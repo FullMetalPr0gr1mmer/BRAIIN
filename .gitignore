@@ -1,0 +1,48 @@
+# --- Dependencies ---
+node_modules/
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+
+# --- Build output ---
+dist/
+.astro/
+.output/
+.wrangler/
+build/
+
+# --- Env & secrets (NEVER commit) ---
+.env
+.env.*
+!.env.example
+.dev.vars
+*.local
+
+# --- Supabase ---
+supabase/.branches/
+supabase/.temp/
+
+# --- Test / coverage / perf ---
+coverage/
+playwright-report/
+test-results/
+.lighthouseci/
+lhci_reports/
+
+# --- Logs ---
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# --- Portable tooling (local Node, if used) ---
+.tools/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
