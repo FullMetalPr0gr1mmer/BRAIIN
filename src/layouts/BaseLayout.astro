@@ -2,6 +2,8 @@
 import type { Locale } from '@schemas/primitives';
 import type { JsonLdNode } from '@/lib/seo/jsonld';
 import SeoHead from '@/components/SeoHead.astro';
+import ConsentBanner from '@/components/ConsentBanner.astro';
+import WebVitals from '@/components/WebVitals.astro';
 import { dir } from '@/lib/i18n';
 
 interface Props {
@@ -39,5 +41,7 @@ const direction = dir(locale);
   </head>
   <body>
     <slot />
+    <ConsentBanner />
+    <WebVitals />
   </body>
 </html>

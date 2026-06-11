@@ -1,0 +1,63 @@
+---
+// PDPL consent banner. Server-rendered, fixed-position (no CLS), hidden until the
+// bundled script (CSP-safe, external) decides a current choice is missing. Writes
+// the __Host-consent cookie and dispatches `consent-updated` to start analytics.
+import { CONSENT_VERSION } from '@consent/gate';
+---
+
+<div
+  id="consent-banner"
+  class="consent-banner"
+  data-version={CONSENT_VERSION}
+  hidden
+  role="region"
+  aria-label="Cookie consent"
+>
+  <p class="consent-text">
+    We use functional cookies to run the site, and — only with your consent — first-party analytics
+    to improve it. See our <a href="/cookie-policy">Cookie Policy</a>.
+  </p>
+  <div class="consent-actions">
+    <button type="button" data-consent="reject">Reject non-essential</button>
+    <button type="button" data-consent="accept">Accept analytics</button>
+  </div>
+</div>
+
+<script>
+  const banner = document.getElementById('consent-banner');
+  if (banner) {
+    const VERSION = Number(banner.dataset.version || '1');
+    const COOKIE = '__Host-consent';
+
+    const read = () => {
+      const match = document.cookie.split('; ').find((c) => c.startsWith(COOKIE + '='));
+      if (!match) return null;
+      try {
+        return JSON.parse(decodeURIComponent(match.slice(COOKIE.length + 1)));
+      } catch {
+        return null;
+      }
+    };
+
+    const write = (analytics: boolean) => {
+      const state = {
+        functional: true,
+        analytics,
+        marketing: false,
+        v: VERSION,
+        ts: Math.floor(Date.now() / 1000),
+      };
+      const value = encodeURIComponent(JSON.stringify(state));
+      // __Host- requires Secure + Path=/ + no Domain. (Not set over http://localhost.)
+      document.cookie = `${COOKIE}=${value}; Path=/; Secure; SameSite=Lax; Max-Age=15552000`;
+      banner.hidden = true;
+      document.dispatchEvent(new CustomEvent('consent-updated', { detail: state }));
+    };
+
+    const current = read();
+    if (!current || current.v !== VERSION) banner.hidden = false;
+
+    banner.querySelector('[data-consent="accept"]')?.addEventListener('click', () => write(true));
+    banner.querySelector('[data-consent="reject"]')?.addEventListener('click', () => write(false));
+  }
+</script>

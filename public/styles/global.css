@@ -63,6 +63,51 @@ section {
   margin-block: 1.5rem;
 }
 
+.consent-banner {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  background: var(--bs-surface);
+  border-block-start: 1px solid var(--bs-accent);
+}
+
+.consent-banner[hidden] {
+  display: none;
+}
+
+.consent-text {
+  margin: 0;
+  max-width: 60ch;
+}
+
+.consent-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.consent-actions button {
+  font: inherit;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--bs-muted);
+  background: transparent;
+  color: var(--bs-fg);
+  cursor: pointer;
+}
+
+.consent-actions button[data-consent='accept'] {
+  border-color: var(--bs-accent);
+  background: var(--bs-accent);
+  color: var(--bs-bg);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
