@@ -1,0 +1,75 @@
+/* Braiin Station — base tokens + reset. The neon-on-dark palette is provisional;
+   a WCAG 2.2 AA contrast audit (CLAUDE.md DoD #4) gates the real values. Uses CSS
+   logical properties so RTL (ar) works without overrides. */
+
+:root {
+  --bs-bg: #0b0b0f;
+  --bs-surface: #14141b;
+  --bs-fg: #e8e8ea;
+  --bs-muted: #a0a0ab;
+  --bs-accent: #00e5ff; /* TODO(a11y): contrast-audit against --bs-bg before launch */
+  --bs-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --bs-maxw: 72rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--bs-font-sans);
+  background: var(--bs-bg);
+  color: var(--bs-fg);
+  line-height: 1.6;
+}
+
+a {
+  color: var(--bs-accent);
+}
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+.container {
+  max-width: var(--bs-maxw);
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+
+:where(:focus-visible) {
+  outline: 2px solid var(--bs-accent);
+  outline-offset: 2px;
+}
+
+.notice {
+  border: 1px solid var(--bs-accent);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--bs-surface);
+}
+
+section {
+  margin-block: 1.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

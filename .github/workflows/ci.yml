@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Pillar-ordered gates (CLAUDE.md §8): typecheck → schema/unit → build → supply-chain.
+  # (perf-budgets, seo-schema, a11y, visual-regression run in perf-seo-a11y.yml, which
+  #  activates in Phase 1 when real pages exist.)
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      PUBLIC_SITE_URL: https://www.braiinstation.com
+      PUBLIC_SUPABASE_URL: https://example.supabase.co
+      PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+    steps:
+      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck (astro check — .astro + ts)
+        run: npm run check
+      - name: Typecheck (tsc — tests + packages)
+        run: npm run typecheck
+      - name: Format check
+        run: npm run format:check
+      - name: Unit + schema + authz tests
+        run: npm run test
+      - name: Build (Cloudflare adapter)
+        run: npm run build
+
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Audit (high+)
+        run: npm audit --audit-level=high

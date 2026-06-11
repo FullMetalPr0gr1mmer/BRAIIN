@@ -1,0 +1,21 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@schemas/*": ["packages/schemas/*"],
+      "@consent/*": ["packages/consent/*"]
+    }
+  },
+  "include": [".astro/types.d.ts", "src/**/*", "packages/**/*", "tests/**/*"],
+  "exclude": ["dist", "node_modules", ".tools", ".wrangler"]
+}

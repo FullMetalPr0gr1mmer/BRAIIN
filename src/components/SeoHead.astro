@@ -1,0 +1,52 @@
+---
+// The SINGLE <head> SEO choke point (CLAUDE.md Pillar 3). Emits title/description,
+// per-language self-referential canonical, reciprocal hreflang + x-default, OG/Twitter,
+// and JSON-LD. AR metadata is first-class (callers pass already-localized strings).
+import type { Locale } from '@schemas/primitives';
+import type { JsonLdNode } from '@/lib/seo/jsonld';
+import { hreflangAlternates, localizedPath } from '@/lib/i18n';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import JsonLd from './JsonLd.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  locale: Locale;
+  logicalPath: string;
+  ogImage?: string;
+  robots?: string;
+  jsonLd?: JsonLdNode[];
+}
+
+const {
+  title,
+  description,
+  locale,
+  logicalPath,
+  ogImage,
+  robots = 'index,follow',
+  jsonLd = [],
+} = Astro.props;
+
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+const canonical = base + localizedPath(logicalPath, locale);
+const alternates = hreflangAlternates(logicalPath, PUBLIC_SITE_URL);
+const ogLocale = locale === 'ar' ? 'ar_SA' : 'en_US';
+---
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{title}</title>
+<meta name="description" content={description} />
+<meta name="robots" content={robots} />
+<link rel="canonical" href={canonical} />
+{alternates.map((a) => <link rel="alternate" hreflang={a.hreflang} href={a.href} />)}
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Braiin Station" />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:locale" content={ogLocale} />
+{ogImage ? <meta property="og:image" content={ogImage} /> : null}
+<meta name="twitter:card" content="summary_large_image" />
+{jsonLd.map((node) => <JsonLd data={node} />)}

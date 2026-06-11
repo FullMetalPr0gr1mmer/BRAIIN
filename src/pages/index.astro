@@ -1,0 +1,21 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { buildOrganizationSchema, buildWebSiteSchema } from '@/lib/seo/jsonld';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+
+// Tier A (indexable, edge-cached SSR). Content is in the server-rendered HTML.
+const jsonLd = [buildOrganizationSchema(PUBLIC_SITE_URL), buildWebSiteSchema(PUBLIC_SITE_URL)];
+---
+
+<BaseLayout
+  title="Braiin Station — Creative Agency"
+  description="A bilingual creative agency: branding, motion, video, web, SEO and more. 14 services, one studio."
+  locale="en"
+  logicalPath="/"
+  jsonLd={jsonLd}
+>
+  <main class="container">
+    <h1>Braiin Station</h1>
+    <p>Foundation scaffold (Phase 0). The CMS-driven home composition lands in Phase 1.</p>
+  </main>
+</BaseLayout>

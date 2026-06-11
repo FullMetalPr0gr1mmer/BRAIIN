@@ -1,0 +1,8 @@
+[
+  {
+    "name": "public route client JS (gzipped)",
+    "path": "dist/_astro/*.js",
+    "limit": "100 KB",
+    "gzip": true
+  }
+]

@@ -1,0 +1,15 @@
+dist
+.astro
+.tools
+.wrangler
+node_modules
+coverage
+playwright-report
+*.sql
+*.pdf
+package-lock.json
+docs/
+CLAUDE.md
+braiin-station-analysis.md
+braiin-station-feature-inventory.md
+claude-code-init-prompt.md

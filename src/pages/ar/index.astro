@@ -1,0 +1,20 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { buildOrganizationSchema, buildWebSiteSchema } from '@/lib/seo/jsonld';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+
+const jsonLd = [buildOrganizationSchema(PUBLIC_SITE_URL), buildWebSiteSchema(PUBLIC_SITE_URL)];
+---
+
+<BaseLayout
+  title="بريّن ستيشن — وكالة إبداعية"
+  description="وكالة إبداعية ثنائية اللغة: الهوية، الموشن، الفيديو، الويب، وتحسين محركات البحث وأكثر. 14 خدمة في استوديو واحد."
+  locale="ar"
+  logicalPath="/"
+  jsonLd={jsonLd}
+>
+  <main class="container">
+    <h1>بريّن ستيشن</h1>
+    <p>هيكل الأساس (المرحلة 0). تركيب الصفحة الرئيسية المُدار من لوحة التحكم يأتي في المرحلة 1.</p>
+  </main>
+</BaseLayout>

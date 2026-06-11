@@ -1,0 +1,43 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { JsonLdNode } from '@/lib/seo/jsonld';
+import SeoHead from '@/components/SeoHead.astro';
+import { dir } from '@/lib/i18n';
+
+interface Props {
+  title: string;
+  description: string;
+  locale: Locale;
+  logicalPath: string;
+  jsonLd?: JsonLdNode[];
+  robots?: string;
+}
+
+const {
+  title,
+  description,
+  locale,
+  logicalPath,
+  jsonLd = [],
+  robots = 'index,follow',
+} = Astro.props;
+const direction = dir(locale);
+---
+
+<!doctype html>
+<html lang={locale} dir={direction}>
+  <head>
+    <SeoHead
+      title={title}
+      description={description}
+      locale={locale}
+      logicalPath={logicalPath}
+      jsonLd={jsonLd}
+      robots={robots}
+    />
+    <link rel="stylesheet" href="/styles/global.css" />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

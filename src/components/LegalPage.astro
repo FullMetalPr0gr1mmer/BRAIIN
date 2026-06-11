@@ -1,0 +1,37 @@
+---
+import type { Locale } from '@schemas/primitives';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import type { LegalDoc } from '@/lib/legal/content';
+
+interface Props {
+  doc: LegalDoc;
+  locale: Locale;
+  logicalPath: string;
+}
+
+const { doc, locale, logicalPath } = Astro.props;
+---
+
+<BaseLayout
+  title={`${doc.title} — Braiin Station`}
+  description={doc.intro}
+  locale={locale}
+  logicalPath={logicalPath}
+>
+  <main class="container">
+    <h1>{doc.title}</h1>
+    <p><small>{doc.updated}</small></p>
+    <p class="notice" role="note">{doc.draftNotice}</p>
+    <p>{doc.intro}</p>
+    {
+      doc.sections.map((s) => (
+        <section>
+          <h2>{s.heading}</h2>
+          {s.body.map((p) => (
+            <p>{p}</p>
+          ))}
+        </section>
+      ))
+    }
+  </main>
+</BaseLayout>
