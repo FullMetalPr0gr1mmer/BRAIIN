@@ -6,6 +6,7 @@ node_modules
 coverage
 playwright-report
 *.sql
+*.toml
 *.pdf
 package-lock.json
 docs/

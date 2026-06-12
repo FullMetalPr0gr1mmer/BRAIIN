@@ -4,6 +4,7 @@ import type { JsonLdNode } from '@/lib/seo/jsonld';
 import SeoHead from '@/components/SeoHead.astro';
 import ConsentBanner from '@/components/ConsentBanner.astro';
 import WebVitals from '@/components/WebVitals.astro';
+import ErrorReporter from '@/components/ErrorReporter.astro';
 import { dir } from '@/lib/i18n';
 
 interface Props {
@@ -43,5 +44,6 @@ const direction = dir(locale);
     <slot />
     <ConsentBanner />
     <WebVitals />
+    <ErrorReporter />
   </body>
 </html>

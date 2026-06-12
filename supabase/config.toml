@@ -1,0 +1,16 @@
+# Minimal Supabase local config for `supabase start` + `supabase test db` (pgTAP).
+# The CLI merges its defaults for omitted sections. Regenerate with `supabase init`
+# if a newer CLI requires more. Real project linking happens during provisioning.
+project_id = "braiin-station"
+
+[db]
+port = 54322
+major_version = 15
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+
+[auth]
+enabled = true

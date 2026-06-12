@@ -2,3 +2,4 @@
 export * from './primitives';
 export * from './lead';
 export * from './webvitals';
+export * from './clientlog';
