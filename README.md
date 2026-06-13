@@ -6,25 +6,25 @@ A production, single-platform creative-agency system: a bilingual (EN/AR, RTL) m
 
 ## Stack
 
-| Layer | Choice |
-|---|---|
-| Public site | Astro (static-first shell + Server Islands) |
-| Admin | React islands inside Astro |
-| Backend | Supabase — Postgres, Auth, Edge Functions, Storage |
-| Rich text | Tiptap (sanitised JSON + derived HTML cache) |
-| Hosting | Cloudflare **Workers Builds** (Astro Cloudflare adapter) |
-| Video | Cloudflare Stream |
-| Language | TypeScript `strict`; Zod as the single content/validation boundary |
+| Layer       | Choice                                                             |
+| ----------- | ------------------------------------------------------------------ |
+| Public site | Astro (static-first shell + Server Islands)                        |
+| Admin       | React islands inside Astro                                         |
+| Backend     | Supabase — Postgres, Auth, Edge Functions, Storage                 |
+| Rich text   | Tiptap (sanitised JSON + derived HTML cache)                       |
+| Hosting     | Cloudflare **Workers Builds** (Astro Cloudflare adapter)           |
+| Video       | Cloudflare Stream                                                  |
+| Language    | TypeScript `strict`; Zod as the single content/validation boundary |
 
 ## Documentation (read these first)
 
-| Doc | What it is |
-|---|---|
-| [`CLAUDE.md`](./CLAUDE.md) | **The engineering standard.** Conventions, four pillars, role×permission matrix, performance budgets, Definition of Done. If code and this doc disagree, the doc wins. |
-| [`docs/architecture.md`](./docs/architecture.md) | How the system is engineered to survive production — rendering, data model, auth/RBAC, security, performance, video, SEO, scalability, CI/DR. |
-| [`docs/delivery-plan.md`](./docs/delivery-plan.md) | The phased plan (Foundation → Public site → Blog → Admin/CMS → AI Style-Finder), each phase gated on the Definition of Done. |
-| [`braiin-station-feature-inventory.md`](./braiin-station-feature-inventory.md) | Source brief — what the system does. |
-| [`braiin-station-analysis.md`](./braiin-station-analysis.md) | Source brief — the gap report (the "why" behind the requirements). |
+| Doc                                                                            | What it is                                                                                                                                                             |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`CLAUDE.md`](./CLAUDE.md)                                                     | **The engineering standard.** Conventions, four pillars, role×permission matrix, performance budgets, Definition of Done. If code and this doc disagree, the doc wins. |
+| [`docs/architecture.md`](./docs/architecture.md)                               | How the system is engineered to survive production — rendering, data model, auth/RBAC, security, performance, video, SEO, scalability, CI/DR.                          |
+| [`docs/delivery-plan.md`](./docs/delivery-plan.md)                             | The phased plan (Foundation → Public site → Blog → Admin/CMS → AI Style-Finder), each phase gated on the Definition of Done.                                           |
+| [`braiin-station-feature-inventory.md`](./braiin-station-feature-inventory.md) | Source brief — what the system does.                                                                                                                                   |
+| [`braiin-station-analysis.md`](./braiin-station-analysis.md)                   | Source brief — the gap report (the "why" behind the requirements).                                                                                                     |
 
 ## Project layout (target)
 

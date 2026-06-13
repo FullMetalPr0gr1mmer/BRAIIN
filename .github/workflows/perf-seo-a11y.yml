@@ -1,0 +1,32 @@
+name: Perf / SEO / A11y (staged)
+
+# Activated in Phase 1 when real pages exist. Enforces the CLAUDE.md §6 performance
+# budgets (Lighthouse), JSON-LD validation, and axe WCAG 2.2 AA against a local
+# wrangler preview of the built Worker. Manual until then.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    env:
+      PUBLIC_SITE_URL: http://localhost:8788
+      PUBLIC_SUPABASE_URL: https://example.supabase.co
+      PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Start preview (miniflare)
+        run: npx wrangler dev --port 8788 &
+      - name: Wait for preview
+        run: npx wait-on http://localhost:8788 --timeout 60000
+      - name: Lighthouse budgets
+        run: npm run lhci

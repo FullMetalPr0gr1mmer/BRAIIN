@@ -1,0 +1,27 @@
+name: DB tests (RLS / pgTAP, staged)
+
+# Boots the Supabase local stack (provides auth + vault + RLS roles), applies
+# supabase/migrations, and runs the pgTAP RLS suite in supabase/tests/. Staged on
+# workflow_dispatch until validated against the provisioned project (then promoted to
+# a required gate — it covers the DoD per-role authz requirement, CLAUDE.md §9).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pgtap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start Supabase (applies migrations)
+        run: supabase start
+      - name: Run pgTAP RLS suite
+        run: supabase test db
+      - name: Stop
+        if: always()
+        run: supabase stop

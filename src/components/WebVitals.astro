@@ -1,0 +1,44 @@
+---
+// Consent-gated RUM collector. The web-vitals library is loaded only after analytics
+// consent (a dynamic import, so zero bytes otherwise), then beacons to /api/rum.
+// Re-runs on `consent-updated` so opting in mid-session starts collection.
+---
+
+<script>
+  import type { Metric } from 'web-vitals';
+
+  const COOKIE = '__Host-consent';
+
+  function analyticsConsent() {
+    const match = document.cookie.split('; ').find((c) => c.startsWith(COOKIE + '='));
+    if (!match) return false;
+    try {
+      return JSON.parse(decodeURIComponent(match.slice(COOKIE.length + 1))).analytics === true;
+    } catch {
+      return false;
+    }
+  }
+
+  let started = false;
+  async function start() {
+    if (started || !analyticsConsent()) return;
+    started = true;
+    const { onLCP, onINP, onCLS } = await import('web-vitals');
+    const send = (metric: Metric) => {
+      const body = JSON.stringify({
+        metric: metric.name,
+        value: metric.value,
+        rating: metric.rating,
+        path: location.pathname,
+        id: metric.id,
+      });
+      navigator.sendBeacon('/api/rum', body);
+    };
+    onLCP(send);
+    onINP(send);
+    onCLS(send);
+  }
+
+  start();
+  document.addEventListener('consent-updated', start);
+</script>

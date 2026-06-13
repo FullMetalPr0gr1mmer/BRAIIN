@@ -1,0 +1,14 @@
+---
+// Emits one JSON-LD block. `application/ld+json` is non-executable data, so it is
+// not subject to script-src and passes the strict, no-unsafe-inline CSP.
+import type { JsonLdNode } from '@/lib/seo/jsonld';
+
+interface Props {
+  data: JsonLdNode;
+}
+
+const { data } = Astro.props;
+const json = JSON.stringify(data);
+---
+
+<script type="application/ld+json" is:inline set:html={json} />
