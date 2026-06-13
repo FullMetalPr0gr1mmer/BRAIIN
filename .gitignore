@@ -46,3 +46,8 @@ desktop.ini
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# --- Claude Code (commit shared team config; ignore personal) ---
+.claude/settings.local.json
+.claude/*.local.json
+CLAUDE.local.md

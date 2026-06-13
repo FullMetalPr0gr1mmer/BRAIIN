@@ -20,6 +20,7 @@ A production, single-platform creative-agency system: a bilingual (EN/AR, RTL) m
 
 | Doc                                                                            | What it is                                                                                                                                                             |
 | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`CONTRIBUTING.md`](./CONTRIBUTING.md)                                         | **Start here (new teammates).** First-time setup, how Claude Code is configured for the team, conventions, and the Definition-of-Done gate.                            |
 | [`CLAUDE.md`](./CLAUDE.md)                                                     | **The engineering standard.** Conventions, four pillars, role×permission matrix, performance budgets, Definition of Done. If code and this doc disagree, the doc wins. |
 | [`docs/architecture.md`](./docs/architecture.md)                               | How the system is engineered to survive production — rendering, data model, auth/RBAC, security, performance, video, SEO, scalability, CI/DR.                          |
 | [`docs/delivery-plan.md`](./docs/delivery-plan.md)                             | The phased plan (Foundation → Public site → Blog → Admin/CMS → AI Style-Finder), each phase gated on the Definition of Done.                                           |
@@ -46,6 +47,8 @@ tests/
 
 ## Local development
 
+> **New here?** Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) first — it covers team setup and how Claude Code is configured for consistency across developers.
+>
 > **Prerequisite:** Node.js LTS (≥ 20) + a package manager. The scaffold is committed but not yet installed/built in CI.
 
 ```bash
