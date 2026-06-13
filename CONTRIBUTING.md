@@ -30,15 +30,15 @@ No change is "done" until all **7 points** of the Definition of Done hold (`CLAU
 
 Cloning the repo gives every developer's Claude the **same behavior** — by design, all under version control:
 
-| File | What it does | Shared? |
-|---|---|---|
-| [`CLAUDE.md`](./CLAUDE.md) | The authoritative standard, auto-loaded every session. | ✅ committed |
-| `.claude/settings.json` | Permission guardrails — deny reading secret files (`.env*`, `.dev.vars`); hard-block force-push & `--no-verify`; prompt before `git push`, deploys, and `supabase db push`; commit/PR attribution trailers; bypass-permissions disabled. | ✅ committed |
-| `.claude/rules/*.md` | Pillar-scoped reminders that load **only when you touch matching files** (e.g. editing a migration surfaces the RLS invariants). Each points back to the canonical `CLAUDE.md` section — no second source of truth. | ✅ committed |
-| `.claude/settings.local.json` | Your personal overrides (machine paths, extra allows). | 🚫 gitignored |
-| `CLAUDE.local.md` | Your personal project notes (sandbox URLs, test data). | 🚫 gitignored |
+| File                          | What it does                                                                                                                                                                                                                             | Shared?       |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [`CLAUDE.md`](./CLAUDE.md)    | The authoritative standard, auto-loaded every session.                                                                                                                                                                                   | ✅ committed  |
+| `.claude/settings.json`       | Permission guardrails — deny reading secret files (`.env*`, `.dev.vars`); hard-block force-push & `--no-verify`; prompt before `git push`, deploys, and `supabase db push`; commit/PR attribution trailers; bypass-permissions disabled. | ✅ committed  |
+| `.claude/rules/*.md`          | Pillar-scoped reminders that load **only when you touch matching files** (e.g. editing a migration surfaces the RLS invariants). Each points back to the canonical `CLAUDE.md` section — no second source of truth.                      | ✅ committed  |
+| `.claude/settings.local.json` | Your personal overrides (machine paths, extra allows).                                                                                                                                                                                   | 🚫 gitignored |
+| `CLAUDE.local.md`             | Your personal project notes (sandbox URLs, test data).                                                                                                                                                                                   | 🚫 gitignored |
 
-**Important nuance:** `CLAUDE.md` and the rules are *context* — Claude tries to follow them but compliance isn't mechanically guaranteed. Only the **permission rules** in `settings.json` (and the hooks below) are *hard enforcement*. Treat the standard as binding even where it isn't yet enforced by tooling.
+**Important nuance:** `CLAUDE.md` and the rules are _context_ — Claude tries to follow them but compliance isn't mechanically guaranteed. Only the **permission rules** in `settings.json` (and the hooks below) are _hard enforcement_. Treat the standard as binding even where it isn't yet enforced by tooling.
 
 ### Personal config — never commit
 
@@ -52,7 +52,7 @@ We will add committed **PreToolUse/PostToolUse hooks** (in `.claude/settings.jso
 - **PreToolUse** on `Edit|Write` matching `supabase/migrations/**` → block edits to already-applied migrations (forward-only rule).
 - **Stop** → run the authz + schema-validation test gate.
 
-Hooks are what turn "Claude *should* run the checks" into "the checks run regardless." Until then, run them manually (below).
+Hooks are what turn "Claude _should_ run the checks" into "the checks run regardless." Until then, run them manually (below).
 
 ## Conventions
 

@@ -1,10 +1,10 @@
 ---
 paths:
-  - "src/middleware.ts"
-  - "src/components/**"
-  - "packages/schemas/**"
-  - "packages/consent/**"
-  - "supabase/functions/**"
+  - 'src/middleware.ts'
+  - 'src/components/**'
+  - 'packages/schemas/**'
+  - 'packages/consent/**'
+  - 'supabase/functions/**'
 ---
 
 # Front-of-house security (Pillar 1)

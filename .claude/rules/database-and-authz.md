@@ -1,10 +1,10 @@
 ---
 paths:
-  - "supabase/migrations/**"
-  - "supabase/functions/**"
-  - "src/lib/authz/**"
-  - "src/pages/api/**"
-  - "src/pages/admin/**"
+  - 'supabase/migrations/**'
+  - 'supabase/functions/**'
+  - 'src/lib/authz/**'
+  - 'src/pages/api/**'
+  - 'src/pages/admin/**'
 ---
 
 # Database, RLS & Authorization — load-bearing invariants
