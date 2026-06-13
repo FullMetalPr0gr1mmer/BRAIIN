@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { anonClient } from '@/lib/supabase/client';
+import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
 
 // Runtime data access for the public services (Tier A SSR). Tenant + published
 // filtering are enforced by RLS; we still pass status explicitly. Zod-validated.
@@ -23,6 +23,7 @@ export type ServiceRow = z.infer<typeof ServiceRowSchema>;
 const COLUMNS = 'slug,title,blurb,body_html,hero_video_uid,category,is_teaser,sort_order';
 
 export async function getPublishedServices(): Promise<ServiceRow[]> {
+  if (!supabaseConfigured()) return [];
   try {
     const { data, error } = await anonClient()
       .from('services')
@@ -40,6 +41,7 @@ export async function getPublishedServices(): Promise<ServiceRow[]> {
 }
 
 export async function getServiceBySlug(slug: string): Promise<ServiceRow | null> {
+  if (!supabaseConfigured()) return null;
   try {
     const { data, error } = await anonClient()
       .from('services')

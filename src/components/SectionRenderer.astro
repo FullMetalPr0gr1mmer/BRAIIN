@@ -1,0 +1,38 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { SectionData } from '@/lib/sections/types';
+import SectionBoundary from '@/components/SectionBoundary.astro';
+import Hero from '@/components/sections/Hero.astro';
+import ServicesOverview from '@/components/sections/ServicesOverview.astro';
+import CtaBand from '@/components/sections/CtaBand.astro';
+import SocialStrip from '@/components/sections/SocialStrip.astro';
+
+interface Props {
+  locale: Locale;
+  sections: SectionData[];
+}
+
+const { locale, sections } = Astro.props;
+
+// Type → component registry. Unknown types are skipped (forward-compatible with CMS).
+const REGISTRY: Record<string, unknown> = {
+  hero: Hero,
+  servicesOverview: ServicesOverview,
+  cta: CtaBand,
+  social: SocialStrip,
+};
+---
+
+{
+  sections
+    .filter((s) => s.visible !== false)
+    .map((s) => {
+      const Comp = REGISTRY[s.type] as typeof Hero | undefined;
+      if (!Comp) return null;
+      return (
+        <SectionBoundary type={s.type}>
+          <Comp locale={locale} {...(s.props ?? {})} />
+        </SectionBoundary>
+      );
+    })
+}

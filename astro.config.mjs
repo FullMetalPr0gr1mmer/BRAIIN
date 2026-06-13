@@ -19,7 +19,9 @@ export default defineConfig({
   // TODO(phase-0): replace with the real production origin before launch.
   site: 'https://www.braiinstation.com',
   output: 'server',
-  trailingSlash: 'never',
+  // 'ignore': both `/x` and `/x/` resolve (no 404s); the per-page self-referential
+  // canonical in <SeoHead> consolidates to the non-trailing URL for SEO.
+  trailingSlash: 'ignore',
 
   adapter: cloudflare({
     // Adapter locks (CLAUDE.md §2): Cloudflare-native image transforms + Workers bindings.

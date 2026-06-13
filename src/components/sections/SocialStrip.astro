@@ -1,0 +1,38 @@
+---
+import type { Locale } from '@schemas/primitives';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+const STR = {
+  en: { heading: 'Follow our work' },
+  ar: { heading: 'تابع أعمالنا' },
+}[locale];
+
+const links = [
+  { label: 'Instagram', href: '#' },
+  { label: 'LinkedIn', href: '#' },
+  { label: 'Behance', href: '#' },
+  { label: 'YouTube', href: '#' },
+];
+---
+
+<section class="social-strip">
+  <div class="container">
+    <h2>{STR.heading}</h2>
+    <ul class="social-links">
+      {
+        links.map((l) => (
+          <li>
+            <a href={l.href} rel="noopener">
+              {l.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>

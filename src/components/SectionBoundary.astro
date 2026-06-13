@@ -1,0 +1,28 @@
+---
+// Per-section error isolation (feature-inventory: "one broken section won't take down
+// the page"). Renders the slotted section, catching any error during its render so a
+// single failing section degrades to an empty placeholder instead of a 500.
+interface Props {
+  type: string;
+}
+
+const { type } = Astro.props;
+
+let html = '';
+let failed = false;
+try {
+  html = await Astro.slots.render('default');
+} catch (err) {
+  failed = true;
+  // Surfaced to the error pipeline (Sentry/system_logs) at provisioning.
+  console.error(`[section:${type}] render failed`, err);
+}
+---
+
+{
+  failed ? (
+    <section class="section-error" aria-hidden="true" data-section={type} />
+  ) : (
+    <Fragment set:html={html} />
+  )
+}

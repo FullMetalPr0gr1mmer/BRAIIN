@@ -1,10 +1,18 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import SectionRenderer from '@/components/SectionRenderer.astro';
+import { DEFAULT_HOME_SECTIONS } from '@/lib/sections/types';
 import { buildOrganizationSchema, buildWebSiteSchema } from '@/lib/seo/jsonld';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 
-// Tier A (indexable, edge-cached SSR). Content is in the server-rendered HTML.
+// Tier A. Home is composed from CMS sections (default composition until page_sections
+// is authored in Phase 3). Publish purges the `route:home` cache tag.
 const jsonLd = [buildOrganizationSchema(PUBLIC_SITE_URL), buildWebSiteSchema(PUBLIC_SITE_URL)];
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set('Cache-Tag', 'tenant:default,route:home,locale:en');
 ---
 
 <BaseLayout
@@ -14,9 +22,7 @@ const jsonLd = [buildOrganizationSchema(PUBLIC_SITE_URL), buildWebSiteSchema(PUB
   logicalPath="/"
   jsonLd={jsonLd}
 >
-  <main class="container">
-    <h1>Braiin Station</h1>
-    <p>Foundation scaffold (Phase 0). The CMS-driven home composition lands in Phase 1.</p>
-    <p><a class="cta" href="/services">Explore our services →</a></p>
+  <main>
+    <SectionRenderer locale="en" sections={DEFAULT_HOME_SECTIONS} />
   </main>
 </BaseLayout>

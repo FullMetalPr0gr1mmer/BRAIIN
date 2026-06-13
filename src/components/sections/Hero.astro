@@ -1,0 +1,31 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { localizedPath } from '@/lib/i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+const STR = {
+  en: {
+    heading: 'Creative work that performs.',
+    sub: 'Branding, motion, video, web — fourteen services, one studio.',
+    cta: 'Explore services',
+  },
+  ar: {
+    heading: 'إبداع يحقق النتائج.',
+    sub: 'هوية، موشن، فيديو، ويب — أربع عشرة خدمة في استوديو واحد.',
+    cta: 'استكشف الخدمات',
+  },
+}[locale];
+---
+
+<section class="hero">
+  <div class="container">
+    <h1>{STR.heading}</h1>
+    <p class="hero-sub">{STR.sub}</p>
+    <a class="cta" href={localizedPath('/services', locale)}>{STR.cta}</a>
+  </div>
+</section>
