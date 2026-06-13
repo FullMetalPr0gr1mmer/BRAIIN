@@ -28,3 +28,32 @@ export function buildWebSiteSchema(siteUrl: string): JsonLdNode {
     inLanguage: ['en', 'ar'],
   };
 }
+
+export function buildServiceSchema(opts: {
+  name: string;
+  description: string;
+  url: string;
+}): JsonLdNode {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Service',
+    name: opts.name,
+    description: opts.description,
+    url: opts.url,
+    provider: { '@type': 'Organization', name: ORG_NAME },
+    areaServed: 'SA',
+  };
+}
+
+export function buildBreadcrumbSchema(items: { name: string; url: string }[]): JsonLdNode {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((it, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: it.name,
+      item: it.url,
+    })),
+  };
+}

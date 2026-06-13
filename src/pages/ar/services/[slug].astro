@@ -1,0 +1,19 @@
+---
+import ServiceDetail from '@/components/ServiceDetail.astro';
+import { getServiceBySlug } from '@/lib/data/services';
+
+const { slug } = Astro.params;
+const service = slug ? await getServiceBySlug(slug) : null;
+if (!service) return Astro.rewrite('/404');
+
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set(
+  'Cache-Tag',
+  `tenant:default,route:service,service:${service.slug},locale:ar`,
+);
+---
+
+<ServiceDetail locale="ar" service={service} />

@@ -1,0 +1,60 @@
+---
+import type { Locale } from '@schemas/primitives';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import StreamPlayer from '@/components/StreamPlayer.astro';
+import { buildServiceSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { localizedPath } from '@/lib/i18n';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import type { ServiceRow } from '@/lib/data/services';
+
+interface Props {
+  locale: Locale;
+  service: ServiceRow;
+}
+
+const { locale, service } = Astro.props;
+
+const STR = {
+  en: { cta: 'Request this service', soon: 'Coming soon', home: 'Home', services: 'Services' },
+  ar: { cta: 'اطلب هذه الخدمة', soon: 'قريبًا', home: 'الرئيسية', services: 'خدماتنا' },
+}[locale];
+
+const title = service.title[locale] ?? service.title.en ?? service.slug;
+const blurb = service.blurb?.[locale] ?? service.blurb?.en ?? '';
+// body_html is the server-SANITIZED HTML cache (sanitized on write in the admin,
+// Phase 3). Safe to render; empty until content is authored.
+const bodyHtml = service.body_html?.[locale] ?? service.body_html?.en ?? '';
+
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+const url = base + localizedPath(`/services/${service.slug}`, locale);
+
+const jsonLd = [
+  buildServiceSchema({ name: title, description: blurb, url }),
+  buildBreadcrumbSchema([
+    { name: STR.home, url: base + localizedPath('/', locale) },
+    { name: STR.services, url: base + localizedPath('/services', locale) },
+    { name: title, url },
+  ]),
+];
+---
+
+<BaseLayout
+  title={`${title} — Braiin Station`}
+  description={blurb}
+  locale={locale}
+  logicalPath={`/services/${service.slug}`}
+  jsonLd={jsonLd}
+>
+  <main class="container">
+    <h1>{title}</h1>
+    {service.is_teaser ? <p class="notice">{STR.soon}</p> : null}
+    {
+      service.hero_video_uid && !service.is_teaser ? (
+        <StreamPlayer uid={service.hero_video_uid} title={title} />
+      ) : null
+    }
+    {blurb ? <p class="lead">{blurb}</p> : null}
+    {bodyHtml ? <div class="prose" set:html={bodyHtml} /> : null}
+    <p><a class="cta" href={localizedPath('/contact', locale)}>{STR.cta}</a></p>
+  </main>
+</BaseLayout>

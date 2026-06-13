@@ -1,0 +1,56 @@
+---
+// Cloudflare Stream hero video — poster-facade pattern (CLAUDE.md Pillar 2).
+// The poster is the LCP `<img>` (explicit width/height ⇒ media CLS = 0). The Stream
+// iframe (allow-listed in CSP `frame-src`) is injected only on click — zero
+// third-party bytes before then; no hls.js ⇒ `connect-src` stays `'self'`.
+import { streamPoster, streamIframe, streamConfigured } from '@/lib/video/stream';
+
+interface Props {
+  uid: string;
+  title: string;
+}
+
+const { uid, title } = Astro.props;
+const poster = streamPoster(uid);
+const iframe = streamIframe(uid);
+const ready = streamConfigured();
+---
+
+<div class="stream" data-iframe={iframe} data-title={title}>
+  <img
+    class="stream-poster"
+    src={poster}
+    alt={title}
+    width="1280"
+    height="720"
+    loading="eager"
+    decoding="async"
+    fetchpriority="high"
+  />
+  {
+    ready && (
+      <button type="button" class="stream-play" aria-label={`Play: ${title}`}>
+        <span aria-hidden="true">▶</span>
+      </button>
+    )
+  }
+</div>
+
+<script>
+  // Click-to-play facade (bundled, CSP-safe). Injects the Stream iframe on demand.
+  document.querySelectorAll('.stream').forEach((el) => {
+    const btn = el.querySelector('.stream-play');
+    btn?.addEventListener('click', () => {
+      const src = el.getAttribute('data-iframe');
+      if (!src) return;
+      const frame = document.createElement('iframe');
+      frame.src = src + (src.includes('?') ? '&' : '?') + 'autoplay=true&muted=true';
+      frame.title = el.getAttribute('data-title') || '';
+      frame.allow = 'accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;';
+      frame.setAttribute('allowfullscreen', 'true');
+      frame.loading = 'lazy';
+      frame.className = 'stream-frame';
+      el.replaceChildren(frame);
+    });
+  });
+</script>

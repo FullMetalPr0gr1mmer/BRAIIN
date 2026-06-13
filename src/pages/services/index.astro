@@ -1,0 +1,14 @@
+---
+import ServicesIndex from '@/components/ServicesIndex.astro';
+import { getPublishedServices } from '@/lib/data/services';
+
+// Tier A (indexable, edge-cached SSR). Publish purges the `services:all` cache tag.
+const services = await getPublishedServices();
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set('Cache-Tag', 'tenant:default,route:services,services:all,locale:en');
+---
+
+<ServicesIndex locale="en" services={services} />

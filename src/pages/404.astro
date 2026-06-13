@@ -1,0 +1,18 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+
+Astro.response.status = 404;
+---
+
+<BaseLayout
+  title="Not found — Braiin Station"
+  description="The page you were looking for does not exist."
+  locale="en"
+  logicalPath="/404"
+  robots="noindex,follow"
+>
+  <main class="container">
+    <h1>404</h1>
+    <p>That page doesn’t exist. <a href="/">Go to the homepage</a>.</p>
+  </main>
+</BaseLayout>
