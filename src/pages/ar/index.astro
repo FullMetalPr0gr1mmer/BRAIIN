@@ -1,9 +1,16 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import SectionRenderer from '@/components/SectionRenderer.astro';
+import { DEFAULT_HOME_SECTIONS } from '@/lib/sections/types';
 import { buildOrganizationSchema, buildWebSiteSchema } from '@/lib/seo/jsonld';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 
 const jsonLd = [buildOrganizationSchema(PUBLIC_SITE_URL), buildWebSiteSchema(PUBLIC_SITE_URL)];
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set('Cache-Tag', 'tenant:default,route:home,locale:ar');
 ---
 
 <BaseLayout
@@ -13,9 +20,7 @@ const jsonLd = [buildOrganizationSchema(PUBLIC_SITE_URL), buildWebSiteSchema(PUB
   logicalPath="/"
   jsonLd={jsonLd}
 >
-  <main class="container">
-    <h1>بريّن ستيشن</h1>
-    <p>هيكل الأساس (المرحلة 0). تركيب الصفحة الرئيسية المُدار من لوحة التحكم يأتي في المرحلة 1.</p>
-    <p><a class="cta" href="/ar/services">استكشف خدماتنا ←</a></p>
+  <main>
+    <SectionRenderer locale="ar" sections={DEFAULT_HOME_SECTIONS} />
   </main>
 </BaseLayout>

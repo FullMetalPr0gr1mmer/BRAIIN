@@ -1,0 +1,46 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { localizedPath } from '@/lib/i18n';
+import { getPublishedServices } from '@/lib/data/services';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+const STR = {
+  en: {
+    heading: 'Our services',
+    empty: 'Services are being published — check back soon.',
+    soon: 'Coming soon',
+  },
+  ar: { heading: 'خدماتنا', empty: 'يتم نشر الخدمات — عُد قريبًا.', soon: 'قريبًا' },
+}[locale];
+
+// Self-contained section: fetches its own data (empty before Supabase is provisioned).
+const services = await getPublishedServices();
+---
+
+<section class="services-overview">
+  <div class="container">
+    <h2>{STR.heading}</h2>
+    {
+      services.length === 0 ? (
+        <p class="notice">{STR.empty}</p>
+      ) : (
+        <ul class="service-grid">
+          {services.map((s) => (
+            <li class="service-card">
+              <a href={localizedPath(`/services/${s.slug}`, locale)}>
+                <h3>{s.title[locale] ?? s.title.en ?? s.slug}</h3>
+                {s.blurb ? <p>{s.blurb[locale] ?? s.blurb.en ?? ''}</p> : null}
+                {s.is_teaser ? <span class="badge">{STR.soon}</span> : null}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  </div>
+</section>

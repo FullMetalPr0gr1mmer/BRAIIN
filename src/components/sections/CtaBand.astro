@@ -1,0 +1,31 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { localizedPath } from '@/lib/i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+const STR = {
+  en: {
+    heading: 'Have a project in mind?',
+    text: "Tell us what you're building — we'll shape it.",
+    button: 'Start a project',
+  },
+  ar: {
+    heading: 'لديك مشروع؟',
+    text: 'أخبرنا بما تبنيه وسنساعدك على تشكيله.',
+    button: 'ابدأ مشروعًا',
+  },
+}[locale];
+---
+
+<section class="cta-band">
+  <div class="container">
+    <h2>{STR.heading}</h2>
+    <p>{STR.text}</p>
+    <a class="cta" href={localizedPath('/contact', locale)}>{STR.button}</a>
+  </div>
+</section>
