@@ -1,17 +1,20 @@
 import type { APIRoute } from 'astro';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { localizedPath } from '@/lib/i18n';
+import { getPublishedServices } from '@/lib/data/services';
 
 // Bilingual sitemap with reciprocal hreflang. Phase 0 lists the static routes; in
 // later phases CMS content is appended on publish with accurate <lastmod>.
 export const prerender = false;
 
-const LOGICAL_PATHS = ['/', '/privacy', '/terms', '/cookie-policy'];
+const STATIC_PATHS = ['/', '/services', '/privacy', '/terms', '/cookie-policy'];
 
-export const GET: APIRoute = () => {
+export const GET: APIRoute = async () => {
   const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+  const services = await getPublishedServices();
+  const logicalPaths = [...STATIC_PATHS, ...services.map((s) => `/services/${s.slug}`)];
 
-  const urls = LOGICAL_PATHS.flatMap((p) =>
+  const urls = logicalPaths.flatMap((p) =>
     (['en', 'ar'] as const).map((loc) => {
       const loc_href = base + localizedPath(p, loc);
       const alts = (['en', 'ar', 'x-default'] as const)

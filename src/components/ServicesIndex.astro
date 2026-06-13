@@ -1,0 +1,68 @@
+---
+import type { Locale } from '@schemas/primitives';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { localizedPath } from '@/lib/i18n';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import type { ServiceRow } from '@/lib/data/services';
+
+interface Props {
+  locale: Locale;
+  services: ServiceRow[];
+}
+
+const { locale, services } = Astro.props;
+
+const STR = {
+  en: {
+    title: 'Services',
+    intro: 'Fourteen creative services, one studio.',
+    soon: 'Coming soon',
+    empty: 'Services will appear here once published.',
+    home: 'Home',
+  },
+  ar: {
+    title: 'خدماتنا',
+    intro: 'أربع عشرة خدمة إبداعية في استوديو واحد.',
+    soon: 'قريبًا',
+    empty: 'ستظهر الخدمات هنا بعد نشرها.',
+    home: 'الرئيسية',
+  },
+}[locale];
+
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+const breadcrumb = buildBreadcrumbSchema([
+  { name: STR.home, url: base + localizedPath('/', locale) },
+  { name: STR.title, url: base + localizedPath('/services', locale) },
+]);
+---
+
+<BaseLayout
+  title={`${STR.title} — Braiin Station`}
+  description={STR.intro}
+  locale={locale}
+  logicalPath="/services"
+  jsonLd={[breadcrumb]}
+>
+  <main class="container">
+    <h1>{STR.title}</h1>
+    <p class="lead">{STR.intro}</p>
+    {
+      services.length === 0 ? (
+        <p class="notice">{STR.empty}</p>
+      ) : (
+        <ul class="service-grid">
+          {services.map((s) => (
+            <li class="service-card">
+              <a href={localizedPath(`/services/${s.slug}`, locale)}>
+                <h2>{s.title[locale] ?? s.title.en ?? s.slug}</h2>
+                {s.blurb ? <p>{s.blurb[locale] ?? s.blurb.en ?? ''}</p> : null}
+                {s.is_teaser ? <span class="badge">{STR.soon}</span> : null}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  </main>
+</BaseLayout>
