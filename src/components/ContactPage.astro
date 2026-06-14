@@ -1,0 +1,49 @@
+---
+import type { Locale } from '@schemas/primitives';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import ContactForm from '@/components/ContactForm.astro';
+import type { ServiceRow } from '@/lib/data/services';
+import { buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { localizedPath } from '@/lib/i18n';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+
+interface Props {
+  locale: Locale;
+  services: ServiceRow[];
+}
+
+const { locale, services } = Astro.props;
+
+const STR = {
+  en: {
+    title: 'Contact',
+    intro: 'Tell us about your project — we usually reply within one business day.',
+    home: 'Home',
+  },
+  ar: {
+    title: 'تواصل معنا',
+    intro: 'أخبرنا عن مشروعك — نرد عادةً خلال يوم عمل واحد.',
+    home: 'الرئيسية',
+  },
+}[locale];
+
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+const breadcrumb = buildBreadcrumbSchema([
+  { name: STR.home, url: base + localizedPath('/', locale) },
+  { name: STR.title, url: base + localizedPath('/contact', locale) },
+]);
+---
+
+<BaseLayout
+  title={`${STR.title} — Braiin Station`}
+  description={STR.intro}
+  locale={locale}
+  logicalPath="/contact"
+  jsonLd={[breadcrumb]}
+>
+  <main class="container">
+    <h1>{STR.title}</h1>
+    <p class="lead">{STR.intro}</p>
+    <ContactForm locale={locale} services={services} />
+  </main>
+</BaseLayout>
