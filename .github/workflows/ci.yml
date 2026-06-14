@@ -49,5 +49,17 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Audit (high+)
+      # Blocking guard: nothing shipped in the deployed Worker (production deps) may
+      # carry a CRITICAL advisory. Passes today — the only critical (vitest UI server)
+      # is a devDependency / test-only and never reaches the bundle.
+      - name: Audit — shipped deps, critical (blocking)
+        run: npm audit --omit=dev --audit-level=critical
+      # Advisory, NON-BLOCKING, under documented exception EXC-001
+      # (docs/security-exceptions.md, expires 2026-09-12): the current high/critical
+      # advisories are all dev/build/test tooling (vite/esbuild/vitest/wrangler/undici)
+      # not present in the deployed Worker, and clearing them requires the breaking
+      # Astro 6 + Node 22 upgrade. Restore blocking (drop continue-on-error, audit full
+      # high+) once that upgrade lands. See CLAUDE.md §11.
+      - name: Audit — full high+ (advisory, see EXC-001)
         run: npm audit --audit-level=high
+        continue-on-error: true
