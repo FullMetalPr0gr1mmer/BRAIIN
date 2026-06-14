@@ -22,8 +22,10 @@ export const LeadInputSchema = z.object({
   budgetBand: BudgetBandSchema.optional(),
   timelineBand: TimelineBandSchema.optional(),
   consentMarketing: z.boolean().default(false),
-  // Anti-spam: honeypot must be empty; captcha token verified server-side.
+  // Anti-spam: honeypot must be empty; captcha token verified server-side once
+  // reCAPTCHA is provisioned (KAN-20) — optional in v1 so the form works pre-launch
+  // (honeypot + edge rate-limit cover spam until then).
   hp: z.string().max(0).optional(),
-  captchaToken: z.string().min(1),
+  captchaToken: z.string().min(1).optional(),
 });
 export type LeadInput = z.infer<typeof LeadInputSchema>;

@@ -1,0 +1,13 @@
+---
+import ContactPage from '@/components/ContactPage.astro';
+import { getPublishedServices } from '@/lib/data/services';
+
+const services = await getPublishedServices();
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set('Cache-Tag', 'tenant:default,route:contact,locale:en');
+---
+
+<ContactPage locale="en" services={services} />

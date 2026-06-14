@@ -7,7 +7,7 @@ import { getPublishedServices } from '@/lib/data/services';
 // later phases CMS content is appended on publish with accurate <lastmod>.
 export const prerender = false;
 
-const STATIC_PATHS = ['/', '/services', '/privacy', '/terms', '/cookie-policy'];
+const STATIC_PATHS = ['/', '/services', '/contact', '/privacy', '/terms', '/cookie-policy'];
 
 export const GET: APIRoute = async () => {
   const base = PUBLIC_SITE_URL.replace(/\/$/, '');

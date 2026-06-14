@@ -1,0 +1,192 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { ServiceRow } from '@/lib/data/services';
+
+interface Props {
+  locale: Locale;
+  services: ServiceRow[];
+}
+
+const { locale, services } = Astro.props;
+
+const STR = {
+  en: {
+    name: 'Name',
+    email: 'Email',
+    phone: 'Phone (optional)',
+    service: 'Service of interest',
+    budget: 'Budget',
+    timeline: 'Timeline',
+    message: 'Your message',
+    choose: 'Choose…',
+    consent: 'I agree to be contacted about my enquiry.',
+    submit: 'Send enquiry',
+    sending: 'Sending…',
+    ok: 'Thanks — we’ll be in touch shortly.',
+    invalid: 'Please check the highlighted fields and try again.',
+    unavailable: 'The form isn’t live yet — please email hello@braiinstation.com.',
+    error: 'Something went wrong. Please try again.',
+    budgets: {
+      lt_10k: 'Under 10k SAR',
+      '10k_50k': '10k–50k SAR',
+      '50k_150k': '50k–150k SAR',
+      gt_150k: '150k+ SAR',
+      undisclosed: 'Prefer not to say',
+    },
+    timelines: { asap: 'ASAP', '1_3m': '1–3 months', '3_6m': '3–6 months', flexible: 'Flexible' },
+  },
+  ar: {
+    name: 'الاسم',
+    email: 'البريد الإلكتروني',
+    phone: 'الهاتف (اختياري)',
+    service: 'الخدمة المطلوبة',
+    budget: 'الميزانية',
+    timeline: 'الجدول الزمني',
+    message: 'رسالتك',
+    choose: 'اختر…',
+    consent: 'أوافق على التواصل معي بخصوص طلبي.',
+    submit: 'إرسال الطلب',
+    sending: 'جارٍ الإرسال…',
+    ok: 'شكرًا — سنتواصل معك قريبًا.',
+    invalid: 'يرجى مراجعة الحقول والمحاولة مرة أخرى.',
+    unavailable: 'النموذج غير مُفعّل بعد — راسلنا على hello@braiinstation.com.',
+    error: 'حدث خطأ ما. حاول مرة أخرى.',
+    budgets: {
+      lt_10k: 'أقل من 10 آلاف ريال',
+      '10k_50k': '10–50 ألف ريال',
+      '50k_150k': '50–150 ألف ريال',
+      gt_150k: 'أكثر من 150 ألف ريال',
+      undisclosed: 'أفضل عدم الإفصاح',
+    },
+    timelines: { asap: 'في أقرب وقت', '1_3m': '1–3 أشهر', '3_6m': '3–6 أشهر', flexible: 'مرن' },
+  },
+}[locale];
+
+const budgetKeys = ['lt_10k', '10k_50k', '50k_150k', 'gt_150k', 'undisclosed'] as const;
+const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
+---
+
+<form id="contact-form" class="contact-form" data-locale={locale} novalidate>
+  <div class="field">
+    <label for="cf-name">{STR.name}</label>
+    <input id="cf-name" name="name" type="text" required maxlength="120" autocomplete="name" />
+  </div>
+  <div class="field">
+    <label for="cf-email">{STR.email}</label>
+    <input id="cf-email" name="email" type="email" required maxlength="254" autocomplete="email" />
+  </div>
+  <div class="field">
+    <label for="cf-phone">{STR.phone}</label>
+    <input id="cf-phone" name="phone" type="tel" maxlength="32" autocomplete="tel" />
+  </div>
+  <div class="field">
+    <label for="cf-service">{STR.service}</label>
+    <select id="cf-service" name="service">
+      <option value="">{STR.choose}</option>
+      {
+        services.map((s) => (
+          <option value={s.slug}>{s.title[locale] ?? s.title.en ?? s.slug}</option>
+        ))
+      }
+    </select>
+  </div>
+  <div class="field">
+    <label for="cf-budget">{STR.budget}</label>
+    <select id="cf-budget" name="budget">
+      <option value="">{STR.choose}</option>
+      {budgetKeys.map((k) => <option value={k}>{STR.budgets[k]}</option>)}
+    </select>
+  </div>
+  <div class="field">
+    <label for="cf-timeline">{STR.timeline}</label>
+    <select id="cf-timeline" name="timeline">
+      <option value="">{STR.choose}</option>
+      {timelineKeys.map((k) => <option value={k}>{STR.timelines[k]}</option>)}
+    </select>
+  </div>
+  <div class="field field-full">
+    <label for="cf-message">{STR.message}</label>
+    <textarea id="cf-message" name="message" required maxlength="5000" rows="5"></textarea>
+  </div>
+  <div class="field field-full field-check">
+    <input id="cf-consent" name="consent" type="checkbox" />
+    <label for="cf-consent">{STR.consent}</label>
+  </div>
+  {/* Honeypot — visually hidden; bots fill it, the schema rejects a non-empty value. */}
+  <div class="hp-field" aria-hidden="true">
+    <label for="cf-hp">Leave this field empty</label>
+    <input id="cf-hp" name="hp" type="text" tabindex="-1" autocomplete="off" />
+  </div>
+  <button type="submit" class="cta">{STR.submit}</button>
+  <p
+    id="contact-status"
+    class="form-status"
+    role="status"
+    aria-live="polite"
+    hidden
+    data-sending={STR.sending}
+    data-ok={STR.ok}
+    data-invalid={STR.invalid}
+    data-unavailable={STR.unavailable}
+    data-error={STR.error}
+  >
+  </p>
+</form>
+
+<script>
+  const form = document.getElementById('contact-form') as HTMLFormElement | null;
+  const status = document.getElementById('contact-status') as HTMLElement | null;
+
+  function show(state: 'sending' | 'ok' | 'invalid' | 'unavailable' | 'error') {
+    if (!status) return;
+    status.hidden = false;
+    status.textContent = status.dataset[state] ?? '';
+    status.classList.toggle('is-ok', state === 'ok');
+    status.classList.toggle(
+      'is-error',
+      state === 'invalid' || state === 'error' || state === 'unavailable',
+    );
+  }
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const text = (k: string) => {
+      const v = fd.get(k);
+      return typeof v === 'string' && v.length > 0 ? v : undefined;
+    };
+    const payload = {
+      kind: 'contact',
+      locale: form.dataset.locale || 'en',
+      name: text('name') ?? '',
+      email: text('email') ?? '',
+      phone: text('phone'),
+      message: text('message') ?? '',
+      serviceOfInterest: text('service'),
+      budgetBand: text('budget'),
+      timelineBand: text('timeline'),
+      consentMarketing: fd.get('consent') === 'on',
+      hp: typeof fd.get('hp') === 'string' ? (fd.get('hp') as string) : '',
+    };
+    show('sending');
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        form.reset();
+        show('ok');
+      } else if (res.status === 503) {
+        show('unavailable');
+      } else if (res.status === 422) {
+        show('invalid');
+      } else {
+        show('error');
+      }
+    } catch {
+      show('error');
+    }
+  });
+</script>
