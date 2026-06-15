@@ -15,3 +15,11 @@ export const DEFAULT_HOME_SECTIONS: SectionData[] = [
   { type: 'cta' },
   { type: 'social' },
 ];
+
+export const DEFAULT_ABOUT_SECTIONS: SectionData[] = [
+  { type: 'aboutStory' },
+  { type: 'statistics' },
+  { type: 'team' },
+  { type: 'certifications' },
+  { type: 'cta' },
+];

@@ -6,6 +6,10 @@ import Hero from '@/components/sections/Hero.astro';
 import ServicesOverview from '@/components/sections/ServicesOverview.astro';
 import CtaBand from '@/components/sections/CtaBand.astro';
 import SocialStrip from '@/components/sections/SocialStrip.astro';
+import AboutStory from '@/components/sections/AboutStory.astro';
+import Statistics from '@/components/sections/Statistics.astro';
+import TeamGrid from '@/components/sections/TeamGrid.astro';
+import Certifications from '@/components/sections/Certifications.astro';
 
 interface Props {
   locale: Locale;
@@ -20,6 +24,10 @@ const REGISTRY: Record<string, unknown> = {
   servicesOverview: ServicesOverview,
   cta: CtaBand,
   social: SocialStrip,
+  aboutStory: AboutStory,
+  statistics: Statistics,
+  team: TeamGrid,
+  certifications: Certifications,
 };
 ---
 

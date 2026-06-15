@@ -37,3 +37,21 @@ insert into public.portfolio (tenant_id, slug, title, summary, status, sort_orde
   ('00000000-0000-0000-0000-0000000000b1', 'cafe-rebrand',         '{"en":"Specialty Café Rebrand","ar":"إعادة هوية مقهى مختص"}', '{"en":"A new identity system, packaging, and storefront photography.","ar":"نظام هوية جديد، وتغليف، وتصوير للواجهة."}', 'published', 2),
   ('00000000-0000-0000-0000-0000000000b1', 'fintech-product-film', '{"en":"Fintech Product Film","ar":"فيلم منتج لشركة تقنية مالية"}', '{"en":"Scriptwriting, cinematic production, and a 60-second cutdown for paid media.","ar":"كتابة سيناريو، وإنتاج سينمائي، ونسخة 60 ثانية للإعلانات المدفوعة."}', 'published', 3)
 on conflict (tenant_id, slug) do nothing;
+
+-- Team = E-E-A-T named authors (no anonymous authorship). Content team adds real bios + avatars.
+insert into public.team_members (tenant_id, slug, name, bio, status, sort_order) values
+  ('00000000-0000-0000-0000-0000000000b1', 'lead-creative',   '{"en":"Creative Director","ar":"المدير الإبداعي"}',       '{"en":"Leads brand and art direction across the studio.","ar":"يقود اتجاه العلامة والفن في الاستوديو."}',          'published', 1),
+  ('00000000-0000-0000-0000-0000000000b1', 'head-of-video',   '{"en":"Head of Video","ar":"رئيس قسم الفيديو"}',          '{"en":"Oversees film, motion, and post-production.","ar":"يشرف على الفيلم والموشن والمونتاج."}',                    'published', 2),
+  ('00000000-0000-0000-0000-0000000000b1', 'head-of-growth',  '{"en":"Head of Growth","ar":"رئيس قسم النمو"}',           '{"en":"Runs SEO/GEO/AEO, social, and performance.","ar":"يدير تحسين محركات البحث ووسائل التواصل والأداء."}',       'published', 3)
+on conflict (tenant_id, slug) do nothing;
+
+insert into public.certifications (tenant_id, slug, name, issuer, year, status, sort_order) values
+  ('00000000-0000-0000-0000-0000000000b1', 'google-partner', '{"en":"Google Partner","ar":"شريك جوجل"}',           '{"en":"Google","ar":"جوجل"}', 2025, 'published', 1),
+  ('00000000-0000-0000-0000-0000000000b1', 'meta-partner',   '{"en":"Meta Business Partner","ar":"شريك أعمال ميتا"}', '{"en":"Meta","ar":"ميتا"}',  2025, 'published', 2)
+on conflict (tenant_id, slug) do nothing;
+
+insert into public.statistics (tenant_id, slug, label, value, status, sort_order) values
+  ('00000000-0000-0000-0000-0000000000b1', 'projects', '{"en":"Projects delivered","ar":"مشروع منجز"}', '150+', 'published', 1),
+  ('00000000-0000-0000-0000-0000000000b1', 'services', '{"en":"Creative services","ar":"خدمة إبداعية"}', '14',   'published', 2),
+  ('00000000-0000-0000-0000-0000000000b1', 'years',    '{"en":"Years in MENA","ar":"سنوات في المنطقة"}',  '8',    'published', 3)
+on conflict (tenant_id, slug) do nothing;

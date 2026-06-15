@@ -1,0 +1,53 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import SectionRenderer from '@/components/SectionRenderer.astro';
+import { DEFAULT_ABOUT_SECTIONS } from '@/lib/sections/types';
+import { getPublishedTeam } from '@/lib/data/team';
+import { buildPersonSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { localizedPath } from '@/lib/i18n';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+
+// Tier A (indexable, edge-cached SSR). Composed from CMS sections (default composition
+// until page_sections is authored in Phase 3). Publish purges the `route:about` tag.
+const locale = 'en' as const;
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+
+// Fetch team once: drives both the named-author Person JSON-LD (head choke point,
+// no anonymous authorship — Pillar 3) and the visible TeamGrid (injected, no 2nd read).
+const team = await getPublishedTeam();
+const sections = DEFAULT_ABOUT_SECTIONS.map((s) =>
+  s.type === 'team' ? { ...s, props: { ...(s.props ?? {}), members: team } } : s,
+);
+
+const jsonLd = [
+  buildBreadcrumbSchema([
+    { name: 'Home', url: base + localizedPath('/', locale) },
+    { name: 'About', url: base + localizedPath('/about', locale) },
+  ]),
+  ...team.map((m) =>
+    buildPersonSchema({
+      name: m.name[locale] ?? m.name.en ?? m.slug,
+      ...((m.bio?.[locale] ?? m.bio?.en) ? { description: m.bio[locale] ?? m.bio.en } : {}),
+      ...(m.avatar_url ? { image: m.avatar_url } : {}),
+    }),
+  ),
+];
+
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set('Cache-Tag', 'tenant:default,route:about,team:all,locale:en');
+---
+
+<BaseLayout
+  title="About — Braiin Station"
+  description="Braiin Station is a bilingual creative studio in Saudi Arabia — 14 services, one accountable team building brands in Arabic and English."
+  locale={locale}
+  logicalPath="/about"
+  jsonLd={jsonLd}
+>
+  <main>
+    <SectionRenderer locale={locale} sections={sections} />
+  </main>
+</BaseLayout>
