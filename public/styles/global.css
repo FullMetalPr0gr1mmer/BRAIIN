@@ -261,6 +261,138 @@ section {
   display: none;
 }
 
+/* ---- About page sections (story / statistics / team / certifications) ---- */
+.about-story {
+  padding: 4rem 0 2rem;
+  background: radial-gradient(circle at 30% 20%, rgba(0, 229, 255, 0.1), transparent 60%);
+}
+
+.about-story h1 {
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  margin: 0 0 1rem;
+  line-height: 1.1;
+}
+
+.about-pillars {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  margin-block-start: 2rem;
+}
+
+.about-pillars h2 {
+  font-size: 1.25rem;
+  margin: 0 0 0.4rem;
+}
+
+.about-pillars p {
+  margin: 0;
+  color: var(--bs-muted);
+}
+
+.statistics {
+  padding: 2rem 0;
+}
+
+.stat-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1.25rem;
+  border: 1px solid #2a2a35;
+  border-radius: 0.6rem;
+  background: var(--bs-surface);
+}
+
+.stat-value {
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 700;
+  color: var(--bs-accent);
+  line-height: 1;
+}
+
+.stat-label {
+  color: var(--bs-muted);
+}
+
+.team-grid {
+  padding: 2rem 0;
+}
+
+.team-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+
+.team-card {
+  padding: 1.25rem;
+  border: 1px solid #2a2a35;
+  border-radius: 0.6rem;
+  background: var(--bs-surface);
+}
+
+.team-card h3 {
+  margin: 0.6rem 0 0.3rem;
+  font-size: 1.1rem;
+}
+
+.team-card p {
+  margin: 0;
+  color: var(--bs-muted);
+}
+
+.team-avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.certifications {
+  padding: 2rem 0 4rem;
+}
+
+.cert-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.cert {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #2a2a35;
+  border-radius: 0.6rem;
+  background: var(--bs-surface);
+}
+
+.cert-name {
+  font-weight: 600;
+}
+
+.cert-meta {
+  font-size: 0.85rem;
+  color: var(--bs-muted);
+}
+
 .contact-form {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

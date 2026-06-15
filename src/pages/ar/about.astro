@@ -1,0 +1,49 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import SectionRenderer from '@/components/SectionRenderer.astro';
+import { DEFAULT_ABOUT_SECTIONS } from '@/lib/sections/types';
+import { getPublishedTeam } from '@/lib/data/team';
+import { buildPersonSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { localizedPath } from '@/lib/i18n';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+
+const locale = 'ar' as const;
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+
+const team = await getPublishedTeam();
+const sections = DEFAULT_ABOUT_SECTIONS.map((s) =>
+  s.type === 'team' ? { ...s, props: { ...(s.props ?? {}), members: team } } : s,
+);
+
+const jsonLd = [
+  buildBreadcrumbSchema([
+    { name: 'الرئيسية', url: base + localizedPath('/', locale) },
+    { name: 'عن الاستوديو', url: base + localizedPath('/about', locale) },
+  ]),
+  ...team.map((m) =>
+    buildPersonSchema({
+      name: m.name[locale] ?? m.name.en ?? m.slug,
+      ...((m.bio?.[locale] ?? m.bio?.en) ? { description: m.bio[locale] ?? m.bio.en } : {}),
+      ...(m.avatar_url ? { image: m.avatar_url } : {}),
+    }),
+  ),
+];
+
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set('Cache-Tag', 'tenant:default,route:about,team:all,locale:ar');
+---
+
+<BaseLayout
+  title="عن الاستوديو — بريّن ستيشن"
+  description="بريّن ستيشن استوديو إبداعي ثنائي اللغة في السعودية — أربع عشرة خدمة وفريق واحد مسؤول يبني العلامات بالعربية والإنجليزية."
+  locale={locale}
+  logicalPath="/about"
+  jsonLd={jsonLd}
+>
+  <main>
+    <SectionRenderer locale={locale} sections={sections} />
+  </main>
+</BaseLayout>

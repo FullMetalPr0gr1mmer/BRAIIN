@@ -45,6 +45,26 @@ export function buildServiceSchema(opts: {
   };
 }
 
+export function buildPersonSchema(opts: {
+  name: string;
+  description?: string;
+  url?: string;
+  image?: string;
+}): JsonLdNode {
+  // E-E-A-T authorship (CLAUDE.md Pillar 3 — no anonymous authorship). Only emit
+  // optional fields when present to keep the node clean + CI-valid.
+  const node: JsonLdNode = {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: opts.name,
+    worksFor: { '@type': 'Organization', name: ORG_NAME },
+  };
+  if (opts.description) node.description = opts.description;
+  if (opts.url) node.url = opts.url;
+  if (opts.image) node.image = opts.image;
+  return node;
+}
+
 export function buildCreativeWorkSchema(opts: {
   name: string;
   description: string;

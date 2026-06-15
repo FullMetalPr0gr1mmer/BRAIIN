@@ -1,0 +1,54 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { getPublishedCertifications, type CertificationRow } from '@/lib/data/certifications';
+
+interface Props {
+  locale: Locale;
+  items?: CertificationRow[];
+}
+
+const { locale } = Astro.props;
+
+const STR = {
+  en: { heading: 'Certifications & partnerships' },
+  ar: { heading: 'الشهادات والشراكات' },
+}[locale];
+
+// Self-contained: uses injected data if present, else fetches.
+const items = Astro.props.items ?? (await getPublishedCertifications());
+---
+
+{
+  items.length > 0 && (
+    <section class="certifications">
+      <div class="container">
+        <h2>{STR.heading}</h2>
+        <ul class="cert-list">
+          {items.map((c) => {
+            const name = c.name[locale] ?? c.name.en ?? c.slug;
+            const issuer = c.issuer?.[locale] ?? c.issuer?.en ?? '';
+            return (
+              <li class="cert">
+                {c.logo_url ? (
+                  <img
+                    class="cert-logo"
+                    src={c.logo_url}
+                    alt={name}
+                    width="64"
+                    height="64"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : null}
+                <span class="cert-name">{name}</span>
+                {issuer || c.year ? (
+                  <span class="cert-meta">{[issuer, c.year].filter(Boolean).join(' · ')}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  )
+}

@@ -1,0 +1,56 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { getPublishedTeam, type TeamMemberRow } from '@/lib/data/team';
+
+interface Props {
+  locale: Locale;
+  members?: TeamMemberRow[];
+}
+
+const { locale } = Astro.props;
+
+const STR = {
+  en: { heading: 'The team', empty: 'Meet the team soon.' },
+  ar: { heading: 'الفريق', empty: 'تعرّف على الفريق قريبًا.' },
+}[locale];
+
+// Named authors = E-E-A-T (CLAUDE.md Pillar 3). Person JSON-LD is emitted at the page
+// level (one <head> choke point); this section is the visible author cards. Uses the
+// page-injected list when present to avoid a second read, else self-fetches.
+const members = Astro.props.members ?? (await getPublishedTeam());
+---
+
+<section class="team-grid">
+  <div class="container">
+    <h2>{STR.heading}</h2>
+    {
+      members.length === 0 ? (
+        <p class="notice">{STR.empty}</p>
+      ) : (
+        <ul class="team-list">
+          {members.map((m) => {
+            const name = m.name[locale] ?? m.name.en ?? m.slug;
+            const bio = m.bio?.[locale] ?? m.bio?.en ?? '';
+            return (
+              <li class="team-card">
+                {m.avatar_url ? (
+                  <img
+                    class="team-avatar"
+                    src={m.avatar_url}
+                    alt={name}
+                    width="96"
+                    height="96"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : null}
+                <h3>{name}</h3>
+                {bio ? <p>{bio}</p> : null}
+              </li>
+            );
+          })}
+        </ul>
+      )
+    }
+  </div>
+</section>

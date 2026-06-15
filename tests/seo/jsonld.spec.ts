@@ -4,6 +4,7 @@ import {
   buildBreadcrumbSchema,
   buildOrganizationSchema,
   buildCreativeWorkSchema,
+  buildPersonSchema,
 } from '@/lib/seo/jsonld';
 
 describe('JSON-LD builders', () => {
@@ -31,6 +32,25 @@ describe('JSON-LD builders', () => {
 
   it('Organization @context is schema.org', () => {
     expect(buildOrganizationSchema('https://x')['@context']).toBe('https://schema.org');
+  });
+
+  it('Person carries name + worksFor, omits empty optional fields', () => {
+    const p = buildPersonSchema({ name: 'Creative Director' });
+    expect(p['@type']).toBe('Person');
+    expect(p.name).toBe('Creative Director');
+    expect((p.worksFor as { '@type': string })['@type']).toBe('Organization');
+    expect(p.description).toBeUndefined();
+    expect(p.image).toBeUndefined();
+  });
+
+  it('Person includes optional fields when provided', () => {
+    const p = buildPersonSchema({
+      name: 'Head of Video',
+      description: 'Oversees film and motion.',
+      image: 'https://x/a.jpg',
+    });
+    expect(p.description).toBe('Oversees film and motion.');
+    expect(p.image).toBe('https://x/a.jpg');
   });
 
   it('CreativeWork carries the required fields + Organization creator', () => {

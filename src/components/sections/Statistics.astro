@@ -1,0 +1,37 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { getPublishedStatistics, type StatisticRow } from '@/lib/data/statistics';
+
+interface Props {
+  locale: Locale;
+  items?: StatisticRow[];
+}
+
+const { locale } = Astro.props;
+
+const STR = {
+  en: { heading: 'By the numbers' },
+  ar: { heading: 'بالأرقام' },
+}[locale];
+
+// Self-contained: uses injected data if the page already fetched it, else fetches.
+const items = Astro.props.items ?? (await getPublishedStatistics());
+---
+
+{
+  items.length > 0 && (
+    <section class="statistics">
+      <div class="container">
+        <h2>{STR.heading}</h2>
+        <ul class="stat-grid">
+          {items.map((s) => (
+            <li class="stat">
+              <span class="stat-value">{s.value}</span>
+              <span class="stat-label">{s.label[locale] ?? s.label.en ?? ''}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )
+}

@@ -1,0 +1,51 @@
+---
+import type { Locale } from '@schemas/primitives';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+// Default story/mission copy until authored in the CMS (Phase 3). Answer-first,
+// named, concrete (GEO authoring defaults, CLAUDE.md Pillar 3).
+const STR = {
+  en: {
+    heading: 'About Braiin Station',
+    lead: 'Braiin Station is a bilingual creative studio in Saudi Arabia — fourteen services, one team, building brands that work in Arabic and English alike.',
+    missionTitle: 'Our mission',
+    mission:
+      'To give ambitious brands in the region a single, accountable creative partner — from identity and film to web and search — measured by the results we ship, not the awards we chase.',
+    visionTitle: 'Our vision',
+    vision:
+      'A MENA creative scene where world-class work is expected, bilingual by default, and made close to the audiences it serves.',
+  },
+  ar: {
+    heading: 'عن بريّن ستيشن',
+    lead: 'بريّن ستيشن استوديو إبداعي ثنائي اللغة في المملكة العربية السعودية — أربع عشرة خدمة، وفريق واحد، يبني علامات تعمل بالعربية والإنجليزية على حدٍ سواء.',
+    missionTitle: 'رسالتنا',
+    mission:
+      'أن نمنح العلامات الطموحة في المنطقة شريكًا إبداعيًا واحدًا مسؤولًا — من الهوية والفيلم إلى الويب والبحث — نُقاس بالنتائج التي نحققها لا بالجوائز.',
+    visionTitle: 'رؤيتنا',
+    vision:
+      'مشهد إبداعي في منطقة الشرق الأوسط وشمال أفريقيا يكون فيه العمل عالمي المستوى هو المتوقع، ثنائي اللغة بطبيعته، وقريبًا من الجمهور الذي يخدمه.',
+  },
+}[locale];
+---
+
+<section class="about-story">
+  <div class="container">
+    <h1>{STR.heading}</h1>
+    <p class="lead">{STR.lead}</p>
+    <div class="about-pillars">
+      <div>
+        <h2>{STR.missionTitle}</h2>
+        <p>{STR.mission}</p>
+      </div>
+      <div>
+        <h2>{STR.visionTitle}</h2>
+        <p>{STR.vision}</p>
+      </div>
+    </div>
+  </div>
+</section>
