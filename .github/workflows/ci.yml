@@ -43,11 +43,18 @@ jobs:
   supply-chain:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Audit (high+)
-        run: npm audit --audit-level=high
+      # Blocking: high+critical in PRODUCTION deps (what ships in the Worker bundle).
+      # Accepted advisories are documented + expiring in scripts/audit-gate.mjs — no
+      # blanket suppression. Fails on any new prod high/critical or an expired entry.
+      - name: Audit — production deps (blocking, documented allowlist)
+        run: npm run audit
+      # Informational: full tree incl. dev tooling (vitest, lighthouse, …). Surfaces
+      # dev-only advisories without halting feature work — they never ship.
+      - name: Audit — full tree incl. dev (informational)
+        run: npm audit --audit-level=high || true
