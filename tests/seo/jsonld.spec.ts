@@ -3,6 +3,7 @@ import {
   buildServiceSchema,
   buildBreadcrumbSchema,
   buildOrganizationSchema,
+  buildCreativeWorkSchema,
 } from '@/lib/seo/jsonld';
 
 describe('JSON-LD builders', () => {
@@ -30,5 +31,16 @@ describe('JSON-LD builders', () => {
 
   it('Organization @context is schema.org', () => {
     expect(buildOrganizationSchema('https://x')['@context']).toBe('https://schema.org');
+  });
+
+  it('CreativeWork carries the required fields + Organization creator', () => {
+    const w = buildCreativeWorkSchema({
+      name: 'Riyadh Season Launch',
+      description: 'A full-funnel campaign.',
+      url: 'https://x/portfolio/riyadh-season-launch',
+    });
+    expect(w['@type']).toBe('CreativeWork');
+    expect(w.name).toBe('Riyadh Season Launch');
+    expect((w.creator as { '@type': string })['@type']).toBe('Organization');
   });
 });
