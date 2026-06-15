@@ -1,0 +1,14 @@
+---
+import SearchPage from '@/components/SearchPage.astro';
+
+// Tier-A static shell, NOINDEX (results are dynamic + parameterized, never indexed). The
+// shell is query-independent so it edge-caches like any Tier-A page; results are fetched
+// client-side from /api/search (no-store). Deliberately NOT in the sitemap (noindex).
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set('Cache-Tag', 'tenant:default,route:search,locale:en');
+---
+
+<SearchPage locale="en" />

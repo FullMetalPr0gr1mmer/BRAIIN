@@ -1,0 +1,200 @@
+---
+import type { Locale } from '@schemas/primitives';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+const STR = {
+  en: {
+    title: 'Search',
+    placeholder: 'Search services, work, articles…',
+    label: 'Search Braiin Station',
+    button: 'Search',
+    hint: 'Type at least 2 characters.',
+    searching: 'Searching…',
+    empty: 'No results.',
+    didYouMean: 'Did you mean:',
+    noscript: 'Search needs JavaScript. Browse Services or Portfolio instead.',
+  },
+  ar: {
+    title: 'البحث',
+    placeholder: 'ابحث في الخدمات والأعمال والمقالات…',
+    label: 'ابحث في بريّن ستيشن',
+    button: 'بحث',
+    hint: 'اكتب حرفين على الأقل.',
+    searching: 'جارٍ البحث…',
+    empty: 'لا توجد نتائج.',
+    didYouMean: 'هل تقصد:',
+    noscript: 'البحث يحتاج إلى جافاسكربت. تصفّح الخدمات أو الأعمال بدلًا من ذلك.',
+  },
+}[locale];
+---
+
+{
+  /* Tier-A static shell, but NOINDEX: search results are dynamic + parameterized and must
+    never be indexed (thin/duplicate URLs + reflected-text vector). The shell is
+    query-independent so it edge-caches like any Tier-A page; results come client-side
+    from /api/search (no-store). robots=noindex,follow. */
+}
+<BaseLayout
+  title={`${STR.title} — Braiin Station`}
+  description={STR.label}
+  locale={locale}
+  logicalPath="/search"
+  robots="noindex,follow"
+>
+  <main class="container search-page">
+    <h1>{STR.title}</h1>
+    <form id="search-form" role="search" class="search-form" data-locale={locale} novalidate>
+      <label class="sr-only" for="search-input">{STR.label}</label>
+      <input
+        id="search-input"
+        name="q"
+        type="search"
+        inputmode="search"
+        autocomplete="off"
+        maxlength="64"
+        minlength="2"
+        required
+        placeholder={STR.placeholder}
+      />
+      <button type="submit" class="cta">{STR.button}</button>
+    </form>
+    <p class="search-hint">{STR.hint}</p>
+
+    <section
+      id="search-results"
+      class="search-results"
+      aria-live="polite"
+      aria-busy="false"
+      data-searching={STR.searching}
+      data-empty={STR.empty}
+      data-didyoumean={STR.didYouMean}
+    >
+    </section>
+
+    <noscript><p class="notice">{STR.noscript}</p></noscript>
+  </main>
+</BaseLayout>
+
+<script>
+  // Locale-aware path builder (mirrors src/lib/i18n localizedPath) + entity → route map.
+  const BASE: Record<string, string> = {
+    service: '/services/',
+    portfolio: '/portfolio/',
+    blog: '/creative-knowledge/',
+  };
+
+  interface Hit {
+    entity_type: 'service' | 'portfolio' | 'blog';
+    slug: string;
+    title: Record<string, string>;
+    snippet: string | null;
+    rank: number;
+  }
+
+  const form = document.getElementById('search-form') as HTMLFormElement | null;
+  const input = document.getElementById('search-input') as HTMLInputElement | null;
+  const out = document.getElementById('search-results') as HTMLElement | null;
+  const locale = (form?.dataset.locale === 'ar' ? 'ar' : 'en') as 'en' | 'ar';
+
+  function localized(path: string): string {
+    return locale === 'ar' ? `/ar${path}` : path;
+  }
+
+  function setBusy(busy: boolean) {
+    if (!out) return;
+    out.setAttribute('aria-busy', busy ? 'true' : 'false');
+    if (busy) out.textContent = out.dataset.searching ?? '';
+  }
+
+  function render(results: Hit[], suggestions: Hit[]) {
+    if (!out) return;
+    out.textContent = '';
+    if (results.length === 0 && suggestions.length === 0) {
+      out.textContent = out.dataset.empty ?? '';
+      return;
+    }
+    const list = (hits: Hit[]) => {
+      const ul = document.createElement('ul');
+      ul.className = 'search-hit-list';
+      for (const h of hits) {
+        const li = document.createElement('li');
+        li.className = 'search-hit';
+        const a = document.createElement('a');
+        a.href = localized((BASE[h.entity_type] ?? '/') + h.slug);
+        const h3 = document.createElement('h3');
+        // textContent only — never innerHTML (snippet is server text; CSP has no inline).
+        h3.textContent = h.title[locale] ?? h.title.en ?? h.slug;
+        a.appendChild(h3);
+        if (h.snippet) {
+          const p = document.createElement('p');
+          p.textContent = h.snippet;
+          a.appendChild(p);
+        }
+        li.appendChild(a);
+        ul.appendChild(li);
+      }
+      return ul;
+    };
+    if (results.length > 0) {
+      out.appendChild(list(results));
+    } else {
+      const p = document.createElement('p');
+      p.textContent = out.dataset.didyoumean ?? '';
+      out.appendChild(p);
+      out.appendChild(list(suggestions));
+    }
+  }
+
+  let seq = 0;
+  async function run(q: string) {
+    const trimmed = q.trim();
+    if (trimmed.length < 2) {
+      if (out) out.textContent = '';
+      return;
+    }
+    const mine = ++seq;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}&locale=${locale}`, {
+        headers: { accept: 'application/json' },
+      });
+      if (mine !== seq) return; // a newer query superseded this one
+      setBusy(false);
+      if (!res.ok) {
+        if (out) out.textContent = out.dataset.empty ?? '';
+        return;
+      }
+      const data = (await res.json()) as { results?: Hit[]; suggestions?: Hit[] };
+      render(data.results ?? [], data.suggestions ?? []);
+    } catch {
+      if (mine !== seq) return;
+      setBusy(false);
+      if (out) out.textContent = out.dataset.empty ?? '';
+    }
+  }
+
+  // Debounced live search.
+  let t: ReturnType<typeof setTimeout> | undefined;
+  input?.addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(() => run(input.value), 250);
+  });
+  form?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    clearTimeout(t);
+    if (input) run(input.value);
+  });
+
+  // Deep-link / shareable: run an initial ?q= if present.
+  const initial = new URLSearchParams(location.search).get('q');
+  if (initial && input) {
+    input.value = initial;
+    run(initial);
+  }
+</script>
