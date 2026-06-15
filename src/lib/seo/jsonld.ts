@@ -45,6 +45,21 @@ export function buildServiceSchema(opts: {
   };
 }
 
+export function buildCreativeWorkSchema(opts: {
+  name: string;
+  description: string;
+  url: string;
+}): JsonLdNode {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CreativeWork',
+    name: opts.name,
+    description: opts.description,
+    url: opts.url,
+    creator: { '@type': 'Organization', name: ORG_NAME },
+  };
+}
+
 export function buildBreadcrumbSchema(items: { name: string; url: string }[]): JsonLdNode {
   return {
     '@context': 'https://schema.org',

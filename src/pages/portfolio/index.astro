@@ -1,0 +1,14 @@
+---
+import PortfolioIndex from '@/components/PortfolioIndex.astro';
+import { getPublishedPortfolio } from '@/lib/data/portfolio';
+
+// Tier A (indexable, edge-cached SSR). Publish purges the `portfolio:all` cache tag.
+const items = await getPublishedPortfolio();
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set('Cache-Tag', 'tenant:default,route:portfolio,portfolio:all,locale:en');
+---
+
+<PortfolioIndex locale="en" items={items} />

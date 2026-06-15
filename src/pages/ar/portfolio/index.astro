@@ -1,0 +1,13 @@
+---
+import PortfolioIndex from '@/components/PortfolioIndex.astro';
+import { getPublishedPortfolio } from '@/lib/data/portfolio';
+
+const items = await getPublishedPortfolio();
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set('Cache-Tag', 'tenant:default,route:portfolio,portfolio:all,locale:ar');
+---
+
+<PortfolioIndex locale="ar" items={items} />

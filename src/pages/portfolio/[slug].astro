@@ -1,0 +1,19 @@
+---
+import PortfolioDetail from '@/components/PortfolioDetail.astro';
+import { getPortfolioBySlug } from '@/lib/data/portfolio';
+
+const { slug } = Astro.params;
+const item = slug ? await getPortfolioBySlug(slug) : null;
+if (!item) return Astro.rewrite('/404');
+
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set(
+  'Cache-Tag',
+  `tenant:default,route:portfolio-item,portfolio:${item.slug},locale:en`,
+);
+---
+
+<PortfolioDetail locale="en" item={item} />

@@ -1,0 +1,53 @@
+---
+import type { Locale } from '@schemas/primitives';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { buildCreativeWorkSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { localizedPath } from '@/lib/i18n';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import type { PortfolioRow } from '@/lib/data/portfolio';
+
+interface Props {
+  locale: Locale;
+  item: PortfolioRow;
+}
+
+const { locale, item } = Astro.props;
+
+const STR = {
+  en: { cta: 'Start a project like this', home: 'Home', portfolio: 'Portfolio' },
+  ar: { cta: 'ابدأ مشروعًا مثل هذا', home: 'الرئيسية', portfolio: 'أعمالنا' },
+}[locale];
+
+const title = item.title[locale] ?? item.title.en ?? item.slug;
+const summary = item.summary?.[locale] ?? item.summary?.en ?? '';
+// body_html is the server-SANITIZED HTML cache (sanitized on write in the admin,
+// Phase 3). Safe to render; empty until content is authored.
+const bodyHtml = item.body_html?.[locale] ?? item.body_html?.en ?? '';
+
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+const url = base + localizedPath(`/portfolio/${item.slug}`, locale);
+
+const jsonLd = [
+  buildCreativeWorkSchema({ name: title, description: summary, url }),
+  buildBreadcrumbSchema([
+    { name: STR.home, url: base + localizedPath('/', locale) },
+    { name: STR.portfolio, url: base + localizedPath('/portfolio', locale) },
+    { name: title, url },
+  ]),
+];
+---
+
+<BaseLayout
+  title={`${title} — Braiin Station`}
+  description={summary}
+  locale={locale}
+  logicalPath={`/portfolio/${item.slug}`}
+  jsonLd={jsonLd}
+>
+  <main class="container">
+    <h1>{title}</h1>
+    {summary ? <p class="lead">{summary}</p> : null}
+    {bodyHtml ? <div class="prose" set:html={bodyHtml} /> : null}
+    <p><a class="cta" href={localizedPath('/contact', locale)}>{STR.cta}</a></p>
+  </main>
+</BaseLayout>
