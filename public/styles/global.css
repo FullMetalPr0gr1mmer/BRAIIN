@@ -7,7 +7,8 @@
   --bs-surface: #14141b;
   --bs-fg: #e8e8ea;
   --bs-muted: #a0a0ab;
-  --bs-accent: #00e5ff; /* TODO(a11y): contrast-audit against --bs-bg before launch */
+  --bs-accent: #00e5ff; /* WCAG 2.2 AA: 12.77:1 on --bs-bg, 11.92:1 on --bs-surface, 12.77:1
+                           as .cta dark-text-on-neon. Gated by scripts/contrast-audit.mjs (KAN-23). */
   --bs-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --bs-maxw: 72rem;
 }

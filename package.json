@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "size": "size-limit",
     "lhci": "lhci autorun",
-    "audit": "node scripts/audit-gate.mjs"
+    "audit": "node scripts/audit-gate.mjs",
+    "a11y:contrast": "node scripts/contrast-audit.mjs"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^12.6.13",

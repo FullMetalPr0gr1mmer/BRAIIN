@@ -37,6 +37,8 @@ jobs:
         run: npm run format:check
       - name: Unit + schema + authz tests
         run: npm run test
+      - name: A11y — WCAG AA contrast gate (token-level, browser-free)
+        run: npm run a11y:contrast
       - name: Build (Cloudflare adapter)
         run: npm run build
 
