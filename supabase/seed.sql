@@ -55,3 +55,14 @@ insert into public.statistics (tenant_id, slug, label, value, status, sort_order
   ('00000000-0000-0000-0000-0000000000b1', 'services', '{"en":"Creative services","ar":"خدمة إبداعية"}', '14',   'published', 2),
   ('00000000-0000-0000-0000-0000000000b1', 'years',    '{"en":"Years in MENA","ar":"سنوات في المنطقة"}',  '8',    'published', 3)
 on conflict (tenant_id, slug) do nothing;
+
+-- Partner/client logos for the home marquee. v1 renders the name as a text wordmark; the
+-- content team uploads real logo assets (logo_url) later. Placeholder URLs for now.
+insert into public.partner_logos (tenant_id, name, logo_url, sort_order, visible) values
+  ('00000000-0000-0000-0000-0000000000b1', 'Riyadh Season',  '/partners/riyadh-season.svg', 1, true),
+  ('00000000-0000-0000-0000-0000000000b1', 'NEOM',           '/partners/neom.svg',          2, true),
+  ('00000000-0000-0000-0000-0000000000b1', 'stc',            '/partners/stc.svg',           3, true),
+  ('00000000-0000-0000-0000-0000000000b1', 'Saudi Arabian Airlines', '/partners/saudia.svg', 4, true),
+  ('00000000-0000-0000-0000-0000000000b1', 'Aramco',         '/partners/aramco.svg',        5, true),
+  ('00000000-0000-0000-0000-0000000000b1', 'Qiddiya',        '/partners/qiddiya.svg',       6, true)
+on conflict do nothing;

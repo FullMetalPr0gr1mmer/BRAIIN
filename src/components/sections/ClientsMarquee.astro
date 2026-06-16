@@ -1,0 +1,45 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { getPartnerLogos, type PartnerLogoRow } from '@/lib/data/partnerLogos';
+
+interface Props {
+  locale: Locale;
+  items?: PartnerLogoRow[];
+}
+
+const { locale } = Astro.props;
+
+const STR = {
+  en: { heading: 'Trusted by' },
+  ar: { heading: 'موضع ثقة' },
+}[locale];
+
+// Self-contained: uses injected data if present, else fetches. Hidden entirely when there
+// are no logos (resilient empty state). v1 renders the partner NAME as a text wordmark
+// (no image assets yet); Phase 3 swaps to <Picture> once logo_url assets are uploaded.
+const items = Astro.props.items ?? (await getPartnerLogos());
+
+// Duplicate the track so the CSS transform can loop seamlessly (translateX -50%).
+const track = [...items, ...items];
+---
+
+{
+  items.length > 0 && (
+    <section class="clients" aria-label={STR.heading}>
+      <div class="container">
+        <h2 class="clients-heading">{STR.heading}</h2>
+      </div>
+      {/* CSS-only marquee: compositor-only transform animation, paused under
+          prefers-reduced-motion (see global.css). The viewport masks the overflow. */}
+      <div class="marquee" data-count={items.length}>
+        <ul class="marquee-track">
+          {track.map((p, i) => (
+            <li class="marquee-item" aria-hidden={i >= items.length ? 'true' : undefined}>
+              {p.name}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )
+}

@@ -11,6 +11,7 @@ export interface SectionData {
 
 export const DEFAULT_HOME_SECTIONS: SectionData[] = [
   { type: 'hero' },
+  { type: 'clientsMarquee' },
   { type: 'servicesOverview' },
   { type: 'cta' },
   { type: 'social' },
