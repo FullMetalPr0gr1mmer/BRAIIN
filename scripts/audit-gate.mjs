@@ -45,6 +45,13 @@ const ALLOWLIST = [
     reason: 'Wrangler/undici, deploy-time only (see GHSA-f269). Fixed by adapter 13 — KAN-31.',
     expires: '2026-09-15',
   },
+  {
+    id: 'GHSA-96hv-2xvq-fx4p',
+    pkg: 'ws',
+    reason:
+      'Local Workers emulator (ws via @astrojs/cloudflare→wrangler→miniflare); not in the shipped Worker runtime, and we run no ws server / no Supabase realtime, so the fragment-DoS is unreachable. Fixed by the wrangler-major upgrade — KAN-31.',
+    expires: '2026-09-15',
+  },
 ];
 
 function runAudit() {
