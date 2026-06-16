@@ -1,12 +1,16 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import { localizedPath } from '@/lib/i18n';
+import StreamPlayer from '@/components/StreamPlayer.astro';
 
 interface Props {
   locale: Locale;
+  /** Cloudflare Stream UID. When set, the hero renders the video variant (poster facade,
+      poster = LCP img); otherwise the art variant. CMS-driven (section prop). */
+  videoUid?: string;
 }
 
-const { locale } = Astro.props;
+const { locale, videoUid } = Astro.props;
 
 const STR = {
   en: {
@@ -22,10 +26,11 @@ const STR = {
 }[locale];
 ---
 
-<section class="hero">
+<section class:list={['hero', { 'hero--video': videoUid }]}>
   <div class="container">
     <h1>{STR.heading}</h1>
     <p class="hero-sub">{STR.sub}</p>
     <a class="cta" href={localizedPath('/services', locale)}>{STR.cta}</a>
+    {videoUid ? <StreamPlayer uid={videoUid} title={STR.heading} /> : null}
   </div>
 </section>

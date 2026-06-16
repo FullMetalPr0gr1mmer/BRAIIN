@@ -261,6 +261,75 @@ section {
   display: none;
 }
 
+/* ---- Clients marquee (CSS-only, compositor-only, reduced-motion-aware) ---- */
+.clients {
+  padding: 2.5rem 0;
+}
+
+.clients-heading {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--bs-muted);
+  margin: 0 0 1.25rem;
+}
+
+.marquee {
+  overflow: hidden;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 3rem;
+  /* fade both edges so items appear/disappear smoothly */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+.marquee-track {
+  display: flex;
+  align-items: center;
+  gap: 3.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: max-content;
+  /* only transform animates → stays on the compositor (Pillar 2) */
+  animation: marquee-scroll 40s linear infinite;
+  will-change: transform;
+}
+
+.marquee-item {
+  flex: none;
+  white-space: nowrap;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--bs-fg);
+  opacity: 0.8;
+}
+
+@keyframes marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    /* track is the logo set duplicated 2× ⇒ -50% loops seamlessly */
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+    flex-wrap: wrap;
+    width: auto;
+    justify-content: center;
+    gap: 1.5rem 2.5rem;
+  }
+  /* show each logo once (drop the loop-duplicate) when not animating */
+  .marquee-item[aria-hidden] {
+    display: none;
+  }
+}
+
 /* Visually-hidden but screen-reader-available (search input label). */
 .sr-only {
   position: absolute;
