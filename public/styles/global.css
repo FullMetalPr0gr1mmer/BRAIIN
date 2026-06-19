@@ -152,6 +152,12 @@ section {
   font-size: 1.1rem;
 }
 
+.post-meta {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--bs-muted);
+}
+
 .stream {
   position: relative;
   aspect-ratio: 16 / 9;

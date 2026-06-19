@@ -1,0 +1,74 @@
+---
+import type { Locale } from '@schemas/primitives';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { buildArticleSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { localizedPath } from '@/lib/i18n';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import type { PostRow } from '@/lib/data/blog';
+
+interface Props {
+  locale: Locale;
+  post: PostRow;
+}
+
+const { locale, post } = Astro.props;
+
+const STR = {
+  en: { home: 'Home', blog: 'Creative Knowledge', by: 'By', read: 'min read' },
+  ar: { home: 'الرئيسية', blog: 'المعرفة الإبداعية', by: 'بقلم', read: 'دقيقة قراءة' },
+}[locale];
+
+const title = post.title[locale] ?? post.title.en ?? post.slug;
+const excerpt = post.excerpt?.[locale] ?? post.excerpt?.en ?? '';
+// body_html is the server-SANITIZED HTML cache (sanitized on write in the admin, Phase 3).
+const bodyHtml = post.body_html?.[locale] ?? post.body_html?.en ?? '';
+const author = post.author?.name[locale] ?? post.author?.name.en ?? '';
+
+const fmtDate = (iso: string | null) =>
+  iso
+    ? new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en', { dateStyle: 'medium' }).format(
+        new Date(iso),
+      )
+    : '';
+
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+const url = base + localizedPath(`/creative-knowledge/${post.slug}`, locale);
+
+const jsonLd = [
+  buildArticleSchema({
+    headline: title,
+    description: excerpt,
+    url,
+    ...(author ? { authorName: author } : {}),
+    ...(post.published_at ? { datePublished: post.published_at } : {}),
+    ...(post.updated_at ? { dateModified: post.updated_at } : {}),
+    ...(post.cover_image_url ? { image: post.cover_image_url } : {}),
+  }),
+  buildBreadcrumbSchema([
+    { name: STR.home, url: base + localizedPath('/', locale) },
+    { name: STR.blog, url: base + localizedPath('/creative-knowledge', locale) },
+    { name: title, url },
+  ]),
+];
+---
+
+<BaseLayout
+  title={`${title} — Braiin Station`}
+  description={excerpt}
+  locale={locale}
+  logicalPath={`/creative-knowledge/${post.slug}`}
+  jsonLd={jsonLd}
+>
+  <main class="container">
+    <article>
+      <h1>{title}</h1>
+      <p class="post-meta">
+        {author ? `${STR.by} ${author}` : ''}
+        {post.published_at ? ` · ${fmtDate(post.published_at)}` : ''}
+        {post.reading_minutes ? ` · ${post.reading_minutes} ${STR.read}` : ''}
+      </p>
+      {excerpt ? <p class="lead">{excerpt}</p> : null}
+      {bodyHtml ? <div class="prose" set:html={bodyHtml} /> : null}
+    </article>
+  </main>
+</BaseLayout>

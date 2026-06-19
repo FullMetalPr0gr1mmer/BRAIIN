@@ -1,0 +1,85 @@
+---
+import type { Locale } from '@schemas/primitives';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { localizedPath } from '@/lib/i18n';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import type { PostRow } from '@/lib/data/blog';
+
+interface Props {
+  locale: Locale;
+  posts: PostRow[];
+}
+
+const { locale, posts } = Astro.props;
+
+const STR = {
+  en: {
+    title: 'Creative Knowledge',
+    intro: 'Field notes on branding, motion, video, web, and being found by people and AI.',
+    empty: 'Articles will appear here once published.',
+    by: 'By',
+    read: 'min read',
+    home: 'Home',
+  },
+  ar: {
+    title: 'المعرفة الإبداعية',
+    intro:
+      'ملاحظات في الهوية والموشن والفيديو والويب، والظهور أمام الناس ومحركات الذكاء الاصطناعي.',
+    empty: 'ستظهر المقالات هنا بعد نشرها.',
+    by: 'بقلم',
+    read: 'دقيقة قراءة',
+    home: 'الرئيسية',
+  },
+}[locale];
+
+const fmtDate = (iso: string | null) =>
+  iso
+    ? new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en', { dateStyle: 'medium' }).format(
+        new Date(iso),
+      )
+    : '';
+
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+const breadcrumb = buildBreadcrumbSchema([
+  { name: STR.home, url: base + localizedPath('/', locale) },
+  { name: STR.title, url: base + localizedPath('/creative-knowledge', locale) },
+]);
+---
+
+<BaseLayout
+  title={`${STR.title} — Braiin Station`}
+  description={STR.intro}
+  locale={locale}
+  logicalPath="/creative-knowledge"
+  jsonLd={[breadcrumb]}
+>
+  <main class="container">
+    <h1>{STR.title}</h1>
+    <p class="lead">{STR.intro}</p>
+    {
+      posts.length === 0 ? (
+        <p class="notice">{STR.empty}</p>
+      ) : (
+        <ul class="service-grid">
+          {posts.map((p) => {
+            const author = p.author?.name[locale] ?? p.author?.name.en ?? '';
+            return (
+              <li class="service-card">
+                <a href={localizedPath(`/creative-knowledge/${p.slug}`, locale)}>
+                  <h2>{p.title[locale] ?? p.title.en ?? p.slug}</h2>
+                  {p.excerpt ? <p>{p.excerpt[locale] ?? p.excerpt.en ?? ''}</p> : null}
+                  <p class="post-meta">
+                    {author ? `${STR.by} ${author}` : ''}
+                    {p.published_at ? ` · ${fmtDate(p.published_at)}` : ''}
+                    {p.reading_minutes ? ` · ${p.reading_minutes} ${STR.read}` : ''}
+                  </p>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )
+    }
+  </main>
+</BaseLayout>

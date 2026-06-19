@@ -1,0 +1,13 @@
+---
+import BlogIndex from '@/components/BlogIndex.astro';
+import { getPublishedPosts } from '@/lib/data/blog';
+
+const posts = await getPublishedPosts();
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set('Cache-Tag', 'tenant:default,route:blog,blog:all,locale:ar');
+---
+
+<BlogIndex locale="ar" posts={posts} />
