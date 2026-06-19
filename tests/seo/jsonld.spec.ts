@@ -5,6 +5,7 @@ import {
   buildOrganizationSchema,
   buildCreativeWorkSchema,
   buildPersonSchema,
+  buildArticleSchema,
 } from '@/lib/seo/jsonld';
 
 describe('JSON-LD builders', () => {
@@ -51,6 +52,29 @@ describe('JSON-LD builders', () => {
     });
     expect(p.description).toBe('Oversees film and motion.');
     expect(p.image).toBe('https://x/a.jpg');
+  });
+
+  it('Article (BlogPosting) carries named Person author + truthful dates when provided', () => {
+    const a = buildArticleSchema({
+      headline: 'Arabic-first brand systems',
+      description: 'Why Arabic-first wins.',
+      url: 'https://x/creative-knowledge/arabic-first',
+      authorName: 'Creative Director',
+      datePublished: '2026-06-10T09:00:00Z',
+      dateModified: '2026-06-12T09:00:00Z',
+    });
+    expect(a['@type']).toBe('BlogPosting');
+    expect((a.author as { '@type': string; name: string })['@type']).toBe('Person');
+    expect((a.author as { name: string }).name).toBe('Creative Director');
+    expect(a.datePublished).toBe('2026-06-10T09:00:00Z');
+    expect(a.dateModified).toBe('2026-06-12T09:00:00Z');
+  });
+
+  it('Article falls back to Organization author and omits absent dates', () => {
+    const a = buildArticleSchema({ headline: 'H', description: 'D', url: 'https://x/ck/h' });
+    expect((a.author as { '@type': string })['@type']).toBe('Organization');
+    expect(a.datePublished).toBeUndefined();
+    expect(a.image).toBeUndefined();
   });
 
   it('CreativeWork carries the required fields + Organization creator', () => {

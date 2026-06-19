@@ -80,6 +80,36 @@ export function buildCreativeWorkSchema(opts: {
   };
 }
 
+export function buildArticleSchema(opts: {
+  headline: string;
+  description: string;
+  url: string;
+  authorName?: string;
+  datePublished?: string;
+  dateModified?: string;
+  image?: string;
+}): JsonLdNode {
+  // BlogPosting for Creative Knowledge articles (CLAUDE.md Pillar 3). Named author
+  // (E-E-A-T, no anonymous authorship); truthful dates. Optional fields emitted only
+  // when present to stay CI-valid.
+  const node: JsonLdNode = {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: opts.headline,
+    description: opts.description,
+    url: opts.url,
+    publisher: { '@type': 'Organization', name: ORG_NAME },
+    author: {
+      '@type': opts.authorName ? 'Person' : 'Organization',
+      name: opts.authorName ?? ORG_NAME,
+    },
+  };
+  if (opts.datePublished) node.datePublished = opts.datePublished;
+  if (opts.dateModified) node.dateModified = opts.dateModified;
+  if (opts.image) node.image = opts.image;
+  return node;
+}
+
 export function buildBreadcrumbSchema(items: { name: string; url: string }[]): JsonLdNode {
   return {
     '@context': 'https://schema.org',

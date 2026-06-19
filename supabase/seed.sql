@@ -66,3 +66,28 @@ insert into public.partner_logos (tenant_id, name, logo_url, sort_order, visible
   ('00000000-0000-0000-0000-0000000000b1', 'Aramco',         '/partners/aramco.svg',        5, true),
   ('00000000-0000-0000-0000-0000000000b1', 'Qiddiya',        '/partners/qiddiya.svg',       6, true)
 on conflict do nothing;
+
+-- A blog category + two published posts (author + category resolved by slug subquery) so
+-- the Creative Knowledge engine renders before the content team authors real articles.
+insert into public.categories (tenant_id, slug, name) values
+  ('00000000-0000-0000-0000-0000000000b1', 'insights', '{"en":"Insights","ar":"رؤى"}')
+on conflict (tenant_id, slug) do nothing;
+
+insert into public.blog_posts
+  (tenant_id, slug, title, excerpt, body_html, author_id, category_id, status, published_at, reading_minutes)
+values
+  ('00000000-0000-0000-0000-0000000000b1', 'arabic-first-brand-systems',
+   '{"en":"Arabic-first brand systems","ar":"أنظمة هوية تبدأ بالعربية"}',
+   '{"en":"Why designing the Arabic wordmark first makes the Latin one better.","ar":"لماذا يبدأ تصميم الشعار بالعربية أولًا يحسّن النسخة اللاتينية."}',
+   '{"en":"<p>Designing Arabic-first forces clarity in the letterforms that Latin then inherits.</p>","ar":"<p>التصميم بالعربية أولًا يفرض وضوحًا في الأحرف ترثه اللاتينية لاحقًا.</p>"}',
+   (select id from public.team_members where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'lead-creative'),
+   (select id from public.categories where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'insights'),
+   'published', '2026-06-10T09:00:00Z', 4),
+  ('00000000-0000-0000-0000-0000000000b1', 'getting-cited-by-ai-answer-engines',
+   '{"en":"Getting cited by AI answer engines","ar":"أن تُذكر في محركات الإجابة بالذكاء الاصطناعي"}',
+   '{"en":"Answer-first structure, named stats, and real authorship win citations.","ar":"البنية القائمة على الإجابة، والإحصاءات المسماة، والتأليف الحقيقي تكسب الاستشهادات."}',
+   '{"en":"<p>Answer-engine visibility rewards answer-first paragraphs and named, verifiable authors.</p>","ar":"<p>ظهورك في محركات الإجابة يكافئ الفقرات التي تبدأ بالإجابة والمؤلفين المعروفين الموثوقين.</p>"}',
+   (select id from public.team_members where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'head-of-growth'),
+   (select id from public.categories where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'insights'),
+   'published', '2026-06-14T09:00:00Z', 5)
+on conflict (tenant_id, slug) do nothing;
