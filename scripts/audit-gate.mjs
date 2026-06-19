@@ -19,12 +19,21 @@ import { execSync } from 'node:child_process';
  * upgrade tracked in KAN-31. Re-evaluate on or before `expires`.
  */
 const ALLOWLIST = [
+  // --- Astro framework advisories: ONLY fix is astro@6 (major, needs Node 22) = KAN-31.
+  //     Reviewed as NOT reachable in our code; short expiry to force the upgrade soon.
   {
-    id: 'GHSA-gv7w-rqvm-qjhr',
-    pkg: 'esbuild',
+    id: 'GHSA-8hv8-536x-4wqp',
+    pkg: 'astro',
     reason:
-      'Build-time bundler (esbuild via vite/astro); not in the shipped Worker bundle. Deno-installer RCE path not applicable to our build. Fix needs Astro 6 (Node 22) — KAN-31.',
-    expires: '2026-09-15',
+      'Reflected XSS via unescaped slot NAME. Not reachable: we use only static slot names (<slot/>, Astro.slots.render("default")) — no user-derived slot names. Fix = astro 6 — KAN-31.',
+    expires: '2026-06-30',
+  },
+  {
+    id: 'GHSA-2pvr-wf23-7pc7',
+    pkg: 'astro',
+    reason:
+      'Host-header SSRF in prerendered error-page fetch. Framework-internal; mitigated by Cloudflare validating Host at the edge + SSR (no prerendered error pages). Fix = astro 6 — KAN-31.',
+    expires: '2026-06-30',
   },
   {
     id: 'GHSA-f269-vfmq-vjvj',
@@ -44,6 +53,13 @@ const ALLOWLIST = [
     pkg: 'undici',
     reason: 'Wrangler/undici, deploy-time only (see GHSA-f269). Fixed by adapter 13 — KAN-31.',
     expires: '2026-09-15',
+  },
+  {
+    id: 'GHSA-vxpw-j846-p89q',
+    pkg: 'undici',
+    reason:
+      'WebSocket DoS via fragment-count bypass. Wrangler/undici, deploy-time only (see GHSA-f269); not in the shipped Worker runtime, no ws server. Fixed by adapter 13 — KAN-31.',
+    expires: '2026-06-30',
   },
   {
     id: 'GHSA-96hv-2xvq-fx4p',
