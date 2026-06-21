@@ -1,0 +1,21 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+
+// AR twin of the 404 so /ar/* misses (rewritten here from AR detail routes) render in
+// Arabic/RTL. noindex. Note: arbitrary unmatched /ar/* paths still fall to the root EN
+// 404 (Astro serves one root 404) — covered for the common mistyped-slug case.
+Astro.response.status = 404;
+---
+
+<BaseLayout
+  title="غير موجود — بريّن ستيشن"
+  description="الصفحة التي تبحث عنها غير موجودة."
+  locale="ar"
+  logicalPath="/404"
+  robots="noindex,follow"
+>
+  <main class="container">
+    <h1>404</h1>
+    <p>هذه الصفحة غير موجودة. <a href="/ar">العودة إلى الرئيسية</a>.</p>
+  </main>
+</BaseLayout>

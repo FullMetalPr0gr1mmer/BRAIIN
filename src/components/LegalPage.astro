@@ -10,6 +10,14 @@ interface Props {
 }
 
 const { doc, locale, logicalPath } = Astro.props;
+
+// Tier A (indexable, edge-cached SSR) — same long s-maxage + purge-by-tag as other
+// content routes. Set here so all 6 legal routes (EN/AR × privacy/terms/cookie) inherit it.
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=31536000, stale-while-revalidate=86400',
+);
+Astro.response.headers.set('Cache-Tag', `tenant:default,route:legal,locale:${locale}`);
 ---
 
 <BaseLayout

@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { StyleFinderInputSchema } from '@schemas/styleFinder';
 import { MemoryRateStore, checkRateLimits, styleFinderRules } from '@/lib/ai/rateLimit';
 import { ZeroSpendStore, underSpendCap } from '@/lib/ai/spendCap';
+import { isSameOrigin } from '@/lib/http/csrf';
 
 // AI Style-Finder — server-side proxy boundary (CLAUDE.md §2/§3). LOGIC IS DEFERRED: this
 // returns 501, but with the FULL security/cost envelope a model proxy requires, evaluated
@@ -31,14 +32,8 @@ function clientIp(request: Request): string {
 
 export const POST: APIRoute = async ({ request }) => {
   // CSRF / cost-abuse: same-origin only (this endpoint would spend money).
-  const origin = request.headers.get('origin');
-  const host = request.headers.get('host');
-  if (origin && host) {
-    try {
-      if (new URL(origin).host !== host) return json({ ok: false, error: 'bad-origin' }, 403);
-    } catch {
-      return json({ ok: false, error: 'bad-origin' }, 403);
-    }
+  if (!isSameOrigin(request.headers.get('origin'), request.headers.get('host'))) {
+    return json({ ok: false, error: 'bad-origin' }, 403);
   }
 
   let body: unknown;

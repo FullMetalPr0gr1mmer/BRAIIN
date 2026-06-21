@@ -14,6 +14,7 @@ interface Props {
   logicalPath: string;
   jsonLd?: JsonLdNode[];
   robots?: string;
+  ogImage?: string;
 }
 
 const {
@@ -23,6 +24,7 @@ const {
   logicalPath,
   jsonLd = [],
   robots = 'index,follow',
+  ogImage,
 } = Astro.props;
 const direction = dir(locale);
 ---
@@ -37,6 +39,7 @@ const direction = dir(locale);
       logicalPath={logicalPath}
       jsonLd={jsonLd}
       robots={robots}
+      {...ogImage ? { ogImage } : {}}
     />
     <link rel="stylesheet" href="/styles/global.css" />
   </head>

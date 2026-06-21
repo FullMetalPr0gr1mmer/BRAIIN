@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { LeadInputSchema } from '@schemas/lead';
 import { createLead } from '@/lib/data/leads';
+import { isSameOrigin } from '@/lib/http/csrf';
 
 // Public contact / project-inquiry submission — the ONLY public write path (RLS denies
 // anon on the leads table). Server-side Zod validation + honeypot (schema) + same-origin
@@ -17,14 +18,8 @@ function json(body: unknown, status: number): Response {
 
 export const POST: APIRoute = async ({ request }) => {
   // CSRF: same-origin only (defense-in-depth alongside Astro's security.checkOrigin).
-  const origin = request.headers.get('origin');
-  const host = request.headers.get('host');
-  if (origin && host) {
-    try {
-      if (new URL(origin).host !== host) return json({ ok: false, error: 'bad-origin' }, 403);
-    } catch {
-      return json({ ok: false, error: 'bad-origin' }, 403);
-    }
+  if (!isSameOrigin(request.headers.get('origin'), request.headers.get('host'))) {
+    return json({ ok: false, error: 'bad-origin' }, 403);
   }
 
   let body: unknown;

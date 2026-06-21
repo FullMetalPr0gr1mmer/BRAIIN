@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { buildArticleSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
-import { localizedPath } from '@/lib/i18n';
+import { localizedPath, formatDate } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import type { PostRow } from '@/lib/data/blog';
 
@@ -23,13 +23,6 @@ const excerpt = post.excerpt?.[locale] ?? post.excerpt?.en ?? '';
 // body_html is the server-SANITIZED HTML cache (sanitized on write in the admin, Phase 3).
 const bodyHtml = post.body_html?.[locale] ?? post.body_html?.en ?? '';
 const author = post.author?.name[locale] ?? post.author?.name.en ?? '';
-
-const fmtDate = (iso: string | null) =>
-  iso
-    ? new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en', { dateStyle: 'medium' }).format(
-        new Date(iso),
-      )
-    : '';
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const url = base + localizedPath(`/creative-knowledge/${post.slug}`, locale);
@@ -58,13 +51,14 @@ const jsonLd = [
   locale={locale}
   logicalPath={`/creative-knowledge/${post.slug}`}
   jsonLd={jsonLd}
+  {...post.cover_image_url ? { ogImage: post.cover_image_url } : {}}
 >
   <main class="container">
     <article>
       <h1>{title}</h1>
       <p class="post-meta">
         {author ? `${STR.by} ${author}` : ''}
-        {post.published_at ? ` · ${fmtDate(post.published_at)}` : ''}
+        {post.published_at ? ` · ${formatDate(post.published_at, locale)}` : ''}
         {post.reading_minutes ? ` · ${post.reading_minutes} ${STR.read}` : ''}
       </p>
       {excerpt ? <p class="lead">{excerpt}</p> : null}

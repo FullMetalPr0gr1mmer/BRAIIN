@@ -49,4 +49,7 @@ const ogLocale = locale === 'ar' ? 'ar_SA' : 'en_US';
 <meta property="og:locale" content={ogLocale} />
 {ogImage ? <meta property="og:image" content={ogImage} /> : null}
 <meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+{ogImage ? <meta name="twitter:image" content={ogImage} /> : null}
 {jsonLd.map((node) => <JsonLd data={node} />)}
