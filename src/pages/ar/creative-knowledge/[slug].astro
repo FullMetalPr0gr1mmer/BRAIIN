@@ -4,7 +4,7 @@ import { getPostBySlug } from '@/lib/data/blog';
 
 const { slug } = Astro.params;
 const post = slug ? await getPostBySlug(slug) : null;
-if (!post) return Astro.rewrite('/404');
+if (!post) return Astro.rewrite('/ar/404');
 
 Astro.response.headers.set(
   'Cache-Control',

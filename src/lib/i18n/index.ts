@@ -28,6 +28,14 @@ export function localizedPath(logicalPath: string, locale: Locale): string {
   return clean;
 }
 
+/** Locale-aware medium date from an ISO string; '' when null (shared by blog index/detail). */
+export function formatDate(iso: string | null, locale: Locale): string {
+  if (!iso) return '';
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en', { dateStyle: 'medium' }).format(
+    new Date(iso),
+  );
+}
+
 export interface HreflangAlternate {
   hreflang: string;
   href: string;

@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { buildBreadcrumbSchema } from '@/lib/seo/jsonld';
-import { localizedPath } from '@/lib/i18n';
+import { localizedPath, formatDate } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import type { PostRow } from '@/lib/data/blog';
 
@@ -32,13 +32,6 @@ const STR = {
     home: 'الرئيسية',
   },
 }[locale];
-
-const fmtDate = (iso: string | null) =>
-  iso
-    ? new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en', { dateStyle: 'medium' }).format(
-        new Date(iso),
-      )
-    : '';
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const breadcrumb = buildBreadcrumbSchema([
@@ -71,7 +64,7 @@ const breadcrumb = buildBreadcrumbSchema([
                   {p.excerpt ? <p>{p.excerpt[locale] ?? p.excerpt.en ?? ''}</p> : null}
                   <p class="post-meta">
                     {author ? `${STR.by} ${author}` : ''}
-                    {p.published_at ? ` · ${fmtDate(p.published_at)}` : ''}
+                    {p.published_at ? ` · ${formatDate(p.published_at, locale)}` : ''}
                     {p.reading_minutes ? ` · ${p.reading_minutes} ${STR.read}` : ''}
                   </p>
                 </a>
