@@ -1,17 +1,12 @@
 import type { APIRoute } from 'astro';
 import { ClientLogSchema } from '@schemas/clientlog';
+import { scrubPii } from '@/lib/log/scrub';
+import { writeSystemLog } from '@/lib/data/systemLog';
 
-// First-party error sink (operational; consent-INdependent). PII is scrubbed before
-// anything is persisted. The Sentry same-origin tunnel + system_logs insert plug in
-// here at provisioning (CLAUDE.md §10).
+// First-party error sink (operational; consent-INdependent). PII is scrubbed server-side
+// before anything is persisted, then written to public.system_logs via the service-role
+// client with a server-resolved tenant (CLAUDE.md §10).
 export const prerender = false;
-
-/** Strip emails and phone-like number runs from free text before persistence. */
-function scrub(s: string): string {
-  return s
-    .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '[email]')
-    .replace(/\+?\d[\d\s().-]{7,}\d/g, '[phone]');
-}
 
 export const POST: APIRoute = async ({ request }) => {
   let body: unknown;
@@ -26,10 +21,19 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response('invalid', { status: 422 });
   }
 
-  const entry = { ...parsed.data, message: scrub(parsed.data.message) };
-  // TODO(provisioning): insert `entry` into public.system_logs via the service-role
-  // client (tenant-scoped) and forward to Sentry via the same-origin tunnel.
-  void entry;
+  // Scrub BOTH the message and the path — a query string can carry an email/phone.
+  const message = scrubPii(parsed.data.message);
+  const path = scrubPii(parsed.data.path);
 
+  // Fire-and-forget by contract: writeSystemLog never throws and no-ops until Supabase
+  // is provisioned, so a logging failure can never turn into a failed client request.
+  await writeSystemLog({
+    level: parsed.data.level,
+    message,
+    source: parsed.data.source ?? 'client',
+    detail: { path, line: parsed.data.line ?? null, col: parsed.data.col ?? null },
+  });
+
+  // TODO(KAN-21): also forward to Sentry via the same-origin tunnel once the DSN exists.
   return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
 };
