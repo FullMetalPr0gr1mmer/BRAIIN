@@ -1,4 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
+// Astro 6+ removed `Astro.locals.runtime.env` (the getter now throws). Worker bindings
+// come from the runtime module instead — works in `astro dev` (workerd) and in prod.
+import { env } from 'cloudflare:workers';
 import { applySecurityHeaders, generateNonce } from '@/lib/http/securityHeaders';
 import { getMaintenanceState, clientIp, maintenanceResponse } from '@/lib/http/maintenance';
 import { lookupRedirect } from '@/lib/http/redirects';
@@ -13,7 +16,6 @@ const CSP_REPORT_ONLY = false;
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url, locals } = context;
-  const env = locals.runtime?.env ?? ({} as CloudflareEnv);
 
   const isAdmin = url.pathname === '/admin' || url.pathname.startsWith('/admin/');
   const isApi = url.pathname.startsWith('/api/');

@@ -7,8 +7,6 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "verbatimModuleSyntax": true,
-    "jsx": "react-jsx",
-    "jsxImportSource": "react",
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
@@ -16,6 +14,12 @@
       "@consent/*": ["packages/consent/*"]
     }
   },
-  "include": [".astro/types.d.ts", "src/**/*", "packages/**/*", "tests/**/*"],
+  "include": [
+    ".astro/types.d.ts",
+    "worker-configuration.d.ts",
+    "src/**/*",
+    "packages/**/*",
+    "tests/**/*"
+  ],
   "exclude": ["dist", "node_modules", ".tools", ".wrangler"]
 }
