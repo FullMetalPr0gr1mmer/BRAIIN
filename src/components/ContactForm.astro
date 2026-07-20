@@ -1,5 +1,6 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import { pickLocale } from '@/lib/i18n';
 import type { ServiceRow } from '@/lib/data/services';
 
 interface Props {
@@ -83,11 +84,7 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
     <label for="cf-service">{STR.service}</label>
     <select id="cf-service" name="service">
       <option value="">{STR.choose}</option>
-      {
-        services.map((s) => (
-          <option value={s.slug}>{s.title[locale] ?? s.title.en ?? s.slug}</option>
-        ))
-      }
+      {services.map((s) => <option value={s.slug}>{pickLocale(s.title, locale, s.slug)}</option>)}
     </select>
   </div>
   <div class="field">

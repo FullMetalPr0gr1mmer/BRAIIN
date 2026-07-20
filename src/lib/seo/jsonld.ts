@@ -110,6 +110,28 @@ export function buildArticleSchema(opts: {
   return node;
 }
 
+/**
+ * FAQPage — the 8th of the eight types CLAUDE.md Pillar 3 requires (the other seven were
+ * built; this one was missed). It is the AEO-load-bearing one: `Question`/`acceptedAnswer`
+ * pairs are the structure answer engines lift verbatim when citing a source, which is the
+ * whole point of the GEO/AEO pillar. Phase 2 scopes an FAQ block on the article system.
+ *
+ * Answers are plain text, not HTML: Google ignores markup here, and passing sanitised
+ * Tiptap HTML through would put author-controlled markup into a `<script>` block. The
+ * caller strips tags; this builder accepts text only (Pillar 1 — sanitise on render).
+ */
+export function buildFaqSchema(items: { question: string; answer: string }[]): JsonLdNode {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: items.map((it) => ({
+      '@type': 'Question',
+      name: it.question,
+      acceptedAnswer: { '@type': 'Answer', text: it.answer },
+    })),
+  };
+}
+
 export function buildBreadcrumbSchema(items: { name: string; url: string }[]): JsonLdNode {
   return {
     '@context': 'https://schema.org',

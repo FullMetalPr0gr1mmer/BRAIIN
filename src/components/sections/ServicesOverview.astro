@@ -1,6 +1,6 @@
 ---
 import type { Locale } from '@schemas/primitives';
-import { localizedPath } from '@/lib/i18n';
+import { localizedPath, pickLocale } from '@/lib/i18n';
 import { getPublishedServices } from '@/lib/data/services';
 
 interface Props {
@@ -33,8 +33,8 @@ const services = await getPublishedServices();
           {services.map((s) => (
             <li class="service-card">
               <a href={localizedPath(`/services/${s.slug}`, locale)}>
-                <h3>{s.title[locale] ?? s.title.en ?? s.slug}</h3>
-                {s.blurb ? <p>{s.blurb[locale] ?? s.blurb.en ?? ''}</p> : null}
+                <h3>{pickLocale(s.title, locale, s.slug)}</h3>
+                {s.blurb ? <p>{pickLocale(s.blurb, locale)}</p> : null}
                 {s.is_teaser ? <span class="badge">{STR.soon}</span> : null}
               </a>
             </li>

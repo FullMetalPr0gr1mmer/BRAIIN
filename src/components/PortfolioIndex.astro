@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { buildBreadcrumbSchema } from '@/lib/seo/jsonld';
-import { localizedPath } from '@/lib/i18n';
+import { localizedPath, pickLocale } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import type { PortfolioRow } from '@/lib/data/portfolio';
 
@@ -53,8 +53,8 @@ const breadcrumb = buildBreadcrumbSchema([
           {items.map((p) => (
             <li class="service-card">
               <a href={localizedPath(`/portfolio/${p.slug}`, locale)}>
-                <h2>{p.title[locale] ?? p.title.en ?? p.slug}</h2>
-                {p.summary ? <p>{p.summary[locale] ?? p.summary.en ?? ''}</p> : null}
+                <h2>{pickLocale(p.title, locale, p.slug)}</h2>
+                {p.summary ? <p>{pickLocale(p.summary, locale)}</p> : null}
               </a>
             </li>
           ))}

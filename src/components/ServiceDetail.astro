@@ -3,7 +3,7 @@ import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import StreamPlayer from '@/components/StreamPlayer.astro';
 import { buildServiceSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
-import { localizedPath } from '@/lib/i18n';
+import { localizedPath, pickLocale } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import type { ServiceRow } from '@/lib/data/services';
 
@@ -19,11 +19,11 @@ const STR = {
   ar: { cta: 'اطلب هذه الخدمة', soon: 'قريبًا', home: 'الرئيسية', services: 'خدماتنا' },
 }[locale];
 
-const title = service.title[locale] ?? service.title.en ?? service.slug;
-const blurb = service.blurb?.[locale] ?? service.blurb?.en ?? '';
+const title = pickLocale(service.title, locale, service.slug);
+const blurb = pickLocale(service.blurb, locale);
 // body_html is the server-SANITIZED HTML cache (sanitized on write in the admin,
 // Phase 3). Safe to render; empty until content is authored.
-const bodyHtml = service.body_html?.[locale] ?? service.body_html?.en ?? '';
+const bodyHtml = pickLocale(service.body_html, locale);
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const url = base + localizedPath(`/services/${service.slug}`, locale);

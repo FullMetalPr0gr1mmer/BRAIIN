@@ -1,5 +1,6 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import { pickLocale } from '@/lib/i18n';
 import { getPublishedTeam, type TeamMemberRow } from '@/lib/data/team';
 
 interface Props {
@@ -29,8 +30,8 @@ const members = Astro.props.members ?? (await getPublishedTeam());
       ) : (
         <ul class="team-list">
           {members.map((m) => {
-            const name = m.name[locale] ?? m.name.en ?? m.slug;
-            const bio = m.bio?.[locale] ?? m.bio?.en ?? '';
+            const name = pickLocale(m.name, locale, m.slug);
+            const bio = pickLocale(m.bio, locale);
             return (
               <li class="team-card">
                 {m.avatar_url ? (
