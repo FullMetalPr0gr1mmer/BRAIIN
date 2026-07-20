@@ -19,6 +19,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const isAdmin = url.pathname === '/admin' || url.pathname.startsWith('/admin/');
   const isApi = url.pathname.startsWith('/api/');
+  // /healthz must answer during maintenance. §10 has external synthetic monitors hitting
+  // it every 60s; if it 503s the moment maintenance is switched on, planned maintenance
+  // pages the on-call — training everyone to ignore the alert that matters.
+  const isHealth = url.pathname === '/healthz';
 
   // The nonce is minted FIRST, before any early return. Previously it was generated
   // after the maintenance and redirect branches, which meant those two responses left
@@ -36,8 +40,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return response;
   };
 
-  // 1) Maintenance pre-cache check (before edge-cache lookup). /admin + /api exempt.
-  if (!isAdmin && !isApi) {
+  // 1) Maintenance pre-cache check (before edge-cache lookup). /admin, /api and
+  //    /healthz exempt.
+  if (!isAdmin && !isApi && !isHealth) {
     const m = await getMaintenanceState(env);
     if (m.active) {
       const ip = clientIp(request);

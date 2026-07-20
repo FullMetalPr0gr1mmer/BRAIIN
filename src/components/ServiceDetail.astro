@@ -3,7 +3,7 @@ import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import StreamPlayer from '@/components/StreamPlayer.astro';
 import { buildServiceSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
-import { localizedPath, pickLocale } from '@/lib/i18n';
+import { localizedPath, pickLocale, pickLocaleStrict } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import type { ServiceRow } from '@/lib/data/services';
 
@@ -21,6 +21,8 @@ const STR = {
 
 const title = pickLocale(service.title, locale, service.slug);
 const blurb = pickLocale(service.blurb, locale);
+// Metadata takes the STRICT read: no EN fallback on an Arabic page.
+const blurbMeta = pickLocaleStrict(service.blurb, locale);
 // body_html is the server-SANITIZED HTML cache (sanitized on write in the admin,
 // Phase 3). Safe to render; empty until content is authored.
 const bodyHtml = pickLocale(service.body_html, locale);
@@ -29,7 +31,7 @@ const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const url = base + localizedPath(`/services/${service.slug}`, locale);
 
 const jsonLd = [
-  buildServiceSchema({ name: title, description: blurb, url }),
+  buildServiceSchema({ name: title, description: blurbMeta, url }),
   buildBreadcrumbSchema([
     { name: STR.home, url: base + localizedPath('/', locale) },
     { name: STR.services, url: base + localizedPath('/services', locale) },
@@ -40,7 +42,7 @@ const jsonLd = [
 
 <BaseLayout
   title={`${title} — Braiin Station`}
-  description={blurb}
+  description={blurbMeta}
   locale={locale}
   logicalPath={`/services/${service.slug}`}
   jsonLd={jsonLd}

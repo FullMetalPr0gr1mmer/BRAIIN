@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   pickLocale,
+  pickLocaleStrict,
   localeFromPath,
   dir,
   toLogicalPath,
@@ -33,6 +34,31 @@ describe('pickLocale', () => {
     expect(pickLocale(null, 'en', 'my-slug')).toBe('my-slug');
     expect(pickLocale(undefined, 'ar', 'my-slug')).toBe('my-slug');
     expect(pickLocale(null, 'en')).toBe('');
+  });
+});
+
+describe('pickLocaleStrict — metadata must never cross-fade languages', () => {
+  it('returns the requested locale when present', () => {
+    expect(pickLocaleStrict({ en: 'Branding', ar: 'العلامة' }, 'ar')).toBe('العلامة');
+    expect(pickLocaleStrict({ en: 'Branding', ar: 'العلامة' }, 'en')).toBe('Branding');
+  });
+
+  it('returns EMPTY rather than English when Arabic is missing', () => {
+    // The whole point: an English og:description under og:locale=ar_SA is a language
+    // mismatch. No description beats a wrong-language one.
+    expect(pickLocaleStrict({ en: 'Branding' }, 'ar')).toBe('');
+    expect(pickLocaleStrict({ en: 'Branding', ar: '' }, 'ar')).toBe('');
+  });
+
+  it('differs from pickLocale exactly on that case', () => {
+    const arless = { en: 'Branding' };
+    expect(pickLocale(arless, 'ar')).toBe('Branding');
+    expect(pickLocaleStrict(arless, 'ar')).toBe('');
+  });
+
+  it('returns empty for null/undefined', () => {
+    expect(pickLocaleStrict(null, 'en')).toBe('');
+    expect(pickLocaleStrict(undefined, 'ar')).toBe('');
   });
 });
 

@@ -8,7 +8,7 @@ import { parseRow, parseRows } from './parse';
 
 export type { PortfolioRow } from '@schemas/content';
 
-const COLUMNS = 'slug,title,summary,body_html,sort_order';
+const COLUMNS = 'slug,title,summary,body_html,sort_order,updated_at';
 
 export async function getPublishedPortfolio() {
   if (!supabaseConfigured()) return [];

@@ -6,7 +6,11 @@ import { z } from 'zod';
 export const ClientLogSchema = z.object({
   level: z.enum(['error', 'warn']),
   message: z.string().min(1).max(2000),
-  source: z.string().max(512).optional(),
+  // 120, matching SystemLogEntrySchema's cap — NOT 512. The two disagreed, so a source
+  // of 121-512 chars passed here, was rejected at the sink, and the client still got a
+  // 204: the log line vanished and nothing reported it. A boundary that accepts more
+  // than the sink stores is a silent data-loss machine.
+  source: z.string().max(120).optional(),
   line: z.number().int().nonnegative().optional(),
   col: z.number().int().nonnegative().optional(),
   path: z.string().min(1).max(2048),

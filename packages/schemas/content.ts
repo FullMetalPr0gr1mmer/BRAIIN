@@ -36,6 +36,9 @@ export type LocalizedProse = z.infer<typeof LocalizedProseSchema>;
 // is a real defect, not a nit. Rows that fail validation are dropped AND logged by
 // `src/lib/data/parse.ts`, so a rejection is diagnosable rather than a silent gap.
 
+// `updated_at` feeds the sitemap's <lastmod> and JSON-LD `dateModified`. Pillar 3 calls
+// for a TRUTHFUL dateModified, which means it has to come from the row rather than from
+// request time — so it is selected here rather than synthesised at render.
 export const ServiceRowSchema = z.object({
   slug: SlugSchema,
   title: LocalizedTextSchema,
@@ -45,6 +48,7 @@ export const ServiceRowSchema = z.object({
   category: z.string().nullable(),
   is_teaser: z.boolean(),
   sort_order: z.number(),
+  updated_at: z.string().nullable(),
 });
 export type ServiceRow = z.infer<typeof ServiceRowSchema>;
 
@@ -54,6 +58,7 @@ export const PortfolioRowSchema = z.object({
   summary: LocalizedProseSchema.nullable(),
   body_html: LocalizedProseSchema.nullable(),
   sort_order: z.number(),
+  updated_at: z.string().nullable(),
 });
 export type PortfolioRow = z.infer<typeof PortfolioRowSchema>;
 

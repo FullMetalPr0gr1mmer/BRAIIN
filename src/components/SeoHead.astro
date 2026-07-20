@@ -32,24 +32,41 @@ const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const canonical = base + localizedPath(logicalPath, locale);
 const alternates = hreflangAlternates(logicalPath, PUBLIC_SITE_URL);
 const ogLocale = locale === 'ar' ? 'ar_SA' : 'en_US';
+
+// A noindex page must not also advertise itself as canonical or claim hreflang twins:
+// that pairs "don't index me" with "here is my indexable identity and my alternates",
+// which is a contradiction search engines resolve unpredictably. /search and the 404s
+// are the noindex routes here.
+const isIndexable = !robots.includes('noindex');
+
+// Descriptions come from prose fields, where AR is allowed to lag EN (see
+// LocalizedProseSchema). pickLocale therefore falls back to English — correct for body
+// copy, wrong for a <meta description> on a page that declares og:locale=ar_SA and
+// lang="ar". An English description under an Arabic locale is a worse signal than no
+// description, so the caller passes '' and we omit the tag entirely.
+const hasDescription = description.trim().length > 0;
 ---
 
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>{title}</title>
-<meta name="description" content={description} />
+{hasDescription ? <meta name="description" content={description} /> : null}
 <meta name="robots" content={robots} />
-<link rel="canonical" href={canonical} />
-{alternates.map((a) => <link rel="alternate" hreflang={a.hreflang} href={a.href} />)}
+{isIndexable ? <link rel="canonical" href={canonical} /> : null}
+{
+  isIndexable
+    ? alternates.map((a) => <link rel="alternate" hreflang={a.hreflang} href={a.href} />)
+    : null
+}
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Braiin Station" />
 <meta property="og:title" content={title} />
-<meta property="og:description" content={description} />
+{hasDescription ? <meta property="og:description" content={description} /> : null}
 <meta property="og:url" content={canonical} />
 <meta property="og:locale" content={ogLocale} />
 {ogImage ? <meta property="og:image" content={ogImage} /> : null}
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content={title} />
-<meta name="twitter:description" content={description} />
+{hasDescription ? <meta name="twitter:description" content={description} /> : null}
 {ogImage ? <meta name="twitter:image" content={ogImage} /> : null}
 {jsonLd.map((node) => <JsonLd data={node} />)}

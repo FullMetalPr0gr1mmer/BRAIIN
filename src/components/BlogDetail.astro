@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { buildArticleSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
-import { localizedPath, formatDate, pickLocale } from '@/lib/i18n';
+import { localizedPath, formatDate, pickLocale, pickLocaleStrict } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import type { PostRow } from '@/lib/data/blog';
 
@@ -20,6 +20,8 @@ const STR = {
 
 const title = pickLocale(post.title, locale, post.slug);
 const excerpt = pickLocale(post.excerpt, locale);
+// Metadata takes the STRICT read: no EN fallback on an Arabic page.
+const excerptMeta = pickLocaleStrict(post.excerpt, locale);
 // body_html is the server-SANITIZED HTML cache (sanitized on write in the admin, Phase 3).
 const bodyHtml = pickLocale(post.body_html, locale);
 const author = pickLocale(post.author?.name, locale);
@@ -30,7 +32,7 @@ const url = base + localizedPath(`/creative-knowledge/${post.slug}`, locale);
 const jsonLd = [
   buildArticleSchema({
     headline: title,
-    description: excerpt,
+    description: excerptMeta,
     url,
     ...(author ? { authorName: author } : {}),
     ...(post.published_at ? { datePublished: post.published_at } : {}),
@@ -47,7 +49,7 @@ const jsonLd = [
 
 <BaseLayout
   title={`${title} — Braiin Station`}
-  description={excerpt}
+  description={excerptMeta}
   locale={locale}
   logicalPath={`/creative-knowledge/${post.slug}`}
   jsonLd={jsonLd}

@@ -51,6 +51,25 @@ export function pickLocale(
   return preferred || field.en || fallback;
 }
 
+/**
+ * Like pickLocale, but with NO cross-language fallback: returns '' when the requested
+ * locale has no value.
+ *
+ * Use for machine-read METADATA (meta description, og:description, JSON-LD description).
+ * Prose fields let Arabic lag English by design, so pickLocale's EN fallback would put an
+ * English description on a page that declares `lang="ar"` and `og:locale=ar_SA`. That is
+ * a language mismatch — a worse signal to a search engine than simply having no
+ * description, and it is invisible to a human reviewing the Arabic page. Visible body
+ * copy still uses pickLocale: a reader is better served by English text than by a blank.
+ */
+export function pickLocaleStrict(
+  field: { en: string; ar?: string | undefined } | null | undefined,
+  locale: Locale,
+): string {
+  if (!field) return '';
+  return (locale === 'ar' ? field.ar : field.en) || '';
+}
+
 /** Locale-aware medium date from an ISO string; '' when null (shared by blog index/detail). */
 export function formatDate(iso: string | null, locale: Locale): string {
   if (!iso) return '';
