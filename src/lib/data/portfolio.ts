@@ -1,25 +1,16 @@
-import { z } from 'zod';
+import { PortfolioRowSchema } from '@schemas/content';
 import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { parseRow, parseRows } from './parse';
 
 // Runtime data access for the public portfolio / case studies (Tier A SSR). Tenant +
-// published filtering are enforced by RLS; we still pass status explicitly. Zod-validated.
-// Resilient: returns []/null on any error (e.g. before Supabase is provisioned) so
-// builds and the shell never break — pages render an empty state.
+// published filtering are enforced by RLS; we still pass status explicitly. Shape lives in
+// `packages/schemas/content.ts` (CLAUDE.md §8). Resilient: []/null on any error.
 
-const LocalizedSchema = z.record(z.string(), z.string());
-
-const PortfolioRowSchema = z.object({
-  slug: z.string(),
-  title: LocalizedSchema,
-  summary: LocalizedSchema.nullable(),
-  body_html: LocalizedSchema.nullable(),
-  sort_order: z.number(),
-});
-export type PortfolioRow = z.infer<typeof PortfolioRowSchema>;
+export type { PortfolioRow } from '@schemas/content';
 
 const COLUMNS = 'slug,title,summary,body_html,sort_order';
 
-export async function getPublishedPortfolio(): Promise<PortfolioRow[]> {
+export async function getPublishedPortfolio() {
   if (!supabaseConfigured()) return [];
   try {
     const { data, error } = await anonClient()
@@ -28,16 +19,13 @@ export async function getPublishedPortfolio(): Promise<PortfolioRow[]> {
       .eq('status', 'published')
       .order('sort_order', { ascending: true });
     if (error || !data) return [];
-    return data.flatMap((row) => {
-      const parsed = PortfolioRowSchema.safeParse(row);
-      return parsed.success ? [parsed.data] : [];
-    });
+    return parseRows(PortfolioRowSchema, data, 'portfolio');
   } catch {
     return [];
   }
 }
 
-export async function getPortfolioBySlug(slug: string): Promise<PortfolioRow | null> {
+export async function getPortfolioBySlug(slug: string) {
   if (!supabaseConfigured()) return null;
   try {
     const { data, error } = await anonClient()
@@ -47,8 +35,7 @@ export async function getPortfolioBySlug(slug: string): Promise<PortfolioRow | n
       .eq('slug', slug)
       .maybeSingle();
     if (error || !data) return null;
-    const parsed = PortfolioRowSchema.safeParse(data);
-    return parsed.success ? parsed.data : null;
+    return parseRow(PortfolioRowSchema, data, 'portfolio');
   } catch {
     return null;
   }

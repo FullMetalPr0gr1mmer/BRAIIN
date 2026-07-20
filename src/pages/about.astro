@@ -4,7 +4,7 @@ import SectionRenderer from '@/components/SectionRenderer.astro';
 import { DEFAULT_ABOUT_SECTIONS } from '@/lib/sections/types';
 import { getPublishedTeam } from '@/lib/data/team';
 import { buildPersonSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
-import { localizedPath } from '@/lib/i18n';
+import { localizedPath, pickLocale } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 
 // Tier A (indexable, edge-cached SSR). Composed from CMS sections (default composition
@@ -24,13 +24,15 @@ const jsonLd = [
     { name: 'Home', url: base + localizedPath('/', locale) },
     { name: 'About', url: base + localizedPath('/about', locale) },
   ]),
-  ...team.map((m) =>
-    buildPersonSchema({
-      name: m.name[locale] ?? m.name.en ?? m.slug,
-      ...((m.bio?.[locale] ?? m.bio?.en) ? { description: m.bio[locale] ?? m.bio.en } : {}),
+  ...team.map((m) => {
+    // `exactOptionalPropertyTypes` — omit the key entirely rather than pass undefined.
+    const bio = pickLocale(m.bio, locale);
+    return buildPersonSchema({
+      name: pickLocale(m.name, locale, m.slug),
+      ...(bio ? { description: bio } : {}),
       ...(m.avatar_url ? { image: m.avatar_url } : {}),
-    }),
-  ),
+    });
+  }),
 ];
 
 Astro.response.headers.set(

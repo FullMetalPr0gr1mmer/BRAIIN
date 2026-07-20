@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { buildArticleSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
-import { localizedPath, formatDate } from '@/lib/i18n';
+import { localizedPath, formatDate, pickLocale } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import type { PostRow } from '@/lib/data/blog';
 
@@ -18,11 +18,11 @@ const STR = {
   ar: { home: 'الرئيسية', blog: 'المعرفة الإبداعية', by: 'بقلم', read: 'دقيقة قراءة' },
 }[locale];
 
-const title = post.title[locale] ?? post.title.en ?? post.slug;
-const excerpt = post.excerpt?.[locale] ?? post.excerpt?.en ?? '';
+const title = pickLocale(post.title, locale, post.slug);
+const excerpt = pickLocale(post.excerpt, locale);
 // body_html is the server-SANITIZED HTML cache (sanitized on write in the admin, Phase 3).
-const bodyHtml = post.body_html?.[locale] ?? post.body_html?.en ?? '';
-const author = post.author?.name[locale] ?? post.author?.name.en ?? '';
+const bodyHtml = pickLocale(post.body_html, locale);
+const author = pickLocale(post.author?.name, locale);
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const url = base + localizedPath(`/creative-knowledge/${post.slug}`, locale);

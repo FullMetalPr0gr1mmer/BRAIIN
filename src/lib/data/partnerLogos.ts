@@ -1,20 +1,16 @@
-import { z } from 'zod';
+import { PartnerLogoRowSchema } from '@schemas/content';
 import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { parseRows } from './parse';
 
 // Public partner/client logos for the home "trusted by" marquee. Tier A SSR read under
 // RLS (tenant-scoped; partner_logos has no publish lifecycle — visibility is the `visible`
-// flag). Zod-validated, resilient: returns [] on any error or before Supabase exists.
+// flag). Shape lives in `packages/schemas/content.ts` (CLAUDE.md §8). Resilient: [].
 
-const PartnerLogoRowSchema = z.object({
-  name: z.string(),
-  logo_url: z.string(),
-  sort_order: z.number(),
-});
-export type PartnerLogoRow = z.infer<typeof PartnerLogoRowSchema>;
+export type { PartnerLogoRow } from '@schemas/content';
 
 const COLUMNS = 'name,logo_url,sort_order';
 
-export async function getPartnerLogos(): Promise<PartnerLogoRow[]> {
+export async function getPartnerLogos() {
   if (!supabaseConfigured()) return [];
   try {
     const { data, error } = await anonClient()
@@ -23,10 +19,7 @@ export async function getPartnerLogos(): Promise<PartnerLogoRow[]> {
       .eq('visible', true)
       .order('sort_order', { ascending: true });
     if (error || !data) return [];
-    return data.flatMap((row) => {
-      const parsed = PartnerLogoRowSchema.safeParse(row);
-      return parsed.success ? [parsed.data] : [];
-    });
+    return parseRows(PartnerLogoRowSchema, data, 'partner_logo');
   } catch {
     return [];
   }

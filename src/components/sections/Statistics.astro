@@ -1,5 +1,6 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import { pickLocale } from '@/lib/i18n';
 import { getPublishedStatistics, type StatisticRow } from '@/lib/data/statistics';
 
 interface Props {
@@ -27,7 +28,7 @@ const items = Astro.props.items ?? (await getPublishedStatistics());
           {items.map((s) => (
             <li class="stat">
               <span class="stat-value">{s.value}</span>
-              <span class="stat-label">{s.label[locale] ?? s.label.en ?? ''}</span>
+              <span class="stat-label">{pickLocale(s.label, locale)}</span>
             </li>
           ))}
         </ul>

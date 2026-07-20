@@ -1,23 +1,16 @@
-import { z } from 'zod';
+import { StatisticRowSchema } from '@schemas/content';
 import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { parseRows } from './parse';
 
 // Public stat counters (e.g. "150+ projects"). Tier A SSR reads under RLS
-// (status='published', tenant-scoped), Zod-validated, resilient. `value` is a display
-// string so it keeps suffixes like '+', '%', 'x' exactly as authored.
+// (status='published', tenant-scoped). Shape lives in `packages/schemas/content.ts`
+// (CLAUDE.md §8) — `value` stays a display string so authored suffixes survive verbatim.
 
-const LocalizedSchema = z.record(z.string(), z.string());
-
-const StatisticRowSchema = z.object({
-  slug: z.string(),
-  label: LocalizedSchema,
-  value: z.string(),
-  sort_order: z.number(),
-});
-export type StatisticRow = z.infer<typeof StatisticRowSchema>;
+export type { StatisticRow } from '@schemas/content';
 
 const COLUMNS = 'slug,label,value,sort_order';
 
-export async function getPublishedStatistics(): Promise<StatisticRow[]> {
+export async function getPublishedStatistics() {
   if (!supabaseConfigured()) return [];
   try {
     const { data, error } = await anonClient()
@@ -26,10 +19,7 @@ export async function getPublishedStatistics(): Promise<StatisticRow[]> {
       .eq('status', 'published')
       .order('sort_order', { ascending: true });
     if (error || !data) return [];
-    return data.flatMap((row) => {
-      const parsed = StatisticRowSchema.safeParse(row);
-      return parsed.success ? [parsed.data] : [];
-    });
+    return parseRows(StatisticRowSchema, data, 'statistic');
   } catch {
     return [];
   }

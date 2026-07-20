@@ -6,6 +6,8 @@ import {
   buildCreativeWorkSchema,
   buildPersonSchema,
   buildArticleSchema,
+  buildFaqSchema,
+  buildWebSiteSchema,
 } from '@/lib/seo/jsonld';
 
 describe('JSON-LD builders', () => {
@@ -86,5 +88,60 @@ describe('JSON-LD builders', () => {
     expect(w['@type']).toBe('CreativeWork');
     expect(w.name).toBe('Riyadh Season Launch');
     expect((w.creator as { '@type': string })['@type']).toBe('Organization');
+  });
+
+  it('FAQPage nests Question/acceptedAnswer pairs (the AEO citation shape)', () => {
+    const f = buildFaqSchema([
+      { question: 'How long does a brand identity take?', answer: 'Typically six to eight weeks.' },
+      { question: 'Do you work in Arabic?', answer: 'Yes — Arabic-first, not translated.' },
+    ]);
+    expect(f['@type']).toBe('FAQPage');
+    const qs = f.mainEntity as Array<{
+      '@type': string;
+      name: string;
+      acceptedAnswer: { '@type': string; text: string };
+    }>;
+    expect(qs).toHaveLength(2);
+    expect(qs[0]?.['@type']).toBe('Question');
+    expect(qs[0]?.acceptedAnswer['@type']).toBe('Answer');
+    expect(qs[0]?.acceptedAnswer.text).toBe('Typically six to eight weeks.');
+  });
+
+  it('FAQPage carries Arabic answers verbatim (AR is first-class, not translated-on-render)', () => {
+    const f = buildFaqSchema([{ question: 'هل تعملون بالعربية؟', answer: 'نعم، بالعربية أولاً.' }]);
+    const qs = f.mainEntity as Array<{ name: string; acceptedAnswer: { text: string } }>;
+    expect(qs[0]?.name).toBe('هل تعملون بالعربية؟');
+    expect(qs[0]?.acceptedAnswer.text).toBe('نعم، بالعربية أولاً.');
+  });
+
+  // Exhaustiveness gate. CLAUDE.md Pillar 3 requires EIGHT JSON-LD types; seven shipped
+  // and FAQPage — the one answer engines actually lift — was missing, with every
+  // individual builder test passing. A per-builder suite cannot catch an ABSENT builder,
+  // so this asserts the SET. Adding a required type means updating this list on purpose.
+  it('emits all eight required JSON-LD types (CLAUDE.md Pillar 3)', () => {
+    const emitted = [
+      buildOrganizationSchema('https://x'),
+      buildWebSiteSchema('https://x'),
+      buildServiceSchema({ name: 'n', description: 'd', url: 'https://x/s' }),
+      buildPersonSchema({ name: 'n' }),
+      buildCreativeWorkSchema({ name: 'n', description: 'd', url: 'https://x/p' }),
+      buildArticleSchema({ headline: 'h', description: 'd', url: 'https://x/a' }),
+      buildFaqSchema([{ question: 'q', answer: 'a' }]),
+      buildBreadcrumbSchema([{ name: 'Home', url: 'https://x/' }]),
+    ].map((n) => n['@type']);
+
+    expect(new Set(emitted)).toEqual(
+      new Set([
+        'Organization',
+        'WebSite',
+        'Service',
+        'Person',
+        'CreativeWork',
+        'BlogPosting',
+        'FAQPage',
+        'BreadcrumbList',
+      ]),
+    );
+    expect(emitted).toHaveLength(8);
   });
 });

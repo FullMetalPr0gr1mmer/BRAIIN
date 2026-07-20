@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { buildBreadcrumbSchema } from '@/lib/seo/jsonld';
-import { localizedPath, formatDate } from '@/lib/i18n';
+import { localizedPath, formatDate, pickLocale } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import type { PostRow } from '@/lib/data/blog';
 
@@ -56,12 +56,12 @@ const breadcrumb = buildBreadcrumbSchema([
       ) : (
         <ul class="service-grid">
           {posts.map((p) => {
-            const author = p.author?.name[locale] ?? p.author?.name.en ?? '';
+            const author = pickLocale(p.author?.name, locale);
             return (
               <li class="service-card">
                 <a href={localizedPath(`/creative-knowledge/${p.slug}`, locale)}>
-                  <h2>{p.title[locale] ?? p.title.en ?? p.slug}</h2>
-                  {p.excerpt ? <p>{p.excerpt[locale] ?? p.excerpt.en ?? ''}</p> : null}
+                  <h2>{pickLocale(p.title, locale, p.slug)}</h2>
+                  {p.excerpt ? <p>{pickLocale(p.excerpt, locale)}</p> : null}
                   <p class="post-meta">
                     {author ? `${STR.by} ${author}` : ''}
                     {p.published_at ? ` · ${formatDate(p.published_at, locale)}` : ''}
