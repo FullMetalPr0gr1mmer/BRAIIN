@@ -9,8 +9,7 @@ import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 // inserts via the service-role client. Public visitors never touch the leads table
 // directly (RLS denies anon); this endpoint is the only public write path.
 export type CreateLeadResult =
-  | { ok: true }
-  | { ok: false; reason: 'unconfigured' | 'no-tenant' | 'insert-failed' };
+  { ok: true } | { ok: false; reason: 'unconfigured' | 'no-tenant' | 'insert-failed' };
 
 export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
   if (!supabaseConfigured()) return { ok: false, reason: 'unconfigured' };

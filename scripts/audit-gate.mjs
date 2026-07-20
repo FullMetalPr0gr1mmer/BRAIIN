@@ -12,63 +12,17 @@
 import { execSync } from 'node:child_process';
 
 /**
- * Each entry MUST justify why the advisory is acceptable AND carry an expiry.
- * All four below are build/deploy tooling pulled transitively by astro (→ vite → esbuild)
- * and @astrojs/cloudflare (→ wrangler → undici); none are part of the deployed Worker
- * runtime bundle, and none have a fix without the Astro 6 / Node 22 / wrangler-major
- * upgrade tracked in KAN-31. Re-evaluate on or before `expires`.
+ * EMPTY BY DESIGN — `npm audit --omit=dev` currently reports **0 vulnerabilities**.
+ *
+ * History: this list carried 7 accepted advisories (astro XSS/SSRF + undici/ws/esbuild
+ * build-tooling DoS) whose only fix was the framework major. The short expiry (2026-06-30)
+ * did its job: it failed CI, forced KAN-31, and the Astro 5→7 + adapter 12→14 + Node 22
+ * upgrade cleared every one of them. The debt was paid, not extended.
+ *
+ * If you add an entry it MUST carry a reason AND an expiry — never a blanket `|| true`.
+ * Past-expiry entries fail the gate on purpose, so debt can't be carried silently.
  */
-const ALLOWLIST = [
-  // --- Astro framework advisories: ONLY fix is astro@6 (major, needs Node 22) = KAN-31.
-  //     Reviewed as NOT reachable in our code; short expiry to force the upgrade soon.
-  {
-    id: 'GHSA-8hv8-536x-4wqp',
-    pkg: 'astro',
-    reason:
-      'Reflected XSS via unescaped slot NAME. Not reachable: we use only static slot names (<slot/>, Astro.slots.render("default")) — no user-derived slot names. Fix = astro 6 — KAN-31.',
-    expires: '2026-06-30',
-  },
-  {
-    id: 'GHSA-2pvr-wf23-7pc7',
-    pkg: 'astro',
-    reason:
-      'Host-header SSRF in prerendered error-page fetch. Framework-internal; mitigated by Cloudflare validating Host at the edge + SSR (no prerendered error pages). Fix = astro 6 — KAN-31.',
-    expires: '2026-06-30',
-  },
-  {
-    id: 'GHSA-f269-vfmq-vjvj',
-    pkg: 'undici',
-    reason:
-      'Wrangler deploy CLI (undici via @astrojs/cloudflare→wrangler); not in the Workers runtime. Fixed by adapter 13 / wrangler-major — KAN-31.',
-    expires: '2026-09-15',
-  },
-  {
-    id: 'GHSA-vrm6-8vpv-qv8q',
-    pkg: 'undici',
-    reason: 'Wrangler/undici, deploy-time only (see GHSA-f269). Fixed by adapter 13 — KAN-31.',
-    expires: '2026-09-15',
-  },
-  {
-    id: 'GHSA-v9p9-hfj2-hcw8',
-    pkg: 'undici',
-    reason: 'Wrangler/undici, deploy-time only (see GHSA-f269). Fixed by adapter 13 — KAN-31.',
-    expires: '2026-09-15',
-  },
-  {
-    id: 'GHSA-vxpw-j846-p89q',
-    pkg: 'undici',
-    reason:
-      'WebSocket DoS via fragment-count bypass. Wrangler/undici, deploy-time only (see GHSA-f269); not in the shipped Worker runtime, no ws server. Fixed by adapter 13 — KAN-31.',
-    expires: '2026-06-30',
-  },
-  {
-    id: 'GHSA-96hv-2xvq-fx4p',
-    pkg: 'ws',
-    reason:
-      'Local Workers emulator (ws via @astrojs/cloudflare→wrangler→miniflare); not in the shipped Worker runtime, and we run no ws server / no Supabase realtime, so the fragment-DoS is unreachable. Fixed by the wrangler-major upgrade — KAN-31.',
-    expires: '2026-09-15',
-  },
-];
+const ALLOWLIST = [];
 
 function runAudit() {
   try {

@@ -22,11 +22,18 @@ jobs:
       PUBLIC_SITE_URL: https://www.braiinstation.com
       PUBLIC_SUPABASE_URL: https://example.supabase.co
       PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+      # astro:env validates the server schema too. These are DUMMY, non-functional values
+      # so the build can run in CI (real values live in Cloudflare Worker Secrets / Vault).
+      SUPABASE_DB_POOL_URL: postgresql://ci:ci@localhost:6543/ci
+      SUPABASE_SERVICE_ROLE_KEY: ci-dummy-service-role-key
+      LEAD_PII_ENC_KEY: ci-dummy-lead-pii-enc-key
+      AUDIT_HMAC_KEY: ci-dummy-audit-hmac-key
+      NOTIFY_LEAD_SECRET: ci-dummy-notify-lead-secret
     steps:
       - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - name: Typecheck (astro check — .astro + ts)
@@ -48,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       # Blocking: high+critical in PRODUCTION deps (what ships in the Worker bundle).

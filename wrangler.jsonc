@@ -1,11 +1,16 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "braiin-station",
-  "compatibility_date": "2025-05-05",
+  "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "./dist/_worker.js/index.js",
+  // NOTE (adapter v14): no `main` here. The Cloudflare Vite plugin resolves the worker
+  // entry during the build and errors if `main` points at a not-yet-emitted output file
+  // (the old v12 value was "./dist/_worker.js/index.js").
   "assets": {
-    "directory": "./dist",
+    // Astro 7 splits output into dist/client (public) + dist/server (worker, wrangler.json
+    // AND .dev.vars containing real env values). Pointing at ./dist would serve
+    // dist/server/.dev.vars over HTTP under `wrangler dev` (the perf-seo-a11y workflow).
+    "directory": "./dist/client",
     "binding": "ASSETS",
   },
   "observability": {

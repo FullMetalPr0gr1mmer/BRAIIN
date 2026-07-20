@@ -28,8 +28,20 @@ export default defineConfig({
     imageService: 'cloudflare-binding',
     imagesBindingName: 'IMAGES',
     sessionKVBindingName: 'SESSION',
-    platformProxy: { enabled: true },
+    // NOTE: `platformProxy` was REMOVED from the adapter's options in v14 (silently
+    // ignored — it is not in `Options`, and astro.config.mjs is unchecked by tsc).
+    // Dropped here; CLAUDE.md §2 names it as an adapter lock and needs a reviewed
+    // amendment (§11). The other three locks above survive unchanged.
   }),
+
+  // Pillar 1 (CSP): force EVERY component <script> to an external file. Astro's
+  // `renderScript` inlines chunks under `assetsInlineLimit` as a bare
+  // `<script type="module">` with NO nonce — which our no-'unsafe-inline' CSP blocks,
+  // silently killing the consent banner, contact form, search, error reporter and the
+  // Stream facade in production (dev serves them external, so it looks fine locally).
+  // 0 = never inline. Astro's top-level `build.assetsInlineLimit` does NOT propagate to
+  // the Vite client environment — it must be set here.
+  vite: { build: { assetsInlineLimit: 0 } },
 
   integrations: [],
 

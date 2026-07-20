@@ -39,7 +39,9 @@ Static, cacheable shell **+** Server Islands (`server:defer`) **+** on-demand `/
 | **B — Server Islands** | ONLY non-indexable dynamic holes | `server:defer` | Per-island `Cache-Control` + `cacheHint.tags` |
 | **C — SSR Worker** | `/admin/**`, Style-Finder dynamic API | `prerender = false` | `private, no-store` |
 
-**Indexable-content rule (hard):** indexable content lives in Tier A. Reviewers reject PRs that hydrate indexable content client-side. **Publish = cache event, not a rebuild.** Cache-Tag scheme `tenant:<tid>`, `route:<name>`, `<entity>:<slug>`, `<entity>:all`, `locale:<en|ar>` (≤30 tags/purge, ≤30k/24h). Adapter locks: `imageService:'cloudflare-binding'`, `platformProxy.enabled`, `sessionKVBindingName`/`imagesBindingName`. All DB access via the Supavisor transaction-mode pooler.
+**Indexable-content rule (hard):** indexable content lives in Tier A. Reviewers reject PRs that hydrate indexable content client-side. **Publish = cache event, not a rebuild.** Cache-Tag scheme `tenant:<tid>`, `route:<name>`, `<entity>:<slug>`, `<entity>:all`, `locale:<en|ar>` (≤30 tags/purge, ≤30k/24h). Adapter locks: `imageService:'cloudflare-binding'`, `sessionKVBindingName`/`imagesBindingName`. All DB access via the Supavisor transaction-mode pooler.
+
+> **Amendment (KAN-31, Astro 7 / adapter 14):** `platformProxy.enabled` was removed from this lock set — the option no longer exists in `@astrojs/cloudflare` v14's `Options` (it is silently ignored). Worker bindings are now reached via `import { env } from 'cloudflare:workers'`; `Astro.locals.runtime.env` was removed in Astro 6 and its getter **throws**. Toolchain floor is now **Node ≥ 22.12** (Astro 7 hard-refuses Node 20). The other three adapter locks are unchanged.
 
 ---
 
