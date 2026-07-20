@@ -34,15 +34,31 @@ export function clientIp(request: Request): string | null {
   return xff ? (xff.split(',')[0]?.trim() ?? null) : null;
 }
 
-export function maintenanceResponse(): Response {
+/**
+ * The 503 page. Takes the request's CSP nonce because this response now carries the same
+ * strict CSP as every other one, and that CSP has no 'unsafe-inline' — the previous
+ * version styled itself with inline `style=` attributes, which the policy blocks. It only
+ * escaped notice because the maintenance branch returned before headers were applied.
+ * Styles therefore live in a single nonced <style> block.
+ */
+export function maintenanceResponse(nonce: string): Response {
+  // Allowlist the base64 alphabet rather than stripping "dangerous" characters. A
+  // denylist here is wrong twice over: this string lands in an HTML attribute AND in the
+  // CSP header, so `>`, spaces and `;` all break something even with quotes removed.
+  // generateNonce() only ever emits base64, so this is belt-and-braces — but the belt
+  // has to actually be a belt.
+  const safeNonce = nonce.replace(/[^A-Za-z0-9+/=]/g, '');
   const html =
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<title>Down for maintenance</title></head>' +
-    '<body style="font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#0b0b0f;color:#e8e8ea;' +
-    'display:grid;place-items:center;min-height:100vh;margin:0">' +
-    '<main style="text-align:center;padding:2rem"><h1 style="margin:0 0 .5rem">Back shortly</h1>' +
-    '<p style="opacity:.7">Braiin Station is undergoing scheduled maintenance.</p></main></body></html>';
+    '<title>Down for maintenance</title>' +
+    `<style nonce="${safeNonce}">` +
+    'body{font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#0b0b0f;color:#e8e8ea;' +
+    'display:grid;place-items:center;min-height:100vh;margin:0}' +
+    'main{text-align:center;padding:2rem}h1{margin:0 0 .5rem}p{opacity:.7}' +
+    '</style></head>' +
+    '<body><main><h1>Back shortly</h1>' +
+    '<p>Braiin Station is undergoing scheduled maintenance.</p></main></body></html>';
   return new Response(html, {
     status: 503,
     headers: {
