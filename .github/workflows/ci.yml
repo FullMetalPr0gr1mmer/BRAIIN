@@ -44,6 +44,13 @@ jobs:
         run: npm run format:check
       - name: Unit + schema + authz tests
         run: npm run test
+      # CLAUDE.md Pillar 3 names a blocking `seo-ci` gate. It is listed separately from
+      # `npm test` (which already runs these) so the pillar-ordered gate is VISIBLE as its
+      # own red/green step — a requirement folded invisibly into another job is one nobody
+      # can tell is enforced.
+      - name: SEO — JSON-LD types, robots/llms snapshot, sitemap twins (blocking)
+        run: npm run seo-ci
+
       - name: A11y — WCAG AA contrast gate (token-level, browser-free)
         run: npm run a11y:contrast
       - name: Build (Cloudflare adapter)

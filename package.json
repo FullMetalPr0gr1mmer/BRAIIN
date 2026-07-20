@@ -21,7 +21,8 @@
     "lhci": "lhci autorun",
     "audit": "node scripts/audit-gate.mjs",
     "cf:types": "wrangler types",
-    "a11y:contrast": "node scripts/contrast-audit.mjs"
+    "a11y:contrast": "node scripts/contrast-audit.mjs",
+    "seo-ci": "vitest run tests/seo"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.3",

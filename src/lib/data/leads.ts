@@ -1,4 +1,5 @@
 import type { LeadInput } from '@schemas/lead';
+import { resolveLaunchTenantId } from './tenant';
 import { serviceClient } from '@/lib/supabase/server';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import { encryptPII } from '@/lib/crypto/pii';
@@ -16,14 +17,10 @@ export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
 
   const sb = serviceClient();
 
-  // Resolve the single launch tenant server-side (the fence).
-  const { data: tenant } = await sb
-    .from('tenants')
-    .select('id')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!tenant) return { ok: false, reason: 'no-tenant' };
+  // Resolve the single launch tenant server-side (the anon fence — one definition,
+  // shared with writeSystemLog(); see src/lib/data/tenant.ts).
+  const tenantId = await resolveLaunchTenantId();
+  if (!tenantId) return { ok: false, reason: 'no-tenant' };
 
   const [email_enc, phone_enc, budget_enc] = await Promise.all([
     encryptPII(input.email, LEAD_PII_ENC_KEY),
@@ -32,7 +29,7 @@ export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
   ]);
 
   const { error } = await sb.from('leads').insert({
-    tenant_id: tenant.id,
+    tenant_id: tenantId,
     kind: input.kind,
     locale: input.locale,
     name: input.name,
