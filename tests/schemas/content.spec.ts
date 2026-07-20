@@ -21,6 +21,7 @@ const service = {
   category: null,
   is_teaser: false,
   sort_order: 1,
+  updated_at: '2026-07-01T10:00:00Z', // feeds sitemap <lastmod> / dateModified
 };
 
 describe('LocalizedTextSchema — indexable scalars require Arabic', () => {

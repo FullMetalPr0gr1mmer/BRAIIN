@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { buildCreativeWorkSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
-import { localizedPath, pickLocale } from '@/lib/i18n';
+import { localizedPath, pickLocale, pickLocaleStrict } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import type { PortfolioRow } from '@/lib/data/portfolio';
 
@@ -20,6 +20,8 @@ const STR = {
 
 const title = pickLocale(item.title, locale, item.slug);
 const summary = pickLocale(item.summary, locale);
+// Metadata takes the STRICT read: no EN fallback on an Arabic page.
+const summaryMeta = pickLocaleStrict(item.summary, locale);
 // body_html is the server-SANITIZED HTML cache (sanitized on write in the admin,
 // Phase 3). Safe to render; empty until content is authored.
 const bodyHtml = pickLocale(item.body_html, locale);
@@ -28,7 +30,7 @@ const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const url = base + localizedPath(`/portfolio/${item.slug}`, locale);
 
 const jsonLd = [
-  buildCreativeWorkSchema({ name: title, description: summary, url }),
+  buildCreativeWorkSchema({ name: title, description: summaryMeta, url }),
   buildBreadcrumbSchema([
     { name: STR.home, url: base + localizedPath('/', locale) },
     { name: STR.portfolio, url: base + localizedPath('/portfolio', locale) },
@@ -39,7 +41,7 @@ const jsonLd = [
 
 <BaseLayout
   title={`${title} — Braiin Station`}
-  description={summary}
+  description={summaryMeta}
   locale={locale}
   logicalPath={`/portfolio/${item.slug}`}
   jsonLd={jsonLd}
