@@ -1,4 +1,5 @@
 import { SystemLogEntrySchema, type SystemLogEntry } from '@schemas/systemLog';
+import { resolveLaunchTenantId } from './tenant';
 import { serviceClient } from '@/lib/supabase/server';
 import { supabaseConfigured } from '@/lib/supabase/client';
 
@@ -23,17 +24,13 @@ export async function writeSystemLog(entry: SystemLogEntry): Promise<boolean> {
   try {
     const sb = serviceClient();
 
-    // Resolve the single launch tenant server-side (the fence).
-    const { data: tenant } = await sb
-      .from('tenants')
-      .select('id')
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (!tenant) return false;
+    // Resolve the single launch tenant server-side (the anon fence — one definition,
+    // shared with createLead(); see src/lib/data/tenant.ts).
+    const tenantId = await resolveLaunchTenantId();
+    if (!tenantId) return false;
 
     const { error } = await sb.from('system_logs').insert({
-      tenant_id: tenant.id,
+      tenant_id: tenantId,
       level: valid.level,
       source: valid.source ?? null,
       message: valid.message,
