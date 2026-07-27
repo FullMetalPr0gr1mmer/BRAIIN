@@ -16,6 +16,19 @@
   "observability": {
     "enabled": true,
   },
+  // PUBLIC_* only. These are non-secret by construction: PUBLIC_SUPABASE_ANON_KEY ships
+  // inside the client bundle on every page, so committing it here reveals nothing that a
+  // visitor cannot already read — it is an identifier, and RLS is what protects the data
+  // behind it. Anything genuinely secret goes through `npm run cf:secrets`.
+  "vars": {
+    // TODO: swap to the custom domain once DNS is cut over. This value is what
+    // <SeoHead> builds canonicals and hreflang from, so a stale one produces canonicals
+    // pointing at the wrong origin — an SEO problem, not a runtime one.
+    "PUBLIC_SITE_URL": "https://braiin-station.workers.dev",
+    "PUBLIC_SUPABASE_URL": "https://xkxthzcmmvtnwicerlup.supabase.co",
+    "PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_fdVFL7qNbBx64z1pwvDAbg_ReRzjhOr",
+    "AI_DAILY_USD_CAP": "5",
+  },
   // Image transforms (astro adapter imageService: 'cloudflare-binding').
   "images": {
     "binding": "IMAGES",
