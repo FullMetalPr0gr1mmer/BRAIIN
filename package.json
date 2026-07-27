@@ -22,7 +22,8 @@
     "audit": "node scripts/audit-gate.mjs",
     "cf:types": "wrangler types",
     "a11y:contrast": "node scripts/contrast-audit.mjs",
-    "seo-ci": "vitest run tests/seo"
+    "seo-ci": "vitest run tests/seo",
+    "cf:secrets": "node scripts/push-secrets.mjs"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.3",
