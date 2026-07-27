@@ -1,0 +1,33 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import ReadOnlyPanel from '@/components/admin/ReadOnlyPanel';
+import { can } from '@/lib/authz/matrix';
+
+export const prerender = false;
+
+const role = Astro.locals.session?.role ?? 'content_creator';
+// `logs.clear` is Admin-only while `logs.view` is Admin + Developer — the role that
+// reads the logs all day is not the role that gets to erase them.
+const canClear = can(role, 'logs.clear') === 'full';
+
+const columns = [
+  { key: 'created_at', label: 'When', kind: 'date' as const },
+  { key: 'level', label: 'Level' },
+  { key: 'source', label: 'Source' },
+  { key: 'message', label: 'Message' },
+  { key: 'detail', label: 'Detail', kind: 'json' as const },
+];
+---
+
+<AdminLayout
+  title="System logs"
+  subtitle="Operational log. Separate from the audit trail, and clearable."
+>
+  <ReadOnlyPanel
+    client:load
+    endpoint="/api/admin/logs"
+    columns={columns}
+    variant="logs"
+    canClear={canClear}
+  />
+</AdminLayout>

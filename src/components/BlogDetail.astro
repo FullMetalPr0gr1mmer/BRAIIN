@@ -4,6 +4,7 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import { buildArticleSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
 import { localizedPath, formatDate, pickLocale, pickLocaleStrict } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
+import { seoForEntity } from '@/lib/data/seo';
 import type { PostRow } from '@/lib/data/blog';
 
 interface Props {
@@ -45,15 +46,31 @@ const jsonLd = [
     { name: title, url },
   ]),
 ];
+
+// Per-entity SEO override (`entity_seo`, authored by the SEO role under /admin) layered
+// over the tenant defaults (`seo_defaults`), falling back to the content's own title and
+// summary. Resolved server-side on this Tier-A route so the override is in the HTML —
+// metadata that needed JavaScript would not be metadata.
+const seo = await seoForEntity({
+  entityType: 'blog_post',
+  entityId: post.id,
+  locale,
+  fallbackTitle: `${title} — Braiin Station`,
+  fallbackDescription: excerptMeta,
+});
 ---
 
 <BaseLayout
-  title={`${title} — Braiin Station`}
-  description={excerptMeta}
+  title={seo.title}
+  description={seo.description}
   locale={locale}
   logicalPath={`/creative-knowledge/${post.slug}`}
   jsonLd={jsonLd}
-  {...post.cover_image_url ? { ogImage: post.cover_image_url } : {}}
+  robots={seo.robots}
+  {...(seo.ogImage ?? post.cover_image_url)
+    ? { ogImage: seo.ogImage ?? (post.cover_image_url as string) }
+    : {}}
+  {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >
   <main class="container">
     <article>

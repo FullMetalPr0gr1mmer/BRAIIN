@@ -39,7 +39,11 @@ export type LocalizedProse = z.infer<typeof LocalizedProseSchema>;
 // `updated_at` feeds the sitemap's <lastmod> and JSON-LD `dateModified`. Pillar 3 calls
 // for a TRUTHFUL dateModified, which means it has to come from the row rather than from
 // request time — so it is selected here rather than synthesised at render.
+// `id` is selected because per-entity SEO (`entity_seo`) is keyed by (entity_type,
+// entity_id) — a polymorphic table cannot be FK-embedded from the content row, so the
+// loader needs the uuid to fetch the override.
 export const ServiceRowSchema = z.object({
+  id: z.string().uuid(),
   slug: SlugSchema,
   title: LocalizedTextSchema,
   blurb: LocalizedProseSchema.nullable(),
@@ -53,6 +57,7 @@ export const ServiceRowSchema = z.object({
 export type ServiceRow = z.infer<typeof ServiceRowSchema>;
 
 export const PortfolioRowSchema = z.object({
+  id: z.string().uuid(),
   slug: SlugSchema,
   title: LocalizedTextSchema,
   summary: LocalizedProseSchema.nullable(),
@@ -111,6 +116,7 @@ export const PostCategorySchema = z
 export type PostCategory = z.infer<typeof PostCategorySchema>;
 
 export const PostRowSchema = z.object({
+  id: z.string().uuid(),
   slug: SlugSchema,
   title: LocalizedTextSchema,
   excerpt: LocalizedProseSchema.nullable(),

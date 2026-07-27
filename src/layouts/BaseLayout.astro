@@ -2,8 +2,11 @@
 import type { Locale } from '@schemas/primitives';
 import type { JsonLdNode } from '@/lib/seo/jsonld';
 import SeoHead from '@/components/SeoHead.astro';
+import SiteHeader from '@/components/SiteHeader.astro';
+import SiteFooter from '@/components/SiteFooter.astro';
 import ConsentBanner from '@/components/ConsentBanner.astro';
 import WebVitals from '@/components/WebVitals.astro';
+import PageView from '@/components/PageView.astro';
 import ErrorReporter from '@/components/ErrorReporter.astro';
 import { dir } from '@/lib/i18n';
 
@@ -15,6 +18,10 @@ interface Props {
   jsonLd?: JsonLdNode[];
   robots?: string;
   ogImage?: string;
+  /** CMS-authored canonical override (`entity_seo.canonical_override`). */
+  canonicalOverride?: string;
+  /** Set on routes that render their own chrome (none today) or a bare error page. */
+  chrome?: boolean;
 }
 
 const {
@@ -25,6 +32,8 @@ const {
   jsonLd = [],
   robots = 'index,follow',
   ogImage,
+  canonicalOverride,
+  chrome = true,
 } = Astro.props;
 const direction = dir(locale);
 ---
@@ -40,13 +49,29 @@ const direction = dir(locale);
       jsonLd={jsonLd}
       robots={robots}
       {...ogImage ? { ogImage } : {}}
+      {...canonicalOverride ? { canonicalOverride } : {}}
     />
     <link rel="stylesheet" href="/styles/global.css" />
   </head>
   <body>
-    <slot />
+    {chrome && <SiteHeader locale={locale} />}
+    {
+      /*
+      The skip link's target. It lives here rather than on each page's own <main>
+      because the pages render that element themselves — a skip link pointing at an id
+      no page defines is worse than no skip link: it passes a visual review, focuses
+      nothing, and leaves a keyboard user tabbing through the whole nav on every page.
+      `tabindex="-1"` is what makes a non-interactive element actually take focus when
+      jumped to (Safari and older Chrome ignore the jump without it).
+    */
+    }
+    <div id="main" tabindex="-1">
+      <slot />
+    </div>
+    {chrome && <SiteFooter locale={locale} />}
     <ConsentBanner />
     <WebVitals />
+    <PageView />
     <ErrorReporter />
   </body>
 </html>

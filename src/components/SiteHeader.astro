@@ -1,0 +1,135 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { getNavigation, type NavNode } from '@/lib/data/navigation';
+import { localizedPath } from '@/lib/i18n';
+
+// Sitewide header. Renders CMS-authored navigation (`public.navigation`, edited under
+// /admin/navigation) with a hard-coded fallback so the site is never navigation-less
+// before the content team authors it — or if the database is unreachable.
+//
+// ── Tier A, zero client JS ───────────────────────────────────────────────────────
+// Server-rendered, no island, no hydration. Navigation is indexable content and the
+// indexability hard rule (Pillar 3) puts it in the HTML; it is also on every route, so
+// any JS here would be JS on every route (Pillar 2). The mobile menu is a
+// `<details>` element — native disclosure, keyboard-accessible, zero bytes.
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+/** Shown until the CMS has nav rows, and whenever the query fails. */
+const FALLBACK: NavNode[] = [
+  {
+    id: 'f1',
+    parent_id: null,
+    href: '/services',
+    sort_order: 1,
+    children: [],
+    label: { en: 'Services', ar: 'خدماتنا' },
+  },
+  {
+    id: 'f2',
+    parent_id: null,
+    href: '/portfolio',
+    sort_order: 2,
+    children: [],
+    label: { en: 'Work', ar: 'أعمالنا' },
+  },
+  {
+    id: 'f3',
+    parent_id: null,
+    href: '/creative-knowledge',
+    sort_order: 3,
+    children: [],
+    label: { en: 'Insights', ar: 'المعرفة' },
+  },
+  {
+    id: 'f4',
+    parent_id: null,
+    href: '/about',
+    sort_order: 4,
+    children: [],
+    label: { en: 'About', ar: 'من نحن' },
+  },
+  {
+    id: 'f5',
+    parent_id: null,
+    href: '/contact',
+    sort_order: 5,
+    children: [],
+    label: { en: 'Contact', ar: 'تواصل' },
+  },
+];
+
+const authored = await getNavigation('header');
+const items = authored.length > 0 ? authored : FALLBACK;
+
+// Authored hrefs are stored as logical paths ('/services'); `localizedPath` prefixes
+// '/ar' for the Arabic twin. An absolute URL is left alone.
+function href(raw: string): string {
+  return raw.startsWith('/') ? localizedPath(raw, locale) : raw;
+}
+
+const current = Astro.url.pathname.replace(/\/$/, '');
+const isCurrent = (raw: string): boolean => {
+  const target = href(raw).replace(/\/$/, '');
+  return current === target || (target.length > 1 && current.startsWith(`${target}/`));
+};
+
+// The language switch points at the SAME logical page in the other language, which is
+// what makes it a language switch rather than a link home. `toLogicalPath` is not used
+// because Astro gives us the localized path directly; stripping the '/ar' prefix is the
+// inverse of what localizedPath added.
+const logical = Astro.url.pathname.replace(/^\/ar(?=\/|$)/, '') || '/';
+const otherLocale: Locale = locale === 'ar' ? 'en' : 'ar';
+const switchHref = localizedPath(logical, otherLocale);
+---
+
+<header class="site-header">
+  <a class="skip-link" href="#main">
+    {locale === 'ar' ? 'تخطَّ إلى المحتوى' : 'Skip to content'}
+  </a>
+
+  <div class="site-header__bar">
+    <a class="site-header__brand" href={localizedPath('/', locale)}>Braiin Station</a>
+
+    <details class="site-nav">
+      <summary class="site-nav__toggle" aria-label={locale === 'ar' ? 'القائمة' : 'Menu'}>
+        <span aria-hidden="true">☰</span>
+      </summary>
+      <nav aria-label={locale === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}>
+        <ul class="site-nav__list">
+          {
+            items.map((item) => (
+              <li>
+                <a href={href(item.href)} aria-current={isCurrent(item.href) ? 'page' : undefined}>
+                  {item.label[locale] ?? item.label.en}
+                </a>
+                {item.children.length > 0 && (
+                  <ul class="site-nav__sub">
+                    {item.children.map((child) => (
+                      <li>
+                        <a
+                          href={href(child.href)}
+                          aria-current={isCurrent(child.href) ? 'page' : undefined}
+                        >
+                          {child.label[locale] ?? child.label.en}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+    </details>
+
+    <a class="site-header__lang" href={switchHref} hreflang={otherLocale} lang={otherLocale}>
+      {otherLocale === 'ar' ? 'العربية' : 'English'}
+    </a>
+  </div>
+</header>

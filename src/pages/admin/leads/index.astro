@@ -1,0 +1,22 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import LeadsPanel from '@/components/admin/LeadsPanel';
+import { can } from '@/lib/authz/matrix';
+
+export const prerender = false;
+
+// The two flags below are UX hints computed from the SAME ROLE_CAPS the server
+// enforces. They decide which controls render; they decide nothing about access. A
+// caller who forges them reaches endpoints that re-check `leads.pii` and `export.csv`
+// server-side and refuse.
+const role = Astro.locals.session?.role ?? 'content_creator';
+const canSeePii = can(role, 'leads.pii') === 'full';
+const canExport = can(role, 'export.csv') === 'full';
+---
+
+<AdminLayout
+  title="Leads"
+  subtitle="Contact details are encrypted at rest. Revealing them is logged against your account."
+>
+  <LeadsPanel client:load canSeePii={canSeePii} canExport={canExport} />
+</AdminLayout>

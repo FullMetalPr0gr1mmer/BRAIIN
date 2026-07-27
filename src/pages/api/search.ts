@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { SearchQuerySchema } from '@schemas/search';
 import { searchContent, searchSuggest } from '@/lib/data/search';
+import { recordSearchQuery } from '@/lib/data/telemetry';
 
 // Public unified-search endpoint (KAN-29). NOT captcha-gated; the safety envelope is the
 // Zod cap (≤64 chars, no control chars) + websearch_to_tsquery + per-call statement_timeout
@@ -28,6 +29,13 @@ export const GET: APIRoute = async ({ url }) => {
   const results = await searchContent(q, locale);
   // Did-you-mean only when the primary search came back empty.
   const suggestions = results.length === 0 ? await searchSuggest(q, locale) : [];
+
+  // Feeds the SEO role's zero-result report. Not consent-gated and carrying no session
+  // id: what is stored is the query and its result count — a property of the CONTENT,
+  // not of the person — so there is nothing here to tie back to a visitor. See
+  // `recordSearchQuery`. Never awaited into the failure path: a logging problem must
+  // not turn a working search into an error.
+  await recordSearchQuery(q, locale, results.length);
 
   return json({ ok: true, query: q, locale, results, suggestions }, 200);
 };

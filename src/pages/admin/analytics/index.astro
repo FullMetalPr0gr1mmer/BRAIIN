@@ -1,0 +1,13 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import InsightsPanel from '@/components/admin/InsightsPanel';
+
+export const prerender = false;
+---
+
+<AdminLayout
+  title="Analytics"
+  subtitle="First-party, consent-gated, and read from pre-aggregated rollups rather than raw events."
+>
+  <InsightsPanel client:load mode="analytics" />
+</AdminLayout>

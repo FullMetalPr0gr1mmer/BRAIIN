@@ -43,6 +43,12 @@ Static, cacheable shell **+** Server Islands (`server:defer`) **+** on-demand `/
 
 > **Amendment (KAN-31, Astro 7 / adapter 14):** `platformProxy.enabled` was removed from this lock set — the option no longer exists in `@astrojs/cloudflare` v14's `Options` (it is silently ignored). Worker bindings are now reached via `import { env } from 'cloudflare:workers'`; `Astro.locals.runtime.env` was removed in Astro 6 and its getter **throws**. Toolchain floor is now **Node ≥ 22.12** (Astro 7 hard-refuses Node 20). The other three adapter locks are unchanged.
 
+> **Amendment (Phase 3, Admin/CMS):** three capability splits in §5 cut *through* a row, and **RLS is row-level, not column-level**, so each becomes its own table rather than a column — otherwise the split is enforceable only in application code, i.e. one layer, not two. `settings.integrations` (Admin+SEO) → **`site_integrations`**, separate from `site_settings` (Admin+Developer). `seo.globalDefaults` (Admin+SEO) → **`seo_defaults`**. `seo.entityMeta` (Admin+SEO write, Content Creator view) → **`entity_seo`**, separate from the content tables (Admin+Content Creator). `ai.config` (Admin only) → **`ai_config`**, separate from `ai_questions`/`ai_styles` (`ai.editContent`, Admin+Content Creator). Migration `0009_admin_cms.sql`; pgTAP in `supabase/tests/rls_admin_cms.test.sql`.
+>
+> **Amendment (Phase 3, session invalidation):** when the JWT's `app_metadata` role/tenant disagrees with the `profiles` row, the session is **rejected**, not downgraded. RLS — the primary layer — reads the role from the JWT, so downgrading only `assertCap()` would leave a demoted user with their old rights at the layer that matters most. This is also the mechanism that makes "force-revoke sessions on role/tenant change" true in practice. See `src/lib/auth/context.ts`.
+>
+> **Amendment (Phase 3, admin bundle budget):** `/admin` is exempt from CWV but gated on bundle size (§6). React + Tiptap are quarantined into predictably-named `admin-*` chunks by `manualChunks` in `astro.config.mjs`, and `.size-limit.json` now carries **two** entries: public routes (≤100 KB gz, excluding `admin-*`) and the admin bundle (≤300 KB gz). Without the split the directory-glob budget would have started weighing CMS code against the public limit.
+
 ---
 
 ## 3. THE FOUR PILLARS (hard requirements, in priority order)

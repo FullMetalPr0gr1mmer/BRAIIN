@@ -16,6 +16,15 @@ interface Props {
   ogImage?: string;
   robots?: string;
   jsonLd?: JsonLdNode[];
+  /**
+   * CMS-authored canonical override (`entity_seo.canonical_override`), for the case a
+   * page must consolidate onto a different URL — a duplicate landing page, or a
+   * campaign variant. Absent for almost every page, and deliberately validated below:
+   * an authored value that is not a same-origin absolute URL is IGNORED rather than
+   * emitted, because a canonical pointing off-site hands the page's ranking to whatever
+   * domain was typed into the box.
+   */
+  canonicalOverride?: string;
 }
 
 const {
@@ -26,10 +35,22 @@ const {
   ogImage,
   robots = 'index,follow',
   jsonLd = [],
+  canonicalOverride,
 } = Astro.props;
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
-const canonical = base + localizedPath(logicalPath, locale);
+
+function safeCanonical(override: string | undefined, fallback: string): string {
+  if (!override) return fallback;
+  try {
+    const parsed = new URL(override, base);
+    return parsed.origin === new URL(base).origin ? parsed.href : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+const canonical = safeCanonical(canonicalOverride, base + localizedPath(logicalPath, locale));
 const alternates = hreflangAlternates(logicalPath, PUBLIC_SITE_URL);
 const ogLocale = locale === 'ar' ? 'ar_SA' : 'en_US';
 

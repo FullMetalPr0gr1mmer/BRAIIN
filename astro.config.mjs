@@ -1,9 +1,11 @@
 // @ts-check
 import { defineConfig, envField } from 'astro/config';
 import cloudflare from '@astrojs/cloudflare';
-// NOTE: @astrojs/react is a dependency but the integration is intentionally NOT
-// registered in Phase 0 — public pages ship ZERO client JS (Performance pillar).
-// Re-enable `react()` in Phase 3 when the admin islands are built.
+// Phase 3: the React integration is registered for the /admin islands. Public pages
+// still ship ZERO React — Astro only emits the runtime for routes that actually
+// hydrate an island, and `manualChunks` below quarantines that runtime into
+// `admin-vendor-*.js` so the public 100 KB budget keeps measuring only public JS.
+import react from '@astrojs/react';
 
 /**
  * Braiin Station — render model (see CLAUDE.md §2 "Render tiers"):
@@ -41,9 +43,38 @@ export default defineConfig({
   // Stream facade in production (dev serves them external, so it looks fine locally).
   // 0 = never inline. Astro's top-level `build.assetsInlineLimit` does NOT propagate to
   // the Vite client environment — it must be set here.
-  vite: { build: { assetsInlineLimit: 0 } },
+  //
+  // `manualChunks` keeps the two budgets separable. `.size-limit.json` measures a
+  // directory glob, not a route graph, so once the admin hydrates React the public
+  // "≤100 KB per route" gate would silently start weighing react-dom and Tiptap and
+  // fail on JS no public visitor ever downloads. Forcing every admin-only vendor into
+  // a predictably-named `admin-vendor` chunk lets the public entry exclude it by name
+  // (`!.../admin-vendor*.js`) and gives /admin its own honest budget instead.
+  vite: {
+    build: {
+      assetsInlineLimit: 0,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const path = id.replace(/\\/g, '/');
+            // Our own admin-only modules. Without this they land in anonymously-named
+            // chunks that the "public route" glob cannot tell apart from public code,
+            // and the 100 KB gate silently starts weighing the CMS.
+            if (/\/src\/(components|lib)\/admin\//.test(path)) return 'admin-ui';
+            if (!path.includes('node_modules')) return undefined;
+            // Vendor code reachable only from an admin island.
+            return /\/node_modules\/(react|react-dom|scheduler|@tiptap|prosemirror-|orderedmap|rope-sequence|w3c-keyname)/.test(
+              path,
+            )
+              ? 'admin-vendor'
+              : undefined;
+          },
+        },
+      },
+    },
+  },
 
-  integrations: [],
+  integrations: [react()],
 
   // Path-based i18n: `/` (EN) + `/ar/` (AR). hreflang + x-default handled in <SeoHead>.
   i18n: {

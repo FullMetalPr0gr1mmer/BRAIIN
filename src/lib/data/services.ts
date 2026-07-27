@@ -11,7 +11,7 @@ import { parseRow, parseRows } from './parse';
 export type { ServiceRow } from '@schemas/content';
 
 const COLUMNS =
-  'slug,title,blurb,body_html,hero_video_uid,category,is_teaser,sort_order,updated_at';
+  'id,slug,title,blurb,body_html,hero_video_uid,category,is_teaser,sort_order,updated_at';
 
 export async function getPublishedServices() {
   if (!supabaseConfigured()) return [];

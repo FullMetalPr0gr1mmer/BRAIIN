@@ -127,7 +127,19 @@ Authorized (article CRUD by `ROLE_CAPS` — Content Creator write, SEO meta-only
 
 ## Phase 3 — Admin / CMS
 
-> **Client go-ahead required.**
+> **Status: BUILT.** Migration `0009_admin_cms.sql`; auth + CSRF + guard in
+> `src/lib/auth/*`, `src/lib/http/csrf.ts`, `src/middleware.ts`; API kernel and CRUD
+> factory in `src/lib/admin/*`; ~45 endpoints under `src/pages/api/admin/`; UI under
+> `src/pages/admin/` + `src/components/admin/`. Authz proven at both layers —
+> `tests/authz/endpoints.spec.ts` (153 assertions over `{principal × capability}`) and
+> `supabase/tests/rls_admin_cms.test.sql` (26 pgTAP assertions).
+>
+> **Not yet closed** (needs a provisioned Supabase project, so it cannot be verified from
+> a local build): the Custom Access Token Hook must be configured to stamp
+> `app_metadata.role`/`tenant_id`; `pg_cron` must be scheduled for
+> `app.publish_scheduled()`; `notify-lead` and the hourly audit-chain R2 anchor are
+> §10 Worker jobs that remain outstanding; Playwright negative-authz e2e still to be
+> written against a running instance.
 
 ### In scope (highlights)
 - **Full server-side RBAC**: RLS primary + Edge guard second layer; RESTRICTIVE publish (Admin+Content Creator) / archive+delete (Admin-only); CSRF/same-origin; role/tenant change revokes sessions. **The single `ROLE_CAPS` matrix is byte-for-byte identical to architecture §3.4, the §9.3 matrix, and CLAUDE.md §5 — a CI snapshot test fails on drift.** Canonical model: Admin all; Content Creator author + publish (no delete/archive/leads); SEO meta/redirects/integrations/analytics (no content/leads); **Developer technical role — settings/theme/maintenance + logs/audit/site-health + leads & PII + backup export, NO content authoring/publish/archive/delete.**

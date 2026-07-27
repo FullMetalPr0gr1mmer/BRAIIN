@@ -1,0 +1,561 @@
+/* Admin CMS styles. Loaded only by AdminLayout, so none of this weight reaches a
+   public route (Pillar 2 budgets are per-route).
+
+   Every colour is a CSS custom property because the theme editor writes custom
+   properties and nothing else — CLAUDE.md §7 forbids `'unsafe-inline'` in style-src, so
+   a theme cannot ship a stylesheet or an inline rule. Tokens are the only channel. */
+
+:root {
+  --ad-bg: #0b0b0f;
+  --ad-surface: #14141b;
+  --ad-surface-2: #1c1c26;
+  --ad-border: #2a2a37;
+  --ad-fg: #e8e8ea;
+  --ad-muted: #a0a0ab;
+  --ad-accent: #00e5ff;
+  --ad-danger: #ff6b6b;
+  --ad-warn: #ffb84d;
+  --ad-ok: #4ade80;
+  --ad-radius: 0.5rem;
+  --ad-sidebar: 15rem;
+}
+
+.admin-body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: var(--ad-sidebar) 1fr;
+  background: var(--ad-bg);
+  color: var(--ad-fg);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.55;
+}
+
+.admin-body[data-layout='bare'] {
+  grid-template-columns: 1fr;
+  place-items: center;
+}
+
+/* ---- Sidebar ---- */
+
+.admin-sidebar {
+  background: var(--ad-surface);
+  border-inline-end: 1px solid var(--ad-border);
+  padding: 1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 100vh;
+}
+
+.admin-brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.5rem;
+  color: var(--ad-accent);
+  text-decoration: none;
+}
+
+.admin-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.admin-nav-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ad-muted);
+  padding: 0.5rem 0.5rem 0.25rem;
+}
+
+.admin-nav a {
+  display: block;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--ad-radius);
+  color: var(--ad-fg);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.admin-nav a:hover {
+  background: var(--ad-surface-2);
+}
+
+.admin-nav a[aria-current='page'] {
+  background: var(--ad-surface-2);
+  color: var(--ad-accent);
+  font-weight: 600;
+}
+
+.admin-user {
+  margin-top: auto;
+  border-top: 1px solid var(--ad-border);
+  padding-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--ad-muted);
+}
+
+/* ---- Main ---- */
+
+.admin-main {
+  padding: 1.5rem 2rem 4rem;
+  max-width: 80rem;
+}
+
+.admin-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.admin-header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.admin-sub {
+  color: var(--ad-muted);
+  font-size: 0.875rem;
+  margin: 0.25rem 0 0;
+}
+
+/* ---- Cards, tables, forms ---- */
+
+.card {
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  padding: 1rem;
+}
+
+.card + .card {
+  margin-top: 1rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.stat {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.stat-label {
+  color: var(--ad-muted);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+/* Wide tables scroll inside their own container; the page never scrolls sideways. */
+.table-wrap {
+  overflow-x: auto;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+table.data th,
+table.data td {
+  text-align: start;
+  padding: 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--ad-border);
+  vertical-align: top;
+}
+
+table.data th {
+  color: var(--ad-muted);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  border: 1px solid var(--ad-border);
+  background: var(--ad-surface-2);
+}
+
+.badge[data-status='published'] {
+  color: var(--ad-ok);
+  border-color: var(--ad-ok);
+}
+.badge[data-status='draft'] {
+  color: var(--ad-muted);
+}
+.badge[data-status='scheduled'] {
+  color: var(--ad-warn);
+  border-color: var(--ad-warn);
+}
+.badge[data-status='archived'] {
+  color: var(--ad-danger);
+  border-color: var(--ad-danger);
+}
+
+.field {
+  display: block;
+  margin-bottom: 0.875rem;
+}
+
+.field > span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--ad-muted);
+  margin-bottom: 0.25rem;
+}
+
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='number'],
+input[type='url'],
+input[type='datetime-local'],
+select,
+textarea {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  background: var(--ad-bg);
+  color: var(--ad-fg);
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  font: inherit;
+}
+
+textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+/* Bar rows for the insight panels.
+
+   The width comes from a `data-width` bucket, NOT from an inline `style` attribute.
+   That is a CSP consequence, not a stylistic preference: Astro server-renders these
+   islands before hydrating them, so a React `style={{…}}` prop is emitted into the HTML
+   as a real `style="…"` attribute — which `style-src 'self' 'nonce-…'` with no
+   'unsafe-inline' blocks outright. The bar would render at zero width until hydration
+   and log a violation on every page view. Twenty-one bucket rules cost nothing and
+   render identically before and after hydration. */
+.bar {
+  display: block;
+  inline-size: 8rem;
+  block-size: 0.55rem;
+  background: var(--ad-surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  block-size: 100%;
+  inline-size: 0;
+  background: var(--ad-accent);
+}
+.bar-fill[data-width='0'] {
+  inline-size: 0%;
+}
+.bar-fill[data-width='5'] {
+  inline-size: 5%;
+}
+.bar-fill[data-width='10'] {
+  inline-size: 10%;
+}
+.bar-fill[data-width='15'] {
+  inline-size: 15%;
+}
+.bar-fill[data-width='20'] {
+  inline-size: 20%;
+}
+.bar-fill[data-width='25'] {
+  inline-size: 25%;
+}
+.bar-fill[data-width='30'] {
+  inline-size: 30%;
+}
+.bar-fill[data-width='35'] {
+  inline-size: 35%;
+}
+.bar-fill[data-width='40'] {
+  inline-size: 40%;
+}
+.bar-fill[data-width='45'] {
+  inline-size: 45%;
+}
+.bar-fill[data-width='50'] {
+  inline-size: 50%;
+}
+.bar-fill[data-width='55'] {
+  inline-size: 55%;
+}
+.bar-fill[data-width='60'] {
+  inline-size: 60%;
+}
+.bar-fill[data-width='65'] {
+  inline-size: 65%;
+}
+.bar-fill[data-width='70'] {
+  inline-size: 70%;
+}
+.bar-fill[data-width='75'] {
+  inline-size: 75%;
+}
+.bar-fill[data-width='80'] {
+  inline-size: 80%;
+}
+.bar-fill[data-width='85'] {
+  inline-size: 85%;
+}
+.bar-fill[data-width='90'] {
+  inline-size: 90%;
+}
+.bar-fill[data-width='95'] {
+  inline-size: 95%;
+}
+.bar-fill[data-width='100'] {
+  inline-size: 100%;
+}
+
+.pii {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  gap: 0.25rem 1rem;
+  border: 1px solid var(--ad-warn);
+  border-radius: var(--ad-radius);
+  padding: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.pii dt {
+  color: var(--ad-muted);
+  font-size: 0.8rem;
+}
+
+.pii dd {
+  margin: 0;
+}
+
+.field-group {
+  border: 0;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.field-legend {
+  font-size: 0.8rem;
+  color: var(--ad-muted);
+  margin: 0 0 0.25rem;
+  padding: 0;
+}
+
+.field-inline {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.field-inline input[type='checkbox'] {
+  width: auto;
+}
+
+.field-inline > span {
+  margin: 0;
+}
+
+.form-actions {
+  margin-top: 1rem;
+}
+
+.row-2 {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 48rem) {
+  .row-2 {
+    grid-template-columns: 1fr;
+  }
+  .admin-body {
+    grid-template-columns: 1fr;
+  }
+  .admin-sidebar {
+    min-height: auto;
+  }
+}
+
+/* The Arabic half of every bilingual field renders RTL so authors see what visitors
+   will. Without this the editor shows correct text with wrong punctuation placement,
+   which is exactly the class of bug that survives review. */
+[dir='rtl'],
+input[lang='ar'],
+textarea[lang='ar'] {
+  direction: rtl;
+  text-align: right;
+}
+
+button,
+.btn {
+  font: inherit;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--ad-radius);
+  border: 1px solid var(--ad-border);
+  background: var(--ad-surface-2);
+  color: var(--ad-fg);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+
+button:hover,
+.btn:hover {
+  border-color: var(--ad-accent);
+}
+
+button[data-variant='primary'],
+.btn[data-variant='primary'] {
+  background: var(--ad-accent);
+  color: #04141a;
+  border-color: var(--ad-accent);
+  font-weight: 600;
+}
+
+button[data-variant='danger'] {
+  color: var(--ad-danger);
+  border-color: var(--ad-danger);
+}
+
+button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 0.875rem;
+}
+
+.msg {
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--ad-radius);
+  border: 1px solid var(--ad-border);
+  margin-bottom: 0.875rem;
+  font-size: 0.875rem;
+}
+
+.msg[data-kind='error'] {
+  border-color: var(--ad-danger);
+  color: var(--ad-danger);
+}
+
+.msg[data-kind='ok'] {
+  border-color: var(--ad-ok);
+  color: var(--ad-ok);
+}
+
+/* ---- Login ---- */
+
+.login-card {
+  width: min(24rem, 92vw);
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  padding: 1.75rem;
+}
+
+.login-card h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+}
+
+/* ---- Tiptap ---- */
+
+.editor-toolbar {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  border: 1px solid var(--ad-border);
+  border-bottom: 0;
+  border-radius: var(--ad-radius) var(--ad-radius) 0 0;
+  padding: 0.35rem;
+  background: var(--ad-surface-2);
+}
+
+.editor-toolbar button {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.editor-toolbar button[aria-pressed='true'] {
+  border-color: var(--ad-accent);
+  color: var(--ad-accent);
+}
+
+.editor-surface .tiptap {
+  min-height: 14rem;
+  padding: 0.75rem;
+  border: 1px solid var(--ad-border);
+  border-radius: 0 0 var(--ad-radius) var(--ad-radius);
+  background: var(--ad-bg);
+}
+
+.editor-surface .tiptap:focus {
+  outline: 2px solid var(--ad-accent);
+  outline-offset: -2px;
+}
+
+:where(:focus-visible) {
+  outline: 2px solid var(--ad-accent);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.card-title {
+  margin-block: 0 0.5rem;
+  font-size: 1rem;
+}
+
+.card-detail {
+  margin-top: 1.25rem;
+}
+
+.prewrap {
+  white-space: pre-wrap;
+}
+
+.spaced-top {
+  margin-top: 0.5rem;
+}
+
+.cell-secondary {
+  opacity: 0.75;
+  font-size: 0.85em;
+}

@@ -11,7 +11,7 @@ export type { PostRow } from '@schemas/content';
 
 // PostgREST FK embeds: blog_posts.author_id → team_members, category_id → categories.
 const COLUMNS =
-  'slug,title,excerpt,body_html,cover_image_url,published_at,updated_at,reading_minutes,' +
+  'id,slug,title,excerpt,body_html,cover_image_url,published_at,updated_at,reading_minutes,' +
   'author:team_members(slug,name,avatar_url),category:categories(slug,name)';
 
 export async function getPublishedPosts() {

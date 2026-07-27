@@ -12,7 +12,10 @@ import {
 // `{}`, `{fr:'x'}` and — the actual defect — an Arabic-less `{en:'x'}`. The tests below
 // are written against that specific regression: each one fails if the weak shape returns.
 
+// `id` is required on the content row schemas: per-entity SEO (`entity_seo`) is keyed
+// by uuid, so the public loaders select it.
 const service = {
+  id: '11111111-1111-4111-8111-111111111111',
   slug: 'brand-identity',
   title: { en: 'Brand Identity', ar: 'الهوية البصرية' },
   blurb: null,
@@ -105,6 +108,7 @@ describe('content rows', () => {
 
   it('a post accepts a null author embed but rejects an Arabic-less author name', () => {
     const post = {
+      id: '22222222-2222-4222-8222-222222222222',
       slug: 'arabic-first-brand-systems',
       title: { en: 'Arabic-first brand systems', ar: 'أنظمة العلامات بالعربية أولاً' },
       excerpt: null,

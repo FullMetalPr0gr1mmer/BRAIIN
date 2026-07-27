@@ -1,0 +1,13 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import SingletonForm from '@/components/admin/SingletonForm';
+
+export const prerender = false;
+---
+
+<AdminLayout
+  title="General settings"
+  subtitle="Site identity and data-retention horizons. Integrations and maintenance have their own screens."
+>
+  <SingletonForm client:load config="settings" />
+</AdminLayout>

@@ -1,0 +1,13 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import SingletonForm from '@/components/admin/SingletonForm';
+
+export const prerender = false;
+---
+
+<AdminLayout
+  title="Integrations"
+  subtitle="GA4, Search Console, Calendly and reCAPTCHA. GA4 stays consent-gated and secondary to first-party analytics."
+>
+  <SingletonForm client:load config="integrations" />
+</AdminLayout>

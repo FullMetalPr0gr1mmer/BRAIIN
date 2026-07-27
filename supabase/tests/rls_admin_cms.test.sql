@@ -1,0 +1,164 @@
+-- pgTAP: RLS for the Phase-3 CMS tables (migration 0009).
+--
+-- This is the PRIMARY authorization layer. The Vitest suite in
+-- tests/authz/endpoints.spec.ts proves the SECONDARY one (assertCap) against a stubbed
+-- database; only Postgres can prove a policy, so the three splits that migration 0009
+-- exists for are asserted here:
+--
+--   entity_seo        Admin + SEO write · Content Creator read-only
+--   site_integrations Admin + SEO        (NOT Developer, who owns general settings)
+--   ai_config         Admin ALONE        (NOT Content Creator, who authors questions)
+--
+-- ── A note on how a denied write actually fails ──────────────────────────────────
+-- It is tempting to assert `throws_ok(..., '42501')` for every refused write. That is
+-- wrong for most of them, and the difference matters when reading these tests.
+--
+--   • A policy's USING clause FILTERS rows. An UPDATE or DELETE that matches no rows
+--     affects zero rows and raises NOTHING. This is the common case below.
+--   • 42501 is raised only when a row passes USING but its new value fails WITH CHECK
+--     (the archive gates in migrations 0001/0007), or when an INSERT fails WITH CHECK.
+--
+-- So "cannot write" is asserted as "affects zero rows" unless the policy is genuinely a
+-- WITH CHECK violation. An endpoint turns that zero into a 403 rather than a cheerful
+-- no-op — see `deleteRow` in src/lib/admin/crud.ts.
+--
+-- Run with `supabase test db`.
+
+begin;
+select plan(26);
+
+-- Setup runs as the migration role, where RLS is bypassed.
+insert into public.tenants (id, name) values ('00000000-0000-0000-0000-000000000001', 'T1');
+
+insert into public.entity_seo (id, tenant_id, entity_type, entity_id, meta_title, meta_description)
+  values (
+    '00000000-0000-0000-0000-0000000000e1',
+    '00000000-0000-0000-0000-000000000001',
+    'service',
+    '00000000-0000-0000-0000-0000000000c1',
+    '{"en":"T","ar":"ت"}'::jsonb,
+    '{"en":"D","ar":"د"}'::jsonb
+  );
+
+insert into public.site_integrations (tenant_id) values ('00000000-0000-0000-0000-000000000001');
+insert into public.ai_config (tenant_id) values ('00000000-0000-0000-0000-000000000001');
+insert into public.navigation (tenant_id, location, label, href)
+  values ('00000000-0000-0000-0000-000000000001', 'header', '{"en":"Services","ar":"خدمات"}'::jsonb, '/services');
+insert into public.seo_defaults (tenant_id) values ('00000000-0000-0000-0000-000000000001');
+insert into public.search_queries (tenant_id, q) values ('00000000-0000-0000-0000-000000000001', 'branding');
+insert into public.consent_log (tenant_id, subject_hash, categories, policy_version)
+  values ('00000000-0000-0000-0000-000000000001', 'hash', '{"analytics":true}'::jsonb, 'v1');
+
+create function _claims(p_role text, p_tid text) returns void language sql as $$
+  select set_config(
+    'request.jwt.claims',
+    case when p_role is null then ''
+         else json_build_object('app_metadata', json_build_object('role', p_role, 'tenant_id', p_tid))::text end,
+    true
+  )
+$$;
+
+-- Rows actually affected by a statement — the honest way to assert a filtered write.
+create function _updated_entity_seo() returns int language sql as $$
+  with u as (update public.entity_seo set robots = 'noindex' returning 1) select count(*)::int from u
+$$;
+create function _updated_integrations() returns int language sql as $$
+  with u as (update public.site_integrations set ga4 = '{"id":"G-X"}'::jsonb returning 1)
+  select count(*)::int from u
+$$;
+create function _updated_navigation() returns int language sql as $$
+  with u as (update public.navigation set href = '/x' returning 1) select count(*)::int from u
+$$;
+create function _deleted_navigation() returns int language sql as $$
+  with d as (delete from public.navigation returning 1) select count(*)::int from d
+$$;
+
+-- ---- entity_seo: public READ, Admin + SEO WRITE ----------------------------
+-- Meta tags ship in the HTML head, so anon reading them is by design, not an oversight.
+set local role anon;
+select _claims(null, null);
+select is((select count(*) from public.entity_seo)::int, 1, 'anon reads entity_seo (it is public meta)');
+
+set local role authenticated;
+
+select _claims('content_creator', '00000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.entity_seo)::int, 1, 'content_creator READS entity_seo (its "view" access)');
+select is(_updated_entity_seo(), 0, 'content_creator cannot WRITE entity_seo');
+
+select _claims('developer', '00000000-0000-0000-0000-000000000001');
+select is(_updated_entity_seo(), 0, 'developer cannot write entity_seo');
+
+select _claims('seo', '00000000-0000-0000-0000-000000000001');
+select is(_updated_entity_seo(), 1, 'seo can write entity_seo');
+
+select _claims('admin', '00000000-0000-0000-0000-000000000001');
+select is(_updated_entity_seo(), 1, 'admin can write entity_seo');
+
+select _claims('admin', '00000000-0000-0000-0000-0000000000ff');
+select is((select count(*) from public.entity_seo)::int, 0, 'admin of another tenant sees no entity_seo');
+
+-- ---- site_integrations: Admin + SEO write, Developer refused ----------------
+select _claims('developer', '00000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.site_integrations)::int, 1, 'developer READS integrations (staff read)');
+select is(_updated_integrations(), 0, 'developer cannot write integrations — that is SEO''s capability');
+
+select _claims('seo', '00000000-0000-0000-0000-000000000001');
+select is(_updated_integrations(), 1, 'seo can write integrations');
+
+select _claims('content_creator', '00000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.site_integrations)::int, 1, 'content_creator reads integrations (staff read)');
+select is(_updated_integrations(), 0, 'content_creator cannot write integrations');
+
+-- ---- ai_config: Admin ALONE -------------------------------------------------
+select _claims('content_creator', '00000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.ai_config)::int, 0, 'content_creator cannot even read ai_config');
+
+select _claims('developer', '00000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.ai_config)::int, 0, 'developer cannot read ai_config');
+
+select _claims('admin', '00000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.ai_config)::int, 1, 'admin reads ai_config');
+select lives_ok($$ update public.ai_config set daily_usd_cap = 7 $$, 'admin writes ai_config');
+
+-- ---- navigation: public read, content authors write, Admin-only delete ------
+set local role anon;
+select _claims(null, null);
+select is((select count(*) from public.navigation)::int, 1, 'anon reads navigation (it renders on every page)');
+
+set local role authenticated;
+select _claims('seo', '00000000-0000-0000-0000-000000000001');
+select is(_updated_navigation(), 0, 'seo cannot edit navigation');
+
+select _claims('content_creator', '00000000-0000-0000-0000-000000000001');
+select is(_updated_navigation(), 1, 'content_creator can edit navigation');
+-- The RESTRICTIVE delete policy filters rather than raising, so this is zero rows.
+select is(_deleted_navigation(), 0, 'content_creator delete on navigation affects zero rows');
+
+select _claims('admin', '00000000-0000-0000-0000-000000000001');
+select is(_deleted_navigation(), 1, 'admin can delete navigation');
+
+-- ---- search_queries: Admin + SEO + Developer, NOT Content Creator -----------
+select _claims('content_creator', '00000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.search_queries)::int, 0, 'content_creator has no search analytics');
+select _claims('seo', '00000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.search_queries)::int, 1, 'seo reads search analytics');
+
+-- ---- consent_log: Admin + Developer only -----------------------------------
+select _claims('seo', '00000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.consent_log)::int, 0, 'seo cannot read the consent ledger');
+select _claims('developer', '00000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.consent_log)::int, 1, 'developer reads the consent ledger');
+
+-- ---- privileged_ops: no policies at all → service_role only ----------------
+select _claims('admin', '00000000-0000-0000-0000-000000000001');
+select is(
+  (select count(*) from public.privileged_ops)::int,
+  0,
+  'even admin cannot read privileged_ops through RLS (service-role only)'
+);
+
+reset role;
+select _claims(null, null);
+
+select * from finish();
+rollback;

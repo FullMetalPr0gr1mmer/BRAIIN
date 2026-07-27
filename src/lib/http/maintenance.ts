@@ -8,13 +8,38 @@ export interface MaintenanceState {
   allowlist: readonly string[];
 }
 
-const KV_KEY = 'site:maintenance';
+export const MAINTENANCE_KV_KEY = 'site:maintenance';
+
+/**
+ * Snapshots the flag into KV, which is what the middleware actually reads.
+ *
+ * `site_settings` stays the source of truth, but the pre-cache check runs before the
+ * edge-cache lookup on EVERY public request — a Postgres round-trip there would put the
+ * database on the critical path of every cache hit, which is the opposite of what
+ * Tier A is for. So the admin writes both: the row for durability and audit, this key
+ * for the read path.
+ */
+export async function putMaintenanceState(
+  env: { SESSION?: KVNamespace },
+  state: MaintenanceState,
+): Promise<boolean> {
+  try {
+    if (!env.SESSION) return false;
+    await env.SESSION.put(
+      MAINTENANCE_KV_KEY,
+      JSON.stringify({ active: state.active, allowlist: [...state.allowlist] }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function getMaintenanceState(env: {
   SESSION?: KVNamespace;
 }): Promise<MaintenanceState> {
   try {
-    const raw = await env.SESSION?.get(KV_KEY);
+    const raw = await env.SESSION?.get(MAINTENANCE_KV_KEY);
     if (!raw) return { active: false, allowlist: [] };
     const parsed = JSON.parse(raw) as Partial<MaintenanceState>;
     return {

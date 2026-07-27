@@ -639,3 +639,146 @@ section {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---- Sitewide chrome (SiteHeader / SiteFooter) -----------------------------
+   Server-rendered, zero client JS. Logical properties throughout so the Arabic
+   RTL twin needs no overrides — `inline-start` flips with `dir`, `left` does not. */
+
+.skip-link {
+  position: absolute;
+  inset-inline-start: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: var(--bs-surface);
+  color: var(--bs-accent);
+}
+
+.skip-link:focus {
+  inset-inline-start: 0;
+}
+
+.site-header {
+  border-block-end: 1px solid #2a2a37;
+  background: var(--bs-bg);
+}
+
+.site-header__bar {
+  max-width: var(--bs-maxw);
+  margin-inline: auto;
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.site-header__brand {
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--bs-fg);
+  margin-inline-end: auto;
+}
+
+.site-header__lang {
+  font-size: 0.875rem;
+}
+
+.site-nav__toggle {
+  display: none;
+  cursor: pointer;
+  list-style: none;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #2a2a37;
+  border-radius: 0.4rem;
+}
+
+.site-nav__toggle::-webkit-details-marker {
+  display: none;
+}
+
+.site-nav__list,
+.site-footer__list {
+  display: flex;
+  gap: 1.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex-wrap: wrap;
+}
+
+.site-nav__list a {
+  text-decoration: none;
+  color: var(--bs-fg);
+  font-size: 0.95rem;
+}
+
+.site-nav__list a:hover,
+.site-nav__list a[aria-current='page'] {
+  color: var(--bs-accent);
+}
+
+.site-nav__sub {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.site-nav__sub a {
+  font-size: 0.85rem;
+  color: var(--bs-muted);
+}
+
+.site-footer {
+  border-block-start: 1px solid #2a2a37;
+  margin-block-start: 4rem;
+  padding-block: 2rem;
+}
+
+.site-footer__inner {
+  max-width: var(--bs-maxw);
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.site-footer__list a {
+  color: var(--bs-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.site-footer__list a:hover {
+  color: var(--bs-accent);
+}
+
+.site-footer__copy {
+  color: var(--bs-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* Below 48rem the nav collapses into the native <details> disclosure. No JS, and
+   no `hidden` toggling that a screen reader would have to be told about. */
+@media (max-width: 48rem) {
+  .site-nav__toggle {
+    display: inline-block;
+  }
+  .site-nav[open] nav {
+    position: absolute;
+    inset-inline: 0;
+    background: var(--bs-surface);
+    padding: 1rem 1.25rem;
+    border-block-end: 1px solid #2a2a37;
+  }
+  .site-nav__list {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
+
+#main:focus {
+  outline: none;
+}
