@@ -1,0 +1,15 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import UsersPanel from '@/components/admin/UsersPanel';
+
+export const prerender = false;
+
+const selfId = Astro.locals.session?.userId ?? '';
+---
+
+<AdminLayout
+  title="Users & roles"
+  subtitle="Admin only. Role changes end the affected session immediately."
+>
+  <UsersPanel client:load selfId={selfId} />
+</AdminLayout>

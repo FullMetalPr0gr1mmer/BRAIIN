@@ -17,6 +17,12 @@ export default defineConfig({
       'astro:env/server': fileURLToPath(
         new URL('./tests/stubs/astro-env-server.ts', import.meta.url),
       ),
+      // `cloudflare:workers` is workerd-only. Same reasoning as astro:env — without a
+      // stub, the middleware and any endpoint touching a binding are unreachable from
+      // tests, which is precisely the code that most wants covering.
+      'cloudflare:workers': fileURLToPath(
+        new URL('./tests/stubs/cloudflare-workers.ts', import.meta.url),
+      ),
     },
   },
   test: {

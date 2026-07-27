@@ -1,0 +1,13 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import MaintenancePanel from '@/components/admin/MaintenancePanel';
+
+export const prerender = false;
+---
+
+<AdminLayout
+  title="Maintenance mode"
+  subtitle="Checked at the edge before the cache lookup, so switching it on takes effect without a purge."
+>
+  <MaintenancePanel client:load />
+</AdminLayout>

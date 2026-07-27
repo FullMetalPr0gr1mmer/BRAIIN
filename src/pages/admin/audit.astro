@@ -1,0 +1,22 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import ReadOnlyPanel from '@/components/admin/ReadOnlyPanel';
+
+export const prerender = false;
+
+const columns = [
+  { key: 'created_at', label: 'When', kind: 'date' as const },
+  { key: 'actor_role', label: 'Role' },
+  { key: 'action', label: 'Action' },
+  { key: 'entity_type', label: 'Entity' },
+  { key: 'entity_id', label: 'Id' },
+  { key: 'detail', label: 'Detail', kind: 'json' as const },
+];
+---
+
+<AdminLayout
+  title="Audit log"
+  subtitle="Append-only and hash-chained by the database. There is no edit or delete path, by design."
+>
+  <ReadOnlyPanel client:load endpoint="/api/admin/audit" columns={columns} variant="audit" />
+</AdminLayout>

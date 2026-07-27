@@ -7,3 +7,6 @@ export * from './clientlog';
 export * from './systemLog';
 export * from './search';
 export * from './styleFinder';
+export * from './tiptap';
+export * from './admin';
+export * from './analytics';

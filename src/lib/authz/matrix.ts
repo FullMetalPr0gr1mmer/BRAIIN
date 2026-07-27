@@ -218,3 +218,28 @@ export function assertCap(
     throw new AuthorizationError(cap, `role '${ctx.role}' has '${access}'`);
   }
 }
+
+/**
+ * Passes when ANY of `caps` is granted at one of `allowed` levels.
+ *
+ * Reading a content list is the case this exists for. Listing services is reachable
+ * two different ways in the matrix — `services.write` (Admin, Content Creator) and
+ * `seo.entityMeta` (Admin, SEO) — because the SEO role must be able to find the entity
+ * whose meta description it owns without being able to touch the body. Expressing that
+ * as a single capability would have meant inventing a `services.read` that is not in
+ * CLAUDE.md §5, and the matrix is the authority. Still default-deny: an empty
+ * intersection throws, and Developer (none on both) is refused.
+ */
+export function assertAnyCap(
+  ctx: AuthContext | null,
+  caps: readonly Capability[],
+  allowed: readonly Access[] = ['full'],
+): asserts ctx is AuthContext {
+  if (!ctx || !ctx.isActive) {
+    throw new AuthorizationError(caps.join('|'), 'no active session');
+  }
+  const granted = caps.some((cap) => allowed.includes(ROLE_CAPS[ctx.role][cap]));
+  if (!granted) {
+    throw new AuthorizationError(caps.join('|'), `role '${ctx.role}' has none of them`);
+  }
+}

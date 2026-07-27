@@ -1,0 +1,16 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import ResourceForm from '@/components/admin/ResourceForm';
+import { uiFor } from '@/lib/admin/uiSchema';
+
+export const prerender = false;
+
+// Astro resolves the static `new.astro` before this dynamic route, so /admin/certifications/new
+// reaches the create form rather than being read as an id.
+const ui = uiFor('certifications');
+const id = Astro.params.id ?? null;
+---
+
+<AdminLayout title={`Edit ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
+  <ResourceForm client:load resource="certifications" id={id} />
+</AdminLayout>

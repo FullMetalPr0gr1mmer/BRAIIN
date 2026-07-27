@@ -1,0 +1,13 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import ResourceForm from '@/components/admin/ResourceForm';
+import { uiFor } from '@/lib/admin/uiSchema';
+
+export const prerender = false;
+
+const ui = uiFor('redirects');
+---
+
+<AdminLayout title={`New ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
+  <ResourceForm client:load resource="redirects" id={null} />
+</AdminLayout>

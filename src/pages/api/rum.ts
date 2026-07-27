@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { hasConsent } from '@consent/gate';
 import { WebVitalSchema } from '@schemas/webvitals';
 import { isSameOrigin } from '@/lib/http/csrf';
+import { recordWebVital } from '@/lib/data/telemetry';
 
 // Consent-gated, first-party RUM web-vitals sink (CLAUDE.md §10). The client only
 // beacons with analytics consent; the server RE-CHECKS here (defense in depth) and
@@ -36,9 +37,10 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response('invalid', { status: 422, headers: NO_STORE });
   }
 
-  // TODO(phase-3): insert parsed.data into public.web_vitals via the service-role
-  // client (tenant-scoped). Consent is already re-verified above.
-  // TODO(KAN-20): WAF rate-limit per IP before that insert lands — an unauthenticated
-  // path to a service-role write needs a row-count bound, not just a row-size bound.
+  // Consent is verified above; the tenant is resolved server-side inside the sink
+  // (the anon fence), never taken from the beacon.
+  // TODO(KAN-20): WAF rate-limit per IP — an unauthenticated path to a service-role
+  // write needs a row-count bound, and the schema only gives us a row-size bound.
+  await recordWebVital(parsed.data);
   return new Response(null, { status: 204, headers: NO_STORE });
 };

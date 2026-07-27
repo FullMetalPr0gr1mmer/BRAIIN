@@ -1,0 +1,18 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import ResourceTable from '@/components/admin/ResourceTable';
+import { uiFor } from '@/lib/admin/uiSchema';
+
+export const prerender = false;
+
+const ui = uiFor('certifications');
+---
+
+<AdminLayout title={ui.title}>
+  <!--
+  `client:load` rather than `client:visible`: this island IS the page, so deferring it
+  to intersection just adds a blank frame. Public routes use visible/idle — /admin is
+  exempt from the CWV budgets (CLAUDE.md §6) and is gated on bundle size instead.
+-->
+  <ResourceTable client:load resource="certifications" />
+</AdminLayout>

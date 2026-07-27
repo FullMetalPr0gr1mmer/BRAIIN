@@ -1,0 +1,86 @@
+---
+// Consent-gated first-party pageview beacon. Feeds `analytics_events`, which the
+// scheduled rollup turns into the table the admin dashboard reads.
+//
+// Everything about this is shaped by the constraint that it runs on EVERY public route:
+//   • no library, no import — the whole thing is well under 1 KB
+//   • `sendBeacon` so it never blocks unload and never delays a navigation
+//   • fires on `pageshow`, not `load`, so a back/forward-cache restore counts as a view
+//     (bfcache restores fire no `load`, and undercounting returns is a silent bias)
+//
+// ── Why the locale is read from <html lang>, not passed with define:vars ─────────
+// `define:vars` cannot produce an external script: injecting the values requires the
+// script to be INLINE, and our CSP is `script-src 'self' 'nonce-…'` with no
+// 'unsafe-inline', so the browser refuses to execute it. The failure is invisible to
+// build, typecheck and size-limit — it is a console event on the live site, and the
+// analytics simply never arrive. `tests/e2e/csp.e2e.ts` caught exactly that here.
+//
+// `document.documentElement.lang` already carries the locale (BaseLayout sets it), so
+// the value is available without a bridge of any kind.
+//
+// The session id is a random per-tab value in sessionStorage. It is NOT an identifier:
+// it dies with the tab, is never joined to a user, and exists only so "sessions" is a
+// countable number. Under PDPL that keeps this an analytics measure rather than a
+// tracking one — but it is still consent-gated, because the visitor's expectation
+// governs, not our data model.
+---
+
+<script>
+  const COOKIE = '__Host-consent';
+
+  function analyticsConsent(): boolean {
+    const match = document.cookie.split('; ').find((c) => c.startsWith(COOKIE + '='));
+    if (!match) return false;
+    try {
+      return JSON.parse(decodeURIComponent(match.slice(COOKIE.length + 1))).analytics === true;
+    } catch {
+      return false;
+    }
+  }
+
+  function sessionId(): string | undefined {
+    try {
+      let id = sessionStorage.getItem('bs_sid');
+      if (!id) {
+        id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        sessionStorage.setItem('bs_sid', id);
+      }
+      return id;
+    } catch {
+      // Storage blocked (private mode, strict cookie policy). Beacon anonymously rather
+      // than not at all — the pageview count stays right, only the session grouping is
+      // lost.
+      return undefined;
+    }
+  }
+
+  let sent = false;
+  function send(): void {
+    if (sent || !analyticsConsent()) return;
+    sent = true;
+    try {
+      const locale = document.documentElement.lang === 'ar' ? 'ar' : 'en';
+      navigator.sendBeacon(
+        '/api/analytics',
+        new Blob(
+          [
+            JSON.stringify({
+              type: 'pageview',
+              path: location.pathname,
+              locale,
+              sessionId: sessionId(),
+            }),
+          ],
+          { type: 'application/json' },
+        ),
+      );
+    } catch {
+      // A failed beacon is never worth an error to the visitor.
+    }
+  }
+
+  // `pageshow` covers both a fresh load and a bfcache restore.
+  window.addEventListener('pageshow', send);
+  // Opting in mid-visit should count the page you opted in on.
+  document.addEventListener('consent-updated', send);
+</script>

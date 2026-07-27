@@ -1,0 +1,149 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { can } from '@/lib/authz/matrix';
+import { visibleNav } from '@/lib/admin/nav';
+
+export const prerender = false;
+
+// Server-rendered rather than another island: the dashboard is read-only, and fetching
+// it from the browser would mean an authenticated round-trip to render a page the
+// server had already authenticated. Tier C is `no-store` anyway, so there is nothing to
+// cache and nothing to gain by deferring.
+//
+// The session is guaranteed by the middleware; the `?? null` guards are for TypeScript,
+// not for a case that can actually reach here.
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+
+interface Attention {
+  kind: string;
+  entity_type: string;
+  id: string;
+  slug: string;
+  title: Record<string, string> | null;
+  at: string | null;
+}
+
+let attention: Attention[] = [];
+let openLeads: number | null = null;
+let failed = false;
+
+if (session && sb) {
+  const canSeeContent =
+    can(session.role, 'blog.write') === 'full' ||
+    can(session.role, 'services.write') === 'full' ||
+    can(session.role, 'seo.entityMeta') === 'full';
+
+  if (canSeeContent) {
+    // `dashboard_attention` is a security_invoker view, so RLS still applies — a role
+    // with no content access sees zero rows rather than being refused.
+    const { data, error } = await sb
+      .from('dashboard_attention')
+      .select('kind,entity_type,id,slug,title,at')
+      .limit(50);
+    if (error) failed = true;
+    else attention = (data ?? []) as Attention[];
+  }
+
+  // Gated on its own capability, not on the dashboard's: a Content Creator must not
+  // learn the lead volume from a widget when the whole leads section is closed to them.
+  if (can(session.role, 'leads.manage') === 'full') {
+    const { count } = await sb
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', session.tenantId)
+      .eq('status', 'new');
+    openLeads = count ?? 0;
+  }
+}
+
+const byKind = new Map<string, Attention[]>();
+for (const row of attention) {
+  byKind.set(row.kind, [...(byKind.get(row.kind) ?? []), row]);
+}
+
+const KIND_LABEL: Record<string, string> = {
+  scheduled_today: 'Going live today',
+  stale: 'Not updated in 180 days',
+  missing_image: 'Published without a cover image',
+};
+
+const sections = session ? visibleNav(session.role) : [];
+const shortcuts = sections.flatMap((group) => group.links).slice(0, 8);
+---
+
+<AdminLayout title="Dashboard" subtitle={session ? `Signed in as ${session.email}` : undefined}>
+  {
+    failed && (
+      <p class="msg" data-kind="error" role="alert">
+        Could not load the attention list. The system log has the detail.
+      </p>
+    )
+  }
+
+  <div class="grid">
+    {
+      openLeads !== null && (
+        <div class="card">
+          <p class="stat">{openLeads}</p>
+          <p class="stat-label">New leads</p>
+        </div>
+      )
+    }
+    {
+      [...byKind.entries()].map(([kind, rows]) => (
+        <div class="card">
+          <p class="stat">{rows.length}</p>
+          <p class="stat-label">{KIND_LABEL[kind] ?? kind}</p>
+        </div>
+      ))
+    }
+    {
+      byKind.size === 0 && openLeads === null && (
+        <div class="card">
+          <p class="stat">—</p>
+          <p class="stat-label">Nothing needs your attention</p>
+        </div>
+      )
+    }
+  </div>
+
+  {
+    [...byKind.entries()].map(([kind, rows]) => (
+      <div class="card table-wrap">
+        <h2 class="card-title">{KIND_LABEL[kind] ?? kind}</h2>
+        <table class="data">
+          <thead>
+            <tr>
+              <th scope="col">Title</th>
+              <th scope="col">Type</th>
+              <th scope="col">When</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr>
+                <td>{row.title?.['en'] ?? row.slug}</td>
+                <td>{row.entity_type.replace('_', ' ')}</td>
+                <td>{row.at ? new Date(row.at).toLocaleDateString() : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ))
+  }
+
+  <div class="card">
+    <h2 class="card-title">Jump to</h2>
+    <div class="toolbar">
+      {
+        shortcuts.map((link) => (
+          <a class="btn" href={link.href}>
+            {link.label}
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</AdminLayout>

@@ -1,0 +1,97 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { getNavigation, type NavNode } from '@/lib/data/navigation';
+import { localizedPath } from '@/lib/i18n';
+
+// Sitewide footer. Same posture as SiteHeader: CMS-authored (`navigation.location =
+// 'footer'`) with a fallback, server-rendered, zero client JS.
+//
+// The legal links are NOT part of the CMS-authored set and are never fallback-only:
+// privacy, terms and the cookie policy are PDPL obligations, so they are hard-wired
+// rather than left to whether someone remembered to author a nav row for them.
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+const FALLBACK: NavNode[] = [
+  {
+    id: 'g1',
+    parent_id: null,
+    href: '/services',
+    sort_order: 1,
+    children: [],
+    label: { en: 'Services', ar: 'خدماتنا' },
+  },
+  {
+    id: 'g2',
+    parent_id: null,
+    href: '/portfolio',
+    sort_order: 2,
+    children: [],
+    label: { en: 'Work', ar: 'أعمالنا' },
+  },
+  {
+    id: 'g3',
+    parent_id: null,
+    href: '/creative-knowledge',
+    sort_order: 3,
+    children: [],
+    label: { en: 'Insights', ar: 'المعرفة' },
+  },
+  {
+    id: 'g4',
+    parent_id: null,
+    href: '/contact',
+    sort_order: 4,
+    children: [],
+    label: { en: 'Contact', ar: 'تواصل' },
+  },
+];
+
+const LEGAL = [
+  { href: '/privacy', en: 'Privacy', ar: 'الخصوصية' },
+  { href: '/terms', en: 'Terms', ar: 'الشروط' },
+  { href: '/cookie-policy', en: 'Cookies', ar: 'ملفات الارتباط' },
+];
+
+const authored = await getNavigation('footer');
+const items = authored.length > 0 ? authored : FALLBACK;
+const year = new Date().getFullYear();
+
+function href(raw: string): string {
+  return raw.startsWith('/') ? localizedPath(raw, locale) : raw;
+}
+---
+
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <nav aria-label={locale === 'ar' ? 'روابط التذييل' : 'Footer navigation'}>
+      <ul class="site-footer__list">
+        {
+          items.map((item) => (
+            <li>
+              <a href={href(item.href)}>{item.label[locale] ?? item.label.en}</a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <nav aria-label={locale === 'ar' ? 'روابط قانونية' : 'Legal'}>
+      <ul class="site-footer__list">
+        {
+          LEGAL.map((item) => (
+            <li>
+              <a href={localizedPath(item.href, locale)}>{locale === 'ar' ? item.ar : item.en}</a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <p class="site-footer__copy">© {year} Braiin Station</p>
+  </div>
+</footer>

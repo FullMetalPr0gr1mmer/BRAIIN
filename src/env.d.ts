@@ -18,5 +18,11 @@ declare namespace App {
     cspNonce: string;
     // Resolved auth context (null for anonymous public requests).
     session: import('@/lib/auth/types').AuthContext | null;
+    // Double-submit CSRF token for admin mutations ('' on public routes).
+    csrfToken: string;
+    // Request-scoped, cookie-bound Supabase client for /admin and /api/admin. Carries
+    // the user's JWT, so every query it makes is subject to RLS — the PRIMARY authz
+    // layer. Absent on public routes.
+    supabase?: import('@supabase/supabase-js').SupabaseClient;
   }
 }

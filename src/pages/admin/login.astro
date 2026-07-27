@@ -1,0 +1,98 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
+
+export const prerender = false;
+
+// Already signed in? Skip the form. `next` is validated below before it is used as a
+// redirect target.
+const session = Astro.locals.session;
+const rawNext = Astro.url.searchParams.get('next') ?? '/admin';
+
+/**
+ * Only site-relative, non-protocol-relative paths under /admin are accepted.
+ *
+ * `?next=` is an OPEN REDIRECT if taken at face value: an attacker sends
+ * `/admin/login?next=https://evil.example/admin`, the victim logs in on the real
+ * domain, and lands on a copy that asks them to "log in again". Rejecting anything that
+ * does not start with a single `/` kills absolute URLs, and rejecting `//` kills the
+ * protocol-relative form that looks relative but is not.
+ */
+function safeNext(value: string): string {
+  if (!value.startsWith('/') || value.startsWith('//')) return '/admin';
+  return value.startsWith('/admin') ? value : '/admin';
+}
+
+const next = safeNext(rawNext);
+if (session) return Astro.redirect(next, 302);
+
+const csrfToken = Astro.locals.csrfToken;
+---
+
+<AdminLayout title="Sign in" layout="bare">
+  <form class="login-card" id="login-form" method="post" action="/api/admin/auth/login">
+    <h1>Braiin Station</h1>
+    <p class="admin-sub">Sign in to the content management system.</p>
+
+    <p class="msg" data-kind="error" id="login-error" hidden role="alert"></p>
+
+    <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+    <input type="hidden" name="next" value={next} />
+
+    <label class="field">
+      <span>Email</span>
+      <input type="email" name="email" autocomplete="username" required maxlength="254" />
+    </label>
+
+    <label class="field">
+      <span>Password</span>
+      <input
+        type="password"
+        name="password"
+        autocomplete="current-password"
+        required
+        minlength="8"
+        maxlength="256"
+      />
+    </label>
+
+    <button type="submit" data-variant="primary" id="login-submit">Sign in</button>
+  </form>
+</AdminLayout>
+
+<script>
+  import { adminFetch, AdminApiError } from '@/lib/admin/client';
+
+  const form = document.getElementById('login-form') as HTMLFormElement | null;
+  const errorBox = document.getElementById('login-error') as HTMLParagraphElement | null;
+  const submit = document.getElementById('login-submit') as HTMLButtonElement | null;
+  if (form && errorBox && submit) {
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      errorBox.hidden = true;
+      submit.disabled = true;
+
+      const data = new FormData(form);
+      try {
+        await adminFetch('/api/admin/auth/login', {
+          method: 'POST',
+          body: {
+            email: String(data.get('email') ?? ''),
+            password: String(data.get('password') ?? ''),
+          },
+        });
+        window.location.href = String(data.get('next') ?? '/admin');
+      } catch (err) {
+        // ONE message for every credential failure. The server already refuses to
+        // distinguish them; echoing a more specific client-side message would hand back
+        // the enumeration oracle the endpoint just took away.
+        const locked = err instanceof AdminApiError && err.info.status === 423;
+        errorBox.textContent = locked
+          ? 'Too many attempts. Try again in 15 minutes.'
+          : 'Those credentials did not work.';
+        errorBox.hidden = false;
+        submit.disabled = false;
+      }
+    });
+  }
+</script>

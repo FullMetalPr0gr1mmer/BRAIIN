@@ -1,0 +1,13 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import SingletonForm from '@/components/admin/SingletonForm';
+
+export const prerender = false;
+---
+
+<AdminLayout
+  title="Global SEO defaults"
+  subtitle="Titles, descriptions and Organization schema used wherever a page has no per-entity override."
+>
+  <SingletonForm client:load config="seo" />
+</AdminLayout>

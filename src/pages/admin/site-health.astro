@@ -1,0 +1,13 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import InsightsPanel from '@/components/admin/InsightsPanel';
+
+export const prerender = false;
+---
+
+<AdminLayout
+  title="Site health"
+  subtitle="Field Core Web Vitals — the source of truth the CI lab gate approximates."
+>
+  <InsightsPanel client:load mode="health" />
+</AdminLayout>

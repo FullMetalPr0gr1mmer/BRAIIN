@@ -1,0 +1,104 @@
+---
+import { visibleNav } from '@/lib/admin/nav';
+
+// Tier C shell (CLAUDE.md §2): on-demand, `private, no-store` (set in middleware),
+// never indexable. Deliberately NOT built on BaseLayout — that one carries <SeoHead>,
+// the consent banner, the RUM beacon and the public stylesheet, none of which belong on
+// a page that must not be indexed, must not be measured as a public route, and has no
+// visitor to ask for consent.
+
+interface Props {
+  title: string;
+  // `| undefined` on both: under exactOptionalPropertyTypes a caller computing
+  // `subtitle` from an optional value passes an explicit undefined, which `?:` alone
+  // rejects.
+  subtitle?: string | undefined;
+  /** `bare` drops the sidebar — used by the login screen, which has no session yet. */
+  layout?: 'app' | 'bare' | undefined;
+}
+
+const { title, subtitle, layout = 'app' } = Astro.props;
+const session = Astro.locals.session;
+const nav = session ? visibleNav(session.role) : [];
+const current = Astro.url.pathname;
+const csrfToken = Astro.locals.csrfToken;
+
+function isCurrent(href: string): boolean {
+  if (href === '/admin') return current === '/admin';
+  return current === href || current.startsWith(`${href}/`);
+}
+---
+
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{title} · Braiin Station Admin</title>
+    <!--
+      Belt AND braces on indexability. The middleware already sends `no-store` and
+      /admin is behind auth, but a crawler that reaches the login page still should not
+      list it, and `noarchive` keeps it out of caches that ignore the rest.
+    -->
+    <meta name="robots" content="noindex,nofollow,noarchive,nosnippet" />
+    <link rel="stylesheet" href="/styles/admin.css" />
+    <!--
+      The CSRF token reaches the client in a meta tag rather than an inline script:
+      `script-src` carries no 'unsafe-inline', so an inline bootstrap would simply be
+      blocked. `adminFetch()` reads it from here.
+    -->
+    <meta name="csrf-token" content={csrfToken} />
+  </head>
+  <body class="admin-body" data-layout={layout}>
+    {
+      layout === 'app' && session && (
+        <nav class="admin-sidebar admin-nav" aria-label="Admin sections">
+          <a class="admin-brand" href="/admin">
+            Braiin Station
+          </a>
+          {nav.map((group) => (
+            <div class="admin-nav-group">
+              <p class="admin-nav-title">{group.title}</p>
+              {group.links.map((link) => (
+                <a href={link.href} aria-current={isCurrent(link.href) ? 'page' : undefined}>
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          ))}
+          <div class="admin-user">
+            <div>{session.email}</div>
+            <div>
+              Role: <strong>{session.role.replace('_', ' ')}</strong>
+            </div>
+            <button type="button" data-action="logout">
+              Sign out
+            </button>
+          </div>
+        </nav>
+      )
+    }
+
+    <main class="admin-main">
+      <header class="admin-header">
+        <div>
+          <h1>{title}</h1>
+          {subtitle && <p class="admin-sub">{subtitle}</p>}
+        </div>
+        <slot name="actions" />
+      </header>
+      <slot />
+    </main>
+
+    <script>
+      // Sign-out is a POST, never a GET link: a GET logout can be fired by any <img src>
+      // on any page — a nuisance CSRF that signs people out mid-edit.
+      import { adminFetch } from '@/lib/admin/client';
+
+      document.querySelector('[data-action="logout"]')?.addEventListener('click', async () => {
+        await adminFetch('/api/admin/auth/logout', { method: 'POST' });
+        window.location.href = '/admin/login';
+      });
+    </script>
+  </body>
+</html>
