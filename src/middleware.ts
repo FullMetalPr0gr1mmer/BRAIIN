@@ -2,7 +2,11 @@ import { defineMiddleware } from 'astro:middleware';
 // Astro 6+ removed `Astro.locals.runtime.env` (the getter now throws). Worker bindings
 // come from the runtime module instead — works in `astro dev` (workerd) and in prod.
 import { env } from 'cloudflare:workers';
-import { applySecurityHeaders, generateNonce } from '@/lib/http/securityHeaders';
+import {
+  applySecurityHeaders,
+  collectInlineHashes,
+  generateNonce,
+} from '@/lib/http/securityHeaders';
 import { getMaintenanceState, clientIp, maintenanceResponse } from '@/lib/http/maintenance';
 import { lookupRedirect } from '@/lib/http/redirects';
 import {
@@ -91,10 +95,30 @@ export const onRequest = defineMiddleware(async (context, next) => {
   locals.csrfToken = '';
 
   // `secured()` is the ONLY way a response leaves this middleware.
-  const secured = (response: Response): Response => {
-    applySecurityHeaders(response.headers, { nonce, reportOnly: CSP_REPORT_ONLY });
-    if (isPrivate) response.headers.set('Cache-Control', PRIVATE_CACHE);
-    return response;
+  //
+  // In PRODUCTION, Astro hashes its own inline island bootstrap at build time and hands
+  // us those hashes on the response; applySecurityHeaders lifts them into our policy.
+  // Astro's DEV server has no CSP code path at all, so in dev we compute the identical
+  // hashes from the rendered HTML instead. Without it, dev blocks the `astro-island`
+  // custom-element definition and every /admin island renders and then sits inert —
+  // and relaxing the policy for dev is the precise divergence that hid this in the
+  // first place. Buffering the body is acceptable at dev latency only.
+  const secured = async (response: Response): Promise<Response> => {
+    const isHtml = (response.headers.get('content-type') ?? '').includes('text/html');
+    let out = response;
+    let extras: { scriptHashes: string[]; styleHashes: string[] } | null = null;
+    if (import.meta.env.DEV && isHtml && response.body !== null) {
+      const html = await response.text();
+      extras = await collectInlineHashes(html);
+      out = new Response(html, response);
+    }
+    applySecurityHeaders(out.headers, {
+      nonce,
+      reportOnly: CSP_REPORT_ONLY,
+      ...(extras ?? {}),
+    });
+    if (isPrivate) out.headers.set('Cache-Control', PRIVATE_CACHE);
+    return out;
   };
 
   // 1) Maintenance pre-cache check (before edge-cache lookup). /admin, /api and

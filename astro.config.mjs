@@ -76,6 +76,16 @@ export default defineConfig({
 
   integrations: [react()],
 
+  // Astro's Markdown pipeline is NOT a render path in this project — there is not one
+  // .md/.mdx file in src/, and blog bodies are Tiptap JSON rendered by
+  // src/lib/content/tiptap.ts, which emits `<pre><code class="language-…">` with no
+  // inline styles (the language is re-derived from an allowlist, never passed through).
+  // Left at its default of 'shiki', Astro warns on every boot that Shiki's inline styles
+  // are incompatible with `security.csp` above — a warning about code that never runs.
+  // Turning it off states the intent and keeps the boot output free of noise nobody
+  // should learn to scroll past. Code-block styling is ours, via `.language-*` in CSS.
+  markdown: { syntaxHighlight: false },
+
   // Path-based i18n: `/` (EN) + `/ar/` (AR). hreflang + x-default handled in <SeoHead>.
   i18n: {
     locales: ['en', 'ar'],
@@ -93,7 +103,25 @@ export default defineConfig({
 
   // Astro's built-in CSRF/origin check on state-changing requests (defense-in-depth
   // alongside the explicit __Host-csrf double-submit in src/middleware.ts).
-  security: { checkOrigin: true },
+  security: {
+    checkOrigin: true,
+
+    // Pillar 1 (CSP), the other half of the `assetsInlineLimit: 0` fix above.
+    // `assetsInlineLimit` only governs COMPONENT scripts. Every hydrated island also
+    // emits four inline elements Astro writes itself and never nonces — the island
+    // <style>, the client:* directive script, the `astro-island` custom-element
+    // definition, and the framework hydration script (see astro's render/component.js:
+    // `<style>…</style><script>…</script><script>…</script>`). Under our
+    // no-'unsafe-inline' CSP the browser blocks all four, the custom element is never
+    // defined, and EVERY admin island renders server-side and then stays dead. Enabling
+    // this makes Astro hash them; src/lib/http/securityHeaders.ts lifts those hashes
+    // into our own policy rather than clobbering them.
+    //
+    // Every route in this app is `prerender = false`, so Astro's CSP always arrives as a
+    // response header (it only falls back to <meta> for prerendered pages) — which
+    // matters, because `frame-ancestors` is ignored in a <meta> CSP and §3 requires it.
+    csp: { algorithm: 'SHA-256' },
+  },
 
   /**
    * Type-safe env via astro:env. SECRETS (access:'secret') are server-only and
