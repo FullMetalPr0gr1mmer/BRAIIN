@@ -26,7 +26,9 @@ const CTX = {
 } as unknown as AuthContext;
 
 /** Minimal PostgREST-shaped stub: `.from(...).insert(...)` resolves to `{ error }`. */
-function stub(outcome: { error: { code: string; message: string } | null } | Error): SupabaseClient {
+function stub(
+  outcome: { error: { code: string; message: string } | null } | Error,
+): SupabaseClient {
   return {
     from: () => ({
       insert: async () => {
@@ -51,7 +53,9 @@ describe('writeAudit', () => {
   it('reports to system_logs when the insert is REJECTED (the regression)', async () => {
     // Exactly the 0012 failure shape: the chain trigger raises, PostgREST returns an error.
     const ok = await writeAudit(
-      stub({ error: { code: '42883', message: 'function hmac(text, text, unknown) does not exist' } }),
+      stub({
+        error: { code: '42883', message: 'function hmac(text, text, unknown) does not exist' },
+      }),
       CTX,
       { action: 'service.publish', entityType: 'service', entityId: 's1' },
     );
@@ -63,7 +67,9 @@ describe('writeAudit', () => {
   });
 
   it('reports to system_logs when the insert THROWS', async () => {
-    const ok = await writeAudit(stub(new Error('socket hang up')), CTX, { action: 'lead.view_pii' });
+    const ok = await writeAudit(stub(new Error('socket hang up')), CTX, {
+      action: 'lead.view_pii',
+    });
     expect(ok).toBe(false);
     expect(logged).toHaveLength(1);
     expect(String(logged[0]?.['message'])).toContain('lead.view_pii');
@@ -71,9 +77,7 @@ describe('writeAudit', () => {
   });
 
   it('never throws — an audit failure must not roll back the operation it describes', async () => {
-    await expect(
-      writeAudit(stub(new Error('boom')), CTX, { action: 'x' }),
-    ).resolves.toBe(false);
+    await expect(writeAudit(stub(new Error('boom')), CTX, { action: 'x' })).resolves.toBe(false);
   });
 
   it('carries the action and entity type in detail, never the audited values', async () => {

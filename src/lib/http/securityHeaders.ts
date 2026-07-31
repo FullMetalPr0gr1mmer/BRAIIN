@@ -18,7 +18,10 @@
 // (the maintenance 503 page), the hashes cover Astro's. Neither admits 'unsafe-inline'.
 
 /** Both spellings, because a stale header of either name would be intersected by the browser. */
-const CSP_HEADER_NAMES = ['Content-Security-Policy', 'Content-Security-Policy-Report-Only'] as const;
+const CSP_HEADER_NAMES = [
+  'Content-Security-Policy',
+  'Content-Security-Policy-Report-Only',
+] as const;
 
 /** `'sha256-…'` / `'sha384-…'` / `'sha512-…'`, base64 with optional padding. */
 const HASH_SOURCE = /^'(?:sha256|sha384|sha512)-[A-Za-z0-9+/]+={0,2}'$/;

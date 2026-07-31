@@ -95,7 +95,8 @@ const switchHref = localizedPath(logical, otherLocale);
   <div class="site-header__bar">
     <a class="site-header__brand" href={localizedPath('/', locale)}>Braiin Station</a>
 
-    {/*
+    {
+      /*
       The <nav> is a SIBLING of the disclosure, not its content. A <details> hides
       everything except its <summary> whenever it is closed — and above 48rem the
       summary is `display: none` and nothing ever opens the element, so nesting the nav
@@ -107,7 +108,8 @@ const switchHref = localizedPath(logical, otherLocale);
       — a plain subsequent-sibling combinator, so this stays zero-JS and zero-bytes exactly
       as the note above intends, and does not depend on `::details-content`, which does not
       in fact override the UA's hidden state (measured, not assumed).
-    */}
+    */
+    }
     <details class="site-nav">
       <summary class="site-nav__toggle" aria-label={locale === 'ar' ? 'القائمة' : 'Menu'}>
         <span aria-hidden="true">☰</span>
@@ -119,29 +121,29 @@ const switchHref = localizedPath(logical, otherLocale);
       aria-label={locale === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}
     >
       <ul class="site-nav__list">
-          {
-            items.map((item) => (
-              <li>
-                <a href={href(item.href)} aria-current={isCurrent(item.href) ? 'page' : undefined}>
-                  {item.label[locale] ?? item.label.en}
-                </a>
-                {item.children.length > 0 && (
-                  <ul class="site-nav__sub">
-                    {item.children.map((child) => (
-                      <li>
-                        <a
-                          href={href(child.href)}
-                          aria-current={isCurrent(child.href) ? 'page' : undefined}
-                        >
-                          {child.label[locale] ?? child.label.en}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))
-          }
+        {
+          items.map((item) => (
+            <li>
+              <a href={href(item.href)} aria-current={isCurrent(item.href) ? 'page' : undefined}>
+                {item.label[locale] ?? item.label.en}
+              </a>
+              {item.children.length > 0 && (
+                <ul class="site-nav__sub">
+                  {item.children.map((child) => (
+                    <li>
+                      <a
+                        href={href(child.href)}
+                        aria-current={isCurrent(child.href) ? 'page' : undefined}
+                      >
+                        {child.label[locale] ?? child.label.en}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))
+        }
       </ul>
     </nav>
 
