@@ -23,19 +23,6 @@ create or replace function app.current_tenant_id() returns uuid
   )::uuid
 $$;
 
--- The single launch tenant. security definer so anon can resolve it past RLS.
-create or replace function app.default_tenant_id() returns uuid
-  language sql stable security definer set search_path = public, pg_temp as $$
-  select id from public.tenants order by created_at asc limit 1
-$$;
-
--- Effective tenant: the JWT tenant, else the single launch tenant (the anon fence —
--- anon can only ever resolve to ONE tenant and can never target another).
-create or replace function app.effective_tenant_id() returns uuid
-  language sql stable as $$
-  select coalesce(app.current_tenant_id(), app.default_tenant_id())
-$$;
-
 create or replace function app.current_role() returns text
   language sql stable as $$
   select coalesce(
@@ -77,6 +64,24 @@ create table public.tenants (
 );
 alter table public.tenants enable row level security;
 alter table public.tenants force row level security;
+
+-- These two MUST be defined after public.tenants exists: a LANGUAGE SQL body is
+-- catalog-resolved at CREATE time (check_function_bodies = on), so a forward
+-- reference to the table is a hard error — unlike plpgsql, which is only
+-- syntax-checked. Kept here rather than above the enums for that reason.
+-- The single launch tenant. security definer so anon can resolve it past RLS.
+create or replace function app.default_tenant_id() returns uuid
+  language sql stable security definer set search_path = public, pg_temp as $$
+  select id from public.tenants order by created_at asc limit 1
+$$;
+
+-- Effective tenant: the JWT tenant, else the single launch tenant (the anon fence —
+-- anon can only ever resolve to ONE tenant and can never target another).
+create or replace function app.effective_tenant_id() returns uuid
+  language sql stable as $$
+  select coalesce(app.current_tenant_id(), app.default_tenant_id())
+$$;
+
 -- Members see their own tenant; only admins edit it.
 create policy tenants_select on public.tenants for select
   using (id = app.effective_tenant_id());

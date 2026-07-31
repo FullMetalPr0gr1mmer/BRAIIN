@@ -81,19 +81,54 @@ create policy profiles_auth_admin_read on public.profiles
 -- Generated here rather than shipped in source: it is per-environment and must never
 -- be reconstructible from the repository. `gen_random_bytes` is pgcrypto's CSPRNG.
 --
--- Guarded on the vault schema existing so a bare-Postgres CI container running the
+-- Guarded on vault.secrets being reachable so a bare-Postgres CI container running the
 -- migration set does not fail; on such a host the audit trigger is unreachable anyway.
+--
+-- `gen_random_bytes` is schema-qualified: on Supabase, pgcrypto is pre-installed into the
+-- `extensions` schema, so the `create extension if not exists pgcrypto` in 0001 was a no-op
+-- and never put it in `public`. Whether `extensions` is on the migration role's search_path
+-- is not ours to assume — qualify it rather than trust the path.
+--
+-- Failure is deliberately fatal, not a warning: app.tg_audit_chain() raises when this key
+-- is absent, and it is a BEFORE INSERT trigger on a table every admin mutation writes to.
+-- A "successful" migration with no key yields a CMS that 500s on every write and an audit
+-- chain — a Pillar 1 control — that silently does not exist. The handler exists only to
+-- attach the environment context that `supabase db push` otherwise swallows.
 do $$
+declare
+  v_key text;
 begin
-  if exists (select 1 from pg_namespace where nspname = 'vault')
-     and not exists (select 1 from vault.secrets where name = 'audit_hmac_key')
-  then
-    perform vault.create_secret(
-      encode(gen_random_bytes(32), 'hex'),
-      'audit_hmac_key',
-      'HMAC key for the append-only audit_log hash chain (CLAUDE.md §3).'
-    );
+  if to_regclass('vault.secrets') is null then
+    raise warning 'vault.secrets absent — skipping audit_hmac_key bootstrap (expected ONLY on bare-Postgres CI)';
+    return;
   end if;
+
+  if exists (select 1 from vault.secrets where name = 'audit_hmac_key') then
+    return;
+  end if;
+
+  v_key := encode(extensions.gen_random_bytes(32), 'hex');
+
+  perform vault.create_secret(
+    v_key,
+    'audit_hmac_key',
+    'HMAC key for the append-only audit_log hash chain (CLAUDE.md §3).'
+  );
+exception
+  when others then
+    raise exception E'audit_hmac_key bootstrap failed.\n  error            : % (SQLSTATE %)\n  current_user     : %\n  search_path      : %\n  vault.secrets    : %\n  vault usage priv : %\n  pgcrypto schema  : %\n  create_secret n  : %',
+      sqlerrm,
+      sqlstate,
+      current_user,
+      current_setting('search_path'),
+      coalesce(to_regclass('vault.secrets')::text, '<missing>'),
+      coalesce((select has_schema_privilege(current_user, 'vault', 'usage')::text
+                  from pg_namespace where nspname = 'vault'), '<no vault schema>'),
+      coalesce((select extnamespace::regnamespace::text
+                  from pg_extension where extname = 'pgcrypto'), '<not installed>'),
+      (select count(*) from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'vault' and p.proname = 'create_secret');
 end $$;
 
 -- ---- 3. First-admin bootstrap ----------------------------------------------

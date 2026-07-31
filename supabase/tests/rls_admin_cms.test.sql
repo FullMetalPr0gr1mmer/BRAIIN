@@ -30,6 +30,16 @@ select plan(26);
 -- Setup runs as the migration role, where RLS is bypassed.
 insert into public.tenants (id, name) values ('00000000-0000-0000-0000-000000000001', 'T1');
 
+-- Two REAL parent entities, one published and one draft. entity_seo's restrictive
+-- SELECT policy (migration 0011) joins each row to its parent's status, so the fixture
+-- has to contain a parent at all — before 0011 these rows pointed at a service id that
+-- never existed, which made "anon reads entity_seo" pass for the wrong reason.
+insert into public.services (id, tenant_id, slug, title, status) values
+  ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-000000000001',
+   'live-service', '{"en":"Live","ar":"مباشر"}'::jsonb, 'published'),
+  ('00000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-000000000001',
+   'draft-service', '{"en":"Draft","ar":"مسودة"}'::jsonb, 'draft');
+
 insert into public.entity_seo (id, tenant_id, entity_type, entity_id, meta_title, meta_description)
   values (
     '00000000-0000-0000-0000-0000000000e1',
@@ -38,6 +48,14 @@ insert into public.entity_seo (id, tenant_id, entity_type, entity_id, meta_title
     '00000000-0000-0000-0000-0000000000c1',
     '{"en":"T","ar":"ت"}'::jsonb,
     '{"en":"D","ar":"د"}'::jsonb
+  ),
+  (
+    '00000000-0000-0000-0000-0000000000e2',
+    '00000000-0000-0000-0000-000000000001',
+    'service',
+    '00000000-0000-0000-0000-0000000000c2',   -- meta for the DRAFT service
+    '{"en":"Unreleased","ar":"غير منشور"}'::jsonb,
+    '{"en":"Unreleased","ar":"غير منشور"}'::jsonb
   );
 
 insert into public.site_integrations (tenant_id) values ('00000000-0000-0000-0000-000000000001');
@@ -74,25 +92,29 @@ create function _deleted_navigation() returns int language sql as $$
 $$;
 
 -- ---- entity_seo: public READ, Admin + SEO WRITE ----------------------------
--- Meta tags ship in the HTML head, so anon reading them is by design, not an oversight.
+-- Meta tags of PUBLISHED content ship in the HTML head, so anon reading those is by
+-- design. Meta of a draft is the title and description of unreleased work, so anon
+-- reading THAT is a disclosure — hence the two rows in the fixture and the 1-of-2 here.
+-- This is the §9 regression assertion for the restrictive policy added in 0011.
 set local role anon;
 select _claims(null, null);
-select is((select count(*) from public.entity_seo)::int, 1, 'anon reads entity_seo (it is public meta)');
+select is((select count(*) from public.entity_seo)::int, 1,
+  'anon reads entity_seo for PUBLISHED entities only (draft meta stays hidden)');
 
 set local role authenticated;
 
 select _claims('content_creator', '00000000-0000-0000-0000-000000000001');
-select is((select count(*) from public.entity_seo)::int, 1, 'content_creator READS entity_seo (its "view" access)');
+select is((select count(*) from public.entity_seo)::int, 2, 'content_creator READS entity_seo (its "view" access)');
 select is(_updated_entity_seo(), 0, 'content_creator cannot WRITE entity_seo');
 
 select _claims('developer', '00000000-0000-0000-0000-000000000001');
 select is(_updated_entity_seo(), 0, 'developer cannot write entity_seo');
 
 select _claims('seo', '00000000-0000-0000-0000-000000000001');
-select is(_updated_entity_seo(), 1, 'seo can write entity_seo');
+select is(_updated_entity_seo(), 2, 'seo can write entity_seo');
 
 select _claims('admin', '00000000-0000-0000-0000-000000000001');
-select is(_updated_entity_seo(), 1, 'admin can write entity_seo');
+select is(_updated_entity_seo(), 2, 'admin can write entity_seo');
 
 select _claims('admin', '00000000-0000-0000-0000-0000000000ff');
 select is((select count(*) from public.entity_seo)::int, 0, 'admin of another tenant sees no entity_seo');
