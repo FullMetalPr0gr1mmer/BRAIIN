@@ -1,10 +1,20 @@
-name: DB tests (RLS / pgTAP, staged)
+name: DB tests (RLS / pgTAP)
 
 # Boots the Supabase local stack (provides auth + vault + RLS roles), applies
-# supabase/migrations, and runs the pgTAP RLS suite in supabase/tests/. Staged on
-# workflow_dispatch until validated against the provisioned project (then promoted to
-# a required gate — it covers the DoD per-role authz requirement, CLAUDE.md §9).
+# supabase/migrations, and runs the pgTAP RLS suite in supabase/tests/. Covers the DoD
+# per-role authz requirement (CLAUDE.md §9).
+#
+# PROMOTED 2026-08-01 from `workflow_dispatch` to push/PR. It had been staged "until
+# validated against the provisioned project" — a precondition met when the project was
+# provisioned, but nothing was watching for that, so the suite sat at ZERO runs, ever.
+# That is how a missing `grant usage on schema app to anon` reached production: these
+# tests `set local role anon` and would have failed on it immediately, while the 464
+# Vitest tests that DO run on every push all mock the database and cannot see a GRANT.
+# A staged gate is an untested gate; it is now a real one.
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:

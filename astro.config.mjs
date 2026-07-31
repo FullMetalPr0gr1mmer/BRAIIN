@@ -86,6 +86,15 @@ export default defineConfig({
   // should learn to scroll past. Code-block styling is ours, via `.language-*` in CSS.
   markdown: { syntaxHighlight: false },
 
+  // The dev toolbar cannot work under the CSP above and never could: it builds its UI by
+  // assigning inline styles at RUNTIME (`updateStyle`, `createWindowElement`), and a
+  // style injected by JS after load can be covered by neither a build-time hash nor a
+  // per-request nonce. So it renders unstyled in a corner and emits a violation per
+  // widget on every page load — dozens of console lines that are pure noise. That noise
+  // is not free: it is what buried the three real violations that proved no island was
+  // hydrating. Off, so the console only says things worth reading.
+  devToolbar: { enabled: false },
+
   // Path-based i18n: `/` (EN) + `/ar/` (AR). hreflang + x-default handled in <SeoHead>.
   i18n: {
     locales: ['en', 'ar'],
