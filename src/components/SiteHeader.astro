@@ -95,12 +95,30 @@ const switchHref = localizedPath(logical, otherLocale);
   <div class="site-header__bar">
     <a class="site-header__brand" href={localizedPath('/', locale)}>Braiin Station</a>
 
+    {/*
+      The <nav> is a SIBLING of the disclosure, not its content. A <details> hides
+      everything except its <summary> whenever it is closed — and above 48rem the
+      summary is `display: none` and nothing ever opens the element, so nesting the nav
+      inside it made the entire main navigation invisible on every desktop viewport.
+      (The links were still in the server-rendered HTML, so the indexability rule and
+      the crawlers were unaffected; only humans lost the menu.)
+
+      As siblings, the small-screen panel is revealed with `.site-nav[open] ~ .site-nav__panel`
+      — a plain subsequent-sibling combinator, so this stays zero-JS and zero-bytes exactly
+      as the note above intends, and does not depend on `::details-content`, which does not
+      in fact override the UA's hidden state (measured, not assumed).
+    */}
     <details class="site-nav">
       <summary class="site-nav__toggle" aria-label={locale === 'ar' ? 'القائمة' : 'Menu'}>
         <span aria-hidden="true">☰</span>
       </summary>
-      <nav aria-label={locale === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}>
-        <ul class="site-nav__list">
+    </details>
+
+    <nav
+      class="site-nav__panel"
+      aria-label={locale === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}
+    >
+      <ul class="site-nav__list">
           {
             items.map((item) => (
               <li>
@@ -124,9 +142,8 @@ const switchHref = localizedPath(logical, otherLocale);
               </li>
             ))
           }
-        </ul>
-      </nav>
-    </details>
+      </ul>
+    </nav>
 
     <a class="site-header__lang" href={switchHref} hreflang={otherLocale} lang={otherLocale}>
       {otherLocale === 'ar' ? 'العربية' : 'English'}
