@@ -12,6 +12,17 @@
 -- EXACT type match on every column; unlike a plain SQL cast site, it will not coerce
 -- citext→text for you even though the two are assignment-compatible.
 --
+-- WHY plpgsql REJECTS WHAT SQL ACCEPTS — the load-bearing detail:
+--   `return query` in plpgsql requires the query's tuple descriptor to match the declared
+--   OUT types EXACTLY; it does not apply assignment casts. A `language sql` function's
+--   final SELECT goes through `check_sql_fn_retval`, which DOES coerce. That is why
+--   `public.search_suggest` — same citext-slug-into-a-text-column shape, same file, a few
+--   lines away — has worked correctly this entire time and needs no change. Verified
+--   against the live database rather than assumed: search_suggest returns 3 rows for
+--   'brand', 1 for the misspelling 'brnd' (the pg_trgm did-you-mean path), and 3 for the
+--   Arabic 'هوية'. Two functions, identical bug shape, opposite outcomes, decided entirely
+--   by `language sql` vs `language plpgsql`.
+--
 -- Why this is the third one and not a surprise: each of these errors is raised by the
 -- executor, one statement at a time, so a body cannot report more than its first failure.
 -- 0006 shipped with all three latent, 0013 cleared the one in front, and this is what was
