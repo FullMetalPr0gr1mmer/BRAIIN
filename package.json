@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "astro dev",
+    "prebuild": "node scripts/check-site-url.mjs",
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
@@ -23,7 +24,8 @@
     "cf:types": "wrangler types",
     "a11y:contrast": "node scripts/contrast-audit.mjs",
     "seo-ci": "vitest run tests/seo",
-    "cf:secrets": "node scripts/push-secrets.mjs"
+    "cf:secrets": "node scripts/push-secrets.mjs",
+    "postbuild": "node scripts/verify-build-origin.mjs"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.3",

@@ -16,17 +16,40 @@
   "observability": {
     "enabled": true,
   },
-  // PUBLIC_* only. These are non-secret by construction: PUBLIC_SUPABASE_ANON_KEY ships
-  // inside the client bundle on every page, so committing it here reveals nothing that a
-  // visitor cannot already read — it is an identifier, and RLS is what protects the data
-  // behind it. Anything genuinely secret goes through `npm run cf:secrets`.
+  // ⚠ READ THIS BEFORE CHANGING A `PUBLIC_*` VALUE HERE — IT WILL NOT TAKE EFFECT.
+  //
+  // All three PUBLIC_* vars are declared `context: 'client'` in astro.config.mjs, so
+  // `astro:env/client` INLINES them into the bundle when `astro build` runs. A build-time
+  // constant cannot be overridden by a runtime binding, so these entries are inert: the
+  // value that ships is whatever was in the BUILD environment.
+  //
+  // Verified, not inferred: a Worker built with .env's `http://localhost:4321` and
+  // previewed with these vars set to the workers.dev origin served
+  // `<link rel="canonical" href="http://localhost:4321/">` and a sitemap of localhost
+  // <loc>s. `grep -r localhost:4321 dist/server` finds them compiled in.
+  //
+  // They are kept here anyway, deliberately, for two reasons: `wrangler deploy` prints the
+  // binding table on every deploy, so these document the expected values where someone
+  // will actually look; and if a future refactor moves any of them to `context: 'server'`
+  // they become live without a config change. Do not treat them as the source of truth.
+  //
+  // TO CHANGE THE ORIGIN: set it in the build environment and rebuild.
+  //   PUBLIC_SITE_URL=https://<origin> npm run build && npx wrangler deploy
+  // `npm run prebuild` (scripts/check-site-url.mjs) blocks a build whose PUBLIC_SITE_URL
+  // is localhost or non-https, so this cannot ship silently again.
+  //
+  // Non-secret by construction: PUBLIC_SUPABASE_ANON_KEY ships inside the client bundle on
+  // every page, so committing it reveals nothing a visitor cannot already read — it is an
+  // identifier, and RLS is what protects the data behind it. Anything genuinely secret
+  // goes through `npm run cf:secrets`.
   "vars": {
-    // TODO: swap to the custom domain once DNS is cut over. This value is what
-    // <SeoHead> builds canonicals and hreflang from, so a stale one produces canonicals
-    // pointing at the wrong origin — an SEO problem, not a runtime one.
+    // TODO: swap to the custom domain once DNS is cut over — AND rebuild, per the note above.
     "PUBLIC_SITE_URL": "https://braiin-station.workers.dev",
     "PUBLIC_SUPABASE_URL": "https://xkxthzcmmvtnwicerlup.supabase.co",
     "PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_fdVFL7qNbBx64z1pwvDAbg_ReRzjhOr",
+    // `context: 'server'` in astro.config.mjs, so unlike the three above this one IS a
+    // live runtime binding. (Note: src/lib/ai/spendCap.ts currently uses its own
+    // hard-coded ceiling and never imports it — wiring that up is Style-Finder work.)
     "AI_DAILY_USD_CAP": "5",
   },
   // Image transforms (astro adapter imageService: 'cloudflare-binding').
