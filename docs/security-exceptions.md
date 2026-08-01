@@ -7,8 +7,9 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | ID      | Opened     | Owner                          | Expiry     | Status | Summary                                                                                     |
 | ------- | ---------- | ------------------------------ | ---------- | ------ | ------------------------------------------------------------------------------------------- |
 | EXC-001 | 2026-06-14 | Developer (tech@purecoffee.sa) | 2026-09-12 | **Closed 2026-08-01** | `npm audit` high+ gate was advisory. Tree is now 0 high / 0 critical; gate is blocking in both scopes |
-| EXC-002 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | Open (items 3–4 done, awaiting first green run) | Migration `0011` (schema `app` grants) shipped ahead of its pgTAP suite — the site was down   |
+| EXC-002 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | **Closed 2026-08-01** | Migration `0011` (schema `app` grants) shipped ahead of its pgTAP suite — suite now green in CI |
 | EXC-003 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | **Closed 2026-08-01** | Migration `0012` (audit-chain `hmac`) shipped ahead of its regression test — test now green in CI |
+| EXC-004 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-09-01 | Open   | Live on `*.workers.dev` with **no WAF rate limits and no crawler blocks** — both are zone-scoped and there is no zone |
 
 ---
 
@@ -108,7 +109,9 @@ The change was not unverified — it was reviewed by three independent adversari
 3. ✅ Per-role rows over `{admin, content_creator, seo, developer, anon, other_tenant}` for the four restrictive policies added in 0011 §5b — `supabase/tests/rls_restrictive_0011.test.sql`, written 2026-08-01 (28 assertions).
 4. ✅ Fix `rls_admin_cms.test.sql`'s `entity_seo` fixture — done 2026-08-01 in `c8110fe`, green in run `30702922011`. It now seeds a published **and** a draft service and asserts anon sees exactly the published one.
 
-**Close condition:** items 3 and 4 merged and green in the `db-tests` workflow. Item 4 is green; item 3 awaits its first run.
+**Close condition:** items 3 and 4 merged and green in the `db-tests` workflow. → **Met. Closed 2026-08-01** — run `30704786054`: `rls_restrictive_0011.test.sql .. ok` (28/28) and `rls_admin_cms.test.sql .. ok`.
+
+All seven non-Arabic pgTAP suites are green. The workflow itself is still red on the 5 Arabic FTS normalization cases in `search_content.test.sql` — a genuine recall gap against the CLAUDE.md §8 pass bar, tracked separately and deliberately left un-hidden. It is **not** covered by this exception and does not hold it open: this entry is about 0011's grants, and those are now proven.
 
 ### What item 3 actually covers
 
@@ -158,3 +161,54 @@ Two things made this survivable for twelve migrations:
 The regression test now runs on every push. What it locks in is narrow and deliberate: it asserts the **chain** — digest well-formed, `prev_hash` links, caller-supplied `hash`/`prev_hash` overwritten by the trigger, per-tenant chains, no UPDATE, no DELETE — and never that an API call returned 200. During the outage every call returned 200. A test written against the response would have been green for all twelve migrations the chain was silently broken.
 
 Item 3 (the R2 anchor and paging verifier) stays open as known-outstanding at MVP and is not gated by this entry. Worth stating plainly: until it lands, the chain is **tamper-evident to anyone who reads it, but nothing reads it on a schedule**. The trigger makes forgery detectable; the anchor is what makes it *detected*.
+
+---
+
+## EXC-004 — Deployed with none of the runbook §7 WAF rules in place
+
+**Pillar:** 1 (Security) — CLAUDE.md §3 (Pillar 1, "WAF/rate limits"), §7; launch runbook §7.
+**Opened:** 2026-08-01 · **Owner:** Developer (tech@purecoffee.sa) · **Expiry:** 2026-09-01 (30 days).
+
+### What is missing
+
+The Worker is deployed and publicly reachable at `https://braiin-station.braiin.workers.dev`. **None** of the six runbook §7 rules exist:
+
+| Rule                                    | Required by                     | Status |
+| --------------------------------------- | ------------------------------- | ------ |
+| `/api/search` 30/min/IP → block         | §3 Pillar 1                     | absent |
+| `/api/ai/style-finder` 60/hr/IP → block  | §3 Pillar 1                     | absent |
+| `/api/hooks/notify-lead` rate-limit      | §3 Pillar 1, §10                | absent |
+| `/api/analytics`, `/api/rum` rate-limit  | §3 Pillar 1                     | absent |
+| Block training crawlers (6 tokens)       | §3 Pillar 3 (three-tier policy) | absent |
+| Allow retrieval crawlers (4 tokens)      | §3 Pillar 3                     | absent |
+
+### Why (justification)
+
+Not a decision — a **hard blocker**. Cloudflare WAF custom rules and rate-limiting rules are **zone-scoped**, and `braiinstation.com` currently has no NS records at all: the domain is not delegated to Cloudflare, so the account has no zone to attach a rule to. `*.workers.dev` sits in Cloudflare's own zone, not the customer's, and cannot carry customer WAF rules. There is no configuration that closes this before DNS cutover.
+
+### What still holds, and what genuinely does not
+
+Precision matters here, because "no WAF" reads worse than it is and better than it is, in different places.
+
+**Intact** — every one of these endpoints keeps its correctness defenses, all of which are in code and all of which are deployed:
+
+- `/api/search` — Zod cap (≤64 chars, no control chars), `websearch_to_tsquery` (never raw `to_tsquery`), per-call `statement_timeout`, capped rows.
+- `/api/analytics`, `/api/rum` — same-origin check, Zod envelope, **server-side** consent re-check (the client's beacon decision is not trusted).
+- `/api/hooks/notify-lead` — bearer token, constant-time compared; verified live: an unsigned POST returns **401**.
+- `/api/ai/style-finder` — the only public endpoint with a code-level limiter (per-IP 60/hr + per-session 20/hr) ahead of the spend cap.
+
+**Genuinely absent** — the **volumetric** layer, everywhere except style-finder. That layer was designed to live in the WAF, and `src/pages/api/search.ts:21` says so in a `TODO(KAN-20)`. Two consequences worth naming rather than implying:
+
+1. `/api/analytics` and `/api/rum` are unauthenticated paths to a **service-role write**. The same-origin check is the only volumetric friction, and an `Origin` header is trivially forged by anything that is not a browser — so it is not one.
+2. `robots.txt` is served correctly from the code-owned crawler map, but robots.txt **asks**. The WAF is what **enforces**. Until it exists, the training-crawler deny list is a request, not a control.
+
+Bounding the exposure: the origin is an unadvertised workers.dev subdomain with no inbound links, no custom domain and no traffic. That is obscurity, which is not a control either — it is the reason this is a 30-day exception and not an incident.
+
+### Remediation plan (clears this exception)
+
+1. ☐ Register/delegate `braiinstation.com` to Cloudflare; confirm the zone is active.
+2. ☐ Add the custom domain to the Worker; rebuild with `PUBLIC_SITE_URL=https://www.braiinstation.com` (it is inlined at build time — a binding cannot override it) and redeploy.
+3. ☐ Create all six rules from runbook §7. Cross-check the crawler tokens against `src/lib/seo/crawlers.ts`, the one code-owned map `tests/seo/crawlers.spec.ts` snapshots.
+4. ☐ Verify by observation, not by reading the dashboard: 31 requests in a minute to `/api/search` gets a block; a `User-Agent: GPTBot` request gets a block; a `User-Agent: PerplexityBot` request does not.
+
+**Close condition:** all six rules exist on the live zone **and** step 4's three observations pass. Nothing here is testable in CI — `tests/seo/crawlers.spec.ts` pins the code-owned map, and by design nothing can pin the WAF, which is exactly why this needs an observed check rather than a merged diff.

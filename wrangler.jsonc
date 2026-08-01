@@ -44,7 +44,16 @@
   // goes through `npm run cf:secrets`.
   "vars": {
     // TODO: swap to the custom domain once DNS is cut over — AND rebuild, per the note above.
-    "PUBLIC_SITE_URL": "https://braiin-station.workers.dev",
+    //
+    // Corrected 2026-08-01: this read `https://braiin-station.workers.dev`, which does not
+    // resolve — a workers.dev origin is `<worker>.<account-subdomain>.workers.dev` and the
+    // account subdomain (`braiin`) was missing. The deployed bundle was always right (the
+    // BUILD environment had the full host, which is the only thing that reaches the HTML),
+    // so nothing was broken in production; what was broken is the one job the note above
+    // says these entries still have — documenting the expected value "where someone will
+    // actually look". An inert setting that is also wrong is worse than no setting: it
+    // reads as authoritative and it is the string someone will copy.
+    "PUBLIC_SITE_URL": "https://braiin-station.braiin.workers.dev",
     "PUBLIC_SUPABASE_URL": "https://xkxthzcmmvtnwicerlup.supabase.co",
     "PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_fdVFL7qNbBx64z1pwvDAbg_ReRzjhOr",
     // `context: 'server'` in astro.config.mjs, so unlike the three above this one IS a
