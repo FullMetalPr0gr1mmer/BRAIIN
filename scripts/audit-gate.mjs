@@ -1,15 +1,31 @@
 // Supply-chain audit gate (CLAUDE.md §3 Pillar 1 — Security; §11 documented exceptions).
 //
-// Blocks on HIGH/CRITICAL advisories in PRODUCTION dependencies (what actually ships
-// in the Cloudflare Worker bundle). Dev-only tooling (vitest, lighthouse, etc.) is
-// audited informationally in CI but does not block feature work — it never ships.
+// Blocks on HIGH/CRITICAL advisories. Two scopes, both blocking as of 2026-08-01:
+//
+//   npm run audit       →  --omit=dev, PRODUCTION deps only (what ships in the Worker)
+//   npm run audit:all   →  --include-dev, the whole tree (bundler, test and CI tooling)
 //
 // Accepted advisories are listed EXPLICITLY below with a reason + expiry (never a blanket
-// `|| true`). Anything HIGH/CRITICAL in prod that is NOT allowlisted fails the gate, so
-// new vulnerabilities are always caught. An allowlist entry past its `expires` date also
+// `|| true`). Anything HIGH/CRITICAL that is NOT allowlisted fails the gate, so new
+// vulnerabilities are always caught. An allowlist entry past its `expires` date also
 // fails the gate — forcing us to revisit rather than silently carrying debt forever.
+//
+// WHY THE DEV SCOPE RUNS THROUGH THIS SCRIPT AND NOT A BARE `npm audit --audit-level=high`
+//
+// Both would block. Only this one can be *lived with*. `npm audit` resolves against a
+// remote advisory database that changes without this repository changing, so a single
+// advisory published against some transitive dev dependency turns every unrelated PR and
+// every hotfix red at once. A bare invocation offers exactly two responses to that: fix a
+// dependency you may not control, or edit CI under deployment pressure — and the second is
+// how `|| true` got there the first time. Routing it through the allowlist adds a third:
+// record it with a reason and an expiry, ship the hotfix, come back to it. The expiry is
+// what keeps that from becoming the same silent suppression by another name.
 
 import { execSync } from 'node:child_process';
+
+// `--include-dev` audits the whole tree; default is production dependencies only.
+const includeDev = process.argv.includes('--include-dev');
+const SCOPE = includeDev ? 'full tree incl. dev' : 'production deps (--omit=dev)';
 
 /**
  * EMPTY BY DESIGN — `npm audit --omit=dev` currently reports **0 vulnerabilities**.
@@ -26,7 +42,7 @@ const ALLOWLIST = [];
 
 function runAudit() {
   try {
-    return execSync('npm audit --json --omit=dev', {
+    return execSync(`npm audit --json${includeDev ? '' : ' --omit=dev'}`, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
@@ -61,7 +77,7 @@ for (const [id, info] of found) {
 }
 const stale = ALLOWLIST.filter((a) => !found.has(a.id)).map((a) => a.id);
 
-console.log(`Supply-chain gate — production deps (--omit=dev), high+critical.`);
+console.log(`Supply-chain gate — ${SCOPE}, high+critical.`);
 console.log(`Found ${found.size} high/critical; ${ALLOWLIST.length} allowlisted.\n`);
 
 if (stale.length) {
@@ -77,7 +93,7 @@ if (expired.length) {
 }
 
 if (unexpected.length) {
-  console.log(`❌ Unallowlisted high/critical advisories in production deps:`);
+  console.log(`❌ Unallowlisted high/critical advisories in ${SCOPE}:`);
   for (const f of unexpected)
     console.log(`    - ${f.sev.toUpperCase()} ${f.pkg}: ${f.id} — ${f.title}`);
   console.log(`\n   Fix the dependency, or (if genuinely accepted) add a documented,`);
@@ -89,4 +105,4 @@ if (unexpected.length || expired.length) {
   console.log('Supply-chain gate: FAIL');
   process.exit(1);
 }
-console.log('Supply-chain gate: PASS (all production high/critical are documented + unexpired).');
+console.log(`Supply-chain gate: PASS — ${SCOPE} (all high/critical documented + unexpired).`);

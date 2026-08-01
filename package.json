@@ -21,6 +21,7 @@
     "size": "size-limit",
     "lhci": "lhci autorun",
     "audit": "node scripts/audit-gate.mjs",
+    "audit:all": "node scripts/audit-gate.mjs --include-dev",
     "cf:types": "wrangler types",
     "a11y:contrast": "node scripts/contrast-audit.mjs",
     "seo-ci": "vitest run tests/seo",
@@ -45,7 +46,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
     "@axe-core/playwright": "^4.10.0",
-    "@lhci/cli": "^0.14.0",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.49.0",
     "@size-limit/file": "^11.1.0",
     "@types/node": "^22.10.0",
@@ -55,9 +56,10 @@
     "prettier-plugin-astro": "^0.14.0",
     "size-limit": "^11.1.0",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "vitest": "^4.1.10"
   },
   "overrides": {
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "tmp": "^0.2.7"
   }
 }

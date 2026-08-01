@@ -6,9 +6,9 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 
 | ID      | Opened     | Owner                          | Expiry     | Status | Summary                                                                                     |
 | ------- | ---------- | ------------------------------ | ---------- | ------ | ------------------------------------------------------------------------------------------- |
-| EXC-001 | 2026-06-14 | Developer (tech@purecoffee.sa) | 2026-09-12 | Open (re-scoped 2026-08-01) | `npm audit` high+ gate advisory; shipped-deps **critical** still blocks. Now blocked only on `vitest` 2→4 |
-| EXC-002 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | Open   | Migration `0011` (schema `app` grants) shipped ahead of its pgTAP suite — the site was down   |
-| EXC-003 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | Open   | Migration `0012` (audit-chain `hmac`) shipped ahead of its regression test                    |
+| EXC-001 | 2026-06-14 | Developer (tech@purecoffee.sa) | 2026-09-12 | **Closed 2026-08-01** | `npm audit` high+ gate was advisory. Tree is now 0 high / 0 critical; gate is blocking in both scopes |
+| EXC-002 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | Open (items 3–4 done, awaiting first green run) | Migration `0011` (schema `app` grants) shipped ahead of its pgTAP suite — the site was down   |
+| EXC-003 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | **Closed 2026-08-01** | Migration `0012` (audit-chain `hmac`) shipped ahead of its regression test — test now green in CI |
 
 ---
 
@@ -67,6 +67,23 @@ Remediation steps 1–3 are therefore **done**, and the counts moved with them: 
 
 **Close condition:** `npm audit --audit-level=high` exits 0 → restore the blocking gate → close. This is a contained dependency bump now, not a toolchain migration.
 
+### Closed 2026-08-01
+
+The close condition was met exactly as written. What it took:
+
+| Step                                        | Result                                             |
+| ------------------------------------------- | -------------------------------------------------- |
+| `vitest` `^2.1.0` → `^4.1.10`               | clears the **critical**; no config change needed, 481 tests / 29 files still pass |
+| `@lhci/cli` `^0.14.0` → `^0.15.1`           | clears one `high`                                   |
+| `npm audit fix`                             | clears `brace-expansion` (non-breaking)             |
+| `overrides: { "tmp": "^0.2.7" }`            | clears the last `high`                              |
+
+**15 vulnerabilities → 2**, both moderate and both dev-only (`@lhci/cli`, `uuid`). `npm audit --audit-level=high` exits **0**; `npm run typecheck` and `npm run build` pass.
+
+The `tmp` override needs its reasoning recorded, because npm's own advice was wrong. `tmp` reaches the tree as `@lhci/cli` → `inquirer` → `external-editor` → `tmp@0.0.33`, and `npm audit` proposed "fix available: `@lhci/cli@0.1.0`" — a **downgrade of 14 minor versions** that npm labels `isSemVerMajor`. Taking it would have traded two path-traversal advisories in CI-only tooling for a four-year-old Lighthouse CLI. Pinning the transitive dependency forward is the correct direction, and it is the reason `overrides` exists.
+
+**Gate restored, with one deliberate change.** The blocking step is `npm run audit:all`, not the bare `npm audit --audit-level=high` this entry originally promised. Both block on the same condition; only the former can be lived with. `npm audit` resolves against a remote advisory database that changes without this repository changing, so a bare invocation can turn every unrelated PR red on a commit that touched nothing, and offers exactly two responses: fix a dependency you may not control, or re-add `|| true` under deployment pressure. The second is how the suppression this entry documents got there in the first place. Routing the dev scope through `scripts/audit-gate.mjs` adds a third response — an entry with a reason and an **expiry** — and the expiry is what stops it from becoming the same silent suppression under a different name.
+
 ---
 
 ## EXC-002 — Migration 0011 (schema `app` grants) shipped ahead of its pgTAP suite
@@ -88,10 +105,21 @@ The change was not unverified — it was reviewed by three independent adversari
 
 1. ✅ `supabase/tests/grants_app_schema.test.sql` — written 2026-08-01 (25 assertions: schema gate, helper allowlist, default-deny, an exhaustive catalog assertion so a future `app.*` routine cannot silently become PUBLIC-executable, table privileges, and the deny list).
 2. ✅ `.github/workflows/db-tests.yml` promoted off `workflow_dispatch` — see EXC-003, same root cause.
-3. ☐ Per-role rows over `{admin, content_creator, seo, developer, anon, other_tenant}` for the four restrictive policies added in 0011 §5b.
-4. ☐ Fix `rls_admin_cms.test.sql`'s `entity_seo` fixture — it points at a service id that never existed, so "anon reads entity_seo" currently passes for the wrong reason. It must seed a published **and** a draft entity and assert anon sees exactly the published one.
+3. ✅ Per-role rows over `{admin, content_creator, seo, developer, anon, other_tenant}` for the four restrictive policies added in 0011 §5b — `supabase/tests/rls_restrictive_0011.test.sql`, written 2026-08-01 (28 assertions).
+4. ✅ Fix `rls_admin_cms.test.sql`'s `entity_seo` fixture — done 2026-08-01 in `c8110fe`, green in run `30702922011`. It now seeds a published **and** a draft service and asserts anon sees exactly the published one.
 
-**Close condition:** items 3 and 4 merged and green in the `db-tests` workflow.
+**Close condition:** items 3 and 4 merged and green in the `db-tests` workflow. Item 4 is green; item 3 awaits its first run.
+
+### What item 3 actually covers
+
+Six roles × four policies, plus two assertions the original scope did not ask for and should have:
+
+- **The orphan.** 0011's comment claims a row whose parent no longer exists "fails closed". That was prose. `entity_seo` now carries a ninth fixture row pointing at a service id that does not exist, asserted invisible to `anon` and visible to staff — so the fail-closed default is a test, not a promise.
+- **The modifier itself.** Recreating any of the four without `as restrictive` reopens the exact disclosure it closed — silently, and with every other assertion in the file still green, because a permissive policy ORs with the others and narrows nothing. The last assertion reads `pg_policies.permissive` for all four names.
+
+One row deviates from the six-role template on purpose. `page_sections` is deliberately **not** in 0011's anon grant list (nothing reads it anonymously until the section renderer ships), so `anon` is denied at the GRANT layer and its row is a `throws_ok(42501)` rather than a count. That proves the outer gate but leaves the policy itself — the half that has to keep working the day the grant is added — untested. A seventh row covers it: a signed-in session with **no role claim**, which holds the `authenticated` table grant but fails `app.is_staff()`, and must see only the visible section of a published page.
+
+**A note for whoever adds that grant:** the `throws_ok` above is the assertion that will fail. It is meant to. It is the one place where turning on anonymous reads for `page_sections` forces a decision instead of a diff.
 
 ---
 
@@ -120,7 +148,13 @@ Two things made this survivable for twelve migrations:
 ### Remediation plan (clears this exception)
 
 1. ✅ `supabase/tests/audit_chain.test.sql` — written 2026-08-01 (11 assertions: digest well-formed, `prev_hash` links, caller-supplied `hash`/`prev_hash` overwritten by the trigger, per-tenant chains, no UPDATE, no DELETE). Asserts the **chain**, not that the API returned 200 — it returned 200 throughout the outage.
-2. ☐ Verify the suite passes in CI against the local stack (no Docker on the current dev machine; unverified locally).
+2. ✅ Verify the suite passes in CI against the local stack (no Docker on the current dev machine; unverifiable locally). **Green 2026-08-01** — run `30702922011`, `audit_chain.test.sql .. ok`, 11/11.
 3. ☐ Hourly audit-chain anchor to object-locked R2 + paging verifier (§10) — tracked separately as known-outstanding at MVP, not by this exception.
 
-**Close condition:** item 2 green in the `db-tests` workflow.
+**Close condition:** item 2 green in the `db-tests` workflow. → **Met. Closed 2026-08-01.**
+
+### Closed 2026-08-01
+
+The regression test now runs on every push. What it locks in is narrow and deliberate: it asserts the **chain** — digest well-formed, `prev_hash` links, caller-supplied `hash`/`prev_hash` overwritten by the trigger, per-tenant chains, no UPDATE, no DELETE — and never that an API call returned 200. During the outage every call returned 200. A test written against the response would have been green for all twelve migrations the chain was silently broken.
+
+Item 3 (the R2 anchor and paging verifier) stays open as known-outstanding at MVP and is not gated by this entry. Worth stating plainly: until it lands, the chain is **tamper-evident to anyone who reads it, but nothing reads it on a schedule**. The trigger makes forgery detectable; the anchor is what makes it *detected*.

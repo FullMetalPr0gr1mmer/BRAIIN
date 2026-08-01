@@ -70,7 +70,20 @@ jobs:
       # blanket suppression. Fails on any new prod high/critical or an expired entry.
       - name: Audit — production deps (blocking, documented allowlist)
         run: npm run audit
-      # Informational: full tree incl. dev tooling (vitest, lighthouse, …). Surfaces
-      # dev-only advisories without halting feature work — they never ship.
-      - name: Audit — full tree incl. dev (informational)
-        run: npm audit --audit-level=high || true
+      # Blocking as of 2026-08-01 (closes EXC-001). This step carried `|| true` for six
+      # weeks because the whole tree reported 27 vulnerabilities — 1 critical + 9 high —
+      # every one of them in build/dev/test tooling absent from the deployed Worker.
+      # Clearing them took a Node 22 + Astro 7 migration (KAN-31), then `vitest` 2→4,
+      # `@lhci/cli` 0.14→0.15 and a `tmp` override; the tree is now 0 high / 0 critical.
+      #
+      # It is blocking rather than informational because CLAUDE.md §3 says "npm audit high"
+      # without qualification, and because an advisory in dev tooling is still an advisory
+      # in code that runs on developer machines and in CI with repository credentials —
+      # "it never ships" bounds the blast radius, it does not zero it.
+      #
+      # Via the gate script, not a bare `npm audit --audit-level=high`: the advisory
+      # database changes without this repo changing, so this step can go red on a commit
+      # that touched nothing. The script gives that situation a documented, EXPIRING
+      # answer instead of forcing someone to re-add `|| true` during an incident.
+      - name: Audit — full tree incl. dev (blocking, documented allowlist)
+        run: npm run audit:all
