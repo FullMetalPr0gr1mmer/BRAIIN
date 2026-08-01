@@ -19,10 +19,18 @@ create function _claims(p_role text, p_tid text) returns void language sql as $$
   )
 $$;
 
--- anon: no lead access
+-- anon: no lead access — and since 0011, denied a step EARLIER than this test assumed.
+-- It used to assert `count(*) = 0`, i.e. the table is readable and RLS filters it to
+-- nothing. 0011 revoked anon's table privilege outright, so the query is now rejected by
+-- the GRANT layer before RLS is consulted at all. Postgres authorization is two gates in
+-- sequence and anon no longer clears the first, which is strictly stronger — assert the
+-- stronger property rather than relax 0011 back to the weaker one.
 set local role anon;
 select _claims(null, null);
-select is((select count(*) from public.leads)::int, 0, 'anon sees no leads');
+select throws_ok(
+  $$ select count(*) from public.leads $$,
+  '42501', null, 'anon is denied public.leads at the GRANT layer (before RLS)'
+);
 
 set local role authenticated;
 

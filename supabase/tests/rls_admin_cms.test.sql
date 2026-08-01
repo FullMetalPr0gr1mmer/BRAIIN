@@ -28,22 +28,27 @@ begin;
 select plan(26);
 
 -- Setup runs as the migration role, where RLS is bypassed.
-insert into public.tenants (id, name) values ('00000000-0000-0000-0000-000000000001', 'T1');
+--
+-- Fixtures go in the LAUNCH tenant rather than one this file invents. `anon` carries no
+-- claims, so app.effective_tenant_id() falls through to app.default_tenant_id() — the
+-- FIRST tenant by created_at, which `supabase start` has already created via seed.sql.
+-- A locally-invented tenant is invisible to anon, which is why the three anon assertions
+-- below read 0 the first time this suite ever ran.
 
 -- Two REAL parent entities, one published and one draft. entity_seo's restrictive
 -- SELECT policy (migration 0011) joins each row to its parent's status, so the fixture
 -- has to contain a parent at all — before 0011 these rows pointed at a service id that
 -- never existed, which made "anon reads entity_seo" pass for the wrong reason.
 insert into public.services (id, tenant_id, slug, title, status) values
-  ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-000000000001',
+  ('00000000-0000-0000-0000-0000000000c1', app.default_tenant_id(),
    'live-service', '{"en":"Live","ar":"مباشر"}'::jsonb, 'published'),
-  ('00000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-000000000001',
+  ('00000000-0000-0000-0000-0000000000c2', app.default_tenant_id(),
    'draft-service', '{"en":"Draft","ar":"مسودة"}'::jsonb, 'draft');
 
 insert into public.entity_seo (id, tenant_id, entity_type, entity_id, meta_title, meta_description)
   values (
     '00000000-0000-0000-0000-0000000000e1',
-    '00000000-0000-0000-0000-000000000001',
+    app.default_tenant_id(),
     'service',
     '00000000-0000-0000-0000-0000000000c1',
     '{"en":"T","ar":"ت"}'::jsonb,
@@ -51,21 +56,21 @@ insert into public.entity_seo (id, tenant_id, entity_type, entity_id, meta_title
   ),
   (
     '00000000-0000-0000-0000-0000000000e2',
-    '00000000-0000-0000-0000-000000000001',
+    app.default_tenant_id(),
     'service',
     '00000000-0000-0000-0000-0000000000c2',   -- meta for the DRAFT service
     '{"en":"Unreleased","ar":"غير منشور"}'::jsonb,
     '{"en":"Unreleased","ar":"غير منشور"}'::jsonb
   );
 
-insert into public.site_integrations (tenant_id) values ('00000000-0000-0000-0000-000000000001');
-insert into public.ai_config (tenant_id) values ('00000000-0000-0000-0000-000000000001');
-insert into public.navigation (tenant_id, location, label, href)
-  values ('00000000-0000-0000-0000-000000000001', 'header', '{"en":"Services","ar":"خدمات"}'::jsonb, '/services');
-insert into public.seo_defaults (tenant_id) values ('00000000-0000-0000-0000-000000000001');
-insert into public.search_queries (tenant_id, q) values ('00000000-0000-0000-0000-000000000001', 'branding');
+insert into public.site_integrations (tenant_id) values (app.default_tenant_id());
+insert into public.ai_config (tenant_id) values (app.default_tenant_id());
+insert into public.navigation (tenant_id, location, label, href, visible)
+  values (app.default_tenant_id(), 'header', '{"en":"Services","ar":"خدمات"}'::jsonb, '/services', true);
+insert into public.seo_defaults (tenant_id) values (app.default_tenant_id());
+insert into public.search_queries (tenant_id, q) values (app.default_tenant_id(), 'branding');
 insert into public.consent_log (tenant_id, subject_hash, categories, policy_version)
-  values ('00000000-0000-0000-0000-000000000001', 'hash', '{"analytics":true}'::jsonb, 'v1');
+  values (app.default_tenant_id(), 'hash', '{"analytics":true}'::jsonb, 'v1');
 
 create function _claims(p_role text, p_tid text) returns void language sql as $$
   select set_config(
@@ -75,6 +80,10 @@ create function _claims(p_role text, p_tid text) returns void language sql as $$
     true
   )
 $$;
+
+-- The launch tenant as text, for claim injection. Staff claims must name the SAME tenant
+-- the fixtures live in, or every staff assertion silently measures an empty tenant.
+create function _tid() returns text language sql as $$ select app.default_tenant_id()::text $$;
 
 -- Rows actually affected by a statement — the honest way to assert a filtered write.
 create function _updated_entity_seo() returns int language sql as $$
@@ -103,42 +112,42 @@ select is((select count(*) from public.entity_seo)::int, 1,
 
 set local role authenticated;
 
-select _claims('content_creator', '00000000-0000-0000-0000-000000000001');
+select _claims('content_creator', _tid());
 select is((select count(*) from public.entity_seo)::int, 2, 'content_creator READS entity_seo (its "view" access)');
 select is(_updated_entity_seo(), 0, 'content_creator cannot WRITE entity_seo');
 
-select _claims('developer', '00000000-0000-0000-0000-000000000001');
+select _claims('developer', _tid());
 select is(_updated_entity_seo(), 0, 'developer cannot write entity_seo');
 
-select _claims('seo', '00000000-0000-0000-0000-000000000001');
+select _claims('seo', _tid());
 select is(_updated_entity_seo(), 2, 'seo can write entity_seo');
 
-select _claims('admin', '00000000-0000-0000-0000-000000000001');
+select _claims('admin', _tid());
 select is(_updated_entity_seo(), 2, 'admin can write entity_seo');
 
 select _claims('admin', '00000000-0000-0000-0000-0000000000ff');
 select is((select count(*) from public.entity_seo)::int, 0, 'admin of another tenant sees no entity_seo');
 
 -- ---- site_integrations: Admin + SEO write, Developer refused ----------------
-select _claims('developer', '00000000-0000-0000-0000-000000000001');
+select _claims('developer', _tid());
 select is((select count(*) from public.site_integrations)::int, 1, 'developer READS integrations (staff read)');
 select is(_updated_integrations(), 0, 'developer cannot write integrations — that is SEO''s capability');
 
-select _claims('seo', '00000000-0000-0000-0000-000000000001');
+select _claims('seo', _tid());
 select is(_updated_integrations(), 1, 'seo can write integrations');
 
-select _claims('content_creator', '00000000-0000-0000-0000-000000000001');
+select _claims('content_creator', _tid());
 select is((select count(*) from public.site_integrations)::int, 1, 'content_creator reads integrations (staff read)');
 select is(_updated_integrations(), 0, 'content_creator cannot write integrations');
 
 -- ---- ai_config: Admin ALONE -------------------------------------------------
-select _claims('content_creator', '00000000-0000-0000-0000-000000000001');
+select _claims('content_creator', _tid());
 select is((select count(*) from public.ai_config)::int, 0, 'content_creator cannot even read ai_config');
 
-select _claims('developer', '00000000-0000-0000-0000-000000000001');
+select _claims('developer', _tid());
 select is((select count(*) from public.ai_config)::int, 0, 'developer cannot read ai_config');
 
-select _claims('admin', '00000000-0000-0000-0000-000000000001');
+select _claims('admin', _tid());
 select is((select count(*) from public.ai_config)::int, 1, 'admin reads ai_config');
 select lives_ok($$ update public.ai_config set daily_usd_cap = 7 $$, 'admin writes ai_config');
 
@@ -148,35 +157,39 @@ select _claims(null, null);
 select is((select count(*) from public.navigation)::int, 1, 'anon reads navigation (it renders on every page)');
 
 set local role authenticated;
-select _claims('seo', '00000000-0000-0000-0000-000000000001');
+select _claims('seo', _tid());
 select is(_updated_navigation(), 0, 'seo cannot edit navigation');
 
-select _claims('content_creator', '00000000-0000-0000-0000-000000000001');
+select _claims('content_creator', _tid());
 select is(_updated_navigation(), 1, 'content_creator can edit navigation');
 -- The RESTRICTIVE delete policy filters rather than raising, so this is zero rows.
 select is(_deleted_navigation(), 0, 'content_creator delete on navigation affects zero rows');
 
-select _claims('admin', '00000000-0000-0000-0000-000000000001');
+select _claims('admin', _tid());
 select is(_deleted_navigation(), 1, 'admin can delete navigation');
 
 -- ---- search_queries: Admin + SEO + Developer, NOT Content Creator -----------
-select _claims('content_creator', '00000000-0000-0000-0000-000000000001');
+select _claims('content_creator', _tid());
 select is((select count(*) from public.search_queries)::int, 0, 'content_creator has no search analytics');
-select _claims('seo', '00000000-0000-0000-0000-000000000001');
+select _claims('seo', _tid());
 select is((select count(*) from public.search_queries)::int, 1, 'seo reads search analytics');
 
 -- ---- consent_log: Admin + Developer only -----------------------------------
-select _claims('seo', '00000000-0000-0000-0000-000000000001');
+select _claims('seo', _tid());
 select is((select count(*) from public.consent_log)::int, 0, 'seo cannot read the consent ledger');
-select _claims('developer', '00000000-0000-0000-0000-000000000001');
+select _claims('developer', _tid());
 select is((select count(*) from public.consent_log)::int, 1, 'developer reads the consent ledger');
 
--- ---- privileged_ops: no policies at all → service_role only ----------------
-select _claims('admin', '00000000-0000-0000-0000-000000000001');
-select is(
-  (select count(*) from public.privileged_ops)::int,
-  0,
-  'even admin cannot read privileged_ops through RLS (service-role only)'
+-- ---- privileged_ops: service_role only, now denied one gate EARLIER ---------
+-- This used to assert "readable, but RLS filters it to zero rows" — true when the table
+-- had no policies but `authenticated` still held Supabase's stock GRANT. 0011 revoked
+-- that GRANT outright (`revoke all on public.login_attempts, public.privileged_ops from
+-- authenticated`), so the statement is now rejected before RLS is reached. Two gates in
+-- sequence; this table no longer clears the first, which is the stronger property.
+select _claims('admin', _tid());
+select throws_ok(
+  $$ select count(*) from public.privileged_ops $$,
+  '42501', null, 'even admin is denied privileged_ops at the GRANT layer (service-role only)'
 );
 
 reset role;

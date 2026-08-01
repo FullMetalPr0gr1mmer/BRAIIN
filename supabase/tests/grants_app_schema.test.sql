@@ -72,15 +72,17 @@ select ok(not has_function_privilege('anon', 'app.tg_audit_chain()', 'execute'),
 -- A named-function list rots the moment migration 0013 adds one. This assertion is a
 -- property of the catalog instead, so a new PUBLIC-executable app.* routine fails here
 -- rather than shipping.
--- Identity built from proname + identity args rather than `oid::regprocedure`, because
--- regprocedure QUOTES reserved words: `app.current_role()` renders as
--- `app."current_role"()` and silently missed the allowlist on this suite's first run.
--- proname is the raw catalog name, so no quoting rule can drift the comparison again.
+-- Identity is `proname(oidvectortypes(proargtypes))`, and it took two runs of this suite
+-- to get there — both failures being the assertion's own formatting, not a real leak:
+--   `oid::regprocedure`               → app."current_role"()   (quotes reserved words)
+--   `pg_get_function_identity_arguments` → normalize_ar(t text)  (includes param NAMES)
+-- `oidvectortypes` yields bare type names with no quoting and no parameter names, which
+-- is the only spelling of "which function is this" that is stable to both.
 select is(
   (
     select coalesce(
              string_agg(
-               p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')',
+               p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')',
                ', ' order by p.proname
              ),
              ''
@@ -89,7 +91,7 @@ select is(
       join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'app'
        and has_function_privilege('anon', p.oid, 'execute')
-       and p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' not in (
+       and p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' not in (
          'effective_tenant_id()', 'current_tenant_id()', 'default_tenant_id()',
          'current_role()', 'is_staff()', 'is_admin()', 'can_write_content()',
          'normalize_ar(text)', 'normalize_ar_q(text)'
