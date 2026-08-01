@@ -61,8 +61,9 @@
   "kv_namespaces": [
     {
       "binding": "SESSION",
-      "id": "REPLACE_WITH_SESSION_KV_ID",
-      "preview_id": "REPLACE_WITH_SESSION_KV_PREVIEW_ID",
+      "id": "28ffe378e6844cdc8b2802e7ffafa267",
+      "preview_id": "7f8764a06e9b4baca340cfdc8495f223",
+      "remote": true,
     },
   ],
   // NOTE: secrets (SUPABASE_SERVICE_ROLE_KEY, LEAD_PII_ENC_KEY, AUDIT_HMAC_KEY,
