@@ -7,30 +7,45 @@
 // Thresholds (WCAG 2.2): 4.5:1 normal text, 3.0:1 large text (≥18.66px bold / ≥24px) and
 // non-text UI (borders/focus indicators, 1.4.11).
 
-// Palette — keep in sync with public/styles/global.css :root tokens.
+// Palette — keep in sync with public/styles/global.css :root tokens (brand system:
+// Klein blue on black & paper white, from the approved "Brain Station UI" design).
 const T = {
-  bg: '#0b0b0f',
-  surface: '#14141b',
-  fg: '#e8e8ea',
-  muted: '#a0a0ab',
-  accent: '#00e5ff',
-  border: '#2a2a35',
+  bg: '#000000', // --bs-bg / --bs-black
+  surface: '#0a0f24', // --bs-surface
+  midnight: '#000d30', // --bs-midnight (consent banner, select popovers)
+  fg: '#ffffff', // --bs-fg
+  muted: '#a6adbf', // --bs-muted (secondary text on dark)
+  accent: '#22a9ff', // --bs-accent / --bs-sky (links, stat values on dark)
+  skySoft: '#9ed4ff', // --bs-sky-soft (svc-row numbers on the Klein hover fill)
+  klein: '#0024bc', // --bs-klein (.cta / .badge / .svc-row hover fill)
+  cobalt: '#024cff', // --bs-cobalt (focus outline, hero accent word — display size)
+  paper: '#ffffff', // --bs-paper (light sections)
+  ink: '#000000', // --bs-ink (text on paper)
+  dim: '#4a5468', // --bs-dim (secondary text on paper)
   ok: '#2ecc71',
-  err: '#ff6b6b',
+  err: '#ff5a5a',
 };
 
 // (foreground, background, minRatio, where) — every real on-screen pairing.
 const PAIRS = [
-  ['fg', 'bg', 4.5, 'body text'],
+  // dark sections (hero, slogan, clients, contact) + interior pages
+  ['fg', 'bg', 4.5, 'body text on black'],
   ['fg', 'surface', 4.5, 'card/section text'],
+  ['fg', 'midnight', 4.5, 'consent banner / select options'],
   ['muted', 'bg', 4.5, 'secondary text on page'],
   ['muted', 'surface', 4.5, 'secondary text on cards'],
-  ['accent', 'bg', 4.5, 'links on page'],
-  ['accent', 'surface', 4.5, 'links / stat value / headings on cards'],
-  ['bg', 'accent', 4.5, '.cta button label (dark text on neon)'],
-  ['accent', 'bg', 3.0, 'focus outline (UI, 1.4.11)'],
+  ['accent', 'bg', 4.5, 'links / sky accents on black'],
+  ['accent', 'surface', 4.5, 'links / stat value on cards'],
+  ['fg', 'klein', 4.5, '.cta + .badge label (white on Klein)'],
+  ['skySoft', 'klein', 4.5, 'svc-row number on Klein hover fill'],
+  ['cobalt', 'bg', 3.0, 'hero accent word (display-size text)'],
+  ['cobalt', 'bg', 3.0, 'focus outline (UI, 1.4.11)'],
   ['ok', 'surface', 3.0, 'form success border (UI)'],
   ['err', 'surface', 3.0, 'form error border (UI)'],
+  // paper sections (about intro, services, social, footer)
+  ['ink', 'paper', 4.5, 'body text on paper'],
+  ['dim', 'paper', 4.5, 'secondary text on paper (svc numbers/blurbs)'],
+  ['klein', 'paper', 4.5, 'tags / accents on paper'],
 ];
 
 function channel(c) {

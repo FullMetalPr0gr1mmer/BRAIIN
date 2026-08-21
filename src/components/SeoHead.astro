@@ -70,6 +70,29 @@ const hasDescription = description.trim().length > 0;
 
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+{
+  /* Preload ONLY the hero face, per locale (CLAUDE.md §6; docs/fonts.md). The remaining
+     faces load on demand via @font-face unicode-range in global.css. */
+}
+{
+  locale === 'ar' ? (
+    <link
+      rel="preload"
+      href="/fonts/almarai-800-arabic.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+  ) : (
+    <link
+      rel="preload"
+      href="/fonts/archivo-var-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+  )
+}
 <title>{title}</title>
 {hasDescription ? <meta name="description" content={description} /> : null}
 <meta name="robots" content={robots} />

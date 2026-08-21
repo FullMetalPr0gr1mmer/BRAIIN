@@ -1,7 +1,9 @@
 ---
+import { Picture } from 'astro:assets';
 import type { Locale } from '@schemas/primitives';
 import { getNavigation, type NavNode } from '@/lib/data/navigation';
 import { localizedPath } from '@/lib/i18n';
+import logo from '@/assets/braiin-logo-white.png';
 
 // Sitewide header. Renders CMS-authored navigation (`public.navigation`, edited under
 // /admin/navigation) with a hard-coded fallback so the site is never navigation-less
@@ -15,9 +17,12 @@ import { localizedPath } from '@/lib/i18n';
 
 interface Props {
   locale: Locale;
+  /** Home: fixed transparent bar over the hero video; the scroll script below adds the
+      solid backdrop / hide-on-scroll-down behaviour. Interior pages: solid sticky bar. */
+  overlay?: boolean;
 }
 
-const { locale } = Astro.props;
+const { locale, overlay = false } = Astro.props;
 
 /** Shown until the CMS has nav rows, and whenever the query fails. */
 const FALLBACK: NavNode[] = [
@@ -87,13 +92,23 @@ const otherLocale: Locale = locale === 'ar' ? 'en' : 'ar';
 const switchHref = localizedPath(logical, otherLocale);
 ---
 
-<header class="site-header">
+<header class:list={['site-header', { 'site-header--overlay': overlay }]}>
   <a class="skip-link" href="#main">
     {locale === 'ar' ? 'تخطَّ إلى المحتوى' : 'Skip to content'}
   </a>
 
   <div class="site-header__bar">
-    <a class="site-header__brand" href={localizedPath('/', locale)}>Braiin Station</a>
+    <a class="site-header__brand" href={localizedPath('/', locale)} aria-label="Braiin Station">
+      <Picture
+        src={logo}
+        alt="Braiin Station"
+        formats={['avif', 'webp']}
+        width={264}
+        densities={[1, 2]}
+        decoding="async"
+        loading="eager"
+      />
+    </a>
 
     {
       /*
@@ -152,3 +167,33 @@ const switchHref = localizedPath(logical, otherLocale);
     </a>
   </div>
 </header>
+
+<script>
+  // Overlay header only (home): solid backdrop once past the hero, hidden while
+  // scrolling down, shown again on any scroll up. rAF-throttled, passive — enhancement
+  // on top of a header that is fully usable without it.
+  const header = document.querySelector<HTMLElement>('.site-header--overlay');
+  if (header) {
+    let lastY = window.scrollY;
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      const y = window.scrollY;
+      const pastHero = y > window.innerHeight * 0.9;
+      header.classList.toggle('is-solid', pastHero);
+      if (pastHero && y - lastY > 4) header.classList.add('is-hidden');
+      else if (y - lastY < -4 || y < window.innerHeight * 0.5) header.classList.remove('is-hidden');
+      lastY = y;
+    };
+    addEventListener(
+      'scroll',
+      () => {
+        if (!ticking) {
+          ticking = true;
+          requestAnimationFrame(update);
+        }
+      },
+      { passive: true },
+    );
+  }
+</script>

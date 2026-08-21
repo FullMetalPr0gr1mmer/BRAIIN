@@ -11,6 +11,9 @@ import Statistics from '@/components/sections/Statistics.astro';
 import TeamGrid from '@/components/sections/TeamGrid.astro';
 import Certifications from '@/components/sections/Certifications.astro';
 import ClientsMarquee from '@/components/sections/ClientsMarquee.astro';
+import AboutIntro from '@/components/sections/AboutIntro.astro';
+import SloganBand from '@/components/sections/SloganBand.astro';
+import HomeContact from '@/components/sections/HomeContact.astro';
 
 interface Props {
   locale: Locale;
@@ -30,6 +33,9 @@ const REGISTRY: Record<string, unknown> = {
   team: TeamGrid,
   certifications: Certifications,
   clientsMarquee: ClientsMarquee,
+  aboutIntro: AboutIntro,
+  slogan: SloganBand,
+  contact: HomeContact,
 };
 ---
 

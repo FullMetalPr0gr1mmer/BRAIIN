@@ -1,0 +1,38 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { ContactSectionContent } from '@schemas/sections';
+import { pickLocale } from '@/lib/i18n';
+import ContactForm from '@/components/ContactForm.astro';
+import { getPublishedServices } from '@/lib/data/services';
+
+// Home contact — display-size CTA over the real lead form (same ContactForm as
+// /contact: Zod-validated server-side at /api/contact, honeypot, consent checkbox).
+// The fallback service rows on this page link to #contact, which is this section.
+// Heading/accent are CMS-overridable (ContactSectionContentSchema).
+
+interface Props extends ContactSectionContent {
+  locale: Locale;
+}
+
+const { locale, heading, accent } = Astro.props;
+
+const STR = {
+  en: { pre: "Let's make something", accent: 'that lands' },
+  ar: { pre: 'خلّنا نصنع شيئاً', accent: 'يترك أثراً' },
+}[locale];
+
+const preText = heading ? pickLocale(heading, locale) : STR.pre;
+const accentText = accent ? pickLocale(accent, locale) : STR.accent;
+
+const services = await getPublishedServices();
+---
+
+<section class="home-contact" id="contact" aria-labelledby="home-contact-cta">
+  <div class="section-wrap">
+    <h2 class="display-cta rv" id="home-contact-cta">
+      {preText}
+      <em>{accentText}</em>
+    </h2>
+    <ContactForm locale={locale} services={services} />
+  </div>
+</section>

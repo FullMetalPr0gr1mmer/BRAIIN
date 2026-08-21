@@ -1,0 +1,93 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { AboutIntroSectionContent } from '@schemas/sections';
+import { pickLocale } from '@/lib/i18n';
+
+// Home "Who we are" — the paper section that slides over the sticky hero. Copy is the
+// approved design's, overridable per-field from the CMS (page_sections.content,
+// AboutIntroSectionContentSchema). Distinct from AboutStory, which is the /about page
+// hero and owns that page's <h1>.
+
+interface Props extends AboutIntroSectionContent {
+  locale: Locale;
+}
+
+const { locale, tag, heading, lead, columns } = Astro.props;
+
+// Normalise authored columns to the built-in {t, d} shape once, up here.
+const colsResolved = (columns ?? []).map((c) => ({
+  t: pickLocale(c.title, locale),
+  d: pickLocale(c.body, locale),
+}));
+
+const STR = {
+  en: {
+    tag: 'Who we are',
+    lead: 'We build brands that are seen, understood, and remembered. On a screen, on a stage, on a shelf, in any language.',
+    cols: [
+      {
+        t: 'Strategy before pixels',
+        d: "Every identity, film, and campaign starts with a question about the business, not a mood board. If the work isn't earning something, it isn't finished.",
+      },
+      {
+        t: 'One studio, fourteen crafts',
+        d: 'Identity, film, sound, events, merch, and web all live under one roof, so the idea never gets diluted in the handoff between three vendors.',
+      },
+      {
+        t: 'Native in any language',
+        d: 'Arabic, English, or whatever the market speaks. Every language is written, typeset, and designed natively, so none of them ends up reading like a translation of another.',
+      },
+    ],
+  },
+  ar: {
+    tag: 'من نحن',
+    lead: 'نبني علامات تُرى وتُفهم وتُتذكَّر. على الشاشة، وعلى المسرح، وعلى الرف، وبأي لغة.',
+    cols: [
+      {
+        t: 'الاستراتيجية قبل التصميم',
+        d: 'كل هوية وكل فيلم وكل حملة تبدأ بسؤال عن العمل نفسه، لا بلوحة إلهام. وإن لم يكن الشغل يحقّق شيئاً، فهو غير مكتمل.',
+      },
+      {
+        t: 'استوديو واحد، أربع عشرة حرفة',
+        d: 'الهوية والإنتاج والصوت والفعاليات والمنتجات والويب تحت سقف واحد، فلا تضيع الفكرة في التنقل بين ثلاث جهات.',
+      },
+      {
+        t: 'أصليّ بأي لغة',
+        d: 'عربي، إنجليزي، أو أي لغة يتحدثها السوق. كل لغة تُكتب وتُنسّق وتُصمَّم بلغتها، فلا تبدو أي واحدة منها ترجمة للأخرى.',
+      },
+    ],
+  },
+}[locale];
+---
+
+<section class="about-intro" id="about">
+  <div class="section-wrap">
+    <div class="tag rv">
+      <span class="dot"></span><span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+    </div>
+    {
+      heading ? (
+        <h2 class="rv">{pickLocale(heading, locale)}</h2>
+      ) : locale === 'ar' ? (
+        <h2 class="rv">
+          وُلدنا في جدة. وُجدنا لننقل الأفكار <b>من الدماغ إلى أرض الواقع</b>.
+        </h2>
+      ) : (
+        <h2 class="rv">
+          Born in Jeddah. Built to move ideas <b>from the brain into the real world</b>.
+        </h2>
+      )
+    }
+    <p class="about-intro__lead rv">{lead ? pickLocale(lead, locale) : STR.lead}</p>
+    <div class="about-intro__cols">
+      {
+        (colsResolved.length > 0 ? colsResolved : STR.cols).map((c) => (
+          <div class="rv">
+            <h3>{c.t}</h3>
+            <p>{c.d}</p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

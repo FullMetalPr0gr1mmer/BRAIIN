@@ -1,46 +1,168 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import type { ServicesOverviewSectionContent } from '@schemas/sections';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import { getPublishedServices } from '@/lib/data/services';
 
-interface Props {
+// "Fourteen services, one studio" — numbered rows on paper with the Klein hover fill.
+// Self-contained: fetches published services; before Supabase is provisioned it falls
+// back to the design's 14 services (slugs mirror supabase/seed.sql) so the section
+// reads real. Fallback rows point at the home contact section — their detail pages
+// don't exist until the DB does.
+
+interface Props extends ServicesOverviewSectionContent {
   locale: Locale;
 }
 
-const { locale } = Astro.props;
+const { locale, tag, heading, sub } = Astro.props;
 
 const STR = {
   en: {
-    heading: 'Our services',
-    empty: 'Services are being published — check back soon.',
-    soon: 'Coming soon',
+    tag: 'What we do',
+    h2: 'Fourteen services, one studio',
+    sub: 'Take one. Take all of them. The work holds together either way, because it never leaves the building.',
+    soon: 'Soon',
   },
-  ar: { heading: 'خدماتنا', empty: 'يتم نشر الخدمات — عُد قريبًا.', soon: 'قريبًا' },
+  ar: {
+    tag: 'ما نقدّمه',
+    h2: 'أربع عشرة خدمة، استوديو واحد',
+    sub: 'خذ واحدة، أو خذها كلها. الشغل يبقى متماسكاً في الحالتين، لأنه لا يغادر المبنى.',
+    soon: 'قريباً',
+  },
 }[locale];
 
-// Self-contained section: fetches its own data (empty before Supabase is provisioned).
+interface Row {
+  href: string;
+  title: string;
+  blurb: string;
+  soon: boolean;
+}
+
+const FALLBACK: { slug: string; title: [string, string]; blurb: [string, string]; soon?: true }[] =
+  [
+    {
+      slug: 'branding',
+      title: ['Branding', 'الهوية البصرية'],
+      blurb: [
+        'Identity systems that make brands unmistakable.',
+        'أنظمة هوية تجعل العلامة لا تُخطئها العين.',
+      ],
+    },
+    {
+      slug: 'animations',
+      title: ['Animation', 'الرسوم المتحركة'],
+      blurb: ['Characters and stories brought to life.', 'شخصيات وقصص تنبض بالحياة.'],
+    },
+    {
+      slug: 'motion-graphics',
+      title: ['Motion Graphics', 'الموشن جرافيك'],
+      blurb: ['Design in motion, for screens of every size.', 'تصميم متحرّك لكل مقاس شاشة.'],
+    },
+    {
+      slug: 'videography',
+      title: ['Videography', 'الإنتاج المرئي'],
+      blurb: ['Cinematic production, end to end.', 'إنتاج سينمائي من الفكرة إلى التسليم.'],
+    },
+    {
+      slug: 'photography',
+      title: ['Photography', 'التصوير الفوتوغرافي'],
+      blurb: ['Images that sell the moment.', 'صور تبيع اللحظة.'],
+    },
+    {
+      slug: 'montage',
+      title: ['Montage', 'المونتاج'],
+      blurb: ['Editing that gives footage its rhythm.', 'مونتاج يمنح اللقطات إيقاعها.'],
+    },
+    {
+      slug: 'event-planning',
+      title: ['Event Planning', 'تنظيم الفعاليات'],
+      blurb: ['Experiences planned down to the detail.', 'تجارب مخططة حتى آخر تفصيل.'],
+    },
+    {
+      slug: 'advertising',
+      title: ['Advertising', 'الإعلان'],
+      blurb: ['Campaigns that move audiences.', 'حملات تحرّك الجمهور.'],
+    },
+    {
+      slug: 'social-media',
+      title: ['Social Media', 'السوشيال ميديا'],
+      blurb: ['Always-on presence that converts.', 'حضور دائم يتحوّل إلى نتائج.'],
+    },
+    {
+      slug: 'web-development',
+      title: ['Web Development', 'تطوير المواقع'],
+      blurb: ['Fast, secure, accessible sites.', 'مواقع سريعة وآمنة وسهلة الوصول.'],
+    },
+    {
+      slug: 'seo-geo-aeo',
+      title: ['SEO / GEO / AEO', 'تحسين الظهور SEO / GEO / AEO'],
+      blurb: [
+        'Be found by people and by AI answer engines.',
+        'أن تُوجد أمام الناس وأمام محركات الإجابة.',
+      ],
+    },
+    {
+      slug: 'music',
+      title: ['Music', 'الموسيقى'],
+      blurb: ['Original sound and scoring.', 'موسيقى أصلية وتوزيع صوتي.'],
+    },
+    {
+      slug: 'merchandise',
+      title: ['Merchandise', 'المنتجات الترويجية'],
+      blurb: ['Branded products people actually keep.', 'منتجات بعلامتك يحتفظ بها الناس.'],
+    },
+    {
+      slug: 'gaming',
+      title: ['Gaming', 'الألعاب'],
+      blurb: ['Worlds, assets, and in-game brand work.', 'عوالم وأصول وحضور داخل اللعبة.'],
+      soon: true,
+    },
+  ];
+
 const services = await getPublishedServices();
+const rows: Row[] =
+  services.length > 0
+    ? services.map((s) => ({
+        href: localizedPath(`/services/${s.slug}`, locale),
+        title: pickLocale(s.title, locale, s.slug),
+        blurb: s.blurb ? pickLocale(s.blurb, locale) : '',
+        soon: s.is_teaser,
+      }))
+    : FALLBACK.map((f) => ({
+        href: '#contact',
+        title: f.title[locale === 'ar' ? 1 : 0],
+        blurb: f.blurb[locale === 'ar' ? 1 : 0],
+        soon: f.soon === true,
+      }));
 ---
 
-<section class="services-overview">
-  <div class="container">
-    <h2>{STR.heading}</h2>
-    {
-      services.length === 0 ? (
-        <p class="notice">{STR.empty}</p>
-      ) : (
-        <ul class="service-grid">
-          {services.map((s) => (
-            <li class="service-card">
-              <a href={localizedPath(`/services/${s.slug}`, locale)}>
-                <h3>{pickLocale(s.title, locale, s.slug)}</h3>
-                {s.blurb ? <p>{pickLocale(s.blurb, locale)}</p> : null}
-                {s.is_teaser ? <span class="badge">{STR.soon}</span> : null}
-              </a>
-            </li>
-          ))}
-        </ul>
-      )
-    }
+<section class="services-overview" id="services">
+  <div class="section-wrap">
+    <div class="tag rv">
+      <span class="dot"></span><span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+    </div>
+    <div class="services-overview__head">
+      <h2 class="rv">{heading ? pickLocale(heading, locale) : STR.h2}</h2>
+      <p class="rv">{sub ? pickLocale(sub, locale) : STR.sub}</p>
+    </div>
+    <div class="svc-list">
+      {
+        rows.map((r, i) => (
+          <a class="svc-row rv" href={r.href}>
+            <span class="svc-row__n" aria-hidden="true">
+              {String(i + 1).padStart(2, '0')}
+            </span>
+            <span class="svc-row__t">
+              {r.title}
+              {r.soon ? <span class="svc-row__soon">{STR.soon}</span> : null}
+            </span>
+            <span class="svc-row__d">{r.blurb}</span>
+            <span class="svc-row__a" aria-hidden="true">
+              →
+            </span>
+          </a>
+        ))
+      }
+    </div>
   </div>
 </section>

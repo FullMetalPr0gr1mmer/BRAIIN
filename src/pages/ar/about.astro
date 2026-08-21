@@ -2,6 +2,7 @@
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SectionRenderer from '@/components/SectionRenderer.astro';
 import { DEFAULT_ABOUT_SECTIONS } from '@/lib/sections/types';
+import { getPageSections } from '@/lib/data/pageSections';
 import { getPublishedTeam } from '@/lib/data/team';
 import { buildPersonSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
 import { localizedPath, pickLocale } from '@/lib/i18n';
@@ -11,7 +12,8 @@ const locale = 'ar' as const;
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 
 const team = await getPublishedTeam();
-const sections = DEFAULT_ABOUT_SECTIONS.map((s) =>
+const authored = await getPageSections('about');
+const sections = (authored ?? DEFAULT_ABOUT_SECTIONS).map((s) =>
   s.type === 'team' ? { ...s, props: { ...(s.props ?? {}), members: team } } : s,
 );
 

@@ -1,11 +1,14 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import type { AboutStorySectionContent } from '@schemas/sections';
+import { pickLocale } from '@/lib/i18n';
 
-interface Props {
+// CMS-overridable copy (AboutStorySectionContentSchema); built-in defaults below.
+interface Props extends AboutStorySectionContent {
   locale: Locale;
 }
 
-const { locale } = Astro.props;
+const { locale, heading, lead, missionTitle, mission, visionTitle, vision } = Astro.props;
 
 // Default story/mission copy until authored in the CMS (Phase 3). Answer-first,
 // named, concrete (GEO authoring defaults, CLAUDE.md Pillar 3).
@@ -35,16 +38,16 @@ const STR = {
 
 <section class="about-story">
   <div class="container">
-    <h1>{STR.heading}</h1>
-    <p class="lead">{STR.lead}</p>
+    <h1>{heading ? pickLocale(heading, locale) : STR.heading}</h1>
+    <p class="lead">{lead ? pickLocale(lead, locale) : STR.lead}</p>
     <div class="about-pillars">
       <div>
-        <h2>{STR.missionTitle}</h2>
-        <p>{STR.mission}</p>
+        <h2>{missionTitle ? pickLocale(missionTitle, locale) : STR.missionTitle}</h2>
+        <p>{mission ? pickLocale(mission, locale) : STR.mission}</p>
       </div>
       <div>
-        <h2>{STR.visionTitle}</h2>
-        <p>{STR.vision}</p>
+        <h2>{visionTitle ? pickLocale(visionTitle, locale) : STR.visionTitle}</h2>
+        <p>{vision ? pickLocale(vision, locale) : STR.vision}</p>
       </div>
     </div>
   </div>

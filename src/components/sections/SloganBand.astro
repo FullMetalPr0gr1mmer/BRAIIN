@@ -1,0 +1,68 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { SloganSectionContent } from '@schemas/sections';
+import { pickLocale } from '@/lib/i18n';
+
+// Pinned slogan band — the ONLY overlaid section in the design. The word-by-word
+// reveal is a CSS scroll-driven animation (compositor-only, zero JS) behind
+// @supports; browsers without support (and reduced-motion visitors) see the slogan
+// fully visible. The plain text lives in an sr-only span; the animated spans are
+// presentation. Text + accent index are CMS-overridable (SloganSectionContentSchema).
+
+interface Props extends SloganSectionContent {
+  locale: Locale;
+  /** Local fallback loop (public/); a Stream source replaces it at KAN-20. */
+  videoSrc?: string;
+}
+
+const { locale, videoSrc = '/media/showreel.mp4', text, accentFromEn, accentFromAr } = Astro.props;
+
+const SLOGAN = {
+  en: { text: "We don't make noise. We make things people remember.", accentFrom: 4 },
+  ar: { text: 'لا نصنع ضجيجاً. نصنع أشياء تبقى في الذاكرة.', accentFrom: 3 },
+}[locale];
+
+const sloganText = text ? pickLocale(text, locale) : SLOGAN.text;
+const accentFrom = (locale === 'ar' ? accentFromAr : accentFromEn) ?? SLOGAN.accentFrom;
+const words = sloganText.split(/\s+/);
+---
+
+<section class="slogan">
+  <div class="slogan__pin">
+    <div class="slogan__media" data-video-src={videoSrc}></div>
+    <div class="slogan__overlay"></div>
+    <div class="slogan__inner">
+      <p>
+        <span class="sr-only">{sloganText}</span>
+        {
+          words.map((w, i) => (
+            <span class:list={['sw', { ac: i >= accentFrom }]} aria-hidden="true">
+              {w}
+            </span>
+          ))
+        }
+      </p>
+    </div>
+    <div class="slogan__rule" aria-hidden="true"></div>
+  </div>
+</section>
+
+<script>
+  import { mountLazyVideo } from '@/lib/client/lazyVideo';
+
+  // Below the fold: zero video bytes before the section approaches the viewport
+  // (CLAUDE.md §6, CI-asserted budget).
+  const media = document.querySelector<HTMLElement>('.slogan__media');
+  if (media) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          io.disconnect();
+          mountLazyVideo(media);
+        }
+      },
+      { rootMargin: '100% 0px' },
+    );
+    io.observe(media);
+  }
+</script>

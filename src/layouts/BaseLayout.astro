@@ -22,6 +22,10 @@ interface Props {
   canonicalOverride?: string;
   /** Set on routes that render their own chrome (none today) or a bare error page. */
   chrome?: boolean;
+  /** Home: header floats transparent over the hero video (see SiteHeader). */
+  headerOverlay?: boolean;
+  /** Home: the logo intro overlay plays; entrance animations wait for it (global.css). */
+  intro?: boolean;
 }
 
 const {
@@ -34,6 +38,8 @@ const {
   ogImage,
   canonicalOverride,
   chrome = true,
+  headerOverlay = false,
+  intro = false,
 } = Astro.props;
 const direction = dir(locale);
 ---
@@ -53,8 +59,8 @@ const direction = dir(locale);
     />
     <link rel="stylesheet" href="/styles/global.css" />
   </head>
-  <body>
-    {chrome && <SiteHeader locale={locale} />}
+  <body class:list={{ 'page-intro': intro }}>
+    {chrome && <SiteHeader locale={locale} overlay={headerOverlay} />}
     {
       /*
       The skip link's target. It lives here rather than on each page's own <main>
@@ -73,5 +79,41 @@ const direction = dir(locale);
     <WebVitals />
     <PageView />
     <ErrorReporter />
+    <script>
+      // Reveal-on-scroll enhancement. Elements opt in with class="rv" and are FULLY
+      // visible without JS (crawlers and no-JS visitors always get the content —
+      // Pillar 3); arming happens here (.rv-init) so only script-running browsers ever
+      // hide anything. Stagger is set through the CSSOM (el.style), which the CSP
+      // permits — inline style ATTRIBUTES would be blocked.
+      const els = [...document.querySelectorAll<HTMLElement>('.rv')];
+      if (els.length > 0 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const io = new IntersectionObserver(
+          (entries) => {
+            for (const e of entries) {
+              if (e.isIntersecting) {
+                e.target.classList.add('on');
+                io.unobserve(e.target);
+              }
+            }
+          },
+          { rootMargin: '0px 0px -12% 0px', threshold: 0.05 },
+        );
+        for (const [i, el] of els.entries()) {
+          el.style.setProperty('--rv-delay', `${Math.min(i % 8, 6) * 55}ms`);
+          el.classList.add('rv-init');
+          io.observe(el);
+        }
+        // Keyboard focus must never land on a still-hidden element: the IO's bottom
+        // rootMargin means a link focus-scrolled to the viewport's bottom edge may not
+        // intersect yet, leaving the focused link invisible (WCAG 2.4.7).
+        document.addEventListener('focusin', (e) => {
+          const el = e.target instanceof Element ? e.target.closest('.rv-init:not(.on)') : null;
+          if (el) {
+            el.classList.add('on');
+            io.unobserve(el);
+          }
+        });
+      }
+    </script>
   </body>
 </html>

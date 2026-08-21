@@ -213,7 +213,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
         label: 'Section type',
         kind: 'text',
         required: true,
-        help: 'Must match a component in src/components/sections.',
+        help: 'One of: hero, aboutIntro, slogan, clientsMarquee, servicesOverview, contact, social, aboutStory, statistics, team, certifications, cta (the SectionRenderer registry). Unknown types are skipped.',
       },
       { name: 'content', label: 'Content (JSON)', kind: 'json' },
       {

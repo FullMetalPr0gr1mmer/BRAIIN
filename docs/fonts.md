@@ -1,8 +1,16 @@
 # Font self-hosting + subsetting runbook (KAN-23)
 
-> **Status: blocked on brand assets.** The WCAG-AA contrast audit is done and gated in CI
-> (`npm run a11y:contrast`). This runbook is ready to execute the moment the brand EN + AR
-> woff2 (or variable) source files land. Canonical budgets: `CLAUDE.md` §6.
+> **Status: EXECUTED (2026-08-21).** The brand landed as **Archivo** (EN) + **Almarai**
+> (AR) with the approved "Brain Station UI" design. Shipped in `public/fonts/`:
+> `archivo-var-latin.woff2` (ONE variable face, wght 400–800, latin subset, **34.9 KB** —
+> inside the 35 KB Latin hero budget and the only Latin file a route loads) and Almarai
+> 400/700/800 × {arabic, latin} static subsets (arabic ≤ 33.4 KB each; worst-case AR
+> route ≈ 152 KB — inside 180 KB). `@font-face` + metric-override fallback faces
+> (`Archivo Fallback`/`Almarai Fallback`, values from `@capsizecss/metrics` vs Arial)
+> live in `public/styles/global.css`; the per-locale hero-face preload lives in
+> `src/components/SeoHead.astro`. Subsetting used Google Fonts' per-script split (same
+> unicode-ranges as below) rather than pyftsubset — re-run pyftsubset only if the brand
+> ever moves off Google-hosted sources. Canonical budgets: `CLAUDE.md` §6.
 
 ## Budgets (CI-enforced via size-limit / Lighthouse once active)
 

@@ -1,45 +1,87 @@
 ---
 import type { Locale } from '@schemas/primitives';
-import { getPartnerLogos, type PartnerLogoRow } from '@/lib/data/partnerLogos';
+import type { ClientsMarqueeSectionContent } from '@schemas/sections';
+import { pickLocale } from '@/lib/i18n';
+import { getPartnerLogos } from '@/lib/data/partnerLogos';
 
-interface Props {
+// "Selected clients" — two counter-scrolling wordmark marquees on black. CSS-only,
+// compositor-only transform animation, paused on hover, static + de-duplicated under
+// prefers-reduced-motion (see global.css). Self-contained: uses injected data if
+// present, else fetches; falls back to the design's client list so the section reads
+// real before `partner_logos` is authored. Phase 3 swaps names for <Picture> logos.
+
+interface Props extends ClientsMarqueeSectionContent {
   locale: Locale;
-  items?: PartnerLogoRow[];
+  items?: { name: string }[];
 }
 
-const { locale } = Astro.props;
+const { locale, tag, heading, note } = Astro.props;
 
 const STR = {
-  en: { heading: 'Trusted by' },
-  ar: { heading: 'موضع ثقة' },
+  en: {
+    tag: 'Selected clients',
+    h2: "Trusted by the minds behind the region's biggest moments.",
+    note: 'Since 2019',
+  },
+  ar: {
+    tag: 'عملاء مختارون',
+    h2: 'بثقة العقول خلف أكبر لحظات المنطقة.',
+    note: 'منذ ٢٠١٩',
+  },
 }[locale];
 
-// Self-contained: uses injected data if present, else fetches. Hidden entirely when there
-// are no logos (resilient empty state). v1 renders the partner NAME as a text wordmark
-// (no image assets yet); Phase 3 swaps to <Picture> once logo_url assets are uploaded.
-const items = Astro.props.items ?? (await getPartnerLogos());
+const FALLBACK = {
+  en: [
+    'Riyadh Season',
+    'NEOM',
+    'stc',
+    'Saudia',
+    'Aramco',
+    'Qiddiya',
+    'Diriyah',
+    'Ministry of Culture',
+  ],
+  ar: ['موسم الرياض', 'نيوم', 'stc', 'السعودية', 'أرامكو', 'القدية', 'الدرعية', 'وزارة الثقافة'],
+}[locale].map((name) => ({ name }));
 
-// Duplicate the track so the CSS transform can loop seamlessly (translateX -50%).
-const track = [...items, ...items];
+const authored: { name: string }[] = Astro.props.items ?? (await getPartnerLogos());
+const items = authored.length > 0 ? authored : FALLBACK;
+
+// Each track is its set duplicated 2× so the CSS transform loops seamlessly (-50%);
+// the second row runs reversed and slower, and is aria-hidden as a whole (pure décor).
+const rowA = [...items, ...items];
+const reversed = [...items].reverse();
+const rowB = [...reversed, ...reversed];
 ---
 
-{
-  items.length > 0 && (
-    <section class="clients" aria-label={STR.heading}>
-      <div class="container">
-        <h2 class="clients-heading">{STR.heading}</h2>
-      </div>
-      {/* CSS-only marquee: compositor-only transform animation, paused under
-          prefers-reduced-motion (see global.css). The viewport masks the overflow. */}
-      <div class="marquee" data-count={items.length}>
-        <ul class="marquee-track">
-          {track.map((p, i) => (
-            <li class="marquee-item" aria-hidden={i >= items.length ? 'true' : undefined}>
-              {p.name}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  )
-}
+<section class="clients" aria-label={tag ? pickLocale(tag, locale) : STR.tag} id="work">
+  <div class="tag tag--sky rv">
+    <span class="dot"></span><span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+  </div>
+  <div class="clients__head">
+    <h2 class="rv">{heading ? pickLocale(heading, locale) : STR.h2}</h2>
+    <span class="rv">{note ? pickLocale(note, locale) : STR.note}</span>
+  </div>
+  <div class="marquee">
+    <ul class="marquee-track">
+      {
+        rowA.map((p, i) => (
+          <li class="marquee-item" aria-hidden={i >= items.length ? 'true' : undefined}>
+            {p.name}
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+  <div class="marquee marquee--rev" aria-hidden="true">
+    <ul class="marquee-track">
+      {
+        rowB.map((p) => (
+          <li class="marquee-item" aria-hidden="true">
+            {p.name}
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>

@@ -2,9 +2,11 @@
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SectionRenderer from '@/components/SectionRenderer.astro';
 import { DEFAULT_HOME_SECTIONS } from '@/lib/sections/types';
+import { getPageSections } from '@/lib/data/pageSections';
 import { buildOrganizationSchema, buildWebSiteSchema } from '@/lib/seo/jsonld';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 
+const sections = (await getPageSections('home')) ?? DEFAULT_HOME_SECTIONS;
 const jsonLd = [buildOrganizationSchema(PUBLIC_SITE_URL), buildWebSiteSchema(PUBLIC_SITE_URL)];
 Astro.response.headers.set(
   'Cache-Control',
@@ -19,8 +21,10 @@ Astro.response.headers.set('Cache-Tag', 'tenant:default,route:home,locale:ar');
   locale="ar"
   logicalPath="/"
   jsonLd={jsonLd}
+  headerOverlay
+  intro
 >
   <main>
-    <SectionRenderer locale="ar" sections={DEFAULT_HOME_SECTIONS} />
+    <SectionRenderer locale="ar" sections={sections} />
   </main>
 </BaseLayout>

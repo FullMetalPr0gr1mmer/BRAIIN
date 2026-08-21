@@ -1,12 +1,14 @@
 ---
 import type { Locale } from '@schemas/primitives';
-import { localizedPath } from '@/lib/i18n';
+import type { CtaSectionContent } from '@schemas/sections';
+import { localizedPath, pickLocale } from '@/lib/i18n';
 
-interface Props {
+// CMS-overridable copy (CtaSectionContentSchema); built-in defaults below.
+interface Props extends CtaSectionContent {
   locale: Locale;
 }
 
-const { locale } = Astro.props;
+const { locale, heading, text, buttonLabel } = Astro.props;
 
 const STR = {
   en: {
@@ -24,8 +26,10 @@ const STR = {
 
 <section class="cta-band">
   <div class="container">
-    <h2>{STR.heading}</h2>
-    <p>{STR.text}</p>
-    <a class="cta" href={localizedPath('/contact', locale)}>{STR.button}</a>
+    <h2>{heading ? pickLocale(heading, locale) : STR.heading}</h2>
+    <p>{text ? pickLocale(text, locale) : STR.text}</p>
+    <a class="cta" href={localizedPath('/contact', locale)}>
+      {buttonLabel ? pickLocale(buttonLabel, locale) : STR.button}
+    </a>
   </div>
 </section>
