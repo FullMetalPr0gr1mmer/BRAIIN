@@ -3,9 +3,9 @@ import { defineMiddleware } from 'astro:middleware';
 // come from the runtime module instead — works in `astro dev` (workerd) and in prod.
 import { env } from 'cloudflare:workers';
 import {
-  applySecurityHeaders,
   collectInlineHashes,
   generateNonce,
+  withSecurityHeaders,
 } from '@/lib/http/securityHeaders';
 import { getMaintenanceState, clientIp, maintenanceResponse } from '@/lib/http/maintenance';
 import { lookupRedirect } from '@/lib/http/redirects';
@@ -112,7 +112,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
       extras = await collectInlineHashes(html);
       out = new Response(html, response);
     }
-    applySecurityHeaders(out.headers, {
+    // withSecurityHeaders, not applySecurityHeaders: fetch()-derived responses (the
+    // /_image endpoint, platform assets) carry immutable headers and must be rebuilt.
+    out = withSecurityHeaders(out, {
       nonce,
       reportOnly: CSP_REPORT_ONLY,
       ...(extras ?? {}),

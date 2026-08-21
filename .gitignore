@@ -19,6 +19,13 @@ build/
 .dev.vars
 *.local
 
+# --- Key material (belt-and-suspenders; none should ever exist in the repo) ---
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+
 # --- Supabase ---
 supabase/.branches/
 supabase/.temp/

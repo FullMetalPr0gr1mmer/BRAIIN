@@ -170,3 +170,26 @@ export function applySecurityHeaders(headers: Headers, opts: CspOptions): void {
   headers.set('Cross-Origin-Resource-Policy', 'same-origin');
   headers.set('X-Frame-Options', 'SAMEORIGIN');
 }
+
+/**
+ * Apply the security headers to a response, tolerating IMMUTABLE headers. A Response
+ * that came out of `fetch()` or a platform asset/image service carries the "immutable"
+ * headers guard — every mutation throws. The `/_image` endpoint (astro:assets → Images
+ * binding / dev sharp) was the first public route to return one, and the middleware
+ * turned each of its responses into a 500. Rebuilding via `new Response(body, response)`
+ * yields a byte-identical response with a mutable header map; the rebuild happens only
+ * on the throwing path, so normal renders pay nothing.
+ *
+ * (The first mutation `applySecurityHeaders` attempts throws before anything is
+ * written, so the retry never double-applies.)
+ */
+export function withSecurityHeaders(response: Response, opts: CspOptions): Response {
+  try {
+    applySecurityHeaders(response.headers, opts);
+    return response;
+  } catch {
+    const copy = new Response(response.body, response);
+    applySecurityHeaders(copy.headers, opts);
+    return copy;
+  }
+}

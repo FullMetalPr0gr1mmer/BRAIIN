@@ -5,6 +5,7 @@ import {
   generateNonce,
   extractHashes,
   collectInlineHashes,
+  withSecurityHeaders,
 } from '@/lib/http/securityHeaders';
 
 // CLAUDE.md §7: "Don't call CSP 'strict' while shipping 'unsafe-inline'." This suite is
@@ -239,5 +240,38 @@ describe('collectInlineHashes', () => {
     const html = `<script type="module" src="/x.js"></script><script></script>`;
     const { scriptHashes } = await collectInlineHashes(html);
     expect(scriptHashes).toEqual([]);
+  });
+});
+
+describe('withSecurityHeaders', () => {
+  it('mutates a normal response in place (no rebuild)', () => {
+    const res = new Response('ok', { status: 200, headers: { 'content-type': 'text/plain' } });
+    const out = withSecurityHeaders(res, { nonce: NONCE, reportOnly: false });
+    expect(out).toBe(res);
+    expect(out.headers.get('Content-Security-Policy')).toContain(`'nonce-${NONCE}'`);
+  });
+
+  it('rebuilds a response whose headers are immutable instead of throwing 500', async () => {
+    // The /_image endpoint returns fetch()-derived responses whose Headers carry the
+    // "immutable" guard — every mutation throws. Simulate that guard on a real Response
+    // (instance properties shadow the prototype getters; a Proxy would break undici's
+    // private fields).
+    const guarded = new Headers({ 'content-type': 'image/webp', 'x-keep': 'yes' });
+    for (const method of ['set', 'delete', 'append'] as const) {
+      Object.defineProperty(guarded, method, {
+        value: () => {
+          throw new TypeError("Can't modify immutable headers.");
+        },
+      });
+    }
+    const immutable = new Response('img-bytes', { status: 200 });
+    Object.defineProperty(immutable, 'headers', { value: guarded });
+
+    const out = withSecurityHeaders(immutable, { nonce: NONCE, reportOnly: false });
+    expect(out).not.toBe(immutable);
+    expect(out.status).toBe(200);
+    expect(out.headers.get('x-keep')).toBe('yes');
+    expect(out.headers.get('Content-Security-Policy')).toContain(`'nonce-${NONCE}'`);
+    expect(await out.text()).toBe('img-bytes');
   });
 });
