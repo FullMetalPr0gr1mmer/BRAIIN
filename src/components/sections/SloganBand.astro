@@ -48,21 +48,30 @@ const words = sloganText.split(/\s+/);
 </section>
 
 <script>
-  import { mountLazyVideo } from '@/lib/client/lazyVideo';
+  import { mountLazyVideo, setVideoInView } from '@/lib/client/lazyVideo';
 
-  // Below the fold: zero video bytes before the section approaches the viewport
-  // (CLAUDE.md §6, CI-asserted budget).
+  // Two observers, two jobs. PRELOAD on approach (one viewport away — zero video bytes
+  // before intersection, CLAUDE.md §6). PLAY only while the pinned band is actually on
+  // screen: the manager pauses it off-screen and, when the source matches the hero's,
+  // hands over the shared clock so the loop continues instead of restarting.
+  const pin = document.querySelector<HTMLElement>('.slogan__pin');
   const media = document.querySelector<HTMLElement>('.slogan__media');
-  if (media) {
-    const io = new IntersectionObserver(
+  if (pin && media) {
+    setVideoInView(media, false); // not on screen at load; flips when the pin arrives
+    const preload = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
-          io.disconnect();
+          preload.disconnect();
           mountLazyVideo(media);
         }
       },
       { rootMargin: '100% 0px' },
     );
-    io.observe(media);
+    preload.observe(media);
+
+    const visibility = new IntersectionObserver((entries) => {
+      for (const e of entries) setVideoInView(media, e.isIntersecting);
+    });
+    visibility.observe(pin);
   }
 </script>

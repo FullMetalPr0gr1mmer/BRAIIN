@@ -173,7 +173,7 @@ const src = videoUid ? undefined : videoSrc;
 </section>
 
 <script>
-  import { mountLazyVideo } from '@/lib/client/lazyVideo';
+  import { mountLazyVideo, setMotionPaused, setVideoInView } from '@/lib/client/lazyVideo';
 
   // Intro: once per tab session; any navigation intent cuts straight to the page.
   const intro = document.querySelector<HTMLElement>('.intro');
@@ -193,18 +193,11 @@ const src = videoUid ? undefined : videoSrc;
   const hero = document.querySelector<HTMLElement>('.hero');
   const media = document.querySelector<HTMLElement>('.hero__media');
 
-  // Motion toggle — pauses/resumes every background video and (via body.motion-paused)
-  // the CSS marquee. Persisted per tab so the choice survives navigation.
+  // Motion toggle — pauses/resumes every background video (lazyVideo owns the video
+  // side) and the CSS marquee. Persisted per tab so the choice survives navigation.
   const toggle = document.querySelector<HTMLButtonElement>('.motion-toggle');
-  const allVideos = () => [
-    ...document.querySelectorAll<HTMLVideoElement>('[data-video-src] video'),
-  ];
   function applyMotion(paused: boolean): void {
-    document.body.classList.toggle('motion-paused', paused);
-    for (const v of allVideos()) {
-      if (paused) v.pause();
-      else void v.play().catch(() => {});
-    }
+    setMotionPaused(paused);
     if (toggle) {
       toggle.setAttribute('aria-pressed', String(paused));
       const label = paused ? toggle.dataset.labelPlay : toggle.dataset.labelPause;
@@ -238,8 +231,9 @@ const src = videoUid ? undefined : videoSrc;
 
   // The hero stays sticky-pinned behind the sections that cover it. Once covered, hide
   // its content — otherwise the CTA stays in the tab order while 100% obscured (WCAG
-  // 2.4.11) — and stop the pinned video from burning CPU off-screen.
-  if (hero) {
+  // 2.4.11) — and report visibility to the video manager, which pauses the off-screen
+  // loop and keeps the shared clock so the slogan band continues where this left off.
+  if (hero && media) {
     let ticking = false;
     let covered = false;
     const update = () => {
@@ -248,12 +242,7 @@ const src = videoUid ? undefined : videoSrc;
       if (isCovered === covered) return;
       covered = isCovered;
       hero.classList.toggle('hero--covered', covered);
-      const video = media?.querySelector('video');
-      if (video) {
-        if (covered) video.pause();
-        else if (!document.body.classList.contains('motion-paused'))
-          void video.play().catch(() => {});
-      }
+      setVideoInView(media, !covered);
     };
     addEventListener(
       'scroll',

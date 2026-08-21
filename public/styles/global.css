@@ -760,12 +760,16 @@ html[dir='rtl'] .hero__cta svg {
   visibility: hidden;
 }
 
-/* WCAG 2.2.2 pause control — governs the background videos and the clients marquee. */
+/* WCAG 2.2.2 pause control — governs the background videos and the clients marquee.
+   Styled as quiet video-player chrome: small, ring-less, tucked into the true viewport
+   corner (inside the CTA column's --bs-pad-x gutter), waking up on hover/focus. It must
+   stay perceivable — it is the page's only pause mechanism — so "hidden" is not an
+   option; unobtrusive is. */
 .motion-toggle {
   position: absolute;
   z-index: 2;
-  bottom: 20px;
-  inset-inline-end: var(--bs-pad-x);
+  bottom: 16px;
+  inset-inline-end: 16px;
 }
 /* While the consent banner (fixed, bottom, z-80) is up it covers this corner and
    intercepts the click — lift the control clear of it until a choice is made. */
@@ -775,25 +779,27 @@ body:has(.consent-banner:not([hidden])) .motion-toggle {
 .motion-toggle {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  background: rgba(0, 0, 0, 0.45);
-  color: var(--bs-fg);
+  border: 0;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.75);
   cursor: pointer;
   transition:
-    background 0.25s,
-    border-color 0.25s;
+    color 0.25s,
+    background 0.25s;
 }
-.motion-toggle:hover {
-  background: var(--bs-klein);
-  border-color: var(--bs-klein);
+.motion-toggle:hover,
+.motion-toggle:focus-visible,
+.motion-toggle[aria-pressed='true'] {
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
 }
 .motion-toggle svg {
-  width: 14px;
-  height: 14px;
+  width: 11px;
+  height: 11px;
 }
 .motion-toggle .motion-toggle__play,
 .motion-toggle[aria-pressed='true'] .motion-toggle__pause {
