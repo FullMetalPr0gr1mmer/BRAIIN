@@ -28,8 +28,6 @@ const includeDev = process.argv.includes('--include-dev');
 const SCOPE = includeDev ? 'full tree incl. dev' : 'production deps (--omit=dev)';
 
 /**
- * EMPTY BY DESIGN — `npm audit --omit=dev` currently reports **0 vulnerabilities**.
- *
  * History: this list carried 7 accepted advisories (astro XSS/SSRF + undici/ws/esbuild
  * build-tooling DoS) whose only fix was the framework major. The short expiry (2026-06-30)
  * did its job: it failed CI, forced KAN-31, and the Astro 5→7 + adapter 12→14 + Node 22
@@ -38,7 +36,33 @@ const SCOPE = includeDev ? 'full tree incl. dev' : 'production deps (--omit=dev)
  * If you add an entry it MUST carry a reason AND an expiry — never a blanket `|| true`.
  * Past-expiry entries fail the gate on purpose, so debt can't be carried silently.
  */
-const ALLOWLIST = [];
+const ALLOWLIST = [
+  {
+    id: 'GHSA-5p4m-2wfm-xmqj',
+    pkg: 'js-yaml',
+    reason:
+      'Quadratic CPU in !!omap resolution; no fixed 4.x exists (fix is 5.x only) and ' +
+      'js-yaml@5 is ESM-only with named exports — Astro imports it as a default export, ' +
+      'so an override breaks `astro check`/`astro build` outright (measured 2026-08-22). ' +
+      'Exposure is build-time parsing of repo-authored YAML frontmatter only: no runtime ' +
+      'code path feeds user input to js-yaml (CMS content is JSON validated by Zod), so ' +
+      'the quadratic blow-up needs a malicious file already committed to this repo. ' +
+      'Revisit when Astro ships js-yaml@5 or a 4.x backport lands (EXC-005).',
+    expires: '2026-11-30',
+  },
+  {
+    id: 'GHSA-jmr9-qjv8-65gv',
+    pkg: 'extract-zip',
+    reason:
+      'Symlink path traversal on extraction; EVERY published version is affected ' +
+      '(range=* — npm’s only "fix" is downgrading @lhci/cli seven majors). Dev/CI ' +
+      'scope only: @lhci/cli uses it to unpack the Chrome-for-Lighthouse archive it ' +
+      'downloads from Google over TLS — the zip is not attacker-controlled, and the ' +
+      'package never ships in the Worker. Revisit when @lhci/cli swaps extractors or ' +
+      'extract-zip patches (EXC-006).',
+    expires: '2026-11-30',
+  },
+];
 
 function runAudit() {
   try {

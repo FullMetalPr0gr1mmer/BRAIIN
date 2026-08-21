@@ -10,6 +10,8 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-002 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | **Closed 2026-08-01** | Migration `0011` (schema `app` grants) shipped ahead of its pgTAP suite — suite now green in CI |
 | EXC-003 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | **Closed 2026-08-01** | Migration `0012` (audit-chain `hmac`) shipped ahead of its regression test — test now green in CI |
 | EXC-004 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-09-01 | Open   | Live on `*.workers.dev` with **no WAF rate limits and no crawler blocks** — both are zone-scoped and there is no zone |
+| EXC-005 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open   | `js-yaml` GHSA-5p4m-2wfm-xmqj allowlisted in the prod audit gate — no fixed 4.x exists and 5.x breaks Astro |
+| EXC-006 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open   | `extract-zip` GHSA-jmr9-qjv8-65gv allowlisted in the dev audit gate — every published version is affected |
 
 ---
 
@@ -212,3 +214,50 @@ Bounding the exposure: the origin is an unadvertised workers.dev subdomain with 
 4. ☐ Verify by observation, not by reading the dashboard: 31 requests in a minute to `/api/search` gets a block; a `User-Agent: GPTBot` request gets a block; a `User-Agent: PerplexityBot` request does not.
 
 **Close condition:** all six rules exist on the live zone **and** step 4's three observations pass. Nothing here is testable in CI — `tests/seo/crawlers.spec.ts` pins the code-owned map, and by design nothing can pin the WAF, which is exactly why this needs an observed check rather than a merged diff.
+
+---
+
+## EXC-005 — `js-yaml` quadratic-CPU advisory allowlisted in the production audit gate
+
+**Pillar:** 1 (Security) — CLAUDE.md §3 (supply chain), §11.
+**Opened:** 2026-08-22 · **Owner:** Developer (tech@purecoffee.sa) · **Expiry:** 2026-11-30.
+
+### What changed
+
+`GHSA-5p4m-2wfm-xmqj` (HIGH — quadratic CPU consumption resolving `!!omap` tags, affecting js-yaml 3.x and 4.x) entered the advisory database on 2026-08-22 and turned the blocking prod-scope gate red on a commit that touched no dependency. It is now a documented, expiring `ALLOWLIST` entry in `scripts/audit-gate.mjs`.
+
+### Why not fix (measured, not assumed)
+
+The fix exists only in `js-yaml@5`, which is ESM-only with **named exports**. Astro (`astro` and `@astrojs/internal-helpers`, the two consumers that put it in the prod tree) imports it as a default export, so a scoped override `"js-yaml@4": "^5.3.0"` was tried and **breaks `astro check` and `astro build` outright** (`The requested module 'js-yaml' does not provide an export named 'default'`). The 4.x line tops out at 4.3.0, which is inside the affected range — there is nothing safe to pin to.
+
+### Why the residual risk is acceptable
+
+The exposure is **build-time parsing of repo-authored YAML frontmatter only**. No runtime code path feeds user input to js-yaml — CMS content is JSON validated by Zod (`packages/schemas`), the contact API is Zod-validated JSON, and the Worker bundle's YAML use is Astro's frontmatter loader. Exploiting quadratic `!!omap` resolution requires a malicious YAML document **already committed to this repository**, at which point CPU consumption is not the attacker's best option.
+
+### Remediation plan (clears this exception)
+
+1. ☐ Watch for Astro adopting `js-yaml@5` (or an interchange like `yaml`) upstream — a routine Renovate bump clears this.
+2. ☐ Alternatively, a backported 4.x release (`>4.3.0`) — then a plain override suffices.
+
+**Close condition:** `npm run audit` reports 0 unallowlisted high/critical with the `GHSA-5p4m-2wfm-xmqj` entry REMOVED from `scripts/audit-gate.mjs`. If neither path lands by expiry, re-justify — never extend silently.
+
+---
+
+## EXC-006 — `extract-zip` path-traversal advisory allowlisted in the dev audit gate
+
+**Pillar:** 1 (Security) — CLAUDE.md §3 (supply chain), §11.
+**Opened:** 2026-08-22 · **Owner:** Developer (tech@purecoffee.sa) · **Expiry:** 2026-11-30.
+
+### What changed
+
+`GHSA-jmr9-qjv8-65gv` (HIGH — unvalidated symlink path traversal on extraction) flags `extract-zip` with an affected range of `*`: **every published version is vulnerable** and npm's only proposed "fix" is downgrading `@lhci/cli` seven majors to 0.6.1 — the same category of wrong answer the `tmp` override history in EXC-001 documents. It is now a documented, expiring `ALLOWLIST` entry in `scripts/audit-gate.mjs` (dev scope; the package is not in the prod tree).
+
+### Why the residual risk is acceptable
+
+`extract-zip` reaches the tree as `@lhci/cli` → chrome-launcher tooling, and runs in exactly one situation: unpacking the Chrome-for-Lighthouse archive that Lighthouse CI downloads from Google over TLS, on dev machines and CI. The archive is not attacker-controlled; exploiting the traversal requires substituting the zip, which requires defeating TLS to Google first. The package never ships in the Worker.
+
+### Remediation plan (clears this exception)
+
+1. ☐ Watch for `extract-zip` publishing a fixed release, or `@lhci/cli` swapping extractors — either clears this via a routine bump.
+
+**Close condition:** `npm run audit:all` reports 0 unallowlisted high/critical with the `GHSA-jmr9-qjv8-65gv` entry REMOVED from `scripts/audit-gate.mjs`. If nothing lands by expiry, re-justify — never extend silently.
