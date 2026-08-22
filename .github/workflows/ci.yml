@@ -87,3 +87,56 @@ jobs:
       # answer instead of forcing someone to re-add `|| true` during an incident.
       - name: Audit — full tree incl. dev (blocking, documented allowlist)
         run: npm run audit:all
+
+  # ── Auto-deploy to the live Worker ─────────────────────────────────────────────
+  # Push to main → every gate above green → build with the PRODUCTION origin → deploy.
+  # This is deliberately a CI job rather than dashboard-connected Workers Builds:
+  # Workers Builds deploys whatever lands on the branch, red or green — this job ships
+  # only after typecheck, tests, seo-ci, contrast and both supply-chain scopes pass
+  # (CLAUDE.md §8 gate order; "failing any budget = blocked" extends to deploys).
+  #
+  # Needs two repository secrets (Settings → Secrets and variables → Actions):
+  #   CLOUDFLARE_API_TOKEN  — "Edit Cloudflare Workers" template, scoped to this account
+  #   CLOUDFLARE_ACCOUNT_ID — the account id (dashboard sidebar / `wrangler whoami`)
+  #
+  # PUBLIC_* below are REAL values, on purpose: astro:env inlines client vars at build
+  # time, and all three ship inside the client bundle by design (the anon key is the
+  # publishable key; RLS is the protection — see wrangler.jsonc's note). The server
+  # entries are DUMMIES so astro:env's schema validation passes at build; real runtime
+  # secrets live in Cloudflare Worker Secrets and are untouched by deploys.
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build-test, supply-chain]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      PUBLIC_SITE_URL: https://braiin-station.braiin.workers.dev
+      PUBLIC_SUPABASE_URL: https://xkxthzcmmvtnwicerlup.supabase.co
+      PUBLIC_SUPABASE_ANON_KEY: sb_publishable_fdVFL7qNbBx64z1pwvDAbg_ReRzjhOr
+      SUPABASE_DB_POOL_URL: postgresql://ci:ci@localhost:6543/ci
+      SUPABASE_SERVICE_ROLE_KEY: ci-dummy-service-role-key
+      LEAD_PII_ENC_KEY: ci-dummy-lead-pii-enc-key
+      AUDIT_HMAC_KEY: ci-dummy-audit-hmac-key
+      NOTIFY_LEAD_SECRET: ci-dummy-notify-lead-secret
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build (production origin)
+        run: npm run build
+      # Skips (loudly) rather than fails while the two secrets are not configured yet,
+      # so enabling auto-deploy is additive and never turns unrelated pushes red.
+      - name: Deploy (wrangler)
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npx wrangler@4 deploy
+      - name: Deploy skipped — secrets missing
+        if: env.CLOUDFLARE_API_TOKEN == ''
+        run: |
+          echo "::warning::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID are not set as repository secrets — build verified but NOT deployed. Add them under Settings → Secrets and variables → Actions to enable auto-deploy."
