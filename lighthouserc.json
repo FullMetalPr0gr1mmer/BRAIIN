@@ -45,7 +45,8 @@
         "unsized-images": "error",
         "modern-image-formats": "error",
         "font-display": "error"
-      }
+      },
+      "aggregationMethod": "median"
     }
   }
 }

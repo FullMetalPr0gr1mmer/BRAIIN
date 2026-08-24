@@ -131,10 +131,11 @@ for (const route of ROUTES) {
       expect(await visibility(page, '.intro')).toBeGreaterThan(0.95);
       // The plate must be OPAQUE, not merely timed: this is the assertion that fails if
       // anyone reverts it to a transparent overlay while keeping the new timings.
-      const plateBg = await page.evaluate(
-        () => getComputedStyle(document.querySelector('.intro')!).backgroundImage,
-      );
-      expect(plateBg, 'the intro plate must paint the hero backdrop').not.toBe('none');
+      // The overlay is deliberately TRANSPARENT so the hero loop plays under the logo,
+      // which means the ONLY thing keeping the headline off the screen is the time gate
+      // below. When the plate was opaque this was belt-and-braces; now it is the whole
+      // guarantee, so these assertions are the real protection against the original
+      // ink-on-ink collision rather than a nice-to-have.
       for (const sel of ENTRANCES) {
         expect(await visibility(page, sel), `${sel} must not precede the logo`).toBeLessThan(0.02);
       }
@@ -395,6 +396,59 @@ test.describe('the intro waits for the logo to actually paint', () => {
       { timeout: 8000 },
     );
     expect(await visibility(page, '.hero h1 .letter')).toBeGreaterThan(0.9);
+  });
+});
+
+test.describe('the intro never absorbs a click meant for something else', () => {
+  // The plate is a full-viewport fixed layer at z-90. The PDPL consent banner is at
+  // z-80, i.e. UNDERNEATH it. While the plate was `pointer-events: auto` a click on
+  // "Accept analytics" during the intro was swallowed: the intro cut, no
+  // `__Host-consent` cookie was written, and the banner stayed open with no feedback —
+  // the visitor's consent choice was silently lost on every first visit.
+  //
+  // This must use RAW mouse events. Playwright's click() runs actionability checks and
+  // retries, which papers over exactly this defect and reports a pass.
+  test('a consent click during the intro is recorded, not eaten', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.goto('/', { waitUntil: 'load' });
+    await page.waitForTimeout(700); // plate is up
+
+    const box = await page.evaluate(() => {
+      const btn = [...document.querySelectorAll('button')].find((b) =>
+        /accept/i.test(b.textContent || ''),
+      );
+      if (!btn) return null;
+      const r = btn.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    expect(box, 'consent banner must be present on a first visit').not.toBeNull();
+
+    await page.mouse.move(box!.x, box!.y);
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForTimeout(600);
+
+    const after = await page.evaluate(() => ({
+      consent: document.cookie.includes('__Host-consent'),
+      bannerOpen:
+        !!document.querySelector('.consent-banner') &&
+        !document.querySelector('.consent-banner')!.hasAttribute('hidden'),
+    }));
+    expect(after.consent, 'consent was not recorded — the intro absorbed the click').toBe(true);
+    expect(after.bannerOpen, 'banner should close once the choice is made').toBe(false);
+  });
+
+  // The other half of the same trade: with the plate now click-through, a click during
+  // the intro must not activate a hero control that has not arrived yet and cannot be
+  // seen. The entrance keyframes carry `pointer-events: none` in their from-state.
+  test('an invisible hero CTA cannot be clicked before it arrives', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.goto('/', { waitUntil: 'load' });
+    await seek(page, 1000);
+    const pe = await page.evaluate(
+      () => getComputedStyle(document.querySelector('.hero__cta')!).pointerEvents,
+    );
+    expect(pe, 'the CTA is invisible at t=1000ms and must not be clickable').toBe('none');
   });
 });
 
