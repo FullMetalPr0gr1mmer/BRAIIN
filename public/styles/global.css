@@ -95,7 +95,7 @@ body {
 /* ONE flag: the overlay's existence in the DOM. Replaces a `body.page-intro` class and
    a Hero `intro` prop that defaulted independently in two files and could disagree. */
 body:has(.intro) {
-  --bs-intro-hold: 1.4s;
+  --bs-intro-hold: 3.5s;
   --bs-intro-fade: 0.4s;
 }
 

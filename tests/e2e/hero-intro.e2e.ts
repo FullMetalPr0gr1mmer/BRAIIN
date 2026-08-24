@@ -93,7 +93,7 @@ for (const route of ROUTES) {
         await page.goto(route, { waitUntil: 'load' });
 
         // Sample across the plate's whole life, including the fade.
-        for (const t of [200, 600, 1000, 1300, 1600, 1750]) {
+        for (const t of [200, 1000, 2000, 3000, 3500, 3850]) {
           await seek(page, t);
           const plate = await visibility(page, '.intro');
           if (plate <= 0.05) continue;
@@ -126,8 +126,8 @@ for (const route of ROUTES) {
       await page.setViewportSize({ width: 1366, height: 768 });
       await page.goto(route, { waitUntil: 'load' });
 
-      // t=900ms — the logo holds the stage by itself.
-      await seek(page, 900);
+      // t=2000ms — the logo holds the stage by itself.
+      await seek(page, 2000);
       expect(await visibility(page, '.intro')).toBeGreaterThan(0.95);
       // The plate must be OPAQUE, not merely timed: this is the assertion that fails if
       // anyone reverts it to a transparent overlay while keeping the new timings.
@@ -139,26 +139,26 @@ for (const route of ROUTES) {
         expect(await visibility(page, sel), `${sel} must not precede the logo`).toBeLessThan(0.02);
       }
 
-      // t=1900ms — the plate is gone and the headline has begun; the button has not.
-      await seek(page, 1900);
+      // t=4100ms — the plate is gone and the headline has begun; the button has not.
+      await seek(page, 4100);
       expect(await visibility(page, '.intro')).toBeLessThan(0.05);
       expect(await visibility(page, '.hero h1 .letter')).toBeGreaterThan(0.1);
       expect(await visibility(page, '.hero__cta')).toBeLessThan(0.02);
 
-      // t=2600ms — the sub strictly precedes the button. The old CSS could not express
+      // t=4700ms — the sub strictly precedes the button. The old CSS could not express
       // this at all: one animation on .hero__side carried both.
-      await seek(page, 2600);
+      await seek(page, 4700);
       expect(await visibility(page, '.hero__sub')).toBeGreaterThan(0.1);
       expect(await visibility(page, '.hero__cta')).toBeLessThan(0.05);
 
-      // t=3000ms — the tail of the cascade.
-      await seek(page, 3000);
+      // t=5200ms — the tail of the cascade.
+      await seek(page, 5200);
       expect(await visibility(page, '.hero__cta')).toBeGreaterThan(0.3);
       expect(await visibility(page, '.hero__scroll')).toBeGreaterThan(0.1);
       expect(await visibility(page, '.site-header--overlay')).toBeGreaterThan(0.1);
 
-      // t=4000ms — settled.
-      await seek(page, 4000);
+      // t=6500ms — settled.
+      await seek(page, 6500);
       expect(await visibility(page, '.intro')).toBe(0);
       expect(await visibility(page, '.hero h1 .letter')).toBe(1);
       expect(await visibility(page, '.hero__sub')).toBe(1);
@@ -311,20 +311,23 @@ for (const route of ROUTES) {
 test.describe('the intro waits for the logo to actually paint', () => {
   test('a cold/slow logo holds the plate instead of lifting without it', async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
+    // The delay must EXCEED the plate's own life (hold + fade), or this test proves
+    // nothing: with a long hold the plate would still be up at the sample point whether
+    // the gate exists or not. Keep this comfortably above --bs-intro-wait if the intro
+    // is ever retimed again.
     await page.route('**/_image*', async (route) => {
-      await new Promise((r) => setTimeout(r, 2500));
+      await new Promise((r) => setTimeout(r, 5000));
       await route.continue();
     });
     await page.goto('/', { waitUntil: 'commit' });
     await page.waitForSelector('.intro img', { timeout: 20_000 });
 
-    // At 1800ms the unmitigated timeline would already have lifted the plate. It must
-    // still be up, because the logo has not arrived.
-    await page.waitForTimeout(1800);
+    // The gate must actually engage while the logo is outstanding.
+    await page.waitForTimeout(800);
+    expect(await page.evaluate(() => document.body.classList.contains('intro-waiting'))).toBe(true);
     expect(await visibility(page, '.intro'), 'plate lifted before the logo loaded').toBeGreaterThan(
       0.9,
     );
-    expect(await page.evaluate(() => document.body.classList.contains('intro-waiting'))).toBe(true);
 
     // The claim under test is that the logo is actually SEEN — so watch for a frame
     // where the logo and the plate are visible together, rather than sampling at the

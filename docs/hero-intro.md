@@ -18,7 +18,7 @@ anywhere — that is the exact defect this design replaced.
 
 ```css
 /* public/styles/global.css — :root */
---bs-intro-hold: 1.4s;   /* the logo holds the plate, alone */
+--bs-intro-hold: 3.5s;   /* the logo holds the plate, alone */
 --bs-intro-fade: 0.4s;   /* the plate + logo leave together */
 ```
 
@@ -30,14 +30,16 @@ Everything else composes from them, declared on `body` (not `:root` — see §5)
 --bs-hero-in:    calc(intro-wait + hero-lead)      /* headline fully arrived */
 ```
 
-| Element | Delay | With the shipped 1.4s / 0.4s |
+| Element | Delay | With the shipped 3.5s / 0.4s |
 | --- | --- | --- |
-| `.intro` plate | `hold`, then `fade` | gone at **1.800s** |
-| `.letter` | `intro-wait + wd + ld` | starts **1.800s** |
-| `.hero__sub` | `hero-in + beat` | **2.511s** |
-| `.hero__cta` | `hero-in + beat * 2` | **2.661s** |
-| `.hero__scroll`, `.site-header--overlay` | `hero-in + beat * 3` | **2.811s** |
-| settled | | **3.511s** |
+| `.intro` plate | `hold`, then `fade` | fades 3.500s, gone at **3.900s** |
+| `.letter` | `intro-wait + wd + ld` | starts **3.900s** |
+| `.hero__sub` | `hero-in + beat` | **4.611s** |
+| `.hero__cta` | `hero-in + beat * 2` | **4.761s** |
+| `.hero__scroll`, `.site-header--overlay` | `hero-in + beat * 3` | **4.911s** |
+| settled | | **5.611s** |
+
+`--bs-hero-in` is **4.461s** here (`3.9 + 0.561`).
 
 `--bs-hero-beat` is `0.15s`. `--bs-hero-word-step` / `--bs-hero-letter-step` drive the
 per-word / per-letter stagger and are overridden once for `html[dir='rtl']` (Arabic
@@ -137,10 +139,12 @@ on an absolute `currentTime`, and infinite animations have no meaningful positio
 
 **If you retime the intro, these need updating** — they carry absolute instants:
 
-- `strict order: logo alone, then headline, then sub, then button` — seeks 900 / 1900 /
-  2600 / 3000 / 4000.
-- `the logo never shares the screen with the headline` — seeks 200…1750.
-- `a cold/slow logo holds the plate…` — asserts the plate is still up at 1800ms.
+- `strict order: logo alone, then headline, then sub, then button` — seeks 2000 / 4100 /
+  4700 / 5200 / 6500.
+- `the logo never shares the screen with the headline` — seeks 200…3850.
+- `a cold/slow logo holds the plate…` — its injected `/_image` delay must stay comfortably
+  ABOVE `--bs-intro-wait`, or the plate would be up at the sample point regardless and the
+  test proves nothing.
 
 > **Never** `click()`, `press()`, `mouse.wheel()` or scroll before an ordering assertion.
 > `wheel|touchstart|keydown|pointerdown|focusin` all cut the intro, and the CSS hides the
