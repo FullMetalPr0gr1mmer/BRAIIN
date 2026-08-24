@@ -326,11 +326,35 @@ test.describe('the intro waits for the logo to actually paint', () => {
     );
     expect(await page.evaluate(() => document.body.classList.contains('intro-waiting'))).toBe(true);
 
-    // Once it does arrive the hold resumes from where it paused — the logo is seen.
-    await page.waitForFunction(() => !document.body.classList.contains('intro-waiting'), null, {
-      timeout: 20_000,
-    });
-    expect(await visibility(page, '.intro img')).toBeGreaterThan(0.5);
+    // The claim under test is that the logo is actually SEEN — so watch for a frame
+    // where the logo and the plate are visible together, rather than sampling at the
+    // instant the hold releases. At that instant the logo is only just starting its own
+    // 0.7s fade-in, so it reads ~0; asserting there passes or fails on luck, which is
+    // exactly how this test flaked before.
+    const seenOnPlate = await page.evaluate(
+      () =>
+        new Promise<boolean>((resolve) => {
+          const vis = (sel: string) => {
+            const el = document.querySelector(sel);
+            if (!el) return 0;
+            let o = 1;
+            for (let n: Element | null = el; n; n = n.parentElement) {
+              const cs = getComputedStyle(n);
+              if (cs.display === 'none' || cs.visibility === 'hidden') return 0;
+              o *= parseFloat(cs.opacity);
+            }
+            return o;
+          };
+          const tick = () => {
+            if (vis('.intro') > 0.5 && vis('.intro img') > 0.5) return resolve(true);
+            // The plate is gone and we never caught the logo on it — the race was lost.
+            if (vis('.intro') === 0) return resolve(false);
+            requestAnimationFrame(tick);
+          };
+          tick();
+        }),
+    );
+    expect(seenOnPlate, 'the plate lifted without the logo ever becoming visible').toBe(true);
   });
 
   test('a logo that never loads still releases — it cannot wedge the page', async ({ page }) => {
