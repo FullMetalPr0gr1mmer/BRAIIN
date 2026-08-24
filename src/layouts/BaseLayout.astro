@@ -24,8 +24,6 @@ interface Props {
   chrome?: boolean;
   /** Home: header floats transparent over the hero video (see SiteHeader). */
   headerOverlay?: boolean;
-  /** Home: the logo intro overlay plays; entrance animations wait for it (global.css). */
-  intro?: boolean;
 }
 
 const {
@@ -39,7 +37,6 @@ const {
   canonicalOverride,
   chrome = true,
   headerOverlay = false,
-  intro = false,
 } = Astro.props;
 const direction = dir(locale);
 ---
@@ -59,7 +56,7 @@ const direction = dir(locale);
     />
     <link rel="stylesheet" href="/styles/global.css" />
   </head>
-  <body class:list={{ 'page-intro': intro }}>
+  <body>
     {chrome && <SiteHeader locale={locale} overlay={headerOverlay} />}
     {
       /*

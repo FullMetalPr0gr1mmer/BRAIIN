@@ -11,11 +11,14 @@ import logo from '@/assets/braiin-logo-white.png';
 // properties; no inline styles — CSP). English animates per letter; Arabic per WORD,
 // because splitting Arabic glyphs breaks their joining forms.
 //
-// The headline animates from t≈0 and is NOT gated on the intro: gating it pushed the
-// page's largest text paint (the LCP element — the blur poster is too low-entropy to
-// count) past the 2.5s budget on every first view, which the lighthouserc LCP assert
-// turns into a blocked PR (§6). Only the small side column, scroll cue and nav wait
-// for the intro.
+// The headline IS gated on the intro, and the whole hero cascade derives from two
+// tokens (--bs-intro-hold / --bs-intro-fade in global.css). A previous version of this
+// comment claimed gating the headline blew the 2.5s LCP budget; measured on a
+// production build that is false — Chromium aggregates text LCP at the block ancestor,
+// so the <h1> registers at first paint while every .letter is still transparent, and
+// Lantern has no term for animation-delay (2ms delta). The LCP element here is the
+// intro logo <img>. The real cliff is putting opacity:0 on the <h1> BLOCK, which makes
+// Chromium record no LCP candidate at all — see the invariant on .letter in global.css.
 
 // CMS overrides arrive via page_sections.content (HeroSectionContentSchema-validated
 // by the loader); every field is optional and falls back to the built-in copy.
@@ -23,15 +26,16 @@ interface Props extends HeroSectionContent {
   locale: Locale;
   /** Local fallback loop served from public/ until the Stream account lands. */
   videoSrc?: string;
-  /** Logo intro overlay (home page only; once per tab session, skipped on any intent). */
-  intro?: boolean;
 }
 
 const {
   locale,
   videoUid,
   videoSrc = '/media/showreel.mp4',
-  intro = true,
+  // Opt-IN, never defaulted on. `intro` now arrives through HeroSectionContent, so a
+  // CMS `hero` section dropped onto another page cannot inherit an undismissable
+  // full-viewport plate. The CSS reads the state off `body:has(.intro)` — one flag.
+  intro = false,
   headline,
   accentFromEn,
   accentFromAr,
@@ -87,6 +91,11 @@ const subText = sub ? pickLocale(sub, locale) : STR.sub;
 const ctaText = ctaLabel ? pickLocale(ctaLabel, locale) : STR.cta;
 const perWord = locale === 'ar';
 
+// The intro logo renders at `min(46vw, 520px, 66svh)`, so `width={520}` + densities
+// [1,2] emits the matching 520w/1040w pair. It was `width={1040}` with the same
+// densities, which put a 1040w image in a 520px box on a 1x screen — 4x the pixels,
+// and this is the LCP element.
+
 // TEMPORARY EXCEPTION (owner: Kareem, expires: KAN-20 Stream provisioning) — the loop
 // ships as a static mp4 so the launched design has its centerpiece; CLAUDE.md P2 wants
 // Cloudflare Stream. Bytes stay off the critical path (poster first, video post-load).
@@ -100,7 +109,7 @@ const src = videoUid ? undefined : videoSrc;
         src={logo}
         alt=""
         formats={['avif', 'webp']}
-        width={1040}
+        width={520}
         densities={[1, 2]}
         decoding="async"
         loading="eager"
@@ -185,7 +194,9 @@ const src = videoUid ? undefined : videoSrc;
     } catch {
       // Storage blocked: the intro still ends on its own CSS timeline.
     }
-    for (const ev of ['wheel', 'touchstart', 'keydown', 'pointerdown']) {
+    // `focusin` covers programmatic / assistive-tech focus moves; the CSS carries a
+    // JS-free `html:has(:focus-visible)` arm for the same reason.
+    for (const ev of ['wheel', 'touchstart', 'keydown', 'pointerdown', 'focusin']) {
       addEventListener(ev, cut, { once: true, passive: true });
     }
   }

@@ -28,8 +28,14 @@ jobs:
         run: npx wrangler dev --port 8788 &
       - name: Wait for preview
         run: npx wait-on http://localhost:8788 --timeout 60000
-      - name: Lighthouse budgets
+      - name: Lighthouse budgets (mobile — Lighthouse default emulation)
         run: npm run lhci
+      # The desktop geometry is where the hero intro/headline collision lived: it was
+      # invisible at Lighthouse's default 412x823 mobile viewport and at >=1700px wide,
+      # and present on every laptop in between. A mobile-only perf gate cannot see a
+      # class of defect that only exists on desktop widths.
+      - name: Lighthouse budgets (desktop)
+        run: npm run lhci:desktop
 
   a11y:
     runs-on: ubuntu-latest

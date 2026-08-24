@@ -2,7 +2,10 @@
   "ci": {
     "collect": {
       "url": ["http://localhost:8788/", "http://localhost:8788/ar"],
-      "numberOfRuns": 3
+      "numberOfRuns": 3,
+      "settings": {
+        "preset": "desktop"
+      }
     },
     "assert": {
       "assertions": {

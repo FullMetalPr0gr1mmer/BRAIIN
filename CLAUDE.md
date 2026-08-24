@@ -152,7 +152,7 @@ Public routes only. **Failing any budget = blocked PR.** `/admin` exempt from CW
 
 | Metric | Budget | Notes |
 |---|---|---|
-| LCP | < 2.5s | poster frame is the hero LCP |
+| LCP | < 2.5s | service pages: the Stream poster `<img>`. **Home: the intro logo `<img>`** — the hero's blur poster is a CSS `background`, not an `<img>`, and is too low-entropy to be an LCP candidate. The headline is NOT the LCP element (Chromium aggregates text LCP at the block ancestor). |
 | INP | < 200ms | source of truth = field RUM |
 | CLS | < 0.1 | explicit width/height; metric-override fonts |
 | TBT (lab proxy) | ≤ 200ms | CI lab cap |
