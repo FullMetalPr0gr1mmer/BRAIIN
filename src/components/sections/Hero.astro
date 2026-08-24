@@ -113,6 +113,7 @@ const src = videoUid ? undefined : videoSrc;
         densities={[1, 2]}
         decoding="async"
         loading="eager"
+        fetchpriority="high"
       />
     </div>
   ) : null
@@ -198,6 +199,47 @@ const src = videoUid ? undefined : videoSrc;
     // JS-free `html:has(:focus-visible)` arm for the same reason.
     for (const ev of ['wheel', 'touchstart', 'keydown', 'pointerdown', 'focusin']) {
       addEventListener(ev, cut, { once: true, passive: true });
+    }
+
+    // Hold the choreography until the logo has actually PAINTED.
+    //
+    // The plate's timeline is a stopwatch, but the logo is a runtime Cloudflare image
+    // transform: measured on production, a cold edge takes ~3.5s to return it while a
+    // warm one takes ~0.7s. With a 1.8s plate the cold case lifted the plate before the
+    // logo existed — you got a blank backdrop, then the headline. (The previous 4.2s
+    // timeline only ever hid this by accident: it happened to outlast the cold fetch.)
+    //
+    // Pausing rather than retiming is deliberate, for the same reason the cut uses
+    // `animation: none`: mutating a delay mid-flight remaps local time onto progress.
+    // A paused animation simply holds at its current position and resumes in place.
+    //
+    // Degradation is safe in both directions. With JS off the class is never added and
+    // the pure-CSS timeline runs exactly as before; if the image errors or stalls, the
+    // cap below releases it anyway, so a broken logo can never wedge the page behind an
+    // opaque plate.
+    const logo = intro.querySelector('img');
+    if (logo) {
+      // Bounds the wait so time-to-content stays honest even on a cold edge: worst case
+      // is CAP + hold + fade. Warm (the overwhelming majority) releases in ~0.7s.
+      const HOLD_CAP_MS = 2000;
+      document.body.classList.add('intro-waiting');
+      let released = false;
+      const release = () => {
+        if (released) return;
+        released = true;
+        document.body.classList.remove('intro-waiting');
+      };
+      // `complete` is true once the fetch has SETTLED — success or failure. Testing it
+      // alone (rather than `complete && naturalWidth > 0`) matters: a logo that already
+      // errored before this deferred module ran is complete with naturalWidth 0, and
+      // waiting on an `error` event that has already fired would stall on the cap for
+      // no reason. Either way there is nothing left to wait for.
+      if (logo.complete) release();
+      else {
+        logo.addEventListener('load', release, { once: true });
+        logo.addEventListener('error', release, { once: true });
+      }
+      setTimeout(release, HOLD_CAP_MS);
     }
   }
 
