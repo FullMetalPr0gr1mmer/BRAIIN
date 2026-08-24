@@ -687,6 +687,21 @@ body.intro-cut .intro,
 html:has(:focus-visible) .intro {
   display: none;
 }
+/* Held until the logo has actually painted (see the Hero script). The logo is a runtime
+   image transform — ~0.7s warm, ~3.5s on a cold edge — so a fixed plate duration is a
+   race the logo can lose, and losing it means the brand moment simply never happens.
+   PAUSING holds every animation in place; it does not retime anything. JS-off never
+   adds the class, so the pure-CSS timeline below remains the default. */
+body.intro-waiting .intro,
+body.intro-waiting .intro img,
+body.intro-waiting .letter,
+body.intro-waiting .hero__sub,
+body.intro-waiting .hero__cta,
+body.intro-waiting .hero__scroll,
+body.intro-waiting .site-header--overlay {
+  animation-play-state: paused;
+}
+
 body.intro-cut .letter,
 body.intro-cut .hero__sub,
 body.intro-cut .hero__cta,

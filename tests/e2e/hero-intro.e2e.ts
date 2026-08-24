@@ -300,6 +300,77 @@ for (const route of ROUTES) {
   });
 }
 
+/*
+ * The plate is a stopwatch; the logo is a runtime image transform. Measured on
+ * production, a warm edge returns it in ~0.7s and a COLD one in ~3.5s — so with a fixed
+ * 1.8s plate the logo lost its own race and users saw a blank backdrop followed by the
+ * headline. The previous 4.2s timeline only hid this by accident, by outlasting the
+ * cold fetch. These tests pin the gate that removed the race, including the two ways it
+ * must never fail closed.
+ */
+test.describe('the intro waits for the logo to actually paint', () => {
+  test('a cold/slow logo holds the plate instead of lifting without it', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.route('**/_image*', async (route) => {
+      await new Promise((r) => setTimeout(r, 2500));
+      await route.continue();
+    });
+    await page.goto('/', { waitUntil: 'commit' });
+    await page.waitForSelector('.intro img', { timeout: 20_000 });
+
+    // At 1800ms the unmitigated timeline would already have lifted the plate. It must
+    // still be up, because the logo has not arrived.
+    await page.waitForTimeout(1800);
+    expect(await visibility(page, '.intro'), 'plate lifted before the logo loaded').toBeGreaterThan(
+      0.9,
+    );
+    expect(await page.evaluate(() => document.body.classList.contains('intro-waiting'))).toBe(true);
+
+    // Once it does arrive the hold resumes from where it paused — the logo is seen.
+    await page.waitForFunction(() => !document.body.classList.contains('intro-waiting'), null, {
+      timeout: 20_000,
+    });
+    expect(await visibility(page, '.intro img')).toBeGreaterThan(0.5);
+  });
+
+  test('a logo that never loads still releases — it cannot wedge the page', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.route('**/_image*', (route) => route.abort());
+    await page.goto('/', { waitUntil: 'commit' });
+    await page.waitForSelector('.hero h1', { timeout: 20_000 });
+
+    // An opaque, full-viewport, pointer-capturing plate that never lifts is the worst
+    // failure this feature can have. The cap and the already-settled `complete` check
+    // are the two things standing between a broken image and an unusable home page.
+    await page.waitForFunction(() => !document.body.classList.contains('intro-waiting'), null, {
+      timeout: 6000,
+    });
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector('.intro');
+        return (
+          !el || getComputedStyle(el).opacity === '0' || getComputedStyle(el).display === 'none'
+        );
+      },
+      null,
+      { timeout: 8000 },
+    );
+    // Wait for the entrance to FINISH rather than sampling it mid-fade. The claim under
+    // test is that the page becomes usable at all, not how far along it is at one
+    // instant — asserting immediately after the plate clears catches the letters at
+    // ~0.3 and fails for a reason that has nothing to do with the broken logo.
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector('.hero h1 .letter');
+        return !!el && parseFloat(getComputedStyle(el).opacity) > 0.9;
+      },
+      null,
+      { timeout: 8000 },
+    );
+    expect(await visibility(page, '.hero h1 .letter')).toBeGreaterThan(0.9);
+  });
+});
+
 test.describe('reduced motion', () => {
   for (const route of ROUTES) {
     test(`no intro, and every entrance is left VISIBLE — ${route}`, async ({ page }) => {
