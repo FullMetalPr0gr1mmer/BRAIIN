@@ -96,7 +96,7 @@ Supavisor transaction mode (`:6543`, `pgbouncer=true`, `prepare:false`); `:5432`
 1. **Server-side authorized** — RLS + Edge/API `assertCap()`; never UI-only.
 2. **Within performance budget** — meets §6; CI perf gates green.
 3. **Server-rendered if indexable** — rankable/citable content in Tier A HTML.
-4. **Accessible (WCAG 2.2 AA)** — axe zero violations on themed output; keyboard + RTL + reduced-motion.
+4. **Accessible (WCAG 2.2 AA)** — axe zero violations on themed output; keyboard + RTL + reduced-motion. *Known open deviation: **EXC-007** removes the only motion pause control, failing 2.2.2 (Level A). axe cannot detect this — a green a11y run is not evidence of 2.2.2 compliance.*
 5. **Tested** — unit + integration + e2e **+ per-role authz** (incl. `other_tenant`=deny).
 6. **Observable** — errors → Sentry + `system_logs`; high-value/PII endpoints audit-logged; RUM beacons.
 7. **Documented** — schema/loader/component documented; this CLAUDE.md amended if the standard changed.

@@ -49,16 +49,12 @@ const STR = {
     sub: 'From the brain to the real world.',
     cta: 'Our Services',
     scroll: 'Scroll',
-    pause: 'Pause background motion',
-    play: 'Resume background motion',
   },
   ar: {
     headline: 'شغل إبداعي يحقّق نتائج*',
     sub: 'من الدماغ إلى أرض الواقع.',
     cta: 'خدماتنا',
     scroll: 'انزل',
-    pause: 'إيقاف الحركة في الخلفية',
-    play: 'تشغيل الحركة في الخلفية',
   },
 }[locale];
 
@@ -154,36 +150,10 @@ const src = videoUid ? undefined : videoSrc;
   </div>
 
   <div class="hero__scroll" aria-hidden="true"><i></i><span>{STR.scroll}</span></div>
-
-  {
-    /* WCAG 2.2.2 Pause/Stop/Hide: auto-playing motion (background videos, the clients
-       marquee) must be pausable by everyone, not only reduced-motion users. One control
-       governs all of it via body.motion-paused + the script below. */
-  }
-  <button
-    class="motion-toggle"
-    type="button"
-    aria-pressed="false"
-    data-label-pause={STR.pause}
-    data-label-play={STR.play}
-    aria-label={STR.pause}
-  >
-    <svg class="motion-toggle__pause" viewBox="0 0 16 16" aria-hidden="true"
-      ><path
-        d="M5 3v10M11 3v10"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"></path></svg
-    >
-    <svg class="motion-toggle__play" viewBox="0 0 16 16" aria-hidden="true"
-      ><path d="M5 3l8 5-8 5z" fill="currentColor"></path></svg
-    >
-  </button>
 </section>
 
 <script>
-  import { mountLazyVideo, setMotionPaused, setVideoInView } from '@/lib/client/lazyVideo';
+  import { mountLazyVideo, setVideoInView } from '@/lib/client/lazyVideo';
 
   // Intro: once per tab session; any navigation intent cuts straight to the page.
   const intro = document.querySelector<HTMLElement>('.intro');
@@ -246,33 +216,12 @@ const src = videoUid ? undefined : videoSrc;
   const hero = document.querySelector<HTMLElement>('.hero');
   const media = document.querySelector<HTMLElement>('.hero__media');
 
-  // Motion toggle — pauses/resumes every background video (lazyVideo owns the video
-  // side) and the CSS marquee. Persisted per tab so the choice survives navigation.
-  const toggle = document.querySelector<HTMLButtonElement>('.motion-toggle');
-  function applyMotion(paused: boolean): void {
-    setMotionPaused(paused);
-    if (toggle) {
-      toggle.setAttribute('aria-pressed', String(paused));
-      const label = paused ? toggle.dataset.labelPlay : toggle.dataset.labelPause;
-      if (label) toggle.setAttribute('aria-label', label);
-    }
-  }
-  let motionPaused = false;
-  try {
-    motionPaused = sessionStorage.getItem('bs_motion') === 'paused';
-  } catch {
-    // Storage blocked: default to playing; the toggle still works for this page.
-  }
-  if (motionPaused) applyMotion(true);
-  toggle?.addEventListener('click', () => {
-    motionPaused = !motionPaused;
-    applyMotion(motionPaused);
-    try {
-      sessionStorage.setItem('bs_motion', motionPaused ? 'paused' : 'playing');
-    } catch {
-      /* per-page toggle only */
-    }
-  });
+  // NOTE: there is no visible pause control. It was removed under EXC-007
+  // (docs/security-exceptions.md) to match the Brain Station UI reference hero — a
+  // logged WCAG 2.2.2 regression, not an oversight. `prefers-reduced-motion` is still
+  // honoured upstream in lazyVideo (it attaches no video at all), and the underlying
+  // setMotionPaused()/body.motion-paused mechanism is retained, so restoring the
+  // control is a button plus one listener.
 
   // Hero loop: the poster backdrop is the immediate paint; video bytes wait for `load`
   // so they never compete with the LCP.

@@ -12,6 +12,7 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-004 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-09-01 | Open   | Live on `*.workers.dev` with **no WAF rate limits and no crawler blocks** — both are zone-scoped and there is no zone |
 | EXC-005 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open   | `js-yaml` GHSA-5p4m-2wfm-xmqj allowlisted in the prod audit gate — no fixed 4.x exists and 5.x breaks Astro |
 | EXC-006 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open   | `extract-zip` GHSA-jmr9-qjv8-65gv allowlisted in the dev audit gate — every published version is affected |
+| EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | Open   | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee now have no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**) |
 
 ---
 
@@ -261,3 +262,48 @@ The exposure is **build-time parsing of repo-authored YAML frontmatter only**. N
 1. ☐ Watch for `extract-zip` publishing a fixed release, or `@lhci/cli` swapping extractors — either clears this via a routine bump.
 
 **Close condition:** `npm run audit:all` reports 0 unallowlisted high/critical with the `GHSA-jmr9-qjv8-65gv` entry REMOVED from `scripts/audit-gate.mjs`. If nothing lands by expiry, re-justify — never extend silently.
+
+---
+
+## EXC-007 — Visible motion pause control removed from the hero
+
+**Pillar:** the Definition of Done, point 4 (Accessible — WCAG 2.2 AA). CLAUDE.md §4, §9 (axe WCAG 2.2 AA zero violations).
+**Opened:** 2026-08-24 · **Owner:** Kareem (kareem@floppytech.ai) · **Expiry:** 2026-11-24
+**Status:** Open
+
+### What was weakened
+
+`.motion-toggle` — the small pause/play control in the hero's bottom corner — has been removed from `src/components/sections/Hero.astro` and its rules deleted from `public/styles/global.css`.
+
+That control was the **only** pause mechanism on the page, and it governed three things at once through `body.motion-paused`:
+
+1. the hero background video loop,
+2. the slogan-band background video (same sync group), and
+3. the clients marquee (`body.motion-paused .marquee-track`).
+
+All three start automatically, loop indefinitely, and are presented alongside other content. **WCAG 2.2.2 Pause, Stop, Hide (Level A)** requires a mechanism to pause, stop, or hide such content. There is now no such mechanism for any visitor who has not set `prefers-reduced-motion` at OS level. This is a **Level A** failure — a lower bar than the AA the standard otherwise holds, which is why it is recorded rather than absorbed.
+
+### Why
+
+Visual parity with the approved **Brain Station UI** reference (`Brain Station UI/index.html`), whose hero ships `<video muted loop playsinline autoplay preload="auto">` and no pause control of any kind. The control was the single visual difference between the shipped hero and the approved design.
+
+The decision was made explicitly by the owner after the WCAG conflict, the Level-A severity and two compliant alternatives (relocating the control to the site header; revealing it on hover/focus) were presented and declined. Recording it here is the §11 requirement: *"flag and propose, rather than ship something that fails a pillar"* — the flag was raised, the trade was chosen with the cost stated, and it is logged rather than silent.
+
+### What still holds
+
+- **`prefers-reduced-motion` is fully honoured and is untouched.** `src/lib/client/lazyVideo.ts` returns before attaching any `<video>` at all for those visitors — they get the still poster, never video bytes — and `global.css`'s reduced-motion block freezes the marquee. This covers the visitors most likely to be harmed by vestibular triggers, but it is **not** a substitute: 2.2.2 is not conditioned on a user preference being set.
+- **The mechanism is retained, only the control is gone.** `setMotionPaused()` in `lazyVideo.ts` and `body.motion-paused .marquee-track` in `global.css` are deliberately kept despite having no caller, so restoring compliance is a `<button>` plus one listener rather than re-plumbing three subsystems.
+
+### Detection gap — read this before trusting CI
+
+**No existing gate catches this.** `tests/a11y/axe.e2e.ts` will stay green: axe-core has no rule for "autoplaying media without a pause mechanism", because that determination is not machine-decidable. Lighthouse's accessibility category will also stay at 100. The CLAUDE.md §9 claim of "axe WCAG 2.2 AA zero violations (blocking)" is therefore **not** evidence of 2.2.2 compliance, here or anywhere else in this codebase. Do not close this entry on the strength of a green a11y run.
+
+### Close condition
+
+Any **one** of:
+
+1. A pause/stop mechanism is restored anywhere on the page and is perceivable to mouse, keyboard **and** touch users — the site header, next to the language switch, was the recommended home and needs no hero changes; or
+2. The hero, slogan-band and marquee motion is changed so 2.2.2 no longer applies (each stops within 5 seconds, or does not start automatically); or
+3. Legal/design sign-off accepts the Level-A failure permanently, in which case the CLAUDE.md §4 DoD point 4 wording is amended to say so — the standard must not keep claiming WCAG 2.2 AA while a Level A criterion is knowingly unmet.
+
+**Watch for:** anyone adding a new autoplaying background video, marquee or carousel. Under this exception they will inherit no pause affordance and will not be warned by CI.

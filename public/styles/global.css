@@ -868,59 +868,22 @@ html[dir='rtl'] .hero__cta svg {
    tab order — a focusable CTA behind an opaque section is WCAG 2.4.11 territory.
    Toggled by the Hero scroll script. */
 .hero--covered .hero__inner,
-.hero--covered .hero__scroll,
-.hero--covered .motion-toggle {
+.hero--covered .hero__scroll {
   visibility: hidden;
 }
 
-/* WCAG 2.2.2 pause control — governs the background videos and the clients marquee.
-   Styled as quiet video-player chrome: small, ring-less, tucked into the true viewport
-   corner (inside the CTA column's --bs-pad-x gutter), waking up on hover/focus. It must
-   stay perceivable — it is the page's only pause mechanism — so "hidden" is not an
-   option; unobtrusive is. */
-.motion-toggle {
-  position: absolute;
-  z-index: 2;
-  bottom: 16px;
-  inset-inline-end: 16px;
-}
-/* While the consent banner (fixed, bottom, z-80) is up it covers this corner and
-   intercepts the click — lift the control clear of it until a choice is made. */
-body:has(.consent-banner:not([hidden])) .motion-toggle {
-  bottom: 130px;
-}
-.motion-toggle {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border-radius: 50%;
-  border: 0;
-  background: rgba(0, 0, 0, 0.55);
-  color: rgba(255, 255, 255, 0.75);
-  cursor: pointer;
-  transition:
-    color 0.25s,
-    background 0.25s;
-}
-.motion-toggle:hover,
-.motion-toggle:focus-visible,
-.motion-toggle[aria-pressed='true'] {
-  background: rgba(0, 0, 0, 0.75);
-  color: #fff;
-}
-.motion-toggle svg {
-  width: 11px;
-  height: 11px;
-}
-.motion-toggle .motion-toggle__play,
-.motion-toggle[aria-pressed='true'] .motion-toggle__pause {
-  display: none;
-}
-.motion-toggle[aria-pressed='true'] .motion-toggle__play {
-  display: block;
-}
+/* The visible pause control was REMOVED under EXC-007 (docs/security-exceptions.md) to
+   match the Brain Station UI reference hero, which ships no such control. That is a
+   WCAG 2.2.2 (Pause, Stop, Hide) regression and is logged as one — it is not an
+   oversight. `prefers-reduced-motion` remains fully honoured: lazyVideo.ts bails before
+   attaching any video at all, so those visitors get the still poster and a frozen
+   marquee.
+
+   The MECHANISM below is deliberately retained even though nothing currently toggles
+   it: `body.motion-paused` still pauses the marquee, and setMotionPaused() in
+   lazyVideo.ts still pauses every background video. Restoring the control is therefore
+   re-adding a button and one listener, not rebuilding the plumbing — which is what
+   makes EXC-007's close condition cheap to satisfy. */
 body.motion-paused .marquee-track {
   animation-play-state: paused;
 }
