@@ -18,15 +18,39 @@ const Text = LocalizedTextSchema;
 /** Links are CMS-authored and rendered into <a href> — https only, no other schemes. */
 const HttpsUrlSchema = z.string().trim().url().startsWith('https://').max(300);
 
+/* The hero headline is split into per-word / per-letter spans whose entrance stagger is
+   an enumerated CSS ladder (10 word rungs x 14 letter rungs — global.css). Bounding the
+   input HERE is what keeps that ladder complete: past its last rung the stagger flattens
+   into a simultaneous pop and `--bs-hero-lead` stops being a real upper bound on when
+   the headline has arrived. It also bounds the number of composited spans inside the
+   LCP element — LocalizedTextSchema has no `.max()`, so a 500-word headline validates
+   today. The loader falls back to built-in copy on failure, so this degrades, never
+   breaks. */
+const HERO_MAX_WORDS = 10;
+const HERO_MAX_WORD_LEN = 14;
+const heroHeadlineShape = (s: string): boolean => {
+  const words = s.trim().split(/\s+/).filter(Boolean);
+  return (
+    words.length > 0 &&
+    words.length <= HERO_MAX_WORDS &&
+    // per code point, matching Hero.astro's `[...w.text]` split
+    words.every((w) => [...w].length <= HERO_MAX_WORD_LEN)
+  );
+};
+
 export const HeroSectionContentSchema = z.object({
   /** Cloudflare Stream UID for the hero loop (KAN-20). */
   videoUid: z.string().trim().max(120).optional(),
-  headline: Text.optional(),
+  headline: Text.refine((v) => heroHeadlineShape(v.en) && heroHeadlineShape(v.ar), {
+    message: `Hero headline: at most ${HERO_MAX_WORDS} words, and ${HERO_MAX_WORD_LEN} characters per word (the CSS entrance ladder has that many rungs).`,
+  }).optional(),
   /** 0-based word index where the accent colour starts, per locale. */
   accentFromEn: z.number().int().min(0).max(30).optional(),
   accentFromAr: z.number().int().min(0).max(30).optional(),
   sub: Text.optional(),
   ctaLabel: Text.optional(),
+  /** Logo intro plate. Home only, opt-in — drives `body:has(.intro)` in global.css. */
+  intro: z.boolean().optional(),
 });
 
 export const AboutIntroSectionContentSchema = z.object({

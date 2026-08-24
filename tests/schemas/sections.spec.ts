@@ -26,6 +26,56 @@ describe('section content schemas', () => {
     ).toBe(true);
   });
 
+  // The hero entrance stagger is an enumerated CSS ladder (10 word rungs x 14 letter
+  // rungs, public/styles/global.css). These bounds are what keep it complete: past the
+  // last rung the stagger flattens into a simultaneous pop and --bs-hero-lead stops
+  // being a real upper bound on when the headline has arrived.
+  describe('hero headline bounds — the CSS ladder has a fixed number of rungs', () => {
+    const headline = (en: string, ar = en) =>
+      HeroSectionContentSchema.safeParse({
+        headline: { en, ar },
+      });
+
+    it('accepts a headline at the ladder limits (10 words, 14 chars per word)', () => {
+      expect(headline(Array.from({ length: 10 }, () => 'word').join(' ')).success).toBe(true);
+      expect(headline('a'.repeat(14)).success).toBe(true);
+    });
+
+    it('rejects an 11th word — rung 11 would fall back to the last rung', () => {
+      expect(headline(Array.from({ length: 11 }, () => 'word').join(' ')).success).toBe(false);
+    });
+
+    it('rejects a 15-character word — letter rung 15 does not exist', () => {
+      expect(headline('a'.repeat(15)).success).toBe(false);
+    });
+
+    it('bounds each locale independently — AR splits per word, EN per letter', () => {
+      expect(headline('short', Array.from({ length: 11 }, () => 'كلمة').join(' ')).success).toBe(
+        false,
+      );
+      expect(headline(Array.from({ length: 11 }, () => 'word').join(' '), 'قصير').success).toBe(
+        false,
+      );
+    });
+
+    it('counts by code point, matching the [...word] split in Hero.astro', () => {
+      // 14 astral code points = 28 UTF-16 units; a .length check would reject this.
+      expect(headline('😀'.repeat(14)).success).toBe(true);
+      expect(headline('😀'.repeat(15)).success).toBe(false);
+    });
+
+    it('rejects a blank headline rather than rendering an empty <h1>', () => {
+      expect(headline('   ').success).toBe(false);
+    });
+  });
+
+  it('carries the opt-in intro flag — the plate must never default on', () => {
+    expect(HeroSectionContentSchema.safeParse({ intro: true }).success).toBe(true);
+    expect(HeroSectionContentSchema.safeParse({ intro: 'yes' }).success).toBe(false);
+    // Absent is the safe default: Hero.astro destructures `intro = false`.
+    expect(HeroSectionContentSchema.parse({}).intro).toBeUndefined();
+  });
+
   it('rejects non-https social links — CMS-authored hrefs render into <a href>', () => {
     const link = (href: string) => ({
       links: [{ label: 'X', user: '@x', href }],

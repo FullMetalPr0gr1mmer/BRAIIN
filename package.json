@@ -20,6 +20,7 @@
     "test:e2e": "playwright test",
     "size": "size-limit",
     "lhci": "lhci autorun",
+    "lhci:desktop": "lhci autorun --config=lighthouserc.desktop.json",
     "audit": "node scripts/audit-gate.mjs",
     "audit:all": "node scripts/audit-gate.mjs --include-dev",
     "cf:types": "wrangler types",

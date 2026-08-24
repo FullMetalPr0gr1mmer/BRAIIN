@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SectionRenderer from '@/components/SectionRenderer.astro';
-import { DEFAULT_HOME_SECTIONS } from '@/lib/sections/types';
+import { DEFAULT_HOME_SECTIONS, withHomeIntro } from '@/lib/sections/types';
 import { getPageSections } from '@/lib/data/pageSections';
 import { buildOrganizationSchema, buildWebSiteSchema } from '@/lib/seo/jsonld';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
@@ -9,7 +9,7 @@ import { PUBLIC_SITE_URL } from 'astro:env/client';
 // Tier A. Home is composed from CMS sections (`pages` slug 'home' + `page_sections`,
 // authored under /admin/pages + /admin/sections); the default composition renders until
 // that page is authored. Publish purges the `route:home` cache tag.
-const sections = (await getPageSections('home')) ?? DEFAULT_HOME_SECTIONS;
+const sections = withHomeIntro((await getPageSections('home')) ?? DEFAULT_HOME_SECTIONS);
 const jsonLd = [buildOrganizationSchema(PUBLIC_SITE_URL), buildWebSiteSchema(PUBLIC_SITE_URL)];
 Astro.response.headers.set(
   'Cache-Control',
@@ -25,7 +25,6 @@ Astro.response.headers.set('Cache-Tag', 'tenant:default,route:home,locale:en');
   logicalPath="/"
   jsonLd={jsonLd}
   headerOverlay
-  intro
 >
   <main>
     <SectionRenderer locale="en" sections={sections} />
