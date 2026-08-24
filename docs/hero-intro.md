@@ -52,18 +52,25 @@ times in `tests/e2e/hero-intro.e2e.ts` (§4) and re-run it.
 
 ---
 
-## 2. Why the plate is opaque
+## 2. Why the overlay is transparent, and what now protects the headline
 
-`.intro` paints `--bs-hero-backdrop` — the same token `.hero__media` uses — so it is
-visually identical to what is behind it and the handoff reads as the logo leaving, not
-a card lifting.
+`.intro` is **transparent**: the hero loop plays underneath the logo from the first
+frame, matching the Brain Station UI reference (`/* 0. INTRO — logo over the clean
+video, no overlay behind it */`). The logo also carries **no drop-shadow** — a deliberate
+choice; the reference keeps `drop-shadow(0 6px 40px rgba(0,0,0,.45))`, and that is the
+one-line fix if the wordmark ever washes out against a lighter cut of the loop.
 
-It used to be **transparent**, holding only the centred logo. That produced the bug this
-whole design exists to kill: the logo is fixed and centred, a constant 520×266 above
-1131px of width, while the headline is bottom-anchored and grows *upward* as it wraps.
-Whether they collided was decided purely by viewport geometry.
+**This is only safe because the headline is TIME-gated.** Every entrance holds
+`opacity: 0` under `fill: both` until `--bs-intro-wait`, so while the logo is up there is
+nothing on screen to collide with. Read that before touching any entrance delay.
 
-| Viewport | Result on the old build |
+It was not always so. The overlay was originally transparent **while the headline
+animated in at t≈0.15s**, which composited a white wordmark straight onto white headline
+text. Whether that read as "layered" or as a collision was decided purely by viewport
+geometry — the logo is fixed and centred, a constant 520×266 above 1131px of width, while
+the headline is bottom-anchored and grows *upward* as it wraps:
+
+| Viewport | Result on the original build |
 | --- | --- |
 | 2560×1440 | 262px clear |
 | 1920×1080 | 92px clear |
@@ -78,9 +85,14 @@ Note the shape: between 1366 and 1680 the overlap gets **worse** as the screen g
 wider, then vanishes in one step at ~1700px. "It looks fine on a bigger monitor" was a
 true observation about a real cliff, not a misreport.
 
-An opaque plate makes the collision *structurally impossible* rather than
-arithmetically unlikely — it holds at any line count, either locale, any zoom level,
-and through a font swap.
+An intermediate version made the plate **opaque** (painted with `--bs-hero-backdrop`),
+which made the collision *structurally* impossible — no timing assumption required. That
+was traded away to get the video visible under the logo. The protection is now purely
+temporal, which means:
+
+> **If anyone un-gates `.letter` from `--bs-intro-wait`, the collision returns in full,
+> and only on screens under ~1700px wide.** `tests/e2e/hero-intro.e2e.ts` is what stands
+> between that edit and a shipped regression. Do not delete it.
 
 ---
 

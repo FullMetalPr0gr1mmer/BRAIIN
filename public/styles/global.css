@@ -442,13 +442,21 @@ html[dir='rtl'] .tag {
   animation-delay: calc(var(--bs-hero-in) + var(--bs-hero-beat) * 3);
 }
 /* Opacity-only, and shared with .hero__cta: a `to { transform: none }` under
-   `fill: both` would permanently outrank .cta:hover's translateY. */
+   `fill: both` would permanently outrank .cta:hover's translateY.
+   `pointer-events` rides along so an entrance that has not arrived yet cannot be
+   clicked while it is invisible — this is what lets the intro plate be
+   `pointer-events: none` without a click landing on a control nobody can see. It is a
+   discrete property, so it flips at the animation's midpoint, and `fill: both` holds
+   the `from` value through the delay. CSS-only: no `:has()`, no JS, and the cut path
+   (`animation: none`) simply falls back to the static default. */
 @keyframes fade-in {
   from {
     opacity: 0;
+    pointer-events: none;
   }
   to {
     opacity: 1;
+    pointer-events: auto;
   }
 }
 .site-header--overlay.is-solid {
@@ -634,16 +642,30 @@ html[dir='rtl'] .site-nav__list a::after {
   z-index: 90;
   display: grid;
   place-items: center;
-  /* OPAQUE, painted with the hero's own backdrop. This is what makes the sequence
-     viewport-INDEPENDENT: the headline is physically un-see-able until the plate is
-     gone, whatever the line count, locale, zoom or font swap does. It replaces a
-     transparent overlay that composited a white wordmark straight onto white headline
-     text — invisible on a >=1700px monitor, 122px of ink-on-ink at 1366x768. */
-  background: var(--bs-hero-backdrop);
-  /* auto, not none: an opaque plate that passes clicks through would activate an
-     INVISIBLE CTA underneath. `pointerdown` cuts the intro, so the first click
-     reveals the page instead of misfiring. */
-  pointer-events: auto;
+  /* TRANSPARENT, so the hero loop plays underneath the logo from the first frame.
+     This is only safe because the headline is TIME-gated on the intro: every entrance
+     holds `opacity: 0` (fill: both) until --bs-intro-wait, so there is nothing to
+     collide with while the logo is up.
+
+     Read that twice before touching the entrance delays. The original bug was exactly
+     this overlay being transparent WHILE the headline animated in at t~0.15s — a white
+     wordmark composited straight onto white headline text, invisible on a >=1700px
+     monitor and 122px of ink-on-ink at 1366x768. An opaque plate made the collision
+     structurally impossible; going transparent trades that back for a purely temporal
+     guarantee. If anyone ever un-gates .letter, the collision returns in full.
+     tests/e2e/hero-intro.e2e.ts pins the ordering for that reason — do not delete it. */
+  background: transparent;
+  /* none. This was `auto` while the plate was opaque, reasoning that a click passing
+     through would hit an invisible CTA. That was the wrong trade and it shipped a real
+     defect: the consent banner (z-80) sits UNDER this layer (z-90), so for the whole
+     intro a click on "Accept analytics" was absorbed here — measured as
+     consentCookie=false, banner still open, choice silently lost. Eating a PDPL consent
+     click is far worse than the case it was guarding, and that case is now handled
+     properly by the keyframes (invisible entrances carry `pointer-events: none` until
+     they arrive), so nothing needs to be absorbed at all.
+     `pointerdown` still bubbles to the window listener, so the first click both cuts
+     the intro AND reaches its real target. */
+  pointer-events: none;
   animation: intro-out var(--bs-intro-fade) ease both;
   animation-delay: var(--bs-intro-hold);
 }
@@ -658,7 +680,11 @@ html[dir='rtl'] .site-nav__list a::after {
      constant 520x266 from 1131px of width all the way up, on every viewport height. */
   width: min(46vw, 520px, 66svh);
   height: auto;
-  filter: drop-shadow(0 6px 40px rgba(0, 0, 0, 0.45));
+  /* No drop-shadow, by design decision (the Brain Station UI reference keeps one at
+     `drop-shadow(0 6px 40px rgba(0,0,0,.45))`). The shadow was what lifted the white
+     wordmark off the bright sky the loop opens on; without it the logo relies on the
+     video frame behind it for contrast. If it ever washes out on a lighter cut of the
+     loop, that shadow — not a plate — is the fix. */
   animation: intro-logo-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: var(--bs-intro-guard);
 }
@@ -683,6 +709,16 @@ html[dir='rtl'] .site-nav__list a::after {
    behind the plate or on a still-transparent entrance (WCAG 2.4.7 / 2.4.11); the
    script's `keydown` listener races Tab's default focus move and is absent with JS
    off. */
+/* With scripting off there is no `intro-cut` latch, and the :focus-visible arm below is
+   TRANSIENT — blur puts `.intro` back into the render tree, which restarts its animation
+   from zero and replays the whole plate indefinitely. Nothing can dismiss it, so the
+   honest behaviour is not to show it at all. */
+@media (scripting: none) {
+  .intro {
+    display: none;
+  }
+}
+
 body.intro-cut .intro,
 html:has(:focus-visible) .intro {
   display: none;
