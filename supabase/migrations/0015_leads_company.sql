@@ -28,10 +28,16 @@ comment on column public.leads.company is
 --
 -- This single clause is the highest-severity line in this migration. The pgTAP suite
 -- asserts it against pg_class.reloptions so a future edit cannot drop it silently.
+-- `company` is APPENDED, not slotted in after `name` where it reads best.
+-- `create or replace view` may only add columns at the END: it matches the new select
+-- list against the old one positionally, so putting `company` in position 6 is read as
+-- renaming `message` to `company` and fails with 42P16. Column order in a view is
+-- cosmetic here — every caller selects by name via SAFE_LEAD_COLUMNS — and appending
+-- avoids a `drop view` that would momentarily remove the view and discard its grants.
 create or replace view public.leads_safe with (security_invoker = true) as
 select
-  id, tenant_id, kind, locale, name, company, message, service_of_interest,
-  status, consent_marketing, created_at, updated_at
+  id, tenant_id, kind, locale, name, message, service_of_interest,
+  status, consent_marketing, created_at, updated_at, company
 from public.leads;
 
 revoke all on public.leads_safe from anon;
