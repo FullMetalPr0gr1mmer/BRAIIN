@@ -33,6 +33,7 @@ export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
     kind: input.kind,
     locale: input.locale,
     name: input.name,
+    company: input.company ?? null,
     email_enc,
     phone_enc,
     budget_enc,

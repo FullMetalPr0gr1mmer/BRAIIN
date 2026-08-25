@@ -23,7 +23,7 @@ export const SENSITIVE_LEAD_COLUMNS = [
 
 /** Columns safe for any role that can see leads at all (mirrors the leads_safe view). */
 export const SAFE_LEAD_COLUMNS =
-  'id,kind,locale,name,message,service_of_interest,status,consent_marketing,created_at,updated_at';
+  'id,kind,locale,name,company,message,service_of_interest,status,consent_marketing,created_at,updated_at';
 
 /** Safe columns plus the ciphertext/sensitive ones. Only for `leads.pii` holders. */
 export const FULL_LEAD_COLUMNS = `${SAFE_LEAD_COLUMNS},email_enc,phone_enc,budget_enc,timeline_band,internal_notes,ip_inet`;

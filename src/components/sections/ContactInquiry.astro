@@ -1,0 +1,60 @@
+---
+import type { Locale } from '@schemas/primitives';
+import ContactForm from '@/components/ContactForm.astro';
+import type { ServiceRow } from '@/lib/data/services';
+
+// The enquiry band: tag, section head, and the real wired form.
+//
+// This wraps ContactForm rather than reimplementing it. The mockup this design came
+// from ships its own <form> with no honeypot, no consent checkbox and no CSRF-bearing
+// same-origin fetch — porting that markup would have quietly deleted the spam guard and
+// the PDPL lawful basis. The design is a shell around the existing form, never a
+// replacement for it.
+
+interface Props {
+  locale: Locale;
+  services?: ServiceRow[];
+  tag?: string;
+  heading?: string;
+  lead?: string;
+}
+
+const { locale, services = [], tag, heading, lead } = Astro.props;
+
+const STR = {
+  en: {
+    tag: 'Project enquiry',
+    headA: "Tell us what you're ",
+    headEm: 'making',
+    lead: 'The more you give us here, the more useful our first reply is. Budget range and timeline help most.',
+  },
+  ar: {
+    tag: 'طلب مشروع',
+    headA: 'أخبرنا بما ',
+    headEm: 'تصنعه',
+    lead: 'كلما زادت التفاصيل هنا، كان ردّنا الأول أنفع. نطاق الميزانية والموعد النهائي هما الأكثر أهمية.',
+  },
+}[locale];
+---
+
+<section class="contact-inquiry" id="inquiry">
+  <div class="section-wrap">
+    <div class="tag tag--sky rv"><span class="dot"></span><span>{tag ?? STR.tag}</span></div>
+    <div class="sec-head">
+      <h2 class="rv">
+        {
+          heading ? (
+            heading
+          ) : (
+            <>
+              {STR.headA}
+              <em>{STR.headEm}</em>
+            </>
+          )
+        }
+      </h2>
+      <p class="rv">{lead ?? STR.lead}</p>
+    </div>
+    <ContactForm locale={locale} services={services} />
+  </div>
+</section>

@@ -1,0 +1,95 @@
+---
+import type { Locale } from '@schemas/primitives';
+import SocialStrip from '@/components/sections/SocialStrip.astro';
+
+// "Talk to us" — the direct channels, on paper, with the social strip joined onto the
+// same block (SocialStrip renders its own <section>; `joined` removes the duplicated
+// top padding so the two read as one light band with a single rule between them).
+
+interface Props {
+  locale: Locale;
+  tag?: string;
+  heading?: string;
+  lead?: string;
+}
+
+const { locale, tag, heading, lead } = Astro.props;
+
+const EMAIL = 'hello@braiinstation.com';
+
+// WhatsApp: intentionally empty until a real number exists. The card renders ONLY when
+// this is set, because a `wa.me/9665XXXXXXXX` placeholder on a live contact page is a
+// dead link on the one page whose entire job is being reachable. Set it to an E.164
+// number without the `+` (e.g. '9665XXXXXXXX') and the card appears — no other change.
+const WHATSAPP_E164 = '';
+
+const STR = {
+  en: {
+    tag: 'Stay in touch',
+    headA: 'Talk to ',
+    headEm: 'us',
+    lead: "No form, no gatekeeping. Write to us directly and you'll get a person, not a ticket number.",
+    emailLabel: 'Email',
+    emailNote: 'Best for briefs, scopes, and anything with attachments.',
+    waLabel: 'WhatsApp',
+    waNote: 'Fastest for quick questions and timing checks.',
+  },
+  ar: {
+    tag: 'ابقَ على تواصل',
+    headA: 'تحدّث ',
+    headEm: 'إلينا مباشرة',
+    lead: 'بلا نماذج ولا وسطاء. راسلنا مباشرة وسيردّ عليك شخص حقيقي، لا رقم تذكرة.',
+    emailLabel: 'البريد الإلكتروني',
+    emailNote: 'الأنسب للبريفات ونطاقات العمل وأي شيء يحتاج مرفقات.',
+    waLabel: 'واتساب',
+    waNote: 'الأسرع للأسئلة السريعة والاستفسار عن المواعيد.',
+  },
+}[locale];
+---
+
+<section class="contact-touch">
+  <div class="section-wrap">
+    <div class="tag rv"><span class="dot"></span><span>{tag ?? STR.tag}</span></div>
+    <div class="sec-head">
+      <h2 class="rv">
+        {
+          heading ? (
+            heading
+          ) : (
+            <>
+              {STR.headA}
+              <em>{STR.headEm}</em>
+            </>
+          )
+        }
+      </h2>
+      <p class="rv">{lead ?? STR.lead}</p>
+    </div>
+
+    <div class="contact-touch__grid">
+      <a class="touch-card rv" href={`mailto:${EMAIL}`}>
+        <span class="touch-card__label">{STR.emailLabel}</span>
+        {/* dir=ltr + isolation so the address does not re-order inside RTL text */}
+        <span class="touch-card__val" dir="ltr">{EMAIL}</span>
+        <span class="touch-card__note">{STR.emailNote}</span>
+      </a>
+
+      {
+        WHATSAPP_E164 ? (
+          <a
+            class="touch-card rv"
+            href={`https://wa.me/${WHATSAPP_E164}`}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <span class="touch-card__label">{STR.waLabel}</span>
+            <span class="touch-card__val" dir="ltr">{`+${WHATSAPP_E164}`}</span>
+            <span class="touch-card__note">{STR.waNote}</span>
+          </a>
+        ) : null
+      }
+    </div>
+
+    <SocialStrip locale={locale} joined />
+  </div>
+</section>
