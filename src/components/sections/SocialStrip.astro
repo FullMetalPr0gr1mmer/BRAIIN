@@ -10,9 +10,12 @@ import { pickLocale } from '@/lib/i18n';
 
 interface Props extends SocialSectionContent {
   locale: Locale;
+  /** Rendered inside another paper block (ContactChannels) — drops the top padding so
+   *  the two read as one band rather than two stacked ones. */
+  joined?: boolean;
 }
 
-const { locale, tag, heading, links } = Astro.props;
+const { locale, tag, heading, links, joined = false } = Astro.props;
 
 const STR = {
   en: { tag: 'Follow the studio', heading: 'New work goes up here first.' },
@@ -52,7 +55,7 @@ const resolved = links
   : LINKS;
 ---
 
-<section class="social-strip">
+<section class:list={['social-strip', { 'social-strip--joined': joined }]}>
   <div class="social-strip__wrap section-wrap">
     <div class="tag rv">
       <span class="dot"></span><span>{tag ? pickLocale(tag, locale) : STR.tag}</span>

@@ -3,7 +3,7 @@
 -- `anon`/`authenticated` roles and injecting JWT claims (set_config), the Supabase pattern.
 
 begin;
-select plan(8);
+select plan(10);
 
 -- Setup runs as the migration/superuser role (RLS bypassed here).
 insert into public.tenants (id, name) values ('00000000-0000-0000-0000-000000000001', 'T1');
@@ -64,6 +64,33 @@ select throws_ok(
 
 reset role;
 select _claims(null, null);
+-- ---- leads_safe must stay SECURITY INVOKER -------------------------------------
+--
+-- 0002 grants `select on public.leads_safe to authenticated`, so this view is readable
+-- by every signed-in user including Content Creator and SEO, who are supposed to have
+-- NO lead access whatsoever. The ONLY thing standing between them and every tenant's
+-- leads is `security_invoker`, which makes the view run RLS as the caller rather than
+-- as its definer.
+--
+-- `create or replace view` does NOT inherit reloptions: re-issuing the definition
+-- without the clause silently reverts the view to definer rights and turns a
+-- defence-in-depth measure into a cross-tenant leak. 0015 re-stated it when adding
+-- `company`; this asserts nobody drops it next time.
+select ok(
+  (select reloptions::text[] @> array['security_invoker=true']
+     from pg_class where relname = 'leads_safe' and relnamespace = 'public'::regnamespace),
+  'leads_safe is SECURITY INVOKER (without it, every authenticated role reads all leads)'
+);
+
+-- `company` is deliberately NON-sensitive: it belongs in leads_safe alongside `name`,
+-- not in the Admin/Developer-gated set. Pinning it here means a future migration cannot
+-- quietly move it either way without a failing test.
+select ok(
+  (select count(*) = 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'leads_safe' and column_name = 'company'),
+  'leads_safe exposes company (non-sensitive business-contact data)'
+);
+
 select is(1, 1, 'cleanup ok');
 
 select * from finish();

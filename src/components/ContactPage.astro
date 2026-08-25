@@ -1,11 +1,17 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import ContactForm from '@/components/ContactForm.astro';
+import SectionRenderer from '@/components/SectionRenderer.astro';
 import type { ServiceRow } from '@/lib/data/services';
-import { buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { buildBreadcrumbSchema, buildFaqSchema } from '@/lib/seo/jsonld';
 import { localizedPath } from '@/lib/i18n';
+import { CONTACT_FAQ } from '@/lib/content/contactFaq';
+import { DEFAULT_CONTACT_SECTIONS, ensureContactInquiry } from '@/lib/sections/types';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
+
+// Contact — a composed section page (hero banner → enquiry → channels → FAQ), matching
+// how the home and about pages are built. It is a shell: every band is a section
+// component, so the composition can move to `page_sections` without touching this file.
 
 interface Props {
   locale: Locale;
@@ -17,33 +23,41 @@ const { locale, services } = Astro.props;
 const STR = {
   en: {
     title: 'Contact',
-    intro: 'Tell us about your project — we usually reply within one business day.',
+    desc: 'Start a project with Braiin Station. Send an enquiry, reach us by email, and read the questions we get every week.',
     home: 'Home',
   },
   ar: {
     title: 'تواصل معنا',
-    intro: 'أخبرنا عن مشروعك — نرد عادةً خلال يوم عمل واحد.',
+    desc: 'ابدأ مشروعك مع بريّن ستيشن. أرسل طلبك، أو تواصل معنا عبر البريد الإلكتروني، واطّلع على الأسئلة التي تصلنا كل أسبوع.',
     home: 'الرئيسية',
   },
 }[locale];
+
+// The service list is data one section needs, so it rides in that section's props
+// rather than becoming a pass-through parameter on SectionRenderer.
+const sections = ensureContactInquiry(DEFAULT_CONTACT_SECTIONS).map((s) =>
+  s.type === 'contactInquiry' ? { ...s, props: { ...(s.props ?? {}), services } } : s,
+);
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const breadcrumb = buildBreadcrumbSchema([
   { name: STR.home, url: base + localizedPath('/', locale) },
   { name: STR.title, url: base + localizedPath('/contact', locale) },
 ]);
+
+// FAQPage, built from the SAME array FaqAccordion renders — see contactFaq.ts. If these
+// two ever read from different sources, the structured data starts describing content
+// the page does not visibly contain, which is a manual-action category.
+const faq = buildFaqSchema(CONTACT_FAQ[locale].map((i) => ({ question: i.q, answer: i.a })));
 ---
 
 <BaseLayout
   title={`${STR.title} — Braiin Station`}
-  description={STR.intro}
+  description={STR.desc}
   locale={locale}
   logicalPath="/contact"
-  jsonLd={[breadcrumb]}
+  jsonLd={[breadcrumb, faq]}
+  headerOverlay
 >
-  <main class="container">
-    <h1>{STR.title}</h1>
-    <p class="lead">{STR.intro}</p>
-    <ContactForm locale={locale} services={services} />
-  </main>
+  <SectionRenderer locale={locale} sections={sections} />
 </BaseLayout>

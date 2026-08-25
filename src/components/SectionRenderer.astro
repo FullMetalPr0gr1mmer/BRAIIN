@@ -14,6 +14,9 @@ import ClientsMarquee from '@/components/sections/ClientsMarquee.astro';
 import AboutIntro from '@/components/sections/AboutIntro.astro';
 import SloganBand from '@/components/sections/SloganBand.astro';
 import HomeContact from '@/components/sections/HomeContact.astro';
+import ContactInquiry from '@/components/sections/ContactInquiry.astro';
+import ContactChannels from '@/components/sections/ContactChannels.astro';
+import FaqAccordion from '@/components/sections/FaqAccordion.astro';
 
 interface Props {
   locale: Locale;
@@ -23,7 +26,12 @@ interface Props {
 const { locale, sections } = Astro.props;
 
 // Type → component registry. Unknown types are skipped (forward-compatible with CMS).
-const REGISTRY: Record<string, unknown> = {
+//
+// Data a section needs beyond `locale` travels in its own `props` (see
+// ContactPage.astro, which injects the service list into the contactInquiry section).
+// Keeping it there rather than adding pass-through props here means this renderer does
+// not grow a parameter every time one section needs something.
+const REGISTRY: Record<string, typeof Hero> = {
   hero: Hero,
   servicesOverview: ServicesOverview,
   cta: CtaBand,
@@ -36,6 +44,9 @@ const REGISTRY: Record<string, unknown> = {
   aboutIntro: AboutIntro,
   slogan: SloganBand,
   contact: HomeContact,
+  contactInquiry: ContactInquiry,
+  contactChannels: ContactChannels,
+  faq: FaqAccordion,
 };
 ---
 
@@ -43,7 +54,7 @@ const REGISTRY: Record<string, unknown> = {
   sections
     .filter((s) => s.visible !== false)
     .map((s) => {
-      const Comp = REGISTRY[s.type] as typeof Hero | undefined;
+      const Comp = REGISTRY[s.type];
       if (!Comp) return null;
       return (
         <SectionBoundary type={s.type}>

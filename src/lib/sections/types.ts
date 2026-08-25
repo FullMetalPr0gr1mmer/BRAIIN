@@ -40,6 +40,31 @@ export const DEFAULT_HOME_SECTIONS: SectionData[] = [
   { type: 'social' },
 ];
 
+export const DEFAULT_CONTACT_SECTIONS: SectionData[] = [
+  { type: 'hero', props: { banner: true, ctaHref: '#inquiry' } },
+  { type: 'contactInquiry' },
+  { type: 'contactChannels' },
+  { type: 'faq' },
+];
+
+/**
+ * The inquiry form is the site's ONLY public write path, and SectionRenderer honours
+ * `visible: false` unconditionally — so an editor toggling this section off would take
+ * the contact form off the contact page with nothing to stop them and no gate to catch
+ * it. This re-inserts it, visible, whatever the authored composition says.
+ *
+ * Deliberately narrower than `withHomeIntro`: that one supplies a default an editor may
+ * override, this one enforces a floor an editor may not. Reordering it is still free.
+ */
+export function ensureContactInquiry(sections: SectionData[]): SectionData[] {
+  const restored = sections.map((s) => (s.type === 'contactInquiry' ? { ...s, visible: true } : s));
+  if (restored.some((s) => s.type === 'contactInquiry')) return restored;
+  // Absent entirely: put it back directly after the hero, where the design expects it.
+  const heroAt = restored.findIndex((s) => s.type === 'hero');
+  const at = heroAt === -1 ? 0 : heroAt + 1;
+  return [...restored.slice(0, at), { type: 'contactInquiry' }, ...restored.slice(at)];
+}
+
 export const DEFAULT_ABOUT_SECTIONS: SectionData[] = [
   { type: 'aboutStory' },
   { type: 'statistics' },

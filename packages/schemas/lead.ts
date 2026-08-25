@@ -15,6 +15,9 @@ export const LeadInputSchema = z.object({
   kind: LeadKindSchema.default('contact'),
   locale: LocaleSchema.default('en'),
   name: z.string().min(1).max(120),
+  // Business-contact data, NOT gated PII: it lives in leads_safe alongside `name`.
+  // See supabase/migrations/0015_leads_company.sql for why it is not sensitive.
+  company: z.string().trim().max(120).optional(),
   email: z.string().email().max(254),
   phone: z.string().min(3).max(32).optional(),
   message: z.string().min(1).max(5000),

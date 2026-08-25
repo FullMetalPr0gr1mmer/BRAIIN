@@ -1,0 +1,70 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { CONTACT_FAQ } from '@/lib/content/contactFaq';
+
+// FAQ, as native <details>/<summary> — no JavaScript.
+//
+// The mockup built this list from a JS array into an empty #faqList, which would have
+// put the most AEO-load-bearing copy on the site outside the server-rendered HTML: no
+// crawler, no find-in-page, no reader mode, and a FAQPage JSON-LD block describing
+// content the page does not visibly contain (a structured-data mismatch Google issues
+// manual actions for). Every Q&A here is in the Tier A response.
+//
+// `name="faq"` gives exclusive-accordion behaviour natively; where it is unsupported
+// the group simply allows several open at once, which is harmless. The reveal animates
+// grid-template-rows 0fr->1fr on a wrapper rather than height, because ::details-content
+// is not reliably stylable — SiteHeader.astro records the same finding for the nav.
+
+interface Props {
+  locale: Locale;
+  tag?: string;
+  heading?: string;
+}
+
+const { locale, tag, heading } = Astro.props;
+
+const STR = {
+  en: { tag: 'FAQ', headA: 'Questions we get ', headEm: 'every week' },
+  ar: { tag: 'الأسئلة الشائعة', headA: 'أسئلة ', headEm: 'تصلنا كل أسبوع' },
+}[locale];
+
+const items = CONTACT_FAQ[locale];
+---
+
+<section class="faq-section" id="faq">
+  <div class="section-wrap">
+    <div class="tag tag--sky rv"><span class="dot"></span><span>{tag ?? STR.tag}</span></div>
+    <div class="sec-head">
+      <h2 class="rv">
+        {
+          heading ? (
+            heading
+          ) : (
+            <>
+              {STR.headA}
+              <em>{STR.headEm}</em>
+            </>
+          )
+        }
+      </h2>
+    </div>
+
+    <div class="faq-list">
+      {
+        items.map((item) => (
+          <details class="faq-item rv" name="faq">
+            <summary class="faq-item__q">
+              <span class="faq-item__t">{item.q}</span>
+              <span class="faq-item__i" aria-hidden="true" />
+            </summary>
+            <div class="faq-item__a">
+              <div>
+                <p>{item.a}</p>
+              </div>
+            </div>
+          </details>
+        ))
+      }
+    </div>
+  </div>
+</section>

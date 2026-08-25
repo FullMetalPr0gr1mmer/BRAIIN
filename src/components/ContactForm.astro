@@ -15,13 +15,23 @@ const STR = {
     name: 'Name',
     email: 'Email',
     phone: 'Phone (optional)',
-    service: 'Service of interest',
-    budget: 'Budget',
-    timeline: 'Timeline',
-    message: 'Your message',
+    company: 'Company',
+    companyPh: 'Optional',
+    namePh: 'Your full name',
+    emailPh: 'you@company.com',
+    phonePh: '+966 5X XXX XXXX',
+    messagePh: 'What are you making, who is it for, and when does it need to be ready?',
+    service: 'What do you need?',
+    budget: 'Budget range',
+    timeline: 'When do you need it?',
+    message: 'Tell us about the project',
+    note: 'We read everything and reply within one business day.',
     choose: 'Choose…',
+    chooseService: "Not sure yet — let's talk",
+    chooseBudget: 'Prefer to discuss',
+    chooseTimeline: 'Not sure yet',
     consent: 'I agree to be contacted about my enquiry.',
-    submit: 'Send enquiry',
+    submit: 'Send a message',
     sending: 'Sending…',
     ok: 'Thanks — we’ll be in touch shortly.',
     invalid: 'Please check the highlighted fields and try again.',
@@ -40,13 +50,23 @@ const STR = {
     name: 'الاسم',
     email: 'البريد الإلكتروني',
     phone: 'الهاتف (اختياري)',
-    service: 'الخدمة المطلوبة',
-    budget: 'الميزانية',
-    timeline: 'الجدول الزمني',
-    message: 'رسالتك',
+    company: 'الشركة',
+    companyPh: 'اختياري',
+    namePh: 'اسمك الكامل',
+    emailPh: 'you@company.com',
+    phonePh: '+966 5X XXX XXXX',
+    messagePh: 'ما الذي تصنعه، ولمن، ومتى يجب أن يكون جاهزًا؟',
+    service: 'ما الخدمة التي تحتاجها؟',
+    budget: 'نطاق الميزانية',
+    timeline: 'متى تحتاجه؟',
+    message: 'أخبرنا عن المشروع',
+    note: 'نقرأ كل رسالة ونردّ خلال يوم عمل واحد.',
     choose: 'اختر…',
+    chooseService: 'لم أُحدّد بعد — لنتحدث',
+    chooseBudget: 'أفضّل مناقشتها',
+    chooseTimeline: 'لم أُحدّد بعد',
     consent: 'أوافق على التواصل معي بخصوص طلبي.',
-    submit: 'إرسال الطلب',
+    submit: 'أرسل رسالتك',
     sending: 'جارٍ الإرسال…',
     ok: 'شكرًا — سنتواصل معك قريبًا.',
     invalid: 'يرجى مراجعة الحقول والمحاولة مرة أخرى.',
@@ -70,40 +90,80 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
 <form id="contact-form" class="contact-form" data-locale={locale} novalidate>
   <div class="field">
     <label for="cf-name">{STR.name}</label>
-    <input id="cf-name" name="name" type="text" required maxlength="120" autocomplete="name" />
+    <input
+      id="cf-name"
+      name="name"
+      type="text"
+      required
+      maxlength="120"
+      autocomplete="name"
+      placeholder={STR.namePh}
+    />
   </div>
   <div class="field">
     <label for="cf-email">{STR.email}</label>
-    <input id="cf-email" name="email" type="email" required maxlength="254" autocomplete="email" />
+    <input
+      id="cf-email"
+      name="email"
+      type="email"
+      required
+      maxlength="254"
+      autocomplete="email"
+      placeholder={STR.emailPh}
+    />
   </div>
   <div class="field">
     <label for="cf-phone">{STR.phone}</label>
-    <input id="cf-phone" name="phone" type="tel" maxlength="32" autocomplete="tel" />
+    <input
+      id="cf-phone"
+      name="phone"
+      type="tel"
+      maxlength="32"
+      autocomplete="tel"
+      placeholder={STR.phonePh}
+    />
+  </div>
+  <div class="field">
+    <label for="cf-company">{STR.company}</label>
+    <input
+      id="cf-company"
+      name="company"
+      type="text"
+      maxlength="120"
+      autocomplete="organization"
+      placeholder={STR.companyPh}
+    />
   </div>
   <div class="field">
     <label for="cf-service">{STR.service}</label>
     <select id="cf-service" name="service">
-      <option value="">{STR.choose}</option>
+      <option value="">{STR.chooseService}</option>
       {services.map((s) => <option value={s.slug}>{pickLocale(s.title, locale, s.slug)}</option>)}
     </select>
   </div>
   <div class="field">
     <label for="cf-budget">{STR.budget}</label>
     <select id="cf-budget" name="budget">
-      <option value="">{STR.choose}</option>
+      <option value="">{STR.chooseBudget}</option>
       {budgetKeys.map((k) => <option value={k}>{STR.budgets[k]}</option>)}
     </select>
   </div>
-  <div class="field">
+  <div class="field field-full">
     <label for="cf-timeline">{STR.timeline}</label>
     <select id="cf-timeline" name="timeline">
-      <option value="">{STR.choose}</option>
+      <option value="">{STR.chooseTimeline}</option>
       {timelineKeys.map((k) => <option value={k}>{STR.timelines[k]}</option>)}
     </select>
   </div>
   <div class="field field-full">
     <label for="cf-message">{STR.message}</label>
-    <textarea id="cf-message" name="message" required maxlength="5000" rows="5"></textarea>
+    <textarea
+      id="cf-message"
+      name="message"
+      required
+      maxlength="5000"
+      rows="5"
+      placeholder={STR.messagePh}></textarea>
   </div>
   <div class="field field-full field-check">
     <input id="cf-consent" name="consent" type="checkbox" />
@@ -114,7 +174,23 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
     <label for="cf-hp">Leave this field empty</label>
     <input id="cf-hp" name="hp" type="text" tabindex="-1" autocomplete="off" />
   </div>
-  <button type="submit" class="cta">{STR.submit}</button>
+  <div class="contact-form__foot field-full">
+    <p class="contact-form__note">{STR.note}</p>
+    <button type="submit" class="cta cta--icon cta--go">
+      <span>{STR.submit}</span>
+      <span class="cta__ico" aria-hidden="true">
+        <svg viewBox="0 0 16 16">
+          <path
+            d="M2 8h12M9 3l5 5-5 5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"></path>
+        </svg>
+      </span>
+    </button>
+  </div>
   <p
     id="contact-status"
     class="form-status"
@@ -158,6 +234,7 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
       name: text('name') ?? '',
       email: text('email') ?? '',
       phone: text('phone'),
+      company: text('company'),
       message: text('message') ?? '',
       serviceOfInterest: text('service'),
       budgetBand: text('budget'),
