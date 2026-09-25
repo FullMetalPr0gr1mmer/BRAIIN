@@ -135,6 +135,33 @@ select vault.create_secret('<same value as NOTIFY_LEAD_SECRET>', 'notify_lead_se
 **Cron runs on the direct `:5432` connection, never the Supavisor pooler** — pg_cron
 holds a session, which transaction-mode pooling cannot provide.
 
+## 5a. Deploy guard role (CI refuses to deploy ahead of migrations)
+
+Merging to `main` auto-deploys the Worker, but migrations are applied by hand (§1). The
+deploy job runs `scripts/deploy-guard.sh` first, which fails the deploy when production is
+missing any migration in the repo. **Order for every change that ships a migration:
+apply it to production (§1) → merge → auto-deploy.** Code first is how content silently
+vanishes: loaders fail closed to empty results, not to an error page.
+
+The guard reads two things and nothing else, so it gets its own read-only role — never
+the `postgres` password:
+
+```sql
+create role deploy_guard login password '<openssl rand -hex 24>'
+  nosuperuser nocreatedb nocreaterole noinherit;
+grant usage on schema supabase_migrations to deploy_guard;
+grant select on supabase_migrations.schema_migrations to deploy_guard;
+-- Once migration 0016 is applied (it creates the app.deployment marker):
+grant usage on schema app to deploy_guard;
+grant select on app.deployment to deploy_guard;
+```
+
+Store the connection URL as the repository secret **`SUPABASE_GUARD_DB_URL`** (Settings →
+Secrets and variables → Actions), using the session pooler on `:5432`:
+`postgresql://deploy_guard.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`.
+While the secret is absent the guard step skips with a warning, exactly like the deploy
+step does without its Cloudflare secrets.
+
 ---
 
 ## 6. Deploy

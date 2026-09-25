@@ -9,10 +9,11 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-001 | 2026-06-14 | Developer (tech@purecoffee.sa) | 2026-09-12 | **Closed 2026-08-01** | `npm audit` high+ gate was advisory. Tree is now 0 high / 0 critical; gate is blocking in both scopes |
 | EXC-002 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | **Closed 2026-08-01** | Migration `0011` (schema `app` grants) shipped ahead of its pgTAP suite — suite now green in CI |
 | EXC-003 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | **Closed 2026-08-01** | Migration `0012` (audit-chain `hmac`) shipped ahead of its regression test — test now green in CI |
-| EXC-004 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-09-01 | Open   | Live on `*.workers.dev` with **no WAF rate limits and no crawler blocks** — both are zone-scoped and there is no zone |
+| EXC-004 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-12-24 | Open (re-justified 2026-09-25; first expiry 2026-09-01 lapsed) | Live on `*.workers.dev` with **no WAF rate limits and no crawler blocks** — both are zone-scoped and there is no zone |
 | EXC-005 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | **Closed 2026-09-25** | `js-yaml` GHSA-5p4m-2wfm-xmqj allowlisted in the prod audit gate — js-yaml 4.3.2 shipped the 4.x fix; entry removed |
 | EXC-006 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open (re-scoped 2026-09-25) | `extract-zip` GHSA-jmr9-qjv8-65gv **+ GHSA-7pqw-9j4j-h8q3** allowlisted in the dev audit gate — every published version is affected |
-| EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | Open   | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee now have no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**) |
+| EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | Open — **widened 2026-09-25, owner re-sign pending** | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee (and, from the UI v2 port, every banner/in-view video loop) have no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**) |
+| EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open   | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20) |
 
 ---
 
@@ -216,6 +217,32 @@ Bounding the exposure: the origin is an unadvertised workers.dev subdomain with 
 
 **Close condition:** all six rules exist on the live zone **and** step 4's three observations pass. Nothing here is testable in CI — `tests/seo/crawlers.spec.ts` pins the code-owned map, and by design nothing can pin the WAF, which is exactly why this needs an observed check rather than a merged diff.
 
+### Re-justified 2026-09-25 — the first expiry lapsed unnoticed
+
+The 2026-09-01 expiry passed with the entry still open and nobody revisiting it. That is
+the failure this register exists to prevent, so the lapse is recorded rather than quietly
+re-dated. **Nothing in the remediation plan has moved:** `braiinstation.com` is still not
+delegated, so there is still no zone to hold a rule.
+
+What changed is the exposure. The UI v2 port (plan `check-latest-folder-in-dazzling-widget`)
+adds a **second public write path** — `/api/apply`, a multipart job application with a CV
+upload — and `/api/contact` has had no volumetric control of any kind since launch. Both
+are unauthenticated paths to a service-role write. Waiting for the zone is no longer an
+acceptable answer for those two, so the exception is **narrowed by a code-level control
+that does not need a zone**:
+
+- ☐ **Two-ring limiter on `/api/contact` and `/api/apply`** (UI v2 PR12a): the Workers Rate
+  Limiting binding per IP over 60 s, then a service-role Postgres counter
+  (`public_write_attempts`, HMAC-keyed, purged after 48 h) for the hour / day / per-email
+  / global windows. `/api/apply` fails **closed**, `/api/contact` fails open and logs.
+- **Hard rule:** `/api/apply` does not ship without that limiter in front of it.
+
+The four WAF rows for search, style-finder, the hooks and the telemetry beacons, and both
+crawler rows, remain open under the original remediation plan — the code limiter is not a
+substitute for them.
+
+**New expiry 2026-12-24.** Close condition unchanged.
+
 ---
 
 ## EXC-005 — `js-yaml` quadratic-CPU advisory allowlisted in the production audit gate
@@ -326,3 +353,86 @@ Any **one** of:
 3. Legal/design sign-off accepts the Level-A failure permanently, in which case the CLAUDE.md §4 DoD point 4 wording is amended to say so — the standard must not keep claiming WCAG 2.2 AA while a Level A criterion is knowingly unmet.
 
 **Watch for:** anyone adding a new autoplaying background video, marquee or carousel. Under this exception they will inherit no pause affordance and will not be warned by CI.
+
+### Widened 2026-09-25 — the UI v2 port trips the "watch for" note
+
+The new Brain Station UI delivery (7 pages; plan `check-latest-folder-in-dazzling-widget`)
+adds motion on almost every page. The owner chose **parity with the mockup** again
+(decision 2), with one addition: the testimonials carousel gets its own pause/play button.
+The scope of this exception therefore grows to cover, **as each surface ships**:
+
+| Surface | Where | Motion |
+| --- | --- | --- |
+| Banner hero loops | `/contact` (already live), `/join`, `/portfolio`, `/portfolio/[slug]` | autoplaying muted video window |
+| In-view clip loops | home Selected Work (featured + 2 cards), about "Who we are", Our Work intro (×2), case-study final film | muted loop while on screen |
+| Clients marquee | home (already covered), `/portfolio` | continuous CSS scroll |
+| Work-hero caption dot | `/portfolio` | pulsing indicator |
+
+**Compliant, and NOT under this exception** (each must stay that way):
+
+- **Testimonials carousel** — visible pause/play control beside its arrows; pauses on hover
+  and on keyboard focus (and Play still resumes with focus inside); stops when off-screen;
+  never auto-advances under `prefers-reduced-motion`.
+- **Card hover previews** — user-initiated, stop on pointer-leave / blur; never autoplay on touch.
+- **Count-up numbers and scroll reveals** — finish in under 5 s (2.2.2 does not apply).
+- **Leadership slider and case-study lightbox** — no autoplay.
+
+**Invariants that still hold across every surface above:** no video element or bytes at
+all under `prefers-reduced-motion` or Save-Data; zero video bytes before intersection
+(now asserted by `tests/e2e/media-bytes.e2e.ts`); in-content clips never autoplay on touch.
+
+⚠ **Owner re-sign required.** The widened scope is a new, larger Level-A failure than the
+one signed on 2026-08-24; this entry must be re-signed (and its expiry revisited) before
+the first new surface merges. The close conditions above are unchanged — the header pause
+control remains the one-button fix for all of it (`setMotionPaused()` is still retained).
+
+---
+
+## EXC-009 — Background video self-hosted as MP4 instead of Cloudflare Stream
+
+**Pillar:** 2 (Performance) — CLAUDE.md §3 Pillar 2 ("Video via Cloudflare Stream only;
+poster is the LCP `<img>`; `preload="none"`"), §6.
+**Opened:** 2026-09-25 · **Owner:** Kareem (kareem@floppytech.ai) · **Expiry:** 2026-12-24
+**Status:** Open
+
+### What deviates
+
+- The hero and slogan background loops play `/media/showreel.mp4` — a **12.2 MB static
+  file** in `public/` — not a Stream rendition. It has been described as "a documented
+  temporary exception pending Stream (KAN-20)" in `Hero.astro` and in commit `2caf2d1` since
+  2026-08-22, but it was never actually entered in this register. This entry is that record.
+- `src/lib/client/lazyVideo.ts` sets `preload = 'auto'` **at mount time**. The standard's
+  `preload="none"` is honoured in the sense that matters — no `<video>` exists in the
+  served HTML, so nothing preloads at parse — but once a surface mounts, the browser is
+  free to fetch aggressively.
+- The UI v2 port multiplies the surfaces. Clip windows (a start/end window of the same
+  file, e.g. 6.2–7.9 s) back the contact/join/work/case-study banners and the in-view
+  clips. The CMS encodes this deliberately: a `VideoClip` is **either** a Stream UID **or**
+  a `path` matching `^/media/[a-z0-9][a-z0-9/_-]*\.mp4$` — that allow-list is the DB-level
+  fence of this exception.
+
+### Why
+
+Cloudflare Stream is not provisioned (KAN-20). The alternative is no video at all, which
+the approved design does not accept.
+
+### What still holds (compensating controls)
+
+- **Zero video bytes before intersection** — now CI-asserted, not just intended
+  (`tests/e2e/media-bytes.e2e.ts`, added 2026-09-25). Its first run is what moved the slogan
+  band from "preload one viewport early" (`rootMargin: '100% 0px'`) to mount-on-intersection.
+- No video bytes at all under `prefers-reduced-motion` or Save-Data.
+- The poster paints first; video mounts after `load` (hero) or on intersection (everything else).
+- From UI v2 PR6: in-content clips never autoplay on touch, so mobile data plans pay for
+  posters only.
+- Every clip is a window of the **same** file, so a visitor downloads (ranges of) one asset,
+  not one per surface.
+
+### Close condition
+
+All of:
+
+1. Stream is provisioned (KAN-20) and every `VideoClip` in content uses `streamUid`;
+2. the `/media/*.mp4` path branch is removed from the `VideoClip` schema (and its DB CHECK);
+3. `public/media/showreel.mp4` is deleted;
+4. mounted `<video>` elements use `preload="none"` or a Stream player facade.

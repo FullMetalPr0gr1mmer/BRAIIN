@@ -3,8 +3,8 @@ import AxeBuilder from '@axe-core/playwright';
 
 // WCAG 2.2 AA DOM audit (CLAUDE.md DoD #4 — "axe zero violations on themed output").
 // Covers both locales incl. an /ar/ RTL route. The token-level contrast guard
-// (scripts/contrast-audit.mjs) runs in main CI; this DOM pass runs in the staged
-// perf-seo-a11y workflow against a served build (needs a browser).
+// (scripts/contrast-audit.mjs) runs in main CI; this DOM pass runs in the perf-seo-a11y
+// workflow against a served build with seeded data (needs a browser).
 const ROUTES = [
   '/',
   '/ar',

@@ -50,8 +50,11 @@ const words = sloganText.split(/\s+/);
 <script>
   import { mountLazyVideo, setVideoInView } from '@/lib/client/lazyVideo';
 
-  // Two observers, two jobs. PRELOAD on approach (one viewport away — zero video bytes
-  // before intersection, CLAUDE.md §6). PLAY only while the pinned band is actually on
+  // Two observers, two jobs. MOUNT on intersection — CLAUDE.md §6 says "zero video bytes
+  // before intersection", and tests/e2e/media-bytes.e2e.ts asserts it literally. This
+  // used to preload one viewport early (`rootMargin: '100% 0px'`), which fetched video
+  // for a band the visitor could not yet see. The poster covers the gap until frames are
+  // decodable (`.has-video` cross-fade). PLAY only while the pinned band is actually on
   // screen: the manager pauses it off-screen and, when the source matches the hero's,
   // hands over the shared clock so the loop continues instead of restarting.
   const pin = document.querySelector<HTMLElement>('.slogan__pin');
@@ -65,7 +68,7 @@ const words = sloganText.split(/\s+/);
           mountLazyVideo(media);
         }
       },
-      { rootMargin: '100% 0px' },
+      { rootMargin: '0px' },
     );
     preload.observe(media);
 
