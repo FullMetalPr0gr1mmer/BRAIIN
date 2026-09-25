@@ -10,8 +10,8 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-002 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | **Closed 2026-08-01** | Migration `0011` (schema `app` grants) shipped ahead of its pgTAP suite — suite now green in CI |
 | EXC-003 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-08-15 | **Closed 2026-08-01** | Migration `0012` (audit-chain `hmac`) shipped ahead of its regression test — test now green in CI |
 | EXC-004 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-09-01 | Open   | Live on `*.workers.dev` with **no WAF rate limits and no crawler blocks** — both are zone-scoped and there is no zone |
-| EXC-005 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open   | `js-yaml` GHSA-5p4m-2wfm-xmqj allowlisted in the prod audit gate — no fixed 4.x exists and 5.x breaks Astro |
-| EXC-006 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open   | `extract-zip` GHSA-jmr9-qjv8-65gv allowlisted in the dev audit gate — every published version is affected |
+| EXC-005 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | **Closed 2026-09-25** | `js-yaml` GHSA-5p4m-2wfm-xmqj allowlisted in the prod audit gate — js-yaml 4.3.2 shipped the 4.x fix; entry removed |
+| EXC-006 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open (re-scoped 2026-09-25) | `extract-zip` GHSA-jmr9-qjv8-65gv **+ GHSA-7pqw-9j4j-h8q3** allowlisted in the dev audit gate — every published version is affected |
 | EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | Open   | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee now have no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**) |
 
 ---
@@ -242,6 +242,16 @@ The exposure is **build-time parsing of repo-authored YAML frontmatter only**. N
 
 **Close condition:** `npm run audit` reports 0 unallowlisted high/critical with the `GHSA-5p4m-2wfm-xmqj` entry REMOVED from `scripts/audit-gate.mjs`. If neither path lands by expiry, re-justify — never extend silently.
 
+### Closed 2026-09-25
+
+Path 2 landed: **js-yaml 4.3.2** is a 4.x release that fixes GHSA-5p4m-2wfm-xmqj, and the
+gate started reporting the allowlist entry as stale. It arrived during the 2026-09 advisory
+sweep (`fix/deps-2026-09`, which also cleared a CRITICAL Astro RCE through AVIF image
+optimization, GHSA-26w7-cxv4-gfx2). The entry is removed from `scripts/audit-gate.mjs` with
+a comment saying why, and `npm run audit` reports 0 high/critical in production deps. The
+Lighthouse CI copy (js-yaml 3.x, dev-only) is pinned forward to `^3.15.2` by an override
+for the separate GHSA-2883-xcg3-v3hh.
+
 ---
 
 ## EXC-006 — `extract-zip` path-traversal advisory allowlisted in the dev audit gate
@@ -262,6 +272,15 @@ The exposure is **build-time parsing of repo-authored YAML frontmatter only**. N
 1. ☐ Watch for `extract-zip` publishing a fixed release, or `@lhci/cli` swapping extractors — either clears this via a routine bump.
 
 **Close condition:** `npm run audit:all` reports 0 unallowlisted high/critical with the `GHSA-jmr9-qjv8-65gv` entry REMOVED from `scripts/audit-gate.mjs`. If nothing lands by expiry, re-justify — never extend silently.
+
+### Re-scoped 2026-09-25 — a second advisory against the same package
+
+**GHSA-7pqw-9j4j-h8q3** (arbitrary file writes through symlink archive entries) was
+published against `extract-zip`, affected range `<=2.0.1` — every release; the package has
+not published since 2023. Same package, same single call site (`@lhci/cli` unpacking the
+Chrome-for-Lighthouse download from Google over TLS), same dev/CI-only exposure, so it is
+allowlisted under this exception with the same expiry rather than as a new one. The close
+condition now requires **both** entries removed.
 
 ---
 
