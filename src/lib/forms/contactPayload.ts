@@ -7,16 +7,18 @@
 // (200 OK) and lose the answer on every submission. tests/lib/contactForm.spec.ts holds
 // every key this module can emit to the schema's own key list.
 
-/** Form control `name` → LeadInputSchema key. */
+/**
+ * Form control `name` → LeadInputSchema key. Only controls a form actually renders: the
+ * UI v2 forms have no phone and no timeline select (the schema still ACCEPTS `phone` and
+ * the legacy `timelineBand`, for pages cached before PR9 — see packages/schemas/lead.ts).
+ */
 export const CONTACT_FIELD_TO_LEAD = {
   name: 'name',
   email: 'email',
-  phone: 'phone',
   company: 'company',
   message: 'message',
   service: 'serviceOfInterest',
   budget: 'budgetBand',
-  timeline: 'timelineBand',
   deadline: 'timelineText',
 } as const;
 export type ContactField = keyof typeof CONTACT_FIELD_TO_LEAD;
@@ -27,11 +29,12 @@ export const CONTACT_FIXED_KEYS = ['kind', 'locale', 'consentMarketing', 'hp'] a
 /**
  * The fields of each ContactForm variant, in DOM order (ContactForm.astro renders from
  * this list). `compact` is the home form of the UI v2 design (name, email, company,
- * service, message); `full` is /contact's, unchanged until the contact page is ported.
+ * service, message); `full` is /contact's (UI v2 PR9): the same plus the budget range and
+ * the free-text deadline ("A date, a season, or ASAP").
  */
 export const CONTACT_FORM_FIELDS = {
   compact: ['name', 'email', 'company', 'service', 'message'],
-  full: ['name', 'email', 'phone', 'company', 'service', 'budget', 'timeline', 'message'],
+  full: ['name', 'email', 'company', 'service', 'budget', 'deadline', 'message'],
 } as const satisfies Record<string, readonly ContactField[]>;
 export type ContactFormVariant = keyof typeof CONTACT_FORM_FIELDS;
 

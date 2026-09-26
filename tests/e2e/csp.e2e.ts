@@ -19,6 +19,7 @@ const ROUTES = [
   '/',
   '/ar',
   '/contact',
+  '/ar/contact',
   '/search',
   '/services',
   '/creative-knowledge',
@@ -53,7 +54,7 @@ for (const route of ROUTES) {
   });
 }
 
-for (const route of ['/contact', '/admin/login']) {
+for (const route of ['/contact', '/ar/contact', '/admin/login']) {
   test(`every component script is external on ${route}`, async ({ page }) => {
     await page.goto(route, { waitUntil: 'networkidle' });
     // A module script with neither `src` nor a nonce would be blocked by our CSP.

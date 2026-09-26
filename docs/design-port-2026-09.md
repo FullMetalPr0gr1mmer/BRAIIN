@@ -157,3 +157,70 @@ existing global.css utilities.
     `/ar/cookie-policy`); unmatched `/ar/*` URLs answer the Arabic 404
     (`src/pages/ar/[...path].astro`, the lowest-priority rest route), and a 404's
     language switch goes to the other locale's home instead of linking to itself.
+
+## Contact (PR9)
+
+| Mockup | Site | Where |
+|---|---|---|
+| `.hero--contact` | `Hero` with `withHeroPreset(…, 'contact')` → `.hero--banner` (route data: banner, `#inquiry`, clip 6.2–7.9 s) | `/contact` hero |
+| hero `.cta.cta--down` (icon first) | `Cta.astro` `.cta--badge.cta--down.hero__cta` | hero |
+| `.inquiry` + `.sec__head` | `ContactInquiry.astro` (`.contact-inquiry`, `.sec-head`, `AccentText`) | `#inquiry` |
+| `.form` / `.field` / `.form__foot` / `.form__ok` | `ContactForm fields="full"` (`.contact-form--full`, badge submit, `.form-status.is-ok`) + `formErrors.ts` | `#inquiry` |
+| `.touch` / `.tbox` / `.tbox__ico` | `ContactChannels.astro` (`.contact-touch`, `.touch-card`, `.touch-card__ico`) | channels |
+| `.social--joined` | `SocialStrip joined` (`.social-strip--joined`) | channels |
+| `.faq` / `.qa` | `FaqAccordion.astro` (`.faq-section`, native `<details class="faq-item">`) | `#faq` |
+
+## Decisions (PR9)
+
+28. **The contact page is CMS-composed** (`pages` slug `contact`, seeded by
+    `supabase/seed-data/52-contact.json` while the page has no sections), with three route
+    guarantees on top: `withHeroPreset('contact')`, `ensureContactInquiry` and
+    `withContactData` (services as route data). This fixes the production bug where the
+    hero rendered the HOME headline and its "See our work" button (and jumped to the form).
+    The preset is code-only and never stored: its copy (the design's, verbatim) is a
+    default under authored content; its layout — the banner, the `#inquiry` target, the
+    loop window — is route `data` the CMS cannot change. An authored headline never
+    inherits the preset's accent indices (they count the preset's words). A banner hero
+    never shows the intro plate, whatever its content says. The page gains its `<main>`.
+29. **Hero loop window 6.2–7.9 s** via `data-clip-start/end` on the hero media (lazyVideo's
+    windowed loop, EXC-009); the design's `scale(1.1)` + `object-position: center 42%` are
+    kept. Its `inset: -10%` overscan is not: it existed only for the JS parallax the port
+    drops. The accent stays **cobalt** (the design's Klein is ~2:1 on the dark video — the
+    PR6 deviation), and the scrim stays.
+30. **The full form is the design's seven fields** (name, email, company, service, budget,
+    deadline, message) plus the PDPL consent checkbox and the honeypot, posting
+    `kind=project_inquiry`. Phone and the timeline select are gone (the schema still accepts
+    `phone` and the legacy `timelineBand` for cached pages). The deadline is free text,
+    `maxlength=120`, posted as `timelineText` (encrypted into `timeline_text_enc`,
+    Admin/Developer only). Budget options are `BUDGET_BAND_LABELS` — the design's bands and
+    its Arabic-Indic digits — with "Prefer to discuss" as the empty option; legacy bands are
+    accepted on input, never offered. Outcomes, per-field errors and the sent state are
+    PR7's (`formErrors.ts`); the design's form showed "sent" whatever happened.
+31. **Service options are the published services' titles**, valued by slug — not the
+    design's static list, which differs from the CMS in six labels ("Animation" vs
+    "Animations"; five Arabic titles). Matching the design is a content edit in
+    /admin/services, not code.
+32. **Section heads are real `<h2>`s** named by `aria-labelledby`, with the accent as a word
+    range (`AccentText`) — never an HTML string. `contactInquiry`, `contactChannels` and
+    `faq` now take CMS copy overrides (strict schemas; tag, heading, accent, lead, and the
+    form note / confirmation / submit label, and the card labels and notes). The FAQ's
+    questions and answers stay code-owned: they are also the FAQPage JSON-LD.
+33. **The FAQ is the design's dark band** — and that is the contrast fix verified on
+    production: on the old paper band its sky kicker and heading accent measured 2.56:1
+    (WCAG 1.4.3). Sky is used only on the black bands (8.2:1); the paper channels band
+    takes Klein (10.6:1); `scripts/contrast-audit.mjs` asserts the pairs and the contact e2e
+    measures every kicker and accent against its own band. Questions turn sky on hover and
+    when open, as designed. The design animated the panel height (layout); here the panel
+    opens natively and the answer rises in (transform + opacity, in the reduced-motion
+    invariant). The FAQPage JSON-LD is emitted only while the FAQ band renders.
+34. **The Arabic FAQ is the design's Saudi-voice copy, verbatim** (owner decision 6),
+    replacing the MSA rewrite; the English was already verbatim. Answer 5 ("one of the
+    fourteen") is tied to the service count — flagged for the owner, kept verbatim.
+35. **Channel cards carry the design's icons**, Klein labels and 700-weight values; the hover
+    label/note stay at .88 white (the design's .8 is 4.36:1 on the gradient). The WhatsApp
+    card renders only for a valid E.164 number in the identity (`whatsappChannel`, checked
+    again on read) — the design's `wa.me/9665XXXXXXXX` never ships. The lead "No form, no
+    gatekeeping." is kept verbatim although it sits under a form (flagged, design copy).
+36. **The joined social strip keeps the design's inset rule** (the gutter is a margin, so
+    the line is inset too). The contact-only always-on `.nav::before` gradient is not
+    carried: the overlay header and the hero scrim already hold the nav's contrast.

@@ -183,6 +183,59 @@ export const TestimonialsSectionContentSchema = z
   })
   .strict();
 
+// ── Contact (UI v2 PR9) ──────────────────────────────────────────────────────────
+// The three contact bands take copy overrides only. Strict, like the other UI v2 schemas:
+// a stray key is refused on write rather than stored and silently ignored.
+
+/**
+ * The inquiry band around the lead form. `note`, `successMessage` and `submitLabel` reach
+ * the form itself; the form's fields, options and validation copy are code (the fields are
+ * the LeadInputSchema contract — src/lib/forms/contactPayload.ts).
+ */
+export const ContactInquirySectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    /** Beside the submit button ("We read everything…"). */
+    note: Text.optional(),
+    /** The confirmation that replaces the fields once the server accepted the inquiry. */
+    successMessage: Text.optional(),
+    submitLabel: Text.optional(),
+  })
+  .strict();
+
+/**
+ * "Talk to us": the direct channels. The address and number are the public identity
+ * (site_profile), never content — the WhatsApp card renders only when a number is set.
+ */
+export const ContactChannelsSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    emailLabel: Text.optional(),
+    emailNote: Text.optional(),
+    whatsappLabel: Text.optional(),
+    whatsappNote: Text.optional(),
+  })
+  .strict();
+
+/**
+ * The FAQ band's heading only. The questions and answers stay code-owned
+ * (src/lib/content/contactFaq.ts): they are also the page's FAQPage JSON-LD, and an
+ * editable answer beside a fixed JSON-LD would be a structured-data mismatch.
+ */
+export const FaqSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+  })
+  .strict();
+
 export const AboutStorySectionContentSchema = z.object({
   heading: Text.optional(),
   lead: Text.optional(),
@@ -211,6 +264,10 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
   statistics: StatisticsSectionContentSchema,
   selectedWork: SelectedWorkSectionContentSchema,
   testimonials: TestimonialsSectionContentSchema,
+  // UI v2 PR9 (contact)
+  contactInquiry: ContactInquirySectionContentSchema,
+  contactChannels: ContactChannelsSectionContentSchema,
+  faq: FaqSectionContentSchema,
 };
 
 /**
@@ -268,3 +325,6 @@ export type CtaSectionContent = z.infer<typeof CtaSectionContentSchema>;
 export type AboutStorySectionContent = z.infer<typeof AboutStorySectionContentSchema>;
 export type SelectedWorkSectionContent = z.infer<typeof SelectedWorkSectionContentSchema>;
 export type TestimonialsSectionContent = z.infer<typeof TestimonialsSectionContentSchema>;
+export type ContactInquirySectionContent = z.infer<typeof ContactInquirySectionContentSchema>;
+export type ContactChannelsSectionContent = z.infer<typeof ContactChannelsSectionContentSchema>;
+export type FaqSectionContent = z.infer<typeof FaqSectionContentSchema>;

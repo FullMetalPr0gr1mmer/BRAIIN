@@ -39,6 +39,8 @@ const T = {
   kleinCount: '#b2bdeb', // .tm__count — white .70 over Klein
   // UI v2 PR7 (home)
   okPanel: '#000b24', // .form-status.is-ok — rgba(2,76,255,.14) over black (the sent panel)
+  // UI v2 PR9 (contact)
+  touchCard: '#f9f9f9', // .touch-card — rgba(0,0,0,.025) over white (the channel cards)
 };
 
 // (foreground, background, minRatio, where) — every real on-screen pairing.
@@ -85,6 +87,16 @@ const PAIRS = [
   ['cobalt', 'mist', 3.0, 'focus outline on mist — Selected work links (UI, 1.4.11)'],
   ['fg', 'okPanel', 4.5, 'lead form "sent" confirmation text'],
   ['err', 'bg', 3.0, 'invalid field border on black (UI, 1.4.11)'],
+  // UI v2 PR9 (contact). Verified on production: the FAQ kicker and heading accent were sky
+  // on the PAPER FAQ band — sky on white is 2.56:1 and fails 1.4.3. The FAQ is the design's
+  // black band now (sky 8.2:1); the one light band (channels) takes Klein. Sky-on-paper is
+  // deliberately absent from this list: it is not a pairing the site may use.
+  ['accent', 'bg', 4.5, 'contact FAQ + inquiry kicker and heading accent (sky on black)'],
+  ['muted', 'bg', 4.5, 'contact FAQ answers / section lead on black'],
+  ['klein', 'paper', 4.5, 'contact channels kicker + heading accent (Klein on white)'],
+  ['klein', 'touchCard', 4.5, 'contact channel card label (Klein on the card tint)'],
+  ['ink', 'touchCard', 4.5, 'contact channel card value'],
+  ['dim', 'touchCard', 4.5, 'contact channel card note'],
 ];
 
 // ---- Admin palette — keep in sync with public/styles/admin.css :root tokens ----

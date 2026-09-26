@@ -2,42 +2,60 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SectionRenderer from '@/components/SectionRenderer.astro';
-import type { ServiceRow } from '@/lib/data/services';
+import { getPageComposition } from '@/lib/data/pageSections';
+import { getPublishedServices } from '@/lib/data/services';
 import { buildBreadcrumbSchema, buildFaqSchema } from '@/lib/seo/jsonld';
 import { localizedPath } from '@/lib/i18n';
 import { loadHead } from '@/lib/seo/head';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { CONTACT_FAQ } from '@/lib/content/contactFaq';
-import { DEFAULT_CONTACT_SECTIONS, ensureContactInquiry } from '@/lib/sections/types';
+import {
+  DEFAULT_CONTACT_SECTIONS,
+  ensureContactInquiry,
+  withHeroPreset,
+} from '@/lib/sections/types';
+import { faqShown, withContactData } from '@/lib/sections/contact';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 
-// Contact — a composed section page (hero banner → enquiry → channels → FAQ), matching
-// how the home and about pages are built. It is a shell: every band is a section
-// component, so the composition can move to `page_sections` without touching this file.
+// Contact (UI v2 PR9) — a CMS-composed section page (`pages` slug 'contact' +
+// `page_sections`, authored under /admin/pages + /admin/sections): banner hero → inquiry →
+// channels → FAQ. The default composition renders until the page is composed.
+//
+// Three route-level guarantees sit on top of whatever the CMS says:
+//   withHeroPreset('contact')  the hero is the contact banner with the contact copy — before
+//                              PR9 it fell back to the HOME headline and "See our work";
+//   ensureContactInquiry       the inquiry form (the one public write path) cannot be hidden
+//                              or removed;
+//   withContactData            the published services reach the form as route data.
 
 interface Props {
   locale: Locale;
-  services: ServiceRow[];
 }
 
-const { locale, services } = Astro.props;
+const { locale } = Astro.props;
 
 const STR = { en: { home: 'Home' }, ar: { home: 'الرئيسية' } }[locale];
 const meta = PAGE_META.contact[locale];
 
-// The head: tenant defaults + this route's code fallbacks (src/lib/seo/pageMeta.ts). The
-// page moves onto its CMS composition — and with it a per-page SEO override — in PR9.
-const { seo } = await loadHead(Astro.locals, {
-  locale,
-  fallbackTitle: meta.title,
-  fallbackDescription: meta.description,
+// The composition, the head (whose per-page SEO override needs the page id, so it is handed
+// the composition query rather than its result) and the services load together.
+const compositionQuery = getPageComposition('contact');
+const [composition, { seo }, services] = await Promise.all([
+  compositionQuery,
+  loadHead(Astro.locals, {
+    locale,
+    fallbackTitle: meta.title,
+    fallbackDescription: meta.description,
+    entity: compositionQuery.then((c) => (c ? { type: 'page' as const, id: c.page.id } : null)),
+  }),
+  getPublishedServices(),
+]);
+// A published page with no sections yet renders the default composition (its SEO override,
+// keyed by the page id above, still applies).
+const composed = composition?.sections.length ? composition.sections : DEFAULT_CONTACT_SECTIONS;
+const sections = withContactData(ensureContactInquiry(withHeroPreset(composed, 'contact')), {
+  services,
 });
-
-// The service list is data one section needs, so it rides in that section's props
-// rather than becoming a pass-through parameter on SectionRenderer.
-const sections = ensureContactInquiry(DEFAULT_CONTACT_SECTIONS).map((s) =>
-  s.type === 'contactInquiry' ? { ...s, props: { ...(s.props ?? {}), services } } : s,
-);
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const breadcrumb = buildBreadcrumbSchema([
@@ -45,10 +63,12 @@ const breadcrumb = buildBreadcrumbSchema([
   { name: meta.title, url: base + localizedPath('/contact', locale) },
 ]);
 
-// FAQPage, built from the SAME array FaqAccordion renders — see contactFaq.ts. If these
-// two ever read from different sources, the structured data starts describing content
-// the page does not visibly contain, which is a manual-action category.
-const faq = buildFaqSchema(CONTACT_FAQ[locale].map((i) => ({ question: i.q, answer: i.a })));
+// FAQPage, built from the SAME array FaqAccordion renders — see contactFaq.ts — and only
+// while the FAQ band renders. If the two ever disagree, the structured data describes
+// content the page does not visibly contain, which is a manual-action category.
+const jsonLd = faqShown(sections)
+  ? [breadcrumb, buildFaqSchema(CONTACT_FAQ[locale].map((i) => ({ question: i.q, answer: i.a })))]
+  : [breadcrumb];
 ---
 
 <BaseLayout
@@ -56,10 +76,13 @@ const faq = buildFaqSchema(CONTACT_FAQ[locale].map((i) => ({ question: i.q, answ
   description={seo.description}
   locale={locale}
   logicalPath="/contact"
-  jsonLd={[breadcrumb, faq]}
+  jsonLd={jsonLd}
   robots={seo.robots}
   {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
   header="overlay"
 >
-  <SectionRenderer locale={locale} sections={sections} />
+  <main>
+    <SectionRenderer locale={locale} sections={sections} />
+  </main>
 </BaseLayout>
