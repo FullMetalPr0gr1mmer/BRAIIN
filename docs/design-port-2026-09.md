@@ -106,8 +106,10 @@ existing global.css utilities.
     whenever the table was empty — a claim no editor could withdraw. The names now come
     only from `clients` rows that are `visible` (the disclosure permission, enforced by
     RLS) and `show_in_marquee`, in each locale's spelling (`partner_logos` held one English
-    name per row). "Since 2019" is the identity's `founded_year` (Arabic-Indic in Arabic,
-    as the design writes it); no year, no note. The partner-logos admin is retired (its
+    name per row). The track runs `direction: ltr` as the design's does (the loop maths
+    assume it; each Arabic name is its own bidi run), flipping back to RTL only in the
+    reduced-motion static list. "Since 2019" is the identity's `founded_year` (Arabic-Indic
+    in Arabic, as the design writes it); no year, no note. The partner-logos admin is retired (its
     table stays until the contract migration; `export-backup` still dumps it).
 21. **Selected work picks among the featured projects only.** Default: the first by
     `sort_order` is the featured project, the next two the cards; `featuredSlug` /
@@ -128,7 +130,11 @@ existing global.css utilities.
     and a server 422 now names the refused schema keys (never their values, never the
     honeypot) so those fields are marked too. On success the fields give way to the
     confirmation panel, which takes focus. Error text uses `--bs-err-soft` (the audited
-    token on black). The consent label says "inquiry" in both forms.
+    token on black). The consent label says "inquiry" in both forms. The selects carry the
+    design's chevron (`appearance: none`, mirrored in RTL), but unlike the mockup it stays
+    visible on focus (the focus rule sets `background-color`, not the shorthand). The
+    invalid-form message names no direction ("the marked fields") — the status line renders
+    below every field it refers to (WCAG 1.3.3).
 23. **The contact-form contract is one list** (`src/lib/forms/contactPayload.ts`): the
     fields per variant (the markup renders from it) and their LeadInputSchema keys.
     `tests/lib/contactForm.spec.ts` asserts every key it can post is a schema key — the
