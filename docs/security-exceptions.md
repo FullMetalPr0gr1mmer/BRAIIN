@@ -370,9 +370,10 @@ The scope of this exception therefore grows to cover, **as each surface ships**:
 
 **Compliant, and NOT under this exception** (each must stay that way):
 
-- **Testimonials carousel** — visible pause/play control beside its arrows; pauses on hover
-  and on keyboard focus (and Play still resumes with focus inside); stops when off-screen;
-  never auto-advances under `prefers-reduced-motion`.
+- **Testimonials carousel** — visible pause/play control beside its arrows; pauses on hover;
+  keyboard focus entering it stops the rotation until Play is pressed (APG — focus leaving
+  does not restart it); stops when off-screen; never auto-advances under
+  `prefers-reduced-motion`.
 - **Card hover previews** — user-initiated, stop on pointer-leave / blur; never autoplay on touch.
 - **Count-up numbers and scroll reveals** — finish in under 5 s (2.2.2 does not apply).
 - **Leadership slider and case-study lightbox** — no autoplay.

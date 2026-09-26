@@ -1,0 +1,134 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { PortfolioCard } from '@/lib/data/portfolio';
+import { pickLocale, localizedHref } from '@/lib/i18n';
+import { facetQuery, toggleFacet, type Facet, type FacetSelection } from '@/lib/portfolio/catalog';
+
+// A project's facet values — Service, Sector ("Industry" on the case study), Client, Year —
+// each a LINK to All projects filtered by it (UI v2). Plain links, not script-driven
+// buttons: they work without JS, can be opened in a new tab, and are what a crawler sees.
+// In the catalogue the active value is marked (aria-current) and its link clears it.
+//
+// Labels use each service's short title where it has one (SEO / GEO / AEO → "تحسين
+// الظهور"). A client RLS hid (not cleared for disclosure) is named "Confidential client" —
+// text, never a link, since a filter URL would disclose the slug.
+
+interface Props {
+  card: PortfolioCard;
+  locale: Locale;
+  /** dark = Our Work / All projects cards; light = home Selected work; case = case-study title band. */
+  variant: 'dark' | 'light' | 'case';
+  /** Logical path of the catalogue the tags filter (default /portfolio/all). */
+  base?: string;
+  /** The catalogue's current selection — marks active tags and makes their links toggle. */
+  selection?: FacetSelection;
+}
+
+const { card, locale, variant, base = '/portfolio/all', selection = {} } = Astro.props;
+
+const STR = {
+  en: {
+    service: 'Service',
+    sector: variant === 'case' ? 'Industry' : 'Sector',
+    client: 'Client',
+    year: 'Year',
+    confidential: 'Confidential client',
+  },
+  ar: {
+    service: 'الخدمة',
+    sector: 'القطاع',
+    client: 'العميل',
+    year: 'السنة',
+    confidential: 'عميل غير مُعلَن',
+  },
+}[locale];
+
+interface Tag {
+  label: string;
+  facet: Facet;
+  value: string;
+}
+interface Field {
+  facet: Facet;
+  label: string;
+  tags: Tag[];
+  /** Shown as text instead of tags (the confidential client). */
+  note?: string;
+}
+
+const candidates: Field[] = [
+  {
+    facet: 'service' as const,
+    label: STR.service,
+    tags: card.services.map((s) => ({
+      label: pickLocale(s.label, locale),
+      facet: 'service' as const,
+      value: s.slug,
+    })),
+  },
+  {
+    facet: 'sector' as const,
+    label: STR.sector,
+    tags: card.sector
+      ? [
+          {
+            label: pickLocale(card.sector.name, locale),
+            facet: 'sector' as const,
+            value: card.sector.slug,
+          },
+        ]
+      : [],
+  },
+  {
+    facet: 'client' as const,
+    label: STR.client,
+    tags: card.client
+      ? [
+          {
+            label: pickLocale(card.client.name, locale),
+            facet: 'client' as const,
+            value: card.client.slug,
+          },
+        ]
+      : [],
+    ...(card.confidentialClient ? { note: STR.confidential } : {}),
+  },
+  {
+    facet: 'year' as const,
+    label: STR.year,
+    tags:
+      card.year !== null
+        ? [{ label: String(card.year), facet: 'year' as const, value: String(card.year) }]
+        : [],
+  },
+];
+const fields = candidates.filter((f) => f.tags.length > 0 || f.note);
+
+const hrefFor = (tag: Tag) =>
+  localizedHref(`${base}${facetQuery(toggleFacet(selection, tag.facet, tag.value))}`, locale);
+const isOn = (tag: Tag) => selection[tag.facet] === tag.value;
+---
+
+{
+  fields.length > 0 && (
+    <div class:list={['facets', `facets--${variant}`]}>
+      {fields.map((field) => (
+        <div class="facets__f">
+          <span class="facets__k">{field.label}</span>
+          <div class="facets__tags">
+            {field.tags.map((tag) => (
+              <a
+                class:list={['ftag', { 'is-on': isOn(tag) }]}
+                href={hrefFor(tag)}
+                aria-current={isOn(tag) ? 'true' : undefined}
+              >
+                {tag.label}
+              </a>
+            ))}
+            {field.note && <span class="ftag ftag--note">{field.note}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}

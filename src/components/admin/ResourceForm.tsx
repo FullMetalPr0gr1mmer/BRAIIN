@@ -22,7 +22,20 @@ export default function ResourceForm({ resource, id }: ResourceFormProps) {
   const ui = uiFor(resource);
   const isNew = id === null;
 
-  const [values, setValues] = useState<Row>({});
+  // A new record starts from the create schema's defaults (a box the server would tick is
+  // shown ticked).
+  const [values, setValues] = useState<Row>(() =>
+    isNew
+      ? Object.fromEntries(
+          ui.fields
+            .filter((f) => f.defaultValue !== undefined)
+            .map((f) => [f.name, f.defaultValue]),
+        )
+      : {},
+  );
+  // As loaded: a datetime the editor did not touch is left out of the PATCH, so the stored
+  // instant keeps its full precision (the input shows minutes only).
+  const [initial, setInitial] = useState<Row>({});
   const [version, setVersion] = useState(1);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -33,7 +46,9 @@ export default function ResourceForm({ resource, id }: ResourceFormProps) {
     setBusy(true);
     try {
       const row = await adminFetch<Row>(`/api/admin/${ui.slug}/${id}`);
-      setValues(rowToForm(row, ui.fields));
+      const form = rowToForm(row, ui.fields);
+      setValues(form);
+      setInitial(form);
       setVersion(Number(row['version'] ?? 1));
     } catch (err) {
       setError(describeError(err));
@@ -62,6 +77,11 @@ export default function ResourceForm({ resource, id }: ResourceFormProps) {
         window.location.href = `/admin/${ui.slug}/${String(created['id'])}`;
         return;
       }
+      for (const field of ui.fields) {
+        if (field.kind === 'datetime' && values[field.name] === initial[field.name]) {
+          delete body[field.name];
+        }
+      }
       const updated = await adminFetch<Row>(`/api/admin/${ui.slug}/${id}`, {
         method: 'PATCH',
         body: { ...body, version },
@@ -69,7 +89,9 @@ export default function ResourceForm({ resource, id }: ResourceFormProps) {
       // Re-seed from the SERVER's response, not from local state: the row now carries a
       // bumped version, a trigger-set updated_at, and derived fields such as
       // reading_minutes that the client never computed.
-      setValues(rowToForm(updated, ui.fields));
+      const reseeded = rowToForm(updated, ui.fields);
+      setValues(reseeded);
+      setInitial(reseeded);
       setVersion(Number(updated['version'] ?? version + 1));
       setSaved(true);
     } catch (err) {

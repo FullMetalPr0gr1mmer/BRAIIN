@@ -13,6 +13,9 @@ const CONFIG: Record<string, ResourceConfig> = {
   services: R.serviceResource,
   blog: R.postResource,
   portfolio: R.portfolioResource,
+  sectors: R.sectorResource,
+  clients: R.clientResource,
+  testimonials: R.testimonialResource,
   pages: R.pageResource,
   sections: R.sectionResource,
   navigation: R.navigationResource,
@@ -28,7 +31,38 @@ const CONFIG: Record<string, ResourceConfig> = {
   'ai-styles': R.aiStyleResource,
 };
 
-const cols = (list: string) => list.split(',').map((c) => c.trim());
+/**
+ * The top-level keys a PostgREST select returns: plain columns, and each embed under its
+ * alias or table name (`portfolio_media(role,kind)` → `portfolio_media`). Commas inside an
+ * embed's parentheses are not separators.
+ */
+function cols(list: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of list) {
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (ch === ',' && depth === 0) {
+      out.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  out.push(current);
+  return out.map((c) => c.trim().replace(/\(.*$/s, '').split(':')[0]!.trim());
+}
+
+/** Keys of the API response: the selected columns, plus whatever fromRow derives from them. */
+function returnedKeys(config: ResourceConfig): string[] {
+  const selected = cols(config.columns);
+  if (!config.fromRow) return selected;
+  const stub = Object.fromEntries(
+    selected.map((k) => [k, config.columns.includes(`${k}(`) ? [] : null]),
+  );
+  return [...new Set([...selected, ...Object.keys(config.fromRow(stub))])];
+}
 
 describe('every admin resource UI has a resource config', () => {
   it('covers exactly the same slugs', () => {
@@ -40,7 +74,7 @@ for (const [slug, ui] of Object.entries(RESOURCE_UI)) {
   const config = CONFIG[slug];
   describe(`${slug}`, () => {
     it('returns every column its form edits (else the form loads empty and saves the emptiness)', () => {
-      const returned = cols(config!.columns);
+      const returned = returnedKeys(config!);
       for (const field of ui.fields) {
         expect(returned, `${slug}.${field.name} → ${columnOf(field)}`).toContain(columnOf(field));
       }
@@ -70,7 +104,19 @@ for (const [slug, ui] of Object.entries(RESOURCE_UI)) {
         row = config!.toRow(payload);
       }, `${slug}: the sample payload must pass toRow validation`).not.toThrow();
       for (const field of ui.fields) {
-        expect(Object.keys(row), `${slug}.${field.name}`).toContain(columnOf(field));
+        // Child sets are written by `persist` outside toRow (a case study's services and
+        // media — one transaction); a composite may flatten into prefixed columns
+        // (`preview` → preview_video_path, preview_start_s, …).
+        if (config!.childKeys?.includes(field.name)) continue;
+        const column = columnOf(field);
+        // Only a clip flattens into prefixed columns (preview → preview_video_path, …); every
+        // other field needs its exact column (`body_html` must not stand in for `body`).
+        const keys = Object.keys(row);
+        const written =
+          field.kind === 'clip'
+            ? keys.some((k) => k.startsWith(`${column}_`))
+            : keys.includes(column);
+        expect(written, `${slug}.${field.name} → ${column}`).toBe(true);
       }
     });
   });

@@ -56,7 +56,7 @@ export default function SectionContentField({
         <p className="field-legend">{field.label}</p>
         <p className="admin-sub">
           {sectionType
-            ? 'This section takes its content from its own table (statistics, team, certifications…) — there is nothing to override here.'
+            ? 'This section takes its content from its own table (team, certifications…) — there is nothing to override here.'
             : 'Choose a section type to edit its content.'}
         </p>
       </div>

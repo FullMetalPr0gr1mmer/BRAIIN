@@ -137,8 +137,8 @@ describe('admin field kinds render', () => {
 
     // What a LOADED table-backed section actually produces (not a hand-built state).
     const sections = RESOURCE_UI['sections']!.fields;
-    const loaded = rowToForm({ type: 'statistics', content: {} }, sections)['content'];
-    const table = render(field, loaded, { type: 'statistics' });
+    const loaded = rowToForm({ type: 'team', content: {} }, sections)['content'];
+    const table = render(field, loaded, { type: 'team' });
     expect(table).toContain('takes its content from its own table');
     expect(table).not.toContain('Content JSON');
 

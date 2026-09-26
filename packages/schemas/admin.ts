@@ -162,7 +162,11 @@ const PortfolioWriteBase = z.object({
   sortOrder: SortOrderSchema,
   scheduledFor: InstantSchema,
   /** Services this case study belongs to (`portfolio_services`), in display order. */
-  serviceIds: z.array(UuidSchema).max(20).optional(),
+  serviceIds: z
+    .array(UuidSchema)
+    .max(20)
+    .refine((a) => new Set(a).size === a.length, { message: 'each service once' })
+    .optional(),
   // Catalogue (UI v2)
   projectType: BilingualTextSchema.nullish(),
   /** The card blurb; the loader falls back to `summary`. */
@@ -316,6 +320,26 @@ export const CertificationUpdateSchema = updatable(CertificationWriteSchema);
 
 const StatPlacement = z.enum(STAT_PLACEMENTS);
 
+/**
+ * Per-page labels, keyed by page ({about: {en, ar}}). The admin form edits them as a list
+ * of {placement, label} rows; the object form is accepted too. Either way the LIST is
+ * validated — each row needs its page, and each page appears once (two rows for one page
+ * would otherwise silently drop one) — and then folded into the object the column stores.
+ */
+const PlacementLabelsSchema = z.preprocess(
+  (v) =>
+    v !== null && typeof v === 'object' && !Array.isArray(v)
+      ? Object.entries(v).map(([placement, label]) => ({ placement, label }))
+      : v,
+  z
+    .array(z.object({ placement: StatPlacement, label: BilingualTextSchema }))
+    .max(STAT_PLACEMENTS.length)
+    .refine((a) => new Set(a.map((i) => i.placement)).size === a.length, {
+      message: 'each page once',
+    })
+    .transform((a) => Object.fromEntries(a.map((i) => [i.placement, i.label]))),
+);
+
 const StatisticWriteBase = z.object({
   slug: SlugSchema,
   label: BilingualTextSchema,
@@ -324,7 +348,7 @@ const StatisticWriteBase = z.object({
    * `valueNumeric` is given: the resource derives it (number + suffix), which is the only
    * way the 0023 statistics_value_consistent CHECK can hold.
    */
-  value: z.string().trim().min(1).max(40).optional(),
+  value: z.string().trim().min(1).max(40).nullish(),
   // Two decimals, as numeric(12,2) stores it — so number + suffix derived here reads exactly
   // as the database's trim_scale(value_numeric) (the 0023 CHECK).
   valueNumeric: z.number().min(0).max(9_999_999_999.99).multipleOf(0.01).nullish(),
@@ -336,17 +360,34 @@ const StatisticWriteBase = z.object({
     .refine((a) => new Set(a).size === a.length, { message: 'each page once' })
     .default([]),
   /** Per-page label where it differs from `label` ({about: {en, ar}}). */
-  placementLabels: z.record(StatPlacement, BilingualTextSchema).default({}),
+  placementLabels: PlacementLabelsSchema.default({}),
   status: ContentStatusSchema.default('draft'),
   sortOrder: SortOrderSchema,
   isPlaceholder: z.boolean().default(false),
 });
 
+const hasNumber = (v: { valueNumeric?: number | null | undefined }) =>
+  typeof v.valueNumeric === 'number';
+
 export const StatisticWriteSchema = StatisticWriteBase.refine(
-  (v) => v.value !== undefined || (v.valueNumeric !== undefined && v.valueNumeric !== null),
+  (v) => (typeof v.value === 'string' && v.value !== '') || hasNumber(v),
   { path: ['value'], message: 'give the value (or a number to count up to)' },
 );
-export const StatisticUpdateSchema = updatable(StatisticWriteBase);
+export const StatisticUpdateSchema = updatable(StatisticWriteBase)
+  // The displayed value is derived from number + suffix, so they travel together — a
+  // suffix alone cannot be combined with a stored number the request cannot see.
+  .refine((v) => v.valueSuffix === undefined || v.valueNumeric !== undefined, {
+    path: ['valueNumeric'],
+    message: 'send the number together with its suffix',
+  })
+  .refine((v) => typeof v.valueNumeric !== 'number' || v.valueSuffix !== undefined, {
+    path: ['valueSuffix'],
+    message: 'send the suffix (or an empty one) together with the number',
+  })
+  .refine((v) => v.value !== null || hasNumber(v), {
+    path: ['value'],
+    message: 'give the value (or a number to count up to)',
+  });
 
 export const PartnerLogoWriteSchema = z.object({
   name: ShortTextSchema,
@@ -360,8 +401,11 @@ export const PartnerLogoUpdateSchema = updatable(PartnerLogoWriteSchema);
 
 // ── Sectors · clients · testimonials (UI v2, 0021) ──────────────────────────────
 
+/** 0021's CHECK caps these slugs at 64 characters ('^[a-z0-9][a-z0-9-]{0,63}$'). */
+const ShortSlugSchema = SlugSchema.max(64);
+
 export const SectorWriteSchema = z.object({
-  slug: SlugSchema,
+  slug: ShortSlugSchema,
   name: BilingualTextSchema,
   visible: z.boolean().default(true),
   sortOrder: SortOrderSchema,
@@ -369,7 +413,7 @@ export const SectorWriteSchema = z.object({
 export const SectorUpdateSchema = updatable(SectorWriteSchema);
 
 export const ClientWriteSchema = z.object({
-  slug: SlugSchema,
+  slug: ShortSlugSchema,
   name: BilingualTextSchema,
   logoMediaId: UuidSchema.nullish(),
   websiteUrl: z.string().trim().url().startsWith('https://').max(300).nullish(),
@@ -385,7 +429,7 @@ export const ClientWriteSchema = z.object({
 export const ClientUpdateSchema = updatable(ClientWriteSchema);
 
 const TestimonialWriteBase = z.object({
-  slug: SlugSchema,
+  slug: ShortSlugSchema,
   quote: z.object({ en: z.string().trim().min(1).max(600), ar: z.string().trim().min(1).max(600) }),
   authorName: BilingualTextSchema,
   /** "Title, Company" verbatim — there is no company column. */
