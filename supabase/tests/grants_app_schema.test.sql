@@ -158,14 +158,22 @@ select ok(not has_table_privilege('authenticated', 'public.site_profile', 'delet
 -- RLS on app.deployment is forced, and deploy_guard is NOBYPASSRLS. Without its policy
 -- the guard read '<unset>' and blocked every production deploy — a grant is not enough.
 -- Roles created here are rolled back with the transaction. PG15 does not make the creator
--- a member of a role it creates, hence the explicit grant before SET ROLE.
+-- a member of a role it creates, hence the explicit grant before SET ROLE. The two roles
+-- also get USAGE on pgTAP's own schema: the assertions run AS them, and a schema without
+-- USAGE is silently skipped on the search_path — is() would "not exist".
 do $$
+declare
+  v_pgtap text;
 begin
   if not exists (select 1 from pg_roles where rolname = 'deploy_guard') then
     create role deploy_guard nologin nobypassrls;
   end if;
   create role pgtap_other_reader nologin nobypassrls;
   execute format('grant deploy_guard, pgtap_other_reader to %I', current_user);
+  select n.nspname into v_pgtap
+    from pg_extension e join pg_namespace n on n.oid = e.extnamespace
+   where e.extname = 'pgtap';
+  execute format('grant usage on schema %I to deploy_guard, pgtap_other_reader', v_pgtap);
 end $$;
 grant usage on schema app to deploy_guard, pgtap_other_reader;
 grant select on app.deployment to deploy_guard, pgtap_other_reader;
