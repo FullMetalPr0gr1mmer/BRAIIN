@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import { budgetBandLabel } from '@schemas/lead';
 
 // Leads list + detail, including the one control in this CMS that reveals personal data.
 //
@@ -13,6 +14,8 @@ import { adminFetch, describeError } from '@/lib/admin/client';
 interface LeadRow {
   id: string;
   name: string;
+  /** Business-contact data, in leads_safe — not PII-gated (migration 0015). */
+  company?: string | null;
   status: string;
   service_of_interest: string | null;
   locale: string;
@@ -24,6 +27,8 @@ interface LeadDetail extends LeadRow {
   email?: string | null;
   phone?: string | null;
   budget?: string | null;
+  /** Decrypted free-text deadline from the v2 contact form (migration 0017). */
+  timeline?: string | null;
   timeline_band?: string | null;
   internal_notes?: string | null;
 }
@@ -208,6 +213,7 @@ export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
           <h2 className="card-title">{selected.name}</h2>
           <p className="admin-sub">
             {new Date(selected.created_at).toLocaleString()} · {selected.locale.toUpperCase()}
+            {selected.company ? ` · ${selected.company}` : ''}
           </p>
           <p className="prewrap">{selected.message}</p>
 
@@ -224,9 +230,9 @@ export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
               <dt>Phone</dt>
               <dd>{selected.phone || '—'}</dd>
               <dt>Budget</dt>
-              <dd>{selected.budget || '—'}</dd>
+              <dd>{selected.budget ? budgetBandLabel(selected.budget) : '—'}</dd>
               <dt>Timeline</dt>
-              <dd>{selected.timeline_band || '—'}</dd>
+              <dd>{selected.timeline || selected.timeline_band || '—'}</dd>
             </dl>
           )}
 

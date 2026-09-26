@@ -10,6 +10,9 @@
 // re-validates every field against `packages/schemas/admin.ts`, and a field omitted
 // here simply cannot be edited in the UI — it does not become writable by other means.
 
+// Zod-free on purpose (see the module header) — this file ships in the admin client bundle.
+import { SECTION_TYPES } from '@schemas/sectionTypes';
+
 export type FieldKind =
   | 'text'
   | 'slug'
@@ -23,7 +26,26 @@ export type FieldKind =
   | 'url'
   | 'datetime'
   | 'tags'
-  | 'json';
+  | 'json'
+  // UI v2 (PR3): composite and referencing kinds
+  | 'relation' // one row of another resource, by id (a <select> loaded from its API)
+  | 'multiRelation' // an ORDERED list of ids of another resource
+  | 'multiSelect' // several of `options`, as a string array
+  | 'media' // one media asset id, chosen in a <dialog> picker
+  | 'repeater' // an array of objects, each edited with `itemFields`
+  | 'clip' // a video clip: a Stream UID or a /media/*.mp4 path, plus a ≤30s window
+  | 'sectionContent' // page_sections.content, typed by the sibling `type` field
+  | 'upload'; // a file sent to `upload.endpoint`; the field holds the returned id
+
+/** Where a relation field loads its options from. */
+export interface RelationDef {
+  /** Admin API resource slug: options load from GET /api/admin/<resource>. */
+  resource: string;
+  /** Row key shown as the option label; a {en, ar} value shows its English. */
+  labelKey: string;
+  /** Equality filters for the options query, e.g. { location: 'header' }. */
+  filter?: Readonly<Record<string, string>>;
+}
 
 export interface FieldDef {
   /** camelCase name sent to the API. */
@@ -35,6 +57,28 @@ export interface FieldDef {
   options?: readonly { value: string; label: string }[];
   help?: string;
   required?: boolean;
+  /**
+   * An all-blank bilingual/prose value is sent as `null` ("none") instead of
+   * `{en:'', ar:''}`. Opt-in, and only for fields whose schema AND column accept null
+   * (site_profile's legal name / city): most bilingual columns are NOT NULL, and a null
+   * there would turn every blank save into a 422.
+   */
+  nullable?: boolean;
+  /** `relation` / `multiRelation`: the resource the ids point at. */
+  relation?: RelationDef;
+  /** `repeater`: the fields of one item. */
+  itemFields?: readonly FieldDef[];
+  /** `repeater` / `multiRelation` / `multiSelect`: the most items the schema accepts. */
+  maxItems?: number;
+  /** `sectionContent`: the sibling field holding the section type (default 'type'). */
+  typeField?: string;
+  /** `upload`: where the file is POSTed (multipart) and what it may be. */
+  upload?: { endpoint: string; accept: string };
+  /**
+   * The value a NEW record's form starts with — must equal the create schema's default, or
+   * the form shows one thing (an unticked box) while the server stores another.
+   */
+  defaultValue?: unknown;
 }
 
 export interface ColumnDef {
@@ -78,6 +122,27 @@ const SCHEDULED_FIELD: FieldDef = {
 
 const SORT_FIELD: FieldDef = { name: 'sortOrder', label: 'Sort order', kind: 'number' };
 
+/** Design-delivery sample content (UI v2). Refused on publish; production also refuses it in the DB. */
+const PLACEHOLDER_FIELD: FieldDef = {
+  name: 'isPlaceholder',
+  label: 'Placeholder (design sample)',
+  kind: 'checkbox',
+  help: 'Sample content from the design delivery. It cannot be published or shown until you replace it and untick this.',
+};
+
+/** A list of short bilingual phrases stored as [{en, ar}] (the item fields ARE the pair). */
+const bilingualList = (name: string, label: string, maxItems: number, help?: string): FieldDef => ({
+  name,
+  label,
+  kind: 'repeater',
+  maxItems,
+  ...(help ? { help } : {}),
+  itemFields: [
+    { name: 'en', label: 'English', kind: 'text', required: true },
+    { name: 'ar', label: 'Arabic', kind: 'text', required: true },
+  ],
+});
+
 /** snake_case default for a field's row key. */
 export function columnOf(field: FieldDef): string {
   return field.column ?? field.name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
@@ -109,6 +174,13 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
         help: 'Video is Stream-only; the poster frame becomes the page’s LCP image.',
       },
       { name: 'category', label: 'Category', kind: 'text' },
+      {
+        name: 'shortTitle',
+        label: 'Short title (chips)',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'Shown on filter chips and skill tags where the full title is too long (e.g. “SEO / GEO / AEO”). Empty = the title.',
+      },
       {
         name: 'isTeaser',
         label: 'Coming-soon teaser',
@@ -153,21 +225,296 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
 
   portfolio: {
     slug: 'portfolio',
-    title: 'Portfolio',
+    title: 'Our Work',
     singular: 'Case study',
     hasStatus: true,
     reorder: true,
     columns: [
       { key: 'title', label: 'Title', kind: 'bilingual' },
-      { key: 'slug', label: 'Slug' },
+      { key: 'project_type', label: 'Type', kind: 'bilingual' },
+      { key: 'year', label: 'Year' },
+      { key: 'is_featured', label: 'Featured', kind: 'boolean' },
+      { key: 'is_placeholder', label: 'Placeholder', kind: 'boolean' },
       { key: 'status', label: 'Status', kind: 'status' },
       { key: 'updated_at', label: 'Updated', kind: 'date' },
     ],
     fields: [
-      { name: 'slug', label: 'Slug', kind: 'slug', required: true },
-      { name: 'title', label: 'Title', kind: 'bilingual', required: true },
-      { name: 'summary', label: 'Summary', kind: 'prose' },
+      {
+        name: 'slug',
+        label: 'Slug',
+        kind: 'slug',
+        required: true,
+        help: 'The case study’s address: /portfolio/<slug>. “all” is reserved.',
+      },
+      { name: 'title', label: 'Project name', kind: 'bilingual', required: true },
+      {
+        name: 'projectType',
+        label: 'Project type',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'Shown on the card and in the title band — “Brand film”, “Rebrand”. Required to publish.',
+      },
+      {
+        name: 'teaser',
+        label: 'Card blurb',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'One line under the project on Our Work and All projects. Empty = the overview.',
+      },
+      {
+        name: 'sectorId',
+        label: 'Industry',
+        kind: 'relation',
+        relation: { resource: 'sectors', labelKey: 'name' },
+      },
+      {
+        name: 'clientId',
+        label: 'Client',
+        kind: 'relation',
+        relation: { resource: 'clients', labelKey: 'name' },
+        help: 'A client not yet cleared for disclosure (not visible) shows as “Confidential client”.',
+      },
+      { name: 'year', label: 'Year', kind: 'number' },
+      {
+        name: 'serviceIds',
+        label: 'Services',
+        kind: 'multiRelation',
+        relation: { resource: 'services', labelKey: 'title' },
+        maxItems: 20,
+        help: 'In the order the case study lists them; they are also its catalogue filters.',
+      },
+      {
+        name: 'isFeatured',
+        label: 'Featured',
+        kind: 'checkbox',
+        help: 'Featured projects lead Our Work and Selected work on the home page.',
+      },
+      {
+        name: 'posterMediaId',
+        label: 'Poster',
+        kind: 'media',
+        help: 'The card image. Needs alt text in English and Arabic to publish.',
+      },
+      {
+        name: 'preview',
+        label: 'Card hover clip',
+        kind: 'clip',
+        help: 'A short window of a video, played while the card is hovered (never on touch).',
+      },
+      {
+        name: 'lead',
+        label: 'Lead',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'The case study’s opening line.',
+      },
+      { name: 'summary', label: 'Overview', kind: 'prose' },
+      { name: 'goal', label: 'The goal', kind: 'bilingual', nullable: true },
+      { name: 'result', label: 'The result', kind: 'bilingual', nullable: true },
+      bilingualList('scope', 'Scope', 10, 'What the studio did, one line each.'),
+      bilingualList('keywords', 'Keywords', 6, 'The chips under the title.'),
+      {
+        name: 'results',
+        label: 'Result cards',
+        kind: 'repeater',
+        maxItems: 4,
+        help: 'Figures only when they are real — a placeholder figure (XX) cannot be published.',
+        itemFields: [
+          { name: 'value', label: 'Figure', kind: 'text', required: true, help: 'e.g. 3.2M, +40%' },
+          { name: 'label', label: 'What it measures', kind: 'bilingual', required: true },
+        ],
+      },
+      {
+        name: 'media',
+        label: 'Case-study media',
+        kind: 'repeater',
+        maxItems: 40,
+        help: 'One hero and one final film at most; breakdown items need their kind. Saved with the case study in one step.',
+        itemFields: [
+          {
+            name: 'role',
+            label: 'Where it appears',
+            kind: 'select',
+            required: true,
+            options: [
+              { value: 'hero', label: 'Hero banner' },
+              { value: 'final', label: 'Final film' },
+              { value: 'breakdown', label: 'Breakdown' },
+              { value: 'gallery', label: 'Gallery' },
+            ],
+          },
+          {
+            name: 'kind',
+            label: 'Kind',
+            kind: 'select',
+            required: true,
+            options: [
+              { value: 'image', label: 'Image' },
+              { value: 'video', label: 'Video' },
+            ],
+          },
+          { name: 'mediaId', label: 'Image (a video’s poster)', kind: 'media' },
+          { name: 'clip', label: 'Video', kind: 'clip' },
+          { name: 'durationLabel', label: 'Duration shown (m:ss)', kind: 'text' },
+          { name: 'caption', label: 'Caption', kind: 'bilingual' },
+          {
+            name: 'breakdownKind',
+            label: 'Breakdown kind',
+            kind: 'select',
+            options: [
+              { value: 'sketch', label: 'Sketch' },
+              { value: 'bts', label: 'Behind the scenes' },
+              { value: 'process', label: 'Process' },
+            ],
+          },
+          {
+            name: 'layout',
+            label: 'Layout',
+            kind: 'select',
+            options: [
+              { value: 'half', label: 'Half width' },
+              { value: 'wide', label: 'Wide' },
+              { value: 'third', label: 'One third' },
+            ],
+          },
+        ],
+      },
       { name: 'body', label: 'Body', kind: 'richtext' },
+      {
+        name: 'nextPortfolioId',
+        label: 'Next project',
+        kind: 'relation',
+        relation: { resource: 'portfolio', labelKey: 'title' },
+        help: 'Empty = the next project in catalogue order.',
+      },
+      PLACEHOLDER_FIELD,
+      SORT_FIELD,
+      STATUS_FIELD,
+      SCHEDULED_FIELD,
+    ],
+  },
+
+  sectors: {
+    slug: 'sectors',
+    title: 'Sectors',
+    singular: 'Sector',
+    reorder: true,
+    columns: [
+      { key: 'name', label: 'Name', kind: 'bilingual' },
+      { key: 'slug', label: 'Slug' },
+      { key: 'visible', label: 'Visible', kind: 'boolean' },
+    ],
+    fields: [
+      {
+        name: 'slug',
+        label: 'Slug',
+        kind: 'slug',
+        required: true,
+        help: 'Used in filter links: /portfolio/all?sector=<slug>.',
+      },
+      { name: 'name', label: 'Name', kind: 'bilingual', required: true },
+      { name: 'visible', label: 'Visible', kind: 'checkbox', defaultValue: true },
+      SORT_FIELD,
+    ],
+  },
+
+  clients: {
+    slug: 'clients',
+    title: 'Clients',
+    singular: 'Client',
+    reorder: true,
+    columns: [
+      { key: 'name', label: 'Name', kind: 'bilingual' },
+      { key: 'visible', label: 'Cleared (visible)', kind: 'boolean' },
+      { key: 'show_in_marquee', label: 'Marquee', kind: 'boolean' },
+      { key: 'is_placeholder', label: 'Placeholder', kind: 'boolean' },
+    ],
+    fields: [
+      { name: 'slug', label: 'Slug', kind: 'slug', required: true },
+      { name: 'name', label: 'Name', kind: 'bilingual', required: true },
+      {
+        name: 'visible',
+        label: 'Cleared for disclosure (visible)',
+        kind: 'checkbox',
+        help: 'Tick only once the client has agreed to be named. Until then the site shows “Confidential client”.',
+      },
+      {
+        name: 'showInMarquee',
+        label: 'Show in the clients marquee',
+        kind: 'checkbox',
+      },
+      { name: 'logoMediaId', label: 'Logo', kind: 'media' },
+      { name: 'websiteUrl', label: 'Website', kind: 'url', help: 'https only.' },
+      PLACEHOLDER_FIELD,
+      SORT_FIELD,
+    ],
+  },
+
+  testimonials: {
+    slug: 'testimonials',
+    title: 'Testimonials',
+    singular: 'Quote',
+    hasStatus: true,
+    reorder: true,
+    columns: [
+      { key: 'author_name', label: 'Author', kind: 'bilingual' },
+      { key: 'slug', label: 'Slug' },
+      { key: 'is_placeholder', label: 'Placeholder', kind: 'boolean' },
+      { key: 'status', label: 'Status', kind: 'status' },
+    ],
+    fields: [
+      { name: 'slug', label: 'Slug', kind: 'slug', required: true },
+      {
+        name: 'quote',
+        label: 'Quote',
+        kind: 'bilingual',
+        required: true,
+        help: 'At most 600 characters per language.',
+      },
+      { name: 'authorName', label: 'Author', kind: 'bilingual', required: true },
+      {
+        name: 'authorRole',
+        label: 'Title, company',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'Written as it should appear: “Marketing Director, Company”.',
+      },
+      {
+        name: 'placements',
+        label: 'Shown on',
+        kind: 'multiSelect',
+        options: [
+          { value: 'home', label: 'Home' },
+          { value: 'work', label: 'Our Work' },
+        ],
+      },
+      {
+        name: 'portfolioId',
+        label: 'Case study',
+        kind: 'relation',
+        relation: { resource: 'portfolio', labelKey: 'title' },
+        help: 'Shown on that case study. One published quote per case study.',
+      },
+      {
+        name: 'clientId',
+        label: 'Client',
+        kind: 'relation',
+        relation: { resource: 'clients', labelKey: 'name' },
+      },
+      { name: 'avatarMediaId', label: 'Photo', kind: 'media' },
+      {
+        name: 'consentObtainedAt',
+        label: 'Consent obtained',
+        kind: 'datetime',
+        help: 'When the person agreed to be quoted. Required to publish or schedule — the database refuses otherwise.',
+      },
+      {
+        name: 'consentReference',
+        label: 'Consent record',
+        kind: 'text',
+        help: 'Where the consent is kept (an email, ticket or document id). Never shown on the site.',
+      },
+      PLACEHOLDER_FIELD,
       SORT_FIELD,
       STATUS_FIELD,
       SCHEDULED_FIELD,
@@ -189,7 +536,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
     fields: [
       { name: 'slug', label: 'Slug', kind: 'slug', required: true },
       { name: 'title', label: 'Title', kind: 'bilingual', required: true },
-      { name: 'navVisible', label: 'Show in navigation', kind: 'checkbox' },
+      { name: 'navVisible', label: 'Show in navigation', kind: 'checkbox', defaultValue: true },
       STATUS_FIELD,
       SCHEDULED_FIELD,
     ],
@@ -207,22 +554,35 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
       { key: 'updated_at', label: 'Updated', kind: 'date' },
     ],
     fields: [
-      { name: 'pageId', label: 'Page id', kind: 'text', required: true },
+      {
+        name: 'pageId',
+        label: 'Page',
+        kind: 'relation',
+        required: true,
+        relation: { resource: 'pages', labelKey: 'title' },
+      },
       {
         name: 'type',
         label: 'Section type',
-        kind: 'text',
+        kind: 'select',
         required: true,
-        help: 'One of: hero, aboutIntro, slogan, clientsMarquee, servicesOverview, contact, social, aboutStory, statistics, team, certifications, cta (the SectionRenderer registry). Unknown types are skipped.',
+        // The canonical list (packages/schemas/sections.ts) — the server rejects anything else.
+        options: SECTION_TYPES.map((t) => ({ value: t, label: t })),
       },
-      { name: 'content', label: 'Content (JSON)', kind: 'json' },
       {
-        name: 'style',
-        label: 'Style (JSON)',
-        kind: 'json',
-        help: 'CSS custom properties only — the strict CSP has no unsafe-inline.',
+        name: 'content',
+        label: 'Content',
+        kind: 'sectionContent',
+        typeField: 'type',
+        help: 'Optional per-type overrides of the built-in copy, validated against the section type on save.',
       },
       { name: 'visible', label: 'Visible', kind: 'checkbox' },
+      {
+        name: 'isPlaceholder',
+        label: 'Design placeholder',
+        kind: 'checkbox',
+        help: 'Seeded demo content. In production a placeholder cannot be made visible — replace the copy, then untick.',
+      },
       SORT_FIELD,
     ],
   },
@@ -237,6 +597,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
       { key: 'href', label: 'Link' },
       { key: 'location', label: 'Location' },
       { key: 'visible', label: 'Visible', kind: 'boolean' },
+      { key: 'is_key', label: 'Key link', kind: 'boolean' },
     ],
     fields: [
       {
@@ -253,6 +614,12 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
       { name: 'href', label: 'Link', kind: 'text', required: true },
       { name: 'parentId', label: 'Parent item id', kind: 'text' },
       { name: 'visible', label: 'Visible', kind: 'checkbox' },
+      {
+        name: 'isKey',
+        label: 'Key link (stays in the header bar on phones)',
+        kind: 'checkbox',
+        help: 'At <=900px the header shows only this link; the rest move into the menu. One per menu — untick the current key link before ticking another.',
+      },
       SORT_FIELD,
     ],
   },
@@ -279,14 +646,30 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
     reorder: true,
     columns: [
       { key: 'name', label: 'Name', kind: 'bilingual' },
-      { key: 'slug', label: 'Slug' },
+      { key: 'role', label: 'Title', kind: 'bilingual' },
+      { key: 'is_leadership', label: 'Leadership', kind: 'boolean' },
       { key: 'status', label: 'Status', kind: 'status' },
     ],
     fields: [
       { name: 'slug', label: 'Slug', kind: 'slug', required: true },
       { name: 'name', label: 'Name', kind: 'bilingual', required: true },
+      { name: 'role', label: 'Job title', kind: 'bilingual', nullable: true },
+      {
+        name: 'isLeadership',
+        label: 'Leadership',
+        kind: 'checkbox',
+        help: 'Shown in the About page leadership slider.',
+      },
+      { name: 'portraitMediaId', label: 'Portrait', kind: 'media' },
+      {
+        name: 'linkedinUrl',
+        label: 'LinkedIn',
+        kind: 'url',
+        help: 'https://linkedin.com/in/… — the slider links it only when set.',
+      },
       { name: 'bio', label: 'Bio', kind: 'prose' },
       { name: 'avatarUrl', label: 'Avatar URL', kind: 'url' },
+      PLACEHOLDER_FIELD,
       SORT_FIELD,
       STATUS_FIELD,
     ],
@@ -323,18 +706,62 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
     columns: [
       { key: 'label', label: 'Label', kind: 'bilingual' },
       { key: 'value', label: 'Value' },
+      { key: 'is_placeholder', label: 'Placeholder', kind: 'boolean' },
       { key: 'status', label: 'Status', kind: 'status' },
     ],
     fields: [
       { name: 'slug', label: 'Slug', kind: 'slug', required: true },
       { name: 'label', label: 'Label', kind: 'bilingual', required: true },
       {
-        name: 'value',
-        label: 'Value',
-        kind: 'text',
-        required: true,
-        help: 'A display string — “150+”, “98%”, “3x” all survive verbatim.',
+        name: 'valueNumeric',
+        label: 'Number',
+        kind: 'number',
+        help: 'The number the band counts up to. With a number, the displayed value is the number plus its suffix.',
       },
+      {
+        name: 'valueSuffix',
+        label: 'Suffix',
+        kind: 'text',
+        help: '“+”, “%”, “x” — at most 4 characters.',
+      },
+      {
+        name: 'value',
+        label: 'Displayed value (no number)',
+        kind: 'text',
+        help: 'Only for a value that is not a plain number. With a number above, this is derived.',
+      },
+      {
+        name: 'placements',
+        label: 'Shown on',
+        kind: 'multiSelect',
+        options: [
+          { value: 'home', label: 'Home' },
+          { value: 'about', label: 'About' },
+          { value: 'work', label: 'Our Work' },
+        ],
+      },
+      {
+        name: 'placementLabels',
+        label: 'Label on a specific page',
+        kind: 'repeater',
+        maxItems: 3,
+        help: 'Where a page words it differently (“Projects delivered across the region” on About).',
+        itemFields: [
+          {
+            name: 'placement',
+            label: 'Page',
+            kind: 'select',
+            required: true,
+            options: [
+              { value: 'home', label: 'Home' },
+              { value: 'about', label: 'About' },
+              { value: 'work', label: 'Our Work' },
+            ],
+          },
+          { name: 'label', label: 'Label', kind: 'bilingual', required: true },
+        ],
+      },
+      PLACEHOLDER_FIELD,
       SORT_FIELD,
       STATUS_FIELD,
     ],
@@ -355,7 +782,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
       { name: 'logoUrl', label: 'Logo URL', kind: 'url', required: true },
       { name: 'scale', label: 'Scale', kind: 'number' },
       { name: 'offsetY', label: 'Vertical offset', kind: 'number' },
-      { name: 'visible', label: 'Visible', kind: 'checkbox' },
+      { name: 'visible', label: 'Visible', kind: 'checkbox', defaultValue: true },
       SORT_FIELD,
     ],
   },
@@ -526,9 +953,15 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         label: 'Title template',
         kind: 'bilingual',
         column: 'title_template',
-        help: 'Use %s for the page title, e.g. “%s | Braiin Station”.',
+        help: 'Use %s for the page title and %brand% for the studio name (from Public identity), e.g. “%brand% | %s”. Left empty, the site uses exactly that format.',
       },
-      { name: 'defaultTitle', label: 'Default title', kind: 'bilingual', column: 'default_title' },
+      {
+        name: 'defaultTitle',
+        label: 'Default title',
+        kind: 'bilingual',
+        column: 'default_title',
+        help: 'Only for a page with no title of its own — a page’s own title always wins.',
+      },
       {
         name: 'defaultDescription',
         label: 'Default description',
@@ -545,7 +978,7 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         name: 'organization',
         label: 'Organization JSON-LD',
         kind: 'json',
-        help: 'Feeds the sitewide Organization schema. Validated by the seo-ci gate.',
+        help: 'Deprecated — no longer read by the site. The Organization schema is built from Settings → Public identity (brand, email, location, socials).',
       },
       {
         name: 'robotsDirectives',
@@ -556,15 +989,93 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
     ],
   },
 
+  profile: {
+    endpoint: '/api/admin/site-profile',
+    title: 'Public identity',
+    fields: [
+      {
+        name: 'brandName',
+        label: 'Brand name',
+        kind: 'bilingual',
+        column: 'brand_name',
+        required: true,
+        help: 'Shown in the header, footer, page titles and Organization JSON-LD on every page.',
+      },
+      {
+        name: 'legalName',
+        label: 'Registered legal name',
+        kind: 'bilingual',
+        column: 'legal_name',
+        nullable: true,
+        help: 'The data controller named in the privacy notice and terms. Leave empty to use the brand name.',
+      },
+      {
+        name: 'contactEmail',
+        label: 'Contact email',
+        kind: 'text',
+        column: 'contact_email',
+        required: true,
+      },
+      {
+        name: 'whatsappE164',
+        label: 'WhatsApp number (E.164)',
+        kind: 'text',
+        column: 'whatsapp_e164',
+        help: 'e.g. +9665XXXXXXXX. Leave empty and the WhatsApp contact card is not shown.',
+      },
+      {
+        name: 'whatsappDisplay',
+        label: 'WhatsApp number as displayed',
+        kind: 'text',
+        column: 'whatsapp_display',
+      },
+      {
+        name: 'location',
+        label: 'Location',
+        kind: 'bilingual',
+        required: true,
+        help: 'Footer copy, e.g. “Jeddah, Saudi Arabia”.',
+      },
+      {
+        name: 'addressLocality',
+        label: 'City (structured data)',
+        kind: 'bilingual',
+        column: 'address_locality',
+        nullable: true,
+      },
+      {
+        name: 'addressCountry',
+        label: 'Country code',
+        kind: 'text',
+        column: 'address_country',
+        help: 'ISO 3166-1 alpha-2, e.g. SA.',
+      },
+      { name: 'foundedYear', label: 'Founded (year)', kind: 'number', column: 'founded_year' },
+      {
+        name: 'socials',
+        label: 'Social links (JSON)',
+        kind: 'json',
+        help: '[{"network":"instagram","handle":"@…","url":"https://instagram.com/…"}] — each link must point at its own network.',
+      },
+      {
+        name: 'acceptingApplications',
+        label: 'Accepting job applications',
+        kind: 'checkbox',
+        column: 'accepting_applications',
+        help: 'Admin only — opens the public application form on /join.',
+      },
+    ],
+  },
+
   settings: {
     endpoint: '/api/admin/settings',
     title: 'General settings',
     fields: [
       {
         name: 'identity',
-        label: 'Identity (JSON)',
+        label: 'Technical identity keys (JSON)',
         kind: 'json',
-        help: 'Site name, footer copy, contact details, social handles.',
+        help: 'Server-side keys only (e.g. notify_lead_url). The public brand, contact details and socials live in “Public identity” above.',
       },
       {
         name: 'retention',

@@ -172,15 +172,15 @@ select _claims('admin', '00000000-0000-0000-0000-0000000000ff');
 select _claims(null, null);
 select is(_sections(), 1, 'page_sections · non-staff session sees ONLY the visible section of a PUBLISHED page');
 
--- anon is denied one gate EARLIER: 0011 deliberately left page_sections out of the anon
--- grant list, because nothing reads it anonymously yet. Two independent layers, and today
--- the outer one is shut — so this is a throws_ok, not a count. When the renderer lands and
--- the grant is added, THIS is the assertion that will fail and demand a decision.
+-- anon. Until 0016 this was a throws_ok: 0011 left page_sections out of the anon grant
+-- list because nothing read it anonymously yet, and the comment here said "when the
+-- renderer lands and the grant is added, THIS is the assertion that will fail and demand
+-- a decision". 0016 made that decision — CMS compositions now reach visitors — so the
+-- outer gate is open and the policy above is the whole fence. The count must match the
+-- non-staff row exactly: the visible section of the published page, nothing else.
 set local role anon; select _claims(null, null);
-select throws_ok(
-  $$ select count(*) from public.page_sections $$,
-  '42501', null, 'page_sections · anon is denied at the GRANT layer (no anonymous reader yet)'
-);
+select is(_sections(), 1,
+  'page_sections · anon sees ONLY the visible section of a PUBLISHED page (0016 grant; the 0011 fence holds)');
 
 -- ── 5. the policies are RESTRICTIVE, not permissive ──────────────────────────
 -- A permissive policy ORs with the others and would narrow nothing. Recreating any of

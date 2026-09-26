@@ -61,6 +61,33 @@ async function visibility(page: Page, selector: string): Promise<number> {
   }, selector);
 }
 
+/** The choreography's instants, recomputed from the LEAF tokens exactly as global.css
+ *  derives them (a custom property holding a calc() computes to its token stream, not a
+ *  time, so the derived ones cannot be read directly). Seeking at instants derived from
+ *  the same tokens keeps these tests meaningful when the intro is retimed — they fail on
+ *  a broken ORDER, not on a new number. */
+async function timeline(page: Page) {
+  return page.evaluate(() => {
+    const num = (name: string) => {
+      const v = getComputedStyle(document.body).getPropertyValue(name).trim();
+      return v.endsWith('ms') ? parseFloat(v) : parseFloat(v) * 1000;
+    };
+    const hold = num('--bs-intro-hold');
+    const wait = hold + num('--bs-intro-fade');
+    const heroIn = wait + num('--bs-hero-word-step') * 9 + num('--bs-hero-letter-step') * 13;
+    const beat = num('--bs-hero-beat');
+    return {
+      hold,
+      wait,
+      heroIn,
+      beat,
+      sub: heroIn + beat,
+      cta: heroIn + beat * 2,
+      tail: heroIn + beat * 3,
+    };
+  });
+}
+
 /** Every viewport here is a measured boundary, not a decoration. */
 const VIEWPORTS = [
   { name: '1366x768 laptop (reported: 122px overlap)', width: 1366, height: 768 },
@@ -93,7 +120,8 @@ for (const route of ROUTES) {
         await page.goto(route, { waitUntil: 'load' });
 
         // Sample across the plate's whole life, including the fade.
-        for (const t of [200, 1000, 2000, 3000, 3500, 3850]) {
+        const { hold, wait } = await timeline(page);
+        for (const t of [200, hold * 0.6, hold, (hold + wait) / 2, wait - 50]) {
           await seek(page, t);
           const plate = await visibility(page, '.intro');
           if (plate <= 0.05) continue;
@@ -125,41 +153,39 @@ for (const route of ROUTES) {
     test('strict order: logo alone, then headline, then sub, then button', async ({ page }) => {
       await page.setViewportSize({ width: 1366, height: 768 });
       await page.goto(route, { waitUntil: 'load' });
+      const t = await timeline(page);
 
-      // t=2000ms — the logo holds the stage by itself.
-      await seek(page, 2000);
+      // The logo holds the stage by itself (it has finished its own .45s entrance).
+      await seek(page, t.hold * 0.7);
       expect(await visibility(page, '.intro')).toBeGreaterThan(0.95);
-      // The plate must be OPAQUE, not merely timed: this is the assertion that fails if
-      // anyone reverts it to a transparent overlay while keeping the new timings.
       // The overlay is deliberately TRANSPARENT so the hero loop plays under the logo,
-      // which means the ONLY thing keeping the headline off the screen is the time gate
-      // below. When the plate was opaque this was belt-and-braces; now it is the whole
-      // guarantee, so these assertions are the real protection against the original
-      // ink-on-ink collision rather than a nice-to-have.
+      // which means the ONLY thing keeping the headline off the screen is the time gate.
+      // These assertions are the real protection against the original ink-on-ink
+      // collision, not a nice-to-have.
       for (const sel of ENTRANCES) {
         expect(await visibility(page, sel), `${sel} must not precede the logo`).toBeLessThan(0.02);
       }
 
-      // t=4100ms — the plate is gone and the headline has begun; the button has not.
-      await seek(page, 4100);
+      // The plate is gone and the headline has begun; the button has not.
+      await seek(page, t.wait + 150);
       expect(await visibility(page, '.intro')).toBeLessThan(0.05);
       expect(await visibility(page, '.hero h1 .letter')).toBeGreaterThan(0.1);
       expect(await visibility(page, '.hero__cta')).toBeLessThan(0.02);
 
-      // t=4700ms — the sub strictly precedes the button. The old CSS could not express
-      // this at all: one animation on .hero__side carried both.
-      await seek(page, 4700);
+      // The sub strictly precedes the button (one beat apart). The old CSS could not
+      // express this at all: one animation on .hero__side carried both.
+      await seek(page, t.sub + 120);
       expect(await visibility(page, '.hero__sub')).toBeGreaterThan(0.1);
       expect(await visibility(page, '.hero__cta')).toBeLessThan(0.05);
 
-      // t=5200ms — the tail of the cascade.
-      await seek(page, 5200);
+      // The tail of the cascade.
+      await seek(page, t.tail + 300);
       expect(await visibility(page, '.hero__cta')).toBeGreaterThan(0.3);
       expect(await visibility(page, '.hero__scroll')).toBeGreaterThan(0.1);
       expect(await visibility(page, '.site-header--overlay')).toBeGreaterThan(0.1);
 
-      // t=6500ms — settled.
-      await seek(page, 6500);
+      // Settled.
+      await seek(page, t.tail + 1500);
       expect(await visibility(page, '.intro')).toBe(0);
       expect(await visibility(page, '.hero h1 .letter')).toBe(1);
       expect(await visibility(page, '.hero__sub')).toBe(1);
@@ -168,6 +194,35 @@ for (const route of ROUTES) {
       // Exactly .8: `fade-up`'s `to { opacity: 1 }` used to forwards-fill over the
       // static `opacity: .8`, so the cue's intended dim was dead code on every screen.
       expect(await visibility(page, '.hero__scroll')).toBeCloseTo(0.8, 2);
+    });
+
+    test("the retime is the mockup's: 1.0s hold, .45s fade, .45s logo, .9s letters", async ({
+      page,
+    }) => {
+      // UI v2 decision 5. The derived-order tests above pass for ANY timing; this pins the
+      // numbers the owner approved, so a retime is a visible diff here, not a silent drift.
+      await page.goto(route, { waitUntil: 'load' });
+      const t = await timeline(page);
+      expect(t.hold).toBe(1000);
+      expect(t.wait).toBe(1450);
+      const anim = await page.evaluate(() => {
+        const dur = (sel: string) =>
+          getComputedStyle(document.querySelector(sel)!).animationDuration;
+        return { logo: dur('.intro img'), letter: dur('.hero h1 .letter') };
+      });
+      expect(anim).toEqual({ logo: '0.45s', letter: '0.9s' });
+    });
+
+    test("the logo carries the mockup's drop-shadow, and never an animated blur", async ({
+      page,
+    }) => {
+      await page.goto(route, { waitUntil: 'load' });
+      const filter = await page.evaluate(
+        () => getComputedStyle(document.querySelector('.intro img')!).filter,
+      );
+      expect(filter).toContain('drop-shadow');
+      // blur() is outside the compositor-only set and this is the LCP image.
+      expect(filter).not.toContain('blur');
     });
 
     test('every delay derives from the tokens — no literal may creep back', async ({ page }) => {
@@ -320,21 +375,68 @@ test.describe('the intro waits for the logo to actually paint', () => {
       await new Promise((r) => setTimeout(r, 5000));
       await route.continue();
     });
+    // Record the gate from INSIDE the page. Sampling it from the test at a fixed delay
+    // raced the page under load: the check could land after the 2s cap had already (and
+    // correctly) released it. The recorder sees every frame of the gate's life instead.
+    await page.addInitScript(() => {
+      const gate = { engagedAt: -1, releasedAt: -1, minPlate: 1 };
+      (window as unknown as { __gate: typeof gate }).__gate = gate;
+      const plate = () => {
+        const el = document.querySelector('.intro');
+        return el ? parseFloat(getComputedStyle(el).opacity) : 1;
+      };
+      const frame = () => {
+        const waiting = document.body?.classList.contains('intro-waiting') ?? false;
+        if (waiting && gate.engagedAt < 0) gate.engagedAt = performance.now();
+        if (waiting) gate.minPlate = Math.min(gate.minPlate, plate());
+        if (!waiting && gate.engagedAt >= 0 && gate.releasedAt < 0) {
+          gate.releasedAt = performance.now();
+          return;
+        }
+        requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    });
     await page.goto('/', { waitUntil: 'commit' });
     await page.waitForSelector('.intro img', { timeout: 20_000 });
 
-    // The gate must actually engage while the logo is outstanding.
-    await page.waitForTimeout(800);
-    expect(await page.evaluate(() => document.body.classList.contains('intro-waiting'))).toBe(true);
-    expect(await visibility(page, '.intro'), 'plate lifted before the logo loaded').toBeGreaterThan(
-      0.9,
+    // The gate must actually engage while the logo is outstanding, hold the plate
+    // (no fade while waiting), and wait for the logo up to its cap rather than a frame.
+    await page.waitForFunction(
+      () => (window as unknown as { __gate: { releasedAt: number } }).__gate.releasedAt >= 0,
+      null,
+      { timeout: 10_000 },
     );
+    const gate = await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __gate: { engagedAt: number; releasedAt: number; minPlate: number };
+          }
+        ).__gate,
+    );
+    expect(gate.engagedAt, 'the paint gate never engaged').toBeGreaterThanOrEqual(0);
+    expect(gate.minPlate, 'plate faded while waiting for the logo').toBeGreaterThan(0.9);
+    // Released by the 3s cap (the logo is held for 5s), not immediately.
+    expect(gate.releasedAt - gate.engagedAt).toBeGreaterThan(2500);
+  });
 
-    // The claim under test is that the logo is actually SEEN — so watch for a frame
-    // where the logo and the plate are visible together, rather than sampling at the
-    // instant the hold releases. At that instant the logo is only just starting its own
-    // 0.7s fade-in, so it reads ~0; asserting there passes or fails on luck, which is
-    // exactly how this test flaked before.
+  test('a slow logo is actually SEEN on the plate — decoded, not just faded in', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    // Slower than warm, well inside CAP + hold (4.0s): the load event — not the cap —
+    // releases the gate, while the plate is still holding.
+    await page.route('**/_image*', async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    });
+    await page.goto('/', { waitUntil: 'commit' });
+    await page.waitForSelector('.intro img', { timeout: 20_000 });
+
+    // A frame where the plate is up AND the logo has real pixels. Opacity alone is not
+    // enough: once the gate releases, an image element fades in whether or not its bytes
+    // have arrived — which is how this used to pass with no logo ever painted.
     const seenOnPlate = await page.evaluate(
       () =>
         new Promise<boolean>((resolve) => {
@@ -350,7 +452,9 @@ test.describe('the intro waits for the logo to actually paint', () => {
             return o;
           };
           const tick = () => {
-            if (vis('.intro') > 0.5 && vis('.intro img') > 0.5) return resolve(true);
+            const img = document.querySelector<HTMLImageElement>('.intro img');
+            const painted = !!img && img.complete && img.naturalWidth > 0;
+            if (vis('.intro') > 0.5 && painted && vis('.intro img') > 0.5) return resolve(true);
             // The plate is gone and we never caught the logo on it — the race was lost.
             if (vis('.intro') === 0) return resolve(false);
             requestAnimationFrame(tick);
@@ -358,7 +462,7 @@ test.describe('the intro waits for the logo to actually paint', () => {
           tick();
         }),
     );
-    expect(seenOnPlate, 'the plate lifted without the logo ever becoming visible').toBe(true);
+    expect(seenOnPlate, 'the plate lifted without the logo ever being painted on it').toBe(true);
   });
 
   test('a logo that never loads still releases — it cannot wedge the page', async ({ page }) => {
@@ -399,6 +503,20 @@ test.describe('the intro waits for the logo to actually paint', () => {
   });
 });
 
+test.describe('a deep link skips the intro', () => {
+  for (const route of ['/#services', '/ar#services']) {
+    test(`${route} lands on its section, not under the logo plate`, async ({ page }) => {
+      await page.setViewportSize({ width: 1366, height: 768 });
+      await page.goto(route, { waitUntil: 'load' });
+      await page.waitForFunction(() => document.body.classList.contains('intro-cut'));
+      expect(await visibility(page, '.intro')).toBe(0);
+      // Cut WITHOUT spending the once-per-session intro: the next visit to the top of home
+      // still gets the brand moment.
+      expect(await page.evaluate(() => sessionStorage.getItem('bs_intro'))).toBeNull();
+    });
+  }
+});
+
 test.describe('the intro never absorbs a click meant for something else', () => {
   // The plate is a full-viewport fixed layer at z-90. The PDPL consent banner is at
   // z-80, i.e. UNDERNEATH it. While the plate was `pointer-events: auto` a click on
@@ -411,7 +529,7 @@ test.describe('the intro never absorbs a click meant for something else', () => 
   test('a consent click during the intro is recorded, not eaten', async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.goto('/', { waitUntil: 'load' });
-    await page.waitForTimeout(700); // plate is up
+    await page.waitForTimeout(300); // plate is up (it holds for 1.0s, then fades)
 
     const box = await page.evaluate(() => {
       const btn = [...document.querySelectorAll('button')].find((b) =>

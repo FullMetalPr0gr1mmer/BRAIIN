@@ -29,6 +29,26 @@ function reportDrop(entity: string, row: unknown, error: z.ZodError): void {
   console.warn(`[content] dropped invalid ${entity} row (slug=${rowSlug(row)}): ${paths}`);
 }
 
+/**
+ * A loader's QUERY failed (as opposed to a row failing validation). Loaders fail closed to
+ * `[]`/null so a page still renders — which also means a 42501 from a missing grant, a
+ * PGRST204 from a column the database does not have yet, or a timeout all look exactly
+ * like "no content" on the page. This makes them diagnosable: the Postgres/PostgREST
+ * error CODE and entity, never the message body (it can quote values).
+ */
+export function reportLoadError(
+  entity: string,
+  error: { code?: string | undefined } | unknown,
+): void {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code: unknown }).code)
+      : error instanceof Error
+        ? error.name
+        : 'unknown';
+  console.warn(`[content] ${entity} load failed (code=${code}) — rendering the fallback`);
+}
+
 /** Validate a list; drop + log rows that fail. Returns only well-formed rows. */
 export function parseRows<S extends z.ZodTypeAny>(
   schema: S,

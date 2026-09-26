@@ -1,0 +1,55 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { Accent } from '@schemas/media';
+import { accentRange, splitAccent } from '@/lib/text/accent';
+
+// A heading that enters word by word (the design's `splitWords`, used by About's "who we
+// are" h1): split on the SERVER, so the text is in the HTML and no script touches it. Per
+// WORD in both languages — splitting Arabic glyphs breaks their joining forms.
+//
+// The stagger is a class per word (`.hw--0` … `.hw--15`, 38 ms apart in global.css): the
+// nonce CSP forbids a style attribute, so a per-word custom property cannot be inlined.
+// Words beyond 16 share the last rung. The accessible name is the plain text (aria-label);
+// the split spans are aria-hidden so a screen reader does not read word fragments.
+// Reduced motion: the words are simply there (the entrance is killed in global.css).
+
+interface Props {
+  text: string;
+  locale: Locale;
+  accent?: Accent | null | undefined;
+  level?: 1 | 2;
+  class?: string;
+  id?: string;
+}
+
+const { text, locale, accent, level = 1, class: className, id } = Astro.props;
+const MAX_RUNG = 15;
+
+let n = 0;
+const runs = splitAccent(text, accentRange(accent, locale)).map((run) => ({
+  accent: run.accent,
+  parts: run.text
+    .split(/(\s+)/)
+    .filter((p) => p !== '')
+    .map((p) => {
+      if (/^\s+$/.test(p)) return { space: true as const, text: ' ' };
+      const rung = Math.min(n, MAX_RUNG);
+      n += 1;
+      return { space: false as const, text: p, rung };
+    }),
+}));
+const Tag = level === 1 ? 'h1' : 'h2';
+---
+
+<Tag class:list={['h-split', className]} id={id} aria-label={text}>
+  <span aria-hidden="true">
+    {
+      runs.map((run) => {
+        const words = run.parts.map((p) =>
+          p.space ? p.text : <span class={`hw hw--${p.rung}`}>{p.text}</span>,
+        );
+        return run.accent ? <em>{words}</em> : words;
+      })
+    }
+  </span>
+</Tag>

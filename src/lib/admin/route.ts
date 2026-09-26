@@ -4,7 +4,13 @@ import { z } from 'zod';
 import type { AuthContext } from '@/lib/auth/types';
 import { assertAnyCap, assertCap, type Access, type Capability } from '@/lib/authz/matrix';
 import { AuthorizationError } from '@/lib/authz/errors';
-import { NotFoundError, OptimisticLockError, RateLimitError, ValidationError } from './errors';
+import {
+  InUseError,
+  NotFoundError,
+  OptimisticLockError,
+  RateLimitError,
+  ValidationError,
+} from './errors';
 import { writeAudit, type AuditEntry } from './audit';
 import { writeSystemLog } from '@/lib/data/systemLog';
 
@@ -95,6 +101,9 @@ function mapError(err: unknown): { status: number; body: Record<string, unknown>
   }
   if (err instanceof OptimisticLockError) {
     return { status: 409, body: { ok: false, error: 'conflict', entity: err.entity } };
+  }
+  if (err instanceof InUseError) {
+    return { status: 409, body: { ok: false, error: 'in-use', detail: err.detail } };
   }
   if (err instanceof NotFoundError) {
     return { status: 404, body: { ok: false, error: 'not-found', entity: err.entity } };

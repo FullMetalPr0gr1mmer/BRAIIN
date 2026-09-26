@@ -23,7 +23,9 @@ const PATHS = [
   '/services',
   '/services/branding',
   '/portfolio',
-  '/portfolio/riyadh-season-launch',
+  // A seeded published case study (local/CI/staging). The legacy demo rows are archived
+  // there, so pointing at one would scan the 404 page instead of the detail template.
+  '/portfolio/the-rider',
   '/creative-knowledge',
   '/creative-knowledge/arabic-first-brand-systems',
   '/search',
@@ -54,6 +56,8 @@ for (const route of ROUTES) {
   test(`served HTML is CSP-clean on ${route}`, async ({ request }) => {
     const res = await request.get(route);
     expect(res.status(), `${route} errored`).toBeLessThan(500);
+    // A content slug that went missing must fail loudly, not quietly scan the 404 page.
+    if (!route.endsWith('/404')) expect(res.status(), `${route} did not render`).toBe(200);
     const html = await res.text();
     for (const [pattern, what] of BANNED) {
       const hit = html.match(pattern);
@@ -61,12 +65,24 @@ for (const route of ROUTES) {
     }
   });
 
+  // Every <title> — legal pages included — carries the brand, in the page's language,
+  // from the public identity (seeded: "Braiin Statiion" / "بريّن ستيشن"). A title
+  // without it is a route that bypassed the title template (src/lib/seo/title.ts).
+  test(`<title> and og:site_name carry the brand on ${route}`, async ({ request }) => {
+    const html = await (await request.get(route)).text();
+    const brand = route === '/ar' || route.startsWith('/ar/') ? 'بريّن ستيشن' : 'Braiin Statiion';
+    const title = /<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '';
+    expect(title, `title on ${route}`).toContain(brand);
+    expect(html, `og:site_name on ${route}`).toContain(
+      `<meta property="og:site_name" content="${brand}">`,
+    );
+  });
+
   if (!LEGAL.test(route)) {
     test(`served HTML uses the current brand on ${route}`, async ({ request }) => {
-      // Enabled in PR2 with the brand sweep (owner decision 1: "Braiin Statiion"). The
-      // spelling with a single-i "Station" must not reach any displayed string; the
-      // domain `braiinstation.com` is unaffected (this matches the two-word name only).
-      test.fixme();
+      // Owner decision 1 (UI v2): "Braiin Statiion". The single-i "Station" spelling must
+      // not reach any displayed string; the domain `braiinstation.com` is unaffected (this
+      // matches the two-word name only).
       const html = await (await request.get(route)).text();
       expect(html.match(/Braiin Station\b/g) ?? [], `old brand name on ${route}`).toHaveLength(0);
     });

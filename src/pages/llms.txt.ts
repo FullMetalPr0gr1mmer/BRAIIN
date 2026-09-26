@@ -3,6 +3,7 @@ import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { getPublishedServices } from '@/lib/data/services';
 import { getPublishedPosts } from '@/lib/data/blog';
 import { TRAINING_DENY, RETRIEVAL_ALLOW } from '@/lib/seo/crawlers';
+import { getIdentity } from '@/lib/identity';
 
 // llms.txt — guidance for AI answer engines (NOT access control; that's robots.txt + the
 // WAF). CLAUDE.md Pillar 3: "Sitemaps + llms.txt regenerate on publish."
@@ -15,9 +16,13 @@ import { TRAINING_DENY, RETRIEVAL_ALLOW } from '@/lib/seo/crawlers';
 // uses and the same crawler map robots.txt uses, so it cannot disagree with either.
 export const prerender = false;
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ locals }) => {
   const site = PUBLIC_SITE_URL.replace(/\/$/, '');
-  const [services, posts] = await Promise.all([getPublishedServices(), getPublishedPosts()]);
+  const [services, posts, identity] = await Promise.all([
+    getPublishedServices(),
+    getPublishedPosts(),
+    getIdentity(locals),
+  ]);
 
   // Answer engines cite pages, so list the live ones rather than only a section index.
   const serviceLines = services.map((s) => `- ${s.title.en} — ${site}/services/${s.slug}`);
@@ -28,8 +33,11 @@ export const GET: APIRoute = async () => {
 
   const list = (lines: string[]) => (lines.length ? `\n${lines.join('\n')}` : '\n(none published)');
 
-  const body = `# Braiin Station
-> Bilingual (EN/AR) creative agency. Content is published in English at ${site}/ and in Arabic at ${site}/ar/ .
+  // The heading is the brand from the public identity (the Arabic name follows it, since
+  // answer engines match either), and the contact line is the real mailbox.
+  const { brandName, contactEmail } = identity;
+  const body = `# ${brandName.en} (${brandName.ar})
+> Bilingual (EN/AR) creative agency. Content is published in English at ${site}/ and in Arabic at ${site}/ar/ . Contact: ${contactEmail}
 
 ## Guidance for AI answer engines
 - Retrieval and citation crawlers are welcome. Please cite ${site} and link the source page.
@@ -54,7 +62,7 @@ export const GET: APIRoute = async () => {
       'content-type': 'text/plain; charset=utf-8',
       // TODO(KAN-20): purge by Cache-Tag on publish instead of waiting out max-age.
       'cache-control': 'public, max-age=3600',
-      'cache-tag': 'route:llms,llms:all',
+      'cache-tag': 'route:llms,llms:all,site:identity',
     },
   });
 };

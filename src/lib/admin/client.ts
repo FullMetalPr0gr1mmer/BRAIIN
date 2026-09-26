@@ -12,6 +12,8 @@ export interface ApiError {
   // `| undefined` is required under exactOptionalPropertyTypes: these are built from
   // an optional JSON payload, so "absent" arrives as an explicit undefined.
   detail?: string | undefined;
+  /** The form field a validation error belongs to (a constraint the server mapped). */
+  field?: string | undefined;
   issues?: { path: string; message: string }[] | undefined;
 }
 
@@ -52,8 +54,10 @@ export async function adminFetch<T = unknown>(
   if (options.body !== undefined) init.body = JSON.stringify(options.body);
   if (options.signal) init.signal = options.signal;
 
-  const response = await fetch(url, init);
+  return unwrap<T>(await fetch(url, init));
+}
 
+async function unwrap<T>(response: Response): Promise<T> {
   // 401 means the session died underneath an open tab — an idle editor, or an admin who
   // was just deactivated. Bouncing to login beats rendering "error" over a form whose
   // contents can no longer be saved.
@@ -74,6 +78,7 @@ export async function adminFetch<T = unknown>(
       error: String(payload['error'] ?? 'request-failed'),
       status: response.status,
       detail: typeof payload['detail'] === 'string' ? payload['detail'] : undefined,
+      field: typeof payload['field'] === 'string' ? payload['field'] : undefined,
       issues: Array.isArray(payload['issues'])
         ? (payload['issues'] as { path: string; message: string }[])
         : undefined,
@@ -81,6 +86,27 @@ export async function adminFetch<T = unknown>(
   }
 
   return (payload['data'] ?? payload) as T;
+}
+
+/**
+ * Multipart upload (a file plus its fields) with the same CSRF header and error handling
+ * as adminFetch. Deliberately sets NO content-type: the browser writes
+ * `multipart/form-data; boundary=…` itself, and a hand-set content-type loses the boundary
+ * so the server cannot parse the body at all.
+ */
+export async function adminUpload<T = unknown>(
+  url: string,
+  form: FormData,
+  options: { signal?: AbortSignal } = {},
+): Promise<T> {
+  const init: RequestInit = {
+    method: 'POST',
+    headers: { accept: 'application/json', 'x-csrf-token': csrfToken() },
+    credentials: 'same-origin',
+    body: form,
+  };
+  if (options.signal) init.signal = options.signal;
+  return unwrap<T>(await fetch(url, init));
 }
 
 /** Human-readable text for the error envelope the API kernel returns. */
@@ -93,6 +119,8 @@ export function describeError(err: unknown): string {
       return 'Your role does not allow that.';
     case 'conflict':
       return 'Someone else saved changes while you were editing. Reload to see their version.';
+    case 'in-use':
+      return err.info.detail ?? 'It is still in use elsewhere — remove it from there first.';
     case 'not-found':
       return 'That item no longer exists.';
     case 'csrf':

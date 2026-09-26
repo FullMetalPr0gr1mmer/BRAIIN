@@ -1,11 +1,19 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getIdentity, brandName } from '@/lib/identity';
+import { siteTitle } from '@/lib/seo/title';
+import { PAGE_META } from '@/lib/seo/pageMeta';
 
 Astro.response.status = 404;
+
+// siteTitle, not loadHead: a 404 is noindex and answers every mistyped or probing URL,
+// so it skips the seo_defaults read. The identity is shared with the header and footer.
+const brand = brandName(await getIdentity(Astro.locals), 'en');
+const title = siteTitle(PAGE_META.notFound.en.title, brand);
 ---
 
 <BaseLayout
-  title="Not found — Braiin Station"
+  title={title}
   description="The page you were looking for does not exist."
   locale="en"
   logicalPath="/404"

@@ -1,0 +1,108 @@
+{
+  "blocks": [
+    {
+      "table": "navigation",
+      "conflict": ["id"],
+      "unlessAuthored": ["location"],
+      "rows": [
+        {
+          "id": "00000000-0000-4000-8000-00000000a101",
+          "location": "header",
+          "label": { "en": "Home", "ar": "الرئيسية" },
+          "href": "/",
+          "sort_order": 1,
+          "visible": true,
+          "is_key": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000a102",
+          "location": "header",
+          "label": { "en": "About", "ar": "من نحن" },
+          "href": "/about",
+          "sort_order": 2,
+          "visible": true,
+          "is_key": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000a103",
+          "location": "header",
+          "label": { "en": "Our Work", "ar": "أعمالنا" },
+          "href": "/portfolio",
+          "sort_order": 3,
+          "visible": true,
+          "is_key": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000a104",
+          "location": "header",
+          "label": { "en": "Services", "ar": "الخدمات" },
+          "href": "/#services",
+          "sort_order": 4,
+          "visible": true,
+          "is_key": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000a105",
+          "location": "header",
+          "label": { "en": "Contact us", "ar": "تواصل معنا" },
+          "href": "/contact",
+          "sort_order": 5,
+          "visible": true,
+          "is_key": true
+        }
+      ]
+    },
+    {
+      "table": "navigation",
+      "conflict": ["id"],
+      "unlessAuthored": ["location"],
+      "rows": [
+        {
+          "id": "00000000-0000-4000-8000-00000000a201",
+          "location": "footer",
+          "label": { "en": "Services", "ar": "الخدمات" },
+          "href": "/services",
+          "sort_order": 1,
+          "visible": true,
+          "is_key": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000a202",
+          "location": "footer",
+          "label": { "en": "Our Work", "ar": "أعمالنا" },
+          "href": "/portfolio",
+          "sort_order": 2,
+          "visible": true,
+          "is_key": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000a203",
+          "location": "footer",
+          "label": { "en": "Insights", "ar": "المعرفة" },
+          "href": "/creative-knowledge",
+          "sort_order": 3,
+          "visible": true,
+          "is_key": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000a204",
+          "location": "footer",
+          "label": { "en": "About", "ar": "من نحن" },
+          "href": "/about",
+          "sort_order": 4,
+          "visible": true,
+          "is_key": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000a205",
+          "location": "footer",
+          "label": { "en": "Contact", "ar": "تواصل معنا" },
+          "href": "/contact",
+          "sort_order": 5,
+          "visible": true,
+          "is_key": false
+        }
+      ]
+    }
+  ]
+}

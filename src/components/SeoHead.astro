@@ -5,6 +5,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { JsonLdNode } from '@/lib/seo/jsonld';
 import { hreflangAlternates, localizedPath } from '@/lib/i18n';
+import { getIdentity, brandName } from '@/lib/identity';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import JsonLd from './JsonLd.astro';
 
@@ -39,6 +40,9 @@ const {
 } = Astro.props;
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+// og:site_name is the brand from the public identity — shared with the header and footer
+// through the per-request memo, so this costs no extra query.
+const siteName = brandName(await getIdentity(Astro.locals), locale);
 
 function safeCanonical(override: string | undefined, fallback: string): string {
   if (!override) return fallback;
@@ -103,7 +107,7 @@ const hasDescription = description.trim().length > 0;
     : null
 }
 <meta property="og:type" content="website" />
-<meta property="og:site_name" content="Braiin Station" />
+<meta property="og:site_name" content={siteName} />
 <meta property="og:title" content={title} />
 {hasDescription ? <meta property="og:description" content={description} /> : null}
 <meta property="og:url" content={canonical} />

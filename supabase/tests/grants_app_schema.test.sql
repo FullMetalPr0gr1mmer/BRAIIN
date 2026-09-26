@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(25);
+select plan(45);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -94,7 +94,7 @@ select is(
        and p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' not in (
          'effective_tenant_id()', 'current_tenant_id()', 'default_tenant_id()',
          'current_role()', 'is_staff()', 'is_admin()', 'can_write_content()',
-         'normalize_ar(text)', 'normalize_ar_q(text)'
+         'normalize_ar(text)', 'normalize_ar_q(text)', 'ar_fts_text(text, boolean)'
        )
   ),
   '',
@@ -133,6 +133,109 @@ select ok(not has_table_privilege('anon', 'public.profiles', 'select'),
   'anon CANNOT select public.profiles');
 select ok(not has_table_privilege('anon', 'public.site_integrations', 'select'),
   'anon CANNOT select public.site_integrations (API keys)');
+
+-- ---- 7. UI v2 additions (0016, 0019) --------------------------------------------------
+-- The two new public surfaces are SELECT-only (the insert/update/delete/truncate sweep in
+-- §5 above already covers their write side), and the deployment marker — which decides
+-- whether the production-only guards are armed — is reachable by no API role at all.
+select ok(has_table_privilege('anon', 'public.page_sections', 'select'),
+  'anon has SELECT on page_sections (0016: CMS compositions reach visitors; 0011 fence applies)');
+select ok(has_table_privilege('anon', 'public.site_profile', 'select'),
+  'anon has SELECT on site_profile (0019: the public identity renders on every page)');
+select ok(
+  not has_table_privilege('anon', 'app.deployment', 'select')
+  and not has_table_privilege('authenticated', 'app.deployment', 'select')
+  and not has_table_privilege('service_role', 'app.deployment', 'select'),
+  'app.deployment is unreadable by anon, authenticated and service_role');
+select ok(
+  not has_function_privilege('authenticated', 'app.is_production()', 'execute')
+  and not has_function_privilege('authenticated', 'app.tg_site_profile_guard()', 'execute'),
+  'the 0016/0019 app.* routines are not executable by authenticated either');
+select ok(not has_table_privilege('authenticated', 'public.site_profile', 'delete'),
+  'authenticated CANNOT delete the site_profile singleton');
+
+-- ---- 8. The deploy guard can actually READ the marker (0016) ------------------------
+-- RLS on app.deployment is forced, and deploy_guard is NOBYPASSRLS. Without its policy
+-- the guard read '<unset>' and blocked every production deploy — a grant is not enough.
+-- Roles created here are rolled back with the transaction. PG15 does not make the creator
+-- a member of a role it creates, hence the explicit grant before SET ROLE. The two roles
+-- also get USAGE on pgTAP's own schema: the assertions run AS them, and a schema without
+-- USAGE is silently skipped on the search_path — is() would "not exist".
+do $$
+declare
+  v_pgtap text;
+begin
+  if not exists (select 1 from pg_roles where rolname = 'deploy_guard') then
+    create role deploy_guard nologin nobypassrls;
+  end if;
+  create role pgtap_other_reader nologin nobypassrls;
+  execute format('grant deploy_guard, pgtap_other_reader to %I', current_user);
+  select n.nspname into v_pgtap
+    from pg_extension e join pg_namespace n on n.oid = e.extnamespace
+   where e.extname = 'pgtap';
+  execute format('grant usage on schema %I to deploy_guard, pgtap_other_reader', v_pgtap);
+end $$;
+grant usage on schema app to deploy_guard, pgtap_other_reader;
+grant select on app.deployment to deploy_guard, pgtap_other_reader;
+insert into app.deployment (env) values ('staging')
+  on conflict (singleton) do update set env = excluded.env;
+
+set local role deploy_guard;
+select is((select env from app.deployment), 'staging',
+  'deploy_guard (NOBYPASSRLS) reads the marker through its SELECT policy');
+select throws_ok($$ update app.deployment set env = 'production' $$, '42501', null,
+  'deploy_guard cannot re-label the database (no write privilege)');
+reset role;
+
+set local role pgtap_other_reader;
+select is((select count(*)::int from app.deployment), 0,
+  'any OTHER grantee still reads zero rows — the policy admits deploy_guard only');
+reset role;
+
+-- ---- 9. UI v2 content model (0020–0025): the exact anon read surface ------------------
+-- A property of the catalog, not a list of spot checks: any table or view anon can SELECT
+-- at table level is named here, so a future grant (or a Supabase default that slipped
+-- back in) fails this line instead of quietly publishing a table.
+select is(
+  (select string_agg(c.relname::text, ', ' order by c.relname)
+     from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p', 'f')
+      and has_table_privilege('anon', c.oid, 'select')),
+  'ai_questions, ai_styles, blog_posts, categories, certifications, clients, entity_seo, '
+  'navigation, page_sections, pages, partner_logos, portfolio, portfolio_media, '
+  'portfolio_services, sectors, seo_defaults, services, site_profile, statistics, team_members',
+  'anon''s table-level SELECT is exactly the public content tables');
+
+-- Column-level surfaces: testimonials without the consent record, media without internals.
+select ok(not has_table_privilege('anon', 'public.testimonials', 'select'),
+  'anon has no TABLE-level select on testimonials (column grant only)');
+select ok(has_column_privilege('anon', 'public.testimonials', 'quote', 'select'),
+  'anon reads testimonial quotes');
+select ok(not has_column_privilege('anon', 'public.testimonials', 'consent_reference', 'select')
+          and not has_column_privilege('anon', 'public.testimonials', 'consent_obtained_at', 'select'),
+  'anon CANNOT read the testimonial consent record');
+select ok(not has_table_privilege('anon', 'public.media_assets', 'select'),
+  'anon has no TABLE-level select on media_assets (column grant only)');
+select ok(has_column_privilege('anon', 'public.media_assets', 'storage_path', 'select'),
+  'anon reads media storage keys (the 0024 policy decides which rows)');
+select ok(not has_column_privilege('anon', 'public.media_assets', 'folder', 'select')
+          and not has_column_privilege('anon', 'public.media_assets', 'provider_ref', 'select')
+          and not has_column_privilege('anon', 'public.media_assets', 'tags', 'select'),
+  'anon CANNOT read media internals (folder, tags, provider_ref)');
+
+-- RPCs: staff only.
+select ok(not has_function_privilege('anon', 'public.update_media_meta(uuid, int, jsonb)', 'execute'),
+  'anon CANNOT execute update_media_meta()');
+select ok(not has_function_privilege('anon', 'public.media_usage(uuid)', 'execute'),
+  'anon CANNOT execute media_usage()');
+select ok(not has_function_privilege('anon', 'public.save_portfolio(uuid, int, jsonb, uuid[], jsonb)', 'execute'),
+  'anon CANNOT execute save_portfolio()');
+select ok(has_function_privilege('authenticated', 'public.save_portfolio(uuid, int, jsonb, uuid[], jsonb)', 'execute')
+          and has_function_privilege('authenticated', 'public.update_media_meta(uuid, int, jsonb)', 'execute')
+          and has_function_privilege('authenticated', 'public.media_usage(uuid)', 'execute'),
+  'authenticated can execute the three staff RPCs (RLS / role checks decide the rest)');
+select ok(not has_function_privilege('authenticated', 'app.tg_placeholder_guard()', 'execute'),
+  'the 0025 placeholder guard is not callable by authenticated');
 
 select * from finish();
 rollback;

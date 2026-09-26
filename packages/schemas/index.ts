@@ -10,3 +10,8 @@ export * from './styleFinder';
 export * from './tiptap';
 export * from './admin';
 export * from './analytics';
+// `sections` re-exports SECTION_TYPES from ./sectionTypes — do not also export that
+// module here, or the barrel has two exports of the same name.
+export * from './sections';
+export * from './media';
+export * from './siteProfile';
