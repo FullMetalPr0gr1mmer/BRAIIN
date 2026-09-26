@@ -19,9 +19,15 @@ import { parseRow, parseRows, reportLoadError } from './parse';
 // hit 42501 and fell back — which is why nothing composed in the CMS had ever reached a
 // visitor. The 0011 restrictive policy is the fence: visible sections of PUBLISHED pages.
 //
-// Returns null (caller falls back to the DEFAULT_* composition in lib/sections/types)
-// when Supabase is unconfigured/unreachable, the page isn't published, or it has no
-// sections yet — the site never renders empty because authoring hasn't happened.
+// getPageComposition returns:
+//   null                    Supabase unconfigured/unreachable, or the page is not published
+//   { page, sections: [] }  published but not yet composed (or its sections failed to load)
+//   { page, sections }      the authored composition
+// The page is returned even with no sections because its id keys the page's own SEO
+// override (`entity_seo`): a published page must be able to carry a title override
+// before anyone has composed it. Callers fall back to the DEFAULT_* composition in
+// lib/sections/types on an EMPTY list — the site never renders empty because authoring
+// hasn't happened.
 
 const PageRowSchema = z.object({
   id: z.string().uuid(),
@@ -31,7 +37,7 @@ const PageRowSchema = z.object({
 });
 
 export interface PageComposition {
-  /** The page row — `id` keys per-page SEO overrides (`seoForEntity('page', id)`). */
+  /** The page row — `id` keys the page's SEO override (`loadHead`, entity type 'page'). */
   page: { id: string; slug: string; title: { en: string; ar: string }; updatedAt: string | null };
   sections: SectionData[];
 }
@@ -76,6 +82,7 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
     }
     const page = pageData ? parseRow(PageRowSchema, pageData, 'page') : null;
     if (!page) return null;
+    const pageRef = { id: page.id, slug: page.slug, title: page.title, updatedAt: page.updated_at };
 
     const { data, error } = await anonClient()
       .from('page_sections')
@@ -84,27 +91,22 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
       .order('sort_order', { ascending: true });
     if (error) {
       reportLoadError('page_section', error);
-      return null;
+      return { page: pageRef, sections: [] };
     }
-    if (!data || data.length === 0) return null;
 
-    const sections = parseRows(PageSectionRowSchema, data, 'page_section').flatMap((row) => {
+    const sections = parseRows(PageSectionRowSchema, data ?? [], 'page_section').flatMap((row) => {
       const section = toSection(row);
       return section ? [section] : [];
     });
-    if (sections.length === 0) return null;
-
-    return {
-      page: { id: page.id, slug: page.slug, title: page.title, updatedAt: page.updated_at },
-      sections,
-    };
+    return { page: pageRef, sections };
   } catch (err) {
     reportLoadError('page_section', err);
     return null;
   }
 }
 
-/** Sections only — for routes that need no page-level metadata. */
+/** Sections only — for routes that need no page-level metadata. Null until composed. */
 export async function getPageSections(pageSlug: string): Promise<SectionData[] | null> {
-  return (await getPageComposition(pageSlug))?.sections ?? null;
+  const composition = await getPageComposition(pageSlug);
+  return composition && composition.sections.length > 0 ? composition.sections : null;
 }

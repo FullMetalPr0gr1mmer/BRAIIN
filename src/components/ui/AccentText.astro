@@ -1,0 +1,20 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { Accent } from '@schemas/media';
+import { accentRange, splitAccent } from '@/lib/text/accent';
+
+// A heading's text with its accented word range wrapped in <em> (the design's accent —
+// colour, or an outline on Klein bands, set by the surrounding component's CSS). Text is
+// always rendered as text; a heading is never assembled from HTML strings.
+
+interface Props {
+  text: string;
+  locale: Locale;
+  accent?: Accent | null | undefined;
+}
+
+const { text, locale, accent } = Astro.props;
+const runs = splitAccent(text, accentRange(accent, locale));
+---
+
+{runs.map((run) => (run.accent ? <em>{run.text}</em> : run.text))}

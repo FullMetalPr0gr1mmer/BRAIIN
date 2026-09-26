@@ -1,6 +1,12 @@
 import type { TiptapDoc } from '@schemas/tiptap';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import RichText from './RichText';
+import RelationField from './fields/RelationField';
+import MediaField from './fields/MediaField';
+import RepeaterField, { type RenderField } from './fields/RepeaterField';
+import ClipField from './fields/ClipField';
+import SectionContentField from './fields/SectionContentField';
+import UploadField from './fields/UploadField';
 
 // One renderer per field kind, shared by ResourceForm and SingletonForm.
 //
@@ -15,10 +21,87 @@ export interface FieldProps {
   field: FieldDef;
   value: unknown;
   onChange: (name: string, value: unknown) => void;
+  /** The whole form's values — a `sectionContent` field reads its sibling `type`. */
+  values?: Row;
+  /** Keeps element ids unique when the same field renders inside repeater items. */
+  idPrefix?: string;
 }
 
-export function Field({ field, value, onChange }: FieldProps) {
-  const id = `f-${field.name}`;
+/** Renders a nested field (repeater items, section content) with the same renderer. */
+const renderField: RenderField = (field, value, onChange, idPrefix) => (
+  <Field key={field.name} field={field} value={value} onChange={onChange} idPrefix={idPrefix} />
+);
+
+export function Field({ field, value, onChange, values = {}, idPrefix = 'f' }: FieldProps) {
+  const id = `${idPrefix}-${field.name}`;
+
+  // ── composite and referencing kinds (UI v2) ──────────────────────────────────
+  if (field.kind === 'relation' || field.kind === 'multiRelation') {
+    return <RelationField field={field} value={value} onChange={onChange} />;
+  }
+  if (field.kind === 'media') {
+    return <MediaField field={field} value={value} onChange={onChange} />;
+  }
+  if (field.kind === 'repeater') {
+    return (
+      <RepeaterField
+        field={field}
+        value={value}
+        onChange={onChange}
+        renderField={renderField}
+        idPrefix={idPrefix}
+      />
+    );
+  }
+  if (field.kind === 'clip') {
+    return <ClipField field={field} value={value} onChange={onChange} idPrefix={idPrefix} />;
+  }
+  if (field.kind === 'sectionContent') {
+    return (
+      <SectionContentField
+        field={field}
+        value={value}
+        sectionType={values[field.typeField ?? 'type']}
+        onChange={onChange}
+        renderField={renderField}
+        idPrefix={idPrefix}
+      />
+    );
+  }
+  if (field.kind === 'upload') {
+    return <UploadField field={field} value={value} onChange={onChange} idPrefix={idPrefix} />;
+  }
+  if (field.kind === 'multiSelect') {
+    const chosen = Array.isArray(value) ? (value as string[]) : [];
+    return (
+      <fieldset className="field-group">
+        <legend className="field-legend">
+          {field.label}
+          {field.required ? ' *' : ''}
+        </legend>
+        <div className="row-3">
+          {field.options?.map((option) => (
+            <label key={option.value} className="field field-inline">
+              <input
+                type="checkbox"
+                checked={chosen.includes(option.value)}
+                onChange={(e) =>
+                  onChange(
+                    field.name,
+                    e.target.checked
+                      ? [...chosen, option.value]
+                      : chosen.filter((v) => v !== option.value),
+                  )
+                }
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+        {field.help && <p className="admin-sub">{field.help}</p>}
+      </fieldset>
+    );
+  }
 
   if (field.kind === 'bilingual' || field.kind === 'prose') {
     const record = (value ?? {}) as Record<string, string>;

@@ -21,12 +21,18 @@
 //   { "blocks": [ { "table": "services",
 //                   "conflict": ["tenant_id", "slug"],   // ON CONFLICT … DO NOTHING
 //                   "existsBy": ["name"],                // OR: insert-where-not-exists
+//                   "unlessAuthored": ["location"],      // with conflict: rows sharing these
+//                                                        // values form a slice, inserted only
+//                                                        // while the table holds NO row of
+//                                                        // that slice (once, never again)
 //                   "tenantScoped": true,                // default true: adds tenant_id
 //                   "rows": [ { …columns…,
 //                               "__placeholder": true,   // demoted in production mode
 //                               "__published": { … },    // overrides in published mode
 //                               "__production": { … } } ] } ] }
-// Values: strings/numbers/booleans/null are literals; objects/arrays are jsonb;
+// Values: strings/numbers/booleans/null are literals; objects/arrays are jsonb — so a
+// text[] column takes a Postgres array LITERAL string ("{home,work}"), which the
+// INSERT … VALUES types from its column (tests/seed/seeds.spec.ts checks the format);
 // {"$ref": {"table": "team_members", "by": {"slug": "x"}}} is a tenant-scoped id lookup;
 // {"$sql": "now()"} is the one raw expression allowed.
 //
@@ -121,6 +127,40 @@ function blockSql(block, mode) {
   }
 
   if (!block.conflict) throw new Error(`${block.source}:${block.table} needs conflict or existsBy`);
+
+  if (block.unlessAuthored) {
+    // A collection an editor may already have built (a menu). Seeding into it would mix
+    // our rows into theirs — and a per-row check would also bring back a seeded row an
+    // editor had DELETED the next time the seed ran. So the decision is made once per
+    // slice (e.g. per menu location): the whole slice goes in only while that slice is
+    // empty, and never again after anyone has touched it.
+    //
+    // One DO block per slice, so the check runs BEFORE any of its rows are inserted (a
+    // per-row statement would see its siblings from the same transaction). A plain
+    // INSERT … VALUES inside it types each literal from its target column, which an
+    // INSERT … SELECT over bare literals would not (text into uuid fails).
+    const slices = new Map();
+    for (const r of rows) {
+      const key = JSON.stringify(block.unlessAuthored.map((c) => r[c]));
+      if (!slices.has(key)) slices.set(key, []);
+      slices.get(key).push(r);
+    }
+    const tenant = scoped ? `tenant_id = ${quote(TENANT_ID)} and ` : '';
+    const stmts = [...slices.values()].map((slice) => {
+      const match = block.unlessAuthored.map((c) => `${c} = ${literal(slice[0][c])}`).join(' and ');
+      const values = slice.map((r) => `      (${tuple(r)})`).join(',\n');
+      return (
+        `do $seed$ begin\n` +
+        `  if not exists (select 1 from public.${block.table} where ${tenant}${match}) then\n` +
+        `    insert into public.${block.table} (${columns.join(', ')}) values\n${values}\n` +
+        `    on conflict (${block.conflict.join(', ')}) do nothing;\n` +
+        `  end if;\n` +
+        `end $seed$;`
+      );
+    });
+    return `${header}\n${stmts.join('\n')}`;
+  }
+
   const values = rows.map((r) => `  (${tuple(r)})`).join(',\n');
   return (
     `${header}\ninsert into public.${block.table} (${columns.join(', ')}) values\n${values}\n` +

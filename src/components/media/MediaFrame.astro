@@ -1,0 +1,97 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { VideoClip } from '@schemas/media';
+import type { ImageRef } from '@/lib/media/resolve';
+import MediaImage from './MediaImage.astro';
+
+// A poster frame that may play a short clip (UI v2 — project cards, the home featured
+// project, Our Work's intro pair, About's "who we are", the case-study final film).
+//
+// The server renders the poster only (<Picture>, real dimensions, CLS 0). The <video> is
+// created by src/lib/client/clips.ts on the first trigger — in view, or pointer/focus on
+// the enclosing [data-clip-trigger] — and never on touch, under reduced motion or with
+// Save-Data. A clip is a WINDOW of a self-hosted /media/*.mp4 (EXC-009); a Stream UID
+// renders as the poster alone until the Stream player lands (KAN-20).
+
+type Ratio = 'feature' | 'card' | 'who' | 'film' | 'intro-a' | 'intro-b';
+
+interface Props {
+  image: ImageRef | null;
+  locale: Locale;
+  clip?: VideoClip | null;
+  /** inview: plays while on screen. hover: while the enclosing [data-clip-trigger] is hovered/focused. */
+  mode?: 'inview' | 'hover';
+  /** inview only: the share of the frame that must be visible (default .35). */
+  threshold?: number;
+  /**
+   * The small round play badge (catalog cards). Shown only once clips.ts wires the frame
+   * (.can-clip — never on touch, under reduced motion, with Save-Data or without JS);
+   * hidden while the clip plays.
+   */
+  badge?: boolean;
+  ratio?: Ratio;
+  /** alt="" — the frame sits in a link that already names the project. */
+  decorative?: boolean;
+  priority?: boolean;
+  sizes?: string;
+  widths?: number[];
+  class?: string;
+}
+
+const {
+  image,
+  locale,
+  clip = null,
+  mode = 'inview',
+  threshold,
+  badge = false,
+  ratio,
+  decorative = false,
+  priority = false,
+  sizes,
+  widths,
+  class: className,
+} = Astro.props;
+
+// Only a self-hosted path can play today; a window without a path is just a poster.
+const playable = clip?.path ? clip : null;
+---
+
+<div
+  class:list={['mf', ratio && `mf--${ratio}`, className]}
+  data-clip-src={playable?.path}
+  data-clip-start={playable?.startS}
+  data-clip-end={playable?.endS}
+  data-clip-mode={playable ? mode : undefined}
+  data-clip-threshold={playable && mode === 'inview' && threshold !== undefined
+    ? threshold
+    : undefined}
+>
+  {
+    image && (
+      <MediaImage
+        image={image}
+        locale={locale}
+        decorative={decorative}
+        priority={priority}
+        {...(sizes ? { sizes } : {})}
+        {...(widths ? { widths } : {})}
+      />
+    )
+  }
+  {
+    badge && playable && (
+      <span class="mf__play" aria-hidden="true">
+        <svg viewBox="0 0 12 12">
+          <path d="M2 1l9 5-9 5z" fill="currentColor" />
+        </svg>
+      </span>
+    )
+  }
+</div>
+
+<script>
+  import { initClips } from '@/lib/client/clips';
+
+  initClips();
+</script>

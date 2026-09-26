@@ -12,8 +12,10 @@
             "ar": "حملة متكاملة — فيلم للعلامة، وموشن جرافيك، وحضور دائم على وسائل التواصل."
           },
           "status": "published",
+          "is_placeholder": true,
           "sort_order": 1,
-          "__placeholder": true
+          "__placeholder": true,
+          "__published": { "status": "archived" }
         },
         {
           "slug": "cafe-rebrand",
@@ -23,8 +25,10 @@
             "ar": "نظام هوية جديد، وتغليف، وتصوير للواجهة."
           },
           "status": "published",
+          "is_placeholder": true,
           "sort_order": 2,
-          "__placeholder": true
+          "__placeholder": true,
+          "__published": { "status": "archived" }
         },
         {
           "slug": "fintech-product-film",
@@ -34,8 +38,10 @@
             "ar": "كتابة سيناريو، وإنتاج سينمائي، ونسخة 60 ثانية للإعلانات المدفوعة."
           },
           "status": "published",
+          "is_placeholder": true,
           "sort_order": 3,
-          "__placeholder": true
+          "__placeholder": true,
+          "__published": { "status": "archived" }
         }
       ]
     },
@@ -51,6 +57,7 @@
             "ar": "يقود اتجاه العلامة والفن في الاستوديو."
           },
           "status": "published",
+          "is_placeholder": true,
           "sort_order": 1,
           "__placeholder": true
         },
@@ -62,6 +69,7 @@
             "ar": "يشرف على الفيلم والموشن والمونتاج."
           },
           "status": "published",
+          "is_placeholder": true,
           "sort_order": 2,
           "__placeholder": true
         },
@@ -73,6 +81,7 @@
             "ar": "يدير تحسين محركات البحث ووسائل التواصل والأداء."
           },
           "status": "published",
+          "is_placeholder": true,
           "sort_order": 3,
           "__placeholder": true
         }
@@ -111,24 +120,30 @@
           "label": { "en": "Projects delivered", "ar": "مشروع منجز" },
           "value": "150+",
           "status": "published",
+          "is_placeholder": true,
           "sort_order": 1,
-          "__placeholder": true
+          "__placeholder": true,
+          "__published": { "status": "archived" }
         },
         {
           "slug": "services",
           "label": { "en": "Creative services", "ar": "خدمة إبداعية" },
           "value": "14",
           "status": "published",
+          "is_placeholder": true,
           "sort_order": 2,
-          "__placeholder": true
+          "__placeholder": true,
+          "__published": { "status": "archived" }
         },
         {
           "slug": "years",
           "label": { "en": "Years in MENA", "ar": "سنوات في المنطقة" },
           "value": "8",
           "status": "published",
+          "is_placeholder": true,
           "sort_order": 3,
-          "__placeholder": true
+          "__placeholder": true,
+          "__published": { "status": "archived" }
         }
       ]
     },

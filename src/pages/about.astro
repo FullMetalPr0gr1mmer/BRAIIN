@@ -2,9 +2,12 @@
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SectionRenderer from '@/components/SectionRenderer.astro';
 import { DEFAULT_ABOUT_SECTIONS } from '@/lib/sections/types';
-import { getPageSections } from '@/lib/data/pageSections';
+import { getPageComposition } from '@/lib/data/pageSections';
 import { getPublishedTeam } from '@/lib/data/team';
-import { buildPersonSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { loadHead } from '@/lib/seo/head';
+import { PAGE_META } from '@/lib/seo/pageMeta';
+import { buildPersonSchema, buildBreadcrumbSchema, orgRef } from '@/lib/seo/jsonld';
+import { setTierA } from '@/lib/http/cacheTags';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 
@@ -12,44 +15,61 @@ import { PUBLIC_SITE_URL } from 'astro:env/client';
 // + `page_sections`; default composition until authored). Purges the `route:about` tag.
 const locale = 'en' as const;
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+const HOME = { en: 'Home', ar: 'الرئيسية' }[locale];
+const meta = PAGE_META.about[locale];
 
-// Fetch team once: drives both the named-author Person JSON-LD (head choke point,
-// no anonymous authorship — Pillar 3) and the visible TeamGrid (injected, no 2nd read).
-const team = await getPublishedTeam();
-const authored = await getPageSections('about');
-const sections = (authored ?? DEFAULT_ABOUT_SECTIONS).map((s) =>
+// Team, composition and head in one concurrent round (the page's SEO override needs the
+// page id, so the head loader is handed the composition query). The team drives both the
+// named-author Person JSON-LD (no anonymous authorship — Pillar 3) and the visible
+// TeamGrid (injected, no second read).
+const compositionQuery = getPageComposition('about');
+const [team, composition, { seo, identity }] = await Promise.all([
+  getPublishedTeam(),
+  compositionQuery,
+  loadHead(Astro.locals, {
+    locale,
+    fallbackTitle: meta.title,
+    fallbackDescription: meta.description,
+    entity: compositionQuery.then((c) => (c ? { type: 'page' as const, id: c.page.id } : null)),
+  }),
+]);
+// A published page with no sections yet renders the default composition (its SEO override,
+// keyed by the page id above, still applies).
+const authored = composition?.sections.length ? composition.sections : DEFAULT_ABOUT_SECTIONS;
+const sections = authored.map((s) =>
   s.type === 'team' ? { ...s, props: { ...(s.props ?? {}), members: team } } : s,
 );
 
+const org = orgRef(identity, locale);
 const jsonLd = [
   buildBreadcrumbSchema([
-    { name: 'Home', url: base + localizedPath('/', locale) },
-    { name: 'About', url: base + localizedPath('/about', locale) },
+    { name: HOME, url: base + localizedPath('/', locale) },
+    { name: meta.title, url: base + localizedPath('/about', locale) },
   ]),
   ...team.map((m) => {
     // `exactOptionalPropertyTypes` — omit the key entirely rather than pass undefined.
     const bio = pickLocale(m.bio, locale);
     return buildPersonSchema({
       name: pickLocale(m.name, locale, m.slug),
+      org,
       ...(bio ? { description: bio } : {}),
       ...(m.avatar_url ? { image: m.avatar_url } : {}),
     });
   }),
 ];
 
-Astro.response.headers.set(
-  'Cache-Control',
-  'public, s-maxage=31536000, stale-while-revalidate=86400',
-);
-Astro.response.headers.set('Cache-Tag', 'tenant:default,route:about,team:all,locale:en');
+setTierA(Astro.response, { route: 'about', locale, entities: ['page:about', 'team:all'] });
 ---
 
 <BaseLayout
-  title="About — Braiin Station"
-  description="Braiin Station is a bilingual creative studio in Saudi Arabia — 14 services, one accountable team building brands in Arabic and English."
+  title={seo.title}
+  description={seo.description}
   locale={locale}
   logicalPath="/about"
   jsonLd={jsonLd}
+  robots={seo.robots}
+  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >
   <main>
     <SectionRenderer locale={locale} sections={sections} />

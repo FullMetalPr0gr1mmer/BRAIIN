@@ -1,14 +1,22 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getIdentity, brandName } from '@/lib/identity';
+import { siteTitle } from '@/lib/seo/title';
+import { PAGE_META } from '@/lib/seo/pageMeta';
 
 // AR twin of the 404 so /ar/* misses (rewritten here from AR detail routes) render in
 // Arabic/RTL. noindex. Note: arbitrary unmatched /ar/* paths still fall to the root EN
 // 404 (Astro serves one root 404) — covered for the common mistyped-slug case.
 Astro.response.status = 404;
+
+// siteTitle, not loadHead: a 404 is noindex and answers every mistyped or probing URL,
+// so it skips the seo_defaults read. The identity is shared with the header and footer.
+const brand = brandName(await getIdentity(Astro.locals), 'ar');
+const title = siteTitle(PAGE_META.notFound.ar.title, brand);
 ---
 
 <BaseLayout
-  title="غير موجود — بريّن ستيشن"
+  title={title}
   description="الصفحة التي تبحث عنها غير موجودة."
   locale="ar"
   logicalPath="/404"

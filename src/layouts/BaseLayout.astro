@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { JsonLdNode } from '@/lib/seo/jsonld';
 import SeoHead from '@/components/SeoHead.astro';
-import SiteHeader from '@/components/SiteHeader.astro';
+import SiteHeader, { type HeaderVariant } from '@/components/SiteHeader.astro';
 import SiteFooter from '@/components/SiteFooter.astro';
 import ConsentBanner from '@/components/ConsentBanner.astro';
 import WebVitals from '@/components/WebVitals.astro';
@@ -22,8 +22,9 @@ interface Props {
   canonicalOverride?: string;
   /** Set on routes that render their own chrome (none today) or a bare error page. */
   chrome?: boolean;
-  /** Home: header floats transparent over the hero video (see SiteHeader). */
-  headerOverlay?: boolean;
+  /** `overlay`: the UI v2 header, transparent over the page's hero (home, contact).
+      `solid` (default): the sticky bar for pages with no hero. See SiteHeader. */
+  header?: HeaderVariant;
 }
 
 const {
@@ -36,7 +37,7 @@ const {
   ogImage,
   canonicalOverride,
   chrome = true,
-  headerOverlay = false,
+  header = 'solid',
 } = Astro.props;
 const direction = dir(locale);
 ---
@@ -57,7 +58,7 @@ const direction = dir(locale);
     <link rel="stylesheet" href="/styles/global.css" />
   </head>
   <body>
-    {chrome && <SiteHeader locale={locale} overlay={headerOverlay} />}
+    {chrome && <SiteHeader locale={locale} variant={header} />}
     {
       /*
       The skip link's target. It lives here rather than on each page's own <main>

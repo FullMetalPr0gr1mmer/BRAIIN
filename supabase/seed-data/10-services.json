@@ -9,7 +9,7 @@
           "title": { "en": "Branding", "ar": "الهوية البصرية" },
           "blurb": {
             "en": "Identity systems that make brands unmistakable.",
-            "ar": "أنظمة هوية تجعل العلامات لا تُنسى."
+            "ar": "أنظمة هوية تجعل العلامة لا تُخطئها العين."
           },
           "status": "published",
           "is_teaser": false,
@@ -17,7 +17,7 @@
         },
         {
           "slug": "animations",
-          "title": { "en": "Animations", "ar": "الرسوم المتحركة" },
+          "title": { "en": "Animation", "ar": "الرسوم المتحركة" },
           "blurb": {
             "en": "Characters and stories brought to life.",
             "ar": "شخصيات وقصص تنبض بالحياة."
@@ -28,10 +28,10 @@
         },
         {
           "slug": "motion-graphics",
-          "title": { "en": "Motion Graphics", "ar": "موشن جرافيك" },
+          "title": { "en": "Motion Graphics", "ar": "الموشن جرافيك" },
           "blurb": {
-            "en": "Design in motion for screens of every size.",
-            "ar": "تصميم متحرك لكل الشاشات."
+            "en": "Design in motion, for screens of every size.",
+            "ar": "تصميم متحرّك لكل مقاس شاشة."
           },
           "status": "published",
           "is_teaser": false,
@@ -39,9 +39,9 @@
         },
         {
           "slug": "videography",
-          "title": { "en": "Videography", "ar": "إنتاج الفيديو" },
+          "title": { "en": "Videography", "ar": "الإنتاج المرئي" },
           "blurb": {
-            "en": "Cinematic production end to end.",
+            "en": "Cinematic production, end to end.",
             "ar": "إنتاج سينمائي من الفكرة إلى التسليم."
           },
           "status": "published",
@@ -51,7 +51,7 @@
         {
           "slug": "photography",
           "title": { "en": "Photography", "ar": "التصوير الفوتوغرافي" },
-          "blurb": { "en": "Images that sell the moment.", "ar": "صور تروي اللحظة." },
+          "blurb": { "en": "Images that sell the moment.", "ar": "صور تبيع اللحظة." },
           "status": "published",
           "is_teaser": false,
           "sort_order": 5
@@ -72,7 +72,7 @@
           "title": { "en": "Event Planning", "ar": "تنظيم الفعاليات" },
           "blurb": {
             "en": "Experiences planned down to the detail.",
-            "ar": "تجارب مُخطَّطة حتى أدق التفاصيل."
+            "ar": "تجارب مخططة حتى آخر تفصيل."
           },
           "status": "published",
           "is_teaser": false,
@@ -80,7 +80,7 @@
         },
         {
           "slug": "advertising",
-          "title": { "en": "Advertising", "ar": "الإعلانات" },
+          "title": { "en": "Advertising", "ar": "الإعلان" },
           "blurb": { "en": "Campaigns that move audiences.", "ar": "حملات تحرّك الجمهور." },
           "status": "published",
           "is_teaser": false,
@@ -88,8 +88,11 @@
         },
         {
           "slug": "social-media",
-          "title": { "en": "Social Media", "ar": "وسائل التواصل" },
-          "blurb": { "en": "Always-on presence that converts.", "ar": "حضور دائم يحقق النتائج." },
+          "title": { "en": "Social Media", "ar": "السوشيال ميديا" },
+          "blurb": {
+            "en": "Always-on presence that converts.",
+            "ar": "حضور دائم يتحوّل إلى نتائج."
+          },
           "status": "published",
           "is_teaser": false,
           "sort_order": 9
@@ -107,10 +110,11 @@
         },
         {
           "slug": "seo-geo-aeo",
-          "title": { "en": "SEO / GEO / AEO", "ar": "تحسين محركات البحث" },
+          "title": { "en": "SEO / GEO / AEO", "ar": "تحسين الظهور SEO / GEO / AEO" },
+          "short_title": { "en": "SEO / GEO / AEO", "ar": "تحسين الظهور" },
           "blurb": {
-            "en": "Be found by people and AI answer engines.",
-            "ar": "ظهور أمام الناس ومحركات الإجابة بالذكاء الاصطناعي."
+            "en": "Be found by people and by AI answer engines.",
+            "ar": "أن تُوجد أمام الناس وأمام محركات الإجابة."
           },
           "status": "published",
           "is_teaser": false,
@@ -119,7 +123,7 @@
         {
           "slug": "music",
           "title": { "en": "Music", "ar": "الموسيقى" },
-          "blurb": { "en": "Original sound and scoring.", "ar": "موسيقى وتلحين أصلي." },
+          "blurb": { "en": "Original sound and scoring.", "ar": "موسيقى أصلية وتوزيع صوتي." },
           "status": "published",
           "is_teaser": false,
           "sort_order": 12
@@ -128,8 +132,8 @@
           "slug": "merchandise",
           "title": { "en": "Merchandise", "ar": "المنتجات الترويجية" },
           "blurb": {
-            "en": "Branded products people keep.",
-            "ar": "منتجات تحمل العلامة ويحتفظ بها الناس."
+            "en": "Branded products people actually keep.",
+            "ar": "منتجات بعلامتك يحتفظ بها الناس."
           },
           "status": "published",
           "is_teaser": false,
@@ -138,7 +142,10 @@
         {
           "slug": "gaming",
           "title": { "en": "Gaming", "ar": "الألعاب" },
-          "blurb": { "en": "Coming soon.", "ar": "قريبًا." },
+          "blurb": {
+            "en": "Worlds, assets, and in-game brand work.",
+            "ar": "عوالم وأصول وحضور داخل اللعبة."
+          },
           "status": "published",
           "is_teaser": true,
           "sort_order": 14

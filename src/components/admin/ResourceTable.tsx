@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import { confirmDialog } from '@/lib/admin/confirm';
+import { toast } from '@/lib/admin/toast';
 import { uiFor, type ColumnDef } from '@/lib/admin/uiSchema';
 
 // The list view for every CRUD resource. Reads its shape from RESOURCE_UI, so adding an
@@ -66,12 +68,21 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
   }, [load]);
 
   async function remove(row: Row) {
-    if (!window.confirm(`Delete this ${ui.singular.toLowerCase()}? This cannot be undone.`)) return;
+    // A real <dialog>, not window.confirm: the browser can suppress repeated native
+    // confirms wholesale, at which point destructive actions silently resolve one way
+    // or the other. confirmDialog puts initial focus on Cancel.
+    const confirmed = await confirmDialog({
+      message: `Delete this ${ui.singular.toLowerCase()}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+    });
+    if (!confirmed) return;
     setError('');
     try {
       await adminFetch(`/api/admin/${ui.slug}/${row.id}`, { method: 'DELETE' });
+      toast(`${ui.singular} deleted.`, 'ok');
       await load();
     } catch (err) {
+      // Errors stay inline, never in a toast — they must not auto-dismiss.
       setError(describeError(err));
     }
   }

@@ -1,14 +1,19 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import { getNavigation, type NavNode } from '@/lib/data/navigation';
-import { localizedPath } from '@/lib/i18n';
+import { FOOTER_FALLBACK, LEGAL_LINKS } from '@/lib/nav/fallback';
+import { getIdentity, brandName } from '@/lib/identity';
+import { arabicIndic, localizedHref, localizedPath } from '@/lib/i18n';
 
-// Sitewide footer. Same posture as SiteHeader: CMS-authored (`navigation.location =
-// 'footer'`) with a fallback, server-rendered, zero client JS.
+// Sitewide footer — the mockup's paper bar: "© 2026 Braiin Statiion. Jeddah, Saudi
+// Arabia" and the studio mailbox, both from the public identity (`site_profile`), so a
+// rename or a new address is an edit, not a deploy. Same posture as SiteHeader:
+// CMS-authored navigation with a fallback, server-rendered, zero client JS.
 //
-// The legal links are NOT part of the CMS-authored set and are never fallback-only:
-// privacy, terms and the cookie policy are PDPL obligations, so they are hard-wired
-// rather than left to whether someone remembered to author a nav row for them.
+// Two rows the mockup does not have, on purpose: the footer navigation (a route to every
+// section from the bottom of any page) and the legal links, which are PDPL obligations
+// and therefore hard-wired (LEGAL_LINKS) rather than left to whether someone authored a
+// nav row for them.
 
 interface Props {
   locale: Locale;
@@ -16,82 +21,55 @@ interface Props {
 
 const { locale } = Astro.props;
 
-const FALLBACK: NavNode[] = [
-  {
-    id: 'g1',
-    parent_id: null,
-    href: '/services',
-    sort_order: 1,
-    children: [],
-    label: { en: 'Services', ar: 'خدماتنا' },
-  },
-  {
-    id: 'g2',
-    parent_id: null,
-    href: '/portfolio',
-    sort_order: 2,
-    children: [],
-    label: { en: 'Work', ar: 'أعمالنا' },
-  },
-  {
-    id: 'g3',
-    parent_id: null,
-    href: '/creative-knowledge',
-    sort_order: 3,
-    children: [],
-    label: { en: 'Insights', ar: 'المعرفة' },
-  },
-  {
-    id: 'g4',
-    parent_id: null,
-    href: '/contact',
-    sort_order: 4,
-    children: [],
-    label: { en: 'Contact', ar: 'تواصل' },
-  },
-];
-
-const LEGAL = [
-  { href: '/privacy', en: 'Privacy', ar: 'الخصوصية' },
-  { href: '/terms', en: 'Terms', ar: 'الشروط' },
-  { href: '/cookie-policy', en: 'Cookies', ar: 'ملفات الارتباط' },
-];
+const identity = await getIdentity(Astro.locals);
+const brand = brandName(identity, locale);
+const place = identity.location[locale];
 
 const authored = await getNavigation('footer');
-const items = authored.length > 0 ? authored : FALLBACK;
-const year = new Date().getFullYear();
+const items: NavNode[] = authored.length > 0 ? authored : FOOTER_FALLBACK;
 
-function href(raw: string): string {
-  return raw.startsWith('/') ? localizedPath(raw, locale) : raw;
-}
+// The Arabic bar writes the year in Arabic-Indic digits, as the mockup does (© ٢٠٢٦).
+const year = new Date().getFullYear();
+const yearText = locale === 'ar' ? arabicIndic(year) : String(year);
+
+const STR = {
+  en: { nav: 'Footer navigation', legal: 'Legal' },
+  ar: { nav: 'روابط التذييل', legal: 'روابط قانونية' },
+}[locale];
 ---
 
 <footer class="site-footer">
-  <div class="site-footer__inner">
-    <nav aria-label={locale === 'ar' ? 'روابط التذييل' : 'Footer navigation'}>
+  <div class="site-footer__bar">
+    <p class="site-footer__copy">© {yearText} {brand}. {place}</p>
+    {/* dir=ltr: an address must not be re-ordered inside RTL text */}
+    <a class="site-footer__mail" href={`mailto:${identity.contactEmail}`} dir="ltr">
+      {identity.contactEmail}
+    </a>
+  </div>
+
+  <div class="site-footer__links">
+    <nav aria-label={STR.nav}>
       <ul class="site-footer__list">
         {
           items.map((item) => (
             <li>
-              <a href={href(item.href)}>{item.label[locale] ?? item.label.en}</a>
+              <a href={localizedHref(item.href, locale)}>{item.label[locale] ?? item.label.en}</a>
             </li>
           ))
         }
       </ul>
     </nav>
 
-    <nav aria-label={locale === 'ar' ? 'روابط قانونية' : 'Legal'}>
+    <nav aria-label={STR.legal}>
       <ul class="site-footer__list">
         {
-          LEGAL.map((item) => (
+          LEGAL_LINKS.map((item) => (
             <li>
-              <a href={localizedPath(item.href, locale)}>{locale === 'ar' ? item.ar : item.en}</a>
+              <a href={localizedPath(item.href, locale)}>{item[locale]}</a>
             </li>
           ))
         }
       </ul>
     </nav>
-
-    <p class="site-footer__copy">© {year} Braiin Station</p>
   </div>
 </footer>
