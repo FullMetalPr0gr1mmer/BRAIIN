@@ -246,7 +246,13 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     the values the page carries). The mockup rebuilt the bar and grid with `innerHTML` on
     every change, which dropped keyboard focus to `<body>` and reflected `?year=` into the
     page (a DOM XSS). Here focus stays on the control used, or moves to the result count
-    when that control disappears; the count is a polite live region.
+    when that control disappears (decided from the control the visitor operated, not
+    `document.activeElement`: Chromium blurs a pill the moment its own `hidden` is set,
+    and Safari never focuses a clicked link); the count is a polite live region. An
+    active pill is named by its visible text first, then the action — "Service:
+    Branding, remove filter" / "الخدمة: الهوية البصرية، إزالة الفلتر" (WCAG 2.5.3 Label in
+    Name; the mockup had no name, and "Remove filter: Branding" dropped the facet word a
+    speech-input user sees).
 39. **Only values a published project carries become a filter** (`parseFacets`); the first
     value of a repeated key wins. Any facet parameter — valid or not — makes the response
     `private, no-store`; only the bare URL is edge-cached (Tier A), and the canonical is
@@ -265,8 +271,11 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     a stronger bottom scrim under it, and no 4.5 s "rest" fade to half opacity. Contrast is
     gated for the worst case (a white frame) in `scripts/contrast-audit.mjs`. Its entrance
     and pulsing dot stop under reduced motion; the dot and the banner loop are EXC-007
-    surfaces; the loop plays under EXC-009 and pauses once the banner is covered, when the
-    caption also leaves the tab order.
+    surfaces; the loop plays under EXC-009 and pauses once the whole banner is covered. The
+    caption leaves paint and the tab order earlier — as soon as the next section's edge
+    passes the caption's own top, i.e. once it is entirely painted over (WCAG 2.4.11
+    Focus Not Obscured); measured against the whole banner, it stayed focusable while
+    hidden for most of the banner's height.
 44. **No parallax** on the banner (the mockup's JS translate on scroll) — dropped with Lenis;
     the banner is pinned (sticky) so the next section still slides over it.
 45. **The filter chip count is .6 white** (mockup .45 = 4.4:1 at 11px); the `fb__lbl`, back
@@ -285,7 +294,11 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     with none the statement stands alone.
 50. **Empty data hides cleanly**: no featured project → no grid; fewer than two Our Work
     counters → no numbers; no published quote (production) → no quotes; neither → no proof
-    band at all; no project → no banner and no catalogue.
+    band at all; no project → no banner and no catalogue. The banner also needs its
+    project's poster (`bannerCard`): a clip alone opened the page on a blank dark block
+    (and never plays under reduced motion or Save-Data). The intro's "See the projects"
+    follows the home CTA's rule (decision 19, `workIntroLinkHref`): `#projects` only when
+    the grid renders, else All projects, and no link at all while nothing is published.
 51. **Discovery lists use the case-study page's own loader and schema**
     (`getCaseStudyIndex`: the `getCaseStudy` select + `CaseStudyRowSchema`), so the sitemap
     and llms.txt never list a case study the page would 404 on. llms.txt names Our Work and
@@ -295,7 +308,8 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
 53. **The overlay header needs a dark opening.** Both pages use the transparent overlay
     header over their banner / black page head (the mockup's work-page scrim is carried by
     the banner's own top gradient); when the page does not open on one — no published
-    project yet, or an editor hid or moved the head — it takes the solid bar instead of
+    project (or none with a poster: the route asks `bannerCard`, the same call WorkHero
+    makes), or an editor hid or moved the head — it takes the solid bar instead of
     sitting white-on-white over the proof band. `data-hero` marks the element the header
     measures to turn solid.
 54. **The `cta` section type renders LeadBand** (tag, outlined accent, `/contact#inquiry`,

@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { LocalizedText } from '@schemas/content';
 import type { WorkIntroSectionContent } from '@schemas/sections';
-import { pickLocale } from '@/lib/i18n';
+import { localizedHref, pickLocale } from '@/lib/i18n';
 import { getSectionImages } from '@/lib/data/sectionMedia';
 import MediaFrame from '@/components/media/MediaFrame.astro';
 
@@ -15,15 +15,23 @@ import MediaFrame from '@/components/media/MediaFrame.astro';
 // The frames are media library images referenced from the section's content by
 // `mediaId`; one that does not resolve (unpublished, unknown) is simply left out, and
 // with none the statement stands alone.
+//
+// The link's target is the route's call (`workIntroLinkHref`): the featured grid below
+// when it renders, else All projects, else no link at all — never an anchor to a section
+// that is not there. Outside the route (no `data`) it keeps the design's `#projects`.
 
 interface Props {
   locale: Locale;
   text?: LocalizedText;
   linkLabel?: LocalizedText;
   media?: WorkIntroSectionContent['media'];
+  /** Route-injected link target (SectionRenderer `data`) — never CMS content. */
+  data?: { linkHref?: string | null };
 }
 
-const { locale, text, linkLabel, media = [] } = Astro.props;
+const { locale, text, linkLabel, media = [], data } = Astro.props;
+const target = data?.linkHref === undefined ? '#projects' : data.linkHref;
+const linkHref = target === null ? null : localizedHref(target, locale);
 
 const STR = {
   en: {
@@ -63,9 +71,13 @@ const [a, b] = frames;
     }
     <div class="work-intro__txt rv">
       <p>{text ? pickLocale(text, locale) : STR.text}</p>
-      <a class="work-intro__link" href="#projects">
-        {linkLabel ? pickLocale(linkLabel, locale) : STR.link}
-      </a>
+      {
+        linkHref && (
+          <a class="work-intro__link" href={linkHref}>
+            {linkLabel ? pickLocale(linkLabel, locale) : STR.link}
+          </a>
+        )
+      }
     </div>
     {
       b && (

@@ -268,16 +268,23 @@ export const LeadershipSectionContentSchema = z
 // content below is only the copy around them. Filter-bar chrome ("Filter by", "All
 // sectors", "Clear filters"…) is built-in bilingual copy, and the facets are fixed in
 // code (src/lib/portfolio/catalog.ts) — neither is content.
+//
+// Every schema here is strict, like the rest of UI v2: a stray key is refused on write,
+// not stored and ignored. A typo (`projectslug`) would otherwise save as success and do
+// nothing, and a stray `mediaId` anywhere in content would make that asset anon-readable
+// under 0024's `$.**.mediaId` policy (and block its hard delete) with nothing showing it.
 
 /**
  * The Our Work banner: a project's poster and loop under a glass caption. `projectSlug`
  * pins one project; without it (or when that project is not published) the banner shows
  * the latest (year desc, then catalogue order).
  */
-export const WorkHeroSectionContentSchema = z.object({
-  tag: Text.optional(),
-  projectSlug: SlugSchema.optional(),
-});
+export const WorkHeroSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    projectSlug: SlugSchema.optional(),
+  })
+  .strict();
 
 /** Most quotes the proof carousel shows (the loader's own cap is 8). */
 export const PROOF_QUOTES_MAX = 8;
@@ -304,37 +311,43 @@ export const ProofSectionContentSchema = z
 /** One of the intro's two frames: a media library image, optionally looping a clip. */
 export const WorkIntroMediaSchema = MediaRefSchema.extend({
   clip: VideoClipSchema.optional(),
-});
+}).strict();
 
 /**
  * The intro statement between two looping frames. `media` is keyed `mediaId` on purpose:
  * the 0024 anon read policy and media_usage() find section media by that key
  * (`$.**.mediaId`), so an image referenced any other way would never reach a visitor.
  */
-export const WorkIntroSectionContentSchema = z.object({
-  text: Text.optional(),
-  linkLabel: Text.optional(),
-  media: z.array(WorkIntroMediaSchema).max(2).optional(),
-});
+export const WorkIntroSectionContentSchema = z
+  .object({
+    text: Text.optional(),
+    linkLabel: Text.optional(),
+    media: z.array(WorkIntroMediaSchema).max(2).optional(),
+  })
+  .strict();
 
 /** The featured-projects grid with its filter bar (the pool is `is_featured`). */
-export const ProjectGridSectionContentSchema = z.object({
-  tag: Text.optional(),
-  heading: Text.optional(),
-});
+export const ProjectGridSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+  })
+  .strict();
 
 /**
  * A page head on black: a back link, the h1 with an accented word range, a lead line and
  * (on the catalogue) the live project count, which the route supplies.
  */
-export const PageHeadSectionContentSchema = z.object({
-  heading: Text.optional(),
-  /** Only read with an authored heading. */
-  accent: AccentSchema.optional(),
-  lead: Text.optional(),
-  backLabel: Text.optional(),
-  backHref: SafeHrefSchema.optional(),
-});
+export const PageHeadSectionContentSchema = z
+  .object({
+    heading: Text.optional(),
+    /** Only read with an authored heading. */
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    backLabel: Text.optional(),
+    backHref: SafeHrefSchema.optional(),
+  })
+  .strict();
 
 export { SECTION_TYPES, type SectionType } from './sectionTypes';
 /** Zod form of the canonical list in ./sectionTypes (kept zod-free for the admin bundle). */

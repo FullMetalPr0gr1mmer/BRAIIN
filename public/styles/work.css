@@ -78,8 +78,9 @@
     rgba(0, 0, 0, 0.6) 100%
   );
 }
-/* Covered by the sections that slid over it: out of paint and out of the tab order. */
-.mbanner.is-covered .work-cap {
+/* Slotted content (the caption) entirely covered by the sections that slid over it: out
+   of paint and out of the tab order (MediaBanner's script; WCAG 2.4.11). */
+.mbanner.is-cap-covered > :not(.mbanner__media) {
   visibility: hidden;
 }
 

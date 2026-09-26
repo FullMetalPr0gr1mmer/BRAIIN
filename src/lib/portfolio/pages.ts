@@ -9,9 +9,10 @@ import { localizedPath } from '@/lib/i18n';
 import {
   DEFAULT_CATALOG_SECTIONS,
   DEFAULT_WORK_SECTIONS,
+  workIntroLinkHref,
   type SectionData,
 } from '@/lib/sections/types';
-import { filterCards, isFiltered, parseFacets } from './catalog';
+import { bannerCard, filterCards, isFiltered, parseFacets } from './catalog';
 
 // The data behind Our Work (`/portfolio`) and All projects (`/portfolio/all`), one loader
 // per page shared by the EN and AR routes so the two twins cannot drift.
@@ -33,8 +34,9 @@ export interface CatalogPage {
   filtered: boolean;
   /**
    * `overlay` (transparent over the page's dark head) only when the page really opens on
-   * one — the banner (which needs a published project) or the black page head. Otherwise
-   * the solid bar: an overlay header over the white proof band would be white on white.
+   * one — the banner (which needs a published project with a poster: `bannerCard`, the
+   * same call WorkHero makes) or the black page head. Otherwise the solid bar: an overlay
+   * header over the white proof band would be white on white.
    */
   header: 'overlay' | 'solid';
 }
@@ -85,15 +87,20 @@ export async function loadOurWork(url: URL, locals: Locals, locale: Locale): Pro
   const { cards, authored, head } = await compose('portfolio', meta, locals, locale);
   const featured = cards.filter((c) => c.isFeatured);
   const selection = parseFacets(url.searchParams, featured);
-  const sections = withData(authored.length ? authored : DEFAULT_WORK_SECTIONS, {
+  const composition = authored.length ? authored : DEFAULT_WORK_SECTIONS;
+  const sections = withData(composition, {
     workHero: { cards },
+    workIntro: { linkHref: workIntroLinkHref(composition, featured.length, cards.length) },
     projectGrid: { cards, selection },
   });
+  const first = firstVisible(sections);
+  const opensOnBanner =
+    first?.type === 'workHero' && bannerCard(cards, first.props?.projectSlug) !== null;
   return {
     sections,
     head,
     filtered: isFiltered(url.searchParams),
-    header: firstVisible(sections)?.type === 'workHero' && cards.length > 0 ? 'overlay' : 'solid',
+    header: opensOnBanner ? 'overlay' : 'solid',
     jsonLd: [
       buildBreadcrumbSchema([
         { name: HOME[locale], url: absolute('/', locale) },
