@@ -366,5 +366,9 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     again on read) — the design's `wa.me/9665XXXXXXXX` never ships. The lead "No form, no
     gatekeeping." is kept verbatim although it sits under a form (flagged, design copy).
 63. **The joined social strip keeps the design's inset rule** (the gutter is a margin, so
-    the line is inset too). The contact-only always-on `.nav::before` gradient is not
+    the line is inset too) and drops the standalone strip's bottom padding — the
+    `.contact-touch` padding ends the band, as the design's `.social--joined` (not a
+    `.social`) does. The full form fills the section wrap with no margin of its own
+    (`max-width: none; margin-block: 0`), as the design's `.form`: the shared 60rem cap
+    and 1.5rem margins had left it ~200px short of the head at ≥1280px. The contact-only always-on `.nav::before` gradient is not
     carried: the overlay header and the hero scrim already hold the nav's contrast.
