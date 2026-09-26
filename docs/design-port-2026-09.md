@@ -74,3 +74,79 @@ existing global.css utilities.
     `aria-hidden` beside an `.sr-only` copy of the final value, so a screen reader reading
     ahead of the viewport never hears the "0" the count starts from; printing restores any
     counter still waiting.
+
+## Our Work and All projects (PR10)
+
+| Mockup | Site | Where |
+| --- | --- | --- |
+| work.html | `/portfolio` + `/ar/portfolio` — `CatalogPage.astro`, sections `workHero · proof · workIntro · projectGrid · clientsMarquee · cta` | `src/pages/portfolio/index.astro` |
+| projects.html | `/portfolio/all` + `/ar/portfolio/all` (new) — sections `pageHead · projectCatalog · cta` | `src/pages/portfolio/all.astro` |
+| `.hero--banner` + `.cap` | `MediaBanner.astro` (`.mbanner`, shared with the PR11 case study) + `WorkHero.astro` (`.work-cap`) | work.css |
+| `.proof` (`.stats` + `.quotes`) | `ProofBand.astro` (`.proof`) = `StatBand` proof + `Testimonials` light, both `bare` | work.css |
+| `.iw-sec` / `.iw` | `WorkIntro.astro` (`.work-intro`) + two `MediaFrame`s | work.css |
+| `.work` / `.grid` / `.card` | `ProjectGrid.astro` (`.pgrid`), `ProjectCatalog.astro` (`.pcat`), `ProjectCard` | work.css |
+| `BSCatalog` `.fb` filter bar | `FilterBar.astro` (`.fb`, `.fchip`, `.fpill` — the mockup's names) + `src/lib/client/catalogFilter.ts` | work.css |
+| `.ap-head` | `PageHead.astro` (`.catalog-head` — `.page-head` is an older global utility) | work.css |
+| catalog I18N | `src/lib/portfolio/filterText.ts` (one copy, server + browser) | |
+| `.lead` | `LeadBand.astro`, now what the `cta` section type renders (CtaBand retired) | global.css |
+
+Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseLayout's new
+`styles` prop (a closed list of names, so a typo fails `astro check`).
+
+## Decisions (PR10)
+
+18. **Filtering is server-side first.** Every control works without JavaScript: service
+    chips, active pills and "Clear filters" are links; sector/client/year are `<select>`s
+    in a GET form with an Apply button that only shows without JS. The enhancement applies
+    the same controls in place — cards and pills are toggled with `hidden`, labels set with
+    `textContent`, the URL follows with `history.replaceState` — and never builds markup or
+    reads `location.search` (its state is the server's `data-state`, re-validated against
+    the values the page carries). The mockup rebuilt the bar and grid with `innerHTML` on
+    every change, which dropped keyboard focus to `<body>` and reflected `?year=` into the
+    page (a DOM XSS). Here focus stays on the control used, or moves to the result count
+    when that control disappears; the count is a polite live region.
+19. **Only values a published project carries become a filter** (`parseFacets`); the first
+    value of a repeated key wins. Any facet parameter — valid or not — makes the response
+    `private, no-store`; only the bare URL is edge-cached (Tier A), and the canonical is
+    always the bare page. Filtered URLs are never in the sitemap.
+20. **Our Work filters the featured pool** (the mockup's `featuredOnly`), latest first (year
+    desc, then catalogue order); the see-all button counts matches across the whole
+    catalogue ("See all 3 matching projects"), as the mockup does, from a slug-only index on
+    the button. All projects shows featured first, then catalogue order.
+21. **Card titles are real headings** — h3 under Our Work's "Projects", h2 in All projects
+    (the mockup's `span.card__t` left the grid with no structure). Card tags on Our Work
+    filter Our Work itself (links carry `#projects`, so a no-JS click lands on the grid).
+22. **Arabic counts follow the plural categories** (1 مشروع, 2 مشروعان, 3–10 مشاريع,
+    11–99 مشروعًا, 100 مشروع) through `Intl.PluralRules`; the mockup writes "مشاريع" for
+    every count. Owner sign-off pending (a deviation from decision 6's "verbatim").
+23. **The banner caption is legible over any frame**: .45 glass (mockup .26), .7 meta (.58),
+    a stronger bottom scrim under it, and no 4.5 s "rest" fade to half opacity. Contrast is
+    gated for the worst case (a white frame) in `scripts/contrast-audit.mjs`. Its entrance
+    and pulsing dot stop under reduced motion; the dot and the banner loop are EXC-007
+    surfaces; the loop plays under EXC-009 and pauses once the banner is covered, when the
+    caption also leaves the tab order.
+24. **No parallax** on the banner (the mockup's JS translate on scroll) — dropped with Lenis;
+    the banner is pinned (sticky) so the next section still slides over it.
+25. **The filter chip count is .6 white** (mockup .45 = 4.4:1 at 11px); the `fb__lbl`, back
+    link, lead and counts use `--bs-muted` for the mockup's `--dim-d` (decision 10).
+26. **The All projects h1 has no scroll reveal** (the mockup's `.rv`): it is the page's
+    likely LCP element, and text held at opacity 0 is not an LCP candidate until it fades in.
+27. **A no-JS "Apply filters" / "طبّق الفلاتر" button** (ours — the mockup has no no-JS
+    path; Arabic for owner review). The service filter survives an Apply through a hidden
+    input.
+28. **Our Work's h1 is visually hidden** ("Our Work" / "أعمالنا"), as in the mockup; All
+    projects' h1 is its page head, and should an editor remove that section a hidden h1
+    stands in.
+29. **The intro frames are CMS media** (`workIntro.media[].mediaId`, keyed so the 0024 anon
+    policy and `media_usage()` find them) with their clip windows (14.0–15.4 s, 17.4–18.3 s),
+    decorative (`alt=""`) as in the mockup; a frame that does not resolve is left out, and
+    with none the statement stands alone.
+30. **Empty data hides cleanly**: no featured project → no grid; fewer than two Our Work
+    counters → no numbers; no published quote (production) → no quotes; neither → no proof
+    band at all; no project → no banner and no catalogue.
+31. **Discovery lists use the case-study page's own loader and schema**
+    (`getCaseStudyIndex`: the `getCaseStudy` select + `CaseStudyRowSchema`), so the sitemap
+    and llms.txt never list a case study the page would 404 on. llms.txt names Our Work and
+    All projects and lists case studies, with no counts.
+32. **Metadata**: the English `<title>`/description are the mockup's own (the brand from
+    identity); the Arabic is ours (`PAGE_META.portfolio` / `portfolioAll`) — owner review.

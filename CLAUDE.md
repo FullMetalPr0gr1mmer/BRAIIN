@@ -49,6 +49,8 @@ Static, cacheable shell **+** Server Islands (`server:defer`) **+** on-demand `/
 >
 > **Amendment (Phase 3, session invalidation):** when the JWT's `app_metadata` role/tenant disagrees with the `profiles` row, the session is **rejected**, not downgraded. RLS — the primary layer — reads the role from the JWT, so downgrading only `assertCap()` would leave a demoted user with their old rights at the layer that matters most. This is also the mechanism that makes "force-revoke sessions on role/tenant change" true in practice. See `src/lib/auth/context.ts`.
 >
+> **Amendment (UI v2 PR10, filtered catalogues):** the Our Work (`/portfolio`) and All projects (`/portfolio/all`) filters are query strings (`?service|sector|client|year=`). Only the **bare URL** is Tier A: a request carrying ANY facet parameter (valid or not) is rendered server-side but served `private, no-store` (`noEdgeCache`), so a crafted query cannot fill the edge cache; its canonical is the bare page and no filtered URL is in the sitemap. Facet values are reduced to ones a published project carries (`src/lib/portfolio/catalog.ts`) before anything uses them, and the in-page enhancement never reads `location.search` or builds markup.
+>
 > **Amendment (Phase 3, admin bundle budget):** `/admin` is exempt from CWV but gated on bundle size (§6). React + Tiptap are quarantined into predictably-named `admin-*` chunks by `manualChunks` in `astro.config.mjs`, and `.size-limit.json` now carries **two** entries: public routes (≤100 KB gz, excluding `admin-*`) and the admin bundle (≤300 KB gz). Without the split the directory-glob budget would have started weighing CMS code against the public limit.
 
 ---
@@ -152,7 +154,7 @@ Public routes only. **Failing any budget = blocked PR.** `/admin` exempt from CW
 
 | Metric | Budget | Notes |
 |---|---|---|
-| LCP | < 2.5s | service pages: the Stream poster `<img>`. **Home: the intro logo `<img>`** — the hero's blur poster is a CSS `background`, not an `<img>`, and is too low-entropy to be an LCP candidate. The headline is NOT the LCP element (Chromium aggregates text LCP at the block ancestor). |
+| LCP | < 2.5s | service pages: the Stream poster `<img>`. **Home: the intro logo `<img>`** — the hero's blur poster is a CSS `background`, not an `<img>`, and is too low-entropy to be an LCP candidate. The headline is NOT the LCP element (Chromium aggregates text LCP at the block ancestor). **Our Work (`/portfolio`): the banner poster `<img>`** (MediaBanner, eager + `fetchpriority=high`; the loop mounts after `load`). **All projects: the page-head `<h1>`** (no scroll reveal on it) or the first card poster (the first two are eager). |
 | INP | < 200ms | source of truth = field RUM |
 | CLS | < 0.1 | explicit width/height; metric-override fonts |
 | TBT (lab proxy) | ≤ 200ms | CI lab cap |
@@ -201,7 +203,7 @@ Every table: `id`, `tenant_id NOT NULL`, timestamps, `created_by`/`updated_by`; 
 - **Media.** `media_assets.provider` ∈ `external|static|cf_images|stream`, shape-checked. `static` = a key of the build-time stills registry (`src/lib/media/static.ts`, `import.meta.glob` → `<Picture>`); an unknown key renders nothing. Anon reads only assets that published/visible content references, and only hosted providers (0024), through a COLUMN grant — public loaders select `PUBLIC_MEDIA_COLUMNS` (`packages/schemas/content.ts`) and nothing else. SEO's "meta only" write is `update_media_meta()`; where an asset is used is `media_usage()` (the hard-delete gate, superseding `ref_count`).
 
 ### File / layout conventions
-`src/middleware.ts` (security headers + redirects + maintenance pre-cache); `src/lib/authz/matrix.ts` (`ROLE_CAPS`, CI snapshot-asserted against both doc matrices); `packages/consent/gate.ts` (the single `hasConsent`); `packages/schemas`; `SeoHead`/`JsonLd`; `SectionRenderer`; `StreamPlayer`; `supabase/migrations/`; `live.config.ts`; `tests/authz/matrix.spec.ts`.
+`src/middleware.ts` (security headers + redirects + maintenance pre-cache); route stylesheets in `public/styles/<route>.css`, linked only through BaseLayout's `styles` prop (a closed union of names — page CSS stays out of `global.css`; UI v2 PR10 `work.css`); `src/lib/authz/matrix.ts` (`ROLE_CAPS`, CI snapshot-asserted against both doc matrices); `packages/consent/gate.ts` (the single `hasConsent`); `packages/schemas`; `SeoHead`/`JsonLd`; `SectionRenderer`; `StreamPlayer`; `supabase/migrations/`; `live.config.ts`; `tests/authz/matrix.spec.ts`.
 
 ### Rendering & data flow
 Content Layer loaders use the anon key under RLS (`status='published'`, tenant-scoped). Per-section error isolation mandatory. Both EN and AR built; both in sitemap.
