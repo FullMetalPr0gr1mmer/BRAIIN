@@ -1,12 +1,17 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import type { SocialSectionContent } from '@schemas/sections';
+import type { SocialNetwork } from '@schemas/siteProfile';
 import { pickLocale } from '@/lib/i18n';
+import { getIdentity } from '@/lib/identity';
 
-// "Follow the studio" — gradient hover boxes on paper. Tag/heading/links are
-// CMS-overridable via page_sections.content (SocialSectionContentSchema — hrefs are
-// validated https-only there, since they render into <a href>). Icons resolve by label
-// (case-insensitive); an unrecognised network renders its name without an icon.
+// "Follow the studio" — gradient hover boxes on paper. The links are the public
+// identity's socials (`site_profile.socials`, host-allow-listed per network on write AND
+// read), so a new handle is a settings edit, not a deploy. Tag/heading/links stay
+// CMS-overridable per section via page_sections.content (SocialSectionContentSchema —
+// hrefs are validated https-only there, since they render into <a href>). Icons resolve
+// by network, and for a per-section override by label (case-insensitive); an
+// unrecognised network renders its name without an icon.
 
 interface Props extends SocialSectionContent {
   locale: Locale;
@@ -22,37 +27,36 @@ const STR = {
   ar: { tag: 'تابع الاستوديو', heading: 'الشغل الجديد ينزل هنا أول.' },
 }[locale];
 
-const LINKS = [
-  {
+// Display name + icon per network. Handles and URLs are data (the identity), not code.
+const NETWORKS: Partial<Record<SocialNetwork, { label: string; icon: string }>> = {
+  instagram: {
     label: 'Instagram',
-    user: '@braiinstation',
-    href: 'https://instagram.com/braiinstation',
     icon: 'M12 2.2c3.2 0 3.6 0 4.9.07 1.2.05 1.8.25 2.2.42.6.22 1 .48 1.4.9.4.4.7.8.9 1.4.2.4.4 1 .4 2.2.1 1.3.1 1.7.1 4.9s0 3.6-.1 4.9c0 1.2-.2 1.8-.4 2.2a3.7 3.7 0 0 1-.9 1.4c-.4.4-.8.7-1.4.9-.4.2-1 .4-2.2.4-1.3.1-1.7.1-4.9.1s-3.6 0-4.9-.1c-1.2 0-1.8-.2-2.2-.4a3.7 3.7 0 0 1-1.4-.9 3.7 3.7 0 0 1-.9-1.4c-.2-.4-.4-1-.4-2.2C2.2 15.6 2.2 15.2 2.2 12s0-3.6.1-4.9c0-1.2.2-1.8.4-2.2.2-.6.5-1 .9-1.4.4-.4.8-.7 1.4-.9.4-.2 1-.4 2.2-.4C8.4 2.2 8.8 2.2 12 2.2Zm0 1.8c-3.1 0-3.5 0-4.8.07-1.1.05-1.7.24-2.1.4-.5.2-.9.44-1.3.83-.4.4-.63.8-.83 1.3-.16.4-.35 1-.4 2.1C2.5 8.5 2.5 8.9 2.5 12s0 3.5.07 4.8c.05 1.1.24 1.7.4 2.1.2.5.44.9.83 1.3.4.4.8.63 1.3.83.4.16 1 .35 2.1.4 1.3.06 1.7.07 4.8.07s3.5 0 4.8-.07c1.1-.05 1.7-.24 2.1-.4.5-.2.9-.44 1.3-.83.4-.4.63-.8.83-1.3.16-.4.35-1 .4-2.1.06-1.3.07-1.7.07-4.8s0-3.5-.07-4.8c-.05-1.1-.24-1.7-.4-2.1a3.5 3.5 0 0 0-.83-1.3 3.5 3.5 0 0 0-1.3-.83c-.4-.16-1-.35-2.1-.4C15.5 4 15.1 4 12 4Zm0 3.1a4.9 4.9 0 1 1 0 9.8 4.9 4.9 0 0 1 0-9.8Zm0 1.8a3.1 3.1 0 1 0 0 6.2 3.1 3.1 0 0 0 0-6.2Zm5.1-2.1a1.15 1.15 0 1 1 0 2.3 1.15 1.15 0 0 1 0-2.3Z',
   },
-  {
+  linkedin: {
     label: 'LinkedIn',
-    user: '@braiin-station',
-    href: 'https://linkedin.com/company/braiin-station',
     icon: 'M4.98 3.5A2.5 2.5 0 1 1 5 8.5a2.5 2.5 0 0 1 0-5ZM3 9.5h4V21H3V9.5Zm6.5 0h3.8v1.6h.05c.53-.95 1.83-1.95 3.77-1.95 4.03 0 4.78 2.5 4.78 5.76V21h-4v-5.3c0-1.27-.02-2.9-1.8-2.9-1.8 0-2.08 1.38-2.08 2.8V21h-4V9.5Z',
   },
-  {
+  behance: {
     label: 'Behance',
-    user: '@braiinstation',
-    href: 'https://behance.net/braiinstation',
     icon: 'M8.2 5.5c1.9 0 3.4.85 3.4 2.75 0 1.15-.6 1.9-1.6 2.3 1.4.4 2.1 1.4 2.1 2.8 0 2.3-1.9 3.15-4 3.15H2V5.5h6.2Zm-.4 4.4c.9 0 1.5-.4 1.5-1.25S8.7 7.4 7.75 7.4H4.9v2.5h2.9Zm.2 4.75c1 0 1.7-.45 1.7-1.45s-.65-1.4-1.7-1.4H4.9v2.85h3.1ZM19 9.35c2.3 0 3.7 1.6 3.7 4.05 0 .18-.02.4-.04.6h-5.6c.1 1.2.85 1.85 1.95 1.85.8 0 1.4-.35 1.65-.95h1.9c-.45 1.6-1.75 2.5-3.6 2.5-2.4 0-3.9-1.6-3.9-4 0-2.35 1.55-4.05 3.94-4.05Zm-1.9 3.3h3.6c-.1-1.05-.75-1.7-1.75-1.7-1.05 0-1.7.6-1.85 1.7ZM15.6 6.3h5.2v1.4h-5.2V6.3Z',
   },
-  {
+  youtube: {
     label: 'YouTube',
-    user: '@braiinstation',
-    href: 'https://youtube.com/@braiinstation',
     icon: 'M21.6 7.2a2.5 2.5 0 0 0-1.75-1.77C18.3 5 12 5 12 5s-6.3 0-7.85.43A2.5 2.5 0 0 0 2.4 7.2C2 8.76 2 12 2 12s0 3.24.4 4.8a2.5 2.5 0 0 0 1.75 1.77C5.7 19 12 19 12 19s6.3 0 7.85-.43a2.5 2.5 0 0 0 1.75-1.77C22 15.24 22 12 22 12s0-3.24-.4-4.8ZM10 15.1V8.9l5.2 3.1-5.2 3.1Z',
   },
-];
+};
 
-const ICONS = new Map(LINKS.map((l) => [l.label.toLowerCase(), l.icon]));
+const identity = await getIdentity(Astro.locals);
+const byLabel = new Map(Object.values(NETWORKS).map((n) => [n.label.toLowerCase(), n.icon]));
 const resolved = links
-  ? links.map((l) => ({ ...l, icon: ICONS.get(l.label.toLowerCase()) }))
-  : LINKS;
+  ? links.map((l) => ({ ...l, icon: byLabel.get(l.label.toLowerCase()) }))
+  : identity.socials.map((sl) => ({
+      label: NETWORKS[sl.network]?.label ?? sl.network,
+      user: sl.handle,
+      href: sl.url,
+      icon: NETWORKS[sl.network]?.icon,
+    }));
 ---
 
 <section class:list={['social-strip', { 'social-strip--joined': joined }]}>

@@ -24,6 +24,11 @@ const T = {
   dim: '#4a5468', // --bs-dim (secondary text on paper)
   ok: '#2ecc71',
   err: '#ff5a5a',
+  // UI v2 (2026-09)
+  mist: '#f3f5fa', // --bs-mist (soft paper: "why us" / "who we are")
+  ink2: '#2a2f3a', // --bs-ink-2 (secondary copy on mist / paper)
+  ink3: '#3a404c', // --bs-ink-3 (case-study body copy on paper)
+  errSoft: '#ff8a8a', // --bs-err-soft (error text on dark)
 };
 
 // (foreground, background, minRatio, where) — every real on-screen pairing.
@@ -46,6 +51,16 @@ const PAIRS = [
   ['ink', 'paper', 4.5, 'body text on paper'],
   ['dim', 'paper', 4.5, 'secondary text on paper (svc numbers/blurbs)'],
   ['klein', 'paper', 4.5, 'tags / accents on paper'],
+  ['cobalt', 'paper', 3.0, 'focus outline on paper — footer links (UI, 1.4.11)'],
+  // UI v2 (2026-09): mist blocks, secondary/case-study copy, error text on dark
+  ['ink', 'mist', 4.5, 'body text on mist'],
+  ['ink2', 'mist', 4.5, 'secondary copy on mist'],
+  ['ink2', 'paper', 4.5, 'secondary copy on paper'],
+  ['ink3', 'paper', 4.5, 'case-study body copy on paper'],
+  ['dim', 'mist', 4.5, 'tags / meta on mist'],
+  ['klein', 'mist', 4.5, 'accents on mist'],
+  ['errSoft', 'bg', 4.5, 'form error text on black'],
+  ['errSoft', 'surface', 4.5, 'form error text on cards'],
 ];
 
 function channel(c) {

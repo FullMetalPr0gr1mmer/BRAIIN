@@ -542,9 +542,15 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         label: 'Title template',
         kind: 'bilingual',
         column: 'title_template',
-        help: 'Use %s for the page title, e.g. “%s | Braiin Station”.',
+        help: 'Use %s for the page title and %brand% for the studio name (from Public identity), e.g. “%brand% | %s”. Left empty, the site uses exactly that format.',
       },
-      { name: 'defaultTitle', label: 'Default title', kind: 'bilingual', column: 'default_title' },
+      {
+        name: 'defaultTitle',
+        label: 'Default title',
+        kind: 'bilingual',
+        column: 'default_title',
+        help: 'Only for a page with no title of its own — a page’s own title always wins.',
+      },
       {
         name: 'defaultDescription',
         label: 'Default description',
@@ -561,7 +567,7 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         name: 'organization',
         label: 'Organization JSON-LD',
         kind: 'json',
-        help: 'Feeds the sitewide Organization schema. Validated by the seo-ci gate.',
+        help: 'Deprecated — no longer read by the site. The Organization schema is built from Settings → Public identity (brand, email, location, socials).',
       },
       {
         name: 'robotsDirectives',

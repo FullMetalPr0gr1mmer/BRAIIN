@@ -1,4 +1,4 @@
-/* Braiin Station — brand design system (from the approved "Brain Station UI" design).
+/* Brand design system (from the approved "Brain Station UI" design, UI v2 2026-09).
    Palette: Klein blue on black & paper white. Type: Archivo (EN) / Almarai (AR).
    Uses CSS logical properties so RTL (ar) works without overrides; every animation is
    compositor-only (transform/opacity) and disabled under prefers-reduced-motion.
@@ -27,6 +27,21 @@
   --bs-ink: #000000;
   --bs-dim: #4a5468;
   --bs-line-l: rgba(0, 0, 0, 0.14);
+
+  /* UI v2 additions (Brain Station UI, 2026-09). Text tokens are contrast-gated in
+     scripts/contrast-audit.mjs like the rest of :root. */
+  --bs-mist: #f3f5fa; /* soft paper — "why us" / "who we are" blocks */
+  --bs-ink-2: #2a2f3a; /* secondary copy on mist and paper */
+  --bs-ink-3: #3a404c; /* case-study body copy on paper */
+  --bs-media-bg: #0d0d0d; /* a media frame before its image paints, on dark */
+  --bs-media-bg-l: #eef0f5; /* ...and on paper */
+  --bs-err-soft: #ff8a8a; /* error text on dark and Klein fills */
+  --bs-shadow-klein: 0 12px 38px rgba(0, 36, 188, 0.45);
+  --bs-shadow-cobalt: 0 18px 48px rgba(2, 76, 255, 0.45);
+  --bs-glow-sky: rgba(34, 169, 255, 0.45);
+  --bs-glow-klein: rgba(0, 36, 188, 0.42);
+  --bs-header-h: 72px;
+  --bs-ease: cubic-bezier(0.16, 1, 0.3, 1); /* the mockup's one entrance curve */
 
   /* status */
   --bs-ok: #2ecc71;
@@ -59,9 +74,12 @@
   --bs-intro-hold: 0s; /* the logo holds the plate, alone */
   --bs-intro-fade: 0s; /* the plate + logo leave */
 
-  /* Headline cadence. The RTL difference is a TOKEN, not a second ladder. */
-  --bs-hero-word-step: 0.045s;
-  --bs-hero-letter-step: 0.012s;
+  /* Headline cadence (UI v2): the mockup staggers every LETTER by 26ms across the whole
+     line. The ladder below is per word + per letter-in-word (server-split spans, no
+     inline styles under CSP), so the word rung is ~5 letters at 26ms — the average word.
+     The RTL difference is a TOKEN, not a second ladder. */
+  --bs-hero-word-step: 0.13s;
+  --bs-hero-letter-step: 0.026s;
 
   --bs-hero-beat: 0.15s; /* one step of the post-headline cascade */
 }
@@ -71,7 +89,7 @@
    be a whole second ladder that only reached rung 6 — rungs 7-10 of an Arabic
    headline fell through to the ENGLISH values and stalled mid-line. */
 html[dir='rtl'] {
-  --bs-hero-word-step: 0.062s;
+  --bs-hero-word-step: 0.09s; /* the mockup's 90ms per Arabic word */
   --bs-hero-letter-step: 0s;
 }
 
@@ -95,8 +113,8 @@ body {
 /* ONE flag: the overlay's existence in the DOM. Replaces a `body.page-intro` class and
    a Hero `intro` prop that defaulted independently in two files and could disagree. */
 body:has(.intro) {
-  --bs-intro-hold: 3.5s;
-  --bs-intro-fade: 0.4s;
+  --bs-intro-hold: 1s; /* UI v2 (decision 5): the mockup's --intro-hold: 1000ms */
+  --bs-intro-fade: 0.45s; /* ...and its .45s fade — the plate is gone at 1.45s */
 }
 
 /* ---- Self-hosted fonts (docs/fonts.md, KAN-23) ------------------------------------
@@ -400,10 +418,12 @@ html[dir='rtl'] .tag {
 }
 
 /* ============================================================
-   Sitewide chrome — SiteHeader
-   Solid variant (interior pages): sticky black bar.
-   Overlay variant (home): fixed over the hero video; the nav
-   script toggles .is-solid / .is-hidden after the hero.
+   Sitewide chrome — SiteHeader (UI v2)
+   overlay  fixed and transparent over the page's hero; a dark,
+            blurred backdrop FADES in once the header script marks
+            it .is-solid past the hero.
+   solid    sticky black bar for pages with no hero.
+   Both hide on the way down and return on the way up (.is-hidden).
    ============================================================ */
 
 .skip-link {
@@ -424,26 +444,41 @@ html[dir='rtl'] .tag {
   position: sticky;
   top: 0;
   z-index: 60;
-  background: rgba(0, 0, 0, 0.62);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  transition: transform 0.6s var(--bs-ease);
+}
+/* The backdrop is its own layer so the solid state changes by OPACITY alone
+   (compositor-only). The bar used to transition `background` and `backdrop-filter`,
+   which repaints the blurred region on every frame of the fade. z-index -1 keeps it under
+   the links: the header's own z-index makes it a stacking context. */
+.site-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--bs-black);
   border-block-end: 1px solid rgba(255, 255, 255, 0.1);
+  transition: opacity 0.45s ease;
 }
 
 .site-header--overlay {
   position: fixed;
   inset: 0 0 auto 0;
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-block-end-color: transparent;
-  transition:
-    background 0.45s ease,
-    border-color 0.45s ease,
-    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.6s ease;
   animation: fade-in 0.7s ease both;
   animation-delay: calc(var(--bs-hero-in) + var(--bs-hero-beat) * 3);
+}
+.site-header--overlay::before {
+  background: rgba(0, 0, 0, 0.62);
+  opacity: 0;
+}
+/* The blur is applied only in the solid state. A backdrop-filter layer is sampled from
+   whatever is behind it on every frame that content changes — even at opacity 0 — and on
+   home that is the intro plate and the headline entrance. It fades in with the opacity,
+   so the moment it switches on is invisible. */
+.site-header--overlay.is-solid::before {
+  opacity: 1;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 /* Opacity-only, and shared with .hero__cta: a `to { transform: none }` under
    `fill: both` would permanently outrank .cta:hover's translateY.
@@ -463,18 +498,13 @@ html[dir='rtl'] .tag {
     pointer-events: auto;
   }
 }
-.site-header--overlay.is-solid {
-  background: rgba(0, 0, 0, 0.62);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-block-end-color: rgba(255, 255, 255, 0.1);
-}
-.site-header--overlay.is-hidden {
+.site-header.is-hidden {
   transform: translateY(-110%);
 }
 /* Keyboard focus must never sit inside an off-screen header (WCAG 2.4.7/2.4.11):
-   tabbing into the hidden bar brings it back. */
-.site-header--overlay.is-hidden:focus-within {
+   tabbing into the hidden bar brings it back. The script also never hides a header
+   with focus inside or its menu open. */
+.site-header.is-hidden:focus-within {
   transform: none;
 }
 
@@ -508,7 +538,8 @@ html[dir='rtl'] .tag {
   align-items: center;
 }
 
-.site-nav__list a {
+.site-nav__list a,
+.site-header__key {
   color: var(--bs-fg);
   text-decoration: none;
   font-size: 12.5px;
@@ -518,12 +549,14 @@ html[dir='rtl'] .tag {
   position: relative;
   padding: 4px 0;
 }
-html[dir='rtl'] .site-nav__list a {
+html[dir='rtl'] .site-nav__list a,
+html[dir='rtl'] .site-header__key {
   letter-spacing: 0;
   font-size: 14px;
   text-transform: none;
 }
-.site-nav__list a::after {
+.site-nav__list a::after,
+.site-header__key::after {
   content: '';
   position: absolute;
   inset-inline: 0;
@@ -532,13 +565,16 @@ html[dir='rtl'] .site-nav__list a {
   background: var(--bs-cobalt);
   transform: scaleX(0);
   transform-origin: var(--bs-underline-origin, left);
-  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.35s var(--bs-ease);
 }
-html[dir='rtl'] .site-nav__list a::after {
+html[dir='rtl'] .site-nav__list a::after,
+html[dir='rtl'] .site-header__key::after {
   --bs-underline-origin: right;
 }
 .site-nav__list a:hover::after,
-.site-nav__list a[aria-current='page']::after {
+.site-nav__list a[aria-current='page']::after,
+.site-header__key:hover::after,
+.site-header__key[aria-current='page']::after {
   transform: scaleX(1);
 }
 
@@ -578,8 +614,10 @@ html[dir='rtl'] .site-nav__list a::after {
    does not exist. `display: none` on the <details> itself (not just on its <summary>)
    is what makes that true — hiding only the summary left a closed <details> in the
    layout, and a closed <details> hides its own content, which is how the whole menu
-   went missing above 48rem. */
-.site-nav {
+   once went missing on desktop. The key link's second copy exists only for narrow
+   screens. */
+.site-nav,
+.site-header__key {
   display: none;
 }
 
@@ -600,13 +638,16 @@ html[dir='rtl'] .site-nav__list a::after {
   display: none;
 }
 
-/* Below 48rem the nav collapses into the native <details> disclosure. No JS. The panel
-   is a SIBLING of the <details> (see SiteHeader.astro), revealed with the
-   subsequent-sibling combinator — a closed <details> hides its content no matter what
-   CSS says about the summary. */
-@media (max-width: 48rem) {
+/* At <=900px (the mockup's breakpoint) only the KEY link stays in the bar; the full list
+   collapses into the native <details> disclosure. No JS. The panel is a SIBLING of the
+   <details> (see SiteHeader.astro), revealed with the subsequent-sibling combinator — a
+   closed <details> hides its content no matter what CSS says about the summary. */
+@media (max-width: 56.25rem) {
   .site-nav {
     display: block;
+  }
+  .site-header__key {
+    display: inline-block;
   }
   .site-nav__panel {
     display: none;
@@ -684,12 +725,16 @@ html[dir='rtl'] .site-nav__list a::after {
      constant 520x266 from 1131px of width all the way up, on every viewport height. */
   width: min(46vw, 520px, 66svh);
   height: auto;
-  /* No drop-shadow, by design decision (the Brain Station UI reference keeps one at
-     `drop-shadow(0 6px 40px rgba(0,0,0,.45))`). The shadow was what lifted the white
-     wordmark off the bright sky the loop opens on; without it the logo relies on the
-     video frame behind it for contrast. If it ever washes out on a lighter cut of the
-     loop, that shadow — not a plate — is the fix. */
-  animation: intro-logo-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* The mockup's shadow (UI v2, decision 5): it lifts the white wordmark off the bright
+     sky the loop opens on. A STATIC filter — rasterised once, never animated. */
+  filter: drop-shadow(0 6px 40px rgba(0, 0, 0, 0.45));
+  /* The mockup's .45s entrance on its easing. Its blur(10px) from-state is NOT adopted:
+     `filter` is outside the compositor-only set (transform + opacity) the file header
+     commits to, the intro overlaps module evaluation (main-thread filter animation is
+     TBT/INP risk), and this image is the LCP element — re-rasterising a blurred 1040w
+     texture every frame is exactly the low-end-Android cost the budget exists to stop.
+     The delay stays the FOUC guard (.12s), not the mockup's .05s. */
+  animation: intro-logo-in 0.45s var(--bs-ease) both;
   animation-delay: var(--bs-intro-guard);
 }
 @keyframes intro-logo-in {
@@ -1000,7 +1045,7 @@ html[dir='rtl'] .hero__scroll i {
 }
 .letter {
   display: inline-block;
-  animation: letter-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: letter-in 0.9s var(--bs-ease) both; /* the mockup's .9s letterIn */
   /* GATED on the intro. The comment that used to live here claimed this blew the 2.5s
      LCP budget; that was measurably false. Chromium aggregates text LCP at the BLOCK
      ancestor, so the <h1> registers at first paint while every .letter is still
@@ -1976,46 +2021,52 @@ html[dir='rtl'] .sbox__user {
 }
 
 /* ============================================================
-   Sitewide footer — dark bar (SiteFooter).
+   Sitewide footer — the mockup's paper bar (SiteFooter):
+   "© 2026 Braiin Statiion. Jeddah, Saudi Arabia" + the mailbox,
+   then the footer navigation and the legal links (ours).
    ============================================================ */
 
 .site-footer {
   position: relative;
   z-index: 4;
-  background: var(--bs-black);
-  color: var(--bs-muted);
-  border-top: 1px solid var(--bs-line-d);
+  background: var(--bs-paper);
+  color: var(--bs-dim); /* #4a5468 on white: 7.6:1 (contrast-audit) */
+  border-top: 1px solid var(--bs-line-l);
   padding: 22px var(--bs-pad-x) 34px;
+  font-size: 12px;
 }
 
-.site-footer__inner {
-  max-width: none;
+.site-footer__bar,
+.site-footer__links {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem 2rem;
+  gap: 12px 20px;
   flex-wrap: wrap;
+}
+
+.site-footer__links {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--bs-line-l);
+}
+
+.site-footer__copy {
+  margin: 0;
+}
+
+.site-footer a {
+  color: var(--bs-dim);
+  text-decoration: none;
+  transition: color 0.25s;
+}
+
+.site-footer a:hover {
+  color: var(--bs-black);
 }
 
 .site-footer__list {
   gap: 1.25rem;
-}
-
-.site-footer__list a {
-  color: var(--bs-muted);
-  text-decoration: none;
-  font-size: 0.8rem;
-  transition: color 0.25s;
-}
-
-.site-footer__list a:hover {
-  color: var(--bs-fg);
-}
-
-.site-footer__copy {
-  color: var(--bs-muted);
-  font-size: 0.8rem;
-  margin: 0;
 }
 
 /* ============================================================

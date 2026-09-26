@@ -7,6 +7,7 @@ import {
   OUTPUTS,
 } from '../../scripts/gen-seeds.mjs';
 import { IDENTITY_FALLBACK } from '@/lib/identity/fallback';
+import { HEADER_FALLBACK, FOOTER_FALLBACK } from '@/lib/nav/fallback';
 
 // supabase/seed.sql and supabase/seeds/production.sql are GENERATED from
 // supabase/seed-data/*.json (scripts/gen-seeds.mjs). These are the tests that make that
@@ -111,5 +112,41 @@ describe('pages seed', () => {
   it('creates the six compositions the UI v2 routes read', () => {
     const slugs = blocks.find((b) => b.table === 'pages')?.rows.map((r) => r['slug']);
     expect(slugs).toEqual(['home', 'about', 'contact', 'portfolio', 'portfolio-all', 'join']);
+  });
+});
+
+describe('navigation seed', () => {
+  const rows = (location: string) =>
+    blocks
+      .filter((b) => b.table === 'navigation')
+      .flatMap((b) => b.rows)
+      .filter((r) => r['location'] === location)
+      .map((r) => ({ href: r['href'], label: r['label'], isKey: r['is_key'] === true }));
+  const fallback = (nodes: typeof HEADER_FALLBACK) =>
+    nodes.map((n) => ({ href: n.href, label: n.label, isKey: n.is_key }));
+
+  it('the seeded menus are exactly the code fallbacks (one list, two copies)', () => {
+    // A freshly seeded site and a site on the fallback (DB down) must show the same menu.
+    expect(rows('header')).toEqual(fallback(HEADER_FALLBACK));
+    expect(rows('footer')).toEqual(fallback(FOOTER_FALLBACK));
+  });
+
+  it('marks exactly one header key link — the one kept visible at <=900px', () => {
+    expect(rows('header').filter((r) => r.isKey)).toHaveLength(1);
+    expect(rows('footer').filter((r) => r.isKey)).toHaveLength(0);
+  });
+
+  it('never seeds into a menu an editor has already built', () => {
+    // Each nav insert is skipped while the location holds rows OTHER than the seed's own,
+    // so production's authored menu is never mixed with ours — and a re-run is a no-op.
+    const statements = generate('production')
+      .split(';')
+      .filter((sql: string) => /insert into public\.navigation/.test(sql));
+    expect(statements.length).toBe(rows('header').length + rows('footer').length);
+    for (const sql of statements) {
+      expect(sql).toMatch(/where not exists \(select 1 from public\.navigation/);
+      expect(sql).toMatch(/and id not in \(/);
+      expect(sql).toMatch(/on conflict \(id\) do nothing/);
+    }
   });
 });

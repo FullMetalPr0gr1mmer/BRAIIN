@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Locale } from '@schemas/primitives';
 import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { DEFAULT_TITLE_TEMPLATE, applyTitleTemplate } from '@/lib/seo/title';
 
 // Public read path for CMS-authored SEO: per-entity overrides (`entity_seo`) and the
 // tenant's global defaults (`seo_defaults`).
@@ -79,8 +80,19 @@ export async function getSeoDefaults(): Promise<SeoDefaults | null> {
 }
 
 /**
- * Resolves the head values for one page: entity override → global default → the
- * content's own title, in that order.
+ * Resolves the head values for one page. Precedence, per field:
+ *
+ *   title        entity override → the page's own title → tenant default title
+ *   description  entity override → the page's own blurb → tenant default description
+ *
+ * The page's own value outranks the tenant default. The default is the LAST resort for a
+ * page that has nothing of its own; ranked above the page title (as it was before UI v2),
+ * authoring a default title would have given every service, article and project on the
+ * site the same <title>.
+ *
+ * The title then goes through the template (`seo_defaults.title_template`, default
+ * `%brand% | %s`) — see src/lib/seo/title.ts for `%brand%`, and why a title that already
+ * names the brand is left alone.
  *
  * ── Why Arabic does NOT fall back to English ─────────────────────────────────────
  * Everywhere else in this codebase a missing Arabic string falls back to English,
@@ -90,69 +102,31 @@ export async function getSeoDefaults(): Promise<SeoDefaults | null> {
  * a search engine than no description at all. An empty string here makes SeoHead omit
  * the tag, which is the honest outcome.
  */
-/**
- * One call for a detail page: fetch the entity override + the tenant defaults, resolve,
- * and hand back exactly what `<BaseLayout>` needs.
- *
- * Two queries rather than one. `entity_seo` is polymorphic — keyed by (entity_type,
- * entity_id) — so PostgREST cannot embed it from the content row the way it embeds an
- * author or a category. Both reads are anon, tenant-scoped and land on a Tier-A route
- * whose response is edge-cached for a year and purged by tag on publish, so the cost is
- * paid once per publish rather than once per visitor.
- *
- * Never throws: a SEO lookup failing must not 500 a content page. The fallbacks are the
- * content's own title and blurb, which is what the page used before this existed.
- */
-export async function seoForEntity(options: {
-  entityType: EntityType;
-  entityId: string;
-  locale: Locale;
-  fallbackTitle: string;
-  fallbackDescription?: string;
-}): Promise<ResolvedSeo> {
-  const [entity, defaults] = await Promise.all([
-    getEntitySeo(options.entityType, options.entityId),
-    getSeoDefaults(),
-  ]);
-  return resolveSeo({
-    locale: options.locale,
-    entity,
-    defaults,
-    fallbackTitle: options.fallbackTitle,
-    ...(options.fallbackDescription === undefined
-      ? {}
-      : { fallbackDescription: options.fallbackDescription }),
-  });
-}
-
 export function resolveSeo(options: {
   locale: Locale;
+  brand: string;
   entity: EntitySeo | null;
   defaults: SeoDefaults | null;
   fallbackTitle: string;
   fallbackDescription?: string;
 }): ResolvedSeo {
-  const { locale, entity, defaults, fallbackTitle, fallbackDescription = '' } = options;
+  const { locale, brand, entity, defaults, fallbackTitle, fallbackDescription = '' } = options;
 
   const pick = (record: Record<string, string> | null | undefined): string =>
     (record?.[locale] ?? '').trim();
 
   const rawTitle =
-    pick(entity?.meta_title) || pick(defaults?.default_title) || fallbackTitle.trim();
-
-  const template = pick(defaults?.title_template);
-  // `%s` is substituted only when the template actually contains it — a template
-  // authored without the placeholder would otherwise silently discard the page title.
-  const title = template.includes('%s') ? template.replace('%s', rawTitle) : rawTitle;
+    pick(entity?.meta_title) || fallbackTitle.trim() || pick(defaults?.default_title);
+  const template = pick(defaults?.title_template) || DEFAULT_TITLE_TEMPLATE;
 
   const description =
     pick(entity?.meta_description) ||
-    pick(defaults?.default_description) ||
-    fallbackDescription.trim();
+    fallbackDescription.trim() ||
+    pick(defaults?.default_description);
 
   return {
-    title,
-    description,
+    title: applyTitleTemplate(template, rawTitle, brand),
+    description: description.replace(/%brand%/g, () => brand),
     ogImage: entity?.og_image ?? defaults?.default_og_image ?? undefined,
     canonicalOverride: entity?.canonical_override ?? undefined,
     robots: entity?.robots ?? defaults?.robots_directives ?? 'index,follow',

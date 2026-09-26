@@ -6,7 +6,9 @@ import { GET as arRss } from '@/pages/ar/creative-knowledge/rss.xml';
 // how a bilingual site ships a monolingual feed. Both twins now share one builder, and
 // these tests assert they stay in step.
 
-const call = (h: unknown) => (h as unknown as () => Promise<Response>)();
+// A fresh `locals` per call, as each request gets: the identity memo lives on it.
+const call = (h: unknown) =>
+  (h as unknown as (ctx: { locals: object }) => Promise<Response>)({ locals: {} });
 const text = async (h: unknown) => await (await call(h)).text();
 
 describe('RSS feeds — both language twins exist', () => {
@@ -43,6 +45,13 @@ describe('RSS feeds — both language twins exist', () => {
     const xml = await text(arRss);
     const title = /<title>([^<]+)<\/title>/.exec(xml)?.[1] ?? '';
     expect(/[؀-ۿ]/.test(title)).toBe(true);
+  });
+
+  it('names the brand from the public identity, in the site title format', async () => {
+    // The AR literal this replaced was misspelled (بريين) — a constant nobody reviewed.
+    const title = (xml: string) => /<title>([^<]+)<\/title>/.exec(xml)?.[1] ?? '';
+    expect(title(await text(enRss))).toBe('Braiin Statiion | Creative Knowledge');
+    expect(title(await text(arRss))).toBe('بريّن ستيشن | المعرفة الإبداعية');
   });
 
   it('omits lastBuildDate when there are no posts rather than claiming now()', async () => {

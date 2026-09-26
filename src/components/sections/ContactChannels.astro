@@ -1,6 +1,7 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import SocialStrip from '@/components/sections/SocialStrip.astro';
+import { getIdentity } from '@/lib/identity';
 
 // "Talk to us" — the direct channels, on paper, with the social strip joined onto the
 // same block (SocialStrip renders its own <section>; `joined` removes the duplicated
@@ -15,13 +16,20 @@ interface Props {
 
 const { locale, tag, heading, lead } = Astro.props;
 
-const EMAIL = 'hello@braiinstation.com';
+// Both channels are the public identity (`site_profile`), edited under Settings →
+// Public identity — a new mailbox or number is an edit, not a deploy.
+const identity = await getIdentity(Astro.locals);
+const EMAIL = identity.contactEmail;
 
-// WhatsApp: intentionally empty until a real number exists. The card renders ONLY when
-// this is set, because a `wa.me/9665XXXXXXXX` placeholder on a live contact page is a
-// dead link on the one page whose entire job is being reachable. Set it to an E.164
-// number without the `+` (e.g. '9665XXXXXXXX') and the card appears — no other change.
-const WHATSAPP_E164 = '';
+// WhatsApp renders ONLY when a real number is set: a `wa.me/9665XXXXXXXX` placeholder on
+// a live contact page is a dead link on the one page whose entire job is being reachable.
+// The number is stored as E.164 (`+9665…`, validated on write); wa.me wants the digits.
+const WHATSAPP = identity.whatsappE164
+  ? {
+      href: `https://wa.me/${identity.whatsappE164.replace(/^\+/, '')}`,
+      display: identity.whatsappDisplay ?? identity.whatsappE164,
+    }
+  : null;
 
 const STR = {
   en: {
@@ -75,15 +83,12 @@ const STR = {
       </a>
 
       {
-        WHATSAPP_E164 ? (
-          <a
-            class="touch-card rv"
-            href={`https://wa.me/${WHATSAPP_E164}`}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
+        WHATSAPP ? (
+          <a class="touch-card rv" href={WHATSAPP.href} rel="noopener noreferrer" target="_blank">
             <span class="touch-card__label">{STR.waLabel}</span>
-            <span class="touch-card__val" dir="ltr">{`+${WHATSAPP_E164}`}</span>
+            <span class="touch-card__val" dir="ltr">
+              {WHATSAPP.display}
+            </span>
             <span class="touch-card__note">{STR.waNote}</span>
           </a>
         ) : null

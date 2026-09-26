@@ -2,28 +2,52 @@
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SectionRenderer from '@/components/SectionRenderer.astro';
 import { DEFAULT_HOME_SECTIONS, withHomeIntro } from '@/lib/sections/types';
-import { getPageSections } from '@/lib/data/pageSections';
-import { buildOrganizationSchema, buildWebSiteSchema } from '@/lib/seo/jsonld';
+import { getPageComposition } from '@/lib/data/pageSections';
+import { loadHead } from '@/lib/seo/head';
+import { PAGE_META } from '@/lib/seo/pageMeta';
+import { buildOrganizationSchema, buildWebSiteSchema, orgRef } from '@/lib/seo/jsonld';
+import { setTierA } from '@/lib/http/cacheTags';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 
-const sections = withHomeIntro((await getPageSections('home')) ?? DEFAULT_HOME_SECTIONS);
-const jsonLd = [buildOrganizationSchema(PUBLIC_SITE_URL), buildWebSiteSchema(PUBLIC_SITE_URL)];
-Astro.response.headers.set(
-  'Cache-Control',
-  'public, s-maxage=31536000, stale-while-revalidate=86400',
-);
-Astro.response.headers.set('Cache-Tag', 'tenant:default,route:home,locale:ar');
+// Tier A. Home is composed from CMS sections (`pages` slug 'home' + `page_sections`,
+// authored under /admin/pages + /admin/sections); the default composition renders until
+// that page is authored. Publish purges the `route:home` cache tag.
+const locale = 'ar' as const;
+const meta = PAGE_META.home[locale];
+
+// The composition and the head load together; the page's SEO override needs the page id,
+// so the head loader is handed the composition query rather than its result.
+const compositionQuery = getPageComposition('home');
+const [composition, { seo, identity }] = await Promise.all([
+  compositionQuery,
+  loadHead(Astro.locals, {
+    locale,
+    fallbackTitle: meta.title,
+    fallbackDescription: meta.description,
+    entity: compositionQuery.then((c) => (c ? { type: 'page' as const, id: c.page.id } : null)),
+  }),
+]);
+const sections = withHomeIntro(composition?.sections ?? DEFAULT_HOME_SECTIONS);
+
+const jsonLd = [
+  buildOrganizationSchema(PUBLIC_SITE_URL, identity, locale),
+  buildWebSiteSchema(PUBLIC_SITE_URL, orgRef(identity, locale)),
+];
+setTierA(Astro.response, { route: 'home', locale, entities: ['page:home'] });
 ---
 
 <BaseLayout
-  title="بريّن ستيشن — وكالة إبداعية"
-  description="وكالة إبداعية ثنائية اللغة: الهوية، الموشن، الفيديو، الويب، وتحسين محركات البحث وأكثر. 14 خدمة في استوديو واحد."
-  locale="ar"
+  title={seo.title}
+  description={seo.description}
+  locale={locale}
   logicalPath="/"
   jsonLd={jsonLd}
-  headerOverlay
+  robots={seo.robots}
+  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
+  header="overlay"
 >
   <main>
-    <SectionRenderer locale="ar" sections={sections} />
+    <SectionRenderer locale={locale} sections={sections} />
   </main>
 </BaseLayout>

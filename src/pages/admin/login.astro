@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
+import { getIdentity } from '@/lib/identity';
 
 export const prerender = false;
 
@@ -27,11 +28,12 @@ const next = safeNext(rawNext);
 if (session) return Astro.redirect(next, 302);
 
 const csrfToken = Astro.locals.csrfToken;
+const brand = (await getIdentity(Astro.locals)).brandName.en;
 ---
 
 <AdminLayout title="Sign in" layout="bare">
   <form class="login-card" id="login-form" method="post" action="/api/admin/auth/login">
-    <h1>Braiin Station</h1>
+    <h1>{brand}</h1>
     <p class="admin-sub">Sign in to the content management system.</p>
 
     <p class="msg" data-kind="error" id="login-error" hidden role="alert"></p>

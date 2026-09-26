@@ -21,6 +21,10 @@
 //   { "blocks": [ { "table": "services",
 //                   "conflict": ["tenant_id", "slug"],   // ON CONFLICT … DO NOTHING
 //                   "existsBy": ["name"],                // OR: insert-where-not-exists
+//                   "unlessAuthored": ["location"],      // with conflict: skip the row when
+//                                                        // the table already has OTHER rows
+//                                                        // (not this block's ids) sharing
+//                                                        // these column values
 //                   "tenantScoped": true,                // default true: adds tenant_id
 //                   "rows": [ { …columns…,
 //                               "__placeholder": true,   // demoted in production mode
@@ -121,6 +125,33 @@ function blockSql(block, mode) {
   }
 
   if (!block.conflict) throw new Error(`${block.source}:${block.table} needs conflict or existsBy`);
+
+  if (block.unlessAuthored) {
+    // A collection an editor may already have built (a menu). Seeding into it would mix
+    // our rows into theirs, so each row goes in only while the matching slice holds
+    // nothing but this block's own rows — which also keeps a re-run idempotent.
+    const ids = rows.map((r) => {
+      if (!r.id) throw new Error(`${block.source}:${block.table} unlessAuthored rows need an id`);
+      // INSERT … SELECT has no `default` keyword, so every row must name every column.
+      if (columns.some((c) => !(c in r))) {
+        throw new Error(`${block.source}:${block.table} unlessAuthored rows must share columns`);
+      }
+      return literal(r.id);
+    });
+    const stmts = rows.map((r) => {
+      const match = block.unlessAuthored.map((c) => `${c} = ${literal(r[c])}`).join(' and ');
+      const tenant = scoped ? `tenant_id = ${quote(TENANT_ID)} and ` : '';
+      return (
+        `insert into public.${block.table} (${columns.join(', ')})\n` +
+        `  select ${tuple(r)}\n` +
+        `  where not exists (select 1 from public.${block.table}\n` +
+        `                    where ${tenant}${match} and id not in (${ids.join(', ')}))\n` +
+        `on conflict (${block.conflict.join(', ')}) do nothing;`
+      );
+    });
+    return `${header}\n${stmts.join('\n')}`;
+  }
+
   const values = rows.map((r) => `  (${tuple(r)})`).join(',\n');
   return (
     `${header}\ninsert into public.${block.table} (${columns.join(', ')}) values\n${values}\n` +

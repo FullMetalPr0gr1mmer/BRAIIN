@@ -31,7 +31,7 @@ const PageRowSchema = z.object({
 });
 
 export interface PageComposition {
-  /** The page row — `id` keys per-page SEO overrides (`seoForEntity('page', id)`). */
+  /** The page row — `id` keys the page's SEO override (`loadHead`, entity type 'page'). */
   page: { id: string; slug: string; title: { en: string; ar: string }; updatedAt: string | null };
   sections: SectionData[];
 }

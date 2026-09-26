@@ -1,10 +1,10 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import { buildArticleSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { buildArticleSchema, buildBreadcrumbSchema, orgRef } from '@/lib/seo/jsonld';
 import { localizedPath, formatDate, pickLocale, pickLocaleStrict } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
-import { seoForEntity } from '@/lib/data/seo';
+import { loadHead } from '@/lib/seo/head';
 import type { PostRow } from '@/lib/data/blog';
 
 interface Props {
@@ -30,11 +30,25 @@ const author = pickLocale(post.author?.name, locale);
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const url = base + localizedPath(`/creative-knowledge/${post.slug}`, locale);
 
+// Per-entity SEO override (`entity_seo`, authored by the SEO role under /admin) layered
+// over the tenant defaults (`seo_defaults`), falling back to the content's own title and
+// summary — loaded with the public identity in one concurrent round. Resolved server-side
+// on this Tier-A route so the override is in the HTML — metadata that needed JavaScript
+// would not be metadata.
+const { seo, identity } = await loadHead(Astro.locals, {
+  locale,
+  fallbackTitle: title,
+  fallbackDescription: excerptMeta,
+  entity: { type: 'blog_post', id: post.id },
+});
+const org = orgRef(identity, locale);
+
 const jsonLd = [
   buildArticleSchema({
     headline: title,
     description: excerptMeta,
     url,
+    org,
     ...(author ? { authorName: author } : {}),
     ...(post.published_at ? { datePublished: post.published_at } : {}),
     ...(post.updated_at ? { dateModified: post.updated_at } : {}),
@@ -46,18 +60,6 @@ const jsonLd = [
     { name: title, url },
   ]),
 ];
-
-// Per-entity SEO override (`entity_seo`, authored by the SEO role under /admin) layered
-// over the tenant defaults (`seo_defaults`), falling back to the content's own title and
-// summary. Resolved server-side on this Tier-A route so the override is in the HTML —
-// metadata that needed JavaScript would not be metadata.
-const seo = await seoForEntity({
-  entityType: 'blog_post',
-  entityId: post.id,
-  locale,
-  fallbackTitle: `${title} — Braiin Station`,
-  fallbackDescription: excerptMeta,
-});
 ---
 
 <BaseLayout

@@ -2,6 +2,8 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import type { LegalDoc } from '@/lib/legal/content';
+import { setTierA } from '@/lib/http/cacheTags';
+import { loadHead } from '@/lib/seo/head';
 
 interface Props {
   doc: LegalDoc;
@@ -13,18 +15,25 @@ const { doc, locale, logicalPath } = Astro.props;
 
 // Tier A (indexable, edge-cached SSR) — same long s-maxage + purge-by-tag as other
 // content routes. Set here so all 6 legal routes (EN/AR × privacy/terms/cookie) inherit it.
-Astro.response.headers.set(
-  'Cache-Control',
-  'public, s-maxage=31536000, stale-while-revalidate=86400',
-);
-Astro.response.headers.set('Cache-Tag', `tenant:default,route:legal,locale:${locale}`);
+setTierA(Astro.response, { route: 'legal', locale });
+
+// The <title> follows the site format like every page. The legal BODY copy is not yet
+// identity-driven: it names the data controller, and the registered legal entity is an
+// open owner item (site_profile.legal_name) awaiting legal review.
+const { seo } = await loadHead(Astro.locals, {
+  locale,
+  fallbackTitle: doc.title,
+  fallbackDescription: doc.intro,
+});
 ---
 
 <BaseLayout
-  title={`${doc.title} — Braiin Station`}
-  description={doc.intro}
+  title={seo.title}
+  description={seo.description}
   locale={locale}
   logicalPath={logicalPath}
+  robots={seo.robots}
+  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
 >
   <main class="container">
     <h1>{doc.title}</h1>

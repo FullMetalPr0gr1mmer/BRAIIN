@@ -1,5 +1,6 @@
 ---
 import { visibleNav } from '@/lib/admin/nav';
+import { getIdentity } from '@/lib/identity';
 
 // Tier C shell (CLAUDE.md §2): on-demand, `private, no-store` (set in middleware),
 // never indexable. Deliberately NOT built on BaseLayout — that one carries <SeoHead>,
@@ -22,6 +23,8 @@ const session = Astro.locals.session;
 const nav = session ? visibleNav(session.role) : [];
 const current = Astro.url.pathname;
 const csrfToken = Astro.locals.csrfToken;
+// The CMS names the studio it edits from the same identity row the public site renders.
+const brand = (await getIdentity(Astro.locals)).brandName.en;
 
 function isCurrent(href: string): boolean {
   if (href === '/admin') return current === '/admin';
@@ -34,7 +37,7 @@ function isCurrent(href: string): boolean {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>{title} · Braiin Station Admin</title>
+    <title>{`${title} · ${brand} Admin`}</title>
     <!--
       Belt AND braces on indexability. The middleware already sends `no-store` and
       /admin is behind auth, but a crawler that reaches the login page still should not
@@ -54,7 +57,7 @@ function isCurrent(href: string): boolean {
       layout === 'app' && session && (
         <nav class="admin-sidebar admin-nav" aria-label="Admin sections">
           <a class="admin-brand" href="/admin">
-            Braiin Station
+            {brand}
           </a>
           {nav.map((group) => (
             <div class="admin-nav-group">

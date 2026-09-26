@@ -6,7 +6,7 @@
 
 ## 1. Project Summary
 
-**Braiin Station** is a production, single-platform creative-agency system with four parts:
+**Braiin Station** is a production, single-platform creative-agency system with four parts (*the project's name; the public brand is data — "Braiin Statiion" since UI v2, read from `site_profile` by every page, title, feed and JSON-LD node, so a rename is a CMS edit. No displayed string may spell it; `tests/e2e/served-html.e2e.ts` gates the old spelling*):
 
 1. **Public site** — bilingual EN/AR (RTL) marketing/portfolio site for **14 services**, fully CMS-driven sections (toggleable, re-orderable, styleable, per-section error isolation). Each service detail page opens with its **own hero video**; **Gaming** launches as a "coming soon" teaser.
 2. **AI Style-Finder** — lead-gen quiz app. **Logic deferred**: ship the **module boundary + security/cost envelope only** (proxy, rate limits, spend cap, Zod wrappers around a `501` stub).

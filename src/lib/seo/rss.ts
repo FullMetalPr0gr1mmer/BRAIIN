@@ -1,6 +1,7 @@
 import type { Locale } from '@schemas/primitives';
 import { getPublishedPosts } from '@/lib/data/blog';
 import { localizedPath, pickLocale, pickLocaleStrict } from '@/lib/i18n';
+import { siteTitle } from '@/lib/seo/title';
 
 // One RSS builder for BOTH language feeds (CLAUDE.md §8: "Both EN and AR built").
 // The EN feed was previously written inline in the route with `p.title.en` hardcoded and
@@ -11,18 +12,24 @@ import { localizedPath, pickLocale, pickLocaleStrict } from '@/lib/i18n';
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+// The channel title carries the brand from the public identity (via the site title
+// format), never a literal — the Arabic literal this replaced was misspelled (بريين).
 const CHANNEL = {
   en: {
-    title: 'Creative Knowledge — Braiin Station',
+    title: 'Creative Knowledge',
     description: 'Field notes on branding, motion, video, web, and SEO/GEO/AEO.',
   },
   ar: {
-    title: 'المعرفة الإبداعية — بريين ستيشن',
+    title: 'المعرفة الإبداعية',
     description: 'ملاحظات ميدانية في العلامات التجارية والموشن والفيديو والويب وتحسين الظهور.',
   },
 } as const;
 
-export async function buildRssFeed(locale: Locale, siteUrl: string): Promise<Response> {
+export async function buildRssFeed(
+  locale: Locale,
+  siteUrl: string,
+  brand: string,
+): Promise<Response> {
   const base = siteUrl.replace(/\/$/, '');
   const posts = await getPublishedPosts();
   const channelPath = base + localizedPath('/creative-knowledge', locale);
@@ -63,7 +70,7 @@ export async function buildRssFeed(locale: Locale, siteUrl: string): Promise<Res
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n' +
     '  <channel>\n' +
-    `    <title>${esc(c.title)}</title>\n` +
+    `    <title>${esc(siteTitle(c.title, brand))}</title>\n` +
     `    <link>${channelPath}</link>\n` +
     `    <atom:link href="${selfPath}" rel="self" type="application/rss+xml"/>\n` +
     `    <description>${esc(c.description)}</description>\n` +
@@ -77,7 +84,8 @@ export async function buildRssFeed(locale: Locale, siteUrl: string): Promise<Res
     headers: {
       'content-type': 'application/rss+xml; charset=utf-8',
       'cache-control': 'public, max-age=3600',
-      'cache-tag': `route:rss,rss:${locale},blog:all`,
+      // site:identity — the channel title names the brand.
+      'cache-tag': `route:rss,rss:${locale},blog:all,site:identity`,
     },
   });
 }

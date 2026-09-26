@@ -59,6 +59,60 @@ insert into public.pages (tenant_id, slug, title, status) values
   ('00000000-0000-0000-0000-0000000000b1', 'join', '{"en":"Join us","ar":"انضم إلينا"}'::jsonb, 'published')
 on conflict (tenant_id, slug) do nothing;
 
+-- navigation (25-navigation.json)
+insert into public.navigation (tenant_id, id, location, label, href, sort_order, visible, is_key)
+  select '00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a101', 'header', '{"en":"Home","ar":"الرئيسية"}'::jsonb, '/', 1, true, false
+  where not exists (select 1 from public.navigation
+                    where tenant_id = '00000000-0000-0000-0000-0000000000b1' and location = 'header' and id not in ('00000000-0000-4000-8000-00000000a101', '00000000-0000-4000-8000-00000000a102', '00000000-0000-4000-8000-00000000a103', '00000000-0000-4000-8000-00000000a104', '00000000-0000-4000-8000-00000000a105'))
+on conflict (id) do nothing;
+insert into public.navigation (tenant_id, id, location, label, href, sort_order, visible, is_key)
+  select '00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a102', 'header', '{"en":"About","ar":"من نحن"}'::jsonb, '/about', 2, true, false
+  where not exists (select 1 from public.navigation
+                    where tenant_id = '00000000-0000-0000-0000-0000000000b1' and location = 'header' and id not in ('00000000-0000-4000-8000-00000000a101', '00000000-0000-4000-8000-00000000a102', '00000000-0000-4000-8000-00000000a103', '00000000-0000-4000-8000-00000000a104', '00000000-0000-4000-8000-00000000a105'))
+on conflict (id) do nothing;
+insert into public.navigation (tenant_id, id, location, label, href, sort_order, visible, is_key)
+  select '00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a103', 'header', '{"en":"Our Work","ar":"أعمالنا"}'::jsonb, '/portfolio', 3, true, false
+  where not exists (select 1 from public.navigation
+                    where tenant_id = '00000000-0000-0000-0000-0000000000b1' and location = 'header' and id not in ('00000000-0000-4000-8000-00000000a101', '00000000-0000-4000-8000-00000000a102', '00000000-0000-4000-8000-00000000a103', '00000000-0000-4000-8000-00000000a104', '00000000-0000-4000-8000-00000000a105'))
+on conflict (id) do nothing;
+insert into public.navigation (tenant_id, id, location, label, href, sort_order, visible, is_key)
+  select '00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a104', 'header', '{"en":"Services","ar":"الخدمات"}'::jsonb, '/#services', 4, true, false
+  where not exists (select 1 from public.navigation
+                    where tenant_id = '00000000-0000-0000-0000-0000000000b1' and location = 'header' and id not in ('00000000-0000-4000-8000-00000000a101', '00000000-0000-4000-8000-00000000a102', '00000000-0000-4000-8000-00000000a103', '00000000-0000-4000-8000-00000000a104', '00000000-0000-4000-8000-00000000a105'))
+on conflict (id) do nothing;
+insert into public.navigation (tenant_id, id, location, label, href, sort_order, visible, is_key)
+  select '00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a105', 'header', '{"en":"Contact us","ar":"تواصل معنا"}'::jsonb, '/contact', 5, true, true
+  where not exists (select 1 from public.navigation
+                    where tenant_id = '00000000-0000-0000-0000-0000000000b1' and location = 'header' and id not in ('00000000-0000-4000-8000-00000000a101', '00000000-0000-4000-8000-00000000a102', '00000000-0000-4000-8000-00000000a103', '00000000-0000-4000-8000-00000000a104', '00000000-0000-4000-8000-00000000a105'))
+on conflict (id) do nothing;
+
+-- navigation (25-navigation.json)
+insert into public.navigation (tenant_id, id, location, label, href, sort_order, visible, is_key)
+  select '00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a201', 'footer', '{"en":"Services","ar":"الخدمات"}'::jsonb, '/services', 1, true, false
+  where not exists (select 1 from public.navigation
+                    where tenant_id = '00000000-0000-0000-0000-0000000000b1' and location = 'footer' and id not in ('00000000-0000-4000-8000-00000000a201', '00000000-0000-4000-8000-00000000a202', '00000000-0000-4000-8000-00000000a203', '00000000-0000-4000-8000-00000000a204', '00000000-0000-4000-8000-00000000a205'))
+on conflict (id) do nothing;
+insert into public.navigation (tenant_id, id, location, label, href, sort_order, visible, is_key)
+  select '00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a202', 'footer', '{"en":"Our Work","ar":"أعمالنا"}'::jsonb, '/portfolio', 2, true, false
+  where not exists (select 1 from public.navigation
+                    where tenant_id = '00000000-0000-0000-0000-0000000000b1' and location = 'footer' and id not in ('00000000-0000-4000-8000-00000000a201', '00000000-0000-4000-8000-00000000a202', '00000000-0000-4000-8000-00000000a203', '00000000-0000-4000-8000-00000000a204', '00000000-0000-4000-8000-00000000a205'))
+on conflict (id) do nothing;
+insert into public.navigation (tenant_id, id, location, label, href, sort_order, visible, is_key)
+  select '00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a203', 'footer', '{"en":"Insights","ar":"المعرفة"}'::jsonb, '/creative-knowledge', 3, true, false
+  where not exists (select 1 from public.navigation
+                    where tenant_id = '00000000-0000-0000-0000-0000000000b1' and location = 'footer' and id not in ('00000000-0000-4000-8000-00000000a201', '00000000-0000-4000-8000-00000000a202', '00000000-0000-4000-8000-00000000a203', '00000000-0000-4000-8000-00000000a204', '00000000-0000-4000-8000-00000000a205'))
+on conflict (id) do nothing;
+insert into public.navigation (tenant_id, id, location, label, href, sort_order, visible, is_key)
+  select '00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a204', 'footer', '{"en":"About","ar":"من نحن"}'::jsonb, '/about', 4, true, false
+  where not exists (select 1 from public.navigation
+                    where tenant_id = '00000000-0000-0000-0000-0000000000b1' and location = 'footer' and id not in ('00000000-0000-4000-8000-00000000a201', '00000000-0000-4000-8000-00000000a202', '00000000-0000-4000-8000-00000000a203', '00000000-0000-4000-8000-00000000a204', '00000000-0000-4000-8000-00000000a205'))
+on conflict (id) do nothing;
+insert into public.navigation (tenant_id, id, location, label, href, sort_order, visible, is_key)
+  select '00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a205', 'footer', '{"en":"Contact","ar":"تواصل معنا"}'::jsonb, '/contact', 5, true, false
+  where not exists (select 1 from public.navigation
+                    where tenant_id = '00000000-0000-0000-0000-0000000000b1' and location = 'footer' and id not in ('00000000-0000-4000-8000-00000000a201', '00000000-0000-4000-8000-00000000a202', '00000000-0000-4000-8000-00000000a203', '00000000-0000-4000-8000-00000000a204', '00000000-0000-4000-8000-00000000a205'))
+on conflict (id) do nothing;
+
 -- portfolio (30-legacy-demo.json)
 insert into public.portfolio (tenant_id, slug, title, summary, status, sort_order) values
   ('00000000-0000-0000-0000-0000000000b1', 'riyadh-season-launch', '{"en":"Riyadh Season Launch","ar":"إطلاق موسم الرياض"}'::jsonb, '{"en":"A full-funnel campaign — brand film, motion graphics, and always-on social.","ar":"حملة متكاملة — فيلم للعلامة، وموشن جرافيك، وحضور دائم على وسائل التواصل."}'::jsonb, 'published', 1),

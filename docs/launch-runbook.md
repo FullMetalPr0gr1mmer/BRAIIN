@@ -228,6 +228,35 @@ Bindings required in `wrangler.jsonc`: `SESSION` (KV), `IMAGES`.
 The KV binding is load-bearing beyond sessions — maintenance mode is read from it before
 the edge-cache lookup.
 
+### 6a. After the UI v2 brand deploy — retire the old brand from the SEO defaults
+
+Since UI v2 PR2 every title is `%brand% | %s` with the brand read from `site_profile`.
+Anything an editor typed into **SEO → Global SEO defaults** before that still holds the
+old spelling as literal text, and a stored template wins over the code default. Look
+first, then switch only values that still name the old brand — a compare-and-set, so a
+value the SEO team has authored since is never overwritten:
+
+```sql
+-- 1. What does this database hold?
+select title_template, default_title, organization from public.seo_defaults;
+
+-- 2. A template that spells the old brand → the token form (the same as leaving it empty).
+update public.seo_defaults
+   set title_template = '{"en":"%brand% | %s","ar":"%brand% | %s"}'::jsonb
+ where title_template::text ilike '%braiin station%'
+    or title_template::text like '%بريين%';
+
+-- 3. A default title that IS the old brand would render "Braiin Statiion | Braiin Station".
+update public.seo_defaults
+   set default_title = '{}'::jsonb
+ where default_title::text ilike '%braiin station%'
+    or default_title::text like '%بريين%';
+```
+
+`organization` is no longer read (the Organization schema is built from the public
+identity); it can stay as it is. Re-check a title afterwards:
+`curl -s $BASE/ | grep -o '<title>[^<]*'` should print `Braiin Statiion | …`.
+
 ---
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)

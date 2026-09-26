@@ -2,106 +2,73 @@
 import { Picture } from 'astro:assets';
 import type { Locale } from '@schemas/primitives';
 import { getNavigation, type NavNode } from '@/lib/data/navigation';
-import { localizedPath } from '@/lib/i18n';
+import { HEADER_FALLBACK } from '@/lib/nav/fallback';
+import { isCurrentNav } from '@/lib/nav/current';
+import { getIdentity, brandName } from '@/lib/identity';
+import { localizedHref, localizedPath } from '@/lib/i18n';
 import logo from '@/assets/braiin-logo-white.png';
 
 // Sitewide header. Renders CMS-authored navigation (`public.navigation`, edited under
-// /admin/navigation) with a hard-coded fallback so the site is never navigation-less
-// before the content team authors it — or if the database is unreachable.
+// /admin/navigation) with a code fallback (src/lib/nav/fallback.ts) so the site is never
+// navigation-less before the content team authors it — or if the database is unreachable.
 //
-// ── Tier A, zero client JS ───────────────────────────────────────────────────────
-// Server-rendered, no island, no hydration. Navigation is indexable content and the
-// indexability hard rule (Pillar 3) puts it in the HTML; it is also on every route, so
-// any JS here would be JS on every route (Pillar 2). The mobile menu is a
-// `<details>` element — native disclosure, keyboard-accessible, zero bytes.
+// ── Tier A, zero hydration ───────────────────────────────────────────────────────
+// Server-rendered, no island. Navigation is indexable content and the indexability hard
+// rule (Pillar 3) puts it in the HTML; it is also on every route, so any framework JS
+// here would be JS on every route (Pillar 2). The small-screen menu is a `<details>`
+// element — native disclosure, keyboard-accessible, zero bytes. The one script below is
+// a scroll enhancement on top of a header that is fully usable without it.
+//
+// ── Two variants ─────────────────────────────────────────────────────────────────
+//   overlay  the UI v2 header (every mockup page): fixed, transparent over the page's
+//            hero, a dark blurred backdrop once past it, hidden while scrolling down.
+//   solid    legacy interior pages with no hero: a sticky black bar that still hides on
+//            the way down and returns on the way up.
+// The mockup has no scrim on the bar itself; legibility over bright video comes from the
+// hero's own top gradient (.hero__media::after), which is where it belongs.
+
+export type HeaderVariant = 'overlay' | 'solid';
 
 interface Props {
   locale: Locale;
-  /** Home: fixed transparent bar over the hero video; the scroll script below adds the
-      solid backdrop / hide-on-scroll-down behaviour. Interior pages: solid sticky bar. */
-  overlay?: boolean;
+  variant?: HeaderVariant;
 }
 
-const { locale, overlay = false } = Astro.props;
+const { locale, variant = 'solid' } = Astro.props;
 
-/** Shown until the CMS has nav rows, and whenever the query fails. */
-const FALLBACK: NavNode[] = [
-  {
-    id: 'f1',
-    parent_id: null,
-    href: '/services',
-    sort_order: 1,
-    children: [],
-    label: { en: 'Services', ar: 'خدماتنا' },
-  },
-  {
-    id: 'f2',
-    parent_id: null,
-    href: '/portfolio',
-    sort_order: 2,
-    children: [],
-    label: { en: 'Work', ar: 'أعمالنا' },
-  },
-  {
-    id: 'f3',
-    parent_id: null,
-    href: '/creative-knowledge',
-    sort_order: 3,
-    children: [],
-    label: { en: 'Insights', ar: 'المعرفة' },
-  },
-  {
-    id: 'f4',
-    parent_id: null,
-    href: '/about',
-    sort_order: 4,
-    children: [],
-    label: { en: 'About', ar: 'من نحن' },
-  },
-  {
-    id: 'f5',
-    parent_id: null,
-    href: '/contact',
-    sort_order: 5,
-    children: [],
-    label: { en: 'Contact', ar: 'تواصل' },
-  },
-];
+const identity = await getIdentity(Astro.locals);
+const brand = brandName(identity, locale);
 
 const authored = await getNavigation('header');
-const items = authored.length > 0 ? authored : FALLBACK;
+const items: NavNode[] = authored.length > 0 ? authored : HEADER_FALLBACK;
+const key = items.find((i) => i.is_key);
 
-// Authored hrefs are stored as logical paths ('/services'); `localizedPath` prefixes
-// '/ar' for the Arabic twin. An absolute URL is left alone.
-function href(raw: string): string {
-  return raw.startsWith('/') ? localizedPath(raw, locale) : raw;
-}
-
-const current = Astro.url.pathname.replace(/\/$/, '');
-const isCurrent = (raw: string): boolean => {
-  const target = href(raw).replace(/\/$/, '');
-  return current === target || (target.length > 1 && current.startsWith(`${target}/`));
-};
+const current = Astro.url.pathname;
+const href = (raw: string) => localizedHref(raw, locale);
+const ariaCurrent = (raw: string) => (isCurrentNav(href(raw), current) ? 'page' : undefined);
+const label = (item: NavNode) => item.label[locale] ?? item.label.en;
 
 // The language switch points at the SAME logical page in the other language, which is
-// what makes it a language switch rather than a link home. `toLogicalPath` is not used
-// because Astro gives us the localized path directly; stripping the '/ar' prefix is the
-// inverse of what localizedPath added.
-const logical = Astro.url.pathname.replace(/^\/ar(?=\/|$)/, '') || '/';
+// what makes it a language switch rather than a link home. Stripping the '/ar' prefix is
+// the inverse of what localizedPath added.
+const logical = current.replace(/^\/ar(?=\/|$)/, '') || '/';
 const otherLocale: Locale = locale === 'ar' ? 'en' : 'ar';
 const switchHref = localizedPath(logical, otherLocale);
+
+const STR = {
+  en: { skip: 'Skip to content', menu: 'Menu', nav: 'Main navigation' },
+  ar: { skip: 'تخطَّ إلى المحتوى', menu: 'القائمة', nav: 'التنقل الرئيسي' },
+}[locale];
 ---
 
-<header class:list={['site-header', { 'site-header--overlay': overlay }]}>
-  <a class="skip-link" href="#main">
-    {locale === 'ar' ? 'تخطَّ إلى المحتوى' : 'Skip to content'}
-  </a>
+<header class:list={['site-header', `site-header--${variant}`]} data-header={variant}>
+  <a class="skip-link" href="#main">{STR.skip}</a>
 
   <div class="site-header__bar">
-    <a class="site-header__brand" href={localizedPath('/', locale)} aria-label="Braiin Station">
+    <a class="site-header__brand" href={localizedPath('/', locale)} aria-label={brand}>
       <Picture
         src={logo}
-        alt="Braiin Station"
+        alt={brand}
         formats={['avif', 'webp']}
         width={264}
         densities={[1, 2]}
@@ -111,46 +78,47 @@ const switchHref = localizedPath(logical, otherLocale);
     </a>
 
     {
+      /* The mockup keeps exactly one link in the bar at <=900px — the key link. It is a
+         second copy OUTSIDE the <details>, shown only at that width (global.css), so it
+         stays one tap away while the full list lives in the menu. It sits BEFORE the
+         toggle so the tab order runs logo → key link → menu → its panel → language. */
+      key ? (
+        <a class="site-header__key" href={href(key.href)} aria-current={ariaCurrent(key.href)}>
+          {label(key)}
+        </a>
+      ) : null
+    }
+
+    {
       /*
       The <nav> is a SIBLING of the disclosure, not its content. A <details> hides
-      everything except its <summary> whenever it is closed — and above 48rem the
+      everything except its <summary> whenever it is closed — and on wide screens the
       summary is `display: none` and nothing ever opens the element, so nesting the nav
       inside it made the entire main navigation invisible on every desktop viewport.
-      (The links were still in the server-rendered HTML, so the indexability rule and
-      the crawlers were unaffected; only humans lost the menu.)
-
-      As siblings, the small-screen panel is revealed with `.site-nav[open] ~ .site-nav__panel`
-      — a plain subsequent-sibling combinator, so this stays zero-JS and zero-bytes exactly
-      as the note above intends, and does not depend on `::details-content`, which does not
-      in fact override the UA's hidden state (measured, not assumed).
+      As siblings, the small-screen panel is revealed with `.site-nav[open] ~
+      .site-nav__panel` — a plain subsequent-sibling combinator, zero JS.
     */
     }
     <details class="site-nav">
-      <summary class="site-nav__toggle" aria-label={locale === 'ar' ? 'القائمة' : 'Menu'}>
+      <summary class="site-nav__toggle" aria-label={STR.menu}>
         <span aria-hidden="true">☰</span>
       </summary>
     </details>
 
-    <nav
-      class="site-nav__panel"
-      aria-label={locale === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}
-    >
+    <nav class="site-nav__panel" aria-label={STR.nav}>
       <ul class="site-nav__list">
         {
           items.map((item) => (
-            <li>
-              <a href={href(item.href)} aria-current={isCurrent(item.href) ? 'page' : undefined}>
-                {item.label[locale] ?? item.label.en}
+            <li class:list={{ 'is-key': item.is_key }}>
+              <a href={href(item.href)} aria-current={ariaCurrent(item.href)}>
+                {label(item)}
               </a>
               {item.children.length > 0 && (
                 <ul class="site-nav__sub">
                   {item.children.map((child) => (
                     <li>
-                      <a
-                        href={href(child.href)}
-                        aria-current={isCurrent(child.href) ? 'page' : undefined}
-                      >
-                        {child.label[locale] ?? child.label.en}
+                      <a href={href(child.href)} aria-current={ariaCurrent(child.href)}>
+                        {label(child)}
                       </a>
                     </li>
                   ))}
@@ -169,34 +137,34 @@ const switchHref = localizedPath(logical, otherLocale);
 </header>
 
 <script>
-  // Overlay header only (home): solid backdrop once past the hero, hidden while
-  // scrolling down, shown again on any scroll up. rAF-throttled, passive — enhancement
-  // on top of a header that is fully usable without it.
-  const header = document.querySelector<HTMLElement>('.site-header--overlay');
+  // Solid backdrop once past the page's hero, hidden while scrolling down, back on any
+  // scroll up — the mockup's behaviour (±4px dead band), on both variants. rAF-throttled
+  // and passive; everything here is enhancement.
+  const header = document.querySelector<HTMLElement>('.site-header');
   if (header) {
+    const overlay = header.dataset.header === 'overlay';
+    const menu = header.querySelector('details');
     let lastY = window.scrollY;
     let ticking = false;
-    // Measure the hero rather than assuming it fills the viewport. The home hero is
-    // 100svh so the two agree there, but the contact hero is a banner
-    // (clamp(400px, 64svh, 760px)) — against a viewport-height threshold the bar would
-    // stay transparent long past it and end up white-on-white over the paper section
-    // below. Re-measured on resize; falls back to the viewport if there is no hero.
-    const hero = document.querySelector<HTMLElement>('.hero');
-    let heroH = hero?.offsetHeight ?? window.innerHeight;
-    addEventListener(
-      'resize',
-      () => {
-        heroH = hero?.offsetHeight ?? window.innerHeight;
-      },
-      { passive: true },
-    );
+
+    // Measure the hero rather than assuming it fills the viewport: the contact hero is a
+    // banner (clamp(400px, 64svh, 760px)), and against a viewport-height threshold the
+    // bar would stay transparent long past it — white-on-white over the paper below.
+    // The solid bar has no hero to clear; it only needs to be out of the way of the top.
+    const hero = overlay ? document.querySelector<HTMLElement>('.hero') : null;
+    const measure = () => (overlay ? (hero?.offsetHeight ?? window.innerHeight) * 0.9 : 160);
+    let threshold = measure();
+    addEventListener('resize', () => (threshold = measure()), { passive: true });
+
     const update = () => {
       ticking = false;
       const y = window.scrollY;
-      const pastHero = y > heroH * 0.85;
-      header.classList.toggle('is-solid', pastHero);
-      if (pastHero && y - lastY > 4) header.classList.add('is-hidden');
-      else if (y - lastY < -4 || y < heroH * 0.5) header.classList.remove('is-hidden');
+      const past = y > threshold;
+      if (overlay) header.classList.toggle('is-solid', past);
+      // Never hide a header the visitor is using: an open menu, or focus inside it.
+      const inUse = menu?.open === true || header.contains(document.activeElement);
+      if (past && y - lastY > 4 && !inUse) header.classList.add('is-hidden');
+      else if (y - lastY < -4 || y < threshold * 0.55) header.classList.remove('is-hidden');
       lastY = y;
     };
     addEventListener(
@@ -209,5 +177,6 @@ const switchHref = localizedPath(logical, otherLocale);
       },
       { passive: true },
     );
+    update();
   }
 </script>

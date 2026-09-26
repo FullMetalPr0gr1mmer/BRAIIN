@@ -1,6 +1,7 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import { pickLocale } from '@/lib/i18n';
+import { getIdentity } from '@/lib/identity';
 import type { ServiceRow } from '@/lib/data/services';
 
 interface Props {
@@ -35,7 +36,7 @@ const STR = {
     sending: 'Sending…',
     ok: 'Thanks — we’ll be in touch shortly.',
     invalid: 'Please check the highlighted fields and try again.',
-    unavailable: 'The form isn’t live yet — please email hello@braiinstation.com.',
+    unavailable: 'The form isn’t live yet — please email {email}.',
     error: 'Something went wrong. Please try again.',
     budgets: {
       lt_10k: 'Under 10k SAR',
@@ -70,7 +71,7 @@ const STR = {
     sending: 'جارٍ الإرسال…',
     ok: 'شكرًا — سنتواصل معك قريبًا.',
     invalid: 'يرجى مراجعة الحقول والمحاولة مرة أخرى.',
-    unavailable: 'النموذج غير مُفعّل بعد — راسلنا على hello@braiinstation.com.',
+    unavailable: 'النموذج غير مُفعّل بعد — راسلنا على {email}.',
     error: 'حدث خطأ ما. حاول مرة أخرى.',
     budgets: {
       lt_10k: 'أقل من 10 آلاف ريال',
@@ -82,6 +83,10 @@ const STR = {
     timelines: { asap: 'في أقرب وقت', '1_3m': '1–3 أشهر', '3_6m': '3–6 أشهر', flexible: 'مرن' },
   },
 }[locale];
+
+// The fallback mailbox in the 'form unavailable' message is the public identity's, so
+// the one message shown when the form is down never names a stale address.
+const { contactEmail } = await getIdentity(Astro.locals);
 
 const budgetKeys = ['lt_10k', '10k_50k', '50k_150k', 'gt_150k', 'undisclosed'] as const;
 const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
@@ -200,7 +205,7 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
     data-sending={STR.sending}
     data-ok={STR.ok}
     data-invalid={STR.invalid}
-    data-unavailable={STR.unavailable}
+    data-unavailable={STR.unavailable.replace('{email}', () => contactEmail)}
     data-error={STR.error}
   >
   </p>

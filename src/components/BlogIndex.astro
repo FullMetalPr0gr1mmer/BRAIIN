@@ -5,6 +5,7 @@ import { buildBreadcrumbSchema } from '@/lib/seo/jsonld';
 import { localizedPath, formatDate, pickLocale } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import type { PostRow } from '@/lib/data/blog';
+import { loadHead } from '@/lib/seo/head';
 
 interface Props {
   locale: Locale;
@@ -38,14 +39,23 @@ const breadcrumb = buildBreadcrumbSchema([
   { name: STR.home, url: base + localizedPath('/', locale) },
   { name: STR.title, url: base + localizedPath('/creative-knowledge', locale) },
 ]);
+// Tenant defaults + this route's own title/blurb, the brand from the public identity
+// through the title template — one concurrent round (src/lib/seo/head.ts).
+const { seo } = await loadHead(Astro.locals, {
+  locale,
+  fallbackTitle: STR.title,
+  fallbackDescription: STR.intro,
+});
 ---
 
 <BaseLayout
-  title={`${STR.title} — Braiin Station`}
-  description={STR.intro}
+  title={seo.title}
+  description={seo.description}
   locale={locale}
   logicalPath="/creative-knowledge"
   jsonLd={[breadcrumb]}
+  robots={seo.robots}
+  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
 >
   <main class="container">
     <h1>{STR.title}</h1>

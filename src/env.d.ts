@@ -24,5 +24,8 @@ declare namespace App {
     // the user's JWT, so every query it makes is subject to RLS — the PRIMARY authz
     // layer. Absent on public routes.
     supabase?: import('@supabase/supabase-js').SupabaseClient;
+    // The public identity (`site_profile`), fetched at most once per request — see
+    // src/lib/identity/index.ts. A promise, so concurrent components share one fetch.
+    identity?: Promise<import('@/lib/identity/fallback').Identity>;
   }
 }

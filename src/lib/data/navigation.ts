@@ -18,6 +18,9 @@ const NavRowSchema = z.object({
   label: BilingualTextSchema,
   href: z.string(),
   sort_order: z.number(),
+  // The one link the header keeps visible at <=900px (migration 0019; at most one per
+  // location, enforced by a unique partial index).
+  is_key: z.boolean(),
 });
 export type NavRow = z.infer<typeof NavRowSchema>;
 
@@ -25,7 +28,7 @@ export interface NavNode extends NavRow {
   children: NavNode[];
 }
 
-const COLUMNS = 'id,parent_id,label,href,sort_order';
+const COLUMNS = 'id,parent_id,label,href,sort_order,is_key';
 
 /** Visible items for one location, nested one level deep. */
 export async function getNavigation(location: 'header' | 'footer'): Promise<NavNode[]> {

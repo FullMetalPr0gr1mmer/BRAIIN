@@ -193,12 +193,18 @@ const src = videoUid ? undefined : videoSrc;
   const intro = document.querySelector<HTMLElement>('.intro');
   if (intro) {
     const cut = () => document.body.classList.add('intro-cut');
-    try {
-      if (sessionStorage.getItem('bs_intro')) cut();
-      else sessionStorage.setItem('bs_intro', '1');
-    } catch {
-      // Storage blocked: the intro still ends on its own CSS timeline.
-    }
+    // A deep link (/#services — the header's Services item — or /ar#contact) asks for a
+    // SECTION: the browser scrolls straight to it, and a logo plate over that section
+    // would be in the way. It cuts without spending the once-per-session intro, so the
+    // next visit to the top of home still gets the brand moment.
+    if (location.hash) cut();
+    else
+      try {
+        if (sessionStorage.getItem('bs_intro')) cut();
+        else sessionStorage.setItem('bs_intro', '1');
+      } catch {
+        // Storage blocked: the intro still ends on its own CSS timeline.
+      }
     // `focusin` covers programmatic / assistive-tech focus moves; the CSS carries a
     // JS-free `html:has(:focus-visible)` arm for the same reason.
     for (const ev of ['wheel', 'touchstart', 'keydown', 'pointerdown', 'focusin']) {
@@ -222,7 +228,17 @@ const src = videoUid ? undefined : videoSrc;
     // cap below releases it anyway, so a broken logo can never wedge the page behind an
     // opaque plate.
     const logo = intro.querySelector('img');
-    if (logo) {
+    // Only a plate that is still HOLDING may be paused. With the 1.0s UI v2 hold, a module
+    // that runs late (slow device, contended network) can arrive after the fade has begun
+    // — pausing then would freeze a half-faded plate for up to the cap. Past the hold, the
+    // moment has gone; let the CSS timeline finish.
+    const ms = (v: string) => (v.trim().endsWith('ms') ? parseFloat(v) : parseFloat(v) * 1000);
+    const holdMs = ms(getComputedStyle(document.body).getPropertyValue('--bs-intro-hold')) || 0;
+    const fade = intro
+      .getAnimations()
+      .find((a) => (a as CSSAnimation).animationName === 'intro-out');
+    const fading = typeof fade?.currentTime === 'number' && fade.currentTime >= holdMs;
+    if (logo && !fading) {
       // Bounds the wait so time-to-content stays honest even on a cold edge: worst case
       // is CAP + hold + fade. Warm (the overwhelming majority) releases in ~0.7s.
       const HOLD_CAP_MS = 2000;

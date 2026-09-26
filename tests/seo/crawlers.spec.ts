@@ -16,8 +16,11 @@ const REQUIRED_DENY = [
 ];
 const REQUIRED_ALLOW = ['OAI-SearchBot', 'Claude-SearchBot', 'PerplexityBot', 'Bingbot'];
 
+// A fresh `locals` per call, as each request gets: the identity memo lives on it.
 const call = async (handler: unknown) =>
-  await (handler as unknown as () => Response | Promise<Response>)();
+  await (handler as unknown as (ctx: { locals: object }) => Response | Promise<Response>)({
+    locals: {},
+  });
 
 describe('AI crawler policy (three tiers)', () => {
   it('every tier is non-empty', () => {
@@ -104,5 +107,12 @@ describe('/llms.txt agrees with the crawler map', () => {
     const body = await (await call(llmsGet)).text();
     expect(body).toContain('/ar/');
     expect(body).toContain('robots.txt');
+  });
+
+  it('names the studio and its mailbox from the public identity, never a literal', async () => {
+    const body = await (await call(llmsGet)).text();
+    expect(body.split('\n')[0]).toBe('# Braiin Statiion (بريّن ستيشن)');
+    expect(body).toContain('hello@braiinstatiion.com');
+    expect(body).not.toMatch(/Braiin Station\b/);
   });
 });
