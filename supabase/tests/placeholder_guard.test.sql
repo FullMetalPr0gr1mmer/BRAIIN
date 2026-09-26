@@ -1,4 +1,5 @@
--- pgTAP: the production placeholder guard + dashboard_attention v2 (migration 0025).
+-- pgTAP: the production placeholder guard + dashboard_attention v2 (migration 0025), and the
+-- owner's per-table exception to it (0027).
 --
 -- UI v2 decision 7: design-delivery placeholders are PUBLISHED in local/CI/staging (so the
 -- environments match the mockup) and never live in production. Outside production the
@@ -8,7 +9,7 @@
 -- app.deployment is changed inside this transaction only (rolled back at the end).
 
 begin;
-select plan(19);
+select plan(34);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values ('66000000-0000-0000-0000-000000000001', 'PhT');
@@ -32,6 +33,13 @@ insert into public.statistics (id, tenant_id, slug, label, value, status, is_pla
 insert into public.pages (id, tenant_id, slug, title, status) values
   ('66000000-0000-0000-0000-0000000000d1', '66000000-0000-0000-0000-000000000001', 'pg-ph-page',
    '{"en":"Pg","ar":"ص"}', 'published');
+-- 0027 fixtures: a second placeholder project, and another tenant's (the exception is per tenant).
+insert into public.tenants (id, name) values ('66000000-0000-0000-0000-000000000002', 'PhT2');
+insert into public.portfolio (id, tenant_id, slug, title, status, is_placeholder) values
+  ('66000000-0000-0000-0000-0000000000c8', '66000000-0000-0000-0000-000000000001', 'pg-ph-proj2',
+   '{"en":"P2","ar":"م٢"}', 'draft', true),
+  ('66000000-0000-0000-0000-0000000000c9', '66000000-0000-0000-0000-000000000002', 'pg-ph-other',
+   '{"en":"O","ar":"ع"}', 'draft', true);
 insert into public.page_sections (id, tenant_id, page_id, type, visible, is_placeholder) values
   ('66000000-0000-0000-0000-0000000000c6', '66000000-0000-0000-0000-000000000001',
    '66000000-0000-0000-0000-0000000000d1', 'cta', false, true);
@@ -117,6 +125,68 @@ select lives_ok(
      values ('66000000-0000-0000-0000-000000000001', 'pg-ph-draft', '{"en":"Q","ar":"ق"}',
              '{"en":"A","ar":"أ"}', 'draft', true) $$,
   'production: a placeholder may still be seeded as a draft (production.sql does this)');
+
+-- ── 3. the owner's per-table exception (0027) ───────────────────────────────
+-- Still production, still as the owner (the runbook's role).
+select throws_ok(
+  $$ insert into app.placeholder_live_override (tenant_id, table_name, reason)
+     values (_tid()::uuid, 'testimonials', 'Owner decision: show the design as is') $$,
+  '23514', null, '0027: no row can ever let a placeholder QUOTE go live (table CHECK)');
+select throws_ok(
+  $$ insert into app.placeholder_live_override (tenant_id, table_name, reason)
+     values (_tid()::uuid, 'portfolio', 'ok') $$,
+  '23514', null, 'an exception needs a stated reason');
+select lives_ok(
+  $$ insert into app.placeholder_live_override (tenant_id, table_name, reason)
+     values (_tid()::uuid, 'portfolio', 'Owner decision 2026-09-26: show the design as is') $$,
+  'the owner allows placeholder PROJECTS to go live for this tenant');
+select is(
+  (select count(*)::int from public.audit_log
+    where tenant_id = _tid()::uuid and entity_type = 'placeholder_override'
+      and entity_id = 'portfolio' and action = 'placeholder_override.grant'),
+  1, 'the grant is on the audit chain, with its reason');
+
+set local role authenticated;
+select _claims('admin', _tid());
+select lives_ok(
+  $$ update public.portfolio set status = 'published' where slug = 'pg-ph-proj2' $$,
+  'with the exception, a placeholder project can be published — flag still set');
+select is(
+  (select kind from public.dashboard_attention where id = '66000000-0000-0000-0000-0000000000c8'),
+  'placeholder_live', 'and the dashboard keeps flagging it as live placeholder content');
+select throws_ok(
+  $$ update public.clients set visible = true where slug = 'pg-ph-client' $$,
+  '42501', null, 'the exception is per TABLE: clients are still guarded');
+select throws_ok(
+  $$ update public.testimonials set status = 'published' where slug = 'pg-ph-quote' $$,
+  '42501', null, 'and quotes are still guarded');
+select throws_ok(
+  $$ select * from app.placeholder_live_override $$,
+  '42501', null, 'authenticated cannot read the exceptions');
+set local role anon;
+select _claims(null, null);
+select throws_ok(
+  $$ select * from app.placeholder_live_override $$,
+  '42501', null, 'nor can anon');
+
+reset role;
+select throws_ok(
+  $$ update public.portfolio set status = 'published' where slug = 'pg-ph-other' $$,
+  '42501', null, 'the exception is per TENANT: another tenant''s placeholder is still guarded');
+select lives_ok(
+  $$ delete from app.placeholder_live_override where tenant_id = _tid()::uuid and table_name = 'portfolio' $$,
+  'the owner revokes the exception');
+select is(
+  (select count(*)::int from public.audit_log
+    where tenant_id = _tid()::uuid and entity_type = 'placeholder_override'
+      and entity_id = 'portfolio' and action = 'placeholder_override.revoke'),
+  1, 'the revoke is on the audit chain too');
+select lives_ok(
+  $$ update public.portfolio set status = 'draft' where slug = 'pg-ph-proj2' $$,
+  'taking it down is always allowed');
+select throws_ok(
+  $$ update public.portfolio set status = 'published' where slug = 'pg-ph-proj2' $$,
+  '42501', null, 'once revoked, the guard holds again');
 
 -- ── structural ───────────────────────────────────────────────────────────────
 select is(

@@ -17,8 +17,6 @@ import {
   NavItemWriteSchema,
   PageUpdateSchema,
   PageWriteSchema,
-  PartnerLogoUpdateSchema,
-  PartnerLogoWriteSchema,
   PortfolioUpdateSchema,
   PortfolioWriteSchema,
   PostUpdateSchema,
@@ -650,27 +648,6 @@ export const statisticResource: ResourceConfig = {
     requireBilingual(row, 'label', 'Statistic label');
     refusePlaceholder(row, 'statistic');
   },
-};
-
-export const partnerLogoResource: ResourceConfig = {
-  table: 'partner_logos',
-  entity: 'partner_logo',
-  writeCap: 'services.write',
-  listColumns: 'id,name,logo_url,visible,sort_order,version',
-  columns: 'id,name,logo_url,scale,offset_y,visible,sort_order,version',
-  orderBy: { column: 'sort_order', ascending: true },
-  searchColumn: 'name',
-  createSchema: PartnerLogoWriteSchema,
-  updateSchema: PartnerLogoUpdateSchema,
-  toRow: (input) =>
-    pick(input as Input, {
-      name: 'name',
-      logoUrl: 'logo_url',
-      scale: 'scale',
-      offsetY: 'offset_y',
-      visible: 'visible',
-      sortOrder: 'sort_order',
-    }),
 };
 
 // ── Sectors · clients · testimonials (UI v2, migration 0021) ────────────────────

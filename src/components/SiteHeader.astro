@@ -32,9 +32,11 @@ export type HeaderVariant = 'overlay' | 'solid';
 interface Props {
   locale: Locale;
   variant?: HeaderVariant;
+  /** Overrides the language switch target (the 404 pages: see below). */
+  langHref?: string;
 }
 
-const { locale, variant = 'solid' } = Astro.props;
+const { locale, variant = 'solid', langHref } = Astro.props;
 
 const identity = await getIdentity(Astro.locals);
 const brand = brandName(identity, locale);
@@ -53,7 +55,9 @@ const label = (item: NavNode) => item.label[locale] ?? item.label.en;
 // the inverse of what localizedPath added.
 const logical = current.replace(/^\/ar(?=\/|$)/, '') || '/';
 const otherLocale: Locale = locale === 'ar' ? 'en' : 'ar';
-const switchHref = localizedPath(logical, otherLocale);
+// A page with no twin — a 404 — passes `langHref` (the other locale's home): switching the
+// language of "this page does not exist" would otherwise link to itself, or to another 404.
+const switchHref = langHref ?? localizedPath(logical, otherLocale);
 
 const STR = {
   en: { skip: 'Skip to content', menu: 'Menu', nav: 'Main navigation' },

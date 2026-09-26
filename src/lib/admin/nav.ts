@@ -46,7 +46,6 @@ export const ADMIN_NAV: readonly NavGroup[] = [
       { href: '/admin/team', label: 'Team & authors', caps: ['blog.write'] },
       { href: '/admin/certifications', label: 'Certifications', caps: ['services.write'] },
       { href: '/admin/statistics', label: 'Statistics', caps: ['services.write'] },
-      { href: '/admin/partner-logos', label: 'Partner logos', caps: ['services.write'] },
     ],
   },
   {

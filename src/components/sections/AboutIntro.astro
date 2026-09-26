@@ -2,10 +2,13 @@
 import type { Locale } from '@schemas/primitives';
 import type { AboutIntroSectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
+import { brandName, getIdentity } from '@/lib/identity';
 
-// Home "Who we are" — the paper section that slides over the sticky hero. Copy is the
-// approved design's, overridable per-field from the CMS (page_sections.content,
-// AboutIntroSectionContentSchema). Distinct from AboutStory, which is the /about page
+// Home "Why {brand}" — the mist block after the services list (UI v2 PR7; it used to be
+// the paper "Who we are" band right under the hero). Copy is the approved design's,
+// overridable per-field from the CMS (page_sections.content,
+// AboutIntroSectionContentSchema). The default tag names the brand from the public
+// identity, so a rename is a CMS edit. Distinct from AboutStory, which is the /about page
 // hero and owns that page's <h1>.
 
 interface Props extends AboutIntroSectionContent {
@@ -20,9 +23,11 @@ const colsResolved = (columns ?? []).map((c) => ({
   d: pickLocale(c.body, locale),
 }));
 
+const brand = brandName(await getIdentity(Astro.locals), locale);
+
 const STR = {
   en: {
-    tag: 'Who we are',
+    tag: `Why ${brand}`,
     lead: 'We build brands that are seen, understood, and remembered. On a screen, on a stage, on a shelf, in any language.',
     cols: [
       {
@@ -40,7 +45,7 @@ const STR = {
     ],
   },
   ar: {
-    tag: 'من نحن',
+    tag: `ليش ${brand}`,
     lead: 'نبني علامات تُرى وتُفهم وتُتذكَّر. على الشاشة، وعلى المسرح، وعلى الرف، وبأي لغة.',
     cols: [
       {

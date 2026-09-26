@@ -356,6 +356,52 @@ update public.services set blurb = '{"en":"Worlds, assets, and in-game brand wor
 commit;
 ```
 
+### 6c. Showing the design delivery before real content exists (migration 0027)
+
+Owner decision 2026-09-26: until real content replaces it, production shows the design delivery as is:
+
+- **Shown:** the sample projects and case studies, the sample statistics, the leadership cards, and the placeholder clients.
+- **Hidden:** the invented testimonial quotes. No database row can let a placeholder quote go live.
+
+Every such row keeps `is_placeholder = true`, so the admin dashboard keeps listing it as **Placeholder content is live** until someone replaces it and clears the flag.
+
+1. **Allow the tables.** Run this as the owner (`supabase db query --linked` or psql). Each row is audit-logged with its reason.
+
+   ```sql
+   insert into app.placeholder_live_override (tenant_id, table_name, reason)
+   select t.id, x.table_name, 'Owner decision 2026-09-26: show the design delivery until real content replaces it'
+     from public.tenants t
+     cross join (values ('portfolio'), ('statistics'), ('team_members'), ('clients'), ('page_sections')) as x(table_name)
+    where t.id = '00000000-0000-0000-0000-0000000000b1'
+   on conflict (tenant_id, table_name) do nothing;
+   ```
+
+2. **Publish the placeholders.** Testimonials are deliberately absent from this list:
+
+   ```sql
+   begin;
+   update public.portfolio    set status = 'published', published_at = coalesce(published_at, now())
+    where is_placeholder and status = 'draft';
+   update public.statistics   set status = 'published'
+    where is_placeholder and status = 'draft';
+   update public.team_members set status = 'published'
+    where is_placeholder and status = 'draft';
+   update public.clients      set visible = true
+    where is_placeholder and not visible;
+   commit;
+   ```
+
+3. **Verify.**
+   - `select kind, entity_type, slug from public.dashboard_attention where kind = 'placeholder_live';` lists the rows you just published.
+   - `select count(*) from public.testimonials where status = 'published';` is `0`.
+   - The pages render the samples.
+
+4. **Taking it back**, per table, once real content exists:
+   1. Unpublish the placeholders (`status = 'draft'` / `visible = false`), or replace them and clear `is_placeholder`.
+   2. Then `delete from app.placeholder_live_override where table_name = '…';`. This is audit-logged as a revoke.
+
+   With the allowance gone, the 0025 guard holds again: nothing flagged can go live.
+
 ---
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)

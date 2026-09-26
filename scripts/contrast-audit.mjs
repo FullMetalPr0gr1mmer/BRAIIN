@@ -37,6 +37,8 @@ const T = {
   kleinLead: '#e0e4f7', // .lead-band__row p — white .88 over Klein
   kleinRole: '#bfc8ee', // .tm__r — white .75 over Klein
   kleinCount: '#b2bdeb', // .tm__count — white .70 over Klein
+  // UI v2 PR7 (home)
+  okPanel: '#000b24', // .form-status.is-ok — rgba(2,76,255,.14) over black (the sent panel)
   // UI v2 PR8 — About's Klein "Follow the studio" band (social-strip--klein)
   kleinBox: '#0f31c0', // .sbox ground — white .06 over Klein
   kleinUser: '#bcc5ed', // .sbox__user — white .72 over that card ground
@@ -85,6 +87,10 @@ const PAIRS = [
   ['klein', 'mist', 4.5, 'accents on mist'],
   ['errSoft', 'bg', 4.5, 'form error text on black'],
   ['errSoft', 'surface', 4.5, 'form error text on cards'],
+  // UI v2 PR7 (home): Selected work on mist, the lead form's states on black
+  ['cobalt', 'mist', 3.0, 'focus outline on mist — Selected work links (UI, 1.4.11)'],
+  ['fg', 'okPanel', 4.5, 'lead form "sent" confirmation text'],
+  ['err', 'bg', 3.0, 'invalid field border on black (UI, 1.4.11)'],
 ];
 
 // ---- Admin palette — keep in sync with public/styles/admin.css :root tokens ----

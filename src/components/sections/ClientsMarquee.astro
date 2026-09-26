@@ -1,18 +1,22 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import type { ClientsMarqueeSectionContent } from '@schemas/sections';
-import { pickLocale } from '@/lib/i18n';
-import { getPartnerLogos } from '@/lib/data/partnerLogos';
+import { arabicIndic, pickLocale } from '@/lib/i18n';
+import { getIdentity } from '@/lib/identity';
+import { getMarqueeClients } from '@/lib/data/taxonomy';
 
 // "Selected clients" — two counter-scrolling wordmark marquees on black. CSS-only,
 // compositor-only transform animation, paused on hover, static + de-duplicated under
-// prefers-reduced-motion (see global.css). Self-contained: uses injected data if
-// present, else fetches; falls back to the design's client list so the section reads
-// real before `partner_logos` is authored. Phase 3 swaps names for <Picture> logos.
+// prefers-reduced-motion (see global.css).
+//
+// The names are the `clients` table's marquee clients (UI v2): only rows cleared for
+// disclosure (`visible`, enforced by RLS) and flagged `show_in_marquee`, in each
+// locale's own spelling. There is deliberately NO code fallback any more: the list used
+// to name eight real brands from code whenever the table was empty, which is a claim no
+// editor could withdraw. No cleared client, no section.
 
 interface Props extends ClientsMarqueeSectionContent {
   locale: Locale;
-  items?: { name: string }[];
 }
 
 const { locale, tag, heading, note } = Astro.props;
@@ -21,31 +25,27 @@ const STR = {
   en: {
     tag: 'Selected clients',
     h2: "Trusted by the minds behind the region's biggest moments.",
-    note: 'Since 2019',
+    since: (year: number) => `Since ${year}`,
   },
   ar: {
     tag: 'عملاء مختارون',
     h2: 'بثقة العقول خلف أكبر لحظات المنطقة.',
-    note: 'منذ ٢٠١٩',
+    // The design writes this year in Arabic-Indic digits ("منذ ٢٠١٩").
+    since: (year: number) => `منذ ${arabicIndic(year)}`,
   },
 }[locale];
 
-const FALLBACK = {
-  en: [
-    'Riyadh Season',
-    'NEOM',
-    'stc',
-    'Saudia',
-    'Aramco',
-    'Qiddiya',
-    'Diriyah',
-    'Ministry of Culture',
-  ],
-  ar: ['موسم الرياض', 'نيوم', 'stc', 'السعودية', 'أرامكو', 'القدية', 'الدرعية', 'وزارة الثقافة'],
-}[locale].map((name) => ({ name }));
+const clients = await getMarqueeClients();
+const items = clients.map((c) => ({ slug: c.slug, name: pickLocale(c.name, locale) }));
 
-const authored: { name: string }[] = Astro.props.items ?? (await getPartnerLogos());
-const items = authored.length > 0 ? authored : FALLBACK;
+// "Since 2019" is the studio's founding year from the public identity; no year, no note.
+const { foundedYear } = await getIdentity(Astro.locals);
+const noteText = note
+  ? pickLocale(note, locale)
+  : foundedYear !== null
+    ? STR.since(foundedYear)
+    : null;
+const tagText = tag ? pickLocale(tag, locale) : STR.tag;
 
 // Each track is its set duplicated 2× so the CSS transform loops seamlessly (-50%);
 // the second row runs reversed and slower, and is aria-hidden as a whole (pure décor).
@@ -54,34 +54,35 @@ const reversed = [...items].reverse();
 const rowB = [...reversed, ...reversed];
 ---
 
-<section class="clients" aria-label={tag ? pickLocale(tag, locale) : STR.tag} id="work">
-  <div class="tag tag--sky rv">
-    <span class="dot"></span><span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
-  </div>
-  <div class="clients__head">
-    <h2 class="rv">{heading ? pickLocale(heading, locale) : STR.h2}</h2>
-    <span class="rv">{note ? pickLocale(note, locale) : STR.note}</span>
-  </div>
-  <div class="marquee">
-    <ul class="marquee-track">
-      {
-        rowA.map((p, i) => (
-          <li class="marquee-item" aria-hidden={i >= items.length ? 'true' : undefined}>
-            {p.name}
-          </li>
-        ))
-      }
-    </ul>
-  </div>
-  <div class="marquee marquee--rev" aria-hidden="true">
-    <ul class="marquee-track">
-      {
-        rowB.map((p) => (
-          <li class="marquee-item" aria-hidden="true">
-            {p.name}
-          </li>
-        ))
-      }
-    </ul>
-  </div>
-</section>
+{
+  items.length > 0 && (
+    <section class="clients" aria-label={tagText} id="clients">
+      <div class="tag tag--sky rv">
+        <span class="dot" />
+        <span>{tagText}</span>
+      </div>
+      <div class="clients__head">
+        <h2 class="rv">{heading ? pickLocale(heading, locale) : STR.h2}</h2>
+        {noteText && <span class="rv">{noteText}</span>}
+      </div>
+      <div class="marquee">
+        <ul class="marquee-track">
+          {rowA.map((p, i) => (
+            <li class="marquee-item" aria-hidden={i >= items.length ? 'true' : undefined}>
+              {p.name}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="marquee marquee--rev" aria-hidden="true">
+        <ul class="marquee-track">
+          {rowB.map((p) => (
+            <li class="marquee-item" aria-hidden="true">
+              {p.name}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )
+}
