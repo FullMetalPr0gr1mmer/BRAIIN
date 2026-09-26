@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(30);
+select plan(33);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -153,6 +153,36 @@ select ok(
   'the 0016/0019 app.* routines are not executable by authenticated either');
 select ok(not has_table_privilege('authenticated', 'public.site_profile', 'delete'),
   'authenticated CANNOT delete the site_profile singleton');
+
+-- ---- 8. The deploy guard can actually READ the marker (0016) ------------------------
+-- RLS on app.deployment is forced, and deploy_guard is NOBYPASSRLS. Without its policy
+-- the guard read '<unset>' and blocked every production deploy — a grant is not enough.
+-- Roles created here are rolled back with the transaction. PG15 does not make the creator
+-- a member of a role it creates, hence the explicit grant before SET ROLE.
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'deploy_guard') then
+    create role deploy_guard nologin nobypassrls;
+  end if;
+  create role pgtap_other_reader nologin nobypassrls;
+  execute format('grant deploy_guard, pgtap_other_reader to %I', current_user);
+end $$;
+grant usage on schema app to deploy_guard, pgtap_other_reader;
+grant select on app.deployment to deploy_guard, pgtap_other_reader;
+insert into app.deployment (env) values ('staging')
+  on conflict (singleton) do update set env = excluded.env;
+
+set local role deploy_guard;
+select is((select env from app.deployment), 'staging',
+  'deploy_guard (NOBYPASSRLS) reads the marker through its SELECT policy');
+select throws_ok($$ update app.deployment set env = 'production' $$, '42501', null,
+  'deploy_guard cannot re-label the database (no write privilege)');
+reset role;
+
+set local role pgtap_other_reader;
+select is((select count(*)::int from app.deployment), 0,
+  'any OTHER grantee still reads zero rows — the policy admits deploy_guard only');
+reset role;
 
 select * from finish();
 rollback;

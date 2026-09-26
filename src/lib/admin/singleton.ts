@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import type { Access, Capability } from '@/lib/authz/matrix';
+import type { AuthContext } from '@/lib/auth/types';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { defineAdminRoute } from './route';
-import { OptimisticLockError } from './errors';
+import { OptimisticLockError, ValidationError } from './errors';
 import type { ResourcePayload } from './resource';
 
 /**
@@ -21,6 +22,11 @@ function rethrowWriteError(
 ): never {
   if (error.code === '42501')
     throw new AuthorizationError(cap, `database refused the ${table} write`);
+  // 23514 = a CHECK constraint the schema could not see, because a PATCH names only the
+  // fields it changes and the check spans stored ones (site_profile: a WhatsApp display
+  // form needs the E.164 number it displays). Bad input, so 422 — not a 500.
+  if (error.code === '23514')
+    throw new ValidationError(`the change conflicts with a stored value on '${table}'`);
   throw new Error(`${verb} ${table}: ${error.message}`);
 }
 
@@ -47,6 +53,22 @@ export interface SingletonConfig {
   toRow: (input: ResourcePayload) => Record<string, unknown>;
   /** Returned by GET when no row exists yet. */
   defaults: Record<string, unknown>;
+  /**
+   * Stored columns `guardWrite` needs, read alongside `version` before the write.
+   * Comma-separated, like `columns`.
+   */
+  guardColumns?: string;
+  /**
+   * A Worker-side check for a rule narrower than `writeCap` — the SECOND server layer
+   * beside a database guard (CLAUDE.md Pillar 1: both must pass). Runs after the row is
+   * read and before any write; throw AuthorizationError to refuse. `existing` is null on
+   * the first save (an INSERT), where the table defaults are the "before" state.
+   */
+  guardWrite?: (
+    auth: AuthContext,
+    existing: Record<string, unknown> | null,
+    values: Record<string, unknown>,
+  ) => void;
 }
 
 export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH: APIRoute } {
@@ -76,10 +98,11 @@ export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH
 
       const { data: existing, error: readError } = await sb
         .from(config.table)
-        .select('version')
+        .select(config.guardColumns ? `version,${config.guardColumns}` : 'version')
         .eq('tenant_id', auth.tenantId)
-        .maybeSingle<{ version: number }>();
+        .maybeSingle<{ version: number } & Record<string, unknown>>();
       if (readError) throw new Error(`read ${config.table}: ${readError.message}`);
+      config.guardWrite?.(auth, existing ?? null, values);
 
       let row: unknown;
       if (!existing) {

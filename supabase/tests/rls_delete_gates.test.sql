@@ -31,7 +31,7 @@ insert into public.page_sections (tenant_id, page_id, type)
   from public.pages where slug = 'pg-del';
 insert into public.media_assets (tenant_id, kind, storage_path)
   values ('33333333-3333-3333-3333-333333333333', 'image', '/seed/x.png');
--- 0018: the five content tables 0007 missed.
+-- 0018: the content tables 0007 missed.
 insert into public.team_members (tenant_id, slug, name, status)
   values ('33333333-3333-3333-3333-333333333333', 'tm-del', '{"en":"T","ar":"ت"}', 'published');
 insert into public.certifications (tenant_id, slug, name, status)
@@ -42,6 +42,11 @@ insert into public.categories (tenant_id, slug, name)
   values ('33333333-3333-3333-3333-333333333333', 'cat-del', '{"en":"K","ar":"ف"}');
 insert into public.partner_logos (tenant_id, name, logo_url)
   values ('33333333-3333-3333-3333-333333333333', 'logo-del', 'https://example.test/l.svg');
+-- 0018: the Style-Finder tables' missing archive gate (their delete gate is 0009's).
+insert into public.ai_questions (tenant_id, slug, prompt, status)
+  values ('33333333-3333-3333-3333-333333333333', 'q-del', '{"en":"Q","ar":"س"}', 'published');
+insert into public.ai_styles (tenant_id, slug, name, status)
+  values ('33333333-3333-3333-3333-333333333333', 's-del', '{"en":"S","ar":"ط"}', 'published');
 
 -- ── Content Creator: CANNOT delete (RLS filters → row survives) ─────────────
 select _claims('content_creator', '33333333-3333-3333-3333-333333333333');
@@ -94,6 +99,15 @@ select throws_ok(
 select throws_ok(
   $$ update public.statistics set status = 'archived' where slug = 'stat-del' $$,
   '42501', null, 'content_creator cannot archive statistics (0018)');
+select throws_ok(
+  $$ update public.ai_questions set status = 'archived' where slug = 'q-del' $$,
+  '42501', null, 'content_creator cannot archive ai_questions (0018)');
+select throws_ok(
+  $$ update public.ai_styles set status = 'archived' where slug = 's-del' $$,
+  '42501', null, 'content_creator cannot archive ai_styles (0018)');
+select lives_ok(
+  $$ update public.ai_questions set sort_order = 3 where slug = 'q-del' $$,
+  'content_creator can still edit ai_questions (ai.editContent)');
 
 -- ── Content Creator: CAN still edit (non-archive update) ────────────────────
 select lives_ok(
@@ -112,6 +126,12 @@ select lives_ok($$ delete from public.portfolio where slug = 'pf-del' $$, 'admin
 select lives_ok(
   $$ update public.statistics set status = 'archived' where slug = 'stat-del' $$,
   'admin can archive statistics (0018)');
+select lives_ok(
+  $$ update public.ai_questions set status = 'archived' where slug = 'q-del' $$,
+  'admin can archive ai_questions (0018)');
+select lives_ok(
+  $$ update public.ai_styles set status = 'archived' where slug = 's-del' $$,
+  'admin can archive ai_styles (0018)');
 delete from public.team_members where slug = 'tm-del';
 delete from public.certifications where slug = 'cert-del';
 delete from public.statistics where slug = 'stat-del';
@@ -135,8 +155,9 @@ select is(
       and policyname in (
         'team_members_delete_admin', 'certifications_delete_admin', 'statistics_delete_admin',
         'categories_delete_admin', 'partner_logos_delete_admin',
-        'team_members_archive_admin', 'certifications_archive_admin', 'statistics_archive_admin')),
-  8, 'the eight 0018 gates are RESTRICTIVE');
+        'team_members_archive_admin', 'certifications_archive_admin', 'statistics_archive_admin',
+        'ai_questions_archive_admin', 'ai_styles_archive_admin')),
+  10, 'the ten 0018 gates are RESTRICTIVE');
 
 reset role;
 select _claims(null, null);

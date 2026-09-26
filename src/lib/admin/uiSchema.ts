@@ -38,6 +38,13 @@ export interface FieldDef {
   options?: readonly { value: string; label: string }[];
   help?: string;
   required?: boolean;
+  /**
+   * An all-blank bilingual/prose value is sent as `null` ("none") instead of
+   * `{en:'', ar:''}`. Opt-in, and only for fields whose schema AND column accept null
+   * (site_profile's legal name / city): most bilingual columns are NOT NULL, and a null
+   * there would turn every blank save into a 422.
+   */
+  nullable?: boolean;
 }
 
 export interface ColumnDef {
@@ -574,6 +581,7 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         label: 'Brand name',
         kind: 'bilingual',
         column: 'brand_name',
+        required: true,
         help: 'Shown in the header, footer, page titles and Organization JSON-LD on every page.',
       },
       {
@@ -581,9 +589,16 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         label: 'Registered legal name',
         kind: 'bilingual',
         column: 'legal_name',
+        nullable: true,
         help: 'The data controller named in the privacy notice and terms. Leave empty to use the brand name.',
       },
-      { name: 'contactEmail', label: 'Contact email', kind: 'text', column: 'contact_email' },
+      {
+        name: 'contactEmail',
+        label: 'Contact email',
+        kind: 'text',
+        column: 'contact_email',
+        required: true,
+      },
       {
         name: 'whatsappE164',
         label: 'WhatsApp number (E.164)',
@@ -601,6 +616,7 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         name: 'location',
         label: 'Location',
         kind: 'bilingual',
+        required: true,
         help: 'Footer copy, e.g. “Jeddah, Saudi Arabia”.',
       },
       {
@@ -608,6 +624,7 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         label: 'City (structured data)',
         kind: 'bilingual',
         column: 'address_locality',
+        nullable: true,
       },
       {
         name: 'addressCountry',

@@ -10,7 +10,7 @@
 -- denials are asserted by re-reading the value as a staff role afterwards.
 
 begin;
-select plan(19);
+select plan(21);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- Dedicated tenants created AFTER the launch tenant, so app.default_tenant_id() — the
@@ -21,6 +21,12 @@ insert into public.tenants (id, name) values
 insert into public.site_profile (tenant_id, brand_name, contact_email, location)
 values ('51000000-0000-0000-0000-000000000001', '{"en":"PT","ar":"ب"}', 'pt@example.test',
         '{"en":"Jeddah","ar":"جدة"}');
+-- The LAUNCH tenant's profile too — the one anon is fenced to — so the positive anon read
+-- below does not depend on whether seed.sql ran (conflict → keep the seeded row).
+insert into public.site_profile (tenant_id, brand_name, contact_email, location)
+values (app.default_tenant_id(), '{"en":"Launch","ar":"ل"}', 'launch@example.test',
+        '{"en":"Jeddah","ar":"جدة"}')
+on conflict (tenant_id) do nothing;
 
 create function _claims(p_role text, p_tid text) returns void language sql as $$
   select set_config(
@@ -64,6 +70,13 @@ select _claims('admin', _tid());
 select lives_ok(
   $$ update public.site_profile set brand_name = '{"en":"ADM","ar":"ب"}' where tenant_id = _tid()::uuid $$,
   'admin can edit the identity');
+
+-- other_tenant: an admin of ANOTHER tenant, with no WHERE clause, so only the policy's
+-- tenant predicate can filter the row.
+select _claims('admin', '00000000-0000-0000-0000-0000000000ff');
+update public.site_profile set brand_name = '{"en":"XT","ar":"ب"}';
+select _claims('admin', _tid());
+select is(_brand(), 'ADM', 'other_tenant admin update affected 0 rows (brand unchanged)');
 
 -- ── accepting_applications: Admin only ───────────────────────────────────────
 select _claims('developer', _tid());
@@ -117,6 +130,8 @@ select lives_ok(
 set local role anon;
 select _claims(null, null);
 select is(_rows(), 0, 'anon is fenced to the launch tenant — cannot read another tenant''s profile');
+select is((select count(*)::int from public.site_profile where tenant_id = app.default_tenant_id()), 1,
+  'anon reads the launch tenant''s profile (the 0019 public read path)');
 select throws_ok(
   $$ update public.site_profile set brand_name = '{"en":"Z","ar":"ز"}' $$,
   '42501', null, 'anon cannot write site_profile (no privilege)');

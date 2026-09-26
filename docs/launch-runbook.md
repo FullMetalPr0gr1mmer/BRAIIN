@@ -199,6 +199,16 @@ grant usage on schema app to deploy_guard;
 grant select on app.deployment to deploy_guard;
 ```
 
+The grant alone is not what lets the guard read the marker: `app.deployment` has row
+security FORCED, and `deploy_guard` is NOBYPASSRLS, so it reads through the one policy
+0016 creates for it (`deployment_read_deploy_guard`, `current_user = 'deploy_guard'`).
+Verify with the guard's own credentials, after §1a — it must print `production`, not an
+empty result:
+
+```bash
+psql "$SUPABASE_GUARD_DB_URL" -At -c "select env from app.deployment"
+```
+
 Store the connection URL as the repository secret **`SUPABASE_GUARD_DB_URL`** (Settings →
 Secrets and variables → Actions), using the session pooler on `:5432`:
 `postgresql://deploy_guard.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`.

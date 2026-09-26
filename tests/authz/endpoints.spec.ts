@@ -363,6 +363,26 @@ const CASES: Case[] = [
     allow: ['admin', 'developer'],
   },
   {
+    // The settings form ALWAYS sends the checkbox, so an unchanged flag must not turn a
+    // Developer's identity save into a 403. (The stubbed stored row has it closed.)
+    name: 'site profile write, applications flag unchanged',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'PATCH',
+    url: '/api/admin/site-profile',
+    body: { brandName: VALID_BILINGUAL, acceptingApplications: false, version: 1 },
+    allow: ['admin', 'developer'],
+  },
+  {
+    // Opening the job-application intake is Admin-only (UI v2 decision 4). This row is
+    // the WORKER layer; the 0019 guard trigger is the database layer (pgTAP).
+    name: 'site profile opens job applications (Admin-only)',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'PATCH',
+    url: '/api/admin/site-profile',
+    body: { acceptingApplications: true, version: 1 },
+    allow: ['admin'],
+  },
+  {
     name: 'integrations write',
     load: () => import('@/pages/api/admin/integrations'),
     method: 'PATCH',
@@ -547,4 +567,39 @@ describe('admin endpoints — {principal × capability} matrix', () => {
       expect([401, 403]).toContain(status);
     }
   });
+});
+
+// ── Database refusals after assertCap passed ─────────────────────────────────────
+// A singleton write the Worker allowed can still be refused by the database: a guard
+// trigger (42501) or a CHECK the PATCH could not see because it spans stored columns
+// (23514). Neither is a server fault, so neither may surface as a 500.
+describe('singleton writes — database refusals map to client errors', () => {
+  function refusingClient(code: string) {
+    let calls = 0;
+    const builder: Record<string, unknown> = {};
+    for (const m of ['select', 'eq', 'update', 'insert']) builder[m] = () => builder;
+    builder['maybeSingle'] = async () =>
+      // 1st call: the version pre-read finds the row. 2nd: the UPDATE is refused.
+      ++calls === 1
+        ? { data: { version: 1, accepting_applications: false }, error: null }
+        : { data: null, error: { code, message: 'refused' } };
+    return { from: () => builder };
+  }
+
+  for (const [code, expected] of [
+    ['42501', 403],
+    ['23514', 422],
+  ] as const) {
+    it(`${code} → ${expected}`, async () => {
+      const { PATCH } = await import('@/pages/api/admin/site-profile');
+      const ctx = makeContext(
+        'admin',
+        '/api/admin/site-profile',
+        { whatsappDisplay: '055 000 0000', version: 1 },
+        'PATCH',
+      );
+      (ctx.locals as unknown as { supabase: unknown }).supabase = refusingClient(code);
+      expect(await statusOf(PATCH as APIRoute, ctx)).toBe(expected);
+    });
+  }
 });

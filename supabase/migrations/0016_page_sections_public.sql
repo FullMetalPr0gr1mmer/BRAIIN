@@ -36,8 +36,16 @@
 
 -- ---- 1. Deployment marker (private schema; not reachable through PostgREST) ------
 -- Environment-scoped, not tenant-scoped: it describes the database, so it carries no
--- tenant_id. RLS is still enabled + forced with NO policy, so even a future grant would
--- read zero rows — the only readers are the table owner and SECURITY DEFINER code.
+-- tenant_id. RLS is enabled + forced, and the ONLY policy admits the read-only
+-- `deploy_guard` role (runbook §5a) — so any other role granted SELECT in future still
+-- reads zero rows. The other readers bypass RLS: the owner / postgres (BYPASSRLS, which
+-- is what the runbook and the seed files run as) and SECURITY DEFINER code.
+--
+-- Without that policy the grant below is useless: deploy_guard is NOBYPASSRLS, RLS with
+-- no permissive policy is default-deny, and scripts/deploy-guard.sh would read '<unset>'
+-- on every run — blocking every production deploy the moment the secret was configured.
+-- The role is named inside USING, not in a `TO` clause, so the migration does not need
+-- the role to exist (CI and local have none).
 create table if not exists app.deployment (
   singleton boolean primary key default true check (singleton),
   env text not null check (env in ('production', 'staging', 'development')),
@@ -46,6 +54,9 @@ create table if not exists app.deployment (
 alter table app.deployment enable row level security;
 alter table app.deployment force row level security;
 revoke all on app.deployment from public, anon, authenticated, service_role;
+drop policy if exists deployment_read_deploy_guard on app.deployment;
+create policy deployment_read_deploy_guard on app.deployment
+  for select using (current_user = 'deploy_guard');
 comment on table app.deployment is
   'Which environment this database is. Set once by the launch runbook (production) — '
   'read by seed.sql, the placeholder guard (0025) and scripts/deploy-guard.sh.';
@@ -106,6 +117,16 @@ begin
      or has_table_privilege('authenticated', 'app.deployment', 'select')
      or has_table_privilege('service_role', 'app.deployment', 'select') then
     raise exception 'app.deployment is readable by an API role';
+  end if;
+  -- Exactly one policy, SELECT-only: a write policy would let the guard role (or any
+  -- future grantee) re-label the database, and with it the production-only guards.
+  if (select count(*) from pg_policies where schemaname = 'app' and tablename = 'deployment') <> 1
+     or not exists (
+       select 1 from pg_policies
+        where schemaname = 'app' and tablename = 'deployment'
+          and policyname = 'deployment_read_deploy_guard' and cmd = 'SELECT'
+     ) then
+    raise exception 'app.deployment must carry exactly the SELECT-only deploy_guard policy';
   end if;
   if has_function_privilege('anon', 'app.is_production()', 'execute')
      or has_function_privilege('authenticated', 'app.is_production()', 'execute') then
