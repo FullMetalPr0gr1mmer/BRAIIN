@@ -5,7 +5,7 @@ import { imageRef, type ImageRef } from '@/lib/media/resolve';
 import { parseRows, reportLoadError } from './parse';
 
 // Media a page SECTION references by id (`{ mediaId }` inside page_sections.content —
-// e.g. Our Work's intro frames). Tier A SSR read under RLS: anon sees a media row only
+// Our Work's intro frames, About's "who we are" poster). Tier A SSR read under RLS: anon sees a media row only
 // while a visible section of a published page references it by that exact key (0024's
 // `$.**.mediaId` branch), plus the 0024 column grant — so a draft page's image, or an id
 // typed into content that nothing publishes, resolves to nothing here.
@@ -38,4 +38,10 @@ export async function getSectionImages(ids: readonly string[]): Promise<Map<stri
     reportLoadError('section_media', err);
     return new Map();
   }
+}
+
+/** One section's asset (About's poster): the same gated read, for a single id. */
+export async function getSectionImage(mediaId: string | undefined): Promise<ImageRef | null> {
+  if (!mediaId) return null;
+  return (await getSectionImages([mediaId])).get(mediaId) ?? null;
 }

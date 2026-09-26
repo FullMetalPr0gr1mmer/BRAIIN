@@ -1,0 +1,167 @@
+{
+  "blocks": [
+    {
+      "table": "page_sections",
+      "conflict": ["id"],
+      "unlessAuthored": ["page_id"],
+      "rows": [
+        {
+          "id": "5eed5000-0000-4000-8000-000000000001",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "home"
+              }
+            }
+          },
+          "type": "hero",
+          "content": {},
+          "visible": true,
+          "sort_order": 10
+        },
+        {
+          "id": "5eed5000-0000-4000-8000-000000000002",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "home"
+              }
+            }
+          },
+          "type": "clientsMarquee",
+          "content": {},
+          "visible": true,
+          "sort_order": 20
+        },
+        {
+          "id": "5eed5000-0000-4000-8000-000000000003",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "home"
+              }
+            }
+          },
+          "type": "selectedWork",
+          "content": {},
+          "visible": true,
+          "sort_order": 30
+        },
+        {
+          "id": "5eed5000-0000-4000-8000-000000000004",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "home"
+              }
+            }
+          },
+          "type": "statistics",
+          "content": {
+            "variant": "band",
+            "placement": "home"
+          },
+          "visible": true,
+          "sort_order": 40
+        },
+        {
+          "id": "5eed5000-0000-4000-8000-000000000005",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "home"
+              }
+            }
+          },
+          "type": "testimonials",
+          "content": {
+            "variant": "klein",
+            "placement": "home"
+          },
+          "visible": true,
+          "sort_order": 50
+        },
+        {
+          "id": "5eed5000-0000-4000-8000-000000000006",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "home"
+              }
+            }
+          },
+          "type": "servicesOverview",
+          "content": {},
+          "visible": true,
+          "sort_order": 60
+        },
+        {
+          "id": "5eed5000-0000-4000-8000-000000000007",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "home"
+              }
+            }
+          },
+          "type": "aboutIntro",
+          "content": {},
+          "visible": true,
+          "sort_order": 70
+        },
+        {
+          "id": "5eed5000-0000-4000-8000-000000000008",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "home"
+              }
+            }
+          },
+          "type": "slogan",
+          "content": {},
+          "visible": true,
+          "sort_order": 80
+        },
+        {
+          "id": "5eed5000-0000-4000-8000-000000000009",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "home"
+              }
+            }
+          },
+          "type": "contact",
+          "content": {},
+          "visible": true,
+          "sort_order": 90
+        },
+        {
+          "id": "5eed5000-0000-4000-8000-000000000010",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "home"
+              }
+            }
+          },
+          "type": "social",
+          "content": {},
+          "visible": true,
+          "sort_order": 100
+        }
+      ]
+    }
+  ]
+}

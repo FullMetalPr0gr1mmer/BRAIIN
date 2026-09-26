@@ -3,7 +3,7 @@
    Linked by BaseLayout `styles` wherever a page opens on MediaBanner: Our Work
    (`['banner.css', 'work.css']`) and the case study (`['banner.css', 'case-study.css']`),
    EN + /ar. From the mockup's work.html / project.html `.hero--banner` + `.cap`
-   (docs/design-port-2026-09.md, decision 23); namespaced:
+   (docs/design-port-2026-09.md, decision 43); namespaced:
      .mbanner       media banner (MediaBanner.astro)                  mockup .hero--banner
      .work-cap      the banner's glass caption (WorkHero, CaseBanner)  mockup .cap
    Motion is compositor-only (opacity + transform); the caption entrance and the pulsing

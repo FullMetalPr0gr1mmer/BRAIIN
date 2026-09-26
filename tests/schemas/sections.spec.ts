@@ -149,6 +149,48 @@ describe('write-time section validation (UI v2 PR1)', () => {
     expect(sectionContentIssues('statistics', { variant: 'grid' }).length).toBeGreaterThan(0);
   });
 
+  it('selectedWork takes copy and picks, never projects: a stray key is refused (UI v2 PR7)', () => {
+    expect(sectionContentIssues('selectedWork', {})).toEqual([]);
+    expect(
+      sectionContentIssues('selectedWork', {
+        featuredSlug: 'the-rider',
+        cardSlugs: ['kitchen-hours', 'notebook'],
+        lines: [{ text: { en: 'One', ar: 'واحد' } }],
+        button: { label: { en: 'All', ar: 'الكل' }, href: '/portfolio' },
+        accent: { en: { from: 2, to: 5 }, ar: { from: 1, to: 4 } },
+      }),
+    ).toEqual([]);
+    expect(sectionContentIssues('selectedWork', { cards: [] }).length).toBeGreaterThan(0);
+    // Three cards do not fit the design's two-up grid; four lines do not fit its list.
+    expect(
+      sectionContentIssues('selectedWork', { cardSlugs: ['a', 'b', 'c'] }).length,
+    ).toBeGreaterThan(0);
+    const line = { text: { en: 'x', ar: 'س' } };
+    expect(
+      sectionContentIssues('selectedWork', { lines: [line, line, line, line] }).length,
+    ).toBeGreaterThan(0);
+    // The button is an authored href: an anchor or a site path, never another origin.
+    for (const href of ['https://evil.example', '//evil.example', 'javascript:alert(1)']) {
+      expect(sectionContentIssues('selectedWork', { button: { href } }).length, href).toBe(1);
+    }
+  });
+
+  it('testimonials takes layout and copy, bounded; quotes come from their table', () => {
+    expect(sectionContentIssues('testimonials', {})).toEqual([]);
+    expect(
+      sectionContentIssues('testimonials', {
+        variant: 'klein',
+        placement: 'home',
+        intervalMs: 7000,
+        limit: 3,
+      }),
+    ).toEqual([]);
+    expect(sectionContentIssues('testimonials', { items: [] }).length).toBeGreaterThan(0);
+    expect(sectionContentIssues('testimonials', { intervalMs: 1000 }).length).toBe(1);
+    expect(sectionContentIssues('testimonials', { limit: 9 }).length).toBe(1);
+    expect(sectionContentIssues('testimonials', { placement: 'about' }).length).toBe(1);
+  });
+
   it('an update restating the type is validated; one without it is left to the kernel', () => {
     expect(
       SectionUpdateSchema.safeParse({ version: 2, type: 'hero', content: { sub: { en: 'x' } } })

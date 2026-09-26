@@ -5,10 +5,12 @@ import { pickLocale } from '@/lib/i18n';
 import ContactForm from '@/components/ContactForm.astro';
 import { getPublishedServices } from '@/lib/data/services';
 
-// Home contact — display-size CTA over the real lead form (same ContactForm as
-// /contact: Zod-validated server-side at /api/contact, honeypot, consent checkbox).
-// The fallback service rows on this page link to #contact, which is this section.
-// Heading/accent are CMS-overridable (ContactSectionContentSchema).
+// Home contact — display-size CTA over the real lead form: ContactForm's compact variant
+// (UI v2 PR7 — the design's name, email, company, service and message, posted as
+// kind=contact; Zod-validated server-side at /api/contact, honeypot, consent checkbox,
+// real status and per-field errors). The fallback service rows on this page link to
+// #contact, which is this section. Heading/accent are CMS-overridable
+// (ContactSectionContentSchema).
 
 interface Props extends ContactSectionContent {
   locale: Locale;
@@ -33,6 +35,6 @@ const services = await getPublishedServices();
       {preText}
       <em>{accentText}</em>
     </h2>
-    <ContactForm locale={locale} services={services} />
+    <ContactForm locale={locale} services={services} fields="compact" kind="contact" />
   </div>
 </section>

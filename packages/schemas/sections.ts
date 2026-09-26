@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { LocalizedTextSchema } from './content';
+import { LocalizedTextSchema, TestimonialPlacementSchema } from './content';
 import { SECTION_TYPES, type SectionType } from './sectionTypes';
 import { AccentSchema, MediaRefSchema, SafeHrefSchema, VideoClipSchema } from './media';
-import { SlugSchema } from './primitives';
+import { SlugSchema, UuidSchema } from './primitives';
 
 // Per-type CMS content shapes for `page_sections.content` (authored at /admin/sections,
 // rendered by src/components/SectionRenderer.astro). One schema per shape, in packages/
@@ -89,9 +89,16 @@ export const ContactSectionContentSchema = z.object({
   accent: Text.optional(),
 });
 
+/** `paper` (home, contact) or the About page's Klein band (UI v2 PR8). */
+export const SOCIAL_VARIANTS = ['paper', 'klein'] as const;
 export const SocialSectionContentSchema = z.object({
+  variant: z.enum(SOCIAL_VARIANTS).optional(),
   tag: Text.optional(),
   heading: Text.optional(),
+  /** Which heading words carry the accent (the Klein band outlines them). */
+  accent: AccentSchema.optional(),
+  /** The line beside the heading (Klein band only — the paper strip has none). */
+  text: Text.optional(),
   links: z
     .array(
       z.object({
@@ -146,6 +153,105 @@ export const StatisticsSectionContentSchema = z
   // must be refused on write rather than stored and silently ignored.
   .strict();
 
+/**
+ * Home "Selected work" (UI v2 PR7). The projects come from the portfolio table — the
+ * published `is_featured` ones, in `sort_order` — never from this content: the first is
+ * the featured project, the next two the cards. `featuredSlug` / `cardSlugs` only
+ * re-pick among the featured projects (an unknown or unfeatured slug is ignored, so a
+ * stale pick degrades to the default order instead of an empty band).
+ */
+export const SelectedWorkSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    /** The numbered statements beside the heading ("Made to be remembered…"). */
+    lines: z
+      .array(z.object({ text: Text }))
+      .max(3)
+      .optional(),
+    featuredSlug: SlugSchema.optional(),
+    cardSlugs: z.array(SlugSchema).max(2).optional(),
+    /** The featured project's link ("See the project"). */
+    featuredLinkLabel: Text.optional(),
+    /** The closing button ("See all our work" → /portfolio). */
+    button: z.object({ label: Text.optional(), href: SafeHrefSchema.optional() }).optional(),
+  })
+  // Strict, like statistics: its projects come from their own table, and a stray key
+  // (`cards`, `items`) must be refused on write rather than stored and ignored.
+  .strict();
+
+/**
+ * Client quotes as a carousel (UI v2 PR7) — the home Klein band. The quotes come from the
+ * `testimonials` table (published, placed on `placement`); this is the layout and the
+ * copy around them. No quotes, no section.
+ */
+export const TestimonialsSectionContentSchema = z
+  .object({
+    variant: z.enum(['klein', 'light']).optional(),
+    placement: TestimonialPlacementSchema.optional(),
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    /** How long each quote stays (the design's 7 s by default). */
+    intervalMs: z.number().int().min(4000).max(15000).optional(),
+    limit: z.number().int().min(1).max(8).optional(),
+  })
+  .strict();
+
+// ── Contact (UI v2 PR9) ──────────────────────────────────────────────────────────
+// The three contact bands take copy overrides only. Strict, like the other UI v2 schemas:
+// a stray key is refused on write rather than stored and silently ignored.
+
+/**
+ * The inquiry band around the lead form. `note`, `successMessage` and `submitLabel` reach
+ * the form itself; the form's fields, options and validation copy are code (the fields are
+ * the LeadInputSchema contract — src/lib/forms/contactPayload.ts).
+ */
+export const ContactInquirySectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    /** Beside the submit button ("We read everything…"). */
+    note: Text.optional(),
+    /** The confirmation that replaces the fields once the server accepted the inquiry. */
+    successMessage: Text.optional(),
+    submitLabel: Text.optional(),
+  })
+  .strict();
+
+/**
+ * "Talk to us": the direct channels. The address and number are the public identity
+ * (site_profile), never content — the WhatsApp card renders only when a number is set.
+ */
+export const ContactChannelsSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    emailLabel: Text.optional(),
+    emailNote: Text.optional(),
+    whatsappLabel: Text.optional(),
+    whatsappNote: Text.optional(),
+  })
+  .strict();
+
+/**
+ * The FAQ band's heading only. The questions and answers stay code-owned
+ * (src/lib/content/contactFaq.ts): they are also the page's FAQPage JSON-LD, and an
+ * editable answer beside a fixed JSON-LD would be a structured-data mismatch.
+ */
+export const FaqSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+  })
+  .strict();
+
 export const AboutStorySectionContentSchema = z.object({
   heading: Text.optional(),
   lead: Text.optional(),
@@ -155,6 +261,61 @@ export const AboutStorySectionContentSchema = z.object({
   vision: Text.optional(),
 });
 
+/* About's "who we are" h1 enters word by word through a 16-rung CSS ladder (SplitHeading,
+   `.hw--0` … `.hw--15`): past the last rung the words would pop in together, and the
+   heading is the page's <h1> — so it is bounded like the hero's (words per code point,
+   the same split SplitHeading uses). */
+export const WHO_MAX_WORDS = 16;
+export const WHO_MAX_WORD_LEN = 24;
+const whoHeadingShape = (s: string): boolean => {
+  const words = s.trim().split(/\s+/).filter(Boolean);
+  return (
+    words.length > 0 &&
+    words.length <= WHO_MAX_WORDS &&
+    words.every((w) => [...w].length <= WHO_MAX_WORD_LEN)
+  );
+};
+
+/**
+ * About "who we are" (UI v2 PR8): the page's <h1>, a media frame and the manifesto. The
+ * poster is a media_assets row by id (`mediaId` — the key 0024's public-read policy looks
+ * for in section content, so the image is readable exactly while this section is live);
+ * with no poster the section renders text only. `clip` plays a window of a self-hosted
+ * file over the poster while it is on screen (EXC-009).
+ */
+export const AboutWhoSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.refine((v) => whoHeadingShape(v.en) && whoHeadingShape(v.ar), {
+      message: `Heading: at most ${WHO_MAX_WORDS} words, and ${WHO_MAX_WORD_LEN} characters per word (the entrance animation has ${WHO_MAX_WORDS} steps).`,
+    }).optional(),
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    /** Each paragraph opens with its title in bold ("Strategy before pixels."). */
+    paragraphs: z
+      .array(z.object({ title: Text, body: Text }))
+      .max(6)
+      .optional(),
+    mediaId: UuidSchema.optional(),
+    clip: VideoClipSchema.optional(),
+  })
+  // Strict: a stray key (a poster URL, say) must be refused on write, not stored and ignored.
+  .strict();
+
+/**
+ * The About leadership slider (UI v2 PR8). The people are `team_members` flagged
+ * `is_leadership` (getLeadership), injected by the route; this is only the copy around
+ * them. Hidden when no leader is published.
+ */
+export const LeadershipSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    text: Text.optional(),
+  })
+  // Strict: the people come from their own table — a stray `members` key is refused.
+  .strict();
 // ── UI v2 PR10: Our Work (/portfolio) and All projects (/portfolio/all) ─────────────
 // The projects, numbers and quotes these sections show come from their own tables; the
 // content below is only the copy around them. Filter-bar chrome ("Filter by", "All
@@ -245,12 +406,20 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
   cta: CtaSectionContentSchema,
   aboutStory: AboutStorySectionContentSchema,
   statistics: StatisticsSectionContentSchema,
+  selectedWork: SelectedWorkSectionContentSchema,
+  testimonials: TestimonialsSectionContentSchema,
+  aboutWho: AboutWhoSectionContentSchema,
+  leadership: LeadershipSectionContentSchema,
   // UI v2 PR10 (projectCatalog takes no content: its data is the portfolio table)
   workHero: WorkHeroSectionContentSchema,
   proof: ProofSectionContentSchema,
   workIntro: WorkIntroSectionContentSchema,
   projectGrid: ProjectGridSectionContentSchema,
   pageHead: PageHeadSectionContentSchema,
+  // UI v2 PR9 (contact)
+  contactInquiry: ContactInquirySectionContentSchema,
+  contactChannels: ContactChannelsSectionContentSchema,
+  faq: FaqSectionContentSchema,
 };
 
 /**
@@ -306,8 +475,15 @@ export type ContactSectionContent = z.infer<typeof ContactSectionContentSchema>;
 export type SocialSectionContent = z.infer<typeof SocialSectionContentSchema>;
 export type CtaSectionContent = z.infer<typeof CtaSectionContentSchema>;
 export type AboutStorySectionContent = z.infer<typeof AboutStorySectionContentSchema>;
+export type SelectedWorkSectionContent = z.infer<typeof SelectedWorkSectionContentSchema>;
+export type TestimonialsSectionContent = z.infer<typeof TestimonialsSectionContentSchema>;
+export type AboutWhoSectionContent = z.infer<typeof AboutWhoSectionContentSchema>;
+export type LeadershipSectionContent = z.infer<typeof LeadershipSectionContentSchema>;
 export type WorkHeroSectionContent = z.infer<typeof WorkHeroSectionContentSchema>;
 export type ProofSectionContent = z.infer<typeof ProofSectionContentSchema>;
 export type WorkIntroSectionContent = z.infer<typeof WorkIntroSectionContentSchema>;
 export type ProjectGridSectionContent = z.infer<typeof ProjectGridSectionContentSchema>;
 export type PageHeadSectionContent = z.infer<typeof PageHeadSectionContentSchema>;
+export type ContactInquirySectionContent = z.infer<typeof ContactInquirySectionContentSchema>;
+export type ContactChannelsSectionContent = z.infer<typeof ContactChannelsSectionContentSchema>;
+export type FaqSectionContent = z.infer<typeof FaqSectionContentSchema>;

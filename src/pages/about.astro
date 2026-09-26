@@ -2,8 +2,9 @@
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SectionRenderer from '@/components/SectionRenderer.astro';
 import { DEFAULT_ABOUT_SECTIONS } from '@/lib/sections/types';
+import { leadershipJsonLd, showsSection, withLeaders } from '@/lib/sections/about';
 import { getPageComposition } from '@/lib/data/pageSections';
-import { getPublishedTeam } from '@/lib/data/team';
+import { getLeadership, getPublishedTeam } from '@/lib/data/team';
 import { loadHead } from '@/lib/seo/head';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { buildPersonSchema, buildBreadcrumbSchema, orgRef } from '@/lib/seo/jsonld';
@@ -12,19 +13,20 @@ import { localizedPath, pickLocale } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 
 // Tier A (indexable, edge-cached SSR). Composed from CMS sections (`pages` slug 'about'
-// + `page_sections`; default composition until authored). Purges the `route:about` tag.
+// + `page_sections`; the UI v2 default composition until authored — who we are →
+// leadership → our reach → follow). Purges on `route:about`, and on the tables its
+// sections read: team (leadership), statistics (our reach).
 const locale = 'en' as const;
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const HOME = { en: 'Home', ar: 'الرئيسية' }[locale];
 const meta = PAGE_META.about[locale];
 
-// Team, composition and head in one concurrent round (the page's SEO override needs the
-// page id, so the head loader is handed the composition query). The team drives both the
-// named-author Person JSON-LD (no anonymous authorship — Pillar 3) and the visible
-// TeamGrid (injected, no second read).
+// Leadership, composition and head in one concurrent round (the page's SEO override needs
+// the page id, so the head loader is handed the composition query). The leaders drive both
+// the visible slider (injected as route data, no second read) and their Person JSON-LD.
 const compositionQuery = getPageComposition('about');
-const [team, composition, { seo, identity }] = await Promise.all([
-  getPublishedTeam(),
+const [leaders, composition, { seo, identity }] = await Promise.all([
+  getLeadership(),
   compositionQuery,
   loadHead(Astro.locals, {
     locale,
@@ -36,7 +38,9 @@ const [team, composition, { seo, identity }] = await Promise.all([
 // A published page with no sections yet renders the default composition (its SEO override,
 // keyed by the page id above, still applies).
 const authored = composition?.sections.length ? composition.sections : DEFAULT_ABOUT_SECTIONS;
-const sections = authored.map((s) =>
+// The pre-UI-v2 team grid (named authors) is still a section type an editor may compose.
+const team = showsSection(authored, 'team') ? await getPublishedTeam() : [];
+const sections = withLeaders(authored, leaders).map((s) =>
   s.type === 'team' ? { ...s, props: { ...(s.props ?? {}), members: team } } : s,
 );
 
@@ -46,6 +50,9 @@ const jsonLd = [
     { name: HOME, url: base + localizedPath('/', locale) },
     { name: meta.title, url: base + localizedPath('/about', locale) },
   ]),
+  // Only the people the page shows (no anonymous authorship — Pillar 3 — and no one a
+  // visitor cannot see).
+  ...leadershipJsonLd(authored, leaders, { locale, org, siteBase: base }),
   ...team.map((m) => {
     // `exactOptionalPropertyTypes` — omit the key entirely rather than pass undefined.
     const bio = pickLocale(m.bio, locale);
@@ -58,7 +65,11 @@ const jsonLd = [
   }),
 ];
 
-setTierA(Astro.response, { route: 'about', locale, entities: ['page:about', 'team:all'] });
+setTierA(Astro.response, {
+  route: 'about',
+  locale,
+  entities: ['page:about', 'team:all', 'statistics:all'],
+});
 ---
 
 <BaseLayout
@@ -68,6 +79,7 @@ setTierA(Astro.response, { route: 'about', locale, entities: ['page:about', 'tea
   logicalPath="/about"
   jsonLd={jsonLd}
   robots={seo.robots}
+  styles={['about.css']}
   {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >

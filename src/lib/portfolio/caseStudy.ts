@@ -57,7 +57,7 @@ export function stillAlt(media: CaseMedia, locale: Locale): string {
 
 /**
  * "09 stills" / "09 لقطات". The mockup writes "لقطة" for every Arabic count; the noun
- * follows the Arabic plural categories here, as the project counts do (decision 22).
+ * follows the Arabic plural categories here, as the project counts do (decision 42).
  */
 export const STILLS_COUNT_FORMS: Record<Locale, PluralForms> = {
   en: { one: '{n} still', other: '{n} stills' },

@@ -20,6 +20,15 @@
 
 export const SLIDE_MS = 7000;
 
+/** The authored per-carousel interval (`data-interval`, the section's intervalMs), bounded
+ *  as the schema bounds it; anything else is the design's 7 s. */
+export const MIN_SLIDE_MS = 4000;
+export const MAX_SLIDE_MS = 15000;
+export function slideInterval(raw: string | undefined): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= MIN_SLIDE_MS && n <= MAX_SLIDE_MS ? n : SLIDE_MS;
+}
+
 export interface CarouselFlags {
   started: boolean; // 40% seen at least once
   onScreen: boolean;
@@ -82,7 +91,7 @@ export function initCarousel(root: HTMLElement): void {
   // The controls are meaningless without script, so the server renders them hidden.
   root.querySelector('[data-controls]')?.removeAttribute('hidden');
   if (toggle && !flags.reducedMotion) toggle.removeAttribute('hidden');
-  bar?.style.setProperty('--carousel-ms', `${SLIDE_MS}ms`);
+  bar?.style.setProperty('--carousel-ms', `${slideInterval(root.dataset.interval)}ms`);
 
   const pad = (n: number) => String(n).padStart(2, '0');
 

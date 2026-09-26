@@ -63,3 +63,13 @@ export function splitAccent(text: string, range: AccentRange | undefined): TextR
   }
   return runs;
 }
+
+/**
+ * Splits a trailing footnote mark ("*") off one word, for headings built per word or per
+ * letter (the hero), where splitAccent's runs do not apply: `performs*` → body `performs`
+ * (accented) + mark `*` (not). A word that is ONLY marks keeps them as its body.
+ */
+export function splitTrailingMark(word: string): { body: string; mark: string } {
+  const m = /^(.*?[^*])(\*+)$/u.exec(word);
+  return m ? { body: m[1]!, mark: m[2]! } : { body: word, mark: '' };
+}

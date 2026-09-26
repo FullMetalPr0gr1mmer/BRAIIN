@@ -26,6 +26,12 @@ export const RENDERED_SECTION_TYPES = [
   'contactInquiry',
   'contactChannels',
   'faq',
+  // UI v2 PR7 (home)
+  'selectedWork',
+  'testimonials',
+  // UI v2 PR8 (About)
+  'aboutWho',
+  'leadership',
   // UI v2 PR10 — Our Work and All projects
   'workHero',
   'proof',

@@ -66,8 +66,18 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
   servicesOverview: [tag, heading, { name: 'sub', label: 'Sub-line', kind: 'bilingual' }],
   contact: [heading, { name: 'accent', label: 'Accent (highlighted words)', kind: 'bilingual' }],
   social: [
+    {
+      name: 'variant',
+      label: 'Layout',
+      kind: 'select',
+      options: [
+        { value: 'paper', label: 'Paper (home, contact)' },
+        { value: 'klein', label: 'Klein band (about)' },
+      ],
+    },
     tag,
     heading,
+    { name: 'text', label: 'Text beside the heading (Klein band only)', kind: 'bilingual' },
     {
       name: 'links',
       label: 'Links (replace the Public identity socials on this section only)',
@@ -130,6 +140,77 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       help: 'Default 2 for Band, Reach and Proof (a band with a single number reads as broken), 1 for Cards.',
     },
   ],
+  selectedWork: [
+    tag,
+    heading,
+    {
+      name: 'lines',
+      label: 'Numbered lines beside the heading',
+      kind: 'repeater',
+      maxItems: 3,
+      itemFields: [{ name: 'text', label: 'Line', kind: 'bilingual', required: true }],
+    },
+    {
+      name: 'featuredSlug',
+      label: 'Featured project (slug)',
+      kind: 'slug',
+      help: 'Optional. One of the projects marked Featured; default: the first featured project by sort order.',
+    },
+    { name: 'featuredLinkLabel', label: 'Featured project link label', kind: 'bilingual' },
+  ],
+  testimonials: [
+    {
+      name: 'variant',
+      label: 'Layout',
+      kind: 'select',
+      options: [
+        { value: 'klein', label: 'Klein band (home)' },
+        { value: 'light', label: 'Light (on white)' },
+      ],
+    },
+    {
+      name: 'placement',
+      label: 'Page (which quotes)',
+      kind: 'select',
+      options: [
+        { value: 'home', label: 'Home' },
+        { value: 'work', label: 'Our Work' },
+      ],
+      help: 'Shows the published testimonials marked for this page. None published → the section hides.',
+    },
+    tag,
+    heading,
+    { name: 'limit', label: 'At most this many quotes (1–8)', kind: 'number' },
+  ],
+  // UI v2 PR9 (contact)
+  contactInquiry: [
+    tag,
+    heading,
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    { name: 'note', label: 'Note beside the send button', kind: 'bilingual' },
+    {
+      name: 'successMessage',
+      label: 'Confirmation after sending',
+      kind: 'bilingual',
+      help: 'Replaces the form once the inquiry has been received.',
+    },
+    { name: 'submitLabel', label: 'Send button label', kind: 'bilingual' },
+  ],
+  contactChannels: [
+    tag,
+    heading,
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    { name: 'emailLabel', label: 'Email card label', kind: 'bilingual' },
+    { name: 'emailNote', label: 'Email card note', kind: 'bilingual' },
+    {
+      name: 'whatsappLabel',
+      label: 'WhatsApp card label',
+      kind: 'bilingual',
+      help: 'The WhatsApp card shows only once a number is set under Settings → Public identity.',
+    },
+    { name: 'whatsappNote', label: 'WhatsApp card note', kind: 'bilingual' },
+  ],
+  faq: [tag, heading],
   aboutStory: [
     heading,
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
@@ -138,6 +219,33 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     { name: 'visionTitle', label: 'Vision title', kind: 'bilingual' },
     { name: 'vision', label: 'Vision', kind: 'bilingual' },
   ],
+  aboutWho: [
+    tag,
+    {
+      ...heading,
+      label: 'Heading (the page title)',
+      help: 'At most 16 words of 24 characters each — the entrance animation has that many steps.',
+    },
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    {
+      name: 'paragraphs',
+      label: 'Paragraphs',
+      kind: 'repeater',
+      maxItems: 6,
+      itemFields: [
+        { name: 'title', label: 'Opening words (bold)', kind: 'bilingual', required: true },
+        { name: 'body', label: 'Text', kind: 'bilingual', required: true },
+      ],
+    },
+    {
+      name: 'mediaId',
+      label: 'Poster image',
+      kind: 'media',
+      help: 'The page’s largest image. Leave empty for a text-only section.',
+    },
+    { name: 'clip', label: 'Clip over the poster (plays while on screen)', kind: 'clip' },
+  ],
+  leadership: [tag, heading, { name: 'text', label: 'Text beside the heading', kind: 'bilingual' }],
   // UI v2 PR10 — Our Work and All projects (projectCatalog is table-backed: no editor)
   workHero: [
     { ...tag, label: 'Caption tag ("Latest project")' },
@@ -206,9 +314,22 @@ export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[
   hero: ['intro'],
   // A per-locale word range ({en: {from, to}, ar: {…}}) — no typed field kind for it yet.
   statistics: ['accent'],
+  // UI v2 PR7: the accent range as above; the card picks (a list of featured-project slugs)
+  // and the closing button ({label, href}) have no typed field kind yet either — both fall
+  // back to the design's defaults when unset. The carousel interval is a design constant.
+  selectedWork: ['accent', 'cardSlugs', 'button'],
+  testimonials: ['accent', 'intervalMs'],
+  social: ['accent'],
+  aboutWho: ['accent'],
+  leadership: ['accent'],
   cta: ['accent'],
   proof: ['quotesAccent'],
   pageHead: ['accent'],
+  // UI v2 PR9: the accent word ranges, as above. The FAQ's questions are code-owned (they
+  // are also its JSON-LD), so the faq section's only content is its heading.
+  contactInquiry: ['accent'],
+  contactChannels: ['accent'],
+  faq: ['accent'],
 };
 
 /** The fields for one section type, or null when it takes no content (table-backed). */

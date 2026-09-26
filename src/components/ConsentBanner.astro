@@ -2,7 +2,41 @@
 // PDPL consent banner. Server-rendered, fixed-position (no CLS), hidden until the
 // bundled script (CSP-safe, external) decides a current choice is missing. Writes
 // the __Host-consent cookie and dispatches `consent-updated` to start analytics.
+//
+// Localized with the page: an Arabic page asks in Arabic and links to the Arabic cookie
+// policy (it used to be English-only on /ar, linking to the English policy — a consent
+// request the visitor may not be able to read is not informed consent). The copy is legal
+// / system text, so the Arabic is MSA (owner decision 6); it inherits lang/dir from <html>.
+import type { Locale } from '@schemas/primitives';
 import { CONSENT_VERSION } from '@consent/gate';
+import { localizedPath } from '@/lib/i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+const STR = {
+  en: {
+    region: 'Cookie consent',
+    before:
+      'We use functional cookies to run the site, and — only with your consent — first-party analytics to improve it. See our',
+    policy: 'Cookie Policy',
+    after: '.',
+    reject: 'Reject non-essential',
+    accept: 'Accept analytics',
+  },
+  ar: {
+    region: 'الموافقة على ملفات تعريف الارتباط',
+    before:
+      'نستخدم ملفات تعريف الارتباط الوظيفية لتشغيل الموقع، ولا نستخدم التحليلات الخاصة بنا لتحسينه إلا بموافقتك. اطّلع على',
+    policy: 'سياسة ملفات تعريف الارتباط',
+    after: '.',
+    reject: 'رفض غير الضرورية',
+    accept: 'قبول التحليلات',
+  },
+}[locale];
 ---
 
 <div
@@ -11,15 +45,15 @@ import { CONSENT_VERSION } from '@consent/gate';
   data-version={CONSENT_VERSION}
   hidden
   role="region"
-  aria-label="Cookie consent"
+  aria-label={STR.region}
 >
   <p class="consent-text">
-    We use functional cookies to run the site, and — only with your consent — first-party analytics
-    to improve it. See our <a href="/cookie-policy">Cookie Policy</a>.
+    {STR.before}
+    <a href={localizedPath('/cookie-policy', locale)}>{STR.policy}</a>{STR.after}
   </p>
   <div class="consent-actions">
-    <button type="button" data-consent="reject">Reject non-essential</button>
-    <button type="button" data-consent="accept">Accept analytics</button>
+    <button type="button" data-consent="reject">{STR.reject}</button>
+    <button type="button" data-consent="accept">{STR.accept}</button>
   </div>
 </div>
 

@@ -127,6 +127,20 @@ describe('JSON-LD builders', () => {
     expect(p.image).toBe('https://x/a.jpg');
   });
 
+  it('Person carries jobTitle and sameAs for the About leadership (UI v2 PR8)', () => {
+    const p = buildPersonSchema({
+      name: 'Jane Doe',
+      org,
+      jobTitle: 'Creative Director',
+      sameAs: ['https://linkedin.com/in/jane'],
+    });
+    expect(p.jobTitle).toBe('Creative Director');
+    expect(p.sameAs).toEqual(['https://linkedin.com/in/jane']);
+    const bare = buildPersonSchema({ name: 'Jane Doe', org, jobTitle: '', sameAs: [] });
+    expect('jobTitle' in bare).toBe(false);
+    expect('sameAs' in bare).toBe(false);
+  });
+
   it('Article (BlogPosting) carries named Person author + truthful dates when provided', () => {
     const a = buildArticleSchema({
       headline: 'Arabic-first brand systems',

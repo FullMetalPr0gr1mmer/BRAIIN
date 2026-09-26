@@ -1,0 +1,146 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { SelectedWorkSectionContent } from '@schemas/sections';
+import type { Accent } from '@schemas/media';
+import { getPortfolioCards, type PortfolioCard } from '@/lib/data/portfolio';
+import { pickSelectedWork } from '@/lib/portfolio/selectedWork';
+import { localizedHref, pickLocale } from '@/lib/i18n';
+import MediaFrame from '@/components/media/MediaFrame.astro';
+import FacetTags from '@/components/portfolio/FacetTags.astro';
+import ProjectCard from '@/components/portfolio/ProjectCard.astro';
+import AccentText from '@/components/ui/AccentText.astro';
+import Cta from '@/components/ui/Cta.astro';
+
+// Home "Selected work" (UI v2 PR7; the mockup's `.sw-sec`) on the mist surface: the
+// featured project (its poster, a clip window while on screen, its blurb and facet links),
+// the statement with three numbered lines, two project cards, and "See all our work".
+//
+// Every word is server-rendered (the mockup filled the blurb and the heading from script).
+// The projects are the published `is_featured` ones in sort_order — the home route loads
+// them once and hands them in as `data`; a section placed elsewhere loads its own. No
+// featured project → no section (production starts with the sample projects as drafts),
+// and the hero's CTA then points at /portfolio instead of this band (homeHeroCtaHref).
+
+interface Props extends SelectedWorkSectionContent {
+  locale: Locale;
+  /** Route-injected featured cards (SectionRenderer `data`) — never CMS content. */
+  data?: { cards?: PortfolioCard[] } | undefined;
+}
+
+const { locale, featuredSlug, cardSlugs, data } = Astro.props;
+
+const STR = {
+  en: {
+    tag: 'Selected work',
+    heading: 'Ideas that leave the brain and land in the world.',
+    lines: [
+      'Made to be remembered, not just seen.',
+      'Built to perform on every screen and stage.',
+      'Delivered by one team, start to finish.',
+    ],
+    link: 'See the project',
+    button: 'See all our work',
+  },
+  ar: {
+    tag: 'مختارات من أعمالنا',
+    heading: 'أفكار تطلع من الدماغ وتوصل للعالم.',
+    lines: [
+      'مصنوعة عشان تنتذكر، مو بس تنشاف.',
+      'مبنية عشان تحقق نتائج على كل شاشة ومسرح.',
+      'فريق واحد من البداية للنهاية.',
+    ],
+    link: 'شوف المشروع',
+    button: 'شوف كل أعمالنا',
+  },
+}[locale];
+// The design's <em>: "Ideas that <em>leave the brain</em> and land…" / "أفكار <em>تطلع من الدماغ</em>…"
+const DEFAULT_ACCENT: Accent = { en: { from: 2, to: 5 }, ar: { from: 1, to: 4 } };
+
+const pool = data?.cards ?? (await getPortfolioCards({ featuredOnly: true }));
+const pick = pickSelectedWork(pool, { featuredSlug, cardSlugs });
+
+const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : STR.tag;
+const heading = Astro.props.heading ? pickLocale(Astro.props.heading, locale) : STR.heading;
+// An authored heading keeps only an authored accent (the default range would land on the
+// wrong words).
+const accent = Astro.props.heading ? Astro.props.accent : (Astro.props.accent ?? DEFAULT_ACCENT);
+const lines = Astro.props.lines
+  ? Astro.props.lines.map((l) => pickLocale(l.text, locale))
+  : STR.lines;
+const linkLabel = Astro.props.featuredLinkLabel
+  ? pickLocale(Astro.props.featuredLinkLabel, locale)
+  : STR.link;
+const buttonLabel = Astro.props.button?.label
+  ? pickLocale(Astro.props.button.label, locale)
+  : STR.button;
+const buttonHref = localizedHref(Astro.props.button?.href ?? '/portfolio', locale);
+
+const featured = pick?.featured ?? null;
+const featuredTitle = featured ? pickLocale(featured.title, locale) : '';
+const featuredBlurb = featured?.blurb ? pickLocale(featured.blurb, locale) : null;
+const featuredHref = featured ? localizedHref(`/portfolio/${featured.slug}`, locale) : '';
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+{
+  pick && featured && (
+    <section class="sel-work" id="selected-work" aria-labelledby="sel-work-heading">
+      <p class="tag rv">
+        <span class="dot" />
+        {tag}
+      </p>
+
+      <div class="sel-work__top">
+        <MediaFrame
+          image={featured.poster}
+          locale={locale}
+          clip={featured.preview}
+          mode="inview"
+          ratio="feature"
+          decorative
+          sizes="(min-width: 53.75rem) 52vw, 100vw"
+          class="sel-work__media rv"
+        />
+        <div class="sel-work__copy rv">
+          <p class="sel-work__blurb">
+            <b>{featuredTitle}</b>
+            {featuredBlurb && <span>{featuredBlurb}</span>}
+          </p>
+          <FacetTags card={featured} locale={locale} variant="light" />
+          <a class="sel-work__link" href={featuredHref}>
+            {linkLabel}
+            <span class="sr-only">{`: ${featuredTitle}`}</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="sel-work__state">
+        <h2 class="rv" id="sel-work-heading">
+          <AccentText text={heading} locale={locale} accent={accent} />
+        </h2>
+        {lines.length > 0 && (
+          <ol class="sel-work__lines rv">
+            {lines.map((line, i) => (
+              <li>
+                <span aria-hidden="true">{pad(i + 1)}</span>
+                <span>{line}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+
+      {pick.cards.length > 0 && (
+        <div class="sel-work__grid">
+          {pick.cards.map((card) => (
+            <ProjectCard card={card} locale={locale} variant="home" />
+          ))}
+        </div>
+      )}
+
+      <div class="sel-work__foot rv">
+        <Cta href={buttonHref}>{buttonLabel}</Cta>
+      </div>
+    </section>
+  )
+}

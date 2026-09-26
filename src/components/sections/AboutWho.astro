@@ -1,0 +1,118 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { AboutWhoSectionContent } from '@schemas/sections';
+import type { Accent } from '@schemas/media';
+import { pickLocale } from '@/lib/i18n';
+import { getSectionImage } from '@/lib/data/sectionMedia';
+import SplitHeading from '@/components/ui/SplitHeading.astro';
+import MediaFrame from '@/components/media/MediaFrame.astro';
+
+// About "Who we are" (UI v2 PR8 — the mockup's `.who`): mist band, the page's <h1> split
+// per word on the server (SplitHeading: aria-label = the plain text, the word spans are
+// aria-hidden), then the media frame beside the manifesto. Copy is the design's, verbatim,
+// overridable per field from the CMS (AboutWhoSectionContentSchema).
+//
+// The poster is the page's LCP element (CLAUDE.md §6): eager, fetchpriority high, real
+// dimensions, and NOT reveal-gated (the mockup faded it in with `.rv`, which would delay
+// LCP until an IntersectionObserver fired). With no poster the section is text only — the
+// code default carries none (the poster is seeded content, never a code fallback).
+
+interface Props extends AboutWhoSectionContent {
+  locale: Locale;
+}
+
+const { locale, tag, heading, accent, lead, paragraphs, mediaId, clip } = Astro.props;
+
+const STR = {
+  en: {
+    tag: 'Who we are',
+    heading: 'Born in Jeddah. Built to move ideas from the brain into the real world.',
+    lead: 'We build brands that are seen, understood, and remembered. On a screen, on a stage, on a shelf, in any language.',
+    paragraphs: [
+      {
+        title: 'Strategy before pixels.',
+        body: "Every identity, film, and campaign starts with a question about the business, not a mood board. If the work isn't earning something, it isn't finished.",
+      },
+      {
+        title: 'One studio, fourteen crafts.',
+        body: 'Identity, film, sound, events, merch, and web all live under one roof, so the idea never gets diluted in the handoff between vendors.',
+      },
+      {
+        title: 'Native in any language.',
+        body: 'Every language is written, typeset, and designed as itself, so none of them reads like a translation of another.',
+      },
+    ],
+  },
+  ar: {
+    tag: 'من نحن',
+    heading: 'وُلدنا في جدة. وُجدنا لننقل الأفكار من الدماغ إلى أرض الواقع.',
+    lead: 'نبني علامات تُرى وتُفهم وتُتذكَّر. على الشاشة، وعلى المسرح، وعلى الرف، وبأي لغة.',
+    paragraphs: [
+      {
+        title: 'الاستراتيجية قبل التصميم.',
+        body: 'كل هوية وكل فيلم وكل حملة تبدأ بسؤال عن العمل نفسه، لا بلوحة إلهام. وإن لم يكن الشغل يحقّق شيئاً، فهو غير مكتمل.',
+      },
+      {
+        title: 'استوديو واحد، أربع عشرة حرفة.',
+        body: 'الهوية والإنتاج والصوت والفعاليات والمنتجات والويب تحت سقف واحد، فلا تضيع الفكرة في التنقل بين الجهات.',
+      },
+      {
+        title: 'أصليّ بأي لغة.',
+        body: 'كل لغة تُكتب وتُنسّق وتُصمَّم بلغتها، فلا تبدو أي واحدة منها ترجمة للأخرى.',
+      },
+    ],
+  },
+}[locale];
+// The design accents "from the brain into the real world." (EN word 7, AR word 6).
+const DEFAULT_ACCENT: Accent = { en: { from: 7 }, ar: { from: 6 } };
+
+const headingText = heading ? pickLocale(heading, locale) : STR.heading;
+// An authored heading keeps only an authored accent (the default's range would land on the
+// wrong words).
+const headingAccent = heading ? accent : (accent ?? DEFAULT_ACCENT);
+const paras = paragraphs?.length
+  ? paragraphs.map((p) => ({
+      title: pickLocale(p.title, locale),
+      body: pickLocale(p.body, locale),
+    }))
+  : STR.paragraphs;
+const image = await getSectionImage(mediaId);
+---
+
+<section class:list={['about-who', { 'about-who--text': !image }]} id="who">
+  <div class="about-who__wrap">
+    <p class="tag">
+      <span class="dot"></span><span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+    </p>
+    <SplitHeading text={headingText} locale={locale} accent={headingAccent} />
+    <div class="about-who__row">
+      {
+        image && (
+          <MediaFrame
+            image={image}
+            locale={locale}
+            clip={clip ?? null}
+            ratio="who"
+            threshold={0.3}
+            decorative
+            priority
+            sizes="(min-width: 53.75rem) 52vw, 100vw"
+            widths={[480, 800, 1200]}
+            class="about-who__media"
+          />
+        )
+      }
+      {/* Text-only, the manifesto is the LCP block: not reveal-gated then. */}
+      <div class:list={['about-who__copy', { rv: !!image }]}>
+        <p class="about-who__lead">{lead ? pickLocale(lead, locale) : STR.lead}</p>
+        {
+          paras.map((p) => (
+            <p>
+              <b>{p.title}</b> {p.body}
+            </p>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+</section>

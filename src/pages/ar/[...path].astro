@@ -1,0 +1,7 @@
+---
+// Every /ar/* URL no other route matches. Rest parameters have the LOWEST route priority,
+// so this never shadows a real page (/ar, /ar/about, /ar/portfolio/[slug]…): it only
+// replaces Astro's single root 404 — English, LTR, with a language switch that linked to
+// itself — with the Arabic one. ar/404.astro sets the 404 status and noindex.
+return Astro.rewrite('/ar/404');
+---

@@ -449,6 +449,48 @@ insert into public.team_members (tenant_id, slug, name, role, is_leadership, sta
   ('00000000-0000-0000-0000-0000000000b1', 'leader-6', '{"en":"Name Surname","ar":"الاسم الكامل"}'::jsonb, '{"en":"Head of Client Services","ar":"رئيس خدمة العملاء"}'::jsonb, true, 'draft', true, 6)
 on conflict (tenant_id, slug) do nothing;
 
+-- page_sections (50-home.json)
+do $seed$ begin
+  if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'home')) then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5000-0000-4000-8000-000000000001', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'home'), 'hero', '{}'::jsonb, true, 10),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5000-0000-4000-8000-000000000002', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'home'), 'clientsMarquee', '{}'::jsonb, true, 20),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5000-0000-4000-8000-000000000003', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'home'), 'selectedWork', '{}'::jsonb, true, 30),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5000-0000-4000-8000-000000000004', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'home'), 'statistics', '{"variant":"band","placement":"home"}'::jsonb, true, 40),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5000-0000-4000-8000-000000000005', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'home'), 'testimonials', '{"variant":"klein","placement":"home"}'::jsonb, true, 50),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5000-0000-4000-8000-000000000006', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'home'), 'servicesOverview', '{}'::jsonb, true, 60),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5000-0000-4000-8000-000000000007', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'home'), 'aboutIntro', '{}'::jsonb, true, 70),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5000-0000-4000-8000-000000000008', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'home'), 'slogan', '{}'::jsonb, true, 80),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5000-0000-4000-8000-000000000009', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'home'), 'contact', '{}'::jsonb, true, 90),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5000-0000-4000-8000-000000000010', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'home'), 'social', '{}'::jsonb, true, 100)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
+-- page_sections (51-about.json)
+do $seed$ begin
+  if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'about')) then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5100-0000-4000-8000-000000000001', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'about'), 'aboutWho', '{"mediaId":"5eed0a00-0000-4000-8000-000000000003","clip":{"path":"/media/showreel.mp4","startS":6.2,"endS":7.9}}'::jsonb, true, 10),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5100-0000-4000-8000-000000000002', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'about'), 'leadership', '{}'::jsonb, true, 20),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5100-0000-4000-8000-000000000003', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'about'), 'statistics', '{"variant":"reach","placement":"about"}'::jsonb, true, 30),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5100-0000-4000-8000-000000000004', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'about'), 'social', '{"variant":"klein"}'::jsonb, true, 40)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
+-- page_sections (52-contact.json)
+do $seed$ begin
+  if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact')) then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000001', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'hero', '{}'::jsonb, true, 10),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000002', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'contactInquiry', '{}'::jsonb, true, 20),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000003', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'contactChannels', '{}'::jsonb, true, 30),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000004', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'faq', '{}'::jsonb, true, 40)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
 -- page_sections (53-work-pages.json)
 do $seed$ begin
   if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio')) then
