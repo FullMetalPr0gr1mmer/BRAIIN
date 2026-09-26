@@ -17,23 +17,193 @@
   box-sizing: border-box;
 }
 
+/* The brand faces. Declared HERE rather than shared with global.css on purpose: the
+   admin does not load global.css, and adding a second render-blocking stylesheet to
+   the public routes to share four @font-face rules would put an extra round trip on
+   the critical path of pages that have an LCP budget (CLAUDE.md §6). /admin is exempt
+   from CWV, so the duplication buys the public side something and costs us nothing.
+   Source of truth for the FILES and their budgets is docs/fonts.md — if a face is
+   ever re-subset, both stylesheets change together.
+
+   Archivo carries no unicode-range: there is one Latin file and no second candidate,
+   so range-splitting would only describe what the fallback chain already does. Almarai
+   does carry one, because Arabic and Latin are separate files and the browser must not
+   fetch the Arabic subset to render an English label. Only the Arabic halves are
+   declared — Archivo comes first in --ad-font-ar, so Latin text inside an Arabic field
+   renders in Archivo rather than pulling a second Latin file for the same glyphs. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/archivo-var-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Archivo Fallback';
+  src: local('Arial');
+  size-adjust: 98.7%;
+  ascent-override: 88.96%;
+  descent-override: 21.28%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Almarai';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/almarai-400-arabic.woff2') format('woff2');
+  unicode-range:
+    U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E,
+    U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'Almarai';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/almarai-700-arabic.woff2') format('woff2');
+  unicode-range:
+    U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E,
+    U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+
+/* Light editorial palette (CLAUDE.md §2 amendment, 2026-08-27).
+   Ported from the reference CMS, with three deliberate deviations — see the ACCENT
+   block below. Every value here is a custom property because a theme cannot ship a
+   stylesheet or an inline rule under a CSP with no 'unsafe-inline' in style-src;
+   tokens are the only channel. */
 :root {
-  --ad-bg: #0b0b0f;
-  --ad-surface: #14141b;
-  --ad-surface-2: #1c1c26;
-  --ad-border: #2a2a37;
-  --ad-fg: #e8e8ea;
-  --ad-muted: #a0a0ab;
-  --ad-accent: #00e5ff;
-  --ad-danger: #ff6b6b;
-  --ad-warn: #ffb84d;
-  --ad-ok: #4ade80;
-  --ad-radius: 0.5rem;
+  /* ---- Ground ---- */
+  --ad-bg: #ffffff;
+  --ad-surface: #faf8f4;
+  --ad-surface-2: #f2efe9;
+  --ad-border: #d4cfc8;
+  --ad-border-strong: #b3aca1;
+
+  /* ---- Ink ----
+     #666666 (5.74:1 on white), NOT the reference's #888888. #888888 is 3.54:1, under
+     the 4.5:1 floor for body text, and the reference spends it on table headers and
+     "Modified:" lines — i.e. on real text. Our a11y gate is blocking (axe zero
+     violations, Lighthouse A11y ≥ 95), so inheriting that value would fail CI. */
+  --ad-fg: #111111;
+  --ad-muted: #666666;
+  --ad-disabled: #a9a29a;
+  --ad-fg-inverse: #ffffff;
+
+  /* ---- Accent ----
+     One functional gold, deliberately darker than the reference's #b8955a.
+
+     #b8955a is 2.81:1 on white and 2.44:1 on the content ground. That fails 4.5:1 as
+     text, which was expected — but it also fails WCAG 2.2 1.4.11's 3:1 for NON-text,
+     which was not. The bar fills in the insight panels are graphical objects required
+     to understand the content, so 1.4.11 applies to them in full and the pale gold
+     cannot be the fill. There is no ground in this palette light enough to rescue it.
+
+     So the gold that ships is #8a6a2a (5.04:1 on white, 4.39:1 on the content ground):
+     unmistakably the same hue, legal in every role, and dark enough to read as
+     deliberate rather than washed out. The pale value is not kept as a token — an
+     unused token with a "decorative only" caveat is how the failing value finds its
+     way back in. Phase 6's theme-preset swatches can introduce it then, where the
+     colour genuinely IS the content and 1.4.11 exempts it.
+
+     --ad-accent-text is a shade darker again, because a token is only safe if it is
+     safe on every ground it can plausibly land on, and --ad-surface-2 is both the
+     default button ground and the content ground.
+
+     --ad-primary is the filled-button ground. It is INK, not gold: the reference's own
+     alias layer resolves `--primary: var(--color-text)`, which is why its "+ New Post"
+     and "SIGN IN" buttons are black.
+
+     --ad-focus is INK too, for 1.4.11 again. This is the token the previous dark
+     palette got for free — cyan on near-black is high contrast — and which quietly
+     breaks on inversion. */
+  --ad-accent: #8a6a2a;
+  --ad-accent-hover: #7f6026;
+  --ad-accent-text: #7f6026;
+  --ad-primary: #111111;
+  --ad-primary-fg: #ffffff;
+  --ad-focus: #111111;
+
+  /* ---- Semantic. All four ≥ 5.7:1 on white; the reference has no warn, so #8a5a00
+     is ours (5.9:1) rather than a second job for the gold. ---- */
+  --ad-ok: #2d6a4f;
+  --ad-warn: #8a5a00;
+  --ad-danger: #a63232;
+  --ad-info: #1e4d8c;
+
+  /* ---- Form. Square corners are the reference's defining move, so this is 0 rather
+     than a small radius: half-measures read as a mistake. ---- */
+  --ad-radius: 0;
+
+  /* ---- Type scale. Admin-specific and deliberately small. The scale captured from
+     the reference (--font-display 72px, --space-section 96px) is its PUBLIC theme,
+     which in a CMS is reachable only inside the theme-preview iframe. ---- */
+  --ad-text-label: 0.6875rem;
+  --ad-text-sm: 0.8125rem;
+  --ad-text-base: 0.875rem;
+  --ad-text-lg: 1rem;
+  --ad-text-title: 1.25rem;
+  --ad-text-stat: 2.5rem;
+  --ad-tracking-label: 0.1em;
+
+  /* ---- Space scale. 24px card padding is the reference's --space-card-pad; the rest
+     is the existing file's rhythm named rather than repeated. ---- */
+  --ad-gap-tight: 0.5rem;
+  --ad-gap: 1rem;
+  --ad-gap-loose: 1.5rem;
+  --ad-card-pad: 1.5rem;
+
+  /* Modal backdrop. rgba, not a hex + opacity pair, so it reads as one value. */
+  --ad-scrim: rgba(17, 17, 17, 0.45);
+
+  /* ---- Font stacks ---- */
+  --ad-font: Archivo, 'Archivo Fallback', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ad-font-ar: Archivo, Almarai, 'Archivo Fallback', system-ui, sans-serif;
+
+  /* ---- Shell ---- */
   --ad-sidebar: 15rem;
   /* The width .admin-main refuses to drop below before the sidebar wraps out of its
      way. This is the only threshold in the file, and it is a statement about CONTENT
      ("a form column stops being usable under this width"), not about a device. */
   --ad-main-min: 32rem;
+}
+
+/* The previous dark palette, retained and dormant. No toggle ships with it yet.
+   Keeping it costs one block and buys two things: the option stays open without an
+   archaeology dig through git, and — the reason that actually matters — it keeps every
+   new component honest. The palette swap above was a single-block edit precisely
+   because nothing in 680 lines had reached for a literal; a second live palette is
+   what makes that property testable rather than aspirational.
+
+   Note what is NOT simply inverted: --ad-primary and --ad-focus stay on the cyan here
+   because on a #0b0b0f ground cyan clears 3:1 comfortably, while ink would vanish.
+   Tokens whose job is contrast have to be re-decided per theme, not mirrored. */
+:root[data-theme='dark'] {
+  --ad-bg: #0b0b0f;
+  --ad-surface: #14141b;
+  --ad-surface-2: #1c1c26;
+  --ad-border: #2a2a37;
+  --ad-border-strong: #3d3d4d;
+
+  --ad-fg: #e8e8ea;
+  --ad-muted: #a0a0ab;
+  --ad-disabled: #6b6b78;
+  --ad-fg-inverse: #04141a;
+
+  --ad-accent: #00e5ff;
+  --ad-accent-hover: #5cf0ff;
+  --ad-accent-text: #00e5ff;
+  --ad-primary: #00e5ff;
+  --ad-primary-fg: #04141a;
+  --ad-focus: #00e5ff;
+
+  --ad-ok: #4ade80;
+  --ad-warn: #ffb84d;
+  --ad-danger: #ff6b6b;
+  --ad-info: #7fb0f0;
+
+  --ad-scrim: rgba(0, 0, 0, 0.6);
 }
 
 /* Shell: the sidebar sits beside the main column until the main column can no longer
@@ -49,14 +219,15 @@
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
-  background: var(--ad-bg);
+  /* The content area is the WARM GREY, not white, and cards are white on top of it.
+     That inversion is most of what makes the reference read as "editorial" rather than
+     "a page with borders": the card boundary is a change in ground, so the 1px rule
+     around it is confirming an edge the eye already found instead of being the only
+     thing announcing it. The sidebar sets its own lighter ground below. */
+  background: var(--ad-surface-2);
   color: var(--ad-fg);
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+  font-family: var(--ad-font);
+  font-size: var(--ad-text-base);
   line-height: 1.55;
   /* A slug, URL or token with no break opportunity is otherwise wider than any track
      that could hold it, and widens the whole page rather than wrapping. */
@@ -93,11 +264,13 @@
      of navigation above the page. */
 }
 
+/* Ink, not accent. The wordmark is ~16px at 700, which WCAG does not count as large
+   text (that starts at 18.66px bold), so the gold's 2.73:1 would apply in full. */
 .admin-brand {
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 0.5rem;
-  color: var(--ad-accent);
+  color: var(--ad-fg);
   text-decoration: none;
 }
 
@@ -108,60 +281,39 @@
 }
 
 .admin-nav-title {
-  font-size: 0.7rem;
+  font-size: var(--ad-text-label);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ad-tracking-label);
   color: var(--ad-muted);
   padding: 0.5rem 0.5rem 0.25rem;
 }
 
+/* The transparent inline-start border is load-bearing, not decoration: the current
+   item marks itself with a 2px accent rule, and if only that item had a border every
+   other label would sit 2px to its left. Declaring it transparent on all of them keeps
+   one text edge down the whole rail. */
 .admin-nav a {
   display: block;
   padding: 0.4rem 0.5rem;
+  border-inline-start: 2px solid transparent;
   border-radius: var(--ad-radius);
   color: var(--ad-fg);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: var(--ad-text-base);
 }
 
 .admin-nav a:hover {
   background: var(--ad-surface-2);
 }
 
+/* Ground, weight and rule together carry "you are here" — three cues, so colour is
+   never doing the work alone (1.4.1). The rule is INK, matching the reference, whose
+   active item is marked with a dark bar rather than a gold one. */
 .admin-nav a[aria-current='page'] {
   background: var(--ad-surface-2);
-  color: var(--ad-accent);
+  border-inline-start-color: var(--ad-fg);
+  color: var(--ad-fg);
   font-weight: 600;
-}
-
-.admin-user {
-  margin-top: auto;
-  border-top: 1px solid var(--ad-border);
-  padding-top: 0.75rem;
-  font-size: 0.8rem;
-  color: var(--ad-muted);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.35rem;
-}
-
-/* Everything else in the sidebar sits on one text edge: .admin-sidebar insets by
-   0.75rem, then .admin-brand / .admin-nav-title / .admin-nav a each add 0.5rem of
-   their own. The inset goes on the CHILDREN and not on .admin-user itself so the
-   border-top above stays a full-width divider rather than an inset one.
-   `padding-inline`, not `padding-left` — the admin shell renders RTL for Arabic
-   authoring (see the [dir='rtl'] block at the foot of this file). */
-.admin-user > div {
-  padding-inline: 0.5rem;
-}
-
-/* The button is a box like .admin-nav a is a box, so it wants to agree on BOTH
-   edges: its border lines up with a nav link's hover/current background, and
-   narrowing its 0.85rem default padding to 0.5rem puts its label on the same text
-   edge as the links above it. */
-.admin-user button {
-  padding-inline: 0.5rem;
 }
 
 /* ---- Main ---- */
@@ -202,7 +354,9 @@
 
 .admin-header h1 {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: var(--ad-text-title);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .admin-sub {
@@ -214,10 +368,10 @@
 /* ---- Cards, tables, forms ---- */
 
 .card {
-  background: var(--ad-surface);
+  background: var(--ad-bg);
   border: 1px solid var(--ad-border);
   border-radius: var(--ad-radius);
-  padding: 1rem;
+  padding: var(--ad-card-pad);
 }
 
 /* Vertical rhythm for a page's top-level blocks, owned by the PARENT rather than by a
@@ -262,20 +416,34 @@
 }
 
 .stat {
-  font-size: 1.75rem;
-  font-weight: 700;
+  font-size: var(--ad-text-stat);
+  font-weight: 600;
+  line-height: 1.1;
+  /* Counters sit in a row of cards and are read as a column of figures. */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
   margin: 0;
 }
 
 .stat-label {
   color: var(--ad-muted);
-  font-size: 0.8rem;
+  font-size: var(--ad-text-label);
+  text-transform: uppercase;
+  letter-spacing: var(--ad-tracking-label);
   margin: 0;
 }
 
 /* Wide tables scroll inside their own container; the page never scrolls sideways. */
 .table-wrap {
   overflow-x: auto;
+}
+
+/* A table sits FLUSH in its card. With the card's 24px inset the header band stopped
+   short of the border on both sides and read as a floating stripe; the reference runs
+   it edge to edge. The cells' own padding supplies the gutter, so nothing touches the
+   border. */
+.card.table-wrap {
+  padding: 0;
 }
 
 table.data {
@@ -287,23 +455,26 @@ table.data {
 table.data th,
 table.data td {
   text-align: start;
-  padding: 0.5rem 0.625rem;
+  padding: 0.625rem 0.875rem;
   border-bottom: 1px solid var(--ad-border);
   vertical-align: top;
 }
 
 table.data th {
   color: var(--ad-muted);
-  font-weight: 600;
-  font-size: 0.75rem;
+  font-weight: 500;
+  font-size: var(--ad-text-label);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ad-tracking-label);
+  background: var(--ad-surface);
+  border-bottom: 1px solid var(--ad-border-strong);
+  white-space: nowrap;
 }
 
 .badge {
   display: inline-block;
   padding: 0.1rem 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--ad-radius);
   font-size: 0.7rem;
   border: 1px solid var(--ad-border);
   background: var(--ad-surface-2);
@@ -342,6 +513,7 @@ input[type='email'],
 input[type='password'],
 input[type='number'],
 input[type='url'],
+input[type='search'],
 input[type='datetime-local'],
 select,
 textarea {
@@ -373,7 +545,7 @@ textarea {
   inline-size: 8rem;
   block-size: 0.55rem;
   background: var(--ad-surface-2);
-  border-radius: 999px;
+  border-radius: var(--ad-radius);
   overflow: hidden;
 }
 
@@ -525,6 +697,14 @@ textarea[lang='ar'] {
   text-align: right;
 }
 
+/* Almarai for Arabic authoring. Until now these fields rendered in system-ui, so an
+   author was proofing Arabic copy in a face no visitor ever sees. */
+input[lang='ar'],
+textarea[lang='ar'],
+[lang='ar'] {
+  font-family: var(--ad-font-ar);
+}
+
 button,
 .btn {
   font: inherit;
@@ -540,15 +720,24 @@ button,
 
 button:hover,
 .btn:hover {
-  border-color: var(--ad-accent);
+  border-color: var(--ad-accent-hover);
 }
 
+/* Ink fill, white label — the reference's black "+ New Post" / "SIGN IN". Both halves
+   are tokens now: the old literal #04141a was a near-black picked to sit on cyan, and
+   it was the one colour in this file that could not survive a palette change. */
 button[data-variant='primary'],
 .btn[data-variant='primary'] {
-  background: var(--ad-accent);
-  color: #04141a;
-  border-color: var(--ad-accent);
+  background: var(--ad-primary);
+  color: var(--ad-primary-fg);
+  border-color: var(--ad-primary);
   font-weight: 600;
+}
+
+button[data-variant='primary']:hover,
+.btn[data-variant='primary']:hover {
+  background: var(--ad-accent-hover);
+  border-color: var(--ad-accent-hover);
 }
 
 button[data-variant='danger'] {
@@ -563,10 +752,21 @@ button[disabled] {
 
 .toolbar {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--ad-gap-tight);
   flex-wrap: wrap;
   align-items: center;
   margin-bottom: 0.875rem;
+}
+
+/* A control in a toolbar is an inline control, not a form field. The global
+   `width: 100%` below is correct inside .field — a stacked label above a full-width
+   input — and wrong in a flex row, where it made the status <select> claim the entire
+   line and push the search box onto a row of its own. */
+.toolbar input[type='text'],
+.toolbar input[type='search'],
+.toolbar select {
+  inline-size: auto;
+  min-inline-size: 12rem;
 }
 
 .msg {
@@ -591,7 +791,7 @@ button[disabled] {
 
 .login-card {
   width: min(24rem, 92vw);
-  background: var(--ad-surface);
+  background: var(--ad-bg);
   border: 1px solid var(--ad-border);
   border-radius: var(--ad-radius);
   padding: 1.75rem;
@@ -621,8 +821,9 @@ button[disabled] {
 }
 
 .editor-toolbar button[aria-pressed='true'] {
-  border-color: var(--ad-accent);
-  color: var(--ad-accent);
+  background: var(--ad-primary);
+  border-color: var(--ad-primary);
+  color: var(--ad-primary-fg);
 }
 
 .editor-surface .tiptap {
@@ -634,12 +835,16 @@ button[disabled] {
 }
 
 .editor-surface .tiptap:focus {
-  outline: 2px solid var(--ad-accent);
+  outline: 2px solid var(--ad-focus);
   outline-offset: -2px;
 }
 
+/* Ink, not accent. WCAG 2.2 1.4.11 asks a focus indicator for 3:1 against what is
+   adjacent to it, and the gold is 2.73:1 on white — so on this palette the accent is
+   the one colour the focus ring must not be. On the dark theme the token resolves back
+   to cyan, which clears it easily. */
 :where(:focus-visible) {
-  outline: 2px solid var(--ad-accent);
+  outline: 2px solid var(--ad-focus);
   outline-offset: 2px;
 }
 
@@ -672,4 +877,359 @@ button[disabled] {
 .cell-secondary {
   opacity: 0.75;
   font-size: 0.85em;
+}
+
+/* ---- Topbar: breadcrumb · search · account (phase 1 shell chrome) ---- */
+
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-gap);
+  flex-wrap: wrap;
+  padding-block-end: 0.75rem;
+  border-bottom: 1px solid var(--ad-border);
+  margin-block-end: var(--ad-gap);
+}
+
+.crumbs ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  font-size: var(--ad-text-sm);
+}
+
+.crumbs a {
+  color: var(--ad-muted);
+  text-decoration: none;
+}
+
+.crumbs a:hover {
+  color: var(--ad-fg);
+  text-decoration: underline;
+}
+
+/* '/' as the separator, not '›': a slash is direction-neutral, so the trail needs no
+   [dir='rtl'] mirror rule the day the chrome grows Arabic strings. */
+.crumbs li + li::before {
+  content: '/';
+  color: var(--ad-disabled);
+  margin-inline-end: 0.5rem;
+}
+
+.crumbs [aria-current='page'] {
+  color: var(--ad-fg);
+  font-weight: 600;
+}
+
+/* margin-inline-start: auto is what pushes search + avatar to the far edge while the
+   breadcrumb holds the near one — no wrapper divs, and it flips for free in RTL. */
+.topbar-search {
+  margin-inline-start: auto;
+}
+
+.topbar-search input {
+  inline-size: 14rem;
+}
+
+/* ---- Dropdown menu on <details> ---- */
+
+details.menu {
+  position: relative;
+}
+
+details.menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+details.menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu-panel {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + 0.375rem);
+  min-inline-size: 14rem;
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border-strong);
+  padding: 0.75rem;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.menu-id {
+  margin: 0;
+  font-size: var(--ad-text-sm);
+  color: var(--ad-muted);
+  overflow-wrap: anywhere;
+}
+
+/* A circle in a square-cornered design, on purpose: an avatar is read as an identity
+   mark, not a control, and the reference keeps it circular for the same reason. This
+   and the switch knob below are the only two radius exceptions in the file. */
+.avatar {
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ad-primary);
+  color: var(--ad-primary-fg);
+  font-size: var(--ad-text-label);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 50%;
+}
+
+/* ---- Toasts (success confirmations only — errors stay inline) ---- */
+
+.toasts {
+  position: fixed;
+  inset-block-end: 1rem;
+  inset-inline-end: 1rem;
+  display: grid;
+  gap: 0.5rem;
+  z-index: 100;
+  max-inline-size: min(22rem, calc(100vw - 2rem));
+}
+
+.toast {
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border-strong);
+  border-inline-start: 3px solid var(--ad-info);
+  padding: 0.6rem 0.85rem;
+  font-size: var(--ad-text-sm);
+  transition: opacity 0.2s ease;
+}
+
+.toast[data-kind='ok'] {
+  border-inline-start-color: var(--ad-ok);
+}
+
+.toast[data-state='leaving'] {
+  opacity: 0;
+}
+
+/* ---- Tabs (server-rendered links; phase 2's status filter consumes this) ---- */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--ad-border);
+  margin-block-end: var(--ad-gap);
+}
+
+.tabs a {
+  padding: 0.5rem 0.875rem;
+  color: var(--ad-muted);
+  text-decoration: none;
+  font-size: var(--ad-text-base);
+  border-bottom: 2px solid transparent;
+  /* The active underline sits ON the container's rule, not above it. */
+  margin-block-end: -1px;
+}
+
+.tabs a:hover {
+  color: var(--ad-fg);
+}
+
+.tabs a[aria-current] {
+  color: var(--ad-fg);
+  font-weight: 600;
+  border-bottom-color: var(--ad-fg);
+}
+
+/* ---- Switch (<button role="switch" aria-checked>) ----
+   Pill-shaped — the second deliberate radius exception. A square toggle reads as a
+   broken checkbox; the pill silhouette IS the affordance. State is carried by
+   aria-checked, so the accessible state and the visual state cannot disagree. */
+
+button[role='switch'] {
+  inline-size: 2.5rem;
+  block-size: 1.375rem;
+  padding: 2px;
+  border: 1px solid var(--ad-border-strong);
+  border-radius: 999px;
+  background: var(--ad-surface-2);
+  display: inline-flex;
+  align-items: center;
+}
+
+button[role='switch']::before {
+  content: '';
+  inline-size: 1rem;
+  block-size: 1rem;
+  border-radius: 50%;
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border-strong);
+  transition: transform 0.15s ease;
+}
+
+button[role='switch'][aria-checked='true'] {
+  background: var(--ad-primary);
+  border-color: var(--ad-primary);
+}
+
+button[role='switch'][aria-checked='true']::before {
+  transform: translateX(1.125rem);
+}
+
+/* translateX is physical, so RTL needs the mirror the logical properties above get
+   for free. */
+[dir='rtl'] button[role='switch'][aria-checked='true']::before {
+  transform: translateX(-1.125rem);
+}
+
+/* ---- Dialog (native <dialog>, opened via showModal) ---- */
+
+dialog.admin-dialog {
+  inline-size: min(26rem, calc(100vw - 2rem));
+  border: 1px solid var(--ad-border-strong);
+  border-radius: var(--ad-radius);
+  background: var(--ad-bg);
+  color: var(--ad-fg);
+  padding: var(--ad-card-pad);
+}
+
+/* ::backdrop inherits custom properties from the dialog's originating element in
+   every current engine; the var() fallback covers the stragglers rather than leaving
+   them a fully transparent scrim. */
+dialog.admin-dialog::backdrop {
+  background: var(--ad-scrim, rgba(17, 17, 17, 0.45));
+}
+
+.dialog-message {
+  margin: 0 0 1rem;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+/* ---- Global search results ---- */
+
+.search-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* Without this, result links render UA-default blue — the one colour on the page
+   nobody chose. Accent text here is also the palette's gold earning a text role. */
+.search-hits a {
+  color: var(--ad-accent-text);
+  text-underline-offset: 2px;
+}
+
+.search-hits a:hover {
+  color: var(--ad-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  button[role='switch']::before {
+    transition: none;
+  }
+}
+
+/* ---- Composite fields (UI v2 PR3): relations, repeaters, media picker, clips ---- */
+.field-error {
+  color: var(--ad-danger);
+  font-weight: 600;
+}
+
+.row-3 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+}
+
+.item-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.item-row,
+.media-current {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.item-label {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.repeater-item {
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  padding: 0.75rem 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.media-thumb {
+  display: block;
+  object-fit: cover;
+  border-radius: calc(var(--ad-radius) / 2);
+  background: var(--ad-surface-2);
+}
+
+dialog.media-dialog {
+  width: min(56rem, calc(100vw - 2rem));
+}
+
+.media-grid {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.media-pick {
+  width: 100%;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.4rem;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  cursor: pointer;
+}
+
+.media-pick:hover,
+.media-pick[aria-pressed='true'] {
+  border-color: var(--ad-accent);
+}
+
+.media-pick .media-thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
 }

@@ -1,38 +1,72 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import type { Accent } from '@schemas/media';
+import type { LocalizedText, StatPlacement } from '@schemas/content';
 import { pickLocale } from '@/lib/i18n';
 import { getPublishedStatistics, type StatisticRow } from '@/lib/data/statistics';
+import StatBand from './StatBand.astro';
+
+// The `statistics` section. UI v2 layouts (`band` home, `reach` About, `proof` Our Work)
+// render StatBand with the counters marked for `placement`, each under that page's label;
+// `cards` (the default — an existing composition renders unchanged) is the original grid;
+// it reads only `heading` and `minItems` (default 1 there, 2 in the bands).
+// The numbers always come from the statistics table; the section only chooses the layout
+// and the copy around them.
 
 interface Props {
   locale: Locale;
-  items?: StatisticRow[];
+  variant?: 'cards' | 'band' | 'reach' | 'proof';
+  placement?: StatPlacement;
+  tag?: LocalizedText;
+  heading?: LocalizedText;
+  accent?: Accent;
+  text?: LocalizedText;
+  staticNumbers?: boolean;
+  minItems?: number;
+  /** Route-injected rows (SectionRenderer `data`) — never CMS content. */
+  data?: { items?: StatisticRow[] };
 }
 
-const { locale } = Astro.props;
+const { locale, variant = 'cards', placement } = Astro.props;
 
 const STR = {
   en: { heading: 'By the numbers' },
   ar: { heading: 'بالأرقام' },
 }[locale];
 
-// Self-contained: uses injected data if the page already fetched it, else fetches.
-const items = Astro.props.items ?? (await getPublishedStatistics());
+const items =
+  Astro.props.data?.items ?? (await getPublishedStatistics(placement ? { placement } : {}));
 ---
 
 {
-  items.length > 0 && (
-    <section class="statistics">
-      <div class="container">
-        <h2>{STR.heading}</h2>
-        <ul class="stat-grid">
-          {items.map((s) => (
-            <li class="stat">
-              <span class="stat-value">{s.value}</span>
-              <span class="stat-label">{pickLocale(s.label, locale)}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
+  variant === 'cards' ? (
+    items.length >= (Astro.props.minItems ?? 1) && (
+      <section class="statistics">
+        <div class="container">
+          <h2>{Astro.props.heading ? pickLocale(Astro.props.heading, locale) : STR.heading}</h2>
+          <ul class="stat-grid">
+            {items.map((s) => (
+              <li class="stat">
+                <span class="stat-value">{s.value}</span>
+                <span class="stat-label">{pickLocale(s.label, locale)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    )
+  ) : (
+    <StatBand
+      locale={locale}
+      items={items}
+      variant={variant}
+      tag={Astro.props.tag}
+      heading={Astro.props.heading}
+      accent={Astro.props.accent}
+      text={Astro.props.text}
+      staticNumbers={Astro.props.staticNumbers}
+      minItems={Astro.props.minItems}
+      id={variant === 'band' ? 'numbers' : undefined}
+    />
   )
 }

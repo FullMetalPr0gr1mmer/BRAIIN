@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   generate,
   loadBlocks,
@@ -77,8 +78,12 @@ describe('placeholders never go live in production', () => {
   it('published mode keeps placeholders as authored (dev/CI/staging mirror the mockup)', () => {
     const published = placeholders.filter(({ row }) => row['status'] === 'published');
     expect(published.length).toBeGreaterThan(0);
-    for (const { row } of published)
-      expect(rowForMode(row, 'published')['status']).toBe('published');
+    for (const { row } of published) {
+      // …unless the row states a published-mode override (the legacy demo rows are
+      // archived there so local/CI/staging show exactly the mockup's projects).
+      const override = (row['__published'] as Row | undefined)?.['status'];
+      expect(rowForMode(row, 'published')['status']).toBe(override ?? 'published');
+    }
   });
 
   it('meta keys never reach SQL', () => {
@@ -148,8 +153,113 @@ describe('navigation seed', () => {
     expect(guards[0]).toContain("location = 'header'");
     expect(guards[1]).toContain("location = 'footer'");
     for (const guard of guards) expect(guard).not.toContain('id not in');
-    const blocks = sql.split('do $seed$').slice(1);
+    const blocks = sql
+      .split('do $seed$')
+      .slice(1)
+      .filter((b: string) => b.includes('from public.navigation'));
     expect(blocks).toHaveLength(2);
     for (const block of blocks) expect(block).toContain('on conflict (id) do nothing');
+  });
+});
+
+describe('UI v2 content seed (0020–0025)', () => {
+  const rowsOf = (table: string) => blocks.filter((b) => b.table === table).flatMap((b) => b.rows);
+  // Tables whose `is_placeholder` COLUMN arms the 0025 production guard.
+  const GUARDED = [
+    'portfolio',
+    'testimonials',
+    'team_members',
+    'statistics',
+    'clients',
+    'page_sections',
+  ];
+
+  it('every static media key is a file the stills registry will find', () => {
+    const media = rowsOf('media_assets').filter((r) => r['provider'] === 'static');
+    expect(media.length).toBeGreaterThan(0);
+    for (const row of media) {
+      const key = String(row['storage_path']);
+      expect(key).toMatch(/^stills\/[a-z0-9][a-z0-9/_-]*\.(jpe?g|png|webp|avif)$/);
+      expect(existsSync(join(process.cwd(), 'src', 'assets', 'media', key)), key).toBe(true);
+    }
+  });
+
+  it('a placeholder row in a guarded table also sets the is_placeholder COLUMN', () => {
+    // The meta key only demotes the row in production.sql; the column is what the database
+    // guard and the dashboard read. A row with one and not the other would slip past both.
+    for (const table of GUARDED) {
+      for (const row of rowsOf(table).filter((r) => r['__placeholder'])) {
+        expect(row['is_placeholder'], `${table}:${String(row['slug'])}`).toBe(true);
+      }
+    }
+  });
+
+  it('production.sql leaves no is_placeholder row live (the 0025 guard would refuse it)', () => {
+    for (const table of GUARDED) {
+      for (const row of rowsOf(table).filter((r) => r['is_placeholder'] === true)) {
+        const out = rowForMode(row, 'production');
+        const label = `${table}:${String(row['slug'])}`;
+        if ('status' in out) expect(['published', 'scheduled'], label).not.toContain(out['status']);
+        if ('visible' in out) expect(out['visible'], label).not.toBe(true);
+      }
+    }
+  });
+
+  it('text[] columns are Postgres array literals — a JSON array would be cast to jsonb', () => {
+    const ARRAY_COLUMNS: Record<string, string[]> = {
+      media_assets: ['tags'],
+      testimonials: ['placements'],
+      statistics: ['placements'],
+    };
+    for (const [table, columns] of Object.entries(ARRAY_COLUMNS)) {
+      for (const row of rowsOf(table)) {
+        for (const column of columns) {
+          if (!(column in row)) continue;
+          expect(row[column], `${table}.${column}`).toMatch(/^\{[a-z0-9,_-]*\}$/);
+        }
+      }
+    }
+  });
+
+  it('every published quote in dev/CI/staging carries (synthetic) consent; production none', () => {
+    const quotes = rowsOf('testimonials');
+    expect(quotes.length).toBeGreaterThan(0);
+    for (const row of quotes) {
+      const pub = rowForMode(row, 'published');
+      if (pub['status'] === 'published') expect(pub['consent_obtained_at']).toBeTruthy();
+      expect(rowForMode(row, 'production')['consent_obtained_at']).toBeUndefined();
+    }
+  });
+
+  it('case-study media only points at seeded stills, with one hero and one final each', () => {
+    const ids = new Set(rowsOf('media_assets').map((r) => r['id']));
+    const perProject = new Map<string, { hero: number; final: number }>();
+    for (const row of rowsOf('portfolio_media')) {
+      if (row['media_id'] !== undefined)
+        expect(ids.has(row['media_id']), String(row['id'])).toBe(true);
+      const ref = row['portfolio_id'] as { $ref: { by: { slug: string } } };
+      const slug = ref.$ref.by.slug;
+      const count = perProject.get(slug) ?? { hero: 0, final: 0 };
+      if (row['role'] === 'hero') count.hero += 1;
+      if (row['role'] === 'final') count.final += 1;
+      perProject.set(slug, count);
+    }
+    expect(perProject.size).toBeGreaterThan(0);
+    for (const [slug, count] of perProject) expect(count, slug).toEqual({ hero: 1, final: 1 });
+  });
+
+  it('a project’s services and media are seeded only while it has none', () => {
+    // Re-running production.sql on a later deploy must not resurrect a removed service or
+    // re-insert a replaced hero (the one-hero index would abort the whole seed).
+    for (const table of ['portfolio_services', 'portfolio_media']) {
+      const block = (loadBlocks() as unknown as (Block & { unlessAuthored?: string[] })[]).find(
+        (b) => b.table === table,
+      );
+      expect(block?.unlessAuthored, table).toEqual(['portfolio_id']);
+    }
+  });
+
+  it('no seeded project is called "all" (the catalogue route)', () => {
+    for (const row of rowsOf('portfolio')) expect(row['slug']).not.toBe('all');
   });
 });

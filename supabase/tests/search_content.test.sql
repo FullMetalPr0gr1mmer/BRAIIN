@@ -65,6 +65,15 @@ select is(app.normalize_ar('الإعلانات'), 'الاعلانات', 'normali
 select is(app.normalize_ar('الموسيقى'), 'الموسيقي', 'normalize_ar: alef-maqsura → ya');
 select is(app.normalize_ar_q('هوية'), 'هويه', 'normalize_ar_q: ta-marbuta → ha');
 select is(app.normalize_ar_q('الهَوِيَّة'), 'الهويه', 'normalize_ar_q: strips tashkeel + ta-marbuta→ha');
+-- 0026: the article comes off before the stemmer, on both sides (it stems ال-words and
+-- bare words by different rules). لل keeps both readings on the index side only.
+select is(app.ar_fts_text('الهَوِيَّة البصرية'), 'هويه بصريه', 'ar_fts_text: article stripped after normalization');
+select is(app.ar_fts_text('والإعلانات بالتصوير'), 'اعلانات تصوير', 'ar_fts_text: و/ب + article stripped');
+select is(app.ar_fts_text('الذي'), 'الذي', 'ar_fts_text: fewer than 3 letters left → word kept (stays a stopword)');
+select is(app.ar_fts_text('مونتاج للقطات'), 'مونتاج قطات لقطات', 'ar_fts_text: index side keeps both readings of لل');
+select is(app.ar_fts_text('للقطات', true), 'قطات', 'ar_fts_text: query side takes the article reading of لل');
+select is(app.ar_fts_text('-"الهوية" or Branding 2026', true), '-"هويه" or Branding 2026',
+  'ar_fts_text: websearch operators, quotes, Latin and digits pass through');
 
 -- ── anon context (the public search path) ──────────────────────────────────
 set local role anon;
@@ -110,6 +119,11 @@ select ok(_recall('متكاملة', 'ar', 'pf-riyadh'), 'AR summary: متكام�
 select ok(_recall('مقهى', 'ar', 'pf-cafe'), 'AR maqsura: مقهى → cafe');
 select ok(_recall('إعادة', 'ar', 'pf-cafe'), 'AR: إعادة → cafe');
 select ok(_recall('تصميم', 'ar', 'pf-cafe'), 'AR summary: تصميم → cafe');
+-- clitic + article forms (0026)
+select ok(_recall('والإعلانات', 'ar', 'svc-advertising'), 'AR wa+article: والإعلانات → advertising');
+select ok(_recall('للهوية', 'ar', 'svc-branding'), 'AR lil: للهوية → branding');
+select ok(_recall('بالتصوير', 'ar', 'svc-photography'), 'AR bi+article: بالتصوير → photography');
+select ok(_recall('اللقطات', 'ar', 'svc-montage'), 'AR article on ل-word: اللقطات → montage');
 -- EN control pairs
 select ok(_recall('branding', 'en', 'svc-branding'), 'EN: branding → branding');
 select ok(_recall('advertising', 'en', 'svc-advertising'), 'EN: advertising → advertising');

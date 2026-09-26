@@ -6,6 +6,9 @@ import {
   PostRowSchema,
   TeamMemberRowSchema,
   StatisticRowSchema,
+  PortfolioCardRowSchema,
+  CaseStudyRowSchema,
+  TestimonialRowSchema,
 } from '@schemas/content';
 
 // These schemas replaced a per-file `z.record(z.string(), z.string())`, which accepted
@@ -18,6 +21,7 @@ const service = {
   id: '11111111-1111-4111-8111-111111111111',
   slug: 'brand-identity',
   title: { en: 'Brand Identity', ar: 'الهوية البصرية' },
+  short_title: null,
   blurb: null,
   body_html: null,
   hero_video_uid: null,
@@ -92,12 +96,43 @@ describe('content rows', () => {
       label: { en: 'Projects delivered', ar: 'المشاريع المنجزة' },
       value: '150+',
       sort_order: 1,
+      value_numeric: 150,
+      value_suffix: '+',
+      placements: ['home'],
+      placement_labels: {},
     });
     expect(parsed.success && parsed.data.value).toBe('150+');
   });
 
+  it('a per-page statistic label must be bilingual too', () => {
+    const base = {
+      slug: 'brands',
+      label: { en: 'Brands', ar: 'علامات' },
+      value: '80+',
+      sort_order: 2,
+      value_numeric: 80,
+      value_suffix: '+',
+      placements: ['about'],
+    };
+    const ok = { about: { en: 'Brands we have partnered with', ar: 'علامات تعاونّا معها' } };
+    expect(StatisticRowSchema.safeParse({ ...base, placement_labels: ok }).success).toBe(true);
+    expect(
+      StatisticRowSchema.safeParse({ ...base, placement_labels: { about: { en: 'Brands' } } })
+        .success,
+    ).toBe(false);
+  });
+
   it('team member (E-E-A-T author) requires a bilingual name', () => {
-    const base = { slug: 'lead-designer', bio: null, avatar_url: null, sort_order: 1 };
+    const base = {
+      slug: 'lead-designer',
+      bio: null,
+      avatar_url: null,
+      sort_order: 1,
+      role: null,
+      linkedin_url: null,
+      is_leadership: false,
+      portrait: null,
+    };
     expect(TeamMemberRowSchema.safeParse({ ...base, name: { en: 'Lead Designer' } }).success).toBe(
       false,
     );
@@ -127,5 +162,61 @@ describe('content rows', () => {
       author: { slug: 'lead-designer', name: { en: 'Lead Designer' }, avatar_url: null },
     };
     expect(PostRowSchema.safeParse(badAuthor).success).toBe(false);
+  });
+});
+
+describe('UI v2 content rows', () => {
+  const card = {
+    id: '33333333-3333-4333-8333-333333333333',
+    slug: 'the-rider',
+    title: { en: 'The Rider', ar: 'الراكب' },
+    project_type: { en: 'Brand film', ar: 'فيلم للعلامة' },
+    teaser: null,
+    summary: null,
+    year: 2026,
+    is_featured: true,
+    sort_order: 1,
+    updated_at: null,
+    preview_video_uid: null,
+    preview_video_path: '/media/showreel.mp4',
+    preview_start_s: 1,
+    preview_end_s: 3.7,
+    client_id: '44444444-4444-4444-8444-444444444444',
+    poster: null,
+    sector: null,
+    client: null,
+    services: [],
+  };
+
+  it('a project card parses with a hidden client (null embed, client_id set)', () => {
+    expect(PortfolioCardRowSchema.safeParse(card).success).toBe(true);
+  });
+
+  it('a card whose type lacks Arabic is rejected', () => {
+    const bad = { ...card, project_type: { en: 'Brand film' } };
+    expect(PortfolioCardRowSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it('a case study bounds its lists as the database does', () => {
+    const study = {
+      ...card,
+      body_html: null,
+      lead: null,
+      goal: null,
+      result: null,
+      scope: [],
+      keywords: Array.from({ length: 7 }, () => ({ en: 'k', ar: 'ك' })),
+      results: [],
+      next_portfolio_id: null,
+      media: [],
+    };
+    expect(CaseStudyRowSchema.safeParse(study).success).toBe(false);
+    expect(CaseStudyRowSchema.safeParse({ ...study, keywords: [] }).success).toBe(true);
+  });
+
+  it('a testimonial row carries no consent fields (anon cannot read them)', () => {
+    const keys = Object.keys(TestimonialRowSchema.shape);
+    expect(keys).not.toContain('consent_obtained_at');
+    expect(keys).not.toContain('consent_reference');
   });
 });

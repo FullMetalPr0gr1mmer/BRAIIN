@@ -1,0 +1,460 @@
+{
+  "blocks": [
+    {
+      "table": "media_assets",
+      "conflict": ["id"],
+      "rows": [
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000001",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/work/p0.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1280,
+          "height": 720,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A person in a black head wrap and amber ski goggles against a hazy desert.",
+            "ar": "شخص يرتدي لثامًا أسود ونظارة تزلج كهرمانية على خلفية صحراء ضبابية."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000002",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/work/p1.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1280,
+          "height": 720,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A hand setting the digital timer on a black kitchen oven.",
+            "ar": "يد تضبط المؤقت الرقمي لفرن مطبخ أسود."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000003",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/work/p2.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1280,
+          "height": 720,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "Close-up of a hand writing in a notebook with a silver pen.",
+            "ar": "لقطة قريبة ليد تكتب في دفتر بقلم فضي."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000004",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/work/p3.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1280,
+          "height": 720,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "Extreme close-up of a blue-green eye with an amber ring around the pupil.",
+            "ar": "لقطة قريبة جدًا لعين زرقاء مخضرّة تحيط بحدقتها حلقة كهرمانية."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000005",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/work/p4.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1280,
+          "height": 720,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A head in profile formed from dark, billowing dust.",
+            "ar": "رأس في وضع جانبي مُشكَّل من غبار داكن متصاعد."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000006",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/work/p5.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1280,
+          "height": 720,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A white sun glowing through a hazy orange sky.",
+            "ar": "شمس بيضاء تتوهج عبر سماء برتقالية ضبابية."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000007",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/work/ia.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1280,
+          "height": 720,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A silhouetted hand reaching through golden, sunlit spray.",
+            "ar": "ظل يد تمتد عبر رذاذ ذهبي تضيئه الشمس."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000008",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/work/ib.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1280,
+          "height": 720,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A woman in a floral dress holding a glowing white sphere in the dark.",
+            "ar": "امرأة بفستان مزهّر تحمل كرة بيضاء مضيئة في الظلام."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000009",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g01.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "An out-of-focus desert horizon under a pale sky, with a dark shape in front.",
+            "ar": "أفق صحراوي غير واضح تحت سماء باهتة، وأمامه شكل داكن."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000010",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g02.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A masked person in amber ski goggles facing the camera, desert behind.",
+            "ar": "شخص ملثّم بنظارة تزلج كهرمانية يواجه الكاميرا والصحراء خلفه."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000011",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g03.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A masked person in amber ski goggles, head turned slightly, in the desert.",
+            "ar": "شخص ملثّم بنظارة تزلج كهرمانية يدير رأسه قليلًا في الصحراء."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000012",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g04.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A masked person in amber ski goggles looking to the side, desert behind.",
+            "ar": "شخص ملثّم بنظارة تزلج كهرمانية ينظر إلى الجانب والصحراء خلفه."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000013",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g05.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A hand pressing a control beside a black oven's clock reading 13:28.",
+            "ar": "يد تضغط زرًا بجانب ساعة فرن أسود تشير إلى 13:28."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000014",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g06.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A hand turning a knob on a black oven, its display reading 13:28.",
+            "ar": "يد تدير مقبض فرن أسود وشاشته تعرض 13:28."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000015",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g07.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "An out-of-focus abstract frame in deep red and brown tones.",
+            "ar": "لقطة تجريدية غير واضحة بدرجات الأحمر الداكن والبني."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000016",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g08.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A hand writing in a small notebook with a silver pen, in cool blue light.",
+            "ar": "يد تكتب في دفتر صغير بقلم فضي تحت ضوء أزرق بارد."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000017",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g09.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "Overhead view of hands holding open a blank notebook, a pen in one hand.",
+            "ar": "لقطة علوية ليدين تفتحان دفترًا فارغًا، وفي إحداهما قلم."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000018",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g10.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "Soft-focus close-up of white notebook pages fanning open.",
+            "ar": "لقطة قريبة ناعمة لصفحات دفتر بيضاء تنفتح."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000019",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g11.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "Blurred close-up of dark ink strokes on pale paper.",
+            "ar": "لقطة قريبة غير واضحة لخطوط حبر داكنة على ورق فاتح."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000020",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g12.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A near-black abstract frame with faint, soft ridges of texture.",
+            "ar": "لقطة تجريدية شبه سوداء بتموجات خافتة وناعمة."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000021",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g13.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "Macro shot of a blue-green iris with an amber ring and a bright catchlight.",
+            "ar": "لقطة ماكرو لقزحية زرقاء مخضرّة بحلقة كهرمانية وانعكاس ضوء ساطع."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000022",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g14.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A head in profile formed from dark grey dust against a teal backdrop.",
+            "ar": "رأس في وضع جانبي مُشكَّل من غبار رمادي داكن على خلفية زرقاء مخضرّة."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000023",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g15.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A silhouetted hand reaching out through glittering golden spray.",
+            "ar": "ظل يد تمتد عبر رذاذ ذهبي متلألئ."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000024",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g16.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "Silhouetted arms reaching through swirling orange dust and flying particles.",
+            "ar": "ظل ذراعين تمتدان عبر غبار برتقالي متطاير وجزيئات متناثرة."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000025",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g17.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A bright white sun glowing through thick orange haze.",
+            "ar": "شمس بيضاء ساطعة تتوهج عبر ضباب برتقالي كثيف."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000026",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/g18.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "A woman in a floral dress holding a glowing white sphere against black.",
+            "ar": "امرأة بفستان مزهّر تحمل كرة بيضاء مضيئة على خلفية سوداء."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000027",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/s1.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1200,
+          "height": 676,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "Line sketch of a masked person wearing ski goggles.",
+            "ar": "رسمة خطية لشخص ملثّم يرتدي نظارة تزلج."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000028",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/s2.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1200,
+          "height": 676,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "Line sketch of a hand turning an oven knob beside a digital clock.",
+            "ar": "رسمة خطية ليد تدير مقبض فرن بجانب ساعة رقمية."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000029",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/s3.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1200,
+          "height": 676,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "Line sketch of a hand writing in a notebook with a pen.",
+            "ar": "رسمة خطية ليد تكتب في دفتر بقلم."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000030",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/project/s4.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1200,
+          "height": 676,
+          "folder": "stills",
+          "tags": "{showreel}",
+          "alt": {
+            "en": "Faint line sketch of the textured outline of a head in profile.",
+            "ar": "رسمة خطية باهتة للخطوط الخارجية لرأس في وضع جانبي."
+          }
+        }
+      ]
+    }
+  ]
+}
