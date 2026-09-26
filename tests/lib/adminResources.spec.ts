@@ -23,7 +23,6 @@ const CONFIG: Record<string, ResourceConfig> = {
   team: R.teamResource,
   certifications: R.certificationResource,
   statistics: R.statisticResource,
-  'partner-logos': R.partnerLogoResource,
   redirects: R.redirectResource,
   media: R.mediaResource,
   themes: R.themeResource,

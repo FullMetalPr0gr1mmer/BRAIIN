@@ -133,14 +133,6 @@ export const StatisticRowSchema = z.object({
 });
 export type StatisticRow = z.infer<typeof StatisticRowSchema>;
 
-/** Marquee logos have no publish lifecycle — visibility is the `visible` flag. */
-export const PartnerLogoRowSchema = z.object({
-  name: z.string(),
-  logo_url: z.string(),
-  sort_order: z.number(),
-});
-export type PartnerLogoRow = z.infer<typeof PartnerLogoRowSchema>;
-
 // Blog embeds its author + category via PostgREST FK embeds (single round-trip, no N+1).
 export const PostAuthorSchema = z
   .object({ slug: SlugSchema, name: LocalizedTextSchema, avatar_url: z.string().nullable() })

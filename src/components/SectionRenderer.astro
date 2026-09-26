@@ -18,6 +18,8 @@ import HomeContact from '@/components/sections/HomeContact.astro';
 import ContactInquiry from '@/components/sections/ContactInquiry.astro';
 import ContactChannels from '@/components/sections/ContactChannels.astro';
 import FaqAccordion from '@/components/sections/FaqAccordion.astro';
+import SelectedWork from '@/components/sections/SelectedWork.astro';
+import TestimonialsSection from '@/components/sections/TestimonialsSection.astro';
 
 interface Props {
   locale: Locale;
@@ -33,8 +35,12 @@ const { locale, sections } = Astro.props;
 // content is editor input, route data is the page's own truth.
 //
 // Typed against src/lib/sections/registry.ts: `astro check` fails if a rendered type has
-// no component here or a component has no registry entry.
-const REGISTRY: Record<RenderedSectionType, typeof Hero> = {
+// no component here or a component has no registry entry. The value type is "any
+// component" (`(props: never) => unknown` — every function is one), not `typeof Hero`:
+// holding every component to Hero's Props made two sections with differently shaped
+// route `data` props unassignable to each other (UI v2 PR7).
+type AnyComponent = (props: never) => unknown;
+const REGISTRY: Record<RenderedSectionType, AnyComponent> = {
   hero: Hero,
   servicesOverview: ServicesOverview,
   cta: CtaBand,
@@ -50,6 +56,8 @@ const REGISTRY: Record<RenderedSectionType, typeof Hero> = {
   contactInquiry: ContactInquiry,
   contactChannels: ContactChannels,
   faq: FaqAccordion,
+  selectedWork: SelectedWork,
+  testimonials: TestimonialsSection,
 };
 
 // Every section takes `locale`, its content props and the route's `data`. The map's type

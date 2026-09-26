@@ -36,15 +36,62 @@ export function withHomeIntro(sections: SectionData[]): SectionData[] {
   });
 }
 
+/**
+ * The home page (UI v2 PR7), in the design's order. The data-driven bands (clients,
+ * selected work, numbers, testimonials) render nothing when their table is empty — in
+ * production the design's sample projects and quotes start as drafts — so this list
+ * never shows an empty shell. Mirrored by the seeded composition
+ * (supabase/seed-data/50-home.json; tests/lib/sections.spec.ts holds the two together).
+ */
 export const DEFAULT_HOME_SECTIONS: SectionData[] = [
   { type: 'hero' },
+  { type: 'clientsMarquee' },
+  { type: 'selectedWork' },
+  { type: 'statistics', props: { variant: 'band', placement: 'home' } },
+  { type: 'testimonials', props: { variant: 'klein', placement: 'home' } },
+  { type: 'servicesOverview' },
   { type: 'aboutIntro' },
   { type: 'slogan' },
-  { type: 'clientsMarquee' },
-  { type: 'servicesOverview' },
   { type: 'contact' },
   { type: 'social' },
 ];
+
+/** The in-page anchor of the home Selected work band (SelectedWork.astro renders it). */
+export const SELECTED_WORK_ANCHOR = '#selected-work';
+
+/**
+ * Where the home hero's "See our work" points. The design sends it to the Selected work
+ * band — but that band hides when no project is featured (production starts with the
+ * sample projects as drafts) or when an editor hides or removes it, and an anchor to a
+ * section that is not there is a dead button. Then it goes to Our Work instead.
+ */
+export function homeHeroCtaHref(
+  sections: readonly SectionData[],
+  featuredCount: number,
+): typeof SELECTED_WORK_ANCHOR | '/portfolio' {
+  const bandShown = sections.some((s) => s.type === 'selectedWork' && s.visible !== false);
+  return bandShown && featuredCount > 0 ? SELECTED_WORK_ANCHOR : '/portfolio';
+}
+
+/**
+ * The home route's own data, handed to the sections as `data` (never CMS content): the
+ * featured project cards (loaded once, for the band and for the CTA decision above) go to
+ * every Selected work band, and the CTA target to the first hero.
+ */
+export function withHomeData<Card>(
+  sections: readonly SectionData[],
+  data: { featured: readonly Card[]; ctaHref: string },
+): SectionData[] {
+  let heroSeen = false;
+  return sections.map((s) => {
+    if (s.type === 'selectedWork') return { ...s, data: { ...s.data, cards: data.featured } };
+    if (s.type === 'hero' && !heroSeen) {
+      heroSeen = true;
+      return { ...s, data: { ...s.data, ctaHref: data.ctaHref } };
+    }
+    return s;
+  });
+}
 
 export const DEFAULT_CONTACT_SECTIONS: SectionData[] = [
   { type: 'hero', props: { banner: true, ctaHref: '#inquiry' } },

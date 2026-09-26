@@ -1,12 +1,19 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SectionRenderer from '@/components/SectionRenderer.astro';
-import { DEFAULT_HOME_SECTIONS, withHomeIntro } from '@/lib/sections/types';
+import {
+  DEFAULT_HOME_SECTIONS,
+  homeHeroCtaHref,
+  withHomeData,
+  withHomeIntro,
+} from '@/lib/sections/types';
 import { getPageComposition } from '@/lib/data/pageSections';
+import { getPortfolioCards } from '@/lib/data/portfolio';
 import { loadHead } from '@/lib/seo/head';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { buildOrganizationSchema, buildWebSiteSchema, orgRef } from '@/lib/seo/jsonld';
 import { setTierA } from '@/lib/http/cacheTags';
+import { HOME_CACHE_ENTITIES } from '@/lib/sections/home';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 
 // Tier A. Home is composed from CMS sections (`pages` slug 'home' + `page_sections`,
@@ -17,8 +24,10 @@ const meta = PAGE_META.home[locale];
 
 // The composition and the head load together; the page's SEO override needs the page id,
 // so the head loader is handed the composition query rather than its result.
+// The featured projects load alongside: the Selected work band shows them, and whether
+// there are any decides where the hero's "See our work" points.
 const compositionQuery = getPageComposition('home');
-const [composition, { seo, identity }] = await Promise.all([
+const [composition, { seo, identity }, featured] = await Promise.all([
   compositionQuery,
   loadHead(Astro.locals, {
     locale,
@@ -26,18 +35,21 @@ const [composition, { seo, identity }] = await Promise.all([
     fallbackDescription: meta.description,
     entity: compositionQuery.then((c) => (c ? { type: 'page' as const, id: c.page.id } : null)),
   }),
+  getPortfolioCards({ featuredOnly: true }),
 ]);
 // A published page with no sections yet renders the default composition (its SEO override,
 // keyed by the page id above, still applies).
-const sections = withHomeIntro(
-  composition?.sections.length ? composition.sections : DEFAULT_HOME_SECTIONS,
-);
+const composed = composition?.sections.length ? composition.sections : DEFAULT_HOME_SECTIONS;
+const sections = withHomeData(withHomeIntro(composed), {
+  featured,
+  ctaHref: homeHeroCtaHref(composed, featured.length),
+});
 
 const jsonLd = [
   buildOrganizationSchema(PUBLIC_SITE_URL, identity, locale),
   buildWebSiteSchema(PUBLIC_SITE_URL, orgRef(identity, locale)),
 ];
-setTierA(Astro.response, { route: 'home', locale, entities: ['page:home'] });
+setTierA(Astro.response, { route: 'home', locale, entities: HOME_CACHE_ENTITIES });
 ---
 
 <BaseLayout

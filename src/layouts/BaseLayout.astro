@@ -25,6 +25,9 @@ interface Props {
   /** `overlay`: the UI v2 header, transparent over the page's hero (home, contact).
       `solid` (default): the sticky bar for pages with no hero. See SiteHeader. */
   header?: HeaderVariant;
+  /** The header's language switch target, when it is NOT this page in the other locale —
+      a 404 has no twin, so its switch goes to the other locale's home. */
+  langHref?: string;
 }
 
 const {
@@ -38,6 +41,7 @@ const {
   canonicalOverride,
   chrome = true,
   header = 'solid',
+  langHref,
 } = Astro.props;
 const direction = dir(locale);
 ---
@@ -58,7 +62,7 @@ const direction = dir(locale);
     <link rel="stylesheet" href="/styles/global.css" />
   </head>
   <body>
-    {chrome && <SiteHeader locale={locale} variant={header} />}
+    {chrome && <SiteHeader locale={locale} variant={header} {...(langHref ? { langHref } : {})} />}
     {
       /*
       The skip link's target. It lives here rather than on each page's own <main>
@@ -73,7 +77,7 @@ const direction = dir(locale);
       <slot />
     </div>
     {chrome && <SiteFooter locale={locale} />}
-    <ConsentBanner />
+    <ConsentBanner locale={locale} />
     <WebVitals />
     <PageView />
     <ErrorReporter />

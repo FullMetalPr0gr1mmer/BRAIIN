@@ -23,5 +23,8 @@ export const SECTION_TYPES = [
   'contactInquiry',
   'contactChannels',
   'faq',
+  // UI v2 PR7 (home)
+  'selectedWork',
+  'testimonials',
 ] as const;
 export type SectionType = (typeof SECTION_TYPES)[number];

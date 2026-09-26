@@ -123,6 +123,48 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       help: 'Default 2 for Band, Reach and Proof (a band with a single number reads as broken), 1 for Cards.',
     },
   ],
+  selectedWork: [
+    tag,
+    heading,
+    {
+      name: 'lines',
+      label: 'Numbered lines beside the heading',
+      kind: 'repeater',
+      maxItems: 3,
+      itemFields: [{ name: 'text', label: 'Line', kind: 'bilingual', required: true }],
+    },
+    {
+      name: 'featuredSlug',
+      label: 'Featured project (slug)',
+      kind: 'slug',
+      help: 'Optional. One of the projects marked Featured; default: the first featured project by sort order.',
+    },
+    { name: 'featuredLinkLabel', label: 'Featured project link label', kind: 'bilingual' },
+  ],
+  testimonials: [
+    {
+      name: 'variant',
+      label: 'Layout',
+      kind: 'select',
+      options: [
+        { value: 'klein', label: 'Klein band (home)' },
+        { value: 'light', label: 'Light (on white)' },
+      ],
+    },
+    {
+      name: 'placement',
+      label: 'Page (which quotes)',
+      kind: 'select',
+      options: [
+        { value: 'home', label: 'Home' },
+        { value: 'work', label: 'Our Work' },
+      ],
+      help: 'Shows the published testimonials marked for this page. None published → the section hides.',
+    },
+    tag,
+    heading,
+    { name: 'limit', label: 'At most this many quotes (1–8)', kind: 'number' },
+  ],
   aboutStory: [
     heading,
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
@@ -138,6 +180,11 @@ export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[
   hero: ['intro'],
   // A per-locale word range ({en: {from, to}, ar: {…}}) — no typed field kind for it yet.
   statistics: ['accent'],
+  // UI v2 PR7: the accent range as above; the card picks (a list of featured-project slugs)
+  // and the closing button ({label, href}) have no typed field kind yet either — both fall
+  // back to the design's defaults when unset. The carousel interval is a design constant.
+  selectedWork: ['accent', 'cardSlugs', 'button'],
+  testimonials: ['accent', 'intervalMs'],
 };
 
 /** The fields for one section type, or null when it takes no content (table-backed). */

@@ -162,6 +162,22 @@ describe('POST /api/contact — the public write path', () => {
     expect((await invoke(contactPost, req)).status).toBe(422);
   });
 
+  it('a 422 names the refused schema keys (so the form marks those fields), never values', async () => {
+    const req = post('https://x/api/contact', { ...lead, email: 'not-an-email', message: '' });
+    const res = await invoke(contactPost, req);
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: string; fields: string[] };
+    expect(body.error).toBe('validation');
+    expect(body.fields.sort()).toEqual(['email', 'message']);
+    expect(JSON.stringify(body)).not.toContain('not-an-email');
+  });
+
+  it('never names the honeypot — a bot learns nothing about the trap', async () => {
+    const req = post('https://x/api/contact', { ...lead, hp: 'i am a bot' });
+    const body = (await (await invoke(contactPost, req)).json()) as { fields: string[] };
+    expect(body.fields).toEqual([]);
+  });
+
   it('never echoes submitted PII back in the response body', async () => {
     const res = await invoke(contactPost, post('https://x/api/contact', lead));
     const text = await res.text();

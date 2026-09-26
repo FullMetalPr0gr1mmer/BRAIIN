@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { LocalizedTextSchema } from './content';
+import { LocalizedTextSchema, TestimonialPlacementSchema } from './content';
 import { SECTION_TYPES, type SectionType } from './sectionTypes';
-import { AccentSchema } from './media';
+import { AccentSchema, SafeHrefSchema } from './media';
+import { SlugSchema } from './primitives';
 
 // Per-type CMS content shapes for `page_sections.content` (authored at /admin/sections,
 // rendered by src/components/SectionRenderer.astro). One schema per shape, in packages/
@@ -136,6 +137,52 @@ export const StatisticsSectionContentSchema = z
   // must be refused on write rather than stored and silently ignored.
   .strict();
 
+/**
+ * Home "Selected work" (UI v2 PR7). The projects come from the portfolio table — the
+ * published `is_featured` ones, in `sort_order` — never from this content: the first is
+ * the featured project, the next two the cards. `featuredSlug` / `cardSlugs` only
+ * re-pick among the featured projects (an unknown or unfeatured slug is ignored, so a
+ * stale pick degrades to the default order instead of an empty band).
+ */
+export const SelectedWorkSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    /** The numbered statements beside the heading ("Made to be remembered…"). */
+    lines: z
+      .array(z.object({ text: Text }))
+      .max(3)
+      .optional(),
+    featuredSlug: SlugSchema.optional(),
+    cardSlugs: z.array(SlugSchema).max(2).optional(),
+    /** The featured project's link ("See the project"). */
+    featuredLinkLabel: Text.optional(),
+    /** The closing button ("See all our work" → /portfolio). */
+    button: z.object({ label: Text.optional(), href: SafeHrefSchema.optional() }).optional(),
+  })
+  // Strict, like statistics: its projects come from their own table, and a stray key
+  // (`cards`, `items`) must be refused on write rather than stored and ignored.
+  .strict();
+
+/**
+ * Client quotes as a carousel (UI v2 PR7) — the home Klein band. The quotes come from the
+ * `testimonials` table (published, placed on `placement`); this is the layout and the
+ * copy around them. No quotes, no section.
+ */
+export const TestimonialsSectionContentSchema = z
+  .object({
+    variant: z.enum(['klein', 'light']).optional(),
+    placement: TestimonialPlacementSchema.optional(),
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    /** How long each quote stays (the design's 7 s by default). */
+    intervalMs: z.number().int().min(4000).max(15000).optional(),
+    limit: z.number().int().min(1).max(8).optional(),
+  })
+  .strict();
+
 export const AboutStorySectionContentSchema = z.object({
   heading: Text.optional(),
   lead: Text.optional(),
@@ -162,6 +209,8 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
   cta: CtaSectionContentSchema,
   aboutStory: AboutStorySectionContentSchema,
   statistics: StatisticsSectionContentSchema,
+  selectedWork: SelectedWorkSectionContentSchema,
+  testimonials: TestimonialsSectionContentSchema,
 };
 
 /**
@@ -217,3 +266,5 @@ export type ContactSectionContent = z.infer<typeof ContactSectionContentSchema>;
 export type SocialSectionContent = z.infer<typeof SocialSectionContentSchema>;
 export type CtaSectionContent = z.infer<typeof CtaSectionContentSchema>;
 export type AboutStorySectionContent = z.infer<typeof AboutStorySectionContentSchema>;
+export type SelectedWorkSectionContent = z.infer<typeof SelectedWorkSectionContentSchema>;
+export type TestimonialsSectionContent = z.infer<typeof TestimonialsSectionContentSchema>;

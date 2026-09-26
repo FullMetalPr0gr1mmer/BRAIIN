@@ -152,7 +152,7 @@ Public routes only. **Failing any budget = blocked PR.** `/admin` exempt from CW
 
 | Metric | Budget | Notes |
 |---|---|---|
-| LCP | < 2.5s | service pages: the Stream poster `<img>`. **Home: the intro logo `<img>`** — the hero's blur poster is a CSS `background`, not an `<img>`, and is too low-entropy to be an LCP candidate. The headline is NOT the LCP element (Chromium aggregates text LCP at the block ancestor). |
+| LCP | < 2.5s | service pages: the Stream poster `<img>`. **Home: the intro logo `<img>`** — the hero's blur poster is a CSS `background`, not an `<img>`, and is too low-entropy to be an LCP candidate. The headline is NOT the LCP element (Chromium aggregates text LCP at the block ancestor). The logo's entrance starts at **opacity .01, never 0**: Chromium records no LCP candidate for an element first painted at opacity 0 (a returning visit then had no LCP entry at all; `tests/e2e/hero-intro.e2e.ts` asserts the logo is recorded). On a first visit at narrow widths the consent banner's text can out-size the logo — accepted (docs/design-port-2026-09.md #26). |
 | INP | < 200ms | source of truth = field RUM |
 | CLS | < 0.1 | explicit width/height; metric-override fonts |
 | TBT (lab proxy) | ≤ 200ms | CI lab cap |
