@@ -45,7 +45,7 @@ alter table public.media_assets add constraint media_assets_provider_shape check
       provider_ref is not null
       and storage_path ~ '^https://imagedelivery\.net/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$'
     when 'stream' then
-      stream_uid ~ '^[a-f0-9]{32}$'
+      stream_uid is not null and stream_uid ~ '^[a-f0-9]{32}$'
     else true
   end
 ) not valid;

@@ -381,21 +381,47 @@ export const statisticResource: ResourceConfig = {
   table: 'statistics',
   entity: 'statistic',
   writeCap: 'services.write',
-  listColumns: 'id,slug,label,value,status,sort_order,version,updated_at',
-  columns: 'id,slug,label,value,status,sort_order,version,created_at,updated_at',
+  listColumns: 'id,slug,label,value,placements,is_placeholder,status,sort_order,version,updated_at',
+  columns:
+    'id,slug,label,value,value_numeric,value_suffix,placements,placement_labels,is_placeholder,' +
+    'status,sort_order,version,created_at,updated_at',
   orderBy: { column: 'sort_order', ascending: true },
   searchColumn: 'slug',
   createSchema: StatisticWriteSchema,
   updateSchema: StatisticUpdateSchema,
-  toRow: (input) =>
-    pick(input as Input, {
+  toRow: (input) => {
+    const i = input as Input;
+    const values = pick(i, {
       slug: 'slug',
       label: 'label',
       value: 'value',
+      valueNumeric: 'value_numeric',
+      valueSuffix: 'value_suffix',
+      placements: 'placements',
+      placementLabels: 'placement_labels',
+      isPlaceholder: 'is_placeholder',
       status: 'status',
       sortOrder: 'sort_order',
-    }),
+    });
+    // The 0023 statistics_value_consistent CHECK: with a number, the displayed value IS the
+    // number plus its suffix (derived here); free text written without a number drops the
+    // count-up number, or the stored one would contradict it.
+    const numeric = i['valueNumeric'];
+    if (typeof numeric === 'number') {
+      values['value'] = `${Number(numeric.toFixed(2))}${String(i['valueSuffix'] ?? '')}`;
+    } else if (i['value'] !== undefined && i['value'] !== null && numeric === undefined) {
+      values['value_numeric'] = null;
+      values['value_suffix'] = null;
+    }
+    return values;
+  },
   statusOf: (input) => statusOf(input as Input),
+  constraintFields: {
+    statistics_value_consistent: {
+      field: 'value',
+      message: 'the value must read as the number plus its suffix',
+    },
+  },
   assertPublishable: (row) => requireBilingual(row, 'label', 'Statistic label'),
 };
 

@@ -9,7 +9,7 @@
 -- Plus the content-table shape: Admin + Content Creator write, archive/delete Admin-only.
 
 begin;
-select plan(20);
+select plan(21);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values ('63000000-0000-0000-0000-000000000001', 'QuoteT');
@@ -128,6 +128,12 @@ insert into public.testimonials
    'scheduled', now() - interval '1 minute', now());
 select ok(app.publish_scheduled() >= 1, 'app.publish_scheduled() ran');
 select is(_status('pg-q-sched'), 'published', 'a due, consented quote is published by the cron');
+select throws_ok(
+  $$ insert into public.testimonials (tenant_id, slug, quote, author_name, status, scheduled_for, consent_obtained_at, portfolio_id)
+     values ('63000000-0000-0000-0000-000000000001', 'pg-q-sched-dup', '{"en":"Q","ar":"ق"}', '{"en":"A","ar":"أ"}',
+             'scheduled', now() + interval '1 day', now(), '63000000-0000-0000-0000-00000000c001') $$,
+  '23505', null,
+  'a second quote cannot be SCHEDULED behind a published one (it would abort the cron at flip time)');
 
 -- ── structural ───────────────────────────────────────────────────────────────
 select ok(

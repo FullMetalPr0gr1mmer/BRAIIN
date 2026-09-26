@@ -238,7 +238,9 @@ begin
     if not found then
       raise exception 'portfolio % not found', p_id using errcode = 'P0002';
     end if;
-    if v_row.version <> p_version then
+    -- A missing version is a stale one: an update without the lock token would be the
+    -- last-write-wins save optimistic locking exists to prevent.
+    if p_version is null or v_row.version <> p_version then
       raise exception 'portfolio % was modified by someone else', p_id using errcode = '40001';
     end if;
 

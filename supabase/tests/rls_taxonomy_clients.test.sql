@@ -9,7 +9,7 @@
 -- are asserted by reading the value back as a staff role afterwards.
 
 begin;
-select plan(21);
+select plan(23);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- A dedicated tenant, created AFTER the launch tenant so app.default_tenant_id() (the
@@ -70,6 +70,14 @@ select lives_ok(
   $$ update public.clients set name = '{"en":"CC edit","ar":"ت"}' where id = '62000000-0000-0000-0000-00000000b001' $$,
   'content_creator can edit a client');
 select is(_client_name(), 'CC edit', 'the content_creator edit applied');
+-- The website CHECK is only compiled when a value is written — so write one (a regex
+-- bound above 255 once made every real URL fail here, invisibly to a NULL-only suite).
+select lives_ok(
+  $$ update public.clients set website_url = 'https://www.example.com' where id = '62000000-0000-0000-0000-00000000b001' $$,
+  'a client website (https) saves');
+select throws_ok(
+  $$ update public.clients set website_url = 'http://example.com' where id = '62000000-0000-0000-0000-00000000b001' $$,
+  '23514', null, 'a non-https website is refused');
 
 select _claims('seo', _tid());
 select throws_ok(
