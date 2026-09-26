@@ -74,3 +74,62 @@ existing global.css utilities.
     `aria-hidden` beside an `.sr-only` copy of the final value, so a screen reader reading
     ahead of the viewport never hears the "0" the count starts from; printing restores any
     counter still waiting.
+
+## About (PR8)
+
+| Mockup | Site | Where |
+|---|---|---|
+| `.who` + `splitWords()` + `[data-clip]` | `AboutWho.astro` (`.about-who`, section type `aboutWho`) + `SplitHeading` + `MediaFrame` (`mf--who`) | About |
+| `.lead-team` / `.lt__*` / `.person*` | `LeadershipSlider.astro` (`.leaders*` / `.leader*`, section type `leadership`) + `src/lib/client/slider.ts` | About |
+| `.reach` / `.rs*` | `StatBand` `sb--reach` (statistics section `{variant:'reach', placement:'about'}`) | About |
+| `.follow` | `SocialStrip` `variant="klein"` (`.social-strip--klein` + `.klein-band`) | About |
+
+Page-only CSS is `public/styles/about.css`, linked through BaseLayout's new `styles` prop (file
+names only, validated `^[a-z0-9-]+\.css$`). The Klein social variant stays in global.css:
+`social` is a section type any page can compose.
+
+18. **The "who" poster is the LCP element**: eager, `fetchpriority="high"`, real dimensions,
+    and never reveal-gated (the mockup faded it in with `.rv` and `loading="lazy"`). Its alt
+    is empty, as in the mockup (a showreel frame beside the manifesto). The code default
+    carries no media — the poster (the p2 still) and the 6.2–7.9 s clip are seeded section
+    content — so an unseeded page renders the section text-only rather than falling back to a
+    hard-coded image.
+19. **Leadership is its own section type (`leadership`)**, not a `team` variant: `team` stays
+    the table-backed author grid with no content, and the slider's copy (tag, heading,
+    accent, text) is typed content like every other UI v2 band. The people are
+    `team_members.is_leadership`, injected by the route as `data`.
+20. **A card links to LinkedIn only when a URL exists**; otherwise it is plain content with no
+    tab stop (the mockup's `tabindex="0"` div was a focus stop that did nothing). A linked
+    card announces "LinkedIn profile (opens in a new tab)" / "حساب لينكدإن (يفتح في تبويب
+    جديد)" (the Arabic suffix is ours — system text, owner review); the badge is
+    `aria-hidden` and the portrait `alt=""`, since the name is the card's text. The URL is
+    re-checked against 0023's LinkedIn shape on read (`toLeader`), because it renders into an
+    `href`. `rel="noopener noreferrer"`.
+21. **Slider controls**: Previous/Next are localized ("السابق" / "التالي" — the mockup left
+    them in English) and go `aria-disabled` at the ends instead of `disabled`, so keyboard
+    focus is not dropped to `<body>`. The track is a named, focusable region (a scroller
+    with no links must still be reachable), and Arrow keys on it step one card in the
+    reading direction. The counter is `aria-hidden`, Western digits, `dir="ltr"` (so it
+    reads "01 / 06" in Arabic, not "06 / 01"). Without JS the row is a native scroll-snap
+    scroller and the chrome stays hidden, as it does whenever the cards fit.
+22. **Leadership motion is compositor-only**: the progress bar is `translateX` + `scaleX` of
+    a full-width bar (the mockup animated `margin` and `width`); grayscale → colour is an
+    opacity fade of a `mix-blend-mode: saturation` layer (the mockup transitioned `filter`);
+    the Klein underline is `scaleX`. The name's sky colour and the silhouette's shade change
+    instantly on hover — no colour transition. Under reduced motion the photo zoom is
+    dropped and every scroll is instant.
+23. **Our reach shows the counters marked for About**, under their About labels
+    (`placement_labels.about`); "14 crafts" is home/Our Work only, as in the mockup.
+24. **Follow the studio** reads the handles from the public identity (the mockup's inline
+    catalog), and its copy is the Klein variant's built-in table, verbatim. The outlined
+    accent is kept in both languages (the mockup's); forced-colors fills it instead. The
+    Arabic outline over joined glyphs is flagged for the PR14 visual review.
+25. **Certifications and the CTA band are dropped from the About composition** (the mockup
+    has neither); both remain section types an editor can add back.
+26. **Person JSON-LD names only the leaders the page shows** (none when the leadership
+    section is hidden), with `jobTitle` and `sameAs` (LinkedIn). The seeded placeholders are
+    drafts in production, so no placeholder person is ever published there; dev/CI/staging
+    carry their "Name Surname" nodes.
+27. **The About manifesto is the About page's own copy**, verbatim (it differs from the home
+    "why us" columns: "between vendors", no "Arabic, English, or…" sentence), and the h1's
+    accent includes the final period, as the mockup's `<em>` does.

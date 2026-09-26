@@ -37,6 +37,9 @@ const T = {
   kleinLead: '#e0e4f7', // .lead-band__row p — white .88 over Klein
   kleinRole: '#bfc8ee', // .tm__r — white .75 over Klein
   kleinCount: '#b2bdeb', // .tm__count — white .70 over Klein
+  // UI v2 PR8 — About's Klein "Follow the studio" band (social-strip--klein)
+  kleinBox: '#0f31c0', // .sbox ground — white .06 over Klein
+  kleinUser: '#bcc5ed', // .sbox__user — white .72 over that card ground
 };
 
 // (foreground, background, minRatio, where) — every real on-screen pairing.
@@ -51,6 +54,9 @@ const PAIRS = [
   ['kleinCount', 'klein', 4.5, 'testimonial counter on the Klein band'],
   ['paper', 'klein', 4.5, 'lead band email / quote text / Klein band headings'],
   ['klein', 'paper', 4.5, 'light badge CTA label (Klein on white)'],
+  // UI v2 PR8 About: the Klein social cards (the head copy is kleinTag / kleinLead above)
+  ['paper', 'kleinBox', 4.5, 'social card network name on the Klein band'],
+  ['kleinUser', 'kleinBox', 4.5, 'social card handle on the Klein band'],
   // dark sections (hero, slogan, clients, contact) + interior pages
   ['fg', 'bg', 4.5, 'body text on black'],
   ['fg', 'surface', 4.5, 'card/section text'],

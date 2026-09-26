@@ -102,7 +102,8 @@ const image = await getSectionImage(mediaId);
           />
         )
       }
-      <div class="about-who__copy rv">
+      {/* Text-only, the manifesto is the LCP block: not reveal-gated then. */}
+      <div class:list={['about-who__copy', { rv: !!image }]}>
         <p class="about-who__lead">{lead ? pickLocale(lead, locale) : STR.lead}</p>
         {
           paras.map((p) => (

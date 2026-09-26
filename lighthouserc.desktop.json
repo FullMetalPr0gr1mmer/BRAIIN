@@ -1,7 +1,12 @@
 {
   "ci": {
     "collect": {
-      "url": ["http://localhost:8788/", "http://localhost:8788/ar"],
+      "url": [
+        "http://localhost:8788/",
+        "http://localhost:8788/ar",
+        "http://localhost:8788/about",
+        "http://localhost:8788/ar/about"
+      ],
       "numberOfRuns": 3,
       "settings": {
         "preset": "desktop"

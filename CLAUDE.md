@@ -152,7 +152,7 @@ Public routes only. **Failing any budget = blocked PR.** `/admin` exempt from CW
 
 | Metric | Budget | Notes |
 |---|---|---|
-| LCP | < 2.5s | service pages: the Stream poster `<img>`. **Home: the intro logo `<img>`** — the hero's blur poster is a CSS `background`, not an `<img>`, and is too low-entropy to be an LCP candidate. The headline is NOT the LCP element (Chromium aggregates text LCP at the block ancestor). |
+| LCP | < 2.5s | service pages: the Stream poster `<img>`. **Home: the intro logo `<img>`** — the hero's blur poster is a CSS `background`, not an `<img>`, and is too low-entropy to be an LCP candidate. The headline is NOT the LCP element (Chromium aggregates text LCP at the block ancestor). **About: the "who we are" poster `<img>`** (eager, `fetchpriority=high`, never reveal-gated; the h1 words start at opacity 0, so they are not the candidate) — a section with no poster set renders text-only, and the manifesto block becomes the LCP element. |
 | INP | < 200ms | source of truth = field RUM |
 | CLS | < 0.1 | explicit width/height; metric-override fonts |
 | TBT (lab proxy) | ≤ 200ms | CI lab cap |
@@ -201,7 +201,7 @@ Every table: `id`, `tenant_id NOT NULL`, timestamps, `created_by`/`updated_by`; 
 - **Media.** `media_assets.provider` ∈ `external|static|cf_images|stream`, shape-checked. `static` = a key of the build-time stills registry (`src/lib/media/static.ts`, `import.meta.glob` → `<Picture>`); an unknown key renders nothing. Anon reads only assets that published/visible content references, and only hosted providers (0024), through a COLUMN grant — public loaders select `PUBLIC_MEDIA_COLUMNS` (`packages/schemas/content.ts`) and nothing else. SEO's "meta only" write is `update_media_meta()`; where an asset is used is `media_usage()` (the hard-delete gate, superseding `ref_count`).
 
 ### File / layout conventions
-`src/middleware.ts` (security headers + redirects + maintenance pre-cache); `src/lib/authz/matrix.ts` (`ROLE_CAPS`, CI snapshot-asserted against both doc matrices); `packages/consent/gate.ts` (the single `hasConsent`); `packages/schemas`; `SeoHead`/`JsonLd`; `SectionRenderer`; `StreamPlayer`; `supabase/migrations/`; `live.config.ts`; `tests/authz/matrix.spec.ts`.
+`src/middleware.ts` (security headers + redirects + maintenance pre-cache); `src/lib/authz/matrix.ts` (`ROLE_CAPS`, CI snapshot-asserted against both doc matrices); `packages/consent/gate.ts` (the single `hasConsent`); `packages/schemas`; `SeoHead`/`JsonLd`; `SectionRenderer`; `StreamPlayer`; `supabase/migrations/`; `live.config.ts`; `tests/authz/matrix.spec.ts`. Page-only CSS — including a page's own section types (`aboutWho`, `leadership`) — lives in a route stylesheet in `public/styles/` (`about.css`, …) linked through BaseLayout's `styles` prop; shared blocks and variants of sections every page uses (`social`, `statistics`) stay in `global.css`.
 
 ### Rendering & data flow
 Content Layer loaders use the anon key under RLS (`status='published'`, tenant-scoped). Per-section error isolation mandatory. Both EN and AR built; both in sitemap.

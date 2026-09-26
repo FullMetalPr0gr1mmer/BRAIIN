@@ -16,7 +16,7 @@ import { expect, test, type Page, type Request } from '@playwright/test';
  * mp4 is reported as `media`, but a prefetch or an <a download> would not be.
  */
 
-const ROUTES = ['/', '/ar', '/contact', '/ar/contact', '/about', '/services'] as const;
+const ROUTES = ['/', '/ar', '/contact', '/ar/contact', '/about', '/ar/about', '/services'] as const;
 // Pages with a below-the-fold background video surface to scroll to.
 const BELOW_FOLD: Record<string, string> = { '/': '.slogan__media', '/ar': '.slogan__media' };
 
