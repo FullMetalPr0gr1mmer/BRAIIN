@@ -46,6 +46,8 @@ export const ServiceRowSchema = z.object({
   id: z.string().uuid(),
   slug: SlugSchema,
   title: LocalizedTextSchema,
+  /** Chip/skill label where it differs from the title (0023). */
+  short_title: LocalizedTextSchema.nullable(),
   blurb: LocalizedProseSchema.nullable(),
   body_html: LocalizedProseSchema.nullable(),
   hero_video_uid: z.string().nullable(),
@@ -67,13 +69,36 @@ export const PortfolioRowSchema = z.object({
 });
 export type PortfolioRow = z.infer<typeof PortfolioRowSchema>;
 
-/** E-E-A-T author (CLAUDE.md Pillar 3 — no anonymous authorship). */
+// ── Media as the public loaders see it (0024) ─────────────────────────────────────
+// Only columns anon is granted on media_assets — selecting any other column is a
+// permission error that empties the whole query, so this list and the grant must agree
+// (tests/lib/publicMedia.spec.ts).
+export const PUBLIC_MEDIA_COLUMNS = 'id,kind,provider,storage_path,width,height,alt,stream_uid';
+
+export const PublicMediaRowSchema = z.object({
+  id: z.string().uuid(),
+  kind: z.string(),
+  provider: z.enum(['external', 'static', 'cf_images', 'stream']),
+  storage_path: z.string(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+  /** Missing alt renders as decorative (alt="") and is flagged on the dashboard (0025). */
+  alt: z.object({ en: z.string().optional(), ar: z.string().optional() }).nullable(),
+  stream_uid: z.string().nullable(),
+});
+export type PublicMediaRow = z.infer<typeof PublicMediaRowSchema>;
+
+/** E-E-A-T author (CLAUDE.md Pillar 3 — no anonymous authorship), and the leadership slider. */
 export const TeamMemberRowSchema = z.object({
   slug: SlugSchema,
   name: LocalizedTextSchema,
   bio: LocalizedProseSchema.nullable(),
   avatar_url: z.string().nullable(),
   sort_order: z.number(),
+  role: LocalizedTextSchema.nullable(),
+  linkedin_url: z.string().nullable(),
+  is_leadership: z.boolean(),
+  portrait: PublicMediaRowSchema.nullable(),
 });
 export type TeamMemberRow = z.infer<typeof TeamMemberRowSchema>;
 
@@ -87,12 +112,24 @@ export const CertificationRowSchema = z.object({
 });
 export type CertificationRow = z.infer<typeof CertificationRowSchema>;
 
-/** `value` stays a display string so authored suffixes ('+', '%', 'x') survive verbatim. */
+export const STAT_PLACEMENTS = ['home', 'about', 'work'] as const;
+export const StatPlacementSchema = z.enum(STAT_PLACEMENTS);
+export type StatPlacement = z.infer<typeof StatPlacementSchema>;
+
+/**
+ * `value` stays a display string so authored suffixes ('+', '%', 'x') survive verbatim;
+ * `value_numeric` + `value_suffix` (0023, CHECK-consistent with `value`) let a band count
+ * up. `placement_labels` holds the per-page label where it differs from `label`.
+ */
 export const StatisticRowSchema = z.object({
   slug: SlugSchema,
   label: LocalizedTextSchema,
   value: z.string(),
   sort_order: z.number(),
+  value_numeric: z.number().nullable(),
+  value_suffix: z.string().nullable(),
+  placements: z.array(z.string()),
+  placement_labels: z.record(z.string(), LocalizedTextSchema),
 });
 export type StatisticRow = z.infer<typeof StatisticRowSchema>;
 
@@ -129,3 +166,132 @@ export const PostRowSchema = z.object({
   category: PostCategorySchema,
 });
 export type PostRow = z.infer<typeof PostRowSchema>;
+
+// ── UI v2 content model (0021–0022) ───────────────────────────────────────────────
+
+export const SectorRowSchema = z.object({
+  id: z.string().uuid(),
+  slug: SlugSchema,
+  name: LocalizedTextSchema,
+  sort_order: z.number(),
+});
+export type SectorRow = z.infer<typeof SectorRowSchema>;
+
+/** A visible client (visibility IS the disclosure permission — fail-closed). */
+export const ClientRowSchema = z.object({
+  id: z.string().uuid(),
+  slug: SlugSchema,
+  name: LocalizedTextSchema,
+  website_url: z.string().nullable(),
+  sort_order: z.number(),
+  logo: PublicMediaRowSchema.nullable(),
+});
+export type ClientRow = z.infer<typeof ClientRowSchema>;
+
+export const TESTIMONIAL_PLACEMENTS = ['home', 'work'] as const;
+export const TestimonialPlacementSchema = z.enum(TESTIMONIAL_PLACEMENTS);
+export type TestimonialPlacement = z.infer<typeof TestimonialPlacementSchema>;
+
+/** Only the columns anon is granted: never the consent record (0021). */
+export const TestimonialRowSchema = z.object({
+  id: z.string().uuid(),
+  slug: SlugSchema,
+  quote: LocalizedTextSchema,
+  author_name: LocalizedTextSchema,
+  /** "Title, Company" verbatim — there is no company column. */
+  author_role: LocalizedTextSchema.nullable(),
+  client_id: z.string().uuid().nullable(),
+  portfolio_id: z.string().uuid().nullable(),
+  placements: z.array(z.string()),
+  sort_order: z.number(),
+  avatar: PublicMediaRowSchema.nullable(),
+});
+export type TestimonialRow = z.infer<typeof TestimonialRowSchema>;
+
+/** A case-study result card ("XXM · Views across platforms"). */
+export const ResultCardSchema = z.object({
+  value: z.string().trim().min(1).max(16),
+  label: LocalizedTextSchema,
+});
+export type ResultCard = z.infer<typeof ResultCardSchema>;
+
+const Seconds = z.number().min(0).max(600);
+
+/** An embedded sector/client: what a facet chip needs, and where it sorts. */
+const FacetRefSchema = z.object({
+  slug: SlugSchema,
+  name: LocalizedTextSchema,
+  sort_order: z.number(),
+});
+
+/** Everything a project CARD needs (Our Work, All projects, Selected work). */
+export const PortfolioCardRowSchema = z.object({
+  id: z.string().uuid(),
+  slug: SlugSchema,
+  title: LocalizedTextSchema,
+  project_type: LocalizedTextSchema.nullable(),
+  teaser: LocalizedTextSchema.nullable(),
+  summary: LocalizedProseSchema.nullable(),
+  year: z.number().int().nullable(),
+  is_featured: z.boolean(),
+  sort_order: z.number(),
+  updated_at: z.string().nullable(),
+  preview_video_uid: z.string().nullable(),
+  preview_video_path: z.string().nullable(),
+  preview_start_s: Seconds.nullable(),
+  preview_end_s: Seconds.nullable(),
+  client_id: z.string().uuid().nullable(),
+  poster: PublicMediaRowSchema.nullable(),
+  sector: FacetRefSchema.nullable(),
+  /** null while client_id is set = RLS hid it (not disclosable) → "Confidential client". */
+  client: FacetRefSchema.nullable(),
+  services: z.array(
+    z.object({
+      sort_order: z.number(),
+      service: z
+        .object({
+          slug: SlugSchema,
+          title: LocalizedTextSchema,
+          short_title: LocalizedTextSchema.nullable(),
+          sort_order: z.number(),
+        })
+        .nullable(),
+    }),
+  ),
+});
+export type PortfolioCardRow = z.infer<typeof PortfolioCardRowSchema>;
+
+export const PORTFOLIO_MEDIA_ROLES = ['hero', 'final', 'breakdown', 'gallery'] as const;
+export const BREAKDOWN_KINDS = ['sketch', 'bts', 'process'] as const;
+export const MEDIA_LAYOUTS = ['half', 'wide', 'third'] as const;
+
+export const PortfolioMediaRowSchema = z.object({
+  role: z.enum(PORTFOLIO_MEDIA_ROLES),
+  kind: z.enum(['image', 'video']),
+  video_uid: z.string().nullable(),
+  video_path: z.string().nullable(),
+  clip_start_s: Seconds.nullable(),
+  clip_end_s: Seconds.nullable(),
+  duration_label: z.string().nullable(),
+  caption: LocalizedTextSchema.nullable(),
+  breakdown_kind: z.enum(BREAKDOWN_KINDS).nullable(),
+  layout: z.enum(MEDIA_LAYOUTS).nullable(),
+  sort_order: z.number(),
+  /** The image, or the video's poster (embedded as `asset:media_id(...)`). */
+  asset: PublicMediaRowSchema.nullable(),
+});
+export type PortfolioMediaRow = z.infer<typeof PortfolioMediaRowSchema>;
+
+/** A card plus the case-study body (`/portfolio/[slug]`). */
+export const CaseStudyRowSchema = PortfolioCardRowSchema.extend({
+  body_html: LocalizedProseSchema.nullable(),
+  lead: LocalizedTextSchema.nullable(),
+  goal: LocalizedTextSchema.nullable(),
+  result: LocalizedTextSchema.nullable(),
+  scope: z.array(LocalizedTextSchema).max(10),
+  keywords: z.array(LocalizedTextSchema).max(6),
+  results: z.array(ResultCardSchema).max(4),
+  next_portfolio_id: z.string().uuid().nullable(),
+  media: z.array(PortfolioMediaRowSchema),
+});
+export type CaseStudyRow = z.infer<typeof CaseStudyRowSchema>;

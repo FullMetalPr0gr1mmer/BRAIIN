@@ -5,6 +5,8 @@ import SectionRenderer from '@/components/SectionRenderer.astro';
 import type { ServiceRow } from '@/lib/data/services';
 import { buildBreadcrumbSchema, buildFaqSchema } from '@/lib/seo/jsonld';
 import { localizedPath } from '@/lib/i18n';
+import { loadHead } from '@/lib/seo/head';
+import { PAGE_META } from '@/lib/seo/pageMeta';
 import { CONTACT_FAQ } from '@/lib/content/contactFaq';
 import { DEFAULT_CONTACT_SECTIONS, ensureContactInquiry } from '@/lib/sections/types';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
@@ -20,18 +22,16 @@ interface Props {
 
 const { locale, services } = Astro.props;
 
-const STR = {
-  en: {
-    title: 'Contact',
-    desc: 'Start a project with Braiin Station. Send an enquiry, reach us by email, and read the questions we get every week.',
-    home: 'Home',
-  },
-  ar: {
-    title: 'تواصل معنا',
-    desc: 'ابدأ مشروعك مع بريّن ستيشن. أرسل طلبك، أو تواصل معنا عبر البريد الإلكتروني، واطّلع على الأسئلة التي تصلنا كل أسبوع.',
-    home: 'الرئيسية',
-  },
-}[locale];
+const STR = { en: { home: 'Home' }, ar: { home: 'الرئيسية' } }[locale];
+const meta = PAGE_META.contact[locale];
+
+// The head: tenant defaults + this route's code fallbacks (src/lib/seo/pageMeta.ts). The
+// page moves onto its CMS composition — and with it a per-page SEO override — in PR9.
+const { seo } = await loadHead(Astro.locals, {
+  locale,
+  fallbackTitle: meta.title,
+  fallbackDescription: meta.description,
+});
 
 // The service list is data one section needs, so it rides in that section's props
 // rather than becoming a pass-through parameter on SectionRenderer.
@@ -42,7 +42,7 @@ const sections = ensureContactInquiry(DEFAULT_CONTACT_SECTIONS).map((s) =>
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const breadcrumb = buildBreadcrumbSchema([
   { name: STR.home, url: base + localizedPath('/', locale) },
-  { name: STR.title, url: base + localizedPath('/contact', locale) },
+  { name: meta.title, url: base + localizedPath('/contact', locale) },
 ]);
 
 // FAQPage, built from the SAME array FaqAccordion renders — see contactFaq.ts. If these
@@ -52,12 +52,14 @@ const faq = buildFaqSchema(CONTACT_FAQ[locale].map((i) => ({ question: i.q, answ
 ---
 
 <BaseLayout
-  title={`${STR.title} — Braiin Station`}
-  description={STR.desc}
+  title={seo.title}
+  description={seo.description}
   locale={locale}
   logicalPath="/contact"
   jsonLd={[breadcrumb, faq]}
-  headerOverlay
+  robots={seo.robots}
+  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  header="overlay"
 >
   <SectionRenderer locale={locale} sections={sections} />
 </BaseLayout>

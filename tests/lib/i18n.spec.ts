@@ -7,6 +7,8 @@ import {
   toLogicalPath,
   localizedPath,
   hreflangAlternates,
+  localizedHref,
+  arabicIndic,
 } from '@/lib/i18n';
 
 describe('pickLocale', () => {
@@ -104,5 +106,41 @@ describe('hreflang', () => {
     const xDefault = alts.find((a) => a.hreflang === 'x-default');
     const en = alts.find((a) => a.hreflang === 'en');
     expect(xDefault?.href).toBe(en?.href);
+  });
+});
+
+describe('localizedHref — authored hrefs', () => {
+  it('keeps a fragment attached to the localized path', () => {
+    // `/#services` used to become `/ar/#services` — a different URL from the /ar home.
+    expect(localizedHref('/#services', 'ar')).toBe('/ar#services');
+    expect(localizedHref('/#services', 'en')).toBe('/#services');
+    expect(localizedHref('/portfolio/all?sector=f-b#projects', 'ar')).toBe(
+      '/ar/portfolio/all?sector=f-b#projects',
+    );
+  });
+
+  it('localizes plain root-relative paths exactly like localizedPath', () => {
+    expect(localizedHref('/about', 'ar')).toBe('/ar/about');
+    expect(localizedHref('/', 'ar')).toBe('/ar');
+    expect(localizedHref('/about', 'en')).toBe('/about');
+  });
+
+  it('leaves anything that is not a route of this site untouched', () => {
+    for (const raw of [
+      'https://instagram.com/braiinstatiion',
+      'mailto:hello@braiinstatiion.com',
+      '#faq',
+      '//evil.example/x',
+      'relative/path',
+    ]) {
+      expect(localizedHref(raw, 'ar')).toBe(raw);
+    }
+  });
+});
+
+describe('arabicIndic', () => {
+  it('renders Arabic-Indic digits with no grouping (a year is not a quantity)', () => {
+    expect(arabicIndic(2026)).toBe('٢٠٢٦');
+    expect(arabicIndic(0)).toBe('٠');
   });
 });

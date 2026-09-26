@@ -29,7 +29,14 @@ import { liveRecheck } from '@/lib/admin/liveRecheck';
 
 export const prerender = false;
 
-const DECRYPTED_FIELDS = ['email', 'phone', 'budget'] as const;
+/** Decrypted response field → the ciphertext column it comes from. */
+const DECRYPTED_FIELDS = {
+  email: 'email_enc',
+  phone: 'phone_enc',
+  budget: 'budget_enc',
+  // The v2 form's free-text "When do you need it?" (migration 0017) — a §3 timeline field.
+  timeline: 'timeline_text_enc',
+} as const;
 
 function requireId(params: Record<string, string | undefined>): string {
   const id = params['id'];
@@ -61,8 +68,8 @@ export const GET = defineAdminRoute({
     await liveRecheck(auth);
 
     const decrypted: Record<string, string | null> = {};
-    for (const field of DECRYPTED_FIELDS) {
-      const ciphertext = row[`${field === 'budget' ? 'budget' : field}_enc`];
+    for (const [field, column] of Object.entries(DECRYPTED_FIELDS)) {
+      const ciphertext = row[column];
       if (typeof ciphertext !== 'string' || ciphertext.length === 0) {
         decrypted[field] = null;
         continue;
@@ -83,10 +90,10 @@ export const GET = defineAdminRoute({
       action: 'lead.view_pii',
       entityType: 'lead',
       entityId: id,
-      detail: { pii: true, fields: [...DECRYPTED_FIELDS] },
+      detail: { pii: true, fields: Object.keys(DECRYPTED_FIELDS) },
     });
 
-    const { email_enc: _e, phone_enc: _p, budget_enc: _b, ...rest } = row;
+    const { email_enc: _e, phone_enc: _p, budget_enc: _b, timeline_text_enc: _t, ...rest } = row;
     return { ...rest, ...decrypted };
   },
 });

@@ -1,4 +1,4 @@
-/* Braiin Station — brand design system (from the approved "Brain Station UI" design).
+/* Brand design system (from the approved "Brain Station UI" design, UI v2 2026-09).
    Palette: Klein blue on black & paper white. Type: Archivo (EN) / Almarai (AR).
    Uses CSS logical properties so RTL (ar) works without overrides; every animation is
    compositor-only (transform/opacity) and disabled under prefers-reduced-motion.
@@ -27,6 +27,21 @@
   --bs-ink: #000000;
   --bs-dim: #4a5468;
   --bs-line-l: rgba(0, 0, 0, 0.14);
+
+  /* UI v2 additions (Brain Station UI, 2026-09). Text tokens are contrast-gated in
+     scripts/contrast-audit.mjs like the rest of :root. */
+  --bs-mist: #f3f5fa; /* soft paper — "why us" / "who we are" blocks */
+  --bs-ink-2: #2a2f3a; /* secondary copy on mist and paper */
+  --bs-ink-3: #3a404c; /* case-study body copy on paper */
+  --bs-media-bg: #0d0d0d; /* a media frame before its image paints, on dark */
+  --bs-media-bg-l: #eef0f5; /* ...and on paper */
+  --bs-err-soft: #ff8a8a; /* error text on dark and Klein fills */
+  --bs-shadow-klein: 0 12px 38px rgba(0, 36, 188, 0.45);
+  --bs-shadow-cobalt: 0 18px 48px rgba(2, 76, 255, 0.45);
+  --bs-glow-sky: rgba(34, 169, 255, 0.45);
+  --bs-glow-klein: rgba(0, 36, 188, 0.42);
+  --bs-header-h: 72px;
+  --bs-ease: cubic-bezier(0.16, 1, 0.3, 1); /* the mockup's one entrance curve */
 
   /* status */
   --bs-ok: #2ecc71;
@@ -59,9 +74,12 @@
   --bs-intro-hold: 0s; /* the logo holds the plate, alone */
   --bs-intro-fade: 0s; /* the plate + logo leave */
 
-  /* Headline cadence. The RTL difference is a TOKEN, not a second ladder. */
-  --bs-hero-word-step: 0.045s;
-  --bs-hero-letter-step: 0.012s;
+  /* Headline cadence (UI v2): the mockup staggers every LETTER by 26ms across the whole
+     line. The ladder below is per word + per letter-in-word (server-split spans, no
+     inline styles under CSP), so the word rung is ~5 letters at 26ms — the average word.
+     The RTL difference is a TOKEN, not a second ladder. */
+  --bs-hero-word-step: 0.13s;
+  --bs-hero-letter-step: 0.026s;
 
   --bs-hero-beat: 0.15s; /* one step of the post-headline cascade */
 }
@@ -71,7 +89,7 @@
    be a whole second ladder that only reached rung 6 — rungs 7-10 of an Arabic
    headline fell through to the ENGLISH values and stalled mid-line. */
 html[dir='rtl'] {
-  --bs-hero-word-step: 0.062s;
+  --bs-hero-word-step: 0.09s; /* the mockup's 90ms per Arabic word */
   --bs-hero-letter-step: 0s;
 }
 
@@ -95,8 +113,8 @@ body {
 /* ONE flag: the overlay's existence in the DOM. Replaces a `body.page-intro` class and
    a Hero `intro` prop that defaulted independently in two files and could disagree. */
 body:has(.intro) {
-  --bs-intro-hold: 3.5s;
-  --bs-intro-fade: 0.4s;
+  --bs-intro-hold: 1s; /* UI v2 (decision 5): the mockup's --intro-hold: 1000ms */
+  --bs-intro-fade: 0.45s; /* ...and its .45s fade — the plate is gone at 1.45s */
 }
 
 /* ---- Self-hosted fonts (docs/fonts.md, KAN-23) ------------------------------------
@@ -125,16 +143,16 @@ body:has(.intro) {
   descent-override: 21.28%;
   line-gap-override: 0%;
 }
-@font-face {
-  font-family: 'Almarai';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/almarai-400-arabic.woff2') format('woff2');
-  unicode-range:
-    U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E,
-    U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
-}
+/* Almarai, subset by scripts/subset-fonts.py (docs/fonts.md). Per weight:
+     latin  = ASCII + the typographic marks the copy uses (~10 KB)
+     arabic = the Arabic block U+0600-06FF + space/nbsp/joiners (~25 KB); contextual
+              and lam-alef glyphs are kept through the GSUB closure.
+   The unicode-ranges below MUST match what the files contain — keep them in lock-step
+   with the script. The LATIN face is declared first and the ARABIC face claims
+   U+0020/U+00A0: with overlapping ranges the LAST-declared face is tried first (CSS
+   Fonts 4 §4.5), so spaces inside Arabic text resolve to the Arabic file already loading.
+   Why it matters: Lighthouse treats font requests as render-blocking, and the old
+   subsets (~152 KB per AR route) put /ar over the LCP/perf budget (CLAUDE.md §6). */
 @font-face {
   font-family: 'Almarai';
   font-style: normal;
@@ -142,18 +160,16 @@ body:has(.intro) {
   font-display: swap;
   src: url('/fonts/almarai-400-latin.woff2') format('woff2');
   unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    U+0020-007E, U+00A0, U+00A9, U+00AB, U+00B7, U+00BB, U+00D7, U+2013-2014, U+2018-201D, U+2022,
+    U+2026, U+20AC, U+2122, U+2190-2193, U+2212;
 }
 @font-face {
   font-family: 'Almarai';
   font-style: normal;
-  font-weight: 700;
+  font-weight: 400;
   font-display: swap;
-  src: url('/fonts/almarai-700-arabic.woff2') format('woff2');
-  unicode-range:
-    U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E,
-    U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+  src: url('/fonts/almarai-400-arabic.woff2') format('woff2');
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
 @font-face {
   font-family: 'Almarai';
@@ -162,18 +178,16 @@ body:has(.intro) {
   font-display: swap;
   src: url('/fonts/almarai-700-latin.woff2') format('woff2');
   unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    U+0020-007E, U+00A0, U+00A9, U+00AB, U+00B7, U+00BB, U+00D7, U+2013-2014, U+2018-201D, U+2022,
+    U+2026, U+20AC, U+2122, U+2190-2193, U+2212;
 }
 @font-face {
   font-family: 'Almarai';
   font-style: normal;
-  font-weight: 800;
+  font-weight: 700;
   font-display: swap;
-  src: url('/fonts/almarai-800-arabic.woff2') format('woff2');
-  unicode-range:
-    U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E,
-    U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+  src: url('/fonts/almarai-700-arabic.woff2') format('woff2');
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
 @font-face {
   font-family: 'Almarai';
@@ -182,8 +196,16 @@ body:has(.intro) {
   font-display: swap;
   src: url('/fonts/almarai-800-latin.woff2') format('woff2');
   unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    U+0020-007E, U+00A0, U+00A9, U+00AB, U+00B7, U+00BB, U+00D7, U+2013-2014, U+2018-201D, U+2022,
+    U+2026, U+20AC, U+2122, U+2190-2193, U+2212;
+}
+@font-face {
+  font-family: 'Almarai';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/almarai-800-arabic.woff2') format('woff2');
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
 @font-face {
   font-family: 'Almarai Fallback';
@@ -396,10 +418,12 @@ html[dir='rtl'] .tag {
 }
 
 /* ============================================================
-   Sitewide chrome — SiteHeader
-   Solid variant (interior pages): sticky black bar.
-   Overlay variant (home): fixed over the hero video; the nav
-   script toggles .is-solid / .is-hidden after the hero.
+   Sitewide chrome — SiteHeader (UI v2)
+   overlay  fixed and transparent over the page's hero; a dark,
+            blurred backdrop FADES in once the header script marks
+            it .is-solid past the hero.
+   solid    sticky black bar for pages with no hero.
+   Both hide on the way down and return on the way up (.is-hidden).
    ============================================================ */
 
 .skip-link {
@@ -420,26 +444,48 @@ html[dir='rtl'] .tag {
   position: sticky;
   top: 0;
   z-index: 60;
-  background: rgba(0, 0, 0, 0.62);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  transition: transform 0.6s var(--bs-ease);
+}
+/* The backdrop is its own layer so the solid state changes by OPACITY alone
+   (compositor-only). The bar used to transition `background` and `backdrop-filter`,
+   which repaints the blurred region on every frame of the fade. z-index -1 keeps it under
+   the links: the header's own z-index makes it a stacking context. */
+.site-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--bs-black);
   border-block-end: 1px solid rgba(255, 255, 255, 0.1);
+  transition: opacity 0.45s ease;
 }
 
 .site-header--overlay {
   position: fixed;
   inset: 0 0 auto 0;
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-block-end-color: transparent;
-  transition:
-    background 0.45s ease,
-    border-color 0.45s ease,
-    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.6s ease;
   animation: fade-in 0.7s ease both;
   animation-delay: calc(var(--bs-hero-in) + var(--bs-hero-beat) * 3);
+}
+/* No intro (contact): there is no handoff to wait for, so the bar does not sit out the
+   worst-case headline bound — invisible and unclickable for ~2s — before it arrives. The
+   mockup's contact page shows its nav from the start. Home always keeps `.intro` in the
+   DOM (a cut only hides it), so home keeps its strict order. */
+body:not(:has(.intro)) .site-header--overlay {
+  animation-delay: 0s;
+}
+.site-header--overlay::before {
+  background: rgba(0, 0, 0, 0.62);
+  opacity: 0;
+}
+/* The blur is applied only in the solid state. A backdrop-filter layer is sampled from
+   whatever is behind it on every frame that content changes — even at opacity 0 — and on
+   home that is the intro plate and the headline entrance. It fades in with the opacity,
+   so the moment it switches on is invisible. */
+.site-header--overlay.is-solid::before {
+  opacity: 1;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 /* Opacity-only, and shared with .hero__cta: a `to { transform: none }` under
    `fill: both` would permanently outrank .cta:hover's translateY.
@@ -459,18 +505,13 @@ html[dir='rtl'] .tag {
     pointer-events: auto;
   }
 }
-.site-header--overlay.is-solid {
-  background: rgba(0, 0, 0, 0.62);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-block-end-color: rgba(255, 255, 255, 0.1);
-}
-.site-header--overlay.is-hidden {
+.site-header.is-hidden {
   transform: translateY(-110%);
 }
 /* Keyboard focus must never sit inside an off-screen header (WCAG 2.4.7/2.4.11):
-   tabbing into the hidden bar brings it back. */
-.site-header--overlay.is-hidden:focus-within {
+   tabbing into the hidden bar brings it back. The script also never hides a header
+   with focus inside or its menu open. */
+.site-header.is-hidden:focus-within {
   transform: none;
 }
 
@@ -504,7 +545,12 @@ html[dir='rtl'] .tag {
   align-items: center;
 }
 
-.site-nav__list a {
+.site-header__key {
+  white-space: nowrap; /* "CONTACT US" on one line, down to 320px */
+}
+
+.site-nav__list a,
+.site-header__key {
   color: var(--bs-fg);
   text-decoration: none;
   font-size: 12.5px;
@@ -514,12 +560,14 @@ html[dir='rtl'] .tag {
   position: relative;
   padding: 4px 0;
 }
-html[dir='rtl'] .site-nav__list a {
+html[dir='rtl'] .site-nav__list a,
+html[dir='rtl'] .site-header__key {
   letter-spacing: 0;
   font-size: 14px;
   text-transform: none;
 }
-.site-nav__list a::after {
+.site-nav__list a::after,
+.site-header__key::after {
   content: '';
   position: absolute;
   inset-inline: 0;
@@ -528,13 +576,16 @@ html[dir='rtl'] .site-nav__list a {
   background: var(--bs-cobalt);
   transform: scaleX(0);
   transform-origin: var(--bs-underline-origin, left);
-  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.35s var(--bs-ease);
 }
-html[dir='rtl'] .site-nav__list a::after {
+html[dir='rtl'] .site-nav__list a::after,
+html[dir='rtl'] .site-header__key::after {
   --bs-underline-origin: right;
 }
 .site-nav__list a:hover::after,
-.site-nav__list a[aria-current='page']::after {
+.site-nav__list a[aria-current='page']::after,
+.site-header__key:hover::after,
+.site-header__key[aria-current='page']::after {
   transform: scaleX(1);
 }
 
@@ -574,8 +625,10 @@ html[dir='rtl'] .site-nav__list a::after {
    does not exist. `display: none` on the <details> itself (not just on its <summary>)
    is what makes that true — hiding only the summary left a closed <details> in the
    layout, and a closed <details> hides its own content, which is how the whole menu
-   went missing above 48rem. */
-.site-nav {
+   once went missing on desktop. The key link's second copy exists only for narrow
+   screens. */
+.site-nav,
+.site-header__key {
   display: none;
 }
 
@@ -596,13 +649,16 @@ html[dir='rtl'] .site-nav__list a::after {
   display: none;
 }
 
-/* Below 48rem the nav collapses into the native <details> disclosure. No JS. The panel
-   is a SIBLING of the <details> (see SiteHeader.astro), revealed with the
-   subsequent-sibling combinator — a closed <details> hides its content no matter what
-   CSS says about the summary. */
-@media (max-width: 48rem) {
+/* At <=900px (the mockup's breakpoint) only the KEY link stays in the bar; the full list
+   collapses into the native <details> disclosure. No JS. The panel is a SIBLING of the
+   <details> (see SiteHeader.astro), revealed with the subsequent-sibling combinator — a
+   closed <details> hides its content no matter what CSS says about the summary. */
+@media (max-width: 56.25rem) {
   .site-nav {
     display: block;
+  }
+  .site-header__key {
+    display: inline-block;
   }
   .site-nav__panel {
     display: none;
@@ -626,6 +682,15 @@ html[dir='rtl'] .site-nav__list a::after {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.9rem;
+  }
+}
+
+/* Small phones (360–400px): logo, key link, menu toggle and language pill share one row.
+   A tighter gap keeps the logo at its 96px minimum; below that the logo — not the
+   language pill — is what gives way. */
+@media (max-width: 25rem) {
+  .site-header__bar {
+    gap: 0.75rem;
   }
 }
 
@@ -680,12 +745,16 @@ html[dir='rtl'] .site-nav__list a::after {
      constant 520x266 from 1131px of width all the way up, on every viewport height. */
   width: min(46vw, 520px, 66svh);
   height: auto;
-  /* No drop-shadow, by design decision (the Brain Station UI reference keeps one at
-     `drop-shadow(0 6px 40px rgba(0,0,0,.45))`). The shadow was what lifted the white
-     wordmark off the bright sky the loop opens on; without it the logo relies on the
-     video frame behind it for contrast. If it ever washes out on a lighter cut of the
-     loop, that shadow — not a plate — is the fix. */
-  animation: intro-logo-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* The mockup's shadow (UI v2, decision 5): it lifts the white wordmark off the bright
+     sky the loop opens on. A STATIC filter — rasterised once, never animated. */
+  filter: drop-shadow(0 6px 40px rgba(0, 0, 0, 0.45));
+  /* The mockup's .45s entrance on its easing. Its blur(10px) from-state is NOT adopted:
+     `filter` is outside the compositor-only set (transform + opacity) the file header
+     commits to, the intro overlaps module evaluation (main-thread filter animation is
+     TBT/INP risk), and this image is the LCP element — re-rasterising a blurred 1040w
+     texture every frame is exactly the low-end-Android cost the budget exists to stop.
+     The delay stays the FOUC guard (.12s), not the mockup's .05s. */
+  animation: intro-logo-in 0.45s var(--bs-ease) both;
   animation-delay: var(--bs-intro-guard);
 }
 @keyframes intro-logo-in {
@@ -996,7 +1065,7 @@ html[dir='rtl'] .hero__scroll i {
 }
 .letter {
   display: inline-block;
-  animation: letter-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: letter-in 0.9s var(--bs-ease) both; /* the mockup's .9s letterIn */
   /* GATED on the intro. The comment that used to live here claimed this blew the 2.5s
      LCP budget; that was measurably false. Chromium aggregates text LCP at the BLOCK
      ancestor, so the <h1> registers at first paint while every .letter is still
@@ -1972,46 +2041,52 @@ html[dir='rtl'] .sbox__user {
 }
 
 /* ============================================================
-   Sitewide footer — dark bar (SiteFooter).
+   Sitewide footer — the mockup's paper bar (SiteFooter):
+   "© 2026 Braiin Statiion. Jeddah, Saudi Arabia" + the mailbox,
+   then the footer navigation and the legal links (ours).
    ============================================================ */
 
 .site-footer {
   position: relative;
   z-index: 4;
-  background: var(--bs-black);
-  color: var(--bs-muted);
-  border-top: 1px solid var(--bs-line-d);
+  background: var(--bs-paper);
+  color: var(--bs-dim); /* #4a5468 on white: 7.6:1 (contrast-audit) */
+  border-top: 1px solid var(--bs-line-l);
   padding: 22px var(--bs-pad-x) 34px;
+  font-size: 12px;
 }
 
-.site-footer__inner {
-  max-width: none;
+.site-footer__bar,
+.site-footer__links {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem 2rem;
+  gap: 12px 20px;
   flex-wrap: wrap;
+}
+
+.site-footer__links {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--bs-line-l);
+}
+
+.site-footer__copy {
+  margin: 0;
+}
+
+.site-footer a {
+  color: var(--bs-dim);
+  text-decoration: none;
+  transition: color 0.25s;
+}
+
+.site-footer a:hover {
+  color: var(--bs-black);
 }
 
 .site-footer__list {
   gap: 1.25rem;
-}
-
-.site-footer__list a {
-  color: var(--bs-muted);
-  text-decoration: none;
-  font-size: 0.8rem;
-  transition: color 0.25s;
-}
-
-.site-footer__list a:hover {
-  color: var(--bs-fg);
-}
-
-.site-footer__copy {
-  color: var(--bs-muted);
-  font-size: 0.8rem;
-  margin: 0;
 }
 
 /* ============================================================
@@ -2741,6 +2816,955 @@ html[dir='rtl'] .faq-item__a p {
   color: var(--bs-err);
 }
 
+/* ============================================================
+   UI v2 SHARED BLOCKS (PR6) — media frames, project cards, facet tags, stat bands,
+   testimonials, the lead band, badge CTAs, split headings. Values from the mockup
+   (docs/design-port-2026-09.md); namespaced so they cannot collide with the older
+   `.lead` / `.stat` / `.sec-head` utilities above.
+   ============================================================ */
+
+/* ---- Kicker dot: Klein, as the design has it (a sky tag keeps a Klein dot); white on a
+   Klein band. ---- */
+.tag .dot {
+  background: var(--bs-klein);
+}
+
+/* ---- Klein band chrome: LeadBand, the home testimonials, the case-study quote ---- */
+.klein-band {
+  position: relative;
+  overflow: hidden;
+  background: var(--bs-klein);
+  color: var(--bs-paper);
+}
+.klein-band::before {
+  content: '';
+  position: absolute;
+  inset: -40% -20% auto auto;
+  width: 80%;
+  height: 140%;
+  background: radial-gradient(closest-side, var(--bs-glow-sky), transparent 70%);
+  pointer-events: none;
+}
+html[dir='rtl'] .klein-band::before {
+  inset: -40% auto auto -20%;
+}
+.klein-band .tag {
+  color: rgba(255, 255, 255, 0.8);
+}
+.klein-band .tag .dot {
+  background: var(--bs-paper);
+}
+/* The outlined accent of the Klein bands. */
+.klein-band h2 em {
+  font-style: normal;
+  color: transparent;
+  -webkit-text-stroke: 2px var(--bs-paper);
+}
+/* The global cobalt ring is near-invisible on Klein (~1.9:1): white instead. */
+.klein-band :focus-visible {
+  outline-color: var(--bs-paper);
+}
+
+/* ---- Media frame (MediaFrame.astro + src/lib/client/clips.ts) ---- */
+.mf {
+  position: relative;
+  overflow: hidden;
+  background: var(--bs-media-bg);
+  border-radius: 4px;
+}
+.mf img,
+.mf video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition:
+    transform 1.1s var(--bs-ease),
+    opacity 0.5s ease;
+}
+.mf video {
+  opacity: 0;
+}
+.mf.is-playing video {
+  opacity: 1;
+}
+.mf--feature {
+  aspect-ratio: 925 / 553;
+}
+.mf--card {
+  aspect-ratio: 916 / 502;
+}
+.mf--who {
+  aspect-ratio: 930 / 538;
+}
+.mf--film {
+  aspect-ratio: 16 / 10;
+  border-radius: 22px;
+}
+.mf--film img,
+.mf--film video {
+  border-radius: inherit;
+}
+.mf--intro-a {
+  min-height: clamp(320px, 42vw, 760px);
+}
+@media (max-width: 51.25rem) {
+  .mf--intro-a {
+    min-height: 0;
+    aspect-ratio: 928 / 738;
+  }
+}
+.mf--intro-b {
+  aspect-ratio: 926 / 525;
+}
+.mf__play {
+  position: absolute;
+  z-index: 2;
+  top: 14px;
+  inset-inline-end: 14px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--bs-paper);
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s var(--bs-ease);
+}
+.mf__play svg {
+  width: 12px;
+  height: 12px;
+  margin-inline-start: 2px;
+}
+.mf.is-playing .mf__play {
+  opacity: 0;
+  transform: scale(0.8);
+}
+/* Only where clips.ts wired the frame: no badge promising a preview that cannot play
+   (touch, reduced motion, Save-Data, no JS). Absolutely positioned — showing it is CLS 0. */
+.mf:not(.can-clip) .mf__play {
+  display: none;
+}
+
+/* ---- Project card (ProjectCard.astro) ---- */
+.pcard {
+  display: block;
+  color: inherit;
+}
+.pcard__link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.pcard__link:hover .mf img,
+.pcard__link:hover .mf video,
+.pcard__link:focus-visible .mf img,
+.pcard__link:focus-visible .mf video {
+  transform: scale(1.035);
+}
+.pcard__t {
+  display: block;
+  margin-top: clamp(16px, 2.2vh, 22px);
+  font-size: clamp(18px, 1.9vw, 27px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.28;
+  transition: color 0.3s;
+}
+.pcard--home .pcard__t {
+  margin-top: 18px;
+  font-size: clamp(18px, 1.9vw, 26px);
+}
+html[dir='rtl'] .pcard__t {
+  letter-spacing: 0;
+  line-height: 1.6;
+}
+.pcard--catalog .pcard__link:hover .pcard__t,
+.pcard--catalog .pcard__link:focus-visible .pcard__t {
+  color: var(--bs-sky);
+}
+.pcard--home .pcard__link:hover .pcard__t,
+.pcard--home .pcard__link:focus-visible .pcard__t {
+  color: var(--bs-klein);
+}
+
+/* ---- Facet tags (FacetTags.astro) ---- */
+.facets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px clamp(22px, 2.6vw, 40px);
+  margin-top: 18px;
+}
+.facets__f {
+  min-width: 0;
+  flex: none;
+}
+.facets__k {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 8px;
+  color: var(--bs-muted);
+}
+.facets--light .facets__k {
+  color: var(--bs-dim);
+}
+.facets__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ftag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 6px 11px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  transition:
+    background 0.25s,
+    border-color 0.25s,
+    color 0.25s;
+}
+a.ftag:hover {
+  border-color: var(--bs-sky);
+  color: var(--bs-sky);
+}
+.ftag.is-on {
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+  color: var(--bs-paper);
+}
+.ftag:focus-visible {
+  outline-offset: 2px;
+}
+.ftag--note {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  border-style: dashed;
+}
+.facets--light .ftag {
+  color: var(--bs-ink);
+  border-color: rgba(0, 0, 0, 0.16);
+}
+.facets--light a.ftag:hover {
+  border-color: var(--bs-klein);
+  color: var(--bs-klein);
+}
+.facets--light .ftag--note {
+  color: var(--bs-dim);
+}
+/* Case-study title band: labels uppercase, tags a touch larger, Klein fill on hover. */
+.facets--case {
+  gap: clamp(22px, 3vw, 52px);
+  margin-top: 0;
+}
+.facets--case .facets__k {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .facets--case .facets__k {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 13px;
+}
+.facets--case .ftag {
+  padding: 6px 12px;
+  font-size: 13.5px;
+  color: var(--bs-paper);
+  border-color: rgba(255, 255, 255, 0.26);
+}
+.facets--case a.ftag:hover {
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+  color: var(--bs-paper);
+}
+@media (max-width: 35rem) {
+  .facets {
+    gap: 14px 22px;
+  }
+  .facets__f {
+    flex: 1 1 40%;
+  }
+}
+
+/* ---- Stat bands (StatBand.astro) ---- */
+.sb {
+  position: relative;
+  padding: clamp(72px, 11vh, 130px) var(--bs-pad-x);
+}
+.sb--band {
+  background: var(--bs-black);
+  color: var(--bs-paper);
+}
+.sb--band .tag {
+  color: var(--bs-sky);
+}
+.sb--reach {
+  background: var(--bs-paper);
+  color: var(--bs-black);
+  padding-block: clamp(80px, 12vh, 150px);
+}
+/* Standalone (a CMS statistics section): the mockup's white .proof shell (work L576-580). */
+.sb--proof {
+  background: var(--bs-paper);
+  color: var(--bs-black);
+  padding-block: clamp(64px, 10vh, 130px) clamp(72px, 11vh, 140px);
+}
+/* Bare (inside Our Work's section, which supplies the shell): no padding of its own. Must
+   stay after every .sb--<variant> padding rule — same specificity, so order decides. */
+.sb--bare {
+  padding: 0;
+}
+.sb__head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px 40px;
+  flex-wrap: wrap;
+  margin-bottom: clamp(28px, 4.5vh, 52px);
+}
+.sb__head h2 {
+  margin: 0;
+  font-size: clamp(28px, 3.6vw, 54px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  text-transform: uppercase;
+  max-width: 18ch;
+}
+html[dir='rtl'] .sb__head h2 {
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: none;
+}
+.sb__head h2 em {
+  font-style: normal;
+  color: var(--bs-sky);
+}
+/* Direct child only: the band's kicker (p.tag) sits one level down, inside the div. */
+.sb__head > p {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--bs-muted);
+  max-width: 36ch;
+}
+.sb--reach .sb__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 24px clamp(32px, 6vw, 110px);
+  margin-bottom: clamp(40px, 6vh, 72px);
+}
+.sb--reach .sb__head h2 {
+  font-size: clamp(34px, 5.4vw, 90px);
+  line-height: 0.92;
+  letter-spacing: -0.045em;
+  max-width: 14ch;
+}
+html[dir='rtl'] .sb--reach .sb__head h2 {
+  letter-spacing: 0;
+  line-height: 1.25;
+  font-size: clamp(30px, 4.4vw, 72px);
+}
+.sb--reach .sb__head h2 em {
+  color: var(--bs-klein);
+}
+.sb--reach .sb__head > p {
+  font-size: clamp(15px, 1.3vw, 18px);
+  line-height: 1.65;
+  color: var(--bs-dim);
+  max-width: 40ch;
+}
+html[dir='rtl'] .sb--reach .sb__head > p {
+  line-height: 1.95;
+}
+.sb__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid var(--bs-line-d);
+}
+.sb--reach .sb__grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.sb--reach .sb__grid,
+.sb--proof .sb__grid {
+  border-color: var(--bs-line-l);
+}
+.sb__cell {
+  padding: clamp(26px, 4vh, 44px) clamp(16px, 2vw, 30px);
+  border-inline-start: 1px solid var(--bs-line-d);
+}
+.sb--reach .sb__cell,
+.sb--proof .sb__cell {
+  border-inline-start-color: var(--bs-line-l);
+}
+.sb--reach .sb__cell {
+  padding: clamp(28px, 4vh, 46px) clamp(16px, 2.4vw, 36px);
+}
+.sb--proof .sb__cell {
+  padding: clamp(24px, 3.6vh, 40px) clamp(16px, 2vw, 30px);
+}
+.sb__cell:first-child {
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+/* More counters than one row (placements are editor-controlled; minItems goes to 6): the
+   first cell of every row drops its rule, and each later row gets a rule above it. */
+.sb--band .sb__cell:nth-child(4n + 1),
+.sb--proof .sb__cell:nth-child(4n + 1),
+.sb--reach .sb__cell:nth-child(3n + 1) {
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+.sb--band .sb__cell:nth-child(n + 5) {
+  border-top: 1px solid var(--bs-line-d);
+}
+.sb--proof .sb__cell:nth-child(n + 5),
+.sb--reach .sb__cell:nth-child(n + 4) {
+  border-top: 1px solid var(--bs-line-l);
+}
+.sb__n {
+  display: block;
+  font-size: clamp(46px, 6.4vw, 104px);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+.sb--reach .sb__n {
+  font-size: clamp(48px, 7vw, 116px);
+}
+.sb--proof .sb__n {
+  font-size: clamp(44px, 6.2vw, 96px);
+}
+.sb__n i {
+  font-style: normal;
+  color: var(--bs-sky);
+}
+.sb--reach .sb__n i,
+.sb--proof .sb__n i {
+  color: var(--bs-klein);
+}
+/* A value that is not a number yet ("TBD"). #6b7384 on white = 4.8:1 (the mockup's
+   #C9CDD6 is 1.5:1 — raised). */
+.sb__n--text {
+  color: #6b7384;
+}
+.sb__l {
+  display: block;
+  margin-top: 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--bs-muted);
+  max-width: 22ch;
+}
+.sb--reach .sb__l,
+.sb--proof .sb__l {
+  color: var(--bs-dim);
+}
+.sb--reach .sb__l {
+  font-size: 14px;
+  line-height: 1.55;
+  max-width: 24ch;
+}
+@media (max-width: 53.75rem) {
+  .sb--reach .sb__head {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 51.25rem) {
+  .sb--band .sb__grid,
+  .sb--proof .sb__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sb--band .sb__cell:nth-child(2n + 1),
+  .sb--proof .sb__cell:nth-child(2n + 1) {
+    border-inline-start: 0;
+    padding-inline-start: 0;
+  }
+  .sb--band .sb__cell:nth-child(n + 3) {
+    border-top: 1px solid var(--bs-line-d);
+  }
+  .sb--proof .sb__cell:nth-child(n + 3) {
+    border-top: 1px solid var(--bs-line-l);
+  }
+}
+@media (max-width: 38.75rem) {
+  .sb--reach .sb__grid {
+    grid-template-columns: 1fr;
+  }
+  .sb--reach .sb__cell {
+    border-inline-start: 0;
+    padding-inline: 0;
+  }
+  .sb--reach .sb__cell + .sb__cell {
+    border-top: 1px solid var(--bs-line-l);
+  }
+}
+
+/* ---- Testimonials (Testimonials.astro + src/lib/client/carousel.ts) ---- */
+.tm--klein {
+  padding: clamp(80px, 12vh, 150px) var(--bs-pad-x);
+}
+.tm__grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.1fr);
+  gap: clamp(32px, 6vw, 110px);
+  align-items: start;
+}
+.tm--light .tm__grid {
+  margin-top: clamp(64px, 10vh, 120px);
+}
+.tm h2 {
+  margin: 0;
+  font-size: clamp(32px, 4.4vw, 70px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+.tm--light h2 {
+  font-size: clamp(26px, 3.4vw, 50px);
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+html[dir='rtl'] .tm h2 {
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: none;
+}
+.tm--light h2 em {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+.tm__nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: clamp(26px, 4vh, 44px);
+}
+.tm__nav[hidden],
+.tm__btn[hidden] {
+  display: none;
+}
+.tm__btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  flex: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  background: none;
+  color: var(--bs-paper);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transition:
+    background 0.3s,
+    color 0.3s,
+    border-color 0.3s;
+}
+.tm__btn:hover {
+  background: var(--bs-paper);
+  color: var(--bs-klein);
+  border-color: var(--bs-paper);
+}
+.tm--light .tm__btn {
+  width: 48px;
+  height: 48px;
+  color: var(--bs-black);
+  border-color: var(--bs-line-l);
+}
+.tm--light .tm__btn:hover {
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+  color: var(--bs-paper);
+}
+.tm__btn svg {
+  width: 17px;
+  height: 17px;
+}
+html[dir='rtl'] .tm__btn:not(.tm__toggle) svg {
+  transform: scaleX(-1);
+}
+.tm__toggle .tm__play,
+.tm__toggle.is-play .tm__pause {
+  display: none;
+}
+.tm__toggle.is-play .tm__play {
+  display: block;
+}
+.tm__count {
+  margin-inline-start: 10px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  font-variant-numeric: tabular-nums;
+}
+.tm__count b {
+  color: var(--bs-paper);
+}
+.tm--light .tm__count {
+  color: var(--bs-dim);
+}
+.tm--light .tm__count b {
+  color: var(--bs-black);
+}
+/* Without JS: every quote, one after another. Enhanced: one at a time, cross-fading. */
+.tm__stage {
+  display: grid;
+  gap: clamp(40px, 6vh, 64px);
+}
+.tm.is-enhanced .tm__stage {
+  gap: 0;
+}
+.tm.is-enhanced .tm__q {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transform: translateY(14px);
+  pointer-events: none;
+  transition:
+    opacity 0.6s ease,
+    transform 0.7s var(--bs-ease);
+}
+.tm.is-enhanced .tm__q.is-active {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.tm__q {
+  margin: 0;
+}
+.tm__mark {
+  display: block;
+  width: 46px;
+  height: 34px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 18px;
+}
+.tm--light .tm__mark {
+  width: 40px;
+  height: 30px;
+  color: var(--bs-klein);
+}
+.tm__text {
+  margin: 0;
+  font-size: clamp(22px, 2.7vw, 40px);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+.tm__text p {
+  margin: 0;
+}
+.tm--light .tm__text {
+  font-size: clamp(21px, 2.5vw, 37px);
+  font-weight: 500;
+  line-height: 1.32;
+  letter-spacing: -0.015em;
+}
+html[dir='rtl'] .tm__text {
+  letter-spacing: 0;
+  line-height: 1.7;
+  font-size: clamp(20px, 2.3vw, 34px);
+}
+html[dir='rtl'] .tm--light .tm__text {
+  font-size: clamp(19px, 2.2vw, 32px);
+}
+.tm__who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: clamp(24px, 3.6vh, 36px);
+}
+.tm__av {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: var(--bs-paper);
+  color: var(--bs-klein);
+  font-size: 14px;
+  font-weight: 800;
+  overflow: hidden;
+}
+/* <Picture> puts the class on the <img> itself (not the <picture>), so .tm__av sizes the
+   image and this crops it. */
+.tm__av--img {
+  object-fit: cover;
+}
+.tm--light .tm__av {
+  width: 46px;
+  height: 46px;
+  background: var(--bs-klein);
+  color: var(--bs-paper);
+  font-weight: 700;
+}
+.tm__n {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 700;
+}
+.tm__r {
+  display: block;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 2px;
+}
+.tm--light .tm__r {
+  color: var(--bs-dim);
+  font-size: 13px;
+}
+.tm__bar {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.25);
+  margin-top: clamp(28px, 4vh, 44px);
+  overflow: hidden;
+}
+.tm--light .tm__bar {
+  background: var(--bs-line-l);
+}
+.tm__bar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--bs-paper);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.tm--light .tm__bar i {
+  background: var(--bs-klein);
+}
+html[dir='rtl'] .tm__bar i {
+  transform-origin: right;
+}
+.tm__bar i.is-running {
+  animation: tm-fill var(--carousel-ms, 7s) linear forwards;
+}
+.tm.is-paused .tm__bar i.is-running {
+  animation-play-state: paused;
+}
+@keyframes tm-fill {
+  to {
+    transform: scaleX(1);
+  }
+}
+@media (max-width: 53.75rem) {
+  .tm__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Lead band (LeadBand.astro) ---- */
+.lead-band {
+  padding: clamp(80px, 13vh, 170px) var(--bs-pad-x);
+}
+.lead-band__wrap {
+  position: relative;
+  max-width: var(--bs-maxw);
+  margin: 0 auto;
+}
+.lead-band h2 {
+  margin: 0;
+  font-size: clamp(40px, 8vw, 136px);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 0.9;
+  text-transform: uppercase;
+  max-width: 12ch;
+}
+html[dir='rtl'] .lead-band h2 {
+  font-size: clamp(34px, 6vw, 100px);
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+.lead-band__row {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 28px 40px;
+  flex-wrap: wrap;
+  margin-top: clamp(32px, 5vh, 56px);
+  padding-top: clamp(26px, 4vh, 40px);
+  border-top: 1px solid rgba(255, 255, 255, 0.28);
+}
+.lead-band__row p {
+  margin: 0;
+  font-size: clamp(15px, 1.3vw, 18px);
+  line-height: 1.6;
+  max-width: 44ch;
+  color: rgba(255, 255, 255, 0.88);
+}
+.lead-band__acts {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+.lead-band__mail {
+  color: var(--bs-paper);
+  font-size: 14px;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  padding-bottom: 2px;
+}
+.lead-band__mail:hover {
+  border-color: var(--bs-paper);
+}
+
+/* ---- Badge CTA (Cta.astro): the pill with the round arrow badge, icon first ---- */
+.cta--badge {
+  margin-top: 0;
+  padding-block: 9px;
+  padding-inline: 9px clamp(24px, 2.4vw, 34px);
+  gap: clamp(12px, 1.4vw, 18px);
+  font-size: clamp(14px, 1.15vw, 16px);
+  letter-spacing: 0.05em;
+  box-shadow: 0 12px 38px rgba(0, 36, 188, 0.35);
+  transition:
+    background 0.3s,
+    transform 0.4s var(--bs-ease),
+    box-shadow 0.3s;
+}
+html[dir='rtl'] .cta--badge {
+  font-size: clamp(15px, 1.25vw, 17px);
+}
+.cta--badge:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--bs-shadow-cobalt);
+}
+.cta--badge .cta__ico {
+  width: clamp(42px, 3.4vw, 50px);
+  height: clamp(42px, 3.4vw, 50px);
+  background: var(--bs-paper);
+  color: var(--bs-klein);
+  transition:
+    transform 0.45s var(--bs-ease),
+    background 0.3s,
+    color 0.3s;
+}
+.cta--badge .cta__ico svg {
+  width: 17px;
+  height: 17px;
+}
+.cta--badge:hover .cta__ico {
+  background: var(--bs-midnight);
+  color: var(--bs-paper);
+}
+.cta--badge.cta--go:hover .cta__ico {
+  transform: translateX(var(--bs-dir-nudge));
+}
+/* An in-page "down" link never slides sideways, in either direction. */
+.cta--badge.cta--down:hover .cta__ico {
+  transform: translateY(3px);
+}
+.cta--light {
+  background: var(--bs-paper);
+  color: var(--bs-klein);
+  box-shadow: 0 14px 40px rgba(0, 13, 48, 0.35);
+}
+.cta--light .cta__ico {
+  background: var(--bs-klein);
+  color: var(--bs-paper);
+}
+/* Stays white on hover (the base .cta:hover would turn it cobalt under a Klein label). */
+.cta--light:hover {
+  background: var(--bs-paper);
+  box-shadow: 0 20px 50px rgba(0, 13, 48, 0.45);
+}
+.cta--light:hover .cta__ico {
+  background: var(--bs-midnight);
+}
+/* The label-then-trailing-arrow pill (the design's hero skip / form submit): the base
+   .cta, plus a sized glyph that points the way the text runs. */
+.cta--trail svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+html[dir='rtl'] .cta--trail svg {
+  transform: scaleX(-1);
+}
+
+/* ---- Split heading (SplitHeading.astro): word by word, 38 ms apart ---- */
+.h-split .hw {
+  display: inline-block;
+  white-space: nowrap;
+  animation: h-word-in 0.9s var(--bs-ease) both;
+}
+.h-split .hw--1 {
+  animation-delay: 38ms;
+}
+.h-split .hw--2 {
+  animation-delay: 76ms;
+}
+.h-split .hw--3 {
+  animation-delay: 114ms;
+}
+.h-split .hw--4 {
+  animation-delay: 152ms;
+}
+.h-split .hw--5 {
+  animation-delay: 190ms;
+}
+.h-split .hw--6 {
+  animation-delay: 228ms;
+}
+.h-split .hw--7 {
+  animation-delay: 266ms;
+}
+.h-split .hw--8 {
+  animation-delay: 304ms;
+}
+.h-split .hw--9 {
+  animation-delay: 342ms;
+}
+.h-split .hw--10 {
+  animation-delay: 380ms;
+}
+.h-split .hw--11 {
+  animation-delay: 418ms;
+}
+.h-split .hw--12 {
+  animation-delay: 456ms;
+}
+.h-split .hw--13 {
+  animation-delay: 494ms;
+}
+.h-split .hw--14 {
+  animation-delay: 532ms;
+}
+.h-split .hw--15 {
+  animation-delay: 570ms;
+}
+/* Compositor-only (opacity + transform): the design's blur is dropped (Pillar 2). */
+@keyframes h-word-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.35em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ---- Motion safety net ---- */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -2782,7 +3806,9 @@ html[dir='rtl'] .faq-item__a p {
   .site-header--overlay,
   .sw,
   .slogan__rule::after,
-  .hero__scroll i {
+  .hero__scroll i,
+  .h-split .hw,
+  .tm__bar i {
     animation: none !important;
   }
   /* Deliberately NOT a blanket `transform: none` — .site-header--overlay must keep
@@ -2792,6 +3818,17 @@ html[dir='rtl'] .faq-item__a p {
      motion on a pointer device. */
   .touch-card:hover {
     transform: none;
+  }
+  /* UI v2 (PR6): hover zooms, CTA lifts and badge nudges, the carousel slide rise. JS-driven
+     motion (clips, count-up, carousel auto-advance) is guarded in its own module. */
+  .pcard__link:hover .mf img,
+  .pcard__link:hover .mf video,
+  .pcard__link:focus-visible .mf img,
+  .pcard__link:focus-visible .mf video,
+  .cta--badge:hover,
+  .cta--badge:hover .cta__ico,
+  .tm.is-enhanced .tm__q {
+    transform: none !important;
   }
   .sw {
     opacity: 1;

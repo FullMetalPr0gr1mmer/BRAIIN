@@ -12,11 +12,14 @@ import { can } from '@/lib/authz/matrix';
 //
 // `leads.pii` gates: budget · timeline · internal_notes · ip_inet — the exact four
 // columns CLAUDE.md §3 restricts to Admin + Developer. Content Creator and SEO hold
-// neither `leads.manage` nor `leads.pii`, so they get nothing at all.
+// neither `leads.manage` nor `leads.pii`, so they get nothing at all. "timeline" is two
+// columns since migration 0017: the legacy `timeline_band` select value and the encrypted
+// free-text deadline the v2 contact form collects (`timeline_text_enc`).
 
 export const SENSITIVE_LEAD_COLUMNS = [
   'budget_enc',
   'timeline_band',
+  'timeline_text_enc',
   'internal_notes',
   'ip_inet',
 ] as const;
@@ -26,7 +29,7 @@ export const SAFE_LEAD_COLUMNS =
   'id,kind,locale,name,company,message,service_of_interest,status,consent_marketing,created_at,updated_at';
 
 /** Safe columns plus the ciphertext/sensitive ones. Only for `leads.pii` holders. */
-export const FULL_LEAD_COLUMNS = `${SAFE_LEAD_COLUMNS},email_enc,phone_enc,budget_enc,timeline_band,internal_notes,ip_inet`;
+export const FULL_LEAD_COLUMNS = `${SAFE_LEAD_COLUMNS},email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,internal_notes,ip_inet`;
 
 export function canSeeLeadPii(role: Role): boolean {
   return can(role, 'leads.pii') === 'full';

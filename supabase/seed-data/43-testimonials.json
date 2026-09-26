@@ -1,0 +1,184 @@
+{
+  "blocks": [
+    {
+      "table": "testimonials",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "quote-home-1",
+          "quote": {
+            "en": "They asked better questions about our business in the first meeting than our last agency did in a year. The work showed it.",
+            "ar": "سألونا أسئلة عن شغلنا في أول اجتماع أعمق مما سألته وكالتنا السابقة في سنة كاملة. وهذا بان في النتيجة."
+          },
+          "author_name": { "en": "Client name", "ar": "اسم العميل" },
+          "author_role": { "en": "Marketing Director, Company", "ar": "مدير التسويق، الشركة" },
+          "placements": "{home,work}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 1,
+          "__placeholder": true,
+          "__published": {
+            "consent_obtained_at": { "$sql": "now()" },
+            "consent_reference": "PLACEHOLDER demo, not a real quote"
+          }
+        },
+        {
+          "slug": "quote-home-2",
+          "quote": {
+            "en": "One team for the identity, the film, and the launch event. Nothing got lost between vendors because there weren't any.",
+            "ar": "فريق واحد للهوية والفيلم وفعالية الإطلاق. ما ضاع شيء بين الجهات لأنه ما كان فيه جهات أصلاً."
+          },
+          "author_name": { "en": "Client name", "ar": "اسم العميل" },
+          "author_role": { "en": "Head of Brand, Company", "ar": "رئيس العلامة التجارية، الشركة" },
+          "placements": "{home,work}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 2,
+          "__placeholder": true,
+          "__published": {
+            "consent_obtained_at": { "$sql": "now()" },
+            "consent_reference": "PLACEHOLDER demo, not a real quote"
+          }
+        },
+        {
+          "slug": "quote-home-3",
+          "quote": {
+            "en": "The Arabic was written, not translated. Our audience noticed before we told them.",
+            "ar": "العربي كان مكتوباً، مو مترجماً. جمهورنا لاحظ قبل ما نقول لهم."
+          },
+          "author_name": { "en": "Client name", "ar": "اسم العميل" },
+          "author_role": { "en": "CEO, Company", "ar": "الرئيس التنفيذي، الشركة" },
+          "placements": "{home,work}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 3,
+          "__placeholder": true,
+          "__published": {
+            "consent_obtained_at": { "$sql": "now()" },
+            "consent_reference": "PLACEHOLDER demo, not a real quote"
+          }
+        },
+        {
+          "slug": "quote-the-rider",
+          "quote": {
+            "en": "They came back with a film that felt like it was made for this region, not adapted for it. Our dealers were asking for it before it aired.",
+            "ar": "رجعوا بفيلم يحسسك أنه مصنوع لهذه المنطقة، مو معدّل لها. وكلاؤنا كانوا يطلبونه قبل ما ينعرض."
+          },
+          "author_name": { "en": "Client name", "ar": "اسم العميل" },
+          "author_role": { "en": "Marketing Director, Company", "ar": "مدير التسويق، الشركة" },
+          "client_id": { "$ref": { "table": "clients", "by": { "slug": "client-a" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "the-rider" } } },
+          "placements": "{}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 4,
+          "__placeholder": true,
+          "__published": {
+            "consent_obtained_at": { "$sql": "now()" },
+            "consent_reference": "PLACEHOLDER demo, not a real quote"
+          }
+        },
+        {
+          "slug": "quote-kitchen-hours",
+          "quote": {
+            "en": "One shoot gave us a month of content that still looked like one idea.",
+            "ar": "تصوير واحد أعطانا شهر محتوى وكلّه يبان فكرة واحدة."
+          },
+          "author_name": { "en": "Client name", "ar": "اسم العميل" },
+          "author_role": { "en": "Head of Brand, Company", "ar": "رئيس العلامة التجارية، الشركة" },
+          "client_id": { "$ref": { "table": "clients", "by": { "slug": "client-b" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "kitchen-hours" } } },
+          "placements": "{}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 5,
+          "__placeholder": true,
+          "__published": {
+            "consent_obtained_at": { "$sql": "now()" },
+            "consent_reference": "PLACEHOLDER demo, not a real quote"
+          }
+        },
+        {
+          "slug": "quote-notebook",
+          "quote": {
+            "en": "The Arabic was written, not translated. Our students noticed before we told them.",
+            "ar": "العربي كان مكتوباً، مو مترجماً. طلابنا لاحظوا قبل ما نقول لهم."
+          },
+          "author_name": { "en": "Client name", "ar": "اسم العميل" },
+          "author_role": { "en": "CEO, Company", "ar": "الرئيس التنفيذي، الشركة" },
+          "client_id": { "$ref": { "table": "clients", "by": { "slug": "client-c" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "notebook" } } },
+          "placements": "{}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 6,
+          "__placeholder": true,
+          "__published": {
+            "consent_obtained_at": { "$sql": "now()" },
+            "consent_reference": "PLACEHOLDER demo, not a real quote"
+          }
+        },
+        {
+          "slug": "quote-ink",
+          "quote": {
+            "en": "It set the tone before anyone said a word.",
+            "ar": "حدد النبرة قبل ما أحد يتكلم."
+          },
+          "author_name": { "en": "Client name", "ar": "اسم العميل" },
+          "author_role": { "en": "Programme Director, Company", "ar": "مدير البرنامج، الشركة" },
+          "client_id": { "$ref": { "table": "clients", "by": { "slug": "client-d" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "ink" } } },
+          "placements": "{}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 7,
+          "__placeholder": true,
+          "__published": {
+            "consent_obtained_at": { "$sql": "now()" },
+            "consent_reference": "PLACEHOLDER demo, not a real quote"
+          }
+        },
+        {
+          "slug": "quote-terrain",
+          "quote": {
+            "en": "They made concrete look like something you'd want to touch.",
+            "ar": "خلّوا الخرسانة تبان شيء تبي تلمسه."
+          },
+          "author_name": { "en": "Client name", "ar": "اسم العميل" },
+          "author_role": { "en": "Sales Director, Company", "ar": "مدير المبيعات، الشركة" },
+          "client_id": { "$ref": { "table": "clients", "by": { "slug": "client-e" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "terrain" } } },
+          "placements": "{}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 8,
+          "__placeholder": true,
+          "__published": {
+            "consent_obtained_at": { "$sql": "now()" },
+            "consent_reference": "PLACEHOLDER demo, not a real quote"
+          }
+        },
+        {
+          "slug": "quote-first-light",
+          "quote": {
+            "en": "The room went quiet, then everyone reached for their phones. That was the brief.",
+            "ar": "القاعة سكتت، وبعدها الكل طلّع جواله. وهذا كان البريف."
+          },
+          "author_name": { "en": "Client name", "ar": "اسم العميل" },
+          "author_role": { "en": "Event Director, Company", "ar": "مدير الفعالية، الشركة" },
+          "client_id": { "$ref": { "table": "clients", "by": { "slug": "client-f" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "first-light" } } },
+          "placements": "{}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 9,
+          "__placeholder": true,
+          "__published": {
+            "consent_obtained_at": { "$sql": "now()" },
+            "consent_reference": "PLACEHOLDER demo, not a real quote"
+          }
+        }
+      ]
+    }
+  ]
+}

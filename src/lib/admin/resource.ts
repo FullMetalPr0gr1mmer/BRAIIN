@@ -5,7 +5,15 @@ import { ListQuerySchema } from '@schemas/admin';
 import type { AuthContext } from '@/lib/auth/types';
 import { assertCap, type Access, type Capability } from '@/lib/authz/matrix';
 import { defineAdminRoute, json } from './route';
-import { assertStatusTransition, deleteRow, getRow, insertRow, listRows, updateRow } from './crud';
+import {
+  assertStatusTransition,
+  deleteRow,
+  getRow,
+  insertRow,
+  listRows,
+  updateRow,
+  type ConstraintFields,
+} from './crud';
 import { NotFoundError, ValidationError } from './errors';
 
 // A declarative CRUD resource. Fifteen entities in this CMS have the same lifecycle —
@@ -32,6 +40,9 @@ import { NotFoundError, ValidationError } from './errors';
 // allowlist in `pick()`: unknown keys never reach SQL regardless of what TypeScript
 // believes about them.
 export type ResourcePayload = Record<string, unknown>;
+
+type Row = Record<string, unknown>;
+type Db = import('@supabase/supabase-js').SupabaseClient;
 
 export interface ResourceConfig {
   /** Postgres table. */
@@ -61,8 +72,52 @@ export interface ResourceConfig {
   toRow: (input: ResourcePayload) => Record<string, unknown>;
   /** Lifecycle status of an incoming payload, when the entity has one. */
   statusOf?: (input: ResourcePayload) => ContentStatus | undefined;
-  /** Domain rules that must hold before a row may be published. */
-  assertPublishable?: (row: Record<string, unknown>) => void;
+  /**
+   * For an entity with no status whose `visible` flag IS its publication (page sections,
+   * and in UI v2 clients and testimonials): turning it on is gated like a publish —
+   * `content.publish` plus `assertPublishable`.
+   */
+  publishFlag?: 'visible';
+  /**
+   * Domain rules that must hold before a row may GO LIVE — published, scheduled (the
+   * cron publishes it later without asking again), or made visible under `publishFlag`.
+   * May be async (a rule that reads related rows, e.g. "has alt text"); it receives the
+   * merged row (stored + patch) and the caller's client, under RLS.
+   */
+  assertPublishable?: (row: Row, ctx: { auth: AuthContext; sb: Db }) => void | Promise<void>;
+  /**
+   * Rules over the row AFTER the write (stored + patch) that the payload schema alone
+   * cannot prove — e.g. section content validated against a type the PATCH did not
+   * restate. `changed` is the column patch, so a rule can skip writes that do not touch
+   * what it checks. Runs on create (merged = the new row) and on every update.
+   */
+  assertWritable?: (
+    merged: Row,
+    ctx: { auth: AuthContext; sb: Db; changed: Row },
+  ) => void | Promise<void>;
+  /**
+   * Named constraints of this table and what they mean to an editor — turns a raw
+   * unique/check/foreign-key violation into a message on the right field.
+   */
+  constraintFields?: ConstraintFields;
+  /** Shapes a stored row for the API response (resolved thumbnails, derived labels). */
+  fromRow?: (row: Row) => Row;
+  /** Payload keys `persist` writes outside `toRow` (child sets) — see the empty-PATCH check. */
+  childKeys?: readonly string[];
+  /**
+   * Replaces the plain INSERT/UPDATE — for an entity whose save spans several tables and
+   * must be ONE transaction (a case study and its services + media: save_portfolio()).
+   * Receives the column patch from `toRow`; `id`/`version` are null on create. Must
+   * enforce the optimistic lock itself and return the saved row with `columns`.
+   */
+  persist?: (ctx: {
+    auth: AuthContext;
+    sb: Db;
+    id: string | null;
+    version: number | null;
+    values: Row;
+    input: ResourcePayload;
+  }) => Promise<Row>;
   /** Runs after a successful write (cache purge, derived rows). Never fatal. */
   afterWrite?: (ctx: {
     auth: AuthContext;
@@ -76,6 +131,30 @@ export interface ResourceConfig {
 function readCapsOf(config: ResourceConfig): readonly Capability[] {
   return config.readCaps ?? [config.writeCap];
 }
+
+/**
+ * Is this row LIVE once written? Decided on the row AFTER the write (stored + patch),
+ * never on the payload alone: a PATCH that omits `status` on a scheduled row can still
+ * strip a field the go-live rules require. Scheduled counts — `app.publish_scheduled()`
+ * flips it to published on a timer with no further checks.
+ */
+function isLive(config: ResourceConfig, row: Row): boolean {
+  if (config.statusOf && (row['status'] === 'published' || row['status'] === 'scheduled')) {
+    return true;
+  }
+  return config.publishFlag === 'visible' && row['visible'] === true;
+}
+
+/** The status transition, and for a `visible`-published entity the publish capability. */
+function assertTransition(auth: AuthContext, config: ResourceConfig, payload: ResourcePayload) {
+  assertStatusTransition(auth, config.statusOf?.(payload));
+  if (config.publishFlag === 'visible' && payload['visible'] === true) {
+    assertCap(auth, 'content.publish');
+  }
+}
+
+const shape = (config: ResourceConfig, row: Row): Row =>
+  config.fromRow ? config.fromRow(row) : row;
 
 /** `GET` (list) + `POST` (create) for `/api/admin/<resource>/index.ts`. */
 export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST: APIRoute } {
@@ -106,7 +185,12 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
         limit: input.limit,
         offset: input.offset,
       });
-      return { rows, total, limit: input.limit, offset: input.offset };
+      return {
+        rows: (rows as Row[]).map((row) => shape(config, row)),
+        total,
+        limit: input.limit,
+        offset: input.offset,
+      };
     },
   });
 
@@ -118,26 +202,28 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
       // Creating something already published is a publish. Checking only on transitions
       // would leave "POST with status: 'published'" as an unguarded back door around
       // the publish capability.
-      assertStatusTransition(auth, config.statusOf?.(payload));
+      assertTransition(auth, config, payload);
 
       const values = config.toRow(payload);
-      if (config.statusOf?.(payload) === 'published') config.assertPublishable?.(values);
+      await config.assertWritable?.(values, { auth, sb, changed: values });
+      if (isLive(config, values)) await config.assertPublishable?.(values, { auth, sb });
 
-      const row = await insertRow<Record<string, unknown>>(
-        sb,
-        config.table,
-        auth,
-        values,
-        config.columns,
-      );
+      const row = config.persist
+        ? await config.persist({ auth, sb, id: null, version: null, values, input: payload })
+        : await insertRow<Row>(sb, config.table, auth, values, config.columns, {
+            constraints: config.constraintFields,
+          });
       audit({
         action: `${config.entity}.create`,
         entityType: config.entity,
         entityId: String(row['id']),
-        detail: { status: values['status'] ?? null },
+        detail: {
+          status: values['status'] ?? null,
+          children: (config.childKeys ?? []).filter((key) => payload[key] !== undefined),
+        },
       });
       await config.afterWrite?.({ auth, sb, row, input: payload, operation: 'create' });
-      return row;
+      return shape(config, row);
     },
   });
 
@@ -162,7 +248,7 @@ export function itemRoutes(config: ResourceConfig): {
     anyCap: readCapsOf(config),
     access: config.readAccess ?? ['full', 'view', 'meta'],
     handler: async ({ auth, sb, params }) =>
-      getRow(sb, config.table, auth, requireId(params), config.columns),
+      shape(config, await getRow<Row>(sb, config.table, auth, requireId(params), config.columns)),
   });
 
   const PATCH = defineAdminRoute({
@@ -171,46 +257,63 @@ export function itemRoutes(config: ResourceConfig): {
     handler: async ({ auth, sb, input, params, audit }) => {
       const id = requireId(params);
       const payload = input as ResourcePayload & { version: number };
-      assertStatusTransition(auth, config.statusOf?.(payload));
+      assertTransition(auth, config, payload);
 
       const values = config.toRow(payload);
-      if (Object.keys(values).length === 0) {
+      // Child sets (a case study's services/media) are written by `persist` outside toRow:
+      // a PATCH of those alone is a real edit, and the audit names them.
+      const childFields = (config.childKeys ?? []).filter((key) => payload[key] !== undefined);
+      if (Object.keys(values).length === 0 && childFields.length === 0) {
         throw new ValidationError('no updatable fields supplied');
       }
 
-      if (config.statusOf?.(payload) === 'published' && config.assertPublishable) {
-        // Merge over the stored row: a partial PATCH that only flips `status` still has
-        // to satisfy the publish preconditions, and those live in the columns it did
-        // not send.
-        const stored = await getRow<Record<string, unknown>>(
-          sb,
-          config.table,
-          auth,
-          id,
-          config.columns,
-        );
-        config.assertPublishable({ ...stored, ...values });
+      let stored: Row | null = null;
+      // The FIRST publish date is permanent (truthful dates, Pillar 3): a save of a row
+      // that already has one — a typo fix on a published post — must not re-stamp it.
+      if ('published_at' in values) {
+        stored = await getRow<Row>(sb, config.table, auth, id, config.columns);
+        if (stored['published_at'] !== null && stored['published_at'] !== undefined) {
+          delete values['published_at'];
+        }
       }
 
-      const row = await updateRow<Record<string, unknown>>(
-        sb,
-        config.table,
-        auth,
-        id,
-        payload.version,
-        values,
-        config.columns,
-      );
+      if (config.assertPublishable || config.assertWritable) {
+        // The rules judge the row as it will BE: merged over the stored row. A partial
+        // PATCH that only flips `status` must satisfy the publish preconditions held in
+        // the columns it did not send — and one that leaves `status` out on an already
+        // scheduled/published row must not strip them either.
+        stored ??= await getRow<Row>(sb, config.table, auth, id, config.columns);
+        const merged = { ...stored, ...values };
+        await config.assertWritable?.(merged, { auth, sb, changed: values });
+        if (config.assertPublishable && isLive(config, merged)) {
+          await config.assertPublishable(merged, { auth, sb });
+        }
+      }
+
+      const row = config.persist
+        ? await config.persist({ auth, sb, id, version: payload.version, values, input: payload })
+        : await updateRow<Row>(
+            sb,
+            config.table,
+            auth,
+            id,
+            payload.version,
+            values,
+            config.columns,
+            {
+              constraints: config.constraintFields,
+            },
+          );
       audit({
         action: `${config.entity}.update`,
         entityType: config.entity,
         entityId: id,
         // Field NAMES, never values — this table is read by anyone with `audit.view`
         // and some of these entities carry PII-adjacent copy.
-        detail: { fields: Object.keys(values), version: payload.version },
+        detail: { fields: [...Object.keys(values), ...childFields], version: payload.version },
       });
       await config.afterWrite?.({ auth, sb, row, input: payload, operation: 'update' });
-      return row;
+      return shape(config, row);
     },
   });
 
@@ -224,7 +327,7 @@ export function itemRoutes(config: ResourceConfig): {
       // content.archiveDelete alone would let an Admin-only role delete rows in a table
       // it has no write capability for, which is not what the matrix says.
       assertCap(auth, config.writeCap, ['full']);
-      await deleteRow(sb, config.table, auth, id);
+      await deleteRow(sb, config.table, auth, id, { constraints: config.constraintFields });
       audit({ action: `${config.entity}.delete`, entityType: config.entity, entityId: id });
       return { deleted: id };
     },

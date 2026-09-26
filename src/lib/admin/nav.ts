@@ -36,7 +36,10 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     links: [
       { href: '/admin/services', label: 'Services', caps: ['services.write', 'seo.entityMeta'] },
       { href: '/admin/blog', label: 'Blog', caps: ['blog.write', 'seo.entityMeta'] },
-      { href: '/admin/portfolio', label: 'Portfolio', caps: ['portfolio.write', 'seo.entityMeta'] },
+      { href: '/admin/portfolio', label: 'Our Work', caps: ['portfolio.write', 'seo.entityMeta'] },
+      { href: '/admin/sectors', label: 'Sectors', caps: ['categories.manage'] },
+      { href: '/admin/clients', label: 'Clients', caps: ['portfolio.write'] },
+      { href: '/admin/testimonials', label: 'Testimonials', caps: ['portfolio.write'] },
       { href: '/admin/pages', label: 'Pages & sections', caps: ['pages.write', 'seo.entityMeta'] },
       { href: '/admin/navigation', label: 'Navigation', caps: ['nav.edit'] },
       { href: '/admin/categories', label: 'Categories', caps: ['categories.manage'] },

@@ -1,10 +1,10 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import { buildCreativeWorkSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { buildCreativeWorkSchema, buildBreadcrumbSchema, orgRef } from '@/lib/seo/jsonld';
 import { localizedPath, pickLocale, pickLocaleStrict } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
-import { seoForEntity } from '@/lib/data/seo';
+import { loadHead } from '@/lib/seo/head';
 import type { PortfolioRow } from '@/lib/data/portfolio';
 
 interface Props {
@@ -30,26 +30,27 @@ const bodyHtml = pickLocale(item.body_html, locale);
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const url = base + localizedPath(`/portfolio/${item.slug}`, locale);
 
+// Per-entity SEO override (`entity_seo`, authored by the SEO role under /admin) layered
+// over the tenant defaults (`seo_defaults`), falling back to the content's own title and
+// summary — loaded with the public identity in one concurrent round. Resolved server-side
+// on this Tier-A route so the override is in the HTML — metadata that needed JavaScript
+// would not be metadata.
+const { seo, identity } = await loadHead(Astro.locals, {
+  locale,
+  fallbackTitle: title,
+  fallbackDescription: summaryMeta,
+  entity: { type: 'portfolio', id: item.id },
+});
+const org = orgRef(identity, locale);
+
 const jsonLd = [
-  buildCreativeWorkSchema({ name: title, description: summaryMeta, url }),
+  buildCreativeWorkSchema({ name: title, description: summaryMeta, url, org }),
   buildBreadcrumbSchema([
     { name: STR.home, url: base + localizedPath('/', locale) },
     { name: STR.portfolio, url: base + localizedPath('/portfolio', locale) },
     { name: title, url },
   ]),
 ];
-
-// Per-entity SEO override (`entity_seo`, authored by the SEO role under /admin) layered
-// over the tenant defaults (`seo_defaults`), falling back to the content's own title and
-// summary. Resolved server-side on this Tier-A route so the override is in the HTML —
-// metadata that needed JavaScript would not be metadata.
-const seo = await seoForEntity({
-  entityType: 'portfolio',
-  entityId: item.id,
-  locale,
-  fallbackTitle: `${title} — Braiin Station`,
-  fallbackDescription: summaryMeta,
-});
 ---
 
 <BaseLayout

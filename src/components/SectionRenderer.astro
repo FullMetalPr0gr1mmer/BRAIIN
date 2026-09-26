@@ -1,6 +1,7 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import type { SectionData } from '@/lib/sections/types';
+import { isRenderedSectionType, type RenderedSectionType } from '@/lib/sections/registry';
 import SectionBoundary from '@/components/SectionBoundary.astro';
 import Hero from '@/components/sections/Hero.astro';
 import ServicesOverview from '@/components/sections/ServicesOverview.astro';
@@ -27,11 +28,13 @@ const { locale, sections } = Astro.props;
 
 // Type → component registry. Unknown types are skipped (forward-compatible with CMS).
 //
-// Data a section needs beyond `locale` travels in its own `props` (see
-// ContactPage.astro, which injects the service list into the contactInquiry section).
-// Keeping it there rather than adding pass-through props here means this renderer does
-// not grow a parameter every time one section needs something.
-const REGISTRY: Record<string, typeof Hero> = {
+// A section's CMS content arrives as its `props`. Data the ROUTE injects (rows it already
+// loaded) arrives as `data`, passed AFTER the spread so no authored key can override it —
+// content is editor input, route data is the page's own truth.
+//
+// Typed against src/lib/sections/registry.ts: `astro check` fails if a rendered type has
+// no component here or a component has no registry entry.
+const REGISTRY: Record<RenderedSectionType, typeof Hero> = {
   hero: Hero,
   servicesOverview: ServicesOverview,
   cta: CtaBand,
@@ -48,17 +51,22 @@ const REGISTRY: Record<string, typeof Hero> = {
   contactChannels: ContactChannels,
   faq: FaqAccordion,
 };
+
+// Every section takes `locale`, its content props and the route's `data`. The map's type
+// above is what holds the registry complete; this view of it is what the template renders.
+type AnySection = (props: Record<string, unknown>) => unknown;
+const COMPONENTS = REGISTRY as unknown as Record<RenderedSectionType, AnySection>;
 ---
 
 {
   sections
     .filter((s) => s.visible !== false)
     .map((s) => {
-      const Comp = REGISTRY[s.type];
-      if (!Comp) return null;
+      if (!isRenderedSectionType(s.type)) return null;
+      const Comp = COMPONENTS[s.type];
       return (
         <SectionBoundary type={s.type}>
-          <Comp locale={locale} {...(s.props ?? {})} />
+          <Comp locale={locale} {...(s.props ?? {})} data={s.data} />
         </SectionBoundary>
       );
     })

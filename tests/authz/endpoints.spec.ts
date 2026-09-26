@@ -257,6 +257,147 @@ const CASES: Case[] = [
     allow: ['admin', 'content_creator'],
   },
 
+  // ---- UI v2 content model (PR4b) ----
+  {
+    name: 'portfolio create (save_portfolio)',
+    load: () => import('@/pages/api/admin/portfolio/index'),
+    method: 'POST',
+    url: '/api/admin/portfolio',
+    body: { slug: 'the-rider', title: VALID_BILINGUAL, status: 'draft' },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'portfolio publish',
+    load: () => import('@/pages/api/admin/portfolio/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/portfolio/${UUID}`,
+    body: { status: 'published', version: 1 },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'portfolio services-only update (child set)',
+    load: () => import('@/pages/api/admin/portfolio/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/portfolio/${UUID}`,
+    body: { serviceIds: [UUID], version: 1 },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'portfolio delete',
+    load: () => import('@/pages/api/admin/portfolio/[id]'),
+    method: 'DELETE',
+    url: `/api/admin/portfolio/${UUID}`,
+    allow: ['admin'],
+  },
+  {
+    name: 'sectors list',
+    load: () => import('@/pages/api/admin/sectors/index'),
+    method: 'GET',
+    url: '/api/admin/sectors',
+    // SEO: the case-study editor's Industry picker.
+    allow: ['admin', 'content_creator', 'seo'],
+  },
+  {
+    name: 'clients list',
+    load: () => import('@/pages/api/admin/clients/index'),
+    method: 'GET',
+    url: '/api/admin/clients',
+    allow: ['admin', 'content_creator', 'seo'],
+  },
+  {
+    name: 'sectors create',
+    load: () => import('@/pages/api/admin/sectors/index'),
+    method: 'POST',
+    url: '/api/admin/sectors',
+    body: { slug: 'automotive', name: VALID_BILINGUAL },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'sectors delete',
+    load: () => import('@/pages/api/admin/sectors/[id]'),
+    method: 'DELETE',
+    url: `/api/admin/sectors/${UUID}`,
+    allow: ['admin'],
+  },
+  {
+    name: 'clients create',
+    load: () => import('@/pages/api/admin/clients/index'),
+    method: 'POST',
+    url: '/api/admin/clients',
+    body: { slug: 'neom', name: VALID_BILINGUAL },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'clients clear for disclosure (visible = publish)',
+    load: () => import('@/pages/api/admin/clients/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/clients/${UUID}`,
+    body: { visible: true, version: 1 },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'testimonials create',
+    load: () => import('@/pages/api/admin/testimonials/index'),
+    method: 'POST',
+    url: '/api/admin/testimonials',
+    body: { slug: 'q', quote: VALID_BILINGUAL, authorName: VALID_BILINGUAL },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'testimonials publish',
+    load: () => import('@/pages/api/admin/testimonials/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/testimonials/${UUID}`,
+    body: { status: 'published', version: 1 },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'testimonials delete',
+    load: () => import('@/pages/api/admin/testimonials/[id]'),
+    method: 'DELETE',
+    url: `/api/admin/testimonials/${UUID}`,
+    allow: ['admin'],
+  },
+  {
+    name: 'team create (leadership fields)',
+    load: () => import('@/pages/api/admin/team/index'),
+    method: 'POST',
+    url: '/api/admin/team',
+    body: { slug: 'leader-1', name: VALID_BILINGUAL, isLeadership: true },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'statistics create (count-up value)',
+    load: () => import('@/pages/api/admin/statistics/index'),
+    method: 'POST',
+    url: '/api/admin/statistics',
+    body: { slug: 'brands', label: VALID_BILINGUAL, valueNumeric: 80, valueSuffix: '+' },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'media hard delete (media.hardDelete — Admin only)',
+    load: () => import('@/pages/api/admin/media/[id]'),
+    method: 'DELETE',
+    url: `/api/admin/media/${UUID}`,
+    allow: ['admin'],
+  },
+  {
+    name: 'media usage',
+    load: () => import('@/pages/api/admin/media/[id]/usage'),
+    method: 'GET',
+    url: `/api/admin/media/${UUID}/usage`,
+    // Every role that may read the library: media.write full (admin, CC, developer) or meta (SEO).
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+  },
+  {
+    name: 'media metadata (SEO "meta only" path)',
+    load: () => import('@/pages/api/admin/media/meta/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/media/meta/${UUID}`,
+    body: { alt: VALID_BILINGUAL, version: 1 },
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+  },
+
   // ---- SEO ----
   {
     name: 'entity SEO read',
@@ -343,6 +484,44 @@ const CASES: Case[] = [
     url: '/api/admin/settings',
     body: { identity: {}, version: 1 },
     allow: ['admin', 'developer'],
+  },
+  // Public identity singleton (migration 0019) — §5 "General settings": Admin + Developer.
+  // (accepting_applications is narrower still — Admin only — but that is enforced by the
+  // DATABASE, a 0019 trigger, and pinned by supabase/tests/rls_site_profile.test.sql.)
+  {
+    name: 'site profile read',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'GET',
+    url: '/api/admin/site-profile',
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'site profile write',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'PATCH',
+    url: '/api/admin/site-profile',
+    body: { brandName: VALID_BILINGUAL, version: 1 },
+    allow: ['admin', 'developer'],
+  },
+  {
+    // The settings form ALWAYS sends the checkbox, so an unchanged flag must not turn a
+    // Developer's identity save into a 403. (The stubbed stored row has it closed.)
+    name: 'site profile write, applications flag unchanged',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'PATCH',
+    url: '/api/admin/site-profile',
+    body: { brandName: VALID_BILINGUAL, acceptingApplications: false, version: 1 },
+    allow: ['admin', 'developer'],
+  },
+  {
+    // Opening the job-application intake is Admin-only (UI v2 decision 4). This row is
+    // the WORKER layer; the 0019 guard trigger is the database layer (pgTAP).
+    name: 'site profile opens job applications (Admin-only)',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'PATCH',
+    url: '/api/admin/site-profile',
+    body: { acceptingApplications: true, version: 1 },
+    allow: ['admin'],
   },
   {
     name: 'integrations write',
@@ -529,4 +708,39 @@ describe('admin endpoints — {principal × capability} matrix', () => {
       expect([401, 403]).toContain(status);
     }
   });
+});
+
+// ── Database refusals after assertCap passed ─────────────────────────────────────
+// A singleton write the Worker allowed can still be refused by the database: a guard
+// trigger (42501) or a CHECK the PATCH could not see because it spans stored columns
+// (23514). Neither is a server fault, so neither may surface as a 500.
+describe('singleton writes — database refusals map to client errors', () => {
+  function refusingClient(code: string) {
+    let calls = 0;
+    const builder: Record<string, unknown> = {};
+    for (const m of ['select', 'eq', 'update', 'insert']) builder[m] = () => builder;
+    builder['maybeSingle'] = async () =>
+      // 1st call: the version pre-read finds the row. 2nd: the UPDATE is refused.
+      ++calls === 1
+        ? { data: { version: 1, accepting_applications: false }, error: null }
+        : { data: null, error: { code, message: 'refused' } };
+    return { from: () => builder };
+  }
+
+  for (const [code, expected] of [
+    ['42501', 403],
+    ['23514', 422],
+  ] as const) {
+    it(`${code} → ${expected}`, async () => {
+      const { PATCH } = await import('@/pages/api/admin/site-profile');
+      const ctx = makeContext(
+        'admin',
+        '/api/admin/site-profile',
+        { whatsappDisplay: '055 000 0000', version: 1 },
+        'PATCH',
+      );
+      (ctx.locals as unknown as { supabase: unknown }).supabase = refusingClient(code);
+      expect(await statusOf(PATCH as APIRoute, ctx)).toBe(expected);
+    });
+  }
 });

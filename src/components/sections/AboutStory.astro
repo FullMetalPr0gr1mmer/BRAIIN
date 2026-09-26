@@ -2,8 +2,11 @@
 import type { Locale } from '@schemas/primitives';
 import type { AboutStorySectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
+import { getIdentity, brandName } from '@/lib/identity';
 
-// CMS-overridable copy (AboutStorySectionContentSchema); built-in defaults below.
+// CMS-overridable copy (AboutStorySectionContentSchema); built-in defaults below. The
+// studio is named through `%brand%` — in the defaults AND in authored copy — so the
+// public identity (site_profile) is the only place its name is spelled.
 interface Props extends AboutStorySectionContent {
   locale: Locale;
 }
@@ -14,8 +17,8 @@ const { locale, heading, lead, missionTitle, mission, visionTitle, vision } = As
 // named, concrete (GEO authoring defaults, CLAUDE.md Pillar 3).
 const STR = {
   en: {
-    heading: 'About Braiin Station',
-    lead: 'Braiin Station is a bilingual creative studio in Saudi Arabia — fourteen services, one team, building brands that work in Arabic and English alike.',
+    heading: 'About %brand%',
+    lead: '%brand% is a bilingual creative studio in Saudi Arabia — fourteen services, one team, building brands that work in Arabic and English alike.',
     missionTitle: 'Our mission',
     mission:
       'To give ambitious brands in the region a single, accountable creative partner — from identity and film to web and search — measured by the results we ship, not the awards we chase.',
@@ -24,8 +27,8 @@ const STR = {
       'A MENA creative scene where world-class work is expected, bilingual by default, and made close to the audiences it serves.',
   },
   ar: {
-    heading: 'عن بريّن ستيشن',
-    lead: 'بريّن ستيشن استوديو إبداعي ثنائي اللغة في المملكة العربية السعودية — أربع عشرة خدمة، وفريق واحد، يبني علامات تعمل بالعربية والإنجليزية على حدٍ سواء.',
+    heading: 'عن %brand%',
+    lead: '%brand% استوديو إبداعي ثنائي اللغة في المملكة العربية السعودية — أربع عشرة خدمة، وفريق واحد، يبني علامات تعمل بالعربية والإنجليزية على حدٍ سواء.',
     missionTitle: 'رسالتنا',
     mission:
       'أن نمنح العلامات الطموحة في المنطقة شريكًا إبداعيًا واحدًا مسؤولًا — من الهوية والفيلم إلى الويب والبحث — نُقاس بالنتائج التي نحققها لا بالجوائز.',
@@ -34,20 +37,24 @@ const STR = {
       'مشهد إبداعي في منطقة الشرق الأوسط وشمال أفريقيا يكون فيه العمل عالمي المستوى هو المتوقع، ثنائي اللغة بطبيعته، وقريبًا من الجمهور الذي يخدمه.',
   },
 }[locale];
+
+const brand = brandName(await getIdentity(Astro.locals), locale);
+const text = (authored: Parameters<typeof pickLocale>[0], fallback: string): string =>
+  (authored ? pickLocale(authored, locale) : fallback).replace(/%brand%/g, () => brand);
 ---
 
 <section class="about-story">
   <div class="container">
-    <h1>{heading ? pickLocale(heading, locale) : STR.heading}</h1>
-    <p class="lead">{lead ? pickLocale(lead, locale) : STR.lead}</p>
+    <h1>{text(heading, STR.heading)}</h1>
+    <p class="lead">{text(lead, STR.lead)}</p>
     <div class="about-pillars">
       <div>
-        <h2>{missionTitle ? pickLocale(missionTitle, locale) : STR.missionTitle}</h2>
-        <p>{mission ? pickLocale(mission, locale) : STR.mission}</p>
+        <h2>{text(missionTitle, STR.missionTitle)}</h2>
+        <p>{text(mission, STR.mission)}</p>
       </div>
       <div>
-        <h2>{visionTitle ? pickLocale(visionTitle, locale) : STR.visionTitle}</h2>
-        <p>{vision ? pickLocale(vision, locale) : STR.vision}</p>
+        <h2>{text(visionTitle, STR.visionTitle)}</h2>
+        <p>{text(vision, STR.vision)}</p>
       </div>
     </div>
   </div>

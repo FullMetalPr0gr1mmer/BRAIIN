@@ -36,20 +36,10 @@ const SCOPE = includeDev ? 'full tree incl. dev' : 'production deps (--omit=dev)
  * If you add an entry it MUST carry a reason AND an expiry — never a blanket `|| true`.
  * Past-expiry entries fail the gate on purpose, so debt can't be carried silently.
  */
+// GHSA-5p4m-2wfm-xmqj (js-yaml, EXC-005) was removed 2026-09-25: js-yaml 4.3.2 shipped the
+// 4.x fix the entry was waiting for, the advisory no longer matches the tree, and EXC-005
+// is closed. Recorded here because a vanished allowlist entry otherwise reads as a lost one.
 const ALLOWLIST = [
-  {
-    id: 'GHSA-5p4m-2wfm-xmqj',
-    pkg: 'js-yaml',
-    reason:
-      'Quadratic CPU in !!omap resolution; no fixed 4.x exists (fix is 5.x only) and ' +
-      'js-yaml@5 is ESM-only with named exports — Astro imports it as a default export, ' +
-      'so an override breaks `astro check`/`astro build` outright (measured 2026-08-22). ' +
-      'Exposure is build-time parsing of repo-authored YAML frontmatter only: no runtime ' +
-      'code path feeds user input to js-yaml (CMS content is JSON validated by Zod), so ' +
-      'the quadratic blow-up needs a malicious file already committed to this repo. ' +
-      'Revisit when Astro ships js-yaml@5 or a 4.x backport lands (EXC-005).',
-    expires: '2026-11-30',
-  },
   {
     id: 'GHSA-jmr9-qjv8-65gv',
     pkg: 'extract-zip',
@@ -60,6 +50,17 @@ const ALLOWLIST = [
       'downloads from Google over TLS — the zip is not attacker-controlled, and the ' +
       'package never ships in the Worker. Revisit when @lhci/cli swaps extractors or ' +
       'extract-zip patches (EXC-006).',
+    expires: '2026-11-30',
+  },
+  {
+    id: 'GHSA-7pqw-9j4j-h8q3',
+    pkg: 'extract-zip',
+    reason:
+      'Second advisory against the SAME package, published 2026-09: arbitrary file writes ' +
+      'through symlink archive entries, affected range <=2.0.1 — i.e. every release ' +
+      '(extract-zip has not published since 2023). Identical exposure and reasoning to ' +
+      'GHSA-jmr9 above: dev/CI only, the archive is the Chrome-for-Lighthouse download ' +
+      'from Google over TLS, never attacker-controlled, never in the Worker (EXC-006).',
     expires: '2026-11-30',
   },
 ];

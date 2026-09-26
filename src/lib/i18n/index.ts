@@ -29,6 +29,38 @@ export function localizedPath(logicalPath: string, locale: Locale): string {
 }
 
 /**
+ * Localize an AUTHORED href (navigation rows, CMS links) — the one place that knows which
+ * hrefs are ours to prefix.
+ *
+ * `localizedPath` alone is wrong for these: it treats the whole string as a path, so the
+ * header's `/#services` became `/ar/#services` — a different URL from the `/ar` home
+ * that trailing-slash handling then redirects, dropping the fragment on some clients.
+ * Splitting off `?query` and `#fragment` first keeps them attached to the localized path
+ * (`/ar#services`). Anything that is not a root-relative path — an absolute URL,
+ * `mailto:`, a bare `#anchor` on the current page, a protocol-relative `//host` — is not
+ * a route of this site and is returned untouched.
+ */
+export function localizedHref(raw: string, locale: Locale): string {
+  if (!raw.startsWith('/') || raw.startsWith('//')) return raw;
+  const cut = raw.search(/[?#]/);
+  const path = cut === -1 ? raw : raw.slice(0, cut);
+  const suffix = cut === -1 ? '' : raw.slice(cut);
+  return localizedPath(path || '/', locale) + suffix;
+}
+
+// `-u-nu-arab` pins the numbering system rather than trusting the locale default, which
+// CLDR has changed for some Arabic locales before.
+const ARABIC_DIGITS = new Intl.NumberFormat('ar-SA-u-nu-arab', { useGrouping: false });
+
+/**
+ * Arabic-Indic digits (٠١٢٣…) for a whole number — the mockup's `© ٢٠٢٦` in the Arabic
+ * footer. Grouping is off: a year is not a quantity, and `٢٬٠٢٦` would be wrong.
+ */
+export function arabicIndic(n: number): string {
+  return ARABIC_DIGITS.format(n);
+}
+
+/**
  * Read a bilingual field in the requested locale, falling back to EN.
  *
  * Centralises the `x[locale] ?? x.en ?? fallback` chain that was repeated in every

@@ -1,0 +1,28 @@
+{
+  "blocks": [
+    {
+      "table": "pages",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        { "slug": "home", "title": { "en": "Home", "ar": "الرئيسية" }, "status": "published" },
+        { "slug": "about", "title": { "en": "About", "ar": "من نحن" }, "status": "published" },
+        {
+          "slug": "contact",
+          "title": { "en": "Contact us", "ar": "تواصل معنا" },
+          "status": "published"
+        },
+        {
+          "slug": "portfolio",
+          "title": { "en": "Our Work", "ar": "أعمالنا" },
+          "status": "published"
+        },
+        {
+          "slug": "portfolio-all",
+          "title": { "en": "All projects", "ar": "كل المشاريع" },
+          "status": "published"
+        },
+        { "slug": "join", "title": { "en": "Join us", "ar": "انضم إلينا" }, "status": "published" }
+      ]
+    }
+  ]
+}

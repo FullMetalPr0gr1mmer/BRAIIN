@@ -1,0 +1,59 @@
+{
+  "blocks": [
+    {
+      "table": "tenants",
+      "tenantScoped": false,
+      "conflict": ["id"],
+      "rows": [
+        {
+          "id": "00000000-0000-0000-0000-0000000000b1",
+          "name": "Braiin Station",
+          "primary_domain": "www.braiinstation.com"
+        }
+      ]
+    },
+    {
+      "table": "site_settings",
+      "conflict": ["tenant_id"],
+      "rows": [{ "identity": { "title": "Braiin Station", "default_locale": "en" } }]
+    },
+    {
+      "table": "site_profile",
+      "conflict": ["tenant_id"],
+      "rows": [
+        {
+          "brand_name": { "en": "Braiin Statiion", "ar": "بريّن ستيشن" },
+          "contact_email": "hello@braiinstatiion.com",
+          "location": { "en": "Jeddah, Saudi Arabia", "ar": "جدة، المملكة العربية السعودية" },
+          "address_locality": { "en": "Jeddah", "ar": "جدة" },
+          "address_country": "SA",
+          "founded_year": 2019,
+          "socials": [
+            {
+              "network": "instagram",
+              "handle": "@braiinstatiion",
+              "url": "https://instagram.com/braiinstatiion"
+            },
+            {
+              "network": "linkedin",
+              "handle": "@braiin-statiion",
+              "url": "https://linkedin.com/company/braiin-statiion"
+            },
+            {
+              "network": "behance",
+              "handle": "@braiinstatiion",
+              "url": "https://behance.net/braiinstatiion"
+            },
+            {
+              "network": "youtube",
+              "handle": "@braiinstatiion",
+              "url": "https://youtube.com/@braiinstatiion"
+            }
+          ],
+          "accepting_applications": false,
+          "__published": { "accepting_applications": true }
+        }
+      ]
+    }
+  ]
+}

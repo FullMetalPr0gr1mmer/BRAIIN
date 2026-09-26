@@ -1,33 +1,121 @@
-name: Perf / SEO / A11y (staged)
+name: Perf / SEO / A11y / E2E
 
-# Activated in Phase 1 when real pages exist. Enforces the CLAUDE.md §6 performance
-# budgets (Lighthouse), JSON-LD validation, and axe WCAG 2.2 AA against a local
-# wrangler preview of the built Worker. Manual until then.
+# Runs the browser gates the standard calls blocking — Lighthouse budgets (CLAUDE.md §6),
+# axe WCAG 2.2 AA, CSP, served-markup and video-bytes checks (§9) and every Playwright
+# spec — against the BUILT Worker, served by `wrangler dev`, reading a real database.
+#
+# PROMOTED 2026-09-25 from `workflow_dispatch` to push/PR. It had been "staged until real
+# pages exist" long after they did, so every e2e spec in tests/ — the hero intro, the
+# contact-form security surface, the CSP guard, axe — had never gated a single PR. This
+# is the same failure db-tests.yml records for pgTAP: a staged gate is an untested gate.
+#
+# WHY A LOCAL SUPABASE, NOT DUMMIES. The previous version built against
+# `https://example.supabase.co`, so every loader returned [] and every page rendered its
+# empty/fallback state: /portfolio was an empty list, every /portfolio/<slug> a 404, and
+# axe/Lighthouse/CSP audited pages no visitor ever sees. `supabase start` applies
+# supabase/migrations and supabase/seed.sql, and its real local keys are exported into
+# the BUILD environment. PUBLIC_* are inlined at build time; the server secrets are written
+# by scripts/local-preview-config.mjs to dist/server/.preview.env and handed to the Worker
+# with `wrangler dev --env-file` (it does not read the adapter's dist/server/.dev.vars, and
+# CI has no project .env). Only secrets with no local counterpart stay dummies.
+#
+# Make both jobs REQUIRED status checks on `main` (Settings → Branches) once green.
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: perf-seo-a11y-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The preview origin is local by design; the prebuild guard needs the explicit opt-out.
+  PUBLIC_SITE_URL: http://localhost:8788
+  ALLOW_LOCAL_SITE_URL: '1'
+  PREVIEW_URL: http://localhost:8788
+  # No local counterpart — dummy, never used for a real write in these suites.
+  LEAD_PII_ENC_KEY: ci-dummy-lead-pii-enc-key
+  AUDIT_HMAC_KEY: ci-dummy-audit-hmac-key
+  NOTIFY_LEAD_SECRET: ci-dummy-notify-lead-secret
+  # Containers the browser suites never touch; skipping them roughly halves `supabase start`.
+  SUPABASE_EXCLUDE: studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta
+
 jobs:
-  lighthouse:
+  e2e:
+    name: E2E + axe + CSP + video bytes
     runs-on: ubuntu-latest
-    env:
-      PUBLIC_SITE_URL: http://localhost:8788
-      PUBLIC_SUPABASE_URL: https://example.supabase.co
-      PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
       - run: npm ci
+      - name: Start Supabase (migrations + seed.sql)
+        run: supabase start -x "$SUPABASE_EXCLUDE"
+      - name: Export local Supabase into the build environment
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "PUBLIC_SUPABASE_URL=${API_URL}"
+            echo "PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY:-$PUBLISHABLE_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:-$SECRET_KEY}"
+            echo "SUPABASE_DB_POOL_URL=${DB_URL}"
+          } >> "$GITHUB_ENV"
       - run: npm run build
-      - name: Start preview (miniflare)
-        run: npx wrangler dev --port 8788 &
+      - name: Preview config (local KV simulation, no Cloudflare credentials)
+        run: node scripts/local-preview-config.mjs
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start preview (wrangler dev)
+        run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env &
       - name: Wait for preview
-        run: npx wait-on http://localhost:8788 --timeout 60000
+        run: npx wait-on http://localhost:8788 --timeout 90000
+      - name: Playwright (e2e, axe WCAG 2.2 AA, CSP, served HTML, video bytes)
+        run: npm run test:e2e
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop
+
+  lighthouse:
+    name: Lighthouse budgets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: npm ci
+      - name: Start Supabase (migrations + seed.sql)
+        run: supabase start -x "$SUPABASE_EXCLUDE"
+      - name: Export local Supabase into the build environment
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "PUBLIC_SUPABASE_URL=${API_URL}"
+            echo "PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY:-$PUBLISHABLE_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:-$SECRET_KEY}"
+            echo "SUPABASE_DB_POOL_URL=${DB_URL}"
+          } >> "$GITHUB_ENV"
+      - run: npm run build
+      - name: Preview config (local KV simulation, no Cloudflare credentials)
+        run: node scripts/local-preview-config.mjs
+      - name: Start preview (wrangler dev)
+        run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env &
+      - name: Wait for preview
+        run: npx wait-on http://localhost:8788 --timeout 90000
       - name: Lighthouse budgets (mobile — Lighthouse default emulation)
         run: npm run lhci
       # The desktop geometry is where the hero intro/headline collision lived: it was
@@ -36,27 +124,6 @@ jobs:
       # class of defect that only exists on desktop widths.
       - name: Lighthouse budgets (desktop)
         run: npm run lhci:desktop
-
-  a11y:
-    runs-on: ubuntu-latest
-    env:
-      PUBLIC_SITE_URL: http://localhost:8788
-      PUBLIC_SUPABASE_URL: https://example.supabase.co
-      PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
-      PREVIEW_URL: http://localhost:8788
-    steps:
-      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Start preview (miniflare)
-        run: npx wrangler dev --port 8788 &
-      - name: Wait for preview
-        run: npx wait-on http://localhost:8788 --timeout 60000
-      - name: axe WCAG 2.2 AA (EN + AR/RTL routes)
-        run: npm run test:e2e
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop

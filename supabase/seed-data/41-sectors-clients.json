@@ -1,0 +1,170 @@
+{
+  "blocks": [
+    {
+      "table": "sectors",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "automotive",
+          "name": { "en": "Automotive", "ar": "السيارات" },
+          "visible": true,
+          "sort_order": 1
+        },
+        {
+          "slug": "food-and-beverage",
+          "name": { "en": "Food & Beverage (F&B)", "ar": "الأغذية والمشروبات" },
+          "visible": true,
+          "sort_order": 2
+        },
+        {
+          "slug": "education",
+          "name": { "en": "Education", "ar": "التعليم" },
+          "visible": true,
+          "sort_order": 3
+        },
+        {
+          "slug": "culture",
+          "name": { "en": "Culture", "ar": "الثقافة" },
+          "visible": true,
+          "sort_order": 4
+        },
+        {
+          "slug": "real-estate",
+          "name": { "en": "Real Estate", "ar": "العقار" },
+          "visible": true,
+          "sort_order": 5
+        },
+        {
+          "slug": "entertainment",
+          "name": { "en": "Entertainment", "ar": "الترفيه" },
+          "visible": true,
+          "sort_order": 6
+        }
+      ]
+    },
+    {
+      "table": "clients",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "client-a",
+          "name": { "en": "Client A", "ar": "العميل أ" },
+          "visible": true,
+          "show_in_marquee": false,
+          "is_placeholder": true,
+          "sort_order": 1,
+          "__placeholder": true
+        },
+        {
+          "slug": "client-b",
+          "name": { "en": "Client B", "ar": "العميل ب" },
+          "visible": true,
+          "show_in_marquee": false,
+          "is_placeholder": true,
+          "sort_order": 2,
+          "__placeholder": true
+        },
+        {
+          "slug": "client-c",
+          "name": { "en": "Client C", "ar": "العميل ج" },
+          "visible": true,
+          "show_in_marquee": false,
+          "is_placeholder": true,
+          "sort_order": 3,
+          "__placeholder": true
+        },
+        {
+          "slug": "client-d",
+          "name": { "en": "Client D", "ar": "العميل د" },
+          "visible": true,
+          "show_in_marquee": false,
+          "is_placeholder": true,
+          "sort_order": 4,
+          "__placeholder": true
+        },
+        {
+          "slug": "client-e",
+          "name": { "en": "Client E", "ar": "العميل هـ" },
+          "visible": true,
+          "show_in_marquee": false,
+          "is_placeholder": true,
+          "sort_order": 5,
+          "__placeholder": true
+        },
+        {
+          "slug": "client-f",
+          "name": { "en": "Client F", "ar": "العميل و" },
+          "visible": true,
+          "show_in_marquee": false,
+          "is_placeholder": true,
+          "sort_order": 6,
+          "__placeholder": true
+        },
+        {
+          "slug": "riyadh-season",
+          "name": { "en": "Riyadh Season", "ar": "موسم الرياض" },
+          "visible": true,
+          "show_in_marquee": true,
+          "is_placeholder": false,
+          "sort_order": 1
+        },
+        {
+          "slug": "neom",
+          "name": { "en": "NEOM", "ar": "نيوم" },
+          "visible": true,
+          "show_in_marquee": true,
+          "is_placeholder": false,
+          "sort_order": 2
+        },
+        {
+          "slug": "stc",
+          "name": { "en": "stc", "ar": "stc" },
+          "visible": true,
+          "show_in_marquee": true,
+          "is_placeholder": false,
+          "sort_order": 3
+        },
+        {
+          "slug": "saudia",
+          "name": { "en": "Saudia", "ar": "السعودية" },
+          "visible": true,
+          "show_in_marquee": true,
+          "is_placeholder": false,
+          "sort_order": 4
+        },
+        {
+          "slug": "aramco",
+          "name": { "en": "Aramco", "ar": "أرامكو" },
+          "visible": true,
+          "show_in_marquee": true,
+          "is_placeholder": false,
+          "sort_order": 5
+        },
+        {
+          "slug": "qiddiya",
+          "name": { "en": "Qiddiya", "ar": "القدية" },
+          "visible": true,
+          "show_in_marquee": true,
+          "is_placeholder": false,
+          "sort_order": 6
+        },
+        {
+          "slug": "diriyah",
+          "name": { "en": "Diriyah", "ar": "الدرعية" },
+          "visible": true,
+          "show_in_marquee": true,
+          "is_placeholder": false,
+          "sort_order": 7
+        },
+        {
+          "slug": "ministry-of-culture",
+          "name": { "en": "Ministry of Culture", "ar": "وزارة الثقافة" },
+          "visible": true,
+          "show_in_marquee": true,
+          "is_placeholder": false,
+          "sort_order": 8
+        }
+      ]
+    }
+  ]
+}
