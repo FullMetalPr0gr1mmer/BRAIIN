@@ -162,7 +162,9 @@ const STR = {
     // banner (clamp(400px, 64svh, 760px)), and against a viewport-height threshold the
     // bar would stay transparent long past it — white-on-white over the paper below.
     // The solid bar has no hero to clear; it only needs to be out of the way of the top.
-    const hero = overlay ? document.querySelector<HTMLElement>('.hero') : null;
+    // `[data-hero]`: a page that opens with another kind of head (Our Work's banner, All
+    // projects' page head) marks it for this measurement.
+    const hero = overlay ? document.querySelector<HTMLElement>('.hero, [data-hero]') : null;
     const measure = () => (overlay ? (hero?.offsetHeight ?? window.innerHeight) * 0.9 : 160);
     let threshold = measure();
     addEventListener('resize', () => (threshold = measure()), { passive: true });

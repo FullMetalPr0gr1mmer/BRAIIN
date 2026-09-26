@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { LocalizedTextSchema, TestimonialPlacementSchema } from './content';
 import { SECTION_TYPES, type SectionType } from './sectionTypes';
-import { AccentSchema, SafeHrefSchema } from './media';
-import { SlugSchema } from './primitives';
+import { AccentSchema, MediaRefSchema, SafeHrefSchema, VideoClipSchema } from './media';
+import { SlugSchema, UuidSchema } from './primitives';
 
 // Per-type CMS content shapes for `page_sections.content` (authored at /admin/sections,
 // rendered by src/components/SectionRenderer.astro). One schema per shape, in packages/
@@ -89,9 +89,16 @@ export const ContactSectionContentSchema = z.object({
   accent: Text.optional(),
 });
 
+/** `paper` (home, contact) or the About page's Klein band (UI v2 PR8). */
+export const SOCIAL_VARIANTS = ['paper', 'klein'] as const;
 export const SocialSectionContentSchema = z.object({
+  variant: z.enum(SOCIAL_VARIANTS).optional(),
   tag: Text.optional(),
   heading: Text.optional(),
+  /** Which heading words carry the accent (the Klein band outlines them). */
+  accent: AccentSchema.optional(),
+  /** The line beside the heading (Klein band only — the paper strip has none). */
+  text: Text.optional(),
   links: z
     .array(
       z.object({
@@ -104,10 +111,19 @@ export const SocialSectionContentSchema = z.object({
     .optional(),
 });
 
+/**
+ * The closing call to action (UI v2: LeadBand — the Klein band of Our Work, All projects
+ * and the case study). The studio email comes from the public identity, never content.
+ */
 export const CtaSectionContentSchema = z.object({
+  tag: Text.optional(),
   heading: Text.optional(),
+  /** Which words of `heading` are outlined; only read with an authored heading. */
+  accent: AccentSchema.optional(),
   text: Text.optional(),
   buttonLabel: Text.optional(),
+  /** Site-relative; default the contact page's inquiry form (`/contact#inquiry`). */
+  buttonHref: SafeHrefSchema.optional(),
 });
 
 /**
@@ -245,6 +261,134 @@ export const AboutStorySectionContentSchema = z.object({
   vision: Text.optional(),
 });
 
+/* About's "who we are" h1 enters word by word through a 16-rung CSS ladder (SplitHeading,
+   `.hw--0` … `.hw--15`): past the last rung the words would pop in together, and the
+   heading is the page's <h1> — so it is bounded like the hero's (words per code point,
+   the same split SplitHeading uses). */
+export const WHO_MAX_WORDS = 16;
+export const WHO_MAX_WORD_LEN = 24;
+const whoHeadingShape = (s: string): boolean => {
+  const words = s.trim().split(/\s+/).filter(Boolean);
+  return (
+    words.length > 0 &&
+    words.length <= WHO_MAX_WORDS &&
+    words.every((w) => [...w].length <= WHO_MAX_WORD_LEN)
+  );
+};
+
+/**
+ * About "who we are" (UI v2 PR8): the page's <h1>, a media frame and the manifesto. The
+ * poster is a media_assets row by id (`mediaId` — the key 0024's public-read policy looks
+ * for in section content, so the image is readable exactly while this section is live);
+ * with no poster the section renders text only. `clip` plays a window of a self-hosted
+ * file over the poster while it is on screen (EXC-009).
+ */
+export const AboutWhoSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.refine((v) => whoHeadingShape(v.en) && whoHeadingShape(v.ar), {
+      message: `Heading: at most ${WHO_MAX_WORDS} words, and ${WHO_MAX_WORD_LEN} characters per word (the entrance animation has ${WHO_MAX_WORDS} steps).`,
+    }).optional(),
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    /** Each paragraph opens with its title in bold ("Strategy before pixels."). */
+    paragraphs: z
+      .array(z.object({ title: Text, body: Text }))
+      .max(6)
+      .optional(),
+    mediaId: UuidSchema.optional(),
+    clip: VideoClipSchema.optional(),
+  })
+  // Strict: a stray key (a poster URL, say) must be refused on write, not stored and ignored.
+  .strict();
+
+/**
+ * The About leadership slider (UI v2 PR8). The people are `team_members` flagged
+ * `is_leadership` (getLeadership), injected by the route; this is only the copy around
+ * them. Hidden when no leader is published.
+ */
+export const LeadershipSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    text: Text.optional(),
+  })
+  // Strict: the people come from their own table — a stray `members` key is refused.
+  .strict();
+// ── UI v2 PR10: Our Work (/portfolio) and All projects (/portfolio/all) ─────────────
+// The projects, numbers and quotes these sections show come from their own tables; the
+// content below is only the copy around them. Filter-bar chrome ("Filter by", "All
+// sectors", "Clear filters"…) is built-in bilingual copy, and the facets are fixed in
+// code (src/lib/portfolio/catalog.ts) — neither is content.
+
+/**
+ * The Our Work banner: a project's poster and loop under a glass caption. `projectSlug`
+ * pins one project; without it (or when that project is not published) the banner shows
+ * the latest (year desc, then catalogue order).
+ */
+export const WorkHeroSectionContentSchema = z.object({
+  tag: Text.optional(),
+  projectSlug: SlugSchema.optional(),
+});
+
+/** Most quotes the proof carousel shows (the loader's own cap is 8). */
+export const PROOF_QUOTES_MAX = 8;
+
+/**
+ * Our Work's white proof band: the page's statistics (placement `work`) above its
+ * testimonials. Each half hides on its own when it has nothing to show; with neither,
+ * the section renders nothing.
+ */
+export const ProofSectionContentSchema = z
+  .object({
+    statsTag: Text.optional(),
+    quotesTag: Text.optional(),
+    quotesHeading: Text.optional(),
+    /** Only read with an authored quotesHeading. */
+    quotesAccent: AccentSchema.optional(),
+    quotesLimit: z.number().int().min(1).max(PROOF_QUOTES_MAX).optional(),
+    /** Opt-OUT of the count-up (server-rendered final values either way). */
+    staticNumbers: z.boolean().optional(),
+    minItems: z.number().int().min(1).max(6).optional(),
+  })
+  .strict();
+
+/** One of the intro's two frames: a media library image, optionally looping a clip. */
+export const WorkIntroMediaSchema = MediaRefSchema.extend({
+  clip: VideoClipSchema.optional(),
+});
+
+/**
+ * The intro statement between two looping frames. `media` is keyed `mediaId` on purpose:
+ * the 0024 anon read policy and media_usage() find section media by that key
+ * (`$.**.mediaId`), so an image referenced any other way would never reach a visitor.
+ */
+export const WorkIntroSectionContentSchema = z.object({
+  text: Text.optional(),
+  linkLabel: Text.optional(),
+  media: z.array(WorkIntroMediaSchema).max(2).optional(),
+});
+
+/** The featured-projects grid with its filter bar (the pool is `is_featured`). */
+export const ProjectGridSectionContentSchema = z.object({
+  tag: Text.optional(),
+  heading: Text.optional(),
+});
+
+/**
+ * A page head on black: a back link, the h1 with an accented word range, a lead line and
+ * (on the catalogue) the live project count, which the route supplies.
+ */
+export const PageHeadSectionContentSchema = z.object({
+  heading: Text.optional(),
+  /** Only read with an authored heading. */
+  accent: AccentSchema.optional(),
+  lead: Text.optional(),
+  backLabel: Text.optional(),
+  backHref: SafeHrefSchema.optional(),
+});
+
 export { SECTION_TYPES, type SectionType } from './sectionTypes';
 /** Zod form of the canonical list in ./sectionTypes (kept zod-free for the admin bundle). */
 export const SectionTypeSchema = z.enum(SECTION_TYPES);
@@ -264,6 +408,14 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
   statistics: StatisticsSectionContentSchema,
   selectedWork: SelectedWorkSectionContentSchema,
   testimonials: TestimonialsSectionContentSchema,
+  aboutWho: AboutWhoSectionContentSchema,
+  leadership: LeadershipSectionContentSchema,
+  // UI v2 PR10 (projectCatalog takes no content: its data is the portfolio table)
+  workHero: WorkHeroSectionContentSchema,
+  proof: ProofSectionContentSchema,
+  workIntro: WorkIntroSectionContentSchema,
+  projectGrid: ProjectGridSectionContentSchema,
+  pageHead: PageHeadSectionContentSchema,
   // UI v2 PR9 (contact)
   contactInquiry: ContactInquirySectionContentSchema,
   contactChannels: ContactChannelsSectionContentSchema,
@@ -325,6 +477,13 @@ export type CtaSectionContent = z.infer<typeof CtaSectionContentSchema>;
 export type AboutStorySectionContent = z.infer<typeof AboutStorySectionContentSchema>;
 export type SelectedWorkSectionContent = z.infer<typeof SelectedWorkSectionContentSchema>;
 export type TestimonialsSectionContent = z.infer<typeof TestimonialsSectionContentSchema>;
+export type AboutWhoSectionContent = z.infer<typeof AboutWhoSectionContentSchema>;
+export type LeadershipSectionContent = z.infer<typeof LeadershipSectionContentSchema>;
+export type WorkHeroSectionContent = z.infer<typeof WorkHeroSectionContentSchema>;
+export type ProofSectionContent = z.infer<typeof ProofSectionContentSchema>;
+export type WorkIntroSectionContent = z.infer<typeof WorkIntroSectionContentSchema>;
+export type ProjectGridSectionContent = z.infer<typeof ProjectGridSectionContentSchema>;
+export type PageHeadSectionContent = z.infer<typeof PageHeadSectionContentSchema>;
 export type ContactInquirySectionContent = z.infer<typeof ContactInquirySectionContentSchema>;
 export type ContactChannelsSectionContent = z.infer<typeof ContactChannelsSectionContentSchema>;
 export type FaqSectionContent = z.infer<typeof FaqSectionContentSchema>;

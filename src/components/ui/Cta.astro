@@ -14,14 +14,23 @@ interface Props {
   variant?: 'klein' | 'light';
   icon?: 'go' | 'down';
   class?: string;
+  /** Hooks for an enhancement script (e.g. `data-see-all` on Our Work's grid). */
+  [data: `data-${string}`]: string | undefined;
 }
 
-const { href, type = 'button', variant = 'klein', icon = 'go', class: className } = Astro.props;
+const {
+  href,
+  type = 'button',
+  variant = 'klein',
+  icon = 'go',
+  class: className,
+  ...data
+} = Astro.props;
 const classes = ['cta', 'cta--badge', `cta--${variant}`, `cta--${icon}`, className];
 const Tag = href ? 'a' : 'button';
 ---
 
-<Tag class:list={classes} href={href} type={href ? undefined : type}>
+<Tag class:list={classes} href={href} type={href ? undefined : type} {...data}>
   <span class="cta__ico" aria-hidden="true">
     {
       icon === 'down' ? (

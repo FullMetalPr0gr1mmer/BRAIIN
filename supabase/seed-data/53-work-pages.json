@@ -1,0 +1,290 @@
+{
+  "blocks": [
+    {
+      "table": "page_sections",
+      "conflict": ["id"],
+      "unlessAuthored": ["page_id"],
+      "rows": [
+        {
+          "id": "5eed5300-0000-4000-8000-000000000001",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "portfolio"
+              }
+            }
+          },
+          "type": "workHero",
+          "content": {
+            "tag": {
+              "en": "Latest project",
+              "ar": "أحدث مشروع"
+            }
+          },
+          "visible": true,
+          "sort_order": 10
+        },
+        {
+          "id": "5eed5300-0000-4000-8000-000000000002",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "portfolio"
+              }
+            }
+          },
+          "type": "proof",
+          "content": {
+            "statsTag": {
+              "en": "In numbers",
+              "ar": "بالأرقام"
+            },
+            "quotesTag": {
+              "en": "Testimonials",
+              "ar": "آراء العملاء"
+            },
+            "quotesHeading": {
+              "en": "In their words",
+              "ar": "بكلماتهم هم"
+            },
+            "quotesAccent": {
+              "en": {
+                "from": 2
+              },
+              "ar": {
+                "from": 1
+              }
+            },
+            "quotesLimit": 3
+          },
+          "visible": true,
+          "sort_order": 20
+        },
+        {
+          "id": "5eed5300-0000-4000-8000-000000000003",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "portfolio"
+              }
+            }
+          },
+          "type": "workIntro",
+          "content": {
+            "text": {
+              "en": "Every project here started as a sketch in a notebook and ended somewhere people could see it, hold it, or hear it. This is a selection of the work we're proudest of.",
+              "ar": "كل مشروع هنا بدأ كرسمة في دفتر، وانتهى في مكان يقدر الناس يشوفونه أو يلمسونه أو يسمعونه. هذه مختارات من الشغل اللي نفتخر فيه أكثر."
+            },
+            "linkLabel": {
+              "en": "See the projects",
+              "ar": "شوف المشاريع"
+            },
+            "media": [
+              {
+                "mediaId": "5eed0a00-0000-4000-8000-000000000007",
+                "clip": {
+                  "path": "/media/showreel.mp4",
+                  "startS": 14,
+                  "endS": 15.4
+                }
+              },
+              {
+                "mediaId": "5eed0a00-0000-4000-8000-000000000008",
+                "clip": {
+                  "path": "/media/showreel.mp4",
+                  "startS": 17.4,
+                  "endS": 18.3
+                }
+              }
+            ]
+          },
+          "visible": true,
+          "sort_order": 30
+        },
+        {
+          "id": "5eed5300-0000-4000-8000-000000000004",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "portfolio"
+              }
+            }
+          },
+          "type": "projectGrid",
+          "content": {
+            "tag": {
+              "en": "Featured work",
+              "ar": "أعمال مختارة"
+            },
+            "heading": {
+              "en": "Projects",
+              "ar": "المشاريع"
+            }
+          },
+          "visible": true,
+          "sort_order": 40
+        },
+        {
+          "id": "5eed5300-0000-4000-8000-000000000005",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "portfolio"
+              }
+            }
+          },
+          "type": "clientsMarquee",
+          "content": {},
+          "visible": true,
+          "sort_order": 50
+        },
+        {
+          "id": "5eed5300-0000-4000-8000-000000000006",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "portfolio"
+              }
+            }
+          },
+          "type": "cta",
+          "content": {
+            "tag": {
+              "en": "Start a project",
+              "ar": "ابدأ مشروعك"
+            },
+            "heading": {
+              "en": "Your idea could be next",
+              "ar": "فكرتك ممكن تكون التالية"
+            },
+            "accent": {
+              "en": {
+                "from": 4
+              },
+              "ar": {
+                "from": 3
+              }
+            },
+            "text": {
+              "en": "Tell us what you're making. You'll hear back within one business day with our questions, a rough range, and a time to talk.",
+              "ar": "قل لنا وش تصنع. يوصلك رد خلال يوم عمل واحد فيه أسئلتنا، ونطاق سعري مبدئي، وموعد للمكالمة."
+            },
+            "buttonLabel": {
+              "en": "Start an inquiry",
+              "ar": "ابدأ طلبك"
+            },
+            "buttonHref": "/contact#inquiry"
+          },
+          "visible": true,
+          "sort_order": 60
+        }
+      ]
+    },
+    {
+      "table": "page_sections",
+      "conflict": ["id"],
+      "unlessAuthored": ["page_id"],
+      "rows": [
+        {
+          "id": "5eed5300-0000-4000-8000-000000000011",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "portfolio-all"
+              }
+            }
+          },
+          "type": "pageHead",
+          "content": {
+            "heading": {
+              "en": "All projects",
+              "ar": "كل المشاريع"
+            },
+            "accent": {
+              "en": {
+                "from": 1
+              },
+              "ar": {
+                "from": 1
+              }
+            },
+            "lead": {
+              "en": "Every project we've made. Filter by service, sector, client or year, or tap any tag on a project.",
+              "ar": "كل المشاريع اللي صنعناها. فلتر حسب الخدمة أو القطاع أو العميل أو السنة، أو اضغط على أي وسم في المشروع."
+            },
+            "backLabel": {
+              "en": "Our Work",
+              "ar": "أعمالنا"
+            },
+            "backHref": "/portfolio"
+          },
+          "visible": true,
+          "sort_order": 10
+        },
+        {
+          "id": "5eed5300-0000-4000-8000-000000000012",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "portfolio-all"
+              }
+            }
+          },
+          "type": "projectCatalog",
+          "content": {},
+          "visible": true,
+          "sort_order": 20
+        },
+        {
+          "id": "5eed5300-0000-4000-8000-000000000013",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "portfolio-all"
+              }
+            }
+          },
+          "type": "cta",
+          "content": {
+            "tag": {
+              "en": "Start a project",
+              "ar": "ابدأ مشروعك"
+            },
+            "heading": {
+              "en": "Your idea could be next",
+              "ar": "فكرتك ممكن تكون التالية"
+            },
+            "accent": {
+              "en": {
+                "from": 4
+              },
+              "ar": {
+                "from": 3
+              }
+            },
+            "text": {
+              "en": "Tell us what you're making. You'll hear back within one business day with our questions, a rough range, and a time to talk.",
+              "ar": "قل لنا وش تصنع. يوصلك رد خلال يوم عمل واحد فيه أسئلتنا، ونطاق سعري مبدئي، وموعد للمكالمة."
+            },
+            "buttonLabel": {
+              "en": "Start an inquiry",
+              "ar": "ابدأ طلبك"
+            },
+            "buttonHref": "/contact#inquiry"
+          },
+          "visible": true,
+          "sort_order": 30
+        }
+      ]
+    }
+  ]
+}

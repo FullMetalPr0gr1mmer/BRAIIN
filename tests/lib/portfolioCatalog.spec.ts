@@ -1,14 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import type { PortfolioCard } from '@/lib/data/portfolio';
 import {
+  activeFacets,
   catalogueOrder,
   facetOptions,
   facetQuery,
+  facetValues,
   filterCards,
   isFiltered,
   latestOrder,
+  matches,
+  matchesValues,
   nextProject,
   parseFacets,
+  sanitizeSelection,
 } from '@/lib/portfolio/catalog';
 
 // The one facet module behind Our Work and All projects. The query string is untrusted:
@@ -182,5 +187,75 @@ describe('nextProject', () => {
       'kitchen-hours',
     );
     expect(nextProject([rider], { id: rider.id, nextPortfolioId: rider.id })).toBeNull();
+  });
+});
+
+describe('facet values — what a rendered card carries for the enhancement', () => {
+  it('lists every facet, services in the editor order, the year as text', () => {
+    expect(facetValues(rider)).toEqual({
+      service: ['videography', 'advertising'],
+      sector: ['automotive'],
+      client: ['client-a'],
+      year: ['2026'],
+    });
+  });
+
+  it('never names a confidential client (a filter URL would disclose it)', () => {
+    expect(facetValues(notebook).client).toEqual([]);
+  });
+
+  it('matchesValues agrees with matches for every card and selection (one AND, two callers)', () => {
+    const selections = [
+      {},
+      { service: 'advertising' },
+      { service: 'advertising', year: '2026' },
+      { sector: 'education' },
+      { client: 'client-b', service: 'photography' },
+      { year: '2025', service: 'advertising' },
+    ];
+    for (const selection of selections) {
+      for (const c of CARDS) {
+        const label = `${c.slug} ${JSON.stringify(selection)}`;
+        expect(matchesValues(facetValues(c), selection), label).toBe(matches(c, selection));
+      }
+    }
+  });
+
+  it('a card missing a facet list never matches a filter on it', () => {
+    expect(matchesValues({ service: ['branding'] }, { year: '2026' })).toBe(false);
+    expect(matchesValues({}, {})).toBe(true);
+  });
+
+  it('activeFacets names the set facets in FACETS order', () => {
+    expect(activeFacets({ year: '2026', service: 'branding' })).toEqual(['service', 'year']);
+    expect(activeFacets({})).toEqual([]);
+  });
+});
+
+describe('sanitizeSelection — the browser re-validates the server-written state', () => {
+  const known = {
+    service: new Set(['branding']),
+    sector: new Set(['automotive']),
+    year: new Set(['2026']),
+  };
+
+  it('keeps known string values of known facets', () => {
+    expect(sanitizeSelection({ service: 'branding', year: '2026' }, known)).toEqual({
+      service: 'branding',
+      year: '2026',
+    });
+  });
+
+  it('drops unknown values, unknown keys and non-strings', () => {
+    const raw = { service: 'hacking', sector: 7, year: '<img src=x onerror=alert(1)>', x: 'y' };
+    expect(sanitizeSelection(raw, known)).toEqual({});
+    // a facet the page offers no values for
+    expect(sanitizeSelection({ client: 'client-a' }, known)).toEqual({});
+  });
+
+  it('survives garbage', () => {
+    expect(sanitizeSelection(null, known)).toEqual({});
+    expect(sanitizeSelection('service=branding', known)).toEqual({});
+    expect(sanitizeSelection(['branding'], known)).toEqual({});
   });
 });

@@ -1,0 +1,100 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { VideoClip } from '@schemas/media';
+import type { ImageRef } from '@/lib/media/resolve';
+import MediaImage from './MediaImage.astro';
+
+// A full-bleed banner (UI v2 — Our Work's latest project; the case study's opening frame
+// reuses it): the poster as a real <img> (<Picture>, eager + high priority — it is the
+// page's LCP element), a muted loop of a clip window over it, and whatever the slot puts
+// on top (the glass caption).
+//
+// Pinned like the home hero (position: sticky) so the next section slides over it. The
+// video is created by lazyVideo.ts after `load` (zero video bytes before the page has
+// painted — tests/e2e/media-bytes.e2e.ts), never under reduced motion or Save-Data, and
+// pauses once the banner is covered. A Stream UID renders the poster alone until the
+// Stream player lands (KAN-20); a self-hosted window plays under EXC-009. The loop is
+// one of EXC-007's banner surfaces (no pause control — docs/security-exceptions.md).
+//
+// `data-hero` is what the overlay header measures to decide when its bar turns solid.
+
+interface Props {
+  image: ImageRef | null;
+  locale: Locale;
+  clip?: VideoClip | null;
+  class?: string;
+  /** Accessible name of the banner region (optional — a caption usually names it). */
+  label?: string;
+}
+
+const { image, locale, clip = null, class: className, label } = Astro.props;
+
+const playable = clip?.path ? clip : null;
+---
+
+<section class:list={['mbanner', className]} data-hero data-banner aria-label={label}>
+  <div
+    class="mbanner__media"
+    data-video-src={playable?.path}
+    data-clip-start={playable?.startS}
+    data-clip-end={playable?.endS}
+  >
+    {
+      image && (
+        <MediaImage
+          image={image}
+          locale={locale}
+          decorative
+          priority
+          widths={[640, 960, 1280, 1600]}
+          sizes="100vw"
+          class="mbanner__poster"
+        />
+      )
+    }
+  </div>
+  <slot />
+</section>
+
+<script>
+  import { mountLazyVideo, setVideoInView } from '@/lib/client/lazyVideo';
+
+  for (const banner of document.querySelectorAll<HTMLElement>('[data-banner]')) {
+    const media = banner.querySelector<HTMLElement>('.mbanner__media');
+    const video = media?.dataset.videoSrc ? media : null;
+
+    // The loop waits for `load` so its bytes never compete with the poster (the LCP).
+    if (video) {
+      const start = () => mountLazyVideo(video);
+      if (document.readyState === 'complete') start();
+      else addEventListener('load', start, { once: true });
+    }
+
+    // Pinned (sticky), so it never leaves the viewport on its own: it is "gone" once the
+    // sections after it have scrolled over it completely. Then its content leaves paint
+    // and the tab order (a focusable caption behind an opaque section is WCAG 2.4.11
+    // territory) and the loop pauses. The banner opens its page (offsetTop of a stuck
+    // element is its STUCK position, so it is not used): covered = scrolled past its height.
+    let covered = false;
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      const isCovered = window.scrollY >= banner.offsetHeight;
+      if (isCovered === covered) return;
+      covered = isCovered;
+      banner.classList.toggle('is-covered', covered);
+      if (video) setVideoInView(video, !covered);
+    };
+    addEventListener(
+      'scroll',
+      () => {
+        if (!ticking) {
+          ticking = true;
+          requestAnimationFrame(update);
+        }
+      },
+      { passive: true },
+    );
+    update();
+  }
+</script>

@@ -52,13 +52,26 @@ export interface Leader {
   portrait: ImageRef | null;
 }
 
-/** The leadership slider, in order. */
-export async function getLeadership(): Promise<Leader[]> {
-  return (await load(true)).map((m) => ({
+/**
+ * The shape 0023 CHECKs and the admin validates. Checked again here because the URL
+ * renders into an <a href> on a public page: a row that slipped past both (a hand edit)
+ * shows the card without a link rather than an arbitrary URL.
+ */
+const LINKEDIN_URL = /^https:\/\/([a-z]{2,3}\.)?linkedin\.com\/(in|company)\/[A-Za-z0-9_-]+\/?$/;
+
+/** A published team row → a leadership card. */
+export function toLeader(m: TeamMemberRow): Leader {
+  const url = m.linkedin_url?.trim() ?? '';
+  return {
     slug: m.slug,
     name: m.name,
     role: m.role,
-    linkedinUrl: m.linkedin_url,
+    linkedinUrl: LINKEDIN_URL.test(url) ? url : null,
     portrait: imageRef(m.portrait),
-  }));
+  };
+}
+
+/** The leadership slider, in order. */
+export async function getLeadership(): Promise<Leader[]> {
+  return (await load(true)).map(toLeader);
 }

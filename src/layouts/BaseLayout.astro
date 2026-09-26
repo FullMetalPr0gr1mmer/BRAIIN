@@ -28,7 +28,14 @@ interface Props {
   /** The header's language switch target, when it is NOT this page in the other locale —
       a 404 has no twin, so its switch goes to the other locale's home. */
   langHref?: string;
+  /** Route stylesheets under /styles/, linked after global.css (UI v2: `work.css` on Our
+      Work + All projects). A known name, never a URL — the sheet is same-origin, so the
+      CSP's `style-src 'self'` covers it with no nonce. */
+  styles?: readonly RouteStylesheet[];
 }
+
+/** Every route stylesheet in public/styles/ (a closed list: a typo fails `astro check`). */
+type RouteStylesheet = 'about.css' | 'work.css';
 
 const {
   title,
@@ -42,6 +49,7 @@ const {
   chrome = true,
   header = 'solid',
   langHref,
+  styles = [],
 } = Astro.props;
 const direction = dir(locale);
 ---
@@ -60,6 +68,7 @@ const direction = dir(locale);
       {...canonicalOverride ? { canonicalOverride } : {}}
     />
     <link rel="stylesheet" href="/styles/global.css" />
+    {styles.map((sheet) => <link rel="stylesheet" href={`/styles/${sheet}`} />)}
   </head>
   <body>
     {chrome && <SiteHeader locale={locale} variant={header} {...(langHref ? { langHref } : {})} />}

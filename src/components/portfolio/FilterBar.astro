@@ -1,0 +1,158 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { PortfolioCard } from '@/lib/data/portfolio';
+import {
+  FACETS,
+  activeFacets,
+  facetOptions,
+  facetQuery,
+  toggleFacet,
+  type Facet,
+  type FacetSelection,
+} from '@/lib/portfolio/catalog';
+import { FILTER_STR, removeLabel } from '@/lib/portfolio/filterText';
+import { localizedHref, localizedPath, pickLocale } from '@/lib/i18n';
+
+// The catalogue filter bar (UI v2 — Our Work's featured grid and All projects; the
+// mockup's `.fb`). Server-rendered and complete WITHOUT JavaScript:
+//   service chips   links (the active one aria-current; "All services" clears it)
+//   sector/client/  <select>s in a GET form — its Apply button shows only without JS
+//   year
+//   active pills    links that remove one filter; "Clear filters" is a link too
+// The enhancement (src/lib/client/catalogFilter.ts) applies the same links and selects in
+// place and rewrites the URL with replaceState — it never builds markup and never reads
+// the query string: the pills below are all rendered (hidden when inactive) and their
+// labels come from `data-labels`, which the server writes from its own options.
+//
+// Options are the values present in the pool, each with its count over the pool (the
+// design's counts do not shrink as other filters apply); years newest first. A facet with
+// no values (every client confidential, say) shows no control.
+
+interface Props {
+  locale: Locale;
+  /** The cards the filter chooses among (Our Work: the featured ones). */
+  pool: readonly PortfolioCard[];
+  selection: FacetSelection;
+  /** Logical path of the page being filtered. */
+  base: string;
+  /** Appended to links and the form action (`#projects` on Our Work). */
+  fragment?: string;
+}
+
+const { locale, pool, selection, base, fragment = '' } = Astro.props;
+const S = FILTER_STR[locale];
+
+const options = Object.fromEntries(
+  FACETS.map((f) => [
+    f,
+    facetOptions(pool, f).map((o) => ({ ...o, text: pickLocale(o.label, locale) })),
+  ]),
+) as Record<Facet, (ReturnType<typeof facetOptions>[number] & { text: string })[]>;
+
+const labels = Object.fromEntries(
+  FACETS.map((f) => [f, Object.fromEntries(options[f].map((o) => [o.value, o.text]))]),
+);
+const labelOf = (f: Facet) => {
+  const v = selection[f];
+  return v ? (labels[f]?.[v] ?? v) : '';
+};
+
+const href = (next: FacetSelection) =>
+  localizedHref(`${base}${facetQuery(next)}${fragment}`, locale);
+const without = (f: Facet): FacetSelection => {
+  const next = { ...selection };
+  delete next[f];
+  return next;
+};
+const active = activeFacets(selection);
+const SELECTS = ['sector', 'client', 'year'] as const;
+---
+
+<div class="fb" data-filter-bar data-labels={JSON.stringify(labels)}>
+  {
+    options.service.length > 0 && (
+      <div class="fb__svc" role="group" aria-label={S.facet.service}>
+        <a
+          class:list={['fchip', { 'is-on': !selection.service }]}
+          href={href(without('service'))}
+          data-f="service"
+          data-v=""
+          aria-current={!selection.service ? 'true' : undefined}
+        >
+          {S.all.service}
+        </a>
+        {options.service.map((o) => (
+          <a
+            class:list={['fchip', { 'is-on': selection.service === o.value }]}
+            href={href(toggleFacet(selection, 'service', o.value))}
+            data-f="service"
+            data-v={o.value}
+            aria-current={selection.service === o.value ? 'true' : undefined}
+          >
+            {o.text}
+            <i>{o.count}</i>
+          </a>
+        ))}
+      </div>
+    )
+  }
+
+  <form
+    class="fb__row"
+    method="get"
+    action={`${localizedPath(base, locale)}${fragment}`}
+    data-filter-form
+  >
+    <span class="fb__lbl">{S.filterBy}</span>
+    {selection.service && <input type="hidden" name="service" value={selection.service} />}
+    {
+      SELECTS.map(
+        (f) =>
+          options[f].length > 0 && (
+            <label class:list={['fb__sel', { 'is-on': Boolean(selection[f]) }]}>
+              <span class="sr-only">{S.facet[f]}</span>
+              <select name={f} data-f={f}>
+                <option value="">{S.all[f]}</option>
+                {options[f].map((o) => (
+                  <option value={o.value} selected={selection[f] === o.value}>
+                    {`${o.text} (${o.count})`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ),
+      )
+    }
+    <button class="fb__apply" type="submit" data-apply>{S.apply}</button>
+    <a
+      class="fb__clear"
+      href={href({})}
+      data-f="all"
+      data-v=""
+      data-clear
+      hidden={active.length === 0}
+    >
+      {S.clear}
+    </a>
+  </form>
+
+  <div class="fb__active" data-active hidden={active.length === 0}>
+    {
+      FACETS.map((f) => (
+        <a
+          class="fpill"
+          href={href(without(f))}
+          data-f={f}
+          data-v=""
+          data-pill={f}
+          hidden={!selection[f]}
+          aria-label={selection[f] ? removeLabel(labelOf(f), locale) : undefined}
+        >
+          <span class="fpill__k">{`${S.facet[f]}:`}</span>
+          <span data-pill-value>{labelOf(f)}</span>
+          <b aria-hidden="true">×</b>
+        </a>
+      ))
+    }
+  </div>
+</div>

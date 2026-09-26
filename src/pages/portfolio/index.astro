@@ -1,11 +1,34 @@
 ---
-import PortfolioIndex from '@/components/PortfolioIndex.astro';
-import { getPublishedPortfolio } from '@/lib/data/portfolio';
-import { setTierA } from '@/lib/http/cacheTags';
+import CatalogPage from '@/components/CatalogPage.astro';
+import { loadOurWork } from '@/lib/portfolio/pages';
+import { PAGE_META } from '@/lib/seo/pageMeta';
+import { noEdgeCache, setTierA } from '@/lib/http/cacheTags';
 
-// Tier A (indexable, edge-cached SSR). Publish purges the `portfolio:all` cache tag.
-const items = await getPublishedPortfolio();
-setTierA(Astro.response, { route: 'portfolio', locale: 'en', entities: ['portfolio:all'] });
+// Our Work (UI v2 PR10). Tier A: server-rendered and edge-cached — the bare URL only. A
+// facet query (?service=…) is a private, uncached response whose canonical is this page.
+// Composed from CMS sections (`pages` slug 'portfolio'); DEFAULT_WORK_SECTIONS until then.
+const locale = 'en' as const;
+const page = await loadOurWork(Astro.url, Astro.locals, locale);
+if (page.filtered) noEdgeCache(Astro.response);
+else
+  setTierA(Astro.response, {
+    route: 'portfolio',
+    locale,
+    entities: [
+      'page:portfolio',
+      'portfolio:all',
+      'sectors:all',
+      'clients:all',
+      'services:all',
+      'statistics:all',
+      'testimonials:all',
+    ],
+  });
 ---
 
-<PortfolioIndex locale="en" items={items} />
+<CatalogPage
+  locale={locale}
+  logicalPath="/portfolio"
+  page={page}
+  name={PAGE_META.portfolio[locale].title}
+/>

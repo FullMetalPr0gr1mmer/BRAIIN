@@ -20,7 +20,7 @@ describe('/sitemap.xml', () => {
 
   it('lists BOTH language twins for every path (CLAUDE.md: both languages in the sitemap)', async () => {
     const xml = await body();
-    for (const path of ['/services', '/portfolio', '/about', '/contact']) {
+    for (const path of ['/services', '/portfolio', '/portfolio/all', '/about', '/contact']) {
       expect(xml).toContain(`<loc>https://www.braiinstation.com${path}</loc>`);
       expect(xml).toContain(`<loc>https://www.braiinstation.com/ar${path}</loc>`);
     }
@@ -63,6 +63,13 @@ describe('/sitemap.xml', () => {
     for (const m of xml.match(/<lastmod>([^<]+)<\/lastmod>/g) ?? []) {
       expect(m).toMatch(/<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
     }
+  });
+
+  it('never lists a query-string URL (filtered catalogue views are canonicalised away)', async () => {
+    const xml = await body();
+    const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+    expect(locs.length).toBeGreaterThan(0);
+    for (const loc of locs) expect(loc, loc).not.toContain('?');
   });
 
   it('does not list noindex routes (/search) or private ones (/admin, /api)', async () => {

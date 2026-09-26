@@ -158,6 +158,150 @@ existing global.css utilities.
     (`src/pages/ar/[...path].astro`, the lowest-priority rest route), and a 404's
     language switch goes to the other locale's home instead of linking to itself.
 
+## About (PR8)
+
+| Mockup | Site | Where |
+|---|---|---|
+| `.who` + `splitWords()` + `[data-clip]` | `AboutWho.astro` (`.about-who`, section type `aboutWho`) + `SplitHeading` + `MediaFrame` (`mf--who`) | About |
+| `.lead-team` / `.lt__*` / `.person*` | `LeadershipSlider.astro` (`.leaders*` / `.leader*`, section type `leadership`) + `src/lib/client/slider.ts` | About |
+| `.reach` / `.rs*` | `StatBand` `sb--reach` (statistics section `{variant:'reach', placement:'about'}`) | About |
+| `.follow` | `SocialStrip` `variant="klein"` (`.social-strip--klein` + `.klein-band`) | About |
+
+Page-only CSS is `public/styles/about.css`, linked through BaseLayout's new `styles` prop (file
+names only, validated `^[a-z0-9-]+\.css$`). The Klein social variant stays in global.css:
+`social` is a section type any page can compose.
+
+28. **The "who" poster is the LCP element**: eager, `fetchpriority="high"`, real dimensions,
+    and never reveal-gated (the mockup faded it in with `.rv` and `loading="lazy"`). Its alt
+    is empty, as in the mockup (a showreel frame beside the manifesto). The code default
+    carries no media — the poster (the p2 still) and the 6.2–7.9 s clip are seeded section
+    content — so an unseeded page renders the section text-only rather than falling back to a
+    hard-coded image.
+29. **Leadership is its own section type (`leadership`)**, not a `team` variant: `team` stays
+    the table-backed author grid with no content, and the slider's copy (tag, heading,
+    accent, text) is typed content like every other UI v2 band. The people are
+    `team_members.is_leadership`, injected by the route as `data`.
+30. **A card links to LinkedIn only when a URL exists**; otherwise it is plain content with no
+    tab stop (the mockup's `tabindex="0"` div was a focus stop that did nothing). A linked
+    card announces "LinkedIn profile (opens in a new tab)" / "حساب لينكدإن (يفتح في تبويب
+    جديد)" (the Arabic suffix is ours — system text, owner review); the badge is
+    `aria-hidden` and the portrait `alt=""`, since the name is the card's text. The URL is
+    re-checked against 0023's LinkedIn shape on read (`toLeader`), because it renders into an
+    `href`. `rel="noopener noreferrer"`.
+31. **Slider controls**: Previous/Next are localized ("السابق" / "التالي" — the mockup left
+    them in English) and go `aria-disabled` at the ends instead of `disabled`, so keyboard
+    focus is not dropped to `<body>`. The track is a named, focusable region (a scroller
+    with no links must still be reachable), and Arrow keys on it step one card in the
+    reading direction. The counter is `aria-hidden`, Western digits, `dir="ltr"` (so it
+    reads "01 / 06" in Arabic, not "06 / 01"). Without JS the row is a native scroll-snap
+    scroller and the chrome stays hidden, as it does whenever the cards fit.
+32. **Leadership motion is compositor-only**: the progress bar is `translateX` + `scaleX` of
+    a full-width bar (the mockup animated `margin` and `width`); grayscale → colour is an
+    opacity fade of a `mix-blend-mode: saturation` layer (the mockup transitioned `filter`);
+    the Klein underline is `scaleX`. The name's sky colour and the silhouette's shade change
+    instantly on hover — no colour transition. Under reduced motion the photo zoom is
+    dropped and every scroll is instant.
+33. **Our reach shows the counters marked for About**, under their About labels
+    (`placement_labels.about`); "14 crafts" is home/Our Work only, as in the mockup.
+34. **Follow the studio** reads the handles from the public identity (the mockup's inline
+    catalog), and its copy is the Klein variant's built-in table, verbatim. The outlined
+    accent is kept in both languages (the mockup's); forced-colors fills it instead. The
+    Arabic outline over joined glyphs is flagged for the PR14 visual review.
+35. **Certifications and the CTA band are dropped from the About composition** (the mockup
+    has neither); both remain section types an editor can add back.
+36. **Person JSON-LD names only the leaders the page shows** (none when the leadership
+    section is hidden), with `jobTitle` and `sameAs` (LinkedIn). The seeded placeholders are
+    drafts in production, so no placeholder person is ever published there; dev/CI/staging
+    carry their "Name Surname" nodes.
+37. **The About manifesto is the About page's own copy**, verbatim (it differs from the home
+    "why us" columns: "between vendors", no "Arabic, English, or…" sentence), and the h1's
+    accent includes the final period, as the mockup's `<em>` does.
+
+## Our Work and All projects (PR10)
+
+| Mockup | Site | Where |
+| --- | --- | --- |
+| work.html | `/portfolio` + `/ar/portfolio` — `CatalogPage.astro`, sections `workHero · proof · workIntro · projectGrid · clientsMarquee · cta` | `src/pages/portfolio/index.astro` |
+| projects.html | `/portfolio/all` + `/ar/portfolio/all` (new) — sections `pageHead · projectCatalog · cta` | `src/pages/portfolio/all.astro` |
+| `.hero--banner` + `.cap` | `MediaBanner.astro` (`.mbanner`, shared with the PR11 case study) + `WorkHero.astro` (`.work-cap`) | work.css |
+| `.proof` (`.stats` + `.quotes`) | `ProofBand.astro` (`.proof`) = `StatBand` proof + `Testimonials` light, both `bare` | work.css |
+| `.iw-sec` / `.iw` | `WorkIntro.astro` (`.work-intro`) + two `MediaFrame`s | work.css |
+| `.work` / `.grid` / `.card` | `ProjectGrid.astro` (`.pgrid`), `ProjectCatalog.astro` (`.pcat`), `ProjectCard` | work.css |
+| `BSCatalog` `.fb` filter bar | `FilterBar.astro` (`.fb`, `.fchip`, `.fpill` — the mockup's names) + `src/lib/client/catalogFilter.ts` | work.css |
+| `.ap-head` | `PageHead.astro` (`.catalog-head` — `.page-head` is an older global utility) | work.css |
+| catalog I18N | `src/lib/portfolio/filterText.ts` (one copy, server + browser) | |
+| `.lead` | `LeadBand.astro`, now what the `cta` section type renders (CtaBand retired) | global.css |
+
+Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseLayout's new
+`styles` prop (a closed list of names, so a typo fails `astro check`).
+
+## Decisions (PR10)
+
+38. **Filtering is server-side first.** Every control works without JavaScript: service
+    chips, active pills and "Clear filters" are links; sector/client/year are `<select>`s
+    in a GET form with an Apply button that only shows without JS. The enhancement applies
+    the same controls in place — cards and pills are toggled with `hidden`, labels set with
+    `textContent`, the URL follows with `history.replaceState` — and never builds markup or
+    reads `location.search` (its state is the server's `data-state`, re-validated against
+    the values the page carries). The mockup rebuilt the bar and grid with `innerHTML` on
+    every change, which dropped keyboard focus to `<body>` and reflected `?year=` into the
+    page (a DOM XSS). Here focus stays on the control used, or moves to the result count
+    when that control disappears; the count is a polite live region.
+39. **Only values a published project carries become a filter** (`parseFacets`); the first
+    value of a repeated key wins. Any facet parameter — valid or not — makes the response
+    `private, no-store`; only the bare URL is edge-cached (Tier A), and the canonical is
+    always the bare page. Filtered URLs are never in the sitemap.
+40. **Our Work filters the featured pool** (the mockup's `featuredOnly`), latest first (year
+    desc, then catalogue order); the see-all button counts matches across the whole
+    catalogue ("See all 3 matching projects"), as the mockup does, from a slug-only index on
+    the button. All projects shows featured first, then catalogue order.
+41. **Card titles are real headings** — h3 under Our Work's "Projects", h2 in All projects
+    (the mockup's `span.card__t` left the grid with no structure). Card tags on Our Work
+    filter Our Work itself (links carry `#projects`, so a no-JS click lands on the grid).
+42. **Arabic counts follow the plural categories** (1 مشروع, 2 مشروعان, 3–10 مشاريع,
+    11–99 مشروعًا, 100 مشروع) through `Intl.PluralRules`; the mockup writes "مشاريع" for
+    every count. Owner sign-off pending (a deviation from decision 6's "verbatim").
+43. **The banner caption is legible over any frame**: .45 glass (mockup .26), .7 meta (.58),
+    a stronger bottom scrim under it, and no 4.5 s "rest" fade to half opacity. Contrast is
+    gated for the worst case (a white frame) in `scripts/contrast-audit.mjs`. Its entrance
+    and pulsing dot stop under reduced motion; the dot and the banner loop are EXC-007
+    surfaces; the loop plays under EXC-009 and pauses once the banner is covered, when the
+    caption also leaves the tab order.
+44. **No parallax** on the banner (the mockup's JS translate on scroll) — dropped with Lenis;
+    the banner is pinned (sticky) so the next section still slides over it.
+45. **The filter chip count is .6 white** (mockup .45 = 4.4:1 at 11px); the `fb__lbl`, back
+    link, lead and counts use `--bs-muted` for the mockup's `--dim-d` (decision 10).
+46. **The All projects h1 has no scroll reveal** (the mockup's `.rv`): it is the page's
+    likely LCP element, and text held at opacity 0 is not an LCP candidate until it fades in.
+47. **A no-JS "Apply filters" / "طبّق الفلاتر" button** (ours — the mockup has no no-JS
+    path; Arabic for owner review). The service filter survives an Apply through a hidden
+    input.
+48. **Our Work's h1 is visually hidden** ("Our Work" / "أعمالنا"), as in the mockup; All
+    projects' h1 is its page head, and should an editor remove that section a hidden h1
+    stands in.
+49. **The intro frames are CMS media** (`workIntro.media[].mediaId`, keyed so the 0024 anon
+    policy and `media_usage()` find them) with their clip windows (14.0–15.4 s, 17.4–18.3 s),
+    decorative (`alt=""`) as in the mockup; a frame that does not resolve is left out, and
+    with none the statement stands alone.
+50. **Empty data hides cleanly**: no featured project → no grid; fewer than two Our Work
+    counters → no numbers; no published quote (production) → no quotes; neither → no proof
+    band at all; no project → no banner and no catalogue.
+51. **Discovery lists use the case-study page's own loader and schema**
+    (`getCaseStudyIndex`: the `getCaseStudy` select + `CaseStudyRowSchema`), so the sitemap
+    and llms.txt never list a case study the page would 404 on. llms.txt names Our Work and
+    All projects and lists case studies, with no counts.
+52. **Metadata**: the English `<title>`/description are the mockup's own (the brand from
+    identity); the Arabic is ours (`PAGE_META.portfolio` / `portfolioAll`) — owner review.
+53. **The overlay header needs a dark opening.** Both pages use the transparent overlay
+    header over their banner / black page head (the mockup's work-page scrim is carried by
+    the banner's own top gradient); when the page does not open on one — no published
+    project yet, or an editor hid or moved the head — it takes the solid bar instead of
+    sitting white-on-white over the proof band. `data-hero` marks the element the header
+    measures to turn solid.
+54. **The `cta` section type renders LeadBand** (tag, outlined accent, `/contact#inquiry`,
+    studio email from identity); CtaBand and its `.cta-band` CSS are retired. Any page still
+    carrying a `cta` section (About's current default) now shows the Klein band.
+
 ## Contact (PR9)
 
 | Mockup | Site | Where |
@@ -172,7 +316,7 @@ existing global.css utilities.
 
 ## Decisions (PR9)
 
-28. **The contact page is CMS-composed** (`pages` slug `contact`, seeded by
+55. **The contact page is CMS-composed** (`pages` slug `contact`, seeded by
     `supabase/seed-data/52-contact.json` while the page has no sections), with three route
     guarantees on top: `withHeroPreset('contact')`, `ensureContactInquiry` and
     `withContactData` (services as route data). This fixes the production bug where the
@@ -182,12 +326,12 @@ existing global.css utilities.
     loop window — is route `data` the CMS cannot change. An authored headline never
     inherits the preset's accent indices (they count the preset's words). A banner hero
     never shows the intro plate, whatever its content says. The page gains its `<main>`.
-29. **Hero loop window 6.2–7.9 s** via `data-clip-start/end` on the hero media (lazyVideo's
+56. **Hero loop window 6.2–7.9 s** via `data-clip-start/end` on the hero media (lazyVideo's
     windowed loop, EXC-009); the design's `scale(1.1)` + `object-position: center 42%` are
     kept. Its `inset: -10%` overscan is not: it existed only for the JS parallax the port
     drops. The accent stays **cobalt** (the design's Klein is ~2:1 on the dark video — the
     PR6 deviation), and the scrim stays.
-30. **The full form is the design's seven fields** (name, email, company, service, budget,
+57. **The full form is the design's seven fields** (name, email, company, service, budget,
     deadline, message) plus the PDPL consent checkbox and the honeypot, posting
     `kind=project_inquiry`. Phone and the timeline select are gone (the schema still accepts
     `phone` and the legacy `timelineBand` for cached pages). The deadline is free text,
@@ -196,16 +340,16 @@ existing global.css utilities.
     its Arabic-Indic digits — with "Prefer to discuss" as the empty option; legacy bands are
     accepted on input, never offered. Outcomes, per-field errors and the sent state are
     PR7's (`formErrors.ts`); the design's form showed "sent" whatever happened.
-31. **Service options are the published services' titles**, valued by slug — not the
+58. **Service options are the published services' titles**, valued by slug — not the
     design's static list, which differs from the CMS in six labels ("Animation" vs
     "Animations"; five Arabic titles). Matching the design is a content edit in
     /admin/services, not code.
-32. **Section heads are real `<h2>`s** named by `aria-labelledby`, with the accent as a word
+59. **Section heads are real `<h2>`s** named by `aria-labelledby`, with the accent as a word
     range (`AccentText`) — never an HTML string. `contactInquiry`, `contactChannels` and
     `faq` now take CMS copy overrides (strict schemas; tag, heading, accent, lead, and the
     form note / confirmation / submit label, and the card labels and notes). The FAQ's
     questions and answers stay code-owned: they are also the FAQPage JSON-LD.
-33. **The FAQ is the design's dark band** — and that is the contrast fix verified on
+60. **The FAQ is the design's dark band** — and that is the contrast fix verified on
     production: on the old paper band its sky kicker and heading accent measured 2.56:1
     (WCAG 1.4.3). Sky is used only on the black bands (8.2:1); the paper channels band
     takes Klein (10.6:1); `scripts/contrast-audit.mjs` asserts the pairs and the contact e2e
@@ -213,14 +357,14 @@ existing global.css utilities.
     when open, as designed. The design animated the panel height (layout); here the panel
     opens natively and the answer rises in (transform + opacity, in the reduced-motion
     invariant). The FAQPage JSON-LD is emitted only while the FAQ band renders.
-34. **The Arabic FAQ is the design's Saudi-voice copy, verbatim** (owner decision 6),
+61. **The Arabic FAQ is the design's Saudi-voice copy, verbatim** (owner decision 6),
     replacing the MSA rewrite; the English was already verbatim. Answer 5 ("one of the
     fourteen") is tied to the service count — flagged for the owner, kept verbatim.
-35. **Channel cards carry the design's icons**, Klein labels and 700-weight values; the hover
+62. **Channel cards carry the design's icons**, Klein labels and 700-weight values; the hover
     label/note stay at .88 white (the design's .8 is 4.36:1 on the gradient). The WhatsApp
     card renders only for a valid E.164 number in the identity (`whatsappChannel`, checked
     again on read) — the design's `wa.me/9665XXXXXXXX` never ships. The lead "No form, no
     gatekeeping." is kept verbatim although it sits under a form (flagged, design copy).
-36. **The joined social strip keeps the design's inset rule** (the gutter is a margin, so
+63. **The joined social strip keeps the design's inset rule** (the gutter is a margin, so
     the line is inset too). The contact-only always-on `.nav::before` gradient is not
     carried: the overlay header and the hero scrim already hold the nav's contrast.

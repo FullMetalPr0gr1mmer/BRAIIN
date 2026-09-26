@@ -1,0 +1,135 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { LocalizedText } from '@schemas/content';
+import { getPortfolioCards, type PortfolioCard } from '@/lib/data/portfolio';
+import {
+  activeFacets,
+  facetQuery,
+  facetValues,
+  filterCards,
+  latestOrder,
+  matches,
+  type FacetSelection,
+} from '@/lib/portfolio/catalog';
+import { FILTER_STR, featuredCount, seeAllLabel } from '@/lib/portfolio/filterText';
+import { localizedHref, localizedPath, pickLocale } from '@/lib/i18n';
+import FilterBar from '@/components/portfolio/FilterBar.astro';
+import ProjectCard from '@/components/portfolio/ProjectCard.astro';
+import Cta from '@/components/ui/Cta.astro';
+
+// Our Work's featured grid (UI v2, the `projectGrid` section; the mockup's `.work`):
+// the featured projects, latest first, under the filter bar, then "See all projects" into
+// All projects carrying the current filter ("See all 4 matching projects" — counted over
+// the WHOLE catalogue, as the design does).
+//
+// Tier A: the grid is server-rendered HTML. The route parses the facet query against the
+// featured pool (src/lib/portfolio/catalog.ts — unknown values are dropped) and a
+// filtered view is served private (only the bare URL is edge-cached). Every featured card
+// is rendered; the ones outside the filter carry `hidden`, which is what lets the
+// enhancement (src/lib/client/catalogFilter.ts) re-filter in place without markup.
+// Nothing featured → the section renders nothing (production starts with drafts).
+
+interface Props {
+  locale: Locale;
+  tag?: LocalizedText;
+  heading?: LocalizedText;
+  /** Route-injected (SectionRenderer `data`) — never CMS content. */
+  data?: { cards?: PortfolioCard[]; selection?: FacetSelection };
+}
+
+const { locale, tag, heading } = Astro.props;
+const S = FILTER_STR[locale];
+const STR = {
+  en: { tag: 'Featured work', heading: 'Projects' },
+  ar: { tag: 'أعمال مختارة', heading: 'المشاريع' },
+}[locale];
+
+const BASE = '/portfolio';
+const FRAGMENT = '#projects';
+
+const all = Astro.props.data?.cards ?? (await getPortfolioCards());
+const selection: FacetSelection = Astro.props.data?.selection ?? {};
+const pool = latestOrder(all.filter((c) => c.isFeatured));
+const shown = pool.filter((c) => matches(c, selection)).length;
+const filtered = activeFacets(selection).length > 0;
+const matching = filtered ? filterCards(all, selection).length : null;
+const seeAllHref = localizedHref(`/portfolio/all${facetQuery(selection)}`, locale);
+// Every published project's facet values, for the see-all count the enhancement keeps
+// current (slugs only — no titles, nothing that is not already on the catalogue page).
+const index = JSON.stringify(all.map(facetValues));
+---
+
+{
+  pool.length > 0 && (
+    <section
+      class="pgrid catalog"
+      id="projects"
+      aria-labelledby="projects-heading"
+      data-catalog="featured"
+      data-base={localizedPath(BASE, locale)}
+      data-fragment={FRAGMENT}
+      data-locale={locale}
+      data-state={JSON.stringify(selection)}
+      data-pool={pool.length}
+    >
+      <div class="pgrid__head">
+        <div>
+          <p class="tag tag--sky rv">
+            <span class="dot" />
+            {tag ? pickLocale(tag, locale) : STR.tag}
+          </p>
+          <h2 class="rv" id="projects-heading">
+            {heading ? pickLocale(heading, locale) : STR.heading}
+          </h2>
+        </div>
+        <span class="pgrid__count rv" data-count tabindex="-1" aria-live="polite">
+          {featuredCount(shown, pool.length, locale)}
+        </span>
+      </div>
+      <FilterBar
+        locale={locale}
+        pool={pool}
+        selection={selection}
+        base={BASE}
+        fragment={FRAGMENT}
+      />
+      <div class="pgrid__grid">
+        {pool.map((card) => (
+          <ProjectCard
+            card={card}
+            locale={locale}
+            variant="catalog"
+            selection={selection}
+            heading="h3"
+            base={BASE}
+            fragment={FRAGMENT}
+            filterable
+            hidden={!matches(card, selection)}
+          />
+        ))}
+        <div class="fb__empty" data-empty hidden={shown > 0}>
+          <p>{S.none}</p>
+          <a
+            class="fb__clear"
+            href={localizedHref(`${BASE}${FRAGMENT}`, locale)}
+            data-f="all"
+            data-v=""
+          >
+            {S.clear}
+          </a>
+        </div>
+      </div>
+      <div class="pgrid__foot">
+        <Cta href={seeAllHref} variant="klein" data-see-all="" data-index={index}>
+          <span data-see-all-label>{seeAllLabel(matching, locale)}</span>
+        </Cta>
+      </div>
+    </section>
+  )
+}
+
+<script>
+  import { initCatalogFilters } from '@/lib/client/catalogFilter';
+
+  initCatalogFilters();
+</script>

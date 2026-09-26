@@ -66,8 +66,18 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
   servicesOverview: [tag, heading, { name: 'sub', label: 'Sub-line', kind: 'bilingual' }],
   contact: [heading, { name: 'accent', label: 'Accent (highlighted words)', kind: 'bilingual' }],
   social: [
+    {
+      name: 'variant',
+      label: 'Layout',
+      kind: 'select',
+      options: [
+        { value: 'paper', label: 'Paper (home, contact)' },
+        { value: 'klein', label: 'Klein band (about)' },
+      ],
+    },
     tag,
     heading,
+    { name: 'text', label: 'Text beside the heading (Klein band only)', kind: 'bilingual' },
     {
       name: 'links',
       label: 'Links (replace the Public identity socials on this section only)',
@@ -81,9 +91,16 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     },
   ],
   cta: [
+    tag,
     heading,
     { name: 'text', label: 'Text', kind: 'bilingual' },
     { name: 'buttonLabel', label: 'Button label', kind: 'bilingual' },
+    {
+      name: 'buttonHref',
+      label: 'Button link',
+      kind: 'text',
+      help: 'A page of this site (/contact#inquiry) or an #anchor. Default: the contact form.',
+    },
   ],
   statistics: [
     {
@@ -202,6 +219,94 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     { name: 'visionTitle', label: 'Vision title', kind: 'bilingual' },
     { name: 'vision', label: 'Vision', kind: 'bilingual' },
   ],
+  aboutWho: [
+    tag,
+    {
+      ...heading,
+      label: 'Heading (the page title)',
+      help: 'At most 16 words of 24 characters each — the entrance animation has that many steps.',
+    },
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    {
+      name: 'paragraphs',
+      label: 'Paragraphs',
+      kind: 'repeater',
+      maxItems: 6,
+      itemFields: [
+        { name: 'title', label: 'Opening words (bold)', kind: 'bilingual', required: true },
+        { name: 'body', label: 'Text', kind: 'bilingual', required: true },
+      ],
+    },
+    {
+      name: 'mediaId',
+      label: 'Poster image',
+      kind: 'media',
+      help: 'The page’s largest image. Leave empty for a text-only section.',
+    },
+    { name: 'clip', label: 'Clip over the poster (plays while on screen)', kind: 'clip' },
+  ],
+  leadership: [tag, heading, { name: 'text', label: 'Text beside the heading', kind: 'bilingual' }],
+  // UI v2 PR10 — Our Work and All projects (projectCatalog is table-backed: no editor)
+  workHero: [
+    { ...tag, label: 'Caption tag ("Latest project")' },
+    {
+      name: 'projectSlug',
+      label: 'Pinned project (slug)',
+      kind: 'text',
+      help: 'Leave empty to show the latest project (newest year, then catalogue order).',
+    },
+  ],
+  proof: [
+    { name: 'statsTag', label: 'Numbers tag ("In numbers")', kind: 'bilingual' },
+    { name: 'quotesTag', label: 'Testimonials tag', kind: 'bilingual' },
+    { name: 'quotesHeading', label: 'Testimonials heading', kind: 'bilingual' },
+    {
+      name: 'quotesLimit',
+      label: 'Most quotes shown',
+      kind: 'number',
+      help: 'Up to 8. Shows the published testimonials marked for Our Work.',
+    },
+    {
+      name: 'staticNumbers',
+      label: 'Show the numbers without counting up',
+      kind: 'checkbox',
+    },
+    {
+      name: 'minItems',
+      label: 'Hide the numbers when fewer counters than',
+      kind: 'number',
+      help: 'Default 2. Shows the statistics marked for Our Work.',
+    },
+  ],
+  workIntro: [
+    { name: 'text', label: 'Statement', kind: 'bilingual' },
+    { name: 'linkLabel', label: 'Link label ("See the projects")', kind: 'bilingual' },
+    {
+      name: 'media',
+      label: 'Frames (the first is the tall one)',
+      kind: 'repeater',
+      maxItems: 2,
+      itemFields: [
+        { name: 'mediaId', label: 'Image', kind: 'media', required: true },
+        { name: 'clip', label: 'Loop (optional)', kind: 'clip' },
+      ],
+    },
+  ],
+  projectGrid: [
+    { ...tag, label: 'Tag ("Featured work")' },
+    { ...heading, label: 'Heading ("Projects")' },
+  ],
+  pageHead: [
+    heading,
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    { name: 'backLabel', label: 'Back link label', kind: 'bilingual' },
+    {
+      name: 'backHref',
+      label: 'Back link',
+      kind: 'text',
+      help: 'A page of this site, e.g. /portfolio. Default: Our Work.',
+    },
+  ],
 };
 
 /** Content keys an editor must set through "Advanced (JSON)" — see the header. */
@@ -214,6 +319,12 @@ export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[
   // back to the design's defaults when unset. The carousel interval is a design constant.
   selectedWork: ['accent', 'cardSlugs', 'button'],
   testimonials: ['accent', 'intervalMs'],
+  social: ['accent'],
+  aboutWho: ['accent'],
+  leadership: ['accent'],
+  cta: ['accent'],
+  proof: ['quotesAccent'],
+  pageHead: ['accent'],
   // UI v2 PR9: the accent word ranges, as above. The FAQ's questions are code-owned (they
   // are also its JSON-LD), so the faq section's only content is its heading.
   contactInquiry: ['accent'],

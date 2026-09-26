@@ -196,10 +196,34 @@ export function ensureContactInquiry(sections: SectionData[]): SectionData[] {
   return [...restored.slice(0, at), { type: 'contactInquiry' }, ...restored.slice(at)];
 }
 
+// UI v2 (PR8) — the mockup's About: who we are → leadership → our reach → follow. The
+// pre-v2 story / team grid / certifications / CTA band stay available as section types;
+// the design drops them from this page. Code defaults carry no media (text-only "who"):
+// the poster and clip are seeded content (supabase/seed-data/51-about.json).
 export const DEFAULT_ABOUT_SECTIONS: SectionData[] = [
-  { type: 'aboutStory' },
-  { type: 'statistics' },
-  { type: 'team' },
-  { type: 'certifications' },
+  { type: 'aboutWho' },
+  { type: 'leadership' },
+  { type: 'statistics', props: { variant: 'reach', placement: 'about' } },
+  { type: 'social', props: { variant: 'klein' } },
+];
+
+/**
+ * Our Work (`/portfolio`, UI v2 PR10), before it is composed in the CMS. Every section
+ * hides on its own when its table is empty (no featured project → no grid, no quotes →
+ * numbers alone), so this renders cleanly on a fresh production database too.
+ */
+export const DEFAULT_WORK_SECTIONS: SectionData[] = [
+  { type: 'workHero' },
+  { type: 'proof' },
+  { type: 'workIntro' },
+  { type: 'projectGrid' },
+  { type: 'clientsMarquee' },
+  { type: 'cta' },
+];
+
+/** All projects (`/portfolio/all`, UI v2 PR10). */
+export const DEFAULT_CATALOG_SECTIONS: SectionData[] = [
+  { type: 'pageHead' },
+  { type: 'projectCatalog' },
   { type: 'cta' },
 ];

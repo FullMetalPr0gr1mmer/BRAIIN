@@ -1,0 +1,69 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { LocalizedText } from '@schemas/content';
+import { getPortfolioCards, type PortfolioCard } from '@/lib/data/portfolio';
+import { latestOrder } from '@/lib/portfolio/catalog';
+import { pickLocale, localizedHref } from '@/lib/i18n';
+import MediaBanner from '@/components/media/MediaBanner.astro';
+
+// Our Work's opening banner (UI v2, the `workHero` section): the latest project full
+// bleed — its poster (the page's LCP) and its preview loop — under a small glass caption
+// linking to the case study. "Latest" = newest year, then catalogue order (The Rider in
+// the design); `projectSlug` pins one instead. Nothing published → nothing rendered.
+//
+// Deviations from the mockup (docs/design-port-2026-09.md): the caption's glass is .45
+// black (not .26) with a bottom scrim under it, and its meta line .7 white (not .58) —
+// it sits over arbitrary video, the one surface the contrast gate cannot measure; the
+// 4.5 s "rest" fade to half opacity is dropped (it halved the contrast of text a visitor
+// may still be reading). The pulsing dot is one of EXC-007's loops and stops under
+// reduced motion.
+
+interface Props {
+  locale: Locale;
+  tag?: LocalizedText;
+  projectSlug?: string;
+  /** Route-injected published cards (SectionRenderer `data`) — never CMS content. */
+  data?: { cards?: PortfolioCard[] };
+}
+
+const { locale, tag, projectSlug } = Astro.props;
+
+const STR = {
+  en: { tag: 'Latest project', confidential: 'Confidential client' },
+  ar: { tag: 'أحدث مشروع', confidential: 'عميل غير مُعلَن' },
+}[locale];
+
+const cards = Astro.props.data?.cards ?? (await getPortfolioCards());
+const card =
+  (projectSlug ? cards.find((c) => c.slug === projectSlug) : undefined) ?? latestOrder(cards)[0];
+
+const title = card ? pickLocale(card.title, locale) : '';
+const type = card?.projectType ? pickLocale(card.projectType, locale) : null;
+const blurb = card?.blurb ? pickLocale(card.blurb, locale) : '';
+const client = card?.client
+  ? pickLocale(card.client.name, locale)
+  : card?.confidentialClient
+    ? STR.confidential
+    : null;
+---
+
+{
+  card && (
+    <MediaBanner image={card.poster} locale={locale} clip={card.preview} class="work-hero">
+      <a class="work-cap" href={localizedHref(`/portfolio/${card.slug}`, locale)}>
+        <span class="work-cap__tag">
+          <span class="work-cap__live" aria-hidden="true" />
+          <span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+        </span>
+        <span class="work-cap__t">{type ? `${title} | ${type}` : title}</span>
+        {blurb && <span class="work-cap__d">{blurb}</span>}
+        {(client || card.year !== null) && (
+          <span class="work-cap__m">
+            {client && <span>{client}</span>}
+            {card.year !== null && <span>{card.year}</span>}
+          </span>
+        )}
+      </a>
+    </MediaBanner>
+  )
+}
