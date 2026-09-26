@@ -9,6 +9,8 @@ import {
   CategoryWriteSchema,
   CertificationUpdateSchema,
   CertificationWriteSchema,
+  ClientUpdateSchema,
+  ClientWriteSchema,
   MediaUpdateSchema,
   MediaWriteSchema,
   NavItemUpdateSchema,
@@ -23,6 +25,8 @@ import {
   PostWriteSchema,
   RedirectUpdateSchema,
   RedirectWriteSchema,
+  SectorUpdateSchema,
+  SectorWriteSchema,
   SectionUpdateSchema,
   SectionWriteSchema,
   ServiceUpdateSchema,
@@ -31,13 +35,18 @@ import {
   StatisticWriteSchema,
   TeamMemberUpdateSchema,
   TeamMemberWriteSchema,
+  TestimonialUpdateSchema,
+  TestimonialWriteSchema,
   ThemeUpdateSchema,
   ThemeWriteSchema,
+  type PortfolioMediaItem,
 } from '@schemas/admin';
+import type { VideoClip } from '@schemas/media';
 import { sectionContentIssues, type SectionType } from '@schemas/sections';
 import { isStaticMediaKey, staticImage } from '@/lib/media/static';
 import { renderTiptapToHtml, readingMinutes, sanitizeHref } from '@/lib/content/tiptap';
-import { ValidationError } from './errors';
+import { NotFoundError, OptimisticLockError, ValidationError } from './errors';
+import { getRow, translateWriteError, type ConstraintFields } from './crud';
 import type { ResourceConfig, ResourcePayload } from './resource';
 
 // One config per CRUD entity. Everything structural (tenant scoping, authz, audit,
@@ -105,6 +114,48 @@ function requireBilingual(row: Input, column: string, label: string): void {
   }
 }
 
+/**
+ * The app half of the placeholder rule (0025 is the database half, production only):
+ * design-delivery samples never go live through the admin, in any environment — seeded
+ * staging rows are published by the seed, not by an editor.
+ */
+function refusePlaceholder(row: Input, what: string): void {
+  if (row['is_placeholder'] === true) {
+    throw new ValidationError(
+      `this ${what} is placeholder content — replace it and untick “Placeholder” before it goes live`,
+      'isPlaceholder',
+    );
+  }
+}
+
+/** A clip's wire shape → its four columns (`null` clears all four). */
+function clipColumns(clip: VideoClip | null, prefix: string, video: string): Input {
+  return {
+    [`${prefix}${video}_uid`]: clip?.streamUid ?? null,
+    [`${prefix}${video}_path`]: clip?.path ?? null,
+    [`${prefix}start_s`]: clip?.startS ?? null,
+    [`${prefix}end_s`]: clip?.endS ?? null,
+  };
+}
+
+/** Four clip columns → the wire shape, or null when there is no source. */
+function clipOfColumns(
+  uid: unknown,
+  path: unknown,
+  start: unknown,
+  end: unknown,
+): Record<string, unknown> | null {
+  if (!uid && !path) return null;
+  const clip: Record<string, unknown> = {};
+  if (uid) clip['streamUid'] = uid;
+  if (path) clip['path'] = path;
+  if (start !== null && start !== undefined) clip['startS'] = Number(start);
+  if (end !== null && end !== undefined) clip['endS'] = Number(end);
+  return clip;
+}
+
+const bySortOrder = (a: Input, b: Input) => Number(a['sort_order']) - Number(b['sort_order']);
+
 // ── Services ────────────────────────────────────────────────────────────────────
 
 export const serviceResource: ResourceConfig = {
@@ -115,7 +166,7 @@ export const serviceResource: ResourceConfig = {
   readCaps: ['services.write', 'seo.entityMeta'],
   listColumns: 'id,slug,title,status,is_teaser,sort_order,version,updated_at',
   columns:
-    'id,slug,title,blurb,body,body_html,hero_video_uid,category,status,is_teaser,sort_order,version,published_at,scheduled_for,created_at,updated_at',
+    'id,slug,title,short_title,blurb,body,body_html,hero_video_uid,category,status,is_teaser,sort_order,version,published_at,scheduled_for,created_at,updated_at',
   orderBy: { column: 'sort_order', ascending: true },
   searchColumn: 'slug',
   createSchema: ServiceWriteSchema,
@@ -130,6 +181,7 @@ export const serviceResource: ResourceConfig = {
           body: 'body',
           heroVideoUid: 'hero_video_uid',
           category: 'category',
+          shortTitle: 'short_title',
           status: 'status',
           isTeaser: 'is_teaser',
           sortOrder: 'sort_order',
@@ -194,20 +246,92 @@ export const postResource: ResourceConfig = {
 
 // ── Portfolio ───────────────────────────────────────────────────────────────────
 
+/** A media item as the form edits it (camelCase) → one element of save_portfolio's p_media. */
+function mediaItemToRow(item: PortfolioMediaItem): Input {
+  const clip = item.clip ?? null;
+  return {
+    role: item.role,
+    kind: item.kind,
+    media_id: item.mediaId ?? null,
+    video_uid: clip?.streamUid ?? null,
+    video_path: clip?.path ?? null,
+    clip_start_s: clip?.startS ?? null,
+    clip_end_s: clip?.endS ?? null,
+    duration_label: item.durationLabel ?? null,
+    caption: item.caption ?? null,
+    breakdown_kind: item.breakdownKind ?? null,
+    layout: item.layout ?? null,
+  };
+}
+
+/** A stored portfolio_media row → the form's item. */
+function mediaRowToItem(row: Input): Input {
+  const item: Input = { role: row['role'], kind: row['kind'] };
+  if (row['media_id']) item['mediaId'] = row['media_id'];
+  const clip = clipOfColumns(
+    row['video_uid'],
+    row['video_path'],
+    row['clip_start_s'],
+    row['clip_end_s'],
+  );
+  if (clip) item['clip'] = clip;
+  if (row['duration_label']) item['durationLabel'] = row['duration_label'];
+  if (row['caption']) item['caption'] = row['caption'];
+  if (row['breakdown_kind']) item['breakdownKind'] = row['breakdown_kind'];
+  if (row['layout']) item['layout'] = row['layout'];
+  return item;
+}
+
+const PORTFOLIO_CONSTRAINTS: ConstraintFields = {
+  portfolio_tenant_id_slug_key: {
+    field: 'slug',
+    message: 'another case study already uses this slug',
+  },
+  portfolio_slug_not_reserved: {
+    field: 'slug',
+    message: '“all” is reserved for the All projects page',
+  },
+  portfolio_preview_window: {
+    field: 'preview',
+    message: 'the hover clip needs a start and an end, at most 30 seconds apart',
+  },
+  portfolio_next_not_self: {
+    field: 'nextPortfolioId',
+    message: 'a case study cannot be its own next project',
+  },
+  portfolio_media_one_hero: { field: 'media', message: 'a case study has one hero item at most' },
+  portfolio_media_one_final: { field: 'media', message: 'a case study has one final film at most' },
+  portfolio_media_breakdown_kind: {
+    field: 'media',
+    message: 'a breakdown item needs its kind (sketch / BTS / process); other items none',
+  },
+};
+
 export const portfolioResource: ResourceConfig = {
   table: 'portfolio',
   entity: 'portfolio',
   writeCap: 'portfolio.write',
   readCaps: ['portfolio.write', 'seo.entityMeta'],
-  listColumns: 'id,slug,title,status,sort_order,version,updated_at',
+  listColumns:
+    'id,slug,title,project_type,year,is_featured,is_placeholder,status,sort_order,version,updated_at',
+  // The child sets ride along as embeds so the form loads them with the row; fromRow
+  // turns them into `service_ids` / `media` in the order the editor gave.
   columns:
-    'id,slug,title,summary,body,body_html,status,sort_order,version,published_at,scheduled_for,created_at,updated_at',
+    'id,slug,title,summary,body,body_html,status,sort_order,version,published_at,scheduled_for,' +
+    'created_at,updated_at,project_type,teaser,lead,goal,result,scope,keywords,results,' +
+    'sector_id,client_id,year,is_featured,poster_media_id,preview_video_uid,preview_video_path,' +
+    'preview_start_s,preview_end_s,next_portfolio_id,is_placeholder,' +
+    'portfolio_services(service_id,sort_order),' +
+    'portfolio_media(role,kind,media_id,video_uid,video_path,clip_start_s,clip_end_s,' +
+    'duration_label,caption,breakdown_kind,layout,sort_order)',
   orderBy: { column: 'sort_order', ascending: true },
   searchColumn: 'slug',
+  filterableColumns: ['is_featured', 'sector_id', 'client_id'],
   createSchema: PortfolioWriteSchema,
   updateSchema: PortfolioUpdateSchema,
-  toRow: (input) =>
-    publishStamp(
+  constraintFields: PORTFOLIO_CONSTRAINTS,
+  toRow: (input) => {
+    const values = publishStamp(
       withBodyHtml(
         pick(input as Input, {
           slug: 'slug',
@@ -217,31 +341,99 @@ export const portfolioResource: ResourceConfig = {
           status: 'status',
           sortOrder: 'sort_order',
           scheduledFor: 'scheduled_for',
+          projectType: 'project_type',
+          teaser: 'teaser',
+          lead: 'lead',
+          goal: 'goal',
+          result: 'result',
+          scope: 'scope',
+          keywords: 'keywords',
+          results: 'results',
+          sectorId: 'sector_id',
+          clientId: 'client_id',
+          year: 'year',
+          isFeatured: 'is_featured',
+          posterMediaId: 'poster_media_id',
+          nextPortfolioId: 'next_portfolio_id',
+          isPlaceholder: 'is_placeholder',
         }),
         input as Input,
       ),
-    ),
-  statusOf: (input) => statusOf(input as Input),
-  assertPublishable: (row) => requireBilingual(row, 'title', 'Case study title'),
-  afterWrite: async ({ auth, sb, row, input }) => {
-    const serviceIds = (input as Input)['serviceIds'];
-    if (!Array.isArray(serviceIds)) return;
-    const portfolioId = String(row['id']);
-    // Replace-the-set semantics. Both statements are tenant-scoped: the DELETE so it
-    // cannot clear another tenant's links, the INSERT so it cannot create one.
-    await sb
-      .from('portfolio_services')
-      .delete()
-      .eq('tenant_id', auth.tenantId)
-      .eq('portfolio_id', portfolioId);
-    if (serviceIds.length === 0) return;
-    await sb.from('portfolio_services').insert(
-      serviceIds.map((serviceId) => ({
-        tenant_id: auth.tenantId,
-        portfolio_id: portfolioId,
-        service_id: String(serviceId),
-      })),
     );
+    const preview = (input as Input)['preview'];
+    return preview === undefined
+      ? values
+      : { ...values, ...clipColumns((preview as VideoClip | null) ?? null, 'preview_', 'video') };
+  },
+  statusOf: (input) => statusOf(input as Input),
+  // A case study and its services + media are ONE save (save_portfolio(), migration
+  // 0022): SECURITY INVOKER so RLS applies to every row it writes, version-checked, and
+  // every linked id fenced to the caller's tenant. The previous afterWrite replaced the
+  // services in a second request — a failure there left a half-saved case study.
+  childKeys: ['serviceIds', 'media'],
+  persist: async ({ auth, sb, id, version, values, input }) => {
+    const serviceIds = input['serviceIds'];
+    const media = input['media'];
+    const { data, error } = await sb.rpc('save_portfolio', {
+      p_id: id,
+      p_version: version,
+      p_values: values,
+      p_service_ids: Array.isArray(serviceIds) ? serviceIds : null,
+      p_media: Array.isArray(media) ? (media as PortfolioMediaItem[]).map(mediaItemToRow) : null,
+    });
+    if (error) {
+      if (error.code === '40001') throw new OptimisticLockError('portfolio');
+      if (error.code === 'P0002') throw new NotFoundError('portfolio');
+      throw translateWriteError(error, 'portfolio', 'write', PORTFOLIO_CONSTRAINTS);
+    }
+    const saved = (Array.isArray(data) ? data[0] : data) as { id?: string } | undefined;
+    if (!saved?.id) throw new Error('save_portfolio returned no row');
+    return getRow<Input>(sb, 'portfolio', auth, saved.id, portfolioResource.columns);
+  },
+  fromRow: (row) => {
+    const { portfolio_services: links, portfolio_media: items, ...rest } = row;
+    const out: Input = {
+      ...rest,
+      preview: clipOfColumns(
+        row['preview_video_uid'],
+        row['preview_video_path'],
+        row['preview_start_s'],
+        row['preview_end_s'],
+      ),
+    };
+    if (Array.isArray(links)) {
+      out['service_ids'] = [...(links as Input[])].sort(bySortOrder).map((l) => l['service_id']);
+    }
+    if (Array.isArray(items)) {
+      out['media'] = [...(items as Input[])].sort(bySortOrder).map(mediaRowToItem);
+    }
+    return out;
+  },
+  // What a card and a case study need to be presentable — the public pages show these.
+  assertPublishable: async (row, { auth, sb }) => {
+    requireBilingual(row, 'title', 'Case study title');
+    requireBilingual(row, 'project_type', 'Project type');
+    refusePlaceholder(row, 'case study');
+    const results = Array.isArray(row['results']) ? (row['results'] as Input[]) : [];
+    if (results.some((r) => /X{2,}/i.test(String(r['value'] ?? '')))) {
+      throw new ValidationError('a result card still shows a placeholder figure (XX)', 'results');
+    }
+    const posterId = row['poster_media_id'];
+    if (!posterId)
+      throw new ValidationError('choose a poster image before publishing', 'posterMediaId');
+    const { data } = await sb
+      .from('media_assets')
+      .select('alt')
+      .eq('tenant_id', auth.tenantId)
+      .eq('id', String(posterId))
+      .maybeSingle();
+    const alt = (data?.['alt'] ?? {}) as Record<string, unknown>;
+    if (!alt['en'] || !alt['ar']) {
+      throw new ValidationError(
+        'the poster needs alt text in English and Arabic before publishing',
+        'posterMediaId',
+      );
+    }
   },
 };
 
@@ -332,9 +524,11 @@ export const teamResource: ResourceConfig = {
   entity: 'team_member',
   writeCap: 'blog.write',
   readCaps: ['blog.write', 'services.write', 'seo.entityMeta'],
-  listColumns: 'id,slug,name,status,sort_order,version,updated_at',
+  listColumns:
+    'id,slug,name,role,is_leadership,is_placeholder,status,sort_order,version,updated_at',
   columns:
-    'id,slug,name,bio,avatar_url,profile_user_id,status,sort_order,version,created_at,updated_at',
+    'id,slug,name,bio,avatar_url,profile_user_id,role,linkedin_url,is_leadership,portrait_media_id,' +
+    'is_placeholder,status,sort_order,version,created_at,updated_at',
   orderBy: { column: 'sort_order', ascending: true },
   searchColumn: 'slug',
   createSchema: TeamMemberWriteSchema,
@@ -346,11 +540,25 @@ export const teamResource: ResourceConfig = {
       bio: 'bio',
       avatarUrl: 'avatar_url',
       profileUserId: 'profile_user_id',
+      role: 'role',
+      linkedinUrl: 'linkedin_url',
+      isLeadership: 'is_leadership',
+      portraitMediaId: 'portrait_media_id',
+      isPlaceholder: 'is_placeholder',
       status: 'status',
       sortOrder: 'sort_order',
     }),
   statusOf: (input) => statusOf(input as Input),
-  assertPublishable: (row) => requireBilingual(row, 'name', 'Author name'),
+  constraintFields: {
+    team_members_linkedin_url_check: {
+      field: 'linkedinUrl',
+      message: 'a https://linkedin.com/in/… or /company/… address',
+    },
+  },
+  assertPublishable: (row) => {
+    requireBilingual(row, 'name', 'Name');
+    refusePlaceholder(row, 'team member');
+  },
 };
 
 export const certificationResource: ResourceConfig = {
@@ -381,22 +589,57 @@ export const statisticResource: ResourceConfig = {
   table: 'statistics',
   entity: 'statistic',
   writeCap: 'services.write',
-  listColumns: 'id,slug,label,value,status,sort_order,version,updated_at',
-  columns: 'id,slug,label,value,status,sort_order,version,created_at,updated_at',
+  listColumns: 'id,slug,label,value,placements,is_placeholder,status,sort_order,version,updated_at',
+  columns:
+    'id,slug,label,value,value_numeric,value_suffix,placements,placement_labels,is_placeholder,' +
+    'status,sort_order,version,created_at,updated_at',
   orderBy: { column: 'sort_order', ascending: true },
   searchColumn: 'slug',
   createSchema: StatisticWriteSchema,
   updateSchema: StatisticUpdateSchema,
-  toRow: (input) =>
-    pick(input as Input, {
+  toRow: (input) => {
+    const values = pick(input as Input, {
       slug: 'slug',
       label: 'label',
       value: 'value',
+      valueNumeric: 'value_numeric',
+      valueSuffix: 'value_suffix',
+      placements: 'placements',
+      placementLabels: 'placement_labels',
+      isPlaceholder: 'is_placeholder',
       status: 'status',
       sortOrder: 'sort_order',
-    }),
+    });
+    // A number to count up to IS the displayed value (number + suffix): deriving it here
+    // is the only way the 0023 statistics_value_consistent CHECK holds for every save.
+    const numeric = values['value_numeric'];
+    if (typeof numeric === 'number') {
+      values['value'] = `${Number(numeric)}${String(values['value_suffix'] ?? '')}`;
+    }
+    return values;
+  },
   statusOf: (input) => statusOf(input as Input),
-  assertPublishable: (row) => requireBilingual(row, 'label', 'Statistic label'),
+  // The form edits per-page labels as a list; the column is an object keyed by page.
+  fromRow: (row) => {
+    const labels = row['placement_labels'];
+    if (!labels || typeof labels !== 'object' || Array.isArray(labels)) return row;
+    return {
+      ...row,
+      placement_labels: Object.entries(labels as Record<string, unknown>).map(
+        ([placement, label]) => ({ placement, label }),
+      ),
+    };
+  },
+  constraintFields: {
+    statistics_value_consistent: {
+      field: 'value',
+      message: 'the value must read as the number plus its suffix',
+    },
+  },
+  assertPublishable: (row) => {
+    requireBilingual(row, 'label', 'Statistic label');
+    refusePlaceholder(row, 'statistic');
+  },
 };
 
 export const partnerLogoResource: ResourceConfig = {
@@ -418,6 +661,122 @@ export const partnerLogoResource: ResourceConfig = {
       visible: 'visible',
       sortOrder: 'sort_order',
     }),
+};
+
+// ── Sectors · clients · testimonials (UI v2, migration 0021) ────────────────────
+
+export const sectorResource: ResourceConfig = {
+  table: 'sectors',
+  entity: 'sector',
+  // A taxonomy, like categories (§5 "Categories management": Admin + Content Creator).
+  writeCap: 'categories.manage',
+  readCaps: ['categories.manage', 'portfolio.write'],
+  listColumns: 'id,slug,name,visible,sort_order,version,updated_at',
+  columns: 'id,slug,name,visible,sort_order,version,created_at,updated_at',
+  orderBy: { column: 'sort_order', ascending: true },
+  searchColumn: 'slug',
+  createSchema: SectorWriteSchema,
+  updateSchema: SectorUpdateSchema,
+  toRow: (input) =>
+    pick(input as Input, {
+      slug: 'slug',
+      name: 'name',
+      visible: 'visible',
+      sortOrder: 'sort_order',
+    }),
+};
+
+export const clientResource: ResourceConfig = {
+  table: 'clients',
+  entity: 'client',
+  writeCap: 'portfolio.write',
+  // `visible` IS the public-disclosure permission: turning it on names a client on the
+  // site, so it is gated like a publish (content.publish + the rules below).
+  publishFlag: 'visible',
+  listColumns: 'id,slug,name,show_in_marquee,visible,is_placeholder,sort_order,version,updated_at',
+  columns:
+    'id,slug,name,logo_media_id,website_url,show_in_marquee,visible,is_placeholder,sort_order,' +
+    'version,created_at,updated_at',
+  orderBy: { column: 'sort_order', ascending: true },
+  searchColumn: 'slug',
+  filterableColumns: ['show_in_marquee', 'visible'],
+  createSchema: ClientWriteSchema,
+  updateSchema: ClientUpdateSchema,
+  toRow: (input) =>
+    pick(input as Input, {
+      slug: 'slug',
+      name: 'name',
+      logoMediaId: 'logo_media_id',
+      websiteUrl: 'website_url',
+      showInMarquee: 'show_in_marquee',
+      visible: 'visible',
+      isPlaceholder: 'is_placeholder',
+      sortOrder: 'sort_order',
+    }),
+  assertPublishable: (row) => {
+    requireBilingual(row, 'name', 'Client name');
+    refusePlaceholder(row, 'client');
+  },
+};
+
+export const testimonialResource: ResourceConfig = {
+  table: 'testimonials',
+  entity: 'testimonial',
+  writeCap: 'portfolio.write',
+  listColumns:
+    'id,slug,author_name,placements,portfolio_id,is_placeholder,status,sort_order,version,updated_at',
+  columns:
+    'id,slug,quote,author_name,author_role,client_id,portfolio_id,avatar_media_id,placements,' +
+    'consent_obtained_at,consent_reference,is_placeholder,status,sort_order,version,' +
+    'published_at,scheduled_for,created_at,updated_at',
+  orderBy: { column: 'sort_order', ascending: true },
+  searchColumn: 'slug',
+  filterableColumns: ['portfolio_id'],
+  createSchema: TestimonialWriteSchema,
+  updateSchema: TestimonialUpdateSchema,
+  constraintFields: {
+    testimonials_consent_gate: {
+      field: 'consentObtainedAt',
+      message: 'record when consent was obtained before publishing or scheduling a quote',
+    },
+    testimonials_one_per_project: {
+      field: 'portfolioId',
+      message: 'that case study already has a published quote',
+    },
+  },
+  toRow: (input) =>
+    publishStamp(
+      pick(input as Input, {
+        slug: 'slug',
+        quote: 'quote',
+        authorName: 'author_name',
+        authorRole: 'author_role',
+        clientId: 'client_id',
+        portfolioId: 'portfolio_id',
+        avatarMediaId: 'avatar_media_id',
+        placements: 'placements',
+        consentObtainedAt: 'consent_obtained_at',
+        consentReference: 'consent_reference',
+        isPlaceholder: 'is_placeholder',
+        status: 'status',
+        sortOrder: 'sort_order',
+        scheduledFor: 'scheduled_for',
+      }),
+    ),
+  statusOf: (input) => statusOf(input as Input),
+  // The database CHECK is the gate of record for consent (every path, the cron included);
+  // this says it on the field first.
+  assertPublishable: (row) => {
+    requireBilingual(row, 'quote', 'Quote');
+    requireBilingual(row, 'author_name', 'Author name');
+    refusePlaceholder(row, 'quote');
+    if (!row['consent_obtained_at']) {
+      throw new ValidationError(
+        'record when the person agreed to be quoted before publishing',
+        'consentObtainedAt',
+      );
+    }
+  },
 };
 
 // ── Navigation ──────────────────────────────────────────────────────────────────

@@ -102,6 +102,22 @@ export interface ResourceConfig {
   constraintFields?: ConstraintFields;
   /** Shapes a stored row for the API response (resolved thumbnails, derived labels). */
   fromRow?: (row: Row) => Row;
+  /** Payload keys `persist` writes outside `toRow` (child sets) — see the empty-PATCH check. */
+  childKeys?: readonly string[];
+  /**
+   * Replaces the plain INSERT/UPDATE — for an entity whose save spans several tables and
+   * must be ONE transaction (a case study and its services + media: save_portfolio()).
+   * Receives the column patch from `toRow`; `id`/`version` are null on create. Must
+   * enforce the optimistic lock itself and return the saved row with `columns`.
+   */
+  persist?: (ctx: {
+    auth: AuthContext;
+    sb: Db;
+    id: string | null;
+    version: number | null;
+    values: Row;
+    input: ResourcePayload;
+  }) => Promise<Row>;
   /** Runs after a successful write (cache purge, derived rows). Never fatal. */
   afterWrite?: (ctx: {
     auth: AuthContext;
@@ -192,9 +208,11 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
       await config.assertWritable?.(values, { auth, sb, changed: values });
       if (isLive(config, values)) await config.assertPublishable?.(values, { auth, sb });
 
-      const row = await insertRow<Row>(sb, config.table, auth, values, config.columns, {
-        constraints: config.constraintFields,
-      });
+      const row = config.persist
+        ? await config.persist({ auth, sb, id: null, version: null, values, input: payload })
+        : await insertRow<Row>(sb, config.table, auth, values, config.columns, {
+            constraints: config.constraintFields,
+          });
       audit({
         action: `${config.entity}.create`,
         entityType: config.entity,
@@ -239,7 +257,9 @@ export function itemRoutes(config: ResourceConfig): {
       assertTransition(auth, config, payload);
 
       const values = config.toRow(payload);
-      if (Object.keys(values).length === 0) {
+      // A PATCH of child sets alone (a case study's services) is an update with no column.
+      const childOnly = (config.childKeys ?? []).some((key) => payload[key] !== undefined);
+      if (Object.keys(values).length === 0 && !childOnly) {
         throw new ValidationError('no updatable fields supplied');
       }
 
@@ -256,16 +276,20 @@ export function itemRoutes(config: ResourceConfig): {
         }
       }
 
-      const row = await updateRow<Row>(
-        sb,
-        config.table,
-        auth,
-        id,
-        payload.version,
-        values,
-        config.columns,
-        { constraints: config.constraintFields },
-      );
+      const row = config.persist
+        ? await config.persist({ auth, sb, id, version: payload.version, values, input: payload })
+        : await updateRow<Row>(
+            sb,
+            config.table,
+            auth,
+            id,
+            payload.version,
+            values,
+            config.columns,
+            {
+              constraints: config.constraintFields,
+            },
+          );
       audit({
         action: `${config.entity}.update`,
         entityType: config.entity,

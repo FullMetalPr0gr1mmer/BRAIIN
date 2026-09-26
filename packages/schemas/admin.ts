@@ -316,6 +316,23 @@ export const CertificationUpdateSchema = updatable(CertificationWriteSchema);
 
 const StatPlacement = z.enum(STAT_PLACEMENTS);
 
+/**
+ * Per-page labels, keyed by page ({about: {en, ar}}). The admin form edits them as a list
+ * of {placement, label} rows; both shapes are accepted and the list is folded into the
+ * object here (a page listed twice keeps its last label).
+ */
+const PlacementLabelsSchema = z.preprocess(
+  (v) =>
+    Array.isArray(v)
+      ? Object.fromEntries(
+          v
+            .filter((i): i is Record<string, unknown> => i !== null && typeof i === 'object')
+            .map((i) => [i['placement'], i['label']]),
+        )
+      : v,
+  z.record(StatPlacement, BilingualTextSchema),
+);
+
 const StatisticWriteBase = z.object({
   slug: SlugSchema,
   label: BilingualTextSchema,
@@ -324,7 +341,7 @@ const StatisticWriteBase = z.object({
    * `valueNumeric` is given: the resource derives it (number + suffix), which is the only
    * way the 0023 statistics_value_consistent CHECK can hold.
    */
-  value: z.string().trim().min(1).max(40).optional(),
+  value: z.string().trim().min(1).max(40).nullish(),
   valueNumeric: z.number().min(0).max(9_999_999_999.99).nullish(),
   valueSuffix: z.string().trim().max(4).nullish(),
   /** Pages this counter appears on. */
@@ -334,17 +351,30 @@ const StatisticWriteBase = z.object({
     .refine((a) => new Set(a).size === a.length, { message: 'each page once' })
     .default([]),
   /** Per-page label where it differs from `label` ({about: {en, ar}}). */
-  placementLabels: z.record(StatPlacement, BilingualTextSchema).default({}),
+  placementLabels: PlacementLabelsSchema.default({}),
   status: ContentStatusSchema.default('draft'),
   sortOrder: SortOrderSchema,
   isPlaceholder: z.boolean().default(false),
 });
 
+const hasNumber = (v: { valueNumeric?: number | null | undefined }) =>
+  typeof v.valueNumeric === 'number';
+
 export const StatisticWriteSchema = StatisticWriteBase.refine(
-  (v) => v.value !== undefined || (v.valueNumeric !== undefined && v.valueNumeric !== null),
+  (v) => (typeof v.value === 'string' && v.value !== '') || hasNumber(v),
   { path: ['value'], message: 'give the value (or a number to count up to)' },
 );
-export const StatisticUpdateSchema = updatable(StatisticWriteBase);
+export const StatisticUpdateSchema = updatable(StatisticWriteBase)
+  // The displayed value is derived from number + suffix, so they travel together — a
+  // suffix alone cannot be combined with a stored number the request cannot see.
+  .refine((v) => v.valueSuffix === undefined || v.valueNumeric !== undefined, {
+    path: ['valueNumeric'],
+    message: 'send the number together with its suffix',
+  })
+  .refine((v) => v.value !== null || hasNumber(v), {
+    path: ['value'],
+    message: 'give the value (or a number to count up to)',
+  });
 
 export const PartnerLogoWriteSchema = z.object({
   name: ShortTextSchema,
