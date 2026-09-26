@@ -2909,6 +2909,12 @@ html[dir='rtl'] .klein-band::before {
 .mf--intro-a {
   min-height: clamp(320px, 42vw, 760px);
 }
+@media (max-width: 51.25rem) {
+  .mf--intro-a {
+    min-height: 0;
+    aspect-ratio: 928 / 738;
+  }
+}
 .mf--intro-b {
   aspect-ratio: 926 / 525;
 }
@@ -2924,6 +2930,7 @@ html[dir='rtl'] .klein-band::before {
   place-items: center;
   background: rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: var(--bs-paper);
   transition:
@@ -2938,6 +2945,11 @@ html[dir='rtl'] .klein-band::before {
 .mf.is-playing .mf__play {
   opacity: 0;
   transform: scale(0.8);
+}
+/* Only where clips.ts wired the frame: no badge promising a preview that cannot play
+   (touch, reduced motion, Save-Data, no JS). Absolutely positioned — showing it is CLS 0. */
+.mf:not(.can-clip) .mf__play {
+  display: none;
 }
 
 /* ---- Project card (ProjectCard.astro) ---- */
@@ -3103,7 +3115,15 @@ html[dir='rtl'] .facets--case .facets__k {
   color: var(--bs-black);
   padding-block: clamp(80px, 12vh, 150px);
 }
+/* Standalone (a CMS statistics section): the mockup's white .proof shell (work L576-580). */
 .sb--proof {
+  background: var(--bs-paper);
+  color: var(--bs-black);
+  padding-block: clamp(64px, 10vh, 130px) clamp(72px, 11vh, 140px);
+}
+/* Bare (inside Our Work's section, which supplies the shell): no padding of its own. Must
+   stay after every .sb--<variant> padding rule — same specificity, so order decides. */
+.sb--bare {
   padding: 0;
 }
 .sb__head {
@@ -3132,7 +3152,8 @@ html[dir='rtl'] .sb__head h2 {
   font-style: normal;
   color: var(--bs-sky);
 }
-.sb__head p {
+/* Direct child only: the band's kicker (p.tag) sits one level down, inside the div. */
+.sb__head > p {
   margin: 0;
   font-size: 14.5px;
   line-height: 1.6;
@@ -3159,13 +3180,13 @@ html[dir='rtl'] .sb--reach .sb__head h2 {
 .sb--reach .sb__head h2 em {
   color: var(--bs-klein);
 }
-.sb--reach .sb__head p {
+.sb--reach .sb__head > p {
   font-size: clamp(15px, 1.3vw, 18px);
   line-height: 1.65;
   color: var(--bs-dim);
   max-width: 40ch;
 }
-html[dir='rtl'] .sb--reach .sb__head p {
+html[dir='rtl'] .sb--reach .sb__head > p {
   line-height: 1.95;
 }
 .sb__grid {
@@ -3200,6 +3221,21 @@ html[dir='rtl'] .sb--reach .sb__head p {
 .sb__cell:first-child {
   border-inline-start: 0;
   padding-inline-start: 0;
+}
+/* More counters than one row (placements are editor-controlled; minItems goes to 6): the
+   first cell of every row drops its rule, and each later row gets a rule above it. */
+.sb--band .sb__cell:nth-child(4n + 1),
+.sb--proof .sb__cell:nth-child(4n + 1),
+.sb--reach .sb__cell:nth-child(3n + 1) {
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+.sb--band .sb__cell:nth-child(n + 5) {
+  border-top: 1px solid var(--bs-line-d);
+}
+.sb--proof .sb__cell:nth-child(n + 5),
+.sb--reach .sb__cell:nth-child(n + 4) {
+  border-top: 1px solid var(--bs-line-l);
 }
 .sb__n {
   display: block;
@@ -3255,8 +3291,8 @@ html[dir='rtl'] .sb--reach .sb__head p {
   .sb--proof .sb__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .sb--band .sb__cell:nth-child(3),
-  .sb--proof .sb__cell:nth-child(3) {
+  .sb--band .sb__cell:nth-child(2n + 1),
+  .sb--proof .sb__cell:nth-child(2n + 1) {
     border-inline-start: 0;
     padding-inline-start: 0;
   }
@@ -3467,9 +3503,9 @@ html[dir='rtl'] .tm--light .tm__text {
   font-weight: 800;
   overflow: hidden;
 }
-.tm__av--img img {
-  width: 100%;
-  height: 100%;
+/* <Picture> puts the class on the <img> itself (not the <picture>), so .tm__av sizes the
+   image and this crops it. */
+.tm__av--img {
   object-fit: cover;
 }
 .tm--light .tm__av {

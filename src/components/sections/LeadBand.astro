@@ -55,14 +55,16 @@ const email = showEmail ? (await getIdentity(Astro.locals)).contactEmail : null;
 
 <section class="lead-band klein-band" aria-labelledby="lead-band-heading">
   <div class="lead-band__wrap">
-    <p class="tag">
+    <p class="tag rv">
       <span class="dot"></span>
       {tag}
     </p>
-    <h2 id="lead-band-heading"><AccentText text={heading} locale={locale} accent={accent} /></h2>
+    <h2 class="rv" id="lead-band-heading">
+      <AccentText text={heading} locale={locale} accent={accent} />
+    </h2>
     <div class="lead-band__row">
-      <p>{text}</p>
-      <div class="lead-band__acts">
+      <p class="rv">{text}</p>
+      <div class="lead-band__acts rv">
         <Cta href={href} variant="light">{button}</Cta>
         {
           email && (

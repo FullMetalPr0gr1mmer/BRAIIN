@@ -108,19 +108,19 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       ],
       help: 'Shows the statistics marked for this page, each with its label for this page.',
     },
-    tag,
+    { ...tag, label: 'Tag (small label above the heading; Band, Reach and Proof only)' },
     heading,
-    { name: 'text', label: 'Text beside the heading', kind: 'bilingual' },
+    { name: 'text', label: 'Text beside the heading (Band and Reach only)', kind: 'bilingual' },
     {
       name: 'staticNumbers',
-      label: 'Show the numbers without counting up',
+      label: 'Show the numbers without counting up (Band, Reach and Proof only)',
       kind: 'checkbox',
     },
     {
       name: 'minItems',
       label: 'Hide when fewer counters than',
       kind: 'number',
-      help: 'Default 2 — a band with a single number reads as broken.',
+      help: 'Default 2 for Band, Reach and Proof (a band with a single number reads as broken), 1 for Cards.',
     },
   ],
   aboutStory: [

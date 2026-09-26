@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { splitAccent, accentRange } from '@/lib/text/accent';
 import { galleryLayout } from '@/lib/portfolio/gallery';
-import { clipWindow, clipsAllowed, seekTarget } from '@/lib/client/clips';
+import { clipWindow, clipsAllowed, hoverStartsClip, seekTarget } from '@/lib/client/clips';
 import { countValue, easeOutCubic, COUNT_DURATION_MS } from '@/lib/client/countUp';
-import { carouselRunning, step, type CarouselFlags } from '@/lib/client/carousel';
+import { carouselRunning, focusEntryStops, step, type CarouselFlags } from '@/lib/client/carousel';
 import { toggleFacet } from '@/lib/portfolio/catalog';
 
 // The pure halves of the UI v2 shared components (PR6). The DOM halves are exercised by the
@@ -119,6 +119,12 @@ describe('clips — a window of one showreel, never on touch', () => {
     expect(clipsAllowed({ ...ok, saveData: true })).toBe(false);
     expect(clipsAllowed({ ...ok, canHover: false })).toBe(false);
   });
+
+  it('a hover preview starts for a mouse or pen, never for a finger on a hybrid', () => {
+    expect(hoverStartsClip('mouse')).toBe(true);
+    expect(hoverStartsClip('pen')).toBe(true);
+    expect(hoverStartsClip('touch')).toBe(false);
+  });
 });
 
 describe('count-up — an enhancement over the final value', () => {
@@ -140,8 +146,6 @@ describe('carousel — the APG run/pause decision', () => {
     reducedMotion: false,
     userPaused: false,
     hovered: false,
-    focusInside: false,
-    focusOverridden: false,
   };
 
   it('runs only when started, on screen and visible', () => {
@@ -155,14 +159,24 @@ describe('carousel — the APG run/pause decision', () => {
     expect(carouselRunning({ ...on, reducedMotion: true })).toBe(false);
   });
 
-  it('pauses on hover, on focus inside, and on the Pause button', () => {
+  it('pauses on hover and stops on the Pause button', () => {
     expect(carouselRunning({ ...on, hovered: true })).toBe(false);
-    expect(carouselRunning({ ...on, focusInside: true })).toBe(false);
     expect(carouselRunning({ ...on, userPaused: true })).toBe(false);
   });
 
-  it('Play resumes even with focus inside', () => {
-    expect(carouselRunning({ ...on, focusInside: true, focusOverridden: true })).toBe(true);
+  it('keyboard focus arriving from outside stops it; a click or focus moving inside does not', () => {
+    const entry = { entering: true, keyboard: true, reducedMotion: false };
+    expect(focusEntryStops(entry)).toBe(true);
+    expect(focusEntryStops({ ...entry, keyboard: false })).toBe(false); // mouse click
+    expect(focusEntryStops({ ...entry, entering: false })).toBe(false); // between controls
+    expect(focusEntryStops({ ...entry, reducedMotion: true })).toBe(false);
+  });
+
+  it('a stop holds until Play — focus leaving does not restart it, Play does even with focus inside', () => {
+    // Keyboard entry sets userPaused; nothing but the toggle clears it (no focus flag).
+    const stopped: CarouselFlags = { ...on, userPaused: true };
+    expect(carouselRunning(stopped)).toBe(false);
+    expect(carouselRunning({ ...stopped, userPaused: !stopped.userPaused })).toBe(true);
   });
 
   it('steps wrap both ways', () => {

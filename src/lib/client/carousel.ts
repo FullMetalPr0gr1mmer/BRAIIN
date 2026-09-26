@@ -1,10 +1,12 @@
 // Testimonials carousel, built to the WAI-ARIA APG carousel pattern (and so outside
 // EXC-007: it has its own pause control). The design's visuals, a different motion model:
 //
-//   • auto-advances every 7 s only once 40% of it has been on screen, and stops whenever
-//     it is off screen, the page is hidden, the pointer is over it, or keyboard focus is
-//     inside it;
-//   • a visible Pause/Play button beside the arrows — Play resumes even with focus inside;
+//   • auto-advances every 7 s only once 40% of it has been on screen, and pauses whenever
+//     it is off screen, the page is hidden or the pointer is over it;
+//   • keyboard focus arriving from outside STOPS it (APG): it does not resume when focus
+//     leaves — only the Play button restarts it, and it does so even with focus inside;
+//   • a visible Pause/Play button beside the arrows: a plain button whose label changes
+//     (the APG carousel's rotation control), so no aria-pressed;
 //   • never auto-advances under prefers-reduced-motion (the button is not shown then);
 //   • the slide region is aria-live="off" while rotating and "polite" otherwise, so an
 //     automatic change is never announced over whatever the reader is doing;
@@ -13,7 +15,8 @@
 // Without JS every quote is shown, stacked (the component's CSS default); `.is-enhanced`
 // switches to one visible slide at a time.
 //
-// The timing decision is a pure function (carouselRunning) so it is unit-tested.
+// The timing decisions are pure functions (carouselRunning, focusEntryStops) so they are
+// unit-tested.
 
 export const SLIDE_MS = 7000;
 
@@ -22,18 +25,28 @@ export interface CarouselFlags {
   onScreen: boolean;
   pageVisible: boolean;
   reducedMotion: boolean;
-  userPaused: boolean; // the Pause button
+  userPaused: boolean; // the Pause button, or keyboard focus arriving — cleared only by Play
   hovered: boolean;
-  focusInside: boolean;
-  /** Play was pressed while focus was inside: focus no longer holds it. */
-  focusOverridden: boolean;
 }
 
 export function carouselRunning(f: CarouselFlags): boolean {
   if (f.reducedMotion || !f.started || !f.onScreen || !f.pageVisible) return false;
   if (f.userPaused || f.hovered) return false;
-  if (f.focusInside && !f.focusOverridden) return false;
   return true;
+}
+
+/**
+ * Whether a focusin stops rotation. Only KEYBOARD focus (:focus-visible) arriving from
+ * outside does: a mouse click on Pause would otherwise stop it on focus and restart it on
+ * the click, and a click on an arrow would stop it for good. Focus moving between the
+ * controls changes nothing, and under reduced motion there is nothing to stop.
+ */
+export function focusEntryStops(e: {
+  entering: boolean;
+  keyboard: boolean;
+  reducedMotion: boolean;
+}): boolean {
+  return e.entering && e.keyboard && !e.reducedMotion;
 }
 
 /** The next index, wrapping. */
@@ -62,8 +75,6 @@ export function initCarousel(root: HTMLElement): void {
     reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
     userPaused: false,
     hovered: false,
-    focusInside: false,
-    focusOverridden: false,
   };
   let index = 0;
 
@@ -102,7 +113,6 @@ export function initCarousel(root: HTMLElement): void {
     stage?.setAttribute('aria-live', running ? 'off' : 'polite');
     if (toggle) {
       const paused = flags.userPaused;
-      toggle.setAttribute('aria-pressed', paused ? 'true' : 'false');
       toggle.setAttribute('aria-label', paused ? labels.play : labels.pause);
       toggle.classList.toggle('is-play', paused);
     }
@@ -122,8 +132,6 @@ export function initCarousel(root: HTMLElement): void {
   next?.addEventListener('click', () => go(index + 1));
   toggle?.addEventListener('click', () => {
     flags.userPaused = !flags.userPaused;
-    // Play pressed with focus inside (on this very button): focus stops holding it.
-    flags.focusOverridden = !flags.userPaused && flags.focusInside;
     sync();
   });
   root.addEventListener('keydown', (e) => {
@@ -140,14 +148,14 @@ export function initCarousel(root: HTMLElement): void {
     flags.hovered = false;
     sync();
   });
-  root.addEventListener('focusin', () => {
-    flags.focusInside = true;
-    sync();
-  });
-  root.addEventListener('focusout', (e) => {
-    if (root.contains(e.relatedTarget as Node | null)) return;
-    flags.focusInside = false;
-    flags.focusOverridden = false;
+  root.addEventListener('focusin', (e) => {
+    const stops = focusEntryStops({
+      entering: !root.contains(e.relatedTarget as Node | null),
+      keyboard: e.target instanceof Element && e.target.matches(':focus-visible'),
+      reducedMotion: flags.reducedMotion,
+    });
+    if (!stops) return;
+    flags.userPaused = true;
     sync();
   });
   document.addEventListener('visibilitychange', () => {

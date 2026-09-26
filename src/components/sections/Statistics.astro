@@ -8,7 +8,8 @@ import StatBand from './StatBand.astro';
 
 // The `statistics` section. UI v2 layouts (`band` home, `reach` About, `proof` Our Work)
 // render StatBand with the counters marked for `placement`, each under that page's label;
-// `cards` (the default — an existing composition renders unchanged) is the original grid.
+// `cards` (the default — an existing composition renders unchanged) is the original grid;
+// it reads only `heading` and `minItems` (default 1 there, 2 in the bands).
 // The numbers always come from the statistics table; the section only chooses the layout
 // and the copy around them.
 
@@ -39,7 +40,7 @@ const items =
 
 {
   variant === 'cards' ? (
-    items.length > 0 && (
+    items.length >= (Astro.props.minItems ?? 1) && (
       <section class="statistics">
         <div class="container">
           <h2>{Astro.props.heading ? pickLocale(Astro.props.heading, locale) : STR.heading}</h2>

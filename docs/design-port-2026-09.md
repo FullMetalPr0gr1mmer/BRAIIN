@@ -27,7 +27,10 @@ existing global.css utilities.
 ## Decisions (PR6)
 
 1. **No clip autoplay on touch** (EXC-007/EXC-009): touch devices see the poster. The mockup
-   autoplayed catalog cards at 60 % visibility and every in-view clip on touch.
+   autoplayed catalog cards at 60 % visibility and every in-view clip on touch. A finger on a
+   hybrid's touchscreen never starts a hover preview either (only a mouse or pen does). The
+   play badge shows only where a clip can actually play — never on touch, under reduced
+   motion, with Save-Data or without JS (the mockup showed it everywhere).
 2. **A paused clip gives the poster back** (and the play badge). The mockup never removed
    `.is-playing`, leaving a frozen video frame up.
 3. **Clips never join the background sync group**: each is a different window of one file.
@@ -39,10 +42,12 @@ existing global.css utilities.
    has them. Arabic-Indic digits only where the mockup's Arabic sentences use them (the
    footer year, PR2).
 6. **Testimonials follow the WAI-ARIA APG carousel**: a visible Pause/Play button beside the
-   arrows; pauses on hover and keyboard focus; stops off screen and with the page hidden;
-   no auto-advance under reduced motion; `aria-live` off while rotating; RTL-aware arrow
-   keys; white focus ring on Klein. The mockup had hover-pause only (and started Our Work's
-   timer at page load).
+   arrows (its label changes, so no `aria-pressed`); keyboard focus entering the carousel
+   stops the rotation, and only Play restarts it (focus leaving does not); hover pauses it
+   while the pointer is over; pauses off screen and with the page hidden; no auto-advance
+   under reduced motion; `aria-live` off while rotating; RTL-aware arrow keys; white focus
+   ring on Klein. Rendered `bare` (inside Our Work's section) it is a named group. The
+   mockup had hover-pause only (and started Our Work's timer at page load).
 7. **`.cta--light` stays white on hover** (work.html's behaviour). On projects/project the
    mockup's cascade turned it Cobalt under a Klein label (~2:1).
 8. **An in-page "down" badge never slides sideways** — the mockup's Arabic join hero did.
@@ -62,3 +67,10 @@ existing global.css utilities.
 16. **Statistics section layouts** (`cards` default, `band`, `reach`, `proof`) are CMS content
     of the `statistics` section; the numbers and their per-page labels always come from the
     statistics table. `cards` keeps the pre-UI-v2 grid so existing compositions are unchanged.
+    A standalone `proof` band carries the mockup's white `.proof` shell itself; only inside
+    Our Work's section (`bare`) does it leave that to the section. Any number of counters
+    wraps cleanly into further rows (the mockup's rules assumed exactly one row).
+17. **Count-up numbers keep a fixed accessible value**: the animated digits are
+    `aria-hidden` beside an `.sr-only` copy of the final value, so a screen reader reading
+    ahead of the viewport never hears the "0" the count starts from; printing restores any
+    counter still waiting.

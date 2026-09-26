@@ -9,13 +9,15 @@
 //   data-clip-end      window end, seconds
 //   data-clip-mode     "inview"  plays while at least `data-clip-threshold` of it is on
 //                                screen (default .35), pauses when it leaves
-//                      "hover"   plays while the pointer is over, or keyboard focus is in,
-//                                the closest [data-clip-trigger] (the card link)
+//                      "hover"   plays while a mouse/pen pointer is over, or keyboard focus
+//                                is in, the closest [data-clip-trigger] (the card link)
 //
 // Never plays: under prefers-reduced-motion, with Save-Data, or on a touch-only device
 // ("in-content clips never autoplay on touch" — EXC-007/EXC-009); the poster stays. Pauses
 // with the page hidden. When a clip pauses the poster comes back (the mockup left the
-// frozen video frame up and never restored its play badge).
+// frozen video frame up and never restored its play badge). Every frame wired here gets
+// .can-clip, which is what shows the play badge: no badge where nothing can play (touch,
+// reduced motion, Save-Data, no JS).
 //
 // Deliberately separate from lazyVideo.ts's sync group: that keeps same-file BACKGROUND
 // loops on one clock; clips are different windows of one file and must never adopt each
@@ -58,6 +60,15 @@ export function clipsAllowed(env: {
   canHover: boolean;
 }): boolean {
   return !env.reducedMotion && !env.saveData && env.canHover;
+}
+
+/**
+ * Whether a pointer entering a hover trigger starts its clip. "(hover: hover)" describes
+ * only the PRIMARY pointer: on a touchscreen laptop a finger landing on a card — or
+ * starting a scroll across it — fires pointerenter too, and must not fetch the clip.
+ */
+export function hoverStartsClip(pointerType: string): boolean {
+  return pointerType !== 'touch';
 }
 
 function environment() {
@@ -144,9 +155,12 @@ export function initClips(root: ParentNode = document): void {
   for (const frame of root.querySelectorAll<HTMLElement>('[data-clip-src]')) {
     if (frames.has(frame)) continue;
     frames.add(frame);
+    frame.classList.add('can-clip');
     if (frame.dataset.clipMode === 'hover') {
       const trigger = frame.closest<HTMLElement>('[data-clip-trigger]') ?? frame;
-      trigger.addEventListener('pointerenter', () => play(frame));
+      trigger.addEventListener('pointerenter', (e) => {
+        if (hoverStartsClip(e.pointerType)) play(frame);
+      });
       trigger.addEventListener('pointerleave', () => pause(frame));
       trigger.addEventListener('focusin', () => play(frame));
       trigger.addEventListener('focusout', () => pause(frame));

@@ -12,8 +12,9 @@ import AccentText from '@/components/ui/AccentText.astro';
 // Our Work's numbers (`light`, rendered inside that section — `bare`).
 //
 // Built to the WAI-ARIA APG carousel pattern by src/lib/client/carousel.ts: a visible
-// Pause/Play button beside the arrows, pause on hover and on keyboard focus, stops off
-// screen, never auto-advances under reduced motion, aria-live off while it rotates.
+// Pause/Play button beside the arrows, pause on hover, keyboard focus stops it (only Play
+// restarts it), pauses off screen, never auto-advances under reduced motion, aria-live off
+// while it rotates. `bare` renders a named group (Our Work's <section> is the landmark).
 // Without JS every quote is shown in turn (the controls are hidden — they need script).
 // Each quote is attributed to a person: name, and "Title, Company" verbatim.
 
@@ -82,21 +83,22 @@ const headId = `${id ?? `tm-${variant}`}-heading`;
     <Tag
       class:list={['tm', `tm--${variant}`, { 'klein-band': variant === 'klein' }]}
       id={id}
+      role={bare ? 'group' : undefined}
       aria-roledescription={many ? STR.carousel : undefined}
       aria-labelledby={headId}
       data-carousel={many ? '' : undefined}
     >
       <div class="tm__grid">
         <div class="tm__side">
-          <p class="tag">
+          <p class="tag rv">
             <span class="dot" />
             {tag}
           </p>
-          <h2 id={headId}>
+          <h2 class="rv" id={headId}>
             <AccentText text={heading} locale={locale} accent={accent} />
           </h2>
           {many && (
-            <div class="tm__nav" data-controls hidden>
+            <div class="tm__nav rv" data-controls hidden>
               <button class="tm__btn" type="button" data-prev aria-label={STR.prev}>
                 <svg viewBox="0 0 16 16" aria-hidden="true">
                   <path
@@ -128,7 +130,6 @@ const headId = `${id ?? `tm-${variant}`}-heading`;
                 data-label-pause={STR.pause}
                 data-label-play={STR.play}
                 aria-label={STR.pause}
-                aria-pressed="false"
                 hidden
               >
                 <svg class="tm__pause" viewBox="0 0 16 16" aria-hidden="true">
@@ -148,7 +149,7 @@ const headId = `${id ?? `tm-${variant}`}-heading`;
             </div>
           )}
         </div>
-        <div class="tm__main">
+        <div class="tm__main rv">
           <div class="tm__stage" data-stage aria-live="polite">
             {quotes.map((q, i) => (
               <figure

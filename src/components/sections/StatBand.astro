@@ -8,11 +8,16 @@ import AccentText from '@/components/ui/AccentText.astro';
 // Statistics as the UI v2 bands (the mockup's `.nums`, `.reach` and `.proof .stats`):
 //   band   home "In numbers" — black, sky accents, 4 columns
 //   reach  About "Our reach" — white, Klein accents, 3 columns
-//   proof  Our Work — white, the tag alone above the row (the quotes follow in the section)
+//   proof  Our Work — white, the tag alone above the row (the quotes follow in the section).
+//          Standalone (a CMS statistics section) it carries the mockup's white .proof shell;
+//          `bare`, inside Our Work's section, that section supplies it.
 //
 // Every number is rendered FINAL on the server (a crawler, a no-JS visitor and a
 // reduced-motion visitor all read "250+"); countUp.ts counts it up only when it is still
-// off-screen at load. A value that is not a number ("TBD") is shown as written, muted.
+// off-screen at load. A countable number is rendered twice: an .sr-only copy of the final
+// value for assistive tech (which reads ahead of the viewport, so it must never hear the
+// "0" the count starts from) and the animated digits inside aria-hidden.
+// A value that is not a number ("TBD") is shown as written, muted.
 // Digits stay Western in Arabic, as the design has them in its stats.
 // Fewer than `minItems` counters and the band renders nothing.
 
@@ -29,7 +34,7 @@ interface Props {
   staticNumbers?: boolean | undefined;
   minItems?: number | undefined;
   id?: string | undefined;
-  /** proof: rendered inside a larger section, so no <section> of its own. */
+  /** proof: rendered inside a larger section, so no <section> and no padding of its own. */
   bare?: boolean;
 }
 
@@ -111,56 +116,64 @@ const headId = id ? `${id}-heading` : undefined;
 {
   cells.length >= minItems && (
     <Tag
-      class:list={['sb', `sb--${variant}`]}
+      class:list={['sb', `sb--${variant}`, { 'sb--bare': bare }]}
       id={id}
       aria-labelledby={heading ? headId : undefined}
     >
       <div class="sb__wrap">
         {variant === 'reach' ? (
           <>
-            <p class="tag">
+            <p class="tag rv">
               <span class="dot" />
               {tag}
             </p>
             <div class="sb__head">
-              <h2 id={headId}>
+              <h2 class="rv" id={headId}>
                 <AccentText text={heading ?? ''} locale={locale} accent={accent} />
               </h2>
-              {text && <p>{text}</p>}
+              {text && <p class="rv">{text}</p>}
             </div>
           </>
         ) : variant === 'band' ? (
           <div class="sb__head">
             <div>
-              <p class="tag">
+              <p class="tag rv">
                 <span class="dot" />
                 {tag}
               </p>
               {heading && (
-                <h2 id={headId}>
+                <h2 class="rv" id={headId}>
                   <AccentText text={heading} locale={locale} accent={accent} />
                 </h2>
               )}
             </div>
-            {text && <p>{text}</p>}
+            {text && <p class="rv">{text}</p>}
           </div>
         ) : (
-          <p class="tag">
+          <p class="tag rv">
             <span class="dot" />
             {tag}
           </p>
         )}
         <ul class="sb__grid">
           {cells.map((c) => (
-            <li class="sb__cell">
+            <li class="sb__cell rv">
               {c.numeric ? (
                 <span class="sb__n">
                   {c.numeric.countable ? (
-                    <span data-count-to={c.numeric.n}>{c.numeric.n}</span>
+                    <>
+                      <span class="sr-only">{`${c.numeric.n}${c.numeric.suffix}`}</span>
+                      <span aria-hidden="true">
+                        <span data-count-to={c.numeric.n}>{c.numeric.n}</span>
+                        {c.numeric.suffix && <i>{c.numeric.suffix}</i>}
+                      </span>
+                    </>
                   ) : (
-                    <span>{c.numeric.n}</span>
+                    <>
+                      <span>{c.numeric.n}</span>
+                      {c.numeric.suffix && <i>{c.numeric.suffix}</i>}
+                    </>
                   )}
-                  {c.numeric.suffix && <i>{c.numeric.suffix}</i>}
                 </span>
               ) : (
                 <span class="sb__n sb__n--text">{c.value}</span>

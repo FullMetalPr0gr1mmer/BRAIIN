@@ -31,7 +31,7 @@ const type = card.projectType ? pickLocale(card.projectType, locale) : null;
 const href = localizedHref(`/portfolio/${card.slug}`, locale);
 ---
 
-<article class:list={['pcard', `pcard--${variant}`]}>
+<article class:list={['pcard', `pcard--${variant}`, 'rv']}>
   <a class="pcard__link" href={href} data-clip-trigger>
     <MediaFrame
       image={card.poster}
