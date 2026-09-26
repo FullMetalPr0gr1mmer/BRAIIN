@@ -74,6 +74,11 @@ export interface FieldDef {
   typeField?: string;
   /** `upload`: where the file is POSTed (multipart) and what it may be. */
   upload?: { endpoint: string; accept: string };
+  /**
+   * The value a NEW record's form starts with — must equal the create schema's default, or
+   * the form shows one thing (an unticked box) while the server stores another.
+   */
+  defaultValue?: unknown;
 }
 
 export interface ColumnDef {
@@ -408,7 +413,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
         help: 'Used in filter links: /portfolio/all?sector=<slug>.',
       },
       { name: 'name', label: 'Name', kind: 'bilingual', required: true },
-      { name: 'visible', label: 'Visible', kind: 'checkbox' },
+      { name: 'visible', label: 'Visible', kind: 'checkbox', defaultValue: true },
       SORT_FIELD,
     ],
   },
@@ -531,7 +536,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
     fields: [
       { name: 'slug', label: 'Slug', kind: 'slug', required: true },
       { name: 'title', label: 'Title', kind: 'bilingual', required: true },
-      { name: 'navVisible', label: 'Show in navigation', kind: 'checkbox' },
+      { name: 'navVisible', label: 'Show in navigation', kind: 'checkbox', defaultValue: true },
       STATUS_FIELD,
       SCHEDULED_FIELD,
     ],
@@ -777,7 +782,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
       { name: 'logoUrl', label: 'Logo URL', kind: 'url', required: true },
       { name: 'scale', label: 'Scale', kind: 'number' },
       { name: 'offsetY', label: 'Vertical offset', kind: 'number' },
-      { name: 'visible', label: 'Visible', kind: 'checkbox' },
+      { name: 'visible', label: 'Visible', kind: 'checkbox', defaultValue: true },
       SORT_FIELD,
     ],
   },

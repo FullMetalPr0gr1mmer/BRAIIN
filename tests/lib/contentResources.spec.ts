@@ -176,9 +176,42 @@ describe('portfolio saves through save_portfolio() — one transaction', () => {
         message: 'new row violates check constraint "portfolio_slug_not_reserved"',
       },
     };
-    const res = await call(PATCH, ctx('admin', 'PATCH', { slug: 'all', version: 1 }));
+    // A body Zod accepts, so it is the DATABASE's refusal that gets mapped to the field.
+    const before = rpcCalls.length;
+    const res = await call(PATCH, ctx('admin', 'PATCH', { year: 2025, version: 1 }));
+    expect(rpcCalls.length).toBe(before + 1);
     expect(res.status).toBe(422);
-    expect(JSON.stringify(res.body)).toContain('slug');
+    expect(res.body['field']).toBe('slug');
+    expect(String(res.body['detail'])).toContain('reserved');
+    // …and Zod refuses "all" before any database call.
+    const n = rpcCalls.length;
+    expect((await call(PATCH, ctx('admin', 'PATCH', { slug: 'all', version: 1 }))).status).toBe(
+      422,
+    );
+    expect(rpcCalls.length).toBe(n);
+  });
+
+  it('a service listed twice is refused on the services field, before the database', async () => {
+    const { PATCH } = itemRoutes(R.portfolioResource);
+    const n = rpcCalls.length;
+    const res = await call(PATCH, ctx('admin', 'PATCH', { serviceIds: [SVC, SVC], version: 1 }));
+    expect(res.status).toBe(422);
+    expect(JSON.stringify(res.body)).toContain('serviceIds');
+    expect(rpcCalls.length).toBe(n);
+  });
+
+  it('a save of an already-published row keeps its FIRST publish date', async () => {
+    stored = {
+      published_at: '2026-06-01T00:00:00Z',
+      title: t('x'),
+      project_type: t('y'),
+      poster_media_id: MEDIA,
+      results: [],
+      is_placeholder: false,
+    };
+    const { PATCH } = itemRoutes(R.portfolioResource);
+    await call(PATCH, ctx('admin', 'PATCH', { status: 'published', version: 1 }));
+    expect(rpcCalls.at(-1)?.args['p_values']).not.toHaveProperty('published_at');
   });
 
   it('loads the child sets back in order, for the form', () => {
@@ -275,6 +308,33 @@ describe('statistics: the displayed value is the number plus its suffix', () => 
       placementLabels: row['placement_labels'],
     });
     expect(parsed.placementLabels).toEqual({ about: t('Delivered') });
+  });
+});
+
+describe('per-page statistic labels are validated as a list', () => {
+  it('refuses a page listed twice and a row with no page', async () => {
+    const { StatisticUpdateSchema } = await import('@schemas/admin');
+    const twice = StatisticUpdateSchema.safeParse({
+      version: 1,
+      placementLabels: [
+        { placement: 'about', label: t('a') },
+        { placement: 'about', label: t('b') },
+      ],
+    });
+    expect(twice.success).toBe(false);
+    const noPage = StatisticUpdateSchema.safeParse({
+      version: 1,
+      placementLabels: [{ label: t('a') }],
+    });
+    expect(noPage.success).toBe(false);
+  });
+
+  it('a number and its suffix travel together', async () => {
+    const { StatisticUpdateSchema } = await import('@schemas/admin');
+    expect(StatisticUpdateSchema.safeParse({ version: 1, valueNumeric: 300 }).success).toBe(false);
+    expect(
+      StatisticUpdateSchema.safeParse({ version: 1, valueNumeric: 300, valueSuffix: null }).success,
+    ).toBe(true);
   });
 });
 

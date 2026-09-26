@@ -109,7 +109,13 @@ for (const [slug, ui] of Object.entries(RESOURCE_UI)) {
         // (`preview` → preview_video_path, preview_start_s, …).
         if (config!.childKeys?.includes(field.name)) continue;
         const column = columnOf(field);
-        const written = Object.keys(row).some((k) => k === column || k.startsWith(`${column}_`));
+        // Only a clip flattens into prefixed columns (preview → preview_video_path, …); every
+        // other field needs its exact column (`body_html` must not stand in for `body`).
+        const keys = Object.keys(row);
+        const written =
+          field.kind === 'clip'
+            ? keys.some((k) => k.startsWith(`${column}_`))
+            : keys.includes(column);
         expect(written, `${slug}.${field.name} → ${column}`).toBe(true);
       }
     });

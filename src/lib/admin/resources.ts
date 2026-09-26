@@ -99,7 +99,11 @@ function withBodyHtml(values: Input, input: Input): Input {
 const statusOf = (input: Input): ContentStatus | undefined =>
   typeof input['status'] === 'string' ? (input['status'] as ContentStatus) : undefined;
 
-/** Publishing sets published_at once and never rewrites it (truthful dates, Pillar 3). */
+/**
+ * A save with status `published` carries a publish date; the kernel drops it again when the
+ * row already has one (resource.ts PATCH), so the FIRST publish date is never rewritten
+ * (truthful dates, Pillar 3).
+ */
 function publishStamp(values: Input): Input {
   return values['status'] === 'published'
     ? { ...values, published_at: new Date().toISOString() }
@@ -301,6 +305,7 @@ const PORTFOLIO_CONSTRAINTS: ConstraintFields = {
   },
   portfolio_media_one_hero: { field: 'media', message: 'a case study has one hero item at most' },
   portfolio_media_one_final: { field: 'media', message: 'a case study has one final film at most' },
+  portfolio_services_pkey: { field: 'serviceIds', message: 'a service is listed twice' },
   portfolio_media_breakdown_kind: {
     field: 'media',
     message: 'a breakdown item needs its kind (sketch / BTS / process); other items none',
@@ -675,7 +680,9 @@ export const sectorResource: ResourceConfig = {
   entity: 'sector',
   // A taxonomy, like categories (§5 "Categories management": Admin + Content Creator).
   writeCap: 'categories.manage',
-  readCaps: ['categories.manage', 'portfolio.write'],
+  // seo.entityMeta: SEO reviews a case study (portfolio readCaps) and its Industry picker
+  // loads from here. RLS already admits every staff role (sectors_read).
+  readCaps: ['categories.manage', 'portfolio.write', 'seo.entityMeta'],
   listColumns: 'id,slug,name,visible,sort_order,version,updated_at',
   columns: 'id,slug,name,visible,sort_order,version,created_at,updated_at',
   orderBy: { column: 'sort_order', ascending: true },
@@ -689,15 +696,35 @@ export const sectorResource: ResourceConfig = {
       visible: 'visible',
       sortOrder: 'sort_order',
     }),
+  constraintFields: {
+    sectors_slug_check: {
+      field: 'slug',
+      message: 'lowercase letters, digits and hyphens, at most 64',
+    },
+    sectors_tenant_id_slug_key: { field: 'slug', message: 'another sector already uses this slug' },
+  },
 };
 
 export const clientResource: ResourceConfig = {
   table: 'clients',
   entity: 'client',
   writeCap: 'portfolio.write',
+  // Read by SEO too: the case-study editor's Client picker (RLS: clients_read, staff).
+  readCaps: ['portfolio.write', 'seo.entityMeta'],
   // `visible` IS the public-disclosure permission: turning it on names a client on the
   // site, so it is gated like a publish (content.publish + the rules below).
   publishFlag: 'visible',
+  constraintFields: {
+    clients_slug_check: {
+      field: 'slug',
+      message: 'lowercase letters, digits and hyphens, at most 64',
+    },
+    clients_tenant_id_slug_key: { field: 'slug', message: 'another client already uses this slug' },
+    clients_website_url_check: {
+      field: 'websiteUrl',
+      message: 'an https:// address, at most 300 characters',
+    },
+  },
   listColumns: 'id,slug,name,show_in_marquee,visible,is_placeholder,sort_order,version,updated_at',
   columns:
     'id,slug,name,logo_media_id,website_url,show_in_marquee,visible,is_placeholder,sort_order,' +
@@ -746,7 +773,15 @@ export const testimonialResource: ResourceConfig = {
     },
     testimonials_one_per_project: {
       field: 'portfolioId',
-      message: 'that case study already has a published quote',
+      message: 'that case study already has a published or scheduled quote',
+    },
+    testimonials_slug_check: {
+      field: 'slug',
+      message: 'lowercase letters, digits and hyphens, at most 64',
+    },
+    testimonials_tenant_id_slug_key: {
+      field: 'slug',
+      message: 'another quote already uses this slug',
     },
   },
   toRow: (input) =>

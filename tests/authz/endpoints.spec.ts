@@ -294,7 +294,15 @@ const CASES: Case[] = [
     load: () => import('@/pages/api/admin/sectors/index'),
     method: 'GET',
     url: '/api/admin/sectors',
-    allow: ['admin', 'content_creator'],
+    // SEO: the case-study editor's Industry picker.
+    allow: ['admin', 'content_creator', 'seo'],
+  },
+  {
+    name: 'clients list',
+    load: () => import('@/pages/api/admin/clients/index'),
+    method: 'GET',
+    url: '/api/admin/clients',
+    allow: ['admin', 'content_creator', 'seo'],
   },
   {
     name: 'sectors create',

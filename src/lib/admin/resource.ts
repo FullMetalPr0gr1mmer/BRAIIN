@@ -217,7 +217,10 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
         action: `${config.entity}.create`,
         entityType: config.entity,
         entityId: String(row['id']),
-        detail: { status: values['status'] ?? null },
+        detail: {
+          status: values['status'] ?? null,
+          children: (config.childKeys ?? []).filter((key) => payload[key] !== undefined),
+        },
       });
       await config.afterWrite?.({ auth, sb, row, input: payload, operation: 'create' });
       return shape(config, row);
@@ -257,10 +260,21 @@ export function itemRoutes(config: ResourceConfig): {
       assertTransition(auth, config, payload);
 
       const values = config.toRow(payload);
-      // A PATCH of child sets alone (a case study's services) is an update with no column.
-      const childOnly = (config.childKeys ?? []).some((key) => payload[key] !== undefined);
-      if (Object.keys(values).length === 0 && !childOnly) {
+      // Child sets (a case study's services/media) are written by `persist` outside toRow:
+      // a PATCH of those alone is a real edit, and the audit names them.
+      const childFields = (config.childKeys ?? []).filter((key) => payload[key] !== undefined);
+      if (Object.keys(values).length === 0 && childFields.length === 0) {
         throw new ValidationError('no updatable fields supplied');
+      }
+
+      let stored: Row | null = null;
+      // The FIRST publish date is permanent (truthful dates, Pillar 3): a save of a row
+      // that already has one — a typo fix on a published post — must not re-stamp it.
+      if ('published_at' in values) {
+        stored = await getRow<Row>(sb, config.table, auth, id, config.columns);
+        if (stored['published_at'] !== null && stored['published_at'] !== undefined) {
+          delete values['published_at'];
+        }
       }
 
       if (config.assertPublishable || config.assertWritable) {
@@ -268,7 +282,7 @@ export function itemRoutes(config: ResourceConfig): {
         // PATCH that only flips `status` must satisfy the publish preconditions held in
         // the columns it did not send — and one that leaves `status` out on an already
         // scheduled/published row must not strip them either.
-        const stored = await getRow<Row>(sb, config.table, auth, id, config.columns);
+        stored ??= await getRow<Row>(sb, config.table, auth, id, config.columns);
         const merged = { ...stored, ...values };
         await config.assertWritable?.(merged, { auth, sb, changed: values });
         if (config.assertPublishable && isLive(config, merged)) {
@@ -296,7 +310,7 @@ export function itemRoutes(config: ResourceConfig): {
         entityId: id,
         // Field NAMES, never values — this table is read by anyone with `audit.view`
         // and some of these entities carry PII-adjacent copy.
-        detail: { fields: Object.keys(values), version: payload.version },
+        detail: { fields: [...Object.keys(values), ...childFields], version: payload.version },
       });
       await config.afterWrite?.({ auth, sb, row, input: payload, operation: 'update' });
       return shape(config, row);
