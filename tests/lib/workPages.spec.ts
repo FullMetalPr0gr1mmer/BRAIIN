@@ -26,9 +26,21 @@ const card = (slug: string, over: Partial<PortfolioCard> = {}): PortfolioCard =>
   ...over,
 });
 const svc = (slug: string) => ({ slug, title: t(slug), label: t(slug), order: 1 });
+const poster = (id: string): PortfolioCard['poster'] => ({
+  id,
+  src: { src: `/${id}.jpg`, width: 1280, height: 720, format: 'jpg' },
+  width: 1280,
+  height: 720,
+  alt: { en: '', ar: '' },
+});
 
 const CARDS = [
-  card('the-rider', { isFeatured: true, year: 2026, services: [svc('videography')] }),
+  card('the-rider', {
+    isFeatured: true,
+    year: 2026,
+    services: [svc('videography')],
+    poster: poster('rider'),
+  }),
   card('dust-trail', { services: [svc('social-media')] }),
 ];
 
@@ -99,8 +111,23 @@ describe('loadOurWork', () => {
     const page = await loadOurWork(url(), {} as never, 'ar');
     expect(byType(page.sections, 'workHero')?.data).toEqual({ cards: CARDS });
     expect(byType(page.sections, 'projectGrid')?.data).toEqual({ cards: CARDS, selection: {} });
+    // the composition carries no workIntro, so no section receives its link
+    expect(page.sections.some((s) => s.type === 'workIntro')).toBe(false);
     expect(byType(page.sections, 'cta')?.data).toBeUndefined();
     expect(byType(page.sections, 'workHero')?.props).toEqual({ tag: t('Latest') });
+  });
+
+  it('the intro link targets the grid only when the grid will render (never a dead anchor)', async () => {
+    const link = async () =>
+      byType((await loadOurWork(url(), {} as never, 'en')).sections, 'workIntro')?.data;
+    expect(await link()).toEqual({ linkHref: '#projects' });
+    authored = [{ type: 'workIntro' }, { type: 'projectGrid', visible: false }];
+    expect(await link()).toEqual({ linkHref: '/portfolio/all' });
+    authored = [];
+    cards = [card('dust-trail')]; // published, none featured → no grid
+    expect(await link()).toEqual({ linkHref: '/portfolio/all' });
+    cards = [];
+    expect(await link()).toEqual({ linkHref: null });
   });
 
   it("keys the head's SEO override to the composed page, with a localised breadcrumb", async () => {
@@ -147,6 +174,18 @@ describe('header variant — overlay only over a dark opening', () => {
     expect((await loadOurWork(url(), {} as never, 'en')).header).toBe('overlay');
     cards = [];
     expect((await loadOurWork(url(), {} as never, 'en')).header).toBe('solid');
+  });
+
+  it('Our Work: solid when the banner project has no poster (WorkHero renders nothing)', async () => {
+    // the latest has a clip but no poster: no banner, so no dark opening
+    cards = [
+      card('the-rider', { year: 2026, poster: null }),
+      card('dust-trail', { poster: poster('d') }),
+    ];
+    expect((await loadOurWork(url(), {} as never, 'en')).header).toBe('solid');
+    // pinning the one WITH a poster brings the banner, and the overlay, back
+    authored = [{ type: 'workHero', props: { projectSlug: 'dust-trail' } }];
+    expect((await loadOurWork(url(), {} as never, 'en')).header).toBe('overlay');
   });
 
   it('Our Work: solid when the composition does not open on the banner', async () => {

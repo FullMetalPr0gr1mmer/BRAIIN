@@ -154,7 +154,7 @@ function enhance(root: HTMLElement): void {
         if (current) {
           const label = labelOf(facet, current);
           if (text) text.textContent = label;
-          link.setAttribute('aria-label', removeLabel(label, locale));
+          link.setAttribute('aria-label', removeLabel(facet, label, locale));
         } else {
           link.removeAttribute('aria-label');
         }
@@ -193,12 +193,16 @@ function enhance(root: HTMLElement): void {
     }
   };
 
-  const commit = (next: FacetSelection) => {
+  // `used` is the control the visitor operated. It is passed in rather than read from
+  // document.activeElement after render(): Chromium blurs a focused element the moment
+  // its OWN `hidden` is set (the removed pill), so activeElement is already the body by
+  // then; and Safari (and Firefox on macOS) never focus a link on click at all. Either
+  // way the visitor would be stranded on <body>.
+  const commit = (next: FacetSelection, used: EventTarget) => {
     state = next;
     render();
     history.replaceState(history.state, '', `${base}${facetQuery(state)}${location.hash}`);
-    const focused = document.activeElement;
-    if (focused instanceof HTMLElement && root.contains(focused) && focused.closest('[hidden]')) {
+    if (used instanceof HTMLElement && root.contains(used) && used.closest('[hidden]')) {
       count?.focus();
     }
   };
@@ -224,7 +228,7 @@ function enhance(root: HTMLElement): void {
     if (facet !== 'all' && !isFacet(facet)) return;
     if (facet !== 'all' && value !== '' && !known[facet]?.has(value)) return;
     event.preventDefault();
-    commit(nextSelection(state, facet, value));
+    commit(nextSelection(state, facet, value), link);
     if (link.classList.contains('ftag')) revealBar();
   });
 
@@ -235,7 +239,7 @@ function enhance(root: HTMLElement): void {
     if (!isFacet(facet)) return;
     const value = select.value;
     if (value !== '' && !known[facet]?.has(value)) return;
-    commit(withFacet(state, facet, value));
+    commit(withFacet(state, facet, value), select);
   });
 
   root

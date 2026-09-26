@@ -12,6 +12,7 @@ import { expect, test } from '@playwright/test';
 const PAGE = {
   en: {
     path: '/about',
+    heroFont: '/fonts/archivo-var-latin.woff2',
     h1: 'Born in Jeddah. Built to move ideas from the brain into the real world.',
     accent: 'from the brain into the real world.',
     leadershipHeading: 'Meet our leadership team',
@@ -28,6 +29,8 @@ const PAGE = {
   },
   ar: {
     path: '/ar/about',
+    // The weight-600 h1 renders with Almarai 700 — not Home's 800 (CLS, docs/fonts.md).
+    heroFont: '/fonts/almarai-700-arabic.woff2',
     h1: 'وُلدنا في جدة. وُجدنا لننقل الأفكار من الدماغ إلى أرض الواقع.',
     accent: 'من الدماغ إلى أرض الواقع.',
     leadershipHeading: 'تعرّف على فريق القيادة',
@@ -82,6 +85,15 @@ for (const locale of ['en', 'ar'] as const) {
       // The clip is a window of the showreel, mounted only by clips.ts.
       await expect(frame).toHaveAttribute('data-clip-start', '6.2');
       await expect(frame).toHaveAttribute('data-clip-end', '7.9');
+      // ...and not before `load`, so its bytes never compete with this poster.
+      await expect(frame).toHaveAttribute('data-clip-after-load', '');
+    });
+
+    test('exactly one font preload: the face the h1 renders in', async ({ request }) => {
+      const html = await (await request.get(P.path)).text();
+      const preloads = [...html.matchAll(/<link[^>]*rel="preload"[^>]*as="font"[^>]*>/g)];
+      expect(preloads).toHaveLength(1);
+      expect(preloads[0]![0]).toContain(`href="${P.heroFont}"`);
     });
 
     test('reach numbers and their About labels are in the served HTML', async ({ request }) => {
@@ -175,7 +187,10 @@ for (const locale of ['en', 'ar'] as const) {
       }
     });
 
-    test('Person JSON-LD names exactly the leaders shown, with their roles', async ({ page }) => {
+    test('no Person JSON-LD for a placeholder leader, though its card shows', async ({ page }) => {
+      // The six seeded leaders are placeholders ("Name Surname"): their cards render (the
+      // test above) but structured data never asserts them as staff (decision 36). Real
+      // leaders' nodes — jobTitle, sameAs, image — are tests/lib/aboutPage.spec.ts.
       await page.goto(P.path);
       const people = await page.$$eval('script[type="application/ld+json"]', (nodes) =>
         nodes
@@ -185,8 +200,8 @@ for (const locale of ['en', 'ar'] as const) {
           })
           .filter((d) => (d as { '@type'?: string })['@type'] === 'Person'),
       );
-      expect(people).toHaveLength(6);
-      expect((people[0] as { jobTitle?: string }).jobTitle).toBe(P.roles[0]);
+      await expect(page.locator('.leader')).toHaveCount(6);
+      expect(people).toHaveLength(0);
     });
 
     test('reduced motion: the h1 words are simply there', async ({ browser }) => {

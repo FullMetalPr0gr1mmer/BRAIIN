@@ -2,6 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { JsonLdNode } from '@/lib/seo/jsonld';
 import SeoHead from '@/components/SeoHead.astro';
+import type { HeroFace } from '@/lib/seo/fonts';
 import SiteHeader, { type HeaderVariant } from '@/components/SiteHeader.astro';
 import SiteFooter from '@/components/SiteFooter.astro';
 import ConsentBanner from '@/components/ConsentBanner.astro';
@@ -33,6 +34,9 @@ interface Props {
       study, with `case-study.css`). A known name, never a URL — the sheet is same-origin, so the
       CSP's `style-src 'self'` covers it with no nonce. */
   styles?: readonly RouteStylesheet[];
+  /** The Arabic hero face SeoHead preloads — the weight the route's above-the-fold heading
+      renders in (default `almarai-800`, Home's hero). EN always preloads Archivo. */
+  heroFace?: HeroFace;
 }
 
 /** Every route stylesheet in public/styles/ (a closed list: a typo fails `astro check`). */
@@ -51,6 +55,7 @@ const {
   header = 'solid',
   langHref,
   styles = [],
+  heroFace,
 } = Astro.props;
 const direction = dir(locale);
 ---
@@ -67,6 +72,7 @@ const direction = dir(locale);
       robots={robots}
       {...ogImage ? { ogImage } : {}}
       {...canonicalOverride ? { canonicalOverride } : {}}
+      {...heroFace ? { heroFace } : {}}
     />
     <link rel="stylesheet" href="/styles/global.css" />
     {styles.map((sheet) => <link rel="stylesheet" href={`/styles/${sheet}`} />)}

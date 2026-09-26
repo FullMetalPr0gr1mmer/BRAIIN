@@ -93,6 +93,26 @@ export function withHomeData<Card>(
   });
 }
 
+/** The in-page anchor of Our Work's featured grid (ProjectGrid.astro renders it). */
+export const PROJECTS_ANCHOR = '#projects';
+
+/**
+ * Where Our Work's intro link ("See the projects") points — the home hero CTA's rule. The
+ * design sends it to the featured grid below, which renders only when a published project
+ * is featured and the grid section is shown; otherwise it goes to All projects, and with
+ * nothing published at all (production before its content is approved) there is nowhere
+ * worth sending anyone: null, and the link is left out.
+ */
+export function workIntroLinkHref(
+  sections: readonly SectionData[],
+  featuredCount: number,
+  publishedCount: number,
+): typeof PROJECTS_ANCHOR | '/portfolio/all' | null {
+  const gridShown = sections.some((s) => s.type === 'projectGrid' && s.visible !== false);
+  if (gridShown && featuredCount > 0) return PROJECTS_ANCHOR;
+  return publishedCount > 0 ? '/portfolio/all' : null;
+}
+
 /**
  * The contact page (UI v2 PR9): banner hero → inquiry form → direct channels → FAQ.
  * Mirrored by the seeded composition (supabase/seed-data/52-contact.json;

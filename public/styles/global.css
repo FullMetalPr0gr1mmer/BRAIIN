@@ -1483,6 +1483,11 @@ html[dir='rtl'] .clients__head h2 {
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
   --marquee-duration: 34s;
+  /* The loop maths assume LTR (as the design does): under dir=rtl the max-content track is
+     right-aligned and overflows to the LEFT, so translateX(-50%) slides it away with nothing
+     entering — the row drained to empty every cycle on /ar. Each Arabic name is its own
+     bidi run, so it still shapes and reads correctly inside its chip. */
+  direction: ltr;
 }
 .marquee + .marquee {
   margin-top: clamp(14px, 2vh, 26px);
@@ -1552,6 +1557,10 @@ html[dir='rtl'] .marquee-item {
        wrapped layout it just renders the first and last names near-invisible */
     -webkit-mask-image: none;
     mask-image: none;
+  }
+  /* nothing animates here, so the static wrapped list reads in the page's direction again */
+  html[dir='rtl'] .marquee {
+    direction: rtl;
   }
   .marquee-track {
     animation: none;
@@ -1862,7 +1871,8 @@ html[dir='rtl'] .contact-form label {
 .contact-form textarea:focus {
   outline: none;
   border-color: var(--bs-cobalt);
-  background: rgba(2, 76, 255, 0.1);
+  /* colour only — the shorthand would reset the select's chevron (background-image) */
+  background-color: rgba(2, 76, 255, 0.1);
   box-shadow: 0 0 0 3px rgba(2, 76, 255, 0.18);
 }
 
@@ -1874,6 +1884,31 @@ html[dir='rtl'] .contact-form label {
 .contact-form select option {
   background: var(--bs-midnight);
   color: var(--bs-fg);
+}
+
+/* The design's select: no native control, a thin two-stroke chevron at the inline end
+   (.6 white on the dark field ≈ 7:1, above 1.4.11's 3:1). Longhands after the base
+   shorthand, so the resting background colour stays. */
+.contact-form select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-inline-end: 38px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(255, 255, 255, 0.6) 50%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.6) 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) 22px,
+    calc(100% - 14px) 22px;
+  background-size:
+    6px 6px,
+    6px 6px;
+  background-repeat: no-repeat;
+}
+html[dir='rtl'] .contact-form select {
+  background-position:
+    20px 22px,
+    26px 22px;
 }
 
 .contact-form textarea {
@@ -2780,9 +2815,11 @@ html[dir='rtl'] .touch-card__val {
    two read as one light band. */
 .social-strip--joined {
   /* The design's .social--joined: a rule above, inset by the page gutter (margin, so the
-     rule is inset too). Its bottom padding stays the strip's own. */
+     rule is inset too). No bottom padding: the enclosing .contact-touch padding ends the
+     band, as in the design (its .social--joined is not a .social). */
   margin: clamp(48px, 7vh, 90px) var(--bs-pad-x) 0;
   padding-block-start: clamp(44px, 6vh, 74px);
+  padding-block-end: 0;
   padding-inline: 0;
   border-block-start: 1px solid var(--bs-line-l);
 }
@@ -2898,8 +2935,12 @@ html[dir='rtl'] .faq-item__a p {
 }
 
 /* ---- Form: the full variant (/contact) — the design's two columns ---- */
+/* The design's .form fills the section wrap and has no margin of its own: the space above
+   is .sec-head's bottom margin, the space below the section's padding. */
 .contact-form--full {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: none;
+  margin-block: 0;
 }
 @media (max-width: 45rem) {
   .contact-form--full {
@@ -3953,7 +3994,8 @@ html[dir='rtl'] .sel-work__blurb {
   display: block;
   font-weight: 800;
 }
-.sel-work .facets {
+/* the featured project's meta only — the grid cards keep the base 18px */
+.sel-work__copy .facets {
   margin-top: 24px;
 }
 .sel-work__link {

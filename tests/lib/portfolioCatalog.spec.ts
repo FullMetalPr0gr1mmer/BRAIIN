@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { PortfolioCard } from '@/lib/data/portfolio';
 import {
   activeFacets,
+  bannerCard,
   catalogueOrder,
   facetOptions,
   facetQuery,
@@ -166,6 +167,33 @@ describe('orders', () => {
       'kitchen-hours',
       'notebook',
     ]);
+  });
+});
+
+describe('bannerCard (Our Work banner: WorkHero and the header variant ask the same)', () => {
+  const still = (id: string): PortfolioCard['poster'] => ({
+    id,
+    src: { src: `/${id}.jpg`, width: 1280, height: 720, format: 'jpg' },
+    width: 1280,
+    height: 720,
+    alt: { en: '', ar: '' },
+  });
+  const a = card({ slug: 'a', year: 2026, poster: still('a') });
+  const b = card({ slug: 'b', year: 2024, poster: still('b') });
+  const bare = card({ slug: 'bare', year: 2027, poster: null });
+
+  it('the latest project, or the pinned one when it is published', () => {
+    expect(bannerCard([b, a])?.slug).toBe('a');
+    expect(bannerCard([b, a], 'b')?.slug).toBe('b');
+    expect(bannerCard([b, a], 'unpublished')?.slug).toBe('a');
+    expect(bannerCard([b, a], 42)?.slug).toBe('a');
+  });
+
+  it('no banner without a poster — a clip alone would open the page on a blank block', () => {
+    expect(bannerCard([bare, a])).toBeNull();
+    expect(bannerCard([bare, a], 'bare')).toBeNull();
+    expect(bannerCard([bare, a], 'a')?.slug).toBe('a');
+    expect(bannerCard([])).toBeNull();
   });
 });
 

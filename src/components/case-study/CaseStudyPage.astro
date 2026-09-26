@@ -41,10 +41,13 @@ const { study, next, quote, head } = page;
 const { seo, identity } = head;
 
 // The banner: the project's hero frame and loop, else its card poster and preview (the
-// mockup's own fallback for projects without a written case study).
+// mockup's own fallback for projects without a written case study). It needs a frame: a
+// clip alone would pin a blank dark block until the loop mounts after `load` (and forever
+// under reduced motion or Save-Data) — the rule Our Work's banner follows (bannerCard).
+// With no frame the black title band opens the page instead (design-port decision 65).
 const bannerImage = study.hero?.image ?? study.poster;
 const bannerClip = study.hero?.clip ?? study.preview;
-const hasBanner = Boolean(bannerImage || bannerClip?.path);
+const hasBanner = Boolean(bannerImage);
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const logicalPath = `/portfolio/${study.slug}`;

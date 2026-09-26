@@ -106,8 +106,10 @@ existing global.css utilities.
     whenever the table was empty — a claim no editor could withdraw. The names now come
     only from `clients` rows that are `visible` (the disclosure permission, enforced by
     RLS) and `show_in_marquee`, in each locale's spelling (`partner_logos` held one English
-    name per row). "Since 2019" is the identity's `founded_year` (Arabic-Indic in Arabic,
-    as the design writes it); no year, no note. The partner-logos admin is retired (its
+    name per row). The track runs `direction: ltr` as the design's does (the loop maths
+    assume it; each Arabic name is its own bidi run), flipping back to RTL only in the
+    reduced-motion static list. "Since 2019" is the identity's `founded_year` (Arabic-Indic
+    in Arabic, as the design writes it); no year, no note. The partner-logos admin is retired (its
     table stays until the contract migration; `export-backup` still dumps it).
 21. **Selected work picks among the featured projects only.** Default: the first by
     `sort_order` is the featured project, the next two the cards; `featuredSlug` /
@@ -128,7 +130,11 @@ existing global.css utilities.
     and a server 422 now names the refused schema keys (never their values, never the
     honeypot) so those fields are marked too. On success the fields give way to the
     confirmation panel, which takes focus. Error text uses `--bs-err-soft` (the audited
-    token on black). The consent label says "inquiry" in both forms.
+    token on black). The consent label says "inquiry" in both forms. The selects carry the
+    design's chevron (`appearance: none`, mirrored in RTL), but unlike the mockup it stays
+    visible on focus (the focus rule sets `background-color`, not the shorthand). The
+    invalid-form message names no direction ("the marked fields") — the status line renders
+    below every field it refers to (WCAG 1.3.3).
 23. **The contact-form contract is one list** (`src/lib/forms/contactPayload.ts`): the
     fields per variant (the markup renders from it) and their LeadInputSchema keys.
     `tests/lib/contactForm.spec.ts` asserts every key it can post is a schema key — the
@@ -176,7 +182,13 @@ names only, validated `^[a-z0-9-]+\.css$`). The Klein social variant stays in gl
     is empty, as in the mockup (a showreel frame beside the manifesto). The code default
     carries no media — the poster (the p2 still) and the 6.2–7.9 s clip are seeded section
     content — so an unseeded page renders the section text-only rather than falling back to a
-    hard-coded image.
+    hard-coded image. Its in-view clip waits for `load` before it is observed
+    (`data-clip-after-load`, set by MediaFrame on a `priority` in-view frame), so the
+    showreel's bytes never compete with the poster — the rule MediaBanner and the hero apply.
+    The page's one font preload is the face its h1 renders in: `/ar/about` preloads Almarai
+    **700** (the weight-600 h1 resolves to it), not Home's 800 — preloading 800 left the 700
+    face to swap in late and shift the split heading (CLS 0.14 > 0.1). BaseLayout `heroFace`;
+    docs/fonts.md step 3.
 29. **Leadership is its own section type (`leadership`)**, not a `team` variant: `team` stays
     the table-backed author grid with no content, and the slider's copy (tag, heading,
     accent, text) is typed content like every other UI v2 band. The people are
@@ -209,10 +221,12 @@ names only, validated `^[a-z0-9-]+\.css$`). The Klein social variant stays in gl
     Arabic outline over joined glyphs is flagged for the PR14 visual review.
 35. **Certifications and the CTA band are dropped from the About composition** (the mockup
     has neither); both remain section types an editor can add back.
-36. **Person JSON-LD names only the leaders the page shows** (none when the leadership
-    section is hidden), with `jobTitle` and `sameAs` (LinkedIn). The seeded placeholders are
-    drafts in production, so no placeholder person is ever published there; dev/CI/staging
-    carry their "Name Surname" nodes.
+36. **Person JSON-LD names only the real leaders the page shows** (none when the leadership
+    section is hidden), with `jobTitle` and `sameAs` (LinkedIn). A placeholder row
+    (`is_placeholder`) never emits a Person node — in any environment, including production
+    once the 0027 override and runbook §6c publish the seeded "Name Surname" leaders: their
+    cards show (the owner's decision), but structured data is read as fact about real people
+    at the studio. The legacy `team` grid's Person nodes follow the same rule.
 37. **The About manifesto is the About page's own copy**, verbatim (it differs from the home
     "why us" columns: "between vendors", no "Arabic, English, or…" sentence), and the h1's
     accent includes the final period, as the mockup's `<em>` does.
@@ -246,7 +260,13 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     the values the page carries). The mockup rebuilt the bar and grid with `innerHTML` on
     every change, which dropped keyboard focus to `<body>` and reflected `?year=` into the
     page (a DOM XSS). Here focus stays on the control used, or moves to the result count
-    when that control disappears; the count is a polite live region.
+    when that control disappears (decided from the control the visitor operated, not
+    `document.activeElement`: Chromium blurs a pill the moment its own `hidden` is set,
+    and Safari never focuses a clicked link); the count is a polite live region. An
+    active pill is named by its visible text first, then the action — "Service:
+    Branding, remove filter" / "الخدمة: الهوية البصرية، إزالة الفلتر" (WCAG 2.5.3 Label in
+    Name; the mockup had no name, and "Remove filter: Branding" dropped the facet word a
+    speech-input user sees).
 39. **Only values a published project carries become a filter** (`parseFacets`); the first
     value of a repeated key wins. Any facet parameter — valid or not — makes the response
     `private, no-store`; only the bare URL is edge-cached (Tier A), and the canonical is
@@ -265,8 +285,11 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     a stronger bottom scrim under it, and no 4.5 s "rest" fade to half opacity. Contrast is
     gated for the worst case (a white frame) in `scripts/contrast-audit.mjs`. Its entrance
     and pulsing dot stop under reduced motion; the dot and the banner loop are EXC-007
-    surfaces; the loop plays under EXC-009 and pauses once the banner is covered, when the
-    caption also leaves the tab order.
+    surfaces; the loop plays under EXC-009 and pauses once the whole banner is covered. The
+    caption leaves paint and the tab order earlier — as soon as the next section's edge
+    passes the caption's own top, i.e. once it is entirely painted over (WCAG 2.4.11
+    Focus Not Obscured); measured against the whole banner, it stayed focusable while
+    hidden for most of the banner's height.
 44. **No parallax** on the banner (the mockup's JS translate on scroll) — dropped with Lenis;
     the banner is pinned (sticky) so the next section still slides over it. **Not pinned on
     a viewport shorter than 480px** (400% zoom, a landscape phone): the banner's 400px floor
@@ -290,7 +313,11 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     with none the statement stands alone.
 50. **Empty data hides cleanly**: no featured project → no grid; fewer than two Our Work
     counters → no numbers; no published quote (production) → no quotes; neither → no proof
-    band at all; no project → no banner and no catalogue.
+    band at all; no project → no banner and no catalogue. The banner also needs its
+    project's poster (`bannerCard`): a clip alone opened the page on a blank dark block
+    (and never plays under reduced motion or Save-Data). The intro's "See the projects"
+    follows the home CTA's rule (decision 19, `workIntroLinkHref`): `#projects` only when
+    the grid renders, else All projects, and no link at all while nothing is published.
 51. **Discovery lists use the case-study page's own loader and schema**
     (`getCaseStudyIndex`: the `getCaseStudy` select + `CaseStudyRowSchema`), so the sitemap
     and llms.txt never list a case study the page would 404 on. llms.txt names Our Work and
@@ -300,7 +327,8 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
 53. **The overlay header needs a dark opening.** Both pages use the transparent overlay
     header over their banner / black page head (the mockup's work-page scrim is carried by
     the banner's own top gradient); when the page does not open on one — no published
-    project yet, or an editor hid or moved the head — it takes the solid bar instead of
+    project (or none with a poster: the route asks `bannerCard`, the same call WorkHero
+    makes), or an editor hid or moved the head — it takes the solid bar instead of
     sitting white-on-white over the proof band. `data-hero` marks the element the header
     measures to turn solid.
 54. **The `cta` section type renders LeadBand** (tag, outlined accent, `/contact#inquiry`,
@@ -371,7 +399,11 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     again on read) — the design's `wa.me/9665XXXXXXXX` never ships. The lead "No form, no
     gatekeeping." is kept verbatim although it sits under a form (flagged, design copy).
 63. **The joined social strip keeps the design's inset rule** (the gutter is a margin, so
-    the line is inset too). The contact-only always-on `.nav::before` gradient is not
+    the line is inset too) and drops the standalone strip's bottom padding — the
+    `.contact-touch` padding ends the band, as the design's `.social--joined` (not a
+    `.social`) does. The full form fills the section wrap with no margin of its own
+    (`max-width: none; margin-block: 0`), as the design's `.form`: the shared 60rem cap
+    and 1.5rem margins had left it ~200px short of the head at ≥1280px. The contact-only always-on `.nav::before` gradient is not
     carried: the overlay header and the hero scrim already hold the nav's contrast.
 
 ## Case study (PR11)
@@ -398,7 +430,9 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     next → lead band. The page and the discovery index (sitemap, llms.txt) share one parse
     path (`parseCaseStudies`), so neither lists a slug that answers 404.
 65. **Banner fallback**: the hero frame and loop, else the card poster and preview (the
-    mockup's own fallback). With no image at all there is no banner; the black title band
+    mockup's own fallback). With no frame there is no banner, even when a clip exists (a clip
+    alone would pin a blank dark block until the loop mounts; Our Work's `bannerCard` follows
+    the same rule); the black title band
     opens the page, carries `data-hero` for the overlay header, and its h1 drops the reveal
     (it may be the LCP element).
 66. **The h1 is the project's name**; its type lives in the keyword chips, which fall back

@@ -2,14 +2,15 @@
 import type { Locale } from '@schemas/primitives';
 import type { LocalizedText } from '@schemas/content';
 import { getPortfolioCards, type PortfolioCard } from '@/lib/data/portfolio';
-import { latestOrder } from '@/lib/portfolio/catalog';
+import { bannerCard } from '@/lib/portfolio/catalog';
 import { pickLocale, localizedHref } from '@/lib/i18n';
 import MediaBanner from '@/components/media/MediaBanner.astro';
 
 // Our Work's opening banner (UI v2, the `workHero` section): the latest project full
 // bleed — its poster (the page's LCP) and its preview loop — under a small glass caption
 // linking to the case study. "Latest" = newest year, then catalogue order (The Rider in
-// the design); `projectSlug` pins one instead. Nothing published → nothing rendered.
+// the design); `projectSlug` pins one instead. Nothing published, or that project has no
+// poster → nothing rendered (`bannerCard`, which the route also asks for the header).
 //
 // Deviations from the mockup (docs/design-port-2026-09.md): the caption's glass is .45
 // black (not .26) with a bottom scrim under it, and its meta line .7 white (not .58) —
@@ -34,8 +35,7 @@ const STR = {
 }[locale];
 
 const cards = Astro.props.data?.cards ?? (await getPortfolioCards());
-const card =
-  (projectSlug ? cards.find((c) => c.slug === projectSlug) : undefined) ?? latestOrder(cards)[0];
+const card = bannerCard(cards, projectSlug);
 
 const title = card ? pickLocale(card.title, locale) : '';
 const type = card?.projectType ? pickLocale(card.projectType, locale) : null;

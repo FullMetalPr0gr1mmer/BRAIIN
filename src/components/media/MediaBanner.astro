@@ -62,6 +62,10 @@ const playable = clip?.path ? clip : null;
   for (const banner of document.querySelectorAll<HTMLElement>('[data-banner]')) {
     const media = banner.querySelector<HTMLElement>('.mbanner__media');
     const video = media?.dataset.videoSrc ? media : null;
+    // What the slot put on top (the glass caption).
+    const slotted = [...banner.children].filter(
+      (el): el is HTMLElement => el instanceof HTMLElement && el !== media,
+    );
 
     // The loop waits for `load` so its bytes never compete with the poster (the LCP).
     if (video) {
@@ -70,16 +74,24 @@ const playable = clip?.path ? clip : null;
       else addEventListener('load', start, { once: true });
     }
 
-    // Pinned (sticky), so it never leaves the viewport on its own: it is "gone" once the
-    // sections after it have scrolled over it completely. Then its content leaves paint
-    // and the tab order (a focusable caption behind an opaque section is WCAG 2.4.11
-    // territory) and the loop pauses. The banner opens its page (offsetTop of a stuck
-    // element is its STUCK position, so it is not used): covered = scrolled past its height.
+    // Pinned (sticky), so it never leaves the viewport on its own: the sections after it
+    // scroll over it. The banner opens its page (offsetTop of a stuck element is its STUCK
+    // position, so it is not used), so the next section's top sits at height − scrollY.
+    //   * The slotted content leaves paint and the tab order (`is-cap-covered`) the moment
+    //     that edge passes ITS top — it is then entirely painted over, and a focusable
+    //     caption behind an opaque section fails WCAG 2.4.11. Measured against the whole
+    //     banner instead, a caption near the bottom stayed focusable while hidden for most
+    //     of the banner's height (Shift+Tab back from the next section landed on it).
+    //   * The loop pauses only once the whole banner is covered (`is-covered`).
     let covered = false;
     let ticking = false;
     const update = () => {
       ticking = false;
-      const isCovered = window.scrollY >= banner.offsetHeight;
+      const y = window.scrollY;
+      const height = banner.offsetHeight;
+      const top = slotted.length ? Math.min(...slotted.map((el) => el.offsetTop)) : 0;
+      banner.classList.toggle('is-cap-covered', y >= height - top);
+      const isCovered = y >= height;
       if (isCovered === covered) return;
       covered = isCovered;
       banner.classList.toggle('is-covered', covered);

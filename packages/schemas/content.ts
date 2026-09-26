@@ -98,6 +98,8 @@ export const TeamMemberRowSchema = z.object({
   role: LocalizedTextSchema.nullable(),
   linkedin_url: z.string().nullable(),
   is_leadership: z.boolean(),
+  /** A seeded design placeholder (0023). Shown under the 0027 override; never a Person node. */
+  is_placeholder: z.boolean(),
   portrait: PublicMediaRowSchema.nullable(),
 });
 export type TeamMemberRow = z.infer<typeof TeamMemberRowSchema>;
