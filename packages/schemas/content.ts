@@ -276,7 +276,13 @@ export type PortfolioMediaRow = z.infer<typeof PortfolioMediaRowSchema>;
 
 /** A card plus the case-study body (`/portfolio/[slug]`). */
 export const CaseStudyRowSchema = PortfolioCardRowSchema.extend({
-  body_html: LocalizedProseSchema.nullable(),
+  /**
+   * The body's Tiptap SOURCE (locale-keyed JSON), not the `body_html` cache: the public
+   * page renders it through the allowlist renderer (CLAUDE.md Pillar 1, "sanitised on
+   * write AND render"). Each locale is validated by that renderer (an invalid doc renders
+   * ''), so a malformed body drops the body — never the whole case study.
+   */
+  body: z.object({ en: z.unknown().optional(), ar: z.unknown().optional() }).nullable().catch(null),
   lead: LocalizedTextSchema.nullable(),
   goal: LocalizedTextSchema.nullable(),
   result: LocalizedTextSchema.nullable(),

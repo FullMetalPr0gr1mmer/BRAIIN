@@ -268,7 +268,12 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     surfaces; the loop plays under EXC-009 and pauses once the banner is covered, when the
     caption also leaves the tab order.
 44. **No parallax** on the banner (the mockup's JS translate on scroll) — dropped with Lenis;
-    the banner is pinned (sticky) so the next section still slides over it.
+    the banner is pinned (sticky) so the next section still slides over it. **Not pinned on
+    a viewport shorter than 480px** (400% zoom, a landscape phone): the banner's 400px floor
+    would never scroll past, so its bottom-anchored caption — the only place the teaser,
+    client and year appear — was covered before it was ever seen (WCAG 1.4.10 Reflow;
+    `banner.css`). The contact `.hero--banner` has the same pre-existing root cause
+    (global.css, from main) and is left for a follow-up.
 45. **The filter chip count is .6 white** (mockup .45 = 4.4:1 at 11px); the `fb__lbl`, back
     link, lead and counts use `--bs-muted` for the mockup's `--dim-d` (decision 10).
 46. **The All projects h1 has no scroll reveal** (the mockup's `.rv`): it is the page's
@@ -402,7 +407,12 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     links into All projects, "Industry" = the sector. The back link keeps the mockup's
     target, Our Work's grid (`/portfolio#projects`).
 67. **Overview headings are real h2s** (the mockup's were divs). Each block hides when
-    empty; the sanitised `body_html` cache, when a project has one, follows the summary.
+    empty; the body, when a project has one, follows the summary. **It is rendered at
+    render time from the Tiptap JSON (`body`) by the allowlist renderer** (`renderBody`,
+    `src/lib/data/portfolio.ts`), not read from the `body_html` cache: the database accepts
+    that cache from a direct PostgREST / `rpc/save_portfolio` write that skips the admin
+    API's sanitiser, and Pillar 1 is "sanitised on write AND render". The cost lands on an
+    edge-cache miss only. BlogDetail/ServiceDetail still emit their cache — follow-up.
 68. **The final film is a muted in-view loop** (30 % visible, the mockup's threshold) and
     never plays on touch, under reduced motion or with Save-Data. The mockup's in-place
     "Sound on" toggle is not shipped: sound, captions (WCAG 1.2.2) and a pause control
@@ -445,7 +455,8 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
 76. **Metadata**: the title is the mockup's own `document.title` — "<name> | <type>" under
     the brand template; the description is the teaser, else the summary (strictly in the
     page's language), else the mockup's generic line (`CASE_STUDY_META`; the Arabic is ours
-    — owner review).
+    — owner review). The CreativeWork `description` is the same text with `%brand%`
+    filled in (`caseSchemaDescription`) — the JSON-LD builder substitutes nothing.
 77. **Cache**: Tier A, tagged `portfolio:<slug>`, `portfolio:all` (the next project's card),
     `sectors:all`, `clients:all`, `services:all`, `testimonials:all`.
 78. **The banner's CSS is its own route sheet** (`banner.css`), linked by Our Work, All
@@ -454,7 +465,8 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
 79. **Dropped with Lenis, as on Our Work**: the banner parallax, the caption's rest fade,
     the hero loop ignoring reduced motion. Digits stay Latin in Arabic for scope numbers,
     result values, the film length and counts (decision 5); result values are LTR-isolated
-    so "+XX%" keeps its sign in front.
+    so "+XX%" keeps its sign in front, and realigned to the right in Arabic
+    (`text-align: end`) so they sit over their labels.
 80. **Every part is its own error boundary** (`SectionBoundary`): a failing part leaves an
     empty placeholder, never a 500.
 81. **The lead band paints over a pinned banner** (`.mbanner ~ .lead-band { z-index: 4 }`,

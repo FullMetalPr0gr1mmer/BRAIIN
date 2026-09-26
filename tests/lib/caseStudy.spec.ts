@@ -108,7 +108,9 @@ vi.mock('@/lib/seo/head', () => ({
 const { nextProject, caseKeywords, describable, stillAlt, stillsCount, pad2 } =
   await import('@/lib/portfolio/caseStudy');
 const { stepIndex, arrowDelta, counterLabel, isPlainClick } = await import('@/lib/client/lightbox');
-const { loadCaseStudyPage, caseTitle, caseDescription } = await import('@/lib/portfolio/casePage');
+const { loadCaseStudyPage, caseTitle, caseDescription, caseSchemaDescription } =
+  await import('@/lib/portfolio/casePage');
+const { buildCreativeWorkSchema } = await import('@/lib/seo/jsonld');
 
 beforeEach(() => {
   studies = {};
@@ -234,6 +236,23 @@ describe('caseTitle / caseDescription — the head', () => {
       'دراسة حالة من %brand%: البريف، ونطاق العمل، والنتيجة، وكيف انصنع الشغل.',
     );
     expect(caseDescription(study({ summary: null }), 'en')).toContain('A %brand% case study');
+  });
+  it('the CreativeWork description never ships the raw %brand% token (no teaser, no summary)', () => {
+    for (const [s, locale] of [
+      [study({ summary: null }), 'en'],
+      [study({ summary: { en: 'English only' } }), 'ar'],
+    ] as const) {
+      const node = buildCreativeWorkSchema({
+        name: 'The Rider',
+        description: caseSchemaDescription(s, locale, 'Acme Studio'),
+        url: 'https://www.braiinstation.com/portfolio/the-rider',
+        org: { name: 'Acme Studio' },
+      });
+      expect(JSON.stringify(node)).not.toContain('%brand%');
+      expect(node.description).toContain('Acme Studio');
+    }
+    // a real teaser passes through untouched
+    expect(caseSchemaDescription(study({ blurb: t('Dawn.') }), 'en', 'B')).toBe('Dawn.');
   });
 });
 

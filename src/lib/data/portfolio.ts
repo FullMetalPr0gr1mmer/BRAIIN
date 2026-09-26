@@ -11,6 +11,7 @@ import {
 } from '@schemas/content';
 import type { VideoClip } from '@schemas/media';
 import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { renderTiptapToHtml } from '@/lib/content/tiptap';
 import { clipOf, imageRef, type ImageRef } from '@/lib/media/resolve';
 import { describable } from '@/lib/portfolio/caseStudy';
 import { parseRows, reportLoadError } from './parse';
@@ -41,8 +42,11 @@ export const CARD_COLUMNS =
   'client:client_id(slug,name,sort_order),' +
   'services:portfolio_services(sort_order,service:service_id(slug,title,short_title,sort_order))';
 
+// `body` (the Tiptap JSON), deliberately NOT `body_html`: the cache is written by the
+// admin API, but the database also accepts it from a direct PostgREST / save_portfolio
+// write that skips that API, so the public page never emits it (see renderBody).
 export const CASE_STUDY_COLUMNS =
-  `${CARD_COLUMNS},body_html,lead,goal,result,scope,keywords,results,next_portfolio_id,` +
+  `${CARD_COLUMNS},body,lead,goal,result,scope,keywords,results,next_portfolio_id,` +
   'media:portfolio_media(role,kind,video_uid,video_path,clip_start_s,clip_end_s,' +
   `duration_label,caption,breakdown_kind,layout,sort_order,asset:media_id${MEDIA})`;
 
@@ -87,6 +91,7 @@ export interface CaseMedia {
 
 export interface CaseStudy extends PortfolioCard {
   summary: LocalizedProse | null;
+  /** Allowlist-rendered from the Tiptap source on every render (renderBody). */
   bodyHtml: LocalizedProse | null;
   lead: LocalizedText | null;
   goal: LocalizedText | null;
@@ -167,6 +172,22 @@ function toCaseMedia(row: PortfolioMediaRow): CaseMedia {
   };
 }
 
+/**
+ * The body as HTML, rendered HERE from its Tiptap JSON by the allowlist renderer
+ * (src/lib/content/tiptap.ts) — CLAUDE.md Pillar 1: "Tiptap sanitised on write AND
+ * render; never `set:html` unsanitised". The stored `body_html` cache is not trusted on
+ * the public path: a caller holding portfolio.write can set it directly (PostgREST PATCH
+ * or rpc/save_portfolio), skipping the admin API that derives it, and the edge would then
+ * cache whatever markup they wrote. The renderer can only emit the tags and attributes
+ * written literally in it. The cost lands on an edge-cache miss only (Security > Perf).
+ */
+export function renderBody(body: CaseStudyRow['body']): LocalizedProse | null {
+  const en = renderTiptapToHtml(body?.en);
+  const ar = renderTiptapToHtml(body?.ar);
+  if (!en && !ar) return null;
+  return ar ? { en, ar } : { en };
+}
+
 export function toCaseStudy(row: CaseStudyRow): CaseStudy {
   const byRole = (role: PortfolioMediaRow['role']) =>
     row.media
@@ -181,7 +202,7 @@ export function toCaseStudy(row: CaseStudyRow): CaseStudy {
   return {
     ...toCard(row),
     summary: row.summary,
-    bodyHtml: row.body_html,
+    bodyHtml: renderBody(row.body),
     lead: row.lead,
     goal: row.goal,
     result: row.result,

@@ -54,6 +54,19 @@ export function caseDescription(
   );
 }
 
+/**
+ * The CreativeWork `description`: the meta description's text with the brand filled in.
+ * caseDescription feeds loadHead, whose resolveSeo substitutes `%brand%`; the JSON-LD
+ * builder does no substitution, so the generic fallback would ship the raw token.
+ */
+export function caseSchemaDescription(
+  study: Pick<CaseStudy, 'blurb' | 'summary'>,
+  locale: Locale,
+  brand: string,
+): string {
+  return caseDescription(study, locale).replace(/%brand%/g, () => brand);
+}
+
 export async function loadCaseStudyPage(
   slug: string,
   locals: Locals,

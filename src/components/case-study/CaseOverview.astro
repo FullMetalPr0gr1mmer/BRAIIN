@@ -44,8 +44,9 @@ const STR = {
 
 const lead = study.lead ? pickLocale(study.lead, locale) : '';
 const summary = study.summary ? pickLocale(study.summary, locale) : '';
-// body_html is the SANITISED HTML cache (sanitised on write in the admin, CLAUDE.md §3
-// Pillar 1) — never raw editor input.
+// bodyHtml is rendered from the Tiptap JSON by the allowlist renderer in the loader
+// (renderBody, src/lib/data/portfolio.ts) — sanitised at render, never the stored
+// body_html cache or raw editor input (CLAUDE.md §3 Pillar 1).
 const bodyHtml = study.bodyHtml ? pickLocale(study.bodyHtml, locale) : '';
 const scope = study.scope.map((s) => pickLocale(s, locale));
 const goal = study.goal ? pickLocale(study.goal, locale) : '';

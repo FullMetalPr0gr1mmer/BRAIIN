@@ -232,6 +232,12 @@ html[dir='rtl'] .cs-ov__body p {
   line-height: 1;
   color: var(--bs-klein);
 }
+/* the value carries dir="ltr" so its sign stays in front (decision 79), which also flips
+   its default alignment — realign it with the RTL card (`end` resolves against the span's
+   own LTR direction, so it lands on the right, over its label) */
+html[dir='rtl'] .cs-res__v {
+  text-align: end;
+}
 .cs-res__l {
   display: block;
   margin-top: 8px;

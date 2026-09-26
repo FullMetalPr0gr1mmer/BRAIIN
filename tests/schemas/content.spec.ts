@@ -200,7 +200,7 @@ describe('UI v2 content rows', () => {
   it('a case study bounds its lists as the database does', () => {
     const study = {
       ...card,
-      body_html: null,
+      body: null,
       lead: null,
       goal: null,
       result: null,

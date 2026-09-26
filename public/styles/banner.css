@@ -24,6 +24,16 @@
   background: #111;
   color: var(--bs-paper);
 }
+/* Reflow (WCAG 1.4.10): a viewport shorter than the banner's 400px floor (400% zoom, a
+   landscape phone) would pin a banner it can never scroll past, so the bottom-anchored
+   caption — the only place the teaser, client and year appear — is never seen before the
+   next section covers it. There the banner scrolls like any section; the is-covered
+   script (scrollY >= offsetHeight) needs no change. */
+@media (max-height: 480px) {
+  .mbanner {
+    position: relative;
+  }
+}
 .mbanner__media {
   position: absolute;
   inset: 0;

@@ -8,7 +8,7 @@ import LeadBand from '@/components/sections/LeadBand.astro';
 import { buildBreadcrumbSchema, buildCreativeWorkSchema, orgRef } from '@/lib/seo/jsonld';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { localizedPath, pickLocale } from '@/lib/i18n';
-import { caseDescription, type CaseStudyPage } from '@/lib/portfolio/casePage';
+import { caseSchemaDescription, type CaseStudyPage } from '@/lib/portfolio/casePage';
 import { caseKeywords } from '@/lib/portfolio/caseStudy';
 import CaseBanner from './CaseBanner.astro';
 import CaseTitle from './CaseTitle.astro';
@@ -70,7 +70,7 @@ const ogImage = seo.ogImage ?? shareImage;
 const jsonLd = [
   buildCreativeWorkSchema({
     name,
-    description: caseDescription(study, locale),
+    description: caseSchemaDescription(study, locale, head.brand),
     url,
     org: orgRef(identity, locale),
     image: shareImage,

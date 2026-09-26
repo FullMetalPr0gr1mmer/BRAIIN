@@ -39,7 +39,7 @@ vi.mock('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { toCard, toCaseStudy, getCaseStudy, getCaseStudyIndex } =
+const { toCard, toCaseStudy, renderBody, getCaseStudy, getCaseStudyIndex } =
   await import('@/lib/data/portfolio');
 
 const t = (en: string) => ({ en, ar: `ع-${en}` });
@@ -85,7 +85,7 @@ const row: CaseStudyRow = {
     },
     { sort_order: 2, service: null }, // an unpublished service: RLS returned null
   ],
-  body_html: null,
+  body: null,
   lead: t('A launch film…'),
   goal: null,
   result: null,
@@ -215,5 +215,80 @@ describe('the discovery index lists exactly what the case-study page renders', (
   it('an unknown slug is null (the route answers a real 404)', async () => {
     tableRows = [row];
     expect(await getCaseStudy('nope')).toBeNull();
+  });
+});
+
+describe('the case-study body is sanitised at render, not trusted from the cache (Pillar 1)', () => {
+  const doc = (content: unknown[]) => ({ type: 'doc', content });
+  const para = (content: unknown[]) => ({ type: 'paragraph', content });
+  // One malicious body per attack class: a script in a text node, an event handler and
+  // style= on an unknown node, a javascript: link, a style= on a known node.
+  const hostile = doc([
+    para([{ type: 'text', text: '<script>alert(1)</script>' }]),
+    {
+      type: 'iframe',
+      attrs: { src: 'https://evil.example', onload: 'alert(1)', style: 'position:fixed' },
+      content: [para([{ type: 'text', text: 'kept' }])],
+    },
+    para([
+      {
+        type: 'text',
+        text: 'click',
+        marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)', onclick: 'alert(1)' } }],
+      },
+    ]),
+    { type: 'paragraph', attrs: { style: 'color:red', class: 'x' }, content: [] },
+    {
+      type: 'image',
+      attrs: { src: 'javascript:alert(1)', onerror: 'alert(1)', alt: 'x' },
+    },
+  ]);
+  // What a direct PostgREST / rpc/save_portfolio write can put in the cache.
+  const rawCache = {
+    en: '<meta http-equiv="refresh" content="0;url=https://evil.example"><img src=x onerror=alert(1)>',
+    ar: '<a href="javascript:alert(1)" style="position:fixed">x</a>',
+  };
+
+  const assertInert = (html: string) => {
+    expect(html).not.toMatch(/<script|<iframe|<meta|javascript:|\son\w+=|style=|class=/i);
+  };
+
+  it('renders hostile Tiptap JSON through the allowlist: no script, on*=, javascript: or style=', () => {
+    const out = renderBody({ en: hostile, ar: hostile });
+    expect(out?.en).toContain('&lt;script&gt;');
+    expect(out?.en).toContain('<p>kept</p>');
+    expect(out?.en).toContain('click'); // the words survive, the link does not
+    assertInert(out?.en ?? '');
+    assertInert(out?.ar ?? '');
+  });
+
+  it('never reads body_html: a raw cache on the row reaches the page as nothing', async () => {
+    tableRows = [{ ...row, body: null, body_html: rawCache }];
+    const study = await getCaseStudy('the-rider');
+    expect(study).not.toBeNull();
+    expect(study?.bodyHtml).toBeNull();
+
+    tableRows = [{ ...row, body: { en: hostile }, body_html: rawCache }];
+    const html = (await getCaseStudy('the-rider'))?.bodyHtml?.en ?? '';
+    expect(html).not.toContain('evil.example');
+    assertInert(html);
+  });
+
+  it('an empty, invalid or malformed body hides the body, never the case study', async () => {
+    expect(renderBody(null)).toBeNull();
+    expect(renderBody({ en: { type: 'nope' } })).toBeNull();
+    expect(renderBody({ ar: doc([para([{ type: 'text', text: 'ع' }])]) })).toEqual({
+      en: '',
+      ar: '<p>ع</p>',
+    });
+    tableRows = [{ ...row, body: 'not a doc' }];
+    const study = await getCaseStudy('the-rider');
+    expect(study).not.toBeNull();
+    expect(study?.bodyHtml).toBeNull();
+  });
+
+  it('toCaseStudy renders a bilingual body per locale', () => {
+    const body = { en: doc([para([{ type: 'text', text: 'Hi' }])]), ar: doc([]) };
+    expect(toCaseStudy({ ...row, body }).bodyHtml).toEqual({ en: '<p>Hi</p>' });
   });
 });
