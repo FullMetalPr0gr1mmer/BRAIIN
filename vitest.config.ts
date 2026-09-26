@@ -3,6 +3,11 @@ import { fileURLToPath } from 'node:url';
 
 // Path aliases mirror tsconfig.json so tests resolve @/ , @schemas/ , @consent/.
 export default defineConfig({
+  // The admin's React islands (.tsx) are rendered in tests with react-dom/server. Astro's
+  // base tsconfig leaves JSX untransformed ("preserve"), which Vite's parser cannot read;
+  // React's automatic runtime is what the @astrojs/react integration compiles them with.
+  // (Vite 8 transforms with Oxc — the `esbuild` option is no longer read.)
+  oxc: { jsx: { runtime: 'automatic', importSource: 'react' } },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

@@ -3,7 +3,7 @@ import type { ContentStatus } from '@schemas/primitives';
 import type { AuthContext } from '@/lib/auth/types';
 import { assertCap } from '@/lib/authz/matrix';
 import { AuthorizationError } from '@/lib/authz/errors';
-import { NotFoundError, OptimisticLockError, ValidationError } from './errors';
+import { InUseError, NotFoundError, OptimisticLockError, ValidationError } from './errors';
 
 // Tenant-scoped CRUD over the RLS-bound client.
 //
@@ -28,6 +28,18 @@ export interface ListOptions {
 export interface ListResult<T> {
   rows: T[];
   total: number;
+}
+
+/**
+ * What a named constraint MEANS to an editor. Postgres reports a violation by constraint
+ * name; without this map every unique violation read "duplicate value — slug" (the only
+ * unique constraint the first resources had), which points an editor at a field that is
+ * not the problem — e.g. a second key link in a menu (`navigation_one_key_per_location`).
+ */
+export type ConstraintFields = Readonly<Record<string, { field?: string; message: string }>>;
+
+export interface WriteOptions {
+  constraints?: ConstraintFields | undefined;
 }
 
 export const MAX_PAGE_SIZE = 100;
@@ -91,13 +103,14 @@ export async function insertRow<T>(
   ctx: AuthContext,
   values: Record<string, unknown>,
   columns: string,
+  options: WriteOptions = {},
 ): Promise<T> {
   const { data, error } = await sb
     .from(table)
     .insert({ ...values, tenant_id: ctx.tenantId })
     .select(columns)
     .single();
-  if (error) throw translateWriteError(error, table);
+  if (error) throw translateWriteError(error, table, 'write', options.constraints);
   return data as T;
 }
 
@@ -117,6 +130,7 @@ export async function updateRow<T>(
   expectedVersion: number,
   values: Record<string, unknown>,
   columns: string,
+  options: WriteOptions = {},
 ): Promise<T> {
   const current = await getRow<{ version: number }>(sb, table, ctx, id, 'id,version');
   if (current.version !== expectedVersion) throw new OptimisticLockError(table);
@@ -130,7 +144,7 @@ export async function updateRow<T>(
     .select(columns)
     .maybeSingle();
 
-  if (error) throw translateWriteError(error, table);
+  if (error) throw translateWriteError(error, table, 'write', options.constraints);
   // Lost the race between the read above and the write: someone else's UPDATE landed
   // in between and bumped the version.
   if (!data) throw new OptimisticLockError(table);
@@ -142,6 +156,7 @@ export async function deleteRow(
   table: string,
   ctx: AuthContext,
   id: string,
+  options: WriteOptions = {},
 ): Promise<void> {
   // Confirms existence first so a genuinely-missing row is a 404 …
   await getRow<{ id: string }>(sb, table, ctx, id, 'id');
@@ -152,7 +167,7 @@ export async function deleteRow(
     .eq('tenant_id', ctx.tenantId)
     .eq('id', id)
     .select('id');
-  if (error) throw translateWriteError(error, table);
+  if (error) throw translateWriteError(error, table, 'delete', options.constraints);
 
   // … and a row that exists but survives DELETE is the RESTRICTIVE admin-only policy
   // filtering it out (RLS filters DELETE rows silently rather than raising). Reporting
@@ -163,15 +178,59 @@ export async function deleteRow(
   }
 }
 
-/** Postgres error codes that mean "the input was wrong", not "the server broke". */
-function translateWriteError(error: { code?: string; message: string }, table: string): Error {
+/** The constraint a Postgres error names (`… violates … constraint "name" …`). */
+export function constraintOf(error: { message?: string; details?: string | null }): string | null {
+  const text = `${error.message ?? ''} ${error.details ?? ''}`;
+  return /constraint "([^"]+)"/.exec(text)?.[1] ?? null;
+}
+
+/** The table a foreign-key violation on DELETE came from (`… on table "blog_posts"`). */
+function referencingTable(error: { message?: string }): string | null {
+  const all = [...(error.message ?? '').matchAll(/on table "([^"]+)"/g)].map((m) => m[1]);
+  // "update or delete on table "A" violates foreign key constraint "…" on table "B"":
+  // B — the LAST table named — is the one still pointing at the row.
+  return all.at(-1) ?? null;
+}
+
+/**
+ * Postgres error codes that mean "the input was wrong" (or "still in use"), not "the
+ * server broke". A mapped constraint wins over the generic message, so the editor is
+ * told which field is at fault.
+ */
+export function translateWriteError(
+  error: { code?: string; message: string; details?: string | null },
+  table: string,
+  op: 'write' | 'delete' = 'write',
+  constraints: ConstraintFields = {},
+): Error {
+  const name = constraintOf(error);
+  const known = name ? constraints[name] : undefined;
   switch (error.code) {
     case '23505': // unique_violation
-      return new ValidationError(`duplicate value in '${table}'`, 'slug');
-    case '23503': // foreign_key_violation
-      return new ValidationError(`referenced row does not exist (${table})`);
+      return new ValidationError(
+        known?.message ?? `duplicate value in '${table}'`,
+        known ? known.field : 'slug',
+      );
+    case '23503': {
+      // foreign_key_violation. On DELETE the row is still referenced — a 409 with where
+      // from, not a 422: the input was fine, the timing (something points at it) is not.
+      if (op === 'delete') {
+        const by = referencingTable(error);
+        return new InUseError(
+          known?.message ??
+            `still used by ${by ? `'${by}'` : 'another record'} — remove that first`,
+        );
+      }
+      return new ValidationError(
+        known?.message ?? `referenced row does not exist (${table})`,
+        known?.field,
+      );
+    }
     case '23514': // check_violation
-      return new ValidationError(`value violates a constraint on '${table}'`);
+      return new ValidationError(
+        known?.message ?? `value violates a constraint on '${table}'`,
+        known?.field,
+      );
     case '42501': // insufficient_privilege — a RESTRICTIVE policy's WITH CHECK rejected it
       return new AuthorizationError('content.archiveDelete', `RLS refused write on '${table}'`);
     default:

@@ -28,6 +28,20 @@ export class ValidationError extends Error {
   }
 }
 
+/**
+ * The row is still referenced by another (a category a post uses, a media asset on a
+ * page) — a DELETE blocked by a foreign key. Not a concurrent edit (that is
+ * OptimisticLockError) and not bad input: the fix is to remove the reference first, and
+ * the message says where it is.
+ */
+export class InUseError extends Error {
+  readonly status = 409 as const;
+  constructor(readonly detail: string) {
+    super(`In use: ${detail}`);
+    this.name = 'InUseError';
+  }
+}
+
 /** A rate limit or spend cap was hit (exports, AI proxy). */
 export class RateLimitError extends Error {
   readonly status = 429 as const;

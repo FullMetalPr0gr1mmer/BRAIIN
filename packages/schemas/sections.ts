@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { LocalizedTextSchema } from './content';
 import { SECTION_TYPES, type SectionType } from './sectionTypes';
+import { AccentSchema } from './media';
 
 // Per-type CMS content shapes for `page_sections.content` (authored at /admin/sections,
 // rendered by src/components/SectionRenderer.astro). One schema per shape, in packages/
@@ -108,6 +109,33 @@ export const CtaSectionContentSchema = z.object({
   buttonLabel: Text.optional(),
 });
 
+/**
+ * A statistics band (UI v2). The numbers come from the `statistics` table, filtered to the
+ * counters shown on `placement` and labelled for that page; this is only the layout and
+ * the copy around them. `cards` is the pre-UI-v2 grid (the default, so an existing
+ * composition renders unchanged).
+ */
+export const STAT_BAND_VARIANTS = ['cards', 'band', 'reach', 'proof'] as const;
+export const StatisticsSectionContentSchema = z
+  .object({
+    variant: z.enum(STAT_BAND_VARIANTS).optional(),
+    placement: z.enum(['home', 'about', 'work']).optional(),
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    text: Text.optional(),
+    /**
+     * Show the numbers without the count-up. An opt-OUT, because an editor's unticked box is
+     * "not set": counting up (an enhancement over server-rendered final values) is the default.
+     */
+    staticNumbers: z.boolean().optional(),
+    /** Fewer published counters than this and the band hides (an under-filled row looks broken). */
+    minItems: z.number().int().min(1).max(6).optional(),
+  })
+  // Strict: its numbers come from their own table, and a stray key (`items`, `members`)
+  // must be refused on write rather than stored and silently ignored.
+  .strict();
+
 export const AboutStorySectionContentSchema = z.object({
   heading: Text.optional(),
   lead: Text.optional(),
@@ -121,7 +149,7 @@ export { SECTION_TYPES, type SectionType } from './sectionTypes';
 /** Zod form of the canonical list in ./sectionTypes (kept zod-free for the admin bundle). */
 export const SectionTypeSchema = z.enum(SECTION_TYPES);
 
-/** type → content schema. Types absent here (statistics, team, certifications) take no
+/** type → content schema. Types absent here (team, certifications, …) take no
     content overrides — their data comes from their own CMS tables. */
 export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>> = {
   hero: HeroSectionContentSchema,
@@ -133,6 +161,7 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
   social: SocialSectionContentSchema,
   cta: CtaSectionContentSchema,
   aboutStory: AboutStorySectionContentSchema,
+  statistics: StatisticsSectionContentSchema,
 };
 
 /**
