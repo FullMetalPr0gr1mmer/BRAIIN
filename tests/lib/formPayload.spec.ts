@@ -1,6 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { SINGLETON_UI, RESOURCE_UI, type FieldDef } from '@/lib/admin/uiSchema';
-import { rowToForm, formToPayload } from '@/lib/admin/formPayload';
+import {
+  rowToForm,
+  formToPayload,
+  enterAdvanced,
+  leaveAdvanced,
+  type SectionContentState,
+} from '@/lib/admin/formPayload';
 import { SeoDefaultsSchema } from '@schemas/admin';
 import { SiteProfileSchema } from '@schemas/siteProfile';
 
@@ -163,5 +169,104 @@ describe('formToPayload — composite kinds', () => {
     const form = rowToForm({ type: 'statistics', content: {} }, fields);
     // no editor for this type → JSON mode with {}
     expect(formToPayload(form, fields)['content']).toEqual({});
+  });
+});
+
+describe('section content keeps what the typed editor does not edit', () => {
+  const fields = RESOURCE_UI['sections']!.fields;
+
+  it('a typed save of a hero keeps its JSON-only `intro`', () => {
+    // Data-loss guard: hero.intro has no typed field, and dropping it on an unrelated edit
+    // would silently switch the home logo plate off (or on).
+    const stored = { type: 'hero', content: { intro: false, sub: { en: 'S', ar: 'س' } } };
+    const form = rowToForm(stored, fields);
+    const payload = formToPayload(form, fields);
+    expect(payload['content']).toEqual({ intro: false, sub: { en: 'S', ar: 'س' } });
+  });
+
+  it('does not carry a key of the OLD type after the section type changes', () => {
+    const form = rowToForm({ type: 'hero', content: { intro: true } }, fields);
+    const payload = formToPayload({ ...form, type: 'cta' }, fields);
+    expect(payload['content']).toEqual({});
+  });
+});
+
+describe('the Advanced (JSON) toggle never loses work', () => {
+  const fields = RESOURCE_UI['sections']!.fields;
+  const HERO = { type: 'hero', content: { headline: { en: 'Old', ar: 'قديم' }, intro: true } };
+
+  it('entering shows the stored keys the fields do not cover; leaving carries JSON edits back', () => {
+    const form = rowToForm(HERO, fields);
+    const entered = enterAdvanced(form['content'] as SectionContentState, 'hero');
+    expect(JSON.parse(entered.json!)).toEqual(HERO.content);
+
+    const edited = {
+      ...entered,
+      json: JSON.stringify({ headline: { en: 'New', ar: 'جديد' }, intro: false }),
+    };
+    const left = leaveAdvanced(edited, 'hero');
+    expect(left.json).toBeNull();
+    expect(left.values['headline']).toEqual({ en: 'New', ar: 'جديد' });
+    expect(left.extra).toEqual({ intro: false });
+
+    const payload = formToPayload({ ...form, content: left }, fields);
+    expect(payload['content']).toEqual({ headline: { en: 'New', ar: 'جديد' }, intro: false });
+  });
+
+  it('leaving with JSON that is not an object refuses (the caller stays in Advanced)', () => {
+    const state: SectionContentState = { values: {}, json: '{"headline": ' };
+    expect(() => leaveAdvanced(state, 'hero')).toThrow(/Fix the JSON/);
+    expect(() => leaveAdvanced({ values: {}, json: '[1]' }, 'hero')).toThrow(/Fix the JSON/);
+  });
+});
+
+describe('section content with no type chosen', () => {
+  const fields = RESOURCE_UI['sections']!.fields;
+
+  it('is left out of the payload — typed mode', () => {
+    const form = rowToForm({ type: 'cta', content: { heading: { en: 'H', ar: 'ع' } } }, fields);
+    expect(formToPayload({ ...form, type: '' }, fields)).not.toHaveProperty('content');
+  });
+
+  it('is left out of the payload — Advanced mode', () => {
+    const form = rowToForm({ type: 'cta', content: {} }, fields);
+    const advanced = { ...form, type: '', content: { values: {}, json: '{"x":1}' } };
+    expect(formToPayload(advanced, fields)).not.toHaveProperty('content');
+  });
+});
+
+describe('a table-backed section', () => {
+  const fields = RESOURCE_UI['sections']!.fields;
+
+  it('loads as the "nothing to override" note, and saves {}', () => {
+    const form = rowToForm({ type: 'statistics', content: {} }, fields);
+    expect((form['content'] as SectionContentState).json).toBeNull();
+    expect(formToPayload(form, fields)['content']).toEqual({});
+  });
+
+  it('keeps leftover content visible as JSON so it can be cleared', () => {
+    const form = rowToForm({ type: 'statistics', content: { stale: 1 } }, fields);
+    expect(JSON.parse((form['content'] as SectionContentState).json!)).toEqual({ stale: 1 });
+  });
+});
+
+describe('datetime fields round-trip in a non-UTC browser', () => {
+  // datetime-local is LOCAL wall-clock time. Slicing the stored UTC string moved a scheduled
+  // time earlier by the offset on every save — invisible to a test running in UTC.
+  const previous = process.env['TZ'];
+  beforeAll(() => {
+    process.env['TZ'] = 'Asia/Riyadh';
+  });
+  afterAll(() => {
+    if (previous === undefined) delete process.env['TZ'];
+    else process.env['TZ'] = previous;
+  });
+
+  it('a stored instant saves back unchanged', () => {
+    const field: FieldDef = { name: 'scheduledFor', label: 'Scheduled for', kind: 'datetime' };
+    expect(new Date('2026-09-26T10:00:00Z').getTimezoneOffset()).toBe(-180); // the zone took
+    const form = rowToForm({ scheduled_for: '2026-09-26T10:00:00+00:00' }, [field]);
+    expect(form['scheduledFor']).toBe('2026-09-26T13:00');
+    expect(formToPayload(form, [field])['scheduledFor']).toBe('2026-09-26T10:00:00.000Z');
   });
 });

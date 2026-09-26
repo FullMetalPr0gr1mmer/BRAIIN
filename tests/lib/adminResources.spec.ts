@@ -63,14 +63,12 @@ for (const [slug, ui] of Object.entries(RESOURCE_UI)) {
       // A payload naming every field once; toRow must emit each field's column. Fields
       // the server derives (e.g. none today) would be listed here explicitly.
       const payload = Object.fromEntries(ui.fields.map((f) => [f.name, sampleFor(f)]));
-      let row: Record<string, unknown>;
-      try {
+      // The sample must PASS toRow's own validation (hrefs, redirects): a swallowed throw
+      // here once made this check vacuous for exactly the resources that validate.
+      let row: Record<string, unknown> = {};
+      expect(() => {
         row = config!.toRow(payload);
-      } catch {
-        // A toRow that validates (hrefs, redirects) may reject the synthetic value; the
-        // column mapping is still checked by the returned-columns test above.
-        return;
-      }
+      }, `${slug}: the sample payload must pass toRow validation`).not.toThrow();
       for (const field of ui.fields) {
         expect(Object.keys(row), `${slug}.${field.name}`).toContain(columnOf(field));
       }
@@ -107,7 +105,9 @@ function sampleFor(field: FieldDef): unknown {
     case 'upload':
       return '11111111-1111-4111-8111-111111111111';
     default:
-      return 'x';
+      // Distinct and site-relative per field: passes sanitizeHref, and a redirect's
+      // source and target differ.
+      return `/${field.name}`;
   }
 }
 

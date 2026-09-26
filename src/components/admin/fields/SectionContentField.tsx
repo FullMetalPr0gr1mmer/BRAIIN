@@ -1,4 +1,5 @@
-import { objectToPayload, type SectionContentState } from '@/lib/admin/formPayload';
+import { useState } from 'react';
+import { enterAdvanced, leaveAdvanced, type SectionContentState } from '@/lib/admin/formPayload';
 import { sectionFields } from '@/lib/admin/sectionUi';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import type { RenderField } from './RepeaterField';
@@ -28,7 +29,25 @@ export default function SectionContentField({
   const state = (value ?? { values: {}, json: null }) as SectionContentState;
   const typed = sectionFields(sectionType);
   const id = `${idPrefix}-${field.name}`;
+  const [jsonError, setJsonError] = useState<string | null>(null);
   const set = (patch: Partial<SectionContentState>) => onChange(field.name, { ...state, ...patch });
+
+  // Switching modes never loses work: entering carries the typed values (and the stored
+  // keys the fields do not cover) into the JSON; leaving parses the JSON back — or, when
+  // it does not parse, stays in Advanced mode and says so.
+  const toggleAdvanced = (on: boolean) => {
+    if (on) {
+      setJsonError(null);
+      onChange(field.name, enterAdvanced(state, sectionType));
+      return;
+    }
+    try {
+      onChange(field.name, leaveAdvanced(state, sectionType));
+      setJsonError(null);
+    } catch (err) {
+      setJsonError(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   // No type chosen yet, or a type whose data lives in its own table.
   if (!typed && state.json === null) {
@@ -54,14 +73,7 @@ export default function SectionContentField({
           type="checkbox"
           checked={advanced}
           disabled={!typed}
-          onChange={(e) =>
-            set(
-              e.target.checked
-                ? // Carry the typed values across, so switching modes never loses work.
-                  { json: JSON.stringify(objectToPayload(state.values, typed ?? []), null, 2) }
-                : { json: null },
-            )
-          }
+          onChange={(e) => toggleAdvanced(e.target.checked)}
         />
         <span>Advanced (JSON)</span>
       </label>
@@ -72,8 +84,15 @@ export default function SectionContentField({
             id={`${id}-json`}
             spellCheck={false}
             value={state.json ?? ''}
+            aria-describedby={jsonError ? `${id}-json-error` : undefined}
+            aria-invalid={jsonError ? true : undefined}
             onChange={(e) => set({ json: e.target.value })}
           />
+          {jsonError && (
+            <span id={`${id}-json-error`} className="field-error" role="alert">
+              {jsonError}
+            </span>
+          )}
           <span>
             Validated against the section type on save. Keys you leave out use the built-in copy.
           </span>

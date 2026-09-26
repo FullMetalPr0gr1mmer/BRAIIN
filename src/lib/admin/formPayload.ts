@@ -19,6 +19,13 @@ export interface SectionContentState {
   values: Row;
   /** Non-null while the editor is in "Advanced (JSON)" mode. */
   json: string | null;
+  /**
+   * Stored keys the typed editor does not edit (hero.intro is JSON-only on purpose), kept
+   * so a typed save does not silently delete them — but only while the section keeps the
+   * type they were stored under (`extraType`); a key of another type is not carried over.
+   */
+  extra?: Row;
+  extraType?: string;
 }
 
 /** Form state of a `clip` field. */
@@ -57,8 +64,15 @@ function valueToForm(raw: unknown, field: FieldDef, siblings: Row): unknown {
   switch (field.kind) {
     case 'json':
       return JSON.stringify(raw ?? {}, null, 2);
-    case 'datetime':
-      return typeof raw === 'string' ? raw.slice(0, 16) : (raw ?? null);
+    case 'datetime': {
+      if (typeof raw !== 'string' || raw.trim() === '') return raw ?? null;
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return raw.slice(0, 16);
+      // <input type="datetime-local"> shows LOCAL wall-clock time and the save path reads
+      // it back as local (new Date(value).toISOString()). Slicing the UTC string instead
+      // moved a scheduled time earlier by the browser's offset on every save (Riyadh: 3h).
+      return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    }
     case 'relation':
     case 'media':
     case 'upload':
@@ -81,17 +95,62 @@ function valueToForm(raw: unknown, field: FieldDef, siblings: Row): unknown {
       };
       return state;
     }
-    case 'sectionContent': {
-      const typed = sectionFields(siblings[field.typeField ?? 'type']);
-      const state: SectionContentState = typed
-        ? { values: objectToForm(raw, typed), json: null }
-        : // A type with no editor (or none chosen yet) edits as JSON.
-          { values: {}, json: JSON.stringify(raw ?? {}, null, 2) };
-      return state;
-    }
+    case 'sectionContent':
+      return sectionStateFromObject(raw, siblings[field.typeField ?? 'type']);
     default:
       return raw ?? null;
   }
+}
+
+/**
+ * Stored section content → editor state for a section of `type`.
+ *   typed editor  the typed values, plus the stored keys it has no field for (`extra`,
+ *                 e.g. hero.intro) so a typed save does not delete them;
+ *   no editor     (a table-backed type, or none chosen) — nothing stored shows the
+ *                 "nothing to override" note (json null); leftover non-empty content
+ *                 stays visible as JSON so it can be seen and cleared.
+ */
+export function sectionStateFromObject(obj: unknown, type: unknown): SectionContentState {
+  const stored = (obj && typeof obj === 'object' && !Array.isArray(obj) ? obj : {}) as Row;
+  const typed = sectionFields(type);
+  if (!typed) {
+    const empty = Object.keys(stored).length === 0 && !Array.isArray(obj);
+    return { values: {}, json: empty ? null : JSON.stringify(obj ?? {}, null, 2) };
+  }
+  const edited = new Set(typed.map((f) => f.name));
+  return {
+    values: objectToForm(stored, typed),
+    json: null,
+    extra: Object.fromEntries(Object.entries(stored).filter(([k]) => !edited.has(k))),
+    extraType: String(type),
+  };
+}
+
+/** Typed editor → Advanced (JSON): everything that would be saved, extras included. */
+export function enterAdvanced(state: SectionContentState, type: unknown): SectionContentState {
+  const typed = sectionFields(type) ?? [];
+  const content = { ...sectionExtra(state, type), ...objectToPayload(state.values, typed) };
+  return { ...state, json: JSON.stringify(content, null, 2) };
+}
+
+/**
+ * Advanced (JSON) → typed editor, carrying the JSON edits back (leaving the mode used to
+ * drop them). Throws when the JSON is not an object, so the caller can stay in Advanced
+ * mode and say why instead of losing the text.
+ */
+export function leaveAdvanced(state: SectionContentState, type: unknown): SectionContentState {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(state.json || '{}');
+  } catch {
+    parsed = undefined;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(
+      'Fix the JSON (it must be one {…} object) before switching back to the fields.',
+    );
+  }
+  return sectionStateFromObject(parsed, type);
 }
 
 /** API row (snake_case) → form state (camelCase), limited to declared fields. */
@@ -140,6 +199,11 @@ function clipToPayload(state: unknown, label: string): Row | null {
     out['endS'] = Number(end);
   }
   return out;
+}
+
+/** The untouched stored keys to keep on save: only under the type they belong to. */
+export function sectionExtra(state: SectionContentState, type: unknown): Row {
+  return state.extra && state.extraType === String(type) ? state.extra : {};
 }
 
 /** One value inside a jsonb object; `undefined` means "omit the key". */
@@ -202,8 +266,10 @@ function valueToPayload(value: unknown, field: FieldDef, siblings: Row): unknown
     case 'sectionContent': {
       const state = (value ?? { values: {}, json: '{}' }) as SectionContentState;
       if (state.json !== null) return parseJson(state.json, field.label);
-      const typed = sectionFields(siblings[field.typeField ?? 'type']);
-      return typed ? objectToPayload(state.values, typed) : {};
+      const type = siblings[field.typeField ?? 'type'];
+      const typed = sectionFields(type);
+      if (!typed) return {};
+      return { ...sectionExtra(state, type), ...objectToPayload(state.values, typed) };
     }
     default:
       return value;
@@ -219,6 +285,10 @@ export function formToPayload(values: Row, fields: readonly FieldDef[]): Row {
 
     // An unset <select> means "leave it alone", not "set it to empty".
     if (field.kind === 'select' && !value) continue;
+
+    // Content is shaped by its type; with no type chosen ("—" = leave the type alone) the
+    // content is left alone too — never wiped to {} or sent past per-type validation.
+    if (field.kind === 'sectionContent' && isBlank(values[field.typeField ?? 'type'])) continue;
 
     // A NULLABLE bilingual pair left entirely blank means "none" (site_profile's legal
     // name), not `{en:'', ar:''}` — which the server would reject for being half-present.

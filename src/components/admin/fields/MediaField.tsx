@@ -69,11 +69,13 @@ export default function MediaField({ field, value, onChange }: Props) {
   const visible = (rows ?? []).filter((r) => !needle || caption(r).toLowerCase().includes(needle));
 
   return (
-    <div className="field-group">
-      <p className="field-legend">
+    // A fieldset, so the Choose/Change/Remove buttons are announced with the field's name
+    // ("Poster, group") — several media fields on one form would otherwise read alike.
+    <fieldset className="field-group">
+      <legend className="field-legend">
         {field.label}
         {field.required ? ' *' : ''}
-      </p>
+      </legend>
       <div className="media-current">
         {current && typeof current['thumb_url'] === 'string' ? (
           <img className="media-thumb" src={current['thumb_url']} alt="" width="96" height="64" />
@@ -102,6 +104,11 @@ export default function MediaField({ field, value, onChange }: Props) {
             aria-label="Filter media"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              // The dialog sits INSIDE the edit <form> in the DOM, so Enter here would
+              // implicitly submit it (inert does not count as disabled).
+              if (e.key === 'Enter') e.preventDefault();
+            }}
           />
           <button type="button" className="btn" onClick={() => dialog.current?.close()}>
             Close
@@ -143,6 +150,6 @@ export default function MediaField({ field, value, onChange }: Props) {
           })}
         </ul>
       </dialog>
-    </div>
+    </fieldset>
   );
 }

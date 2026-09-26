@@ -34,6 +34,7 @@ import {
   ThemeUpdateSchema,
   ThemeWriteSchema,
 } from '@schemas/admin';
+import { sectionContentIssues, type SectionType } from '@schemas/sections';
 import { renderTiptapToHtml, readingMinutes, sanitizeHref } from '@/lib/content/tiptap';
 import { ValidationError } from './errors';
 import type { ResourceConfig, ResourcePayload } from './resource';
@@ -296,6 +297,17 @@ export const sectionResource: ResourceConfig = {
       sortOrder: 'sort_order',
       isPlaceholder: 'is_placeholder',
     }),
+  // The schema validates content only when a payload carries BOTH type and content. A
+  // PATCH of content alone (or of type alone) is checked here, against the type the row
+  // will have — otherwise it saves "fine" and the loader silently drops it.
+  assertWritable: (merged, { changed }) => {
+    if (!('type' in changed) && !('content' in changed)) return;
+    const [issue] = sectionContentIssues(merged['type'] as SectionType, merged['content'] ?? {});
+    if (issue) {
+      const where = issue.path.slice(1).join('.');
+      throw new ValidationError(where ? `${where}: ${issue.message}` : issue.message, 'content');
+    }
+  },
 };
 
 // ── Taxonomy & about-page entities ──────────────────────────────────────────────

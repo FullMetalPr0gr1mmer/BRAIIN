@@ -54,8 +54,14 @@ describe('SECTION_UI agrees with SECTION_CONTENT_SCHEMAS', () => {
     it(`${type}: a fully filled editor saves content the schema accepts`, () => {
       const fields = SECTION_UI[type] ?? [];
       const values = Object.fromEntries(fields.map((f) => [f.name, sample(f)]));
-      const parsed = SECTION_CONTENT_SCHEMAS[type]!.safeParse(objectToPayload(values, fields));
+      const payload = objectToPayload(values, fields);
+      // Every filled field reaches the payload: every schema key is optional, so a shaper
+      // that dropped (say) all number overrides would still "validate".
+      expect(Object.keys(payload).sort()).toEqual(fields.map((f) => f.name).sort());
+      const parsed = SECTION_CONTENT_SCHEMAS[type]!.safeParse(payload);
       expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
+      // ...and nothing was stripped by z.object, at the top level or inside repeater items.
+      expect(parsed.data).toEqual(payload);
     });
 
     it(`${type}: an untouched editor saves {} (the built-in copy)`, () => {

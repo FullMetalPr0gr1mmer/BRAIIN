@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { adminUpload, describeError } from '@/lib/admin/client';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 
@@ -18,6 +18,7 @@ export default function UploadField({ field, value, onChange, idPrefix }: Props)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
+  const input = useRef<HTMLInputElement>(null);
   const id = `${idPrefix}-${field.name}`;
   const current = typeof value === 'string' ? value : '';
 
@@ -35,17 +36,26 @@ export default function UploadField({ field, value, onChange, idPrefix }: Props)
       setError(describeError(err));
     } finally {
       setBusy(false);
+      // Cleared after every attempt: picking the SAME file again must fire `change`.
+      if (input.current) input.current.value = '';
     }
+  }
+
+  function remove() {
+    setName('');
+    if (input.current) input.current.value = '';
+    onChange(field.name, '');
   }
 
   return (
     <div className="field-group">
       <label className="field" htmlFor={id}>
-        <span>
+        <span id={`${id}-label`}>
           {field.label}
           {field.required ? ' *' : ''}
         </span>
         <input
+          ref={input}
           id={id}
           type="file"
           accept={field.upload?.accept}
@@ -57,10 +67,10 @@ export default function UploadField({ field, value, onChange, idPrefix }: Props)
         />
       </label>
       <p className="admin-sub" aria-live="polite">
-        {busy ? 'Uploading…' : name ? `Uploaded ${name}.` : current ? 'A file is attached.' : ''}
+        {busy ? 'Uploading…' : current ? (name ? `Uploaded ${name}.` : 'A file is attached.') : ''}
       </p>
       {current && !busy && (
-        <button type="button" className="btn" onClick={() => onChange(field.name, '')}>
+        <button type="button" className="btn" aria-describedby={`${id}-label`} onClick={remove}>
           Remove file
         </button>
       )}

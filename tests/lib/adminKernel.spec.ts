@@ -5,6 +5,7 @@ import { translateWriteError, constraintOf } from '@/lib/admin/crud';
 import { InUseError, ValidationError } from '@/lib/admin/errors';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { collectionRoutes, itemRoutes, type ResourceConfig } from '@/lib/admin/resource';
+import { sectionResource } from '@/lib/admin/resources';
 import type { Role } from '@/lib/auth/types';
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
@@ -196,6 +197,80 @@ describe('resource routes — the publish preconditions', () => {
     const { POST } = collectionRoutes(config());
     await statusOf(POST, ctx('admin', 'POST', { title: 'x', status: 'draft' }));
     expect(publishable).not.toHaveBeenCalled();
+  });
+
+  it('run on a PATCH that leaves status out of an already SCHEDULED row', async () => {
+    // Liveness is judged on the row after the write: otherwise "schedule a valid row, then
+    // strip a required field without restating status" lets the cron publish it.
+    publishable.mockImplementation(() => {
+      throw new ValidationError('needs an author');
+    });
+    const { PATCH } = itemRoutes(config());
+    expect(
+      await statusOf(
+        PATCH,
+        ctx('admin', 'PATCH', { title: 'y', version: 1 }, { status: 'scheduled' }),
+      ),
+    ).toBe(422);
+    expect(publishable).toHaveBeenCalledTimes(1);
+  });
+
+  it('run on a PATCH that leaves status out of an already PUBLISHED row', async () => {
+    const { PATCH } = itemRoutes(config());
+    await statusOf(
+      PATCH,
+      ctx('admin', 'PATCH', { title: 'y', version: 1 }, { status: 'published' }),
+    );
+    expect(publishable).toHaveBeenCalledTimes(1);
+  });
+
+  it('do not run when the PATCH unpublishes, or the row stays a draft', async () => {
+    const { PATCH } = itemRoutes(config());
+    await statusOf(
+      PATCH,
+      ctx('admin', 'PATCH', { status: 'draft', version: 1 }, { status: 'published' }),
+    );
+    await statusOf(PATCH, ctx('admin', 'PATCH', { title: 'y', version: 1 }, { status: 'draft' }));
+    expect(publishable).not.toHaveBeenCalled();
+  });
+
+  it('run on a PATCH to a row that is already visible under publishFlag', async () => {
+    const { PATCH } = itemRoutes(config({ publishFlag: 'visible', statusOf: undefined }));
+    await statusOf(PATCH, ctx('admin', 'PATCH', { title: 'y', version: 1 }, { visible: true }));
+    expect(publishable).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('resource routes — assertWritable judges the merged row', () => {
+  const HERO = { type: 'hero', content: { headline: { en: 'Old', ar: 'قديم' } } };
+
+  it('a content-only section PATCH is validated against the STORED type', async () => {
+    const { PATCH } = itemRoutes(sectionResource);
+    const body = { content: { headline: { en: 'New' } }, version: 1 };
+    expect(await statusOf(PATCH, ctx('admin', 'PATCH', body, HERO))).toBe(422);
+  });
+
+  it('a type-only PATCH cannot leave content its new type rejects', async () => {
+    // statistics takes its data from its own table: hero-shaped content under it is refused.
+    const { PATCH } = itemRoutes(sectionResource);
+    expect(
+      await statusOf(PATCH, ctx('admin', 'PATCH', { type: 'statistics', version: 1 }, HERO)),
+    ).toBe(422);
+  });
+
+  it('a valid content-only PATCH saves', async () => {
+    const { PATCH } = itemRoutes(sectionResource);
+    const body = { content: { headline: { en: 'New', ar: 'جديد' } }, version: 1 };
+    expect(await statusOf(PATCH, ctx('admin', 'PATCH', body, HERO))).toBe(200);
+  });
+
+  it('a PATCH that touches neither type nor content is not re-validated', async () => {
+    // Stored content that no longer validates must not block a reorder or a hide.
+    const stale = { type: 'hero', content: { headline: { en: 'only English' } } };
+    const { PATCH } = itemRoutes(sectionResource);
+    expect(await statusOf(PATCH, ctx('admin', 'PATCH', { sortOrder: 3, version: 1 }, stale))).toBe(
+      200,
+    );
   });
 });
 

@@ -1147,6 +1147,11 @@ dialog.admin-dialog::backdrop {
 }
 
 /* ---- Composite fields (UI v2 PR3): relations, repeaters, media picker, clips ---- */
+.field-error {
+  color: var(--ad-danger);
+  font-weight: 600;
+}
+
 .row-3 {
   display: flex;
   flex-wrap: wrap;

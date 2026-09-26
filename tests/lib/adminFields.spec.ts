@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { RESOURCE_UI, type FieldDef } from '@/lib/admin/uiSchema';
+import { rowToForm } from '@/lib/admin/formPayload';
 
 // The Tiptap editor is irrelevant here and heavy in node.
 vi.mock('@/components/admin/RichText', () => ({ default: () => null }));
@@ -58,6 +59,9 @@ describe('admin field kinds render', () => {
     expect(html).toContain('<legend class="field-legend">Services</legend>');
     expect(html).toMatch(/aria-label="Move a down"/);
     expect(html).toMatch(/aria-label="Remove b"/);
+    // Adding is an explicit button, never a side effect of moving through the select.
+    expect(html).toContain('Add to Services');
+    expect(html).toMatch(/<button type="button" class="btn" disabled="">Add<\/button>/);
   });
 
   it('multiSelect: one checkbox per option, checked from the value', () => {
@@ -81,6 +85,8 @@ describe('admin field kinds render', () => {
     expect(html).toContain('No image chosen');
     expect(html).toContain('<dialog');
     expect(html).toContain('aria-label="Poster: choose"');
+    // The buttons take the field's name from the group ("Poster, group, Choose…").
+    expect(html).toContain('<legend class="field-legend">Poster</legend>');
   });
 
   it('repeater: nested fields with ids unique per item', () => {
@@ -129,8 +135,12 @@ describe('admin field kinds render', () => {
     const json = render(field, { values: {}, json: '{"intro":true}' }, { type: 'hero' });
     expect(json).toContain('Content JSON');
 
-    const table = render(field, { values: {}, json: null }, { type: 'statistics' });
+    // What a LOADED table-backed section actually produces (not a hand-built state).
+    const sections = RESOURCE_UI['sections']!.fields;
+    const loaded = rowToForm({ type: 'statistics', content: {} }, sections)['content'];
+    const table = render(field, loaded, { type: 'statistics' });
     expect(table).toContain('takes its content from its own table');
+    expect(table).not.toContain('Content JSON');
 
     const none = render(field, { values: {}, json: null }, {});
     expect(none).toContain('Choose a section type');
@@ -148,6 +158,13 @@ describe('admin field kinds render', () => {
     );
     expect(html).toContain('type="file"');
     expect(html).toContain('accept=".pdf"');
+    const attached = render(
+      f({ name: 'cv', label: 'CV', kind: 'upload', upload: { endpoint: '/x', accept: '.pdf' } }),
+      '11111111-1111-4111-8111-111111111111',
+      {},
+    );
+    // Remove says WHICH file field it clears.
+    expect(attached).toMatch(/aria-describedby="[^"]*-cv-label"[^>]*>Remove file/);
   });
 
   it('every field of every resource renders without throwing, with unique ids', () => {

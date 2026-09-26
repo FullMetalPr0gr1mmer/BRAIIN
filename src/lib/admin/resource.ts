@@ -86,6 +86,16 @@ export interface ResourceConfig {
    */
   assertPublishable?: (row: Row, ctx: { auth: AuthContext; sb: Db }) => void | Promise<void>;
   /**
+   * Rules over the row AFTER the write (stored + patch) that the payload schema alone
+   * cannot prove — e.g. section content validated against a type the PATCH did not
+   * restate. `changed` is the column patch, so a rule can skip writes that do not touch
+   * what it checks. Runs on create (merged = the new row) and on every update.
+   */
+  assertWritable?: (
+    merged: Row,
+    ctx: { auth: AuthContext; sb: Db; changed: Row },
+  ) => void | Promise<void>;
+  /**
    * Named constraints of this table and what they mean to an editor — turns a raw
    * unique/check/foreign-key violation into a message on the right field.
    */
@@ -107,14 +117,16 @@ function readCapsOf(config: ResourceConfig): readonly Capability[] {
 }
 
 /**
- * Does this payload put the row LIVE? Scheduled counts: `app.publish_scheduled()` flips
- * it to published on a timer with no further checks, so a rule enforced only at
- * "published" was a bypass — schedule an unpublishable row and let the cron publish it.
+ * Is this row LIVE once written? Decided on the row AFTER the write (stored + patch),
+ * never on the payload alone: a PATCH that omits `status` on a scheduled row can still
+ * strip a field the go-live rules require. Scheduled counts — `app.publish_scheduled()`
+ * flips it to published on a timer with no further checks.
  */
-function goesLive(config: ResourceConfig, payload: ResourcePayload): boolean {
-  const status = config.statusOf?.(payload);
-  if (status === 'published' || status === 'scheduled') return true;
-  return config.publishFlag === 'visible' && payload['visible'] === true;
+function isLive(config: ResourceConfig, row: Row): boolean {
+  if (config.statusOf && (row['status'] === 'published' || row['status'] === 'scheduled')) {
+    return true;
+  }
+  return config.publishFlag === 'visible' && row['visible'] === true;
 }
 
 /** The status transition, and for a `visible`-published entity the publish capability. */
@@ -177,7 +189,8 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
       assertTransition(auth, config, payload);
 
       const values = config.toRow(payload);
-      if (goesLive(config, payload)) await config.assertPublishable?.(values, { auth, sb });
+      await config.assertWritable?.(values, { auth, sb, changed: values });
+      if (isLive(config, values)) await config.assertPublishable?.(values, { auth, sb });
 
       const row = await insertRow<Row>(sb, config.table, auth, values, config.columns, {
         constraints: config.constraintFields,
@@ -230,12 +243,17 @@ export function itemRoutes(config: ResourceConfig): {
         throw new ValidationError('no updatable fields supplied');
       }
 
-      if (goesLive(config, payload) && config.assertPublishable) {
-        // Merge over the stored row: a partial PATCH that only flips `status` still has
-        // to satisfy the publish preconditions, and those live in the columns it did
-        // not send.
+      if (config.assertPublishable || config.assertWritable) {
+        // The rules judge the row as it will BE: merged over the stored row. A partial
+        // PATCH that only flips `status` must satisfy the publish preconditions held in
+        // the columns it did not send — and one that leaves `status` out on an already
+        // scheduled/published row must not strip them either.
         const stored = await getRow<Row>(sb, config.table, auth, id, config.columns);
-        await config.assertPublishable({ ...stored, ...values }, { auth, sb });
+        const merged = { ...stored, ...values };
+        await config.assertWritable?.(merged, { auth, sb, changed: values });
+        if (config.assertPublishable && isLive(config, merged)) {
+          await config.assertPublishable(merged, { auth, sb });
+        }
       }
 
       const row = await updateRow<Row>(

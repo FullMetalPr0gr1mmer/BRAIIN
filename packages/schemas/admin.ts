@@ -160,8 +160,9 @@ function checkSectionContent(
   v: { type?: SectionType | undefined; content?: Record<string, unknown> | undefined },
   ctx: z.RefinementCtx,
 ): void {
-  // An update that changes content without restating `type` is validated by the admin
-  // kernel against the STORED type (UI v2 PR3); here we check what the payload can prove.
+  // An update that changes content without restating `type` (or type without content) is
+  // validated against the row it will produce by sectionResource.assertWritable
+  // (src/lib/admin/resources.ts); here we check what the payload alone can prove.
   if (v.type === undefined || v.content === undefined) return;
   for (const issue of sectionContentIssues(v.type, v.content)) ctx.addIssue(issue);
 }

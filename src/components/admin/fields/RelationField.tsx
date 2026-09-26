@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import { useOptions } from './useOptions';
 
@@ -13,6 +14,8 @@ interface Props {
 
 export default function RelationField({ field, value, onChange }: Props) {
   const { options, error, loading } = useOptions(field.relation);
+  // The multi relation's pending choice (hooks run unconditionally, before the branch).
+  const [pick, setPick] = useState('');
   const id = `f-${field.name}`;
   const labelFor = (v: string) => options.find((o) => o.value === v)?.label ?? v;
 
@@ -102,28 +105,37 @@ export default function RelationField({ field, value, onChange }: Props) {
           ))}
         </ol>
       )}
-      <label className="field" htmlFor={id}>
-        <span>Add</span>
-        <select
-          id={id}
-          value=""
-          disabled={loading || full}
-          onChange={(e) => {
-            if (e.target.value) onChange(field.name, [...selected, e.target.value]);
+      {/* An ordinary value control plus an explicit button: arrow keys on a closed select
+          fire `change` in Windows browsers, so "add on change" added every option the
+          keyboard passed over (WCAG F37). */}
+      <div className="item-row">
+        <label className="field" htmlFor={id}>
+          <span>Add to {field.label}</span>
+          <select id={id} value={pick} disabled={loading} onChange={(e) => setPick(e.target.value)}>
+            <option value="">
+              {loading ? 'Loading…' : full ? `At most ${field.maxItems}` : '—'}
+            </option>
+            {options
+              .filter((o) => !selected.includes(o.value))
+              .map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="btn"
+          disabled={!pick || full}
+          onClick={() => {
+            onChange(field.name, [...selected, pick]);
+            setPick('');
           }}
         >
-          <option value="">
-            {loading ? 'Loading…' : full ? `At most ${field.maxItems}` : '—'}
-          </option>
-          {options
-            .filter((o) => !selected.includes(o.value))
-            .map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-        </select>
-      </label>
+          Add
+        </button>
+      </div>
       {error && (
         <p className="admin-sub" role="alert">
           {error}
