@@ -150,3 +150,12 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     All projects and lists case studies, with no counts.
 32. **Metadata**: the English `<title>`/description are the mockup's own (the brand from
     identity); the Arabic is ours (`PAGE_META.portfolio` / `portfolioAll`) — owner review.
+33. **The overlay header needs a dark opening.** Both pages use the transparent overlay
+    header over their banner / black page head (the mockup's work-page scrim is carried by
+    the banner's own top gradient); when the page does not open on one — no published
+    project yet, or an editor hid or moved the head — it takes the solid bar instead of
+    sitting white-on-white over the proof band. `data-hero` marks the element the header
+    measures to turn solid.
+34. **The `cta` section type renders LeadBand** (tag, outlined accent, `/contact#inquiry`,
+    studio email from identity); CtaBand and its `.cta-band` CSS are retired. Any page still
+    carrying a `cta` section (About's current default) now shows the Klein band.
