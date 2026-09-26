@@ -258,7 +258,12 @@ describe('statistics: the displayed value is the number plus its suffix', () => 
     expect(R.statisticResource.toRow({ valueNumeric: 1.5, valueSuffix: null })).toMatchObject({
       value: '1.5',
     });
-    expect(R.statisticResource.toRow({ value: 'Top 10' })).toEqual({ value: 'Top 10' });
+    // Free text without a number drops the stored number (else the CHECK would refuse it).
+    expect(R.statisticResource.toRow({ value: 'Top 10' })).toEqual({
+      value: 'Top 10',
+      value_numeric: null,
+      value_suffix: null,
+    });
   });
 
   it('per-page labels round-trip between the column object and the form list', async () => {

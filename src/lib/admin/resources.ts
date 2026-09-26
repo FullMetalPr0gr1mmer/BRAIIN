@@ -598,7 +598,8 @@ export const statisticResource: ResourceConfig = {
   createSchema: StatisticWriteSchema,
   updateSchema: StatisticUpdateSchema,
   toRow: (input) => {
-    const values = pick(input as Input, {
+    const i = input as Input;
+    const values = pick(i, {
       slug: 'slug',
       label: 'label',
       value: 'value',
@@ -610,11 +611,15 @@ export const statisticResource: ResourceConfig = {
       status: 'status',
       sortOrder: 'sort_order',
     });
-    // A number to count up to IS the displayed value (number + suffix): deriving it here
-    // is the only way the 0023 statistics_value_consistent CHECK holds for every save.
-    const numeric = values['value_numeric'];
+    // The 0023 statistics_value_consistent CHECK: with a number, the displayed value IS the
+    // number plus its suffix (derived here); free text written without a number drops the
+    // count-up number, or the stored one would contradict it.
+    const numeric = i['valueNumeric'];
     if (typeof numeric === 'number') {
-      values['value'] = `${Number(numeric)}${String(values['value_suffix'] ?? '')}`;
+      values['value'] = `${Number(numeric.toFixed(2))}${String(i['valueSuffix'] ?? '')}`;
+    } else if (i['value'] !== undefined && i['value'] !== null && numeric === undefined) {
+      values['value_numeric'] = null;
+      values['value_suffix'] = null;
     }
     return values;
   },

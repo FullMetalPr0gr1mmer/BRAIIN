@@ -42,7 +42,9 @@ create table if not exists public.clients (
   slug citext not null check (slug ~ '^[a-z0-9][a-z0-9-]{0,63}$'),
   name jsonb not null check (jsonb_typeof(name) = 'object' and name ? 'en' and name ? 'ar'),
   logo_media_id uuid references public.media_assets (id) on delete restrict,
-  website_url text check (website_url ~ '^https://[^[:space:]]{4,300}$'),
+  -- Length checked apart from the pattern: Postgres regex bounds stop at 255 ({4,300} would
+  -- compile-fail on the first non-null value, not at CREATE TABLE).
+  website_url text check (char_length(website_url) <= 300 and website_url ~ '^https://[^[:space:]]{4,}$'),
   show_in_marquee boolean not null default false,
   visible boolean not null default false,
   is_placeholder boolean not null default false,
@@ -88,9 +90,14 @@ create table if not exists public.testimonials (
   constraint testimonials_consent_gate
     check (status not in ('published', 'scheduled') or consent_obtained_at is not null)
 );
--- One published quote per case study (the case-study page shows exactly one).
+-- One live-or-queued quote per case study (the case-study page shows exactly one).
+-- Scheduled counts too: a second quote scheduled behind a published one would otherwise
+-- hit this index only when app.publish_scheduled() flips it — aborting the whole cron run,
+-- services/blog/portfolio/pages included, every five minutes. Now it is refused (409) at
+-- the moment it is scheduled.
 create unique index if not exists testimonials_one_per_project
-  on public.testimonials (portfolio_id) where portfolio_id is not null and status = 'published';
+  on public.testimonials (portfolio_id)
+  where portfolio_id is not null and status in ('published', 'scheduled');
 create index if not exists testimonials_scheduled_idx
   on public.testimonials (tenant_id, scheduled_for) where status = 'scheduled';
 create index if not exists testimonials_client_idx on public.testimonials (client_id);
@@ -176,33 +183,29 @@ select p.tenant_id,
 on conflict (tenant_id, slug) do nothing;
 
 -- ---- Scheduled publishing: testimonials join the cron ---------------------------
+-- Each table is its own sub-transaction: one table whose rows cannot be published (a
+-- constraint an editor managed to trip) is logged and skipped, and never stops the others
+-- from going live on time.
 create or replace function app.publish_scheduled() returns int
   language plpgsql security definer set search_path = public, app, pg_temp as $$
 declare
   n int := 0;
   c int;
+  t text;
 begin
-  update public.services set status = 'published', published_at = coalesce(published_at, now())
-    where status = 'scheduled' and scheduled_for is not null and scheduled_for <= now();
-  get diagnostics c = row_count; n := n + c;
-
-  update public.blog_posts set status = 'published', published_at = coalesce(published_at, now())
-    where status = 'scheduled' and scheduled_for is not null and scheduled_for <= now();
-  get diagnostics c = row_count; n := n + c;
-
-  update public.portfolio set status = 'published', published_at = coalesce(published_at, now())
-    where status = 'scheduled' and scheduled_for is not null and scheduled_for <= now();
-  get diagnostics c = row_count; n := n + c;
-
-  update public.pages set status = 'published', published_at = coalesce(published_at, now())
-    where status = 'scheduled' and scheduled_for is not null and scheduled_for <= now();
-  get diagnostics c = row_count; n := n + c;
-
-  -- Consent is already guaranteed: the CHECK refuses a scheduled row without it.
-  update public.testimonials set status = 'published', published_at = coalesce(published_at, now())
-    where status = 'scheduled' and scheduled_for is not null and scheduled_for <= now();
-  get diagnostics c = row_count; n := n + c;
-
+  foreach t in array array['services', 'blog_posts', 'portfolio', 'pages', 'testimonials'] loop
+    begin
+      -- testimonials: consent is already guaranteed — the CHECK refuses a scheduled row
+      -- without it.
+      execute format(
+        'update public.%I set status = ''published'', published_at = coalesce(published_at, now())
+          where status = ''scheduled'' and scheduled_for is not null and scheduled_for <= now()', t);
+      get diagnostics c = row_count;
+      n := n + c;
+    exception when others then
+      raise warning 'publish_scheduled: % skipped (%: %)', t, sqlstate, sqlerrm;
+    end;
+  end loop;
   return n;
 end $$;
 revoke all on function app.publish_scheduled() from public, anon, authenticated, service_role;

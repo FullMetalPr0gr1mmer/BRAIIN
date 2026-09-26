@@ -45,13 +45,13 @@ export const BACKUP_TABLES: readonly { table: string; columns: string }[] = [
       'id,slug,name,logo_media_id,website_url,show_in_marquee,visible,is_placeholder,sort_order,updated_at',
   },
   {
-    // The consent columns travel with the quote: a restore without them could not re-publish
-    // it (the 0021 CHECK), and `consent_reference` is a pointer, not personal data.
+    // consent_obtained_at travels with the quote — a restore without it could not re-publish
+    // it (the 0021 CHECK). consent_reference (where the consent record is kept) does not:
+    // it points into correspondence a content backup has no reason to carry.
     table: 'testimonials',
     columns:
       'id,slug,quote,author_name,author_role,client_id,portfolio_id,avatar_media_id,placements,' +
-      'consent_obtained_at,consent_reference,status,published_at,scheduled_for,sort_order,' +
-      'is_placeholder,updated_at',
+      'consent_obtained_at,status,published_at,scheduled_for,sort_order,is_placeholder,updated_at',
   },
   { table: 'pages', columns: 'id,slug,title,status,nav_visible,updated_at' },
   {

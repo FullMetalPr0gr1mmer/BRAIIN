@@ -23,7 +23,9 @@ const PATHS = [
   '/services',
   '/services/branding',
   '/portfolio',
-  '/portfolio/riyadh-season-launch',
+  // A seeded published case study (local/CI/staging). The legacy demo rows are archived
+  // there, so pointing at one would scan the 404 page instead of the detail template.
+  '/portfolio/the-rider',
   '/creative-knowledge',
   '/creative-knowledge/arabic-first-brand-systems',
   '/search',
@@ -54,6 +56,8 @@ for (const route of ROUTES) {
   test(`served HTML is CSP-clean on ${route}`, async ({ request }) => {
     const res = await request.get(route);
     expect(res.status(), `${route} errored`).toBeLessThan(500);
+    // A content slug that went missing must fail loudly, not quietly scan the 404 page.
+    if (!route.endsWith('/404')) expect(res.status(), `${route} did not render`).toBe(200);
     const html = await res.text();
     for (const [pattern, what] of BANNED) {
       const hit = html.match(pattern);

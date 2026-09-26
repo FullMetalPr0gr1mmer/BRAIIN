@@ -45,6 +45,11 @@ insert into public.media_assets (id, tenant_id, kind, provider, storage_path) va
   ('65000000-0000-0000-0000-0000000000b1', '65000000-0000-0000-0000-000000000002', 'image', 'static', 'stills/work/p0.jpg');
 insert into public.portfolio (tenant_id, slug, title, status, poster_media_id) values
   ('65000000-0000-0000-0000-000000000002', 'pg-mp-t2', '{"en":"T","ar":"ت"}', 'published', '65000000-0000-0000-0000-0000000000b1');
+-- …and a LAUNCH-tenant visible section of the published page pointing at that asset
+-- (section JSON has no FK, so this is reachable). Only 0024's own tenant term hides it.
+insert into public.page_sections (tenant_id, page_id, type, content, visible) values
+  (app.default_tenant_id(), '65000000-0000-0000-0000-0000000000d1', 'hero',
+   '{"poster":{"mediaId":"65000000-0000-0000-0000-0000000000b1"}}', true);
 
 create function _claims(p_role text, p_tid text) returns void language sql as $$
   select set_config(
@@ -69,7 +74,8 @@ select is(_seen('65000000-0000-0000-0000-0000000000a6'), 0, 'anon CANNOT read an
 select is(_seen('65000000-0000-0000-0000-0000000000a7'), 1, 'anon reads an image in a visible section of a published page');
 select is(_seen('65000000-0000-0000-0000-0000000000a8'), 0, 'anon CANNOT read an image in a hidden section');
 select is(_seen('65000000-0000-0000-0000-0000000000a9'), 1, 'anon reads a published case study''s gallery image');
-select is(_seen('65000000-0000-0000-0000-0000000000b1'), 0, 'anon is fenced to the launch tenant');
+select is(_seen('65000000-0000-0000-0000-0000000000b1'), 0,
+  'anon is fenced to the launch tenant — even when launch-tenant content references another tenant''s asset');
 select throws_ok(
   $$ select folder from public.media_assets $$,
   '42501', null, 'anon CANNOT read internal columns (folder)');

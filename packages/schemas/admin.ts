@@ -342,7 +342,9 @@ const StatisticWriteBase = z.object({
    * way the 0023 statistics_value_consistent CHECK can hold.
    */
   value: z.string().trim().min(1).max(40).nullish(),
-  valueNumeric: z.number().min(0).max(9_999_999_999.99).nullish(),
+  // Two decimals, as numeric(12,2) stores it — so number + suffix derived here reads exactly
+  // as the database's trim_scale(value_numeric) (the 0023 CHECK).
+  valueNumeric: z.number().min(0).max(9_999_999_999.99).multipleOf(0.01).nullish(),
   valueSuffix: z.string().trim().max(4).nullish(),
   /** Pages this counter appears on. */
   placements: z
@@ -545,9 +547,23 @@ const MediaWriteBase = z.object({
 
 /** The provider's shape — the 0020 media_assets_provider_shape CHECK, stated up front. */
 function checkProvider(
-  v: { provider?: string | undefined; storagePath?: string | undefined },
+  v: {
+    provider?: string | undefined;
+    storagePath?: string | undefined;
+    streamUid?: string | null | undefined;
+  },
   ctx: z.RefinementCtx,
 ): void {
+  if (
+    v.provider === 'stream' &&
+    !(typeof v.streamUid === 'string' && /^[a-f0-9]{32}$/.test(v.streamUid))
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['streamUid'],
+      message: 'a Stream asset needs its 32-hex video uid',
+    });
+  }
   if (v.provider === 'static' && v.storagePath !== undefined) {
     if (!StaticMediaKeySchema.safeParse(v.storagePath).success) {
       ctx.addIssue({
