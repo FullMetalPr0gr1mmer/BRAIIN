@@ -31,7 +31,16 @@ export interface CatalogPage {
   head: Head;
   jsonLd: JsonLdNode[];
   filtered: boolean;
+  /**
+   * `overlay` (transparent over the page's dark head) only when the page really opens on
+   * one — the banner (which needs a published project) or the black page head. Otherwise
+   * the solid bar: an overlay header over the white proof band would be white on white.
+   */
+  header: 'overlay' | 'solid';
 }
+
+/** The first section a visitor will actually see (visible: false is skipped). */
+const firstVisible = (sections: SectionData[]) => sections.find((s) => s.visible !== false);
 
 type Locals = Parameters<typeof loadHead>[0];
 
@@ -84,6 +93,7 @@ export async function loadOurWork(url: URL, locals: Locals, locale: Locale): Pro
     sections,
     head,
     filtered: isFiltered(url.searchParams),
+    header: firstVisible(sections)?.type === 'workHero' && cards.length > 0 ? 'overlay' : 'solid',
     jsonLd: [
       buildBreadcrumbSchema([
         { name: HOME[locale], url: absolute('/', locale) },
@@ -103,13 +113,16 @@ export async function loadAllProjects(
   const { cards, authored, head } = await compose('portfolio-all', meta, locals, locale);
   const selection = parseFacets(url.searchParams, cards);
   const sections = withData(authored.length ? authored : DEFAULT_CATALOG_SECTIONS, {
-    pageHead: { count: filterCards(cards, selection).length },
+    // No count at all while nothing is published — "00 projects" above an empty page reads
+    // as broken; with a catalogue it is the live number of matches.
+    pageHead: cards.length > 0 ? { count: filterCards(cards, selection).length } : {},
     projectCatalog: { cards, selection },
   });
   return {
     sections,
     head,
     filtered: isFiltered(url.searchParams),
+    header: firstVisible(sections)?.type === 'pageHead' ? 'overlay' : 'solid',
     jsonLd: [
       buildBreadcrumbSchema([
         { name: HOME[locale], url: absolute('/', locale) },

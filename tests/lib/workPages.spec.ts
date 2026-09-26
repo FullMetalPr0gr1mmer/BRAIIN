@@ -33,7 +33,8 @@ const CARDS = [
 ];
 
 let authored: SectionData[] = [];
-vi.mock('@/lib/data/portfolio', () => ({ getPortfolioCards: async () => CARDS }));
+let cards: PortfolioCard[] = CARDS;
+vi.mock('@/lib/data/portfolio', () => ({ getPortfolioCards: async () => cards }));
 vi.mock('@/lib/data/pageSections', () => ({
   getPageComposition: async (slug: string) => ({
     page: { id: `id-${slug}`, slug, title: t(slug), updatedAt: null },
@@ -53,6 +54,7 @@ const url = (q = '') => new URL(`https://www.braiinstation.com/portfolio${q}`);
 const byType = (sections: SectionData[], type: string) => sections.find((s) => s.type === type);
 
 beforeEach(() => {
+  cards = CARDS;
   authored = [];
   entities.length = 0;
 });
@@ -137,5 +139,33 @@ describe('loadAllProjects', () => {
       (i) => i.name,
     );
     expect(names).toEqual(['Home', 'Our Work', 'All projects']);
+  });
+});
+
+describe('header variant — overlay only over a dark opening', () => {
+  it('Our Work: overlay over the banner, solid when no project is published', async () => {
+    expect((await loadOurWork(url(), {} as never, 'en')).header).toBe('overlay');
+    cards = [];
+    expect((await loadOurWork(url(), {} as never, 'en')).header).toBe('solid');
+  });
+
+  it('Our Work: solid when the composition does not open on the banner', async () => {
+    authored = [
+      { type: 'workHero', visible: false },
+      { type: 'proof', props: {} },
+    ];
+    expect((await loadOurWork(url(), {} as never, 'en')).header).toBe('solid');
+  });
+
+  it('All projects shows no count while nothing is published', async () => {
+    cards = [];
+    const page = await loadAllProjects(url(), {} as never, 'en');
+    expect(byType(page.sections, 'pageHead')?.data).toEqual({});
+  });
+
+  it('All projects: overlay over the black page head, solid without it', async () => {
+    expect((await loadAllProjects(url(), {} as never, 'ar')).header).toBe('overlay');
+    authored = [{ type: 'projectCatalog', props: {} }];
+    expect((await loadAllProjects(url(), {} as never, 'ar')).header).toBe('solid');
   });
 });
