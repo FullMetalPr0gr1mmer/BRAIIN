@@ -321,9 +321,6 @@ html[dir='rtl'] .work-intro__link {
   margin-bottom: clamp(28px, 4vh, 48px);
   border-bottom: 1px solid var(--bs-line-d);
 }
-.pgrid__head .tag {
-  margin-bottom: 1.2rem;
-}
 .pgrid__head h2 {
   margin: 0;
   font-size: clamp(34px, 6vw, 96px);
