@@ -1,0 +1,796 @@
+/* ============================================================
+   CASE STUDY — route stylesheet (UI v2 PR11)
+   Linked after global.css and banner.css by BaseLayout `styles` on /portfolio/[slug]
+   (EN + /ar). Values from the mockup's project.html "PROJECT (case study)" block
+   (docs/design-port-2026-09.md); namespaced:
+     .cs-title      the title band (CaseTitle)             mockup .pt / .kw
+     .cs-ov         overview + final film (CaseOverview)   mockup .ov / .scope / .res
+     .cs-final      the final film (in CaseOverview)       mockup .ov__final
+     .cs-quote      the client quote (CaseQuote)           mockup .pq
+     .cs-bd         the breakdown (CaseBreakdown)          mockup .bd / .bdi
+     .cs-gal        the gallery (CaseGallery)              mockup .gal
+     .lightbox      the image viewer (Lightbox)            mockup .lb
+     .cs-next       next project (NextProject)             mockup .nx
+   The banner and its caption are banner.css; the lead band is global.css.
+   Logical properties throughout, so RTL needs overrides only for type (no uppercase, no
+   tracking, taller lines) and mirrored glyphs. Motion is compositor-only (opacity +
+   transform); this sheet's share of the reduced-motion safety net is at the end.
+   ============================================================ */
+
+/* ---- Title band (CaseTitle.astro) ---- */
+.cs-title {
+  position: relative;
+  z-index: 2;
+  background: var(--bs-black);
+  color: var(--bs-paper);
+  padding: clamp(64px, 10vh, 120px) var(--bs-pad-x) clamp(48px, 7vh, 80px);
+}
+/* No banner above it: the band opens the page, under the fixed overlay header. */
+.cs-title[data-hero] {
+  padding-top: calc(var(--bs-header-h) + clamp(56px, 9vh, 110px));
+}
+.cs-title__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: clamp(26px, 4vh, 40px);
+  color: var(--bs-muted);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.3s;
+}
+html[dir='rtl'] .cs-title__back {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 14px;
+}
+.cs-title__back:hover {
+  color: var(--bs-paper);
+}
+.cs-title__back svg {
+  width: 14px;
+  height: 14px;
+}
+html[dir='rtl'] .cs-title__back svg {
+  transform: scaleX(-1);
+}
+.cs-title h1 {
+  margin: 0;
+  font-size: clamp(40px, 7.4vw, 128px);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+  max-width: 16ch;
+}
+html[dir='rtl'] .cs-title h1 {
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+  font-size: clamp(34px, 5.8vw, 100px);
+}
+.cs-title__row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 26px 48px;
+  flex-wrap: wrap;
+  margin-top: clamp(28px, 4.5vh, 48px);
+  padding-top: clamp(22px, 3.4vh, 32px);
+  border-top: 1px solid var(--bs-line-d);
+}
+.cs-kw {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cs-kw li {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.9);
+}
+.cs-kw li:first-child {
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+  color: var(--bs-paper);
+}
+
+/* ---- Overview + final film, on mist (CaseOverview.astro) ---- */
+.cs-ov {
+  position: relative;
+  z-index: 2;
+  background: var(--bs-mist);
+  color: var(--bs-black);
+  padding: clamp(72px, 11vh, 140px) var(--bs-pad-x);
+}
+.cs-ov__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: clamp(32px, 5vw, 96px);
+  align-items: start;
+}
+/* Only the text, or only the film: one column, kept to a readable measure. */
+.cs-ov--solo .cs-ov__grid {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 60rem;
+}
+.cs-ov__blk + .cs-ov__blk {
+  margin-top: clamp(34px, 5vh, 54px);
+  padding-top: clamp(28px, 4vh, 40px);
+  border-top: 1px solid var(--bs-line-l);
+}
+.cs-ov__h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bs-klein);
+}
+html[dir='rtl'] .cs-ov__h {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 14px;
+}
+.cs-ov__h::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bs-klein);
+}
+.cs-ov__lead {
+  margin: 0;
+  font-size: clamp(19px, 1.8vw, 26px);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.015em;
+}
+html[dir='rtl'] .cs-ov__lead {
+  letter-spacing: 0;
+  line-height: 1.8;
+}
+.cs-ov__p,
+.cs-ov__body p {
+  margin: 0;
+  font-size: clamp(15px, 1.25vw, 17px);
+  line-height: 1.7;
+  color: var(--bs-ink-3);
+}
+html[dir='rtl'] .cs-ov__p,
+html[dir='rtl'] .cs-ov__body p {
+  line-height: 1.95;
+}
+.cs-ov__lead + .cs-ov__p,
+.cs-ov__lead + .cs-ov__body,
+.cs-ov__p + .cs-ov__body,
+.cs-ov__body p + p {
+  margin-top: 14px;
+}
+/* Links in the rich-text body: Klein on mist (the site's sky link colour fails here). */
+.cs-ov__body a {
+  color: var(--bs-klein);
+}
+.cs-scope {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cs-scope li {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--bs-line-l);
+  font-size: clamp(15px, 1.3vw, 18px);
+  font-weight: 600;
+}
+.cs-scope li:first-child {
+  padding-top: 0;
+}
+.cs-scope__n {
+  flex: none;
+  min-width: 22px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bs-klein);
+  font-variant-numeric: tabular-nums;
+}
+.cs-res {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.cs-res li {
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--bs-paper);
+  border: 1px solid var(--bs-line-l);
+}
+.cs-res__v {
+  display: block;
+  font-size: clamp(28px, 3vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--bs-klein);
+}
+.cs-res__l {
+  display: block;
+  margin-top: 8px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--bs-dim);
+}
+.cs-final {
+  position: sticky;
+  top: 110px;
+  margin: 0;
+}
+.cs-final__cap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--bs-dim);
+}
+.cs-final__cap b {
+  color: var(--bs-black);
+  font-weight: 700;
+}
+@media (max-width: 56.25rem) {
+  .cs-ov__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cs-final {
+    position: relative;
+    top: 0;
+    order: -1;
+  }
+}
+
+/* ---- Client quote, on Klein (CaseQuote.astro; .klein-band gives the fill + glow) ---- */
+.cs-quote {
+  z-index: 2;
+  padding: clamp(80px, 13vh, 160px) var(--bs-pad-x);
+}
+.cs-quote__wrap {
+  position: relative;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.cs-quote__mark {
+  display: block;
+  width: 56px;
+  height: 42px;
+  color: rgba(255, 255, 255, 0.4);
+}
+.cs-quote blockquote {
+  margin: 24px 0 0;
+}
+.cs-quote blockquote p {
+  margin: 0;
+  font-size: clamp(24px, 3.2vw, 50px);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+html[dir='rtl'] .cs-quote blockquote p {
+  letter-spacing: 0;
+  line-height: 1.7;
+  font-size: clamp(22px, 2.8vw, 42px);
+}
+.cs-quote__by {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: clamp(28px, 4vh, 44px);
+}
+.cs-quote__av {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  overflow: hidden;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bs-paper);
+  color: var(--bs-klein);
+  font-weight: 800;
+}
+.cs-quote__av img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cs-quote__n {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+}
+.cs-quote__r {
+  display: block;
+  margin-top: 3px;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ---- Breakdown, on white (CaseBreakdown.astro) ---- */
+.cs-bd {
+  position: relative;
+  z-index: 2;
+  background: var(--bs-paper);
+  color: var(--bs-black);
+  padding: clamp(80px, 12vh, 150px) var(--bs-pad-x);
+}
+.cs-bd__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px 48px;
+  flex-wrap: wrap;
+  margin-bottom: clamp(36px, 6vh, 64px);
+}
+.cs-bd__head h2 {
+  margin: 0;
+  font-size: clamp(36px, 6vw, 100px);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+  max-width: 13ch;
+}
+html[dir='rtl'] .cs-bd__head h2 {
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+  font-size: clamp(32px, 4.8vw, 80px);
+}
+.cs-bd__head h2 em {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+.cs-bd__lead {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--bs-dim);
+  max-width: 38ch;
+}
+.cs-bd__grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: clamp(14px, 1.6vw, 24px);
+}
+.cs-bdi {
+  grid-column: span 6;
+  margin: 0;
+}
+.cs-bdi--wide {
+  grid-column: span 12;
+}
+.cs-bdi--third {
+  grid-column: span 4;
+}
+.cs-bdi__open {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  border-radius: 18px;
+  background: var(--bs-media-bg-l);
+  cursor: zoom-in;
+}
+.cs-bdi--wide .cs-bdi__open {
+  aspect-ratio: 21 / 9;
+}
+.cs-bdi--sketch .cs-bdi__open {
+  background: var(--bs-paper);
+  border: 1px solid var(--bs-line-l);
+}
+.cs-bdi__open img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.cs-bdi__cap {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 14px;
+}
+.cs-bdi__tag {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--bs-black);
+  color: var(--bs-paper);
+}
+html[dir='rtl'] .cs-bdi__tag {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 12px;
+}
+.cs-bdi--sketch .cs-bdi__tag {
+  background: var(--bs-klein);
+}
+.cs-bdi__t {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--bs-ink-3);
+}
+@media (max-width: 47.5rem) {
+  .cs-bdi,
+  .cs-bdi--third {
+    grid-column: span 12;
+  }
+}
+
+/* ---- Gallery, black and edge to edge (CaseGallery.astro; layout from galleryLayout) ---- */
+.cs-gal {
+  position: relative;
+  z-index: 2;
+  background: var(--bs-black);
+  color: var(--bs-paper);
+}
+.cs-gal__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: clamp(64px, 10vh, 120px) var(--bs-pad-x) clamp(28px, 4vh, 44px);
+}
+.cs-gal__head h2 {
+  margin: 0;
+  font-size: clamp(34px, 5.4vw, 90px);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .cs-gal__head h2 {
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+.cs-gal__head h2 em {
+  font-style: normal;
+  color: var(--bs-sky);
+}
+.cs-gal__count {
+  font-size: 13px;
+  color: var(--bs-muted);
+  font-variant-numeric: tabular-nums;
+}
+.cs-gal__grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0;
+}
+.cs-gal__item {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  grid-column: span 2;
+  aspect-ratio: 4 / 3;
+  background: var(--bs-media-bg);
+  cursor: zoom-in;
+}
+.cs-gal__item--half {
+  grid-column: span 3;
+  aspect-ratio: 3 / 2;
+}
+.cs-gal__item--wide {
+  grid-column: span 6;
+  aspect-ratio: 21 / 8;
+}
+.cs-gal__item img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 1.2s var(--bs-ease);
+}
+.cs-gal__item:hover img,
+.cs-gal__item:focus-visible img {
+  transform: scale(1.04);
+}
+/* The stills touch edge to edge, so an outline would be painted over by the next one: the
+   focus ring is drawn INSIDE the still instead (white, with a dark keyline for pale frames). */
+.cs-gal__item:focus-visible {
+  outline: none;
+}
+.cs-gal__item:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid var(--bs-paper);
+  box-shadow: inset 0 0 0 2px var(--bs-black);
+}
+@media (max-width: 47.5rem) {
+  .cs-gal__item,
+  .cs-gal__item--half {
+    grid-column: span 3;
+    aspect-ratio: 1;
+  }
+  .cs-gal__item--wide,
+  .cs-gal__item--fill {
+    grid-column: span 6;
+    aspect-ratio: 16 / 9;
+  }
+}
+
+/* ---- Image viewer (Lightbox.astro + src/lib/client/lightbox.ts) ---- */
+/* A modal <dialog> filling the viewport — its own fill is the dim, so ::backdrop is clear.
+   `display` only when [open]: an author `display` would beat the UA's
+   `dialog:not([open]) { display: none }` and leave the viewer on screen. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.92);
+  color: var(--bs-paper);
+}
+.lightbox[open] {
+  display: grid;
+  animation: cs-lb-in 0.3s var(--bs-ease);
+}
+@keyframes cs-lb-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.lightbox::backdrop {
+  background: transparent;
+}
+.lightbox [hidden] {
+  display: none;
+}
+.lightbox__stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.lightbox__img {
+  max-width: 92vw;
+  max-height: 84vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.lightbox__btn {
+  position: absolute;
+  z-index: 1;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: var(--bs-paper);
+  transition:
+    background 0.3s,
+    border-color 0.3s;
+}
+.lightbox__btn:hover {
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+}
+.lightbox__btn:focus-visible {
+  outline-color: var(--bs-paper);
+  outline-offset: 3px;
+}
+.lightbox__btn svg {
+  width: 18px;
+  height: 18px;
+}
+.lightbox__x {
+  top: 22px;
+  inset-inline-end: 22px;
+}
+.lightbox__p {
+  inset-inline-start: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.lightbox__n {
+  inset-inline-end: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+html[dir='rtl'] .lightbox__p svg,
+html[dir='rtl'] .lightbox__n svg {
+  transform: scaleX(-1);
+}
+.lightbox__c {
+  position: absolute;
+  z-index: 1;
+  bottom: 22px;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  font-variant-numeric: tabular-nums;
+}
+html[dir='rtl'] .lightbox__c {
+  transform: translateX(50%);
+}
+/* The page behind a modal viewer does not scroll. */
+html:has(.lightbox[open]) {
+  overflow: hidden;
+}
+
+/* ---- Next project (NextProject.astro) ---- */
+.cs-next {
+  position: relative;
+  z-index: 2;
+  display: block;
+  overflow: hidden;
+  color: var(--bs-paper);
+  text-decoration: none;
+  background: var(--bs-black);
+}
+.cs-next picture,
+.cs-next__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.cs-next__img {
+  object-fit: cover;
+  opacity: 0.45;
+  transition:
+    opacity 0.6s,
+    transform 1.4s var(--bs-ease);
+}
+.cs-next:hover .cs-next__img,
+.cs-next:focus-visible .cs-next__img {
+  opacity: 0.65;
+  transform: scale(1.04);
+}
+/* Scrim (ours): the band's text stays legible over ANY frame, at the hover opacity too —
+   worst case a white frame (.65 × .6 → #636363): title 6.0:1, kicker 4.9:1
+   (scripts/contrast-audit.mjs, nxWorst). */
+.cs-next::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.cs-next:focus-visible {
+  outline-color: var(--bs-paper);
+  outline-offset: -4px;
+}
+.cs-next__in {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: clamp(80px, 14vh, 170px) var(--bs-pad-x);
+}
+.cs-next__k {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+}
+html[dir='rtl'] .cs-next__k {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 14px;
+}
+.cs-next__t {
+  display: block;
+  margin-top: 14px;
+  font-size: clamp(34px, 6vw, 100px);
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+  max-width: 16ch;
+}
+html[dir='rtl'] .cs-next__t {
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: none;
+}
+.cs-next__go {
+  flex: none;
+  width: clamp(64px, 7vw, 96px);
+  height: clamp(64px, 7vw, 96px);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bs-paper);
+  color: var(--bs-klein);
+  transition:
+    transform 0.5s var(--bs-ease),
+    background 0.3s,
+    color 0.3s;
+}
+.cs-next__go svg {
+  width: 26px;
+  height: 26px;
+}
+html[dir='rtl'] .cs-next__go svg {
+  transform: scaleX(-1);
+}
+.cs-next:hover .cs-next__go,
+.cs-next:focus-visible .cs-next__go {
+  transform: translateX(6px);
+  background: var(--bs-klein);
+  color: var(--bs-paper);
+}
+html[dir='rtl'] .cs-next:hover .cs-next__go,
+html[dir='rtl'] .cs-next:focus-visible .cs-next__go {
+  transform: translateX(-6px);
+}
+
+/* ---- Motion safety net (this sheet's share of global.css's reduced-motion block) ----
+   The viewer's fade is revealed by KILLING its animation (its from-state lives only in
+   @keyframes — the global INVARIANT); hover zooms and nudges are pinned still. */
+@media (prefers-reduced-motion: reduce) {
+  .lightbox[open] {
+    animation: none !important;
+  }
+  .cs-gal__item:hover img,
+  .cs-gal__item:focus-visible img,
+  .cs-next:hover .cs-next__img,
+  .cs-next:focus-visible .cs-next__img,
+  .cs-next:hover .cs-next__go,
+  .cs-next:focus-visible .cs-next__go {
+    transform: none !important;
+  }
+}

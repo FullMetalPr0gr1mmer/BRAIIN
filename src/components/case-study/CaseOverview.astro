@@ -1,0 +1,141 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { CaseStudy } from '@/lib/data/portfolio';
+import { pickLocale } from '@/lib/i18n';
+import { pad2 } from '@/lib/portfolio/caseStudy';
+import MediaFrame from '@/components/media/MediaFrame.astro';
+
+// Overview + the final film (UI v2 PR11 — project.html `.ov`), on mist. Left: four blocks
+// under REAL h2 headings (the mockup's were divs) — Overview (the lead line, the summary,
+// and the sanitised rich-text body when there is one), Scope of work (numbered), The goal,
+// The result (+ its figure cards). Right: the final film, sticky beside them on wide
+// screens and above them on narrow ones. Every block hides when it has nothing to say;
+// with nothing at all the section is not rendered.
+//
+// The film is a MediaFrame: its poster, and a MUTED loop of its clip window while at least
+// 30 % of it is on screen (clips.ts — never on touch, under reduced motion or Save-Data;
+// an EXC-007 in-view surface, playing under EXC-009). The mockup's in-place "Sound on"
+// toggle is not carried: a sound version with captions (WCAG 1.2.2) and a pause control
+// arrives with the Stream player (KAN-20), consent-gated — docs/design-port-2026-09.md.
+
+interface Props {
+  locale: Locale;
+  study: CaseStudy;
+}
+
+const { locale, study } = Astro.props;
+
+const STR = {
+  en: {
+    overview: 'Overview',
+    scope: 'Scope of work',
+    goal: 'The goal',
+    result: 'The result',
+    final: 'Final film',
+  },
+  ar: {
+    overview: 'نظرة عامة',
+    scope: 'نطاق العمل',
+    goal: 'الهدف',
+    result: 'النتيجة',
+    final: 'الفيلم النهائي',
+  },
+}[locale];
+
+const lead = study.lead ? pickLocale(study.lead, locale) : '';
+const summary = study.summary ? pickLocale(study.summary, locale) : '';
+// body_html is the SANITISED HTML cache (sanitised on write in the admin, CLAUDE.md §3
+// Pillar 1) — never raw editor input.
+const bodyHtml = study.bodyHtml ? pickLocale(study.bodyHtml, locale) : '';
+const scope = study.scope.map((s) => pickLocale(s, locale));
+const goal = study.goal ? pickLocale(study.goal, locale) : '';
+const result = study.result ? pickLocale(study.result, locale) : '';
+const results = study.results.map((r) => ({ value: r.value, label: pickLocale(r.label, locale) }));
+
+const film = study.final && (study.final.image || study.final.clip) ? study.final : null;
+const hasOverview = Boolean(lead || summary || bodyHtml);
+const hasResult = Boolean(result || results.length > 0);
+const hasText = hasOverview || scope.length > 0 || Boolean(goal) || hasResult;
+---
+
+{
+  (hasText || film) && (
+    <section class:list={['cs-ov', { 'cs-ov--solo': !hasText || !film }]}>
+      <div class="cs-ov__grid">
+        {hasText && (
+          <div class="cs-ov__text">
+            {hasOverview && (
+              <div class="cs-ov__blk rv">
+                <h2 class="cs-ov__h">{STR.overview}</h2>
+                {lead && <p class="cs-ov__lead">{lead}</p>}
+                {summary && <p class="cs-ov__p">{summary}</p>}
+                {bodyHtml && <div class="cs-ov__body" set:html={bodyHtml} />}
+              </div>
+            )}
+            {scope.length > 0 && (
+              <div class="cs-ov__blk rv">
+                <h2 class="cs-ov__h">{STR.scope}</h2>
+                <ol class="cs-scope" role="list">
+                  {scope.map((item, i) => (
+                    <li>
+                      <span class="cs-scope__n" aria-hidden="true">
+                        {pad2(i + 1)}
+                      </span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {goal && (
+              <div class="cs-ov__blk rv">
+                <h2 class="cs-ov__h">{STR.goal}</h2>
+                <p class="cs-ov__p">{goal}</p>
+              </div>
+            )}
+            {hasResult && (
+              <div class="cs-ov__blk rv">
+                <h2 class="cs-ov__h">{STR.result}</h2>
+                {result && <p class="cs-ov__p">{result}</p>}
+                {results.length > 0 && (
+                  <ul class="cs-res" role="list">
+                    {results.map((r) => (
+                      <li>
+                        <span class="cs-res__v" dir="ltr">
+                          {r.value}
+                        </span>
+                        <span class="cs-res__l">{r.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {film && (
+          <figure class="cs-final rv">
+            <MediaFrame
+              image={film.image}
+              locale={locale}
+              clip={film.clip}
+              mode="inview"
+              threshold={0.3}
+              ratio="film"
+              widths={[640, 960, 1280, 1600]}
+              sizes="(min-width: 56.25rem) 52vw, 100vw"
+            />
+            <figcaption class="cs-final__cap">
+              <b>{STR.final}</b>
+              {film.durationLabel && (
+                <span>
+                  · <bdi>{film.durationLabel}</bdi>
+                </span>
+              )}
+            </figcaption>
+          </figure>
+        )}
+      </div>
+    </section>
+  )
+}

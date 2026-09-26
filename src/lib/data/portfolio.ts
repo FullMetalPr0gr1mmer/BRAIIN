@@ -1,7 +1,6 @@
 import {
   CaseStudyRowSchema,
   PortfolioCardRowSchema,
-  PortfolioRowSchema,
   PUBLIC_MEDIA_COLUMNS,
   type CaseStudyRow,
   type LocalizedProse,
@@ -13,40 +12,20 @@ import {
 import type { VideoClip } from '@schemas/media';
 import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
 import { clipOf, imageRef, type ImageRef } from '@/lib/media/resolve';
-import { parseRow, parseRows, reportLoadError } from './parse';
+import { describable } from '@/lib/portfolio/caseStudy';
+import { parseRows, reportLoadError } from './parse';
 
 // Runtime data access for the public portfolio / case studies (Tier A SSR). Tenant +
 // published filtering are enforced by RLS; we still pass status explicitly. Shape lives in
 // `packages/schemas/content.ts` (CLAUDE.md §8). Resilient: []/null on any error.
 //
-// Two generations live here while UI v2 lands page by page:
-//   getPortfolioBySlug                     the current case-study page (until PR11)
-//   getPortfolioCards / getCaseStudy /     UI v2: Our Work, All projects, the sitemap and
-//   getCaseStudyIndex                      llms.txt (PR10), the case study (PR11)
-// The discovery files list from getCaseStudyIndex — the getCaseStudy select + schema — so
-// once PR11 moves the page onto getCaseStudy neither can list a URL the page would 404 on.
-// Until then the interim page is no stricter: CaseStudyRowSchema validates the legacy
-// columns with the very same sub-schemas, so every listed row renders there too.
-
-export type { PortfolioRow } from '@schemas/content';
-
-const COLUMNS = 'id,slug,title,summary,body_html,sort_order,updated_at';
-
-export async function getPortfolioBySlug(slug: string) {
-  if (!supabaseConfigured()) return null;
-  try {
-    const { data, error } = await anonClient()
-      .from('portfolio')
-      .select(COLUMNS)
-      .eq('status', 'published')
-      .eq('slug', slug)
-      .maybeSingle();
-    if (error || !data) return null;
-    return parseRow(PortfolioRowSchema, data, 'portfolio');
-  } catch {
-    return null;
-  }
-}
+//   getPortfolioCards    Our Work, All projects, home Selected work, the case study's
+//                        "Next project"
+//   getCaseStudy         the case study (/portfolio/[slug], PR11)
+//   getCaseStudyIndex    the sitemap and llms.txt
+// getCaseStudy and getCaseStudyIndex share ONE select (CASE_STUDY_COLUMNS) and ONE
+// row→model path (parseCaseStudies), so neither discovery file can list a URL the page
+// would answer 404 for (tests/lib/portfolioLoader.spec.ts asserts the pairing).
 
 // ── UI v2 ──────────────────────────────────────────────────────────────────────
 
@@ -194,9 +173,11 @@ export function toCaseStudy(row: CaseStudyRow): CaseStudy {
       .filter((m) => m.role === role)
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(toCaseMedia);
-  // A gallery or breakdown image that no longer resolves is dropped rather than rendered
-  // as an empty frame; hero/final keep their clip even when the poster is missing.
-  const images = (items: CaseMedia[]) => items.filter((m) => m.image !== null);
+  // A gallery or breakdown still is CONTENT on this page: one that no longer resolves, or
+  // that cannot be described in both languages (no caption, no bilingual alt), is dropped
+  // rather than rendered as an empty frame or with alt="". Hero/final keep their clip even
+  // when the poster is missing.
+  const images = (items: CaseMedia[]) => items.filter(describable);
   return {
     ...toCard(row),
     summary: row.summary,
@@ -239,6 +220,14 @@ export async function getPortfolioCards(
   }
 }
 
+/**
+ * THE row → case-study path, shared by the page and the discovery index: whatever it
+ * rejects (and logs) is a 404 on the page AND absent from the sitemap and llms.txt.
+ */
+export function parseCaseStudies(rows: unknown[]): CaseStudy[] {
+  return parseRows(CaseStudyRowSchema, rows, 'portfolio').map(toCaseStudy);
+}
+
 export interface CaseStudyEntry {
   slug: string;
   title: LocalizedText;
@@ -263,10 +252,10 @@ export async function getCaseStudyIndex(): Promise<CaseStudyEntry[]> {
       reportLoadError('case_study_index', error);
       return [];
     }
-    return parseRows(CaseStudyRowSchema, data ?? [], 'portfolio').map((row) => ({
-      slug: row.slug,
-      title: row.title,
-      updatedAt: row.updated_at,
+    return parseCaseStudies(data ?? []).map((study) => ({
+      slug: study.slug,
+      title: study.title,
+      updatedAt: study.updatedAt,
     }));
   } catch (err) {
     reportLoadError('case_study_index', err);
@@ -289,8 +278,7 @@ export async function getCaseStudy(slug: string): Promise<CaseStudy | null> {
       return null;
     }
     if (!data) return null;
-    const row = parseRow(CaseStudyRowSchema, data, 'portfolio');
-    return row ? toCaseStudy(row) : null;
+    return parseCaseStudies([data])[0] ?? null;
   } catch (err) {
     reportLoadError('case_study', err);
     return null;
