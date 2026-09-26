@@ -237,6 +237,8 @@ export const NavItemWriteSchema = z.object({
   /** Site-relative or absolute; same scheme allowlist as rich-text links. */
   href: z.string().trim().min(1).max(2048),
   visible: z.boolean().default(true),
+  /** The link the header keeps visible at <=900px. At most one per location (0019 index). */
+  isKey: z.boolean().default(false),
   sortOrder: SortOrderSchema,
 });
 export const NavItemUpdateSchema = updatable(NavItemWriteSchema);

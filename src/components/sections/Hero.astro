@@ -240,8 +240,11 @@ const src = videoUid ? undefined : videoSrc;
     const fading = typeof fade?.currentTime === 'number' && fade.currentTime >= holdMs;
     if (logo && !fading) {
       // Bounds the wait so time-to-content stays honest even on a cold edge: worst case
-      // is CAP + hold + fade. Warm (the overwhelming majority) releases in ~0.7s.
-      const HOLD_CAP_MS = 2000;
+      // is CAP + hold + fade (4.45s with the UI v2 1.0s hold). Warm (the overwhelming
+      // majority) releases in ~0.7s. 3s, not the 2s it was: CAP + hold must outlast the
+      // measured cold transform (~3.6s) or the plate lifts before the logo exists — with
+      // the old 3.5s hold, 2s had slack to spare; with a 1.0s hold it had none.
+      const HOLD_CAP_MS = 3000;
       document.body.classList.add('intro-waiting');
       let released = false;
       const release = () => {

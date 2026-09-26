@@ -98,6 +98,18 @@ for (const locale of ['en', 'ar'] as const) {
     await expect(page.locator('.site-nav__list > li > a')).toHaveCount(items.length);
   });
 
+  test(`following a same-page link closes the small-screen menu — ${locale}`, async ({ page }) => {
+    // /#services on home is an in-page jump: nothing reloads, so an open <details> would
+    // stay pinned over the section the visitor asked for.
+    await page.setViewportSize({ width: 412, height: 823 });
+    await page.goto(root);
+    await page.locator('.site-nav__toggle').click();
+    await page.locator('.site-nav__panel a', { hasText: items[3][0] }).click();
+    await expect(page).toHaveURL(/#services$/);
+    await expect(page.locator('details.site-nav')).not.toHaveAttribute('open', /.*/);
+    await expect(page.locator('.site-nav__panel')).toBeHidden();
+  });
+
   test(`wide screens show the list, not the key-link copy — ${locale}`, async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 800 });
     await page.goto(root);

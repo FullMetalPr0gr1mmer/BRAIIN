@@ -136,17 +136,20 @@ describe('navigation seed', () => {
     expect(rows('footer').filter((r) => r.isKey)).toHaveLength(0);
   });
 
-  it('never seeds into a menu an editor has already built', () => {
-    // Each nav insert is skipped while the location holds rows OTHER than the seed's own,
-    // so production's authored menu is never mixed with ours — and a re-run is a no-op.
-    const statements = generate('production')
-      .split(';')
-      .filter((sql: string) => /insert into public\.navigation/.test(sql));
-    expect(statements.length).toBe(rows('header').length + rows('footer').length);
-    for (const sql of statements) {
-      expect(sql).toMatch(/where not exists \(select 1 from public\.navigation/);
-      expect(sql).toMatch(/and id not in \(/);
-      expect(sql).toMatch(/on conflict \(id\) do nothing/);
-    }
+  it('seeds a menu only while it is EMPTY — never into, or back into, an edited one', () => {
+    // One guarded block per location: the check runs once, before any of its rows, and
+    // looks at the WHOLE location — so production's authored menu is never mixed with ours,
+    // and an item an editor deleted is not resurrected when the seed is run again.
+    const sql = generate('production');
+    const guards = [
+      ...sql.matchAll(/if not exists \(select 1 from public\.navigation where [^)]*\)/g),
+    ].map((m) => m[0]);
+    expect(guards).toHaveLength(2);
+    expect(guards[0]).toContain("location = 'header'");
+    expect(guards[1]).toContain("location = 'footer'");
+    for (const guard of guards) expect(guard).not.toContain('id not in');
+    const blocks = sql.split('do $seed$').slice(1);
+    expect(blocks).toHaveLength(2);
+    for (const block of blocks) expect(block).toContain('on conflict (id) do nothing');
   });
 });

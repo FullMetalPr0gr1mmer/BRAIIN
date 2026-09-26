@@ -467,6 +467,13 @@ html[dir='rtl'] .tag {
   animation: fade-in 0.7s ease both;
   animation-delay: calc(var(--bs-hero-in) + var(--bs-hero-beat) * 3);
 }
+/* No intro (contact): there is no handoff to wait for, so the bar does not sit out the
+   worst-case headline bound — invisible and unclickable for ~2s — before it arrives. The
+   mockup's contact page shows its nav from the start. Home always keeps `.intro` in the
+   DOM (a cut only hides it), so home keeps its strict order. */
+body:not(:has(.intro)) .site-header--overlay {
+  animation-delay: 0s;
+}
 .site-header--overlay::before {
   background: rgba(0, 0, 0, 0.62);
   opacity: 0;
@@ -536,6 +543,10 @@ html[dir='rtl'] .tag {
   padding: 0;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.site-header__key {
+  white-space: nowrap; /* "CONTACT US" on one line, down to 320px */
 }
 
 .site-nav__list a,
@@ -671,6 +682,15 @@ html[dir='rtl'] .site-header__key::after {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.9rem;
+  }
+}
+
+/* Small phones (360–400px): logo, key link, menu toggle and language pill share one row.
+   A tighter gap keeps the logo at its 96px minimum; below that the logo — not the
+   language pill — is what gives way. */
+@media (max-width: 25rem) {
+  .site-header__bar {
+    gap: 0.75rem;
   }
 }
 

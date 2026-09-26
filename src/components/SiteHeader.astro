@@ -144,6 +144,13 @@ const STR = {
   if (header) {
     const overlay = header.dataset.header === 'overlay';
     const menu = header.querySelector('details');
+    // Following a link from the small-screen menu closes it. A same-page anchor
+    // (/#services, on home) does not reload, so a <details> left open would stay pinned
+    // over the very section the visitor asked for. The panel is the disclosure's SIBLING,
+    // so the listener sits on the panel, not inside <details>.
+    header.querySelector('.site-nav__panel')?.addEventListener('click', (event) => {
+      if (menu?.open && (event.target as Element | null)?.closest('a')) menu.open = false;
+    });
     let lastY = window.scrollY;
     let ticking = false;
 

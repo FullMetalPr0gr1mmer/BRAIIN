@@ -21,10 +21,10 @@
 //   { "blocks": [ { "table": "services",
 //                   "conflict": ["tenant_id", "slug"],   // ON CONFLICT … DO NOTHING
 //                   "existsBy": ["name"],                // OR: insert-where-not-exists
-//                   "unlessAuthored": ["location"],      // with conflict: skip the row when
-//                                                        // the table already has OTHER rows
-//                                                        // (not this block's ids) sharing
-//                                                        // these column values
+//                   "unlessAuthored": ["location"],      // with conflict: rows sharing these
+//                                                        // values form a slice, inserted only
+//                                                        // while the table holds NO row of
+//                                                        // that slice (once, never again)
 //                   "tenantScoped": true,                // default true: adds tenant_id
 //                   "rows": [ { …columns…,
 //                               "__placeholder": true,   // demoted in production mode
@@ -128,25 +128,32 @@ function blockSql(block, mode) {
 
   if (block.unlessAuthored) {
     // A collection an editor may already have built (a menu). Seeding into it would mix
-    // our rows into theirs, so each row goes in only while the matching slice holds
-    // nothing but this block's own rows — which also keeps a re-run idempotent.
-    const ids = rows.map((r) => {
-      if (!r.id) throw new Error(`${block.source}:${block.table} unlessAuthored rows need an id`);
-      // INSERT … SELECT has no `default` keyword, so every row must name every column.
-      if (columns.some((c) => !(c in r))) {
-        throw new Error(`${block.source}:${block.table} unlessAuthored rows must share columns`);
-      }
-      return literal(r.id);
-    });
-    const stmts = rows.map((r) => {
-      const match = block.unlessAuthored.map((c) => `${c} = ${literal(r[c])}`).join(' and ');
-      const tenant = scoped ? `tenant_id = ${quote(TENANT_ID)} and ` : '';
+    // our rows into theirs — and a per-row check would also bring back a seeded row an
+    // editor had DELETED the next time the seed ran. So the decision is made once per
+    // slice (e.g. per menu location): the whole slice goes in only while that slice is
+    // empty, and never again after anyone has touched it.
+    //
+    // One DO block per slice, so the check runs BEFORE any of its rows are inserted (a
+    // per-row statement would see its siblings from the same transaction). A plain
+    // INSERT … VALUES inside it types each literal from its target column, which an
+    // INSERT … SELECT over bare literals would not (text into uuid fails).
+    const slices = new Map();
+    for (const r of rows) {
+      const key = JSON.stringify(block.unlessAuthored.map((c) => r[c]));
+      if (!slices.has(key)) slices.set(key, []);
+      slices.get(key).push(r);
+    }
+    const tenant = scoped ? `tenant_id = ${quote(TENANT_ID)} and ` : '';
+    const stmts = [...slices.values()].map((slice) => {
+      const match = block.unlessAuthored.map((c) => `${c} = ${literal(slice[0][c])}`).join(' and ');
+      const values = slice.map((r) => `      (${tuple(r)})`).join(',\n');
       return (
-        `insert into public.${block.table} (${columns.join(', ')})\n` +
-        `  select ${tuple(r)}\n` +
-        `  where not exists (select 1 from public.${block.table}\n` +
-        `                    where ${tenant}${match} and id not in (${ids.join(', ')}))\n` +
-        `on conflict (${block.conflict.join(', ')}) do nothing;`
+        `do $seed$ begin\n` +
+        `  if not exists (select 1 from public.${block.table} where ${tenant}${match}) then\n` +
+        `    insert into public.${block.table} (${columns.join(', ')}) values\n${values}\n` +
+        `    on conflict (${block.conflict.join(', ')}) do nothing;\n` +
+        `  end if;\n` +
+        `end $seed$;`
       );
     });
     return `${header}\n${stmts.join('\n')}`;

@@ -30,7 +30,16 @@ export function applyTitleTemplate(template: string, pageTitle: string, brand: s
   if (!page) return brand;
   if (brand && page.toLocaleLowerCase().includes(brand.toLocaleLowerCase())) return page;
   const pattern = template.includes('%s') ? template : DEFAULT_TITLE_TEMPLATE;
-  return pattern.replace(BRAND_TOKEN, () => brand).replace('%s', () => page);
+  // ONE pass over the template for both tokens, so text already inserted is never
+  // searched again: substituting the brand first let a brand containing "%s" capture the
+  // page title ("Studio %s" → "Studio About | %s"). Only the first %s takes the title.
+  let placed = false;
+  return pattern.replace(/%brand%|%s/g, (token) => {
+    if (token === '%brand%') return brand;
+    if (placed) return token;
+    placed = true;
+    return page;
+  });
 }
 
 /** The default format, for callers with no CMS template in hand. */

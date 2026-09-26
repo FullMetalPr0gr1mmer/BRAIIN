@@ -142,9 +142,14 @@ never lifts would be far worse than the bug it fixed:
 | Case | Behaviour |
 | --- | --- |
 | JS off | class never added, pure-CSS timeline runs as before |
-| Logo slow | `HOLD_CAP_MS = 2000` releases anyway |
+| Logo slow | `HOLD_CAP_MS = 3000` releases anyway (worst case 4.45s to content) |
 | Logo broken | releases **immediately** |
 | Module runs late | the gate is **skipped** once the fade has begun (UI v2) |
+
+The cap went from 2s to 3s with the 1.0s hold: CAP + hold must outlast the measured cold
+transform (~3.6s), or a cold edge lifts the plate before the logo exists. With the old 3.5s
+hold, 2s had slack to spare; with 1.0s it had none. The cost is only on a cold edge
+(content up to ~1s later); warm loads release on the image's own load event (~0.7s).
 
 The fourth row is new with the 1.0s hold. The gate only works if the deferred module runs
 while the plate is still holding; on a slow device it can arrive mid-fade, and pausing
@@ -194,6 +199,10 @@ rAF recorder: when it engaged, when it released, the lowest plate opacity while 
 engaged). It used to sample from the test at a fixed delay, which raced the page under
 parallel load — the check could land after the 2s cap had already, correctly, released
 the gate. Its injected `/_image` delay must stay comfortably ABOVE the cap.
+`a slow logo is actually SEEN on the plate` delays the logo INSIDE cap + hold and requires
+a frame where the plate is up and the image has decoded (`complete && naturalWidth > 0`) —
+opacity alone is not proof, since a released gate fades the element in with or without
+its bytes.
 
 `a deep link skips the intro` covers the hash cut in both locales, and asserts it leaves
 the session flag unset.

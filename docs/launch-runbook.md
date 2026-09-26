@@ -237,8 +237,12 @@ first, then switch only values that still name the old brand — a compare-and-s
 value the SEO team has authored since is never overwritten:
 
 ```sql
--- 1. What does this database hold?
-select title_template, default_title, organization from public.seo_defaults;
+-- 1. What does this database hold? (the defaults, and any per-page override naming the old brand)
+select title_template, default_title, default_description, organization from public.seo_defaults;
+select entity_type, entity_id, meta_title, meta_description
+  from public.entity_seo
+ where meta_title::text ilike '%braiin station%' or meta_description::text ilike '%braiin station%'
+    or meta_title::text like '%بريين%' or meta_description::text like '%بريين%';
 
 -- 2. A template that spells the old brand → the token form (the same as leaving it empty).
 update public.seo_defaults
@@ -251,7 +255,25 @@ update public.seo_defaults
    set default_title = '{}'::jsonb
  where default_title::text ilike '%braiin station%'
     or default_title::text like '%بريين%';
+
+-- 4. Descriptions and per-page overrides: swap the old name for the %brand% token rather
+--    than erasing the text. resolveSeo substitutes it, and a title that then names the
+--    brand is used as is (no second "Braiin Statiion | " prefix).
+update public.seo_defaults
+   set default_description = regexp_replace(regexp_replace(default_description::text,
+         'braiin station', '%brand%', 'gi'), 'بريين ستيشن', '%brand%', 'g')::jsonb
+ where default_description::text ilike '%braiin station%'
+    or default_description::text like '%بريين%';
+update public.entity_seo
+   set meta_title = regexp_replace(regexp_replace(meta_title::text,
+         'braiin station', '%brand%', 'gi'), 'بريين ستيشن', '%brand%', 'g')::jsonb,
+       meta_description = regexp_replace(regexp_replace(meta_description::text,
+         'braiin station', '%brand%', 'gi'), 'بريين ستيشن', '%brand%', 'g')::jsonb
+ where meta_title::text ilike '%braiin station%' or meta_description::text ilike '%braiin station%'
+    or meta_title::text like '%بريين%' or meta_description::text like '%بريين%';
 ```
+
+Re-run the two `select`s from step 1: both must now come back clean.
 
 `organization` is no longer read (the Organization schema is built from the public
 identity); it can stay as it is. Re-check a title afterwards:
