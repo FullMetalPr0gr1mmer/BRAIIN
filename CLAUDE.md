@@ -161,7 +161,7 @@ Public routes only. **Failing any budget = blocked PR.** `/admin` exempt from CW
 | Lighthouse Perf / A11y / SEO | ≥ 95 each | incl. an `/ar/` RTL route |
 | Per-route client JS | ≤ 100 KB gzipped | `hls.js` post-LCP, excluded |
 | EN+AR fonts per route | ≤ 180 KB woff2 | AR face counts |
-| Hero face | ≤ 35 KB (Latin) / 45 KB (Arabic) | preload only this face |
+| Hero face | ≤ 35 KB (Latin) / 45 KB (Arabic) | preload only this face — exactly one per route. EN: Archivo variable. AR: the Almarai weight the route's above-the-fold heading renders in (`heroFace`, `src/lib/seo/fonts.ts`): 800 by default (Home), 700 on `/ar/about` (its 600-weight h1 resolves to the 700 face; preloading 800 there cost CLS 0.14) |
 | Poster image | ≤ 80 KB | Stream thumbnail |
 | Media CLS contribution | 0 | |
 

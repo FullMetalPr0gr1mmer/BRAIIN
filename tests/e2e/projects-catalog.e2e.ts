@@ -20,7 +20,7 @@ const STR = {
     n3: '03 projects',
     n2: '02 projects',
     branding: 'Branding',
-    remove: 'Remove filter: Branding',
+    remove: 'Service: Branding, remove filter',
     none: 'No projects match these filters.',
   },
   ar: {
@@ -33,7 +33,7 @@ const STR = {
     n3: '03 مشاريع',
     n2: '02 مشروعان',
     branding: 'الهوية البصرية',
-    remove: 'إزالة الفلتر: الهوية البصرية',
+    remove: 'الخدمة: الهوية البصرية، إزالة الفلتر',
     none: 'ما في مشاريع تطابق هذه الفلاتر.',
   },
 } as const;

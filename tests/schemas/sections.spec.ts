@@ -255,6 +255,21 @@ describe('Our Work / All projects section content (UI v2 PR10)', () => {
     expect(head.safeParse({ backHref: '//evil.example' }).success).toBe(false);
   });
 
+  it('the PR10 schemas are strict: a stray key (a hidden mediaId above all) is refused', () => {
+    const mediaId = '5eed0a00-0000-4000-8000-000000000007';
+    const hidden = { x: { mediaId } };
+    expect(sectionContentIssues('workHero', { projectslug: 'the-rider' })).not.toEqual([]);
+    expect(sectionContentIssues('workHero', hidden)).not.toEqual([]);
+    expect(sectionContentIssues('projectGrid', { heading: T, cards: [] })).not.toEqual([]);
+    expect(sectionContentIssues('projectGrid', hidden)).not.toEqual([]);
+    expect(sectionContentIssues('pageHead', { mediaId })).not.toEqual([]);
+    expect(sectionContentIssues('workIntro', hidden)).not.toEqual([]);
+    // inside a frame: a second, unrendered image riding along with the real one
+    const frame = { mediaId, poster: { mediaId } };
+    expect(sectionContentIssues('workIntro', { media: [frame] })).not.toEqual([]);
+    expect(sectionContentIssues('workIntro', { media: [{ mediaId }] })).toEqual([]);
+  });
+
   it('projectCatalog takes no content at all (its data is the portfolio table)', () => {
     expect(sectionContentIssues('projectCatalog', {})).toEqual([]);
     expect(sectionContentIssues('projectCatalog', { cards: [] })).not.toEqual([]);

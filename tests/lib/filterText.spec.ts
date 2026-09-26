@@ -50,9 +50,10 @@ describe('see-all label', () => {
 });
 
 describe('chrome strings', () => {
-  it('a pill is named "Remove filter: <value>"', () => {
-    expect(removeLabel('Automotive', 'en')).toBe('Remove filter: Automotive');
-    expect(removeLabel('السيارات', 'ar')).toBe('إزالة الفلتر: السيارات');
+  it('a pill is named by its visible text first, then the action (WCAG 2.5.3)', () => {
+    expect(removeLabel('sector', 'Automotive', 'en')).toBe('Sector: Automotive, remove filter');
+    expect(removeLabel('sector', 'السيارات', 'ar')).toBe('القطاع: السيارات، إزالة الفلتر');
+    expect(removeLabel('year', '2026', 'en').startsWith('Year: 2026')).toBe(true);
   });
 
   it('every string exists in both languages (none left empty)', () => {

@@ -605,25 +605,17 @@ test.describe('the home LCP is the intro logo', () => {
   for (const route of ROUTES) {
     test(`a returning visitor (consent given, no banner) records the logo — ${route}`, async ({
       browser,
-      baseURL,
     }) => {
       const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } });
-      // Read the live consent version from the page, then come back as a visitor who has
-      // already answered — in a NEW tab, so the once-per-session intro plays again.
+      // Answer the banner the way a visitor does (Reject: no third party can skew the LCP),
+      // so the site writes its own consent cookie — Chromium refuses a Secure `__Host-`
+      // cookie injected for an http:// origin. Then come back in a NEW tab, so the
+      // once-per-session intro plays again.
       const first = await ctx.newPage();
       await first.goto(route, { waitUntil: 'load' });
-      const version = await first.locator('#consent-banner').getAttribute('data-version');
+      await first.locator('#consent-banner [data-consent="reject"]').click();
+      await expect(first.locator('#consent-banner')).toBeHidden();
       await first.close();
-      const state = { functional: true, analytics: false, marketing: false, v: Number(version) };
-      await ctx.addCookies([
-        {
-          name: '__Host-consent',
-          value: encodeURIComponent(JSON.stringify({ ...state, ts: 1 })),
-          url: baseURL ?? 'http://localhost:8788',
-          secure: true,
-          sameSite: 'Lax',
-        },
-      ]);
       const page = await ctx.newPage();
       await page.addInitScript(() => {
         (window as unknown as { __lcp: unknown[] }).__lcp = [];

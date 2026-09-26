@@ -100,7 +100,15 @@ export function seeAllLabel(matching: number | null, locale: Locale): string {
   return matching === null ? s.seeAll : s.seeMatching.replace('{n}', String(matching));
 }
 
-/** A pill's accessible name: "Remove filter: Automotive". */
-export function removeLabel(value: string, locale: Locale): string {
-  return `${FILTER_STR[locale].remove}: ${value}`;
+/**
+ * A pill's accessible name: "Sector: Automotive, remove filter" / "القطاع: السيارات، إزالة
+ * الفلتر". It STARTS with the pill's visible text (the facet label, then the value — the ×
+ * is aria-hidden), so a speech-input user who says what they see gets a match (WCAG 2.5.3
+ * Label in Name); the action follows.
+ */
+export function removeLabel(facet: Facet, value: string, locale: Locale): string {
+  const s = FILTER_STR[locale];
+  return locale === 'ar'
+    ? `${s.facet[facet]}: ${value}، ${s.remove}`
+    : `${s.facet[facet]}: ${value}, ${s.remove.toLowerCase()}`;
 }

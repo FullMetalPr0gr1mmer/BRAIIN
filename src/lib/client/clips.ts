@@ -11,6 +11,9 @@
 //                                screen (default .35), pauses when it leaves
 //                      "hover"   plays while a mouse/pen pointer is over, or keyboard focus
 //                                is in, the closest [data-clip-trigger] (the card link)
+//   data-clip-after-load  inview only: not observed until `load` — the frame's poster is
+//                      the LCP (About's "who"), so its clip's bytes never compete with it,
+//                      the rule MediaBanner and the hero apply
 //
 // Never plays: under prefers-reduced-motion, with Save-Data, or on a touch-only device
 // ("in-content clips never autoplay on touch" — EXC-007/EXC-009); the poster stays. Pauses
@@ -51,6 +54,11 @@ export function seekTarget(
   if (seekableEnd <= window.end - 0.1) return null;
   if (currentTime >= window.end || currentTime < window.start - 0.05) return window.start;
   return null;
+}
+
+/** Whether an in-view frame must wait for `load` before it is observed (its poster is the LCP). */
+export function waitsForLoad(el: HTMLElement, readyState: DocumentReadyState): boolean {
+  return el.dataset.clipAfterLoad !== undefined && readyState !== 'complete';
 }
 
 /** Whether clips may play at all in this environment. */
@@ -182,6 +190,9 @@ export function initClips(root: ParentNode = document): void {
       );
       inview.set(key, io);
     }
-    io.observe(frame);
+    if (waitsForLoad(frame, document.readyState)) {
+      const observer = io;
+      addEventListener('load', () => observer.observe(frame), { once: true });
+    } else io.observe(frame);
   }
 }

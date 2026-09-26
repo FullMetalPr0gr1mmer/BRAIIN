@@ -89,6 +89,35 @@ for (const locale of ['en', 'ar'] as const) {
       const cap = page.locator('a.work-cap');
       await expect(cap).toHaveAttribute('href', `${s.path}/the-rider`);
       await expect(cap).toContainText(s.caption);
+      // the grid renders (featured projects are seeded), so the intro link is in-page
+      await expect(page.locator('a.work-intro__link')).toHaveAttribute('href', '#projects');
+    });
+
+    test('the caption leaves the tab order once IT is covered, before the banner is (2.4.11)', async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1366, height: 768 });
+      await page.goto(s.path);
+      const cap = page.locator('a.work-cap');
+      const banner = page.locator('.mbanner');
+      const { height, top } = await page.evaluate(() => {
+        const b = document.querySelector<HTMLElement>('.mbanner');
+        const c = document.querySelector<HTMLElement>('.work-cap');
+        return { height: b?.offsetHeight ?? 0, top: c?.offsetTop ?? 0 };
+      });
+      expect(top).toBeGreaterThan(0);
+      const scrollTo = (y: number) =>
+        page.evaluate((to) => window.scrollTo({ top: to, behavior: 'instant' }), y);
+      // the next section's top edge is just below the caption's: still partly visible
+      await scrollTo(height - top - 20);
+      await expect(cap).toHaveCSS('visibility', 'visible');
+      // edge past the caption's top: entirely painted over → hidden, though the banner
+      // itself is not yet covered (its loop keeps playing)
+      await scrollTo(height - top + 2);
+      await expect(cap).toHaveCSS('visibility', 'hidden');
+      await expect(banner).not.toHaveClass(/\bis-covered\b/);
+      await scrollTo(0);
+      await expect(cap).toHaveCSS('visibility', 'visible');
     });
 
     test('six featured cards, latest first, titles as h3 under the "Projects" h2', async ({

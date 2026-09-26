@@ -32,6 +32,7 @@ interface Props {
   ratio?: Ratio;
   /** alt="" — the frame sits in a link that already names the project. */
   decorative?: boolean;
+  /** The poster is the LCP: eager + fetchpriority=high, and an in-view clip waits for `load`. */
   priority?: boolean;
   sizes?: string;
   widths?: number[];
@@ -66,6 +67,7 @@ const playable = clip?.path ? clip : null;
   data-clip-threshold={playable && mode === 'inview' && threshold !== undefined
     ? threshold
     : undefined}
+  data-clip-after-load={playable && priority && mode === 'inview' ? '' : undefined}
 >
   {
     image && (

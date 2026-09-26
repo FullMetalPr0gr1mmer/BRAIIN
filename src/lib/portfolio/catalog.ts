@@ -207,6 +207,23 @@ export function latestOrder(cards: readonly PortfolioCard[]): PortfolioCard[] {
 }
 
 /**
+ * The project Our Work's banner shows: the pinned `projectSlug` when that project is
+ * published, else the latest. null when there is none — or when it has no poster: the
+ * poster is the banner (and the page's LCP image); a clip alone would open the page on a
+ * blank dark block, and under reduced motion or Save-Data the loop never starts at all.
+ * ONE decision, shared by WorkHero (what renders) and the route (which header it gets).
+ */
+export function bannerCard(
+  cards: readonly PortfolioCard[],
+  projectSlug?: unknown,
+): PortfolioCard | null {
+  const pinned =
+    typeof projectSlug === 'string' ? cards.find((c) => c.slug === projectSlug) : undefined;
+  const card = pinned ?? latestOrder(cards)[0];
+  return card?.poster ? card : null;
+}
+
+/**
  * The case study's "next project": the editor's explicit choice when it is published, else
  * the project after it in catalogue order, wrapping round. null when it is the only one.
  */

@@ -146,7 +146,7 @@ const SELECTS = ['sector', 'client', 'year'] as const;
           data-v=""
           data-pill={f}
           hidden={!selection[f]}
-          aria-label={selection[f] ? removeLabel(labelOf(f), locale) : undefined}
+          aria-label={selection[f] ? removeLabel(f, labelOf(f), locale) : undefined}
         >
           <span class="fpill__k">{`${S.facet[f]}:`}</span>
           <span data-pill-value>{labelOf(f)}</span>
