@@ -94,7 +94,13 @@ export default function ResourceForm({ resource, id }: ResourceFormProps) {
 
       <div className="card">
         {ui.fields.map((field) => (
-          <Field key={field.name} field={field} value={values[field.name]} onChange={set} />
+          <Field
+            key={field.name}
+            field={field}
+            value={values[field.name]}
+            values={values}
+            onChange={set}
+          />
         ))}
       </div>
 

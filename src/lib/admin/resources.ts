@@ -273,6 +273,10 @@ export const pageResource: ResourceConfig = {
 
 export const sectionResource: ResourceConfig = {
   table: 'page_sections',
+  // A visible section on a published page is live copy, so turning `visible` on is gated
+  // as a publish (content.publish). Every role that may edit sections holds it today; the
+  // flag keeps the two capabilities from drifting apart unnoticed.
+  publishFlag: 'visible',
   entity: 'page_section',
   writeCap: 'pages.write',
   listColumns: 'id,page_id,type,visible,sort_order,version,updated_at',
@@ -416,6 +420,12 @@ export const navigationResource: ResourceConfig = {
   filterableColumns: ['location'],
   createSchema: NavItemWriteSchema,
   updateSchema: NavItemUpdateSchema,
+  constraintFields: {
+    navigation_one_key_per_location: {
+      field: 'isKey',
+      message: 'This menu already has a key link — untick it there first, then tick this one.',
+    },
+  },
   toRow: (input) => {
     const values = pick(input as Input, {
       location: 'location',

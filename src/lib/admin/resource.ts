@@ -5,7 +5,15 @@ import { ListQuerySchema } from '@schemas/admin';
 import type { AuthContext } from '@/lib/auth/types';
 import { assertCap, type Access, type Capability } from '@/lib/authz/matrix';
 import { defineAdminRoute, json } from './route';
-import { assertStatusTransition, deleteRow, getRow, insertRow, listRows, updateRow } from './crud';
+import {
+  assertStatusTransition,
+  deleteRow,
+  getRow,
+  insertRow,
+  listRows,
+  updateRow,
+  type ConstraintFields,
+} from './crud';
 import { NotFoundError, ValidationError } from './errors';
 
 // A declarative CRUD resource. Fifteen entities in this CMS have the same lifecycle —
@@ -32,6 +40,9 @@ import { NotFoundError, ValidationError } from './errors';
 // allowlist in `pick()`: unknown keys never reach SQL regardless of what TypeScript
 // believes about them.
 export type ResourcePayload = Record<string, unknown>;
+
+type Row = Record<string, unknown>;
+type Db = import('@supabase/supabase-js').SupabaseClient;
 
 export interface ResourceConfig {
   /** Postgres table. */
@@ -61,8 +72,26 @@ export interface ResourceConfig {
   toRow: (input: ResourcePayload) => Record<string, unknown>;
   /** Lifecycle status of an incoming payload, when the entity has one. */
   statusOf?: (input: ResourcePayload) => ContentStatus | undefined;
-  /** Domain rules that must hold before a row may be published. */
-  assertPublishable?: (row: Record<string, unknown>) => void;
+  /**
+   * For an entity with no status whose `visible` flag IS its publication (page sections,
+   * and in UI v2 clients and testimonials): turning it on is gated like a publish —
+   * `content.publish` plus `assertPublishable`.
+   */
+  publishFlag?: 'visible';
+  /**
+   * Domain rules that must hold before a row may GO LIVE — published, scheduled (the
+   * cron publishes it later without asking again), or made visible under `publishFlag`.
+   * May be async (a rule that reads related rows, e.g. "has alt text"); it receives the
+   * merged row (stored + patch) and the caller's client, under RLS.
+   */
+  assertPublishable?: (row: Row, ctx: { auth: AuthContext; sb: Db }) => void | Promise<void>;
+  /**
+   * Named constraints of this table and what they mean to an editor — turns a raw
+   * unique/check/foreign-key violation into a message on the right field.
+   */
+  constraintFields?: ConstraintFields;
+  /** Shapes a stored row for the API response (resolved thumbnails, derived labels). */
+  fromRow?: (row: Row) => Row;
   /** Runs after a successful write (cache purge, derived rows). Never fatal. */
   afterWrite?: (ctx: {
     auth: AuthContext;
@@ -76,6 +105,28 @@ export interface ResourceConfig {
 function readCapsOf(config: ResourceConfig): readonly Capability[] {
   return config.readCaps ?? [config.writeCap];
 }
+
+/**
+ * Does this payload put the row LIVE? Scheduled counts: `app.publish_scheduled()` flips
+ * it to published on a timer with no further checks, so a rule enforced only at
+ * "published" was a bypass — schedule an unpublishable row and let the cron publish it.
+ */
+function goesLive(config: ResourceConfig, payload: ResourcePayload): boolean {
+  const status = config.statusOf?.(payload);
+  if (status === 'published' || status === 'scheduled') return true;
+  return config.publishFlag === 'visible' && payload['visible'] === true;
+}
+
+/** The status transition, and for a `visible`-published entity the publish capability. */
+function assertTransition(auth: AuthContext, config: ResourceConfig, payload: ResourcePayload) {
+  assertStatusTransition(auth, config.statusOf?.(payload));
+  if (config.publishFlag === 'visible' && payload['visible'] === true) {
+    assertCap(auth, 'content.publish');
+  }
+}
+
+const shape = (config: ResourceConfig, row: Row): Row =>
+  config.fromRow ? config.fromRow(row) : row;
 
 /** `GET` (list) + `POST` (create) for `/api/admin/<resource>/index.ts`. */
 export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST: APIRoute } {
@@ -106,7 +157,12 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
         limit: input.limit,
         offset: input.offset,
       });
-      return { rows, total, limit: input.limit, offset: input.offset };
+      return {
+        rows: (rows as Row[]).map((row) => shape(config, row)),
+        total,
+        limit: input.limit,
+        offset: input.offset,
+      };
     },
   });
 
@@ -118,18 +174,14 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
       // Creating something already published is a publish. Checking only on transitions
       // would leave "POST with status: 'published'" as an unguarded back door around
       // the publish capability.
-      assertStatusTransition(auth, config.statusOf?.(payload));
+      assertTransition(auth, config, payload);
 
       const values = config.toRow(payload);
-      if (config.statusOf?.(payload) === 'published') config.assertPublishable?.(values);
+      if (goesLive(config, payload)) await config.assertPublishable?.(values, { auth, sb });
 
-      const row = await insertRow<Record<string, unknown>>(
-        sb,
-        config.table,
-        auth,
-        values,
-        config.columns,
-      );
+      const row = await insertRow<Row>(sb, config.table, auth, values, config.columns, {
+        constraints: config.constraintFields,
+      });
       audit({
         action: `${config.entity}.create`,
         entityType: config.entity,
@@ -137,7 +189,7 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
         detail: { status: values['status'] ?? null },
       });
       await config.afterWrite?.({ auth, sb, row, input: payload, operation: 'create' });
-      return row;
+      return shape(config, row);
     },
   });
 
@@ -162,7 +214,7 @@ export function itemRoutes(config: ResourceConfig): {
     anyCap: readCapsOf(config),
     access: config.readAccess ?? ['full', 'view', 'meta'],
     handler: async ({ auth, sb, params }) =>
-      getRow(sb, config.table, auth, requireId(params), config.columns),
+      shape(config, await getRow<Row>(sb, config.table, auth, requireId(params), config.columns)),
   });
 
   const PATCH = defineAdminRoute({
@@ -171,28 +223,22 @@ export function itemRoutes(config: ResourceConfig): {
     handler: async ({ auth, sb, input, params, audit }) => {
       const id = requireId(params);
       const payload = input as ResourcePayload & { version: number };
-      assertStatusTransition(auth, config.statusOf?.(payload));
+      assertTransition(auth, config, payload);
 
       const values = config.toRow(payload);
       if (Object.keys(values).length === 0) {
         throw new ValidationError('no updatable fields supplied');
       }
 
-      if (config.statusOf?.(payload) === 'published' && config.assertPublishable) {
+      if (goesLive(config, payload) && config.assertPublishable) {
         // Merge over the stored row: a partial PATCH that only flips `status` still has
         // to satisfy the publish preconditions, and those live in the columns it did
         // not send.
-        const stored = await getRow<Record<string, unknown>>(
-          sb,
-          config.table,
-          auth,
-          id,
-          config.columns,
-        );
-        config.assertPublishable({ ...stored, ...values });
+        const stored = await getRow<Row>(sb, config.table, auth, id, config.columns);
+        await config.assertPublishable({ ...stored, ...values }, { auth, sb });
       }
 
-      const row = await updateRow<Record<string, unknown>>(
+      const row = await updateRow<Row>(
         sb,
         config.table,
         auth,
@@ -200,6 +246,7 @@ export function itemRoutes(config: ResourceConfig): {
         payload.version,
         values,
         config.columns,
+        { constraints: config.constraintFields },
       );
       audit({
         action: `${config.entity}.update`,
@@ -210,7 +257,7 @@ export function itemRoutes(config: ResourceConfig): {
         detail: { fields: Object.keys(values), version: payload.version },
       });
       await config.afterWrite?.({ auth, sb, row, input: payload, operation: 'update' });
-      return row;
+      return shape(config, row);
     },
   });
 
@@ -224,7 +271,7 @@ export function itemRoutes(config: ResourceConfig): {
       // content.archiveDelete alone would let an Admin-only role delete rows in a table
       // it has no write capability for, which is not what the matrix says.
       assertCap(auth, config.writeCap, ['full']);
-      await deleteRow(sb, config.table, auth, id);
+      await deleteRow(sb, config.table, auth, id, { constraints: config.constraintFields });
       audit({ action: `${config.entity}.delete`, entityType: config.entity, entityId: id });
       return { deleted: id };
     },

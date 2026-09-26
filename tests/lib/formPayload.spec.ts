@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SINGLETON_UI } from '@/lib/admin/uiSchema';
+import { SINGLETON_UI, RESOURCE_UI, type FieldDef } from '@/lib/admin/uiSchema';
 import { rowToForm, formToPayload } from '@/lib/admin/formPayload';
 import { SeoDefaultsSchema } from '@schemas/admin';
 import { SiteProfileSchema } from '@schemas/siteProfile';
@@ -54,5 +54,114 @@ describe('formToPayload', () => {
   it('marks the identity fields the schema cannot do without as required', () => {
     const required = SINGLETON_UI['profile']!.fields.filter((f) => f.required).map((f) => f.name);
     expect(required).toEqual(expect.arrayContaining(['brandName', 'contactEmail', 'location']));
+  });
+});
+
+// ── Composite kinds (UI v2 PR3) ──────────────────────────────────────────────────
+const f = (field: Partial<FieldDef> & Pick<FieldDef, 'name' | 'kind'>): FieldDef => ({
+  label: field.name,
+  ...field,
+});
+
+describe('formToPayload — composite kinds', () => {
+  it('a relation left empty is null, a chosen one is its id', () => {
+    const rel = f({
+      name: 'pageId',
+      kind: 'relation',
+      relation: { resource: 'pages', labelKey: 'title' },
+    });
+    expect(formToPayload({ pageId: '' }, [rel])).toEqual({ pageId: null });
+    expect(formToPayload({ pageId: 'abc' }, [rel])).toEqual({ pageId: 'abc' });
+  });
+
+  it('a multi relation keeps the chosen ORDER and drops duplicates', () => {
+    const multi = f({ name: 'ids', kind: 'multiRelation' });
+    expect(formToPayload({ ids: ['b', 'a', 'b', ''] }, [multi])).toEqual({ ids: ['b', 'a'] });
+  });
+
+  it('a repeater drops untouched rows and omits blank overrides inside items', () => {
+    const rep = f({
+      name: 'columns',
+      kind: 'repeater',
+      itemFields: [f({ name: 'title', kind: 'bilingual' }), f({ name: 'body', kind: 'bilingual' })],
+    });
+    const out = formToPayload(
+      {
+        columns: [
+          { title: { en: 'A', ar: 'أ' }, body: { en: '', ar: '' } },
+          {},
+          { title: { en: '', ar: '' } },
+        ],
+      },
+      [rep],
+    );
+    expect(out).toEqual({ columns: [{ title: { en: 'A', ar: 'أ' } }] });
+  });
+
+  it('a clip is either/or, and its window is both-or-neither', () => {
+    const clip = f({ name: 'clip', kind: 'clip' });
+    const base = { streamUid: '', path: '', startS: '', endS: '' };
+    expect(formToPayload({ clip: { ...base, source: '' } }, [clip])).toEqual({ clip: null });
+    expect(
+      formToPayload(
+        { clip: { ...base, source: 'path', path: '/media/a.mp4', startS: '2', endS: '8' } },
+        [clip],
+      ),
+    ).toEqual({ clip: { path: '/media/a.mp4', startS: 2, endS: 8 } });
+    expect(() =>
+      formToPayload({ clip: { ...base, source: 'stream', streamUid: 'uid', startS: '2' } }, [clip]),
+    ).toThrow(/both a start and an end/);
+    expect(() => formToPayload({ clip: { ...base, source: 'stream' } }, [clip])).toThrow(
+      /Stream UID/,
+    );
+  });
+
+  it('section content is shaped by the sibling type, or parsed in Advanced mode', () => {
+    const fields = RESOURCE_UI['sections']!.fields;
+    const typed = formToPayload(
+      {
+        type: 'cta',
+        content: {
+          values: { heading: { en: 'Hi', ar: 'أهلاً' }, text: { en: '', ar: '' } },
+          json: null,
+        },
+      },
+      fields,
+    );
+    expect(typed['content']).toEqual({ heading: { en: 'Hi', ar: 'أهلاً' } });
+
+    const advanced = formToPayload(
+      { type: 'hero', content: { values: {}, json: '{"intro": true}' } },
+      fields,
+    );
+    expect(advanced['content']).toEqual({ intro: true });
+    expect(() =>
+      formToPayload({ type: 'hero', content: { values: {}, json: '{not json' } }, fields),
+    ).toThrow(/not valid JSON/);
+  });
+
+  it('round-trips a stored section through the form unchanged', () => {
+    const fields = RESOURCE_UI['sections']!.fields;
+    const stored = {
+      page_id: 'p1',
+      type: 'aboutIntro',
+      content: {
+        heading: { en: 'H', ar: 'ع' },
+        columns: [{ title: { en: 'T', ar: 'ت' }, body: { en: 'B', ar: 'ب' } }],
+      },
+      visible: true,
+      is_placeholder: false,
+      sort_order: 3,
+    };
+    const payload = formToPayload(rowToForm(stored, fields), fields);
+    expect(payload['content']).toEqual(stored.content);
+    expect(payload['pageId']).toBe('p1');
+  });
+
+  it('a table-backed section type saves empty content', () => {
+    const fields = RESOURCE_UI['sections']!.fields;
+    const form = rowToForm({ type: 'statistics', content: {} }, fields);
+    // no editor for this type → JSON mode with {}
+    expect(formToPayload(form, fields)['content']).toEqual({});
   });
 });

@@ -26,7 +26,26 @@ export type FieldKind =
   | 'url'
   | 'datetime'
   | 'tags'
-  | 'json';
+  | 'json'
+  // UI v2 (PR3): composite and referencing kinds
+  | 'relation' // one row of another resource, by id (a <select> loaded from its API)
+  | 'multiRelation' // an ORDERED list of ids of another resource
+  | 'multiSelect' // several of `options`, as a string array
+  | 'media' // one media asset id, chosen in a <dialog> picker
+  | 'repeater' // an array of objects, each edited with `itemFields`
+  | 'clip' // a video clip: a Stream UID or a /media/*.mp4 path, plus a ≤30s window
+  | 'sectionContent' // page_sections.content, typed by the sibling `type` field
+  | 'upload'; // a file sent to `upload.endpoint`; the field holds the returned id
+
+/** Where a relation field loads its options from. */
+export interface RelationDef {
+  /** Admin API resource slug: options load from GET /api/admin/<resource>. */
+  resource: string;
+  /** Row key shown as the option label; a {en, ar} value shows its English. */
+  labelKey: string;
+  /** Equality filters for the options query, e.g. { location: 'header' }. */
+  filter?: Readonly<Record<string, string>>;
+}
 
 export interface FieldDef {
   /** camelCase name sent to the API. */
@@ -45,6 +64,16 @@ export interface FieldDef {
    * there would turn every blank save into a 422.
    */
   nullable?: boolean;
+  /** `relation` / `multiRelation`: the resource the ids point at. */
+  relation?: RelationDef;
+  /** `repeater`: the fields of one item. */
+  itemFields?: readonly FieldDef[];
+  /** `repeater` / `multiRelation` / `multiSelect`: the most items the schema accepts. */
+  maxItems?: number;
+  /** `sectionContent`: the sibling field holding the section type (default 'type'). */
+  typeField?: string;
+  /** `upload`: where the file is POSTed (multipart) and what it may be. */
+  upload?: { endpoint: string; accept: string };
 }
 
 export interface ColumnDef {
@@ -217,7 +246,13 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
       { key: 'updated_at', label: 'Updated', kind: 'date' },
     ],
     fields: [
-      { name: 'pageId', label: 'Page id', kind: 'text', required: true },
+      {
+        name: 'pageId',
+        label: 'Page',
+        kind: 'relation',
+        required: true,
+        relation: { resource: 'pages', labelKey: 'title' },
+      },
       {
         name: 'type',
         label: 'Section type',
@@ -228,9 +263,10 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
       },
       {
         name: 'content',
-        label: 'Content (JSON)',
-        kind: 'json',
-        help: 'Optional per-type overrides, validated against the section type on save. Types backed by their own table (statistics, team, certifications) take none: leave {}.',
+        label: 'Content',
+        kind: 'sectionContent',
+        typeField: 'type',
+        help: 'Optional per-type overrides of the built-in copy, validated against the section type on save.',
       },
       { name: 'visible', label: 'Visible', kind: 'checkbox' },
       {
