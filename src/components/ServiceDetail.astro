@@ -2,10 +2,10 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import StreamPlayer from '@/components/StreamPlayer.astro';
-import { buildServiceSchema, buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { buildServiceSchema, buildBreadcrumbSchema, orgRef } from '@/lib/seo/jsonld';
 import { localizedPath, pickLocale, pickLocaleStrict } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
-import { seoForEntity } from '@/lib/data/seo';
+import { loadHead } from '@/lib/seo/head';
 import type { ServiceRow } from '@/lib/data/services';
 
 interface Props {
@@ -31,26 +31,27 @@ const bodyHtml = pickLocale(service.body_html, locale);
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const url = base + localizedPath(`/services/${service.slug}`, locale);
 
+// Per-entity SEO override (`entity_seo`, authored by the SEO role under /admin) layered
+// over the tenant defaults (`seo_defaults`), falling back to the content's own title and
+// summary — loaded with the public identity in one concurrent round. Resolved server-side
+// on this Tier-A route so the override is in the HTML — metadata that needed JavaScript
+// would not be metadata.
+const { seo, identity } = await loadHead(Astro.locals, {
+  locale,
+  fallbackTitle: title,
+  fallbackDescription: blurbMeta,
+  entity: { type: 'service', id: service.id },
+});
+const org = orgRef(identity, locale);
+
 const jsonLd = [
-  buildServiceSchema({ name: title, description: blurbMeta, url }),
+  buildServiceSchema({ name: title, description: blurbMeta, url, org }),
   buildBreadcrumbSchema([
     { name: STR.home, url: base + localizedPath('/', locale) },
     { name: STR.services, url: base + localizedPath('/services', locale) },
     { name: title, url },
   ]),
 ];
-
-// Per-entity SEO override (`entity_seo`, authored by the SEO role under /admin) layered
-// over the tenant defaults (`seo_defaults`), falling back to the content's own title and
-// summary. Resolved server-side on this Tier-A route so the override is in the HTML —
-// metadata that needed JavaScript would not be metadata.
-const seo = await seoForEntity({
-  entityType: 'service',
-  entityId: service.id,
-  locale,
-  fallbackTitle: `${title} — Braiin Station`,
-  fallbackDescription: blurbMeta,
-});
 ---
 
 <BaseLayout

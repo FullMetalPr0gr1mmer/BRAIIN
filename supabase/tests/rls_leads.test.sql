@@ -3,7 +3,7 @@
 -- `anon`/`authenticated` roles and injecting JWT claims (set_config), the Supabase pattern.
 
 begin;
-select plan(10);
+select plan(11);
 
 -- Setup runs as the migration/superuser role (RLS bypassed here).
 insert into public.tenants (id, name) values ('00000000-0000-0000-0000-000000000001', 'T1');
@@ -89,6 +89,17 @@ select ok(
   (select count(*) = 1 from information_schema.columns
      where table_schema = 'public' and table_name = 'leads_safe' and column_name = 'company'),
   'leads_safe exposes company (non-sensitive business-contact data)'
+);
+
+-- 0017: the free-text deadline is a §3 `timeline` field — Admin/Developer only. It must
+-- exist on the base table and must NEVER appear in the safe view.
+select ok(
+  (select count(*) = 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'leads' and column_name = 'timeline_text_enc')
+  and
+  (select count(*) = 0 from information_schema.columns
+     where table_schema = 'public' and table_name = 'leads_safe' and column_name = 'timeline_text_enc'),
+  'leads.timeline_text_enc exists and is ABSENT from leads_safe (Admin/Developer-gated)'
 );
 
 select is(1, 1, 'cleanup ok');

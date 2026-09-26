@@ -1,6 +1,7 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { loadHead } from '@/lib/seo/head';
 
 interface Props {
   locale: Locale;
@@ -12,7 +13,6 @@ const STR = {
   en: {
     title: 'Search',
     placeholder: 'Search services, work, articles…',
-    label: 'Search Braiin Station',
     button: 'Search',
     hint: 'Type at least 2 characters.',
     searching: 'Searching…',
@@ -23,7 +23,6 @@ const STR = {
   ar: {
     title: 'البحث',
     placeholder: 'ابحث في الخدمات والأعمال والمقالات…',
-    label: 'ابحث في بريّن ستيشن',
     button: 'بحث',
     hint: 'اكتب حرفين على الأقل.',
     searching: 'جارٍ البحث…',
@@ -32,6 +31,16 @@ const STR = {
     noscript: 'البحث يحتاج إلى جافاسكربت. تصفّح الخدمات أو الأعمال بدلًا من ذلك.',
   },
 }[locale];
+// Tenant defaults + this route's own title, the brand from the public identity through
+// the title template — one concurrent round (src/lib/seo/head.ts). The visible label
+// names the studio, and so does the description (via %brand%).
+const labelTemplate = locale === 'ar' ? 'ابحث في %brand%' : 'Search %brand%';
+const { seo, brand } = await loadHead(Astro.locals, {
+  locale,
+  fallbackTitle: STR.title,
+  fallbackDescription: labelTemplate,
+});
+const label = labelTemplate.replace('%brand%', () => brand);
 ---
 
 {
@@ -41,8 +50,8 @@ const STR = {
     from /api/search (no-store). robots=noindex,follow. */
 }
 <BaseLayout
-  title={`${STR.title} — Braiin Station`}
-  description={STR.label}
+  title={seo.title}
+  description={seo.description}
   locale={locale}
   logicalPath="/search"
   robots="noindex,follow"
@@ -50,7 +59,7 @@ const STR = {
   <main class="container search-page">
     <h1>{STR.title}</h1>
     <form id="search-form" role="search" class="search-form" data-locale={locale} novalidate>
-      <label class="sr-only" for="search-input">{STR.label}</label>
+      <label class="sr-only" for="search-input">{label}</label>
       <input
         id="search-input"
         name="q"

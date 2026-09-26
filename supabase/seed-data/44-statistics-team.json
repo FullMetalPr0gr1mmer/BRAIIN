@@ -1,0 +1,126 @@
+{
+  "blocks": [
+    {
+      "table": "statistics",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "crafts",
+          "label": { "en": "Crafts under one roof", "ar": "حرفة تحت سقف واحد" },
+          "value": "14",
+          "value_numeric": 14,
+          "placements": "{home,work}",
+          "status": "published",
+          "sort_order": 1
+        },
+        {
+          "slug": "projects-delivered",
+          "label": { "en": "Projects delivered", "ar": "مشروع مُنجز" },
+          "value": "250+",
+          "value_numeric": 250,
+          "value_suffix": "+",
+          "placements": "{home,about,work}",
+          "placement_labels": {
+            "about": { "en": "Projects delivered across the region", "ar": "مشروع منجز في المنطقة" }
+          },
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 2,
+          "__placeholder": true
+        },
+        {
+          "slug": "brands",
+          "label": { "en": "Brands we've worked with", "ar": "علامة اشتغلنا معها" },
+          "value": "80+",
+          "value_numeric": 80,
+          "value_suffix": "+",
+          "placements": "{home,about,work}",
+          "placement_labels": {
+            "about": { "en": "Brands we've partnered with", "ar": "علامة اشتغلنا معها" }
+          },
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 3,
+          "__placeholder": true
+        },
+        {
+          "slug": "countries",
+          "label": { "en": "Countries our work has reached", "ar": "دولة وصلها شغلنا" },
+          "value": "12",
+          "value_numeric": 12,
+          "placements": "{home,about,work}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 4,
+          "__placeholder": true
+        }
+      ]
+    },
+    {
+      "table": "team_members",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "leader-1",
+          "name": { "en": "Name Surname", "ar": "الاسم الكامل" },
+          "role": { "en": "Founder & CEO", "ar": "المؤسس والرئيس التنفيذي" },
+          "is_leadership": true,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 1,
+          "__placeholder": true
+        },
+        {
+          "slug": "leader-2",
+          "name": { "en": "Name Surname", "ar": "الاسم الكامل" },
+          "role": { "en": "Creative Director", "ar": "المدير الإبداعي" },
+          "is_leadership": true,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 2,
+          "__placeholder": true
+        },
+        {
+          "slug": "leader-3",
+          "name": { "en": "Name Surname", "ar": "الاسم الكامل" },
+          "role": { "en": "Head of Production", "ar": "رئيس الإنتاج" },
+          "is_leadership": true,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 3,
+          "__placeholder": true
+        },
+        {
+          "slug": "leader-4",
+          "name": { "en": "Name Surname", "ar": "الاسم الكامل" },
+          "role": { "en": "Head of Strategy", "ar": "رئيس الاستراتيجية" },
+          "is_leadership": true,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 4,
+          "__placeholder": true
+        },
+        {
+          "slug": "leader-5",
+          "name": { "en": "Name Surname", "ar": "الاسم الكامل" },
+          "role": { "en": "Head of Digital", "ar": "رئيس الرقمي" },
+          "is_leadership": true,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 5,
+          "__placeholder": true
+        },
+        {
+          "slug": "leader-6",
+          "name": { "en": "Name Surname", "ar": "الاسم الكامل" },
+          "role": { "en": "Head of Client Services", "ar": "رئيس خدمة العملاء" },
+          "is_leadership": true,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 6,
+          "__placeholder": true
+        }
+      ]
+    }
+  ]
+}

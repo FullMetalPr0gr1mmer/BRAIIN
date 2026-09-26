@@ -14,8 +14,22 @@ concurrency:
 
 jobs:
   # Pillar-ordered gates (CLAUDE.md §8): typecheck → schema/unit → build → supply-chain.
-  # (perf-budgets, seo-schema, a11y, visual-regression run in perf-seo-a11y.yml, which
-  #  activates in Phase 1 when real pages exist.)
+  # (perf budgets, a11y, CSP and the browser e2e suites run in perf-seo-a11y.yml, against
+  #  the built Worker and a seeded local database.)
+
+  # Forward-only migrations (CLAUDE.md §8), enforced against the PR's base branch:
+  # immutable once on main, unique numbers, and every new file numbered above main's
+  # highest — so two branches that both add "0016_…" collide here, not in production.
+  migrations:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
+        with:
+          fetch-depth: 0
+      - name: Migration ledger (forward-only, ordered, unique)
+        run: node scripts/check-migrations.mjs "origin/${{ github.base_ref }}"
+
   build-test:
     runs-on: ubuntu-latest
     env:
@@ -122,6 +136,7 @@ jobs:
       NOTIFY_LEAD_SECRET: ci-dummy-notify-lead-secret
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SUPABASE_GUARD_DB_URL: ${{ secrets.SUPABASE_GUARD_DB_URL }}
     steps:
       - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
       - uses: actions/setup-node@v4
@@ -129,6 +144,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Refuse to deploy code whose migrations production has not applied (the loaders
+      # fail CLOSED to empty content, so this would otherwise look like missing content,
+      # not an error). Needs the SUPABASE_GUARD_DB_URL secret — a read-only `deploy_guard`
+      # role, launch runbook §5a. Skips loudly while that secret is absent, like the
+      # deploy step itself, so adding the guard never turns an unrelated push red.
+      - name: Deploy guard — production has every migration
+        if: env.SUPABASE_GUARD_DB_URL != ''
+        run: bash scripts/deploy-guard.sh
+      - name: Deploy guard skipped — secret missing
+        if: env.SUPABASE_GUARD_DB_URL == ''
+        run: echo "::warning::Deploy guard skipped — SUPABASE_GUARD_DB_URL is not set (launch runbook §5a). Nothing checked that production has this commit's migrations."
       - name: Build (production origin)
         run: npm run build
       # Skips (loudly) rather than fails while the two secrets are not configured yet,

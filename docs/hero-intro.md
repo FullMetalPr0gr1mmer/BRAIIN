@@ -8,6 +8,12 @@ it safely.
 **Restore point:** `hero-intro-baseline-2026-08-24` (tag, = `d145aee`) — the last state
 verified working in production. See [Rolling back](#rolling-back).
 
+**UI v2 retime (2026-09, owner decision 5):** the Brain Station UI mockup's timing — a
+**1.0s hold and a .45s fade**, a **.45s logo entrance with the mockup's drop-shadow**, and
+a **.9s letter entrance at 26ms per letter (90ms per Arabic word)**. Once-per-session, the
+paint gate and the focus cut are kept; a URL **hash now cuts** the intro. Everything below
+describes the retimed choreography.
+
 ---
 
 ## 1. The one thing to know before editing
@@ -17,9 +23,9 @@ everything downstream moves with them, in both locales. Do not reintroduce a lit
 anywhere — that is the exact defect this design replaced.
 
 ```css
-/* public/styles/global.css — :root */
---bs-intro-hold: 3.5s;   /* the logo holds the plate, alone */
---bs-intro-fade: 0.4s;   /* the plate + logo leave together */
+/* public/styles/global.css — body:has(.intro) */
+--bs-intro-hold: 1s;     /* the logo holds the plate, alone (the mockup's --intro-hold) */
+--bs-intro-fade: 0.45s;  /* the plate + logo leave together */
 ```
 
 Everything else composes from them, declared on `body` (not `:root` — see §5):
@@ -30,25 +36,37 @@ Everything else composes from them, declared on `body` (not `:root` — see §5)
 --bs-hero-in:    calc(intro-wait + hero-lead)      /* headline fully arrived */
 ```
 
-| Element | Delay | With the shipped 3.5s / 0.4s |
-| --- | --- | --- |
-| `.intro` plate | `hold`, then `fade` | fades 3.500s, gone at **3.900s** |
-| `.letter` | `intro-wait + wd + ld` | starts **3.900s** |
-| `.hero__sub` | `hero-in + beat` | **4.611s** |
-| `.hero__cta` | `hero-in + beat * 2` | **4.761s** |
-| `.hero__scroll`, `.site-header--overlay` | `hero-in + beat * 3` | **4.911s** |
-| settled | | **5.611s** |
+| Element | Delay | EN (shipped 1s / 0.45s) | AR |
+| --- | --- | --- | --- |
+| `.intro` plate | `hold`, then `fade` | fades 1.000s, gone at **1.450s** | same |
+| `.letter` | `intro-wait + wd + ld` | starts **1.450s** | same |
+| `.hero__sub` | `hero-in + beat` | **3.108s** | **2.410s** |
+| `.hero__cta` | `hero-in + beat * 2` | **3.258s** | **2.560s** |
+| `.hero__scroll`, `.site-header--overlay` | `hero-in + beat * 3` | **3.408s** | **2.710s** |
+| settled | | **4.108s** | **3.410s** |
 
-`--bs-hero-in` is **4.461s** here (`3.9 + 0.561`).
+`--bs-hero-in` is **2.958s** in English (`1.45 + 0.13·9 + 0.026·13`) and **2.260s** in
+Arabic (`1.45 + 0.09·9`) — an upper bound for the longest headline the schema allows.
 
-`--bs-hero-beat` is `0.15s`. `--bs-hero-word-step` / `--bs-hero-letter-step` drive the
-per-word / per-letter stagger and are overridden once for `html[dir='rtl']` (Arabic
-splits per word, because splitting Arabic glyphs breaks their joining forms).
+`--bs-hero-beat` is `0.15s`. `--bs-hero-word-step` (0.13s) / `--bs-hero-letter-step`
+(0.026s) drive the per-word / per-letter stagger and are overridden once for
+`html[dir='rtl']` (0.09s per word, no per-letter offset: Arabic splits per word, because
+splitting Arabic glyphs breaks their joining forms). The mockup staggers every letter by
+26ms across the whole line; the ladder is per word + per letter-in-word (server-split
+spans, no inline styles under CSP), so the word rung is ~5 letters at 26ms — the average
+word. Letters animate for **0.9s**.
+
+**Deliberately not adopted from the mockup:** its `blur()` from-states (on the logo and
+the letters) — `filter` is outside the compositor-only set, the logo is the LCP image, and
+the intro overlaps module evaluation; and its "everything reveals at once" handoff — the
+strict order below is kept, and pinned by the tests.
 
 ### To retime the intro
 
-Change `--bs-intro-hold` and/or `--bs-intro-fade`. Nothing else. Then update the seek
-times in `tests/e2e/hero-intro.e2e.ts` (§4) and re-run it.
+Change `--bs-intro-hold` and/or `--bs-intro-fade`. Nothing else. The ordering tests in
+`tests/e2e/hero-intro.e2e.ts` derive their seek instants from the same tokens, so they
+follow; the one test that pins the approved numbers (`the retime is the mockup's`) is the
+visible diff for an intentional retime.
 
 ---
 
@@ -56,9 +74,9 @@ times in `tests/e2e/hero-intro.e2e.ts` (§4) and re-run it.
 
 `.intro` is **transparent**: the hero loop plays underneath the logo from the first
 frame, matching the Brain Station UI reference (`/* 0. INTRO — logo over the clean
-video, no overlay behind it */`). The logo also carries **no drop-shadow** — a deliberate
-choice; the reference keeps `drop-shadow(0 6px 40px rgba(0,0,0,.45))`, and that is the
-one-line fix if the wordmark ever washes out against a lighter cut of the loop.
+video, no overlay behind it */`). Since UI v2 the logo carries the reference's
+**`drop-shadow(0 6px 40px rgba(0,0,0,.45))`** — a static filter, never animated — which
+lifts the white wordmark off the bright sky the loop opens on.
 
 **This is only safe because the headline is TIME-gated.** Every entrance holds
 `opacity: 0` under `fill: both` until `--bs-intro-wait`, so while the logo is up there is
@@ -124,8 +142,19 @@ never lifts would be far worse than the bug it fixed:
 | Case | Behaviour |
 | --- | --- |
 | JS off | class never added, pure-CSS timeline runs as before |
-| Logo slow | `HOLD_CAP_MS = 2000` releases anyway |
+| Logo slow | `HOLD_CAP_MS = 3000` releases anyway (worst case 4.45s to content) |
 | Logo broken | releases **immediately** |
+| Module runs late | the gate is **skipped** once the fade has begun (UI v2) |
+
+The cap went from 2s to 3s with the 1.0s hold: CAP + hold must outlast the measured cold
+transform (~3.6s), or a cold edge lifts the plate before the logo exists. With the old 3.5s
+hold, 2s had slack to spare; with 1.0s it had none. The cost is only on a cold edge
+(content up to ~1s later); warm loads release on the image's own load event (~0.7s).
+
+The fourth row is new with the 1.0s hold. The gate only works if the deferred module runs
+while the plate is still holding; on a slow device it can arrive mid-fade, and pausing
+then would freeze a half-faded plate for up to the cap. So the module reads the plate's
+`intro-out` animation and engages the gate only while `currentTime < hold`.
 
 That last one is subtle. The check is `logo.complete`, **not**
 `complete && naturalWidth > 0`: an image that already errored before this deferred module
@@ -134,29 +163,49 @@ already fired would stall on the cap for nothing. Settled is settled, either way
 
 ---
 
+### Skipping the intro
+
+Any intent to move on cuts it (`wheel`, `touchstart`, `keydown`, `pointerdown`,
+`focusin`), and so does arriving with a URL **hash** (`/#services` — the header's
+Services item — or `/ar#contact`): the browser scrolls straight to that section, and a
+logo plate over it would be in the way. A hash cut does not spend the once-per-session
+flag, so the next visit to the top of home still gets the brand moment.
+
+---
+
 ## 4. Tests
 
-`tests/e2e/hero-intro.e2e.ts` — 30 tests, runs under `npm run test:e2e`, and is picked
-up by the `a11y` job in `.github/workflows/perf-seo-a11y.yml`.
+`tests/e2e/hero-intro.e2e.ts` — runs under `npm run test:e2e`, and is picked up by the
+`e2e` job in `.github/workflows/perf-seo-a11y.yml`.
 
 It seeks with the **Web Animations API** (`getAnimations()` → `pause()` →
 `currentTime = T`), not screenshots. `currentTime` includes `animation-delay`, so seeking
 every animation to the same `T` is exactly "T ms into the choreography" and is
-deterministic on any CPU. Screenshots flake on a 3.5s sequence, and
+deterministic on any CPU. Screenshots flake on a timed sequence, and
 `toHaveScreenshot({animations:'disabled'})` fast-forwards `fill: both` entrances to their
 **end** state — it renders the post-intro frame and tells you nothing about ordering.
 
 Two skip rules in `seek()`: scroll/view-timeline animations are progress-based and throw
 on an absolute `currentTime`, and infinite animations have no meaningful position.
 
-**If you retime the intro, these need updating** — they carry absolute instants:
+**Retiming.** The ordering tests (`strict order…`, `the logo never shares the screen…`)
+compute their seek instants from the leaf tokens with `timeline()`, exactly as the CSS
+derives them, so a retime does not need them edited — they fail on a broken ORDER, not
+on a new number. `the retime is the mockup's…` pins the approved 1.0s / .45s / .45s / .9s
+on purpose: an intentional retime shows up there as a one-line diff.
 
-- `strict order: logo alone, then headline, then sub, then button` — seeks 2000 / 4100 /
-  4700 / 5200 / 6500.
-- `the logo never shares the screen with the headline` — seeks 200…3850.
-- `a cold/slow logo holds the plate…` — its injected `/_image` delay must stay comfortably
-  ABOVE `--bs-intro-wait`, or the plate would be up at the sample point regardless and the
-  test proves nothing.
+`a cold/slow logo holds the plate…` records the gate from INSIDE the page (an init-script
+rAF recorder: when it engaged, when it released, the lowest plate opacity while it was
+engaged). It used to sample from the test at a fixed delay, which raced the page under
+parallel load — the check could land after the 2s cap had already, correctly, released
+the gate. Its injected `/_image` delay must stay comfortably ABOVE the cap.
+`a slow logo is actually SEEN on the plate` delays the logo INSIDE cap + hold and requires
+a frame where the plate is up and the image has decoded (`complete && naturalWidth > 0`) —
+opacity alone is not proof, since a released gate fades the element in with or without
+its bytes.
+
+`a deep link skips the intro` covers the hash cut in both locales, and asserts it leaves
+the session flag unset.
 
 > **Never** `click()`, `press()`, `mouse.wheel()` or scroll before an ordering assertion.
 > `wheel|touchstart|keydown|pointerdown|focusin` all cut the intro, and the CSS hides the

@@ -72,7 +72,7 @@ export const POST: APIRoute = async ({ request }) => {
   const { data: lead, error } = await sb
     .from('leads')
     .select(
-      'id,tenant_id,name,message,service_of_interest,locale,email_enc,phone_enc,budget_enc,timeline_band,created_at',
+      'id,tenant_id,name,company,message,service_of_interest,locale,email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,created_at',
     )
     .eq('tenant_id', parsed.data.tenant_id)
     .eq('id', parsed.data.lead_id)
@@ -96,6 +96,7 @@ export const POST: APIRoute = async ({ request }) => {
   const safe = {
     id: lead['id'],
     name: lead['name'],
+    company: lead['company'],
     message: lead['message'],
     service: lead['service_of_interest'],
     locale: lead['locale'],
@@ -108,7 +109,8 @@ export const POST: APIRoute = async ({ request }) => {
       email: await safeDecrypt(lead['email_enc']),
       phone: await safeDecrypt(lead['phone_enc']),
       budget: await safeDecrypt(lead['budget_enc']),
-      timeline: lead['timeline_band'],
+      // v2 form: free-text deadline (0017); older leads carry only the band.
+      timeline: (await safeDecrypt(lead['timeline_text_enc'])) ?? lead['timeline_band'],
     };
   }
 

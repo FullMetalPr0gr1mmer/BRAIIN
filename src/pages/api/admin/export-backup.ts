@@ -4,56 +4,15 @@ import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { assertPrivilegedOpAllowed, recordPrivilegedOp } from '@/lib/admin/rateLimit';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { AuthorizationError } from '@/lib/authz/errors';
+import { BACKUP_TABLES } from '@/lib/admin/backupTables';
 
 // Content backup export — `export.backup` (Admin + Developer). Same seven-step lockdown
 // as the CSV export (see leads/export.ts), applied to content rather than leads.
 //
-// ── What this deliberately does NOT contain ──────────────────────────────────────
-// No leads, in any form. Not even ciphertext. A "backup" that quietly includes the lead
-// table would let `export.backup` stand in for `export.csv` and route around the PII
-// gate entirely — and the two capabilities are listed separately in §5 precisely
-// because they are different decisions. Database-level backup with PII is the DR path
-// (§10: pg_dump → object-locked R2), which runs off-platform under different custody.
+// What it dumps, and the tables it must never dump (leads, applications, consent
+// records, …), live in src/lib/admin/backupTables.ts — see the rationale there.
 
 export const prerender = false;
-
-/** Content only. Every table here is publishable material, not personal data. */
-const BACKUP_TABLES: readonly { table: string; columns: string }[] = [
-  {
-    table: 'services',
-    columns:
-      'id,slug,title,blurb,body,hero_video_uid,category,status,is_teaser,sort_order,updated_at',
-  },
-  {
-    table: 'blog_posts',
-    columns:
-      'id,slug,title,excerpt,body,author_id,category_id,cover_image_url,status,published_at,updated_at',
-  },
-  { table: 'portfolio', columns: 'id,slug,title,summary,body,status,sort_order,updated_at' },
-  { table: 'pages', columns: 'id,slug,title,status,nav_visible,updated_at' },
-  {
-    table: 'page_sections',
-    columns: 'id,page_id,type,content,style,visible,sort_order,updated_at',
-  },
-  { table: 'navigation', columns: 'id,location,parent_id,label,href,visible,sort_order' },
-  { table: 'categories', columns: 'id,slug,name' },
-  { table: 'team_members', columns: 'id,slug,name,bio,avatar_url,status,sort_order' },
-  { table: 'certifications', columns: 'id,slug,name,issuer,year,logo_url,status,sort_order' },
-  { table: 'statistics', columns: 'id,slug,label,value,status,sort_order' },
-  { table: 'partner_logos', columns: 'id,name,logo_url,scale,offset_y,visible,sort_order' },
-  { table: 'redirects', columns: 'id,source_path,target_path,status' },
-  {
-    table: 'entity_seo',
-    columns:
-      'id,entity_type,entity_id,meta_title,meta_description,og_image,canonical_override,robots,schema_type',
-  },
-  { table: 'media_assets', columns: 'id,kind,storage_path,folder,alt,tags,width,height,mime_type' },
-  {
-    table: 'ai_questions',
-    columns: 'id,slug,prompt,help_text,input_type,options,status,sort_order',
-  },
-  { table: 'ai_styles', columns: 'id,slug,name,description,traits,image_url,status,sort_order' },
-];
 
 const MAX_ROWS_PER_TABLE = 5000;
 

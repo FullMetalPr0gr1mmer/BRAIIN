@@ -3,12 +3,21 @@
 // the long-`s-maxage` Tier-A cache without a purge. `/admin` and `/api` are exempt.
 // Source of truth is `site_settings` (flag + allowlist), snapshotted into KV.
 
+import { IDENTITY_FALLBACK } from '@/lib/identity/fallback';
+
 export interface MaintenanceState {
   active: boolean;
   allowlist: readonly string[];
 }
 
 export const MAINTENANCE_KV_KEY = 'site:maintenance';
+
+// The 503 names the studio from the code fallback, deliberately NOT from site_profile:
+// this page is answered before the edge cache on every request during maintenance, and
+// maintenance is exactly when the database may be the thing being worked on. A Postgres
+// round-trip here would put the DB back on the critical path this check exists to avoid.
+// The brand is a fixed string with no markup, so it needs no escaping.
+const MAINTENANCE_BRAND = IDENTITY_FALLBACK.brandName.en;
 
 /**
  * Snapshots the flag into KV, which is what the middleware actually reads.
@@ -83,7 +92,7 @@ export function maintenanceResponse(nonce: string): Response {
     'main{text-align:center;padding:2rem}h1{margin:0 0 .5rem}p{opacity:.7}' +
     '</style></head>' +
     '<body><main><h1>Back shortly</h1>' +
-    '<p>Braiin Station is undergoing scheduled maintenance.</p></main></body></html>';
+    `<p>${MAINTENANCE_BRAND} is undergoing scheduled maintenance.</p></main></body></html>`;
   return new Response(html, {
     status: 503,
     headers: {

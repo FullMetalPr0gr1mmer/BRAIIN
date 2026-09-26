@@ -7,6 +7,12 @@ export interface SectionData {
   visible?: boolean;
   /** Per-instance overrides; section components also localise their own copy. */
   props?: Record<string, unknown>;
+  /**
+   * Data the ROUTE injects (rows it already loaded — a case study, the facet selection).
+   * Rendered as the component's `data` prop AFTER the content props, so authored CMS
+   * content can never replace it.
+   */
+  data?: Record<string, unknown>;
 }
 
 /**

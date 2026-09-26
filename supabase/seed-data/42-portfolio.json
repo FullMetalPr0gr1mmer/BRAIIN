@@ -1,0 +1,2594 @@
+{
+  "blocks": [
+    {
+      "table": "portfolio",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "the-rider",
+          "title": {
+            "en": "The Rider",
+            "ar": "الراكب"
+          },
+          "project_type": {
+            "en": "Brand film",
+            "ar": "فيلم للعلامة"
+          },
+          "teaser": {
+            "en": "A launch film shot in the desert at first light.",
+            "ar": "فيلم إطلاق صُوّر في الصحراء مع أول ضوء."
+          },
+          "summary": {
+            "en": "The brief was to introduce a new model to a region that has seen every car ad already. We skipped the studio and the showroom and went to the desert at 5am, with one rider, one vehicle, and a crew of twelve.",
+            "ar": "كان البريف تقديم موديل جديد لمنطقة شافت كل إعلانات السيارات. تركنا الاستوديو والمعرض ورحنا للصحراء الساعة خمسة الفجر، براكب واحد ومركبة واحدة وفريق من اثني عشر شخص."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "automotive"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-a"
+              }
+            }
+          },
+          "year": 2026,
+          "is_featured": true,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000001",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 1,
+          "preview_end_s": 3.7,
+          "lead": {
+            "en": "A launch film built around one image: a rider who looks like the landscape made him.",
+            "ar": "فيلم إطلاق مبني حول صورة واحدة: راكب يبدو وكأن الأرض هي اللي صنعته."
+          },
+          "goal": {
+            "en": "Make a launch people would stop scrolling for, and remember the model name the next day.",
+            "ar": "إطلاق يوقّف الناس عن التمرير، ويخليهم يتذكرون اسم الموديل اليوم اللي بعده."
+          },
+          "result": {
+            "en": "The film ran across broadcast, cinema and social, with cutdowns tailored to each placement.",
+            "ar": "عُرض الفيلم على التلفزيون والسينما والسوشيال ميديا، مع نسخ قصيرة مفصّلة لكل منصة."
+          },
+          "scope": [
+            {
+              "en": "Creative concept",
+              "ar": "الفكرة الإبداعية"
+            },
+            {
+              "en": "Storyboard and art direction",
+              "ar": "الستوريبورد والإخراج الفني"
+            },
+            {
+              "en": "Production and filming",
+              "ar": "الإنتاج والتصوير"
+            },
+            {
+              "en": "Edit, grade and sound design",
+              "ar": "المونتاج والتلوين وتصميم الصوت"
+            },
+            {
+              "en": "Cutdowns for social",
+              "ar": "نسخ قصيرة للسوشيال ميديا"
+            }
+          ],
+          "keywords": [
+            {
+              "en": "Brand film",
+              "ar": "فيلم للعلامة"
+            },
+            {
+              "en": "Launch",
+              "ar": "إطلاق"
+            },
+            {
+              "en": "Desert shoot",
+              "ar": "تصوير صحراوي"
+            },
+            {
+              "en": "Art direction",
+              "ar": "إخراج فني"
+            }
+          ],
+          "results": [
+            {
+              "value": "XXM",
+              "label": {
+                "en": "Views across platforms",
+                "ar": "مشاهدة على المنصات"
+              }
+            },
+            {
+              "value": "+XX%",
+              "label": {
+                "en": "Brand recall after launch",
+                "ar": "تذكّر العلامة بعد الإطلاق"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 1,
+          "__placeholder": true
+        },
+        {
+          "slug": "kitchen-hours",
+          "title": {
+            "en": "Kitchen Hours",
+            "ar": "ساعات المطبخ"
+          },
+          "project_type": {
+            "en": "Product campaign",
+            "ar": "حملة منتج"
+          },
+          "teaser": {
+            "en": "A campaign built around the ten minutes before dinner.",
+            "ar": "حملة مبنية حول العشر دقائق قبل العشاء."
+          },
+          "summary": {
+            "en": "We turned a product launch into a series of small, true moments: the oven timer, the first taste, the table filling up.",
+            "ar": "حوّلنا إطلاق منتج لسلسلة لحظات صغيرة وحقيقية: مؤقت الفرن، أول تذوّق، والسفرة وهي تمتلي."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "food-and-beverage"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-b"
+              }
+            }
+          },
+          "year": 2026,
+          "is_featured": true,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000002",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 4.1,
+          "preview_end_s": 5.4,
+          "lead": {
+            "en": "A campaign about the ten minutes before dinner, when the kitchen is the busiest room in the house.",
+            "ar": "حملة عن العشر دقائق قبل العشاء، لما يكون المطبخ أكثر غرفة زحمة في البيت."
+          },
+          "goal": {
+            "en": "Put the product in real homes, not on a set.",
+            "ar": "نحط المنتج في بيوت حقيقية، مو في استوديو."
+          },
+          "result": {
+            "en": "A film, a stills library and a month of social content from one production.",
+            "ar": "فيلم ومكتبة صور وشهر من محتوى السوشيال ميديا من إنتاج واحد."
+          },
+          "scope": [
+            {
+              "en": "Campaign strategy",
+              "ar": "استراتيجية الحملة"
+            },
+            {
+              "en": "Product film",
+              "ar": "فيلم المنتج"
+            },
+            {
+              "en": "Photography",
+              "ar": "التصوير الفوتوغرافي"
+            },
+            {
+              "en": "Social content",
+              "ar": "محتوى السوشيال ميديا"
+            }
+          ],
+          "keywords": [
+            {
+              "en": "Campaign",
+              "ar": "حملة"
+            },
+            {
+              "en": "Product film",
+              "ar": "فيلم منتج"
+            },
+            {
+              "en": "Social",
+              "ar": "سوشيال ميديا"
+            }
+          ],
+          "results": [
+            {
+              "value": "XX",
+              "label": {
+                "en": "Pieces of content from one shoot",
+                "ar": "قطعة محتوى من تصوير واحد"
+              }
+            },
+            {
+              "value": "+XX%",
+              "label": {
+                "en": "Engagement against the last campaign",
+                "ar": "تفاعل مقارنة بالحملة السابقة"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 2,
+          "__placeholder": true
+        },
+        {
+          "slug": "notebook",
+          "title": {
+            "en": "Notebook",
+            "ar": "الدفتر"
+          },
+          "project_type": {
+            "en": "Rebrand",
+            "ar": "إعادة بناء هوية"
+          },
+          "teaser": {
+            "en": "A rebrand that started, literally, on paper.",
+            "ar": "هوية جديدة بدأت حرفياً على الورق."
+          },
+          "summary": {
+            "en": "Every direction started as a pencil sketch before it touched a screen, so the final system still feels drawn by hand.",
+            "ar": "كل اتجاه بدأ برسمة بالقلم قبل ما يوصل للشاشة، عشان النظام النهائي يبقى وكأنه مرسوم باليد."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "education"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-c"
+              }
+            }
+          },
+          "year": 2025,
+          "is_featured": true,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000003",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 6.2,
+          "preview_end_s": 7.9,
+          "lead": {
+            "en": "A rebrand that kept what people loved and fixed what nobody could read.",
+            "ar": "هوية جديدة حافظت على اللي يحبه الناس، وصلّحت اللي ما أحد كان يقدر يقرأه."
+          },
+          "goal": {
+            "en": "One identity that works as well on a notebook as on a building.",
+            "ar": "هوية واحدة تشتغل على الدفتر زي ما تشتغل على المبنى."
+          },
+          "result": {
+            "en": "A full identity system, rolled out across every campus.",
+            "ar": "نظام هوية كامل، طُبّق في كل الفروع."
+          },
+          "scope": [
+            {
+              "en": "Brand strategy",
+              "ar": "استراتيجية العلامة"
+            },
+            {
+              "en": "Logo and type system",
+              "ar": "الشعار ونظام الخطوط"
+            },
+            {
+              "en": "Arabic and English lettering",
+              "ar": "الخط العربي والإنجليزي"
+            },
+            {
+              "en": "Brand guidelines",
+              "ar": "دليل الهوية"
+            }
+          ],
+          "keywords": [
+            {
+              "en": "Identity",
+              "ar": "هوية"
+            },
+            {
+              "en": "Rebrand",
+              "ar": "إعادة بناء"
+            },
+            {
+              "en": "Guidelines",
+              "ar": "دليل الاستخدام"
+            }
+          ],
+          "results": [
+            {
+              "value": "XX",
+              "label": {
+                "en": "Touchpoints redesigned",
+                "ar": "نقطة تواصل أُعيد تصميمها"
+              }
+            },
+            {
+              "value": "XX",
+              "label": {
+                "en": "Weeks from brief to launch",
+                "ar": "أسبوع من البريف للإطلاق"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 3,
+          "__placeholder": true
+        },
+        {
+          "slug": "ink",
+          "title": {
+            "en": "Ink",
+            "ar": "حبر"
+          },
+          "project_type": {
+            "en": "Title sequence",
+            "ar": "تتر افتتاحي"
+          },
+          "teaser": {
+            "en": "Title sequence and motion system for a cultural season.",
+            "ar": "تتر افتتاحي ونظام موشن لموسم ثقافي."
+          },
+          "summary": {
+            "en": "We filmed ink, pen strokes and a human eye at extreme close range, then built a motion system from the same footage.",
+            "ar": "صوّرنا الحبر وحركة القلم وعين إنسان من مسافة قريبة جداً، وبنينا نظام موشن من نفس اللقطات."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "culture"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-d"
+              }
+            }
+          },
+          "year": 2025,
+          "is_featured": true,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000004",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 12,
+          "preview_end_s": 13,
+          "lead": {
+            "en": "A title sequence shot in macro, where ink behaves like a landscape.",
+            "ar": "تتر افتتاحي مصوّر بالماكرو، الحبر فيه يتصرف كأنه أرض."
+          },
+          "goal": {
+            "en": "An opening that sets the tone for a whole season in forty seconds.",
+            "ar": "افتتاحية تحدد نبرة موسم كامل في أربعين ثانية."
+          },
+          "result": {
+            "en": "A sequence and a motion kit reused across every event of the season.",
+            "ar": "تتر وحزمة موشن استُخدمت في كل فعاليات الموسم."
+          },
+          "scope": [
+            {
+              "en": "Title design",
+              "ar": "تصميم التتر"
+            },
+            {
+              "en": "Macro filming",
+              "ar": "تصوير ماكرو"
+            },
+            {
+              "en": "Motion system",
+              "ar": "نظام الموشن"
+            },
+            {
+              "en": "Original score",
+              "ar": "موسيقى أصلية"
+            }
+          ],
+          "keywords": [
+            {
+              "en": "Motion",
+              "ar": "موشن"
+            },
+            {
+              "en": "Title design",
+              "ar": "تصميم التتر"
+            },
+            {
+              "en": "Macro filming",
+              "ar": "تصوير ماكرو"
+            }
+          ],
+          "results": [
+            {
+              "value": "XX",
+              "label": {
+                "en": "Events using the motion kit",
+                "ar": "فعالية استخدمت حزمة الموشن"
+              }
+            },
+            {
+              "value": "0:40",
+              "label": {
+                "en": "Seconds of opening title",
+                "ar": "ثانية من التتر الافتتاحي"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 4,
+          "__placeholder": true
+        },
+        {
+          "slug": "terrain",
+          "title": {
+            "en": "Terrain",
+            "ar": "تضاريس"
+          },
+          "project_type": {
+            "en": "Launch photography",
+            "ar": "تصوير إطلاق"
+          },
+          "teaser": {
+            "en": "Material studies for a real estate launch.",
+            "ar": "دراسات خامات لإطلاق مشروع عقاري."
+          },
+          "summary": {
+            "en": "Before there was a building to photograph, we photographed what it would be made of.",
+            "ar": "قبل ما يكون فيه مبنى نصوّره، صوّرنا الأشياء اللي بيتبنى منها."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "real-estate"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-e"
+              }
+            }
+          },
+          "year": 2025,
+          "is_featured": true,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000005",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 13,
+          "preview_end_s": 13.9,
+          "lead": {
+            "en": "A launch told through the materials the project is built from.",
+            "ar": "إطلاق يُحكى من خلال الخامات اللي المشروع مبني منها."
+          },
+          "goal": {
+            "en": "Sell a place that didn't exist yet.",
+            "ar": "نسوّق لمكان ما كان موجود للحين."
+          },
+          "result": {
+            "en": "A photography library used across the launch and the sales centre.",
+            "ar": "مكتبة صور استُخدمت في الإطلاق ومركز المبيعات."
+          },
+          "scope": [
+            {
+              "en": "Art direction",
+              "ar": "الإخراج الفني"
+            },
+            {
+              "en": "Still life photography",
+              "ar": "تصوير الطبيعة الصامتة"
+            },
+            {
+              "en": "Launch campaign",
+              "ar": "حملة الإطلاق"
+            }
+          ],
+          "keywords": [
+            {
+              "en": "Photography",
+              "ar": "تصوير فوتوغرافي"
+            },
+            {
+              "en": "Materials",
+              "ar": "الخامات"
+            },
+            {
+              "en": "Launch",
+              "ar": "إطلاق"
+            }
+          ],
+          "results": [
+            {
+              "value": "XX",
+              "label": {
+                "en": "Images delivered",
+                "ar": "صورة مسلّمة"
+              }
+            },
+            {
+              "value": "XX",
+              "label": {
+                "en": "Placements in the launch",
+                "ar": "موقع ظهرت فيه في الإطلاق"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 5,
+          "__placeholder": true
+        },
+        {
+          "slug": "first-light",
+          "title": {
+            "en": "First Light",
+            "ar": "أول ضوء"
+          },
+          "project_type": {
+            "en": "Live event",
+            "ar": "فعالية حيّة"
+          },
+          "teaser": {
+            "en": "Opening night visuals for a live event.",
+            "ar": "مرئيات ليلة الافتتاح لفعالية حيّة."
+          },
+          "summary": {
+            "en": "We designed the stage visuals, the opening film and the moment the whole venue went dark before the first light came up.",
+            "ar": "صمّمنا مرئيات المسرح والفيلم الافتتاحي واللحظة اللي أظلم فيها المكان كله قبل ما يطلع أول ضوء."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "entertainment"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-f"
+              }
+            }
+          },
+          "year": 2024,
+          "is_featured": true,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000006",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 15.9,
+          "preview_end_s": 17.3,
+          "lead": {
+            "en": "An opening night where the light itself was the headline act.",
+            "ar": "ليلة افتتاح كان الضوء نفسه فيها هو العرض الرئيسي."
+          },
+          "goal": {
+            "en": "One moment everyone in the room would film.",
+            "ar": "لحظة وحدة كل اللي في القاعة يصوّرونها."
+          },
+          "result": {
+            "en": "An opening that ran on every guest's phone before it ran on the news.",
+            "ar": "افتتاحية انتشرت على جوالات الحضور قبل ما تنعرض في الأخبار."
+          },
+          "scope": [
+            {
+              "en": "Show concept",
+              "ar": "فكرة العرض"
+            },
+            {
+              "en": "Stage visuals",
+              "ar": "مرئيات المسرح"
+            },
+            {
+              "en": "Opening film",
+              "ar": "الفيلم الافتتاحي"
+            },
+            {
+              "en": "Event production",
+              "ar": "إنتاج الفعالية"
+            }
+          ],
+          "keywords": [
+            {
+              "en": "Live event",
+              "ar": "فعالية حيّة"
+            },
+            {
+              "en": "Stage visuals",
+              "ar": "مرئيات المسرح"
+            },
+            {
+              "en": "Show design",
+              "ar": "تصميم العرض"
+            }
+          ],
+          "results": [
+            {
+              "value": "XXK",
+              "label": {
+                "en": "Guests on opening night",
+                "ar": "ضيف في ليلة الافتتاح"
+              }
+            },
+            {
+              "value": "XXM",
+              "label": {
+                "en": "Social views in the first week",
+                "ar": "مشاهدة في الأسبوع الأول"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 6,
+          "__placeholder": true
+        },
+        {
+          "slug": "dust-trail",
+          "title": {
+            "en": "Dust Trail",
+            "ar": "أثر الغبار"
+          },
+          "project_type": {
+            "en": "Social series",
+            "ar": "سلسلة سوشيال"
+          },
+          "teaser": {
+            "en": "A twelve-part social series cut from one desert shoot.",
+            "ar": "سلسلة من اثني عشر جزء للسوشيال من تصوير صحراوي واحد."
+          },
+          "summary": {
+            "en": "A twelve-part social series cut from one desert shoot.",
+            "ar": "سلسلة من اثني عشر جزء للسوشيال من تصوير صحراوي واحد."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "automotive"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-a"
+              }
+            }
+          },
+          "year": 2025,
+          "is_featured": false,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000023",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 15,
+          "preview_end_s": 15.8,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 7,
+          "__placeholder": true
+        },
+        {
+          "slug": "the-table",
+          "title": {
+            "en": "The Table",
+            "ar": "السفرة"
+          },
+          "project_type": {
+            "en": "Menu photography",
+            "ar": "تصوير قائمة الطعام"
+          },
+          "teaser": {
+            "en": "Menu and packaging photography for a seasonal launch.",
+            "ar": "تصوير القائمة والتغليف لإطلاق موسمي."
+          },
+          "summary": {
+            "en": "Menu and packaging photography for a seasonal launch.",
+            "ar": "تصوير القائمة والتغليف لإطلاق موسمي."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "food-and-beverage"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-b"
+              }
+            }
+          },
+          "year": 2025,
+          "is_featured": false,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000015",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 5.5,
+          "preview_end_s": 6.1,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 8,
+          "__placeholder": true
+        },
+        {
+          "slug": "field-notes",
+          "title": {
+            "en": "Field Notes",
+            "ar": "ملاحظات ميدانية"
+          },
+          "project_type": {
+            "en": "Website",
+            "ar": "موقع إلكتروني"
+          },
+          "teaser": {
+            "en": "A bilingual website built on the new identity.",
+            "ar": "موقع ثنائي اللغة مبني على الهوية الجديدة."
+          },
+          "summary": {
+            "en": "A bilingual website built on the new identity.",
+            "ar": "موقع ثنائي اللغة مبني على الهوية الجديدة."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "education"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-c"
+              }
+            }
+          },
+          "year": 2024,
+          "is_featured": false,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000018",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 8.3,
+          "preview_end_s": 9.3,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 9,
+          "__placeholder": true
+        },
+        {
+          "slug": "sunday-sessions",
+          "title": {
+            "en": "Sunday Sessions",
+            "ar": "جلسات الأحد"
+          },
+          "project_type": {
+            "en": "Original score",
+            "ar": "موسيقى أصلية"
+          },
+          "teaser": {
+            "en": "An original score written for a season of live talks.",
+            "ar": "موسيقى أصلية لموسم من الجلسات الحيّة."
+          },
+          "summary": {
+            "en": "An original score written for a season of live talks.",
+            "ar": "موسيقى أصلية لموسم من الجلسات الحيّة."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "culture"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-d"
+              }
+            }
+          },
+          "year": 2024,
+          "is_featured": false,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000019",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 10.5,
+          "preview_end_s": 11.5,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 10,
+          "__placeholder": true
+        },
+        {
+          "slug": "blueprint",
+          "title": {
+            "en": "Blueprint",
+            "ar": "المخطط"
+          },
+          "project_type": {
+            "en": "Sales centre identity",
+            "ar": "هوية مركز المبيعات"
+          },
+          "teaser": {
+            "en": "Identity, signage and merchandise for a sales centre.",
+            "ar": "هوية ولافتات ومنتجات ترويجية لمركز مبيعات."
+          },
+          "summary": {
+            "en": "Identity, signage and merchandise for a sales centre.",
+            "ar": "هوية ولافتات ومنتجات ترويجية لمركز مبيعات."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "real-estate"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-e"
+              }
+            }
+          },
+          "year": 2024,
+          "is_featured": false,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000020",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 12,
+          "preview_end_s": 12.8,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 11,
+          "__placeholder": true
+        },
+        {
+          "slug": "opening-night",
+          "title": {
+            "en": "Opening Night",
+            "ar": "ليلة الافتتاح"
+          },
+          "project_type": {
+            "en": "Event film",
+            "ar": "فيلم الفعالية"
+          },
+          "teaser": {
+            "en": "The recap film, edited overnight and live by morning.",
+            "ar": "فيلم ملخّص، مونتاجه خلال الليل ونُشر الصباح."
+          },
+          "summary": {
+            "en": "The recap film, edited overnight and live by morning.",
+            "ar": "فيلم ملخّص، مونتاجه خلال الليل ونُشر الصباح."
+          },
+          "sector_id": {
+            "$ref": {
+              "table": "sectors",
+              "by": {
+                "slug": "entertainment"
+              }
+            }
+          },
+          "client_id": {
+            "$ref": {
+              "table": "clients",
+              "by": {
+                "slug": "client-f"
+              }
+            }
+          },
+          "year": 2024,
+          "is_featured": false,
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000026",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 17.4,
+          "preview_end_s": 18.3,
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 12,
+          "__placeholder": true
+        }
+      ]
+    },
+    {
+      "table": "portfolio_services",
+      "conflict": ["portfolio_id", "service_id"],
+      "unlessAuthored": ["portfolio_id"],
+      "tenantScoped": true,
+      "rows": [
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "videography"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "advertising"
+              }
+            }
+          },
+          "sort_order": 1
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "advertising"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "photography"
+              }
+            }
+          },
+          "sort_order": 1
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "social-media"
+              }
+            }
+          },
+          "sort_order": 2
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "branding"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "motion-graphics"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "music"
+              }
+            }
+          },
+          "sort_order": 1
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "terrain"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "photography"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "event-planning"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "motion-graphics"
+              }
+            }
+          },
+          "sort_order": 1
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "dust-trail"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "social-media"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "dust-trail"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "montage"
+              }
+            }
+          },
+          "sort_order": 1
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-table"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "photography"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "field-notes"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "web-development"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "field-notes"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "branding"
+              }
+            }
+          },
+          "sort_order": 1
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "field-notes"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "seo-geo-aeo"
+              }
+            }
+          },
+          "sort_order": 2
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "sunday-sessions"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "music"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "sunday-sessions"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "animations"
+              }
+            }
+          },
+          "sort_order": 1
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "blueprint"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "branding"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "blueprint"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "merchandise"
+              }
+            }
+          },
+          "sort_order": 1
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "opening-night"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "videography"
+              }
+            }
+          },
+          "sort_order": 0
+        },
+        {
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "opening-night"
+              }
+            }
+          },
+          "service_id": {
+            "$ref": {
+              "table": "services",
+              "by": {
+                "slug": "montage"
+              }
+            }
+          },
+          "sort_order": 1
+        }
+      ]
+    },
+    {
+      "table": "portfolio_media",
+      "conflict": ["id"],
+      "unlessAuthored": ["portfolio_id"],
+      "tenantScoped": true,
+      "rows": [
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000001",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "hero",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000010",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 1,
+          "clip_end_s": 3.7,
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000002",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "final",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000011",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 0.2,
+          "clip_end_s": 4,
+          "duration_label": "1:30",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000003",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000027",
+          "breakdown_kind": "sketch",
+          "layout": "half",
+          "caption": {
+            "en": "First frame sketch. The goggles were in it from day one.",
+            "ar": "رسمة أول لقطة. النظارات كانت فيها من اليوم الأول."
+          },
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000004",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000028",
+          "breakdown_kind": "sketch",
+          "layout": "half",
+          "caption": {
+            "en": "Storyboard for the interior cutaway.",
+            "ar": "ستوريبورد للقطة الداخلية."
+          },
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000005",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000009",
+          "breakdown_kind": "bts",
+          "layout": "wide",
+          "caption": {
+            "en": "Location scout at 5am, two days before the shoot.",
+            "ar": "استكشاف الموقع الساعة خمسة الفجر، قبل التصوير بيومين."
+          },
+          "sort_order": 2
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000006",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000012",
+          "breakdown_kind": "bts",
+          "layout": "third",
+          "caption": {
+            "en": "Wardrobe test in natural light.",
+            "ar": "تجربة الأزياء في ضوء طبيعي."
+          },
+          "sort_order": 3
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000007",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000024",
+          "breakdown_kind": "process",
+          "layout": "third",
+          "caption": {
+            "en": "Grade reference: warm, dusty, never orange.",
+            "ar": "مرجع التلوين: دافئ ومغبّر، بدون برتقالي."
+          },
+          "sort_order": 4
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000008",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000023",
+          "breakdown_kind": "bts",
+          "layout": "third",
+          "caption": {
+            "en": "Second unit on the dust pass.",
+            "ar": "الوحدة الثانية على لقطة الغبار."
+          },
+          "sort_order": 5
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000009",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000009",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000010",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000011",
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000011",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000012",
+          "sort_order": 2
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000012",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000025",
+          "sort_order": 3
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000013",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000023",
+          "sort_order": 4
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000014",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000024",
+          "sort_order": 5
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000015",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000022",
+          "sort_order": 6
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000016",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000026",
+          "sort_order": 7
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000017",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "the-rider"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000010",
+          "sort_order": 8
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000018",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "role": "hero",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000013",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 4.1,
+          "clip_end_s": 5.4,
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000019",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "role": "final",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000014",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 4.1,
+          "clip_end_s": 5.6,
+          "duration_label": "0:45",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000020",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000028",
+          "breakdown_kind": "sketch",
+          "layout": "half",
+          "caption": {
+            "en": "The oven timer frame, drawn first.",
+            "ar": "لقطة مؤقت الفرن، أول شيء رسمناه."
+          },
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000021",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000014",
+          "breakdown_kind": "bts",
+          "layout": "half",
+          "caption": {
+            "en": "Lighting the kitchen for a real evening.",
+            "ar": "إضاءة المطبخ على أنه مساء حقيقي."
+          },
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000022",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000013",
+          "breakdown_kind": "process",
+          "layout": "wide",
+          "caption": {
+            "en": "Final hero frame.",
+            "ar": "لقطة البطل النهائية."
+          },
+          "sort_order": 2
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000023",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000013",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000024",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000014",
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000025",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000015",
+          "sort_order": 2
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000026",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000016",
+          "sort_order": 3
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000027",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000017",
+          "sort_order": 4
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000028",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "kitchen-hours"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000018",
+          "sort_order": 5
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000029",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "role": "hero",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000016",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 6.2,
+          "clip_end_s": 7.9,
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000030",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "role": "final",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000017",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 6.2,
+          "clip_end_s": 9.8,
+          "duration_label": "0:30",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000031",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000029",
+          "breakdown_kind": "sketch",
+          "layout": "half",
+          "caption": {
+            "en": "Early lettering studies in pencil.",
+            "ar": "دراسات خط أولية بالقلم."
+          },
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000032",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000018",
+          "breakdown_kind": "process",
+          "layout": "half",
+          "caption": {
+            "en": "Testing the mark on paper stock.",
+            "ar": "تجربة الشعار على الورق."
+          },
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000033",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000016",
+          "breakdown_kind": "process",
+          "layout": "wide",
+          "caption": {
+            "en": "Where the first mark came from.",
+            "ar": "من هنا جاء الشعار الأول."
+          },
+          "sort_order": 2
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000034",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000016",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000035",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000017",
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000036",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000018",
+          "sort_order": 2
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000037",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000019",
+          "sort_order": 3
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000038",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000015",
+          "sort_order": 4
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000039",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "notebook"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000020",
+          "sort_order": 5
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000040",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "role": "hero",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000021",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 12,
+          "clip_end_s": 13,
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000041",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "role": "final",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000021",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 11,
+          "clip_end_s": 14,
+          "duration_label": "0:40",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000042",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000030",
+          "breakdown_kind": "sketch",
+          "layout": "half",
+          "caption": {
+            "en": "Texture study for the opening frame.",
+            "ar": "دراسة ملمس للقطة الافتتاحية."
+          },
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000043",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000020",
+          "breakdown_kind": "bts",
+          "layout": "half",
+          "caption": {
+            "en": "Macro rig, 2cm from the surface.",
+            "ar": "معدات الماكرو على بعد ٢ سم من السطح."
+          },
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000044",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000021",
+          "breakdown_kind": "process",
+          "layout": "wide",
+          "caption": {
+            "en": "The eye shot that became the key frame.",
+            "ar": "لقطة العين اللي صارت اللقطة الرئيسية."
+          },
+          "sort_order": 2
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000045",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000021",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000046",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000020",
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000047",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000019",
+          "sort_order": 2
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000048",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000022",
+          "sort_order": 3
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000049",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000023",
+          "sort_order": 4
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000050",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "ink"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000024",
+          "sort_order": 5
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000051",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "terrain"
+              }
+            }
+          },
+          "role": "hero",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000022",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 13,
+          "clip_end_s": 13.9,
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000052",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "terrain"
+              }
+            }
+          },
+          "role": "final",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000023",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 12.4,
+          "clip_end_s": 14.4,
+          "duration_label": "0:20",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000053",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "terrain"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000030",
+          "breakdown_kind": "sketch",
+          "layout": "half",
+          "caption": {
+            "en": "Composition sketch for the texture series.",
+            "ar": "رسمة تكوين لسلسلة الملمس."
+          },
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000054",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "terrain"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000023",
+          "breakdown_kind": "bts",
+          "layout": "half",
+          "caption": {
+            "en": "Lighting the surface with a single source.",
+            "ar": "إضاءة السطح بمصدر واحد."
+          },
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000055",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "terrain"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000022",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000056",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "terrain"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000023",
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000057",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "terrain"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000024",
+          "sort_order": 2
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000058",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "terrain"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000021",
+          "sort_order": 3
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000059",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "terrain"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000020",
+          "sort_order": 4
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000060",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "terrain"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000025",
+          "sort_order": 5
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000061",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "role": "hero",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000025",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 15.9,
+          "clip_end_s": 17.3,
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000062",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "role": "final",
+          "kind": "video",
+          "media_id": "5eed0a00-0000-4000-8000-000000000026",
+          "video_path": "/media/showreel.mp4",
+          "clip_start_s": 15.4,
+          "clip_end_s": 18.3,
+          "duration_label": "1:00",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000063",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000029",
+          "breakdown_kind": "sketch",
+          "layout": "half",
+          "caption": {
+            "en": "Show flow, drawn on the back of a run sheet.",
+            "ar": "تسلسل العرض، مرسوم على ظهر جدول التشغيل."
+          },
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000064",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000026",
+          "breakdown_kind": "bts",
+          "layout": "half",
+          "caption": {
+            "en": "Rehearsal, three hours before doors.",
+            "ar": "البروفة، قبل فتح الأبواب بثلاث ساعات."
+          },
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000065",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "role": "breakdown",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000025",
+          "breakdown_kind": "process",
+          "layout": "wide",
+          "caption": {
+            "en": "The first light cue.",
+            "ar": "إشارة أول ضوء."
+          },
+          "sort_order": 2
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000066",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000025",
+          "sort_order": 0
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000067",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000026",
+          "sort_order": 1
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000068",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000024",
+          "sort_order": 2
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000069",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000023",
+          "sort_order": 3
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000070",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000009",
+          "sort_order": 4
+        },
+        {
+          "id": "5eed0b00-0000-4000-8000-000000000071",
+          "portfolio_id": {
+            "$ref": {
+              "table": "portfolio",
+              "by": {
+                "slug": "first-light"
+              }
+            }
+          },
+          "role": "gallery",
+          "kind": "image",
+          "media_id": "5eed0a00-0000-4000-8000-000000000022",
+          "sort_order": 5
+        }
+      ]
+    }
+  ]
+}

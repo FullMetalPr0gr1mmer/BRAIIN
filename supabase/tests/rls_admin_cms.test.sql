@@ -25,7 +25,7 @@
 -- Run with `supabase test db`.
 
 begin;
-select plan(26);
+select plan(28);
 
 -- Setup runs as the migration role, where RLS is bypassed.
 --
@@ -65,8 +65,11 @@ insert into public.entity_seo (id, tenant_id, entity_type, entity_id, meta_title
 
 insert into public.site_integrations (tenant_id) values (app.default_tenant_id());
 insert into public.ai_config (tenant_id) values (app.default_tenant_id());
-insert into public.navigation (tenant_id, location, label, href, visible)
-  values (app.default_tenant_id(), 'header', '{"en":"Services","ar":"خدمات"}'::jsonb, '/services', true);
+-- A fixed id, and every navigation assertion below is scoped to it: seed.sql authors the
+-- real header and footer menus (UI v2), so a whole-table count would measure the seed.
+insert into public.navigation (id, tenant_id, location, label, href, visible)
+  values ('00000000-0000-0000-0000-0000000000d1', app.default_tenant_id(), 'header',
+          '{"en":"pgTAP fixture","ar":"تجربة"}'::jsonb, '/pgtap-fixture', true);
 insert into public.seo_defaults (tenant_id) values (app.default_tenant_id());
 insert into public.search_queries (tenant_id, q) values (app.default_tenant_id(), 'branding');
 insert into public.consent_log (tenant_id, subject_hash, categories, policy_version)
@@ -94,10 +97,14 @@ create function _updated_integrations() returns int language sql as $$
   select count(*)::int from u
 $$;
 create function _updated_navigation() returns int language sql as $$
-  with u as (update public.navigation set href = '/x' returning 1) select count(*)::int from u
+  with u as (update public.navigation set href = '/x'
+             where id = '00000000-0000-0000-0000-0000000000d1' returning 1)
+  select count(*)::int from u
 $$;
 create function _deleted_navigation() returns int language sql as $$
-  with d as (delete from public.navigation returning 1) select count(*)::int from d
+  with d as (delete from public.navigation
+             where id = '00000000-0000-0000-0000-0000000000d1' returning 1)
+  select count(*)::int from d
 $$;
 
 -- ---- entity_seo: public READ, Admin + SEO WRITE ----------------------------
@@ -154,7 +161,9 @@ select lives_ok($$ update public.ai_config set daily_usd_cap = 7 $$, 'admin writ
 -- ---- navigation: public read, content authors write, Admin-only delete ------
 set local role anon;
 select _claims(null, null);
-select is((select count(*) from public.navigation)::int, 1, 'anon reads navigation (it renders on every page)');
+select is((select count(*) from public.navigation
+            where id = '00000000-0000-0000-0000-0000000000d1')::int, 1,
+  'anon reads navigation (it renders on every page)');
 
 set local role authenticated;
 select _claims('seo', _tid());
@@ -194,6 +203,25 @@ select throws_ok(
 
 reset role;
 select _claims(null, null);
+
+-- ---- navigation.is_key (0019): at most ONE key link per location ------------
+-- The key link is the one the header keeps visible at <=900px; two would mean the
+-- narrow header shows whichever the renderer met first. Cleared first so the assertion
+-- does not depend on what seed.sql marks as key (rolled back with everything else).
+update public.navigation set is_key = false where location = 'footer';
+select lives_ok(
+  $$ insert into public.navigation (id, tenant_id, location, label, href, visible, is_key)
+     values ('00000000-0000-0000-0000-0000000000d2', app.default_tenant_id(), 'footer',
+             '{"en":"Key A","ar":"أ"}'::jsonb, '/key-a', true, true) $$,
+  'one key link per location is allowed'
+);
+select throws_ok(
+  $$ insert into public.navigation (id, tenant_id, location, label, href, visible, is_key)
+     values ('00000000-0000-0000-0000-0000000000d3', app.default_tenant_id(), 'footer',
+             '{"en":"Key B","ar":"ب"}'::jsonb, '/key-b', true, true) $$,
+  '23505', null,
+  'a second key link in the same location is refused'
+);
 
 select * from finish();
 rollback;

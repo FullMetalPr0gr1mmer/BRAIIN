@@ -1,13 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { resolveSeo, type EntitySeo, type SeoDefaults } from '@/lib/data/seo';
+import { DEFAULT_TITLE_TEMPLATE, applyTitleTemplate, siteTitle } from '@/lib/seo/title';
 import { AnalyticsEventSchema, ConsentRecordSchema } from '@schemas/analytics';
 
 // The precedence rule the SEO role's whole surface depends on, plus the bounds on the
 // two unauthenticated ingest paths added for launch.
 
+const BRAND = 'Braiin Statiion';
+const BRAND_AR = 'بريّن ستيشن';
+
 const defaults: SeoDefaults = {
-  title_template: { en: '%s | Braiin Station', ar: '%s | بريـن ستيشن' },
-  default_title: { en: 'Braiin Station', ar: 'بريـن ستيشن' },
+  title_template: { en: '%brand% | %s', ar: '%brand% | %s' },
+  default_title: { en: 'Creative studio', ar: 'استوديو إبداعي' },
   default_description: { en: 'Creative agency.', ar: 'وكالة إبداعية.' },
   default_og_image: 'https://cdn.test/default.png',
   robots_directives: 'index,follow',
@@ -22,36 +26,94 @@ const entity: EntitySeo = {
   schema_type: null,
 };
 
+const en = { locale: 'en' as const, brand: BRAND };
+const ar = { locale: 'ar' as const, brand: BRAND_AR };
+
 describe('resolveSeo precedence', () => {
-  it('prefers the entity override over the tenant default', () => {
-    const seo = resolveSeo({ locale: 'en', entity, defaults, fallbackTitle: 'Fallback' });
-    expect(seo.title).toBe('Branding | Braiin Station');
+  it('prefers the entity override over the page title and the tenant default', () => {
+    const seo = resolveSeo({ ...en, entity, defaults, fallbackTitle: 'Fallback' });
+    expect(seo.title).toBe('Braiin Statiion | Branding');
     expect(seo.description).toBe('Identity systems.');
     expect(seo.ogImage).toBe('https://cdn.test/branding.png');
   });
 
-  it('falls back to the tenant default, then to the content title', () => {
+  it("ranks the page's own title ABOVE the tenant default title", () => {
+    // Before UI v2 the default outranked the page, so authoring one default title gave
+    // every service, article and project on the site the same <title>.
     const empty: EntitySeo = { ...entity, meta_title: {}, meta_description: {} };
-    expect(resolveSeo({ locale: 'en', entity: empty, defaults, fallbackTitle: 'X' }).title).toBe(
-      'Braiin Station | Braiin Station',
+    const seo = resolveSeo({
+      ...en,
+      entity: empty,
+      defaults,
+      fallbackTitle: 'Motion Graphics',
+      fallbackDescription: 'Moving type.',
+    });
+    expect(seo.title).toBe('Braiin Statiion | Motion Graphics');
+    expect(seo.description).toBe('Moving type.');
+  });
+
+  it('uses the tenant default only when the page has nothing of its own', () => {
+    const seo = resolveSeo({ ...en, entity: null, defaults, fallbackTitle: '' });
+    expect(seo.title).toBe('Braiin Statiion | Creative studio');
+    expect(seo.description).toBe('Creative agency.');
+  });
+
+  it('defaults the template to "%brand% | %s" when none is authored', () => {
+    expect(resolveSeo({ ...en, entity: null, defaults: null, fallbackTitle: 'About' }).title).toBe(
+      'Braiin Statiion | About',
     );
-    expect(
-      resolveSeo({ locale: 'en', entity: null, defaults: null, fallbackTitle: 'Service X' }).title,
-    ).toBe('Service X');
+    const blank: SeoDefaults = { ...defaults, title_template: {} };
+    expect(resolveSeo({ ...en, entity: null, defaults: blank, fallbackTitle: 'About' }).title).toBe(
+      'Braiin Statiion | About',
+    );
   });
 
-  it('applies the template only when it contains %s', () => {
-    const noPlaceholder: SeoDefaults = { ...defaults, title_template: { en: 'Braiin Station' } };
-    // A template authored without the placeholder must not silently discard the page
-    // title — every page would end up with the same <title>.
-    expect(
-      resolveSeo({ locale: 'en', entity, defaults: noPlaceholder, fallbackTitle: 'X' }).title,
-    ).toBe('Branding');
+  it('honours an authored template, with %brand% substituted', () => {
+    const custom: SeoDefaults = { ...defaults, title_template: { en: '%s — %brand%' } };
+    expect(resolveSeo({ ...en, entity, defaults: custom, fallbackTitle: 'X' }).title).toBe(
+      'Branding — Braiin Statiion',
+    );
   });
 
-  it('uses the Arabic strings on an Arabic page', () => {
-    const seo = resolveSeo({ locale: 'ar', entity, defaults, fallbackTitle: 'X' });
-    expect(seo.title).toBe('الهوية البصرية | بريـن ستيشن');
+  it('ignores a template without %s rather than giving every page one title', () => {
+    const noPlaceholder: SeoDefaults = { ...defaults, title_template: { en: '%brand%' } };
+    expect(resolveSeo({ ...en, entity, defaults: noPlaceholder, fallbackTitle: 'X' }).title).toBe(
+      'Braiin Statiion | Branding',
+    );
+  });
+
+  it('never doubles the brand when the title already names it', () => {
+    const legacy: EntitySeo = { ...entity, meta_title: { en: 'Branding — Braiin Statiion' } };
+    expect(resolveSeo({ ...en, entity: legacy, defaults, fallbackTitle: 'X' }).title).toBe(
+      'Branding — Braiin Statiion',
+    );
+    const tokened: EntitySeo = { ...entity, meta_title: { en: '%brand% for Riyadh Season' } };
+    expect(resolveSeo({ ...en, entity: tokened, defaults, fallbackTitle: 'X' }).title).toBe(
+      'Braiin Statiion for Riyadh Season',
+    );
+  });
+
+  it('keeps $-patterns in a CMS title verbatim (no replacement-string expansion)', () => {
+    const dollars: EntitySeo = { ...entity, meta_title: { en: "Save $& now, $1 off, $$ and $'" } };
+    expect(resolveSeo({ ...en, entity: dollars, defaults, fallbackTitle: 'X' }).title).toBe(
+      "Braiin Statiion | Save $& now, $1 off, $$ and $'",
+    );
+  });
+
+  it('substitutes %brand% in descriptions too', () => {
+    const seo = resolveSeo({
+      ...en,
+      entity: null,
+      defaults: null,
+      fallbackTitle: 'About',
+      fallbackDescription: 'Meet %brand%.',
+    });
+    expect(seo.description).toBe('Meet Braiin Statiion.');
+  });
+
+  it('uses the Arabic strings (and the Arabic brand) on an Arabic page', () => {
+    const seo = resolveSeo({ ...ar, entity, defaults, fallbackTitle: 'X' });
+    expect(seo.title).toBe('بريّن ستيشن | الهوية البصرية');
     expect(seo.description).toBe('أنظمة الهوية.');
   });
 
@@ -71,13 +133,19 @@ describe('resolveSeo precedence', () => {
       default_description: {},
     };
     const seo = resolveSeo({
-      locale: 'ar',
+      ...ar,
       entity: enOnly,
       defaults: bareDefaults,
       fallbackTitle: 'خدمة',
     });
-    expect(seo.title).toBe('خدمة');
+    expect(seo.title).toBe('بريّن ستيشن | خدمة');
     expect(seo.description).toBe('');
+  });
+
+  it('yields the brand alone when there is no title anywhere', () => {
+    expect(resolveSeo({ ...en, entity: null, defaults: null, fallbackTitle: '' }).title).toBe(
+      'Braiin Statiion',
+    );
   });
 
   it('carries robots and canonical overrides through', () => {
@@ -86,15 +154,37 @@ describe('resolveSeo precedence', () => {
       robots: 'noindex,follow',
       canonical_override: 'https://www.braiinstation.com/services/branding',
     };
-    const seo = resolveSeo({ locale: 'en', entity: overridden, defaults, fallbackTitle: 'X' });
+    const seo = resolveSeo({ ...en, entity: overridden, defaults, fallbackTitle: 'X' });
     expect(seo.robots).toBe('noindex,follow');
     expect(seo.canonicalOverride).toBe('https://www.braiinstation.com/services/branding');
   });
 
   it('defaults robots to index,follow when nothing is authored', () => {
-    expect(
-      resolveSeo({ locale: 'en', entity: null, defaults: null, fallbackTitle: 'X' }).robots,
-    ).toBe('index,follow');
+    expect(resolveSeo({ ...en, entity: null, defaults: null, fallbackTitle: 'X' }).robots).toBe(
+      'index,follow',
+    );
+  });
+});
+
+describe('title template helpers', () => {
+  it('siteTitle is the default format', () => {
+    expect(siteTitle('Contact us', BRAND)).toBe('Braiin Statiion | Contact us');
+    expect(siteTitle('تواصل معنا', BRAND_AR)).toBe('بريّن ستيشن | تواصل معنا');
+  });
+
+  it('a brand containing "%s" cannot capture the page title', () => {
+    expect(applyTitleTemplate(DEFAULT_TITLE_TEMPLATE, 'About', 'Studio %s')).toBe(
+      'Studio %s | About',
+    );
+    expect(applyTitleTemplate('%s — %brand%', 'About', 'Studio %s')).toBe('About — Studio %s');
+    // only the template's FIRST %s takes the page title
+    expect(applyTitleTemplate('%s | %s | %brand%', 'About', 'Studio')).toBe('About | %s | Studio');
+  });
+
+  it('the brand check is case-insensitive', () => {
+    expect(applyTitleTemplate(DEFAULT_TITLE_TEMPLATE, 'about BRAIIN STATIION', BRAND)).toBe(
+      'about BRAIIN STATIION',
+    );
   });
 });
 

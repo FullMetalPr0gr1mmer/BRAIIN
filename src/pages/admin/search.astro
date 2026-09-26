@@ -1,0 +1,76 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { searchAdmin, cleanQuery, MAX_QUERY_LENGTH } from '@/lib/admin/globalSearch';
+import type { SearchOutcome } from '@/lib/admin/globalSearch';
+
+export const prerender = false;
+
+// Cross-entity search, reached from the header form. Server-rendered like the
+// dashboard: the middleware already authenticated this request, so fetching results
+// from the browser would only add an authenticated round-trip. Zero client JS.
+//
+// There is no capability gate on the PAGE — the gate is per entity inside
+// searchAdmin(), because "which entities may this role search" is exactly "which
+// entities may this role list", and no single capability expresses that union.
+// A role with nothing searchable gets an empty result, not a 403.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+
+const q = cleanQuery(Astro.url.searchParams.get('q') ?? '');
+let outcome: SearchOutcome = { groups: [], failed: [] };
+if (session && sb && q.length >= 2) {
+  outcome = await searchAdmin(sb, session, q);
+}
+const total = outcome.groups.reduce((n, g) => n + g.hits.length, 0);
+---
+
+<AdminLayout title="Search" subtitle={q ? `Results for “${q}”` : undefined}>
+  <form class="toolbar" role="search" action="/admin/search" method="get">
+    <label class="visually-hidden" for="search-q">Search the admin</label>
+    <input
+      id="search-q"
+      type="search"
+      name="q"
+      value={q}
+      placeholder="Search…"
+      minlength="2"
+      maxlength={MAX_QUERY_LENGTH}
+      autofocus
+    />
+    <button type="submit" data-variant="primary">Search</button>
+  </form>
+
+  {
+    outcome.failed.length > 0 && (
+      <p class="msg" data-kind="error" role="alert">
+        Some areas could not be searched: {outcome.failed.join(', ')}. The system log has the
+        detail.
+      </p>
+    )
+  }
+
+  {
+    q.length >= 2 && (
+      <p class="admin-sub" aria-live="polite">
+        {total === 0 ? 'No matches.' : `${total} match${total === 1 ? '' : 'es'}.`}
+      </p>
+    )
+  }
+
+  {
+    outcome.groups.map((group) => (
+      <div class="card">
+        <h2 class="card-title">{group.group}</h2>
+        <ul class="search-hits">
+          {group.hits.map((hit) => (
+            <li>
+              <a href={hit.href}>{hit.label}</a>
+              {hit.detail && <span class="cell-secondary"> {hit.detail}</span>}
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))
+  }
+</AdminLayout>

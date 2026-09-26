@@ -1,0 +1,249 @@
+{
+  "blocks": [
+    {
+      "table": "portfolio",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "riyadh-season-launch",
+          "title": { "en": "Riyadh Season Launch", "ar": "إطلاق موسم الرياض" },
+          "summary": {
+            "en": "A full-funnel campaign — brand film, motion graphics, and always-on social.",
+            "ar": "حملة متكاملة — فيلم للعلامة، وموشن جرافيك، وحضور دائم على وسائل التواصل."
+          },
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 1,
+          "__placeholder": true,
+          "__published": { "status": "archived" }
+        },
+        {
+          "slug": "cafe-rebrand",
+          "title": { "en": "Specialty Café Rebrand", "ar": "إعادة هوية مقهى مختص" },
+          "summary": {
+            "en": "A new identity system, packaging, and storefront photography.",
+            "ar": "نظام هوية جديد، وتغليف، وتصوير للواجهة."
+          },
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 2,
+          "__placeholder": true,
+          "__published": { "status": "archived" }
+        },
+        {
+          "slug": "fintech-product-film",
+          "title": { "en": "Fintech Product Film", "ar": "فيلم منتج لشركة تقنية مالية" },
+          "summary": {
+            "en": "Scriptwriting, cinematic production, and a 60-second cutdown for paid media.",
+            "ar": "كتابة سيناريو، وإنتاج سينمائي، ونسخة 60 ثانية للإعلانات المدفوعة."
+          },
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 3,
+          "__placeholder": true,
+          "__published": { "status": "archived" }
+        }
+      ]
+    },
+    {
+      "table": "team_members",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "lead-creative",
+          "name": { "en": "Creative Director", "ar": "المدير الإبداعي" },
+          "bio": {
+            "en": "Leads brand and art direction across the studio.",
+            "ar": "يقود اتجاه العلامة والفن في الاستوديو."
+          },
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 1,
+          "__placeholder": true
+        },
+        {
+          "slug": "head-of-video",
+          "name": { "en": "Head of Video", "ar": "رئيس قسم الفيديو" },
+          "bio": {
+            "en": "Oversees film, motion, and post-production.",
+            "ar": "يشرف على الفيلم والموشن والمونتاج."
+          },
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 2,
+          "__placeholder": true
+        },
+        {
+          "slug": "head-of-growth",
+          "name": { "en": "Head of Growth", "ar": "رئيس قسم النمو" },
+          "bio": {
+            "en": "Runs SEO/GEO/AEO, social, and performance.",
+            "ar": "يدير تحسين محركات البحث ووسائل التواصل والأداء."
+          },
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 3,
+          "__placeholder": true
+        }
+      ]
+    },
+    {
+      "table": "certifications",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "google-partner",
+          "name": { "en": "Google Partner", "ar": "شريك جوجل" },
+          "issuer": { "en": "Google", "ar": "جوجل" },
+          "year": 2025,
+          "status": "published",
+          "sort_order": 1,
+          "__placeholder": true
+        },
+        {
+          "slug": "meta-partner",
+          "name": { "en": "Meta Business Partner", "ar": "شريك أعمال ميتا" },
+          "issuer": { "en": "Meta", "ar": "ميتا" },
+          "year": 2025,
+          "status": "published",
+          "sort_order": 2,
+          "__placeholder": true
+        }
+      ]
+    },
+    {
+      "table": "statistics",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "projects",
+          "label": { "en": "Projects delivered", "ar": "مشروع منجز" },
+          "value": "150+",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 1,
+          "__placeholder": true,
+          "__published": { "status": "archived" }
+        },
+        {
+          "slug": "services",
+          "label": { "en": "Creative services", "ar": "خدمة إبداعية" },
+          "value": "14",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 2,
+          "__placeholder": true,
+          "__published": { "status": "archived" }
+        },
+        {
+          "slug": "years",
+          "label": { "en": "Years in MENA", "ar": "سنوات في المنطقة" },
+          "value": "8",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 3,
+          "__placeholder": true,
+          "__published": { "status": "archived" }
+        }
+      ]
+    },
+    {
+      "table": "partner_logos",
+      "existsBy": ["name"],
+      "rows": [
+        {
+          "name": "Riyadh Season",
+          "logo_url": "/partners/riyadh-season.svg",
+          "sort_order": 1,
+          "visible": true,
+          "__placeholder": true
+        },
+        {
+          "name": "NEOM",
+          "logo_url": "/partners/neom.svg",
+          "sort_order": 2,
+          "visible": true,
+          "__placeholder": true
+        },
+        {
+          "name": "stc",
+          "logo_url": "/partners/stc.svg",
+          "sort_order": 3,
+          "visible": true,
+          "__placeholder": true
+        },
+        {
+          "name": "Saudi Arabian Airlines",
+          "logo_url": "/partners/saudia.svg",
+          "sort_order": 4,
+          "visible": true,
+          "__placeholder": true
+        },
+        {
+          "name": "Aramco",
+          "logo_url": "/partners/aramco.svg",
+          "sort_order": 5,
+          "visible": true,
+          "__placeholder": true
+        },
+        {
+          "name": "Qiddiya",
+          "logo_url": "/partners/qiddiya.svg",
+          "sort_order": 6,
+          "visible": true,
+          "__placeholder": true
+        }
+      ]
+    },
+    {
+      "table": "categories",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [{ "slug": "insights", "name": { "en": "Insights", "ar": "رؤى" } }]
+    },
+    {
+      "table": "blog_posts",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "arabic-first-brand-systems",
+          "title": { "en": "Arabic-first brand systems", "ar": "أنظمة هوية تبدأ بالعربية" },
+          "excerpt": {
+            "en": "Why designing the Arabic wordmark first makes the Latin one better.",
+            "ar": "لماذا يبدأ تصميم الشعار بالعربية أولًا يحسّن النسخة اللاتينية."
+          },
+          "body_html": {
+            "en": "<p>Designing Arabic-first forces clarity in the letterforms that Latin then inherits.</p>",
+            "ar": "<p>التصميم بالعربية أولًا يفرض وضوحًا في الأحرف ترثه اللاتينية لاحقًا.</p>"
+          },
+          "author_id": { "$ref": { "table": "team_members", "by": { "slug": "lead-creative" } } },
+          "category_id": { "$ref": { "table": "categories", "by": { "slug": "insights" } } },
+          "status": "published",
+          "published_at": "2026-06-10T09:00:00Z",
+          "reading_minutes": 4,
+          "__placeholder": true
+        },
+        {
+          "slug": "getting-cited-by-ai-answer-engines",
+          "title": {
+            "en": "Getting cited by AI answer engines",
+            "ar": "أن تُذكر في محركات الإجابة بالذكاء الاصطناعي"
+          },
+          "excerpt": {
+            "en": "Answer-first structure, named stats, and real authorship win citations.",
+            "ar": "البنية القائمة على الإجابة، والإحصاءات المسماة، والتأليف الحقيقي تكسب الاستشهادات."
+          },
+          "body_html": {
+            "en": "<p>Answer-engine visibility rewards answer-first paragraphs and named, verifiable authors.</p>",
+            "ar": "<p>ظهورك في محركات الإجابة يكافئ الفقرات التي تبدأ بالإجابة والمؤلفين المعروفين الموثوقين.</p>"
+          },
+          "author_id": { "$ref": { "table": "team_members", "by": { "slug": "head-of-growth" } } },
+          "category_id": { "$ref": { "table": "categories", "by": { "slug": "insights" } } },
+          "status": "published",
+          "published_at": "2026-06-14T09:00:00Z",
+          "reading_minutes": 5,
+          "__placeholder": true
+        }
+      ]
+    }
+  ]
+}

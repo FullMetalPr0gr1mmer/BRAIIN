@@ -1,5 +1,19 @@
 # Font self-hosting + subsetting runbook (KAN-23)
 
+> **Re-subset 2026-09-25 (Almarai).** `scripts/subset-fonts.py` tightened the six Almarai
+> files — arabic ≈ 25 KB (the Arabic block U+0600–06FF + space/nbsp/joiners; contextual and
+> lam-alef glyphs kept via the GSUB closure) and latin ≈ 10 KB (ASCII + the marks the copy
+> uses). A route loading every face now pulls **≈ 105 KB, down from ≈ 152 KB**. It was a
+> budget failure, not a tidy-up: Lighthouse treats font requests as render-blocking, and
+> the day `perf-seo-a11y` first ran as a PR gate `/ar` missed LCP (2.50–2.52 s vs < 2.5 s)
+> and performance (0.94 vs ≥ 0.95); after, locally, LCP ≈ 2.24 s and 0.95–0.96. The same
+> change declares each weight's latin face BEFORE its arabic face and lets the arabic face
+> claim U+0020/U+00A0, so spaces in Arabic text no longer pull in the latin file. Verified
+> glyph-for-glyph: full-page screenshots of /ar, /ar/about, /ar/contact, /ar/services and
+> / before/after are pixel-identical (2 px of antialiasing on /ar), and a scan of the
+> visible text of every public AR route found no code point outside the new ranges.
+> **The unicode-range descriptors in global.css must match the script's ranges.**
+>
 > **Status: EXECUTED (2026-08-21).** The brand landed as **Archivo** (EN) + **Almarai**
 > (AR) with the approved "Brain Station UI" design. Shipped in `public/fonts/`:
 > `archivo-var-latin.woff2` (ONE variable face, wght 400–800, latin subset, **34.9 KB** —

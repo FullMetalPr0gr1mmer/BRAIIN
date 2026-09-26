@@ -1,29 +1,72 @@
 // JSON-LD builders (CLAUDE.md Pillar 3). Output is emitted only through <JsonLd>
-// and validated per entity type in CI (EN + AR). Phase 0 ships Organization +
-// WebSite; Service/Article/FAQ/Breadcrumb/CreativeWork/Speakable land with their
-// content types in later phases.
+// and validated per entity type in CI (EN + AR).
+//
+// The organisation is DATA (`site_profile`, via getIdentity()): no builder names the
+// brand itself. Nodes that attribute work to the studio (Service.provider,
+// Person.worksFor, CreativeWork.creator, BlogPosting.publisher) take an `org` reference
+// built by `orgRef()`, so a rename in the CMS reaches every structured-data node on the
+// next render — the old hard-coded ORG_NAME is exactly how "Braiin Station" would have
+// outlived the rename in search results.
+
+import type { Locale } from '@schemas/primitives';
+import type { Identity } from '@/lib/identity/fallback';
 
 export type JsonLdNode = Record<string, unknown>;
 
-const ORG_NAME = 'Braiin Station';
-
-export function buildOrganizationSchema(siteUrl: string): JsonLdNode {
-  const base = siteUrl.replace(/\/$/, '');
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    name: ORG_NAME,
-    url: base,
-    logo: `${base}/logo.svg`,
-  };
+/** The studio as the subject of an attribution. */
+export interface OrgRef {
+  name: string;
 }
 
-export function buildWebSiteSchema(siteUrl: string): JsonLdNode {
+export function orgRef(identity: Identity, locale: Locale): OrgRef {
+  return { name: identity.brandName[locale] };
+}
+
+const orgNode = (org: OrgRef): JsonLdNode => ({ '@type': 'Organization', name: org.name });
+
+/**
+ * Organization — the sitewide identity node (home). Every field comes from the public
+ * identity, and each optional one is emitted only when it has a real value.
+ *
+ * `logo` is deliberately ABSENT. It pointed at /logo.svg, which has never existed: a logo
+ * URL that 404s is a structured-data error, not a missing enhancement. The only logo
+ * asset today is white-on-transparent, which renders invisibly on the white tile search
+ * engines display it on. It returns with a proper square asset (open owner item).
+ */
+export function buildOrganizationSchema(
+  siteUrl: string,
+  identity: Identity,
+  locale: Locale,
+): JsonLdNode {
+  const base = siteUrl.replace(/\/$/, '');
+  const other: Locale = locale === 'ar' ? 'en' : 'ar';
+  const node: JsonLdNode = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: identity.brandName[locale],
+    alternateName: identity.brandName[other],
+    url: base,
+    email: identity.contactEmail,
+  };
+  if (identity.legalName) node.legalName = identity.legalName[locale];
+  if (identity.foundedYear) node.foundingDate = String(identity.foundedYear);
+  node.address = {
+    '@type': 'PostalAddress',
+    ...(identity.addressLocality ? { addressLocality: identity.addressLocality[locale] } : {}),
+    addressCountry: identity.addressCountry,
+  };
+  // Socials were re-validated against the per-network host allow-list on read
+  // (SiteProfileRowSchema), so every URL here points at the network it claims.
+  if (identity.socials.length > 0) node.sameAs = identity.socials.map((s) => s.url);
+  return node;
+}
+
+export function buildWebSiteSchema(siteUrl: string, org: OrgRef): JsonLdNode {
   const base = siteUrl.replace(/\/$/, '');
   return {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: ORG_NAME,
+    name: org.name,
     url: base,
     inLanguage: ['en', 'ar'],
   };
@@ -33,6 +76,7 @@ export function buildServiceSchema(opts: {
   name: string;
   description: string;
   url: string;
+  org: OrgRef;
 }): JsonLdNode {
   return {
     '@context': 'https://schema.org',
@@ -40,13 +84,14 @@ export function buildServiceSchema(opts: {
     name: opts.name,
     description: opts.description,
     url: opts.url,
-    provider: { '@type': 'Organization', name: ORG_NAME },
+    provider: orgNode(opts.org),
     areaServed: 'SA',
   };
 }
 
 export function buildPersonSchema(opts: {
   name: string;
+  org: OrgRef;
   description?: string;
   url?: string;
   image?: string;
@@ -57,7 +102,7 @@ export function buildPersonSchema(opts: {
     '@context': 'https://schema.org',
     '@type': 'Person',
     name: opts.name,
-    worksFor: { '@type': 'Organization', name: ORG_NAME },
+    worksFor: orgNode(opts.org),
   };
   if (opts.description) node.description = opts.description;
   if (opts.url) node.url = opts.url;
@@ -69,6 +114,7 @@ export function buildCreativeWorkSchema(opts: {
   name: string;
   description: string;
   url: string;
+  org: OrgRef;
 }): JsonLdNode {
   return {
     '@context': 'https://schema.org',
@@ -76,7 +122,7 @@ export function buildCreativeWorkSchema(opts: {
     name: opts.name,
     description: opts.description,
     url: opts.url,
-    creator: { '@type': 'Organization', name: ORG_NAME },
+    creator: orgNode(opts.org),
   };
 }
 
@@ -84,6 +130,7 @@ export function buildArticleSchema(opts: {
   headline: string;
   description: string;
   url: string;
+  org: OrgRef;
   authorName?: string;
   datePublished?: string;
   dateModified?: string;
@@ -98,11 +145,8 @@ export function buildArticleSchema(opts: {
     headline: opts.headline,
     description: opts.description,
     url: opts.url,
-    publisher: { '@type': 'Organization', name: ORG_NAME },
-    author: {
-      '@type': opts.authorName ? 'Person' : 'Organization',
-      name: opts.authorName ?? ORG_NAME,
-    },
+    publisher: orgNode(opts.org),
+    author: opts.authorName ? { '@type': 'Person', name: opts.authorName } : orgNode(opts.org),
   };
   if (opts.datePublished) node.datePublished = opts.datePublished;
   if (opts.dateModified) node.dateModified = opts.dateModified;
