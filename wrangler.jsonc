@@ -16,49 +16,33 @@
   "observability": {
     "enabled": true,
   },
-  // ⚠ READ THIS BEFORE CHANGING A `PUBLIC_*` VALUE HERE — IT WILL NOT TAKE EFFECT.
+  // ⚠ NO `PUBLIC_*` ENTRIES HERE — THEY OVERRIDE THE BUILD ENVIRONMENT.
   //
   // All three PUBLIC_* vars are declared `context: 'client'` in astro.config.mjs, so
-  // `astro:env/client` INLINES them into the bundle when `astro build` runs. A build-time
-  // constant cannot be overridden by a runtime binding, so these entries are inert: the
-  // value that ships is whatever was in the BUILD environment.
+  // `astro:env/client` INLINES them when `astro build` runs. Under Astro 7 + adapter 14 the
+  // build reads this file's `vars` too, and they WIN over the process environment:
+  // measured 2026-09-26, a build run with PUBLIC_SITE_URL=http://localhost:8790 shipped
+  // `var PUBLIC_SITE_URL = "https://braiin-station.braiin.workers.dev"` — the value that
+  // used to sit here. (On the older adapter they were inert; that is what this note said.)
   //
-  // Verified, not inferred: a Worker built with .env's `http://localhost:4321` and
-  // previewed with these vars set to the workers.dev origin served
-  // `<link rel="canonical" href="http://localhost:4321/">` and a sitemap of localhost
-  // <loc>s. `grep -r localhost:4321 dist/server` finds them compiled in.
+  // What it broke: the perf-seo-a11y workflow builds against its seeded local Supabase,
+  // but every CI preview Worker was compiled with the production URL and key from here,
+  // so E2E, axe and Lighthouse audited PRODUCTION data. A seeded case study 404'd in CI
+  // because it is a draft in production; a new column 404'd a service page until
+  // production had the migration.
   //
-  // They are kept here anyway, deliberately, for two reasons: `wrangler deploy` prints the
-  // binding table on every deploy, so these document the expected values where someone
-  // will actually look; and if a future refactor moves any of them to `context: 'server'`
-  // they become live without a config change. Do not treat them as the source of truth.
-  //
-  // TO CHANGE THE ORIGIN: set it in the build environment and rebuild.
-  //   PUBLIC_SITE_URL=https://<origin> npm run build && npx wrangler deploy
-  // `npm run prebuild` (scripts/check-site-url.mjs) blocks a build whose PUBLIC_SITE_URL
-  // is localhost or non-https, so this cannot ship silently again.
+  // The build environment is the only source: .env locally, the job's `env:` in CI, and
+  // the deploy job's `env:` (ci.yml) for production. `npm run prebuild`
+  // (scripts/check-site-url.mjs) and `postbuild` (verify-build-origin.mjs) block a deploy
+  // artifact carrying a localhost origin.
   //
   // Non-secret by construction: PUBLIC_SUPABASE_ANON_KEY ships inside the client bundle on
-  // every page, so committing it reveals nothing a visitor cannot already read — it is an
-  // identifier, and RLS is what protects the data behind it. Anything genuinely secret
-  // goes through `npm run cf:secrets`.
+  // every page, so it is an identifier, and RLS is what protects the data behind it.
+  // Anything genuinely secret goes through `npm run cf:secrets`.
   "vars": {
-    // TODO: swap to the custom domain once DNS is cut over — AND rebuild, per the note above.
-    //
-    // Corrected 2026-08-01: this read `https://braiin-station.workers.dev`, which does not
-    // resolve — a workers.dev origin is `<worker>.<account-subdomain>.workers.dev` and the
-    // account subdomain (`braiin`) was missing. The deployed bundle was always right (the
-    // BUILD environment had the full host, which is the only thing that reaches the HTML),
-    // so nothing was broken in production; what was broken is the one job the note above
-    // says these entries still have — documenting the expected value "where someone will
-    // actually look". An inert setting that is also wrong is worse than no setting: it
-    // reads as authoritative and it is the string someone will copy.
-    "PUBLIC_SITE_URL": "https://braiin-station.braiin.workers.dev",
-    "PUBLIC_SUPABASE_URL": "https://xkxthzcmmvtnwicerlup.supabase.co",
-    "PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_fdVFL7qNbBx64z1pwvDAbg_ReRzjhOr",
-    // `context: 'server'` in astro.config.mjs, so unlike the three above this one IS a
-    // live runtime binding. (Note: src/lib/ai/spendCap.ts currently uses its own
-    // hard-coded ceiling and never imports it — wiring that up is Style-Finder work.)
+    // `context: 'server'` in astro.config.mjs, so this IS a live runtime binding.
+    // (Note: src/lib/ai/spendCap.ts currently uses its own hard-coded ceiling and never
+    // imports it — wiring that up is Style-Finder work.)
     "AI_DAILY_USD_CAP": "5",
   },
   // Image transforms (astro adapter imageService: 'cloudflare-binding').

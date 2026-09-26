@@ -11,6 +11,13 @@
 //
 // Respects prefers-reduced-motion and Save-Data (no video at all — the still poster
 // stays), and the sitewide WCAG 2.2.2 motion toggle (setMotionPaused).
+//
+// A container may play a WINDOW of its file (`data-clip-start` / `data-clip-end`, e.g. a
+// banner hero on one showreel window): the loop seeks back to the start, and the sync
+// group is keyed by file AND window — two windows of one file are different videos and
+// must never adopt each other's clock.
+
+import { clipWindow, seekTarget } from './clips';
 
 const groupTime = new Map<string, number>();
 
@@ -92,7 +99,23 @@ export function mountLazyVideo(container: HTMLElement): void {
   video.preload = 'auto';
   video.tabIndex = -1;
   video.setAttribute('aria-hidden', 'true');
-  video.dataset.groupSrc = src;
+  const win = clipWindow(container);
+  video.dataset.groupSrc = win ? `${src}#${win.start}-${win.end}` : src;
+  if (win) {
+    const loop = () => {
+      const seekable = video.seekable.length > 0 ? video.seekable.end(0) : 0;
+      const to = seekTarget(video.currentTime, win, seekable);
+      if (to !== null) {
+        try {
+          video.currentTime = to;
+        } catch {
+          // not seekable yet — the next timeupdate retries
+        }
+      }
+    };
+    video.addEventListener('loadedmetadata', loop);
+    video.addEventListener('timeupdate', loop);
+  }
   video.src = src;
   // `.has-video` cross-fades the poster out only once frames are actually decodable.
   video.addEventListener('canplay', () => container.classList.add('has-video'), { once: true });

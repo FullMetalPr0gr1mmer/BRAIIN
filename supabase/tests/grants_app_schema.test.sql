@@ -94,7 +94,7 @@ select is(
        and p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' not in (
          'effective_tenant_id()', 'current_tenant_id()', 'default_tenant_id()',
          'current_role()', 'is_staff()', 'is_admin()', 'can_write_content()',
-         'normalize_ar(text)', 'normalize_ar_q(text)'
+         'normalize_ar(text)', 'normalize_ar_q(text)', 'ar_fts_text(text, boolean)'
        )
   ),
   '',
