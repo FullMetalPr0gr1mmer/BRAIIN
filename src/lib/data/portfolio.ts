@@ -22,8 +22,9 @@ import { parseRow, parseRows, reportLoadError } from './parse';
 // Two generations live here while UI v2 lands page by page:
 //   getPublishedPortfolio / getPortfolioBySlug   the current pages and the sitemap
 //   getPortfolioCards / getCaseStudy             UI v2 (Our Work, All projects, case study)
-// PR10/PR11 move every caller to the second pair so the sitemap can never list a case
-// study the page would 404 on.
+// The sitemap and llms.txt already list case studies from the second generation
+// (getCaseStudyIndex — PR10); PR11 moves the case-study page itself onto getCaseStudy, the
+// same select and schema, so neither file can list a case study the page would 404 on.
 
 export type { PortfolioRow } from '@schemas/content';
 
@@ -247,6 +248,41 @@ export async function getPortfolioCards(
     return parseRows(PortfolioCardRowSchema, data ?? [], 'portfolio').map(toCard);
   } catch (err) {
     reportLoadError('portfolio_cards', err);
+    return [];
+  }
+}
+
+export interface CaseStudyEntry {
+  slug: string;
+  title: LocalizedText;
+  updatedAt: string | null;
+}
+
+/**
+ * Every published case study the case-study page can render — for the sitemap and
+ * llms.txt. Deliberately the SAME select and the same schema as getCaseStudy (not the
+ * lighter card query): a row the page would reject (and answer 404 for) is dropped here
+ * too, so neither discovery file ever lists a URL that does not resolve.
+ */
+export async function getCaseStudyIndex(): Promise<CaseStudyEntry[]> {
+  if (!supabaseConfigured()) return [];
+  try {
+    const { data, error } = await anonClient()
+      .from('portfolio')
+      .select(CASE_STUDY_COLUMNS)
+      .eq('status', 'published')
+      .order('sort_order', { ascending: true });
+    if (error) {
+      reportLoadError('case_study_index', error);
+      return [];
+    }
+    return parseRows(CaseStudyRowSchema, data ?? [], 'portfolio').map((row) => ({
+      slug: row.slug,
+      title: row.title,
+      updatedAt: row.updated_at,
+    }));
+  } catch (err) {
+    reportLoadError('case_study_index', err);
     return [];
   }
 }

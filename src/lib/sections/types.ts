@@ -78,3 +78,24 @@ export const DEFAULT_ABOUT_SECTIONS: SectionData[] = [
   { type: 'certifications' },
   { type: 'cta' },
 ];
+
+/**
+ * Our Work (`/portfolio`, UI v2 PR10), before it is composed in the CMS. Every section
+ * hides on its own when its table is empty (no featured project → no grid, no quotes →
+ * numbers alone), so this renders cleanly on a fresh production database too.
+ */
+export const DEFAULT_WORK_SECTIONS: SectionData[] = [
+  { type: 'workHero' },
+  { type: 'proof' },
+  { type: 'workIntro' },
+  { type: 'projectGrid' },
+  { type: 'clientsMarquee' },
+  { type: 'cta' },
+];
+
+/** All projects (`/portfolio/all`, UI v2 PR10). */
+export const DEFAULT_CATALOG_SECTIONS: SectionData[] = [
+  { type: 'pageHead' },
+  { type: 'projectCatalog' },
+  { type: 'cta' },
+];

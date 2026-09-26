@@ -26,6 +26,13 @@ export const RENDERED_SECTION_TYPES = [
   'contactInquiry',
   'contactChannels',
   'faq',
+  // UI v2 PR10 — Our Work and All projects
+  'workHero',
+  'proof',
+  'workIntro',
+  'projectGrid',
+  'pageHead',
+  'projectCatalog',
 ] as const satisfies readonly SectionType[];
 
 export type RenderedSectionType = (typeof RENDERED_SECTION_TYPES)[number];

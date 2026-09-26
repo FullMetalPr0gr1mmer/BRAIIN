@@ -1,0 +1,28 @@
+---
+import CatalogPage from '@/components/CatalogPage.astro';
+import { loadAllProjects } from '@/lib/portfolio/pages';
+import { PAGE_META } from '@/lib/seo/pageMeta';
+import { noEdgeCache, setTierA } from '@/lib/http/cacheTags';
+
+// All projects (UI v2 PR10). Tier A: server-rendered and edge-cached — the bare URL only.
+// A facet query (?service=…) is a private, uncached response whose canonical is this page.
+// A static route, so it wins over /portfolio/[slug] (and `all` is a reserved slug).
+// Composed from CMS sections (`pages` slug 'portfolio-all'); DEFAULT_CATALOG_SECTIONS
+// until then.
+const locale = 'en' as const;
+const page = await loadAllProjects(Astro.url, Astro.locals, locale);
+if (page.filtered) noEdgeCache(Astro.response);
+else
+  setTierA(Astro.response, {
+    route: 'portfolio-all',
+    locale,
+    entities: ['page:portfolio-all', 'portfolio:all', 'sectors:all', 'clients:all', 'services:all'],
+  });
+---
+
+<CatalogPage
+  locale={locale}
+  logicalPath="/portfolio/all"
+  page={page}
+  name={PAGE_META.portfolioAll[locale].title}
+/>

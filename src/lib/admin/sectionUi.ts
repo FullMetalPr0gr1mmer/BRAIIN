@@ -81,9 +81,16 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     },
   ],
   cta: [
+    tag,
     heading,
     { name: 'text', label: 'Text', kind: 'bilingual' },
     { name: 'buttonLabel', label: 'Button label', kind: 'bilingual' },
+    {
+      name: 'buttonHref',
+      label: 'Button link',
+      kind: 'text',
+      help: 'A page of this site (/contact#inquiry) or an #anchor. Default: the contact form.',
+    },
   ],
   statistics: [
     {
@@ -131,6 +138,67 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     { name: 'visionTitle', label: 'Vision title', kind: 'bilingual' },
     { name: 'vision', label: 'Vision', kind: 'bilingual' },
   ],
+  // UI v2 PR10 — Our Work and All projects (projectCatalog is table-backed: no editor)
+  workHero: [
+    { ...tag, label: 'Caption tag ("Latest project")' },
+    {
+      name: 'projectSlug',
+      label: 'Pinned project (slug)',
+      kind: 'text',
+      help: 'Leave empty to show the latest project (newest year, then catalogue order).',
+    },
+  ],
+  proof: [
+    { name: 'statsTag', label: 'Numbers tag ("In numbers")', kind: 'bilingual' },
+    { name: 'quotesTag', label: 'Testimonials tag', kind: 'bilingual' },
+    { name: 'quotesHeading', label: 'Testimonials heading', kind: 'bilingual' },
+    {
+      name: 'quotesLimit',
+      label: 'Most quotes shown',
+      kind: 'number',
+      help: 'Up to 8. Shows the published testimonials marked for Our Work.',
+    },
+    {
+      name: 'staticNumbers',
+      label: 'Show the numbers without counting up',
+      kind: 'checkbox',
+    },
+    {
+      name: 'minItems',
+      label: 'Hide the numbers when fewer counters than',
+      kind: 'number',
+      help: 'Default 2. Shows the statistics marked for Our Work.',
+    },
+  ],
+  workIntro: [
+    { name: 'text', label: 'Statement', kind: 'bilingual' },
+    { name: 'linkLabel', label: 'Link label ("See the projects")', kind: 'bilingual' },
+    {
+      name: 'media',
+      label: 'Frames (the first is the tall one)',
+      kind: 'repeater',
+      maxItems: 2,
+      itemFields: [
+        { name: 'mediaId', label: 'Image', kind: 'media', required: true },
+        { name: 'clip', label: 'Loop (optional)', kind: 'clip' },
+      ],
+    },
+  ],
+  projectGrid: [
+    { ...tag, label: 'Tag ("Featured work")' },
+    { ...heading, label: 'Heading ("Projects")' },
+  ],
+  pageHead: [
+    heading,
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    { name: 'backLabel', label: 'Back link label', kind: 'bilingual' },
+    {
+      name: 'backHref',
+      label: 'Back link',
+      kind: 'text',
+      help: 'A page of this site, e.g. /portfolio. Default: Our Work.',
+    },
+  ],
 };
 
 /** Content keys an editor must set through "Advanced (JSON)" — see the header. */
@@ -138,6 +206,9 @@ export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[
   hero: ['intro'],
   // A per-locale word range ({en: {from, to}, ar: {…}}) — no typed field kind for it yet.
   statistics: ['accent'],
+  cta: ['accent'],
+  proof: ['quotesAccent'],
+  pageHead: ['accent'],
 };
 
 /** The fields for one section type, or null when it takes no content (table-backed). */

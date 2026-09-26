@@ -1,0 +1,83 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { Accent } from '@schemas/media';
+import type { LocalizedText, StatisticRow } from '@schemas/content';
+import { getPublishedStatistics } from '@/lib/data/statistics';
+import { getTestimonials, type Testimonial } from '@/lib/data/taxonomy';
+import StatBand from './StatBand.astro';
+import Testimonials from './Testimonials.astro';
+
+// Our Work's white proof band (UI v2, the `proof` section; the mockup's `section.proof`):
+// the counters marked for Our Work (placement `work`, each under its Our Work label)
+// above the quotes marked for it. Both halves are the shared components, rendered `bare`
+// inside this one section.
+//
+// Each half hides on its own when its table has nothing to show (production seeds
+// testimonials as drafts, so there the band is the numbers alone); with neither, the
+// section renders nothing at all — never an empty white shell.
+
+interface Props {
+  locale: Locale;
+  statsTag?: LocalizedText;
+  quotesTag?: LocalizedText;
+  quotesHeading?: LocalizedText;
+  quotesAccent?: Accent;
+  quotesLimit?: number;
+  staticNumbers?: boolean;
+  minItems?: number;
+  /** Route-injected rows (SectionRenderer `data`) — never CMS content. */
+  data?: { stats?: StatisticRow[]; quotes?: Testimonial[] };
+}
+
+const {
+  locale,
+  statsTag,
+  quotesTag,
+  quotesHeading,
+  quotesAccent,
+  quotesLimit,
+  staticNumbers,
+  minItems = 2,
+} = Astro.props;
+
+const [stats, quotes] = await Promise.all([
+  Astro.props.data?.stats ?? getPublishedStatistics({ placement: 'work' }),
+  Astro.props.data?.quotes ??
+    getTestimonials({ placement: 'work', ...(quotesLimit ? { limit: quotesLimit } : {}) }),
+]);
+const shownQuotes = quotesLimit ? quotes.slice(0, quotesLimit) : quotes;
+const showStats = stats.length >= minItems;
+const showQuotes = shownQuotes.length > 0;
+---
+
+{
+  (showStats || showQuotes) && (
+    <section class:list={['proof', { 'proof--quotes-only': !showStats }]}>
+      <div class="proof__wrap">
+        {showStats && (
+          <StatBand
+            locale={locale}
+            items={stats}
+            variant="proof"
+            tag={statsTag}
+            staticNumbers={staticNumbers}
+            minItems={minItems}
+            bare
+          />
+        )}
+        {showQuotes && (
+          <Testimonials
+            locale={locale}
+            items={shownQuotes}
+            variant="light"
+            tag={quotesTag}
+            heading={quotesHeading}
+            accent={quotesAccent}
+            id="quotes"
+            bare
+          />
+        )}
+      </div>
+    </section>
+  )
+}

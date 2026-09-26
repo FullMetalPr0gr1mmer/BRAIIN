@@ -19,7 +19,7 @@ export interface PageMeta {
   description: string;
 }
 
-export type MetaRoute = 'home' | 'about' | 'contact' | 'notFound';
+export type MetaRoute = 'home' | 'about' | 'contact' | 'notFound' | 'portfolio' | 'portfolioAll';
 
 export const PAGE_META: Record<MetaRoute, Record<Locale, PageMeta>> = {
   home: {
@@ -61,5 +61,29 @@ export const PAGE_META: Record<MetaRoute, Record<Locale, PageMeta>> = {
   notFound: {
     en: { title: 'Not found', description: '' },
     ar: { title: 'غير موجود', description: '' },
+  },
+  // UI v2 PR10. English: work.html / projects.html <title> + <meta> verbatim (brand as
+  // %brand%). Arabic: ours, from the pages' Arabic copy — owner review.
+  portfolio: {
+    en: {
+      title: 'Our Work',
+      description:
+        'Selected projects from %brand%, a creative studio in Jeddah. Brand films, identities, campaigns, events, and more.',
+    },
+    ar: {
+      title: 'أعمالنا',
+      description:
+        'مشاريع مختارة من %brand%، استوديو إبداعي في جدة: أفلام للعلامات، وهويات، وحملات، وفعاليات، وأكثر.',
+    },
+  },
+  portfolioAll: {
+    en: {
+      title: 'All projects',
+      description: 'Every %brand% project, filterable by service, sector, client and year.',
+    },
+    ar: {
+      title: 'كل المشاريع',
+      description: 'كل مشاريع %brand%، مع فلترة حسب الخدمة والقطاع والعميل والسنة.',
+    },
   },
 };
