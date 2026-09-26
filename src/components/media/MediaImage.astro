@@ -1,0 +1,51 @@
+---
+import { Picture } from 'astro:assets';
+import type { Locale } from '@schemas/primitives';
+import { altFor, type ImageRef } from '@/lib/media/resolve';
+
+// The one way a CMS media asset becomes an <img> on a public page: <Picture> (AVIF/WebP
+// via the IMAGES binding) with the file's real width/height, so it never shifts layout
+// (CLS 0 — CLAUDE.md §6). `widths` + `sizes` describe the slot; loading is lazy unless the
+// caller says this is the LCP image (eager + fetchpriority high).
+
+interface Props {
+  image: ImageRef;
+  locale: Locale;
+  /** Rendered widths in CSS px (srcset); defaults suit a half-width card. */
+  widths?: number[];
+  sizes?: string;
+  /** Replaces the asset's alt text for this use (a caption that already describes it). */
+  altOverride?: string | null;
+  /** The LCP image of the page: eager + high priority. */
+  priority?: boolean;
+  class?: string;
+}
+
+const {
+  image,
+  locale,
+  widths = [480, 800, 1200],
+  sizes = '(min-width: 56.25rem) 50vw, 100vw',
+  altOverride = null,
+  priority = false,
+  class: className,
+} = Astro.props;
+
+// Never ask for a derivative wider than the source.
+const usable = widths.filter((w) => w <= image.width);
+const renderWidths = usable.length > 0 ? usable : [image.width];
+---
+
+<Picture
+  src={image.src}
+  alt={altFor(image, locale, altOverride)}
+  formats={['avif', 'webp']}
+  widths={renderWidths}
+  sizes={sizes}
+  width={image.width}
+  height={image.height}
+  loading={priority ? 'eager' : 'lazy'}
+  decoding="async"
+  fetchpriority={priority ? 'high' : 'auto'}
+  class={className}
+/>

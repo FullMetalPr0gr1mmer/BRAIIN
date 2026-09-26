@@ -36,7 +36,8 @@ export const GET = defineAdminRoute({
       const { data, error } = await sb
         .from('dashboard_attention')
         .select('kind,entity_type,id,slug,title,at')
-        .limit(100);
+        // Counts per kind are derived from these rows; keep the cap above any real total.
+        .limit(500);
       if (error) throw new Error(`dashboard: ${error.message}`);
       attention.push(...((data ?? []) as AttentionRow[]));
     }

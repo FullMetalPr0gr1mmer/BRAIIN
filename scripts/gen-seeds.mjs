@@ -30,7 +30,9 @@
 //                               "__placeholder": true,   // demoted in production mode
 //                               "__published": { … },    // overrides in published mode
 //                               "__production": { … } } ] } ] }
-// Values: strings/numbers/booleans/null are literals; objects/arrays are jsonb;
+// Values: strings/numbers/booleans/null are literals; objects/arrays are jsonb — so a
+// text[] column takes a Postgres array LITERAL string ("{home,work}"), which the
+// INSERT … VALUES types from its column (tests/seed/seeds.spec.ts checks the format);
 // {"$ref": {"table": "team_members", "by": {"slug": "x"}}} is a tenant-scoped id lookup;
 // {"$sql": "now()"} is the one raw expression allowed.
 //

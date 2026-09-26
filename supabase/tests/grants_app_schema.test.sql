@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(33);
+select plan(45);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -191,6 +191,51 @@ set local role pgtap_other_reader;
 select is((select count(*)::int from app.deployment), 0,
   'any OTHER grantee still reads zero rows — the policy admits deploy_guard only');
 reset role;
+
+-- ---- 9. UI v2 content model (0020–0025): the exact anon read surface ------------------
+-- A property of the catalog, not a list of spot checks: any table or view anon can SELECT
+-- at table level is named here, so a future grant (or a Supabase default that slipped
+-- back in) fails this line instead of quietly publishing a table.
+select is(
+  (select string_agg(c.relname::text, ', ' order by c.relname)
+     from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p', 'f')
+      and has_table_privilege('anon', c.oid, 'select')),
+  'ai_questions, ai_styles, blog_posts, categories, certifications, clients, entity_seo, '
+  'navigation, page_sections, pages, partner_logos, portfolio, portfolio_media, '
+  'portfolio_services, sectors, seo_defaults, services, site_profile, statistics, team_members',
+  'anon''s table-level SELECT is exactly the public content tables');
+
+-- Column-level surfaces: testimonials without the consent record, media without internals.
+select ok(not has_table_privilege('anon', 'public.testimonials', 'select'),
+  'anon has no TABLE-level select on testimonials (column grant only)');
+select ok(has_column_privilege('anon', 'public.testimonials', 'quote', 'select'),
+  'anon reads testimonial quotes');
+select ok(not has_column_privilege('anon', 'public.testimonials', 'consent_reference', 'select')
+          and not has_column_privilege('anon', 'public.testimonials', 'consent_obtained_at', 'select'),
+  'anon CANNOT read the testimonial consent record');
+select ok(not has_table_privilege('anon', 'public.media_assets', 'select'),
+  'anon has no TABLE-level select on media_assets (column grant only)');
+select ok(has_column_privilege('anon', 'public.media_assets', 'storage_path', 'select'),
+  'anon reads media storage keys (the 0024 policy decides which rows)');
+select ok(not has_column_privilege('anon', 'public.media_assets', 'folder', 'select')
+          and not has_column_privilege('anon', 'public.media_assets', 'provider_ref', 'select')
+          and not has_column_privilege('anon', 'public.media_assets', 'tags', 'select'),
+  'anon CANNOT read media internals (folder, tags, provider_ref)');
+
+-- RPCs: staff only.
+select ok(not has_function_privilege('anon', 'public.update_media_meta(uuid, int, jsonb)', 'execute'),
+  'anon CANNOT execute update_media_meta()');
+select ok(not has_function_privilege('anon', 'public.media_usage(uuid)', 'execute'),
+  'anon CANNOT execute media_usage()');
+select ok(not has_function_privilege('anon', 'public.save_portfolio(uuid, int, jsonb, uuid[], jsonb)', 'execute'),
+  'anon CANNOT execute save_portfolio()');
+select ok(has_function_privilege('authenticated', 'public.save_portfolio(uuid, int, jsonb, uuid[], jsonb)', 'execute')
+          and has_function_privilege('authenticated', 'public.update_media_meta(uuid, int, jsonb)', 'execute')
+          and has_function_privilege('authenticated', 'public.media_usage(uuid)', 'execute'),
+  'authenticated can execute the three staff RPCs (RLS / role checks decide the rest)');
+select ok(not has_function_privilege('authenticated', 'app.tg_placeholder_guard()', 'execute'),
+  'the 0025 placeholder guard is not callable by authenticated');
 
 select * from finish();
 rollback;
