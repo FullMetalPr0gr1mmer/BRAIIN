@@ -10,6 +10,9 @@
 // re-validates every field against `packages/schemas/admin.ts`, and a field omitted
 // here simply cannot be edited in the UI — it does not become writable by other means.
 
+// Zod-free on purpose (see the module header) — this file ships in the admin client bundle.
+import { SECTION_TYPES } from '@schemas/sectionTypes';
+
 export type FieldKind =
   | 'text'
   | 'slug'
@@ -211,18 +214,24 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
       {
         name: 'type',
         label: 'Section type',
-        kind: 'text',
+        kind: 'select',
         required: true,
-        help: 'One of: hero, aboutIntro, slogan, clientsMarquee, servicesOverview, contact, social, aboutStory, statistics, team, certifications, cta (the SectionRenderer registry). Unknown types are skipped.',
+        // The canonical list (packages/schemas/sections.ts) — the server rejects anything else.
+        options: SECTION_TYPES.map((t) => ({ value: t, label: t })),
       },
-      { name: 'content', label: 'Content (JSON)', kind: 'json' },
       {
-        name: 'style',
-        label: 'Style (JSON)',
+        name: 'content',
+        label: 'Content (JSON)',
         kind: 'json',
-        help: 'CSS custom properties only — the strict CSP has no unsafe-inline.',
+        help: 'Optional per-type overrides, validated against the section type on save. Types backed by their own table (statistics, team, certifications) take none: leave {}.',
       },
       { name: 'visible', label: 'Visible', kind: 'checkbox' },
+      {
+        name: 'isPlaceholder',
+        label: 'Design placeholder',
+        kind: 'checkbox',
+        help: 'Seeded demo content. In production a placeholder cannot be made visible — replace the copy, then untick.',
+      },
       SORT_FIELD,
     ],
   },
@@ -556,15 +565,83 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
     ],
   },
 
+  profile: {
+    endpoint: '/api/admin/site-profile',
+    title: 'Public identity',
+    fields: [
+      {
+        name: 'brandName',
+        label: 'Brand name',
+        kind: 'bilingual',
+        column: 'brand_name',
+        help: 'Shown in the header, footer, page titles and Organization JSON-LD on every page.',
+      },
+      {
+        name: 'legalName',
+        label: 'Registered legal name',
+        kind: 'bilingual',
+        column: 'legal_name',
+        help: 'The data controller named in the privacy notice and terms. Leave empty to use the brand name.',
+      },
+      { name: 'contactEmail', label: 'Contact email', kind: 'text', column: 'contact_email' },
+      {
+        name: 'whatsappE164',
+        label: 'WhatsApp number (E.164)',
+        kind: 'text',
+        column: 'whatsapp_e164',
+        help: 'e.g. +9665XXXXXXXX. Leave empty and the WhatsApp contact card is not shown.',
+      },
+      {
+        name: 'whatsappDisplay',
+        label: 'WhatsApp number as displayed',
+        kind: 'text',
+        column: 'whatsapp_display',
+      },
+      {
+        name: 'location',
+        label: 'Location',
+        kind: 'bilingual',
+        help: 'Footer copy, e.g. “Jeddah, Saudi Arabia”.',
+      },
+      {
+        name: 'addressLocality',
+        label: 'City (structured data)',
+        kind: 'bilingual',
+        column: 'address_locality',
+      },
+      {
+        name: 'addressCountry',
+        label: 'Country code',
+        kind: 'text',
+        column: 'address_country',
+        help: 'ISO 3166-1 alpha-2, e.g. SA.',
+      },
+      { name: 'foundedYear', label: 'Founded (year)', kind: 'number', column: 'founded_year' },
+      {
+        name: 'socials',
+        label: 'Social links (JSON)',
+        kind: 'json',
+        help: '[{"network":"instagram","handle":"@…","url":"https://instagram.com/…"}] — each link must point at its own network.',
+      },
+      {
+        name: 'acceptingApplications',
+        label: 'Accepting job applications',
+        kind: 'checkbox',
+        column: 'accepting_applications',
+        help: 'Admin only — opens the public application form on /join.',
+      },
+    ],
+  },
+
   settings: {
     endpoint: '/api/admin/settings',
     title: 'General settings',
     fields: [
       {
         name: 'identity',
-        label: 'Identity (JSON)',
+        label: 'Technical identity keys (JSON)',
         kind: 'json',
-        help: 'Site name, footer copy, contact details, social handles.',
+        help: 'Server-side keys only (e.g. notify_lead_url). The public brand, contact details and socials live in “Public identity” above.',
       },
       {
         name: 'retention',

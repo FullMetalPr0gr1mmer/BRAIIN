@@ -1,9 +1,28 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import type { Access, Capability } from '@/lib/authz/matrix';
+import { AuthorizationError } from '@/lib/authz/errors';
 import { defineAdminRoute } from './route';
 import { OptimisticLockError } from './errors';
 import type { ResourcePayload } from './resource';
+
+/**
+ * 42501 from a singleton write means the DATABASE refused it after assertCap() allowed
+ * it: a guard trigger narrower than the row (site_profile.accepting_applications is
+ * Admin-only while the rest of the row is Admin + Developer — migration 0019), or RLS.
+ * That is an authorization outcome and must reach the client as 403, not as the generic
+ * 500 every other unexpected error becomes.
+ */
+function rethrowWriteError(
+  table: string,
+  cap: Capability,
+  verb: string,
+  error: { code?: string; message: string },
+): never {
+  if (error.code === '42501')
+    throw new AuthorizationError(cap, `database refused the ${table} write`);
+  throw new Error(`${verb} ${table}: ${error.message}`);
+}
 
 // Per-tenant singleton config rows: site_settings, site_integrations, seo_defaults,
 // ai_config. Their primary key IS `tenant_id`, so the id-based CRUD helpers do not
@@ -78,7 +97,7 @@ export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH
         // 23505 = someone else inserted between our read and our write.
         if (error) {
           if (error.code === '23505') throw new OptimisticLockError(config.table);
-          throw new Error(`create ${config.table}: ${error.message}`);
+          rethrowWriteError(config.table, config.writeCap, 'create', error);
         }
         row = data;
       } else {
@@ -90,7 +109,7 @@ export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH
           .eq('version', payload.version)
           .select(config.columns)
           .maybeSingle();
-        if (error) throw new Error(`update ${config.table}: ${error.message}`);
+        if (error) rethrowWriteError(config.table, config.writeCap, 'update', error);
         if (!data) throw new OptimisticLockError(config.table);
         row = data;
       }

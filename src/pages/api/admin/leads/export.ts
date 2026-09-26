@@ -6,6 +6,7 @@ import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { assertPrivilegedOpAllowed, recordPrivilegedOp } from '@/lib/admin/rateLimit';
 import { canSeeLeadPii, FULL_LEAD_COLUMNS, SAFE_LEAD_COLUMNS } from '@/lib/admin/leadFields';
 import { decryptPII } from '@/lib/crypto/pii';
+import { budgetBandLabel } from '@schemas/lead';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { toCsv } from '@/lib/admin/csv';
 
@@ -82,22 +83,37 @@ export const GET = defineAdminRoute({
     // which PostgREST's literal-string typings cannot follow.
     const rows = (data ?? []) as unknown as Record<string, unknown>[];
 
+    // `company` is business-contact data in leads_safe (0015), so it is in BOTH projections.
+    // `budget` is exported as its human label (BUDGET_BAND_LABELS — the same map the form
+    // and the admin panel read), and `timeline` is the decrypted free-text deadline (0017),
+    // with the legacy select value alongside for rows that came through the old form.
     const header = withPii
       ? [
           'id',
           'created_at',
           'status',
           'name',
+          'company',
           'email',
           'phone',
           'budget',
+          'timeline',
           'timeline_band',
           'service_of_interest',
           'locale',
           'message',
           'internal_notes',
         ]
-      : ['id', 'created_at', 'status', 'name', 'service_of_interest', 'locale', 'message'];
+      : [
+          'id',
+          'created_at',
+          'status',
+          'name',
+          'company',
+          'service_of_interest',
+          'locale',
+          'message',
+        ];
 
     const records: Record<string, unknown>[] = [];
     for (const row of rows) {
@@ -106,6 +122,7 @@ export const GET = defineAdminRoute({
         created_at: row['created_at'],
         status: row['status'],
         name: row['name'],
+        company: row['company'],
         service_of_interest: row['service_of_interest'],
         locale: row['locale'],
         message: row['message'],
@@ -113,7 +130,9 @@ export const GET = defineAdminRoute({
       if (withPii) {
         base['email'] = await safeDecrypt(row['email_enc']);
         base['phone'] = await safeDecrypt(row['phone_enc']);
-        base['budget'] = await safeDecrypt(row['budget_enc']);
+        const budget = await safeDecrypt(row['budget_enc']);
+        base['budget'] = budget ? budgetBandLabel(budget) : budget;
+        base['timeline'] = await safeDecrypt(row['timeline_text_enc']);
         base['timeline_band'] = row['timeline_band'];
         base['internal_notes'] = row['internal_notes'];
       }

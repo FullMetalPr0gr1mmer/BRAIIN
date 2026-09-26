@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { LocalizedTextSchema } from './content';
+import { SECTION_TYPES, type SectionType } from './sectionTypes';
 
 // Per-type CMS content shapes for `page_sections.content` (authored at /admin/sections,
 // rendered by src/components/SectionRenderer.astro). One schema per shape, in packages/
@@ -116,9 +117,13 @@ export const AboutStorySectionContentSchema = z.object({
   vision: Text.optional(),
 });
 
+export { SECTION_TYPES, type SectionType } from './sectionTypes';
+/** Zod form of the canonical list in ./sectionTypes (kept zod-free for the admin bundle). */
+export const SectionTypeSchema = z.enum(SECTION_TYPES);
+
 /** type → content schema. Types absent here (statistics, team, certifications) take no
     content overrides — their data comes from their own CMS tables. */
-export const SECTION_CONTENT_SCHEMAS: Record<string, z.ZodTypeAny> = {
+export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>> = {
   hero: HeroSectionContentSchema,
   aboutIntro: AboutIntroSectionContentSchema,
   slogan: SloganSectionContentSchema,
@@ -129,6 +134,36 @@ export const SECTION_CONTENT_SCHEMAS: Record<string, z.ZodTypeAny> = {
   cta: CtaSectionContentSchema,
   aboutStory: AboutStorySectionContentSchema,
 };
+
+/**
+ * Validates one section's `content` against its type, for WRITES. Returns the issues
+ * with `content`-rooted paths so the admin can point at the offending field.
+ *
+ * A type with no content schema takes NO overrides at all: `{}` only. Its data comes
+ * from its own table, and SectionRenderer spreads content into component props — a
+ * stray `members` or `items` key would otherwise replace the table-backed data on a
+ * public page.
+ */
+export function sectionContentIssues(type: SectionType, content: unknown): z.ZodIssue[] {
+  const schema = SECTION_CONTENT_SCHEMAS[type];
+  if (!schema) {
+    const empty =
+      typeof content === 'object' && content !== null && Object.keys(content).length === 0;
+    return empty
+      ? []
+      : [
+          {
+            code: z.ZodIssueCode.custom,
+            path: ['content'],
+            message: `section type '${type}' takes no content overrides — its data comes from its own table`,
+          },
+        ];
+  }
+  const parsed = schema.safeParse(content);
+  return parsed.success
+    ? []
+    : parsed.error.issues.map((issue) => ({ ...issue, path: ['content', ...issue.path] }));
+}
 
 /** Public row shape for the Tier-A page_sections read (see PageSectionRow loaders). */
 export const PageSectionRowSchema = z.object({

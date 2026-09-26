@@ -276,19 +276,21 @@ export const sectionResource: ResourceConfig = {
   entity: 'page_section',
   writeCap: 'pages.write',
   listColumns: 'id,page_id,type,visible,sort_order,version,updated_at',
-  columns: 'id,page_id,type,content,style,visible,sort_order,version,created_at,updated_at',
+  columns:
+    'id,page_id,type,content,visible,sort_order,is_placeholder,version,created_at,updated_at',
   orderBy: { column: 'sort_order', ascending: true },
   filterableColumns: ['page_id'],
   createSchema: SectionWriteSchema,
   updateSchema: SectionUpdateSchema,
+  // `style` is deliberately absent: it is no longer writable (see SectionWriteSchema).
   toRow: (input) =>
     pick(input as Input, {
       pageId: 'page_id',
       type: 'type',
       content: 'content',
-      style: 'style',
       visible: 'visible',
       sortOrder: 'sort_order',
+      isPlaceholder: 'is_placeholder',
     }),
 };
 

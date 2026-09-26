@@ -1,6 +1,7 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import type { SectionData } from '@/lib/sections/types';
+import { isRenderedSectionType, type RenderedSectionType } from '@/lib/sections/registry';
 import SectionBoundary from '@/components/SectionBoundary.astro';
 import Hero from '@/components/sections/Hero.astro';
 import ServicesOverview from '@/components/sections/ServicesOverview.astro';
@@ -31,7 +32,10 @@ const { locale, sections } = Astro.props;
 // ContactPage.astro, which injects the service list into the contactInquiry section).
 // Keeping it there rather than adding pass-through props here means this renderer does
 // not grow a parameter every time one section needs something.
-const REGISTRY: Record<string, typeof Hero> = {
+//
+// Typed against src/lib/sections/registry.ts: `astro check` fails if a rendered type has
+// no component here or a component has no registry entry.
+const REGISTRY: Record<RenderedSectionType, typeof Hero> = {
   hero: Hero,
   servicesOverview: ServicesOverview,
   cta: CtaBand,
@@ -54,8 +58,8 @@ const REGISTRY: Record<string, typeof Hero> = {
   sections
     .filter((s) => s.visible !== false)
     .map((s) => {
+      if (!isRenderedSectionType(s.type)) return null;
       const Comp = REGISTRY[s.type];
-      if (!Comp) return null;
       return (
         <SectionBoundary type={s.type}>
           <Comp locale={locale} {...(s.props ?? {})} />

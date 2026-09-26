@@ -27,8 +27,51 @@ npx supabase link --project-ref <prod-ref>
 ## 1. Apply migrations  ⛔ blocker
 
 ```bash
-npx supabase db push          # applies 0001 → 0010
+npx supabase db push          # applies every migration not yet recorded in production
 ```
+
+**Order for every change that ships a migration: apply it here FIRST, then merge.**
+Merging to `main` auto-deploys the Worker; code that reads a column production does not
+have yet fails closed to empty content (§5a's deploy guard refuses such a deploy once
+configured).
+
+### 1a. Mark this database as production  ⛔ blocker — immediately after 0016
+
+Migration 0016 creates `app.deployment`, the marker that tells the database which
+environment it is. It arms the production-only guards: `supabase/seed.sql` refuses to run
+(it publishes design placeholders), and from migration 0025 a placeholder row cannot be
+published or made visible. **Unset, production behaves like staging.**
+
+```sql
+insert into app.deployment (env) values ('production')
+  on conflict (singleton) do update set env = excluded.env, set_at = now();
+select env, set_at from app.deployment;          -- expect exactly: production
+```
+
+Staging gets `'staging'` the same way. Local / CI need nothing (unset ≠ production).
+
+### 1b. Seed content
+
+Seeds are GENERATED from `supabase/seed-data/*.json` (`npm run seed:gen`); never hand-edit
+the `.sql` files — `tests/seed/seeds.spec.ts` fails if they drift.
+
+```bash
+# Production — every design placeholder lands as a DRAFT / hidden row for editors to
+# replace and publish. Idempotent: never overwrites a row an editor has changed.
+psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/production.sql
+
+# Staging — placeholders PUBLISHED so the environment matches the approved mockup.
+psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed.sql
+```
+
+`-v ON_ERROR_STOP=1` is load-bearing: without it psql keeps executing after the seed's
+production guard raises. Each file is one transaction, so a failure applies nothing.
+
+**Legacy rows (owner sign-off required).** Production may already hold the pre-UI-v2 demo
+content (three case studies, "150+ / 14 / 8" statistics, role-titled team members, two
+blog posts) as PUBLISHED rows — the seeds only ever insert-if-absent, so they will not
+demote what is already there. Archiving them is an owner decision, taken after real
+content exists, and is not automated.
 
 `0010_launch_readiness.sql` generates the audit HMAC key into Supabase Vault on first
 run. Verify it landed — **if this row is missing, every admin write returns 500**,

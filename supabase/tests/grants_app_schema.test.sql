@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(25);
+select plan(30);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -133,6 +133,26 @@ select ok(not has_table_privilege('anon', 'public.profiles', 'select'),
   'anon CANNOT select public.profiles');
 select ok(not has_table_privilege('anon', 'public.site_integrations', 'select'),
   'anon CANNOT select public.site_integrations (API keys)');
+
+-- ---- 7. UI v2 additions (0016, 0019) --------------------------------------------------
+-- The two new public surfaces are SELECT-only (the insert/update/delete/truncate sweep in
+-- §5 above already covers their write side), and the deployment marker — which decides
+-- whether the production-only guards are armed — is reachable by no API role at all.
+select ok(has_table_privilege('anon', 'public.page_sections', 'select'),
+  'anon has SELECT on page_sections (0016: CMS compositions reach visitors; 0011 fence applies)');
+select ok(has_table_privilege('anon', 'public.site_profile', 'select'),
+  'anon has SELECT on site_profile (0019: the public identity renders on every page)');
+select ok(
+  not has_table_privilege('anon', 'app.deployment', 'select')
+  and not has_table_privilege('authenticated', 'app.deployment', 'select')
+  and not has_table_privilege('service_role', 'app.deployment', 'select'),
+  'app.deployment is unreadable by anon, authenticated and service_role');
+select ok(
+  not has_function_privilege('authenticated', 'app.is_production()', 'execute')
+  and not has_function_privilege('authenticated', 'app.tg_site_profile_guard()', 'execute'),
+  'the 0016/0019 app.* routines are not executable by authenticated either');
+select ok(not has_table_privilege('authenticated', 'public.site_profile', 'delete'),
+  'authenticated CANNOT delete the site_profile singleton');
 
 select * from finish();
 rollback;

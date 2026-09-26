@@ -14,7 +14,7 @@ paths:
 Security is the highest pillar — never weaken authz to hit a perf budget; file an exception (§11) instead. When you touch migrations, Edge Functions, or authz code:
 
 - **Two independent server authz layers that must BOTH pass:** Postgres RLS (primary) + `assertCap()` in the Edge/API handler (secondary). React `can()` is UX only, never a security control.
-- **Every table:** `id`, `tenant_id uuid NOT NULL`, timestamps, `created_by`/`updated_by`. RLS `ENABLE` **and** `FORCE` at creation. Every policy `USING`/`WITH CHECK` includes `tenant_id = (select auth.current_tenant_id())`.
+- **Every table:** `id`, `tenant_id uuid NOT NULL`, timestamps, `created_by`/`updated_by`. RLS `ENABLE` **and** `FORCE` at creation. Every policy `USING`/`WITH CHECK` includes `tenant_id = app.effective_tenant_id()` (the real helper — there is no `auth.current_tenant_id()`).
 - Role + `tenant_id` come from `app_metadata` via the Custom Access Token Hook — **never** `user_metadata`. Force-revoke sessions on role/tenant change.
 - Publish/archive/delete gated by **RESTRICTIVE** RLS, not hidden buttons.
 - **Lead PII** (`budget`/`timeline`/`internal_notes`/`ip_inet`): Admin + Developer only — column GRANT + `leads_safe` view (omits them; **not** granted to all `authenticated`) + role-checked decrypt path as the gate of record. Content Creator & SEO get **zero** lead access.

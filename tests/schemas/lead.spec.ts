@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { LeadInputSchema } from '@schemas/lead';
+import {
+  BUDGET_BANDS,
+  BUDGET_BAND_LABELS,
+  LEGACY_BUDGET_BANDS,
+  LeadInputSchema,
+  budgetBandLabel,
+} from '@schemas/lead';
 
 const base = { name: 'Sam', email: 'sam@example.com', message: 'Hello there.' };
 
@@ -23,5 +29,46 @@ describe('LeadInputSchema (server-side validation)', () => {
 
   it('rejects an unknown budget band', () => {
     expect(LeadInputSchema.safeParse({ ...base, budgetBand: 'a-lot' }).success).toBe(false);
+  });
+});
+
+describe('UI v2 contact fields', () => {
+  it('accepts every v2 budget band', () => {
+    for (const band of BUDGET_BANDS) {
+      expect(LeadInputSchema.safeParse({ ...base, budgetBand: band }).success, band).toBe(true);
+    }
+  });
+
+  it('STILL accepts every legacy band — a year-cached page may post the old form', () => {
+    for (const band of LEGACY_BUDGET_BANDS) {
+      expect(LeadInputSchema.safeParse({ ...base, budgetBand: band }).success, band).toBe(true);
+    }
+    // and the deprecated timeline select value
+    expect(LeadInputSchema.safeParse({ ...base, timelineBand: 'asap' }).success).toBe(true);
+  });
+
+  it('bounds the free-text deadline (a §3 timeline field, encrypted downstream)', () => {
+    expect(LeadInputSchema.safeParse({ ...base, timelineText: 'Before Ramadan' }).success).toBe(
+      true,
+    );
+    expect(LeadInputSchema.safeParse({ ...base, timelineText: 'x'.repeat(121) }).success).toBe(
+      false,
+    );
+    expect(LeadInputSchema.safeParse({ ...base, timelineText: '   ' }).success).toBe(false);
+  });
+
+  it('has a label, in both languages, for every key it accepts (new AND legacy)', () => {
+    for (const band of [...BUDGET_BANDS, ...LEGACY_BUDGET_BANDS]) {
+      expect(BUDGET_BAND_LABELS[band].en, band).toBeTruthy();
+      expect(BUDGET_BAND_LABELS[band].ar, band).toBeTruthy();
+    }
+    expect(budgetBandLabel('lt_25k')).toBe('Under 25k SAR');
+    expect(budgetBandLabel('lt_25k', 'ar')).toBe('أقل من ٢٥ ألف ريال');
+    // A hand-edited row never crashes the admin — it shows the raw key.
+    expect(budgetBandLabel('mystery')).toBe('mystery');
+  });
+
+  it('marks legacy labels so an editor can tell which form a lead came through', () => {
+    for (const band of LEGACY_BUDGET_BANDS) expect(BUDGET_BAND_LABELS[band].en).toMatch(/legacy/i);
   });
 });

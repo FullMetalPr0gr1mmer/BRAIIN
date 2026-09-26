@@ -4,7 +4,9 @@ import {
   PageSectionRowSchema,
   SECTION_CONTENT_SCHEMAS,
   SocialSectionContentSchema,
+  sectionContentIssues,
 } from '@schemas/sections';
+import { SectionUpdateSchema, SectionWriteSchema } from '@schemas/admin';
 
 // The CMS section-content boundary (page_sections.content → section props). The public
 // loader (src/lib/data/pageSections.ts) safeParses content per type and degrades to {}
@@ -110,5 +112,46 @@ describe('section content schemas', () => {
   it('caps accent indices so a stray number cannot mark thousands of words', () => {
     expect(HeroSectionContentSchema.safeParse({ accentFromEn: 31 }).success).toBe(false);
     expect(HeroSectionContentSchema.safeParse({ accentFromEn: 3 }).success).toBe(true);
+  });
+});
+
+describe('write-time section validation (UI v2 PR1)', () => {
+  const pageId = '00000000-0000-4000-8000-000000000001';
+
+  it('rejects a type the renderer does not know — it used to save and silently not render', () => {
+    expect(SectionWriteSchema.safeParse({ pageId, type: 'carousel' }).success).toBe(false);
+    expect(SectionWriteSchema.safeParse({ pageId, type: 'hero' }).success).toBe(true);
+  });
+
+  it('validates content against its type, with content-rooted issue paths', () => {
+    const bad = SectionWriteSchema.safeParse({
+      pageId,
+      type: 'hero',
+      content: { headline: { en: 'Only English' } },
+    });
+    expect(bad.success).toBe(false);
+    if (!bad.success) expect(bad.error.issues[0]?.path[0]).toBe('content');
+  });
+
+  it('table-backed types take NO content — a stray key would overwrite their data', () => {
+    for (const type of ['statistics', 'team', 'certifications'] as const) {
+      expect(sectionContentIssues(type, {})).toEqual([]);
+      expect(sectionContentIssues(type, { members: [] }).length, type).toBe(1);
+    }
+  });
+
+  it('an update restating the type is validated; one without it is left to the kernel', () => {
+    expect(
+      SectionUpdateSchema.safeParse({ version: 2, type: 'hero', content: { sub: { en: 'x' } } })
+        .success,
+    ).toBe(false);
+    expect(SectionUpdateSchema.safeParse({ version: 2, content: { anything: true } }).success).toBe(
+      true,
+    );
+  });
+
+  it('no longer accepts `style` (never read, and unusable under the nonce CSP)', () => {
+    const parsed = SectionWriteSchema.parse({ pageId, type: 'hero', style: { color: 'red' } });
+    expect('style' in parsed).toBe(false);
   });
 });

@@ -1,0 +1,149 @@
+{
+  "blocks": [
+    {
+      "table": "services",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "branding",
+          "title": { "en": "Branding", "ar": "الهوية البصرية" },
+          "blurb": {
+            "en": "Identity systems that make brands unmistakable.",
+            "ar": "أنظمة هوية تجعل العلامات لا تُنسى."
+          },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 1
+        },
+        {
+          "slug": "animations",
+          "title": { "en": "Animations", "ar": "الرسوم المتحركة" },
+          "blurb": {
+            "en": "Characters and stories brought to life.",
+            "ar": "شخصيات وقصص تنبض بالحياة."
+          },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 2
+        },
+        {
+          "slug": "motion-graphics",
+          "title": { "en": "Motion Graphics", "ar": "موشن جرافيك" },
+          "blurb": {
+            "en": "Design in motion for screens of every size.",
+            "ar": "تصميم متحرك لكل الشاشات."
+          },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 3
+        },
+        {
+          "slug": "videography",
+          "title": { "en": "Videography", "ar": "إنتاج الفيديو" },
+          "blurb": {
+            "en": "Cinematic production end to end.",
+            "ar": "إنتاج سينمائي من الفكرة إلى التسليم."
+          },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 4
+        },
+        {
+          "slug": "photography",
+          "title": { "en": "Photography", "ar": "التصوير الفوتوغرافي" },
+          "blurb": { "en": "Images that sell the moment.", "ar": "صور تروي اللحظة." },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 5
+        },
+        {
+          "slug": "montage",
+          "title": { "en": "Montage", "ar": "المونتاج" },
+          "blurb": {
+            "en": "Editing that gives footage its rhythm.",
+            "ar": "مونتاج يمنح اللقطات إيقاعها."
+          },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 6
+        },
+        {
+          "slug": "event-planning",
+          "title": { "en": "Event Planning", "ar": "تنظيم الفعاليات" },
+          "blurb": {
+            "en": "Experiences planned down to the detail.",
+            "ar": "تجارب مُخطَّطة حتى أدق التفاصيل."
+          },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 7
+        },
+        {
+          "slug": "advertising",
+          "title": { "en": "Advertising", "ar": "الإعلانات" },
+          "blurb": { "en": "Campaigns that move audiences.", "ar": "حملات تحرّك الجمهور." },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 8
+        },
+        {
+          "slug": "social-media",
+          "title": { "en": "Social Media", "ar": "وسائل التواصل" },
+          "blurb": { "en": "Always-on presence that converts.", "ar": "حضور دائم يحقق النتائج." },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 9
+        },
+        {
+          "slug": "web-development",
+          "title": { "en": "Web Development", "ar": "تطوير المواقع" },
+          "blurb": {
+            "en": "Fast, secure, accessible sites.",
+            "ar": "مواقع سريعة وآمنة وسهلة الوصول."
+          },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 10
+        },
+        {
+          "slug": "seo-geo-aeo",
+          "title": { "en": "SEO / GEO / AEO", "ar": "تحسين محركات البحث" },
+          "blurb": {
+            "en": "Be found by people and AI answer engines.",
+            "ar": "ظهور أمام الناس ومحركات الإجابة بالذكاء الاصطناعي."
+          },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 11
+        },
+        {
+          "slug": "music",
+          "title": { "en": "Music", "ar": "الموسيقى" },
+          "blurb": { "en": "Original sound and scoring.", "ar": "موسيقى وتلحين أصلي." },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 12
+        },
+        {
+          "slug": "merchandise",
+          "title": { "en": "Merchandise", "ar": "المنتجات الترويجية" },
+          "blurb": {
+            "en": "Branded products people keep.",
+            "ar": "منتجات تحمل العلامة ويحتفظ بها الناس."
+          },
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 13
+        },
+        {
+          "slug": "gaming",
+          "title": { "en": "Gaming", "ar": "الألعاب" },
+          "blurb": { "en": "Coming soon.", "ar": "قريبًا." },
+          "status": "published",
+          "is_teaser": true,
+          "sort_order": 14
+        }
+      ]
+    }
+  ]
+}

@@ -31,6 +31,17 @@ insert into public.page_sections (tenant_id, page_id, type)
   from public.pages where slug = 'pg-del';
 insert into public.media_assets (tenant_id, kind, storage_path)
   values ('33333333-3333-3333-3333-333333333333', 'image', '/seed/x.png');
+-- 0018: the five content tables 0007 missed.
+insert into public.team_members (tenant_id, slug, name, status)
+  values ('33333333-3333-3333-3333-333333333333', 'tm-del', '{"en":"T","ar":"ت"}', 'published');
+insert into public.certifications (tenant_id, slug, name, status)
+  values ('33333333-3333-3333-3333-333333333333', 'cert-del', '{"en":"C","ar":"ش"}', 'published');
+insert into public.statistics (tenant_id, slug, label, value, status)
+  values ('33333333-3333-3333-3333-333333333333', 'stat-del', '{"en":"S","ar":"إ"}', '1', 'published');
+insert into public.categories (tenant_id, slug, name)
+  values ('33333333-3333-3333-3333-333333333333', 'cat-del', '{"en":"K","ar":"ف"}');
+insert into public.partner_logos (tenant_id, name, logo_url)
+  values ('33333333-3333-3333-3333-333333333333', 'logo-del', 'https://example.test/l.svg');
 
 -- ── Content Creator: CANNOT delete (RLS filters → row survives) ─────────────
 select _claims('content_creator', '33333333-3333-3333-3333-333333333333');
@@ -51,6 +62,22 @@ delete from public.media_assets;
 select is((select count(*) from public.media_assets)::int, 1,
   'content_creator hard-delete of media is a no-op (row survives)');
 
+delete from public.team_members where slug = 'tm-del';
+select is((select count(*) from public.team_members where slug = 'tm-del')::int, 1,
+  'content_creator delete of team_members is a no-op (0018)');
+delete from public.certifications where slug = 'cert-del';
+select is((select count(*) from public.certifications where slug = 'cert-del')::int, 1,
+  'content_creator delete of certifications is a no-op (0018)');
+delete from public.statistics where slug = 'stat-del';
+select is((select count(*) from public.statistics where slug = 'stat-del')::int, 1,
+  'content_creator delete of statistics is a no-op (0018)');
+delete from public.categories where slug = 'cat-del';
+select is((select count(*) from public.categories where slug = 'cat-del')::int, 1,
+  'content_creator delete of categories is a no-op (0018)');
+delete from public.partner_logos where name = 'logo-del';
+select is((select count(*) from public.partner_logos where name = 'logo-del')::int, 1,
+  'content_creator delete of partner_logos is a no-op (0018)');
+
 -- ── Content Creator: CANNOT archive (WITH CHECK → 42501) ────────────────────
 select throws_ok(
   $$ update public.portfolio set status = 'archived' where slug = 'pf-del' $$,
@@ -58,6 +85,15 @@ select throws_ok(
 select throws_ok(
   $$ update public.pages set status = 'archived' where slug = 'pg-del' $$,
   '42501', null, 'content_creator cannot archive pages');
+select throws_ok(
+  $$ update public.team_members set status = 'archived' where slug = 'tm-del' $$,
+  '42501', null, 'content_creator cannot archive team_members (0018)');
+select throws_ok(
+  $$ update public.certifications set status = 'archived' where slug = 'cert-del' $$,
+  '42501', null, 'content_creator cannot archive certifications (0018)');
+select throws_ok(
+  $$ update public.statistics set status = 'archived' where slug = 'stat-del' $$,
+  '42501', null, 'content_creator cannot archive statistics (0018)');
 
 -- ── Content Creator: CAN still edit (non-archive update) ────────────────────
 select lives_ok(
@@ -73,6 +109,34 @@ select lives_ok($$ delete from public.media_assets $$, 'admin can hard-delete me
 select lives_ok($$ delete from public.page_sections $$, 'admin can delete page_sections');
 select lives_ok($$ delete from public.pages where slug = 'pg-del' $$, 'admin can delete pages');
 select lives_ok($$ delete from public.portfolio where slug = 'pf-del' $$, 'admin can delete portfolio');
+select lives_ok(
+  $$ update public.statistics set status = 'archived' where slug = 'stat-del' $$,
+  'admin can archive statistics (0018)');
+delete from public.team_members where slug = 'tm-del';
+delete from public.certifications where slug = 'cert-del';
+delete from public.statistics where slug = 'stat-del';
+delete from public.categories where slug = 'cat-del';
+delete from public.partner_logos where name = 'logo-del';
+select is(
+  (select count(*)::int from (
+     select 1 from public.team_members where slug = 'tm-del'
+     union all select 1 from public.certifications where slug = 'cert-del'
+     union all select 1 from public.statistics where slug = 'stat-del'
+     union all select 1 from public.categories where slug = 'cat-del'
+     union all select 1 from public.partner_logos where name = 'logo-del') x),
+  0, 'admin can delete team_members, certifications, statistics, categories, partner_logos (0018)');
+
+-- The gates themselves are RESTRICTIVE — a permissive policy would OR with the write
+-- policy and narrow nothing, with every assertion above still green.
+reset role;
+select is(
+  (select count(*)::int from pg_policies
+    where schemaname = 'public' and permissive = 'RESTRICTIVE'
+      and policyname in (
+        'team_members_delete_admin', 'certifications_delete_admin', 'statistics_delete_admin',
+        'categories_delete_admin', 'partner_logos_delete_admin',
+        'team_members_archive_admin', 'certifications_archive_admin', 'statistics_archive_admin')),
+  8, 'the eight 0018 gates are RESTRICTIVE');
 
 reset role;
 select _claims(null, null);

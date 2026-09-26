@@ -344,6 +344,24 @@ const CASES: Case[] = [
     body: { identity: {}, version: 1 },
     allow: ['admin', 'developer'],
   },
+  // Public identity singleton (migration 0019) — §5 "General settings": Admin + Developer.
+  // (accepting_applications is narrower still — Admin only — but that is enforced by the
+  // DATABASE, a 0019 trigger, and pinned by supabase/tests/rls_site_profile.test.sql.)
+  {
+    name: 'site profile read',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'GET',
+    url: '/api/admin/site-profile',
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'site profile write',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'PATCH',
+    url: '/api/admin/site-profile',
+    body: { brandName: VALID_BILINGUAL, version: 1 },
+    allow: ['admin', 'developer'],
+  },
   {
     name: 'integrations write',
     load: () => import('@/pages/api/admin/integrations'),

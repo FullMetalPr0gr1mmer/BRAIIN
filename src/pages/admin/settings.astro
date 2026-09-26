@@ -7,7 +7,8 @@ export const prerender = false;
 
 <AdminLayout
   title="General settings"
-  subtitle="Site identity and data-retention horizons. Integrations and maintenance have their own screens."
+  subtitle="Public identity, technical keys and data-retention horizons. Integrations and maintenance have their own screens."
 >
+  <SingletonForm client:load config="profile" />
   <SingletonForm client:load config="settings" />
 </AdminLayout>

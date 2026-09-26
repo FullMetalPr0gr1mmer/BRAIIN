@@ -22,10 +22,12 @@ export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
   const tenantId = await resolveLaunchTenantId();
   if (!tenantId) return { ok: false, reason: 'no-tenant' };
 
-  const [email_enc, phone_enc, budget_enc] = await Promise.all([
+  const [email_enc, phone_enc, budget_enc, timeline_text_enc] = await Promise.all([
     encryptPII(input.email, LEAD_PII_ENC_KEY),
     input.phone ? encryptPII(input.phone, LEAD_PII_ENC_KEY) : Promise.resolve(null),
     input.budgetBand ? encryptPII(input.budgetBand, LEAD_PII_ENC_KEY) : Promise.resolve(null),
+    // The free-text deadline is a §3 `timeline` field — encrypted exactly like budget.
+    input.timelineText ? encryptPII(input.timelineText, LEAD_PII_ENC_KEY) : Promise.resolve(null),
   ]);
 
   const { error } = await sb.from('leads').insert({
@@ -38,6 +40,11 @@ export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
     phone_enc,
     budget_enc,
     timeline_band: input.timelineBand ?? null,
+    // Sent only when present. PostgREST rejects an insert naming a column it has not
+    // seen, so an always-present key would turn every contact submission into a 500 in
+    // the window between this code deploying and migration 0017 being applied. Unset
+    // keeps the old shape; set requires 0017 (which the deploy guard enforces).
+    ...(timeline_text_enc ? { timeline_text_enc } : {}),
     message: input.message,
     service_of_interest: input.serviceOfInterest ?? null,
     consent_marketing: input.consentMarketing,

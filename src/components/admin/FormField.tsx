@@ -265,6 +265,23 @@ export function formToPayload(values: Row, fields: readonly FieldDef[]): Row {
     // An unset <select> means "leave it alone", not "set it to empty".
     if (field.kind === 'select' && !value) continue;
 
+    // An optional bilingual pair left entirely blank means "none" (e.g. site_profile's
+    // legal name), not `{en:'', ar:''}` — which the server would reject for being
+    // half-present. A HALF-filled pair is still sent as-is so the server can say which
+    // language is missing.
+    if (
+      (field.kind === 'bilingual' || field.kind === 'prose') &&
+      !field.required &&
+      typeof value === 'object' &&
+      value !== null &&
+      Object.values(value as Record<string, unknown>).every(
+        (v) => typeof v !== 'string' || v.trim() === '',
+      )
+    ) {
+      out[field.name] = null;
+      continue;
+    }
+
     if (typeof value === 'string' && value.trim() === '') {
       out[field.name] = field.required ? '' : null;
       continue;

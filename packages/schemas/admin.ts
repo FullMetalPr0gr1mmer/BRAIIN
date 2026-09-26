@@ -8,6 +8,7 @@ import {
 } from './primitives';
 import { LocalizedProseSchema } from './content';
 import { LocalizedDocSchema } from './tiptap';
+import { SectionTypeSchema, sectionContentIssues, type SectionType } from './sections';
 
 // Every admin write goes through a schema in this file. CLAUDE.md §8: "Zod is the
 // single content boundary."
@@ -139,20 +140,34 @@ const SectionPayloadSchema = z
   .record(z.string(), z.unknown())
   .refine((v) => JSON.stringify(v).length <= 65_536, { message: 'section payload exceeds 64 KB' });
 
-export const SectionWriteSchema = z.object({
+// `type` is the SECTION_TYPES enum, not a free identifier: an unknown type used to save
+// fine and then be skipped by the renderer without a word — the editor saw "saved", the
+// visitor saw nothing. `content` is validated against its type's schema on write (the
+// loader still re-validates on read, so a row written around the API degrades rather
+// than breaks). `style` is gone from the write surface: nothing ever read it, and under a
+// nonce CSP with no 'unsafe-inline' it could not be applied anyway (the column stays).
+const SectionWriteBase = z.object({
   pageId: UuidSchema,
-  type: z
-    .string()
-    .trim()
-    .min(1)
-    .max(60)
-    .regex(/^[a-zA-Z][a-zA-Z0-9]*$/, 'must be a component-style identifier'),
+  type: SectionTypeSchema,
   content: SectionPayloadSchema.default({}),
-  style: SectionPayloadSchema.default({}),
   visible: z.boolean().default(true),
   sortOrder: SortOrderSchema,
+  /** Design-delivery placeholder (0016). The 0025 production guard refuses to show one. */
+  isPlaceholder: z.boolean().default(false),
 });
-export const SectionUpdateSchema = updatable(SectionWriteSchema);
+
+function checkSectionContent(
+  v: { type?: SectionType | undefined; content?: Record<string, unknown> | undefined },
+  ctx: z.RefinementCtx,
+): void {
+  // An update that changes content without restating `type` is validated by the admin
+  // kernel against the STORED type (UI v2 PR3); here we check what the payload can prove.
+  if (v.type === undefined || v.content === undefined) return;
+  for (const issue of sectionContentIssues(v.type, v.content)) ctx.addIssue(issue);
+}
+
+export const SectionWriteSchema = SectionWriteBase.superRefine(checkSectionContent);
+export const SectionUpdateSchema = updatable(SectionWriteBase).superRefine(checkSectionContent);
 
 /** Bulk reorder — one round-trip instead of N optimistic updates that can half-apply. */
 export const ReorderSchema = z.object({
