@@ -1,0 +1,181 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { Accent } from '@schemas/media';
+import type { LocalizedText, StatisticRow } from '@schemas/content';
+import { pickLocale } from '@/lib/i18n';
+import AccentText from '@/components/ui/AccentText.astro';
+
+// Statistics as the UI v2 bands (the mockup's `.nums`, `.reach` and `.proof .stats`):
+//   band   home "In numbers" — black, sky accents, 4 columns
+//   reach  About "Our reach" — white, Klein accents, 3 columns
+//   proof  Our Work — white, the tag alone above the row (the quotes follow in the section)
+//
+// Every number is rendered FINAL on the server (a crawler, a no-JS visitor and a
+// reduced-motion visitor all read "250+"); countUp.ts counts it up only when it is still
+// off-screen at load. A value that is not a number ("TBD") is shown as written, muted.
+// Digits stay Western in Arabic, as the design has them in its stats.
+// Fewer than `minItems` counters and the band renders nothing.
+
+type Variant = 'band' | 'reach' | 'proof';
+
+interface Props {
+  locale: Locale;
+  items: StatisticRow[];
+  variant: Variant;
+  tag?: LocalizedText | undefined;
+  heading?: LocalizedText | undefined;
+  accent?: Accent | undefined;
+  text?: LocalizedText | undefined;
+  staticNumbers?: boolean | undefined;
+  minItems?: number | undefined;
+  id?: string | undefined;
+  /** proof: rendered inside a larger section, so no <section> of its own. */
+  bare?: boolean;
+}
+
+const {
+  locale,
+  items,
+  variant,
+  staticNumbers = false,
+  minItems = 2,
+  id,
+  bare = false,
+} = Astro.props;
+
+// Built-in copy, verbatim from the design (overridable per field from the CMS).
+const DEFAULTS: Record<
+  Variant,
+  Record<Locale, { tag: string; heading?: string; text?: string }>
+> = {
+  band: {
+    en: {
+      tag: 'In numbers',
+      heading: 'The work, counted',
+      text: 'Every number here is a brief someone trusted us with, and a result they could measure.',
+    },
+    ar: {
+      tag: 'بالأرقام',
+      heading: 'الشغل بالأرقام',
+      text: 'كل رقم هنا بريف أحد وثق فينا فيه، ونتيجة قدر يقيسها.',
+    },
+  },
+  reach: {
+    en: {
+      tag: 'Our reach',
+      heading: 'Campaigns that run end to end',
+      text: 'We started with minds built to plan, make, and run integrated campaigns. From brand strategy and production to media and live events, we build communication that feels new, for clients who expect it to deliver.',
+    },
+    ar: {
+      tag: 'نطاق تأثيرنا',
+      heading: 'حملات متكاملة من البداية للنهاية',
+      text: 'انطلقنا بعقول مبنية للتخطيط والتنفيذ وإدارة الحملات المتكاملة. من استراتيجية العلامة والإنتاج إلى الإعلام والفعاليات الحيّة، نبني تواصلاً يبدو جديداً، لعملاء يتوقعون منه نتائج.',
+    },
+  },
+  proof: {
+    en: { tag: 'In numbers' },
+    ar: { tag: 'بالأرقام' },
+  },
+};
+const DEFAULT_ACCENT: Record<Variant, Accent | undefined> = {
+  band: { en: { from: 2 }, ar: { from: 1 } },
+  reach: { en: { from: 3 }, ar: { from: 2 } },
+  proof: undefined,
+};
+
+const d = DEFAULTS[variant][locale];
+const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : d.tag;
+const heading = Astro.props.heading ? pickLocale(Astro.props.heading, locale) : d.heading;
+// An authored heading keeps only an authored accent (the default's word range would land
+// on the wrong words).
+const accent = Astro.props.heading
+  ? Astro.props.accent
+  : (Astro.props.accent ?? DEFAULT_ACCENT[variant]);
+const text = Astro.props.text ? pickLocale(Astro.props.text, locale) : d.text;
+
+const cells = items.map((s) => {
+  const n = s.value_numeric;
+  const countable = typeof n === 'number' && Number.isInteger(n) && n > 0 && !staticNumbers;
+  return {
+    slug: s.slug,
+    label: pickLocale(s.label, locale),
+    numeric: typeof n === 'number' ? { n, suffix: s.value_suffix ?? '', countable } : null,
+    value: s.value,
+  };
+});
+
+const Tag = bare ? 'div' : 'section';
+const headId = id ? `${id}-heading` : undefined;
+---
+
+{
+  cells.length >= minItems && (
+    <Tag
+      class:list={['sb', `sb--${variant}`]}
+      id={id}
+      aria-labelledby={heading ? headId : undefined}
+    >
+      <div class="sb__wrap">
+        {variant === 'reach' ? (
+          <>
+            <p class="tag">
+              <span class="dot" />
+              {tag}
+            </p>
+            <div class="sb__head">
+              <h2 id={headId}>
+                <AccentText text={heading ?? ''} locale={locale} accent={accent} />
+              </h2>
+              {text && <p>{text}</p>}
+            </div>
+          </>
+        ) : variant === 'band' ? (
+          <div class="sb__head">
+            <div>
+              <p class="tag">
+                <span class="dot" />
+                {tag}
+              </p>
+              {heading && (
+                <h2 id={headId}>
+                  <AccentText text={heading} locale={locale} accent={accent} />
+                </h2>
+              )}
+            </div>
+            {text && <p>{text}</p>}
+          </div>
+        ) : (
+          <p class="tag">
+            <span class="dot" />
+            {tag}
+          </p>
+        )}
+        <ul class="sb__grid">
+          {cells.map((c) => (
+            <li class="sb__cell">
+              {c.numeric ? (
+                <span class="sb__n">
+                  {c.numeric.countable ? (
+                    <span data-count-to={c.numeric.n}>{c.numeric.n}</span>
+                  ) : (
+                    <span>{c.numeric.n}</span>
+                  )}
+                  {c.numeric.suffix && <i>{c.numeric.suffix}</i>}
+                </span>
+              ) : (
+                <span class="sb__n sb__n--text">{c.value}</span>
+              )}
+              <span class="sb__l">{c.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Tag>
+  )
+}
+
+<script>
+  import { initCountUp } from '@/lib/client/countUp';
+
+  initCountUp();
+</script>

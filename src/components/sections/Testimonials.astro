@@ -1,0 +1,208 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { Accent } from '@schemas/media';
+import type { LocalizedText } from '@schemas/content';
+import type { Testimonial } from '@/lib/data/taxonomy';
+import { pickLocale } from '@/lib/i18n';
+import { initials } from '@/lib/text/initials';
+import MediaImage from '@/components/media/MediaImage.astro';
+import AccentText from '@/components/ui/AccentText.astro';
+
+// Client quotes as a carousel (UI v2): the home Klein band (`klein`) and the quotes under
+// Our Work's numbers (`light`, rendered inside that section — `bare`).
+//
+// Built to the WAI-ARIA APG carousel pattern by src/lib/client/carousel.ts: a visible
+// Pause/Play button beside the arrows, pause on hover and on keyboard focus, stops off
+// screen, never auto-advances under reduced motion, aria-live off while it rotates.
+// Without JS every quote is shown in turn (the controls are hidden — they need script).
+// Each quote is attributed to a person: name, and "Title, Company" verbatim.
+
+interface Props {
+  locale: Locale;
+  items: Testimonial[];
+  variant: 'klein' | 'light';
+  tag?: LocalizedText | undefined;
+  heading?: LocalizedText | undefined;
+  accent?: Accent | undefined;
+  id?: string | undefined;
+  bare?: boolean;
+}
+
+const { locale, items, variant, id, bare = false } = Astro.props;
+
+const STR = {
+  en: {
+    tag: 'Testimonials',
+    heading: 'In their words',
+    prev: 'Previous testimonial',
+    next: 'Next testimonial',
+    pause: 'Pause the testimonials',
+    play: 'Play the testimonials',
+    slide: (i: number, n: number) => `${i} of ${n}`,
+    carousel: 'carousel',
+    slideRole: 'slide',
+  },
+  ar: {
+    tag: 'آراء العملاء',
+    heading: 'بكلماتهم هم',
+    prev: 'الرأي السابق',
+    next: 'الرأي التالي',
+    pause: 'إيقاف تبديل الآراء',
+    play: 'تشغيل تبديل الآراء',
+    slide: (i: number, n: number) => `${i} من ${n}`,
+    carousel: 'عرض دوّار',
+    slideRole: 'شريحة',
+  },
+}[locale];
+
+const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : STR.tag;
+const heading = Astro.props.heading ? pickLocale(Astro.props.heading, locale) : STR.heading;
+const accent = Astro.props.heading
+  ? Astro.props.accent
+  : (Astro.props.accent ?? { en: { from: 2 }, ar: { from: 1 } });
+
+const quotes = items.map((q) => {
+  const name = pickLocale(q.authorName, locale);
+  return {
+    slug: q.slug,
+    quote: pickLocale(q.quote, locale),
+    name,
+    role: q.authorRole ? pickLocale(q.authorRole, locale) : null,
+    avatar: q.avatar,
+    initials: initials(name),
+  };
+});
+const many = quotes.length > 1;
+const Tag = bare ? 'div' : 'section';
+const headId = `${id ?? `tm-${variant}`}-heading`;
+---
+
+{
+  quotes.length > 0 && (
+    <Tag
+      class:list={['tm', `tm--${variant}`, { 'klein-band': variant === 'klein' }]}
+      id={id}
+      aria-roledescription={many ? STR.carousel : undefined}
+      aria-labelledby={headId}
+      data-carousel={many ? '' : undefined}
+    >
+      <div class="tm__grid">
+        <div class="tm__side">
+          <p class="tag">
+            <span class="dot" />
+            {tag}
+          </p>
+          <h2 id={headId}>
+            <AccentText text={heading} locale={locale} accent={accent} />
+          </h2>
+          {many && (
+            <div class="tm__nav" data-controls hidden>
+              <button class="tm__btn" type="button" data-prev aria-label={STR.prev}>
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M14 8H2M7 3L2 8l5 5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+              <button class="tm__btn" type="button" data-next aria-label={STR.next}>
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M2 8h12M9 3l5 5-5 5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+              <button
+                class="tm__btn tm__toggle"
+                type="button"
+                data-toggle
+                data-label-pause={STR.pause}
+                data-label-play={STR.play}
+                aria-label={STR.pause}
+                aria-pressed="false"
+                hidden
+              >
+                <svg class="tm__pause" viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M5 3v10M11 3v10"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                <svg class="tm__play" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M5 3l8 5-8 5z" fill="currentColor" />
+                </svg>
+              </button>
+              <span class="tm__count" data-counter aria-hidden="true" />
+            </div>
+          )}
+        </div>
+        <div class="tm__main">
+          <div class="tm__stage" data-stage aria-live="polite">
+            {quotes.map((q, i) => (
+              <figure
+                class:list={['tm__q', { 'is-active': i === 0 }]}
+                data-slide
+                role={many ? 'group' : undefined}
+                aria-roledescription={many ? STR.slideRole : undefined}
+                aria-label={many ? STR.slide(i + 1, quotes.length) : undefined}
+              >
+                <svg class="tm__mark" viewBox="0 0 40 30" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M0 30V17.6C0 7.4 5.3 1.5 15.8 0l1.6 4.4C11.7 6 9 9.4 8.8 14.5H16V30H0Zm22.6 0V17.6C22.6 7.4 27.9 1.5 38.4 0L40 4.4c-5.7 1.6-8.4 5-8.6 10.1h7.2V30H22.6Z"
+                  />
+                </svg>
+                <blockquote class="tm__text">
+                  <p>{q.quote}</p>
+                </blockquote>
+                <figcaption class="tm__who">
+                  {q.avatar ? (
+                    <MediaImage
+                      image={q.avatar}
+                      locale={locale}
+                      decorative
+                      widths={[100]}
+                      sizes="50px"
+                      class="tm__av tm__av--img"
+                    />
+                  ) : (
+                    <span class="tm__av" aria-hidden="true">
+                      {q.initials}
+                    </span>
+                  )}
+                  <span>
+                    <span class="tm__n">{q.name}</span>
+                    {q.role && <span class="tm__r">{q.role}</span>}
+                  </span>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+          {many && (
+            <div class="tm__bar" aria-hidden="true">
+              <i data-bar />
+            </div>
+          )}
+        </div>
+      </div>
+    </Tag>
+  )
+}
+
+<script>
+  import { initCarousels } from '@/lib/client/carousel';
+
+  initCarousels();
+</script>

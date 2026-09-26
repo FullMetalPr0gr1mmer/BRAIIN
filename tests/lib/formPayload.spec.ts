@@ -166,7 +166,7 @@ describe('formToPayload — composite kinds', () => {
 
   it('a table-backed section type saves empty content', () => {
     const fields = RESOURCE_UI['sections']!.fields;
-    const form = rowToForm({ type: 'statistics', content: {} }, fields);
+    const form = rowToForm({ type: 'team', content: {} }, fields);
     // no editor for this type → JSON mode with {}
     expect(formToPayload(form, fields)['content']).toEqual({});
   });
@@ -239,13 +239,13 @@ describe('a table-backed section', () => {
   const fields = RESOURCE_UI['sections']!.fields;
 
   it('loads as the "nothing to override" note, and saves {}', () => {
-    const form = rowToForm({ type: 'statistics', content: {} }, fields);
+    const form = rowToForm({ type: 'team', content: {} }, fields);
     expect((form['content'] as SectionContentState).json).toBeNull();
     expect(formToPayload(form, fields)['content']).toEqual({});
   });
 
   it('keeps leftover content visible as JSON so it can be cleared', () => {
-    const form = rowToForm({ type: 'statistics', content: { stale: 1 } }, fields);
+    const form = rowToForm({ type: 'team', content: { stale: 1 } }, fields);
     expect(JSON.parse((form['content'] as SectionContentState).json!)).toEqual({ stale: 1 });
   });
 });

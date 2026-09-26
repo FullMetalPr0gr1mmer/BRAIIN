@@ -16,6 +16,11 @@ interface Props {
   sizes?: string;
   /** Replaces the asset's alt text for this use (a caption that already describes it). */
   altOverride?: string | null;
+  /**
+   * The image adds nothing the surrounding text does not already say (a card poster inside
+   * a link that carries the project's name): alt="" so a screen reader is not told twice.
+   */
+  decorative?: boolean;
   /** The LCP image of the page: eager + high priority. */
   priority?: boolean;
   class?: string;
@@ -27,6 +32,7 @@ const {
   widths = [480, 800, 1200],
   sizes = '(min-width: 56.25rem) 50vw, 100vw',
   altOverride = null,
+  decorative = false,
   priority = false,
   class: className,
 } = Astro.props;
@@ -38,7 +44,7 @@ const renderWidths = usable.length > 0 ? usable : [image.width];
 
 <Picture
   src={image.src}
-  alt={altFor(image, locale, altOverride)}
+  alt={decorative ? '' : altFor(image, locale, altOverride)}
   formats={['avif', 'webp']}
   widths={renderWidths}
   sizes={sizes}

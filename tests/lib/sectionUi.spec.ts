@@ -25,6 +25,10 @@ function sample(field: FieldDef): unknown {
       return 'https://instagram.com/braiinstatiion';
     case 'repeater':
       return [Object.fromEntries((field.itemFields ?? []).map((f) => [f.name, sample(f)]))];
+    case 'select':
+      return field.options?.[0]?.value ?? 'value';
+    case 'checkbox':
+      return true;
     default:
       return 'value';
   }
@@ -77,7 +81,6 @@ describe('SECTION_UI agrees with SECTION_CONTENT_SCHEMAS', () => {
   }
 
   it('table-backed and unknown types have no editor', () => {
-    expect(sectionFields('statistics')).toBeNull();
     expect(sectionFields('team')).toBeNull();
     expect(sectionFields('not-a-type')).toBeNull();
     expect(sectionFields(undefined)).toBeNull();

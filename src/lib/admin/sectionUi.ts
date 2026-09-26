@@ -85,6 +85,44 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     { name: 'text', label: 'Text', kind: 'bilingual' },
     { name: 'buttonLabel', label: 'Button label', kind: 'bilingual' },
   ],
+  statistics: [
+    {
+      name: 'variant',
+      label: 'Layout',
+      kind: 'select',
+      options: [
+        { value: 'cards', label: 'Cards (the original grid)' },
+        { value: 'band', label: 'Band (home, on black)' },
+        { value: 'reach', label: 'Reach (about, on white)' },
+        { value: 'proof', label: 'Proof (Our Work, on white)' },
+      ],
+    },
+    {
+      name: 'placement',
+      label: 'Page (which counters, which labels)',
+      kind: 'select',
+      options: [
+        { value: 'home', label: 'Home' },
+        { value: 'about', label: 'About' },
+        { value: 'work', label: 'Our Work' },
+      ],
+      help: 'Shows the statistics marked for this page, each with its label for this page.',
+    },
+    tag,
+    heading,
+    { name: 'text', label: 'Text beside the heading', kind: 'bilingual' },
+    {
+      name: 'staticNumbers',
+      label: 'Show the numbers without counting up',
+      kind: 'checkbox',
+    },
+    {
+      name: 'minItems',
+      label: 'Hide when fewer counters than',
+      kind: 'number',
+      help: 'Default 2 — a band with a single number reads as broken.',
+    },
+  ],
   aboutStory: [
     heading,
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
@@ -98,6 +136,8 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
 /** Content keys an editor must set through "Advanced (JSON)" — see the header. */
 export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[]>> = {
   hero: ['intro'],
+  // A per-locale word range ({en: {from, to}, ar: {…}}) — no typed field kind for it yet.
+  statistics: ['accent'],
 };
 
 /** The fields for one section type, or null when it takes no content (table-backed). */

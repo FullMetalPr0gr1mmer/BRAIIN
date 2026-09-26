@@ -131,6 +131,21 @@ export function facetQuery(selection: FacetSelection): string {
   return text ? `?${text}` : '';
 }
 
+/**
+ * The selection a facet tag links to: that value set — or, when it is already the active
+ * one, that facet cleared (clicking the active tag turns it off, as in the design).
+ */
+export function toggleFacet(
+  selection: FacetSelection,
+  facet: Facet,
+  value: string,
+): FacetSelection {
+  const next: FacetSelection = { ...selection };
+  if (next[facet] === value) delete next[facet];
+  else next[facet] = value;
+  return next;
+}
+
 /** All projects: featured first, then catalogue order. */
 export function catalogueOrder(cards: readonly PortfolioCard[]): PortfolioCard[] {
   return [...cards].sort(

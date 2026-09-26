@@ -1,0 +1,55 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { PortfolioCard } from '@/lib/data/portfolio';
+import type { FacetSelection } from '@/lib/portfolio/catalog';
+import { pickLocale, localizedHref } from '@/lib/i18n';
+import MediaFrame from '@/components/media/MediaFrame.astro';
+import FacetTags from './FacetTags.astro';
+
+// A project card (UI v2). The poster and the "Name | Type" title are ONE link to the case
+// study; the facet tags below are their own links into the filtered catalogue.
+//
+//   catalog  Our Work / All projects (dark): the clip plays on hover/focus of the link,
+//            with the play badge; tags can reflect and toggle the catalogue's selection.
+//   home     Selected work on the home page (light): the clip plays while on screen.
+//
+// The poster is decorative (alt="") — the link's text already names the project.
+
+interface Props {
+  card: PortfolioCard;
+  locale: Locale;
+  variant: 'catalog' | 'home';
+  selection?: FacetSelection;
+  /** Lazy by default; the first cards above the fold may ask for eager. */
+  priority?: boolean;
+}
+
+const { card, locale, variant, selection, priority = false } = Astro.props;
+
+const title = pickLocale(card.title, locale);
+const type = card.projectType ? pickLocale(card.projectType, locale) : null;
+const href = localizedHref(`/portfolio/${card.slug}`, locale);
+---
+
+<article class:list={['pcard', `pcard--${variant}`]}>
+  <a class="pcard__link" href={href} data-clip-trigger>
+    <MediaFrame
+      image={card.poster}
+      locale={locale}
+      clip={card.preview}
+      mode={variant === 'catalog' ? 'hover' : 'inview'}
+      badge={variant === 'catalog'}
+      ratio="card"
+      decorative
+      priority={priority}
+      sizes="(min-width: 47.5rem) 50vw, 100vw"
+    />
+    <span class="pcard__t">{type ? `${title} | ${type}` : title}</span>
+  </a>
+  <FacetTags
+    card={card}
+    locale={locale}
+    variant={variant === 'catalog' ? 'dark' : 'light'}
+    {...selection ? { selection } : {}}
+  />
+</article>
