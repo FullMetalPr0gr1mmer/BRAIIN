@@ -2,6 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { JsonLdNode } from '@/lib/seo/jsonld';
 import SeoHead from '@/components/SeoHead.astro';
+import type { HeroFace } from '@/lib/seo/fonts';
 import SiteHeader, { type HeaderVariant } from '@/components/SiteHeader.astro';
 import SiteFooter from '@/components/SiteFooter.astro';
 import ConsentBanner from '@/components/ConsentBanner.astro';
@@ -31,6 +32,9 @@ interface Props {
   /** Route stylesheets in public/styles (UI v2: 'about.css', 'work.css', …), linked after
       global.css so a page ships only its own blocks. File names only — no paths. */
   styles?: readonly string[];
+  /** The Arabic hero face SeoHead preloads — the weight the route's above-the-fold heading
+      renders in (default `almarai-800`, Home's hero). EN always preloads Archivo. */
+  heroFace?: HeroFace;
 }
 
 const {
@@ -46,6 +50,7 @@ const {
   header = 'solid',
   langHref,
   styles = [],
+  heroFace,
 } = Astro.props;
 const direction = dir(locale);
 const routeStyles = styles.filter((name) => /^[a-z0-9-]+\.css$/.test(name));
@@ -63,6 +68,7 @@ const routeStyles = styles.filter((name) => /^[a-z0-9-]+\.css$/.test(name));
       robots={robots}
       {...ogImage ? { ogImage } : {}}
       {...canonicalOverride ? { canonicalOverride } : {}}
+      {...heroFace ? { heroFace } : {}}
     />
     <link rel="stylesheet" href="/styles/global.css" />
     {routeStyles.map((name) => <link rel="stylesheet" href={`/styles/${name}`} />)}

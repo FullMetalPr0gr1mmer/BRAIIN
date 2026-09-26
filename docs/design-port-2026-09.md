@@ -176,7 +176,13 @@ names only, validated `^[a-z0-9-]+\.css$`). The Klein social variant stays in gl
     is empty, as in the mockup (a showreel frame beside the manifesto). The code default
     carries no media — the poster (the p2 still) and the 6.2–7.9 s clip are seeded section
     content — so an unseeded page renders the section text-only rather than falling back to a
-    hard-coded image.
+    hard-coded image. Its in-view clip waits for `load` before it is observed
+    (`data-clip-after-load`, set by MediaFrame on a `priority` in-view frame), so the
+    showreel's bytes never compete with the poster — the rule MediaBanner and the hero apply.
+    The page's one font preload is the face its h1 renders in: `/ar/about` preloads Almarai
+    **700** (the weight-600 h1 resolves to it), not Home's 800 — preloading 800 left the 700
+    face to swap in late and shift the split heading (CLS 0.14 > 0.1). BaseLayout `heroFace`;
+    docs/fonts.md step 3.
 29. **Leadership is its own section type (`leadership`)**, not a `team` variant: `team` stays
     the table-backed author grid with no content, and the slider's copy (tag, heading,
     accent, text) is typed content like every other UI v2 band. The people are
@@ -209,10 +215,12 @@ names only, validated `^[a-z0-9-]+\.css$`). The Klein social variant stays in gl
     Arabic outline over joined glyphs is flagged for the PR14 visual review.
 35. **Certifications and the CTA band are dropped from the About composition** (the mockup
     has neither); both remain section types an editor can add back.
-36. **Person JSON-LD names only the leaders the page shows** (none when the leadership
-    section is hidden), with `jobTitle` and `sameAs` (LinkedIn). The seeded placeholders are
-    drafts in production, so no placeholder person is ever published there; dev/CI/staging
-    carry their "Name Surname" nodes.
+36. **Person JSON-LD names only the real leaders the page shows** (none when the leadership
+    section is hidden), with `jobTitle` and `sameAs` (LinkedIn). A placeholder row
+    (`is_placeholder`) never emits a Person node — in any environment, including production
+    once the 0027 override and runbook §6c publish the seeded "Name Surname" leaders: their
+    cards show (the owner's decision), but structured data is read as fact about real people
+    at the studio. The legacy `team` grid's Person nodes follow the same rule.
 37. **The About manifesto is the About page's own copy**, verbatim (it differs from the home
     "why us" columns: "between vendors", no "Arabic, English, or…" sentence), and the h1's
     accent includes the final period, as the mockup's `<em>` does.

@@ -15,7 +15,8 @@ import { PUBLIC_SITE_URL } from 'astro:env/client';
 // Tier A (indexable, edge-cached SSR). Composed from CMS sections (`pages` slug 'about'
 // + `page_sections`; the UI v2 default composition until authored — who we are →
 // leadership → our reach → follow). Purges on `route:about`, and on the tables its
-// sections read: team (leadership), statistics (our reach).
+// sections read: team (leadership), statistics (our reach). The Arabic h1 (weight 600)
+// renders with Almarai 700, so that is the one face preloaded (src/lib/seo/fonts.ts).
 const locale = 'en' as const;
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const HOME = { en: 'Home', ar: 'الرئيسية' }[locale];
@@ -50,19 +51,21 @@ const jsonLd = [
     { name: HOME, url: base + localizedPath('/', locale) },
     { name: meta.title, url: base + localizedPath('/about', locale) },
   ]),
-  // Only the people the page shows (no anonymous authorship — Pillar 3 — and no one a
-  // visitor cannot see).
+  // Only the real people the page shows (no anonymous authorship — Pillar 3 — no one a
+  // visitor cannot see, and no seeded placeholder: decision 36).
   ...leadershipJsonLd(authored, leaders, { locale, org, siteBase: base }),
-  ...team.map((m) => {
-    // `exactOptionalPropertyTypes` — omit the key entirely rather than pass undefined.
-    const bio = pickLocale(m.bio, locale);
-    return buildPersonSchema({
-      name: pickLocale(m.name, locale, m.slug),
-      org,
-      ...(bio ? { description: bio } : {}),
-      ...(m.avatar_url ? { image: m.avatar_url } : {}),
-    });
-  }),
+  ...team
+    .filter((m) => !m.is_placeholder)
+    .map((m) => {
+      // `exactOptionalPropertyTypes` — omit the key entirely rather than pass undefined.
+      const bio = pickLocale(m.bio, locale);
+      return buildPersonSchema({
+        name: pickLocale(m.name, locale, m.slug),
+        org,
+        ...(bio ? { description: bio } : {}),
+        ...(m.avatar_url ? { image: m.avatar_url } : {}),
+      });
+    }),
 ];
 
 setTierA(Astro.response, {
@@ -80,6 +83,7 @@ setTierA(Astro.response, {
   jsonLd={jsonLd}
   robots={seo.robots}
   styles={['about.css']}
+  heroFace="almarai-700"
   {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >
