@@ -18,6 +18,8 @@ import HomeContact from '@/components/sections/HomeContact.astro';
 import ContactInquiry from '@/components/sections/ContactInquiry.astro';
 import ContactChannels from '@/components/sections/ContactChannels.astro';
 import FaqAccordion from '@/components/sections/FaqAccordion.astro';
+import AboutWho from '@/components/sections/AboutWho.astro';
+import LeadershipSlider from '@/components/sections/LeadershipSlider.astro';
 
 interface Props {
   locale: Locale;
@@ -50,6 +52,8 @@ const REGISTRY: Record<RenderedSectionType, typeof Hero> = {
   contactInquiry: ContactInquiry,
   contactChannels: ContactChannels,
   faq: FaqAccordion,
+  aboutWho: AboutWho,
+  leadership: LeadershipSlider,
 };
 
 // Every section takes `locale`, its content props and the route's `data`. The map's type

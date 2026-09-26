@@ -95,6 +95,10 @@ export function buildPersonSchema(opts: {
   description?: string;
   url?: string;
   image?: string;
+  /** The person's role (About leadership: "Creative Director"). */
+  jobTitle?: string;
+  /** Profiles that identify the same person (LinkedIn). */
+  sameAs?: readonly string[];
 }): JsonLdNode {
   // E-E-A-T authorship (CLAUDE.md Pillar 3 — no anonymous authorship). Only emit
   // optional fields when present to keep the node clean + CI-valid.
@@ -104,9 +108,11 @@ export function buildPersonSchema(opts: {
     name: opts.name,
     worksFor: orgNode(opts.org),
   };
+  if (opts.jobTitle) node.jobTitle = opts.jobTitle;
   if (opts.description) node.description = opts.description;
   if (opts.url) node.url = opts.url;
   if (opts.image) node.image = opts.image;
+  if (opts.sameAs && opts.sameAs.length > 0) node.sameAs = [...opts.sameAs];
   return node;
 }
 

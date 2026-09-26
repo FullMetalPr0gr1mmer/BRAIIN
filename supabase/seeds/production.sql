@@ -449,4 +449,16 @@ insert into public.team_members (tenant_id, slug, name, role, is_leadership, sta
   ('00000000-0000-0000-0000-0000000000b1', 'leader-6', '{"en":"Name Surname","ar":"الاسم الكامل"}'::jsonb, '{"en":"Head of Client Services","ar":"رئيس خدمة العملاء"}'::jsonb, true, 'draft', true, 6)
 on conflict (tenant_id, slug) do nothing;
 
+-- page_sections (51-about.json)
+do $seed$ begin
+  if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'about')) then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5100-0000-4000-8000-000000000001', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'about'), 'aboutWho', '{"mediaId":"5eed0a00-0000-4000-8000-000000000003","clip":{"path":"/media/showreel.mp4","startS":6.2,"endS":7.9}}'::jsonb, true, 10),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5100-0000-4000-8000-000000000002', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'about'), 'leadership', '{}'::jsonb, true, 20),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5100-0000-4000-8000-000000000003', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'about'), 'statistics', '{"variant":"reach","placement":"about"}'::jsonb, true, 30),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5100-0000-4000-8000-000000000004', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'about'), 'social', '{"variant":"klein"}'::jsonb, true, 40)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
 commit;

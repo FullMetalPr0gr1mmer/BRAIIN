@@ -26,6 +26,9 @@ export const RENDERED_SECTION_TYPES = [
   'contactInquiry',
   'contactChannels',
   'faq',
+  // UI v2 PR8 (About)
+  'aboutWho',
+  'leadership',
 ] as const satisfies readonly SectionType[];
 
 export type RenderedSectionType = (typeof RENDERED_SECTION_TYPES)[number];

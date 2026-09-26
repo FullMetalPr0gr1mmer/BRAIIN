@@ -1,0 +1,46 @@
+{
+  "blocks": [
+    {
+      "table": "page_sections",
+      "conflict": ["id"],
+      "unlessAuthored": ["page_id"],
+      "rows": [
+        {
+          "id": "5eed5100-0000-4000-8000-000000000001",
+          "page_id": { "$ref": { "table": "pages", "by": { "slug": "about" } } },
+          "type": "aboutWho",
+          "content": {
+            "mediaId": "5eed0a00-0000-4000-8000-000000000003",
+            "clip": { "path": "/media/showreel.mp4", "startS": 6.2, "endS": 7.9 }
+          },
+          "visible": true,
+          "sort_order": 10
+        },
+        {
+          "id": "5eed5100-0000-4000-8000-000000000002",
+          "page_id": { "$ref": { "table": "pages", "by": { "slug": "about" } } },
+          "type": "leadership",
+          "content": {},
+          "visible": true,
+          "sort_order": 20
+        },
+        {
+          "id": "5eed5100-0000-4000-8000-000000000003",
+          "page_id": { "$ref": { "table": "pages", "by": { "slug": "about" } } },
+          "type": "statistics",
+          "content": { "variant": "reach", "placement": "about" },
+          "visible": true,
+          "sort_order": 30
+        },
+        {
+          "id": "5eed5100-0000-4000-8000-000000000004",
+          "page_id": { "$ref": { "table": "pages", "by": { "slug": "about" } } },
+          "type": "social",
+          "content": { "variant": "klein" },
+          "visible": true,
+          "sort_order": 40
+        }
+      ]
+    }
+  ]
+}

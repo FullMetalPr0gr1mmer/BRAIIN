@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { LocalizedTextSchema } from './content';
 import { SECTION_TYPES, type SectionType } from './sectionTypes';
-import { AccentSchema } from './media';
+import { AccentSchema, VideoClipSchema } from './media';
+import { UuidSchema } from './primitives';
 
 // Per-type CMS content shapes for `page_sections.content` (authored at /admin/sections,
 // rendered by src/components/SectionRenderer.astro). One schema per shape, in packages/
@@ -88,9 +89,16 @@ export const ContactSectionContentSchema = z.object({
   accent: Text.optional(),
 });
 
+/** `paper` (home, contact) or the About page's Klein band (UI v2 PR8). */
+export const SOCIAL_VARIANTS = ['paper', 'klein'] as const;
 export const SocialSectionContentSchema = z.object({
+  variant: z.enum(SOCIAL_VARIANTS).optional(),
   tag: Text.optional(),
   heading: Text.optional(),
+  /** Which heading words carry the accent (the Klein band outlines them). */
+  accent: AccentSchema.optional(),
+  /** The line beside the heading (Klein band only — the paper strip has none). */
+  text: Text.optional(),
   links: z
     .array(
       z.object({
@@ -145,6 +153,62 @@ export const AboutStorySectionContentSchema = z.object({
   vision: Text.optional(),
 });
 
+/* About's "who we are" h1 enters word by word through a 16-rung CSS ladder (SplitHeading,
+   `.hw--0` … `.hw--15`): past the last rung the words would pop in together, and the
+   heading is the page's <h1> — so it is bounded like the hero's (words per code point,
+   the same split SplitHeading uses). */
+export const WHO_MAX_WORDS = 16;
+export const WHO_MAX_WORD_LEN = 24;
+const whoHeadingShape = (s: string): boolean => {
+  const words = s.trim().split(/\s+/).filter(Boolean);
+  return (
+    words.length > 0 &&
+    words.length <= WHO_MAX_WORDS &&
+    words.every((w) => [...w].length <= WHO_MAX_WORD_LEN)
+  );
+};
+
+/**
+ * About "who we are" (UI v2 PR8): the page's <h1>, a media frame and the manifesto. The
+ * poster is a media_assets row by id (`mediaId` — the key 0024's public-read policy looks
+ * for in section content, so the image is readable exactly while this section is live);
+ * with no poster the section renders text only. `clip` plays a window of a self-hosted
+ * file over the poster while it is on screen (EXC-009).
+ */
+export const AboutWhoSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.refine((v) => whoHeadingShape(v.en) && whoHeadingShape(v.ar), {
+      message: `Heading: at most ${WHO_MAX_WORDS} words, and ${WHO_MAX_WORD_LEN} characters per word (the entrance animation has ${WHO_MAX_WORDS} steps).`,
+    }).optional(),
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    /** Each paragraph opens with its title in bold ("Strategy before pixels."). */
+    paragraphs: z
+      .array(z.object({ title: Text, body: Text }))
+      .max(6)
+      .optional(),
+    mediaId: UuidSchema.optional(),
+    clip: VideoClipSchema.optional(),
+  })
+  // Strict: a stray key (a poster URL, say) must be refused on write, not stored and ignored.
+  .strict();
+
+/**
+ * The About leadership slider (UI v2 PR8). The people are `team_members` flagged
+ * `is_leadership` (getLeadership), injected by the route; this is only the copy around
+ * them. Hidden when no leader is published.
+ */
+export const LeadershipSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    text: Text.optional(),
+  })
+  // Strict: the people come from their own table — a stray `members` key is refused.
+  .strict();
+
 export { SECTION_TYPES, type SectionType } from './sectionTypes';
 /** Zod form of the canonical list in ./sectionTypes (kept zod-free for the admin bundle). */
 export const SectionTypeSchema = z.enum(SECTION_TYPES);
@@ -162,6 +226,8 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
   cta: CtaSectionContentSchema,
   aboutStory: AboutStorySectionContentSchema,
   statistics: StatisticsSectionContentSchema,
+  aboutWho: AboutWhoSectionContentSchema,
+  leadership: LeadershipSectionContentSchema,
 };
 
 /**
@@ -217,3 +283,5 @@ export type ContactSectionContent = z.infer<typeof ContactSectionContentSchema>;
 export type SocialSectionContent = z.infer<typeof SocialSectionContentSchema>;
 export type CtaSectionContent = z.infer<typeof CtaSectionContentSchema>;
 export type AboutStorySectionContent = z.infer<typeof AboutStorySectionContentSchema>;
+export type AboutWhoSectionContent = z.infer<typeof AboutWhoSectionContentSchema>;
+export type LeadershipSectionContent = z.infer<typeof LeadershipSectionContentSchema>;

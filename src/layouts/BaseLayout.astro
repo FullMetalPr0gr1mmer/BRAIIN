@@ -25,6 +25,9 @@ interface Props {
   /** `overlay`: the UI v2 header, transparent over the page's hero (home, contact).
       `solid` (default): the sticky bar for pages with no hero. See SiteHeader. */
   header?: HeaderVariant;
+  /** Route stylesheets in public/styles (UI v2: 'about.css', 'work.css', …), linked after
+      global.css so a page ships only its own blocks. File names only — no paths. */
+  styles?: readonly string[];
 }
 
 const {
@@ -38,8 +41,10 @@ const {
   canonicalOverride,
   chrome = true,
   header = 'solid',
+  styles = [],
 } = Astro.props;
 const direction = dir(locale);
+const routeStyles = styles.filter((name) => /^[a-z0-9-]+\.css$/.test(name));
 ---
 
 <!doctype html>
@@ -56,6 +61,7 @@ const direction = dir(locale);
       {...canonicalOverride ? { canonicalOverride } : {}}
     />
     <link rel="stylesheet" href="/styles/global.css" />
+    {routeStyles.map((name) => <link rel="stylesheet" href={`/styles/${name}`} />)}
   </head>
   <body>
     {chrome && <SiteHeader locale={locale} variant={header} />}

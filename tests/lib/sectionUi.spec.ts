@@ -29,6 +29,10 @@ function sample(field: FieldDef): unknown {
       return field.options?.[0]?.value ?? 'value';
     case 'checkbox':
       return true;
+    case 'media':
+      return '5eed0a00-0000-4000-8000-000000000003';
+    case 'clip':
+      return { source: 'path', streamUid: '', path: '/media/showreel.mp4', startS: '1', endS: '2' };
     default:
       return 'value';
   }

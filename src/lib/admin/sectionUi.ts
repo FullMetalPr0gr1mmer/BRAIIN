@@ -66,8 +66,18 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
   servicesOverview: [tag, heading, { name: 'sub', label: 'Sub-line', kind: 'bilingual' }],
   contact: [heading, { name: 'accent', label: 'Accent (highlighted words)', kind: 'bilingual' }],
   social: [
+    {
+      name: 'variant',
+      label: 'Layout',
+      kind: 'select',
+      options: [
+        { value: 'paper', label: 'Paper (home, contact)' },
+        { value: 'klein', label: 'Klein band (about)' },
+      ],
+    },
     tag,
     heading,
+    { name: 'text', label: 'Text beside the heading (Klein band only)', kind: 'bilingual' },
     {
       name: 'links',
       label: 'Links (replace the Public identity socials on this section only)',
@@ -131,6 +141,33 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     { name: 'visionTitle', label: 'Vision title', kind: 'bilingual' },
     { name: 'vision', label: 'Vision', kind: 'bilingual' },
   ],
+  aboutWho: [
+    tag,
+    {
+      ...heading,
+      label: 'Heading (the page title)',
+      help: 'At most 16 words of 24 characters each — the entrance animation has that many steps.',
+    },
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    {
+      name: 'paragraphs',
+      label: 'Paragraphs',
+      kind: 'repeater',
+      maxItems: 6,
+      itemFields: [
+        { name: 'title', label: 'Opening words (bold)', kind: 'bilingual', required: true },
+        { name: 'body', label: 'Text', kind: 'bilingual', required: true },
+      ],
+    },
+    {
+      name: 'mediaId',
+      label: 'Poster image',
+      kind: 'media',
+      help: 'The page’s largest image. Leave empty for a text-only section.',
+    },
+    { name: 'clip', label: 'Clip over the poster (plays while on screen)', kind: 'clip' },
+  ],
+  leadership: [tag, heading, { name: 'text', label: 'Text beside the heading', kind: 'bilingual' }],
 };
 
 /** Content keys an editor must set through "Advanced (JSON)" — see the header. */
@@ -138,6 +175,9 @@ export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[
   hero: ['intro'],
   // A per-locale word range ({en: {from, to}, ar: {…}}) — no typed field kind for it yet.
   statistics: ['accent'],
+  social: ['accent'],
+  aboutWho: ['accent'],
+  leadership: ['accent'],
 };
 
 /** The fields for one section type, or null when it takes no content (table-backed). */
