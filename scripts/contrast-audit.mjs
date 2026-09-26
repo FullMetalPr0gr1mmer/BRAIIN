@@ -37,6 +37,14 @@ const T = {
   kleinLead: '#e0e4f7', // .lead-band__row p — white .88 over Klein
   kleinRole: '#bfc8ee', // .tm__r — white .75 over Klein
   kleinCount: '#b2bdeb', // .tm__count — white .70 over Klein
+  // UI v2 PR10 (work.css) — Our Work / All projects
+  capWorst: '#545454', // .work-cap glass (.45 black) over the banner scrim at the caption's top edge (~.4) over a WHITE frame
+  capTag: '#cfcfcf', // .work-cap__tag — white .72 over capWorst
+  capMeta: '#cccccc', // .work-cap__m — white .70 over capWorst (the mockup's .58 on .26 glass)
+  chipCount: '#999999', // .fchip i — white .60 over black (the mockup's .45 was 4.4:1)
+  chipLabel: '#d9d9d9', // .fchip — white .85 over black
+  pillBg: '#051824', // .fpill — sky .14 over black
+  pillKey: '#b4babd', // .fpill__k — white .70 over pillBg
 };
 
 // (foreground, background, minRatio, where) — every real on-screen pairing.
@@ -51,6 +59,14 @@ const PAIRS = [
   ['kleinCount', 'klein', 4.5, 'testimonial counter on the Klein band'],
   ['paper', 'klein', 4.5, 'lead band email / quote text / Klein band headings'],
   ['klein', 'paper', 4.5, 'light badge CTA label (Klein on white)'],
+  // UI v2 PR10 — Our Work / All projects
+  ['fg', 'capWorst', 4.5, 'work caption title + description over the worst-case frame'],
+  ['capTag', 'capWorst', 4.5, 'work caption tag ("Latest project")'],
+  ['capMeta', 'capWorst', 4.5, 'work caption meta (client, year)'],
+  ['chipCount', 'bg', 4.5, 'filter chip count'],
+  ['chipLabel', 'bg', 4.5, 'filter chip label'],
+  ['fg', 'pillBg', 4.5, 'active filter pill value'],
+  ['pillKey', 'pillBg', 4.5, 'active filter pill facet name'],
   // dark sections (hero, slogan, clients, contact) + interior pages
   ['fg', 'bg', 4.5, 'body text on black'],
   ['fg', 'surface', 4.5, 'card/section text'],

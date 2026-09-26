@@ -1,7 +1,14 @@
 {
   "ci": {
     "collect": {
-      "url": ["http://localhost:8788/", "http://localhost:8788/ar"],
+      "url": [
+        "http://localhost:8788/",
+        "http://localhost:8788/ar",
+        "http://localhost:8788/portfolio",
+        "http://localhost:8788/ar/portfolio",
+        "http://localhost:8788/portfolio/all",
+        "http://localhost:8788/ar/portfolio/all"
+      ],
       "numberOfRuns": 3
     },
     "assert": {

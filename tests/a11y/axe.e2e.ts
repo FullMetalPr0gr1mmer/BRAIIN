@@ -11,6 +11,10 @@ const ROUTES = [
   '/services',
   '/ar/services',
   '/portfolio',
+  // UI v2 PR10
+  '/ar/portfolio',
+  '/portfolio/all',
+  '/ar/portfolio/all',
   '/about',
   '/ar/about',
   '/contact',

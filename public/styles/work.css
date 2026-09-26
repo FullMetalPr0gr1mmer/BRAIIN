@@ -72,9 +72,10 @@
     180deg,
     rgba(0, 0, 0, 0.55) 0%,
     rgba(0, 0, 0, 0.22) 18%,
+    rgba(0, 0, 0, 0) 30%,
     rgba(0, 0, 0, 0) 40%,
-    rgba(0, 0, 0, 0) 52%,
-    rgba(0, 0, 0, 0.55) 100%
+    rgba(0, 0, 0, 0.5) 58%,
+    rgba(0, 0, 0, 0.6) 100%
   );
 }
 /* Covered by the sections that slid over it: out of paint and out of the tab order. */
@@ -84,8 +85,10 @@
 
 /* ---- The glass caption (WorkHero.astro) ---- */
 /* .45 glass (the mockup's .26), .7 meta (its .58) and no 4.5 s "rest" fade to half
-   opacity: the caption sits over arbitrary video. Worst case (a white frame under the
-   bottom scrim + this glass) composites to #3f3f3f: white 10.4:1, the .7 meta 5.9:1. */
+   opacity: the caption sits over arbitrary video. Worst case — a WHITE frame, at the
+   caption's top edge on a 400px-tall banner with a wrapped caption, where the bottom
+   scrim is still only ~.4 — composites to #545454 under this glass: white 7.6:1, the tag
+   4.9:1, the meta 4.7:1 (scripts/contrast-audit.mjs, capWorst). */
 .work-cap {
   position: absolute;
   z-index: 2;
