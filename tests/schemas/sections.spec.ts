@@ -164,3 +164,57 @@ describe('write-time section validation (UI v2 PR1)', () => {
     expect('style' in parsed).toBe(false);
   });
 });
+
+describe('Our Work / All projects section content (UI v2 PR10)', () => {
+  const T = { en: 'Two words', ar: 'كلمتان هنا' };
+
+  it('cta (LeadBand): an in-site button link only, never an off-site or scheme-relative one', () => {
+    const cta = SECTION_CONTENT_SCHEMAS.cta!;
+    expect(cta.safeParse({ buttonHref: '/contact#inquiry', tag: T }).success).toBe(true);
+    expect(cta.safeParse({ buttonHref: '#inquiry' }).success).toBe(true);
+    for (const bad of ['//evil.example', 'https://evil.example', 'javascript:alert(1)', '/a?b=c']) {
+      expect(cta.safeParse({ buttonHref: bad }).success, bad).toBe(false);
+    }
+  });
+
+  it('workHero pins a project by slug; anything else is refused', () => {
+    const hero = SECTION_CONTENT_SCHEMAS.workHero!;
+    expect(hero.safeParse({ projectSlug: 'the-rider', tag: T }).success).toBe(true);
+    expect(hero.safeParse({ projectSlug: '../the-rider' }).success).toBe(false);
+    expect(hero.safeParse({ projectSlug: 'The Rider' }).success).toBe(false);
+  });
+
+  it('proof is strict: its numbers and quotes come from their tables, not content', () => {
+    const proof = SECTION_CONTENT_SCHEMAS.proof!;
+    expect(proof.safeParse({ quotesLimit: 3, quotesHeading: T }).success).toBe(true);
+    expect(proof.safeParse({ items: [] }).success).toBe(false);
+    expect(proof.safeParse({ quotesLimit: 0 }).success).toBe(false);
+    expect(proof.safeParse({ quotesLimit: 9 }).success).toBe(false);
+  });
+
+  it('workIntro frames are keyed `mediaId` (the key the 0024 anon read policy looks for)', () => {
+    const intro = SECTION_CONTENT_SCHEMAS.workIntro!;
+    const frame = {
+      mediaId: '5eed0a00-0000-4000-8000-000000000007',
+      clip: { path: '/media/showreel.mp4', startS: 14, endS: 15.4 },
+    };
+    expect(intro.safeParse({ media: [frame, frame] }).success).toBe(true);
+    expect(intro.safeParse({ media: [frame, frame, frame] }).success).toBe(false);
+    expect(intro.safeParse({ media: [{ id: frame.mediaId }] }).success).toBe(false);
+    expect(intro.safeParse({ media: [{ mediaId: 'not-a-uuid' }] }).success).toBe(false);
+    // the clip is the EXC-009 fence: a /media/*.mp4 window of at most 30 s
+    const offsite = { ...frame, clip: { path: 'https://evil.example/x.mp4' } };
+    expect(intro.safeParse({ media: [offsite] }).success).toBe(false);
+  });
+
+  it('pageHead back link is in-site only', () => {
+    const head = SECTION_CONTENT_SCHEMAS.pageHead!;
+    expect(head.safeParse({ backHref: '/portfolio', heading: T }).success).toBe(true);
+    expect(head.safeParse({ backHref: '//evil.example' }).success).toBe(false);
+  });
+
+  it('projectCatalog takes no content at all (its data is the portfolio table)', () => {
+    expect(sectionContentIssues('projectCatalog', {})).toEqual([]);
+    expect(sectionContentIssues('projectCatalog', { cards: [] })).not.toEqual([]);
+  });
+});
