@@ -33,7 +33,10 @@ const [team, composition, { seo, identity }] = await Promise.all([
     entity: compositionQuery.then((c) => (c ? { type: 'page' as const, id: c.page.id } : null)),
   }),
 ]);
-const sections = (composition?.sections ?? DEFAULT_ABOUT_SECTIONS).map((s) =>
+// A published page with no sections yet renders the default composition (its SEO override,
+// keyed by the page id above, still applies).
+const authored = composition?.sections.length ? composition.sections : DEFAULT_ABOUT_SECTIONS;
+const sections = authored.map((s) =>
   s.type === 'team' ? { ...s, props: { ...(s.props ?? {}), members: team } } : s,
 );
 

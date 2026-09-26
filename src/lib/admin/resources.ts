@@ -409,8 +409,9 @@ export const navigationResource: ResourceConfig = {
   table: 'navigation',
   entity: 'nav_item',
   writeCap: 'nav.edit',
-  listColumns: 'id,location,parent_id,label,href,visible,sort_order,version',
-  columns: 'id,location,parent_id,label,href,visible,sort_order,version,created_at,updated_at',
+  listColumns: 'id,location,parent_id,label,href,visible,is_key,sort_order,version',
+  columns:
+    'id,location,parent_id,label,href,visible,is_key,sort_order,version,created_at,updated_at',
   orderBy: { column: 'sort_order', ascending: true },
   filterableColumns: ['location'],
   createSchema: NavItemWriteSchema,
@@ -422,6 +423,7 @@ export const navigationResource: ResourceConfig = {
       label: 'label',
       href: 'href',
       visible: 'visible',
+      isKey: 'is_key',
       sortOrder: 'sort_order',
     });
     if ('href' in values) {

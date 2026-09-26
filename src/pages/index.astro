@@ -27,7 +27,11 @@ const [composition, { seo, identity }] = await Promise.all([
     entity: compositionQuery.then((c) => (c ? { type: 'page' as const, id: c.page.id } : null)),
   }),
 ]);
-const sections = withHomeIntro(composition?.sections ?? DEFAULT_HOME_SECTIONS);
+// A published page with no sections yet renders the default composition (its SEO override,
+// keyed by the page id above, still applies).
+const sections = withHomeIntro(
+  composition?.sections.length ? composition.sections : DEFAULT_HOME_SECTIONS,
+);
 
 const jsonLd = [
   buildOrganizationSchema(PUBLIC_SITE_URL, identity, locale),

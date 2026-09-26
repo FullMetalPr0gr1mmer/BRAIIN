@@ -417,14 +417,26 @@ test.describe('the intro waits for the logo to actually paint', () => {
     );
     expect(gate.engagedAt, 'the paint gate never engaged').toBeGreaterThanOrEqual(0);
     expect(gate.minPlate, 'plate faded while waiting for the logo').toBeGreaterThan(0.9);
-    // Released by the 2s cap (the logo is held for 5s), not immediately.
-    expect(gate.releasedAt - gate.engagedAt).toBeGreaterThan(1500);
+    // Released by the 3s cap (the logo is held for 5s), not immediately.
+    expect(gate.releasedAt - gate.engagedAt).toBeGreaterThan(2500);
+  });
 
-    // The claim under test is that the logo is actually SEEN — so watch for a frame
-    // where the logo and the plate are visible together, rather than sampling at the
-    // instant the hold releases. At that instant the logo is only just starting its own
-    // 0.7s fade-in, so it reads ~0; asserting there passes or fails on luck, which is
-    // exactly how this test flaked before.
+  test('a slow logo is actually SEEN on the plate — decoded, not just faded in', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    // Slower than warm, well inside CAP + hold (4.0s): the load event — not the cap —
+    // releases the gate, while the plate is still holding.
+    await page.route('**/_image*', async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    });
+    await page.goto('/', { waitUntil: 'commit' });
+    await page.waitForSelector('.intro img', { timeout: 20_000 });
+
+    // A frame where the plate is up AND the logo has real pixels. Opacity alone is not
+    // enough: once the gate releases, an image element fades in whether or not its bytes
+    // have arrived — which is how this used to pass with no logo ever painted.
     const seenOnPlate = await page.evaluate(
       () =>
         new Promise<boolean>((resolve) => {
@@ -440,7 +452,9 @@ test.describe('the intro waits for the logo to actually paint', () => {
             return o;
           };
           const tick = () => {
-            if (vis('.intro') > 0.5 && vis('.intro img') > 0.5) return resolve(true);
+            const img = document.querySelector<HTMLImageElement>('.intro img');
+            const painted = !!img && img.complete && img.naturalWidth > 0;
+            if (vis('.intro') > 0.5 && painted && vis('.intro img') > 0.5) return resolve(true);
             // The plate is gone and we never caught the logo on it — the race was lost.
             if (vis('.intro') === 0) return resolve(false);
             requestAnimationFrame(tick);
@@ -448,7 +462,7 @@ test.describe('the intro waits for the logo to actually paint', () => {
           tick();
         }),
     );
-    expect(seenOnPlate, 'the plate lifted without the logo ever becoming visible').toBe(true);
+    expect(seenOnPlate, 'the plate lifted without the logo ever being painted on it').toBe(true);
   });
 
   test('a logo that never loads still releases — it cannot wedge the page', async ({ page }) => {

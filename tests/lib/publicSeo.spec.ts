@@ -172,6 +172,15 @@ describe('title template helpers', () => {
     expect(siteTitle('تواصل معنا', BRAND_AR)).toBe('بريّن ستيشن | تواصل معنا');
   });
 
+  it('a brand containing "%s" cannot capture the page title', () => {
+    expect(applyTitleTemplate(DEFAULT_TITLE_TEMPLATE, 'About', 'Studio %s')).toBe(
+      'Studio %s | About',
+    );
+    expect(applyTitleTemplate('%s — %brand%', 'About', 'Studio %s')).toBe('About — Studio %s');
+    // only the template's FIRST %s takes the page title
+    expect(applyTitleTemplate('%s | %s | %brand%', 'About', 'Studio')).toBe('About | %s | Studio');
+  });
+
   it('the brand check is case-insensitive', () => {
     expect(applyTitleTemplate(DEFAULT_TITLE_TEMPLATE, 'about BRAIIN STATIION', BRAND)).toBe(
       'about BRAIIN STATIION',
