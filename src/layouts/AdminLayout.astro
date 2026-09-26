@@ -30,6 +30,22 @@ function isCurrent(href: string): boolean {
   if (href === '/admin') return current === '/admin';
   return current === href || current.startsWith(`${href}/`);
 }
+
+// Breadcrumb: Admin / <section> / <this page>. The section is the longest nav href
+// that prefixes the current path — derived from the ROLE-FILTERED nav, so a page a
+// role reaches through a capability its sidebar does not show (Developer on
+// /admin/pages via maintenance.manage) simply gets a shorter trail, never a link the
+// sidebar would not have offered. The terminal crumb is the page's own title, which
+// also means detail pages ("Edit post") need no extra wiring.
+const sectionLinks = nav.flatMap((group) => group.links).filter((link) => link.href !== '/admin');
+const section =
+  sectionLinks
+    .filter((link) => current === link.href || current.startsWith(`${link.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0] ?? null;
+
+// Avatar initials from the email's local part. Nothing profound — "ka" for kareem@ —
+// but it matches what the account menu expands to, and needs no profile fetch.
+const initials = session ? session.email.slice(0, 2) : '';
 ---
 
 <!doctype html>
@@ -69,20 +85,61 @@ function isCurrent(href: string): boolean {
               ))}
             </div>
           ))}
-          <div class="admin-user">
-            <div>{session.email}</div>
-            <div>
-              Role: <strong>{session.role.replace('_', ' ')}</strong>
-            </div>
-            <button type="button" data-action="logout">
-              Sign out
-            </button>
-          </div>
         </nav>
       )
     }
 
     <main class="admin-main">
+      {
+        layout === 'app' && session && (
+          <div class="admin-topbar">
+            <nav class="crumbs" aria-label="Breadcrumb">
+              <ol>
+                <li>
+                  <a href="/admin">Admin</a>
+                </li>
+                {section && current !== section.href && (
+                  <li>
+                    <a href={section.href}>{section.label}</a>
+                  </li>
+                )}
+                <li aria-current="page">{title}</li>
+              </ol>
+            </nav>
+            {/* A plain GET form, not a live combobox: Enter lands on the server-rendered
+                results page, which costs zero client JS and cannot show a result the
+                server did not authorize. */}
+            <form class="topbar-search" role="search" action="/admin/search" method="get">
+              <label class="visually-hidden" for="topbar-q">
+                Search the admin
+              </label>
+              <input
+                id="topbar-q"
+                type="search"
+                name="q"
+                placeholder="Search…"
+                minlength="2"
+                maxlength="64"
+              />
+            </form>
+            <details class="menu account-menu">
+              <summary class="avatar" aria-label={`Account: ${session.email}`}>
+                {initials}
+              </summary>
+              <div class="menu-panel">
+                <p class="menu-id">
+                  {session.email}
+                  <br />
+                  Role: <strong>{session.role.replace('_', ' ')}</strong>
+                </p>
+                <button type="button" data-action="logout">
+                  Sign out
+                </button>
+              </div>
+            </details>
+          </div>
+        )
+      }
       <header class="admin-header">
         <div>
           <h1>{title}</h1>
@@ -93,6 +150,13 @@ function isCurrent(href: string): boolean {
       <slot />
     </main>
 
+    <!--
+      The toast live region is server-rendered, not created on demand: a live region
+      announces CHANGES to its contents, so one appended together with its first toast
+      announces nothing. src/lib/admin/toast.ts appends into it.
+    -->
+    <div id="admin-toasts" class="toasts" aria-live="polite"></div>
+
     <script>
       // Sign-out is a POST, never a GET link: a GET logout can be fired by any <img src>
       // on any page — a nuisance CSRF that signs people out mid-edit.
@@ -101,6 +165,25 @@ function isCurrent(href: string): boolean {
       document.querySelector('[data-action="logout"]')?.addEventListener('click', async () => {
         await adminFetch('/api/admin/auth/logout', { method: 'POST' });
         window.location.href = '/admin/login';
+      });
+
+      // <details class="menu"> gives the dropdown for free, but native details only
+      // closes on its own summary. Light-dismiss (outside click) and Escape are the two
+      // behaviours users expect of a menu and the element does not supply.
+      document.addEventListener('click', (event) => {
+        const target = event.target as Node;
+        for (const menu of document.querySelectorAll('details.menu[open]')) {
+          if (!menu.contains(target)) menu.removeAttribute('open');
+        }
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        for (const menu of document.querySelectorAll('details.menu[open]')) {
+          menu.removeAttribute('open');
+          // Focus back on the trigger, else focus falls to <body> and a keyboard user
+          // is teleported to the top of the page.
+          menu.querySelector<HTMLElement>('summary')?.focus();
+        }
       });
     </script>
   </body>

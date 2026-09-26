@@ -63,6 +63,79 @@ const PAIRS = [
   ['errSoft', 'surface', 4.5, 'form error text on cards'],
 ];
 
+// ---- Admin palette — keep in sync with public/styles/admin.css :root tokens ----
+//
+// The CMS needs its own suite: /admin is exempt from Core Web Vitals but NOT from DoD
+// #4, and the light editorial palette is a port of a reference design that fails AA in
+// two places on its own site. Asserting the pairs here is what stops those two values
+// coming back the next time someone "restores" a colour to match the source.
+const A_LIGHT = {
+  bg: '#ffffff', // --ad-bg (card ground, inputs)
+  surface: '#faf8f4', // --ad-surface (sidebar, table head)
+  surface2: '#f2efe9', // --ad-surface-2 (content ground, default button, badge)
+  fg: '#111111', // --ad-fg
+  muted: '#666666', // --ad-muted — #888888 in the source is 3.54:1 and fails
+  accentText: '#7f6026', // --ad-accent-text (accent TEXT only)
+  accent: '#8a6a2a', // --ad-accent (fills/rules; the source's #b8955a fails 1.4.11)
+  primary: '#111111', // --ad-primary (filled button ground)
+  primaryFg: '#ffffff', // --ad-primary-fg
+  focus: '#111111', // --ad-focus
+  ok: '#2d6a4f',
+  warn: '#8a5a00',
+  danger: '#a63232',
+  info: '#1e4d8c',
+};
+
+// The dormant dark theme under :root[data-theme='dark']. Asserted even though no toggle
+// ships yet — an unasserted palette is where the next regression hides, and the tokens
+// whose job is contrast (primary, focus) are re-decided per theme rather than mirrored,
+// which is exactly the kind of decision worth pinning down in CI.
+const A_DARK = {
+  bg: '#0b0b0f',
+  surface: '#14141b',
+  surface2: '#1c1c26',
+  fg: '#e8e8ea',
+  muted: '#a0a0ab',
+  accentText: '#00e5ff',
+  accent: '#00e5ff',
+  primary: '#00e5ff',
+  primaryFg: '#04141a',
+  focus: '#00e5ff',
+  ok: '#4ade80',
+  warn: '#ffb84d',
+  danger: '#ff6b6b',
+  info: '#7fb0f0',
+};
+
+// Same pair list for both themes — the point of a token layer is that the component
+// pairings do not change when the palette does.
+const ADMIN_PAIRS = [
+  ['fg', 'bg', 4.5, 'body text on a card'],
+  ['fg', 'surface', 4.5, 'sidebar nav label'],
+  ['fg', 'surface2', 4.5, 'text on the content ground'],
+  ['muted', 'bg', 4.5, 'help text / .stat-label on a card'],
+  ['muted', 'surface', 4.5, 'table th, sidebar group title'],
+  ['muted', 'surface2', 4.5, '.badge[data-status=draft]'],
+  ['accentText', 'bg', 4.5, 'accent text on a card'],
+  ['accentText', 'surface', 4.5, 'accent text on the sidebar'],
+  ['accentText', 'surface2', 4.5, 'accent text on a default button'],
+  ['primaryFg', 'primary', 4.5, '[data-variant=primary] label'],
+  ['ok', 'bg', 4.5, ".msg[data-kind='ok']"],
+  ['ok', 'surface2', 4.5, '.badge[data-status=published]'],
+  ['warn', 'surface2', 4.5, '.badge[data-status=scheduled]'],
+  ['danger', 'bg', 4.5, ".msg[data-kind='error']"],
+  ['danger', 'surface2', 4.5, '.badge[data-status=archived]'],
+  ['info', 'bg', 4.5, 'informational text'],
+  // Non-text (1.4.11): focus ring, and the gold in its only legitimate role.
+  ['focus', 'bg', 3.0, 'focus outline on a card (UI)'],
+  ['focus', 'surface2', 3.0, 'focus outline on the content ground (UI)'],
+  ['accent', 'bg', 3.0, 'gold bar fill on a card (UI)'],
+  ['accent', 'surface2', 3.0, 'gold bar fill on the content ground (UI)'],
+];
+
+// --ad-disabled is deliberately absent: WCAG 1.4.3 exempts inactive controls, and
+// asserting a threshold the spec does not require would be false rigour.
+
 function channel(c) {
   const s = c / 255;
   return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -82,20 +155,36 @@ function ratio(a, b) {
 }
 
 let failed = 0;
-console.log('WCAG 2.2 AA contrast gate — public palette\n');
-console.log('  ratio   min   fg/bg                         where');
-for (const [fg, bg, min, where] of PAIRS) {
-  const r = ratio(T[fg], T[bg]);
-  const pass = r >= min;
-  if (!pass) failed++;
-  const mark = pass ? '✓' : '✗';
-  console.log(
-    `  ${mark} ${r.toFixed(2).padStart(5)}  ${String(min).padStart(3)}   ${`${fg} on ${bg}`.padEnd(28)}  ${where}`,
-  );
+
+function suite(title, tokens, pairs, source) {
+  console.log(`WCAG 2.2 AA contrast gate — ${title}\n`);
+  console.log('  ratio   min   fg/bg                         where');
+  let bad = 0;
+  for (const [fg, bg, min, where] of pairs) {
+    const r = ratio(tokens[fg], tokens[bg]);
+    const pass = r >= min;
+    if (!pass) bad++;
+    const mark = pass ? '✓' : '✗';
+    console.log(
+      `  ${mark} ${r.toFixed(2).padStart(5)}  ${String(min).padStart(3)}   ${`${fg} on ${bg}`.padEnd(28)}  ${where}`,
+    );
+  }
+  if (bad) console.log(`\n  ${bad} pair(s) below AA — adjust tokens in ${source}.`);
+  console.log('');
+  failed += bad;
 }
-console.log('');
+
+suite('public palette', T, PAIRS, 'public/styles/global.css');
+suite('admin palette (light)', A_LIGHT, ADMIN_PAIRS, 'public/styles/admin.css :root');
+suite(
+  'admin palette (dark, dormant)',
+  A_DARK,
+  ADMIN_PAIRS,
+  "public/styles/admin.css :root[data-theme='dark']",
+);
+
 if (failed) {
-  console.log(`Contrast gate: FAIL (${failed} pair(s) below AA). Adjust tokens in global.css.`);
+  console.log(`Contrast gate: FAIL (${failed} pair(s) below AA).`);
   process.exit(1);
 }
 console.log('Contrast gate: PASS (all UI pairs meet WCAG 2.2 AA).');
