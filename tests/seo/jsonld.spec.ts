@@ -163,6 +163,44 @@ describe('JSON-LD builders', () => {
     expect((w.creator as { '@type': string })['@type']).toBe('Organization');
   });
 
+  it('CreativeWork (case study, PR11) carries the extended fields only when present — never a Review', () => {
+    const w = buildCreativeWorkSchema({
+      name: 'The Rider',
+      description: 'A launch film shot in the desert at first light.',
+      url: 'https://x/portfolio/the-rider',
+      org,
+      image: 'https://x/_image?href=g02.jpg&w=1200&f=jpg',
+      dateModified: '2026-09-20T08:00:00Z',
+      year: 2026,
+      keywords: ['Brand film', 'Launch'],
+      genre: 'Brand film',
+      about: 'Automotive',
+      inLanguage: 'en',
+    });
+    expect(w.image).toBe('https://x/_image?href=g02.jpg&w=1200&f=jpg');
+    expect(w.dateModified).toBe('2026-09-20T08:00:00Z');
+    expect(w.dateCreated).toBe('2026');
+    expect(w.keywords).toBe('Brand film, Launch');
+    expect(w.genre).toBe('Brand film');
+    expect(w.about).toEqual({ '@type': 'Thing', name: 'Automotive' });
+    expect(w.inLanguage).toBe('en');
+    expect(w.review).toBeUndefined();
+    expect(w.aggregateRating).toBeUndefined();
+
+    const bare = buildCreativeWorkSchema({
+      name: 'n',
+      description: 'd',
+      url: 'https://x/p',
+      org,
+      dateModified: null,
+      year: null,
+      keywords: [],
+    });
+    for (const key of ['image', 'dateModified', 'dateCreated', 'keywords', 'genre', 'about']) {
+      expect(bare[key], key).toBeUndefined();
+    }
+  });
+
   it('FAQPage nests Question/acceptedAnswer pairs (the AEO citation shape)', () => {
     const f = buildFaqSchema([
       { question: 'How long does a brand identity take?', answer: 'Typically six to eight weeks.' },
