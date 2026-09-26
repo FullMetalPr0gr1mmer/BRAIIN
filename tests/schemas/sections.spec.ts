@@ -134,10 +134,19 @@ describe('write-time section validation (UI v2 PR1)', () => {
   });
 
   it('table-backed types take NO content — a stray key would overwrite their data', () => {
-    for (const type of ['statistics', 'team', 'certifications'] as const) {
+    for (const type of ['team', 'certifications'] as const) {
       expect(sectionContentIssues(type, {})).toEqual([]);
       expect(sectionContentIssues(type, { members: [] }).length, type).toBe(1);
     }
+  });
+
+  it('statistics takes layout and copy, never data: a stray key is refused', () => {
+    expect(sectionContentIssues('statistics', {})).toEqual([]);
+    expect(
+      sectionContentIssues('statistics', { variant: 'band', placement: 'home', minItems: 3 }),
+    ).toEqual([]);
+    expect(sectionContentIssues('statistics', { items: [] }).length).toBeGreaterThan(0);
+    expect(sectionContentIssues('statistics', { variant: 'grid' }).length).toBeGreaterThan(0);
   });
 
   it('an update restating the type is validated; one without it is left to the kernel', () => {

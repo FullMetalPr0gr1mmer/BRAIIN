@@ -29,10 +29,28 @@ const T = {
   ink2: '#2a2f3a', // --bs-ink-2 (secondary copy on mist / paper)
   ink3: '#3a404c', // --bs-ink-3 (case-study body copy on paper)
   errSoft: '#ff8a8a', // --bs-err-soft (error text on dark)
+  // UI v2 PR6 shared blocks — translucent text precomposited over its only background
+  tbd: '#6b7384', // .sb__n--text — a stat value that is not a number yet (the mockup's #C9CDD6 was 1.5:1)
+  tagDark: '#ebebeb', // .ftag — white .92 over black
+  noteDark: '#b3b3b3', // .ftag--note — white .70 over black
+  kleinTag: '#ccd3f2', // .klein-band .tag — white .80 over Klein
+  kleinLead: '#e0e4f7', // .lead-band__row p — white .88 over Klein
+  kleinRole: '#bfc8ee', // .tm__r — white .75 over Klein
+  kleinCount: '#b2bdeb', // .tm__count — white .70 over Klein
 };
 
 // (foreground, background, minRatio, where) — every real on-screen pairing.
 const PAIRS = [
+  // UI v2 PR6 shared blocks
+  ['tbd', 'paper', 4.5, 'stat band: a non-numeric value on white'],
+  ['tagDark', 'bg', 4.5, 'facet tag on a dark card'],
+  ['noteDark', 'bg', 4.5, '"Confidential client" note on a dark card'],
+  ['kleinTag', 'klein', 4.5, 'kicker tag on a Klein band'],
+  ['kleinLead', 'klein', 4.5, 'lead band copy'],
+  ['kleinRole', 'klein', 4.5, 'testimonial role on the Klein band'],
+  ['kleinCount', 'klein', 4.5, 'testimonial counter on the Klein band'],
+  ['paper', 'klein', 4.5, 'lead band email / quote text / Klein band headings'],
+  ['klein', 'paper', 4.5, 'light badge CTA label (Klein on white)'],
   // dark sections (hero, slogan, clients, contact) + interior pages
   ['fg', 'bg', 4.5, 'body text on black'],
   ['fg', 'surface', 4.5, 'card/section text'],

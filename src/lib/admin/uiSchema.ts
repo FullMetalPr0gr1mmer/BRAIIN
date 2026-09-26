@@ -74,6 +74,11 @@ export interface FieldDef {
   typeField?: string;
   /** `upload`: where the file is POSTed (multipart) and what it may be. */
   upload?: { endpoint: string; accept: string };
+  /**
+   * The value a NEW record's form starts with — must equal the create schema's default, or
+   * the form shows one thing (an unticked box) while the server stores another.
+   */
+  defaultValue?: unknown;
 }
 
 export interface ColumnDef {
@@ -117,6 +122,27 @@ const SCHEDULED_FIELD: FieldDef = {
 
 const SORT_FIELD: FieldDef = { name: 'sortOrder', label: 'Sort order', kind: 'number' };
 
+/** Design-delivery sample content (UI v2). Refused on publish; production also refuses it in the DB. */
+const PLACEHOLDER_FIELD: FieldDef = {
+  name: 'isPlaceholder',
+  label: 'Placeholder (design sample)',
+  kind: 'checkbox',
+  help: 'Sample content from the design delivery. It cannot be published or shown until you replace it and untick this.',
+};
+
+/** A list of short bilingual phrases stored as [{en, ar}] (the item fields ARE the pair). */
+const bilingualList = (name: string, label: string, maxItems: number, help?: string): FieldDef => ({
+  name,
+  label,
+  kind: 'repeater',
+  maxItems,
+  ...(help ? { help } : {}),
+  itemFields: [
+    { name: 'en', label: 'English', kind: 'text', required: true },
+    { name: 'ar', label: 'Arabic', kind: 'text', required: true },
+  ],
+});
+
 /** snake_case default for a field's row key. */
 export function columnOf(field: FieldDef): string {
   return field.column ?? field.name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
@@ -148,6 +174,13 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
         help: 'Video is Stream-only; the poster frame becomes the page’s LCP image.',
       },
       { name: 'category', label: 'Category', kind: 'text' },
+      {
+        name: 'shortTitle',
+        label: 'Short title (chips)',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'Shown on filter chips and skill tags where the full title is too long (e.g. “SEO / GEO / AEO”). Empty = the title.',
+      },
       {
         name: 'isTeaser',
         label: 'Coming-soon teaser',
@@ -192,21 +225,296 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
 
   portfolio: {
     slug: 'portfolio',
-    title: 'Portfolio',
+    title: 'Our Work',
     singular: 'Case study',
     hasStatus: true,
     reorder: true,
     columns: [
       { key: 'title', label: 'Title', kind: 'bilingual' },
-      { key: 'slug', label: 'Slug' },
+      { key: 'project_type', label: 'Type', kind: 'bilingual' },
+      { key: 'year', label: 'Year' },
+      { key: 'is_featured', label: 'Featured', kind: 'boolean' },
+      { key: 'is_placeholder', label: 'Placeholder', kind: 'boolean' },
       { key: 'status', label: 'Status', kind: 'status' },
       { key: 'updated_at', label: 'Updated', kind: 'date' },
     ],
     fields: [
-      { name: 'slug', label: 'Slug', kind: 'slug', required: true },
-      { name: 'title', label: 'Title', kind: 'bilingual', required: true },
-      { name: 'summary', label: 'Summary', kind: 'prose' },
+      {
+        name: 'slug',
+        label: 'Slug',
+        kind: 'slug',
+        required: true,
+        help: 'The case study’s address: /portfolio/<slug>. “all” is reserved.',
+      },
+      { name: 'title', label: 'Project name', kind: 'bilingual', required: true },
+      {
+        name: 'projectType',
+        label: 'Project type',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'Shown on the card and in the title band — “Brand film”, “Rebrand”. Required to publish.',
+      },
+      {
+        name: 'teaser',
+        label: 'Card blurb',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'One line under the project on Our Work and All projects. Empty = the overview.',
+      },
+      {
+        name: 'sectorId',
+        label: 'Industry',
+        kind: 'relation',
+        relation: { resource: 'sectors', labelKey: 'name' },
+      },
+      {
+        name: 'clientId',
+        label: 'Client',
+        kind: 'relation',
+        relation: { resource: 'clients', labelKey: 'name' },
+        help: 'A client not yet cleared for disclosure (not visible) shows as “Confidential client”.',
+      },
+      { name: 'year', label: 'Year', kind: 'number' },
+      {
+        name: 'serviceIds',
+        label: 'Services',
+        kind: 'multiRelation',
+        relation: { resource: 'services', labelKey: 'title' },
+        maxItems: 20,
+        help: 'In the order the case study lists them; they are also its catalogue filters.',
+      },
+      {
+        name: 'isFeatured',
+        label: 'Featured',
+        kind: 'checkbox',
+        help: 'Featured projects lead Our Work and Selected work on the home page.',
+      },
+      {
+        name: 'posterMediaId',
+        label: 'Poster',
+        kind: 'media',
+        help: 'The card image. Needs alt text in English and Arabic to publish.',
+      },
+      {
+        name: 'preview',
+        label: 'Card hover clip',
+        kind: 'clip',
+        help: 'A short window of a video, played while the card is hovered (never on touch).',
+      },
+      {
+        name: 'lead',
+        label: 'Lead',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'The case study’s opening line.',
+      },
+      { name: 'summary', label: 'Overview', kind: 'prose' },
+      { name: 'goal', label: 'The goal', kind: 'bilingual', nullable: true },
+      { name: 'result', label: 'The result', kind: 'bilingual', nullable: true },
+      bilingualList('scope', 'Scope', 10, 'What the studio did, one line each.'),
+      bilingualList('keywords', 'Keywords', 6, 'The chips under the title.'),
+      {
+        name: 'results',
+        label: 'Result cards',
+        kind: 'repeater',
+        maxItems: 4,
+        help: 'Figures only when they are real — a placeholder figure (XX) cannot be published.',
+        itemFields: [
+          { name: 'value', label: 'Figure', kind: 'text', required: true, help: 'e.g. 3.2M, +40%' },
+          { name: 'label', label: 'What it measures', kind: 'bilingual', required: true },
+        ],
+      },
+      {
+        name: 'media',
+        label: 'Case-study media',
+        kind: 'repeater',
+        maxItems: 40,
+        help: 'One hero and one final film at most; breakdown items need their kind. Saved with the case study in one step.',
+        itemFields: [
+          {
+            name: 'role',
+            label: 'Where it appears',
+            kind: 'select',
+            required: true,
+            options: [
+              { value: 'hero', label: 'Hero banner' },
+              { value: 'final', label: 'Final film' },
+              { value: 'breakdown', label: 'Breakdown' },
+              { value: 'gallery', label: 'Gallery' },
+            ],
+          },
+          {
+            name: 'kind',
+            label: 'Kind',
+            kind: 'select',
+            required: true,
+            options: [
+              { value: 'image', label: 'Image' },
+              { value: 'video', label: 'Video' },
+            ],
+          },
+          { name: 'mediaId', label: 'Image (a video’s poster)', kind: 'media' },
+          { name: 'clip', label: 'Video', kind: 'clip' },
+          { name: 'durationLabel', label: 'Duration shown (m:ss)', kind: 'text' },
+          { name: 'caption', label: 'Caption', kind: 'bilingual' },
+          {
+            name: 'breakdownKind',
+            label: 'Breakdown kind',
+            kind: 'select',
+            options: [
+              { value: 'sketch', label: 'Sketch' },
+              { value: 'bts', label: 'Behind the scenes' },
+              { value: 'process', label: 'Process' },
+            ],
+          },
+          {
+            name: 'layout',
+            label: 'Layout',
+            kind: 'select',
+            options: [
+              { value: 'half', label: 'Half width' },
+              { value: 'wide', label: 'Wide' },
+              { value: 'third', label: 'One third' },
+            ],
+          },
+        ],
+      },
       { name: 'body', label: 'Body', kind: 'richtext' },
+      {
+        name: 'nextPortfolioId',
+        label: 'Next project',
+        kind: 'relation',
+        relation: { resource: 'portfolio', labelKey: 'title' },
+        help: 'Empty = the next project in catalogue order.',
+      },
+      PLACEHOLDER_FIELD,
+      SORT_FIELD,
+      STATUS_FIELD,
+      SCHEDULED_FIELD,
+    ],
+  },
+
+  sectors: {
+    slug: 'sectors',
+    title: 'Sectors',
+    singular: 'Sector',
+    reorder: true,
+    columns: [
+      { key: 'name', label: 'Name', kind: 'bilingual' },
+      { key: 'slug', label: 'Slug' },
+      { key: 'visible', label: 'Visible', kind: 'boolean' },
+    ],
+    fields: [
+      {
+        name: 'slug',
+        label: 'Slug',
+        kind: 'slug',
+        required: true,
+        help: 'Used in filter links: /portfolio/all?sector=<slug>.',
+      },
+      { name: 'name', label: 'Name', kind: 'bilingual', required: true },
+      { name: 'visible', label: 'Visible', kind: 'checkbox', defaultValue: true },
+      SORT_FIELD,
+    ],
+  },
+
+  clients: {
+    slug: 'clients',
+    title: 'Clients',
+    singular: 'Client',
+    reorder: true,
+    columns: [
+      { key: 'name', label: 'Name', kind: 'bilingual' },
+      { key: 'visible', label: 'Cleared (visible)', kind: 'boolean' },
+      { key: 'show_in_marquee', label: 'Marquee', kind: 'boolean' },
+      { key: 'is_placeholder', label: 'Placeholder', kind: 'boolean' },
+    ],
+    fields: [
+      { name: 'slug', label: 'Slug', kind: 'slug', required: true },
+      { name: 'name', label: 'Name', kind: 'bilingual', required: true },
+      {
+        name: 'visible',
+        label: 'Cleared for disclosure (visible)',
+        kind: 'checkbox',
+        help: 'Tick only once the client has agreed to be named. Until then the site shows “Confidential client”.',
+      },
+      {
+        name: 'showInMarquee',
+        label: 'Show in the clients marquee',
+        kind: 'checkbox',
+      },
+      { name: 'logoMediaId', label: 'Logo', kind: 'media' },
+      { name: 'websiteUrl', label: 'Website', kind: 'url', help: 'https only.' },
+      PLACEHOLDER_FIELD,
+      SORT_FIELD,
+    ],
+  },
+
+  testimonials: {
+    slug: 'testimonials',
+    title: 'Testimonials',
+    singular: 'Quote',
+    hasStatus: true,
+    reorder: true,
+    columns: [
+      { key: 'author_name', label: 'Author', kind: 'bilingual' },
+      { key: 'slug', label: 'Slug' },
+      { key: 'is_placeholder', label: 'Placeholder', kind: 'boolean' },
+      { key: 'status', label: 'Status', kind: 'status' },
+    ],
+    fields: [
+      { name: 'slug', label: 'Slug', kind: 'slug', required: true },
+      {
+        name: 'quote',
+        label: 'Quote',
+        kind: 'bilingual',
+        required: true,
+        help: 'At most 600 characters per language.',
+      },
+      { name: 'authorName', label: 'Author', kind: 'bilingual', required: true },
+      {
+        name: 'authorRole',
+        label: 'Title, company',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'Written as it should appear: “Marketing Director, Company”.',
+      },
+      {
+        name: 'placements',
+        label: 'Shown on',
+        kind: 'multiSelect',
+        options: [
+          { value: 'home', label: 'Home' },
+          { value: 'work', label: 'Our Work' },
+        ],
+      },
+      {
+        name: 'portfolioId',
+        label: 'Case study',
+        kind: 'relation',
+        relation: { resource: 'portfolio', labelKey: 'title' },
+        help: 'Shown on that case study. One published quote per case study.',
+      },
+      {
+        name: 'clientId',
+        label: 'Client',
+        kind: 'relation',
+        relation: { resource: 'clients', labelKey: 'name' },
+      },
+      { name: 'avatarMediaId', label: 'Photo', kind: 'media' },
+      {
+        name: 'consentObtainedAt',
+        label: 'Consent obtained',
+        kind: 'datetime',
+        help: 'When the person agreed to be quoted. Required to publish or schedule — the database refuses otherwise.',
+      },
+      {
+        name: 'consentReference',
+        label: 'Consent record',
+        kind: 'text',
+        help: 'Where the consent is kept (an email, ticket or document id). Never shown on the site.',
+      },
+      PLACEHOLDER_FIELD,
       SORT_FIELD,
       STATUS_FIELD,
       SCHEDULED_FIELD,
@@ -228,7 +536,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
     fields: [
       { name: 'slug', label: 'Slug', kind: 'slug', required: true },
       { name: 'title', label: 'Title', kind: 'bilingual', required: true },
-      { name: 'navVisible', label: 'Show in navigation', kind: 'checkbox' },
+      { name: 'navVisible', label: 'Show in navigation', kind: 'checkbox', defaultValue: true },
       STATUS_FIELD,
       SCHEDULED_FIELD,
     ],
@@ -338,14 +646,30 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
     reorder: true,
     columns: [
       { key: 'name', label: 'Name', kind: 'bilingual' },
-      { key: 'slug', label: 'Slug' },
+      { key: 'role', label: 'Title', kind: 'bilingual' },
+      { key: 'is_leadership', label: 'Leadership', kind: 'boolean' },
       { key: 'status', label: 'Status', kind: 'status' },
     ],
     fields: [
       { name: 'slug', label: 'Slug', kind: 'slug', required: true },
       { name: 'name', label: 'Name', kind: 'bilingual', required: true },
+      { name: 'role', label: 'Job title', kind: 'bilingual', nullable: true },
+      {
+        name: 'isLeadership',
+        label: 'Leadership',
+        kind: 'checkbox',
+        help: 'Shown in the About page leadership slider.',
+      },
+      { name: 'portraitMediaId', label: 'Portrait', kind: 'media' },
+      {
+        name: 'linkedinUrl',
+        label: 'LinkedIn',
+        kind: 'url',
+        help: 'https://linkedin.com/in/… — the slider links it only when set.',
+      },
       { name: 'bio', label: 'Bio', kind: 'prose' },
       { name: 'avatarUrl', label: 'Avatar URL', kind: 'url' },
+      PLACEHOLDER_FIELD,
       SORT_FIELD,
       STATUS_FIELD,
     ],
@@ -382,18 +706,62 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
     columns: [
       { key: 'label', label: 'Label', kind: 'bilingual' },
       { key: 'value', label: 'Value' },
+      { key: 'is_placeholder', label: 'Placeholder', kind: 'boolean' },
       { key: 'status', label: 'Status', kind: 'status' },
     ],
     fields: [
       { name: 'slug', label: 'Slug', kind: 'slug', required: true },
       { name: 'label', label: 'Label', kind: 'bilingual', required: true },
       {
-        name: 'value',
-        label: 'Value',
-        kind: 'text',
-        required: true,
-        help: 'A display string — “150+”, “98%”, “3x” all survive verbatim.',
+        name: 'valueNumeric',
+        label: 'Number',
+        kind: 'number',
+        help: 'The number the band counts up to. With a number, the displayed value is the number plus its suffix.',
       },
+      {
+        name: 'valueSuffix',
+        label: 'Suffix',
+        kind: 'text',
+        help: '“+”, “%”, “x” — at most 4 characters.',
+      },
+      {
+        name: 'value',
+        label: 'Displayed value (no number)',
+        kind: 'text',
+        help: 'Only for a value that is not a plain number. With a number above, this is derived.',
+      },
+      {
+        name: 'placements',
+        label: 'Shown on',
+        kind: 'multiSelect',
+        options: [
+          { value: 'home', label: 'Home' },
+          { value: 'about', label: 'About' },
+          { value: 'work', label: 'Our Work' },
+        ],
+      },
+      {
+        name: 'placementLabels',
+        label: 'Label on a specific page',
+        kind: 'repeater',
+        maxItems: 3,
+        help: 'Where a page words it differently (“Projects delivered across the region” on About).',
+        itemFields: [
+          {
+            name: 'placement',
+            label: 'Page',
+            kind: 'select',
+            required: true,
+            options: [
+              { value: 'home', label: 'Home' },
+              { value: 'about', label: 'About' },
+              { value: 'work', label: 'Our Work' },
+            ],
+          },
+          { name: 'label', label: 'Label', kind: 'bilingual', required: true },
+        ],
+      },
+      PLACEHOLDER_FIELD,
       SORT_FIELD,
       STATUS_FIELD,
     ],
@@ -414,7 +782,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
       { name: 'logoUrl', label: 'Logo URL', kind: 'url', required: true },
       { name: 'scale', label: 'Scale', kind: 'number' },
       { name: 'offsetY', label: 'Vertical offset', kind: 'number' },
-      { name: 'visible', label: 'Visible', kind: 'checkbox' },
+      { name: 'visible', label: 'Visible', kind: 'checkbox', defaultValue: true },
       SORT_FIELD,
     ],
   },

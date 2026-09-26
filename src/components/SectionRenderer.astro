@@ -28,10 +28,9 @@ const { locale, sections } = Astro.props;
 
 // Type → component registry. Unknown types are skipped (forward-compatible with CMS).
 //
-// Data a section needs beyond `locale` travels in its own `props` (see
-// ContactPage.astro, which injects the service list into the contactInquiry section).
-// Keeping it there rather than adding pass-through props here means this renderer does
-// not grow a parameter every time one section needs something.
+// A section's CMS content arrives as its `props`. Data the ROUTE injects (rows it already
+// loaded) arrives as `data`, passed AFTER the spread so no authored key can override it —
+// content is editor input, route data is the page's own truth.
 //
 // Typed against src/lib/sections/registry.ts: `astro check` fails if a rendered type has
 // no component here or a component has no registry entry.
@@ -52,6 +51,11 @@ const REGISTRY: Record<RenderedSectionType, typeof Hero> = {
   contactChannels: ContactChannels,
   faq: FaqAccordion,
 };
+
+// Every section takes `locale`, its content props and the route's `data`. The map's type
+// above is what holds the registry complete; this view of it is what the template renders.
+type AnySection = (props: Record<string, unknown>) => unknown;
+const COMPONENTS = REGISTRY as unknown as Record<RenderedSectionType, AnySection>;
 ---
 
 {
@@ -59,10 +63,10 @@ const REGISTRY: Record<RenderedSectionType, typeof Hero> = {
     .filter((s) => s.visible !== false)
     .map((s) => {
       if (!isRenderedSectionType(s.type)) return null;
-      const Comp = REGISTRY[s.type];
+      const Comp = COMPONENTS[s.type];
       return (
         <SectionBoundary type={s.type}>
-          <Comp locale={locale} {...(s.props ?? {})} />
+          <Comp locale={locale} {...(s.props ?? {})} data={s.data} />
         </SectionBoundary>
       );
     })

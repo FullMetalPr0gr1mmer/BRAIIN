@@ -1,0 +1,79 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { Accent } from '@schemas/media';
+import type { LocalizedText } from '@schemas/content';
+import { pickLocale, localizedHref } from '@/lib/i18n';
+import { getIdentity } from '@/lib/identity';
+import AccentText from '@/components/ui/AccentText.astro';
+import Cta from '@/components/ui/Cta.astro';
+
+// The closing call to action of Our Work, All projects and the case study (UI v2): a Klein
+// band with the outlined accent, a line of copy, the inquiry button and the studio email
+// (from site_profile — the identity is data, never code). Replaces CtaBand for the `cta`
+// section type as those pages are composed.
+
+interface Props {
+  locale: Locale;
+  tag?: LocalizedText | undefined;
+  heading?: LocalizedText | undefined;
+  accent?: Accent | undefined;
+  text?: LocalizedText | undefined;
+  buttonLabel?: LocalizedText | undefined;
+  /** Site-relative (SafeHref); localised here. Default: the contact page's inquiry form. */
+  buttonHref?: string | undefined;
+  /** Show the studio email beside the button (default on). */
+  showEmail?: boolean | undefined;
+}
+
+const { locale, showEmail = true } = Astro.props;
+
+const STR = {
+  en: {
+    tag: 'Start a project',
+    heading: 'Your idea could be next',
+    text: "Tell us what you're making. You'll hear back within one business day with our questions, a rough range, and a time to talk.",
+    button: 'Start an inquiry',
+  },
+  ar: {
+    tag: 'ابدأ مشروعك',
+    heading: 'فكرتك ممكن تكون التالية',
+    text: 'قل لنا وش تصنع. يوصلك رد خلال يوم عمل واحد فيه أسئلتنا، ونطاق سعري مبدئي، وموعد للمكالمة.',
+    button: 'ابدأ طلبك',
+  },
+}[locale];
+
+const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : STR.tag;
+const heading = Astro.props.heading ? pickLocale(Astro.props.heading, locale) : STR.heading;
+const accent = Astro.props.heading
+  ? Astro.props.accent
+  : (Astro.props.accent ?? { en: { from: 4 }, ar: { from: 3 } });
+const text = Astro.props.text ? pickLocale(Astro.props.text, locale) : STR.text;
+const button = Astro.props.buttonLabel ? pickLocale(Astro.props.buttonLabel, locale) : STR.button;
+const href = localizedHref(Astro.props.buttonHref ?? '/contact#inquiry', locale);
+const email = showEmail ? (await getIdentity(Astro.locals)).contactEmail : null;
+---
+
+<section class="lead-band klein-band" aria-labelledby="lead-band-heading">
+  <div class="lead-band__wrap">
+    <p class="tag rv">
+      <span class="dot"></span>
+      {tag}
+    </p>
+    <h2 class="rv" id="lead-band-heading">
+      <AccentText text={heading} locale={locale} accent={accent} />
+    </h2>
+    <div class="lead-band__row">
+      <p class="rv">{text}</p>
+      <div class="lead-band__acts rv">
+        <Cta href={href} variant="light">{button}</Cta>
+        {
+          email && (
+            <a class="lead-band__mail" href={`mailto:${email}`} dir="ltr">
+              {email}
+            </a>
+          )
+        }
+      </div>
+    </div>
+  </div>
+</section>
