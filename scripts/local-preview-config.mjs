@@ -8,22 +8,26 @@
 //    the adapter's generated copy (dist/server/wrangler.json), dropping `remote` so
 //    miniflare simulates the namespace locally.
 //
-// 2. Server env (astro:env `context: 'server'`) reaches `wrangler dev` through
-//    dist/server/.dev.vars, and the adapter builds that file from `.env*` FILES only —
-//    never from the process environment. CI has no .env, so the Worker booted with no
-//    secrets and died on its first `getSecret` ("SUPABASE_DB_POOL_URL is missing"). Any
-//    server variable present in the process env and absent from .dev.vars is appended
-//    here. The names come from astro.config.mjs's env schema, so this cannot drift.
+// 2. Server env (astro:env `context: 'server'`). `wrangler dev` finds it in the project's
+//    own .env / .dev.vars — which is why every local run works and CI, which has neither,
+//    booted a Worker with no secrets that died on its first getSecret ("SUPABASE_DB_POOL_URL
+//    is missing"). It does NOT read the adapter's dist/server/.dev.vars (measured: a
+//    populated one there was ignored). So this writes the server variables present in the
+//    process environment to dist/server/.preview.env, and the workflow passes that file
+//    explicitly:  npx wrangler dev --env-file dist/server/.preview.env
+//    The names come from astro.config.mjs's env schema, so a new secret needs no edit here.
 //
 // wrangler.jsonc — and therefore every deploy — is untouched. dist/server is not the
-// assets directory (wrangler.jsonc serves dist/client), so .dev.vars is never served.
+// assets directory (wrangler.jsonc serves dist/client), so neither file is ever served.
 //
-//   npm run build && node scripts/local-preview-config.mjs && npx wrangler dev --port 8788
+//   Locally (uses your .env):  npm run build && node scripts/local-preview-config.mjs \
+//                              && npx wrangler dev --port 8788
+//   CI (no .env):              … && npx wrangler dev --port 8788 --env-file dist/server/.preview.env
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
 const CONFIG = 'dist/server/wrangler.json';
-const DEV_VARS = 'dist/server/.dev.vars';
+const PREVIEW_ENV = 'dist/server/.preview.env';
 
 if (!existsSync(CONFIG)) {
   console.error(`  ✘ ${CONFIG} not found — run \`npm run build\` first.`);
@@ -44,44 +48,34 @@ for (const key of ['kv_namespaces', 'r2_buckets', 'd1_databases']) {
 writeFileSync(CONFIG, `${JSON.stringify(config, null, 2)}\n`);
 console.log(`  ✓ ${CONFIG}: ${stripped} remote binding(s) switched to local simulation.`);
 
-// ---- 2. server env → .dev.vars -----------------------------------------------
+// ---- 2. server env → .preview.env --------------------------------------------
 const schema = readFileSync('astro.config.mjs', 'utf8');
 const serverVars = [
   ...schema.matchAll(/^\s*([A-Z][A-Z0-9_]*):\s*envField\.\w+\(\{[^}]*context:\s*'server'/gm),
 ].map((m) => m[1]);
 
-const existing = existsSync(DEV_VARS) ? readFileSync(DEV_VARS, 'utf8') : '';
-const present = new Set(
-  existing
-    .split(/\r?\n/)
-    .map((line) => /^([A-Z][A-Z0-9_]*)=/.exec(line)?.[1])
-    .filter(Boolean),
-);
-
-// Written for the parser wrangler uses (dotenv), which does NOT unescape `\"` or `\\` inside
-// double quotes — it only expands `\n`/`\r`. Escaping would therefore corrupt the value.
-// Double quotes for plain values; single quotes (fully literal in dotenv) when the value has
-// a double quote or a backslash; refuse anything neither form can carry.
+// Written for dotenv's rules, which do NOT unescape `\"` or `\\` inside double quotes —
+// escaping would corrupt the value. Double quotes for plain values; single quotes (fully
+// literal in dotenv) when the value has a double quote or a backslash; refuse the rest.
 const quote = (name, v) => {
   if (/[\r\n]/.test(v)) throw new Error(`${name}: multi-line values are not supported here`);
   if (!/["\\]/.test(v)) return `"${v}"`;
   if (!v.includes("'")) return `'${v}'`;
-  throw new Error(`${name}: value contains both quote kinds — add it to ${DEV_VARS} by hand`);
+  throw new Error(`${name}: value contains both quote kinds — cannot be written to ${PREVIEW_ENV}`);
 };
-const added = [];
-let out = existing && !existing.endsWith('\n') ? `${existing}\n` : existing;
+
+const lines = [];
+const found = [];
 for (const name of serverVars) {
   const value = process.env[name];
-  if (present.has(name) || value === undefined || value === '') continue;
-  out += `${name}=${quote(name, value)}\n`;
-  added.push(name);
+  if (value === undefined || value === '') continue;
+  lines.push(`${name}=${quote(name, value)}`);
+  found.push(name);
 }
-if (added.length) writeFileSync(DEV_VARS, out);
+writeFileSync(PREVIEW_ENV, lines.length ? `${lines.join('\n')}\n` : '');
 
-const missing = serverVars.filter((n) => !present.has(n) && !added.includes(n));
+const absent = serverVars.filter((n) => !found.includes(n));
 console.log(
-  `  ✓ ${DEV_VARS}: ${added.length ? `added ${added.join(', ')} from the environment` : 'nothing to add'}` +
-    (missing.length
-      ? ` — not set anywhere (fine if optional/defaulted): ${missing.join(', ')}`
-      : ''),
+  `  ✓ ${PREVIEW_ENV}: ${found.length ? found.join(', ') : 'no server variables in the environment'}` +
+    (absent.length ? ` — not in the environment: ${absent.join(', ')}` : ''),
 );

@@ -14,9 +14,10 @@ name: Perf / SEO / A11y / E2E
 # empty/fallback state: /portfolio was an empty list, every /portfolio/<slug> a 404, and
 # axe/Lighthouse/CSP audited pages no visitor ever sees. `supabase start` applies
 # supabase/migrations and supabase/seed.sql, and its real local keys are exported into
-# the BUILD environment — PUBLIC_* are inlined at build time, and the server secrets land
-# in dist/server/.dev.vars, which is what `wrangler dev` reads. Only secrets with no local
-# counterpart stay dummies.
+# the BUILD environment. PUBLIC_* are inlined at build time; the server secrets are written
+# by scripts/local-preview-config.mjs to dist/server/.preview.env and handed to the Worker
+# with `wrangler dev --env-file` (it does not read the adapter's dist/server/.dev.vars, and
+# CI has no project .env). Only secrets with no local counterpart stay dummies.
 #
 # Make both jobs REQUIRED status checks on `main` (Settings → Branches) once green.
 on:
@@ -75,7 +76,7 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Start preview (wrangler dev)
-        run: npx wrangler dev --port 8788 &
+        run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env &
       - name: Wait for preview
         run: npx wait-on http://localhost:8788 --timeout 90000
       - name: Playwright (e2e, axe WCAG 2.2 AA, CSP, served HTML, video bytes)
@@ -112,7 +113,7 @@ jobs:
       - name: Preview config (local KV simulation, no Cloudflare credentials)
         run: node scripts/local-preview-config.mjs
       - name: Start preview (wrangler dev)
-        run: npx wrangler dev --port 8788 &
+        run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env &
       - name: Wait for preview
         run: npx wait-on http://localhost:8788 --timeout 90000
       - name: Lighthouse budgets (mobile — Lighthouse default emulation)
