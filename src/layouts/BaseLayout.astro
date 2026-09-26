@@ -25,6 +25,9 @@ interface Props {
   /** `overlay`: the UI v2 header, transparent over the page's hero (home, contact).
       `solid` (default): the sticky bar for pages with no hero. See SiteHeader. */
   header?: HeaderVariant;
+  /** The header's language switch target, when it is NOT this page in the other locale —
+      a 404 has no twin, so its switch goes to the other locale's home. */
+  langHref?: string;
   /** Route stylesheets under /styles/, linked after global.css (UI v2: `work.css` on Our
       Work + All projects). A known name, never a URL — the sheet is same-origin, so the
       CSP's `style-src 'self'` covers it with no nonce. */
@@ -32,7 +35,7 @@ interface Props {
 }
 
 /** Every route stylesheet in public/styles/ (a closed list: a typo fails `astro check`). */
-type RouteStylesheet = 'work.css';
+type RouteStylesheet = 'about.css' | 'work.css';
 
 const {
   title,
@@ -45,6 +48,7 @@ const {
   canonicalOverride,
   chrome = true,
   header = 'solid',
+  langHref,
   styles = [],
 } = Astro.props;
 const direction = dir(locale);
@@ -67,7 +71,7 @@ const direction = dir(locale);
     {styles.map((sheet) => <link rel="stylesheet" href={`/styles/${sheet}`} />)}
   </head>
   <body>
-    {chrome && <SiteHeader locale={locale} variant={header} />}
+    {chrome && <SiteHeader locale={locale} variant={header} {...(langHref ? { langHref } : {})} />}
     {
       /*
       The skip link's target. It lives here rather than on each page's own <main>
@@ -82,7 +86,7 @@ const direction = dir(locale);
       <slot />
     </div>
     {chrome && <SiteFooter locale={locale} />}
-    <ConsentBanner />
+    <ConsentBanner locale={locale} />
     <WebVitals />
     <PageView />
     <ErrorReporter />

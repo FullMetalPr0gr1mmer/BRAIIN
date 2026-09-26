@@ -1,0 +1,44 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { TestimonialsSectionContent } from '@schemas/sections';
+import { getTestimonials, type Testimonial } from '@/lib/data/taxonomy';
+import Testimonials from './Testimonials.astro';
+
+// The `testimonials` section (UI v2 PR7): client quotes placed on a page, as the design's
+// carousel — the home Klein band by default. The quotes come from the testimonials table
+// (published only; the anon read never sees the consent record); this is only the layout
+// and the copy around them. No published quote on the placement → nothing renders, so a
+// production home page (whose sample quotes stay unpublished) has no empty band.
+
+interface Props extends TestimonialsSectionContent {
+  locale: Locale;
+  /** Route-injected quotes (SectionRenderer `data`) — never CMS content. */
+  data?: { items?: Testimonial[] } | undefined;
+}
+
+const {
+  locale,
+  variant = 'klein',
+  placement = 'home',
+  tag,
+  heading,
+  accent,
+  intervalMs,
+  limit,
+  data,
+} = Astro.props;
+
+const items =
+  data?.items ?? (await getTestimonials({ placement, ...(limit !== undefined ? { limit } : {}) }));
+---
+
+<Testimonials
+  locale={locale}
+  items={items}
+  variant={variant}
+  tag={tag}
+  heading={heading}
+  accent={accent}
+  intervalMs={intervalMs}
+  id="testimonials"
+/>

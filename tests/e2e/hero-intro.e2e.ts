@@ -591,3 +591,89 @@ test.describe('reduced motion', () => {
     });
   }
 });
+
+/*
+ * UI v2 PR7 — the home LCP element (CLAUDE.md §6: the intro logo <img>).
+ *
+ * Measured on production before this: a RETURNING visitor (consent already given, so no
+ * banner) got NO LCP entry at all — every candidate on the page animated in from opacity
+ * 0, and Chromium neither records an element painted at opacity 0 nor records it later
+ * when the fade brings it in. A first visit reported the consent banner's text instead.
+ * The logo's entrance now starts at opacity .01, so it is recorded at its first paint.
+ */
+test.describe('the home LCP is the intro logo', () => {
+  for (const route of ROUTES) {
+    test(`a returning visitor (consent given, no banner) records the logo — ${route}`, async ({
+      browser,
+      baseURL,
+    }) => {
+      const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+      // Read the live consent version from the page, then come back as a visitor who has
+      // already answered — in a NEW tab, so the once-per-session intro plays again.
+      const first = await ctx.newPage();
+      await first.goto(route, { waitUntil: 'load' });
+      const version = await first.locator('#consent-banner').getAttribute('data-version');
+      await first.close();
+      const state = { functional: true, analytics: false, marketing: false, v: Number(version) };
+      await ctx.addCookies([
+        {
+          name: '__Host-consent',
+          value: encodeURIComponent(JSON.stringify({ ...state, ts: 1 })),
+          url: baseURL ?? 'http://localhost:8788',
+          secure: true,
+          sameSite: 'Lax',
+        },
+      ]);
+      const page = await ctx.newPage();
+      await page.addInitScript(() => {
+        (window as unknown as { __lcp: unknown[] }).__lcp = [];
+        new PerformanceObserver((list) => {
+          for (const e of list.getEntries()) {
+            (window as unknown as { __lcp: unknown[] }).__lcp.push({
+              tag: (e as PerformanceEntry & { element?: Element }).element?.tagName ?? null,
+              intro: !!(e as PerformanceEntry & { element?: Element }).element?.closest('.intro'),
+            });
+          }
+        }).observe({ type: 'largest-contentful-paint', buffered: true });
+      });
+      await page.goto(route, { waitUntil: 'load' });
+      await expect(page.locator('#consent-banner')).toBeHidden();
+      await page.waitForTimeout(3000);
+      const lcp = await page.evaluate(
+        () => (window as unknown as { __lcp: { tag: string | null; intro: boolean }[] }).__lcp,
+      );
+      expect(lcp.length, 'no LCP candidate was recorded at all').toBeGreaterThan(0);
+      // The logo is recorded; nothing later on the hero outgrows it at 1366.
+      expect(lcp.some((e) => e.tag === 'IMG' && e.intro)).toBe(true);
+      await ctx.close();
+    });
+  }
+
+  test('the logo never starts fully transparent (the from-state Chromium skips)', async ({
+    page,
+  }) => {
+    await page.goto('/', { waitUntil: 'load' });
+    await seek(page, 0);
+    const opacity = await page.evaluate(() =>
+      parseFloat(getComputedStyle(document.querySelector('.intro img')!).opacity),
+    );
+    expect(opacity).toBeGreaterThan(0);
+    // ...and is still invisible to the eye during the FOUC guard.
+    expect(opacity).toBeLessThan(0.05);
+  });
+});
+
+test.describe('the hero CTA', () => {
+  for (const [route, label] of [
+    ['/', 'See our work'],
+    ['/ar', 'شوف أعمالنا'],
+  ] as const) {
+    test(`says "${label}" and jumps to the Selected work band — ${route}`, async ({ page }) => {
+      await page.goto(route, { waitUntil: 'load' });
+      const cta = page.locator('.hero__cta');
+      await expect(cta).toHaveText(label);
+      await expect(cta).toHaveAttribute('href', '#selected-work');
+      await expect(page.locator('#selected-work')).toHaveCount(1);
+    });
+  }
+});

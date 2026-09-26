@@ -2,8 +2,10 @@
 import type { Locale } from '@schemas/primitives';
 import type { SocialSectionContent } from '@schemas/sections';
 import type { SocialNetwork } from '@schemas/siteProfile';
+import type { Accent } from '@schemas/media';
 import { pickLocale } from '@/lib/i18n';
 import { getIdentity } from '@/lib/identity';
+import AccentText from '@/components/ui/AccentText.astro';
 
 // "Follow the studio" — gradient hover boxes on paper. The links are the public
 // identity's socials (`site_profile.socials`, host-allow-listed per network on write AND
@@ -12,6 +14,11 @@ import { getIdentity } from '@/lib/identity';
 // hrefs are validated https-only there, since they render into <a href>). Icons resolve
 // by network, and for a per-section override by label (case-insensitive); a label the
 // map does not know renders without an icon.
+//
+// Two layouts (UI v2 PR8): `paper` (default — home, contact) and `klein`, About's "Follow
+// the studio" band (the mockup's `.follow`): Klein ground with the sky glow, the heading
+// beside a line of text, its accent outlined, white-fill hover cards. Each layout has its
+// own built-in copy, verbatim from the design.
 
 interface Props extends SocialSectionContent {
   locale: Locale;
@@ -20,12 +27,44 @@ interface Props extends SocialSectionContent {
   joined?: boolean;
 }
 
-const { locale, tag, heading, links, joined = false } = Astro.props;
+const {
+  locale,
+  variant = 'paper',
+  tag,
+  heading,
+  accent,
+  text,
+  links,
+  joined = false,
+} = Astro.props;
 
-const STR = {
-  en: { tag: 'Follow the studio', heading: 'New work goes up here first.' },
-  ar: { tag: 'تابع الاستوديو', heading: 'الشغل الجديد ينزل هنا أول.' },
-}[locale];
+type Copy = { tag: string; heading: string; text?: string; accent?: Accent };
+const STR_BY_VARIANT: Record<'paper' | 'klein', Record<Locale, Copy>> = {
+  paper: {
+    en: { tag: 'Follow the studio', heading: 'New work goes up here first.' },
+    ar: { tag: 'تابع الاستوديو', heading: 'الشغل الجديد ينزل هنا أول.' },
+  },
+  klein: {
+    en: {
+      tag: 'Follow the studio',
+      heading: 'See the work as it happens',
+      text: 'Launches, behind the scenes, and new work. It goes up on our channels first.',
+      accent: { en: { from: 3 } },
+    },
+    ar: {
+      tag: 'تابع الاستوديو',
+      heading: 'شوف الشغل وهو يصير',
+      text: 'الإطلاقات وكواليس العمل والشغل الجديد. كلها تنزل على حساباتنا أول.',
+      accent: { ar: { from: 2 } },
+    },
+  },
+};
+const STR = STR_BY_VARIANT[variant][locale];
+const klein = variant === 'klein';
+const headingText = heading ? pickLocale(heading, locale) : STR.heading;
+// An authored heading keeps only an authored accent.
+const headingAccent = heading ? accent : (accent ?? STR.accent);
+const lineText = text ? pickLocale(text, locale) : STR.text;
 
 // Display name + icon per network. Handles and URLs are data (the identity), not code.
 // Complete by type: Record<SocialNetwork, …> makes the compiler flag a network added to
@@ -66,12 +105,39 @@ const resolved = links
     }));
 ---
 
-<section class:list={['social-strip', { 'social-strip--joined': joined }]}>
+<section
+  class:list={[
+    'social-strip',
+    { 'social-strip--joined': joined, 'social-strip--klein klein-band': klein },
+  ]}
+>
   <div class="social-strip__wrap section-wrap">
-    <div class="tag rv">
-      <span class="dot"></span><span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
-    </div>
-    <h2 class="rv">{heading ? pickLocale(heading, locale) : STR.heading}</h2>
+    {
+      klein ? (
+        <div class="social-strip__head">
+          <div>
+            <div class="tag rv">
+              <span class="dot" />
+              <span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+            </div>
+            <h2 class="rv">
+              <AccentText text={headingText} locale={locale} accent={headingAccent} />
+            </h2>
+          </div>
+          {lineText && <p class="rv">{lineText}</p>}
+        </div>
+      ) : (
+        <>
+          <div class="tag rv">
+            <span class="dot" />
+            <span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+          </div>
+          <h2 class="rv">
+            <AccentText text={headingText} locale={locale} accent={headingAccent} />
+          </h2>
+        </>
+      )
+    }
     <ul class="social-links">
       {
         resolved.map((l) => (

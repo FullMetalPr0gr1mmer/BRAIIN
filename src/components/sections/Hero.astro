@@ -2,7 +2,8 @@
 import { Picture } from 'astro:assets';
 import type { Locale } from '@schemas/primitives';
 import type { HeroSectionContent } from '@schemas/sections';
-import { pickLocale } from '@/lib/i18n';
+import { localizedHref, pickLocale } from '@/lib/i18n';
+import { splitTrailingMark } from '@/lib/text/accent';
 import logo from '@/assets/braiin-logo-white.png';
 
 // Full-viewport brand hero (design: "Brain Station UI"). Sticky, so the next section
@@ -28,8 +29,12 @@ interface Props extends HeroSectionContent {
   videoSrc?: string;
   /** Short banner variant (the contact hero): shorter box, icon CTA, no scroll cue. */
   banner?: boolean;
-  /** Where the hero CTA points. Defaults to the home page's services anchor. */
+  /** Where the hero CTA points (a code default — the contact banner's `#inquiry`).
+      Defaults to the home page's Selected work band. */
   ctaHref?: string;
+  /** Route-injected (SectionRenderer `data`, never CMS content): the home route's CTA
+      target — `/portfolio` when the Selected work band will not render. */
+  data?: { ctaHref?: string } | undefined;
 }
 
 const {
@@ -47,24 +52,27 @@ const {
   accentFromAr,
   sub,
   ctaLabel,
+  data,
 } = Astro.props;
 
 const STR = {
   en: {
     headline: 'Creative work that performs*',
     sub: 'From the brain to the real world.',
-    cta: 'Our Services',
+    cta: 'See our work',
     scroll: 'Scroll',
   },
   ar: {
     headline: 'شغل إبداعي يحقّق نتائج*',
     sub: 'من الدماغ إلى أرض الواقع.',
-    cta: 'خدماتنا',
+    cta: 'شوف أعمالنا',
     scroll: 'انزل',
   },
 }[locale];
 
 type Word = { text: string; accent: boolean };
+// The accent never carries the footnote asterisk ("performs*": the mark stays white, as in
+// the design's `<em>performs</em>*`), so an accented word renders as body + plain mark.
 const WORDS: Record<Locale, Word[]> = {
   en: [
     { text: 'Creative', accent: false },
@@ -92,6 +100,11 @@ const words: Word[] = headline
 const subText = sub ? pickLocale(sub, locale) : STR.sub;
 const ctaText = ctaLabel ? pickLocale(ctaLabel, locale) : STR.cta;
 const perWord = locale === 'ar';
+const parts = words.map((w) => ({
+  ...w,
+  ...(w.accent ? splitTrailingMark(w.text) : { body: w.text, mark: '' }),
+}));
+const href = localizedHref(data?.ctaHref ?? ctaHref ?? '#selected-work', locale);
 
 // The intro logo renders at `min(46vw, 520px, 66svh)`, so `width={520}` + densities
 // [1,2] emits the matching 520w/1040w pair. It was `width={1040}` with the same
@@ -127,13 +140,14 @@ const src = videoUid ? undefined : videoSrc;
   <div class="hero__inner">
     <h1 aria-label={headlineText}>
       {
-        words.map((w) => (
+        parts.map((w) => (
           <span class:list={['word', { accent: w.accent }]} aria-hidden="true">
             {perWord ? (
-              <span class="letter">{w.text}</span>
+              <span class="letter">{w.body}</span>
             ) : (
-              [...w.text].map((ch) => <span class="letter">{ch}</span>)
+              [...w.body].map((ch) => <span class="letter">{ch}</span>)
             )}
+            {w.mark && <span class="letter letter--plain">{w.mark}</span>}
           </span>
         ))
       }
@@ -142,7 +156,7 @@ const src = videoUid ? undefined : videoSrc;
       <p class="hero__sub">{subText}</p>
       <a
         class:list={['cta', 'hero__cta', { 'cta--icon': banner, 'cta--down': banner }]}
-        href={ctaHref ?? '#services'}
+        href={href}
       >
         <span>{ctaText}</span>
         {

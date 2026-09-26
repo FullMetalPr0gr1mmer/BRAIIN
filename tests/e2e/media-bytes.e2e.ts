@@ -22,6 +22,7 @@ const ROUTES = [
   '/contact',
   '/ar/contact',
   '/about',
+  '/ar/about',
   '/services',
   // UI v2 PR10: the banner loop (on screen at load — allowed), hover clips on the cards and
   // the intro's in-view clips (below the fold — never before intersection)

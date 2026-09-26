@@ -195,3 +195,55 @@ test('the footer keeps the section links and the PDPL legal links', async ({ pag
   await expect(lists.nth(1).locator('a')).toHaveText(['الخصوصية', 'الشروط', 'ملفات الارتباط']);
   await expect(lists.nth(1).locator('a').first()).toHaveAttribute('href', '/ar/privacy');
 });
+
+// ── UI v2 PR7 regressions (verified on production) ─────────────────────────────────
+for (const route of ['/contact', '/ar/contact']) {
+  test(`the open small-screen menu shows the key link once, current once — ${route}`, async ({
+    page,
+  }) => {
+    // At <=900px the key link lives in the bar; its list copy used to show in the open
+    // panel too, so "Contact us" appeared twice and BOTH carried aria-current="page".
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto(route);
+    await page.locator('.site-nav__toggle').click();
+    await expect(page.locator('.site-nav__panel')).toBeVisible();
+    await expect(page.locator('.site-header [aria-current="page"]:visible')).toHaveCount(1);
+    await expect(page.locator('.site-nav__list > .is-key')).toBeHidden();
+  });
+}
+
+test('the consent banner speaks Arabic on Arabic pages and links the Arabic policy', async ({
+  page,
+}) => {
+  await page.goto('/ar/services');
+  const banner = page.locator('#consent-banner');
+  await expect(banner).toBeVisible();
+  await expect(banner).toHaveAttribute('aria-label', 'الموافقة على ملفات تعريف الارتباط');
+  await expect(banner.locator('a')).toHaveAttribute('href', '/ar/cookie-policy');
+  await expect(banner.locator('[data-consent="accept"]')).toHaveText('قبول التحليلات');
+  // It inherits the page's language and direction.
+  expect(await banner.evaluate((el) => getComputedStyle(el).direction)).toBe('rtl');
+});
+
+test('the English consent banner links the English policy', async ({ page }) => {
+  await page.goto('/services');
+  await expect(page.locator('#consent-banner a')).toHaveAttribute('href', '/cookie-policy');
+});
+
+for (const [route, lang, home] of [
+  ['/ar/no-such-page', 'ar', '/'],
+  ['/ar/services/nope/deeper', 'ar', '/'],
+  ['/no-such-page', 'en', '/ar'],
+] as const) {
+  test(`an unknown URL answers the ${lang} 404, switching language to the other home — ${route}`, async ({
+    page,
+  }) => {
+    const res = await page.goto(route);
+    expect(res?.status()).toBe(404);
+    await expect(page.locator('html')).toHaveAttribute('lang', lang);
+    await expect(page.locator('html')).toHaveAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+    // A 404 has no twin: the switch goes home in the other language, never to itself.
+    await expect(page.locator('.site-header__lang')).toHaveAttribute('href', home);
+  });
+}

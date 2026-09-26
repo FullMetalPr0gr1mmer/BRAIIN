@@ -683,6 +683,12 @@ html[dir='rtl'] .site-header__key::after {
     align-items: flex-start;
     gap: 0.9rem;
   }
+  /* The key link is already in the bar at this width (.site-header__key). Its copy in the
+     list would show "Contact us" twice in the open panel — and on /contact both copies
+     carried aria-current="page". display:none also takes it out of the a11y tree. */
+  .site-nav__list > .is-key {
+    display: none;
+  }
 }
 
 /* Small phones (360–400px): logo, key link, menu toggle and language pill share one row.
@@ -757,9 +763,16 @@ html[dir='rtl'] .site-header__key::after {
   animation: intro-logo-in 0.45s var(--bs-ease) both;
   animation-delay: var(--bs-intro-guard);
 }
+/* The from-state is opacity .01, NOT 0 — this is the home page's LCP element (CLAUDE.md
+   §6). Chromium records no LCP candidate for an element painted at opacity 0, and does not
+   record it later when the fade brings it in: measured, a logo entering from 0 left a
+   returning visit (no consent banner) with NO LCP entry at all, and a first visit reported
+   the consent banner's text instead. At .01 the logo is recorded at its first paint and is
+   still invisible to the eye through the FOUC guard, so the intro is unchanged. Do not
+   "tidy" this back to 0 — tests/e2e/hero-intro.e2e.ts asserts the logo is the LCP. */
 @keyframes intro-logo-in {
   from {
-    opacity: 0;
+    opacity: 0.01;
     transform: scale(0.965);
   }
   to {
@@ -1177,13 +1190,14 @@ html[dir='rtl'] .hero__scroll i {
 }
 
 /* ============================================================
-   About intro (home) — paper section that covers the hero.
+   About intro (home) — the mist "Why {brand}" block (UI v2 order:
+   after the services list).
    ============================================================ */
 
 .about-intro {
   position: relative;
   z-index: 2;
-  background: var(--bs-paper);
+  background: var(--bs-mist); /* UI v2: the "Why {brand}" block is mist, after the services */
   color: var(--bs-ink);
   padding: clamp(72px, 13vh, 170px) var(--bs-pad-x) clamp(80px, 14vh, 180px);
   margin: 0;
@@ -2038,6 +2052,72 @@ html[dir='rtl'] .sbox__user {
 }
 .sbox:hover .sbox__user {
   color: rgba(255, 255, 255, 0.88);
+}
+
+/* ---- Klein variant — About "Follow the studio" (UI v2 PR8; the mockup's `.follow`).
+   Ground, sky glow, white tag/dot, outlined accent and white focus ring come from
+   .klein-band (UI v2 shared blocks). Shared, not in about.css: `social` is a section
+   type any page can compose. ---- */
+.social-strip--klein {
+  padding: clamp(80px, 13vh, 160px) var(--bs-pad-x);
+}
+.social-strip--klein .social-strip__wrap {
+  position: relative;
+}
+.social-strip__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 24px 48px;
+}
+.social-strip--klein h2 {
+  font-size: clamp(38px, 7vw, 120px);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+  max-width: 12ch;
+}
+html[dir='rtl'] .social-strip--klein h2 {
+  font-size: clamp(32px, 5.6vw, 92px);
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.social-strip__head > p {
+  margin: 0;
+  max-width: 34ch;
+  font-size: clamp(15px, 1.3vw, 18px);
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.88);
+}
+.social-strip--klein .social-links {
+  margin-top: clamp(40px, 6vh, 64px);
+}
+.social-strip--klein .sbox {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--bs-paper);
+}
+.social-strip--klein .sbox::before {
+  background: var(--bs-paper);
+}
+.social-strip--klein .sbox:hover {
+  color: var(--bs-klein);
+}
+.social-strip--klein .sbox__user {
+  color: rgba(255, 255, 255, 0.72);
+}
+.social-strip--klein .sbox:hover .sbox__user {
+  color: var(--bs-dim);
+}
+/* An outline with no fill vanishes when forced colors drop the stroke: fill it instead. */
+@media (forced-colors: active) {
+  .social-strip--klein h2 em {
+    color: CanvasText;
+    -webkit-text-stroke: 0;
+  }
 }
 
 /* ============================================================
@@ -3749,6 +3829,219 @@ html[dir='rtl'] .cta--trail svg {
     opacity: 1;
     transform: none;
   }
+}
+
+/* ============================================================
+   UI v2 HOME (PR7) — home-only blocks, one delimited block.
+   Namespace: .sel-work* (Selected work — the mockup's .sw-*),
+   .contact-form--compact + .contact-form.is-sent (the home lead
+   form and its sent state), .letter--plain (the hero's footnote
+   mark), and the home band stacking.
+   ============================================================ */
+
+/* The hero stays sticky-pinned under the WHOLE home page (z-index 1), so every band after
+   it must paint above it. The PR6 shared bands (.sb, .klein-band) are positioned but carry
+   no z-index of their own — without this the pinned hero video would sit on top of them. */
+.sb--band,
+.tm--klein {
+  z-index: 4;
+}
+
+/* The accent never takes the footnote asterisk ("<em>performs</em>*"). */
+.hero h1 .letter--plain {
+  color: var(--bs-fg);
+}
+
+/* ---- Selected work (SelectedWork.astro) — mist surface ---- */
+.sel-work {
+  position: relative;
+  z-index: 4;
+  background: var(--bs-mist);
+  color: var(--bs-ink);
+  padding: clamp(72px, 11vh, 140px) var(--bs-pad-x) clamp(80px, 12vh, 150px);
+  margin: 0;
+}
+.sel-work__top,
+.sel-work__state {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 72px);
+}
+.sel-work__top {
+  align-items: center;
+}
+.sel-work__copy {
+  padding-inline-end: clamp(0px, 4vw, 80px);
+}
+.sel-work__blurb {
+  margin: 0;
+  font-size: clamp(16px, 1.45vw, 21px);
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+}
+html[dir='rtl'] .sel-work__blurb {
+  letter-spacing: 0;
+  line-height: 1.9;
+}
+/* The project's name, then its blurb (the catalogue teaser, which does not open with the
+   name the way the mockup's home-only sentence did). */
+.sel-work__blurb b {
+  display: block;
+  font-weight: 800;
+}
+.sel-work .facets {
+  margin-top: 24px;
+}
+.sel-work__link {
+  display: inline-block;
+  margin-top: 26px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid currentColor;
+  color: var(--bs-ink);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: color 0.3s;
+}
+html[dir='rtl'] .sel-work__link {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 15px;
+}
+.sel-work__link:hover {
+  color: var(--bs-klein);
+}
+.sel-work__state {
+  align-items: end;
+  margin-top: clamp(56px, 9vh, 110px);
+}
+.sel-work__state h2 {
+  margin: 0;
+  max-width: 16ch;
+  font-size: clamp(34px, 5vw, 80px);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .sel-work__state h2 {
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: none;
+}
+.sel-work__state h2 em {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+.sel-work__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--bs-line-l);
+}
+.sel-work__lines li {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--bs-line-l);
+  font-size: clamp(16px, 1.5vw, 20px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+html[dir='rtl'] .sel-work__lines li {
+  letter-spacing: 0;
+}
+.sel-work__lines li > span:first-child {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bs-klein);
+  font-variant-numeric: tabular-nums;
+}
+.sel-work__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(14px, 1.4vw, 22px);
+  margin-top: clamp(56px, 9vh, 110px);
+}
+.sel-work__foot {
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(48px, 8vh, 90px);
+}
+@media (max-width: 53.75rem) {
+  .sel-work__top,
+  .sel-work__state {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sel-work__copy {
+    padding: 0;
+  }
+}
+@media (max-width: 43.75rem) {
+  .sel-work__grid {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 44px;
+  }
+}
+
+/* ---- The home lead form (ContactForm fields="compact") ---- */
+.contact-form--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: none;
+}
+@media (max-width: 45rem) {
+  .contact-form--compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* The design's submit: label then arrow, no badge; the button before the note. */
+.contact-form--compact .contact-form__foot .cta--trail {
+  margin-top: 0;
+  padding: 16px 30px;
+  gap: 11px;
+  font-size: 13.5px;
+}
+html[dir='rtl'] .contact-form--compact .contact-form__foot .cta--trail {
+  font-size: 15px;
+}
+.contact-form--compact .contact-form__note {
+  flex: 0 1 38ch;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* Error text on the dark form: the soft red (#ff8a8a) is the audited error-text token on
+   black; the base red stays the field's border colour. */
+.contact-form .field-error {
+  color: var(--bs-err-soft);
+}
+
+/* Sent: the fields give way to the confirmation (the design's .form.sent + .form__ok),
+   which the script focuses. Only ever set by formErrors.showStatus('ok'). */
+.contact-form.is-sent > :not(.form-status) {
+  display: none;
+}
+.contact-form .form-status.is-ok:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: rgba(2, 76, 255, 0.14);
+  border: 1px solid rgba(2, 76, 255, 0.45);
+  font-size: 14.5px;
+}
+.contact-form .form-status.is-ok::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bs-sky);
 }
 
 /* ---- Motion safety net ---- */
