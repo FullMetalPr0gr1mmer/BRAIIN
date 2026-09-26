@@ -31,7 +31,7 @@
 | Item | Budget |
 |---|---|
 | EN + AR fonts **per route** | ≤ 180 KB woff2 (AR face counts) |
-| Hero face (the one preloaded) | ≤ 35 KB Latin / 45 KB Arabic |
+| Hero face (the one preloaded — per route) | ≤ 35 KB Latin / 45 KB Arabic |
 | `font-display` | `swap` (never blocks render) |
 | CLS from fonts | 0 — via `size-adjust` + `ascent/descent-override` |
 
@@ -84,6 +84,17 @@
    <link rel="preload" href="/fonts/brand-latin.woff2" as="font" type="font/woff2" crossorigin />
    <!-- on /ar/*, preload brand-arabic.woff2 instead -->
    ```
+   **The Arabic hero face is per route** (2026-09-27). Almarai is static, so the face to
+   preload is the weight the route's above-the-fold heading actually renders in — a CSS
+   weight with no file of its own resolves to a neighbour (600 → 700). The href comes from
+   `heroFontPreload()` in `src/lib/seo/fonts.ts`; a route picks the face with BaseLayout's
+   `heroFace` prop (`almarai-800` by default — Home's hero; `almarai-700` on About, whose h1
+   is weight 600). Still exactly one preload. Why: `/ar/about` preloaded 800 while its h1
+   rendered in 700, and the late 700 swap reflowed the split heading — Lighthouse CLS 0.14
+   against the 0.1 budget, on `/ar/about` only. The `Almarai Fallback` metrics are tuned to
+   `local('Arial')`, which Linux/Android lack, so the swap is not CLS-free there and the
+   preload is what keeps the shift out of the window. `tests/seo/fonts.spec.ts` locks the
+   hrefs and each preloadable face's hero budget (every Almarai arabic face is ≈ 25 KB).
 
 4. **Verify:** `npm run a11y:contrast` (already green), then run the staged
    `perf-seo-a11y` workflow — Lighthouse asserts `font-display`, unsized-images, and the

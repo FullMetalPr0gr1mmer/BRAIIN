@@ -6,6 +6,7 @@ import {
   SocialSectionContentSchema,
   sectionContentIssues,
 } from '@schemas/sections';
+import { waitsForLoad } from '@/lib/client/clips';
 import { keyStep, pad2, sliderState } from '@/lib/client/slider';
 import { DEFAULT_ABOUT_SECTIONS, type SectionData } from '@/lib/sections/types';
 
@@ -169,6 +170,7 @@ const row = (over: Partial<TeamMemberRow> = {}): TeamMemberRow => ({
   role: t('Founder & CEO', 'المؤسس والرئيس التنفيذي'),
   linkedin_url: null,
   is_leadership: true,
+  is_placeholder: false,
   portrait: null,
   ...over,
 });
@@ -251,6 +253,17 @@ describe('About route plumbing', () => {
     expect(leadershipJsonLd([{ type: 'aboutWho' }], leaders, opts)).toEqual([]);
   });
 
+  it('a placeholder leader keeps its card but never becomes a Person node', () => {
+    const placeholder = toLeader(row({ slug: 'leader-3', is_placeholder: true }));
+    expect(placeholder.isPlaceholder).toBe(true);
+    expect(leadershipJsonLd([{ type: 'leadership' }], [placeholder], opts)).toEqual([]);
+    const mixed = leadershipJsonLd([{ type: 'leadership' }], [...leaders, placeholder], opts);
+    expect(mixed).toHaveLength(2);
+    // The card data is untouched: withLeaders still hands the slider every row.
+    const [section] = withLeaders([{ type: 'leadership' }], [placeholder]);
+    expect(section!.data).toEqual({ leaders: [placeholder] });
+  });
+
   it('localises the Person name and role', () => {
     const [node] = leadershipJsonLd([{ type: 'leadership' }], leaders, { ...opts, locale: 'ar' });
     expect(node).toMatchObject({ name: 'الاسم الكامل', jobTitle: 'المؤسس والرئيس التنفيذي' });
@@ -269,5 +282,18 @@ describe('About route plumbing', () => {
     };
     const [node] = leadershipJsonLd([{ type: 'leadership' }], [toLeader(row({ portrait }))], opts);
     expect(node!.image).toBe('https://www.braiinstation.com/_astro/p2.jpg');
+  });
+});
+
+describe('the "who" clip waits for load (its poster is the LCP)', () => {
+  const frame = (dataset: Record<string, string>) => ({ dataset }) as unknown as HTMLElement;
+
+  it('holds a priority frame until the document is complete', () => {
+    expect(waitsForLoad(frame({ clipAfterLoad: '' }), 'loading')).toBe(true);
+    expect(waitsForLoad(frame({ clipAfterLoad: '' }), 'interactive')).toBe(true);
+    // already loaded (script ran late): observe at once
+    expect(waitsForLoad(frame({ clipAfterLoad: '' }), 'complete')).toBe(false);
+    // any other frame is observed immediately
+    expect(waitsForLoad(frame({}), 'loading')).toBe(false);
   });
 });

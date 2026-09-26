@@ -25,7 +25,9 @@ export function withLeaders(sections: readonly SectionData[], leaders: Leader[])
 /**
  * Person JSON-LD for the leaders the page actually shows — none when the leadership
  * section is hidden or absent, so the structured data never names people a visitor cannot
- * see. Role → jobTitle, LinkedIn → sameAs, portrait → image (absolute).
+ * see — and never for a seeded placeholder: the 0027 override may put its card live, but
+ * structured data is read as fact, so "Name Surname" is never asserted as staff (decision
+ * 36). Role → jobTitle, LinkedIn → sameAs, portrait → image (absolute).
  */
 export function leadershipJsonLd(
   sections: readonly SectionData[],
@@ -33,14 +35,16 @@ export function leadershipJsonLd(
   opts: { locale: Locale; org: OrgRef; siteBase: string },
 ): JsonLdNode[] {
   if (!showsSection(sections, 'leadership')) return [];
-  return leaders.map((l) => {
-    const jobTitle = l.role ? pickLocale(l.role, opts.locale) : '';
-    return buildPersonSchema({
-      name: pickLocale(l.name, opts.locale, l.slug),
-      org: opts.org,
-      ...(jobTitle ? { jobTitle } : {}),
-      ...(l.linkedinUrl ? { sameAs: [l.linkedinUrl] } : {}),
-      ...(l.portrait ? { image: opts.siteBase + l.portrait.src.src } : {}),
+  return leaders
+    .filter((l) => !l.isPlaceholder)
+    .map((l) => {
+      const jobTitle = l.role ? pickLocale(l.role, opts.locale) : '';
+      return buildPersonSchema({
+        name: pickLocale(l.name, opts.locale, l.slug),
+        org: opts.org,
+        ...(jobTitle ? { jobTitle } : {}),
+        ...(l.linkedinUrl ? { sameAs: [l.linkedinUrl] } : {}),
+        ...(l.portrait ? { image: opts.siteBase + l.portrait.src.src } : {}),
+      });
     });
-  });
 }

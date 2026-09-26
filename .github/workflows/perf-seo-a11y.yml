@@ -57,7 +57,10 @@ jobs:
           cache: npm
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned: `latest` asks the GitHub API for the newest release on every job, and a
+          # burst of parallel runs hits its rate limit ("Failed to resolve latest Supabase CLI
+          # release") and fails the gate for no code reason. Bump deliberately (supply chain).
+          version: 2.118.0
       - run: npm ci
       - name: Start Supabase (migrations + seed.sql)
         run: supabase start -x "$SUPABASE_EXCLUDE"
@@ -96,7 +99,10 @@ jobs:
           cache: npm
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned: `latest` asks the GitHub API for the newest release on every job, and a
+          # burst of parallel runs hits its rate limit ("Failed to resolve latest Supabase CLI
+          # release") and fails the gate for no code reason. Bump deliberately (supply chain).
+          version: 2.118.0
       - run: npm ci
       - name: Start Supabase (migrations + seed.sql)
         run: supabase start -x "$SUPABASE_EXCLUDE"

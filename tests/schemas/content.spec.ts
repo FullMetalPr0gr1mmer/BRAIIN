@@ -131,6 +131,7 @@ describe('content rows', () => {
       role: null,
       linkedin_url: null,
       is_leadership: false,
+      is_placeholder: false,
       portrait: null,
     };
     expect(TeamMemberRowSchema.safeParse({ ...base, name: { en: 'Lead Designer' } }).success).toBe(

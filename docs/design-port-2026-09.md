@@ -106,8 +106,10 @@ existing global.css utilities.
     whenever the table was empty — a claim no editor could withdraw. The names now come
     only from `clients` rows that are `visible` (the disclosure permission, enforced by
     RLS) and `show_in_marquee`, in each locale's spelling (`partner_logos` held one English
-    name per row). "Since 2019" is the identity's `founded_year` (Arabic-Indic in Arabic,
-    as the design writes it); no year, no note. The partner-logos admin is retired (its
+    name per row). The track runs `direction: ltr` as the design's does (the loop maths
+    assume it; each Arabic name is its own bidi run), flipping back to RTL only in the
+    reduced-motion static list. "Since 2019" is the identity's `founded_year` (Arabic-Indic
+    in Arabic, as the design writes it); no year, no note. The partner-logos admin is retired (its
     table stays until the contract migration; `export-backup` still dumps it).
 21. **Selected work picks among the featured projects only.** Default: the first by
     `sort_order` is the featured project, the next two the cards; `featuredSlug` /
@@ -128,7 +130,11 @@ existing global.css utilities.
     and a server 422 now names the refused schema keys (never their values, never the
     honeypot) so those fields are marked too. On success the fields give way to the
     confirmation panel, which takes focus. Error text uses `--bs-err-soft` (the audited
-    token on black). The consent label says "inquiry" in both forms.
+    token on black). The consent label says "inquiry" in both forms. The selects carry the
+    design's chevron (`appearance: none`, mirrored in RTL), but unlike the mockup it stays
+    visible on focus (the focus rule sets `background-color`, not the shorthand). The
+    invalid-form message names no direction ("the marked fields") — the status line renders
+    below every field it refers to (WCAG 1.3.3).
 23. **The contact-form contract is one list** (`src/lib/forms/contactPayload.ts`): the
     fields per variant (the markup renders from it) and their LeadInputSchema keys.
     `tests/lib/contactForm.spec.ts` asserts every key it can post is a schema key — the
@@ -176,7 +182,13 @@ names only, validated `^[a-z0-9-]+\.css$`). The Klein social variant stays in gl
     is empty, as in the mockup (a showreel frame beside the manifesto). The code default
     carries no media — the poster (the p2 still) and the 6.2–7.9 s clip are seeded section
     content — so an unseeded page renders the section text-only rather than falling back to a
-    hard-coded image.
+    hard-coded image. Its in-view clip waits for `load` before it is observed
+    (`data-clip-after-load`, set by MediaFrame on a `priority` in-view frame), so the
+    showreel's bytes never compete with the poster — the rule MediaBanner and the hero apply.
+    The page's one font preload is the face its h1 renders in: `/ar/about` preloads Almarai
+    **700** (the weight-600 h1 resolves to it), not Home's 800 — preloading 800 left the 700
+    face to swap in late and shift the split heading (CLS 0.14 > 0.1). BaseLayout `heroFace`;
+    docs/fonts.md step 3.
 29. **Leadership is its own section type (`leadership`)**, not a `team` variant: `team` stays
     the table-backed author grid with no content, and the slider's copy (tag, heading,
     accent, text) is typed content like every other UI v2 band. The people are
@@ -209,10 +221,12 @@ names only, validated `^[a-z0-9-]+\.css$`). The Klein social variant stays in gl
     Arabic outline over joined glyphs is flagged for the PR14 visual review.
 35. **Certifications and the CTA band are dropped from the About composition** (the mockup
     has neither); both remain section types an editor can add back.
-36. **Person JSON-LD names only the leaders the page shows** (none when the leadership
-    section is hidden), with `jobTitle` and `sameAs` (LinkedIn). The seeded placeholders are
-    drafts in production, so no placeholder person is ever published there; dev/CI/staging
-    carry their "Name Surname" nodes.
+36. **Person JSON-LD names only the real leaders the page shows** (none when the leadership
+    section is hidden), with `jobTitle` and `sameAs` (LinkedIn). A placeholder row
+    (`is_placeholder`) never emits a Person node — in any environment, including production
+    once the 0027 override and runbook §6c publish the seeded "Name Surname" leaders: their
+    cards show (the owner's decision), but structured data is read as fact about real people
+    at the studio. The legacy `team` grid's Person nodes follow the same rule.
 37. **The About manifesto is the About page's own copy**, verbatim (it differs from the home
     "why us" columns: "between vendors", no "Arabic, English, or…" sentence), and the h1's
     accent includes the final period, as the mockup's `<em>` does.
