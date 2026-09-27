@@ -16,8 +16,8 @@ const T = {
   fg: '#ffffff', // --bs-fg
   muted: '#a6adbf', // --bs-muted (secondary text on dark)
   accent: '#22a9ff', // --bs-accent / --bs-sky (links, stat values on dark)
-  skySoft: '#9ed4ff', // --bs-sky-soft (svc-row numbers on the Klein hover fill)
-  klein: '#0024bc', // --bs-klein (.cta / .badge / .svc-row hover fill)
+  skySoft: '#9ed4ff', // --bs-sky-soft (a sky tint that passes on the Klein fill)
+  klein: '#0024bc', // --bs-klein (.cta / .badge fills)
   cobalt: '#024cff', // --bs-cobalt (focus outline, hero accent word — display size)
   paper: '#ffffff', // --bs-paper (light sections)
   ink: '#000000', // --bs-ink (text on paper)
@@ -58,6 +58,20 @@ const T = {
   kwChip: '#e6e6e6', // .cs-kw li — white .90 over black
   lbWorst: '#141414', // .lightbox — the .92 black dialog over a WHITE page
   lbCount: '#b9b9b9', // .lightbox__c — white .70 over lbWorst
+  // Round 2 (S2) — the discipline cards (global.css) over their worst case, a WHITE poster
+  discWorst: '#666666', // .disc-card__clip::after — the .6 black the words sit on, over white
+  discCount: '#eaeaea', // .disc-card__cnt — white .86 over discWorst
+  discLine: '#f0f0f0', // .disc-card__line — white .90 over discWorst
+  discPill: '#6d6d6d', // .disc-card__n — its .4 glass under the top scrim (.29 at its foot), over white
+  // Round 2 (S2) — "Say hello" (services.css) on black, and under its Klein glow
+  helloGlow: '#00125e', // .hello::before — rgba(0,36,188,.5) over black, the glow's peak
+  helloLead: '#9e9e9e', // .hello__p — white .62 over black
+  helloLeadGlow: '#9ea5c2', // .hello__p — white .62 over helloGlow
+  helloIcon: '#010f33', // .hello__pts b — rgba(2,76,255,.2) over black
+  // Round 2 (S2) — the service page's skip pill (services.css .hero__skip): its .5 glass
+  // over a WHITE frame under the hero's top scrim (≈ .18 where the pill sits)
+  skipWorst: '#686868',
+  skipKicker: '#ededed', // .hero__skip small — white .88 over skipWorst
 };
 
 // (foreground, background, minRatio, where) — every real on-screen pairing.
@@ -132,6 +146,28 @@ const PAIRS = [
   ['klein', 'touchCard', 4.5, 'contact channel card label (Klein on the card tint)'],
   ['ink', 'touchCard', 4.5, 'contact channel card value'],
   ['dim', 'touchCard', 4.5, 'contact channel card note'],
+  // Round 2 (S2): the discipline cards — home on paper, /services on mist
+  ['dim', 'mist', 4.5, 'discipline band (page mode): sub-line + hint on mist'],
+  ['klein', 'mist', 4.5, 'discipline band (page mode): kicker + heading accent on mist'],
+  ['dim', 'paper', 4.5, 'discipline band (home): sub-line + hint on paper'],
+  ['fg', 'discWorst', 4.5, 'discipline card name over a white poster (worst case)'],
+  ['discCount', 'discWorst', 4.5, 'discipline card count ("8 services") over a white poster'],
+  ['discLine', 'discWorst', 4.5, 'discipline card short line over a white poster'],
+  ['fg', 'discPill', 4.5, 'discipline card number pill over a white poster'],
+  ['klein', 'paper', 3.0, 'discipline card arrow (Klein on its white disc, UI)'],
+  ['paper', 'klein', 3.0, 'discipline card arrow, hovered (white on Klein, UI)'],
+  ['klein', 'paper', 3.0, 'discipline card focus ring, outer (Klein against the band, UI)'],
+  ['accent', 'midnight', 4.5, 'grouped service select: discipline heading (sky optgroup)'],
+  // Round 2 (S2): "Say hello" — black band, Klein glow at its top
+  ['accent', 'bg', 4.5, 'hello kicker + heading accent on black'],
+  ['accent', 'helloGlow', 4.5, 'hello kicker + heading accent under the Klein glow'],
+  ['fg', 'helloGlow', 4.5, 'hello heading + points under the Klein glow'],
+  ['helloLead', 'bg', 4.5, 'hello lead line on black'],
+  ['helloLeadGlow', 'helloGlow', 4.5, 'hello lead line under the Klein glow'],
+  ['accent', 'helloIcon', 3.0, 'hello point icon (sky plus on its disc, UI)'],
+  // Round 2 (S2): the service page's skip pill over footage
+  ['fg', 'skipWorst', 4.5, 'skip pill label over a white frame (worst case)'],
+  ['skipKicker', 'skipWorst', 4.5, 'skip pill kicker ("Been here before?") over a white frame'],
 ];
 
 // ---- Admin palette — keep in sync with public/styles/admin.css :root tokens ----

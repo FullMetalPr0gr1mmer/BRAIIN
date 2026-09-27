@@ -2,166 +2,181 @@
 import type { Locale } from '@schemas/primitives';
 import type { ServicesOverviewSectionContent } from '@schemas/sections';
 import { localizedPath, pickLocale } from '@/lib/i18n';
-import { getPublishedServices } from '@/lib/data/services';
+import { getPublishedDisciplines } from '@/lib/data/disciplines';
+import {
+  DISCIPLINE_BAND_COPY,
+  disciplineSectionId,
+  fallbackDisciplineCards,
+  toDisciplineCards,
+  type DisciplineCardInput,
+  type DisciplineCardsMode,
+} from '@/lib/services/cards';
+import AccentText from '@/components/ui/AccentText.astro';
+import Cta from '@/components/ui/Cta.astro';
+import MediaFrame from '@/components/media/MediaFrame.astro';
 
-// "Fourteen services, one studio" — numbered rows on paper with the Klein hover fill.
-// Self-contained: fetches published services; before Supabase is provisioned it falls
-// back to the design's 14 services (slugs mirror supabase/seed.sql) so the section
-// reads real. Fallback rows point at the home contact section — their detail pages
-// don't exist until the DB does.
+// The discipline cards (Round 2) — the section type is still `servicesOverview`, so the
+// production home row (`{}`) keeps working without a data edit. Shared by home and /services.
+//
+// PUBLIC API (S3 builds on it):
+//   content  ServicesOverviewSectionContentSchema — { tag, heading, accent, sub, hint,
+//            allLabel }, every key an optional bilingual override of the mockup's copy
+//            (src/lib/services/cards.ts DISCIPLINE_BAND_COPY). `accent` only applies to an
+//            authored heading.
+//   data     { mode?: 'home' | 'page'; disciplines?: readonly DisciplineCardInput[] } —
+//            ROUTE data (SectionRenderer `data`), never content. `mode` defaults to 'home'.
+//            With no `disciplines` the section loads them itself (getPublishedDisciplines);
+//            an empty list (an outage) renders the five names as text-only cards.
+//
+//   home  white band, id="services" (the /#services deep link); a card links to
+//         /services#<slug>; the hint and the "All services" button close the band.
+//   page  mist band, id="categories"; a card links to #<slug> (the explorer panel); the
+//         hint only. S3's explorer script owns the selected state: it toggles `.on` on a
+//         card (the Klein outline, and the card stays wide) — never `.rv`, whose reveal
+//         script adds `.on` too. Every card carries data-disc="<slug>".
+//
+// Every card is ONE server-rendered link: number pill, arrow, count ("8 services"), name,
+// short line, and the discipline's poster (lazy <Picture>) with its hover clip
+// (src/lib/client/clips.ts — mouse/pen hover or keyboard focus, never on touch).
+//
+// The hover widen and the scroll "rise" are pure CSS (global.css, "Discipline cards"),
+// built so they can never shift layout (CLS): each card's visuals are one layer at the
+// widest width, placed with `translate` and cut to the current width with
+// `clip-path: inset()`; the rise is a scroll-driven `transform`. The <a>'s own box stays
+// the card AT REST (it takes no pointer events itself — the clipped layer does), so a
+// test or tool that aims at the link's centre lands on that card, whatever is hovered.
+// See docs/design-port-2026-09.md, S2 decisions.
 
 interface Props extends ServicesOverviewSectionContent {
   locale: Locale;
+  data?:
+    | {
+        mode?: DisciplineCardsMode;
+        disciplines?: readonly DisciplineCardInput[];
+      }
+    | undefined;
 }
 
-const { locale, tag, heading, sub } = Astro.props;
+const { locale, tag, heading, accent, sub, hint, allLabel, data } = Astro.props;
 
-const STR = {
-  en: {
-    tag: 'What we do',
-    h2: 'Fourteen services, one studio',
-    sub: 'Take one. Take all of them. The work holds together either way, because it never leaves the building.',
-    soon: 'Soon',
-  },
-  ar: {
-    tag: 'ما نقدّمه',
-    h2: 'أربع عشرة خدمة، استوديو واحد',
-    sub: 'خذ واحدة، أو خذها كلها. الشغل يبقى متماسكاً في الحالتين، لأنه لا يغادر المبنى.',
-    soon: 'قريباً',
-  },
-}[locale];
+const mode: DisciplineCardsMode = data?.mode === 'page' ? 'page' : 'home';
+const copy = DISCIPLINE_BAND_COPY[mode];
+const STR = copy[locale];
 
-interface Row {
-  href: string;
-  title: string;
-  blurb: string;
-  soon: boolean;
-}
+const tagText = tag ? pickLocale(tag, locale) : STR.tag;
+const headingText = heading ? pickLocale(heading, locale) : STR.heading;
+// An authored heading takes only an authored accent: the built-in range counts the words of
+// the built-in heading.
+const accentRange = heading ? accent : copy.accent;
+const subText = sub ? pickLocale(sub, locale) : STR.sub;
+const hintText = hint ? pickLocale(hint, locale) : STR.hint;
+const allText = mode === 'home' ? (allLabel ? pickLocale(allLabel, locale) : STR.allLabel) : null;
 
-const FALLBACK: { slug: string; title: [string, string]; blurb: [string, string]; soon?: true }[] =
-  [
-    {
-      slug: 'branding',
-      title: ['Branding', 'الهوية البصرية'],
-      blurb: [
-        'Identity systems that make brands unmistakable.',
-        'أنظمة هوية تجعل العلامة لا تُخطئها العين.',
-      ],
-    },
-    {
-      slug: 'animations',
-      title: ['Animation', 'الرسوم المتحركة'],
-      blurb: ['Characters and stories brought to life.', 'شخصيات وقصص تنبض بالحياة.'],
-    },
-    {
-      slug: 'motion-graphics',
-      title: ['Motion Graphics', 'الموشن جرافيك'],
-      blurb: ['Design in motion, for screens of every size.', 'تصميم متحرّك لكل مقاس شاشة.'],
-    },
-    {
-      slug: 'videography',
-      title: ['Videography', 'الإنتاج المرئي'],
-      blurb: ['Cinematic production, end to end.', 'إنتاج سينمائي من الفكرة إلى التسليم.'],
-    },
-    {
-      slug: 'photography',
-      title: ['Photography', 'التصوير الفوتوغرافي'],
-      blurb: ['Images that sell the moment.', 'صور تبيع اللحظة.'],
-    },
-    {
-      slug: 'montage',
-      title: ['Montage', 'المونتاج'],
-      blurb: ['Editing that gives footage its rhythm.', 'مونتاج يمنح اللقطات إيقاعها.'],
-    },
-    {
-      slug: 'event-planning',
-      title: ['Event Planning', 'تنظيم الفعاليات'],
-      blurb: ['Experiences planned down to the detail.', 'تجارب مخططة حتى آخر تفصيل.'],
-    },
-    {
-      slug: 'advertising',
-      title: ['Advertising', 'الإعلان'],
-      blurb: ['Campaigns that move audiences.', 'حملات تحرّك الجمهور.'],
-    },
-    {
-      slug: 'social-media',
-      title: ['Social Media', 'السوشيال ميديا'],
-      blurb: ['Always-on presence that converts.', 'حضور دائم يتحوّل إلى نتائج.'],
-    },
-    {
-      slug: 'web-development',
-      title: ['Web Development', 'تطوير المواقع'],
-      blurb: ['Fast, secure, accessible sites.', 'مواقع سريعة وآمنة وسهلة الوصول.'],
-    },
-    {
-      slug: 'seo-geo-aeo',
-      title: ['SEO / GEO / AEO', 'تحسين الظهور SEO / GEO / AEO'],
-      blurb: [
-        'Be found by people and by AI answer engines.',
-        'أن تُوجد أمام الناس وأمام محركات الإجابة.',
-      ],
-    },
-    {
-      slug: 'music',
-      title: ['Music', 'الموسيقى'],
-      blurb: ['Original sound and scoring.', 'موسيقى أصلية وتوزيع صوتي.'],
-    },
-    {
-      slug: 'merchandise',
-      title: ['Merchandise', 'المنتجات الترويجية'],
-      blurb: ['Branded products people actually keep.', 'منتجات بعلامتك يحتفظ بها الناس.'],
-    },
-    {
-      slug: 'gaming',
-      title: ['Gaming', 'الألعاب'],
-      blurb: ['Worlds, assets, and in-game brand work.', 'عوالم وأصول وحضور داخل اللعبة.'],
-      soon: true,
-    },
-  ];
+const disciplines = data?.disciplines ?? (await getPublishedDisciplines());
+const cards =
+  disciplines.length > 0
+    ? toDisciplineCards(disciplines, mode, locale)
+    : fallbackDisciplineCards(mode, locale);
 
-const services = await getPublishedServices();
-const rows: Row[] =
-  services.length > 0
-    ? services.map((s) => ({
-        href: localizedPath(`/services/${s.slug}`, locale),
-        title: pickLocale(s.title, locale, s.slug),
-        blurb: s.blurb ? pickLocale(s.blurb, locale) : '',
-        soon: s.is_teaser,
-      }))
-    : FALLBACK.map((f) => ({
-        href: '#contact',
-        title: f.title[locale === 'ar' ? 1 : 0],
-        blurb: f.blurb[locale === 'ar' ? 1 : 0],
-        soon: f.soon === true,
-      }));
+const sectionId = disciplineSectionId(mode);
+const headingId = `${sectionId}-heading`;
 ---
 
-<section class="services-overview" id="services">
-  <div class="section-wrap">
-    <div class="tag rv">
-      <span class="dot"></span><span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+<section
+  class:list={['disc', `disc--${mode}`]}
+  id={sectionId}
+  aria-labelledby={headingId}
+  data-disc-mode={mode}
+>
+  <div class="disc__wrap">
+    <div class="disc__head">
+      <div>
+        <div class="tag rv"><span class="dot"></span><span>{tagText}</span></div>
+        <h2 class="rv" id={headingId}>
+          <AccentText text={headingText} locale={locale} accent={accentRange} />
+        </h2>
+      </div>
+      <p class="rv">{subText}</p>
     </div>
-    <div class="services-overview__head">
-      <h2 class="rv">{heading ? pickLocale(heading, locale) : STR.h2}</h2>
-      <p class="rv">{sub ? pickLocale(sub, locale) : STR.sub}</p>
-    </div>
-    <div class="svc-list">
+
+    <div class="disc__stage">
       {
-        rows.map((r, i) => (
-          <a class="svc-row rv" href={r.href}>
-            <span class="svc-row__n" aria-hidden="true">
-              {String(i + 1).padStart(2, '0')}
-            </span>
-            <span class="svc-row__t">
-              {r.title}
-              {r.soon ? <span class="svc-row__soon">{STR.soon}</span> : null}
-            </span>
-            <span class="svc-row__d">{r.blurb}</span>
-            <span class="svc-row__a" aria-hidden="true">
-              →
+        cards.map((c) => (
+          <a class="disc-card" href={c.href} data-disc={c.slug} data-clip-trigger>
+            {/* The link's own box is the card AT REST; everything visible is on this layer,
+                which is the widest width and clipped to the current one (global.css). */}
+            <span class="disc-card__clip">
+              {c.poster || c.clip ? (
+                <MediaFrame
+                  class="disc-card__media"
+                  image={c.poster}
+                  locale={locale}
+                  clip={c.clip}
+                  mode="hover"
+                  decorative
+                  sizes="(min-width: 56.3125rem) 40vw, 100vw"
+                  widths={[400, 640, 960]}
+                />
+              ) : (
+                <span class="disc-card__media disc-card__media--none" />
+              )}
+              <span class="disc-card__ring" aria-hidden="true" />
+              <span class="disc-card__n" aria-hidden="true">
+                {c.n}
+              </span>
+              <span class="disc-card__go" aria-hidden="true">
+                <svg viewBox="0 0 16 16">
+                  <path
+                    d="M2 8h12M9 3l5 5-5 5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              {/* The bottom block. `.disc-card__s` holds the short line and is what moves: at
+                  rest (wide screens) it is translated down by 100% of ITS OWN height, which
+                  carries the name block — positioned just above it — down to the card's
+                  bottom edge; on hover it translates back and the line fades in. Pure
+                  transform: no JS measuring, no layout change. The name comes first in the
+                  DOM, so the link reads "Branding 8 services The mark…" (explicit spaces:
+                  compressHTML drops template whitespace); CSS shows the count above it, as
+                  the design does. */}
+              <span class="disc-card__bot">
+                <span class="disc-card__s">
+                  <span class="disc-card__head">
+                    <span class="disc-card__t">{c.name}</span>
+                    {c.count && (
+                      <>
+                        {' '}
+                        <span class="disc-card__cnt">{c.count}</span>
+                      </>
+                    )}
+                  </span>
+                  {c.short && (
+                    <>
+                      {' '}
+                      <span class="disc-card__line">{c.short}</span>
+                    </>
+                  )}
+                </span>
+              </span>
             </span>
           </a>
         ))
+      }
+    </div>
+
+    <div class="disc__foot">
+      <p class="disc__hint"><i aria-hidden="true"></i><span>{hintText}</span></p>
+      {
+        allText && (
+          <Cta href={localizedPath('/services', locale)} icon="go">
+            {allText}
+          </Cta>
+        )
       }
     </div>
   </div>

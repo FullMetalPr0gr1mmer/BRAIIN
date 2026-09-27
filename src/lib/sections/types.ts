@@ -76,15 +76,21 @@ export function homeHeroCtaHref(
 /**
  * The home route's own data, handed to the sections as `data` (never CMS content): the
  * featured project cards (loaded once, for the band and for the CTA decision above) go to
- * every Selected work band, and the CTA target to the first hero.
+ * every Selected work band, and the CTA target to the first hero. Round 2: the published
+ * disciplines (loaded once) go to the discipline cards — in home mode — and to the home
+ * lead form's grouped select.
  */
-export function withHomeData<Card>(
+export function withHomeData<Card, Discipline>(
   sections: readonly SectionData[],
-  data: { featured: readonly Card[]; ctaHref: string },
+  data: { featured: readonly Card[]; ctaHref: string; disciplines: readonly Discipline[] },
 ): SectionData[] {
   let heroSeen = false;
   return sections.map((s) => {
     if (s.type === 'selectedWork') return { ...s, data: { ...s.data, cards: data.featured } };
+    if (s.type === 'servicesOverview') {
+      return { ...s, data: { ...s.data, mode: 'home', disciplines: data.disciplines } };
+    }
+    if (s.type === 'contact') return { ...s, data: { ...s.data, groups: data.disciplines } };
     if (s.type === 'hero' && !heroSeen) {
       heroSeen = true;
       return { ...s, data: { ...s.data, ctaHref: data.ctaHref } };

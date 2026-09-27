@@ -63,7 +63,23 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     { name: 'accentFromAr', label: 'Accent from word (Arabic)', kind: 'number', help: accentHelp },
   ],
   clientsMarquee: [tag, heading, { name: 'note', label: 'Note', kind: 'bilingual' }],
-  servicesOverview: [tag, heading, { name: 'sub', label: 'Sub-line', kind: 'bilingual' }],
+  // Round 2: the discipline cards (the disciplines themselves are under Disciplines).
+  servicesOverview: [
+    tag,
+    heading,
+    { name: 'sub', label: 'Sub-line', kind: 'bilingual' },
+    {
+      name: 'hint',
+      label: 'Line under the cards',
+      kind: 'bilingual',
+      help: 'Default: "Open one to see every service inside it" (home) / "Tap a discipline to open it" (Services page).',
+    },
+    {
+      name: 'allLabel',
+      label: '"All services" button label (home only)',
+      kind: 'bilingual',
+    },
+  ],
   contact: [heading, { name: 'accent', label: 'Accent (highlighted words)', kind: 'bilingual' }],
   social: [
     {
@@ -211,6 +227,20 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     { name: 'whatsappNote', label: 'WhatsApp card note', kind: 'bilingual' },
   ],
   faq: [tag, heading],
+  // Round 2: "Say hello" — the inquiry block closing the services pages. The form itself is
+  // code (its fields are the LeadInputSchema contract).
+  hello: [
+    tag,
+    heading,
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    {
+      name: 'points',
+      label: 'Points beside the form',
+      kind: 'repeater',
+      maxItems: 3,
+      itemFields: [{ name: 'text', label: 'Point', kind: 'bilingual', required: true }],
+    },
+  ],
   aboutStory: [
     heading,
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
@@ -330,6 +360,9 @@ export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[
   contactInquiry: ['accent'],
   contactChannels: ['accent'],
   faq: ['accent'],
+  // Round 2: the accent word ranges, as above.
+  servicesOverview: ['accent'],
+  hello: ['accent'],
 };
 
 /** The fields for one section type, or null when it takes no content (table-backed). */

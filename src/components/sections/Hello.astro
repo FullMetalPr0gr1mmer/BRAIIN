@@ -1,0 +1,115 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { HelloSectionContent } from '@schemas/sections';
+import { pickLocale } from '@/lib/i18n';
+import { getPublishedDisciplines } from '@/lib/data/disciplines';
+import { HELLO_COPY, type HelloHeading } from '@/lib/sections/hello';
+import type { ServiceGroupInput } from '@/lib/forms/serviceSelect';
+import AccentText from '@/components/ui/AccentText.astro';
+import ContactForm from '@/components/ContactForm.astro';
+
+// "Say hello" (Round 2): the inquiry block closing /services (a `hello` section) and every
+// service page (rendered directly). Heading, lead, three points, and the real lead form —
+// ContactForm fields="hello" (name, email, company, phone, service, budget, message +
+// consent and honeypot), posted as kind=project_inquiry. Styled in public/styles/services.css
+// (the page must link it: BaseLayout styles={['services.css']}).
+//
+// PUBLIC API (S3 renders it as a section, S4 directly):
+//   content  HelloSectionContentSchema — { tag, heading, accent, lead, points[≤3] }, every
+//            key an optional bilingual override of the mockup's copy (HELLO_COPY);
+//            `accent` only applies to an authored heading.
+//   data     { groups? } — ROUTE data: the disciplines with their services for the grouped
+//            select. Without it the section loads them itself.
+//   Direct props (never reachable from CMS content — the strict schema refuses them):
+//     groups?           as data.groups, for a direct render
+//     selected?         a service slug or `discipline:<slug>` to preselect
+//     headingOverride?  { text, accent? } in the page's language — the service page's
+//                       "Let's talk *Logo Design*" (serviceHelloHeading() builds it); the
+//                       heading then takes the smaller service-page size
+//     leadOverride?     a string in the page's language (SERVICE_HELLO_LEAD)
+//
+// id="inquiry" is the target of every "Skip to the inquiry" / "Inquire" link.
+
+interface Props extends HelloSectionContent {
+  locale: Locale;
+  data?: { groups?: readonly ServiceGroupInput[] | undefined } | undefined;
+  groups?: readonly ServiceGroupInput[] | undefined;
+  selected?: string | undefined;
+  headingOverride?: HelloHeading | undefined;
+  leadOverride?: string | undefined;
+}
+
+const {
+  locale,
+  tag,
+  heading,
+  accent,
+  lead,
+  points,
+  data,
+  groups: groupsProp,
+  selected,
+  headingOverride,
+  leadOverride,
+} = Astro.props;
+
+const STR = HELLO_COPY[locale];
+const tagText = tag ? pickLocale(tag, locale) : STR.tag;
+// Precedence: the page's own heading (a service page), then an authored one, then the
+// design's. An authored heading takes only an authored accent.
+const title = headingOverride
+  ? { text: headingOverride.text, accent: headingOverride.accent }
+  : heading
+    ? { text: pickLocale(heading, locale), accent }
+    : { text: STR.heading, accent: HELLO_COPY.accent };
+const leadText = leadOverride ?? (lead ? pickLocale(lead, locale) : STR.lead);
+const pointTexts =
+  points && points.length > 0 ? points.map((p) => pickLocale(p.text, locale)) : STR.points;
+
+const groups = groupsProp ?? data?.groups ?? (await getPublishedDisciplines());
+---
+
+<section class="hello" id="inquiry" aria-labelledby="hello-heading">
+  <div class="hello__wrap">
+    <div class="hello__grid">
+      <div class="hello__side">
+        <div class="tag tag--sky rv"><span class="dot"></span><span>{tagText}</span></div>
+        <h2
+          class:list={['hello__h', 'rv', { 'hello__h--svc': headingOverride }]}
+          id="hello-heading"
+        >
+          <AccentText text={title.text} locale={locale} accent={title.accent} />
+        </h2>
+        <p class="hello__p rv">{leadText}</p>
+        <div class="hello__rule rv" aria-hidden="true"></div>
+        <ul class="hello__pts rv">
+          {
+            pointTexts.map((text) => (
+              <li>
+                <b aria-hidden="true">
+                  <svg viewBox="0 0 14 14">
+                    <path
+                      d="M7 1v12M1 7h12"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </b>
+                <span>{text}</span>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+      <ContactForm
+        locale={locale}
+        groups={groups}
+        selected={selected}
+        fields="hello"
+        kind="project_inquiry"
+      />
+    </div>
+  </div>
+</section>

@@ -36,5 +36,7 @@ export const SECTION_TYPES = [
   'projectGrid',
   'pageHead',
   'projectCatalog',
+  // Round 2 (services): the "Say hello" inquiry block closing the services pages
+  'hello',
 ] as const;
 export type SectionType = (typeof SECTION_TYPES)[number];

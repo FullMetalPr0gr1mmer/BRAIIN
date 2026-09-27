@@ -28,6 +28,7 @@ import WorkIntro from '@/components/sections/WorkIntro.astro';
 import ProjectGrid from '@/components/sections/ProjectGrid.astro';
 import PageHead from '@/components/sections/PageHead.astro';
 import ProjectCatalog from '@/components/sections/ProjectCatalog.astro';
+import Hello from '@/components/sections/Hello.astro';
 
 interface Props {
   locale: Locale;
@@ -75,6 +76,8 @@ const REGISTRY: Record<RenderedSectionType, AnyComponent> = {
   projectGrid: ProjectGrid,
   pageHead: PageHead,
   projectCatalog: ProjectCatalog,
+  // Round 2 (services)
+  hello: Hello,
 };
 
 // Every section takes `locale`, its content props and the route's `data`. The map's type

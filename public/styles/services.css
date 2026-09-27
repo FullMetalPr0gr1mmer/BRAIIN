@@ -1,0 +1,313 @@
+/* Route stylesheet: /services and /services/[slug] (+ the /ar twins), Round 2. Linked only
+   through BaseLayout's `styles` prop (styles={['services.css']}); tokens and the shared
+   blocks (the discipline cards, the hero, the lead form) are in global.css.
+
+   Blocks, in order — each slice APPENDS after the last one, under its own banner:
+     S2  "Say hello" (Hello.astro) and the services hero links (Hero.astro data props)
+     S3  /services (proof, explorer)
+     S4  the service page
+
+   Values are the mockups' (services.html / service.html, second <style> block), with the
+   site tokens for the mockup's (--black → --bs-black, --klein → --bs-klein, …). */
+
+/* ============================================================
+   S2: Say hello (Hello.astro) — the mockup's .hello
+   Namespace: .hello*
+   ============================================================ */
+
+.hello {
+  position: relative;
+  z-index: 4;
+  background: var(--bs-black);
+  color: var(--bs-fg);
+  padding: clamp(80px, 13vh, 160px) var(--bs-pad-x) clamp(72px, 11vh, 130px);
+  margin: 0;
+  overflow: clip;
+}
+.hello::before {
+  content: '';
+  position: absolute;
+  inset: -35% -10% auto -10%;
+  height: 85%;
+  pointer-events: none;
+  background: radial-gradient(55% 100% at 30% 0%, rgba(0, 36, 188, 0.5), transparent 70%);
+}
+html[dir='rtl'] .hello::before {
+  background: radial-gradient(55% 100% at 70% 0%, rgba(0, 36, 188, 0.5), transparent 70%);
+}
+.hello__wrap {
+  position: relative;
+  max-width: 1280px;
+  margin-inline: auto;
+}
+.hello__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: clamp(40px, 6vw, 110px);
+  align-items: start;
+}
+.hello__side {
+  position: sticky;
+  top: 110px;
+}
+/* The design's sky dot here (the site's other sky tags keep a Klein one). */
+.hello .tag .dot {
+  background: var(--bs-sky);
+}
+.hello__h {
+  margin: 0;
+  font-size: clamp(46px, 7.4vw, 124px);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+}
+/* A service page's "Let's talk Logo Design" is longer than "Say hello". */
+.hello__h--svc {
+  font-size: clamp(38px, 5.4vw, 92px);
+}
+html[dir='rtl'] .hello__h {
+  font-size: clamp(36px, 5.6vw, 92px);
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+html[dir='rtl'] .hello__h--svc {
+  font-size: clamp(32px, 4.4vw, 74px);
+}
+.hello__h em {
+  font-style: normal;
+  color: var(--bs-sky);
+}
+.hello__p {
+  margin: clamp(18px, 2.4vh, 28px) 0 0;
+  max-width: 40ch;
+  font-size: clamp(16px, 1.35vw, 19px);
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.62);
+}
+html[dir='rtl'] .hello__p {
+  line-height: 1.9;
+}
+.hello__rule {
+  max-width: 560px;
+  height: 1px;
+  margin: clamp(26px, 3.6vh, 40px) 0 clamp(20px, 2.8vh, 30px);
+  background: var(--bs-line-d);
+}
+.hello__pts {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hello__pts li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: clamp(15px, 1.3vw, 18px);
+  font-weight: 500;
+  line-height: normal;
+}
+.hello__pts li b {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 76, 255, 0.2);
+  color: var(--bs-sky);
+}
+.hello__pts li b svg {
+  width: 14px;
+  height: 14px;
+}
+/* The form sits beside the heading here: no rule above it. */
+.hello .contact-form {
+  border-top: 0;
+  padding-top: 0;
+}
+@media (max-width: 960px) {
+  .hello__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hello__side {
+    position: static;
+  }
+}
+
+/* ============================================================
+   S2: services hero links (Hero.astro data.altLink / crumb / skipLink)
+   Namespace: .hero__alt, .crumb, .hero__skip* (the mockup's .skipov*), .hero--one
+   ============================================================ */
+
+/* "Know what you need? Skip to the inquiry", under the CTA — it arrives with the CTA. */
+.hero__alt {
+  display: block;
+  margin-top: 2px;
+  text-align: center;
+  font-size: 13.5px;
+  line-height: normal;
+  color: rgba(255, 255, 255, 0.86);
+  text-decoration: none;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6);
+  animation: fade-in 0.7s ease both;
+  animation-delay: calc(var(--bs-hero-in) + var(--bs-hero-beat) * 2);
+}
+.hero__alt b {
+  font-weight: 700;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 1px;
+  transition: color 0.25s;
+}
+.hero__alt:hover b {
+  color: var(--bs-sky);
+}
+
+/* The service page's hero: the crumb gets its own row above the h1 (it is the h1's sibling,
+   not wrapped with it — the flex row gap is taken back so the two sit the design's 12–20px
+   apart), and the headline is smaller, to fit a long service name. */
+.hero--one h1 {
+  font-size: clamp(40px, 6.6vw, 118px);
+  line-height: 0.92;
+}
+html[dir='rtl'] .hero--one h1 {
+  font-size: clamp(34px, 5.2vw, 90px);
+  line-height: 1.2;
+}
+.crumb {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: calc(clamp(12px, 1.8vh, 20px) - clamp(24px, 4vw, 56px));
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6);
+}
+html[dir='rtl'] .crumb {
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.crumb a {
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  transition: color 0.25s;
+}
+.crumb a:hover {
+  color: var(--bs-sky);
+}
+.crumb span {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* "Been here before? Skip to the inquiry" — glass over the footage, under the header. The
+   glass is darker than the mockup's .26 and the kicker brighter than its .72, so both pass
+   AA over the worst case (a white frame under the hero's top scrim —
+   scripts/contrast-audit.mjs "skip pill"). Never above the header: at least its height. */
+.hero__skip {
+  position: absolute;
+  z-index: 3;
+  top: max(clamp(86px, 12vh, 118px), calc(var(--bs-header-h) + 6px));
+  inset-inline-end: var(--bs-pad-x);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px;
+  padding-inline-start: 18px;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--bs-fg);
+  line-height: normal;
+  text-decoration: none;
+  animation: hero-skip-in 0.8s var(--bs-ease) 0.5s both;
+  transition:
+    background 0.3s,
+    border-color 0.3s;
+}
+@keyframes hero-skip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hero__skip:hover {
+  background: rgba(0, 36, 188, 0.55);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.hero__skip-t {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hero__skip small {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.88);
+}
+.hero__skip b {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+html[dir='rtl'] .hero__skip b {
+  letter-spacing: 0;
+}
+.hero__skip-go {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bs-klein);
+  color: var(--bs-fg);
+  transition:
+    transform 0.45s var(--bs-ease),
+    background 0.3s,
+    color 0.3s;
+}
+.hero__skip-go svg {
+  width: 15px;
+  height: 15px;
+}
+.hero__skip:hover .hero__skip-go {
+  transform: translateY(3px);
+  background: var(--bs-paper);
+  color: var(--bs-klein);
+}
+.hero__skip:focus-visible {
+  outline-color: var(--bs-paper);
+}
+@media (max-width: 640px) {
+  .hero__skip {
+    top: max(78px, calc(var(--bs-header-h) + 6px));
+    inset-inline: 16px;
+    justify-content: space-between;
+  }
+}
+
+/* ---- Motion safety net (this sheet's entrances; global.css holds the invariant) ----
+   Every entrance above is revealed by KILLING its animation: its hidden from-state lives
+   only in @keyframes. Never add a static `opacity: 0` to one without pinning it here. */
+@media (prefers-reduced-motion: reduce) {
+  .hero__alt,
+  .hero__skip {
+    animation: none !important;
+  }
+  .hero__skip:hover .hero__skip-go {
+    transform: none;
+  }
+}
