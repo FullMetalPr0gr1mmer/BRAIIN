@@ -739,6 +739,14 @@ The orchestrator renumbers these at integration.
     it below the viewport. There is no `display` toggle, so showing it moves nothing.
   - While it shows, `scroll-padding-bottom` keeps keyboard focus from being scrolled
     under it (WCAG 2.4.11).
+  - It rides above the PDPL consent banner while that is open. The banner is fixed to the
+    same bottom edge on a higher layer (z-80) and is open on every first visit, so the
+    button was shown and focusable but hidden under it. A ResizeObserver on the banner
+    publishes its height as `--svc-fab-lift` on `<html>` (CSSOM; 0 once a choice hides
+    it), the shown button is lifted by that much with a transform, so it drops back on the
+    same compositor-only transition, and the scroll padding adds it too. The mockup has
+    no banner. The e2e keeps the banner open and asserts the button is the element under
+    its own centre, then closes it and asserts the button is back at the edge.
   - Without JS it never shows. The hero's skip pill is the same link and is always there.
 - **S4-3. The body is sanitised on render.** "What it is" renders the service's Tiptap
   JSON through the allowlist renderer on every render (`toServiceDetail` →
@@ -768,8 +776,11 @@ The orchestrator renumbers these at integration.
     panel, no target is itself retired, and no retired slug is a live service.
 - **S4-6. The hero is the banner hero with the service's own clip.** It plays the
   service's window of the reel. Without one it plays its discipline's window, and without
-  either the default reel, so no page opens on a still. The crumb reads "Services /
-  {Discipline}" and links to `/services#<discipline>`. The CTA is "See the case study" →
+  either the default reel, so no page opens on a still. The sub line is the service's
+  tagline. A service with no tagline has no sub line (`data.noSub`), not the home hero's
+  "From the brain to the real world.", which is what Hero shows when it is given none. The
+  crumb reads "Services / {Discipline}" and links to `/services#<discipline>`. The CTA is
+  "See the case study" →
   `#case`, or "Skip to the inquiry" → `#inquiry` when there is no case (no dead link). The
   LCP element is the h1 (CLAUDE.md §6), as on Contact.
 - **S4-7. The case block.** Its client and sector are the project's, as the chips show.
@@ -777,8 +788,15 @@ The orchestrator renumbers these at integration.
     linked `projects.html?client=`. A client RLS hides is "Confidential client" as text,
     never a link, because a filter URL would disclose its slug.
   - The image is the project's poster, linking to its case study, with the project's name
-    as its alt. With no published project, the case shows the service's poster, unlinked,
-    with no pill and no project chip.
+    as its alt. With no published project, or a published project with no poster, the
+    case shows the service's poster: unlinked, with no pill and its own alt. A project
+    with no poster keeps its chip (`src/lib/services/caseFigure.ts`).
+  - The image's `sizes` follows its layout. Beside "Where they were" it is the grid's wide
+    column. Alone on its row (no context) it spans the 1280px wrap, so it is described as
+    `min(100vw, 1280px)` and offered a 1600w file. Described as the column, it fetched an
+    800w file upscaled about 1.5x on a 1x laptop.
+  - The kicker's dot is sky, as the mockup's `.case .tag .dot` and S2's `.hello` have it.
+    The site's default Klein dot is about 2:1 on the black band.
   - The "See the full project" glass is .6 black (the mockup's .35), so its label passes AA
     over a white poster.
   - The problem → what-we-did rows are an ordered list, not anonymous divs. Each cell
@@ -801,8 +819,11 @@ The orchestrator renumbers these at integration.
   in the mockup. There are two columns from 900px. The section is absent for a service in
   no discipline.
 - **S4-10. Structured data.** The Service node carries `serviceType` (its name),
-  `category` (its discipline), the poster as `image`, `inLanguage`, `areaServed: SA` and
-  the studio as `provider`. The BreadcrumbList is Home › Services › Service. The visible
+  `category` (its discipline), the poster as `image`, `areaServed: SA` and the studio as
+  `provider`. It has no `inLanguage`: schema.org defines that on CreativeWork, Event and a
+  few other types, not on Service, and the validator reports it unrecognised. The page's
+  language is `<html lang>` and hreflang. A test holds the node to Service's and Thing's
+  properties. The BreadcrumbList is Home › Services › Service. The visible
   crumb's discipline step is left out because its URL would be a fragment
   (`/services#branding`), which search engines fold into `/services`. There is no
   Review or AggregateRating markup: the case block is our own sample content.
