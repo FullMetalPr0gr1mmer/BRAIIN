@@ -29,13 +29,18 @@ interface Props {
   /** The header's language switch target, when it is NOT this page in the other locale —
       a 404 has no twin, so its switch goes to the other locale's home. */
   langHref?: string;
-  /** Route stylesheets in public/styles (UI v2: 'about.css', 'work.css', …), linked after
-      global.css so a page ships only its own blocks. File names only — no paths. */
-  styles?: readonly string[];
+  /** Route stylesheets under /styles/, linked after global.css (UI v2: `work.css` on Our
+      Work + All projects; `banner.css` — MediaBanner + its caption — there and on the case
+      study, with `case-study.css`). A known name, never a URL — the sheet is same-origin, so the
+      CSP's `style-src 'self'` covers it with no nonce. */
+  styles?: readonly RouteStylesheet[];
   /** The Arabic hero face SeoHead preloads — the weight the route's above-the-fold heading
       renders in (default `almarai-800`, Home's hero). EN always preloads Archivo. */
   heroFace?: HeroFace;
 }
+
+/** Every route stylesheet in public/styles/ (a closed list: a typo fails `astro check`). */
+type RouteStylesheet = 'about.css' | 'work.css' | 'banner.css' | 'case-study.css';
 
 const {
   title,
@@ -53,7 +58,6 @@ const {
   heroFace,
 } = Astro.props;
 const direction = dir(locale);
-const routeStyles = styles.filter((name) => /^[a-z0-9-]+\.css$/.test(name));
 ---
 
 <!doctype html>
@@ -71,7 +75,7 @@ const routeStyles = styles.filter((name) => /^[a-z0-9-]+\.css$/.test(name));
       {...heroFace ? { heroFace } : {}}
     />
     <link rel="stylesheet" href="/styles/global.css" />
-    {routeStyles.map((name) => <link rel="stylesheet" href={`/styles/${name}`} />)}
+    {styles.map((sheet) => <link rel="stylesheet" href={`/styles/${sheet}`} />)}
   </head>
   <body>
     {chrome && <SiteHeader locale={locale} variant={header} {...(langHref ? { langHref } : {})} />}

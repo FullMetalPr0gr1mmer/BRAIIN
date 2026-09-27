@@ -2,29 +2,46 @@ import { PUBLIC_MEDIA_COLUMNS, PublicMediaRowSchema } from '@schemas/content';
 import { UuidSchema } from '@schemas/primitives';
 import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
 import { imageRef, type ImageRef } from '@/lib/media/resolve';
-import { parseRow, reportLoadError } from './parse';
+import { parseRows, reportLoadError } from './parse';
 
-// A media asset a SECTION references by id (`page_sections.content.mediaId` — About's
-// "who we are" poster). Tier A SSR reads under RLS: migration 0024 lets anon read an asset
-// only while a visible section of a published page names it, so a poster chosen for a
-// draft page stays invisible. Resolved through imageRef (static stills today; an unknown
-// provider or key renders nothing — fail closed). Resilient: null on any error.
+// Media a page SECTION references by id (`{ mediaId }` inside page_sections.content —
+// Our Work's intro frames, About's "who we are" poster). Tier A SSR read under RLS: anon sees a media row only
+// while a visible section of a published page references it by that exact key (0024's
+// `$.**.mediaId` branch), plus the 0024 column grant — so a draft page's image, or an id
+// typed into content that nothing publishes, resolves to nothing here.
+//
+// Resolved through the same provider gate as every other public image (media/resolve.ts):
+// a non-static row, or a key the stills registry does not know, is dropped. Resilient:
+// an empty map on any error (the section then renders without that frame).
 
-export async function getSectionImage(mediaId: string | undefined): Promise<ImageRef | null> {
-  if (!mediaId || !UuidSchema.safeParse(mediaId).success || !supabaseConfigured()) return null;
+const MAX_IDS = 12;
+
+export async function getSectionImages(ids: readonly string[]): Promise<Map<string, ImageRef>> {
+  const wanted = [...new Set(ids)].filter((id) => UuidSchema.safeParse(id).success);
+  if (wanted.length === 0 || !supabaseConfigured()) return new Map();
   try {
     const { data, error } = await anonClient()
       .from('media_assets')
       .select(PUBLIC_MEDIA_COLUMNS)
-      .eq('id', mediaId)
-      .maybeSingle();
+      .in('id', wanted.slice(0, MAX_IDS));
     if (error) {
-      reportLoadError('media_asset', error);
-      return null;
+      reportLoadError('section_media', error);
+      return new Map();
     }
-    return data ? imageRef(parseRow(PublicMediaRowSchema, data, 'media_asset')) : null;
+    const out = new Map<string, ImageRef>();
+    for (const row of parseRows(PublicMediaRowSchema, data ?? [], 'media')) {
+      const ref = imageRef(row);
+      if (ref) out.set(row.id, ref);
+    }
+    return out;
   } catch (err) {
-    reportLoadError('media_asset', err);
-    return null;
+    reportLoadError('section_media', err);
+    return new Map();
   }
+}
+
+/** One section's asset (About's poster): the same gated read, for a single id. */
+export async function getSectionImage(mediaId: string | undefined): Promise<ImageRef | null> {
+  if (!mediaId) return null;
+  return (await getSectionImages([mediaId])).get(mediaId) ?? null;
 }

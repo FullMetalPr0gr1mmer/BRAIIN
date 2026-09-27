@@ -1,0 +1,115 @@
+---
+import { getImage } from 'astro:assets';
+import type { Locale } from '@schemas/primitives';
+import type { Accent } from '@schemas/media';
+import type { CaseMedia } from '@/lib/data/portfolio';
+import { pickLocale } from '@/lib/i18n';
+import { stillAlt } from '@/lib/portfolio/caseStudy';
+import MediaImage from '@/components/media/MediaImage.astro';
+import AccentText from '@/components/ui/AccentText.astro';
+
+// The breakdown (UI v2 PR11 — project.html `.bd`), on white: the mockup's head copy
+// verbatim ("From the first sketch to set"), then the sketches, behind-the-scenes and
+// process stills on a 12-column grid — each half, wide or third as the editor laid it
+// out, tagged with its kind, captioned in real text.
+//
+// Every still is a LINK to its full-size image (1600 px WebP): the lightbox enhancement
+// (src/lib/client/lightbox.ts) opens it in the page's <dialog>; without JS it opens the
+// image itself. Its accessible name is the image's alt (the still's description, else its
+// caption) — the loader has already dropped any still that cannot be described in both
+// languages. Nothing renders when there is no still.
+
+interface Props {
+  locale: Locale;
+  items: CaseMedia[];
+}
+
+const { locale, items } = Astro.props;
+
+const STR = {
+  en: {
+    tag: 'Breakdown',
+    heading: 'From the first sketch to set',
+    lead: 'How the idea got made: the sketches, the tests, and the days on set.',
+    kind: { sketch: 'Sketch', bts: 'Behind the scenes', process: 'Process' },
+  },
+  ar: {
+    tag: 'كواليس العمل',
+    heading: 'من أول رسمة إلى موقع التصوير',
+    lead: 'كيف انصنعت الفكرة: الرسومات والتجارب وأيام التصوير.',
+    kind: { sketch: 'رسمة', bts: 'خلف الكواليس', process: 'مراحل العمل' },
+  },
+}[locale];
+
+/** "first sketch" / "أول رسمة" — the mockup's <em>, as a word range per locale. */
+const ACCENT: Accent = { en: { from: 2, to: 4 }, ar: { from: 1, to: 3 } };
+
+// Rendered widths per layout: the grid spans the content width (100vw less the page
+// gutters), so a half is ~50vw and a third ~33vw; on phones every still is full width.
+const SIZES = {
+  wide: '100vw',
+  half: '(min-width: 47.5rem) 50vw, 100vw',
+  third: '(min-width: 47.5rem) 34vw, 100vw',
+} as const;
+
+const stills = await Promise.all(
+  items.flatMap((m) => {
+    const image = m.image;
+    if (!image) return [];
+    return [
+      getImage({ src: image.src, width: Math.min(1600, image.width), format: 'webp' }).then(
+        (full) => ({
+          image,
+          full: full.src,
+          layout: m.layout ?? 'half',
+          kind: m.breakdownKind,
+          caption: m.caption ? pickLocale(m.caption, locale) : '',
+          alt: stillAlt(m, locale),
+        }),
+      ),
+    ];
+  }),
+);
+---
+
+{
+  stills.length > 0 && (
+    <section class="cs-bd" aria-labelledby="cs-bd-heading">
+      <div class="cs-bd__head">
+        <div>
+          <p class="tag rv">
+            <span class="dot" />
+            {STR.tag}
+          </p>
+          <h2 class="rv" id="cs-bd-heading">
+            <AccentText text={STR.heading} locale={locale} accent={ACCENT} />
+          </h2>
+        </div>
+        <p class="cs-bd__lead rv">{STR.lead}</p>
+      </div>
+      <div class="cs-bd__grid">
+        {stills.map((s) => (
+          <figure
+            class:list={['cs-bdi', `cs-bdi--${s.layout}`, s.kind && `cs-bdi--${s.kind}`, 'rv']}
+          >
+            <a class="cs-bdi__open" href={s.full} data-lb="bd">
+              <MediaImage
+                image={s.image}
+                locale={locale}
+                altOverride={s.alt}
+                widths={[480, 800, 1200, 1600]}
+                sizes={SIZES[s.layout]}
+              />
+            </a>
+            {(s.kind || s.caption) && (
+              <figcaption class="cs-bdi__cap">
+                {s.kind && <span class="cs-bdi__tag">{STR.kind[s.kind]}</span>}
+                {s.caption && <span class="cs-bdi__t">{s.caption}</span>}
+              </figcaption>
+            )}
+          </figure>
+        ))}
+      </div>
+    </section>
+  )
+}

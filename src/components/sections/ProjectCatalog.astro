@@ -1,0 +1,83 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { getPortfolioCards, type PortfolioCard } from '@/lib/data/portfolio';
+import { catalogueOrder, matches, type FacetSelection } from '@/lib/portfolio/catalog';
+import { FILTER_STR } from '@/lib/portfolio/filterText';
+import { localizedHref, localizedPath } from '@/lib/i18n';
+import FilterBar from '@/components/portfolio/FilterBar.astro';
+import ProjectCard from '@/components/portfolio/ProjectCard.astro';
+
+// All projects (UI v2, the `projectCatalog` section; the mockup's `section.work.ap`):
+// every published project — featured first, then catalogue order — under the filter bar.
+// Takes no CMS content: its data is the portfolio table, its words are the filter bar's.
+//
+// Tier A: the route parses the facet query against the published catalogue (unknown
+// values are dropped; a filtered view is served private) and every card is rendered, the
+// ones outside the filter `hidden`, so the enhancement re-filters in place. The live count
+// sits in the page head (`#catalog-count`, the pageHead section), which the enhancement
+// updates too. Card titles are h2: nothing else sits between the page's h1 and them.
+
+interface Props {
+  locale: Locale;
+  /** Route-injected (SectionRenderer `data`) — never CMS content. */
+  data?: { cards?: PortfolioCard[]; selection?: FacetSelection };
+}
+
+const { locale } = Astro.props;
+const S = FILTER_STR[locale];
+const BASE = '/portfolio/all';
+
+const pool = catalogueOrder(Astro.props.data?.cards ?? (await getPortfolioCards()));
+const selection: FacetSelection = Astro.props.data?.selection ?? {};
+const visible = pool.map((card) => matches(card, selection));
+// The first two cards on screen are above the fold on desktop: eager, high priority.
+const priority: boolean[] = [];
+for (const v of visible) priority.push(v && priority.filter(Boolean).length < 2);
+const shown = visible.filter(Boolean).length;
+---
+
+{
+  pool.length > 0 && (
+    <section
+      class="pcat catalog"
+      id="projects"
+      aria-label={S.results}
+      data-catalog="all"
+      data-base={localizedPath(BASE, locale)}
+      data-fragment=""
+      data-locale={locale}
+      data-state={JSON.stringify(selection)}
+      data-pool={pool.length}
+      data-count-id="catalog-count"
+    >
+      <FilterBar locale={locale} pool={pool} selection={selection} base={BASE} />
+      <div class="pgrid__grid">
+        {pool.map((card, i) => (
+          <ProjectCard
+            card={card}
+            locale={locale}
+            variant="catalog"
+            selection={selection}
+            heading="h2"
+            base={BASE}
+            filterable
+            hidden={!visible[i]}
+            priority={priority[i] ?? false}
+          />
+        ))}
+        <div class="fb__empty" data-empty hidden={shown > 0}>
+          <p>{S.none}</p>
+          <a class="fb__clear" href={localizedHref(BASE, locale)} data-f="all" data-v="">
+            {S.clear}
+          </a>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+<script>
+  import { initCatalogFilters } from '@/lib/client/catalogFilter';
+
+  initCatalogFilters();
+</script>

@@ -5,7 +5,7 @@ import { isRenderedSectionType, type RenderedSectionType } from '@/lib/sections/
 import SectionBoundary from '@/components/SectionBoundary.astro';
 import Hero from '@/components/sections/Hero.astro';
 import ServicesOverview from '@/components/sections/ServicesOverview.astro';
-import CtaBand from '@/components/sections/CtaBand.astro';
+import LeadBand from '@/components/sections/LeadBand.astro';
 import SocialStrip from '@/components/sections/SocialStrip.astro';
 import AboutStory from '@/components/sections/AboutStory.astro';
 import Statistics from '@/components/sections/Statistics.astro';
@@ -22,6 +22,12 @@ import SelectedWork from '@/components/sections/SelectedWork.astro';
 import TestimonialsSection from '@/components/sections/TestimonialsSection.astro';
 import AboutWho from '@/components/sections/AboutWho.astro';
 import LeadershipSlider from '@/components/sections/LeadershipSlider.astro';
+import WorkHero from '@/components/sections/WorkHero.astro';
+import ProofBand from '@/components/sections/ProofBand.astro';
+import WorkIntro from '@/components/sections/WorkIntro.astro';
+import ProjectGrid from '@/components/sections/ProjectGrid.astro';
+import PageHead from '@/components/sections/PageHead.astro';
+import ProjectCatalog from '@/components/sections/ProjectCatalog.astro';
 
 interface Props {
   locale: Locale;
@@ -45,7 +51,7 @@ type AnyComponent = (props: never) => unknown;
 const REGISTRY: Record<RenderedSectionType, AnyComponent> = {
   hero: Hero,
   servicesOverview: ServicesOverview,
-  cta: CtaBand,
+  cta: LeadBand,
   social: SocialStrip,
   aboutStory: AboutStory,
   statistics: Statistics,
@@ -62,6 +68,13 @@ const REGISTRY: Record<RenderedSectionType, AnyComponent> = {
   testimonials: TestimonialsSection,
   aboutWho: AboutWho,
   leadership: LeadershipSlider,
+  // UI v2 PR10 — Our Work and All projects
+  workHero: WorkHero,
+  proof: ProofBand,
+  workIntro: WorkIntro,
+  projectGrid: ProjectGrid,
+  pageHead: PageHead,
+  projectCatalog: ProjectCatalog,
 };
 
 // Every section takes `locale`, its content props and the route's `data`. The map's type

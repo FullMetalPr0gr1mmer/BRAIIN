@@ -488,4 +488,41 @@ do $seed$ begin
   end if;
 end $seed$;
 
+-- page_sections (52-contact.json)
+do $seed$ begin
+  if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact')) then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000001', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'hero', '{}'::jsonb, true, 10),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000002', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'contactInquiry', '{}'::jsonb, true, 20),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000003', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'contactChannels', '{}'::jsonb, true, 30),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000004', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'faq', '{}'::jsonb, true, 40)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
+-- page_sections (53-work-pages.json)
+do $seed$ begin
+  if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio')) then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000001', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio'), 'workHero', '{"tag":{"en":"Latest project","ar":"أحدث مشروع"}}'::jsonb, true, 10),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000002', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio'), 'proof', '{"statsTag":{"en":"In numbers","ar":"بالأرقام"},"quotesTag":{"en":"Testimonials","ar":"آراء العملاء"},"quotesHeading":{"en":"In their words","ar":"بكلماتهم هم"},"quotesAccent":{"en":{"from":2},"ar":{"from":1}},"quotesLimit":3}'::jsonb, true, 20),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000003', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio'), 'workIntro', '{"text":{"en":"Every project here started as a sketch in a notebook and ended somewhere people could see it, hold it, or hear it. This is a selection of the work we''re proudest of.","ar":"كل مشروع هنا بدأ كرسمة في دفتر، وانتهى في مكان يقدر الناس يشوفونه أو يلمسونه أو يسمعونه. هذه مختارات من الشغل اللي نفتخر فيه أكثر."},"linkLabel":{"en":"See the projects","ar":"شوف المشاريع"},"media":[{"mediaId":"5eed0a00-0000-4000-8000-000000000007","clip":{"path":"/media/showreel.mp4","startS":14,"endS":15.4}},{"mediaId":"5eed0a00-0000-4000-8000-000000000008","clip":{"path":"/media/showreel.mp4","startS":17.4,"endS":18.3}}]}'::jsonb, true, 30),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000004', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio'), 'projectGrid', '{"tag":{"en":"Featured work","ar":"أعمال مختارة"},"heading":{"en":"Projects","ar":"المشاريع"}}'::jsonb, true, 40),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000005', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio'), 'clientsMarquee', '{}'::jsonb, true, 50),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000006', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio'), 'cta', '{"tag":{"en":"Start a project","ar":"ابدأ مشروعك"},"heading":{"en":"Your idea could be next","ar":"فكرتك ممكن تكون التالية"},"accent":{"en":{"from":4},"ar":{"from":3}},"text":{"en":"Tell us what you''re making. You''ll hear back within one business day with our questions, a rough range, and a time to talk.","ar":"قل لنا وش تصنع. يوصلك رد خلال يوم عمل واحد فيه أسئلتنا، ونطاق سعري مبدئي، وموعد للمكالمة."},"buttonLabel":{"en":"Start an inquiry","ar":"ابدأ طلبك"},"buttonHref":"/contact#inquiry"}'::jsonb, true, 60)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
+-- page_sections (53-work-pages.json)
+do $seed$ begin
+  if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio-all')) then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000011', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio-all'), 'pageHead', '{"heading":{"en":"All projects","ar":"كل المشاريع"},"accent":{"en":{"from":1},"ar":{"from":1}},"lead":{"en":"Every project we''ve made. Filter by service, sector, client or year, or tap any tag on a project.","ar":"كل المشاريع اللي صنعناها. فلتر حسب الخدمة أو القطاع أو العميل أو السنة، أو اضغط على أي وسم في المشروع."},"backLabel":{"en":"Our Work","ar":"أعمالنا"},"backHref":"/portfolio"}'::jsonb, true, 10),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000012', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio-all'), 'projectCatalog', '{}'::jsonb, true, 20),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000013', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio-all'), 'cta', '{"tag":{"en":"Start a project","ar":"ابدأ مشروعك"},"heading":{"en":"Your idea could be next","ar":"فكرتك ممكن تكون التالية"},"accent":{"en":{"from":4},"ar":{"from":3}},"text":{"en":"Tell us what you''re making. You''ll hear back within one business day with our questions, a rough range, and a time to talk.","ar":"قل لنا وش تصنع. يوصلك رد خلال يوم عمل واحد فيه أسئلتنا، ونطاق سعري مبدئي، وموعد للمكالمة."},"buttonLabel":{"en":"Start an inquiry","ar":"ابدأ طلبك"},"buttonHref":"/contact#inquiry"}'::jsonb, true, 30)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
 commit;

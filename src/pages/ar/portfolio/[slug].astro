@@ -1,17 +1,27 @@
 ---
-import PortfolioDetail from '@/components/PortfolioDetail.astro';
-import { getPortfolioBySlug } from '@/lib/data/portfolio';
+import CaseStudyPage from '@/components/case-study/CaseStudyPage.astro';
+import { loadCaseStudyPage } from '@/lib/portfolio/casePage';
 import { setTierA } from '@/lib/http/cacheTags';
 
+// A case study, Arabic twin (UI v2 PR11) — see src/pages/portfolio/[slug].astro. An
+// unknown or unpublished slug is a REAL 404 (status 404) on the ARABIC 404 page.
+const locale = 'ar' as const;
 const { slug } = Astro.params;
-const item = slug ? await getPortfolioBySlug(slug) : null;
-if (!item) return Astro.rewrite('/ar/404');
+const page = slug ? await loadCaseStudyPage(slug, Astro.locals, locale) : null;
+if (!page) return Astro.rewrite('/ar/404');
 
 setTierA(Astro.response, {
   route: 'portfolio-item',
-  locale: 'ar',
-  entities: [`portfolio:${item.slug}`],
+  locale,
+  entities: [
+    `portfolio:${page.study.slug}`,
+    'portfolio:all',
+    'sectors:all',
+    'clients:all',
+    'services:all',
+    'testimonials:all',
+  ],
 });
 ---
 
-<PortfolioDetail locale="ar" item={item} />
+<CaseStudyPage locale={locale} page={page} />

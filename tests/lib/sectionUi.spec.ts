@@ -30,11 +30,18 @@ function sample(field: FieldDef): unknown {
     case 'checkbox':
       return true;
     case 'media':
-      return '5eed0a00-0000-4000-8000-000000000003';
+      return '5eed0a00-0000-4000-8000-000000000007';
     case 'clip':
-      return { source: 'path', streamUid: '', path: '/media/showreel.mp4', startS: '1', endS: '2' };
+      return {
+        source: 'path',
+        streamUid: '',
+        path: '/media/showreel.mp4',
+        startS: '14',
+        endS: '15.4',
+      };
     default:
-      return 'value';
+      // text fields: a value every text key accepts (a slug, a site-relative href)
+      return field.name.endsWith('Href') ? '/portfolio' : 'value';
   }
 }
 

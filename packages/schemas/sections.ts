@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LocalizedTextSchema, TestimonialPlacementSchema } from './content';
 import { SECTION_TYPES, type SectionType } from './sectionTypes';
-import { AccentSchema, SafeHrefSchema, VideoClipSchema } from './media';
+import { AccentSchema, MediaRefSchema, SafeHrefSchema, VideoClipSchema } from './media';
 import { SlugSchema, UuidSchema } from './primitives';
 
 // Per-type CMS content shapes for `page_sections.content` (authored at /admin/sections,
@@ -111,10 +111,19 @@ export const SocialSectionContentSchema = z.object({
     .optional(),
 });
 
+/**
+ * The closing call to action (UI v2: LeadBand — the Klein band of Our Work, All projects
+ * and the case study). The studio email comes from the public identity, never content.
+ */
 export const CtaSectionContentSchema = z.object({
+  tag: Text.optional(),
   heading: Text.optional(),
+  /** Which words of `heading` are outlined; only read with an authored heading. */
+  accent: AccentSchema.optional(),
   text: Text.optional(),
   buttonLabel: Text.optional(),
+  /** Site-relative; default the contact page's inquiry form (`/contact#inquiry`). */
+  buttonHref: SafeHrefSchema.optional(),
 });
 
 /**
@@ -190,6 +199,59 @@ export const TestimonialsSectionContentSchema = z
   })
   .strict();
 
+// ── Contact (UI v2 PR9) ──────────────────────────────────────────────────────────
+// The three contact bands take copy overrides only. Strict, like the other UI v2 schemas:
+// a stray key is refused on write rather than stored and silently ignored.
+
+/**
+ * The inquiry band around the lead form. `note`, `successMessage` and `submitLabel` reach
+ * the form itself; the form's fields, options and validation copy are code (the fields are
+ * the LeadInputSchema contract — src/lib/forms/contactPayload.ts).
+ */
+export const ContactInquirySectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    /** Beside the submit button ("We read everything…"). */
+    note: Text.optional(),
+    /** The confirmation that replaces the fields once the server accepted the inquiry. */
+    successMessage: Text.optional(),
+    submitLabel: Text.optional(),
+  })
+  .strict();
+
+/**
+ * "Talk to us": the direct channels. The address and number are the public identity
+ * (site_profile), never content — the WhatsApp card renders only when a number is set.
+ */
+export const ContactChannelsSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    emailLabel: Text.optional(),
+    emailNote: Text.optional(),
+    whatsappLabel: Text.optional(),
+    whatsappNote: Text.optional(),
+  })
+  .strict();
+
+/**
+ * The FAQ band's heading only. The questions and answers stay code-owned
+ * (src/lib/content/contactFaq.ts): they are also the page's FAQPage JSON-LD, and an
+ * editable answer beside a fixed JSON-LD would be a structured-data mismatch.
+ */
+export const FaqSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    accent: AccentSchema.optional(),
+  })
+  .strict();
+
 export const AboutStorySectionContentSchema = z.object({
   heading: Text.optional(),
   lead: Text.optional(),
@@ -254,6 +316,91 @@ export const LeadershipSectionContentSchema = z
   })
   // Strict: the people come from their own table — a stray `members` key is refused.
   .strict();
+// ── UI v2 PR10: Our Work (/portfolio) and All projects (/portfolio/all) ─────────────
+// The projects, numbers and quotes these sections show come from their own tables; the
+// content below is only the copy around them. Filter-bar chrome ("Filter by", "All
+// sectors", "Clear filters"…) is built-in bilingual copy, and the facets are fixed in
+// code (src/lib/portfolio/catalog.ts) — neither is content.
+//
+// Every schema here is strict, like the rest of UI v2: a stray key is refused on write,
+// not stored and ignored. A typo (`projectslug`) would otherwise save as success and do
+// nothing, and a stray `mediaId` anywhere in content would make that asset anon-readable
+// under 0024's `$.**.mediaId` policy (and block its hard delete) with nothing showing it.
+
+/**
+ * The Our Work banner: a project's poster and loop under a glass caption. `projectSlug`
+ * pins one project; without it (or when that project is not published) the banner shows
+ * the latest (year desc, then catalogue order).
+ */
+export const WorkHeroSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    projectSlug: SlugSchema.optional(),
+  })
+  .strict();
+
+/** Most quotes the proof carousel shows (the loader's own cap is 8). */
+export const PROOF_QUOTES_MAX = 8;
+
+/**
+ * Our Work's white proof band: the page's statistics (placement `work`) above its
+ * testimonials. Each half hides on its own when it has nothing to show; with neither,
+ * the section renders nothing.
+ */
+export const ProofSectionContentSchema = z
+  .object({
+    statsTag: Text.optional(),
+    quotesTag: Text.optional(),
+    quotesHeading: Text.optional(),
+    /** Only read with an authored quotesHeading. */
+    quotesAccent: AccentSchema.optional(),
+    quotesLimit: z.number().int().min(1).max(PROOF_QUOTES_MAX).optional(),
+    /** Opt-OUT of the count-up (server-rendered final values either way). */
+    staticNumbers: z.boolean().optional(),
+    minItems: z.number().int().min(1).max(6).optional(),
+  })
+  .strict();
+
+/** One of the intro's two frames: a media library image, optionally looping a clip. */
+export const WorkIntroMediaSchema = MediaRefSchema.extend({
+  clip: VideoClipSchema.optional(),
+}).strict();
+
+/**
+ * The intro statement between two looping frames. `media` is keyed `mediaId` on purpose:
+ * the 0024 anon read policy and media_usage() find section media by that key
+ * (`$.**.mediaId`), so an image referenced any other way would never reach a visitor.
+ */
+export const WorkIntroSectionContentSchema = z
+  .object({
+    text: Text.optional(),
+    linkLabel: Text.optional(),
+    media: z.array(WorkIntroMediaSchema).max(2).optional(),
+  })
+  .strict();
+
+/** The featured-projects grid with its filter bar (the pool is `is_featured`). */
+export const ProjectGridSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+  })
+  .strict();
+
+/**
+ * A page head on black: a back link, the h1 with an accented word range, a lead line and
+ * (on the catalogue) the live project count, which the route supplies.
+ */
+export const PageHeadSectionContentSchema = z
+  .object({
+    heading: Text.optional(),
+    /** Only read with an authored heading. */
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    backLabel: Text.optional(),
+    backHref: SafeHrefSchema.optional(),
+  })
+  .strict();
 
 export { SECTION_TYPES, type SectionType } from './sectionTypes';
 /** Zod form of the canonical list in ./sectionTypes (kept zod-free for the admin bundle). */
@@ -276,6 +423,16 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
   testimonials: TestimonialsSectionContentSchema,
   aboutWho: AboutWhoSectionContentSchema,
   leadership: LeadershipSectionContentSchema,
+  // UI v2 PR10 (projectCatalog takes no content: its data is the portfolio table)
+  workHero: WorkHeroSectionContentSchema,
+  proof: ProofSectionContentSchema,
+  workIntro: WorkIntroSectionContentSchema,
+  projectGrid: ProjectGridSectionContentSchema,
+  pageHead: PageHeadSectionContentSchema,
+  // UI v2 PR9 (contact)
+  contactInquiry: ContactInquirySectionContentSchema,
+  contactChannels: ContactChannelsSectionContentSchema,
+  faq: FaqSectionContentSchema,
 };
 
 /**
@@ -335,3 +492,11 @@ export type SelectedWorkSectionContent = z.infer<typeof SelectedWorkSectionConte
 export type TestimonialsSectionContent = z.infer<typeof TestimonialsSectionContentSchema>;
 export type AboutWhoSectionContent = z.infer<typeof AboutWhoSectionContentSchema>;
 export type LeadershipSectionContent = z.infer<typeof LeadershipSectionContentSchema>;
+export type WorkHeroSectionContent = z.infer<typeof WorkHeroSectionContentSchema>;
+export type ProofSectionContent = z.infer<typeof ProofSectionContentSchema>;
+export type WorkIntroSectionContent = z.infer<typeof WorkIntroSectionContentSchema>;
+export type ProjectGridSectionContent = z.infer<typeof ProjectGridSectionContentSchema>;
+export type PageHeadSectionContent = z.infer<typeof PageHeadSectionContentSchema>;
+export type ContactInquirySectionContent = z.infer<typeof ContactInquirySectionContentSchema>;
+export type ContactChannelsSectionContent = z.infer<typeof ContactChannelsSectionContentSchema>;
+export type FaqSectionContent = z.infer<typeof FaqSectionContentSchema>;
