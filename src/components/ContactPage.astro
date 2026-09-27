@@ -3,7 +3,7 @@ import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SectionRenderer from '@/components/SectionRenderer.astro';
 import { getPageComposition } from '@/lib/data/pageSections';
-import { getPublishedServices } from '@/lib/data/services';
+import { getPublishedDisciplines } from '@/lib/data/disciplines';
 import { buildBreadcrumbSchema, buildFaqSchema } from '@/lib/seo/jsonld';
 import { localizedPath } from '@/lib/i18n';
 import { loadHead } from '@/lib/seo/head';
@@ -26,7 +26,8 @@ import { PUBLIC_SITE_URL } from 'astro:env/client';
 //                              PR9 it fell back to the HOME headline and "See our work";
 //   ensureContactInquiry       the inquiry form (the one public write path) cannot be hidden
 //                              or removed;
-//   withContactData            the published services reach the form as route data.
+//   withContactData            the published disciplines and their services reach the form
+//                              as route data (its grouped select, Round 2).
 
 interface Props {
   locale: Locale;
@@ -38,9 +39,9 @@ const STR = { en: { home: 'Home' }, ar: { home: 'الرئيسية' } }[locale];
 const meta = PAGE_META.contact[locale];
 
 // The composition, the head (whose per-page SEO override needs the page id, so it is handed
-// the composition query rather than its result) and the services load together.
+// the composition query rather than its result) and the disciplines load together.
 const compositionQuery = getPageComposition('contact');
-const [composition, { seo }, services] = await Promise.all([
+const [composition, { seo }, groups] = await Promise.all([
   compositionQuery,
   loadHead(Astro.locals, {
     locale,
@@ -48,13 +49,13 @@ const [composition, { seo }, services] = await Promise.all([
     fallbackDescription: meta.description,
     entity: compositionQuery.then((c) => (c ? { type: 'page' as const, id: c.page.id } : null)),
   }),
-  getPublishedServices(),
+  getPublishedDisciplines(),
 ]);
 // A published page with no sections yet renders the default composition (its SEO override,
 // keyed by the page id above, still applies).
 const composed = composition?.sections.length ? composition.sections : DEFAULT_CONTACT_SECTIONS;
 const sections = withContactData(ensureContactInquiry(withHeroPreset(composed, 'contact')), {
-  services,
+  groups,
 });
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');

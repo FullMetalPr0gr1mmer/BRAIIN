@@ -5,7 +5,8 @@ import type { Accent } from '@schemas/media';
 import { pickLocale } from '@/lib/i18n';
 import ContactForm from '@/components/ContactForm.astro';
 import AccentText from '@/components/ui/AccentText.astro';
-import type { ServiceRow } from '@/lib/data/services';
+import type { ServiceGroupInput } from '@/lib/forms/serviceSelect';
+import { getPublishedDisciplines } from '@/lib/data/disciplines';
 
 // The inquiry band (UI v2 PR9): tag, section head, and the real wired form — the FULL
 // variant (name, email, company, service, budget, deadline, message), posted as
@@ -16,12 +17,13 @@ import type { ServiceRow } from '@/lib/data/services';
 // porting that markup would have deleted the spam guard and the PDPL lawful basis, and made
 // every submission a 422. The design is a shell around the existing form.
 //
-// Copy is CMS-overridable (ContactInquirySectionContentSchema); the published services
-// arrive as ROUTE data (withContactData), never as content.
+// Copy is CMS-overridable (ContactInquirySectionContentSchema); the published disciplines
+// and their services (the grouped select, Round 2) arrive as ROUTE data (withContactData),
+// never as content.
 
 interface Props extends ContactInquirySectionContent {
   locale: Locale;
-  data?: { services?: readonly ServiceRow[] } | undefined;
+  data?: { groups?: readonly ServiceGroupInput[] } | undefined;
 }
 
 const { locale, tag, heading, accent, lead, note, successMessage, submitLabel, data } = Astro.props;
@@ -48,7 +50,8 @@ const headingText = heading ? pickLocale(heading, locale) : STR.heading;
 // the built-in heading.
 const accentRange = heading ? accent : (accent ?? BUILT_IN_ACCENT);
 const leadText = lead ? pickLocale(lead, locale) : STR.lead;
-const services = data?.services ?? [];
+// Placed on a page whose route passes none, the band loads them itself.
+const groups = data?.groups ?? (await getPublishedDisciplines());
 ---
 
 <section class="contact-inquiry" id="inquiry" aria-labelledby="inquiry-heading">
@@ -62,7 +65,7 @@ const services = data?.services ?? [];
     </div>
     <ContactForm
       locale={locale}
-      services={services}
+      groups={groups}
       fields="full"
       kind="project_inquiry"
       note={note ? pickLocale(note, locale) : undefined}

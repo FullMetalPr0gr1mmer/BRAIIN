@@ -1,9 +1,7 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import { BUDGET_BANDS, BUDGET_BAND_LABELS } from '@schemas/lead';
-import { pickLocale } from '@/lib/i18n';
 import { getIdentity } from '@/lib/identity';
-import type { ServiceRow } from '@/lib/data/services';
 import Cta from '@/components/ui/Cta.astro';
 import {
   CONTACT_FORM_FIELDS,
@@ -11,6 +9,11 @@ import {
   type ContactFormVariant,
   type ContactKind,
 } from '@/lib/forms/contactPayload';
+import {
+  initialServiceValue,
+  serviceOptionGroups,
+  type ServiceGroupInput,
+} from '@/lib/forms/serviceSelect';
 
 // The lead form — the site's one public write path (/api/contact: same-origin check, Zod,
 // honeypot, tenant resolved server-side, PII envelope-encrypted).
@@ -19,6 +22,20 @@ import {
 //            "Send message" with a trailing arrow, the button before the note.
 //   full     /contact's form (UI v2 PR9): the same plus the budget range and the
 //            free-text deadline; the badge "Send a message", icon first, before the note.
+//   hello    the services pages' "Say hello" form (Round 2): name, email, company, phone
+//            (type=tel, dir=ltr — envelope-encrypted server-side), service, budget and
+//            message; the full form's two columns and badge.
+//
+// The service select is grouped by discipline (Round 2, src/lib/forms/serviceSelect.ts):
+// "Not sure yet", then per discipline an <optgroup label="01 Branding"> opening with
+// "Branding, help me choose" (value `discipline:branding` → disciplineOfInterest) and its
+// services (value = slug → serviceOfInterest). `selected` preselects one server-side (a
+// service page preselects itself); a `[data-preselect="discipline:<slug>"]` link anywhere
+// on the page sets it on click, but only while the select is empty or on a discipline.
+// With no groups (a database outage) the select offers only "Not sure yet".
+//
+// ONE form per page: its ids (contact-form, cf-*) are fixed, and the scripts find it by
+// them.
 //
 // Both carry the PDPL consent checkbox and the honeypot, post valued options (never a
 // visible label — the budget bands are BUDGET_BAND_LABELS, the one map the admin and the
@@ -28,9 +45,12 @@ import {
 // design's copy is verbatim (its Saudi-voice Arabic); validation and system copy stays MSA
 // (owner decision 6).
 
-interface Props {
+export interface Props {
   locale: Locale;
-  services: readonly ServiceRow[];
+  /** The disciplines with their services, in order (getPublishedDisciplines()). */
+  groups: readonly ServiceGroupInput[];
+  /** Preselect a service slug or `discipline:<slug>`; ignored when the select lacks it. */
+  selected?: string | undefined;
   fields?: ContactFormVariant;
   /** Posted as the lead's `kind`. */
   kind?: ContactKind;
@@ -42,7 +62,8 @@ interface Props {
 
 const {
   locale,
-  services,
+  groups,
+  selected,
   fields = 'full',
   kind = 'contact',
   note,
@@ -58,6 +79,8 @@ const STR = {
     email: 'Email',
     company: 'Company',
     companyPh: 'Optional',
+    phone: 'Phone or WhatsApp',
+    phonePh: '+966 5X XXX XXXX',
     namePh: 'Your full name',
     emailPh: 'you@company.com',
     messagePh: 'What are you making, who is it for, and when does it need to be ready?',
@@ -87,6 +110,8 @@ const STR = {
     email: 'البريد الإلكتروني',
     company: 'الشركة',
     companyPh: 'اختياري',
+    phone: 'الجوال أو واتساب',
+    phonePh: '+966 5X XXX XXXX',
     namePh: 'اسمك الكامل',
     emailPh: 'you@company.com',
     // The design words the placeholder per page: home "builds", /contact "makes".
@@ -125,11 +150,18 @@ const { contactEmail } = await getIdentity(Astro.locals);
 // The design's bands, in its order; "Prefer to discuss" is the empty option (no answer).
 // The legacy bands stay accepted on input (cached pages) but are never offered.
 const budgets = BUDGET_BANDS.map((k) => ({ value: k, label: BUDGET_BAND_LABELS[k][locale] }));
+
+const serviceGroups = serviceOptionGroups(groups, locale);
+const serviceValue = initialServiceValue(serviceGroups, selected);
 ---
 
 <form
   id="contact-form"
-  class:list={['contact-form', compact ? 'contact-form--compact' : 'contact-form--full']}
+  class:list={[
+    'contact-form',
+    compact ? 'contact-form--compact' : 'contact-form--full',
+    fields === 'hello' && 'contact-form--hello',
+  ]}
   data-locale={locale}
   data-kind={kind}
   data-err-required={STR.errRequired}
@@ -186,13 +218,38 @@ const budgets = BUDGET_BANDS.map((k) => ({ value: k, label: BUDGET_BAND_LABELS[k
     )
   }
   {
+    has('phone') && (
+      <div class="field">
+        <label for="cf-phone">{STR.phone}</label>
+        <input
+          id="cf-phone"
+          name="phone"
+          type="tel"
+          dir="ltr"
+          maxlength="32"
+          autocomplete="tel"
+          inputmode="tel"
+          placeholder={STR.phonePh}
+        />
+      </div>
+    )
+  }
+  {
     has('service') && (
       <div class="field">
         <label for="cf-service">{STR.service}</label>
         <select id="cf-service" name="service">
-          <option value="">{STR.chooseService}</option>
-          {services.map((s) => (
-            <option value={s.slug}>{pickLocale(s.title, locale, s.slug)}</option>
+          <option value="" selected={serviceValue === ''}>
+            {STR.chooseService}
+          </option>
+          {serviceGroups.map((g) => (
+            <optgroup label={g.label}>
+              {g.options.map((o) => (
+                <option value={o.value} selected={o.value === serviceValue}>
+                  {o.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>
@@ -300,9 +357,28 @@ const budgets = BUDGET_BANDS.map((k) => ({ value: k, label: BUDGET_BAND_LABELS[k
     type FieldProblem,
   } from '@/lib/client/formErrors';
   import { buildContactPayload, leadKeysToFields } from '@/lib/forms/contactPayload';
+  import { preselectValue } from '@/lib/forms/serviceSelect';
 
   const form = document.getElementById('contact-form') as HTMLFormElement | null;
   const status = document.getElementById('contact-status') as HTMLElement | null;
+  const service = document.getElementById('cf-service') as HTMLSelectElement | null;
+
+  // "Start your Branding project" (S3's explorer CTA) and any other
+  // [data-preselect="discipline:<slug>"] link: the click still follows the link (to the
+  // form's #inquiry), and the select takes the discipline unless the visitor already chose
+  // a specific service. Delegated, so links rendered anywhere on the page are covered.
+  if (service) {
+    document.addEventListener('click', (e) => {
+      const link = e.target instanceof Element ? e.target.closest('[data-preselect]') : null;
+      const wanted = link?.getAttribute('data-preselect');
+      if (!wanted) return;
+      const available = [...service.options].map((o) => o.value);
+      const next = preselectValue(service.value, wanted, available);
+      if (next === null) return;
+      service.value = next;
+      service.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
 
   if (form && status) {
     const d = form.dataset;
