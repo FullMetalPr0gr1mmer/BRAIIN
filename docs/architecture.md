@@ -8,7 +8,7 @@
 
 ## System overview
 
-Braiin Station is a single-platform, single-tenant-but-tenant-ready creative-agency system comprising four parts: (1) a bilingual EN/AR (RTL) marketing/portfolio public site for 14 services, fully CMS-driven with toggleable, re-orderable, styleable, per-section error-isolated sections, each service detail page opening with its own hero video and Gaming launching as a coming-soon teaser; (2) an AI Style-Finder lead-generation app, deferred to a module boundary for now but with its security and cost guardrails baked in from day one; (3) an SEO/GEO/AEO-tuned Creative Knowledge blog; and (4) an authenticated admin/CMS governed by four roles (Admin, Content Creator, SEO, Developer) with authorization enforced server-side. The platform is built greenfield on Astro (public site) + React admin islands + Supabase (Postgres, Auth, Edge Functions, Storage) + Tiptap, deployed on **Cloudflare Workers Builds** (NOT Pages — the Astro Cloudflare adapter dropped Pages support; on-demand `/admin` needs the Workers runtime) via the Astro Cloudflare adapter, with Cloudflare Stream for video, and is governed throughout by four pillars in strict priority order — **Security → Performance → SEO/GEO/AEO → Scalability** — and a seven-point Definition of Done applied to every feature.
+Braiin Station is a single-platform, single-tenant-but-tenant-ready creative-agency system comprising four parts: (1) a bilingual EN/AR (RTL) marketing/portfolio public site for 28 services grouped in 5 disciplines (Branding, Production, Marketing, Website Development, Events & Exhibitions — Round 2, 2026-09-27; it launched with 14), fully CMS-driven with toggleable, re-orderable, styleable, per-section error-isolated sections, each service detail page opening with its own clip (a window of the showreel, EXC-009, until Stream at KAN-20) and a case block; the Gaming teaser and Merchandise were retired on 2026-09-27 (archived, restorable, old URLs 301); (2) an AI Style-Finder lead-generation app, deferred to a module boundary for now but with its security and cost guardrails baked in from day one; (3) an SEO/GEO/AEO-tuned Creative Knowledge blog; and (4) an authenticated admin/CMS governed by four roles (Admin, Content Creator, SEO, Developer) with authorization enforced server-side. The platform is built greenfield on Astro (public site) + React admin islands + Supabase (Postgres, Auth, Edge Functions, Storage) + Tiptap, deployed on **Cloudflare Workers Builds** (NOT Pages — the Astro Cloudflare adapter dropped Pages support; on-demand `/admin` needs the Workers runtime) via the Astro Cloudflare adapter, with Cloudflare Stream for video, and is governed throughout by four pillars in strict priority order — **Security → Performance → SEO/GEO/AEO → Scalability** — and a seven-point Definition of Done applied to every feature.
 
 ## Locked decisions (decision log)
 
@@ -118,10 +118,19 @@ const services = defineCollection({
     tenant_id: z.string().uuid(),
     slug: z.string(),
     status: z.enum(['draft', 'scheduled', 'published', 'archived']), // matches §2.2 content_status
-    is_teaser: z.boolean(),    // Gaming teaser is a boolean flag on a PUBLISHED row, NOT a 5th status
+    is_teaser: z.boolean(),    // unused since Gaming was retired (2026-09-27); a teaser is a flag on a PUBLISHED row, NOT a 5th status
     order: z.number().int(),
-    title: localized(z.string()), body: localized(z.string()),
-    hero_video_id: z.string().nullable(), category: z.string().nullable(),
+    title: localized(z.string()),            // the service name
+    blurb: localized(z.string()),            // the tagline: hero sub, meta description, search text
+    body: localized(tiptapDoc),              // rendered through the allowlist renderer (sanitise on render)
+    // Round 2 (migration 0028): the service page
+    discipline_id: z.string().uuid().nullable(),     // → disciplines (5); crumb, "More in {Discipline}"
+    intro: localized(z.string()).nullable(),
+    value_points: z.array(z.object({ title: localized(z.string()), text: localized(z.string()) })).max(6),
+    deliverables: z.array(localized(z.string())).max(12),
+    poster_media_id: z.string().uuid().nullable(),   // the hero poster (Picture) and the card still
+    preview_video_path: z.string().nullable(),       // /media/*.mp4 + preview_start_s/_end_s (≤30s) — EXC-009
+    hero_video_id: z.string().nullable(),            // Stream UID: unused until KAN-20 replaces the clip
     seo: z.object({ /* … */ }), updated_at: z.coerce.date(),
   }),
 });
@@ -129,8 +138,10 @@ const services = defineCollection({
 ```ts
 // src/loaders/supabase.ts — anon key + RLS; only published+current-tenant rows reach the build
 let q = db.from(opts.table).select(opts.select ?? '*')
-         .eq('tenant_id', TENANT_ID).eq('status', 'published'); // a teaser row is genuinely status='published' (is_teaser=true), so it passes this filter
+         .eq('tenant_id', TENANT_ID).eq('status', 'published');
 ```
+
+**Round 2 (0028) — disciplines and service cases.** A service sits in one of five `disciplines` (slug, name/short/blurb, poster, clip window, status, order). RLS hides a service whose discipline is not published from every anonymous read — pages, `search_content`/`search_suggest` (SECURITY INVOKER), sitemap, llms.txt, portfolio embeds, entity SEO, media — by a RESTRICTIVE policy on `services`; archiving a discipline is therefore one write, with no code having to agree. Each service has at most one `service_cases` row (title, context, problems → what we did, results), linked to a portfolio project for its client, sector and poster; it is public only while the case **and** its service are published. Both tables are column-granted to anon: loaders name their columns (a `select=*` is refused with 42501), as for testimonials and media.
 
 ### 1.4 Publish without a full rebuild — Live Content Collections + on-demand revalidation
 
@@ -167,13 +178,13 @@ Every application table carries `id`, `tenant_id uuid not null`, `created_at`, `
 `tenants`; `app_role` enum (`admin`,`content_creator`,`seo`,`developer`); `profiles` (1:1 with `auth.users`, holds `role`, `failed_login_count`, `locked_until`). **`login_attempts(id, tenant_id, email, ip_inet, succeeded, attempted_at)` is provisioned in migration 0001** so the Pillar-1 lockout control has a schema home from day one (enforcement UI lands in Phase 3; invite/reset token lifetimes — reset 1h, invite 24h — are GoTrue config).
 
 ### 2.2 Shared content lifecycle
-`content_status` enum (`draft`,`scheduled`,`published`,`archived`). Gaming teaser = `status='published' + is_teaser=true` — **not** a fifth status.
+`content_status` enum (`draft`,`scheduled`,`published`,`archived`). A teaser (the Gaming row, retired 2026-09-27) = `status='published' + is_teaser=true` — **not** a fifth status.
 
 ### 2.3 Bilingual rule
 Scalar SEO/identity field → sibling `_ar` column; document/array/rich-text → locale-keyed JSONB. NULL `_ar` ⇒ EN fallback + omit from AR sitemap.
 
 ### 2.4 Content tables
-`services`, `portfolio` + `portfolio_services` (M:N), `blog_categories`, `blog_posts` (with `author_id uuid references team_members(id)` — public Person identity, §7.6), `pages`, `page_sections` (section_type list includes `stat_counters`→statistics, `team`→team_members, `certifications`→certifications, `partner_logos`; unknown types isolated by §1.5).
+`disciplines` (0028) → `services` (+ `service_cases`, one per service, 0028), `portfolio` + `portfolio_services` (M:N), `blog_categories`, `blog_posts` (with `author_id uuid references team_members(id)` — public Person identity, §7.6), `pages`, `page_sections` (section_type list includes `stat_counters`→statistics, `team`→team_members, `certifications`→certifications, `partner_logos`; unknown types isolated by §1.5).
 
 **Versioning — ONE polymorphic table (resolves R52):** Braiin Station standardises on a single polymorphic `content_versions(entity_type versioned_entity, entity_id, version_no, snapshot jsonb, …)` for pages, services, portfolio, and blog. **`page_versions` is removed** — page history is a `content_versions` row (snapshot = full `{page + ordered page_sections}`) exactly like every other type. Each entity carries `version_token` for optimistic locking (§8.7). One table, one rollback mechanism, no per-type version tables.
 

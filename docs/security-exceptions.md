@@ -12,8 +12,8 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-004 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-12-24 | Open (re-justified 2026-09-25; first expiry 2026-09-01 lapsed) | Live on `*.workers.dev` with **no WAF rate limits and no crawler blocks** — both are zone-scoped and there is no zone |
 | EXC-005 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | **Closed 2026-09-25** | `js-yaml` GHSA-5p4m-2wfm-xmqj allowlisted in the prod audit gate — js-yaml 4.3.2 shipped the 4.x fix; entry removed |
 | EXC-006 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open (re-scoped 2026-09-25) | `extract-zip` GHSA-jmr9-qjv8-65gv **+ GHSA-7pqw-9j4j-h8q3** allowlisted in the dev audit gate — every published version is affected |
-| EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | Open — **widened 2026-09-25, owner re-sign pending** | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee (and, from the UI v2 port, every banner/in-view video loop) have no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**) |
-| EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open   | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20) |
+| EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | Open — **widened 2026-09-25 and 2026-09-27, owner re-sign pending** | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee (and, from the UI v2 port, every banner/in-view video loop; from Round 2, the discipline card clips, the `/services` explorer clip and the service hero loops) have no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**) |
+| EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open — **widened 2026-09-27, owner re-sign pending** | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops |
 
 ---
 
@@ -387,6 +387,32 @@ one signed on 2026-08-24; this entry must be re-signed (and its expiry revisited
 the first new surface merges. The close conditions above are unchanged — the header pause
 control remains the one-button fix for all of it (`setMotionPaused()` is still retained).
 
+### Widened 2026-09-27 — Round 2 (services redesign)
+
+The Round 2 delivery (`index.html` v2.1, `services.html`, `service.html`; plan
+`check-latest-folder-in-dazzling-widget`, "Round 2") adds three more video surfaces. The
+owner again chose parity with the mockup. Each plays a window of the showreel, stored in
+the database as a `preview_video_path` clip (migration 0028: `disciplines`, `services`):
+
+| Surface | Where | Motion |
+| --- | --- | --- |
+| Discipline card clips | home "What we do", `/services` cards (5 cards) | muted loop while the card is hovered or focused |
+| Explorer clip | `/services` tabbed explorer (sticky media, one per open discipline; swaps on row hover/focus) | muted loop while the explorer is open and on screen |
+| Service hero loops | `/services/[slug]` (28 pages, EN + AR) | autoplaying muted banner loop, the service's own window |
+
+The card clips are user-initiated (hover/focus), like the card hover previews above, and
+stop on pointer-leave or blur. They are listed here anyway: focus alone starts them, and a
+keyboard user tabbing through the row starts one clip after another. The explorer clip and
+the service hero loops autoplay with no pause control, which is squarely the 2.2.2 failure
+this entry records.
+
+**Invariants unchanged:** no video under `prefers-reduced-motion` or Save-Data; zero video
+bytes before intersection (the Round 2 slices add these surfaces to
+`tests/e2e/media-bytes.e2e.ts`); in-content clips never autoplay on touch.
+
+⚠ **Owner re-sign required again** before the Round 2 PRs merge. The header pause control
+would still fix every surface at once.
+
 ---
 
 ## EXC-009 — Background video self-hosted as MP4 instead of Cloudflare Stream
@@ -454,6 +480,27 @@ All of:
 2. the `/media/*.mp4` path branch is removed from the `VideoClip` schema (and its DB CHECK);
 3. `public/media/showreel.mp4` is deleted;
 4. mounted `<video>` elements use `preload="none"` or a Stream player facade.
+
+### Widened 2026-09-27 — Round 2 surfaces (owner re-sign pending)
+
+Round 2 adds three surfaces, all windows of the same `/media/showreel.mp4`, so a visitor
+still downloads ranges of one file:
+
+- the **discipline card clips** on home and `/services` (5 windows, `disciplines.preview_*`);
+- the **explorer clip** on `/services` (the discipline's window, swapped to a service's on
+  row hover/focus);
+- the **service hero loops** on the 28 `/services/[slug]` pages, EN and AR
+  (`services.preview_*`).
+
+The DB fence is the same allow-list as `portfolio.preview_video_path`: migration 0028 gives
+`disciplines` and `services` a `preview_video_path` CHECK
+(`^/media/[a-z0-9][a-z0-9/_-]*\.mp4$`) and a window CHECK (both-or-neither, end after
+start, at most 30 s: `disciplines_preview_window`, `services_preview_window`). Posters are
+`static` stills (`stills/services/*.jpg`) through `<Picture>`, readable by visitors only
+while the discipline or service is published (0028's branches of
+`media_assets_public_read`). The close conditions above now also cover these columns:
+closing means Stream UIDs for all of them, and dropping the path branch from both CHECKs.
+`services.hero_video_uid` (the Stream column since 0001) stays unused until then.
 
 **Watch for (added with UI v2 PR11):** the case study's final film ships as a muted in-view
 loop with no sound control; its Stream replacement (sound + captions, WCAG 1.2.2) is part
