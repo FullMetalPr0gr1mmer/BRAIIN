@@ -26,12 +26,12 @@ export const PAGE_META: Record<MetaRoute, Record<Locale, PageMeta>> = {
     en: {
       title: 'Creative work that performs',
       description:
-        '%brand% is a creative studio in Jeddah working in any language. Identity, film, sound, events, merch, web. Fourteen crafts, one studio.',
+        '%brand% is a creative studio in Jeddah working in any language. Identity, film, sound, events, merch, web. Five disciplines, one studio.',
     },
     ar: {
       title: 'شغل إبداعي يحقّق نتائج',
       description:
-        '%brand% استوديو إبداعي في جدة يشتغل بأي لغة. الهوية والإنتاج والصوت والفعاليات والمنتجات والويب: أربع عشرة حرفة في استوديو واحد.',
+        '%brand% استوديو إبداعي في جدة يشتغل بأي لغة. الهوية والإنتاج والصوت والفعاليات والمنتجات والويب: خمسة تخصصات، استوديو واحد.',
     },
   },
   about: {
