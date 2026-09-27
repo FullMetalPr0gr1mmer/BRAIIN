@@ -76,16 +76,17 @@ describe('the Services page composition', () => {
     expect(DEFAULT_SERVICES_SECTIONS.map((s) => s.type)).toEqual(ORDER);
   });
 
-  it('the proof band is the statistics `services` variant, with the sample rating as CONTENT', () => {
+  it('the proof band is the statistics `services` variant, and the code default carries NO rating', () => {
+    // The rating is the design's sample claim. This default renders whenever the
+    // composition is empty (unpublished page, every section hidden, a failed read), and code
+    // is never behind the 0025 placeholder fence, so the claim may live only in the flagged
+    // seed row.
     const proof = DEFAULT_SERVICES_SECTIONS.find((s) => s.type === 'statistics')!;
-    expect(proof.props).toMatchObject({ variant: 'services', placement: 'services' });
-    expect(proof.props?.['rating']).toEqual({
-      value: '4.9 / 5',
-      label: { en: 'average client rating', ar: 'متوسط تقييم عملائنا' },
-    });
+    expect(proof.props).toEqual({ variant: 'services', placement: 'services' });
+    expect(JSON.stringify(DEFAULT_SERVICES_SECTIONS)).not.toContain('4.9');
   });
 
-  it('the seeded composition is the default one, and the rating row is a flagged sample', () => {
+  it('the seeded composition is the default one plus the sample rating, on a flagged row', () => {
     type Row = {
       type: string;
       content: Record<string, unknown>;
@@ -100,13 +101,21 @@ describe('the Services page composition', () => {
       .sort((a, b) => a.sort_order - b.sort_order);
     expect(rows.map((r) => r.type)).toEqual(ORDER);
     for (const [i, row] of rows.entries()) {
-      expect(row.content, row.type).toEqual(DEFAULT_SERVICES_SECTIONS[i]!.props ?? {});
+      // The seed is the default, except that the proof row adds the design's sample rating.
+      const { rating, ...content } = row.content;
+      expect(content, row.type).toEqual(DEFAULT_SERVICES_SECTIONS[i]!.props ?? {});
       // Only the band carrying the rating line is a sample (production hides it until the
       // owner's override, runbook §6d); the rest is the design's own copy.
       const sample = row.type === 'statistics';
+      expect(rating !== undefined, row.type).toBe(sample);
       expect(row.is_placeholder === true, row.type).toBe(sample);
       expect(row.__placeholder === true, row.type).toBe(sample);
     }
+    const proof = rows.find((r) => r.type === 'statistics')!;
+    expect(proof.content['rating']).toEqual({
+      value: '4.9 / 5',
+      label: { en: 'average client rating', ar: 'متوسط تقييم عملائنا' },
+    });
   });
 
   it('seeds the services page itself, published', () => {
@@ -431,6 +440,17 @@ describe('servicesPageLinks', () => {
     const neither = noHello.filter((s) => s.type !== 'servicesOverview');
     expect(servicesPageLinks(neither).ctaHref).toBe('/contact#inquiry');
   });
+
+  it('with the cards hidden, the CTA goes to the standalone explorer, when there is one', () => {
+    const noCards = DEFAULT_SERVICES_SECTIONS.filter((s) => s.type !== 'servicesOverview');
+    expect(servicesPageLinks(noCards, 'branding').ctaHref).toBe('#branding');
+    // No explorer on the page (or no discipline to open): the form, as before.
+    const bare = noCards.filter((s) => s.type !== 'serviceExplorer');
+    expect(servicesPageLinks(bare, 'branding').ctaHref).toBe('#inquiry');
+    expect(servicesPageLinks(noCards).ctaHref).toBe('#inquiry');
+    // With the cards, they stay the target.
+    expect(servicesPageLinks(DEFAULT_SERVICES_SECTIONS, 'branding').ctaHref).toBe('#categories');
+  });
 });
 
 describe('ensureServiceExplorer', () => {
@@ -475,12 +495,29 @@ describe('withServicesData', () => {
     expect(byType(out, 'serviceExplorer')?.data).toEqual({
       disciplines: d,
       inquiryHref: '#inquiry',
+      standalone: false,
     });
     expect(byType(out, 'hello')?.data).toEqual({ groups: d });
     expect(byType(out, 'hero')?.data).toMatchObject({
       ctaHref: '#categories',
       altLink: { href: '#inquiry' },
     });
+  });
+
+  it('makes the explorer standalone when no card band shows, and points the CTA at it', () => {
+    // With the cards hidden nothing else on the page opens the explorer: it must show its
+    // first panel from first paint (services.css), or a bare /services visit sees none of
+    // the 28 service links.
+    for (const cards of [{ visible: false }, null] as const) {
+      const sections = DEFAULT_SERVICES_SECTIONS.flatMap((s) =>
+        s.type !== 'servicesOverview' ? [s] : cards ? [{ ...s, ...cards }] : [],
+      );
+      const out = withServicesData(ensureServiceExplorer(withHeroPreset(sections, 'services')), {
+        disciplines: [{ slug: 'branding' }, { slug: 'events' }],
+      });
+      expect(byType(out, 'serviceExplorer')?.data).toMatchObject({ standalone: true });
+      expect(byType(out, 'hero')?.data).toMatchObject({ ctaHref: '#branding' });
+    }
   });
 
   it('re-points the hero when its bands are hidden', () => {
@@ -533,6 +570,8 @@ describe('loadServicesPage', () => {
     const page = await loadServicesPage({} as never, 'en');
     expect(page.sections.length).toBe(DEFAULT_SERVICES_SECTIONS.length);
     expect(entities).toEqual([null]);
+    // The fallback reaches production unflagged, so it must not carry the sample rating.
+    expect(byType(page.sections, 'statistics')?.props).not.toHaveProperty('rating');
   });
 
   it('carries the Home › Services breadcrumb, localized', async () => {

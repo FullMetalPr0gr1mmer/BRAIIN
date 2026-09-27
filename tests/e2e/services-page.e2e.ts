@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 
 /*
  * /services and /ar/services (Round 2, S3), against the seeded local database: five
@@ -46,6 +46,23 @@ async function parkCards(page: Page): Promise<void> {
 }
 
 const activePanels = (page: Page) => page.locator('.svc-panel:visible');
+
+/** A selected pill's fill (`--bs-klein`, #0024bc). */
+const KLEIN = 'rgb(0, 36, 188)';
+
+/**
+ * Serves the real page with only the explorer's `svc-xp--standalone` class added: what the
+ * route renders when the composition shows no discipline cards (servicesPage.spec.ts pins
+ * that data), a CMS state the seed does not have.
+ */
+async function standaloneExplorer(route: Route): Promise<void> {
+  const res = await route.fetch();
+  const body = (await res.text()).replace('class="svc-xp"', 'class="svc-xp svc-xp--standalone"');
+  const headers = { ...res.headers() };
+  delete headers['content-length'];
+  delete headers['content-encoding'];
+  await route.fulfill({ response: res, body, headers });
+}
 
 for (const locale of ['en', 'ar'] as const) {
   const p = PAGES[locale];
@@ -234,6 +251,76 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(page.locator('.svc-panel#web')).toBeVisible();
       await expect(activePanels(page)).toHaveCount(1);
       await ctx.close();
+    });
+
+    test('without JS: the pill of the panel on show looks selected, as the script would mark it', async ({
+      browser,
+    }) => {
+      const ctx = await browser.newContext({ javaScriptEnabled: false });
+      const page = await ctx.newPage();
+      await page.setViewportSize({ width: 1366, height: 900 });
+      await page.goto(`${p.path}#events`);
+      await expect(page.locator('#svc-tab-events')).toHaveCSS('background-color', KLEIN);
+      await expect(page.locator('#svc-tab-branding')).not.toHaveCSS('background-color', KLEIN);
+      // A pill is a plain fragment link here: following it moves the selected look with it.
+      // (Keys, not a click: the fragment's smooth scroll is still moving the row.)
+      await page.locator('#svc-tab-web').focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('.svc-panel#web')).toBeVisible();
+      await expect(page.locator('#svc-tab-web')).toHaveCSS('background-color', KLEIN);
+      await expect(page.locator('#svc-tab-events')).not.toHaveCSS('background-color', KLEIN);
+      await ctx.close();
+    });
+
+    test('standalone (the page shows no cards): the first panel shows from first paint, JS or not', async ({
+      browser,
+    }) => {
+      for (const javaScriptEnabled of [true, false]) {
+        const ctx = await browser.newContext({ javaScriptEnabled });
+        const page = await ctx.newPage();
+        await page.setViewportSize({ width: 1366, height: 900 });
+        await page.route(`**${p.path}`, standaloneExplorer);
+        await page.goto(p.path, { waitUntil: 'load' });
+        const tag = `js ${javaScriptEnabled}`;
+        await expect(page.locator('.svc-xp'), tag).toBeVisible();
+        await expect(page.locator('.svc-panel#branding'), tag).toBeVisible();
+        await expect(activePanels(page), tag).toHaveCount(1);
+        await expect(page.locator('#svc-tab-branding'), tag).toHaveCSS('background-color', KLEIN);
+        if (javaScriptEnabled) {
+          await expect(page.locator('#svc-tab-branding')).toHaveAttribute('aria-selected', 'true');
+          // The script adopts that panel without writing a hash nobody asked for.
+          expect(new URL(page.url()).hash).toBe('');
+        }
+        // An addressed panel still wins over the first one.
+        await hideConsent(page).catch(() => {});
+        await page.locator('#svc-tab-events').click();
+        await expect(page.locator('.svc-panel#events'), tag).toBeVisible();
+        await expect(activePanels(page), tag).toHaveCount(1);
+        await expect(page.locator('#svc-tab-events'), tag).toHaveCSS('background-color', KLEIN);
+        await ctx.close();
+      }
+    });
+
+    test("a focused pill's ring fits inside the tab row (a scroller clips at its padding)", async ({
+      page,
+    }) => {
+      await page.goto(`${p.path}#branding`, { waitUntil: 'load' });
+      await page.locator('#svc-tab-branding').focus();
+      await expect(page.locator('#svc-tab-branding')).toHaveCSS('outline-style', 'solid');
+      const fit = await page.evaluate(() => {
+        const tab = getComputedStyle(document.querySelector('#svc-tab-branding')!);
+        const row = getComputedStyle(document.querySelector('.svc-xp__tabs')!);
+        return {
+          ring: parseFloat(tab.outlineOffset) + parseFloat(tab.outlineWidth),
+          overflow: row.overflowX,
+          pads: ['top', 'right', 'bottom', 'left'].map((side) =>
+            parseFloat(row.getPropertyValue(`padding-${side}`)),
+          ),
+        };
+      });
+      expect(fit.overflow).toBe('auto');
+      expect(fit.ring).toBeGreaterThan(0);
+      for (const pad of fit.pads) expect(pad).toBeGreaterThanOrEqual(fit.ring);
     });
   });
 }

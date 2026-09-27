@@ -474,11 +474,27 @@ html[dir='rtl'] .svc-proof__n {
    :target — `/services#events` opens Events at FIRST PAINT, so the opening can never be a
    layout shift — and with nothing addressed the explorer is collapsed. Once the script
    runs (.is-live) the classes it sets decide instead, starting from the same panel
-   (replaceState, which the script uses, does not update :target). */
-.svc-xp:not(.is-live):not(:has(.svc-panel:target)),
+   (replaceState, which the script uses, does not update :target).
+   A `:has()` selector is always a rule of its own: `:has()` is not forgiving, so in a
+   selector list an engine without it drops the WHOLE rule — every panel would show
+   stacked, whatever the script set. Alone, it costs such an engine only the pre-script
+   states (tests/lib/cssSelectorLists.spec.ts). */
+.svc-xp:not(.is-live):not(.svc-xp--standalone):not(:has(.svc-panel:target)) {
+  display: none;
+}
 .svc-xp:not(.is-live) .svc-panel:not(:target),
 .svc-xp.is-live:not(.is-open),
 .svc-xp.is-live .svc-panel:not(.is-active) {
+  display: none;
+}
+/* Standalone (the page shows no discipline cards, the only other way in): never collapsed —
+   with nothing addressed its FIRST panel shows, and the script starts from it. The pad's
+   first child is the tab row, so the first panel is its second child. */
+.svc-xp.svc-xp--standalone:not(.is-live) .svc-panel:nth-child(2) {
+  display: block;
+}
+.svc-xp.svc-xp--standalone:not(.is-live):has(.svc-panel:target)
+  .svc-panel:nth-child(2):not(:target) {
   display: none;
 }
 /* A jump to a panel (the fragment, or the script's scrollIntoView) keeps the header's room
@@ -513,9 +529,12 @@ html[dir='rtl'] .svc-proof__n {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  /* room inside the scroller for the focus ring, taken back from the layout */
-  padding: 4px 4px 6px;
-  margin: -4px -4px clamp(34px, 5vh, 60px);
+  /* Room inside the scroller for the focus ring, taken back from the layout. A scroller
+     clips at its padding edge, and the global ring reaches 5px past a pill (2px wide, 3px
+     offset), so 6px on every side: at 4px only 1px of it showed at the top, and at the
+     first and last pill's outer ends. */
+  padding: 6px;
+  margin: -6px -6px clamp(34px, 5vh, 60px);
   scrollbar-width: none;
 }
 .svc-xp__tabs::-webkit-scrollbar {
@@ -545,7 +564,7 @@ html[dir='rtl'] .svc-proof__n {
   font-style: normal;
   font-size: 11px;
   font-weight: 700;
-  color: var(--bs-klein);
+  color: var(--svc-tab-n, var(--bs-klein));
   font-variant-numeric: tabular-nums;
 }
 .svc-tab:hover {
@@ -553,12 +572,29 @@ html[dir='rtl'] .svc-proof__n {
   color: var(--bs-klein);
 }
 .svc-tab[aria-selected='true'] {
+  --svc-tab-n: rgba(255, 255, 255, 0.75);
   background: var(--bs-klein);
   border-color: var(--bs-klein);
   color: var(--bs-paper);
 }
-.svc-tab[aria-selected='true'] i {
-  color: rgba(255, 255, 255, 0.75);
+/* The same selected look before the script (and without it), for the pill of the panel on
+   show: the addressed one (:target), else a standalone explorer's first. Colour only, so
+   the hand-over to [aria-selected] can shift nothing. The k-th pill is the (k+1)-th child
+   of the pad (the tab row comes first), written out to eight disciplines; past that a
+   pre-script pill just stays plain. All :has(), so the list drops as one (see above). */
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(2):target) .svc-tab:nth-child(1),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(3):target) .svc-tab:nth-child(2),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(4):target) .svc-tab:nth-child(3),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(5):target) .svc-tab:nth-child(4),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(6):target) .svc-tab:nth-child(5),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(7):target) .svc-tab:nth-child(6),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(8):target) .svc-tab:nth-child(7),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(9):target) .svc-tab:nth-child(8),
+.svc-xp.svc-xp--standalone:not(.is-live):not(:has(.svc-panel:target)) .svc-tab:nth-child(1) {
+  --svc-tab-n: rgba(255, 255, 255, 0.75);
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+  color: var(--bs-paper);
 }
 
 /* ---- A panel ---- */

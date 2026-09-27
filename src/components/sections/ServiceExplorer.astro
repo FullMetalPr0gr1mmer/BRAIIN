@@ -29,14 +29,16 @@ import MediaFrame from '@/components/media/MediaFrame.astro';
 //
 // A panel's id is the discipline's slug (`/services#events`). Which panel shows is CSS
 // `:target` until src/lib/client/serviceExplorer.ts takes over (see its header); with
-// nothing addressed the explorer is collapsed. Tabs are `<a href="#slug">` that the script
-// upgrades to APG tabs (src/lib/client/tabs.ts). Styled in public/styles/services.css.
+// nothing addressed the explorer is collapsed — unless it is `standalone`, when it shows its
+// first panel. Tabs are `<a href="#slug">` that the script upgrades to APG tabs
+// (src/lib/client/tabs.ts). Styled in public/styles/services.css.
 //
 //   content  ServiceExplorerSectionContentSchema — { inquireLabel, startLabel } overrides
-//   data     { disciplines?, inquiryHref? } — ROUTE data: the published disciplines with
-//            their services (else it loads them itself) and where "Start your…" points
-//            (default #inquiry; the route sends it to /contact#inquiry when the page's own
-//            "Say hello" is hidden).
+//   data     { disciplines?, inquiryHref?, standalone? } — ROUTE data: the published
+//            disciplines with their services (else it loads them itself); where "Start
+//            your…" points (default #inquiry; the route sends it to /contact#inquiry when
+//            the page's own "Say hello" is hidden); `standalone` when the page shows no
+//            discipline cards, which are otherwise the only way in (servicesPage.ts).
 
 interface Props extends ServiceExplorerSectionContent {
   locale: Locale;
@@ -44,6 +46,7 @@ interface Props extends ServiceExplorerSectionContent {
     | {
         disciplines?: readonly ExplorerDisciplineInput[] | undefined;
         inquiryHref?: string | undefined;
+        standalone?: boolean | undefined;
       }
     | undefined;
 }
@@ -85,7 +88,11 @@ const rows = await Promise.all(
 );
 ---
 
-<section class="svc-xp" aria-label={COPY.region} data-xp>
+<section
+  class:list={['svc-xp', { 'svc-xp--standalone': data?.standalone === true }]}
+  aria-label={COPY.region}
+  data-xp
+>
   <div class="svc-xp__pad">
     <div class="svc-xp__tabs" data-xp-tabs data-xp-label={COPY.tabs}>
       {

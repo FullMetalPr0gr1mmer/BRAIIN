@@ -6,7 +6,9 @@
 //   First paint is CSS. `/services#events` (the home cards, the service pages' crumb, the
 //   retired-slug 301s) opens the Events panel through `:target` before any script runs. A
 //   script opening it after first paint would move everything below with no input to
-//   excuse it — a layout shift that counts.
+//   excuse it — a layout shift that counts. A standalone explorer (`.svc-xp--standalone`:
+//   the page shows no discipline cards) shows its FIRST panel when nothing is addressed,
+//   also by CSS, and the hand-over below starts from that panel, leaving the URL alone.
 //
 //   After that, this module owns the state. It adds `.is-live` to the explorer, which
 //   switches the CSS from `:target` to the `.is-open` / `.is-active` classes — set here to
@@ -188,7 +190,7 @@ export function initServiceExplorer(root: HTMLElement): void {
 
   function open(
     slug: string,
-    how: { focus: 'panel' | null; scroll: boolean; animate?: boolean },
+    how: { focus: 'panel' | null; scroll: boolean; animate?: boolean; hash?: boolean },
   ): void {
     const i = slugs.indexOf(slug);
     const panel = panels[i];
@@ -209,7 +211,7 @@ export function initServiceExplorer(root: HTMLElement): void {
     document.getElementById('categories')?.classList.add('is-picked');
     const tab = tabs[i];
     if (tab) revealTab(tab);
-    if (location.hash !== `#${slug}`) {
+    if (how.hash !== false && location.hash !== `#${slug}`) {
       history.replaceState(history.state, '', `${location.pathname}${location.search}#${slug}`);
     }
     if (how.focus === 'panel') {
@@ -237,10 +239,15 @@ export function initServiceExplorer(root: HTMLElement): void {
     });
 
   // Hand-over: what `:target` showed (if anything) becomes the state, with no change on
-  // screen — no animation, no scroll (the browser already scrolled to the fragment).
+  // screen — no animation, no scroll (the browser already scrolled to the fragment). A
+  // standalone explorer with nothing addressed was showing its first panel: that one, and
+  // no hash is written for a panel the visitor never asked for.
   root.classList.add('is-live');
   const initial = panelFromHash(location.hash, slugs);
   if (initial) open(initial, { focus: null, scroll: false, animate: false });
+  else if (root.classList.contains('svc-xp--standalone') && slugs[0]) {
+    open(slugs[0], { focus: null, scroll: false, animate: false, hash: false });
+  }
 
   document.addEventListener('click', (e) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {

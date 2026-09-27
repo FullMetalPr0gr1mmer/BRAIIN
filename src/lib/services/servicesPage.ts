@@ -19,6 +19,8 @@ import { DEFAULT_SERVICES_SECTIONS, withHeroPreset, type SectionData } from '@/l
 //   withHeroPreset('services')  the banner hero with the services copy and loop window;
 //   ensureServiceExplorer       the page-mode cards are `#<slug>` links INTO the explorer,
 //                               so while the cards show, the explorer does too;
+//   withServicesData            with NO visible cards the explorer is `standalone`: nothing
+//                               else on the page opens it, so it opens its first panel;
 //   servicesPageLinks           the hero CTA, its alt link and the explorer's "Start your…"
 //                               point at bands that are actually on the page.
 
@@ -36,17 +38,22 @@ const shown = (sections: readonly SectionData[], type: string) =>
 
 /**
  * Where the page's links go, given what it will actually render: the hero CTA to the cards
- * (else the form), the alt link and every "Start your {Discipline} project" to this page's
- * "Say hello" (else the contact page's form — an anchor to a band that is not there is a
- * dead button, the home CTA's rule).
+ * (else to the standalone explorer's first panel, `explorerSlug`, else the form), the alt
+ * link and every "Start your {Discipline} project" to this page's "Say hello" (else the
+ * contact page's form — an anchor to a band that is not there is a dead button, the home
+ * CTA's rule).
  */
-export function servicesPageLinks(sections: readonly SectionData[]): {
+export function servicesPageLinks(
+  sections: readonly SectionData[],
+  explorerSlug?: string,
+): {
   ctaHref: string;
   inquiryHref: string;
 } {
   const inquiryHref = shown(sections, 'hello') ? '#inquiry' : '/contact#inquiry';
+  const explorer = explorerSlug && shown(sections, 'serviceExplorer') ? `#${explorerSlug}` : null;
   return {
-    ctaHref: shown(sections, 'servicesOverview') ? '#categories' : inquiryHref,
+    ctaHref: shown(sections, 'servicesOverview') ? '#categories' : (explorer ?? inquiryHref),
     inquiryHref,
   };
 }
@@ -70,12 +77,19 @@ export function ensureServiceExplorer(sections: readonly SectionData[]): Section
  * The route's own data, as SectionRenderer `data` (never CMS content): the disciplines to
  * the cards (in page mode), the explorer and the form; the link targets to the hero and the
  * explorer. Only the FIRST hero is the banner (withHeroPreset) and gets the targets.
+ *
+ * `standalone`: with no visible card band, nothing on the page can open the explorer (its
+ * tabs are inside it, and a collapsed explorer shows nothing), so a bare /services visit
+ * would never see a panel or the 28 service links. A standalone explorer shows its first
+ * panel from first paint instead (CSS; the script starts from the same panel), and the
+ * hero CTA points at it.
  */
-export function withServicesData<D>(
+export function withServicesData<D extends { slug: string }>(
   sections: readonly SectionData[],
   data: { disciplines: readonly D[] },
 ): SectionData[] {
-  const links = servicesPageLinks(sections);
+  const standalone = !shown(sections, 'servicesOverview');
+  const links = servicesPageLinks(sections, standalone ? data.disciplines[0]?.slug : undefined);
   let heroSeen = false;
   return sections.map((s) => {
     switch (s.type) {
@@ -84,7 +98,12 @@ export function withServicesData<D>(
       case 'serviceExplorer':
         return {
           ...s,
-          data: { ...s.data, disciplines: data.disciplines, inquiryHref: links.inquiryHref },
+          data: {
+            ...s.data,
+            disciplines: data.disciplines,
+            inquiryHref: links.inquiryHref,
+            standalone,
+          },
         };
       case 'hello':
         return { ...s, data: { ...s.data, groups: data.disciplines } };

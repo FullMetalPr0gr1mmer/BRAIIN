@@ -284,28 +284,22 @@ export const DEFAULT_WORK_SECTIONS: SectionData[] = [
  * The Services page (`/services`, Round 2), in the design's order: banner hero → proof
  * (the `services` statistics variant) → the discipline cards (page mode) → the explorer →
  * "Say hello". Mirrored by the seeded composition (supabase/seed-data/54-services-page.json;
- * tests/lib/servicesPage.spec.ts holds the two together). The hero carries no content: its
- * copy and banner layout come from `withHeroPreset(…, 'services')`.
+ * tests/lib/servicesPage.spec.ts holds the two together, the seed's sample `rating` aside).
+ * The hero carries no content: its copy and banner layout come from
+ * `withHeroPreset(…, 'services')`.
  *
- * The proof band's rating line is CONTENT, never a component default: it is a claim with
- * no table behind it (the design's sample), so it exists only where it is authored — here
- * and in the seeded row, which is flagged `is_placeholder` for that reason (production
- * shows it only under the owner's override, runbook §6d). The band still hides with its
- * numbers: fewer published `services` counters than two and nothing renders.
+ * The proof band's rating line ("4.9 / 5 average client rating") is NOT here. It is a claim
+ * with no table behind it (the design's sample), so it exists only in the seeded row, which
+ * is flagged `is_placeholder` for it: the 0025 fence keeps that row off production until
+ * the owner makes it real or overrides (runbook §6d). This default renders whenever the
+ * composition comes back empty (the page unpublished, every section hidden, a failed read),
+ * and code is never behind that fence: a sample claim here would reach production, and the
+ * Tier A edge cache, unflagged. The band still hides with its numbers: fewer published
+ * `services` counters than two and nothing renders.
  */
 export const DEFAULT_SERVICES_SECTIONS: SectionData[] = [
   { type: 'hero' },
-  {
-    type: 'statistics',
-    props: {
-      variant: 'services',
-      placement: 'services',
-      rating: {
-        value: '4.9 / 5',
-        label: { en: 'average client rating', ar: 'متوسط تقييم عملائنا' },
-      },
-    },
-  },
+  { type: 'statistics', props: { variant: 'services', placement: 'services' } },
   { type: 'servicesOverview' },
   { type: 'serviceExplorer' },
   { type: 'hello' },
