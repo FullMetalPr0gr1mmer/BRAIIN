@@ -428,6 +428,23 @@ the approved design does not accept.
   posters only.
 - Every clip is a window of the **same** file, so a visitor downloads (ranges of) one asset,
   not one per surface.
+- **Byte ranges (amended 2026-09-27).** The mp4 is served **through the Worker**, not by
+  Workers Static Assets directly: `assets.run_worker_first: ["/media/*"]` (wrangler.jsonc)
+  routes it to `src/worker.ts`, which answers `/media/*.mp4` from the `ASSETS` binding with
+  `206` + `Content-Range` / `Accept-Ranges` (`416` when unsatisfiable, `HEAD` supported,
+  `If-Range` honoured) — `src/lib/http/media.ts`, parsing in `src/lib/http/range.ts`. Until
+  then the asset worker ignored `Range` (a `bytes=0-99` request got 200 and all 12,233,105
+  bytes), Chromium reported `seekable` = [0, 0], and every clip window was silently dropped:
+  each surface played the reel from 0 and pulled the whole file, so the "ranges of one
+  asset" line above was not true in production. The route admits only the `VideoClip`
+  allow-list (`StaticVideoPathSchema`, the same pattern as the DB CHECK), GET/HEAD only,
+  forwards no client headers but the validators, and carries the middleware's security
+  headers. It is an Astro-bypassing entry on purpose — the adapter answers every
+  `dist/client` file before routing and drops `Range` — see the header of `media.ts`.
+  Guarded by `tests/lib/range.spec.ts`, `tests/lib/mediaRoute.spec.ts` and
+  `tests/e2e/media-range.e2e.ts` (206/200/416 on the wire, a seekable `<video>`, and the
+  contact hero looping inside its 6.2–7.9 s window). Closing this exception (Stream)
+  removes the route with the file.
 
 ### Close condition
 
