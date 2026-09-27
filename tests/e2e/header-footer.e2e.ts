@@ -35,7 +35,7 @@ const HEADER = {
       ['Home', '/'],
       ['About', '/about'],
       ['Our Work', '/portfolio'],
-      ['Services', '/#services'],
+      ['Services', '/services'],
       ['Contact us', '/contact'],
     ],
   },
@@ -45,7 +45,7 @@ const HEADER = {
       ['الرئيسية', '/ar'],
       ['من نحن', '/ar/about'],
       ['أعمالنا', '/ar/portfolio'],
-      ['الخدمات', '/ar#services'],
+      ['الخدمات', '/ar/services'],
       ['تواصل معنا', '/ar/contact'],
     ],
   },
@@ -65,7 +65,6 @@ for (const locale of ['en', 'ar'] as const) {
     await expect(links).toHaveCount(items.length);
     for (const [i, [label, href]] of items.entries()) {
       await expect(links.nth(i)).toHaveText(label);
-      // Fragments stay attached to the localized path: /ar#services, never /ar/#services.
       await expect(links.nth(i)).toHaveAttribute('href', href);
     }
   });
@@ -81,7 +80,7 @@ for (const locale of ['en', 'ar'] as const) {
     await page.goto(root);
     const onHome = page.locator('.site-nav__list a[aria-current="page"]');
     await expect(onHome).toHaveCount(1);
-    await expect(onHome).toHaveText(items[0][0]); // not Services (/#services is an anchor)
+    await expect(onHome).toHaveText(items[0][0]);
   });
 
   test(`at <=900px only the key link stays in the bar — ${locale}`, async ({ page }) => {
@@ -98,14 +97,20 @@ for (const locale of ['en', 'ar'] as const) {
     await expect(page.locator('.site-nav__list > li > a')).toHaveCount(items.length);
   });
 
-  test(`following a same-page link closes the small-screen menu — ${locale}`, async ({ page }) => {
-    // /#services on home is an in-page jump: nothing reloads, so an open <details> would
-    // stay pinned over the section the visitor asked for.
+  test(`following a link from the small-screen menu closes it — ${locale}`, async ({ page }) => {
+    // An in-page link does not reload, so an open <details> would stay pinned over the
+    // section the visitor asked for — the menu closes itself. Since Round 2 every menu item
+    // is a page (Services is /services, no longer /#services), so the navigation is
+    // cancelled here, leaving only the menu's own handler to observe.
     await page.setViewportSize({ width: 412, height: 823 });
     await page.goto(root);
+    const before = page.url();
     await page.locator('.site-nav__toggle').click();
+    await page.evaluate(() =>
+      document.addEventListener('click', (event) => event.preventDefault(), { once: true }),
+    );
     await page.locator('.site-nav__panel a', { hasText: items[3][0] }).click();
-    await expect(page).toHaveURL(/#services$/);
+    expect(page.url()).toBe(before);
     await expect(page.locator('details.site-nav')).not.toHaveAttribute('open', /.*/);
     await expect(page.locator('.site-nav__panel')).toBeHidden();
   });

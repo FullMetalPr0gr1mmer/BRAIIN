@@ -21,10 +21,11 @@ const STR = {
     lead: 'Your idea could be',
     all6: '06 of 06 featured',
     adv2: '02 of 06 featured',
-    photo2: '02 of 06 featured',
+    // Photography / Videography: 3 of the 6 featured, 5 in the whole catalogue (Round 2)
+    photo3: '03 of 06 featured',
     seeAll: 'See all projects',
-    seePhoto: 'See all 3 matching projects',
-    photography: 'Photography',
+    seePhoto: 'See all 5 matching projects',
+    photography: 'Photography / Videography',
   },
   ar: {
     path: '/ar/portfolio',
@@ -36,10 +37,10 @@ const STR = {
     lead: 'فكرتك ممكن تكون',
     all6: '06 من 06 مختارة',
     adv2: '02 من 06 مختارة',
-    photo2: '02 من 06 مختارة',
+    photo3: '03 من 06 مختارة',
     seeAll: 'شوف كل المشاريع',
-    seePhoto: 'شوف كل المشاريع المطابقة (3)',
-    photography: 'التصوير الفوتوغرافي',
+    seePhoto: 'شوف كل المشاريع المطابقة (5)',
+    photography: 'التصوير الفوتوغرافي والفيديو',
   },
 } as const;
 
@@ -164,17 +165,17 @@ for (const locale of ['en', 'ar'] as const) {
     test('with JavaScript a chip filters in place: replaceState, focus kept', async ({ page }) => {
       await page.goto(s.path);
       const before = await page.evaluate(() => history.length);
-      const chip = page.locator('.fchip[data-v="photography"]');
+      const chip = page.locator('.fchip[data-v="photo-video"]');
       await chip.focus();
       await page.keyboard.press('Enter');
-      await expect(visibleCards(page)).toHaveCount(2);
-      await expect(page.locator('#projects [data-count]')).toHaveText(s.photo2);
+      await expect(visibleCards(page)).toHaveCount(3);
+      await expect(page.locator('#projects [data-count]')).toHaveText(s.photo3);
       await expect(page.locator('#projects [data-see-all-label]')).toHaveText(s.seePhoto);
       await expect(page.locator('#projects .pgrid__foot a')).toHaveAttribute(
         'href',
-        `${s.path}/all?service=photography`,
+        `${s.path}/all?service=photo-video`,
       );
-      expect(new URL(page.url()).search).toBe('?service=photography');
+      expect(new URL(page.url()).search).toBe('?service=photo-video');
       expect(await page.evaluate(() => history.length)).toBe(before);
       await expect(chip).toBeFocused();
       await expect(chip).toHaveAttribute('aria-current', 'true');

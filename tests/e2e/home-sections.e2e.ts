@@ -158,7 +158,8 @@ for (const locale of ['en', 'ar'] as const) {
       // Facet tags are real links into the filtered catalogue.
       await expect(band.locator('.sel-work__copy .ftag').first()).toHaveAttribute(
         'href',
-        `${t.prefix}/portfolio/all?service=videography`,
+        // The Rider's first service (Round 2 links: photo-video, advertising).
+        `${t.prefix}/portfolio/all?service=photo-video`,
       );
       await expect(band.locator('#sel-work-heading em')).toHaveText(t.accent);
       await expect(band.locator('.sel-work__lines li')).toHaveCount(3);
@@ -174,7 +175,8 @@ for (const locale of ['en', 'ar'] as const) {
       const html = await (await request.get(t.root)).text();
       const band = /<section[^>]*id="numbers"[\s\S]*?<\/section>/.exec(html)?.[0] ?? '';
       expect(band).toContain(t.numbers.split(' ').pop()!);
-      for (const v of ['14', '250+', '80+', '12']) expect(band).toContain(v);
+      // 28 services under one roof (Round 2), then the design's sample counters.
+      for (const v of ['28', '250+', '80+', '12']) expect(band).toContain(v);
     });
 
     test('the quotes are a carousel with a pause control, every quote in the HTML', async ({
@@ -261,7 +263,7 @@ test.describe('the home lead form reports what really happened', () => {
       await page.goto(HOME[locale].root);
       await page.locator('#cf-name').fill('Kareem');
       await page.locator('#cf-email').fill('k@example.com');
-      await page.locator('#cf-service').selectOption('branding');
+      await page.locator('#cf-service').selectOption('logo');
       await page.locator('#cf-message').fill('A brand for a launch.');
       await page.locator('#cf-consent').check();
       await page.locator('#contact-form button[type="submit"]').click();
@@ -277,7 +279,7 @@ test.describe('the home lead form reports what really happened', () => {
         locale,
         name: 'Kareem',
         email: 'k@example.com',
-        serviceOfInterest: 'branding',
+        serviceOfInterest: 'logo',
         consentMarketing: true,
         hp: '',
       });

@@ -119,7 +119,9 @@ for (const locale of ['en', 'ar'] as const) {
         expect(html).toMatch(new RegExp(escaped));
         expect(html).toContain(`<span class="sr-only">${value}</span>`);
       }
-      expect(html).not.toMatch(/Crafts under one roof|حرفة تحت سقف واحد/);
+      expect(html).not.toMatch(
+        /Crafts under one roof|حرفة تحت سقف واحد|Services under one roof|خدمة تحت سقف واحد/,
+      );
     });
 
     test('leadership cards are server-rendered; without LinkedIn they take no tab stop', async ({

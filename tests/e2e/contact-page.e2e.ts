@@ -233,6 +233,8 @@ const SCHEMA_KEYS = [
   'company',
   'message',
   'serviceOfInterest',
+  // Round 2: "{Discipline}, help me choose" (LeadInputSchema, 0028)
+  'disciplineOfInterest',
   'budgetBand',
   'timelineText',
   'consentMarketing',
