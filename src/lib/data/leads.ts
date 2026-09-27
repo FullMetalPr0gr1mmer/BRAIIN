@@ -47,6 +47,10 @@ export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
     ...(timeline_text_enc ? { timeline_text_enc } : {}),
     message: input.message,
     service_of_interest: input.serviceOfInterest ?? null,
+    // "{Discipline}, help me choose" (0028). Sent only when present, like
+    // timeline_text_enc above: an always-present key would fail every submission in the
+    // window between this code deploying and 0028 being applied.
+    ...(input.disciplineOfInterest ? { discipline_of_interest: input.disciplineOfInterest } : {}),
     consent_marketing: input.consentMarketing,
   });
 

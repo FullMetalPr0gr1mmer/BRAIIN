@@ -24,9 +24,13 @@ export const SENSITIVE_LEAD_COLUMNS = [
   'ip_inet',
 ] as const;
 
-/** Columns safe for any role that can see leads at all (mirrors the leads_safe view). */
+/**
+ * Columns safe for any role that can see leads at all (mirrors the leads_safe view).
+ * `discipline_of_interest` (0028) is the "{Discipline}, help me choose" answer — not
+ * sensitive, the view's last column.
+ */
 export const SAFE_LEAD_COLUMNS =
-  'id,kind,locale,name,company,message,service_of_interest,status,consent_marketing,created_at,updated_at';
+  'id,kind,locale,name,company,message,service_of_interest,status,consent_marketing,created_at,updated_at,discipline_of_interest';
 
 /** Safe columns plus the ciphertext/sensitive ones. Only for `leads.pii` holders. */
 export const FULL_LEAD_COLUMNS = `${SAFE_LEAD_COLUMNS},email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,internal_notes,ip_inet`;

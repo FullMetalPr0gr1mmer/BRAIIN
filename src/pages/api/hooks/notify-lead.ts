@@ -72,7 +72,7 @@ export const POST: APIRoute = async ({ request }) => {
   const { data: lead, error } = await sb
     .from('leads')
     .select(
-      'id,tenant_id,name,company,message,service_of_interest,locale,email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,created_at',
+      'id,tenant_id,name,company,message,service_of_interest,discipline_of_interest,locale,email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,created_at',
     )
     .eq('tenant_id', parsed.data.tenant_id)
     .eq('id', parsed.data.lead_id)
@@ -99,6 +99,8 @@ export const POST: APIRoute = async ({ request }) => {
     company: lead['company'],
     message: lead['message'],
     service: lead['service_of_interest'],
+    // "{Discipline}, help me choose" (0028): the visitor picked a discipline, not a service.
+    discipline: lead['discipline_of_interest'],
     locale: lead['locale'],
     receivedAt: lead['created_at'],
   };
