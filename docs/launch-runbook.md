@@ -360,12 +360,12 @@ update public.services set blurb = '{"en":"Worlds, assets, and in-game brand wor
 commit;
 ```
 
-### 6c. Showing the design delivery before real content exists (migration 0027)
+### 6c. Showing the design delivery before real content exists (migrations 0027, 0028)
 
 Owner decision 2026-09-26: until real content replaces it, production shows the design delivery as is:
 
 - **Shown:** the sample projects and case studies, the sample statistics, the leadership cards, and the placeholder clients.
-- **Hidden:** the invented testimonial quotes. No database row can let a placeholder quote go live.
+- **Hidden:** the invented testimonial quotes. *(Superseded 2026-09-27: the owner decided to show the sample quotes too — see "Round 2" below. Steps 1–4 stay as they were for the five original tables.)*
 
 Every such row keeps `is_placeholder = true`, so the admin dashboard keeps listing it as **Placeholder content is live** until someone replaces it and clears the flag.
 
@@ -397,7 +397,7 @@ Every such row keeps `is_placeholder = true`, so the admin dashboard keeps listi
 
 3. **Verify.**
    - `select kind, entity_type, slug from public.dashboard_attention where kind = 'placeholder_live';` lists the rows you just published.
-   - `select count(*) from public.testimonials where status = 'published';` is `0`.
+   - `select count(*) from public.testimonials where status = 'published';` is `0` *(until the Round 2 step below publishes the samples)*.
    - The pages render the samples.
 
 4. **Taking it back**, per table, once real content exists:
@@ -405,6 +405,57 @@ Every such row keeps `is_placeholder = true`, so the admin dashboard keeps listi
    2. Then `delete from app.placeholder_live_override where table_name = '…';`. This is audit-logged as a revoke.
 
    With the allowance gone, the 0025 guard holds again: nothing flagged can go live.
+
+#### Round 2 (2026-09-27, migration 0028): sample quotes and service cases
+
+Owner decisions R1 and R3 (2026-09-27): show the **9 sample quotes** (signed "Client name / CEO, Company") and the **28 sample service case blocks** until real ones replace them from the admin. Migration 0028 makes this possible without weakening what protects a real person's words:
+
+- **The override** may now name `testimonials` and `service_cases` (all seven placeholder tables). Nothing else changed about it: owner-only, per (tenant, table), audit-logged on grant and revoke.
+- **The consent CHECK** (`testimonials_consent_gate`) now reads "consent recorded, **or** a flagged design sample". A real quote still cannot be published or scheduled without consent, by any role.
+- **The sample lock** (`app.tg_testimonial_sample_lock`) holds for every staff session (any JWT with a staff role, i.e. the admin and PostgREST): nobody can create a sample, flag an existing quote as one, or change a sample's `quote`, `author_name`, `author_role`, `avatar_media_id`, `client_id` or `portfolio_id` while it stays a sample. Only the seed files and the owner's psql session, which carry no JWT, create or edit samples. Without the lock, the override plus the looser CHECK would let anyone flag a real person's quote as a "sample" and publish it without consent.
+
+The Round 2 cut-over (§6d) runs these steps in its overrides transaction; they are here so they can also be run, checked or reversed on their own.
+
+5. **Allow the two tables.** As the owner:
+
+   ```sql
+   insert into app.placeholder_live_override (tenant_id, table_name, reason)
+   select t.id, x.table_name, 'Owner decision 2026-09-27 (R1/R3): show the sample quotes and case blocks until real ones replace them'
+     from public.tenants t
+     cross join (values ('testimonials'), ('service_cases')) as x(table_name)
+    where t.id = '00000000-0000-0000-0000-0000000000b1'
+   on conflict (tenant_id, table_name) do nothing;
+   ```
+
+6. **Publish the samples.** Only flagged rows. A quote without consent that is *not* flagged is refused by the CHECK (23514); that is correct, so leave it as a draft:
+
+   ```sql
+   begin;
+   update public.testimonials  set status = 'published', published_at = coalesce(published_at, now())
+    where is_placeholder and status = 'draft';
+   update public.service_cases set status = 'published', published_at = coalesce(published_at, now())
+    where is_placeholder and status = 'draft';
+   commit;
+   ```
+
+   A service case is public only while its **service** is published too; a case on a draft or archived service stays hidden without any further step.
+
+7. **Verify.**
+   - `select entity_type, count(*) from public.dashboard_attention where kind = 'placeholder_live' group by 1;` shows the `testimonial` and `service_case` rows.
+   - `select action, entity_id, detail ->> 'reason' from public.audit_log where entity_type = 'placeholder_override' order by id desc limit 2;` shows both grants.
+   - Home, Our Work and a case study render the quote carousel; a service page renders its case block.
+
+8. **Making a quote real** (Admin → Testimonials; no SQL needed). In **one save**: replace the words and the author, set "Consent obtained" (date and reference), untick "Placeholder". The quote stays published. Two things the database refuses, on purpose:
+   - unticking "Placeholder" on a published quote **without** recording consent (23514);
+   - editing a sample's words or author while "Placeholder" stays ticked (42501, the sample lock).
+
+   A service case is made real the same way (replace the content, untick "Placeholder"); cases carry no consent record.
+
+9. **Taking it back.** When every quote (or case) is real, or to hide the samples again:
+   1. Unpublish what is still flagged: `update public.testimonials set status = 'draft' where is_placeholder and status = 'published';` (and the same for `service_cases`).
+   2. `delete from app.placeholder_live_override where table_name in ('testimonials', 'service_cases');`, audit-logged as revokes.
+
+   With the allowance gone, the 0025 guard again refuses any flagged quote or case that tries to go live.
 
 ---
 

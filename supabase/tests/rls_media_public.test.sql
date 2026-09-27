@@ -8,9 +8,12 @@
 -- update_media_meta() is the SEO role's metadata path: §5 gives SEO "media: meta only",
 -- but media_write never admitted SEO, so its UPDATE was filtered to 0 rows (the admin
 -- reported a 409 on every save). The function writes alt/tags/folder and nothing else.
+--
+-- 0028 adds two references: a published discipline's poster and a published service's
+-- poster — the service's read runs under anon's RLS, so its discipline must be published too.
 
 begin;
-select plan(22);
+select plan(29);
 
 -- ── fixtures in the LAUNCH tenant (the one anon is fenced to) ───────────────
 insert into public.media_assets (id, tenant_id, kind, provider, storage_path, folder) values
@@ -50,6 +53,21 @@ insert into public.portfolio (tenant_id, slug, title, status, poster_media_id) v
 insert into public.page_sections (tenant_id, page_id, type, content, visible) values
   (app.default_tenant_id(), '65000000-0000-0000-0000-0000000000d1', 'hero',
    '{"poster":{"mediaId":"65000000-0000-0000-0000-0000000000b1"}}', true);
+-- 0028: discipline and service posters.
+insert into public.media_assets (id, tenant_id, kind, provider, storage_path) values
+  ('65000000-0000-0000-0000-0000000000e1', app.default_tenant_id(), 'image', 'static', 'stills/services/write.jpg'),
+  ('65000000-0000-0000-0000-0000000000e2', app.default_tenant_id(), 'image', 'static', 'stills/services/rider.jpg'),
+  ('65000000-0000-0000-0000-0000000000e3', app.default_tenant_id(), 'image', 'static', 'stills/services/oven.jpg'),
+  ('65000000-0000-0000-0000-0000000000e4', app.default_tenant_id(), 'image', 'static', 'stills/services/sun.jpg'),
+  ('65000000-0000-0000-0000-0000000000e5', app.default_tenant_id(), 'image', 'static', 'stills/services/arm.jpg');
+insert into public.disciplines (id, tenant_id, slug, name, status, poster_media_id) values
+  ('65000000-0000-0000-0000-0000000000f1', app.default_tenant_id(), 'pgtap-mp-disc-pub', '{"en":"D","ar":"ت"}', 'published', '65000000-0000-0000-0000-0000000000e1'),
+  ('65000000-0000-0000-0000-0000000000f2', app.default_tenant_id(), 'pgtap-mp-disc-draft', '{"en":"D","ar":"ت"}', 'draft', '65000000-0000-0000-0000-0000000000e2');
+insert into public.services (tenant_id, slug, title, status, poster_media_id, discipline_id) values
+  (app.default_tenant_id(), 'pgtap-mp-svc-pub', '{"en":"S","ar":"خ"}', 'published', '65000000-0000-0000-0000-0000000000e3', null),
+  (app.default_tenant_id(), 'pgtap-mp-svc-draft', '{"en":"S","ar":"خ"}', 'draft', '65000000-0000-0000-0000-0000000000e4', null),
+  (app.default_tenant_id(), 'pgtap-mp-svc-hidden', '{"en":"S","ar":"خ"}', 'published', '65000000-0000-0000-0000-0000000000e5',
+   '65000000-0000-0000-0000-0000000000f2');
 
 create function _claims(p_role text, p_tid text) returns void language sql as $$
   select set_config(
@@ -76,6 +94,12 @@ select is(_seen('65000000-0000-0000-0000-0000000000a8'), 0, 'anon CANNOT read an
 select is(_seen('65000000-0000-0000-0000-0000000000a9'), 1, 'anon reads a published case study''s gallery image');
 select is(_seen('65000000-0000-0000-0000-0000000000b1'), 0,
   'anon is fenced to the launch tenant — even when launch-tenant content references another tenant''s asset');
+select is(_seen('65000000-0000-0000-0000-0000000000e1'), 1, 'anon reads the poster of a PUBLISHED discipline (0028)');
+select is(_seen('65000000-0000-0000-0000-0000000000e2'), 0, 'anon CANNOT read the poster of a draft discipline');
+select is(_seen('65000000-0000-0000-0000-0000000000e3'), 1, 'anon reads the poster of a PUBLISHED service (0028)');
+select is(_seen('65000000-0000-0000-0000-0000000000e4'), 0, 'anon CANNOT read the poster of a draft service');
+select is(_seen('65000000-0000-0000-0000-0000000000e5'), 0,
+  'anon CANNOT read the poster of a published service hidden by its draft discipline');
 select throws_ok(
   $$ select folder from public.media_assets $$,
   '42501', null, 'anon CANNOT read internal columns (folder)');
@@ -99,6 +123,12 @@ select is(
 select is(
   (select count(*)::int from public.media_usage('65000000-0000-0000-0000-0000000000a3')),
   0, 'an unreferenced asset is unused');
+select is(
+  (select entity_type || ':' || label from public.media_usage('65000000-0000-0000-0000-0000000000e2')),
+  'discipline:pgtap-mp-disc-draft', 'media_usage finds a discipline poster, even a draft''s (0028)');
+select is(
+  (select entity_type || ':' || label from public.media_usage('65000000-0000-0000-0000-0000000000e4')),
+  'service:pgtap-mp-svc-draft', 'media_usage finds a service poster (0028)');
 
 -- ── 3. update_media_meta(): SEO's metadata path ──────────────────────────────
 select _claims('seo', app.default_tenant_id()::text);
