@@ -2618,6 +2618,13 @@ html[dir='rtl'] .sec-head h2 {
 .contact-touch .sec-head h2 em {
   color: var(--bs-klein);
 }
+/* The contact FAQ is a PAPER band (until the Contact slice makes it dark): sky on white is
+   2.56:1, so its tag and heading accent use Klein there (WCAG 1.4.3). axe began auditing it
+   once it ran under reduced motion — before, the band sat below the fold at opacity 0. */
+.faq-section .tag--sky,
+.faq-section .sec-head h2 em {
+  color: var(--bs-klein);
+}
 .sec-head p {
   margin: clamp(12px, 2vh, 18px) 0 0;
   font-size: clamp(15px, 1.35vw, 18px);
