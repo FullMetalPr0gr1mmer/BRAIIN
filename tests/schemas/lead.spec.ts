@@ -72,3 +72,28 @@ describe('UI v2 contact fields', () => {
     for (const band of LEGACY_BUDGET_BANDS) expect(BUDGET_BAND_LABELS[band].en).toMatch(/legacy/i);
   });
 });
+
+describe('Round 2: "{Discipline}, help me choose"', () => {
+  it('accepts a discipline slug, alone or beside a service', () => {
+    const one = LeadInputSchema.safeParse({ ...base, disciplineOfInterest: 'branding' });
+    expect(one.success && one.data.disciplineOfInterest).toBe('branding');
+    expect(
+      LeadInputSchema.safeParse({
+        ...base,
+        disciplineOfInterest: 'events',
+        serviceOfInterest: 'logo',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('holds it to the slug shape and the 0028 column bound (64)', () => {
+    for (const bad of ['Branding', 'discipline:branding', 'web dev', '', 'a'.repeat(65)]) {
+      expect(LeadInputSchema.safeParse({ ...base, disciplineOfInterest: bad }).success, bad).toBe(
+        false,
+      );
+    }
+    expect(
+      LeadInputSchema.safeParse({ ...base, disciplineOfInterest: 'a'.repeat(64) }).success,
+    ).toBe(true);
+  });
+});

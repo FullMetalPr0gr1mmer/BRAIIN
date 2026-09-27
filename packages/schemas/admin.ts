@@ -8,12 +8,20 @@ import {
 } from './primitives';
 import {
   BREAKDOWN_KINDS,
+  CaseProblemSchema,
+  CaseResultSchema,
+  DeliverableSchema,
   LocalizedProseSchema,
+  MAX_CASE_PROBLEMS,
+  MAX_CASE_RESULTS,
+  MAX_DELIVERABLES,
+  MAX_VALUE_POINTS,
   MEDIA_LAYOUTS,
   PORTFOLIO_MEDIA_ROLES,
   ResultCardSchema,
   STAT_PLACEMENTS,
   TESTIMONIAL_PLACEMENTS,
+  ValuePointSchema,
 } from './content';
 import { LocalizedDocSchema } from './tiptap';
 import { SectionTypeSchema, sectionContentIssues, type SectionType } from './sections';
@@ -76,11 +84,29 @@ export const LoginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof LoginSchema>;
 
-// ── Services ────────────────────────────────────────────────────────────────────
+// ── Services · disciplines · service cases (0028) ───────────────────────────────
+
+/** 0028's slug CHECK on disciplines ('^[a-z0-9][a-z0-9-]{0,63}$'): at most 64 characters. */
+const DisciplineSlugSchema = SlugSchema.max(64);
+
+/** A bilingual line with a length ceiling, both languages trimmed and required. */
+const boundedBilingual = (max: number) =>
+  z.object({ en: z.string().trim().min(1).max(max), ar: z.string().trim().min(1).max(max) });
+
+/**
+ * A clip stored in the three preview columns (path + window). Disciplines and services
+ * have no Stream-uid column until Stream is provisioned (KAN-20) — a Stream clip would be
+ * dropped on save, so it is refused here instead.
+ */
+const PathClipSchema = VideoClipSchema.refine((clip) => clip.streamUid === undefined, {
+  path: ['streamUid'],
+  message: 'a site file (/media/….mp4) — Stream clips arrive with KAN-20',
+});
 
 export const ServiceWriteSchema = z.object({
   slug: SlugSchema,
   title: BilingualTextSchema,
+  /** The TAGLINE under the service name: the hero sub, meta description and search text. */
   blurb: LocalizedProseSchema.nullish(),
   body: LocalizedDocSchema.nullish(),
   heroVideoUid: z.string().trim().max(120).nullish(),
@@ -91,10 +117,57 @@ export const ServiceWriteSchema = z.object({
   isTeaser: z.boolean().default(false),
   sortOrder: SortOrderSchema,
   scheduledFor: InstantSchema,
+  // Round 2 — the service page (0028)
+  /** Required to publish (resources.ts assertPublishable) — not a DB CHECK (the cut-over renames). */
+  disciplineId: UuidSchema.nullish(),
+  /** The "What it is" heading line. */
+  intro: boundedBilingual(300).nullish(),
+  valuePoints: z.array(ValuePointSchema).max(MAX_VALUE_POINTS).default([]),
+  deliverables: z.array(DeliverableSchema).max(MAX_DELIVERABLES).default([]),
+  posterMediaId: UuidSchema.nullish(),
+  /** The hero loop: a window of the showreel (EXC-009) → preview_video_path + window. */
+  clip: PathClipSchema.nullish(),
 });
 export const ServiceUpdateSchema = updatable(ServiceWriteSchema);
 export type ServiceWrite = z.infer<typeof ServiceWriteSchema>;
 export type ServiceUpdate = z.infer<typeof ServiceUpdateSchema>;
+
+export const DisciplineWriteSchema = z.object({
+  slug: DisciplineSlugSchema,
+  name: BilingualTextSchema,
+  /** The card line under the name. */
+  short: boundedBilingual(200).nullish(),
+  /** The explorer paragraph. */
+  blurb: boundedBilingual(600).nullish(),
+  posterMediaId: UuidSchema.nullish(),
+  /** The card's hover loop and the explorer's clip → preview_video_path + window. */
+  clip: PathClipSchema.nullish(),
+  status: ContentStatusSchema.default('draft'),
+  scheduledFor: InstantSchema,
+  sortOrder: SortOrderSchema,
+});
+export const DisciplineUpdateSchema = updatable(DisciplineWriteSchema);
+export type DisciplineWrite = z.infer<typeof DisciplineWriteSchema>;
+export type DisciplineUpdate = z.infer<typeof DisciplineUpdateSchema>;
+
+/** A service page's case block (one per service — the 0028 unique key). */
+export const ServiceCaseWriteSchema = z.object({
+  serviceId: UuidSchema,
+  /** The project the case is told through; its client and sector are the case's. */
+  portfolioId: UuidSchema.nullish(),
+  title: boundedBilingual(200),
+  /** "Where they were". */
+  context: boundedBilingual(800).nullish(),
+  problems: z.array(CaseProblemSchema).max(MAX_CASE_PROBLEMS).default([]),
+  results: z.array(CaseResultSchema).max(MAX_CASE_RESULTS).default([]),
+  status: ContentStatusSchema.default('draft'),
+  scheduledFor: InstantSchema,
+  /** Design-delivery sample: refused on publish (resources.ts) and by the 0025 guard. */
+  isPlaceholder: z.boolean().default(false),
+});
+export const ServiceCaseUpdateSchema = updatable(ServiceCaseWriteSchema);
+export type ServiceCaseWrite = z.infer<typeof ServiceCaseWriteSchema>;
+export type ServiceCaseUpdate = z.infer<typeof ServiceCaseUpdateSchema>;
 
 // ── Blog ────────────────────────────────────────────────────────────────────────
 

@@ -36,28 +36,6 @@ export type LocalizedProse = z.infer<typeof LocalizedProseSchema>;
 // is a real defect, not a nit. Rows that fail validation are dropped AND logged by
 // `src/lib/data/parse.ts`, so a rejection is diagnosable rather than a silent gap.
 
-// `updated_at` feeds the sitemap's <lastmod> and JSON-LD `dateModified`. Pillar 3 calls
-// for a TRUTHFUL dateModified, which means it has to come from the row rather than from
-// request time — so it is selected here rather than synthesised at render.
-// `id` is selected because per-entity SEO (`entity_seo`) is keyed by (entity_type,
-// entity_id) — a polymorphic table cannot be FK-embedded from the content row, so the
-// loader needs the uuid to fetch the override.
-export const ServiceRowSchema = z.object({
-  id: z.string().uuid(),
-  slug: SlugSchema,
-  title: LocalizedTextSchema,
-  /** Chip/skill label where it differs from the title (0023). */
-  short_title: LocalizedTextSchema.nullable(),
-  blurb: LocalizedProseSchema.nullable(),
-  body_html: LocalizedProseSchema.nullable(),
-  hero_video_uid: z.string().nullable(),
-  category: z.string().nullable(),
-  is_teaser: z.boolean(),
-  sort_order: z.number(),
-  updated_at: z.string().nullable(),
-});
-export type ServiceRow = z.infer<typeof ServiceRowSchema>;
-
 export const PortfolioRowSchema = z.object({
   id: z.string().uuid(),
   slug: SlugSchema,
@@ -88,6 +66,106 @@ export const PublicMediaRowSchema = z.object({
 });
 export type PublicMediaRow = z.infer<typeof PublicMediaRowSchema>;
 
+/** Clip window bounds in seconds (the 0022/0028 numeric(6,2) columns). */
+const Seconds = z.number().min(0).max(600);
+
+// ── Services (0001, 0023, 0028) ───────────────────────────────────────────────────
+
+/** A bounded bilingual line: both languages, trimmed, each at most `max` characters. */
+const boundedText = (max: number) =>
+  z.object({ en: z.string().trim().min(1).max(max), ar: z.string().trim().min(1).max(max) });
+
+export const MAX_VALUE_POINTS = 6;
+export const MAX_DELIVERABLES = 12;
+export const MAX_CASE_PROBLEMS = 6;
+export const MAX_CASE_RESULTS = 4;
+
+/** A "Value we add" card on a service page — one item of services.value_points (0028). */
+export const ValuePointSchema = z.object({ title: boundedText(120), text: boundedText(400) });
+export type ValuePoint = z.infer<typeof ValuePointSchema>;
+
+/** A "What you get" line — one item of services.deliverables (0028). */
+export const DeliverableSchema = boundedText(160);
+export type Deliverable = z.infer<typeof DeliverableSchema>;
+
+// `updated_at` feeds the sitemap's <lastmod> and JSON-LD `dateModified`. Pillar 3 calls
+// for a TRUTHFUL dateModified, which means it has to come from the row rather than from
+// request time — so it is selected here rather than synthesised at render.
+// `id` is selected because per-entity SEO (`entity_seo`) is keyed by (entity_type,
+// entity_id) — a polymorphic table cannot be FK-embedded from the content row, so the
+// loader needs the uuid to fetch the override.
+//
+// Round 2 (0028): `blurb` is the service's TAGLINE (hero sub, meta description, search
+// text); `title` is its name. A service belongs to one discipline; the page opens with its
+// own window of the showreel (EXC-009 until Stream, KAN-20) over its poster.
+export const ServiceRowSchema = z.object({
+  id: z.string().uuid(),
+  slug: SlugSchema,
+  title: LocalizedTextSchema,
+  /** Chip/skill label where it differs from the title (0023). */
+  short_title: LocalizedTextSchema.nullable(),
+  blurb: LocalizedProseSchema.nullable(),
+  body_html: LocalizedProseSchema.nullable(),
+  hero_video_uid: z.string().nullable(),
+  category: z.string().nullable(),
+  is_teaser: z.boolean(),
+  sort_order: z.number(),
+  updated_at: z.string().nullable(),
+  discipline_id: z.string().uuid().nullable(),
+  /** The "What it is" heading line (0028). */
+  intro: LocalizedTextSchema.nullable(),
+  value_points: z.array(ValuePointSchema).max(MAX_VALUE_POINTS),
+  deliverables: z.array(DeliverableSchema).max(MAX_DELIVERABLES),
+  preview_video_path: z.string().nullable(),
+  preview_start_s: Seconds.nullable(),
+  preview_end_s: Seconds.nullable(),
+  /** Embedded as `poster:poster_media_id(...)` — null when unset or not public (0024/0028). */
+  poster: PublicMediaRowSchema.nullable(),
+});
+export type ServiceRow = z.infer<typeof ServiceRowSchema>;
+
+/** The discipline a service page names in its crumb (embedded through discipline_id). */
+export const ServiceDisciplineRefSchema = z.object({
+  slug: SlugSchema,
+  name: LocalizedTextSchema,
+  sort_order: z.number(),
+});
+
+/** One service for its own page: the row plus its Tiptap body SOURCE and its discipline. */
+export const ServiceDetailRowSchema = ServiceRowSchema.extend({
+  /**
+   * The body's Tiptap source, rendered on the page by the allowlist renderer (never the
+   * stored body_html cache — the portfolio renderBody rule). A malformed body renders
+   * nothing rather than dropping the whole service.
+   */
+  body: z.object({ en: z.unknown().optional(), ar: z.unknown().optional() }).nullable().catch(null),
+  discipline: ServiceDisciplineRefSchema.nullable(),
+});
+export type ServiceDetailRow = z.infer<typeof ServiceDetailRowSchema>;
+
+// ── Disciplines (0028) ────────────────────────────────────────────────────────────
+
+/**
+ * One of the five groups the services sit in (Branding, Production, …). Only the columns
+ * anon is granted (0028); the poster arrives embedded through poster_media_id.
+ */
+export const DisciplineRowSchema = z.object({
+  id: z.string().uuid(),
+  slug: SlugSchema,
+  name: LocalizedTextSchema,
+  /** The one-line card text ("The mark, the system, and everything it touches."). */
+  short: LocalizedTextSchema.nullable(),
+  /** The explorer paragraph. */
+  blurb: LocalizedTextSchema.nullable(),
+  sort_order: z.number(),
+  updated_at: z.string().nullable(),
+  preview_video_path: z.string().nullable(),
+  preview_start_s: Seconds.nullable(),
+  preview_end_s: Seconds.nullable(),
+  poster: PublicMediaRowSchema.nullable(),
+});
+export type DisciplineRow = z.infer<typeof DisciplineRowSchema>;
+
 /** E-E-A-T author (CLAUDE.md Pillar 3 — no anonymous authorship), and the leadership slider. */
 export const TeamMemberRowSchema = z.object({
   slug: SlugSchema,
@@ -114,7 +192,7 @@ export const CertificationRowSchema = z.object({
 });
 export type CertificationRow = z.infer<typeof CertificationRowSchema>;
 
-export const STAT_PLACEMENTS = ['home', 'about', 'work'] as const;
+export const STAT_PLACEMENTS = ['home', 'about', 'work', 'services'] as const;
 export const StatPlacementSchema = z.enum(STAT_PLACEMENTS);
 export type StatPlacement = z.infer<typeof StatPlacementSchema>;
 
@@ -209,8 +287,6 @@ export const ResultCardSchema = z.object({
 });
 export type ResultCard = z.infer<typeof ResultCardSchema>;
 
-const Seconds = z.number().min(0).max(600);
-
 /** An embedded sector/client: what a facet chip needs, and where it sorts. */
 const FacetRefSchema = z.object({
   slug: SlugSchema,
@@ -295,3 +371,45 @@ export const CaseStudyRowSchema = PortfolioCardRowSchema.extend({
   media: z.array(PortfolioMediaRowSchema),
 });
 export type CaseStudyRow = z.infer<typeof CaseStudyRowSchema>;
+
+// ── Service cases (0028) ──────────────────────────────────────────────────────────
+
+/** One "Where they were" row of a service case: the problem, and what we did about it. */
+export const CaseProblemSchema = z.object({
+  problem: boundedText(400),
+  solution: boundedText(400),
+});
+export type CaseProblem = z.infer<typeof CaseProblemSchema>;
+
+/** A service case's result card — the case study's own shape (portfolio.results, 0022). */
+export const CaseResultSchema = ResultCardSchema;
+
+/** The project a case is told through: what the case block's chips and image need. */
+export const ServiceCaseProjectSchema = z.object({
+  id: z.string().uuid(),
+  slug: SlugSchema,
+  title: LocalizedTextSchema,
+  client_id: z.string().uuid().nullable(),
+  poster: PublicMediaRowSchema.nullable(),
+  sector: FacetRefSchema.nullable(),
+  /** null while client_id is set = RLS hid it (not disclosable) → "Confidential client". */
+  client: FacetRefSchema.nullable(),
+});
+
+/**
+ * A service page's case block, as anon reads it: only granted columns (never
+ * is_placeholder), with its project embedded through portfolio_id. The project comes back
+ * null when it is unpublished — the case then has no project to show.
+ */
+export const ServiceCaseRowSchema = z.object({
+  id: z.string().uuid(),
+  service_id: z.string().uuid(),
+  portfolio_id: z.string().uuid().nullable(),
+  title: LocalizedTextSchema,
+  context: LocalizedTextSchema.nullable(),
+  problems: z.array(CaseProblemSchema).max(MAX_CASE_PROBLEMS),
+  results: z.array(CaseResultSchema).max(MAX_CASE_RESULTS),
+  updated_at: z.string().nullable(),
+  project: ServiceCaseProjectSchema.nullable(),
+});
+export type ServiceCaseRow = z.infer<typeof ServiceCaseRowSchema>;
