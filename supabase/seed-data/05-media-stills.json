@@ -453,6 +453,216 @@
             "en": "Faint line sketch of the textured outline of a head in profile.",
             "ar": "رسمة خطية باهتة للخطوط الخارجية لرأس في وضع جانبي."
           }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000101",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/write.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "A hand writing with a silver pen in a white notepad.",
+            "ar": "يد تكتب بقلم فضي في مفكرة بيضاء."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000102",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/over.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "Seen from above, two hands open a handwritten notebook.",
+            "ar": "من الأعلى، يدان تفتحان دفترًا مكتوبًا بخط اليد."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000103",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/hand.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "A blurred close-up of dark marks on a pale surface.",
+            "ar": "لقطة قريبة ضبابية لعلامات داكنة على سطح فاتح."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000104",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/pages.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "Close-up of the pages of a book fanning open.",
+            "ar": "لقطة قريبة لصفحات كتاب تنفتح."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000105",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/cup.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "A hand reaching for a steaming mug, in soft focus.",
+            "ar": "يد تمتد إلى كوب يتصاعد منه البخار، بتركيز ناعم."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000106",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/dust.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "Glowing specks of dust falling through the dark.",
+            "ar": "ذرات غبار مضيئة تتساقط في الظلام."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000107",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/orb.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "A woman in a floral dress holds a glowing white sphere in the dark.",
+            "ar": "امرأة بفستان مزهّر تحمل كرة بيضاء مضيئة في الظلام."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000108",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/rider.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "A rider in a black head wrap and amber goggles, the desert blurred behind.",
+            "ar": "راكب بلثام أسود ونظارة كهرمانية، والصحراء ضبابية خلفه."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000109",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/smoke.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "A face formed from grey sand, seen in profile against a dark background.",
+            "ar": "وجه مشكّل من رمل رمادي، يظهر من الجانب على خلفية داكنة."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000110",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/oven.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "A hand setting the timer on the digital display of a black oven.",
+            "ar": "يد تضبط المؤقت على الشاشة الرقمية لفرن أسود."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000111",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/pen.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "A blurred close-up of a pen tip writing on paper.",
+            "ar": "لقطة قريبة ضبابية لرأس قلم يكتب على ورقة."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000112",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/sun.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "A white sun glowing through a hazy orange sky.",
+            "ar": "شمس بيضاء تتوهّج في سماء برتقالية ضبابية."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000113",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/desert.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "The blurred top of a wrapped head against a pale desert sky.",
+            "ar": "أعلى رأس ملفوف بلثام، ضبابي أمام سماء صحراوية فاتحة."
+          }
+        },
+        {
+          "id": "5eed0a00-0000-4000-8000-000000000114",
+          "kind": "image",
+          "provider": "static",
+          "storage_path": "stills/services/arm.jpg",
+          "mime_type": "image/jpeg",
+          "width": 1600,
+          "height": 900,
+          "folder": "stills",
+          "tags": "{services}",
+          "alt": {
+            "en": "An outstretched arm silhouetted against a shower of golden sparks.",
+            "ar": "ذراع ممدودة تظهر كظلّ أمام وابل من الشرر الذهبي."
+          }
         }
       ]
     }

@@ -16,6 +16,11 @@
 //
 //   node scripts/gen-seeds.mjs          write both files
 //   node scripts/gen-seeds.mjs --check  exit 1 if either committed file is stale
+//   node scripts/gen-seeds.mjs --only 08-disciplines.json,45-service-cases.json
+//                                       print a production-mode DELTA seed of just those
+//                                       files to stdout (runbook §6d: when a rehearsal of
+//                                       the full production.sql would also re-insert rows
+//                                       an editor deleted)
 //
 // ── Data format (supabase/seed-data/NN-name.json) ────────────────────────────────────
 //   { "blocks": [ { "table": "services",
@@ -196,7 +201,22 @@ export function generate(mode, blocks = loadBlocks()) {
   );
 }
 
+/** The blocks of the named seed-data files only, in load order (unknown names refused). */
+export function onlyBlocks(files, blocks = loadBlocks()) {
+  const known = new Set(blocks.map((b) => b.source));
+  for (const f of files) if (!known.has(f)) throw new Error(`no seed-data file ${f}`);
+  return blocks.filter((b) => files.includes(b.source));
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const only = process.argv.indexOf('--only');
+  if (only !== -1) {
+    const files = (process.argv[only + 1] ?? '').split(',').filter(Boolean);
+    if (files.length === 0)
+      throw new Error('--only takes a comma-separated list of seed-data files');
+    process.stdout.write(generate('production', onlyBlocks(files)));
+    process.exit(0);
+  }
   const check = process.argv.includes('--check');
   let stale = false;
   for (const [mode, path] of Object.entries(OUTPUTS)) {

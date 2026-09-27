@@ -1,0 +1,1738 @@
+{
+  "blocks": [
+    {
+      "table": "service_cases",
+      "conflict": ["tenant_id", "service_id"],
+      "rows": [
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "logo" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "notebook" } } },
+          "title": {
+            "en": "A school group rebrand that parents recognized in one term",
+            "ar": "إعادة هوية لمجموعة مدارس صار الأهالي يعرفونها خلال فصل واحد"
+          },
+          "context": {
+            "en": "Client C, an education group, had grown to four campuses with four slightly different logos. Parents were unsure which schools belonged together, and the old mark broke down on small screens.",
+            "ar": "العميل ج، مجموعة تعليمية، توسّعت إلى أربعة فروع ولكل فرع شعار مختلف شوي. الأهالي ما كانوا متأكدين أي المدارس تتبع نفس المجموعة، والشعار القديم كان يتكسّر على الشاشات الصغيرة."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Four campus logos made the group look like separate, unrelated schools.",
+                "ar": "أربعة شعارات للفروع خلّت المجموعة تبان كأنها مدارس منفصلة ما بينها علاقة."
+              },
+              "solution": {
+                "en": "We built one master mark with a simple campus lockup, so every school reads as part of the same family.",
+                "ar": "بنينا شعارًا رئيسيًا واحدًا مع صيغة بسيطة لاسم كل فرع، عشان كل مدرسة تبان جزء من نفس العائلة."
+              }
+            },
+            {
+              "problem": {
+                "en": "The Arabic name was squeezed under the English one as an afterthought.",
+                "ar": "الاسم العربي كان محشور تحت الإنجليزي كأنه إضافة متأخرة."
+              },
+              "solution": {
+                "en": "We redrew the Arabic lettering from scratch and balanced both scripts so they share the same weight and height.",
+                "ar": "رسمنا الحروف العربية من الصفر ووازنّا بين الخطين عشان يكون لهم نفس الوزن والارتفاع."
+              }
+            },
+            {
+              "problem": {
+                "en": "The detailed crest turned into a blur on apps and social avatars.",
+                "ar": "الشعار المليان تفاصيل كان يصير بقعة غير واضحة في التطبيقات وصور الحسابات."
+              },
+              "solution": {
+                "en": "We simplified the crest into a clean icon that holds up at 32 pixels and on embroidered uniforms.",
+                "ar": "بسّطنا الشعار إلى أيقونة نظيفة تبقى واضحة بمقاس 32 بكسل وعلى الزي المدرسي المطرّز."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "4",
+              "label": { "en": "campuses under one mark", "ar": "فروع تحت شعار واحد" }
+            },
+            {
+              "value": "+27%",
+              "label": { "en": "parent recall in survey", "ar": "تذكّر الأهالي في الاستبيان" }
+            },
+            {
+              "value": "6",
+              "label": { "en": "weeks from brief to launch", "ar": "أسابيع من الموجز إلى الإطلاق" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "business-cards" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "blueprint" } } },
+          "title": {
+            "en": "Sales centre cards that brought buyers back for second visits",
+            "ar": "بطاقات مركز مبيعات رجّعت المشترين لزيارة ثانية"
+          },
+          "context": {
+            "en": "Client E, a real estate developer, was opening a sales centre for a new residential project. Its sales team was handing out generic cards that looked nothing like the project they were selling.",
+            "ar": "العميل هـ، مطوّر عقاري، كان يفتتح مركز مبيعات لمشروع سكني جديد. فريق المبيعات كان يوزّع بطاقات عامة ما تشبه المشروع اللي يبيعونه أبدًا."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Cards carried the parent company brand, not the project buyers came to see.",
+                "ar": "البطاقات كانت تحمل هوية الشركة الأم، مو المشروع اللي جاء المشتري يشوفه."
+              },
+              "solution": {
+                "en": "We designed project cards in the sales centre identity, with the developer credited quietly on the back.",
+                "ar": "صمّمنا بطاقات للمشروع بهوية مركز المبيعات، واسم المطوّر موجود بهدوء على الخلف."
+              }
+            },
+            {
+              "problem": {
+                "en": "Buyers left with a card but no easy way back to the floor plans.",
+                "ar": "المشتري يطلع ومعه بطاقة، بس ما عنده طريقة سهلة يرجع فيها للمخططات."
+              },
+              "solution": {
+                "en": "We added a QR code linking to each agent's page with plans, prices, and a direct booking link.",
+                "ar": "أضفنا رمز QR يودّي لصفحة كل موظف مبيعات فيها المخططات والأسعار ورابط حجز مباشر."
+              }
+            },
+            {
+              "problem": {
+                "en": "A thin, glossy stock felt cheap next to a premium property.",
+                "ar": "الورق الخفيف اللامع كان يبان رخيص جنب عقار فاخر."
+              },
+              "solution": {
+                "en": "We moved to a heavy uncoated board with a blind emboss, tested three samples, and approved the press proof together.",
+                "ar": "انتقلنا لكرتون ثقيل غير مطلي مع نقش بارز بدون لون، وجرّبنا ثلاث عيّنات، واعتمدنا بروفة الطباعة مع بعض."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "+22%",
+              "label": { "en": "second visits booked", "ar": "زيارات ثانية محجوزة" }
+            },
+            {
+              "value": "18",
+              "label": {
+                "en": "sales agents, one print run",
+                "ar": "موظف مبيعات بدفعة طباعة واحدة"
+              }
+            },
+            {
+              "value": "340",
+              "label": { "en": "QR scans in first month", "ar": "مسح لرمز QR في أول شهر" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "letterhead" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "first-light" } } },
+          "title": {
+            "en": "Sponsor letters that finally looked like the event they promoted",
+            "ar": "خطابات رعاة صارت أخيرًا تشبه الفعالية اللي تروّج لها"
+          },
+          "context": {
+            "en": "Client F, an entertainment company, was pitching sponsors for a large live event. Each producer wrote proposals in their own Word file, with stretched logos, mixed fonts, and Arabic pages that looked broken.",
+            "ar": "العميل و، شركة ترفيه، كانت تعرض على الرعاة فعالية حيّة كبيرة. كل منتج كان يكتب العروض في ملف Word خاص فيه، بشعارات ممطوطة وخطوط مختلطة وصفحات عربية شكلها مكسور."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Every producer had a different version of the company letterhead.",
+                "ar": "كل منتج كان عنده نسخة مختلفة من ورق الشركة الرسمي."
+              },
+              "solution": {
+                "en": "We built one locked Word template in both languages and retired the old files from the shared drive.",
+                "ar": "بنينا قالب Word واحد مقفل باللغتين، وشلنا الملفات القديمة من المجلد المشترك."
+              }
+            },
+            {
+              "problem": {
+                "en": "Arabic letters broke alignment, with numbers and punctuation jumping around the page.",
+                "ar": "الخطابات العربية كان تنسيقها يتلخبط، والأرقام وعلامات الترقيم تتنقّل في الصفحة."
+              },
+              "solution": {
+                "en": "We set proper right to left styles, fixed number handling, and tested the template with ten real sponsor letters.",
+                "ar": "ضبطنا أنماط من اليمين لليسار، وعالجنا طريقة ظهور الأرقام، وجرّبنا القالب على عشرة خطابات رعاة حقيقية."
+              }
+            },
+            {
+              "problem": {
+                "en": "The plain letterhead gave no hint of the event's energy.",
+                "ar": "الورق الرسمي الباهت ما كان يعكس أي شي من حماس الفعالية."
+              },
+              "solution": {
+                "en": "We added a bold event band to the footer that can change per season without touching the rest.",
+                "ar": "أضفنا شريطًا جريئًا للفعالية في التذييل، يتغيّر كل موسم بدون ما نلمس باقي التصميم."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "1",
+              "label": { "en": "template instead of eleven", "ar": "قالب بدل أحد عشر" }
+            },
+            {
+              "value": "-60%",
+              "label": { "en": "time formatting proposals", "ar": "وقت تنسيق العروض" }
+            },
+            {
+              "value": "9",
+              "label": { "en": "sponsors signed this season", "ar": "رعاة وقّعوا هذا الموسم" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "brand-guidelines" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "dust-trail" } } },
+          "title": {
+            "en": "Guidelines that kept five social freelancers on one brand",
+            "ar": "دليل هوية خلّى خمسة مستقلين في السوشال على هوية وحدة"
+          },
+          "context": {
+            "en": "Client A, an automotive brand, was running a weekly social series with several freelance designers. Each one read the brand differently, and the feed started to look like five different companies.",
+            "ar": "العميل أ، علامة سيارات، كان ينشر سلسلة أسبوعية على السوشال مع عدة مصممين مستقلين. كل واحد فهم الهوية بطريقته، وصار الحساب يبان كأنه لخمس شركات مختلفة."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "The old guidelines were a 90 page PDF that nobody opened.",
+                "ar": "الدليل القديم كان ملف PDF من 90 صفحة ما أحد يفتحه."
+              },
+              "solution": {
+                "en": "We cut it to a focused social chapter with ready layouts, and put it on a web page freelancers could bookmark.",
+                "ar": "اختصرناه إلى فصل مركّز للسوشال بتصاميم جاهزة، وحطّيناه في صفحة ويب يقدر المستقلين يحفظونها."
+              }
+            },
+            {
+              "problem": {
+                "en": "Colors shifted from post to post, especially on dark vehicle photography.",
+                "ar": "الألوان كانت تتغيّر من منشور لمنشور، خصوصًا على صور السيارات الداكنة."
+              },
+              "solution": {
+                "en": "We defined screen color values and overlay rules for dark and light shots, with examples for each.",
+                "ar": "حدّدنا قيم الألوان للشاشات وقواعد الطبقات فوق الصور الداكنة والفاتحة، مع أمثلة لكل حالة."
+              }
+            },
+            {
+              "problem": {
+                "en": "Arabic captions used whatever font each freelancer had installed.",
+                "ar": "النصوص العربية كانت بأي خط منزّل عند كل مستقل."
+              },
+              "solution": {
+                "en": "We set one Arabic and one Latin typeface with sizes and spacing, and shared licensed font files with the team.",
+                "ar": "اعتمدنا خطًا عربيًا وخطًا لاتينيًا بمقاسات ومسافات محددة، وشاركنا ملفات الخطوط المرخّصة مع الفريق."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "5",
+              "label": { "en": "freelancers on one system", "ar": "مستقلين على نظام واحد" }
+            },
+            {
+              "value": "-45%",
+              "label": { "en": "revision rounds per post", "ar": "جولات التعديل لكل منشور" }
+            },
+            {
+              "value": "+19%",
+              "label": { "en": "average engagement per post", "ar": "متوسط التفاعل لكل منشور" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "stationery" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "sunday-sessions" } } },
+          "title": {
+            "en": "A season of concert print delivered in one run, on budget",
+            "ar": "مطبوعات موسم حفلات كامل في دفعة وحدة وضمن الميزانية"
+          },
+          "context": {
+            "en": "Client D, a cultural organization, runs a season of live music evenings. Invitations, tickets, and programs were designed and printed piece by piece, so costs crept up and nothing quite matched.",
+            "ar": "العميل د، جهة ثقافية، تنظّم موسمًا من الأمسيات الموسيقية الحيّة. الدعوات والتذاكر والبرامج كانت تتصمّم وتنطبع قطعة قطعة، فزادت التكاليف شوي شوي وما كان فيه شي متناسق."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Each evening's print was ordered separately, often at rush rates.",
+                "ar": "مطبوعات كل أمسية كانت تنطلب لحالها، وغالبًا بأسعار مستعجلة."
+              },
+              "solution": {
+                "en": "We planned the whole season up front and printed shared pieces in one run, leaving only dates to overprint.",
+                "ar": "خطّطنا الموسم كامل من البداية وطبعنا القطع المشتركة في دفعة وحدة، وتركنا التواريخ بس تنطبع فوقها لاحقًا."
+              }
+            },
+            {
+              "problem": {
+                "en": "Invitations, tickets, and programs used different papers and colors.",
+                "ar": "الدعوات والتذاكر والبرامج كانت بأنواع ورق وألوان مختلفة."
+              },
+              "solution": {
+                "en": "We built one kit on two paper stocks and a fixed palette, so every piece looks like part of the season.",
+                "ar": "بنينا مجموعة وحدة على نوعين من الورق وألوان ثابتة، عشان كل قطعة تبان جزء من الموسم."
+              }
+            },
+            {
+              "problem": {
+                "en": "The team had no files to reprint when a batch ran short.",
+                "ar": "الفريق ما كان عنده ملفات يعيد فيها الطباعة لما تخلص دفعة."
+              },
+              "solution": {
+                "en": "We handed over a shared folder with print files and spec sheets, so any reorder takes one email.",
+                "ar": "سلّمناهم مجلدًا مشتركًا فيه ملفات الطباعة وأوراق المواصفات، فأي إعادة طلب تحتاج إيميل واحد."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "-30%",
+              "label": { "en": "season print cost", "ar": "تكلفة مطبوعات الموسم" }
+            },
+            { "value": "12", "label": { "en": "pieces in one kit", "ar": "قطعة في مجموعة واحدة" } },
+            {
+              "value": "1",
+              "label": { "en": "print run for the season", "ar": "دفعة طباعة للموسم كامل" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "packaging" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "kitchen-hours" } } },
+          "title": {
+            "en": "A snack range redesign that won more shelf space in three months",
+            "ar": "إعادة تصميم تشكيلة سناكات كسبت مساحة أكبر على الرف خلال ثلاثة أشهر"
+          },
+          "context": {
+            "en": "Client B, a food and beverage brand, was launching a product campaign for its snack range. The packs looked alike across flavors, and shoppers struggled to find their favorite on busy supermarket shelves.",
+            "ar": "العميل ب، علامة أغذية ومشروبات، كان يجهّز حملة لتشكيلة السناكات حقته. العبوات كانت متشابهة بين النكهات، والمتسوّقين يتعبون وهم يدوّرون على نكهتهم المفضّلة في رفوف السوبرماركت المزدحمة."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Every flavor used the same color, so packs blurred together on shelf.",
+                "ar": "كل النكهات كانت بنفس اللون، فتختلط العبوات ببعض على الرف."
+              },
+              "solution": {
+                "en": "We gave each flavor its own color block and ingredient photo, while keeping the brand band fixed across the range.",
+                "ar": "عطينا كل نكهة لونها وصورة مكوّناتها الخاصة، وثبّتنا شريط العلامة على كل التشكيلة."
+              }
+            },
+            {
+              "problem": {
+                "en": "Arabic and English text competed for space on the small front panel.",
+                "ar": "النص العربي والإنجليزي كانوا يتزاحمون على الواجهة الصغيرة."
+              },
+              "solution": {
+                "en": "We moved mandatory details to the back and side, leaving the front for the name, flavor, and one clear claim.",
+                "ar": "نقلنا التفاصيل الإلزامية للخلف والجوانب، وخلّينا الواجهة للاسم والنكهة ومعلومة وحدة واضحة."
+              }
+            },
+            {
+              "problem": {
+                "en": "Thin film packs arrived crushed and creased after distribution.",
+                "ar": "العبوات بالغلاف الرقيق كانت توصل مضغوطة ومجعّدة بعد التوزيع."
+              },
+              "solution": {
+                "en": "We worked with the supplier on a heavier film and a new carton layout, then tested it through a real delivery route.",
+                "ar": "اشتغلنا مع المورّد على غلاف أسمك وترتيب جديد للكرتون، وجرّبناه في مسار توزيع حقيقي."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "+24%",
+              "label": {
+                "en": "shelf facings in key stores",
+                "ar": "واجهات على الرف في المتاجر الرئيسية"
+              }
+            },
+            {
+              "value": "+16%",
+              "label": { "en": "sales in first quarter", "ar": "مبيعات في أول ربع" }
+            },
+            {
+              "value": "-70%",
+              "label": { "en": "damaged packs returned", "ar": "عبوات تالفة مرتجعة" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": {
+            "$ref": { "table": "services", "by": { "slug": "powerpoint-templates" } }
+          },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "field-notes" } } },
+          "title": {
+            "en": "One template that cut faculty deck prep time by half",
+            "ar": "قالب واحد قلّل وقت تجهيز عروض المعلمين للنص"
+          },
+          "context": {
+            "en": "Client C, an education group, had just launched a new website with us. Faculty and admissions staff were still presenting from old, mismatched slides at open days and parent meetings.",
+            "ar": "العميل ج، مجموعة تعليمية، أطلق معنا موقعًا جديدًا قبل فترة قصيرة. لكن المعلمين وموظفي القبول كانوا لسّا يقدّمون بشرائح قديمة وغير متناسقة في الأيام المفتوحة واجتماعات الأهالي."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Staff rebuilt slides from scratch for every open day and meeting.",
+                "ar": "الموظفين كانوا يبنون الشرائح من الصفر لكل يوم مفتوح وكل اجتماع."
+              },
+              "solution": {
+                "en": "We designed twelve ready layouts covering their most common presentations, from program overviews to fee tables.",
+                "ar": "صمّمنا اثني عشر تخطيطًا جاهزًا تغطي أكثر العروض اللي يقدّمونها، من نبذة البرامج إلى جداول الرسوم."
+              }
+            },
+            {
+              "problem": {
+                "en": "Arabic slides had reversed charts and bullets sitting on the wrong side.",
+                "ar": "الشرائح العربية كانت رسومها البيانية معكوسة والنقاط في الجهة الغلط."
+              },
+              "solution": {
+                "en": "We built a dedicated right to left master and tested every layout with real Arabic content from the admissions team.",
+                "ar": "بنينا شريحة رئيسية مخصّصة من اليمين لليسار، وجرّبنا كل تخطيط بمحتوى عربي حقيقي من فريق القبول."
+              }
+            },
+            {
+              "problem": {
+                "en": "Slides no longer matched the new website parents had just seen.",
+                "ar": "الشرائح ما عادت تشبه الموقع الجديد اللي شافه الأهالي للتو."
+              },
+              "solution": {
+                "en": "We carried the website's type, colors, and photography into the template so both feel like the same school.",
+                "ar": "نقلنا خطوط الموقع وألوانه وصوره للقالب، عشان الاثنين يحسّسونك إنها نفس المدرسة."
+              }
+            }
+          ],
+          "results": [
+            { "value": "-50%", "label": { "en": "deck prep time", "ar": "وقت تجهيز العروض" } },
+            { "value": "12", "label": { "en": "ready layouts", "ar": "تخطيط جاهز" } },
+            {
+              "value": "60",
+              "label": { "en": "staff trained in one week", "ar": "موظف تدرّبوا في أسبوع" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "company-profile" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "terrain" } } },
+          "title": {
+            "en": "A developer profile that opened talks with two new investors",
+            "ar": "ملف تعريفي لمطوّر عقاري فتح نقاشات مع مستثمرَين جديدين"
+          },
+          "context": {
+            "en": "Client E, a real estate developer, had strong completed projects but was pitching investors with an outdated profile. It was text heavy, English only, and used renders instead of photos of real buildings.",
+            "ar": "العميل هـ، مطوّر عقاري، عنده مشاريع منجزة قوية، لكنه كان يعرض على المستثمرين بملف تعريفي قديم. كان مليان نصوص، وبالإنجليزي بس، ويستخدم صورًا تصوّرية بدل صور المباني الحقيقية."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Completed projects were shown as renders, which undersold the finished quality.",
+                "ar": "المشاريع المنجزة كانت معروضة بصور تصوّرية، وهذا ما أنصف جودتها الفعلية."
+              },
+              "solution": {
+                "en": "We used our launch photography of the finished buildings, so investors saw real results, not promises.",
+                "ar": "استخدمنا تصويرنا لإطلاق المباني المكتملة، عشان المستثمر يشوف نتائج حقيقية، مو وعود."
+              }
+            },
+            {
+              "problem": {
+                "en": "Long paragraphs buried the numbers investors actually look for.",
+                "ar": "الفقرات الطويلة كانت تدفن الأرقام اللي يدوّر عليها المستثمر."
+              },
+              "solution": {
+                "en": "We rebuilt the structure around a one page summary, project cards, and clear figures for delivered units and timelines.",
+                "ar": "أعدنا بناء الهيكل حول ملخّص من صفحة وحدة، وبطاقات للمشاريع، وأرقام واضحة للوحدات المسلّمة والجداول الزمنية."
+              }
+            },
+            {
+              "problem": {
+                "en": "An English only profile left out regional investors and partners.",
+                "ar": "الملف الإنجليزي فقط كان يستبعد المستثمرين والشركاء في المنطقة."
+              },
+              "solution": {
+                "en": "We wrote a full Arabic edition in house, designed as its own layout rather than a translated copy.",
+                "ar": "كتبنا نسخة عربية كاملة من فريقنا، بتصميم خاص فيها مو مجرد نسخة مترجمة."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "2",
+              "label": { "en": "new investor meetings", "ar": "اجتماعات مع مستثمرين جدد" }
+            },
+            { "value": "24", "label": { "en": "pages, down from 40", "ar": "صفحة بدل 40" } },
+            {
+              "value": "3x",
+              "label": { "en": "more profile downloads", "ar": "تنزيلات أكثر للملف" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "motion-graphics" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "notebook" } } },
+          "title": {
+            "en": "Giving a new education brand one consistent way to move",
+            "ar": "هوية تعليمية جديدة صار لها طريقة حركة وحدة في كل مكان"
+          },
+          "context": {
+            "en": "Client C, an education provider, had just finished a rebrand. The static identity was strong, but every campus and department animated it differently, and videos looked like they came from five different schools.",
+            "ar": "العميل ج، جهة تعليمية، كان للتو مخلّص إعادة هوية. الهوية الثابتة كانت قوية، لكن كل فرع وكل قسم كان يحرّكها بطريقته، والفيديوهات كانت تبان كأنها من خمس مدارس مختلفة."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "The new logo was animated five different ways across departments.",
+                "ar": "الشعار الجديد كان يتحرك بخمس طرق مختلفة بين الأقسام."
+              },
+              "solution": {
+                "en": "We designed one logo reveal with short, medium and loop versions, and made it the only approved file.",
+                "ar": "صمّمنا ظهور واحد للشعار بنسخة قصيرة ومتوسطة ومتكررة، وصار هو الملف الوحيد المعتمد."
+              }
+            },
+            {
+              "problem": {
+                "en": "Arabic titles jittered and broke apart in every video template.",
+                "ar": "العناوين العربية كانت ترجف وتتفكك في كل قالب فيديو."
+              },
+              "solution": {
+                "en": "We rebuilt the Arabic text animations so words build as connected units, in the correct reading direction.",
+                "ar": "أعدنا بناء حركات النص العربي بحيث الكلمات تتركّب كوحدات متصلة وباتجاه القراءة الصحيح."
+              }
+            },
+            {
+              "problem": {
+                "en": "Small teams could not afford an agency for every announcement.",
+                "ar": "الفرق الصغيرة ما تقدر تتحمّل تكلفة وكالة لكل إعلان."
+              },
+              "solution": {
+                "en": "We handed over a template kit with training, so department staff can publish on-brand videos in an afternoon.",
+                "ar": "سلّمنا مجموعة قوالب مع تدريب، عشان موظفي الأقسام ينشرون فيديوهات على الهوية في نص يوم."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "12",
+              "label": { "en": "departments on one template kit", "ar": "قسم يستخدم نفس القوالب" }
+            },
+            {
+              "value": "-60%",
+              "label": { "en": "time to publish a video", "ar": "وقت نشر الفيديو" }
+            },
+            {
+              "value": "3x",
+              "label": {
+                "en": "more videos posted per term",
+                "ar": "فيديوهات أكثر في كل فصل دراسي"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "animation" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "kitchen-hours" } } },
+          "title": {
+            "en": "An animated launch that explained a new product in fifteen seconds",
+            "ar": "إطلاق بالأنيميشن شرح منتج جديد في خمس عشرة ثانية"
+          },
+          "context": {
+            "en": "Client B, a food and beverage brand, was launching a new product line built on a slow cooking process. Filming the process looked dull, and shoppers were not reading the long pack copy.",
+            "ar": "العميل ب، علامة أغذية ومشروبات، كان يطلق خط منتجات جديد مبني على طريقة طبخ بطيئة. تصوير العملية كان يطلع ممل، والمتسوقين ما كانوا يقرون النص الطويل على العبوة."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "The product's key benefit was invisible on camera and hard to explain.",
+                "ar": "أهم ميزة في المنتج ما تبان قدّام الكاميرا وصعب تنشرح."
+              },
+              "solution": {
+                "en": "We animated the cooking process in stylised 3D, turning twelve hours into a clear fifteen second sequence.",
+                "ar": "حرّكنا عملية الطبخ بـ 3D بأسلوب خاص، وحوّلنا اثنتي عشرة ساعة إلى مشهد واضح مدته خمس عشرة ثانية."
+              }
+            },
+            {
+              "problem": {
+                "en": "Previous ads used generic stock visuals that any competitor could run.",
+                "ar": "الإعلانات السابقة كانت بصور جاهزة يقدر أي منافس ينشرها."
+              },
+              "solution": {
+                "en": "We built an illustrated world around the brand's colours and packaging, so every frame belonged to them alone.",
+                "ar": "بنينا عالم مرسوم حول ألوان العلامة وتغليفها، عشان كل إطار يكون لهم هم وبس."
+              }
+            },
+            {
+              "problem": {
+                "en": "The campaign needed in-store screens, social and TV from one budget.",
+                "ar": "الحملة كانت تحتاج شاشات داخل المتاجر وسوشال وتلفزيون من ميزانية وحدة."
+              },
+              "solution": {
+                "en": "We planned the animation in modular scenes, then recut them into eighteen versions without new animation work.",
+                "ar": "خططنا الأنيميشن على شكل مشاهد مستقلة، وبعدها أعدنا تركيبها في ثماني عشرة نسخة بدون تحريك جديد."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "18",
+              "label": { "en": "versions from one production", "ar": "نسخة من إنتاج واحد" }
+            },
+            {
+              "value": "+27%",
+              "label": {
+                "en": "product trial in launch stores",
+                "ar": "تجربة المنتج في متاجر الإطلاق"
+              }
+            },
+            {
+              "value": "+22%",
+              "label": {
+                "en": "view completion versus past ads",
+                "ar": "إكمال المشاهدة مقارنة بالإعلانات السابقة"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "video-editing" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "opening-night" } } },
+          "title": {
+            "en": "Turning forty hours of event footage into a film people finished",
+            "ar": "حوّلنا أربعين ساعة من لقطات الفعالية إلى فيلم يكمله الناس للنهاية"
+          },
+          "context": {
+            "en": "Client F, an entertainment company, filmed its opening night with six crews. They had forty hours of footage, a sponsor deadline in ten days, and no clear idea what the film was about.",
+            "ar": "العميل و، شركة ترفيه، صوّر ليلة الافتتاح بست فرق تصوير. صار عنده أربعين ساعة لقطات، وموعد تسليم للراعي بعد عشرة أيام، وما كانت عنده فكرة واضحة عن موضوع الفيلم."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Forty hours of footage and no one had watched it all.",
+                "ar": "أربعين ساعة لقطات وما أحد شافها كلها."
+              },
+              "solution": {
+                "en": "Two editors logged everything in three days and tagged moments by emotion, crowd reaction and sponsor visibility.",
+                "ar": "محرّرين اثنين فرزوا كل شي خلال ثلاثة أيام، وصنّفوا اللحظات حسب الشعور وتفاعل الجمهور وظهور الراعي."
+              }
+            },
+            {
+              "problem": {
+                "en": "Past event recaps were long montages that viewers left within seconds.",
+                "ar": "ملخصات الفعاليات السابقة كانت مونتاج طويل يطلع منه المشاهد خلال ثواني."
+              },
+              "solution": {
+                "en": "We built the film around one guest's night, from arrival to final act, so it had a story to follow.",
+                "ar": "بنينا الفيلم حول ليلة ضيف واحد، من وصوله لآخر فقرة، عشان يكون فيه قصة تنتابع."
+              }
+            },
+            {
+              "problem": {
+                "en": "The sponsor needed their own version without a second edit budget.",
+                "ar": "الراعي كان يبغى نسخته الخاصة بدون ميزانية مونتاج ثانية."
+              },
+              "solution": {
+                "en": "We tagged sponsor moments while logging, so their cut came from the same timeline in one extra day.",
+                "ar": "علّمنا لحظات الراعي وقت الفرز، فطلعت نسخته من نفس الخط الزمني في يوم إضافي واحد."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "10",
+              "label": { "en": "days from shoot to delivery", "ar": "أيام من التصوير للتسليم" }
+            },
+            {
+              "value": "+45%",
+              "label": { "en": "average watch time", "ar": "متوسط مدة المشاهدة" }
+            },
+            {
+              "value": "6",
+              "label": { "en": "cuts from one timeline", "ar": "نسخ من خط زمني واحد" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "photo-video" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "terrain" } } },
+          "title": {
+            "en": "Launch photography that filled the sales centre before handover",
+            "ar": "تصوير إطلاق ملأ مركز المبيعات قبل تسليم المشروع"
+          },
+          "context": {
+            "en": "Client E, a real estate developer, was launching a coastal community while half the site was still under construction. Renders felt cold, and buyers wanted to see the real place and light.",
+            "ar": "العميل هـ، مطوّر عقاري، كان يطلق مجتمع سكني على البحر ونص الموقع لسه تحت الإنشاء. الصور المجسّمة كانت باردة، والمشترين يبغون يشوفون المكان الحقيقي وضوءه."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Half the site was a building zone and could not be shown.",
+                "ar": "نص الموقع كان منطقة بناء وما ينفع يظهر."
+              },
+              "solution": {
+                "en": "We scouted angles that framed finished areas, the sea and the landscape, and shot at golden hour.",
+                "ar": "اخترنا زوايا تبرز الأجزاء المكتملة والبحر والمساحات الخضراء، وصوّرنا في الساعة الذهبية قبل الغروب."
+              }
+            },
+            {
+              "problem": {
+                "en": "Marketing needed photos and a film but had budget for one shoot.",
+                "ar": "التسويق كان يحتاج صور وفيلم، والميزانية تكفي لتصوير واحد بس."
+              },
+              "solution": {
+                "en": "We ran photo and video crews side by side over two days from a single shot list.",
+                "ar": "شغّلنا فريق الصور وفريق الفيديو جنب بعض على مدى يومين من قائمة لقطات وحدة."
+              }
+            },
+            {
+              "problem": {
+                "en": "Renders did not show how the homes felt to live in.",
+                "ar": "الصور المجسّمة ما كانت توضح إحساس العيش في البيوت."
+              },
+              "solution": {
+                "en": "We styled and shot the show villa with families at breakfast and sunset, so buyers pictured daily life.",
+                "ar": "جهّزنا الفيلا النموذجية وصوّرناها مع عائلات وقت الفطور والغروب، عشان المشتري يتخيل حياته اليومية فيها."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "2",
+              "label": { "en": "shoot days for full campaign", "ar": "أيام تصوير للحملة كاملة" }
+            },
+            {
+              "value": "+35%",
+              "label": {
+                "en": "sales centre visits in month one",
+                "ar": "زيارات مركز المبيعات في الشهر الأول"
+              }
+            },
+            {
+              "value": "240",
+              "label": { "en": "approved images and clips", "ar": "صورة ومقطع معتمد" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "model-booking" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "the-rider" } } },
+          "title": {
+            "en": "Casting real drivers turned a brand film into something people trusted",
+            "ar": "اختيار سائقين حقيقيين خلّى فيلم العلامة شي يصدّقه الناس"
+          },
+          "context": {
+            "en": "Client A, an automotive brand, wanted a film about the people who drive its cars. Earlier ads used polished models who looked nothing like its customers, and comments said so.",
+            "ar": "العميل أ، علامة سيارات، كان يبغى فيلم عن الناس اللي يسوقون سياراته. إعلاناته السابقة كانت بعارضين مصقولين ما يشبهون عملاءه أبدًا، والتعليقات قالتها صراحة."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Audiences did not believe the models in earlier ads owned the cars.",
+                "ar": "الجمهور ما صدّق إن العارضين في الإعلانات السابقة يملكون السيارات."
+              },
+              "solution": {
+                "en": "We mixed three professional models with five real owners found through driving clubs and owner communities.",
+                "ar": "دمجنا ثلاثة عارضين محترفين مع خمسة ملّاك حقيقيين لقيناهم عن طريق نوادي القيادة ومجتمعات الملّاك."
+              }
+            },
+            {
+              "problem": {
+                "en": "Non-professional talent risked freezing on camera and slowing the shoot.",
+                "ar": "المواهب غير المحترفة ممكن تتوتر قدّام الكاميرا وتأخر التصوير."
+              },
+              "solution": {
+                "en": "We ran short rehearsal sessions before the shoot and paired each owner with a coach on set.",
+                "ar": "سوّينا جلسات تدريب قصيرة قبل التصوير، وكل مالك كان معه مدرّب في الموقع."
+              }
+            },
+            {
+              "problem": {
+                "en": "The brand needed the film across the region for two years.",
+                "ar": "العلامة كانت تحتاج الفيلم على مستوى المنطقة لمدة سنتين."
+              },
+              "solution": {
+                "en": "We negotiated regional usage for two years across all channels upfront, with one clear fee per person.",
+                "ar": "تفاوضنا من البداية على استخدام إقليمي لسنتين في كل القنوات، برسوم واضحة وحدة لكل شخص."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "8",
+              "label": {
+                "en": "people cast in three weeks",
+                "ar": "أشخاص اخترناهم خلال ثلاثة أسابيع"
+              }
+            },
+            {
+              "value": "+31%",
+              "label": { "en": "positive comment sentiment", "ar": "التعليقات الإيجابية" }
+            },
+            {
+              "value": "2",
+              "label": {
+                "en": "years of regional usage secured",
+                "ar": "سنوات استخدام إقليمي مضمونة"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "music-vo-sfx" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "sunday-sessions" } } },
+          "title": {
+            "en": "An original score that gave a cultural series its own sound",
+            "ar": "موسيقى أصلية أعطت سلسلة ثقافية صوتها الخاص"
+          },
+          "context": {
+            "en": "Client D, a cultural organisation, runs a weekly series of talks and performances. Its videos used a different stock track each week, and nothing tied the series together or made it memorable.",
+            "ar": "العميل د، جهة ثقافية، تنظّم سلسلة أسبوعية من الجلسات والعروض. فيديوهاتها كانت تستخدم موسيقى جاهزة مختلفة كل أسبوع، وما كان فيه شي يربط السلسلة ببعض أو يخليها تنذكر."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Stock tracks changed weekly, so the series had no audio identity.",
+                "ar": "الموسيقى الجاهزة كانت تتغير كل أسبوع، فالسلسلة ما كان لها هوية صوتية."
+              },
+              "solution": {
+                "en": "We composed a main theme blending oud and strings with modern percussion, plus short variations for each format.",
+                "ar": "ألّفنا لحن رئيسي يجمع العود والوتريات مع إيقاعات حديثة، ومعه نسخ قصيرة لكل صيغة."
+              }
+            },
+            {
+              "problem": {
+                "en": "Some episodes were taken down after copyright claims on the music.",
+                "ar": "بعض الحلقات انحذفت بسبب مطالبات حقوق على الموسيقى."
+              },
+              "solution": {
+                "en": "Every track is original and registered to the client, so uploads clear content checks on every platform.",
+                "ar": "كل مقطوعة أصلية ومسجّلة باسم العميل، فالرفع يعدّي فحوصات المحتوى في كل المنصات."
+              }
+            },
+            {
+              "problem": {
+                "en": "Host introductions were recorded on phones and sounded uneven.",
+                "ar": "مقدمات المقدّم كانت تتسجل بالجوال وصوتها غير متساوي."
+              },
+              "solution": {
+                "en": "We recorded a bilingual VO package for intros and outros, mixed to match the score's level and tone.",
+                "ar": "سجّلنا باقة VO بلغتين للمقدمات والخواتيم، ومكسناها عشان تتناسق مع مستوى الموسيقى ونبرتها."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "0",
+              "label": { "en": "copyright claims since launch", "ar": "مطالبات حقوق منذ الإطلاق" }
+            },
+            {
+              "value": "+42%",
+              "label": { "en": "episode completion rate", "ar": "نسبة إكمال الحلقات" }
+            },
+            {
+              "value": "14",
+              "label": { "en": "theme variations delivered", "ar": "نسخة من اللحن الرئيسي" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "marketing-strategy" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "blueprint" } } },
+          "title": {
+            "en": "A sales centre that filled its first month of appointments",
+            "ar": "مركز مبيعات امتلأت مواعيده من أول شهر"
+          },
+          "context": {
+            "en": "Client E, a real estate developer, was opening a sales centre for a new residential project. They had a launch date and a budget, but no agreed plan for who to reach or how.",
+            "ar": "العميل هـ، مطوّر عقاري، كان يستعد لافتتاح مركز مبيعات لمشروع سكني جديد. عنده تاريخ إطلاق وميزانية، لكن ما عنده خطة متفق عليها تحدد مين يستهدف وكيف."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Marketing, sales, and management each had a different buyer in mind.",
+                "ar": "التسويق والمبيعات والإدارة، كل واحد في باله مشتري مختلف."
+              },
+              "solution": {
+                "en": "We ran buyer interviews and a joint workshop, then agreed on two priority buyer profiles everyone signed off on.",
+                "ar": "أجرينا مقابلات مع مشترين وورشة عمل مشتركة، واتفقنا على شريحتين أساسيتين من المشترين وافق عليها الجميع."
+              }
+            },
+            {
+              "problem": {
+                "en": "The budget was spread thin across too many channels at once.",
+                "ar": "الميزانية موزعة على قنوات كثيرة في نفس الوقت وما تكفي أي منها."
+              },
+              "solution": {
+                "en": "We cut the channel list to three, weighted spend toward the weeks before opening, and set a review every fortnight.",
+                "ar": "قلّصنا القنوات إلى ثلاث، وركّزنا الصرف في الأسابيع اللي قبل الافتتاح، وحددنا مراجعة كل أسبوعين."
+              }
+            },
+            {
+              "problem": {
+                "en": "Messages focused on finishes and specs, not on how families would live there.",
+                "ar": "الرسائل تركز على التشطيبات والمواصفات، مو على حياة العائلات في المكان."
+              },
+              "solution": {
+                "en": "We rebuilt the key messages around daily life: schools, commute times, and space for children to play.",
+                "ar": "أعدنا بناء الرسائل حول الحياة اليومية: المدارس، ووقت المشوار، ومساحات يلعب فيها الأطفال."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "+42%",
+              "label": { "en": "booked site visits", "ar": "زيارات موقع محجوزة" }
+            },
+            { "value": "3", "label": { "en": "channels instead of nine", "ar": "قنوات بدل تسع" } },
+            { "value": "-25%", "label": { "en": "cost per lead", "ar": "تكلفة العميل المحتمل" } }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "content-strategy" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "field-notes" } } },
+          "title": {
+            "en": "An education website parents found through search and kept reading",
+            "ar": "موقع تعليمي يوصله أولياء الأمور من البحث ويكملون القراءة"
+          },
+          "context": {
+            "en": "Client C, an education group running several private schools, had a new website but little reason for parents to visit it. Enquiries still came almost entirely by phone and word of mouth.",
+            "ar": "العميل ج، مجموعة تعليمية تدير عدة مدارس أهلية، عندها موقع جديد لكن ما فيه سبب يخلي أولياء الأمور يزورونه. الاستفسارات كانت تجي تقريباً كلها بالهاتف والتوصيات."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Pages described the schools, but did not answer the questions parents were asking.",
+                "ar": "الصفحات توصف المدارس، لكن ما تجاوب على الأسئلة اللي يسألها أولياء الأمور."
+              },
+              "solution": {
+                "en": "We mapped the top questions parents search in Arabic and English and built pillar pages to answer each one.",
+                "ar": "حصرنا أهم الأسئلة اللي يبحث عنها أولياء الأمور بالعربي والإنجليزي، وبنينا صفحات محورية تجاوب على كل سؤال."
+              }
+            },
+            {
+              "problem": {
+                "en": "The team posted in bursts, then went quiet for weeks at a time.",
+                "ar": "الفريق ينشر بكثافة فترة، وبعدها يختفي لأسابيع."
+              },
+              "solution": {
+                "en": "We set a rhythm of two posts a week, with a shared calendar and templates teachers could fill in quickly.",
+                "ar": "حددنا إيقاع منشورين في الأسبوع، مع تقويم مشترك وقوالب يقدر المعلمون يعبّونها بسرعة."
+              }
+            },
+            {
+              "problem": {
+                "en": "No one knew which content led to a school tour booking.",
+                "ar": "ما أحد يعرف أي محتوى يقود لحجز زيارة للمدرسة."
+              },
+              "solution": {
+                "en": "We linked each page to the tour booking form and reported monthly on which topics brought families in.",
+                "ar": "ربطنا كل صفحة بنموذج حجز الزيارة، وصرنا نرفع تقرير شهري يوضح أي المواضيع جابت العائلات."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "+65%",
+              "label": { "en": "organic search visits", "ar": "زيارات من البحث العضوي" }
+            },
+            {
+              "value": "2x",
+              "label": { "en": "online tour bookings", "ar": "حجوزات الزيارات عبر الموقع" }
+            },
+            {
+              "value": "24",
+              "label": { "en": "pillar pages in two languages", "ar": "صفحة محورية بلغتين" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "advertising" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "the-rider" } } },
+          "title": {
+            "en": "A brand film cut into ads that booked test drives",
+            "ar": "فيلم علامة تحوّل إلى إعلانات جابت حجوزات تجربة قيادة"
+          },
+          "context": {
+            "en": "Client A, an automotive brand, had a strong brand film but no plan to turn it into paid media. Their past ads drove views, yet very few showroom visits.",
+            "ar": "العميل أ، علامة سيارات، عنده فيلم علامة قوي لكن ما عنده خطة تحوّله لإعلانات مدفوعة. إعلاناته السابقة جابت مشاهدات، لكن زيارات المعرض كانت قليلة جداً."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "A two minute film does not work as a six second ad.",
+                "ar": "فيلم مدته دقيقتين ما يشتغل كإعلان مدته ست ثواني."
+              },
+              "solution": {
+                "en": "We cut the film into short versions for each platform, each opening on the car in its first second.",
+                "ar": "قصّينا الفيلم لنسخ قصيرة لكل منصة، وكل نسخة تبدأ بالسيارة من أول ثانية."
+              }
+            },
+            {
+              "problem": {
+                "en": "Ads sent people to a homepage instead of a booking page.",
+                "ar": "الإعلانات توديهم للصفحة الرئيسية بدل صفحة الحجز."
+              },
+              "solution": {
+                "en": "We built a simple test drive booking page and pointed every ad to it, with the model already selected.",
+                "ar": "بنينا صفحة بسيطة لحجز تجربة القيادة ووجّهنا لها كل الإعلانات، والموديل مختار مسبقاً."
+              }
+            },
+            {
+              "problem": {
+                "en": "Budget went to the widest audience rather than likely buyers.",
+                "ar": "الميزانية راحت لأوسع جمهور بدل المشترين المحتملين."
+              },
+              "solution": {
+                "en": "We narrowed targeting to in-market audiences in three cities and shifted spend weekly based on bookings.",
+                "ar": "ضيّقنا الاستهداف على جمهور يبحث عن سيارة في ثلاث مدن، ونقلنا الصرف أسبوعياً حسب الحجوزات."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "+58%",
+              "label": { "en": "test drive bookings", "ar": "حجوزات تجربة القيادة" }
+            },
+            { "value": "-31%", "label": { "en": "cost per booking", "ar": "تكلفة الحجز الواحد" } },
+            {
+              "value": "6",
+              "label": { "en": "platform cuts from one film", "ar": "نسخ للمنصات من فيلم واحد" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "social-media" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "dust-trail" } } },
+          "title": {
+            "en": "A desert driving series that brought a quiet account back",
+            "ar": "سلسلة قيادة صحراوية رجّعت الحياة لحساب هادئ"
+          },
+          "context": {
+            "en": "Client A, an automotive brand, had social accounts that mostly reposted global ads. Local followers were not engaging, and the team had no steady stream of content made for Saudi audiences.",
+            "ar": "العميل أ، علامة سيارات، حساباته في السوشال أغلبها إعادة نشر لإعلانات عالمية. المتابعين المحليين ما يتفاعلون، والفريق ما عنده محتوى مستمر معمول للجمهور السعودي."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Global ads felt distant and did not reflect how people drive here.",
+                "ar": "الإعلانات العالمية بعيدة عن الناس وما تعكس طريقة القيادة هنا."
+              },
+              "solution": {
+                "en": "We shot a weekly series on real desert and mountain routes near Jeddah, with local drivers and local stories.",
+                "ar": "صوّرنا سلسلة أسبوعية على طرق صحراوية وجبلية حقيقية قريبة من جدة، مع سائقين محليين وقصص محلية."
+              }
+            },
+            {
+              "problem": {
+                "en": "Comments went unanswered for days, and some questions were about sales.",
+                "ar": "التعليقات تنتظر أيام بدون رد، وبعضها أسئلة عن الشراء."
+              },
+              "solution": {
+                "en": "We set up daily community management and passed sales questions to the showroom team within the same day.",
+                "ar": "بدأنا إدارة يومية للتفاعل، وحوّلنا أسئلة الشراء لفريق المعرض في نفس اليوم."
+              }
+            },
+            {
+              "problem": {
+                "en": "Every post was a different style, so the account had no identity.",
+                "ar": "كل منشور بأسلوب مختلف، فما كان للحساب هوية."
+              },
+              "solution": {
+                "en": "We designed a series look with fixed titles, colours, and edit pace so each episode is recognisable at a glance.",
+                "ar": "صممنا شكل ثابت للسلسلة بعناوين وألوان وإيقاع مونتاج محدد، عشان تتعرف على كل حلقة من أول نظرة."
+              }
+            }
+          ],
+          "results": [
+            { "value": "+85%", "label": { "en": "engagement rate", "ar": "معدل التفاعل" } },
+            {
+              "value": "12",
+              "label": { "en": "episodes in the first season", "ar": "حلقة في الموسم الأول" }
+            },
+            {
+              "value": "4x",
+              "label": { "en": "faster replies to comments", "ar": "أسرع في الرد على التعليقات" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "campaigns" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "kitchen-hours" } } },
+          "title": {
+            "en": "A product launch campaign that sold out its first batch",
+            "ar": "حملة إطلاق منتج نفدت أول دفعة منه"
+          },
+          "context": {
+            "en": "Client B, a food and beverage brand, was launching a new product line during a busy season. Past launches had used separate agencies for film, photo, and social, and it showed.",
+            "ar": "العميل ب، علامة أغذية ومشروبات، كان يطلق خط منتجات جديد في موسم مزدحم. إطلاقاته السابقة توزعت على وكالات مختلفة للفيلم والصور والسوشال، وكان هذا واضح في النتيجة."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Earlier campaigns looked like three different brands across three different channels.",
+                "ar": "الحملات السابقة كانت تبان كأنها ثلاث علامات مختلفة في ثلاث قنوات."
+              },
+              "solution": {
+                "en": "We built one campaign idea around home cooking hours and made every film, photo, and post from it.",
+                "ar": "بنينا فكرة حملة واحدة حول أوقات الطبخ في البيت، وطلّعنا منها كل فيلم وصورة ومنشور."
+              }
+            },
+            {
+              "problem": {
+                "en": "The launch window was six weeks, with retail dates already fixed.",
+                "ar": "مدة التحضير للإطلاق ست أسابيع، ومواعيد المتاجر محددة مسبقاً."
+              },
+              "solution": {
+                "en": "We shot film and photography in one three day production and delivered every asset two weeks early.",
+                "ar": "صوّرنا الفيلم والصور في إنتاج واحد مدته ثلاثة أيام، وسلّمنا كل المواد قبل الموعد بأسبوعين."
+              }
+            },
+            {
+              "problem": {
+                "en": "Shoppers saw the ads but could not find the product in stores.",
+                "ar": "المتسوقين يشوفون الإعلانات لكن ما يلقون المنتج في المتاجر."
+              },
+              "solution": {
+                "en": "We added in-store displays and a store finder to the social ads, matched to where stock actually was.",
+                "ar": "أضفنا مواد عرض داخل المتاجر وخاصية تحديد أقرب متجر في إعلانات السوشال، مربوطة بأماكن توفر المنتج فعلاً."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "+47%",
+              "label": { "en": "sales versus last launch", "ar": "مبيعات مقارنة بالإطلاق السابق" }
+            },
+            {
+              "value": "3",
+              "label": { "en": "weeks to sell out", "ar": "أسابيع حتى نفاد الكمية" }
+            },
+            {
+              "value": "40",
+              "label": { "en": "assets from one shoot", "ar": "مادة من تصوير واحد" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "content-creation" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "opening-night" } } },
+          "title": {
+            "en": "One event film that fed a full month of content",
+            "ar": "فيلم فعالية واحد غذّى شهر كامل من المحتوى"
+          },
+          "context": {
+            "en": "Client F, an entertainment company, was hosting an opening night for a new venue. They needed content for before, during, and after the event, with a small team and a tight budget.",
+            "ar": "العميل و، شركة ترفيه، كان يستضيف ليلة افتتاح لمكان جديد. احتاجوا محتوى لما قبل الفعالية وأثناءها وبعدها، بفريق صغير وميزانية محدودة."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Past events were filmed, but footage sat unused on a hard drive.",
+                "ar": "الفعاليات السابقة كانت تتصوّر، لكن اللقطات تنحفظ في هارديسك وما تُستخدم."
+              },
+              "solution": {
+                "en": "We planned the shoot around a content calendar, so every camera position had a post or ad waiting for it.",
+                "ar": "خططنا التصوير حسب تقويم المحتوى، فكل موقع كاميرا كان له منشور أو إعلان ينتظره."
+              }
+            },
+            {
+              "problem": {
+                "en": "Social posts needed to go out during the event, not days later.",
+                "ar": "منشورات السوشال لازم تنزل أثناء الفعالية، مو بعدها بأيام."
+              },
+              "solution": {
+                "en": "We ran an on-site edit desk that turned clips into stories and reels within an hour of each moment.",
+                "ar": "شغّلنا مكتب مونتاج في الموقع يحوّل اللقطات لستوريز وريلز خلال ساعة من كل لحظة."
+              }
+            },
+            {
+              "problem": {
+                "en": "The team wanted a lasting film, not only fast social clips.",
+                "ar": "الفريق يبغى فيلم يعيش، مو بس مقاطع سريعة للسوشال."
+              },
+              "solution": {
+                "en": "We cut a three minute event film for the website and future sponsors, alongside the social edits.",
+                "ar": "منتجنا فيلم للفعالية مدته ثلاث دقائق للموقع وللرعاة مستقبلاً، بجانب نسخ السوشال."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "60",
+              "label": { "en": "pieces of content delivered", "ar": "قطعة محتوى مسلّمة" }
+            },
+            {
+              "value": "+72%",
+              "label": { "en": "reach during event week", "ar": "الوصول في أسبوع الفعالية" }
+            },
+            {
+              "value": "1",
+              "label": { "en": "hour from moment to post", "ar": "ساعة من اللحظة للنشر" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "copywriting" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "notebook" } } },
+          "title": {
+            "en": "A rebrand that gave an education group one clear voice",
+            "ar": "هوية جديدة أعطت مجموعة تعليمية صوت واحد واضح"
+          },
+          "context": {
+            "en": "Client C, an education group, was going through a rebrand. Each school wrote its own materials, and the Arabic and English versions often said different things to the same parents.",
+            "ar": "العميل ج، مجموعة تعليمية، كانت تمر بإعادة بناء هويتها. كل مدرسة تكتب موادها بنفسها، والنسخ العربية والإنجليزية كثير تقول لنفس أولياء الأمور أشياء مختلفة."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "The English text was written first and the Arabic was translated late.",
+                "ar": "النص الإنجليزي ينكتب أولاً، والعربي يترجم في آخر وقت."
+              },
+              "solution": {
+                "en": "We had native writers draft both languages in parallel from one shared brief and message map.",
+                "ar": "خلّينا كتّاب بلغتهم الأم يكتبون اللغتين بالتوازي من موجز واحد وخريطة رسائل مشتركة."
+              }
+            },
+            {
+              "problem": {
+                "en": "Brochures were long and formal, and parents skipped straight to the fees.",
+                "ar": "الكتيبات طويلة ورسمية، وأولياء الأمور يقفزون مباشرة للرسوم."
+              },
+              "solution": {
+                "en": "We rewrote them around the questions parents ask most, with short sections and plain answers up front.",
+                "ar": "أعدنا كتابتها حول أكثر الأسئلة اللي يسألها أولياء الأمور، بأقسام قصيرة وإجابات واضحة من البداية."
+              }
+            },
+            {
+              "problem": {
+                "en": "Every school sounded different, so the group had no shared identity.",
+                "ar": "كل مدرسة لها أسلوب مختلف، فما كان للمجموعة هوية مشتركة."
+              },
+              "solution": {
+                "en": "We wrote a bilingual voice guide with ready examples, and trained each school's admissions team to use it.",
+                "ar": "كتبنا دليل نبرة بلغتين مع أمثلة جاهزة، ودرّبنا فريق القبول في كل مدرسة على استخدامه."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "+34%",
+              "label": { "en": "admissions enquiries", "ar": "استفسارات القبول" }
+            },
+            { "value": "5", "label": { "en": "schools on one voice", "ar": "مدارس بصوت واحد" } },
+            { "value": "-40%", "label": { "en": "brochure length", "ar": "طول الكتيب" } }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "hosting" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "field-notes" } } },
+          "title": {
+            "en": "An education website that stopped crashing on results day",
+            "ar": "موقع تعليمي ما عاد يطيح يوم إعلان النتائج"
+          },
+          "context": {
+            "en": "Client C, an education provider, had a new website running on shared hosting. It slowed to a crawl every enrollment season, went down twice on results day, and nobody owned the fix.",
+            "ar": "العميل ج، جهة تعليمية، كان موقعه الجديد على استضافة مشتركة. يبطأ بشكل كبير في كل موسم تسجيل، وطاح مرتين يوم إعلان النتائج، وما أحد كان مسؤول عن الحل."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Shared hosting could not handle traffic spikes during enrollment and results periods.",
+                "ar": "الاستضافة المشتركة ما تتحمّل ضغط الزيارات في مواسم التسجيل والنتائج."
+              },
+              "solution": {
+                "en": "We moved the site to scalable managed hosting with caching and a CDN, with zero downtime during the switch.",
+                "ar": "نقلنا الموقع إلى استضافة مُدارة قابلة للتوسّع مع تخزين مؤقت وشبكة CDN، بدون أي توقّف أثناء النقل."
+              }
+            },
+            {
+              "problem": {
+                "en": "Outages were discovered by parents and students before the team knew anything.",
+                "ar": "الأعطال كان يكتشفها أولياء الأمور والطلاب قبل ما يدري الفريق."
+              },
+              "solution": {
+                "en": "We set up round-the-clock monitoring with alerts to our team, and a clear plan for who responds and how fast.",
+                "ar": "ركّبنا مراقبة على مدار الساعة تنبّه فريقنا مباشرة، مع خطة واضحة لمين يتدخّل وبأي سرعة."
+              }
+            },
+            {
+              "problem": {
+                "en": "No working backups existed, so every plugin update felt like a risk.",
+                "ar": "ما كان فيه نسخ احتياطية تشتغل، فكل تحديث للإضافات كان مخاطرة."
+              },
+              "solution": {
+                "en": "We added daily off-site backups and a staging copy, so updates are tested before they touch the live site.",
+                "ar": "أضفنا نسخ احتياطية يومية خارج السيرفر ونسخة تجريبية، فالتحديثات تنختبر قبل ما توصل للموقع الفعلي."
+              }
+            }
+          ],
+          "results": [
+            { "value": "3x", "label": { "en": "faster page loads", "ar": "تحميل أسرع للصفحات" } },
+            {
+              "value": "0",
+              "label": { "en": "outages on results day", "ar": "أعطال يوم إعلان النتائج" }
+            },
+            {
+              "value": "-60%",
+              "label": {
+                "en": "site complaints from parents",
+                "ar": "شكاوى أولياء الأمور عن الموقع"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "domain" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "blueprint" } } },
+          "title": {
+            "en": "Bringing a developer's scattered domains back under one owner",
+            "ar": "جمع دومينات مطوّر عقاري المتفرّقة تحت مالك واحد"
+          },
+          "context": {
+            "en": "Client E, a real estate developer, was launching a new sales centre. Its domains were spread across old agencies and staff accounts, and one project domain had already expired.",
+            "ar": "العميل هـ، مطوّر عقاري، كان يجهّز لإطلاق مركز مبيعات جديد. دوميناته كانت موزّعة بين وكالات سابقة وحسابات موظفين، وواحد من دومينات المشاريع كان منتهي أصلًا."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Domains were registered under former agencies and personal staff accounts.",
+                "ar": "الدومينات مسجّلة باسم وكالات سابقة وحسابات شخصية لموظفين."
+              },
+              "solution": {
+                "en": "We traced every domain, recovered access, and transferred all of them into one account owned by the company.",
+                "ar": "تتبّعنا كل دومين واسترجعنا الوصول إليه، ونقلناها كلها لحساب واحد تملكه الشركة."
+              }
+            },
+            {
+              "problem": {
+                "en": "A lapsed project domain was showing a parked page to buyers.",
+                "ar": "دومين مشروع منتهي كان يعرض للمشترين صفحة إعلانات فاضية."
+              },
+              "solution": {
+                "en": "We recovered it inside the grace period, pointed it to the new sales centre site, and set auto-renewal.",
+                "ar": "استرجعناه خلال فترة السماح، ووجّهناه لموقع مركز المبيعات الجديد، وفعّلنا التجديد التلقائي."
+              }
+            },
+            {
+              "problem": {
+                "en": "Sales emails landed in spam, and lookalike addresses were impersonating the sales team.",
+                "ar": "رسائل المبيعات تروح للبريد المزعج، وعناوين مشابهة كانت تنتحل صفة فريق المبيعات."
+              },
+              "solution": {
+                "en": "We configured SPF, DKIM and DMARC, and registered the closest lookalike domains before anyone else could.",
+                "ar": "ضبطنا SPF وDKIM وDMARC، وسجّلنا أقرب الدومينات المشابهة قبل ما يسبقنا عليها أحد."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "14",
+              "label": {
+                "en": "domains consolidated under one owner",
+                "ar": "دومين توحّدت تحت مالك واحد"
+              }
+            },
+            {
+              "value": "0",
+              "label": { "en": "missed renewals since launch", "ar": "تجديدات فائتة منذ الإطلاق" }
+            },
+            {
+              "value": "+30%",
+              "label": {
+                "en": "sales emails reaching the inbox",
+                "ar": "رسائل مبيعات توصل للبريد الوارد"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "seo-geo-aeo" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "kitchen-hours" } } },
+          "title": {
+            "en": "Getting a food brand recommended when people ask AI",
+            "ar": "خلّينا علامة أغذية تنرشّح لما الناس يسألون الذكاء الاصطناعي"
+          },
+          "context": {
+            "en": "Client B, a food and beverage brand, had a strong product campaign but little search presence. When people searched or asked AI assistants about its category, competitors came up instead.",
+            "ar": "العميل ب، علامة أغذية ومشروبات، كانت عنده حملة منتج قوية لكن حضوره في البحث ضعيف. لما يبحث الناس أو يسألون مساعدات الذكاء الاصطناعي عن فئته، يطلع لهم المنافسين بداله."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Product pages were image-heavy, slow, and gave search engines almost no text to read.",
+                "ar": "صفحات المنتجات مليانة صور وبطيئة، وما فيها نص تقريبًا تقراه محركات البحث."
+              },
+              "solution": {
+                "en": "We compressed media, fixed page speed, and added clear product descriptions and structured data in both languages.",
+                "ar": "ضغطنا الصور والفيديو، وحسّنّا سرعة الصفحات، وأضفنا أوصاف منتجات واضحة وبيانات منظّمة باللغتين."
+              }
+            },
+            {
+              "problem": {
+                "en": "AI assistants described the brand with outdated or wrong details.",
+                "ar": "مساعدات الذكاء الاصطناعي كانت توصف العلامة بمعلومات قديمة أو غلط."
+              },
+              "solution": {
+                "en": "We aligned brand facts across the website, listings and profiles, and published an FAQ that answers common questions directly.",
+                "ar": "وحّدنا معلومات العلامة بين الموقع والأدلة والحسابات، ونشرنا صفحة أسئلة شائعة تجاوب على الأسئلة المتكررة مباشرة."
+              }
+            },
+            {
+              "problem": {
+                "en": "Arabic content was translated from English and missed how customers really search.",
+                "ar": "المحتوى العربي مترجم من الإنجليزي وما يعكس طريقة بحث العملاء الفعلية."
+              },
+              "solution": {
+                "en": "We rebuilt the Arabic pages around real local search phrases, including recipes and occasions tied to the products.",
+                "ar": "أعدنا بناء الصفحات العربية حول عبارات البحث المحلية الفعلية، ومنها الوصفات والمناسبات المرتبطة بالمنتجات."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "+64%",
+              "label": { "en": "organic search traffic", "ar": "زيارات البحث العضوي" }
+            },
+            {
+              "value": "3x",
+              "label": {
+                "en": "brand mentions in AI answers",
+                "ar": "ذكر العلامة في إجابات الذكاء الاصطناعي"
+              }
+            },
+            {
+              "value": "+22%",
+              "label": { "en": "store locator visits", "ar": "زيارات صفحة مواقع المتاجر" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "venue-booking" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "first-light" } } },
+          "title": {
+            "en": "Finding a live event venue in three weeks, under budget",
+            "ar": "مكان لفعالية حيّة خلال ثلاث أسابيع، وأقل من الميزانية"
+          },
+          "context": {
+            "en": "Client F, an entertainment company, lost its booked venue five weeks before a live event. It needed a new space for 1,200 guests, with full stage power, during peak season.",
+            "ar": "العميل و، شركة ترفيه، خسر المكان المحجوز قبل فعالية حيّة بخمس أسابيع. كان يحتاج مساحة جديدة تستوعب 1,200 ضيف، مع كهرباء كافية للمسرح، وفي عزّ الموسم."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Most suitable venues were already booked for the event weekend.",
+                "ar": "أغلب الأماكن المناسبة كانت محجوزة في نهاية أسبوع الفعالية."
+              },
+              "solution": {
+                "en": "We contacted fourteen venues in two days, including spaces not listed publicly, and secured three real options.",
+                "ar": "تواصلنا مع أربعة عشر مكان خلال يومين، منها أماكن ما تنعرض للعامة، وثبّتنا ثلاث خيارات حقيقية."
+              }
+            },
+            {
+              "problem": {
+                "en": "The production needed stage power and rigging that many halls could not support.",
+                "ar": "الإنتاج يحتاج كهرباء ونقاط تعليق للمسرح ما تتحمّلها قاعات كثيرة."
+              },
+              "solution": {
+                "en": "We visited each option with our production lead and ruled out two halls before any deposit was paid.",
+                "ar": "زرنا كل خيار مع مسؤول الإنتاج عندنا، واستبعدنا قاعتين قبل ما ندفع أي عربون."
+              }
+            },
+            {
+              "problem": {
+                "en": "Last-minute bookings usually come with high rates and strict cancellation terms.",
+                "ar": "الحجوزات المتأخرة عادةً تجي بأسعار عالية وشروط إلغاء صارمة."
+              },
+              "solution": {
+                "en": "We negotiated a lower rate, an extra setup day and flexible cancellation, then managed the contract end to end.",
+                "ar": "فاوضنا على سعر أقل ويوم تجهيز إضافي وإلغاء مرن، وتولّينا العقد من أوله لآخره."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "-18%",
+              "label": { "en": "venue cost against budget", "ar": "تكلفة المكان مقارنة بالميزانية" }
+            },
+            {
+              "value": "21",
+              "label": {
+                "en": "days from brief to signed contract",
+                "ar": "يوم من الطلب لتوقيع العقد"
+              }
+            },
+            {
+              "value": "0",
+              "label": { "en": "technical issues on show night", "ar": "مشاكل تقنية ليلة العرض" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "3d-design" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "blueprint" } } },
+          "title": {
+            "en": "Approving a sales centre in 3D, with zero rebuilds on site",
+            "ar": "اعتماد مركز مبيعات بتقنية 3D، وبدون أي إعادة بناء في الموقع"
+          },
+          "context": {
+            "en": "Client E, a real estate developer, was building a sales centre for a new project. Past fit-outs had run over budget because stakeholders only saw the space once it was built.",
+            "ar": "العميل هـ، مطوّر عقاري، كان يجهّز مركز مبيعات لمشروع جديد. تجهيزاته السابقة كانت تتجاوز الميزانية، لأن أصحاب القرار ما يشوفون المساحة إلا بعد ما تنبني."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Board members struggled to picture the space from flat drawings and mood boards.",
+                "ar": "أعضاء مجلس الإدارة ما قدروا يتخيّلون المساحة من المخططات ولوحات الإلهام."
+              },
+              "solution": {
+                "en": "We built a full 3D model and a video walkthrough, so every stakeholder reviewed the same space.",
+                "ar": "بنينا نموذج 3D كامل وفيديو جولة، عشان كل أصحاب القرار يراجعون نفس المساحة."
+              }
+            },
+            {
+              "problem": {
+                "en": "Late design changes on site had caused costly rework on earlier projects.",
+                "ar": "التعديلات المتأخرة في الموقع سبّبت إعادة شغل مكلفة في المشاريع السابقة."
+              },
+              "solution": {
+                "en": "We ran three review rounds in 3D and locked every change before a single material was ordered.",
+                "ar": "سوّينا ثلاث جولات مراجعة على نموذج 3D، وثبّتنا كل تعديل قبل ما نطلب أي خامة."
+              }
+            },
+            {
+              "problem": {
+                "en": "The model display, screens and lighting had to work together for buyer tours.",
+                "ar": "مجسّم المشروع والشاشات والإضاءة لازم تشتغل مع بعض في جولة المشترين."
+              },
+              "solution": {
+                "en": "We planned the buyer route in 3D, placing the project model, screens and lights along it.",
+                "ar": "خطّطنا مسار المشتري في نموذج 3D، ووزّعنا عليه مجسّم المشروع والشاشات والإضاءة."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "0",
+              "label": { "en": "rebuilds during fit-out", "ar": "إعادة بناء أثناء التجهيز" }
+            },
+            {
+              "value": "-15%",
+              "label": {
+                "en": "fit-out cost versus previous centre",
+                "ar": "تكلفة التجهيز مقارنة بالمركز السابق"
+              }
+            },
+            {
+              "value": "3",
+              "label": {
+                "en": "review rounds to final approval",
+                "ar": "جولات مراجعة حتى الاعتماد النهائي"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "booth-production" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "the-rider" } } },
+          "title": {
+            "en": "A motor show booth delivered early, with twice the test drive leads",
+            "ar": "جناح معرض سيارات تسلّم بدري، وضاعف طلبات تجربة القيادة"
+          },
+          "context": {
+            "en": "Client A, an automotive brand, was unveiling a new model at a regional motor show. Its previous booth had arrived with damaged panels and was still being finished when doors opened.",
+            "ar": "العميل أ، علامة سيارات، كان بيكشف عن موديل جديد في معرض سيارات إقليمي. جناحه السابق وصل بألواح متضرّرة، وكان الشغل عليه مستمر لين فتحت الأبواب."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "Glossy finishes had scratched in transit on the previous booth.",
+                "ar": "التشطيبات اللامعة في الجناح السابق انخدشت أثناء النقل."
+              },
+              "solution": {
+                "en": "We used protective wrapping, custom crates and numbered panels, and checked every surface on delivery.",
+                "ar": "استخدمنا تغليف حماية وصناديق مفصّلة وألواح مرقّمة، وفحصنا كل سطح عند الاستلام."
+              }
+            },
+            {
+              "problem": {
+                "en": "The car display needed a reinforced turntable and precise lighting to look right.",
+                "ar": "عرض السيارة يحتاج منصة دوّارة مدعّمة وإضاءة دقيقة عشان يطلع صح."
+              },
+              "solution": {
+                "en": "We built and load-tested the turntable in the workshop and tuned the lighting on a full test assembly.",
+                "ar": "صنّعنا المنصة الدوّارة واختبرنا تحمّلها في الورشة، وضبطنا الإضاءة خلال التركيب التجريبي الكامل."
+              }
+            },
+            {
+              "problem": {
+                "en": "The brand wanted to reuse the booth at two more regional shows.",
+                "ar": "العلامة كانت تبي تعيد استخدام الجناح في معرضين إقليميين ثانيين."
+              },
+              "solution": {
+                "en": "We designed the structure in modules that reconfigure for smaller spaces, and stored them between shows.",
+                "ar": "صمّمنا الهيكل بوحدات يتعاد ترتيبها للمساحات الأصغر، وخزّنّاها بين المعارض."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "2x",
+              "label": { "en": "test drive sign-ups", "ar": "تسجيلات تجربة القيادة" }
+            },
+            {
+              "value": "2",
+              "label": { "en": "days ahead of schedule", "ar": "يوم قبل الموعد المحدّد" }
+            },
+            {
+              "value": "-35%",
+              "label": { "en": "build cost for later shows", "ar": "تكلفة التصنيع للمعارض اللاحقة" }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "service_id": { "$ref": { "table": "services", "by": { "slug": "booth-installation" } } },
+          "portfolio_id": { "$ref": { "table": "portfolio", "by": { "slug": "kitchen-hours" } } },
+          "title": {
+            "en": "A food brand's booth, installed overnight and open on time",
+            "ar": "جناح علامة أغذية، تركّب في ليلة وحدة وافتتح في وقته"
+          },
+          "context": {
+            "en": "Client B, a food and beverage brand, was exhibiting at a major food trade show. Two days before build-up, the organizer moved its stand to a different hall with tighter access.",
+            "ar": "العميل ب، علامة أغذية ومشروبات، كان مشارك في معرض تجاري كبير للأغذية. وقبل التركيب بيومين، نقل المنظّم جناحه لقاعة ثانية مداخلها أضيق."
+          },
+          "problems": [
+            {
+              "problem": {
+                "en": "The new hall had a shorter build-up window and one shared loading bay.",
+                "ar": "القاعة الجديدة وقت التركيب فيها أقصر، ومنطقة التحميل وحدة ومشتركة."
+              },
+              "solution": {
+                "en": "We rebooked delivery slots, split the load into smaller trucks, and ran an overnight crew in two shifts.",
+                "ar": "أعدنا حجز مواعيد التوريد، وقسّمنا الحمولة على شاحنات أصغر، وشغّلنا فريق ليلي على ورديتين."
+              }
+            },
+            {
+              "problem": {
+                "en": "The live cooking area needed extra power and safety approval in the new hall.",
+                "ar": "ركن الطبخ المباشر يحتاج كهرباء إضافية وموافقة سلامة في القاعة الجديدة."
+              },
+              "solution": {
+                "en": "We resubmitted electrical and fire safety plans the same day and had approval before our crew arrived.",
+                "ar": "أعدنا تقديم مخططات الكهرباء والسلامة من الحريق في نفس اليوم، وأخذنا الموافقة قبل وصول فريقنا."
+              }
+            },
+            {
+              "problem": {
+                "en": "Samples and screens had to run nonstop across four busy show days.",
+                "ar": "العيّنات والشاشات لازم تشتغل بدون توقّف طوال أربعة أيام زحمة."
+              },
+              "solution": {
+                "en": "We kept a technician on the stand daily and fixed a failing fridge and screen within the hour.",
+                "ar": "خلّينا فنّي في الجناح كل يوم، وصلّح ثلاجة وشاشة تعطّلت خلال ساعة."
+              }
+            }
+          ],
+          "results": [
+            {
+              "value": "18",
+              "label": {
+                "en": "hours from first truck to handover",
+                "ar": "ساعة من أول شاحنة للتسليم"
+              }
+            },
+            {
+              "value": "0",
+              "label": { "en": "hours of downtime during show", "ar": "ساعات توقّف خلال المعرض" }
+            },
+            {
+              "value": "+40%",
+              "label": {
+                "en": "stand visitors versus last year",
+                "ar": "زوار الجناح مقارنة بالسنة الماضية"
+              }
+            }
+          ],
+          "status": "published",
+          "is_placeholder": true,
+          "__placeholder": true
+        }
+      ]
+    }
+  ]
+}

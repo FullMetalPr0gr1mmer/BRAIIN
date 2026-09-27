@@ -929,7 +929,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "videography"
+                "slug": "photo-video"
               }
             }
           },
@@ -986,7 +986,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "photography"
+                "slug": "photo-video"
               }
             }
           },
@@ -1024,7 +1024,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "branding"
+                "slug": "logo"
               }
             }
           },
@@ -1062,7 +1062,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "music"
+                "slug": "music-vo-sfx"
               }
             }
           },
@@ -1081,7 +1081,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "photography"
+                "slug": "photo-video"
               }
             }
           },
@@ -1100,7 +1100,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "event-planning"
+                "slug": "venue-booking"
               }
             }
           },
@@ -1157,7 +1157,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "montage"
+                "slug": "video-editing"
               }
             }
           },
@@ -1176,7 +1176,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "photography"
+                "slug": "photo-video"
               }
             }
           },
@@ -1195,7 +1195,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "web-development"
+                "slug": "hosting"
               }
             }
           },
@@ -1214,7 +1214,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "branding"
+                "slug": "content-strategy"
               }
             }
           },
@@ -1252,7 +1252,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "music"
+                "slug": "music-vo-sfx"
               }
             }
           },
@@ -1271,7 +1271,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "animations"
+                "slug": "animation"
               }
             }
           },
@@ -1290,7 +1290,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "branding"
+                "slug": "business-cards"
               }
             }
           },
@@ -1309,7 +1309,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "merchandise"
+                "slug": "3d-design"
               }
             }
           },
@@ -1328,7 +1328,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "videography"
+                "slug": "photo-video"
               }
             }
           },
@@ -1347,7 +1347,7 @@
             "$ref": {
               "table": "services",
               "by": {
-                "slug": "montage"
+                "slug": "video-editing"
               }
             }
           },

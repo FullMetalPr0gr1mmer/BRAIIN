@@ -5,150 +5,2357 @@
       "conflict": ["tenant_id", "slug"],
       "rows": [
         {
-          "slug": "branding",
-          "title": { "en": "Branding", "ar": "الهوية البصرية" },
+          "slug": "logo",
+          "title": { "en": "Logo Design", "ar": "تصميم الشعار" },
           "blurb": {
-            "en": "Identity systems that make brands unmistakable.",
-            "ar": "أنظمة هوية تجعل العلامة لا تُخطئها العين."
+            "en": "A mark that works on a sign, a favicon, and a stamp, and still feels like you.",
+            "ar": "شعار يشتغل على اللوحة والأيقونة الصغيرة والختم، ويبقى يشبهك في كل مكان."
           },
+          "intro": {
+            "en": "A logo is a promise you repeat thousands of times, so we make it count.",
+            "ar": "الشعار وعد تكرّره آلاف المرات، فنحرص إنه يستاهل."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We start by listening: who you serve, who you compete with, and what you want people to feel. Then we sketch widely and bring you two or three routes, each one a direction we would be happy to build. Once you pick, we refine the mark, test it at every size and on real surfaces, and hand over clean files your team can use."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نبدأ بالاستماع: مين جمهورك، ومين منافسينك، ووش تبي الناس تحس لما تشوفك. بعدها نرسم بتوسّع ونقدّم لك مسارين أو ثلاثة، وكل واحد منها اتجاه نتحمّس نبنيه. لما تختار، نصقل الشعار ونختبره بكل المقاسات وعلى أسطح حقيقية، ونسلّمك ملفات نظيفة يقدر فريقك يستخدمها."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We start by listening: who you serve, who you compete with, and what you want people to feel. Then we sketch widely and bring you two or three routes, each one a direction we would be happy to build. Once you pick, we refine the mark, test it at every size and on real surfaces, and hand over clean files your team can use.</p>",
+            "ar": "<p>نبدأ بالاستماع: مين جمهورك، ومين منافسينك، ووش تبي الناس تحس لما تشوفك. بعدها نرسم بتوسّع ونقدّم لك مسارين أو ثلاثة، وكل واحد منها اتجاه نتحمّس نبنيه. لما تختار، نصقل الشعار ونختبره بكل المقاسات وعلى أسطح حقيقية، ونسلّمك ملفات نظيفة يقدر فريقك يستخدمها.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Arabic and Latin together", "ar": "العربي واللاتيني معًا" },
+              "text": {
+                "en": "We draw the Arabic and English versions side by side, so neither one looks like an afterthought.",
+                "ar": "نرسم النسخة العربية والإنجليزية جنب بعض، عشان ما تبان وحدة منهم كأنها إضافة متأخرة."
+              }
+            },
+            {
+              "title": { "en": "Tested at real sizes", "ar": "مختبر بمقاسات حقيقية" },
+              "text": {
+                "en": "Every route is checked as a 16 pixel icon, an embroidered patch, and a building sign before you see it.",
+                "ar": "نجرّب كل مسار كأيقونة 16 بكسل وكتطريز على قماش وكلوحة على مبنى، قبل ما يوصلك."
+              }
+            },
+            {
+              "title": { "en": "Files that just work", "ar": "ملفات جاهزة للاستخدام" },
+              "text": {
+                "en": "You get every format, color version, and a one page usage sheet, named and organized so nobody hunts for files.",
+                "ar": "تستلم كل الصيغ ونسخ الألوان وصفحة استخدام مختصرة، مسمّاة ومرتّبة عشان ما أحد يدوّر على ملف."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Two or three routes", "ar": "مساران أو ثلاثة للاختيار" },
+            { "en": "Bilingual primary logo", "ar": "شعار رئيسي بلغتين" },
+            { "en": "Secondary marks and icon", "ar": "شعارات ثانوية وأيقونة" },
+            { "en": "Full file package", "ar": "حزمة ملفات كاملة" },
+            { "en": "One page usage sheet", "ar": "دليل استخدام من صفحة" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "branding" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000101",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 5.9,
+          "preview_end_s": 6.9,
           "status": "published",
           "is_teaser": false,
-          "sort_order": 1
+          "sort_order": 10
         },
         {
-          "slug": "animations",
-          "title": { "en": "Animation", "ar": "الرسوم المتحركة" },
+          "slug": "business-cards",
+          "title": { "en": "Business Cards", "ar": "بطاقات العمل" },
           "blurb": {
-            "en": "Characters and stories brought to life.",
-            "ar": "شخصيات وقصص تنبض بالحياة."
+            "en": "Cards people keep in their wallet, with paper, print, and details chosen so they feel as good as they look.",
+            "ar": "بطاقات يحتفظ فيها الناس، بورق وطباعة وتفاصيل مختارة عشان يكون ملمسها حلو مثل شكلها."
           },
+          "intro": {
+            "en": "A business card is often the first thing of yours someone holds.",
+            "ar": "بطاقة العمل غالبًا أول شي من طرفك يمسكه أحد بيده."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We design the front and back in Arabic and English, set the layout for every team member, and choose paper, finish, and print method with you. We handle the printer directly, check proofs, and sit in on the press check when it matters. You get cards that arrive right, plus editable files for new hires."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نصمّم الوجه والخلف بالعربي والإنجليزي، ونضبط التصميم لكل شخص في فريقك، ونختار معك الورق والتشطيب وطريقة الطباعة. نتعامل مع المطبعة مباشرة ونراجع البروفات، ونحضر التجربة على المكينة لما يكون الموضوع يستاهل. توصلك بطاقات مضبوطة، ومعها ملفات قابلة للتعديل للموظفين الجدد."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We design the front and back in Arabic and English, set the layout for every team member, and choose paper, finish, and print method with you. We handle the printer directly, check proofs, and sit in on the press check when it matters. You get cards that arrive right, plus editable files for new hires.</p>",
+            "ar": "<p>نصمّم الوجه والخلف بالعربي والإنجليزي، ونضبط التصميم لكل شخص في فريقك، ونختار معك الورق والتشطيب وطريقة الطباعة. نتعامل مع المطبعة مباشرة ونراجع البروفات، ونحضر التجربة على المكينة لما يكون الموضوع يستاهل. توصلك بطاقات مضبوطة، ومعها ملفات قابلة للتعديل للموظفين الجدد.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "We manage the printer", "ar": "نتولّى المطبعة" },
+              "text": {
+                "en": "We brief the print house, approve proofs, and catch color or trim issues before a single card is cut.",
+                "ar": "نشرح للمطبعة المطلوب ونعتمد البروفات، ونلقط أي خلل في اللون أو القص قبل ما تُقص أي بطاقة."
+              }
+            },
+            {
+              "title": { "en": "Bilingual without the clutter", "ar": "لغتين بدون زحمة" },
+              "text": {
+                "en": "Arabic on one side, English on the other, or both together, laid out so names and numbers read cleanly.",
+                "ar": "العربي على وجه والإنجليزي على الثاني، أو الاثنين مع بعض، بترتيب يخلّي الأسماء والأرقام تنقرأ بوضوح."
+              }
+            },
+            {
+              "title": { "en": "Ready for new hires", "ar": "جاهزة للموظفين الجدد" },
+              "text": {
+                "en": "We set up a template so your team can add a new person in minutes without breaking the layout.",
+                "ar": "نجهّز قالبًا يقدر فريقك يضيف عليه أي موظف جديد في دقائق بدون ما يخرب التصميم."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Bilingual card design", "ar": "تصميم بطاقة بلغتين" },
+            { "en": "Paper and finish selection", "ar": "اختيار الورق والتشطيب" },
+            { "en": "Print files per person", "ar": "ملفات طباعة لكل شخص" },
+            { "en": "Printer liaison and proofing", "ar": "متابعة المطبعة والبروفات" },
+            { "en": "Editable template for new staff", "ar": "قالب قابل للتعديل للموظفين الجدد" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "branding" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000102",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 6.9,
+          "preview_end_s": 7.9,
           "status": "published",
           "is_teaser": false,
-          "sort_order": 2
+          "sort_order": 20
+        },
+        {
+          "slug": "letterhead",
+          "title": { "en": "Letterhead", "ar": "الورق الرسمي" },
+          "blurb": {
+            "en": "Letterhead that looks right printed, in a PDF, or typed into Word by anyone on your team.",
+            "ar": "ورق رسمي يطلع مضبوط مطبوعًا أو PDF أو مكتوبًا في Word من أي شخص في فريقك."
+          },
+          "intro": {
+            "en": "The letters you send carry your name long after the meeting ends.",
+            "ar": "خطاباتك تحمل اسمك حتى بعد ما ينتهي الاجتماع بوقت طويل."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We design letterhead that works in both directions, with Arabic set right to left and English left to right, and margins that suit each. Then we build it where your team writes: Word and Google Docs templates with locked styles, plus a print version. We test it with real letters, not lorem ipsum, before handing it over."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نصمّم ورقًا رسميًا يشتغل بالاتجاهين، العربي من اليمين لليسار والإنجليزي من اليسار لليمين، بهوامش تناسب كل لغة. بعدها نبنيه في المكان اللي يكتب فيه فريقك: قوالب Word وGoogle Docs بأنماط مقفلة، ونسخة للطباعة. ونجرّبه على خطابات حقيقية، مو نص تجريبي، قبل ما نسلّمه."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We design letterhead that works in both directions, with Arabic set right to left and English left to right, and margins that suit each. Then we build it where your team writes: Word and Google Docs templates with locked styles, plus a print version. We test it with real letters, not lorem ipsum, before handing it over.</p>",
+            "ar": "<p>نصمّم ورقًا رسميًا يشتغل بالاتجاهين، العربي من اليمين لليسار والإنجليزي من اليسار لليمين، بهوامش تناسب كل لغة. بعدها نبنيه في المكان اللي يكتب فيه فريقك: قوالب Word وGoogle Docs بأنماط مقفلة، ونسخة للطباعة. ونجرّبه على خطابات حقيقية، مو نص تجريبي، قبل ما نسلّمه.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Built into Word properly", "ar": "مبني في Word صح" },
+              "text": {
+                "en": "Styles, headers, and footers are set so nobody drags logos around or breaks the layout with a paste.",
+                "ar": "الأنماط والترويسة والتذييل مضبوطة عشان ما أحد يسحب الشعار يمين ويسار أو يخرب التنسيق بلصقة."
+              }
+            },
+            {
+              "title": { "en": "Right to left, done right", "ar": "من اليمين لليسار بإتقان" },
+              "text": {
+                "en": "Arabic letters get their own layout and typography, not a mirrored copy of the English one.",
+                "ar": "الخطابات العربية لها تصميمها وخطوطها الخاصة، مو نسخة معكوسة من الإنجليزية."
+              }
+            },
+            {
+              "title": { "en": "Print and digital match", "ar": "المطبوع والرقمي متطابقين" },
+              "text": {
+                "en": "The PDF you email and the sheet you print use the same file, so they never drift apart.",
+                "ar": "ملف PDF اللي ترسله بالإيميل والورقة اللي تطبعها من نفس الملف، فما يختلفون عن بعض أبدًا."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Arabic and English letterhead", "ar": "ورق رسمي عربي وإنجليزي" },
+            { "en": "Word and Google Docs templates", "ar": "قوالب Word وGoogle Docs" },
+            { "en": "Continuation page design", "ar": "تصميم صفحة المتابعة" },
+            { "en": "Print files and paper spec", "ar": "ملفات طباعة ومواصفات الورق" },
+            { "en": "Short how-to guide", "ar": "دليل استخدام مختصر" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "branding" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000103",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 9.4,
+          "preview_end_s": 10.4,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 30
+        },
+        {
+          "slug": "brand-guidelines",
+          "title": { "en": "Brand Guidelines", "ar": "دليل الهوية" },
+          "blurb": {
+            "en": "A clear rulebook your team and partners can follow, so the brand looks the same wherever it shows up.",
+            "ar": "دليل واضح يمشي عليه فريقك وشركاؤك، عشان تطلع هويتك بنفس الشكل وين ما ظهرت."
+          },
+          "intro": {
+            "en": "A brand stays consistent only when the rules are easy to find and follow.",
+            "ar": "الهوية تبقى ثابتة بس لما تكون قواعدها سهلة توصل لها وتطبّقها."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We document how your logo, colors, type, photography, and tone of voice work, with real examples of what to do and what to avoid. We write it for the people who will use it: designers, agencies, and the marketing coordinator making a quick post. It ships as a PDF and a web page, and we update it as the brand grows."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نوثّق كيف يشتغل شعارك وألوانك وخطوطك وتصويرك ونبرة صوتك، بأمثلة حقيقية لوش تسوي ووش تتجنّب. نكتبه للناس اللي بيستخدمونه: المصممين والوكالات، ومنسّق التسويق اللي يسوي منشور سريع. نسلّمه كملف PDF وصفحة ويب، ونحدّثه مع نمو علامتك."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We document how your logo, colors, type, photography, and tone of voice work, with real examples of what to do and what to avoid. We write it for the people who will use it: designers, agencies, and the marketing coordinator making a quick post. It ships as a PDF and a web page, and we update it as the brand grows.</p>",
+            "ar": "<p>نوثّق كيف يشتغل شعارك وألوانك وخطوطك وتصويرك ونبرة صوتك، بأمثلة حقيقية لوش تسوي ووش تتجنّب. نكتبه للناس اللي بيستخدمونه: المصممين والوكالات، ومنسّق التسويق اللي يسوي منشور سريع. نسلّمه كملف PDF وصفحة ويب، ونحدّثه مع نمو علامتك.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Examples, not just rules", "ar": "أمثلة، مو بس قواعد" },
+              "text": {
+                "en": "Every rule sits next to a real layout, so people see the right answer instead of guessing it.",
+                "ar": "كل قاعدة جنبها تصميم حقيقي، عشان الناس يشوفون الجواب الصح بدل ما يخمّنونه."
+              }
+            },
+            {
+              "title": { "en": "Arabic rules written properly", "ar": "قواعد عربية مكتوبة صح" },
+              "text": {
+                "en": "Arabic type pairing, numerals, and line spacing get their own pages, because they rarely follow the English rules.",
+                "ar": "تنسيق الخطوط العربية والأرقام والمسافات بين الأسطر لها صفحات خاصة، لأنها نادرًا ما تتبع القواعد الإنجليزية."
+              }
+            },
+            {
+              "title": { "en": "A living web version", "ar": "نسخة ويب محدّثة" },
+              "text": {
+                "en": "Alongside the PDF, you get a web page your partners can bookmark, and we keep it current.",
+                "ar": "مع ملف PDF، تستلم صفحة ويب يقدر شركاؤك يحفظونها عندهم، ونحن نبقيها محدّثة."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Logo and color rules", "ar": "قواعد الشعار والألوان" },
+            { "en": "Typography in both scripts", "ar": "الخطوط باللغتين" },
+            { "en": "Photography and tone guide", "ar": "دليل التصوير ونبرة الصوت" },
+            { "en": "Do and don't examples", "ar": "أمثلة للصح والغلط" },
+            { "en": "PDF and web versions", "ar": "نسخة PDF ونسخة ويب" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "branding" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000104",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 7.9,
+          "preview_end_s": 9.4,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 40
+        },
+        {
+          "slug": "stationery",
+          "title": { "en": "Stationery", "ar": "القرطاسية" },
+          "blurb": {
+            "en": "Envelopes, folders, notepads, invitations, and tickets that belong to the same brand and arrive on time.",
+            "ar": "ظروف وملفات ودفاتر ودعوات وتذاكر كلها من نفس الهوية، وتوصل في وقتها."
+          },
+          "intro": {
+            "en": "Small printed pieces add up to how people remember you.",
+            "ar": "القطع المطبوعة الصغيرة تتجمّع وتصنع الصورة اللي يتذكّرك فيها الناس."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We design the full set of printed pieces around your identity, from envelopes and folders to notepads, stickers, and event invitations. We plan it as one system, so sizes, papers, and colors work together and print runs can be combined to save cost. We manage suppliers and deliveries, and hand over files for every reorder."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نصمّم كل المطبوعات حول هويتك، من الظروف والملفات إلى الدفاتر والملصقات ودعوات الفعاليات. نخطّطها كنظام واحد، عشان المقاسات والورق والألوان تتناسق مع بعض، ونقدر ندمج دفعات الطباعة ونوفّر في التكلفة. نتابع الموردين والتوريد، ونسلّمك ملفات جاهزة لأي إعادة طلب."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We design the full set of printed pieces around your identity, from envelopes and folders to notepads, stickers, and event invitations. We plan it as one system, so sizes, papers, and colors work together and print runs can be combined to save cost. We manage suppliers and deliveries, and hand over files for every reorder.</p>",
+            "ar": "<p>نصمّم كل المطبوعات حول هويتك، من الظروف والملفات إلى الدفاتر والملصقات ودعوات الفعاليات. نخطّطها كنظام واحد، عشان المقاسات والورق والألوان تتناسق مع بعض، ونقدر ندمج دفعات الطباعة ونوفّر في التكلفة. نتابع الموردين والتوريد، ونسلّمك ملفات جاهزة لأي إعادة طلب.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "One system, fewer print runs", "ar": "نظام واحد وطباعة أقل" },
+              "text": {
+                "en": "We group pieces by paper and size so they print together, which cuts setup costs and color mismatches.",
+                "ar": "نجمع القطع حسب الورق والمقاس عشان تنطبع مع بعض، وهذا يقلّل تكاليف التجهيز واختلاف الألوان."
+              }
+            },
+            {
+              "title": { "en": "Suppliers handled for you", "ar": "نتولّى الموردين عنك" },
+              "text": {
+                "en": "We deal with printers, envelope makers, and finishers, and you get one delivery date and one point of contact.",
+                "ar": "نتعامل مع المطابع ومصنّعي الظروف ومحلات التشطيب، وأنت عندك موعد تسليم واحد وشخص واحد تتواصل معه."
+              }
+            },
+            {
+              "title": { "en": "Easy reorders", "ar": "إعادة طلب بسهولة" },
+              "text": {
+                "en": "Every piece comes with a spec sheet, so reprinting next year takes an email, not a new project.",
+                "ar": "كل قطعة معها ورقة مواصفات، فإعادة طباعتها السنة الجاية تحتاج إيميل، مو مشروع جديد."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Envelopes and folders", "ar": "ظروف وملفات" },
+            { "en": "Notepads and stickers", "ar": "دفاتر وملصقات" },
+            { "en": "Invitations and tickets", "ar": "دعوات وتذاكر" },
+            { "en": "Supplier management", "ar": "إدارة الموردين" },
+            { "en": "Spec sheets for reorders", "ar": "مواصفات لإعادة الطلب" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "branding" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000102",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 6.9,
+          "preview_end_s": 7.9,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 50
+        },
+        {
+          "slug": "packaging",
+          "title": { "en": "Packaging", "ar": "تصميم التغليف" },
+          "blurb": {
+            "en": "Packaging that stands out on a crowded shelf, survives shipping, and tells people what is inside at a glance.",
+            "ar": "تغليف يبرز على الرف المزدحم، ويتحمّل الشحن، ويقول للناس وش داخله من أول نظرة."
+          },
+          "intro": {
+            "en": "On the shelf, your pack has about three seconds to make its case.",
+            "ar": "على الرف، عبوتك عندها تقريبًا ثلاث ثواني تقنع فيها."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We design the structure and the graphics together, starting from where the product is sold and how it is shipped. We work within labeling rules for Arabic and English, mock up real samples, and test them on a shelf next to competitors. Then we prepare dielines and print files and work with your packaging supplier through production."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نصمّم شكل العبوة ورسوماتها مع بعض، ونبدأ من مكان بيع المنتج وطريقة شحنه. نلتزم بمتطلبات الملصقات بالعربي والإنجليزي، ونسوي عيّنات حقيقية ونجرّبها على رف جنب المنافسين. بعدها نجهّز قوالب القص وملفات الطباعة، ونشتغل مع مورّد التغليف حتى نهاية الإنتاج."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We design the structure and the graphics together, starting from where the product is sold and how it is shipped. We work within labeling rules for Arabic and English, mock up real samples, and test them on a shelf next to competitors. Then we prepare dielines and print files and work with your packaging supplier through production.</p>",
+            "ar": "<p>نصمّم شكل العبوة ورسوماتها مع بعض، ونبدأ من مكان بيع المنتج وطريقة شحنه. نلتزم بمتطلبات الملصقات بالعربي والإنجليزي، ونسوي عيّنات حقيقية ونجرّبها على رف جنب المنافسين. بعدها نجهّز قوالب القص وملفات الطباعة، ونشتغل مع مورّد التغليف حتى نهاية الإنتاج.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Tested on a real shelf", "ar": "مجرّب على رف حقيقي" },
+              "text": {
+                "en": "We print samples and place them beside competitors, so decisions come from what shoppers see, not a screen.",
+                "ar": "نطبع عيّنات ونحطّها جنب المنافسين، عشان القرار يكون مبني على اللي يشوفه المتسوّق، مو الشاشة."
+              }
+            },
+            {
+              "title": { "en": "Labeling rules built in", "ar": "متطلبات الملصق من البداية" },
+              "text": {
+                "en": "Mandatory Arabic and English information is planned into the layout from day one, not squeezed in at the end.",
+                "ar": "المعلومات الإلزامية بالعربي والإنجليزي نخطّط لها في التصميم من أول يوم، مو نحشرها في الآخر."
+              }
+            },
+            {
+              "title": { "en": "One family, many flavors", "ar": "عائلة وحدة بنكهات كثيرة" },
+              "text": {
+                "en": "We design a system that stretches across sizes and variants, so adding a new flavor takes days, not months.",
+                "ar": "نصمّم نظامًا يمتد على كل المقاسات والأصناف، فإضافة نكهة جديدة تاخذ أيام، مو شهور."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Structure and graphic design", "ar": "تصميم الهيكل والرسومات" },
+            { "en": "Printed shelf samples", "ar": "عيّنات مطبوعة للرف" },
+            { "en": "Dielines and print files", "ar": "قوالب قص وملفات طباعة" },
+            { "en": "Variant system for range", "ar": "نظام للأصناف والمقاسات" },
+            { "en": "Supplier and press support", "ar": "متابعة المورّد والطباعة" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "branding" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000105",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 4.9,
+          "preview_end_s": 5.9,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 60
+        },
+        {
+          "slug": "powerpoint-templates",
+          "title": { "en": "PowerPoint Templates", "ar": "قوالب PowerPoint" },
+          "blurb": {
+            "en": "Slide templates your team can fill in quickly, with layouts that keep every deck on brand and easy to read.",
+            "ar": "قوالب شرائح يعبّيها فريقك بسرعة، بتصاميم تخلّي كل عرض على الهوية وسهل القراءة."
+          },
+          "intro": {
+            "en": "Your people present every week, so the slides should work as hard as they do.",
+            "ar": "فريقك يقدّم عروض كل أسبوع، فالشرائح لازم تشتغل بنفس جهدهم."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We look at the decks your team already makes, then design master layouts for what they present most: updates, proposals, reports, and data. Everything is built into the slide master, so fonts, colors, and placeholders stay put. Arabic layouts mirror properly. We finish with a short training session and a sample deck to copy from."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نطّلع على العروض اللي يسويها فريقك حاليًا، وبعدها نصمّم تخطيطات أساسية لأكثر شي يقدّمونه: التحديثات والعروض والتقارير والبيانات. كل شي مبني في الشريحة الرئيسية، فالخطوط والألوان والعناصر تبقى في مكانها. والتخطيطات العربية تنعكس بشكل صحيح. ونختم بجلسة تدريب قصيرة وعرض نموذجي ينسخون منه."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We look at the decks your team already makes, then design master layouts for what they present most: updates, proposals, reports, and data. Everything is built into the slide master, so fonts, colors, and placeholders stay put. Arabic layouts mirror properly. We finish with a short training session and a sample deck to copy from.</p>",
+            "ar": "<p>نطّلع على العروض اللي يسويها فريقك حاليًا، وبعدها نصمّم تخطيطات أساسية لأكثر شي يقدّمونه: التحديثات والعروض والتقارير والبيانات. كل شي مبني في الشريحة الرئيسية، فالخطوط والألوان والعناصر تبقى في مكانها. والتخطيطات العربية تنعكس بشكل صحيح. ونختم بجلسة تدريب قصيرة وعرض نموذجي ينسخون منه.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Built on real decks", "ar": "مبنية على عروض حقيقية" },
+              "text": {
+                "en": "We design from the slides your team already makes, so the layouts match what they present.",
+                "ar": "نصمّم انطلاقًا من الشرائح اللي يسويها فريقك أصلًا، عشان التخطيطات تناسب اللي يقدّمونه فعلًا."
+              }
+            },
+            {
+              "title": { "en": "Proper Arabic slides", "ar": "شرائح عربية مضبوطة" },
+              "text": {
+                "en": "Right to left masters with correct text direction, bullet alignment, and charts that read the right way.",
+                "ar": "شرائح رئيسية من اليمين لليسار باتجاه نص صحيح ومحاذاة نقاط سليمة ورسوم بيانية تنقرأ بالاتجاه الصح."
+              }
+            },
+            {
+              "title": { "en": "Your team trained", "ar": "فريقك مدرّب" },
+              "text": {
+                "en": "A 45 minute session shows people how to use the layouts, so the template gets used, not ignored.",
+                "ar": "جلسة مدتها 45 دقيقة توضّح للناس كيف يستخدمون التخطيطات، عشان القالب ينستخدم فعلًا، مو ينهمل."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Master slide template", "ar": "قالب شرائح رئيسي" },
+            { "en": "Arabic and English versions", "ar": "نسخة عربية وإنجليزية" },
+            { "en": "Chart and table styles", "ar": "أنماط الرسوم والجداول" },
+            { "en": "Icon and image library", "ar": "مكتبة أيقونات وصور" },
+            { "en": "Team training session", "ar": "جلسة تدريب للفريق" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "branding" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000104",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 7.9,
+          "preview_end_s": 9.4,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 70
+        },
+        {
+          "slug": "company-profile",
+          "title": { "en": "Company Profile", "ar": "الملف التعريفي" },
+          "blurb": {
+            "en": "A company profile that explains who you are, what you have built, and why the next partner should trust you.",
+            "ar": "ملف تعريفي يوضّح مين أنت، ووش بنيت، وليش الشريك الجاي لازم يثق فيك."
+          },
+          "intro": {
+            "en": "Your profile often reaches the decision maker before you do.",
+            "ar": "ملفك التعريفي غالبًا يوصل لصاحب القرار قبلك."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We write and design the profile together, so the story and the layout support each other. We interview your leadership, gather the facts that matter, and shape them into a clear structure in Arabic and English. Then we design it for print and screen, with photography and charts where they help, and a short version for email."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نكتب الملف ونصمّمه مع بعض، عشان القصة والتصميم يخدمون بعض. نقابل إدارتك، ونجمع الحقائق المهمة، ونرتّبها في هيكل واضح بالعربي والإنجليزي. بعدها نصمّمه للطباعة والشاشة، مع صور ورسوم بيانية وين ما تفيد، ونسخة مختصرة للإيميل."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We write and design the profile together, so the story and the layout support each other. We interview your leadership, gather the facts that matter, and shape them into a clear structure in Arabic and English. Then we design it for print and screen, with photography and charts where they help, and a short version for email.</p>",
+            "ar": "<p>نكتب الملف ونصمّمه مع بعض، عشان القصة والتصميم يخدمون بعض. نقابل إدارتك، ونجمع الحقائق المهمة، ونرتّبها في هيكل واضح بالعربي والإنجليزي. بعدها نصمّمه للطباعة والشاشة، مع صور ورسوم بيانية وين ما تفيد، ونسخة مختصرة للإيميل.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Written in house", "ar": "كتابة من فريقنا" },
+              "text": {
+                "en": "Our writers draft the Arabic and English side by side, so both read naturally and say the same thing.",
+                "ar": "كتّابنا يكتبون النص العربي والإنجليزي جنب بعض، عشان النصين يكونون طبيعيين ويقولون نفس الكلام."
+              }
+            },
+            {
+              "title": { "en": "Facts before adjectives", "ar": "حقائق قبل الأوصاف" },
+              "text": {
+                "en": "We lead with projects, numbers, and names of sectors served, because evidence persuades more than claims.",
+                "ar": "نبدأ بالمشاريع والأرقام والقطاعات اللي خدمتها، لأن الدليل يقنع أكثر من الادعاء."
+              }
+            },
+            {
+              "title": { "en": "Print, screen, and email", "ar": "مطبوع وشاشة وإيميل" },
+              "text": {
+                "en": "You get a printed edition, an interactive PDF, and a short version light enough to attach to any email.",
+                "ar": "تستلم نسخة مطبوعة، وملف PDF تفاعلي، ونسخة مختصرة خفيفة تقدر ترفقها بأي إيميل."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Leadership interviews", "ar": "مقابلات مع الإدارة" },
+            { "en": "Bilingual copywriting", "ar": "كتابة المحتوى بلغتين" },
+            { "en": "Designed print edition", "ar": "نسخة مطبوعة مصمّمة" },
+            { "en": "Interactive PDF", "ar": "ملف PDF تفاعلي" },
+            { "en": "Short email version", "ar": "نسخة مختصرة للإيميل" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "branding" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000104",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 7.9,
+          "preview_end_s": 9.4,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 80
         },
         {
           "slug": "motion-graphics",
           "title": { "en": "Motion Graphics", "ar": "الموشن جرافيك" },
           "blurb": {
-            "en": "Design in motion, for screens of every size.",
-            "ar": "تصميم متحرّك لكل مقاس شاشة."
+            "en": "Type, shapes and data that move with purpose, built to your brand system and ready for every screen.",
+            "ar": "خطوط وأشكال وبيانات تتحرك لسبب واضح، مبنية على هوية علامتك وجاهزة لكل شاشة."
           },
+          "intro": {
+            "en": "Motion is how your brand behaves, not just how it looks.",
+            "ar": "الحركة تبيّن كيف تتصرّف علامتك، مو بس كيف تبدو قدّام الناس."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We start from your identity and write motion rules first: timing, easing, how the logo enters and leaves, how text builds. Then we design the pieces, from social cutdowns to explainers and screen graphics. Every file ships as editable templates, so your team can make the next ten without calling us."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نبدأ من هويتك ونكتب قواعد الحركة أولًا: التوقيت، والتسارع، وكيف يدخل الشعار ويطلع، وكيف يتركّب النص. بعدها نصمّم القطع، من مقاطع السوشال إلى الفيديوهات التوضيحية وجرافيكس الشاشات. وكل ملف يوصلك كقالب قابل للتعديل، عشان فريقك يسوي العشرة الجاية بدون ما يرجع لنا."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We start from your identity and write motion rules first: timing, easing, how the logo enters and leaves, how text builds. Then we design the pieces, from social cutdowns to explainers and screen graphics. Every file ships as editable templates, so your team can make the next ten without calling us.</p>",
+            "ar": "<p>نبدأ من هويتك ونكتب قواعد الحركة أولًا: التوقيت، والتسارع، وكيف يدخل الشعار ويطلع، وكيف يتركّب النص. بعدها نصمّم القطع، من مقاطع السوشال إلى الفيديوهات التوضيحية وجرافيكس الشاشات. وكل ملف يوصلك كقالب قابل للتعديل، عشان فريقك يسوي العشرة الجاية بدون ما يرجع لنا.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Rules before frames", "ar": "القواعد قبل الإطارات" },
+              "text": {
+                "en": "A written motion guide means every animation, from any designer, feels like it came from the same hand.",
+                "ar": "دليل حركة مكتوب يخلّي كل أنيميشن، مهما كان المصمم، يبان كأنه طالع من نفس اليد."
+              }
+            },
+            {
+              "title": { "en": "Arabic type that moves right", "ar": "حرف عربي يتحرك صح" },
+              "text": {
+                "en": "We animate Arabic letterforms with their own logic, right to left and connected, not as a mirrored copy of English.",
+                "ar": "نحرّك الحرف العربي بمنطقه الخاص، من اليمين لليسار ومتصل، مو كنسخة معكوسة من الإنجليزي."
+              }
+            },
+            {
+              "title": { "en": "Templates your team owns", "ar": "قوالب يملكها فريقك" },
+              "text": {
+                "en": "Editable After Effects and Premiere templates with locked brand rules, so quick updates stay on brand without us.",
+                "ar": "قوالب After Effects وPremiere قابلة للتعديل وقواعد الهوية فيها مقفلة، عشان التحديثات السريعة تظل على الهوية بدوننا."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Motion identity guide", "ar": "دليل هوية الحركة" },
+            { "en": "Animated logo and stings", "ar": "شعار متحرك وفواصل قصيرة" },
+            { "en": "Social and screen graphics", "ar": "جرافيكس للسوشال والشاشات" },
+            { "en": "Explainer videos", "ar": "فيديوهات توضيحية" },
+            { "en": "Editable project templates", "ar": "قوالب مشاريع قابلة للتعديل" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "production" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000106",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 12.3,
+          "preview_end_s": 13,
           "status": "published",
           "is_teaser": false,
-          "sort_order": 3
+          "sort_order": 90
         },
         {
-          "slug": "videography",
-          "title": { "en": "Videography", "ar": "الإنتاج المرئي" },
+          "slug": "animation",
+          "title": { "en": "Animation", "ar": "الأنيميشن" },
           "blurb": {
-            "en": "Cinematic production, end to end.",
-            "ar": "إنتاج سينمائي من الفكرة إلى التسليم."
+            "en": "Characters, worlds and products brought to life in 2D and 3D, when a camera cannot tell the story.",
+            "ar": "شخصيات وعوالم ومنتجات تنبض بالحياة بالـ 2D والـ 3D، لما الكاميرا ما تقدر تحكي القصة."
           },
+          "intro": {
+            "en": "Animation lets you show what does not exist yet, or what no camera can reach.",
+            "ar": "الأنيميشن يخليك تعرض اللي لسه ما صار موجود، أو اللي ما توصله أي كاميرا."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We write the script, then board every shot before anyone animates a frame. You approve a rough animatic with temp sound, so timing and story are settled early. Then we move to style frames, full animation, lighting for 3D and final sound. Fewer surprises late, and changes happen when they are still cheap."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نكتب السيناريو، وبعدها نرسم ستوري بورد لكل لقطة قبل ما نحرّك أي إطار. توافق على أنيماتيك مبدئي بصوت مؤقت، فيتثبت التوقيت والقصة من بدري. بعدها ننتقل لإطارات الأسلوب، ثم التحريك الكامل، والإضاءة للـ 3D، والصوت النهائي. مفاجآت أقل في الآخر، والتعديلات تصير وهي لسه رخيصة."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We write the script, then board every shot before anyone animates a frame. You approve a rough animatic with temp sound, so timing and story are settled early. Then we move to style frames, full animation, lighting for 3D and final sound. Fewer surprises late, and changes happen when they are still cheap.</p>",
+            "ar": "<p>نكتب السيناريو، وبعدها نرسم ستوري بورد لكل لقطة قبل ما نحرّك أي إطار. توافق على أنيماتيك مبدئي بصوت مؤقت، فيتثبت التوقيت والقصة من بدري. بعدها ننتقل لإطارات الأسلوب، ثم التحريك الكامل، والإضاءة للـ 3D، والصوت النهائي. مفاجآت أقل في الآخر، والتعديلات تصير وهي لسه رخيصة.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Animatic before animation", "ar": "الأنيماتيك قبل التحريك" },
+              "text": {
+                "en": "You see the whole film, timed and voiced, before the expensive work starts, so approvals are fast and real.",
+                "ar": "تشوف الفيلم كامل، بتوقيته وصوته، قبل ما يبدأ الشغل المكلف، فتكون الموافقات سريعة وعن قناعة."
+              }
+            },
+            {
+              "title": { "en": "Style built for you", "ar": "أسلوب مصمم لك" },
+              "text": {
+                "en": "We design a look for your brand, not a stock illustration style, so the film is recognisable without the logo.",
+                "ar": "نصمّم شكل خاص بعلامتك، مو أسلوب رسم جاهز، عشان الفيلم ينعرف حتى بدون الشعار."
+              }
+            },
+            {
+              "title": { "en": "Assets that keep working", "ar": "أصول تستمر تشتغل" },
+              "text": {
+                "en": "Characters, rigs and 3D models are yours to reuse in future campaigns, stills, packaging and social posts.",
+                "ar": "الشخصيات والـ rigs ونماذج الـ 3D ملكك، تعيد استخدامها في حملات قادمة وصور وتغليف ومنشورات سوشال."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Script and storyboard", "ar": "سيناريو وستوري بورد" },
+            { "en": "Animatic with temp sound", "ar": "أنيماتيك بصوت مؤقت" },
+            { "en": "2D or 3D animation", "ar": "أنيميشن 2D أو 3D" },
+            { "en": "Character and product models", "ar": "نماذج شخصيات ومنتجات" },
+            { "en": "Cutdowns for every platform", "ar": "نسخ مختصرة لكل منصة" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "production" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000107",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 17.3,
+          "preview_end_s": 18.3,
           "status": "published",
           "is_teaser": false,
-          "sort_order": 4
+          "sort_order": 100
         },
         {
-          "slug": "photography",
-          "title": { "en": "Photography", "ar": "التصوير الفوتوغرافي" },
-          "blurb": { "en": "Images that sell the moment.", "ar": "صور تبيع اللحظة." },
-          "status": "published",
-          "is_teaser": false,
-          "sort_order": 5
-        },
-        {
-          "slug": "montage",
-          "title": { "en": "Montage", "ar": "المونتاج" },
+          "slug": "video-editing",
+          "title": { "en": "Montage / Video Editing", "ar": "المونتاج وتحرير الفيديو" },
           "blurb": {
-            "en": "Editing that gives footage its rhythm.",
-            "ar": "مونتاج يمنح اللقطات إيقاعها."
+            "en": "Raw footage shaped into a clear story, with pace, colour and sound finished to broadcast standard.",
+            "ar": "لقطات خام تتحول لقصة واضحة، بإيقاع وألوان وصوت مشطّبة بمعايير البث."
           },
+          "intro": {
+            "en": "The story is made in the edit, so we treat the edit as the main event.",
+            "ar": "القصة تنصنع في المونتاج، عشان كذا نتعامل معه كأنه الحدث الرئيسي."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We log and select footage first, then build a rough cut around the story, not around the prettiest shots. You review on a shared link with timecoded comments. Once structure is locked, we move to colour grading, sound mix, subtitles in Arabic and English, and versions for each platform. We work with footage we shot or footage you already have."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نفرز اللقطات ونختار منها أولًا، وبعدها نبني نسخة أولية حول القصة، مو حول أحلى اللقطات. تراجع على رابط مشترك وتكتب ملاحظاتك على التوقيت بالضبط. ولما نثبّت البنية، ننتقل لتصحيح الألوان ومكساج الصوت والترجمة بالعربي والإنجليزي ونسخ لكل منصة. نشتغل على لقطات صوّرناها أو لقطات عندك من قبل."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We log and select footage first, then build a rough cut around the story, not around the prettiest shots. You review on a shared link with timecoded comments. Once structure is locked, we move to colour grading, sound mix, subtitles in Arabic and English, and versions for each platform. We work with footage we shot or footage you already have.</p>",
+            "ar": "<p>نفرز اللقطات ونختار منها أولًا، وبعدها نبني نسخة أولية حول القصة، مو حول أحلى اللقطات. تراجع على رابط مشترك وتكتب ملاحظاتك على التوقيت بالضبط. ولما نثبّت البنية، ننتقل لتصحيح الألوان ومكساج الصوت والترجمة بالعربي والإنجليزي ونسخ لكل منصة. نشتغل على لقطات صوّرناها أو لقطات عندك من قبل.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Story first, shots second", "ar": "القصة أولًا، واللقطات بعدها" },
+              "text": {
+                "en": "We cut for what the audience needs to understand, even when that means dropping an expensive shot.",
+                "ar": "نقصّ على حسب اللي يحتاج الجمهور يفهمه، حتى لو معناه نشيل لقطة كلّفت كثير."
+              }
+            },
+            {
+              "title": { "en": "Bilingual finishing in house", "ar": "تشطيب بلغتين داخل الفريق" },
+              "text": {
+                "en": "Arabic and English subtitles, supers and captions are written and timed by our own team, not a subtitling service.",
+                "ar": "الترجمة والنصوص على الشاشة بالعربي والإنجليزي يكتبها ويضبط توقيتها فريقنا، مو خدمة ترجمة خارجية."
+              }
+            },
+            {
+              "title": { "en": "Clear review rounds", "ar": "جولات مراجعة واضحة" },
+              "text": {
+                "en": "Timecoded comments on one link and agreed revision rounds, so feedback never gets lost in email threads.",
+                "ar": "ملاحظات مربوطة بالتوقيت على رابط واحد وجولات تعديل متفق عليها، عشان ما تضيع الملاحظات بين الإيميلات."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Edited master film", "ar": "الفيلم النهائي بعد المونتاج" },
+            { "en": "Colour grade and sound mix", "ar": "تصحيح ألوان ومكساج صوت" },
+            { "en": "Arabic and English subtitles", "ar": "ترجمة عربية وإنجليزية" },
+            { "en": "Platform cutdowns", "ar": "نسخ مختصرة للمنصات" },
+            { "en": "Archived project files", "ar": "ملفات المشروع مؤرشفة" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "production" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000108",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 1,
+          "preview_end_s": 3.7,
           "status": "published",
           "is_teaser": false,
-          "sort_order": 6
+          "sort_order": 110
         },
         {
-          "slug": "event-planning",
-          "title": { "en": "Event Planning", "ar": "تنظيم الفعاليات" },
+          "slug": "photo-video",
+          "title": { "en": "Photography / Videography", "ar": "التصوير الفوتوغرافي والفيديو" },
           "blurb": {
-            "en": "Experiences planned down to the detail.",
-            "ar": "تجارب مخططة حتى آخر تفصيل."
+            "en": "Stills and footage planned together and shot in one production, so your campaign looks the same everywhere.",
+            "ar": "صور ولقطات فيديو نخطط لها سوا ونصوّرها في إنتاج واحد، عشان حملتك تبان بنفس الشكل في كل مكان."
           },
+          "intro": {
+            "en": "Good shoots are won in the planning, long before anyone picks up a camera.",
+            "ar": "التصوير الناجح ينحسم في التخطيط، قبل ما أحد يمسك الكاميرا بوقت طويل."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We scout locations, handle permits, write a shot list and build a schedule that covers photo and video on the same day. On set, a director and photographer work from one brief, with a live monitor for you to approve frames as we go. Retouching and grading follow the same look."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نستكشف المواقع، ونطلّع التصاريح، ونكتب قائمة اللقطات، ونبني جدول يغطي الصور والفيديو في نفس اليوم. في موقع التصوير، المخرج والمصوّر يشتغلون من بريف واحد، ومعك شاشة مباشرة توافق فيها على الإطارات أول بأول. وتعديل الصور وتصحيح ألوان الفيديو يمشون على نفس الشكل."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We scout locations, handle permits, write a shot list and build a schedule that covers photo and video on the same day. On set, a director and photographer work from one brief, with a live monitor for you to approve frames as we go. Retouching and grading follow the same look.</p>",
+            "ar": "<p>نستكشف المواقع، ونطلّع التصاريح، ونكتب قائمة اللقطات، ونبني جدول يغطي الصور والفيديو في نفس اليوم. في موقع التصوير، المخرج والمصوّر يشتغلون من بريف واحد، ومعك شاشة مباشرة توافق فيها على الإطارات أول بأول. وتعديل الصور وتصحيح ألوان الفيديو يمشون على نفس الشكل.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "One crew, two outputs", "ar": "فريق واحد ونتيجتين" },
+              "text": {
+                "en": "Photo and video captured on the same days with one team, which cuts crew costs and keeps visuals consistent.",
+                "ar": "الصور والفيديو ينصوّرون في نفس الأيام وبنفس الفريق، وهذا يقلل تكلفة الطاقم ويخلي الصورة متناسقة."
+              }
+            },
+            {
+              "title": { "en": "Local permits handled", "ar": "التصاريح المحلية علينا" },
+              "text": {
+                "en": "We know how location permits and access work in Jeddah and across the Kingdom, so shoot days do not slip.",
+                "ar": "نعرف كيف تمشي تصاريح المواقع والدخول في جدة وباقي المملكة، عشان أيام التصوير ما تتأخر."
+              }
+            },
+            {
+              "title": { "en": "Approve on set", "ar": "الموافقة في الموقع" },
+              "text": {
+                "en": "You see frames live on a monitor and sign off as we shoot, instead of waiting a week for surprises.",
+                "ar": "تشوف الإطارات مباشرة على شاشة وتوافق وحنا نصوّر، بدل ما تنتظر أسبوع وتتفاجأ."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Shot list and schedule", "ar": "قائمة لقطات وجدول تصوير" },
+            { "en": "Location scouting and permits", "ar": "استكشاف مواقع وتصاريح" },
+            { "en": "Retouched photo selects", "ar": "صور مختارة ومعدّلة" },
+            { "en": "Graded video footage", "ar": "لقطات فيديو مصححة الألوان" },
+            { "en": "Files sized per channel", "ar": "ملفات بمقاسات كل قناة" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "production" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000108",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 1,
+          "preview_end_s": 3.7,
           "status": "published",
           "is_teaser": false,
-          "sort_order": 7
+          "sort_order": 120
+        },
+        {
+          "slug": "model-booking",
+          "title": { "en": "Model Booking", "ar": "حجز العارضين" },
+          "blurb": {
+            "en": "The right faces for your brand, cast, cleared and on set on time, with usage rights sorted before the shoot.",
+            "ar": "الوجوه المناسبة لعلامتك، نختارها ونجهّز أوراقها وتوصل موقع التصوير في وقتها، وحقوق الاستخدام محسومة قبل التصوير."
+          },
+          "intro": {
+            "en": "The people in your ads say more about your brand than your copy does.",
+            "ar": "الناس اللي يظهرون في إعلاناتك يقولون عن علامتك أكثر من النص نفسه."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We turn your brief into a casting spec, then shortlist models and talent from agencies and our own network across the Gulf. You see self tapes or test shots before anyone is booked. We handle contracts, usage terms, fittings, travel and call times, and we check every look fits local guidelines and your audience."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نحوّل البريف لمواصفات اختيار واضحة، وبعدها نرشّح عارضين ومواهب من الوكالات ومن شبكتنا في الخليج. تشوف تسجيلات تجريبية أو صور اختبار قبل ما نحجز أي أحد. نتكفّل بالعقود وشروط الاستخدام وتجارب الملابس والسفر ومواعيد الحضور، ونتأكد إن كل إطلالة تناسب الضوابط المحلية وجمهورك."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We turn your brief into a casting spec, then shortlist models and talent from agencies and our own network across the Gulf. You see self tapes or test shots before anyone is booked. We handle contracts, usage terms, fittings, travel and call times, and we check every look fits local guidelines and your audience.</p>",
+            "ar": "<p>نحوّل البريف لمواصفات اختيار واضحة، وبعدها نرشّح عارضين ومواهب من الوكالات ومن شبكتنا في الخليج. تشوف تسجيلات تجريبية أو صور اختبار قبل ما نحجز أي أحد. نتكفّل بالعقود وشروط الاستخدام وتجارب الملابس والسفر ومواعيد الحضور، ونتأكد إن كل إطلالة تناسب الضوابط المحلية وجمهورك.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Casting tied to strategy", "ar": "اختيار مربوط بالاستراتيجية" },
+              "text": {
+                "en": "We cast from your audience profile, not from whoever is available, so people on screen feel real to buyers.",
+                "ar": "نختار على حسب ملف جمهورك، مو على حسب مين فاضي، عشان اللي على الشاشة يحسّهم المشتري حقيقيين."
+              }
+            },
+            {
+              "title": { "en": "Rights sorted upfront", "ar": "الحقوق محسومة من البداية" },
+              "text": {
+                "en": "Usage period, territories and channels are agreed in writing before the shoot, so no surprise fees appear later.",
+                "ar": "مدة الاستخدام والدول والقنوات نتفق عليها كتابيًا قبل التصوير، عشان ما تطلع رسوم مفاجئة بعدين."
+              }
+            },
+            {
+              "title": { "en": "Cultural fit checked", "ar": "نراجع التوافق الثقافي" },
+              "text": {
+                "en": "Wardrobe, styling and casting are reviewed against Saudi and Gulf guidelines, avoiding reshoots and awkward edits after release.",
+                "ar": "نراجع الملابس والستايلنق واختيار الوجوه مقابل الضوابط السعودية والخليجية، عشان نتجنب إعادة التصوير والتعديلات المحرجة بعد النشر."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Casting spec and shortlist", "ar": "مواصفات الاختيار والقائمة المختصرة" },
+            { "en": "Self tapes and test shots", "ar": "تسجيلات وصور تجريبية" },
+            { "en": "Contracts and usage rights", "ar": "العقود وحقوق الاستخدام" },
+            { "en": "Fittings and call sheets", "ar": "تجارب ملابس وجداول حضور" },
+            { "en": "On set talent management", "ar": "إدارة المواهب في موقع التصوير" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "production" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000108",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 1,
+          "preview_end_s": 3.7,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 130
+        },
+        {
+          "slug": "music-vo-sfx",
+          "title": { "en": "Music, VO & SFX", "ar": "الموسيقى والتعليق الصوتي والمؤثرات" },
+          "blurb": {
+            "en": "Original music, voice over in Arabic and English, and sound design that makes your brand recognisable with eyes closed.",
+            "ar": "موسيقى أصلية، وتعليق صوتي بالعربي والإنجليزي، وتصميم صوتي يخلّي علامتك تنعرف حتى وعيونك مسكّرة."
+          },
+          "intro": {
+            "en": "Half of every video is sound, and most brands leave it to a stock library.",
+            "ar": "نص أي فيديو هو الصوت، وأغلب العلامات تتركه لمكتبة موسيقى جاهزة."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We compose original tracks and sonic logos, cast voice talent in Arabic dialects and English, and design sound effects shot by shot. Sessions are directed live, so you can hear takes and give notes in the room or remotely. Final mixes are delivered to broadcast and platform loudness standards, with stems for future edits."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نؤلّف مقطوعات أصلية وشعارات صوتية، ونختار أصوات بلهجات عربية مختلفة وبالإنجليزي، ونصمّم المؤثرات الصوتية لقطة بلقطة. جلسات التسجيل نوجّهها مباشرة، فتسمع التسجيلات وتعطي ملاحظاتك من الاستوديو أو عن بعد. والمكساج النهائي يوصلك بمعايير مستوى الصوت للبث والمنصات، مع المسارات المنفصلة للتعديلات الجاية."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We compose original tracks and sonic logos, cast voice talent in Arabic dialects and English, and design sound effects shot by shot. Sessions are directed live, so you can hear takes and give notes in the room or remotely. Final mixes are delivered to broadcast and platform loudness standards, with stems for future edits.</p>",
+            "ar": "<p>نؤلّف مقطوعات أصلية وشعارات صوتية، ونختار أصوات بلهجات عربية مختلفة وبالإنجليزي، ونصمّم المؤثرات الصوتية لقطة بلقطة. جلسات التسجيل نوجّهها مباشرة، فتسمع التسجيلات وتعطي ملاحظاتك من الاستوديو أو عن بعد. والمكساج النهائي يوصلك بمعايير مستوى الصوت للبث والمنصات، مع المسارات المنفصلة للتعديلات الجاية.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Music you own outright", "ar": "موسيقى ملكك بالكامل" },
+              "text": {
+                "en": "Original compositions with full rights, so you never face licence renewals or the same track on a competitor's ad.",
+                "ar": "مقطوعات أصلية بحقوق كاملة، فما تواجه تجديد تراخيص ولا تسمع نفس المقطوعة في إعلان منافس."
+              }
+            },
+            {
+              "title": { "en": "The right Arabic voice", "ar": "الصوت العربي المناسب" },
+              "text": {
+                "en": "We match dialect and tone to the audience, Saudi, Gulf or pan Arab, and direct the reading ourselves.",
+                "ar": "نطابق اللهجة والنبرة مع الجمهور، سعودي أو خليجي أو عربي عام، ونوجّه التسجيل بأنفسنا."
+              }
+            },
+            {
+              "title": { "en": "A sound that repeats", "ar": "صوت يتكرر ويترسّخ" },
+              "text": {
+                "en": "A sonic logo and sound palette used across ads, events and apps, so your brand is heard consistently.",
+                "ar": "شعار صوتي ومجموعة أصوات تُستخدم في الإعلانات والفعاليات والتطبيقات، عشان علامتك تنسمع بنفس الشكل دايمًا."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Original score or track", "ar": "موسيقى أصلية أو مقطوعة" },
+            { "en": "Sonic logo", "ar": "شعار صوتي" },
+            { "en": "Arabic and English VO", "ar": "VO بالعربي والإنجليزي" },
+            { "en": "Sound design and SFX", "ar": "تصميم صوتي وSFX" },
+            { "en": "Final mix and stems", "ar": "مكساج نهائي ومسارات منفصلة" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "production" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000109",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 12.9,
+          "preview_end_s": 13.45,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 140
+        },
+        {
+          "slug": "marketing-strategy",
+          "title": { "en": "Marketing Strategy", "ar": "الاستراتيجية التسويقية" },
+          "blurb": {
+            "en": "A clear plan for who you are talking to, what you say, and where your budget goes.",
+            "ar": "خطة واضحة تحدد لمن تتكلم، وماذا تقول، وأين تذهب ميزانيتك."
+          },
+          "intro": {
+            "en": "Most marketing problems are strategy problems wearing a creative costume.",
+            "ar": "أغلب مشاكل التسويق هي مشاكل استراتيجية لابسة ثوب الإبداع."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We start with your numbers, your customers, and your competitors, then sit with your team to agree on what success looks like. From there we write one plan: audiences, positioning, key messages, channels, and a budget split by quarter. Every choice has a reason written next to it, so your team can defend it and act on it without us in the room."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نبدأ بأرقامك وعملائك ومنافسيك، ثم نجلس مع فريقك لنتفق على شكل النجاح. بعدها نكتب خطة واحدة: الجمهور، والتموضع، والرسائل الأساسية، والقنوات، وتوزيع الميزانية على كل ربع سنة. كل قرار مكتوب جنبه سببه، عشان يقدر فريقك يدافع عنه وينفذه حتى لو ما كنا معكم في الغرفة."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We start with your numbers, your customers, and your competitors, then sit with your team to agree on what success looks like. From there we write one plan: audiences, positioning, key messages, channels, and a budget split by quarter. Every choice has a reason written next to it, so your team can defend it and act on it without us in the room.</p>",
+            "ar": "<p>نبدأ بأرقامك وعملائك ومنافسيك، ثم نجلس مع فريقك لنتفق على شكل النجاح. بعدها نكتب خطة واحدة: الجمهور، والتموضع، والرسائل الأساسية، والقنوات، وتوزيع الميزانية على كل ربع سنة. كل قرار مكتوب جنبه سببه، عشان يقدر فريقك يدافع عنه وينفذه حتى لو ما كنا معكم في الغرفة.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Research before opinions", "ar": "البحث قبل الآراء" },
+              "text": {
+                "en": "We interview customers and study the data first, so the plan rests on evidence, not on the loudest voice.",
+                "ar": "نقابل العملاء وندرس البيانات أولاً، عشان تقوم الخطة على أدلة، مو على أعلى صوت في الاجتماع."
+              }
+            },
+            {
+              "title": { "en": "One plan, one page", "ar": "خطة واحدة في صفحة" },
+              "text": {
+                "en": "The core strategy fits on a single page your whole team can read, remember, and repeat.",
+                "ar": "خلاصة الاستراتيجية في صفحة واحدة يقدر فريقك كله يقرأها ويحفظها ويكررها."
+              }
+            },
+            {
+              "title": { "en": "Built by the makers", "ar": "يكتبها اللي ينفذونها" },
+              "text": {
+                "en": "The people who write the strategy also make the work, so nothing gets lost between planning and production.",
+                "ar": "نفس الفريق اللي يكتب الاستراتيجية هو اللي ينفذ العمل، فما يضيع شيء بين التخطيط والإنتاج."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Audience and competitor research", "ar": "بحث الجمهور والمنافسين" },
+            { "en": "Positioning statement", "ar": "صياغة التموضع" },
+            { "en": "Key messages by audience", "ar": "الرسائل الأساسية لكل جمهور" },
+            { "en": "Channel plan", "ar": "خطة القنوات" },
+            { "en": "Quarterly budget split", "ar": "توزيع الميزانية الربعي" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "marketing" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000103",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 9.4,
+          "preview_end_s": 10.4,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 150
+        },
+        {
+          "slug": "content-strategy",
+          "title": { "en": "Content Strategy", "ar": "استراتيجية المحتوى" },
+          "blurb": {
+            "en": "Decide what to publish, where, and why, so every piece of content has a job to do.",
+            "ar": "نحدد ماذا تنشر وأين ولماذا، حتى يكون لكل قطعة محتوى مهمة واضحة."
+          },
+          "intro": {
+            "en": "Publishing more is not a strategy. Publishing with purpose is.",
+            "ar": "النشر الكثير مو استراتيجية. النشر بهدف هو الاستراتيجية."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We audit what you already publish and what your audience searches for, then build a small set of content pillars tied to your business goals. Each pillar gets formats, channels, and a publishing rhythm your team can keep up with. We write the guidelines, set up the calendar, and agree on the few numbers worth tracking each month."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نراجع اللي تنشره حالياً واللي يبحث عنه جمهورك، ثم نبني مجموعة صغيرة من محاور المحتوى مرتبطة بأهداف عملك. كل محور له صيغه وقنواته وإيقاع نشر يقدر فريقك يلتزم فيه. نكتب الإرشادات، ونجهّز التقويم، ونتفق على الأرقام القليلة اللي تستاهل المتابعة كل شهر."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We audit what you already publish and what your audience searches for, then build a small set of content pillars tied to your business goals. Each pillar gets formats, channels, and a publishing rhythm your team can keep up with. We write the guidelines, set up the calendar, and agree on the few numbers worth tracking each month.</p>",
+            "ar": "<p>نراجع اللي تنشره حالياً واللي يبحث عنه جمهورك، ثم نبني مجموعة صغيرة من محاور المحتوى مرتبطة بأهداف عملك. كل محور له صيغه وقنواته وإيقاع نشر يقدر فريقك يلتزم فيه. نكتب الإرشادات، ونجهّز التقويم، ونتفق على الأرقام القليلة اللي تستاهل المتابعة كل شهر.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Rhythm your team can keep", "ar": "إيقاع يقدر عليه فريقك" },
+              "text": {
+                "en": "We plan a publishing pace that fits your real capacity, so the calendar does not collapse by month two.",
+                "ar": "نخطط وتيرة نشر تناسب طاقة فريقك الفعلية، عشان ما ينهار التقويم في الشهر الثاني."
+              }
+            },
+            {
+              "title": { "en": "Search and social together", "ar": "البحث والسوشال مع بعض" },
+              "text": {
+                "en": "We plan for what people search on Google and what they scroll past on social, in both languages.",
+                "ar": "نخطط للي يبحث عنه الناس في Google وللي يمرون عليه في السوشال، باللغتين."
+              }
+            },
+            {
+              "title": { "en": "Numbers that mean something", "ar": "أرقام لها معنى" },
+              "text": {
+                "en": "We track a few measures tied to leads or sales, not vanity counts that look good in a report.",
+                "ar": "نتابع مقاييس قليلة مرتبطة بالعملاء المحتملين أو المبيعات، مو أرقام شكلية تحلو في التقارير."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Content audit", "ar": "مراجعة المحتوى الحالي" },
+            { "en": "Content pillars", "ar": "محاور المحتوى" },
+            { "en": "Editorial calendar", "ar": "تقويم النشر" },
+            { "en": "Tone and style guide", "ar": "دليل النبرة والأسلوب" },
+            { "en": "Monthly performance review", "ar": "مراجعة أداء شهرية" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "marketing" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000104",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 7.9,
+          "preview_end_s": 9.4,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 160
         },
         {
           "slug": "advertising",
-          "title": { "en": "Advertising", "ar": "الإعلان" },
-          "blurb": { "en": "Campaigns that move audiences.", "ar": "حملات تحرّك الجمهور." },
+          "title": { "en": "Advertising", "ar": "الإعلانات" },
+          "blurb": {
+            "en": "Paid ads across social, search, and outdoor, made and managed by the same team that plans them.",
+            "ar": "إعلانات مدفوعة في السوشال والبحث والطرق، يصنعها ويديرها نفس الفريق اللي يخطط لها."
+          },
+          "intro": {
+            "en": "A good ad earns a second look. A good media plan makes sure people see it.",
+            "ar": "الإعلان الجيد يكسب نظرة ثانية. وخطة الإعلان الجيدة تضمن إن الناس يشوفونه."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We write and design the ads, cut them for each platform, and run the media buying ourselves. Every campaign starts with a clear goal and a test plan: a few versions go live, we watch what works in the first week, and move budget toward the winners. You get a short weekly update in plain language, not a dashboard dump."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نكتب الإعلانات ونصممها، ونجهّز نسخة لكل منصة، وندير شراء المساحات الإعلانية بأنفسنا. كل حملة تبدأ بهدف واضح وخطة اختبار: ننزل كم نسخة، ونراقب وش ينجح في أول أسبوع، ونحوّل الميزانية للنسخ الأقوى. يوصلك تحديث أسبوعي قصير بلغة واضحة، مو كومة أرقام من لوحة التحكم."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We write and design the ads, cut them for each platform, and run the media buying ourselves. Every campaign starts with a clear goal and a test plan: a few versions go live, we watch what works in the first week, and move budget toward the winners. You get a short weekly update in plain language, not a dashboard dump.</p>",
+            "ar": "<p>نكتب الإعلانات ونصممها، ونجهّز نسخة لكل منصة، وندير شراء المساحات الإعلانية بأنفسنا. كل حملة تبدأ بهدف واضح وخطة اختبار: ننزل كم نسخة، ونراقب وش ينجح في أول أسبوع، ونحوّل الميزانية للنسخ الأقوى. يوصلك تحديث أسبوعي قصير بلغة واضحة، مو كومة أرقام من لوحة التحكم.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Creative and media together", "ar": "الإبداع والشراء مع بعض" },
+              "text": {
+                "en": "One team makes the ads and buys the space, so the creative is built for how each platform actually works.",
+                "ar": "فريق واحد يصنع الإعلان ويشتري المساحة، فيكون التصميم مبني على طريقة عمل كل منصة فعلاً."
+              }
+            },
+            {
+              "title": { "en": "Test early, spend later", "ar": "اختبر بدري، واصرف بعدين" },
+              "text": {
+                "en": "We launch several small versions first and only scale the ones that prove themselves with real results.",
+                "ar": "نطلق كم نسخة صغيرة أولاً، وما نوسّع إلا النسخ اللي أثبتت نفسها بنتائج حقيقية."
+              }
+            },
+            {
+              "title": { "en": "Arabic written first", "ar": "العربي يُكتب أولاً" },
+              "text": {
+                "en": "Arabic ads are written in Arabic from the start, not translated from English at the last minute.",
+                "ar": "الإعلانات العربية تنكتب بالعربي من البداية، مو مترجمة من الإنجليزي في آخر لحظة."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Ad concepts and copy", "ar": "أفكار الإعلانات ونصوصها" },
+            { "en": "Platform ready formats", "ar": "مقاسات جاهزة لكل منصة" },
+            { "en": "Media plan and buying", "ar": "خطة الإعلان والشراء" },
+            { "en": "A/B test setup", "ar": "إعداد اختبارات A/B" },
+            { "en": "Weekly performance reports", "ar": "تقارير أداء أسبوعية" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "marketing" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000110",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 3.9,
+          "preview_end_s": 4.9,
           "status": "published",
           "is_teaser": false,
-          "sort_order": 8
+          "sort_order": 170
         },
         {
           "slug": "social-media",
-          "title": { "en": "Social Media", "ar": "السوشيال ميديا" },
+          "title": { "en": "Social Media", "ar": "السوشال ميديا" },
           "blurb": {
-            "en": "Always-on presence that converts.",
-            "ar": "حضور دائم يتحوّل إلى نتائج."
+            "en": "Social channels run with a plan, a clear voice, and people who reply like people.",
+            "ar": "حسابات تُدار بخطة ونبرة واضحة، وناس يردّون مثل الناس."
           },
+          "intro": {
+            "en": "Your followers can tell when nobody is home. We make sure someone is.",
+            "ar": "متابعينك يحسّون إذا الحساب ما فيه أحد. واحنا نتأكد إن فيه أحد موجود."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We plan a monthly calendar, shoot and design the posts, write captions in Arabic and English, and publish on schedule. We also watch the comments and messages, answer within working hours, and flag anything sensitive to you straight away. At the end of each month we look at what worked, drop what did not, and adjust the next calendar."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نخطط تقويم شهري، ونصوّر ونصمم المنشورات، ونكتب النصوص بالعربي والإنجليزي، وننشر في موعدها. ونتابع التعليقات والرسائل، ونرد خلال ساعات العمل، ونبلغك فوراً بأي شيء حساس. وفي نهاية كل شهر نشوف وش نجح، ونترك اللي ما نجح، ونعدّل تقويم الشهر الجاي."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We plan a monthly calendar, shoot and design the posts, write captions in Arabic and English, and publish on schedule. We also watch the comments and messages, answer within working hours, and flag anything sensitive to you straight away. At the end of each month we look at what worked, drop what did not, and adjust the next calendar.</p>",
+            "ar": "<p>نخطط تقويم شهري، ونصوّر ونصمم المنشورات، ونكتب النصوص بالعربي والإنجليزي، وننشر في موعدها. ونتابع التعليقات والرسائل، ونرد خلال ساعات العمل، ونبلغك فوراً بأي شيء حساس. وفي نهاية كل شهر نشوف وش نجح، ونترك اللي ما نجح، ونعدّل تقويم الشهر الجاي.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Made in house", "ar": "إنتاج داخلي" },
+              "text": {
+                "en": "Photos, video, and design come from our own studio, so posts look consistent without chasing freelancers.",
+                "ar": "الصور والفيديو والتصاميم تطلع من استوديونا، فتكون المنشورات متناسقة بدون ملاحقة مستقلين."
+              }
+            },
+            {
+              "title": { "en": "Replies with a real voice", "ar": "ردود بنبرة حقيقية" },
+              "text": {
+                "en": "Comments and messages are answered by people who know your brand, using tone rules agreed with you.",
+                "ar": "يرد على التعليقات والرسائل ناس يعرفون علامتك، ويلتزمون بقواعد نبرة متفق عليها معك."
+              }
+            },
+            {
+              "title": { "en": "A monthly look back", "ar": "مراجعة كل شهر" },
+              "text": {
+                "en": "Each month we show what grew, what fell flat, and what we are changing next, in one short report.",
+                "ar": "كل شهر نوريك وش نما، ووش ما نجح، ووش بنغيّر بعده، في تقرير واحد قصير."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Monthly content calendar", "ar": "تقويم محتوى شهري" },
+            { "en": "Posts, reels, and stories", "ar": "منشورات وريلز وستوريز" },
+            { "en": "Bilingual captions", "ar": "نصوص بلغتين" },
+            { "en": "Community management", "ar": "إدارة التفاعل والردود" },
+            { "en": "Monthly insights report", "ar": "تقرير شهري بالنتائج" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "marketing" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000105",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 4.9,
+          "preview_end_s": 5.9,
           "status": "published",
           "is_teaser": false,
-          "sort_order": 9
+          "sort_order": 180
         },
         {
-          "slug": "web-development",
-          "title": { "en": "Web Development", "ar": "تطوير المواقع" },
+          "slug": "campaigns",
+          "title": { "en": "Campaigns", "ar": "الحملات" },
           "blurb": {
-            "en": "Fast, secure, accessible sites.",
-            "ar": "مواقع سريعة وآمنة وسهلة الوصول."
+            "en": "Campaigns built around one idea and carried across film, photo, social, and outdoor, with a date to hit.",
+            "ar": "حملات مبنية على فكرة واحدة، تمتد عبر الفيلم والصورة والسوشال والطرق، ولها موعد محدد نلتزم فيه."
           },
+          "intro": {
+            "en": "One idea, told well in every place your audience will meet it.",
+            "ar": "فكرة واحدة، تنحكى صح في كل مكان يقابلها فيه جمهورك."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We start from the brief and a clear goal, then bring you two or three campaign routes. Once you pick one, the same team writes, shoots, designs, and edits every piece, so the idea holds together from the billboard to the fifteen second story. We plan the rollout week by week, launch, and report on results as they come in."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نبدأ من الموجز وهدف واضح، ثم نقدم لك مسارين أو ثلاثة للحملة. وإذا اخترت واحد، نفس الفريق يكتب ويصوّر ويصمم ويمنتج كل قطعة، عشان تبقى الفكرة متماسكة من اللوحة الإعلانية إلى الستوري اللي مدتها خمس عشرة ثانية. نخطط الإطلاق أسبوع بأسبوع، ونطلق، ونرفع لك النتائج أول بأول."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We start from the brief and a clear goal, then bring you two or three campaign routes. Once you pick one, the same team writes, shoots, designs, and edits every piece, so the idea holds together from the billboard to the fifteen second story. We plan the rollout week by week, launch, and report on results as they come in.</p>",
+            "ar": "<p>نبدأ من الموجز وهدف واضح، ثم نقدم لك مسارين أو ثلاثة للحملة. وإذا اخترت واحد، نفس الفريق يكتب ويصوّر ويصمم ويمنتج كل قطعة، عشان تبقى الفكرة متماسكة من اللوحة الإعلانية إلى الستوري اللي مدتها خمس عشرة ثانية. نخطط الإطلاق أسبوع بأسبوع، ونطلق، ونرفع لك النتائج أول بأول.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Routes we would build", "ar": "مسارات نقدر ننفذها" },
+              "text": {
+                "en": "Every route we present is one we are ready to make, not filler to pad the pitch.",
+                "ar": "كل مسار نعرضه جاهزين ننفذه، ما نحشو العرض بخيارات عشان يبان أكبر."
+              }
+            },
+            {
+              "title": { "en": "No handoffs between teams", "ar": "بدون تسليم بين فرق" },
+              "text": {
+                "en": "Concept, production, and rollout stay with one team, so the idea does not get diluted along the way.",
+                "ar": "الفكرة والإنتاج والإطلاق كلها عند فريق واحد، فما تضعف الفكرة في الطريق."
+              }
+            },
+            {
+              "title": { "en": "Rollout planned to the week", "ar": "إطلاق مخطط بالأسبوع" },
+              "text": {
+                "en": "We schedule every asset against launch dates, media bookings, and approvals, so nothing lands late.",
+                "ar": "نجدول كل قطعة حسب مواعيد الإطلاق وحجوزات الإعلان والموافقات، عشان ما يتأخر شيء."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Campaign idea and routes", "ar": "فكرة الحملة ومساراتها" },
+            { "en": "Hero film and cutdowns", "ar": "الفيلم الرئيسي ونسخه القصيرة" },
+            { "en": "Key visuals and photography", "ar": "الصور والتصاميم الرئيسية" },
+            { "en": "Social and outdoor assets", "ar": "مواد السوشال والطرق" },
+            { "en": "Rollout plan and report", "ar": "خطة الإطلاق وتقرير النتائج" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "marketing" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000108",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 0.05,
+          "preview_end_s": 3.7,
           "status": "published",
           "is_teaser": false,
-          "sort_order": 10
+          "sort_order": 190
+        },
+        {
+          "slug": "content-creation",
+          "title": { "en": "Content Creation", "ar": "صناعة المحتوى" },
+          "blurb": {
+            "en": "Photos, video, and design produced in our own studio, in the volume and pace a brand needs today.",
+            "ar": "صور وفيديو وتصاميم ننتجها في استوديونا، بالكمية والسرعة اللي تحتاجها العلامة اليوم."
+          },
+          "intro": {
+            "en": "Good content is planned well before the camera comes out.",
+            "ar": "المحتوى الجيد يتخطط له قبل ما تطلع الكاميرا بوقت كافي."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We plan shoots in batches, so one production day can feed weeks of posts, ads, and web content. Our team handles the shot list, casting, location, filming, photography, editing, and design, then delivers every file sized and named for where it will be used. Arabic and English versions are made at the same time, not added afterwards."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نخطط التصوير على دفعات، عشان يوم إنتاج واحد يغطي أسابيع من المنشورات والإعلانات ومحتوى الموقع. فريقنا يتولى قائمة اللقطات، واختيار الوجوه، والموقع، وتصوير الفيديو والصور، والمونتاج، والتصميم، ويسلّم كل ملف بالمقاس والاسم المناسب لمكان استخدامه. النسخ العربية والإنجليزية تنعمل في نفس الوقت، مو تنضاف بعدين."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We plan shoots in batches, so one production day can feed weeks of posts, ads, and web content. Our team handles the shot list, casting, location, filming, photography, editing, and design, then delivers every file sized and named for where it will be used. Arabic and English versions are made at the same time, not added afterwards.</p>",
+            "ar": "<p>نخطط التصوير على دفعات، عشان يوم إنتاج واحد يغطي أسابيع من المنشورات والإعلانات ومحتوى الموقع. فريقنا يتولى قائمة اللقطات، واختيار الوجوه، والموقع، وتصوير الفيديو والصور، والمونتاج، والتصميم، ويسلّم كل ملف بالمقاس والاسم المناسب لمكان استخدامه. النسخ العربية والإنجليزية تنعمل في نفس الوقت، مو تنضاف بعدين.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "More from each shoot", "ar": "أكثر من كل تصوير" },
+              "text": {
+                "en": "Careful planning means one day on set gives you a full month of varied content.",
+                "ar": "التخطيط الدقيق يخلّي يوم واحد في التصوير يعطيك شهر كامل من محتوى متنوع."
+              }
+            },
+            {
+              "title": { "en": "Studio and crew in house", "ar": "استوديو وفريق داخلي" },
+              "text": {
+                "en": "Our own studio, gear, and crew mean fewer booking delays and lower production costs for you.",
+                "ar": "عندنا استوديو ومعدات وفريق خاص، فتقل تأخيرات الحجز وتنخفض تكاليف الإنتاج عليك."
+              }
+            },
+            {
+              "title": { "en": "Files ready to publish", "ar": "ملفات جاهزة للنشر" },
+              "text": {
+                "en": "Everything arrives cut, sized, and labelled for each platform, so your team can post it the same day.",
+                "ar": "كل شيء يوصلك مقصوص ومقاسه مضبوط ومسمّى لكل منصة، عشان يقدر فريقك ينشره في نفس اليوم."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Shoot plan and shot list", "ar": "خطة التصوير وقائمة اللقطات" },
+            { "en": "Edited photography sets", "ar": "مجموعات صور معدّلة" },
+            { "en": "Short form video", "ar": "فيديوهات قصيرة" },
+            { "en": "Social graphics and motion", "ar": "تصاميم وموشن للسوشال" },
+            { "en": "Organised asset library", "ar": "مكتبة ملفات مرتبة" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "marketing" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000105",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 4.9,
+          "preview_end_s": 5.9,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 200
+        },
+        {
+          "slug": "copywriting",
+          "title": { "en": "Copywriting", "ar": "كتابة النصوص" },
+          "blurb": {
+            "en": "Words for your website, ads, packaging, and presentations, written in Arabic and English by people who write for a living.",
+            "ar": "كلمات لموقعك وإعلاناتك وتغليفك وعروضك، يكتبها بالعربي والإنجليزي ناس الكتابة شغلهم."
+          },
+          "intro": {
+            "en": "Clear words sell. Clever words that confuse people do not.",
+            "ar": "الكلام الواضح يبيع. والكلام الذكي اللي يربك الناس ما يبيع."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We start by learning how your customers talk, then agree a tone of voice with you before writing a single headline. Arabic and English are written separately by native writers, so each one reads naturally rather than as a translation. Every piece goes through an edit and a read aloud before it reaches you, and revisions come back within two business days."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نبدأ بفهم طريقة كلام عملائك، ثم نتفق معك على نبرة الصوت قبل ما نكتب أي عنوان. العربي والإنجليزي ينكتبون كل واحد لحاله على يد كتّاب بلغتهم الأم، عشان كل نص يُقرأ بطبيعية مو كأنه ترجمة. كل نص يمر بتحرير وقراءة بصوت عالي قبل ما يوصلك، والتعديلات ترجع لك خلال يومي عمل."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We start by learning how your customers talk, then agree a tone of voice with you before writing a single headline. Arabic and English are written separately by native writers, so each one reads naturally rather than as a translation. Every piece goes through an edit and a read aloud before it reaches you, and revisions come back within two business days.</p>",
+            "ar": "<p>نبدأ بفهم طريقة كلام عملائك، ثم نتفق معك على نبرة الصوت قبل ما نكتب أي عنوان. العربي والإنجليزي ينكتبون كل واحد لحاله على يد كتّاب بلغتهم الأم، عشان كل نص يُقرأ بطبيعية مو كأنه ترجمة. كل نص يمر بتحرير وقراءة بصوت عالي قبل ما يوصلك، والتعديلات ترجع لك خلال يومي عمل.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Two languages, two writers", "ar": "لغتين وكاتبين" },
+              "text": {
+                "en": "Native Arabic and English writers work on each project, so neither version feels borrowed from the other.",
+                "ar": "كاتب عربي وكاتب إنجليزي بلغتهم الأم يشتغلون على كل مشروع، فما تحس إن نسخة مأخوذة من الثانية."
+              }
+            },
+            {
+              "title": { "en": "A tone you can reuse", "ar": "نبرة تقدر تستخدمها" },
+              "text": {
+                "en": "We hand over a short voice guide with examples, so your team writes in the same tone after we finish.",
+                "ar": "نسلّمك دليل نبرة مختصر مع أمثلة، عشان يكتب فريقك بنفس الأسلوب حتى بعد ما نخلص."
+              }
+            },
+            {
+              "title": { "en": "Written with the design", "ar": "كتابة مع التصميم" },
+              "text": {
+                "en": "Our writers sit with the designers, so headlines fit the layout and nothing gets cut at the last minute.",
+                "ar": "كتّابنا يشتغلون جنب المصممين، فتجي العناوين على مقاس التصميم وما ينقص منها شيء في آخر لحظة."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Tone of voice guide", "ar": "دليل نبرة الصوت" },
+            { "en": "Website copy", "ar": "نصوص الموقع" },
+            { "en": "Ad and campaign copy", "ar": "نصوص الإعلانات والحملات" },
+            { "en": "Taglines and naming", "ar": "الشعارات اللفظية والتسميات" },
+            { "en": "Presentation and brochure text", "ar": "نصوص العروض والكتيبات" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "marketing" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000111",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 11.2,
+          "preview_end_s": 12.1,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 210
+        },
+        {
+          "slug": "hosting",
+          "title": { "en": "Hosting", "ar": "الاستضافة" },
+          "blurb": {
+            "en": "Managed hosting, set up and watched by the team that built your site, so problems get fixed before visitors notice.",
+            "ar": "استضافة مُدارة يجهّزها ويراقبها نفس الفريق اللي بنى موقعك، عشان تنحل المشاكل قبل ما يلاحظها زوّارك."
+          },
+          "intro": {
+            "en": "Your website is only as good as the server it runs on.",
+            "ar": "موقعك ما يكون أقوى من السيرفر اللي يشتغل عليه."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We choose the right hosting for your traffic and budget, then set it up, configure SSL, backups, caching and business email, and move your site over without downtime. After launch we monitor uptime and speed around the clock, apply updates and security patches, and handle renewals. When something needs attention, you hear it from us first, with the fix already underway."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نختار الاستضافة المناسبة لحجم زياراتك وميزانيتك، ثم نجهّزها ونضبط شهادة SSL والنسخ الاحتياطية والتخزين المؤقت وبريد الشركة، وننقل موقعك بدون أي توقّف. بعد الإطلاق نراقب التشغيل والسرعة على مدار الساعة، ونطبّق التحديثات وإصلاحات الأمان، ونتابع التجديدات. وإذا صار شي يحتاج انتباه، تسمعه منّا أول، والحل بدأ فعلًا."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We choose the right hosting for your traffic and budget, then set it up, configure SSL, backups, caching and business email, and move your site over without downtime. After launch we monitor uptime and speed around the clock, apply updates and security patches, and handle renewals. When something needs attention, you hear it from us first, with the fix already underway.</p>",
+            "ar": "<p>نختار الاستضافة المناسبة لحجم زياراتك وميزانيتك، ثم نجهّزها ونضبط شهادة SSL والنسخ الاحتياطية والتخزين المؤقت وبريد الشركة، وننقل موقعك بدون أي توقّف. بعد الإطلاق نراقب التشغيل والسرعة على مدار الساعة، ونطبّق التحديثات وإصلاحات الأمان، ونتابع التجديدات. وإذا صار شي يحتاج انتباه، تسمعه منّا أول، والحل بدأ فعلًا.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Watched around the clock", "ar": "مراقبة على مدار الساعة" },
+              "text": {
+                "en": "Uptime and speed monitoring alerts us the moment something slows or breaks, day or night, weekends included.",
+                "ar": "أنظمة مراقبة التشغيل والسرعة تنبّهنا لحظة ما يبطأ الموقع أو يتعطّل، ليل ونهار وحتى في الإجازات."
+              }
+            },
+            {
+              "title": { "en": "Backups you can restore", "ar": "نسخ احتياطية تنفع وقت الحاجة" },
+              "text": {
+                "en": "Daily off-site backups, tested regularly, so a bad update or a mistake is an hour's fix, not a rebuild.",
+                "ar": "نسخ احتياطية يومية خارج السيرفر نختبرها باستمرار، فالتحديث الغلط أو الخطأ يتصلّح في ساعة، مو إعادة بناء."
+              }
+            },
+            {
+              "title": { "en": "One team, no handoffs", "ar": "فريق واحد بدون تحويلات" },
+              "text": {
+                "en": "The people who built your site run its server, so fixes happen without tickets passing between three vendors.",
+                "ar": "اللي بنوا موقعك هم اللي يديرون سيرفره، فالإصلاح يتم بدون تذاكر تتنقّل بين ثلاث شركات."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Server setup and migration", "ar": "إعداد السيرفر ونقل الموقع" },
+            { "en": "SSL and security hardening", "ar": "شهادة SSL وتحصين الأمان" },
+            { "en": "Daily off-site backups", "ar": "نسخ احتياطية يومية" },
+            { "en": "Business email setup", "ar": "إعداد بريد الشركة" },
+            { "en": "Uptime and speed monitoring", "ar": "مراقبة التشغيل والسرعة" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "web" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000107",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 17.3,
+          "preview_end_s": 18.3,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 220
+        },
+        {
+          "slug": "domain",
+          "title": { "en": "Domain", "ar": "الدومين" },
+          "blurb": {
+            "en": "We register, protect and manage your domains, DNS and email records, so your address never lapses or breaks.",
+            "ar": "نسجّل دوميناتك ونحميها وندير إعدادات DNS والبريد، عشان عنوانك ما ينتهي ولا يتعطّل أبدًا."
+          },
+          "intro": {
+            "en": "Your domain is the one address every campaign, email and customer depends on.",
+            "ar": "الدومين هو العنوان الوحيد اللي تعتمد عليه كل حملة وكل إيميل وكل عميل."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We help you pick a name that fits the brand, secure the close variations and local extensions like .sa, and register everything in your company's name. Then we manage DNS, email authentication, SSL and redirects, lock domains against unwanted transfers, and track every renewal date. You own it all. We make sure it keeps working."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نساعدك تختار اسم يناسب العلامة، ونحجز الصيغ القريبة منه والامتدادات المحلية مثل .sa، ونسجّل كل شي باسم شركتك. بعدها ندير إعدادات DNS وتوثيق البريد وشهادات SSL والتحويلات، ونقفل الدومينات ضد أي نقل غير مصرّح، ونتابع كل مواعيد التجديد. الملكية لك بالكامل، واحنا نتأكد إنها تظل شغّالة."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We help you pick a name that fits the brand, secure the close variations and local extensions like .sa, and register everything in your company&#39;s name. Then we manage DNS, email authentication, SSL and redirects, lock domains against unwanted transfers, and track every renewal date. You own it all. We make sure it keeps working.</p>",
+            "ar": "<p>نساعدك تختار اسم يناسب العلامة، ونحجز الصيغ القريبة منه والامتدادات المحلية مثل .sa، ونسجّل كل شي باسم شركتك. بعدها ندير إعدادات DNS وتوثيق البريد وشهادات SSL والتحويلات، ونقفل الدومينات ضد أي نقل غير مصرّح، ونتابع كل مواعيد التجديد. الملكية لك بالكامل، واحنا نتأكد إنها تظل شغّالة.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Registered in your name", "ar": "مسجّل باسمك أنت" },
+              "text": {
+                "en": "Every domain sits under your company's ownership with full access, never locked inside an agency account.",
+                "ar": "كل دومين يكون ملك شركتك مع صلاحيات كاملة، وما ينحبس داخل حساب وكالة."
+              }
+            },
+            {
+              "title": { "en": "No surprise expiries", "ar": "ولا انتهاء مفاجئ" },
+              "text": {
+                "en": "We track renewals across every domain and extension, renew ahead of time, and keep payment details current.",
+                "ar": "نتابع التجديدات لكل الدومينات والامتدادات، ونجدّد قبل الموعد، ونحافظ على بيانات الدفع محدّثة."
+              }
+            },
+            {
+              "title": { "en": "Email that lands", "ar": "بريد يوصل لوجهته" },
+              "text": {
+                "en": "Correct SPF, DKIM and DMARC records so your emails reach inboxes and nobody can send mail pretending to be you.",
+                "ar": "إعدادات SPF وDKIM وDMARC مضبوطة، عشان توصل رسائلك للبريد الوارد وما أحد يقدر يرسل باسمك."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Name and extension advice", "ar": "اقتراح الاسم والامتداد" },
+            { "en": "Domain registration and protection", "ar": "تسجيل الدومين وحمايته" },
+            { "en": "DNS and redirect management", "ar": "إدارة DNS والتحويلات" },
+            { "en": "Email authentication records", "ar": "إعدادات توثيق البريد" },
+            { "en": "Renewal tracking and alerts", "ar": "متابعة التجديدات والتنبيهات" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "web" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000112",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 15.9,
+          "preview_end_s": 17.3,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 230
         },
         {
           "slug": "seo-geo-aeo",
           "title": { "en": "SEO / GEO / AEO", "ar": "تحسين الظهور SEO / GEO / AEO" },
           "short_title": { "en": "SEO / GEO / AEO", "ar": "تحسين الظهور" },
           "blurb": {
-            "en": "Be found by people and by AI answer engines.",
-            "ar": "أن تُوجد أمام الناس وأمام محركات الإجابة."
+            "en": "Be found in search, cited by AI assistants, and quoted in the direct answers people read first.",
+            "ar": "خلّ الناس يلقونك في البحث، ومساعدات الذكاء الاصطناعي تستشهد فيك، وإجاباتك تظهر أول شي يقرونه."
           },
+          "intro": {
+            "en": "People now ask AI before they search. Your brand should be in the answer.",
+            "ar": "الناس صاروا يسألون الذكاء الاصطناعي قبل ما يبحثون. علامتك لازم تكون في الإجابة."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "SEO gets your pages ranking in search. GEO makes your brand a source that AI assistants like ChatGPT, Gemini and Perplexity trust and cite. AEO shapes content to appear in direct answers and AI overviews. We audit the site, fix the technical base, add structured data, and write clear Arabic and English content that answers real questions. Monthly reports show what moved."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "SEO يرفع صفحاتك في نتائج البحث. وGEO يخلّي علامتك مصدر تثق فيه مساعدات الذكاء الاصطناعي مثل ChatGPT وGemini وPerplexity وتستشهد فيه. وAEO يجهّز المحتوى عشان يظهر في الإجابات المباشرة وملخّصات الذكاء الاصطناعي. نراجع الموقع، ونصلّح أساسه التقني، ونضيف البيانات المنظّمة، ونكتب محتوى واضح بالعربي والإنجليزي يجاوب على أسئلة الناس الفعلية. وتقارير شهرية توضّح وش اللي تحرّك."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>SEO gets your pages ranking in search. GEO makes your brand a source that AI assistants like ChatGPT, Gemini and Perplexity trust and cite. AEO shapes content to appear in direct answers and AI overviews. We audit the site, fix the technical base, add structured data, and write clear Arabic and English content that answers real questions. Monthly reports show what moved.</p>",
+            "ar": "<p>SEO يرفع صفحاتك في نتائج البحث. وGEO يخلّي علامتك مصدر تثق فيه مساعدات الذكاء الاصطناعي مثل ChatGPT وGemini وPerplexity وتستشهد فيه. وAEO يجهّز المحتوى عشان يظهر في الإجابات المباشرة وملخّصات الذكاء الاصطناعي. نراجع الموقع، ونصلّح أساسه التقني، ونضيف البيانات المنظّمة، ونكتب محتوى واضح بالعربي والإنجليزي يجاوب على أسئلة الناس الفعلية. وتقارير شهرية توضّح وش اللي تحرّك.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Arabic search done natively", "ar": "بحث عربي من الأساس" },
+              "text": {
+                "en": "We research how people in Saudi Arabia actually phrase their searches in Arabic, not translated English keywords.",
+                "ar": "ندرس كيف يكتب الناس في السعودية بحثهم بالعربي فعلًا، مو كلمات إنجليزية مترجمة."
+              }
+            },
+            {
+              "title": { "en": "Built to be cited", "ar": "محتوى يستاهل الاستشهاد" },
+              "text": {
+                "en": "Clear facts, structured data and consistent brand details that AI assistants can read, trust and quote back accurately.",
+                "ar": "معلومات واضحة وبيانات منظّمة وتفاصيل علامة متّسقة، تقدر مساعدات الذكاء الاصطناعي تقراها وتثق فيها وتنقلها بدقّة."
+              }
+            },
+            {
+              "title": { "en": "Reports in plain language", "ar": "تقارير بلغة واضحة" },
+              "text": {
+                "en": "Each month you see rankings, AI mentions and leads side by side, with what we changed and what comes next.",
+                "ar": "كل شهر تشوف الترتيب وظهورك في الذكاء الاصطناعي والطلبات جنب بعض، مع اللي غيّرناه واللي بعده."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Technical SEO audit", "ar": "تدقيق SEO تقني" },
+            { "en": "Arabic and English keyword map", "ar": "خريطة كلمات عربية وإنجليزية" },
+            { "en": "Structured data and schema", "ar": "البيانات المنظّمة وSchema" },
+            { "en": "Answer-ready content pages", "ar": "صفحات محتوى جاهزة للإجابات" },
+            { "en": "Monthly visibility report", "ar": "تقرير ظهور شهري" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "web" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000112",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 15.9,
+          "preview_end_s": 18.3,
           "status": "published",
           "is_teaser": false,
-          "sort_order": 11
+          "sort_order": 240
         },
         {
-          "slug": "music",
-          "title": { "en": "Music", "ar": "الموسيقى" },
-          "blurb": { "en": "Original sound and scoring.", "ar": "موسيقى أصلية وتوزيع صوتي." },
-          "status": "published",
-          "is_teaser": false,
-          "sort_order": 12
-        },
-        {
-          "slug": "merchandise",
-          "title": { "en": "Merchandise", "ar": "المنتجات الترويجية" },
+          "slug": "venue-booking",
+          "title": { "en": "Venue Booking", "ar": "حجز الأماكن" },
           "blurb": {
-            "en": "Branded products people actually keep.",
-            "ar": "منتجات بعلامتك يحتفظ بها الناس."
+            "en": "We shortlist, visit and negotiate venues that fit your guest list, your date and the experience you want to deliver.",
+            "ar": "نرشّح الأماكن ونزورها ونفاوض عليها، عشان تناسب عدد ضيوفك وموعدك والتجربة اللي تبي تقدّمها."
           },
+          "intro": {
+            "en": "The right venue solves half your event problems before planning even starts.",
+            "ar": "المكان الصح يحلّ نص مشاكل فعاليتك قبل ما يبدأ التخطيط."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We start with your audience, format and budget, then shortlist venues across Jeddah and the Kingdom that match. We visit each one, check capacity, access, power, loading and permits, and bring you a clear comparison. Once you choose, we negotiate rates and terms, handle the contract and deposits, and stay the single contact with the venue until the last guest leaves."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نبدأ من جمهورك وشكل الفعالية وميزانيتك، ثم نرشّح أماكن مناسبة في جدة وباقي المملكة. نزور كل مكان، ونتأكد من السعة والمداخل والكهرباء ومنطقة التحميل والتصاريح، ونرجع لك بمقارنة واضحة. ولما تختار، نفاوض على الأسعار والشروط، ونتولّى العقد والدفعات، ونظل حلقة الوصل الوحيدة مع المكان لين يطلع آخر ضيف."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We start with your audience, format and budget, then shortlist venues across Jeddah and the Kingdom that match. We visit each one, check capacity, access, power, loading and permits, and bring you a clear comparison. Once you choose, we negotiate rates and terms, handle the contract and deposits, and stay the single contact with the venue until the last guest leaves.</p>",
+            "ar": "<p>نبدأ من جمهورك وشكل الفعالية وميزانيتك، ثم نرشّح أماكن مناسبة في جدة وباقي المملكة. نزور كل مكان، ونتأكد من السعة والمداخل والكهرباء ومنطقة التحميل والتصاريح، ونرجع لك بمقارنة واضحة. ولما تختار، نفاوض على الأسعار والشروط، ونتولّى العقد والدفعات، ونظل حلقة الوصل الوحيدة مع المكان لين يطلع آخر ضيف.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Every venue visited first", "ar": "نزور كل مكان بنفسنا" },
+              "text": {
+                "en": "We walk every shortlisted space in person, so you never discover a low ceiling or missing loading bay on the day.",
+                "ar": "نمشي في كل مكان مرشّح بأنفسنا، عشان ما تكتشف سقف منخفض أو منطقة تحميل ناقصة يوم الفعالية."
+              }
+            },
+            {
+              "title": { "en": "Better rates and terms", "ar": "أسعار وشروط أفضل" },
+              "text": {
+                "en": "Our relationships with venue teams mean fairer prices, flexible dates and cancellation terms that protect you.",
+                "ar": "علاقتنا مع فرق الأماكن تعني أسعار أعدل ومواعيد مرنة وشروط إلغاء تحميك."
+              }
+            },
+            {
+              "title": { "en": "Chosen with production in mind", "ar": "اختيار يراعي التنفيذ" },
+              "text": {
+                "en": "Because we also design and build, we check power, rigging and access for what will actually be installed.",
+                "ar": "لأننا نصمّم ونبني بعد، نتحقق من الكهرباء ونقاط التعليق والمداخل حسب اللي بيتركّب فعلًا."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Venue brief and shortlist", "ar": "ملخّص الاحتياج وقائمة الأماكن" },
+            { "en": "Site visits and reports", "ar": "زيارات ميدانية وتقارير" },
+            { "en": "Side-by-side venue comparison", "ar": "مقارنة واضحة بين الأماكن" },
+            { "en": "Rate and contract negotiation", "ar": "التفاوض على السعر والعقد" },
+            { "en": "Permits and venue coordination", "ar": "التصاريح والتنسيق مع المكان" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "events" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000113",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 0.05,
+          "preview_end_s": 1,
           "status": "published",
           "is_teaser": false,
-          "sort_order": 13
+          "sort_order": 250
         },
         {
-          "slug": "gaming",
-          "title": { "en": "Gaming", "ar": "الألعاب" },
+          "slug": "3d-design",
+          "title": { "en": "3D Design", "ar": "تصميم 3D" },
           "blurb": {
-            "en": "Worlds, assets, and in-game brand work.",
-            "ar": "عوالم وأصول وحضور داخل اللعبة."
+            "en": "See your booth, stage or event space in full 3D, from every angle, before a single panel is built.",
+            "ar": "شوف جناحك أو مسرحك أو مساحة فعاليتك بتقنية 3D من كل زاوية، قبل ما تنبني أي قطعة."
           },
+          "intro": {
+            "en": "Every change is free on screen and expensive on the show floor.",
+            "ar": "أي تعديل على الشاشة ببلاش، وعلى أرض المعرض مكلف."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We model your booth, stage or venue layout to real scale, using the organizer's floor plan and rules. You see materials, lighting, screens and branding as they will look, and walk through the space before approving it. Our 3D files become the build drawings, so what you signed off is what our workshop produces."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نبني نموذج لجناحك أو مسرحك أو توزيع المكان بمقاساته الحقيقية، حسب مخطط المنظّم وشروطه. تشوف الخامات والإضاءة والشاشات والهوية مثل ما بتطلع، وتتجوّل في المساحة قبل ما تعتمدها. وملفات 3D نفسها تتحوّل لمخططات التنفيذ، فاللي اعتمدته هو اللي تنتجه ورشتنا."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We model your booth, stage or venue layout to real scale, using the organizer&#39;s floor plan and rules. You see materials, lighting, screens and branding as they will look, and walk through the space before approving it. Our 3D files become the build drawings, so what you signed off is what our workshop produces.</p>",
+            "ar": "<p>نبني نموذج لجناحك أو مسرحك أو توزيع المكان بمقاساته الحقيقية، حسب مخطط المنظّم وشروطه. تشوف الخامات والإضاءة والشاشات والهوية مثل ما بتطلع، وتتجوّل في المساحة قبل ما تعتمدها. وملفات 3D نفسها تتحوّل لمخططات التنفيذ، فاللي اعتمدته هو اللي تنتجه ورشتنا.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Real scale, real rules", "ar": "مقاسات وشروط حقيقية" },
+              "text": {
+                "en": "Designs follow the venue's floor plan, height limits and organizer regulations, so approvals come back without surprises.",
+                "ar": "التصميم يلتزم بمخطط المكان وحدود الارتفاع وأنظمة المنظّم، فالموافقات ترجع بدون مفاجآت."
+              }
+            },
+            {
+              "title": { "en": "Walkthroughs, not just renders", "ar": "جولات، مو صور بس" },
+              "text": {
+                "en": "Video walkthroughs show visitor flow, sightlines and screen placement, so decisions get made with the whole team watching.",
+                "ar": "فيديوهات جولة توضّح حركة الزوار وزوايا الرؤية ومكان الشاشات، عشان يتخذ الفريق كله القرار وهو شايف الصورة كاملة."
+              }
+            },
+            {
+              "title": { "en": "Drawn to be built", "ar": "مصمّم عشان ينبني" },
+              "text": {
+                "en": "Our designers work with our own workshop, so every detail is costed and buildable before you approve it.",
+                "ar": "مصمّمينا يشتغلون مع ورشتنا مباشرة، فكل تفصيلة محسوبة التكلفة وقابلة للتنفيذ قبل ما تعتمدها."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Concept 3D renders", "ar": "تصاميم 3D مبدئية" },
+            { "en": "Material and lighting options", "ar": "خيارات الخامات والإضاءة" },
+            { "en": "Video walkthrough", "ar": "فيديو جولة داخل التصميم" },
+            { "en": "Organizer approval drawings", "ar": "مخططات موافقة المنظّم" },
+            { "en": "Build-ready technical files", "ar": "ملفات فنية جاهزة للتنفيذ" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "events" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000109",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 12.9,
+          "preview_end_s": 13.45,
           "status": "published",
-          "is_teaser": true,
-          "sort_order": 14
+          "is_teaser": false,
+          "sort_order": 260
+        },
+        {
+          "slug": "booth-production",
+          "title": { "en": "Booth Production", "ar": "تصنيع الأجنحة" },
+          "blurb": {
+            "en": "We build your exhibition booth in our workshop, with quality checked at every stage and a full test assembly before shipping.",
+            "ar": "نصنّع جناح معرضك في ورشتنا، مع فحص الجودة في كل مرحلة وتركيب تجريبي كامل قبل الشحن."
+          },
+          "intro": {
+            "en": "A booth is judged in the first three seconds. The finish decides what people remember.",
+            "ar": "الجناح ينحكم عليه من أول ثلاث ثواني، والتشطيب هو اللي يحدّد وش يتذكّره الناس."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "From approved 3D files, we produce joinery, metalwork, graphics, lighting and AV integration under one roof. A project lead tracks every element against the schedule and sends progress photos each week. Before anything ships, we assemble the full booth in the workshop, fix what needs fixing, and pack it labelled for fast installation. Reusable modules can be stored for your next show."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "من ملفات 3D المعتمدة، ننتج النجارة والحدادة والجرافيكس والإضاءة وتجهيزات الصوت والشاشات تحت سقف واحد. مدير مشروع يتابع كل عنصر حسب الجدول ويرسل لك صور التقدّم كل أسبوع. وقبل الشحن، نركّب الجناح كامل في الورشة، ونصلّح اللي يحتاج، ونغلّفه بترقيم واضح عشان يتركّب بسرعة. والوحدات القابلة لإعادة الاستخدام نخزّنها لمعرضك الجاي."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>From approved 3D files, we produce joinery, metalwork, graphics, lighting and AV integration under one roof. A project lead tracks every element against the schedule and sends progress photos each week. Before anything ships, we assemble the full booth in the workshop, fix what needs fixing, and pack it labelled for fast installation. Reusable modules can be stored for your next show.</p>",
+            "ar": "<p>من ملفات 3D المعتمدة، ننتج النجارة والحدادة والجرافيكس والإضاءة وتجهيزات الصوت والشاشات تحت سقف واحد. مدير مشروع يتابع كل عنصر حسب الجدول ويرسل لك صور التقدّم كل أسبوع. وقبل الشحن، نركّب الجناح كامل في الورشة، ونصلّح اللي يحتاج، ونغلّفه بترقيم واضح عشان يتركّب بسرعة. والوحدات القابلة لإعادة الاستخدام نخزّنها لمعرضك الجاي.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Test-built before shipping", "ar": "تركيب تجريبي قبل الشحن" },
+              "text": {
+                "en": "Every booth is fully assembled in our workshop first, so problems are solved there, not on the show floor.",
+                "ar": "كل جناح نركّبه كامل في ورشتنا أول، عشان تنحل المشاكل هناك مو على أرض المعرض."
+              }
+            },
+            {
+              "title": { "en": "Finishes that hold up", "ar": "تشطيبات تتحمّل" },
+              "text": {
+                "en": "We choose materials and finishes that look right under exhibition lighting and survive long days of heavy foot traffic.",
+                "ar": "نختار خامات وتشطيبات تطلع صح تحت إضاءة المعارض وتتحمّل أيام طويلة من زحمة الزوار."
+              }
+            },
+            {
+              "title": { "en": "Built to reuse", "ar": "مصنوع لإعادة الاستخدام" },
+              "text": {
+                "en": "Modular structures and stored components mean your next exhibition costs less and goes up faster.",
+                "ar": "الهياكل المعيارية والقطع المخزّنة تعني إن معرضك الجاي يكلّف أقل ويتركّب أسرع."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Joinery and metalwork", "ar": "النجارة والحدادة" },
+            { "en": "Large-format printed graphics", "ar": "طباعة جرافيكس بمقاسات كبيرة" },
+            { "en": "Lighting and AV integration", "ar": "تجهيز الإضاءة والشاشات" },
+            { "en": "Full workshop test assembly", "ar": "تركيب تجريبي كامل في الورشة" },
+            { "en": "Labelled packing and storage", "ar": "تغليف بترقيم وتخزين" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "events" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000114",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 13.4,
+          "preview_end_s": 15.9,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 270
+        },
+        {
+          "slug": "booth-installation",
+          "title": { "en": "Booth Installation", "ar": "تركيب الأجنحة" },
+          "blurb": {
+            "en": "Our crew installs, tests and hands over your booth on time, stays through the show, and clears everything out after.",
+            "ar": "فريقنا يركّب جناحك ويختبره ويسلّمه في وقته، ويبقى معك طوال المعرض، ويفكّ كل شي بعده."
+          },
+          "intro": {
+            "en": "Build-up days are short. The crew on site decides whether you open on time.",
+            "ar": "أيام التركيب قصيرة، والفريق اللي في الموقع هو اللي يحدّد تفتح في وقتك أو لا."
+          },
+          "body": {
+            "en": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "We handle organizer paperwork, crew passes, safety plans and delivery slots before build-up starts. On site, a supervisor leads our installation crew, connects power and AV, and runs a full check of lighting, screens and finishes. You walk the booth before the show opens. During the event a technician stays on call, and after closing we dismantle, pack and store."
+                    }
+                  ]
+                }
+              ]
+            },
+            "ar": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "نتولّى أوراق المنظّم وتصاريح الفريق وخطط السلامة ومواعيد التوريد قبل ما يبدأ التركيب. وفي الموقع، مشرف يقود فريق التركيب، ويوصّل الكهرباء والشاشات، ويسوّي فحص كامل للإضاءة والشاشات والتشطيب. وتتجوّل في الجناح قبل الافتتاح. وخلال الفعالية يبقى فنّي جاهز لأي طلب، وبعد الإغلاق نفكّ ونغلّف ونخزّن."
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body_html": {
+            "en": "<p>We handle organizer paperwork, crew passes, safety plans and delivery slots before build-up starts. On site, a supervisor leads our installation crew, connects power and AV, and runs a full check of lighting, screens and finishes. You walk the booth before the show opens. During the event a technician stays on call, and after closing we dismantle, pack and store.</p>",
+            "ar": "<p>نتولّى أوراق المنظّم وتصاريح الفريق وخطط السلامة ومواعيد التوريد قبل ما يبدأ التركيب. وفي الموقع، مشرف يقود فريق التركيب، ويوصّل الكهرباء والشاشات، ويسوّي فحص كامل للإضاءة والشاشات والتشطيب. وتتجوّل في الجناح قبل الافتتاح. وخلال الفعالية يبقى فنّي جاهز لأي طلب، وبعد الإغلاق نفكّ ونغلّف ونخزّن.</p>"
+          },
+          "value_points": [
+            {
+              "title": { "en": "Paperwork handled early", "ar": "الأوراق جاهزة بدري" },
+              "text": {
+                "en": "Organizer approvals, insurance, safety plans and crew passes are filed ahead, so nothing stops us at the gate.",
+                "ar": "موافقات المنظّم والتأمين وخطط السلامة وتصاريح الفريق نقدّمها مبكر، عشان ما يوقفنا شي عند البوابة."
+              }
+            },
+            {
+              "title": { "en": "The builders install it", "ar": "اللي صنعوه يركّبونه" },
+              "text": {
+                "en": "The same people who built your booth in the workshop set it up on site, so they know every joint.",
+                "ar": "نفس الفريق اللي صنّع جناحك في الورشة يركّبه في الموقع، فيعرف كل وصلة فيه."
+              }
+            },
+            {
+              "title": { "en": "On call all show", "ar": "جاهزين طوال المعرض" },
+              "text": {
+                "en": "A technician stays available for the whole event to fix a loose panel, a dead screen or a lighting fault fast.",
+                "ar": "فنّي متواجد طوال الفعالية عشان يصلّح بسرعة أي لوح مفكوك أو شاشة طافية أو عطل في الإضاءة."
+              }
+            }
+          ],
+          "deliverables": [
+            { "en": "Organizer approvals and permits", "ar": "موافقات المنظّم والتصاريح" },
+            { "en": "Supervised on-site installation", "ar": "تركيب ميداني بإشراف" },
+            { "en": "Power, lighting and AV setup", "ar": "توصيل الكهرباء والإضاءة والشاشات" },
+            { "en": "On-call show support", "ar": "دعم فني طوال المعرض" },
+            { "en": "Dismantling and storage", "ar": "الفك والتخزين" }
+          ],
+          "discipline_id": { "$ref": { "table": "disciplines", "by": { "slug": "events" } } },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000107",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 17.3,
+          "preview_end_s": 18.3,
+          "status": "published",
+          "is_teaser": false,
+          "sort_order": 280
         }
       ]
     }

@@ -36,7 +36,7 @@
           "id": "00000000-0000-4000-8000-00000000a104",
           "location": "header",
           "label": { "en": "Services", "ar": "الخدمات" },
-          "href": "/#services",
+          "href": "/services",
           "sort_order": 4,
           "visible": true,
           "is_key": false
