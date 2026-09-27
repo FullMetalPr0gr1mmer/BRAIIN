@@ -695,3 +695,40 @@ The orchestrator renumbers these at integration.
   - the Arabic home meta, "…: خمسة تخصصات، استوديو واحد.".
 
   ServicesIndex's "Fourteen" goes with the component in S3.
+- **S2-12. Performance: the /ar home LCP regression (CI 2680 ms against the 2500 ms
+  budget; S1 passed).** Measured with Lighthouse 12.6 on the mobile profile of
+  `lighthouserc.json` (simulated throttling), S1 and S2 builds served side by side and run
+  interleaved, 7 runs a route, and by recomputing Lantern's LCP graph from the saved
+  trace. Lantern's LCP is not the logo's arrival: it is the end of the LAST request that
+  finished before the observed paint. On /ar those were the five Almarai faces the page
+  lays out, and a face cannot start before global.css has arrived, because the
+  `@font-face` rules live in it. S2 grew that render-blocking sheet by 4.3 KB gzipped, and
+  the font chain, and so the LCP, moved by the same ~150 ms on every page. Local medians:
+  /ar 2492 → 2643 ms, / 1884 → 2049 ms, /contact 1728 → 1873 ms. Four changes, none of
+  them to the design, the markup's structure or the CSP:
+  - **The served stylesheets are minified.** `scripts/minify-css.mjs` runs in
+    `postbuild` and strips comments and insignificant whitespace from
+    `dist/client/styles/*.css`, the served copy only; the source keeps its comments.
+    global.css drops from 34.9 KB to 14.1 KB gzipped. It is semantics-preserving by
+    construction, it never rewrites a rule, and it refuses what it does not model
+    (`tests/lib/minifyCss.spec.ts` proves each sheet keeps its token stream). No
+    dependency was added.
+  - **The video helpers are one chunk.** With the CSS out of the way, the graph's tail
+    became a module waterfall: Hero → lazyVideo → clips, three round trips. `manualChunks`
+    now puts both helpers in `media-client`.
+  - **The logos are sized by their box.** The header logo and the intro logo (the LCP
+    element) were 1x/2x density pairs keyed to the desktop box. A phone at DPR 1.75
+    fetched the 528w and 1040w files (9 + 17 KB) for 96 px and 189 px boxes. They now
+    use width descriptors with `sizes` from their CSS, `clamp(96px, 10vw, 132px)` and
+    `min(46vw, 520px)`, so that phone takes 176w + 520w (3 + 9 KB). Every candidate has
+    the exact aspect ratio, so the box never reshapes when the file arrives. Desktop
+    picks are unchanged: 1x 520w, 2x 1040w for the intro; 176w/264w for the header.
+  - **No layout read before the first frame.** SiteHeader's first `offsetHeight` /
+    `scrollY` read and the count-up's `getBoundingClientRect` ran at module evaluation.
+    When a module evaluated before the first frame (on a loaded machine), the page's
+    whole first layout moved into that script's task (158 ms). Once FCP came earlier,
+    Lighthouse counted that task as blocking time on the home page (TBT up to 790 ms in
+    loaded runs). Both reads now wait for `requestAnimationFrame`.
+
+  After the fix, local medians of 7 (S1 in brackets): /ar 2135 ms (2479), / 1736 ms
+  (1882), /contact 1717 ms (1724). TBT is 0 on all three and CLS is unchanged.
