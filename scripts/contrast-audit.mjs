@@ -42,7 +42,7 @@ const T = {
   // UI v2 PR8 — About's Klein "Follow the studio" band (social-strip--klein)
   kleinBox: '#0f31c0', // .sbox ground — white .06 over Klein
   kleinUser: '#bcc5ed', // .sbox__user — white .72 over that card ground
-  // UI v2 PR10 (work.css) — Our Work / All projects
+  // UI v2 PR10 (banner.css caption; work.css) — Our Work / All projects
   capWorst: '#545454', // .work-cap glass (.45 black) over the banner scrim at the caption's top edge (~.4) over a WHITE frame
   capTag: '#cfcfcf', // .work-cap__tag — white .72 over capWorst
   capMeta: '#cccccc', // .work-cap__m — white .70 over capWorst (the mockup's .58 on .26 glass)
@@ -50,6 +50,14 @@ const T = {
   chipLabel: '#d9d9d9', // .fchip — white .85 over black
   pillBg: '#051824', // .fpill — sky .14 over black
   pillKey: '#b4babd', // .fpill__k — white .70 over pillBg
+  // UI v2 PR9 (contact)
+  touchCard: '#f9f9f9', // .touch-card — rgba(0,0,0,.025) over white (the channel cards)
+  // UI v2 PR11 (case-study.css) — the case study
+  nxWorst: '#636363', // .cs-next — a WHITE poster at the hover opacity (.65) under the .4 scrim
+  nxKicker: '#e8e8e8', // .cs-next__k — white .85 over nxWorst (the mockup's .75 on no scrim was ~2.4:1)
+  kwChip: '#e6e6e6', // .cs-kw li — white .90 over black
+  lbWorst: '#141414', // .lightbox — the .92 black dialog over a WHITE page
+  lbCount: '#b9b9b9', // .lightbox__c — white .70 over lbWorst
 };
 
 // (foreground, background, minRatio, where) — every real on-screen pairing.
@@ -75,6 +83,13 @@ const PAIRS = [
   ['chipLabel', 'bg', 4.5, 'filter chip label'],
   ['fg', 'pillBg', 4.5, 'active filter pill value'],
   ['pillKey', 'pillBg', 4.5, 'active filter pill facet name'],
+  // UI v2 PR11 — the case study
+  ['fg', 'nxWorst', 4.5, 'next-project title over the worst-case poster (hover)'],
+  ['nxKicker', 'nxWorst', 4.5, 'next-project kicker ("Next project") over the worst-case poster'],
+  ['kwChip', 'bg', 4.5, 'keyword chip on the black title band'],
+  ['ink3', 'mist', 4.5, 'case-study overview copy on mist'],
+  ['lbCount', 'lbWorst', 4.5, 'lightbox counter'],
+  ['fg', 'lbWorst', 4.5, 'lightbox controls (white glyphs)'],
   // dark sections (hero, slogan, clients, contact) + interior pages
   ['fg', 'bg', 4.5, 'body text on black'],
   ['fg', 'surface', 4.5, 'card/section text'],
@@ -107,6 +122,16 @@ const PAIRS = [
   ['cobalt', 'mist', 3.0, 'focus outline on mist — Selected work links (UI, 1.4.11)'],
   ['fg', 'okPanel', 4.5, 'lead form "sent" confirmation text'],
   ['err', 'bg', 3.0, 'invalid field border on black (UI, 1.4.11)'],
+  // UI v2 PR9 (contact). Verified on production: the FAQ kicker and heading accent were sky
+  // on the PAPER FAQ band — sky on white is 2.56:1 and fails 1.4.3. The FAQ is the design's
+  // black band now (sky 8.2:1); the one light band (channels) takes Klein. Sky-on-paper is
+  // deliberately absent from this list: it is not a pairing the site may use.
+  ['accent', 'bg', 4.5, 'contact FAQ + inquiry kicker and heading accent (sky on black)'],
+  ['muted', 'bg', 4.5, 'contact FAQ answers / section lead on black'],
+  ['klein', 'paper', 4.5, 'contact channels kicker + heading accent (Klein on white)'],
+  ['klein', 'touchCard', 4.5, 'contact channel card label (Klein on the card tint)'],
+  ['ink', 'touchCard', 4.5, 'contact channel card value'],
+  ['dim', 'touchCard', 4.5, 'contact channel card note'],
 ];
 
 // ---- Admin palette — keep in sync with public/styles/admin.css :root tokens ----

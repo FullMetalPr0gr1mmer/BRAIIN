@@ -237,7 +237,7 @@ names only, validated `^[a-z0-9-]+\.css$`). The Klein social variant stays in gl
 | --- | --- | --- |
 | work.html | `/portfolio` + `/ar/portfolio` — `CatalogPage.astro`, sections `workHero · proof · workIntro · projectGrid · clientsMarquee · cta` | `src/pages/portfolio/index.astro` |
 | projects.html | `/portfolio/all` + `/ar/portfolio/all` (new) — sections `pageHead · projectCatalog · cta` | `src/pages/portfolio/all.astro` |
-| `.hero--banner` + `.cap` | `MediaBanner.astro` (`.mbanner`, shared with the PR11 case study) + `WorkHero.astro` (`.work-cap`) | work.css |
+| `.hero--banner` + `.cap` | `MediaBanner.astro` (`.mbanner`, shared with the PR11 case study) + `WorkHero.astro` (`.work-cap`) | banner.css (split out of work.css in PR11) |
 | `.proof` (`.stats` + `.quotes`) | `ProofBand.astro` (`.proof`) = `StatBand` proof + `Testimonials` light, both `bare` | work.css |
 | `.iw-sec` / `.iw` | `WorkIntro.astro` (`.work-intro`) + two `MediaFrame`s | work.css |
 | `.work` / `.grid` / `.card` | `ProjectGrid.astro` (`.pgrid`), `ProjectCatalog.astro` (`.pcat`), `ProjectCard` | work.css |
@@ -291,7 +291,12 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     Focus Not Obscured); measured against the whole banner, it stayed focusable while
     hidden for most of the banner's height.
 44. **No parallax** on the banner (the mockup's JS translate on scroll) — dropped with Lenis;
-    the banner is pinned (sticky) so the next section still slides over it.
+    the banner is pinned (sticky) so the next section still slides over it. **Not pinned on
+    a viewport shorter than 480px** (400% zoom, a landscape phone): the banner's 400px floor
+    would never scroll past, so its bottom-anchored caption — the only place the teaser,
+    client and year appear — was covered before it was ever seen (WCAG 1.4.10 Reflow;
+    `banner.css`). The contact `.hero--banner` has the same pre-existing root cause
+    (global.css, from main) and is left for a follow-up.
 45. **The filter chip count is .6 white** (mockup .45 = 4.4:1 at 11px); the `fb__lbl`, back
     link, lead and counts use `--bs-muted` for the mockup's `--dim-d` (decision 10).
 46. **The All projects h1 has no scroll reveal** (the mockup's `.rv`): it is the page's
@@ -329,3 +334,176 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
 54. **The `cta` section type renders LeadBand** (tag, outlined accent, `/contact#inquiry`,
     studio email from identity); CtaBand and its `.cta-band` CSS are retired. Any page still
     carrying a `cta` section (About's current default) now shows the Klein band.
+
+## Contact (PR9)
+
+| Mockup | Site | Where |
+|---|---|---|
+| `.hero--contact` | `Hero` with `withHeroPreset(…, 'contact')` → `.hero--banner` (route data: banner, `#inquiry`, clip 6.2–7.9 s) | `/contact` hero |
+| hero `.cta.cta--down` (icon first) | `Cta.astro` `.cta--badge.cta--down.hero__cta` | hero |
+| `.inquiry` + `.sec__head` | `ContactInquiry.astro` (`.contact-inquiry`, `.sec-head`, `AccentText`) | `#inquiry` |
+| `.form` / `.field` / `.form__foot` / `.form__ok` | `ContactForm fields="full"` (`.contact-form--full`, badge submit, `.form-status.is-ok`) + `formErrors.ts` | `#inquiry` |
+| `.touch` / `.tbox` / `.tbox__ico` | `ContactChannels.astro` (`.contact-touch`, `.touch-card`, `.touch-card__ico`) | channels |
+| `.social--joined` | `SocialStrip joined` (`.social-strip--joined`) | channels |
+| `.faq` / `.qa` | `FaqAccordion.astro` (`.faq-section`, native `<details class="faq-item">`) | `#faq` |
+
+## Decisions (PR9)
+
+55. **The contact page is CMS-composed** (`pages` slug `contact`, seeded by
+    `supabase/seed-data/52-contact.json` while the page has no sections), with three route
+    guarantees on top: `withHeroPreset('contact')`, `ensureContactInquiry` and
+    `withContactData` (services as route data). This fixes the production bug where the
+    hero rendered the HOME headline and its "See our work" button (and jumped to the form).
+    The preset is code-only and never stored: its copy (the design's, verbatim) is a
+    default under authored content; its layout — the banner, the `#inquiry` target, the
+    loop window — is route `data` the CMS cannot change. An authored headline never
+    inherits the preset's accent indices (they count the preset's words). A banner hero
+    never shows the intro plate, whatever its content says. The page gains its `<main>`.
+56. **Hero loop window 6.2–7.9 s** via `data-clip-start/end` on the hero media (lazyVideo's
+    windowed loop, EXC-009); the design's `scale(1.1)` + `object-position: center 42%` are
+    kept. Its `inset: -10%` overscan is not: it existed only for the JS parallax the port
+    drops. The accent stays **cobalt** (the design's Klein is ~2:1 on the dark video — the
+    PR6 deviation), and the scrim stays.
+57. **The full form is the design's seven fields** (name, email, company, service, budget,
+    deadline, message) plus the PDPL consent checkbox and the honeypot, posting
+    `kind=project_inquiry`. Phone and the timeline select are gone (the schema still accepts
+    `phone` and the legacy `timelineBand` for cached pages). The deadline is free text,
+    `maxlength=120`, posted as `timelineText` (encrypted into `timeline_text_enc`,
+    Admin/Developer only). Budget options are `BUDGET_BAND_LABELS` — the design's bands and
+    its Arabic-Indic digits — with "Prefer to discuss" as the empty option; legacy bands are
+    accepted on input, never offered. Outcomes, per-field errors and the sent state are
+    PR7's (`formErrors.ts`); the design's form showed "sent" whatever happened.
+58. **Service options are the published services' titles**, valued by slug — not the
+    design's static list, which differs from the CMS in six labels ("Animation" vs
+    "Animations"; five Arabic titles). Matching the design is a content edit in
+    /admin/services, not code.
+59. **Section heads are real `<h2>`s** named by `aria-labelledby`, with the accent as a word
+    range (`AccentText`) — never an HTML string. `contactInquiry`, `contactChannels` and
+    `faq` now take CMS copy overrides (strict schemas; tag, heading, accent, lead, and the
+    form note / confirmation / submit label, and the card labels and notes). The FAQ's
+    questions and answers stay code-owned: they are also the FAQPage JSON-LD.
+60. **The FAQ is the design's dark band** — and that is the contrast fix verified on
+    production: on the old paper band its sky kicker and heading accent measured 2.56:1
+    (WCAG 1.4.3). Sky is used only on the black bands (8.2:1); the paper channels band
+    takes Klein (10.6:1); `scripts/contrast-audit.mjs` asserts the pairs and the contact e2e
+    measures every kicker and accent against its own band. Questions turn sky on hover and
+    when open, as designed. The design animated the panel height (layout); here the panel
+    opens natively and the answer rises in (transform + opacity, in the reduced-motion
+    invariant). The FAQPage JSON-LD is emitted only while the FAQ band renders.
+61. **The Arabic FAQ is the design's Saudi-voice copy, verbatim** (owner decision 6),
+    replacing the MSA rewrite; the English was already verbatim. Answer 5 ("one of the
+    fourteen") is tied to the service count — flagged for the owner, kept verbatim.
+62. **Channel cards carry the design's icons**, Klein labels and 700-weight values; the hover
+    label/note stay at .88 white (the design's .8 is 4.36:1 on the gradient). The WhatsApp
+    card renders only for a valid E.164 number in the identity (`whatsappChannel`, checked
+    again on read) — the design's `wa.me/9665XXXXXXXX` never ships. The lead "No form, no
+    gatekeeping." is kept verbatim although it sits under a form (flagged, design copy).
+63. **The joined social strip keeps the design's inset rule** (the gutter is a margin, so
+    the line is inset too) and drops the standalone strip's bottom padding — the
+    `.contact-touch` padding ends the band, as the design's `.social--joined` (not a
+    `.social`) does. The full form fills the section wrap with no margin of its own
+    (`max-width: none; margin-block: 0`), as the design's `.form`: the shared 60rem cap
+    and 1.5rem margins had left it ~200px short of the head at ≥1280px. The contact-only always-on `.nav::before` gradient is not
+    carried: the overlay header and the hero scrim already hold the nav's contrast.
+
+## Case study (PR11)
+
+| Mockup | Site | Where |
+| --- | --- | --- |
+| project.html `?p=<slug>` | `/portfolio/[slug]` + `/ar/portfolio/[slug]` — `CaseStudyPage.astro` + `loadCaseStudyPage` (one loader for both twins) | `src/components/case-study/`, `src/lib/portfolio/casePage.ts` |
+| `.hero--banner` + `.cap` | `CaseBanner.astro` = `MediaBanner` + the `.work-cap` glass caption ("Case study") | banner.css |
+| `.pt` / `.kw` / `.pt__meta` | `CaseTitle.astro` (`.cs-title`, `.cs-kw`) + `FacetTags` `case` | case-study.css |
+| `.ov` / `.scope` / `.res` / `.ov__final` | `CaseOverview.astro` (`.cs-ov`, `.cs-scope`, `.cs-res`, `.cs-final` = `MediaFrame` `film`) | case-study.css |
+| `.pq` | `CaseQuote.astro` (`.cs-quote` on `.klein-band`) | case-study.css |
+| `.bd` / `.steps-bd` / `.bdi` | `CaseBreakdown.astro` (`.cs-bd`, `.cs-bdi`) | case-study.css |
+| `.gal` + `GAL_PATTERN` | `CaseGallery.astro` (`.cs-gal`) + `galleryLayout()` (server-side) | case-study.css |
+| `.lb` | `Lightbox.astro` (`dialog.lightbox`) + `src/lib/client/lightbox.ts` | case-study.css |
+| `.nx` | `NextProject.astro` (`.cs-next`) + `nextProject()` | case-study.css |
+| `.lead` | `LeadBand` (unchanged) | global.css |
+
+## Decisions (PR11)
+
+64. **An unknown slug is a real 404** (status 404; the Arabic 404 page under `/ar`) — the
+    mockup rendered The Rider for any slug, and cloned The Rider's whole body into the six
+    projects that had no written case study. Here a project renders only its own data, and
+    every part hides when it has none: a card-only project reads banner → title → facets →
+    next → lead band. The page and the discovery index (sitemap, llms.txt) share one parse
+    path (`parseCaseStudies`), so neither lists a slug that answers 404.
+65. **Banner fallback**: the hero frame and loop, else the card poster and preview (the
+    mockup's own fallback). With no frame there is no banner, even when a clip exists (a clip
+    alone would pin a blank dark block until the loop mounts; Our Work's `bannerCard` follows
+    the same rule); the black title band
+    opens the page, carries `data-hero` for the overlay header, and its h1 drops the reveal
+    (it may be the LCP element).
+66. **The h1 is the project's name**; its type lives in the keyword chips, which fall back
+    to the type alone when none are authored (the mockup's rule). The chips are a list (its
+    accessible name "Keywords" / "الكلمات المفتاحية" is ours — owner review). Facets are
+    links into All projects, "Industry" = the sector. The back link keeps the mockup's
+    target, Our Work's grid (`/portfolio#projects`).
+67. **Overview headings are real h2s** (the mockup's were divs). Each block hides when
+    empty; the body, when a project has one, follows the summary. **It is rendered at
+    render time from the Tiptap JSON (`body`) by the allowlist renderer** (`renderBody`,
+    `src/lib/data/portfolio.ts`), not read from the `body_html` cache: the database accepts
+    that cache from a direct PostgREST / `rpc/save_portfolio` write that skips the admin
+    API's sanitiser, and Pillar 1 is "sanitised on write AND render". The cost lands on an
+    edge-cache miss only. BlogDetail/ServiceDetail still emit their cache — follow-up.
+68. **The final film is a muted in-view loop** (30 % visible, the mockup's threshold) and
+    never plays on touch, under reduced motion or with Save-Data. The mockup's in-place
+    "Sound on" toggle is not shipped: sound, captions (WCAG 1.2.2) and a pause control
+    arrive with the Stream player (KAN-20). **No Stream facade is rendered on the case
+    study** — nothing third-party loads, so there is nothing to consent-gate today; the
+    player that replaces the loop must go through `hasConsent` (recorded as a KAN-20
+    prerequisite in EXC-009).
+69. **The quote is attributed to the person** — `author_name` + "Title, Company" — where the
+    mockup overwrote the name with the client company ("Client A"). Photo, else initials
+    (the shared helper skips the Arabic article: "اسم العميل" → "اع"). Only the project's
+    own PUBLISHED testimonial is shown; with none (production today) the band is absent.
+70. **Stills are content, so alt text is required**: a breakdown or gallery still is shown
+    only when it can be described in both languages (a caption, or an EN + AR alt), else it
+    is dropped. Its alt is its own description, else its caption. The mockup used the
+    caption for breakdown alts and `alt=""` in gallery buttons named "01".
+71. **Stills are links to their full-size image** (1600 px WebP): without JS, or with a
+    modified click, they open the image. The viewer is a native modal `<dialog>`: the page
+    behind is inert, focus goes to Close, Tab wraps inside, Escape and a backdrop click
+    close, focus returns to the still; labels are localised (ours in Arabic — owner review);
+    the counter is a polite live region; the page does not scroll behind it; its fade-in is
+    killed under reduced motion. **RTL keeps the buttons' meaning** — Previous sits at the
+    inline start with a mirrored arrow, and ArrowLeft means "next" — where the mockup kept
+    the buttons in place and swapped what they did (its "Previous" went forwards).
+72. **The gallery count follows the Arabic plural categories** (01 لقطة, 02 لقطتان, 03–10
+    لقطات, 11–99 لقطةً); the mockup wrote "09 لقطة". Owner sign-off with decision 42.
+73. **The gallery rhythm is server-rendered** (`galleryLayout`, including the phone rule
+    that stretches a half left alone on its row). The stills touch edge to edge, so the
+    focus ring is drawn inside the still (white with a dark keyline), not as an outline the
+    next still would paint over.
+74. **Next project** = the editor's pick (`next_portfolio_id`) when it is another published
+    project, else the next in catalogue order, wrapping (the mockup's rule). The band is one
+    link named "Next project: <name>". A .4 black scrim over the poster and a .85 kicker
+    (the mockup's .75, no scrim): at its hover opacity over a bright frame the kicker fell to
+    ~2.4:1. Gated in `scripts/contrast-audit.mjs` (`nxWorst`).
+75. **Structured data**: an extended CreativeWork — `image` (the banner frame, 1200 px JPEG,
+    absolute), `dateModified` (the row's `updated_at`), `dateCreated` (the year),
+    `keywords`, `genre` (the type), `about` (the sector), `inLanguage` — and a breadcrumb
+    Home › Our Work › name. **No Review/AggregateRating**: a client quote on our own page is
+    not an independent review. og:image falls back to the same frame when SEO set none.
+76. **Metadata**: the title is the mockup's own `document.title` — "<name> | <type>" under
+    the brand template; the description is the teaser, else the summary (strictly in the
+    page's language), else the mockup's generic line (`CASE_STUDY_META`; the Arabic is ours
+    — owner review). The CreativeWork `description` is the same text with `%brand%`
+    filled in (`caseSchemaDescription`) — the JSON-LD builder substitutes nothing.
+77. **Cache**: Tier A, tagged `portfolio:<slug>`, `portfolio:all` (the next project's card),
+    `sectors:all`, `clients:all`, `services:all`, `testimonials:all`.
+78. **The banner's CSS is its own route sheet** (`banner.css`), linked by Our Work, All
+    projects and the case study, so the case study does not load the catalogue's CSS and
+    Our Work does not load the case study's.
+79. **Dropped with Lenis, as on Our Work**: the banner parallax, the caption's rest fade,
+    the hero loop ignoring reduced motion. Digits stay Latin in Arabic for scope numbers,
+    result values, the film length and counts (decision 5); result values are LTR-isolated
+    so "+XX%" keeps its sign in front, and realigned to the right in Arabic
+    (`text-align: end`) so they sit over their labels.
+80. **Every part is its own error boundary** (`SectionBoundary`): a failing part leaves an
+    empty placeholder, never a 500.
+81. **The lead band paints over a pinned banner** (`.mbanner ~ .lead-band { z-index: 4 }`,
+    banner.css — the mockup's `.lead` z-index). The banner stays stuck at the top of its
+    page, and the lead band — shared chrome with no z-index of its own — slid UNDER it as it
+    scrolled up. This also fixes Our Work, where PR10 shipped the same stacking.

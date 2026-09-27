@@ -38,8 +38,13 @@ export async function loadHead(
   locals: Pick<App.Locals, 'identity'>,
   options: {
     locale: Locale;
-    fallbackTitle: string;
-    fallbackDescription?: string;
+    /**
+     * The page's own title/blurb. Either may be a promise, like `entity`: a detail page
+     * (the case study) only learns them from the content query it starts alongside this
+     * loader, and awaiting that query first would chain a round-trip onto TTFB.
+     */
+    fallbackTitle: string | Promise<string>;
+    fallbackDescription?: string | Promise<string>;
     /**
      * The page's own row, for its `entity_seo` override. May be a promise, so a route can
      * start its content query and this loader together — a section-composed page only
@@ -51,10 +56,12 @@ export async function loadHead(
   const entitySeo = Promise.resolve(options.entity ?? null).then((ref) =>
     ref ? getEntitySeo(ref.type, ref.id) : null,
   );
-  const [identity, defaults, entity] = await Promise.all([
+  const [identity, defaults, entity, fallbackTitle, fallbackDescription] = await Promise.all([
     getIdentity(locals),
     getSeoDefaults(),
     entitySeo,
+    options.fallbackTitle,
+    options.fallbackDescription,
   ]);
   const brand = brandName(identity, options.locale);
   const seo = resolveSeo({
@@ -62,10 +69,8 @@ export async function loadHead(
     brand,
     entity,
     defaults,
-    fallbackTitle: options.fallbackTitle,
-    ...(options.fallbackDescription === undefined
-      ? {}
-      : { fallbackDescription: options.fallbackDescription }),
+    fallbackTitle,
+    ...(fallbackDescription === undefined ? {} : { fallbackDescription }),
   });
   return { seo, identity, brand };
 }

@@ -87,3 +87,19 @@ export const PAGE_META: Record<MetaRoute, Record<Locale, PageMeta>> = {
     },
   },
 };
+
+// UI v2 PR11 — the case study (not a section-composed route, so outside PAGE_META). Its
+// own title is "<name> | <type>" (src/lib/portfolio/casePage.ts); this description is the
+// fallback for a project with no teaser or summary in the page's language. English:
+// project.html's static <meta> verbatim (brand as %brand%). Arabic: ours, in the page's
+// own words (البريف، نطاق العمل) — owner review.
+export const CASE_STUDY_META: Record<Locale, PageMeta> = {
+  en: {
+    title: 'Case study',
+    description: 'A %brand% case study: the brief, the scope, the result, and how it was made.',
+  },
+  ar: {
+    title: 'دراسة حالة',
+    description: 'دراسة حالة من %brand%: البريف، ونطاق العمل، والنتيجة، وكيف انصنع الشغل.',
+  },
+};

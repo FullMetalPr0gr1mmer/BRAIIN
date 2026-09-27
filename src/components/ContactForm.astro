@@ -1,8 +1,10 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import { BUDGET_BANDS, BUDGET_BAND_LABELS } from '@schemas/lead';
 import { pickLocale } from '@/lib/i18n';
 import { getIdentity } from '@/lib/identity';
 import type { ServiceRow } from '@/lib/data/services';
+import Cta from '@/components/ui/Cta.astro';
 import {
   CONTACT_FORM_FIELDS,
   type ContactField,
@@ -13,26 +15,40 @@ import {
 // The lead form — the site's one public write path (/api/contact: same-origin check, Zod,
 // honeypot, tenant resolved server-side, PII envelope-encrypted).
 //
-//   compact  the home form of the UI v2 design: name, email, company, service, message,
-//            in the design's copy (its Saudi-voice Arabic); "Send message" with a trailing
-//            arrow, the button before the note.
-//   full     /contact's form, unchanged until the contact page is ported (PR9).
+//   compact  the home form of the UI v2 design: name, email, company, service, message;
+//            "Send message" with a trailing arrow, the button before the note.
+//   full     /contact's form (UI v2 PR9): the same plus the budget range and the
+//            free-text deadline; the badge "Send a message", icon first, before the note.
 //
 // Both carry the PDPL consent checkbox and the honeypot, post valued options (never a
-// visible label), and report the REAL outcome with per-field errors
+// visible label — the budget bands are BUDGET_BAND_LABELS, the one map the admin and the
+// CSV read too), and report the REAL outcome with per-field errors
 // (src/lib/client/formErrors.ts). Which fields exist, and the JSON they become, is one
-// list: src/lib/forms/contactPayload.ts — tested against LeadInputSchema's keys.
-// Validation and system copy stays MSA (owner decision 6); the design's copy is verbatim.
+// list: src/lib/forms/contactPayload.ts — tested against LeadInputSchema's keys. The
+// design's copy is verbatim (its Saudi-voice Arabic); validation and system copy stays MSA
+// (owner decision 6).
 
 interface Props {
   locale: Locale;
-  services: ServiceRow[];
+  services: readonly ServiceRow[];
   fields?: ContactFormVariant;
   /** Posted as the lead's `kind`. */
   kind?: ContactKind;
+  /** CMS overrides from the surrounding section, already in this locale. */
+  note?: string | undefined;
+  okMessage?: string | undefined;
+  submitLabel?: string | undefined;
 }
 
-const { locale, services, fields = 'full', kind = 'contact' } = Astro.props;
+const {
+  locale,
+  services,
+  fields = 'full',
+  kind = 'contact',
+  note,
+  okMessage,
+  submitLabel,
+} = Astro.props;
 const compact = fields === 'compact';
 const has = (f: ContactField) => (CONTACT_FORM_FIELDS[fields] as readonly string[]).includes(f);
 
@@ -40,27 +56,23 @@ const STR = {
   en: {
     name: 'Name',
     email: 'Email',
-    phone: 'Phone (optional)',
     company: 'Company',
     companyPh: 'Optional',
     namePh: 'Your full name',
     emailPh: 'you@company.com',
-    phonePh: '+966 5X XXX XXXX',
     messagePh: 'What are you making, who is it for, and when does it need to be ready?',
     service: 'What do you need?',
     budget: 'Budget range',
-    timeline: 'When do you need it?',
+    deadline: 'When do you need it?',
+    deadlinePh: 'A date, a season, or ASAP',
     message: 'Tell us about the project',
     note: 'We read everything and reply within one business day.',
-    chooseService: compact ? "Not sure yet, let's talk" : "Not sure yet — let's talk",
+    chooseService: "Not sure yet, let's talk",
     chooseBudget: 'Prefer to discuss',
-    chooseTimeline: 'Not sure yet',
     consent: 'I agree to be contacted about my inquiry.',
     submit: compact ? 'Send message' : 'Send a message',
     sending: 'Sending…',
-    ok: compact
-      ? "Got it. We'll be in touch within one business day."
-      : 'Thanks — we’ll be in touch shortly.',
+    ok: "Got it. We'll be in touch within one business day.",
     invalid: 'Please correct the marked fields and try again.',
     rateLimited: 'Too many attempts. Please wait a minute and try again.',
     unavailable: 'The form isn’t live yet — please email {email}.',
@@ -69,41 +81,28 @@ const STR = {
     errEmail: 'Enter a valid email address, like name@company.com.',
     errTooLong: 'This is longer than we can accept.',
     errInvalid: 'Please check this field.',
-    budgets: {
-      lt_10k: 'Under 10k SAR',
-      '10k_50k': '10k–50k SAR',
-      '50k_150k': '50k–150k SAR',
-      gt_150k: '150k+ SAR',
-      undisclosed: 'Prefer not to say',
-    },
-    timelines: { asap: 'ASAP', '1_3m': '1–3 months', '3_6m': '3–6 months', flexible: 'Flexible' },
   },
   ar: {
     name: 'الاسم',
     email: 'البريد الإلكتروني',
-    phone: 'الهاتف (اختياري)',
     company: 'الشركة',
     companyPh: 'اختياري',
     namePh: 'اسمك الكامل',
     emailPh: 'you@company.com',
-    phonePh: '+966 5X XXX XXXX',
-    messagePh: compact
-      ? 'وش تبني، ولمين، ومتى لازم يطلع؟'
-      : 'ما الذي تصنعه، ولمن، ومتى يجب أن يكون جاهزًا؟',
-    service: compact ? 'وش تحتاج؟' : 'ما الخدمة التي تحتاجها؟',
+    // The design words the placeholder per page: home "builds", /contact "makes".
+    messagePh: compact ? 'وش تبني، ولمين، ومتى لازم يطلع؟' : 'وش تصنع، ولمين، ومتى لازم يكون جاهز؟',
+    service: 'وش تحتاج؟',
     budget: 'نطاق الميزانية',
-    timeline: 'متى تحتاجه؟',
-    message: compact ? 'احكِ لنا عن المشروع' : 'أخبرنا عن المشروع',
-    note: compact
-      ? 'نقرأ كل رسالة ونرد خلال يوم عمل واحد.'
-      : 'نقرأ كل رسالة ونردّ خلال يوم عمل واحد.',
-    chooseService: compact ? 'لسه ما قررت، خلّنا نتكلم' : 'لم أُحدّد بعد — لنتحدث',
-    chooseBudget: 'أفضّل مناقشتها',
-    chooseTimeline: 'لم أُحدّد بعد',
+    deadline: 'متى تحتاجه؟',
+    deadlinePh: 'تاريخ، أو موسم، أو في أقرب وقت',
+    message: 'احكِ لنا عن المشروع',
+    note: 'نقرأ كل رسالة ونرد خلال يوم عمل واحد.',
+    chooseService: 'لسه ما قررت، خلّنا نتكلم',
+    chooseBudget: 'أفضّل نتناقش فيها',
     consent: 'أوافق على التواصل معي بخصوص طلبي.',
     submit: compact ? 'أرسل الرسالة' : 'أرسل رسالتك',
     sending: 'جارٍ الإرسال…',
-    ok: compact ? 'وصلتنا. بنتواصل معك خلال يوم عمل واحد.' : 'شكرًا — سنتواصل معك قريبًا.',
+    ok: 'وصلتنا. بنتواصل معك خلال يوم عمل واحد.',
     invalid: 'يرجى تصحيح الحقول المشار إليها والمحاولة مرة أخرى.',
     rateLimited: 'محاولات كثيرة. يرجى الانتظار دقيقة ثم المحاولة مرة أخرى.',
     unavailable: 'النموذج غير مُفعّل بعد — راسلنا على {email}.',
@@ -112,28 +111,25 @@ const STR = {
     errEmail: 'أدخل بريدًا إلكترونيًا صحيحًا، مثل name@company.com.',
     errTooLong: 'النص أطول من الحد المسموح.',
     errInvalid: 'يرجى مراجعة هذا الحقل.',
-    budgets: {
-      lt_10k: 'أقل من 10 آلاف ريال',
-      '10k_50k': '10–50 ألف ريال',
-      '50k_150k': '50–150 ألف ريال',
-      gt_150k: 'أكثر من 150 ألف ريال',
-      undisclosed: 'أفضل عدم الإفصاح',
-    },
-    timelines: { asap: 'في أقرب وقت', '1_3m': '1–3 أشهر', '3_6m': '3–6 أشهر', flexible: 'مرن' },
   },
 }[locale];
+
+const noteText = note ?? STR.note;
+const okText = okMessage ?? STR.ok;
+const submitText = submitLabel ?? STR.submit;
 
 // The fallback mailbox in the 'form unavailable' message is the public identity's, so
 // the one message shown when the form is down never names a stale address.
 const { contactEmail } = await getIdentity(Astro.locals);
 
-const budgetKeys = ['lt_10k', '10k_50k', '50k_150k', 'gt_150k', 'undisclosed'] as const;
-const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
+// The design's bands, in its order; "Prefer to discuss" is the empty option (no answer).
+// The legacy bands stay accepted on input (cached pages) but are never offered.
+const budgets = BUDGET_BANDS.map((k) => ({ value: k, label: BUDGET_BAND_LABELS[k][locale] }));
 ---
 
 <form
   id="contact-form"
-  class:list={['contact-form', { 'contact-form--compact': compact }]}
+  class:list={['contact-form', compact ? 'contact-form--compact' : 'contact-form--full']}
   data-locale={locale}
   data-kind={kind}
   data-err-required={STR.errRequired}
@@ -175,21 +171,6 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
     )
   }
   {
-    has('phone') && (
-      <div class="field">
-        <label for="cf-phone">{STR.phone}</label>
-        <input
-          id="cf-phone"
-          name="phone"
-          type="tel"
-          maxlength="32"
-          autocomplete="tel"
-          placeholder={STR.phonePh}
-        />
-      </div>
-    )
-  }
-  {
     has('company') && (
       <div class="field">
         <label for="cf-company">{STR.company}</label>
@@ -223,23 +204,25 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
         <label for="cf-budget">{STR.budget}</label>
         <select id="cf-budget" name="budget">
           <option value="">{STR.chooseBudget}</option>
-          {budgetKeys.map((k) => (
-            <option value={k}>{STR.budgets[k]}</option>
+          {budgets.map((b) => (
+            <option value={b.value}>{b.label}</option>
           ))}
         </select>
       </div>
     )
   }
   {
-    has('timeline') && (
-      <div class="field field-full">
-        <label for="cf-timeline">{STR.timeline}</label>
-        <select id="cf-timeline" name="timeline">
-          <option value="">{STR.chooseTimeline}</option>
-          {timelineKeys.map((k) => (
-            <option value={k}>{STR.timelines[k]}</option>
-          ))}
-        </select>
+    has('deadline') && (
+      <div class="field">
+        <label for="cf-deadline">{STR.deadline}</label>
+        <input
+          id="cf-deadline"
+          name="deadline"
+          type="text"
+          maxlength="120"
+          autocomplete="off"
+          placeholder={STR.deadlinePh}
+        />
       </div>
     )
   }
@@ -267,11 +250,11 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
     <label for="cf-hp">Leave this field empty</label>
     <input id="cf-hp" name="hp" type="text" tabindex="-1" autocomplete="off" />
   </div>
-  {
-    compact ? (
-      <div class="contact-form__foot field-full">
+  <div class="contact-form__foot field-full">
+    {
+      compact ? (
         <button type="submit" class="cta cta--trail">
-          <span>{STR.submit}</span>
+          <span>{submitText}</span>
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path
               d="M2 8h12M9 3l5 5-5 5"
@@ -283,29 +266,14 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
             />
           </svg>
         </button>
-        <p class="contact-form__note">{STR.note}</p>
-      </div>
-    ) : (
-      <div class="contact-form__foot field-full">
-        <p class="contact-form__note">{STR.note}</p>
-        <button type="submit" class="cta cta--icon cta--go">
-          <span>{STR.submit}</span>
-          <span class="cta__ico" aria-hidden="true">
-            <svg viewBox="0 0 16 16">
-              <path
-                d="M2 8h12M9 3l5 5-5 5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </span>
-        </button>
-      </div>
-    )
-  }
+      ) : (
+        <Cta type="submit" icon="go">
+          {submitText}
+        </Cta>
+      )
+    }
+    <p class="contact-form__note">{noteText}</p>
+  </div>
   <p
     id="contact-status"
     class="form-status"
@@ -314,7 +282,7 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
     tabindex="-1"
     hidden
     data-sending={STR.sending}
-    data-ok={STR.ok}
+    data-ok={okText}
     data-invalid={STR.invalid}
     data-rate-limited={STR.rateLimited}
     data-unavailable={STR.unavailable.replace('{email}', () => contactEmail)}

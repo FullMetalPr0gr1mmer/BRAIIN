@@ -1,0 +1,65 @@
+---
+import type { Locale } from '@schemas/primitives';
+
+// The case study's image viewer (UI v2 PR11 — the mockup's `.lb`): ONE server-rendered
+// <dialog>, driven by src/lib/client/lightbox.ts for every breakdown and gallery still.
+// A native modal dialog makes the page behind inert and handles Escape; the script adds
+// the focus loop, the arrows (mirrored in RTL) and the counter. Labels are localised (the
+// mockup's were English only); the image is created by the script when a still opens, so
+// the served HTML carries no <img> without a source. The page renders this only when it
+// has stills.
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+const STR = {
+  en: { label: 'Image viewer', close: 'Close', prev: 'Previous', next: 'Next' },
+  ar: { label: 'عارض الصور', close: 'إغلاق', prev: 'السابق', next: 'التالي' },
+}[locale];
+---
+
+<dialog class="lightbox" aria-label={STR.label} data-lightbox>
+  <button class="lightbox__btn lightbox__x" type="button" aria-label={STR.close} data-lb-close>
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M3 3l10 10M13 3L3 13"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"></path>
+    </svg>
+  </button>
+  <div class="lightbox__stage" data-lb-stage></div>
+  <button class="lightbox__btn lightbox__p" type="button" aria-label={STR.prev} data-lb-prev>
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M14 8H2M7 3L2 8l5 5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"></path>
+    </svg>
+  </button>
+  <button class="lightbox__btn lightbox__n" type="button" aria-label={STR.next} data-lb-next>
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M2 8h12M9 3l5 5-5 5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"></path>
+    </svg>
+  </button>
+  <span class="lightbox__c" aria-live="polite" data-lb-count></span>
+</dialog>
+
+<script>
+  import { initLightbox } from '@/lib/client/lightbox';
+
+  initLightbox();
+</script>

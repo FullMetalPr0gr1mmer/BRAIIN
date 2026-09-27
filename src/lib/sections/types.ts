@@ -113,12 +113,90 @@ export function workIntroLinkHref(
   return publishedCount > 0 ? '/portfolio/all' : null;
 }
 
+/**
+ * The contact page (UI v2 PR9): banner hero → inquiry form → direct channels → FAQ.
+ * Mirrored by the seeded composition (supabase/seed-data/52-contact.json;
+ * tests/lib/contactPage.spec.ts holds the two together). The hero carries no content here:
+ * its copy and its banner layout come from `withHeroPreset(…, 'contact')`, which the route
+ * applies to whatever composition renders — authored or this default.
+ */
 export const DEFAULT_CONTACT_SECTIONS: SectionData[] = [
-  { type: 'hero', props: { banner: true, ctaHref: '#inquiry' } },
+  { type: 'hero' },
   { type: 'contactInquiry' },
   { type: 'contactChannels' },
   { type: 'faq' },
 ];
+
+/** A preset's layout — handed to the hero as route `data`, which CMS content cannot replace. */
+export interface HeroPresetData {
+  /** The short banner hero: shorter box, badge CTA first, no scroll cue, never the intro. */
+  banner: true;
+  /** Where the CTA points: the page's own form. */
+  ctaHref: string;
+  /** The window of the loop this page plays, so it does not replay the home opening. */
+  clip?: { start: number; end: number };
+}
+
+/**
+ * Per-page hero presets (a CODE-only argument, never stored — lead contract). `content` is
+ * the page's built-in copy, verbatim from the design; `data` is its layout.
+ */
+export const HERO_PRESETS = {
+  contact: {
+    content: {
+      headline: { en: "Let's make it happen", ar: 'خلّنا نحقّقها' },
+      accentFromEn: 3,
+      accentFromAr: 1,
+      sub: {
+        en: "Strategy, creative, and production under one roof. Tell us where you want to go, and we'll take it from there.",
+        ar: 'استراتيجية وإبداع وإنتاج تحت سقف واحد. قل لنا وين تبي توصل، والباقي علينا.',
+      },
+      ctaLabel: { en: 'Start your project', ar: 'ابدأ مشروعك' },
+    },
+    // The design's contact loop: 6.2–7.9 s of the showreel, "so this page doesn't replay
+    // the homepage opening".
+    data: { banner: true, ctaHref: '#inquiry', clip: { start: 6.2, end: 7.9 } },
+  },
+} as const satisfies Record<
+  string,
+  {
+    content: {
+      headline: { en: string; ar: string };
+      accentFromEn: number;
+      accentFromAr: number;
+      sub: { en: string; ar: string };
+      ctaLabel: { en: string; ar: string };
+    };
+    data: HeroPresetData;
+  }
+>;
+export type HeroPreset = keyof typeof HERO_PRESETS;
+
+/**
+ * Applies a page's hero preset to its FIRST hero — the contact page's fix: with no content
+ * the hero fell back to the HOME copy ("Creative work that performs*", "See our work").
+ *
+ * Mirrors `withHomeIntro`: the preset's copy is a default under whatever the CMS authored
+ * (an authored field wins), and its layout goes in as route data (the CMS cannot turn the
+ * banner off or point its button elsewhere). The accent indices belong to the headline
+ * they were counted against, so an authored headline never inherits the preset's.
+ */
+export function withHeroPreset(
+  sections: readonly SectionData[],
+  preset: HeroPreset,
+): SectionData[] {
+  const { content, data } = HERO_PRESETS[preset];
+  let applied = false;
+  return sections.map((s) => {
+    if (applied || s.type !== 'hero') return s;
+    applied = true;
+    const authored = s.props ?? {};
+    const { headline, accentFromEn, accentFromAr, ...rest } = content;
+    const copy: Record<string, unknown> =
+      'headline' in authored ? rest : { headline, accentFromEn, accentFromAr, ...rest };
+    return { ...s, props: { ...copy, ...authored }, data: { ...s.data, ...data } };
+  });
+}
 
 /**
  * The inquiry form is the site's ONLY public write path, and SectionRenderer honours

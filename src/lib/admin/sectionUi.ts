@@ -182,6 +182,35 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     heading,
     { name: 'limit', label: 'At most this many quotes (1–8)', kind: 'number' },
   ],
+  // UI v2 PR9 (contact)
+  contactInquiry: [
+    tag,
+    heading,
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    { name: 'note', label: 'Note beside the send button', kind: 'bilingual' },
+    {
+      name: 'successMessage',
+      label: 'Confirmation after sending',
+      kind: 'bilingual',
+      help: 'Replaces the form once the inquiry has been received.',
+    },
+    { name: 'submitLabel', label: 'Send button label', kind: 'bilingual' },
+  ],
+  contactChannels: [
+    tag,
+    heading,
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    { name: 'emailLabel', label: 'Email card label', kind: 'bilingual' },
+    { name: 'emailNote', label: 'Email card note', kind: 'bilingual' },
+    {
+      name: 'whatsappLabel',
+      label: 'WhatsApp card label',
+      kind: 'bilingual',
+      help: 'The WhatsApp card shows only once a number is set under Settings → Public identity.',
+    },
+    { name: 'whatsappNote', label: 'WhatsApp card note', kind: 'bilingual' },
+  ],
+  faq: [tag, heading],
   aboutStory: [
     heading,
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
@@ -296,6 +325,11 @@ export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[
   cta: ['accent'],
   proof: ['quotesAccent'],
   pageHead: ['accent'],
+  // UI v2 PR9: the accent word ranges, as above. The FAQ's questions are code-owned (they
+  // are also its JSON-LD), so the faq section's only content is its heading.
+  contactInquiry: ['accent'],
+  contactChannels: ['accent'],
+  faq: ['accent'],
 };
 
 /** The fields for one section type, or null when it takes no content (table-backed). */

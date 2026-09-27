@@ -479,6 +479,18 @@ do $seed$ begin
   end if;
 end $seed$;
 
+-- page_sections (52-contact.json)
+do $seed$ begin
+  if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact')) then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000001', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'hero', '{}'::jsonb, true, 10),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000002', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'contactInquiry', '{}'::jsonb, true, 20),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000003', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'contactChannels', '{}'::jsonb, true, 30),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5200-0000-4000-8000-000000000004', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'contact'), 'faq', '{}'::jsonb, true, 40)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
 -- page_sections (53-work-pages.json)
 do $seed$ begin
   if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio')) then
