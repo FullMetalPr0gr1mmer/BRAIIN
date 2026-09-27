@@ -21,6 +21,11 @@
           "title": { "en": "All projects", "ar": "كل المشاريع" },
           "status": "published"
         },
+        {
+          "slug": "services",
+          "title": { "en": "Services", "ar": "الخدمات" },
+          "status": "published"
+        },
         { "slug": "join", "title": { "en": "Join us", "ar": "انضم إلينا" }, "status": "published" }
       ]
     }

@@ -1,11 +1,14 @@
 ---
-import ServicesIndex from '@/components/ServicesIndex.astro';
-import { getPublishedServices } from '@/lib/data/services';
+import ServicesPage from '@/components/ServicesPage.astro';
+import { loadServicesPage, SERVICES_CACHE_ENTITIES } from '@/lib/services/servicesPage';
 import { setTierA } from '@/lib/http/cacheTags';
 
-// Tier A (indexable, edge-cached SSR). Publish purges the `services:all` cache tag.
-const services = await getPublishedServices();
-setTierA(Astro.response, { route: 'services', locale: 'en', entities: ['services:all'] });
+// Services (Round 2). Tier A: server-rendered and edge-cached; a publish of the page, a
+// discipline, a service, a counter or a still purges it by tag. Composed from CMS sections
+// (`pages` slug 'services'); DEFAULT_SERVICES_SECTIONS until then.
+const locale = 'en' as const;
+const page = await loadServicesPage(Astro.locals, locale);
+setTierA(Astro.response, { route: 'services', locale, entities: SERVICES_CACHE_ENTITIES });
 ---
 
-<ServicesIndex locale="en" services={services} />
+<ServicesPage locale={locale} page={page} />

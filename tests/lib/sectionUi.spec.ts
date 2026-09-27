@@ -18,7 +18,11 @@ function sample(field: FieldDef): unknown {
   switch (field.kind) {
     case 'bilingual':
     case 'prose':
-      return { en: 'Two words', ar: 'كلمتان هنا' };
+      // The explorer's button label must name its discipline through the token (its help
+      // says so; the schema refuses a label without it).
+      return field.name === 'startLabel'
+        ? { en: 'Start {discipline}', ar: 'ابدأ {discipline}' }
+        : { en: 'Two words', ar: 'كلمتان هنا' };
     case 'number':
       return 1;
     case 'url':

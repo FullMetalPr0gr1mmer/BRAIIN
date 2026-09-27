@@ -311,3 +311,560 @@ html[dir='rtl'] .hero__skip b {
     transform: none;
   }
 }
+
+/* ---- S3: /services — the proof band, the explorer ----
+   ServicesProof.astro (the `statistics` section's `services` variant) and
+   ServiceExplorer.astro (`serviceExplorer`). Namespace: .svc-proof* (the mockup's
+   .proof / .stats — Our Work owns .proof), .svc-xp* / .svc-tab / .svc-panel (its .xp* /
+   .xtab), .svc-list / .svc-row* (its .xl / .xi*). Values: services.html "SERVICES PAGE". */
+
+/* The design's services crop of the banner loop (the contact page keeps 42%). */
+.services-page .hero--banner .hero__media video {
+  object-position: center 55%;
+}
+
+/* ============================================================
+   S3: proof — a statement, a rating line, the numbers
+   ============================================================ */
+
+.svc-proof {
+  position: relative;
+  z-index: 4;
+  background: var(--bs-paper);
+  color: var(--bs-ink);
+  padding: clamp(56px, 9vh, 110px) var(--bs-pad-x);
+}
+.svc-proof__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.6fr);
+  gap: clamp(32px, 5vw, 90px);
+  align-items: end;
+}
+.svc-proof__line {
+  margin: 0;
+  font-size: clamp(24px, 2.7vw, 42px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .svc-proof__line {
+  font-size: clamp(22px, 2.4vw, 36px);
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-proof__line em {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+.svc-proof__rate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 22px 0 0;
+  font-size: 14px;
+  line-height: normal;
+  color: var(--bs-dim);
+}
+.svc-proof__stars {
+  display: flex;
+  gap: 3px;
+  color: var(--bs-klein);
+}
+.svc-proof__stars svg {
+  width: 16px;
+  height: 16px;
+}
+.svc-proof__rate b {
+  font-weight: 800;
+  color: var(--bs-ink);
+  unicode-bidi: isolate;
+}
+.svc-proof__stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--bs-line-l);
+}
+.svc-proof__stat {
+  padding: 22px clamp(12px, 1.6vw, 26px) 4px;
+  border-inline-start: 1px solid var(--bs-line-l);
+}
+/* The first cell of every row drops its rule; a later row gets one above it (more than
+   four counters is an editor's choice: placements are content). */
+.svc-proof__stat:nth-child(4n + 1) {
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+.svc-proof__stat:nth-child(n + 5) {
+  border-top: 1px solid var(--bs-line-l);
+  margin-top: 18px;
+}
+.svc-proof__n {
+  display: block;
+  font-size: clamp(38px, 4.6vw, 76px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+html[dir='rtl'] .svc-proof__n {
+  text-align: right;
+}
+.svc-proof__n i {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+/* A value that is not a number yet ("TBD") — the stat bands' muted 4.8:1 grey. */
+.svc-proof__n--text {
+  color: #6b7384;
+}
+.svc-proof__l {
+  display: block;
+  margin-top: 12px;
+  max-width: 20ch;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--bs-dim);
+}
+@media (max-width: 63.75rem) {
+  .svc-proof__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 40rem) {
+  .svc-proof__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .svc-proof__stat:nth-child(2n + 1) {
+    border-inline-start: 0;
+    padding-inline-start: 0;
+  }
+  .svc-proof__stat:nth-child(2n) {
+    border-inline-start: 1px solid var(--bs-line-l);
+    padding-inline-start: clamp(12px, 1.6vw, 26px);
+  }
+  .svc-proof__stat:nth-child(n + 3) {
+    border-top: 1px solid var(--bs-line-l);
+    margin-top: 18px;
+  }
+}
+
+/* ============================================================
+   S3: the explorer — one panel per discipline
+   ============================================================ */
+
+.svc-xp {
+  position: relative;
+  z-index: 4;
+  background: var(--bs-paper);
+  color: var(--bs-ink);
+}
+.svc-xp__pad {
+  padding: clamp(56px, 9vh, 110px) var(--bs-pad-x) clamp(72px, 11vh, 140px);
+}
+
+/* Which panel shows. Before the script (and without it): the one the URL addresses, by
+   :target — `/services#events` opens Events at FIRST PAINT, so the opening can never be a
+   layout shift — and with nothing addressed the explorer is collapsed. Once the script
+   runs (.is-live) the classes it sets decide instead, starting from the same panel
+   (replaceState, which the script uses, does not update :target). */
+.svc-xp:not(.is-live):not(:has(.svc-panel:target)),
+.svc-xp:not(.is-live) .svc-panel:not(:target),
+.svc-xp.is-live:not(.is-open),
+.svc-xp.is-live .svc-panel:not(.is-active) {
+  display: none;
+}
+/* A jump to a panel (the fragment, or the script's scrollIntoView) keeps the header's room
+   and the tab row above it on screen. */
+.svc-panel {
+  scroll-margin-top: calc(var(--bs-header-h) + 44px + clamp(34px, 5vh, 60px) + 12px);
+  border-radius: 12px;
+}
+.svc-panel:focus-visible {
+  outline-offset: 10px;
+}
+/* The opening motion: the body alone fades and rises (compositor — opacity + transform).
+   The box itself appears at once, inside the click's input window; the mockup's 0.9 s
+   row expansion would keep moving the page after it. The hidden from-state lives only in
+   the keyframes (reduced motion: see the block's end). */
+.svc-panel.is-entering .svc-xp__grid {
+  animation: svc-xp-in 0.7s var(--bs-ease) both;
+}
+@keyframes svc-xp-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- The discipline pills (APG tabs once the script runs) ---- */
+.svc-xp__tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  /* room inside the scroller for the focus ring, taken back from the layout */
+  padding: 4px 4px 6px;
+  margin: -4px -4px clamp(34px, 5vh, 60px);
+  scrollbar-width: none;
+}
+.svc-xp__tabs::-webkit-scrollbar {
+  display: none;
+}
+.svc-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bs-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: normal;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background 0.25s,
+    border-color 0.25s,
+    color 0.25s;
+}
+.svc-tab i {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bs-klein);
+  font-variant-numeric: tabular-nums;
+}
+.svc-tab:hover {
+  border-color: var(--bs-klein);
+  color: var(--bs-klein);
+}
+.svc-tab[aria-selected='true'] {
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+  color: var(--bs-paper);
+}
+.svc-tab[aria-selected='true'] i {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ---- A panel ---- */
+.svc-xp__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+  gap: clamp(28px, 4.4vw, 80px);
+  align-items: start;
+}
+/* A discipline with no poster and no clip (and the outage fallback): the copy alone. */
+.svc-xp__grid--solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+.svc-xp__media {
+  position: sticky;
+  top: 96px;
+  aspect-ratio: 4 / 4.6;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--bs-media-bg);
+}
+.svc-xp__mf {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+/* The row-hover poster (serviceExplorer.ts creates it): over the discipline's poster, under
+   a playing clip; it fades in once decoded. */
+.svc-xp__swap {
+  opacity: 0;
+}
+.svc-xp__mf.is-swapped .svc-xp__swap {
+  opacity: 1;
+}
+/* The caption pill. Its glass is .7 black (the mockup's .35), so over a WHITE poster the name
+   is 8.4:1 and the number, sky-soft, 5.4:1 (the mockup's sky there is 1.9:1). */
+.svc-xp__cap {
+  position: absolute;
+  z-index: 2;
+  inset-inline-start: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  padding-inline-start: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--bs-paper);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: normal;
+}
+.svc-xp__cap i {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bs-sky-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.svc-xp__k {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bs-klein);
+}
+html[dir='rtl'] .svc-xp__k {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-xp__k .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.svc-xp__h {
+  margin: 16px 0 0;
+  font-size: clamp(38px, 5.4vw, 88px);
+  font-weight: 800;
+  line-height: 0.94;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .svc-xp__h {
+  font-size: clamp(32px, 4.4vw, 70px);
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-xp__p {
+  margin: 20px 0 0;
+  max-width: 48ch;
+  font-size: clamp(16px, 1.3vw, 19px);
+  line-height: 1.6;
+  color: var(--bs-dim);
+}
+html[dir='rtl'] .svc-xp__p {
+  line-height: 1.95;
+}
+
+/* ---- The services, one row each ---- */
+.svc-list {
+  list-style: none;
+  margin: clamp(30px, 4.4vh, 50px) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: clamp(20px, 2.4vw, 40px);
+}
+@media (min-width: 80rem) {
+  .svc-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.svc-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--bs-line-l);
+}
+.svc-row::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--bs-klein);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.5s var(--bs-ease);
+}
+html[dir='rtl'] .svc-row::after {
+  transform-origin: right;
+}
+.svc-row:hover::after,
+.svc-row:focus-within::after {
+  transform: scaleX(1);
+}
+.svc-row__a {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: clamp(16px, 2.2vh, 22px) 0;
+  color: inherit;
+  text-decoration: none;
+}
+.svc-row__n {
+  flex: none;
+  min-width: 22px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bs-klein);
+  font-variant-numeric: tabular-nums;
+}
+.svc-row__t {
+  font-size: clamp(18px, 1.55vw, 23px);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  transition:
+    color 0.3s,
+    transform 0.45s var(--bs-ease);
+}
+html[dir='rtl'] .svc-row__t {
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+.svc-row:hover .svc-row__t,
+.svc-row__a:focus-visible .svc-row__t {
+  color: var(--bs-klein);
+  transform: translateX(4px);
+}
+html[dir='rtl'] .svc-row:hover .svc-row__t,
+html[dir='rtl'] .svc-row__a:focus-visible .svc-row__t {
+  transform: translateX(-4px);
+}
+.svc-row__q {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  color: var(--bs-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background 0.25s,
+    border-color 0.25s,
+    color 0.25s,
+    opacity 0.3s;
+}
+.svc-row__q svg {
+  width: 11px;
+  height: 11px;
+}
+html[dir='rtl'] .svc-row__q svg {
+  transform: scaleX(-1);
+}
+.svc-row__q:hover {
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+  color: var(--bs-paper);
+}
+/* With a mouse the pill shows on its row (hover, or keyboard focus inside it); on touch it
+   is always there — there is no hover to reveal it. */
+@media (hover: hover) {
+  .svc-row__q {
+    opacity: 0;
+  }
+  .svc-row:hover .svc-row__q,
+  .svc-row:focus-within .svc-row__q {
+    opacity: 1;
+  }
+}
+
+/* ---- Prev / next and the panel's call to action ---- */
+.svc-xp__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: clamp(34px, 5vh, 56px);
+}
+.svc-xp__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.svc-xp__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+  color: var(--bs-ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: normal;
+  text-decoration: none;
+  transition:
+    border-color 0.25s,
+    color 0.25s;
+}
+.svc-xp__btn svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+html[dir='rtl'] .svc-xp__btn svg {
+  transform: scaleX(-1);
+}
+.svc-xp__btn:hover {
+  border-color: var(--bs-klein);
+  color: var(--bs-klein);
+}
+
+/* The cards' hint ("Tap a discipline to open it") has done its job once one is open —
+   the mockup hides it (visibility: no layout change). */
+.disc.is-picked .disc__hint {
+  visibility: hidden;
+}
+
+@media (max-width: 56.25rem) {
+  .svc-xp__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .svc-xp__media {
+    position: relative;
+    top: auto;
+    aspect-ratio: 16 / 10;
+  }
+}
+
+/* ---- S3 motion safety net (global.css holds the invariant) ----
+   The panel entrance is revealed by KILLING its animation: its hidden from-state lives only
+   in @keyframes. The row's hover nudge is the one transform left to pin. */
+@media (prefers-reduced-motion: reduce) {
+  .svc-panel.is-entering .svc-xp__grid {
+    animation: none !important;
+  }
+  .svc-row:hover .svc-row__t,
+  .svc-row__a:focus-visible .svc-row__t {
+    transform: none !important;
+  }
+}
