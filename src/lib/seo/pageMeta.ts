@@ -19,7 +19,8 @@ export interface PageMeta {
   description: string;
 }
 
-export type MetaRoute = 'home' | 'about' | 'contact' | 'notFound' | 'portfolio' | 'portfolioAll';
+export type MetaRoute =
+  'home' | 'about' | 'contact' | 'notFound' | 'portfolio' | 'portfolioAll' | 'services';
 
 export const PAGE_META: Record<MetaRoute, Record<Locale, PageMeta>> = {
   home: {
@@ -84,6 +85,21 @@ export const PAGE_META: Record<MetaRoute, Record<Locale, PageMeta>> = {
     ar: {
       title: 'كل المشاريع',
       description: 'كل مشاريع %brand%، مع فلترة حسب الخدمة والقطاع والعميل والسنة.',
+    },
+  },
+  // Round 2. English: services.html <title> + <meta> verbatim. Arabic: ours — the title is
+  // the Arabic menu label (nav.services), the description the English one in the page's own
+  // Arabic words (s.sub, s.catP) — owner review.
+  services: {
+    en: {
+      title: 'Services',
+      description:
+        'Branding, production, marketing, website development, and events and exhibitions. Five disciplines and one team in Jeddah, from the first sketch to launch.',
+    },
+    ar: {
+      title: 'الخدمات',
+      description:
+        'الهوية البصرية، والإنتاج، والتسويق، وتطوير المواقع، والفعاليات والمعارض. خمسة تخصصات وفريق واحد في جدة، من أول رسمة إلى الإطلاق.',
     },
   },
 };

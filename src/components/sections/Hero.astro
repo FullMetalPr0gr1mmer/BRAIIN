@@ -156,10 +156,18 @@ const skip = data?.skipLink
     }
   : null;
 
-// The intro logo renders at `min(46vw, 520px, 66svh)`, so `width={520}` + densities
-// [1,2] emits the matching 520w/1040w pair. It was `width={1040}` with the same
-// densities, which put a 1040w image in a 520px box on a 1x screen — 4x the pixels,
-// and this is the LCP element.
+// The intro logo renders at `min(46vw, 520px, 66svh)` (global.css `.intro img`) and is
+// the home LCP element. It was `width={520}` + densities [1,2]: a 1x/2x pair keyed to the
+// DESKTOP box, so a phone (a 189px box at DPR 1.75 on Lighthouse's Moto G) took the
+// 1040w file — 3x the pixels it can show, 17 KB on the critical path. Width descriptors
+// + `sizes` let the browser pick by the real box × DPR: that phone takes 520w (9 KB), a
+// 1x desktop 520w and a 2x desktop 1040w, exactly as before. Every width is a multiple
+// of 260, so every candidate is exactly 520:266 — the box never changes shape when the
+// file arrives (a 360w file would be 360×184, a sub-pixel resize). `sizes` leaves out
+// the 66svh bound (a short landscape window over-fetches a little — never under).
+// `width={520}` keeps the img's intrinsic 520×266 attributes (CLS).
+const INTRO_LOGO_WIDTHS = [260, 520, 780, 1040];
+const INTRO_LOGO_SIZES = 'min(46vw, 520px)';
 
 // TEMPORARY EXCEPTION (owner: Kareem, expires: KAN-20 Stream provisioning) — the loop
 // ships as a static mp4 so the launched design has its centerpiece; CLAUDE.md P2 wants
@@ -175,7 +183,8 @@ const src = videoUid ? undefined : videoSrc;
         alt=""
         formats={['avif', 'webp']}
         width={520}
-        densities={[1, 2]}
+        widths={INTRO_LOGO_WIDTHS}
+        sizes={INTRO_LOGO_SIZES}
         decoding="async"
         loading="eager"
         fetchpriority="high"

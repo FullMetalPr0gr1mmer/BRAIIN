@@ -1,0 +1,98 @@
+{
+  "blocks": [
+    {
+      "table": "page_sections",
+      "conflict": ["id"],
+      "unlessAuthored": ["page_id"],
+      "rows": [
+        {
+          "id": "5eed5400-0000-4000-8000-000000000001",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "services"
+              }
+            }
+          },
+          "type": "hero",
+          "content": {},
+          "visible": true,
+          "sort_order": 10
+        },
+        {
+          "id": "5eed5400-0000-4000-8000-000000000002",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "services"
+              }
+            }
+          },
+          "type": "statistics",
+          "content": {
+            "variant": "services",
+            "placement": "services",
+            "rating": {
+              "value": "4.9 / 5",
+              "label": {
+                "en": "average client rating",
+                "ar": "متوسط تقييم عملائنا"
+              }
+            }
+          },
+          "visible": true,
+          "is_placeholder": true,
+          "sort_order": 20,
+          "__placeholder": true
+        },
+        {
+          "id": "5eed5400-0000-4000-8000-000000000003",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "services"
+              }
+            }
+          },
+          "type": "servicesOverview",
+          "content": {},
+          "visible": true,
+          "sort_order": 30
+        },
+        {
+          "id": "5eed5400-0000-4000-8000-000000000004",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "services"
+              }
+            }
+          },
+          "type": "serviceExplorer",
+          "content": {},
+          "visible": true,
+          "sort_order": 40
+        },
+        {
+          "id": "5eed5400-0000-4000-8000-000000000005",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "services"
+              }
+            }
+          },
+          "type": "hello",
+          "content": {},
+          "visible": true,
+          "sort_order": 50
+        }
+      ]
+    }
+  ]
+}

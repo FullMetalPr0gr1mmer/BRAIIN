@@ -22,6 +22,8 @@ const ROUTES = [
   '/ar/contact',
   '/search',
   '/services',
+  // Round 2 (S3): the explorer and APG tabs are module scripts
+  '/ar/services',
   '/creative-knowledge',
   // UI v2 PR10 — Our Work and All projects (the catalogue enhancement is a module script)
   '/portfolio',
@@ -80,6 +82,7 @@ for (const route of [
   '/portfolio/all',
   '/portfolio/the-rider',
   '/services/logo',
+  '/services',
 ]) {
   test(`every component script is external on ${route}`, async ({ page }) => {
     // `load`, not `networkidle` — a playing banner video never goes idle (see above).

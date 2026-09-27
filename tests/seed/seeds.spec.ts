@@ -117,9 +117,17 @@ describe('site_profile seed', () => {
 });
 
 describe('pages seed', () => {
-  it('creates the six compositions the UI v2 routes read', () => {
+  it('creates the seven compositions the UI v2 routes read (Round 2: services)', () => {
     const slugs = blocks.find((b) => b.table === 'pages')?.rows.map((r) => r['slug']);
-    expect(slugs).toEqual(['home', 'about', 'contact', 'portfolio', 'portfolio-all', 'join']);
+    expect(slugs).toEqual([
+      'home',
+      'about',
+      'contact',
+      'portfolio',
+      'portfolio-all',
+      'services',
+      'join',
+    ]);
   });
 });
 

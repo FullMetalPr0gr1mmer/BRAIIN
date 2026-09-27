@@ -23,7 +23,10 @@ const ROUTES = [
   '/ar/contact',
   '/about',
   '/ar/about',
+  // Round 2 (S3): the banner loop (on screen at load — allowed); the cards' hover clips and
+  // the explorer's in-view clip (collapsed until opened — never before it is on screen)
   '/services',
+  '/ar/services',
   // UI v2 PR10: the banner loop (on screen at load — allowed), hover clips on the cards and
   // the intro's in-view clips (below the fold — never before intersection)
   '/portfolio',
@@ -175,5 +178,34 @@ for (const route of ['/services/logo', '/ar/services/logo']) {
     const imgs = main.match(/<img\b[^>]*>/g) ?? [];
     expect(imgs.length, 'the case block poster').toBeGreaterThan(0);
     for (const img of imgs) expect(img).toMatch(/\sloading="lazy"/);
+  });
+}
+
+// Round 2 (S3): /services has no background surface below the fold — its clips are the
+// cards' (hover only) and the explorer's (in view, inside a panel that is collapsed until
+// opened). So a full scroll with the pointer parked fetches no video at all, and an opened
+// panel's clip mounts only once that panel is on screen.
+for (const route of ['/services', '/ar/services']) {
+  test(`${route}: the cards and the collapsed explorer fetch no video until asked`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.goto(route, { waitUntil: 'load' });
+    await settle(page);
+    // The pointer parked over the fixed header, so no card is hovered while the page moves.
+    // Every clip shares the hero's file, so the check is on the element a clip's bytes
+    // need: no <video> exists outside the hero (the hero loop's own requests continue).
+    await page.mouse.move(1, 1);
+    await scrollThrough(page);
+    await expect(page.locator('.svc-xp video, .disc-card video')).toHaveCount(0);
+
+    await page.evaluate(() => document.getElementById('consent-banner')?.remove());
+    await page.locator('.disc-card[data-disc="events"]').focus();
+    await page.keyboard.press('Enter');
+    const frame = page.locator('.svc-panel#events .svc-xp__mf');
+    await frame.scrollIntoViewIfNeeded();
+    await expect(frame.locator('video')).toHaveCount(1, { timeout: 5000 });
+    // Only the opened panel's clip: the four hidden panels never mount theirs.
+    await expect(page.locator('.svc-xp video')).toHaveCount(1);
   });
 }

@@ -80,6 +80,10 @@ const T = {
   resBg: '#000c40', // .svc-res__i — rgba(0,36,188,.34) over black, the gradient's lighter end
   resLabel: '#b8bbca', // .svc-res__l — white .72 over resBg
   casePill: '#666666', // .svc-case__see — its .6 black glass over a WHITE poster
+  // Round 2 (S3) — the /services explorer (services.css): the media caption pill's .7 glass
+  // over a WHITE poster, and the selected tab's number (white .75 over Klein)
+  xpCap: '#4d4d4d',
+  xpTabNum: '#bfc8ee',
 };
 
 // (foreground, background, minRatio, where) — every real on-screen pairing.
@@ -198,6 +202,16 @@ const PAIRS = [
   ['fg', 'resBg', 4.5, 'case result value on its card'],
   ['resLabel', 'resBg', 4.5, 'case result label on its card'],
   ['fg', 'cobalt', 4.5, 'floating "Skip to inquiry", hovered (white on Cobalt)'],
+  // Round 2 (S3): /services — the proof band and the explorer, both on white
+  ['ink', 'paper', 4.5, 'services proof statement, rating value, stat numbers; explorer copy'],
+  ['klein', 'paper', 4.5, 'services proof accent + stars; explorer key line, tab/row numbers'],
+  ['dim', 'paper', 4.5, 'services proof rating label + stat labels; explorer blurb'],
+  ['tbd', 'paper', 4.5, 'services proof: a non-numeric value'],
+  ['paper', 'klein', 4.5, 'explorer: the selected tab, a hovered Inquire pill'],
+  ['xpTabNum', 'klein', 4.5, "explorer: the selected tab's number"],
+  ['klein', 'paper', 3.0, 'explorer: the row underline and hover borders (UI)'],
+  ['fg', 'xpCap', 4.5, 'explorer media caption name over a white poster (worst case)'],
+  ['skySoft', 'xpCap', 4.5, 'explorer media caption number over a white poster (worst case)'],
 ];
 
 // ---- Admin palette — keep in sync with public/styles/admin.css :root tokens ----

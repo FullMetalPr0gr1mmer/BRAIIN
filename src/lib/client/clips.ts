@@ -104,22 +104,23 @@ function ensureVideo(frame: HTMLElement): HTMLVideoElement | null {
   video.tabIndex = -1;
   video.setAttribute('aria-hidden', 'true');
   video.disableRemotePlayback = true;
-  const win = clipWindow(frame);
-  if (win) {
-    const loop = () => {
-      const seekable = video.seekable.length > 0 ? video.seekable.end(0) : 0;
-      const to = seekTarget(video.currentTime, win, seekable);
-      if (to !== null) {
-        try {
-          video.currentTime = to;
-        } catch {
-          // not seekable yet — the next timeupdate retries
-        }
+  // The window is read from the frame on every tick, not captured here, so retargetClip()
+  // can move a live frame to another window without recreating its <video>.
+  const loop = () => {
+    const win = clipWindow(frame);
+    if (!win) return;
+    const seekable = video.seekable.length > 0 ? video.seekable.end(0) : 0;
+    const to = seekTarget(video.currentTime, win, seekable);
+    if (to !== null) {
+      try {
+        video.currentTime = to;
+      } catch {
+        // not seekable yet — the next timeupdate retries
       }
-    };
-    video.addEventListener('loadedmetadata', loop);
-    video.addEventListener('timeupdate', loop);
-  }
+    }
+  };
+  video.addEventListener('loadedmetadata', loop);
+  video.addEventListener('timeupdate', loop);
   video.addEventListener('playing', () => frame.classList.add('is-playing'));
   video.addEventListener('pause', () => frame.classList.remove('is-playing'));
   video.src = src;
@@ -137,6 +138,58 @@ function play(frame: HTMLElement): void {
 function pause(frame: HTMLElement): void {
   wanted.set(frame, false);
   frame.querySelector<HTMLVideoElement>('video')?.pause();
+}
+
+export interface ClipTarget {
+  src: string;
+  start?: number | undefined;
+  end?: number | undefined;
+}
+
+/** Whether a frame's data attributes already name this clip (no retarget needed). */
+export function sameClip(data: DOMStringMap, next: ClipTarget): boolean {
+  const num = (v: number | undefined) => (v === undefined ? undefined : String(v));
+  return (
+    data.clipSrc === next.src &&
+    data.clipStart === num(next.start) &&
+    data.clipEnd === num(next.end)
+  );
+}
+
+/**
+ * Points a clip frame at another window (or file) — the /services explorer, whose panel
+ * media follows the hovered service row. Before the frame's <video> exists this only
+ * rewrites its attributes (the first play reads them). After, the poster shows (the video
+ * fades out) while the video seeks, and the video fades back in once it has.
+ */
+export function retargetClip(frame: HTMLElement, next: ClipTarget): void {
+  if (sameClip(frame.dataset, next)) return;
+  frame.dataset.clipSrc = next.src;
+  if (next.start === undefined) delete frame.dataset.clipStart;
+  else frame.dataset.clipStart = String(next.start);
+  if (next.end === undefined) delete frame.dataset.clipEnd;
+  else frame.dataset.clipEnd = String(next.end);
+  const video = frame.querySelector<HTMLVideoElement>('video');
+  if (!video) return;
+  frame.classList.remove('is-playing');
+  video.addEventListener(
+    'seeked',
+    () => {
+      if (!video.paused) frame.classList.add('is-playing');
+    },
+    { once: true },
+  );
+  if (video.getAttribute('src') !== next.src) {
+    video.src = next.src; // a new file: `loadedmetadata` seeks into the window
+  } else {
+    const win = clipWindow(frame);
+    try {
+      video.currentTime = win ? win.start : 0;
+    } catch {
+      // not seekable yet — timeupdate brings it into the window
+    }
+  }
+  if (wanted.get(frame) && !document.hidden) void video.play().catch(() => {});
 }
 
 let visibilityBound = false;

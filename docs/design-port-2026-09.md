@@ -695,6 +695,201 @@ The orchestrator renumbers these at integration.
   - the Arabic home meta, "…: خمسة تخصصات، استوديو واحد.".
 
   ServicesIndex's "Fourteen" goes with the component in S3.
+- **S2-12. Performance: the /ar home LCP regression (CI 2680 ms against the 2500 ms
+  budget; S1 passed).** Measured with Lighthouse 12.6 on the mobile profile of
+  `lighthouserc.json` (simulated throttling), S1 and S2 builds served side by side and run
+  interleaved, 7 runs a route, and by recomputing Lantern's LCP graph from the saved
+  trace. Lantern's LCP is not the logo's arrival: it is the end of the LAST request that
+  finished before the observed paint. On /ar those were the five Almarai faces the page
+  lays out, and a face cannot start before global.css has arrived, because the
+  `@font-face` rules live in it. S2 grew that render-blocking sheet by 4.3 KB gzipped, and
+  the font chain, and so the LCP, moved by the same ~150 ms on every page. Local medians:
+  /ar 2492 → 2643 ms, / 1884 → 2049 ms, /contact 1728 → 1873 ms. Four changes, none of
+  them to the design, the markup's structure or the CSP:
+  - **The served stylesheets are minified.** `scripts/minify-css.mjs` runs in
+    `postbuild` and strips comments and insignificant whitespace from
+    `dist/client/styles/*.css`, the served copy only; the source keeps its comments.
+    global.css drops from 34.9 KB to 14.1 KB gzipped. It is semantics-preserving by
+    construction, it never rewrites a rule, and it refuses what it does not model
+    (`tests/lib/minifyCss.spec.ts` proves each sheet keeps its token stream). No
+    dependency was added.
+  - **The video helpers are one chunk.** With the CSS out of the way, the graph's tail
+    became a module waterfall: Hero → lazyVideo → clips, three round trips. `manualChunks`
+    now puts both helpers in `media-client`.
+  - **The logos are sized by their box.** The header logo and the intro logo (the LCP
+    element) were 1x/2x density pairs keyed to the desktop box. A phone at DPR 1.75
+    fetched the 528w and 1040w files (9 + 17 KB) for 96 px and 189 px boxes. They now
+    use width descriptors with `sizes` from their CSS, `clamp(96px, 10vw, 132px)` and
+    `min(46vw, 520px)`, so that phone takes 176w + 520w (3 + 9 KB). Every candidate has
+    the exact aspect ratio, so the box never reshapes when the file arrives. Desktop
+    picks are unchanged: 1x 520w, 2x 1040w for the intro; 176w/264w for the header.
+  - **No layout read before the first frame.** SiteHeader's first `offsetHeight` /
+    `scrollY` read and the count-up's `getBoundingClientRect` ran at module evaluation.
+    When a module evaluated before the first frame (on a loaded machine), the page's
+    whole first layout moved into that script's task (158 ms). Once FCP came earlier,
+    Lighthouse counted that task as blocking time on the home page (TBT up to 790 ms in
+    loaded runs). Both reads now wait for `requestAnimationFrame`.
+
+  After the fix, local medians of 7 (S1 in brackets): /ar 2135 ms (2479), / 1736 ms
+  (1882), /contact 1717 ms (1724). TBT is 0 on all three and CLS is unchanged.
+
+## Services page (S3)
+
+`/services` and `/ar/services`, from the Round 2 `services.html` (and `services.html#events`,
+the explorer open). The page is section-composed (`pages` slug `services`,
+`supabase/seed-data/54-services-page.json`), with `DEFAULT_SERVICES_SECTIONS` until it is:
+banner hero → proof → the discipline cards (page mode) → the explorer → "Say hello". One
+loader (`src/lib/services/servicesPage.ts`) serves both twins.
+
+| Mockup | Site | Where |
+| --- | --- | --- |
+| `.hero.hero--contact` + `HERO_SEG` 13.4–15.9 + `.hero__alt` | Hero `withHeroPreset(…, 'services')` → `.hero--banner`, `data.clip`, `data.altLink` | global.css (banner), services.css (alt link; the 55% crop) |
+| `.proof` / `.proof__grid` / `.proof__line` / `.proof__rate` / `.stars` / `.stats` / `.stat` / `.stat__n` / `.stat__l` | `statistics` variant `services` → `ServicesProof.astro`: `.svc-proof` / `__grid` / `__line` / `__rate` / `__stars` / `__stats` / `__stat` / `__n` / `__l` | services.css |
+| `.cats` (services) | `servicesOverview`, `data.mode: 'page'` (S2) → `.disc.disc--page#categories` | global.css |
+| `.xp` / `.xp.open` / `.xp__pad` / `.xp__body` | `serviceExplorer` → `ServiceExplorer.astro`: `.svc-xp` (+ `.is-live` / `.is-open`) / `.svc-xp__pad` / `.svc-panel` (+ `.is-active` / `.is-entering`) | services.css |
+| `.xp__tabs` / `.xtab` / `.xtab.on` | `.svc-xp__tabs` / `.svc-tab` / `.svc-tab[aria-selected='true']` — `src/lib/client/tabs.ts` | services.css |
+| `.xp__grid` / `.xp__media` / `.xp__cap` | `.svc-xp__grid` (`--solo`) / `.svc-xp__media` + `MediaFrame.svc-xp__mf` (+ `.svc-xp__swap`, `.is-swapped`) / `.svc-xp__cap` | services.css |
+| `.xp__k` / `.xp__h` / `.xp__p` | `.svc-xp__k` / `.svc-xp__h` / `.svc-xp__p` | services.css |
+| `.xl` / `.xi` / `.xi__a` / `.xi__n` / `.xi__t` / `.xi__q` | `.svc-list` / `.svc-row` / `.svc-row__a` / `.svc-row__n` / `.svc-row__t` / `.svc-row__q` | services.css |
+| `.xp__foot` / `.xp__nav` / `.xbtn` / `.cta--go[data-pre]` | `.svc-xp__foot` / `.svc-xp__nav` / `.svc-xp__btn(--prev/--next)` / `<Cta class="svc-xp__start" data-preselect="discipline:<slug>">` | services.css; global.css (`.cta`) |
+| `openCat()` / `renderBody()` / `pageBoot()` (innerHTML) | server-rendered panels + `src/lib/client/serviceExplorer.ts` | — |
+| `.hello` | `hello` (S2) | services.css |
+
+## Decisions (S3)
+
+The orchestrator renumbers these at integration.
+
+- **S3-1. First paint is CSS; after that the script owns the state.** `/services#events`
+  (the home cards, the service pages' crumb, the retired-slug 301s) must open Events with
+  no layout shift. A script opening it after first paint would move everything below it
+  with no input to excuse the move, and that shift counts. So `:target` shows the addressed
+  panel (`.svc-xp:not(.is-live) .svc-panel:not(:target) { display: none }`), and with
+  nothing addressed the whole explorer is collapsed.
+  - The script then adds `.is-live`, which switches the CSS to its own `.is-open` /
+    `.is-active` classes, set to the panel `:target` already showed: the hand-over changes
+    nothing on screen, and plays no entrance.
+  - From then on a card, a tab, prev/next or a `hashchange` opens a panel **instantly**,
+    inside the input's 500 ms window (`hadRecentInput`). Only the panel's inner grid fades
+    and rises (`svc-xp-in`, opacity + transform, 0.7 s). The mockup's 0.9 s
+    `grid-template-rows` expansion would keep pushing the page after the window closed.
+  - The hash follows with `replaceState`, which does not update `:target` — the reason the
+    CSS switches to classes rather than trusting `:target` for good.
+  - Without JS every card, tab and prev/next is a plain `#slug` link, and `:target` does the
+    opening. The gate is `tests/e2e/layout-shift.e2e.ts`: a click-open and a keyboard
+    switch count 0, and a `#events` load shifts nothing at all.
+  - Before the script (and without it) the addressed panel's pill wears the selected look
+    too: `.svc-xp:not(.is-live):has(.svc-panel:nth-child(k+1):target) .svc-tab:nth-child(k)`,
+    written out to eight disciplines. It is colour only, so the hand-over to
+    `[aria-selected]` shifts nothing.
+  - Every `:has()` selector is a rule of its own (or in a list of only `:has()` selectors).
+    `:has()` is not forgiving: in a mixed list an engine without it (Firefox < 121, Safari
+    < 15.4) drops the whole rule, and the explorer's script-driven hiding went with it, so
+    every panel showed stacked. `tests/lib/cssSelectorLists.spec.ts` holds every served
+    sheet to that rule (two older lists in global.css, the intro cut, are named there and
+    left to their owner).
+  - **Standalone.** With no visible card band (an editor hid or removed it), nothing else
+    on the page can open the explorer: its tabs are inside it, and a collapsed explorer
+    shows nothing. So the route marks it `data.standalone` (`withServicesData`), it renders
+    `.svc-xp--standalone`, and CSS shows its FIRST panel when nothing is addressed (an
+    addressed one still wins). The script starts from that panel and writes no hash for
+    it.
+- **S3-2. The tabs are APG tabs, applied by the script.** `src/lib/client/tabs.ts`:
+  `role=tablist` (named "Disciplines" / "التخصصات"), `role=tab` with `aria-controls` and
+  `aria-selected`, a roving tabindex, and `role=tabpanel` with `aria-labelledby` →
+  its tab and `tabindex=0` (a panel whose first content is not focusable joins the Tab
+  sequence). Automatic activation: ←/→ move and select, mirrored in RTL (→ is "previous"
+  there), wrapping at both ends; Home/End; Enter/Space. There is no region-wide
+  `aria-live` (the mockup had one on the whole explorer): the selected tab's own
+  announcement is the feedback. The roles are applied only when the script runs, so a
+  no-JS page never promises a widget that is not there. Focus: a card click or prev/next
+  moves focus to the opened panel and scrolls it into view (its `scroll-margin-top` keeps
+  the header's room and the tab row above it); a tab keeps focus on itself. The selected
+  card gets S2's `.on` (no ARIA state on the cards: they are links, and the tab carries
+  the selection). The tab row scrolls on phones, and a scroller clips at its padding
+  edge, so it keeps 6px of room on every side for the global focus ring (2px wide at a
+  3px offset, 5px past the pill), taken back with an equal negative margin.
+- **S3-3. Every panel is server-rendered.** All five disciplines and their 28 service
+  links are in the HTML (Tier A, crawlable), each panel's id the discipline's slug; the
+  mockup rendered one panel at a time with `innerHTML`. A panel's poster is a lazy
+  `<Picture>` and its clip an in-view `MediaFrame` (clips.ts), so a hidden panel costs no
+  image and no video bytes until it is shown, and never on touch, under reduced motion or
+  with Save-Data. Outage fallback: the cards' five names as text-only panels (no services,
+  no count, no media), so a fallback card's `#slug` link still opens something.
+- **S3-4. The row hover swap is data attributes, never markup.** Each row carries a
+  server-computed WebP URL (`getImage`, one per distinct still, 1200w — hover means a mouse
+  or pen) and its clip window in `data-xp-*`. On hover or focus the script paints an
+  overlay `<img>` (created once, then only its `src` changes) once decoded, rewrites the
+  caption with `textContent`, and moves the frame's clip with `clips.ts retargetClip()`;
+  leaving the list restores the discipline's. `clips.ts` now reads a frame's window on every
+  tick (it captured it once), which is what makes a live retarget possible. A service with
+  no poster or clip of its own keeps the discipline's, so the media never goes blank. The
+  rows use `data-xp-clip-*`, not `data-clip-*`: the latter would make clips.ts wire every
+  row as a frame.
+- **S3-5. The proof band is the `statistics` `services` variant, namespaced `.svc-proof`.**
+  The mockup's `.proof` / `.stats` names are Our Work's. The numbers are the counters placed
+  on `services` (their Services-page labels), rendered final on the server and counted up
+  by `countUp.ts` only while still off screen. The statement is built-in copy (overridable
+  `line` + `lineAccent`).
+- **S3-6. The rating line is content only, and never structured data.** "★★★★★ 4.9 / 5
+  average client rating" is a claim with no table behind it. It renders only where it is
+  authored (`rating: {value, label}`), and the one place it is authored is the seeded row,
+  which is flagged `is_placeholder` for exactly this reason (production shows it only under
+  the owner's override, runbook §6d). It is never a component default, and never in
+  `DEFAULT_SERVICES_SECTIONS` either: that default renders whenever the composition comes
+  back empty (the page unpublished, every section hidden, a failed read), code is never
+  behind the 0025 fence, and so a sample there would reach production, and the Tier A edge
+  cache, unflagged. The seed-equality test allows the seed row that one extra key. There is **no
+  AggregateRating JSON-LD**: it would assert review data the site does not have (a
+  manual-action category). The value is isolated LTR (`<b dir="ltr">`), as in the mockup's
+  Arabic. The whole band hides with fewer than two published counters, so the rating line
+  is never the only sample left standing.
+- **S3-7. The page's links follow the bands that are there.** The hero CTA goes to
+  `#categories`, the alt link ("Know what you need? **Skip to the inquiry**") and every
+  "Start your {Discipline} project" to `#inquiry` — or, with "Say hello" hidden, to
+  `/contact#inquiry`. With the cards hidden the CTA goes to the standalone explorer's
+  first panel (`#<slug>`, S3-1), else to the form (`servicesPageLinks`, the home CTA's
+  rule). And a floor: while the page-mode cards show, the explorer shows too
+  (`ensureServiceExplorer`), because the cards are `#slug` links into it and it carries the
+  page's service links. If the hero is hidden the page wears the solid
+  header and a visually hidden h1.
+- **S3-8. Explorer copy.** "Inquire" / "اطلب", and "Start your {Discipline} project" /
+  "ابدأ مشروع {Discipline}" are the mockup's `x.*`. The section's content is only those two
+  labels (strict); `startLabel` must carry `{discipline}` in both languages. The key line
+  reads "01 / 05  8 services", with the cards' plural rule and Western digits (S2-7). The
+  Inquire pill is named "Inquire: Logo Design" (its visible text starts the name, 2.5.3);
+  the prev/next links carry a screen-reader prefix ("Previous discipline: …"), since their
+  visible text is only a name; the row number is `aria-hidden` (the `<ol>` numbers the
+  rows). With a mouse the pill shows on its row's hover or focus, as in the mockup; on touch
+  it is always visible.
+- **S3-9. The caption pill is darker than the mockup's.** Its glass is .7 black (the
+  mockup's .35), so over a white poster the name is 8.4:1 and the number, in sky-soft, 5.4:1
+  (the mockup's sky there is 1.9:1). `scripts/contrast-audit.mjs` holds the worst case.
+- **S3-10. The Arabic head copy is ours.** `PAGE_META.services`: the English title and
+  description are `services.html`'s, verbatim; the Arabic title is the menu label
+  ("الخدمات") and the description the English one in the page's own Arabic words. It is
+  flagged for owner review.
+- **S3-11. The LCP element is the banner loop's first frame.** Lighthouse records the hero
+  `<video>`, not the h1: the loop mounts after `load`, and its first frame out-sizes the
+  headline, which was the candidate until then. `/contact` behaves the same way, although
+  its §6 row names the h1. The first S3 measurement ran on the S2 tip before S2-12. There,
+  `/ar/services` was over budget (simulated LCP 2.68–2.85 s, perf 0.93–0.95). Rebased onto
+  S2-12, `services.css` is minified too (6.5 → 3.4 KB gzipped) and the budget holds.
+  Lighthouse 12.6 ran the `lighthouserc.json` profiles, 5 interleaved mobile runs and 3
+  desktop runs, with the page's data mocked from the seed (28 rows, card and panel posters,
+  the four `services` counters):
+  - mobile, `/services`: LCP 1.95 s, perf 0.99;
+  - mobile, `/ar/services`: LCP 2.22 s (2.21–2.30), perf 0.98;
+  - mobile, `/ar/contact` (control): LCP 1.92 s;
+  - desktop: 0.55 s and 0.68 s, perf 0.99 or more.
+
+  With the code fallbacks and no data, the mobile LCP is 1.71 s and 2.08 s. The ≈0.15–0.25 s
+  difference is the posters and counters. Since the frame paints after `load`, everything
+  that finishes before `load` sits in its Lantern graph (S2-12). A band that adds eager
+  bytes above the fold on this page therefore spends LCP budget directly. The margin on
+  `/ar/services` is ≈0.28 s. The structural fix is not in the page. It is a Hero-wide
+  treatment that keeps the loop's first frame from becoming a candidate, or Stream
+  (KAN-20). Both are owner items, and so is correcting the contact row.
+
 
 ## Service page (S4)
 

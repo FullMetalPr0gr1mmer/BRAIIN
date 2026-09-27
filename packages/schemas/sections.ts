@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LocalizedTextSchema, TestimonialPlacementSchema } from './content';
+import { LocalizedTextSchema, STAT_PLACEMENTS, TestimonialPlacementSchema } from './content';
 import { SECTION_TYPES, type SectionType } from './sectionTypes';
 import { AccentSchema, MediaRefSchema, SafeHrefSchema, VideoClipSchema } from './media';
 import { SlugSchema, UuidSchema } from './primitives';
@@ -124,6 +124,30 @@ export const HelloSectionContentSchema = z
   })
   .strict();
 
+/** The token a "Start your {discipline} project" label puts the discipline's name in. */
+export const EXPLORER_DISCIPLINE_TOKEN = '{discipline}';
+
+/**
+ * The /services explorer (Round 2): one panel per published discipline, each listing its
+ * published services. The disciplines, services, posters and clips come from their own
+ * tables (route data); this is only the two labels around them, both optional overrides of
+ * the design's copy. `startLabel` must name the discipline, in both languages, through
+ * `{discipline}` — a fixed label would read "Start your project" on all five panels.
+ */
+export const ServiceExplorerSectionContentSchema = z
+  .object({
+    /** The pill beside every service ("Inquire"). */
+    inquireLabel: Text.optional(),
+    /** The panel's closing button ("Start your {discipline} project"). */
+    startLabel: Text.refine(
+      (v) => v.en.includes(EXPLORER_DISCIPLINE_TOKEN) && v.ar.includes(EXPLORER_DISCIPLINE_TOKEN),
+      {
+        message: `Use ${EXPLORER_DISCIPLINE_TOKEN} where the discipline's name goes (both languages).`,
+      },
+    ).optional(),
+  })
+  .strict();
+
 export const ContactSectionContentSchema = z.object({
   heading: Text.optional(),
   accent: Text.optional(),
@@ -172,15 +196,35 @@ export const CtaSectionContentSchema = z.object({
  * the copy around them. `cards` is the pre-UI-v2 grid (the default, so an existing
  * composition renders unchanged).
  */
-export const STAT_BAND_VARIANTS = ['cards', 'band', 'reach', 'proof'] as const;
+export const STAT_BAND_VARIANTS = ['cards', 'band', 'reach', 'proof', 'services'] as const;
+
+/**
+ * The Services page proof band's rating line ("4.9 / 5 average client rating", Round 2).
+ * `value` is shown as written, isolated LTR, so it is a short display string, not a number
+ * the page could compute from anything. It is rendered as TEXT only — never as
+ * AggregateRating structured data, which would assert a rating no review data backs.
+ */
+export const StatRatingSchema = z
+  .object({
+    value: z.string().trim().min(1).max(16),
+    label: Text,
+  })
+  .strict();
+
 export const StatisticsSectionContentSchema = z
   .object({
     variant: z.enum(STAT_BAND_VARIANTS).optional(),
-    placement: z.enum(['home', 'about', 'work']).optional(),
+    placement: z.enum(STAT_PLACEMENTS).optional(),
     tag: Text.optional(),
     heading: Text.optional(),
     accent: AccentSchema.optional(),
     text: Text.optional(),
+    /** `services` only: the statement beside the numbers ("Five disciplines. One team…"). */
+    line: Text.optional(),
+    /** `services` only: which words of `line` carry the accent; only read with an authored line. */
+    lineAccent: AccentSchema.optional(),
+    /** `services` only: the rating line under the statement, with five stars. */
+    rating: StatRatingSchema.optional(),
     /**
      * Show the numbers without the count-up. An opt-OUT, because an editor's unticked box is
      * "not set": counting up (an enhancement over server-rendered final values) is the default.
@@ -475,6 +519,7 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
   faq: FaqSectionContentSchema,
   // Round 2 (services)
   hello: HelloSectionContentSchema,
+  serviceExplorer: ServiceExplorerSectionContentSchema,
 };
 
 /**
@@ -543,3 +588,6 @@ export type ContactInquirySectionContent = z.infer<typeof ContactInquirySectionC
 export type ContactChannelsSectionContent = z.infer<typeof ContactChannelsSectionContentSchema>;
 export type FaqSectionContent = z.infer<typeof FaqSectionContentSchema>;
 export type HelloSectionContent = z.infer<typeof HelloSectionContentSchema>;
+export type ServiceExplorerSectionContent = z.infer<typeof ServiceExplorerSectionContentSchema>;
+export type StatisticsSectionContent = z.infer<typeof StatisticsSectionContentSchema>;
+export type StatRating = z.infer<typeof StatRatingSchema>;

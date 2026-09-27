@@ -56,24 +56,31 @@ export function initCountUp(root: ParentNode = document): void {
     },
     { threshold: 0.6 },
   );
-  for (const el of root.querySelectorAll<HTMLElement>('[data-count-to]')) {
-    const to = Number(el.dataset.countTo);
-    if (!Number.isFinite(to) || to <= 0) continue;
-    if (inViewport(el)) continue; // already seen at its final value — never flash it to 0
-    el.textContent = '0';
-    pending.add(el);
-    io.observe(el);
-  }
-  if (pending.size === 0) return;
-  addEventListener(
-    'beforeprint',
-    () => {
-      for (const el of pending) {
-        io.unobserve(el);
-        el.textContent = el.dataset.countTo ?? '';
-      }
-      pending.clear();
-    },
-    { once: true },
-  );
+  // In the first frame, not during module evaluation: `inViewport` reads layout
+  // (getBoundingClientRect), and a module that evaluates before the browser's first frame
+  // would pull the whole page's first layout into its own task (the same trap SiteHeader's
+  // first measurement was in — Round 2 S2 perf note). The frame's own layout is the one it
+  // reads, and a number reset to 0 here is off-screen, so nothing visible changes.
+  requestAnimationFrame(() => {
+    for (const el of root.querySelectorAll<HTMLElement>('[data-count-to]')) {
+      const to = Number(el.dataset.countTo);
+      if (!Number.isFinite(to) || to <= 0) continue;
+      if (inViewport(el)) continue; // already seen at its final value — never flash it to 0
+      el.textContent = '0';
+      pending.add(el);
+      io.observe(el);
+    }
+    if (pending.size === 0) return;
+    addEventListener(
+      'beforeprint',
+      () => {
+        for (const el of pending) {
+          io.unobserve(el);
+          el.textContent = el.dataset.countTo ?? '';
+        }
+        pending.clear();
+      },
+      { once: true },
+    );
+  });
 }

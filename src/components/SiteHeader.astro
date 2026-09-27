@@ -70,12 +70,22 @@ const STR = {
 
   <div class="site-header__bar">
     <a class="site-header__brand" href={localizedPath('/', locale)} aria-label={brand}>
+      {
+        /* Sized by the real box: `--bs-logo-w` is clamp(96px, 10vw, 132px) (global.css),
+           so `sizes` says exactly that and the browser picks by box × DPR — a phone at
+           DPR 1.75 takes 176w, 3 KB (it took the 528w 2x file, 9 KB and 3x its pixels, on
+           the critical path of every page), a 1x desktop 176w, a 2x desktop 264w. Every
+           width is a multiple of 88, so every candidate is exactly 264:135 and the box
+           never changes shape when the file arrives. `width={264}` keeps the img's
+           intrinsic size attributes (CLS). */
+      }
       <Picture
         src={logo}
         alt={brand}
         formats={['avif', 'webp']}
         width={264}
-        densities={[1, 2]}
+        widths={[176, 264, 352]}
+        sizes="clamp(96px, 10vw, 132px)"
         decoding="async"
         loading="eager"
       />
@@ -155,7 +165,7 @@ const STR = {
     header.querySelector('.site-nav__panel')?.addEventListener('click', (event) => {
       if (menu?.open && (event.target as Element | null)?.closest('a')) menu.open = false;
     });
-    let lastY = window.scrollY;
+    let lastY = 0;
     let ticking = false;
 
     // Measure the hero rather than assuming it fills the viewport: the contact hero is a
@@ -166,7 +176,7 @@ const STR = {
     // projects' page head) marks it for this measurement.
     const hero = overlay ? document.querySelector<HTMLElement>('.hero, [data-hero]') : null;
     const measure = () => (overlay ? (hero?.offsetHeight ?? window.innerHeight) * 0.9 : 160);
-    let threshold = measure();
+    let threshold = 0; // measured in the first frame, below
     addEventListener('resize', () => (threshold = measure()), { passive: true });
 
     const update = () => {
@@ -190,6 +200,18 @@ const STR = {
       },
       { passive: true },
     );
-    update();
+    // The first reads wait for the first frame. `offsetHeight` and `scrollY` each force a
+    // synchronous style + layout, and this module can evaluate BEFORE the browser's first
+    // frame: read here, they pulled the whole page's first layout into this script's task
+    // (measured: a 158 ms task on a loaded machine, which Lighthouse's simulation counted
+    // as blocking time on the home page once its CSS arrived faster — Round 2 S2 perf
+    // note, docs/design-port-2026-09.md). In a frame callback the frame's own layout is
+    // the one they read, so no work is added, and the initial state still lands before
+    // that frame paints.
+    requestAnimationFrame(() => {
+      threshold = measure();
+      lastY = window.scrollY;
+      update();
+    });
   }
 </script>

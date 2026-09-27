@@ -28,7 +28,7 @@
     "seo-ci": "vitest run tests/seo",
     "cf:secrets": "node scripts/push-secrets.mjs",
     "seed:gen": "node scripts/gen-seeds.mjs && node scripts/round2-cutover.mjs",
-    "postbuild": "node scripts/verify-build-origin.mjs"
+    "postbuild": "node scripts/minify-css.mjs && node scripts/verify-build-origin.mjs"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.3",

@@ -41,6 +41,7 @@ export const RENDERED_SECTION_TYPES = [
   'projectCatalog',
   // Round 2 (services)
   'hello',
+  'serviceExplorer',
 ] as const satisfies readonly SectionType[];
 
 export type RenderedSectionType = (typeof RENDERED_SECTION_TYPES)[number];

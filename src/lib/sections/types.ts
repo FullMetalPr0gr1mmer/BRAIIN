@@ -2,6 +2,8 @@
 // In Phase 3 these come from the `page_sections` table; until then pages use the
 // default compositions below so the site looks real before content is authored.
 
+import type { HeroText } from '@/lib/text/heroLinks';
+
 export interface SectionData {
   type: string;
   visible?: boolean;
@@ -137,10 +139,12 @@ export const DEFAULT_CONTACT_SECTIONS: SectionData[] = [
 export interface HeroPresetData {
   /** The short banner hero: shorter box, badge CTA first, no scroll cue, never the intro. */
   banner: true;
-  /** Where the CTA points: the page's own form. */
+  /** Where the CTA points: the page's own form (contact) or its first band (services). */
   ctaHref: string;
   /** The window of the loop this page plays, so it does not replay the home opening. */
   clip?: { start: number; end: number };
+  /** The small line under the CTA (Hero `data.altLink`, Round 2) — its `<b>` run is split, never injected. */
+  altLink?: { label: HeroText; href: string };
 }
 
 /**
@@ -162,6 +166,35 @@ export const HERO_PRESETS = {
     // The design's contact loop: 6.2–7.9 s of the showreel, "so this page doesn't replay
     // the homepage opening".
     data: { banner: true, ctaHref: '#inquiry', clip: { start: 6.2, end: 7.9 } },
+  },
+  // Round 2: /services — services.html `s.h1` / `s.sub` / `s.cta` / `s.alt`, verbatim.
+  // "Ideas, made <em>real</em>" / "أفكار، صارت <em>حقيقة</em>": the accent is the third word.
+  services: {
+    content: {
+      headline: { en: 'Ideas, made real', ar: 'أفكار، صارت حقيقة' },
+      accentFromEn: 2,
+      accentFromAr: 2,
+      sub: {
+        en: 'Branding, production, marketing, websites, and events. One team takes your idea from the first sketch to the day it goes live.',
+        ar: 'هوية، وإنتاج، وتسويق، ومواقع، وفعاليات. فريق واحد ياخذ فكرتك من أول رسمة إلى يوم إطلاقها.',
+      },
+      ctaLabel: { en: 'Explore our services', ar: 'استكشف خدماتنا' },
+    },
+    // The design's services loop (HERO_SEG): 13.4–15.9 s. The CTA opens the discipline
+    // cards; the alt link skips to the page's own "Say hello" form. The route re-points
+    // both when the band they name is not on the page (servicesPageLinks).
+    data: {
+      banner: true,
+      ctaHref: '#categories',
+      clip: { start: 13.4, end: 15.9 },
+      altLink: {
+        label: {
+          en: 'Know what you need? <b>Skip to the inquiry</b>',
+          ar: 'عارف وش تحتاج؟ <b>انتقل للطلب مباشرة</b>',
+        },
+        href: '#inquiry',
+      },
+    },
   },
 } as const satisfies Record<
   string,
@@ -245,6 +278,31 @@ export const DEFAULT_WORK_SECTIONS: SectionData[] = [
   { type: 'projectGrid' },
   { type: 'clientsMarquee' },
   { type: 'cta' },
+];
+
+/**
+ * The Services page (`/services`, Round 2), in the design's order: banner hero → proof
+ * (the `services` statistics variant) → the discipline cards (page mode) → the explorer →
+ * "Say hello". Mirrored by the seeded composition (supabase/seed-data/54-services-page.json;
+ * tests/lib/servicesPage.spec.ts holds the two together, the seed's sample `rating` aside).
+ * The hero carries no content: its copy and banner layout come from
+ * `withHeroPreset(…, 'services')`.
+ *
+ * The proof band's rating line ("4.9 / 5 average client rating") is NOT here. It is a claim
+ * with no table behind it (the design's sample), so it exists only in the seeded row, which
+ * is flagged `is_placeholder` for it: the 0025 fence keeps that row off production until
+ * the owner makes it real or overrides (runbook §6d). This default renders whenever the
+ * composition comes back empty (the page unpublished, every section hidden, a failed read),
+ * and code is never behind that fence: a sample claim here would reach production, and the
+ * Tier A edge cache, unflagged. The band still hides with its numbers: fewer published
+ * `services` counters than two and nothing renders.
+ */
+export const DEFAULT_SERVICES_SECTIONS: SectionData[] = [
+  { type: 'hero' },
+  { type: 'statistics', props: { variant: 'services', placement: 'services' } },
+  { type: 'servicesOverview' },
+  { type: 'serviceExplorer' },
+  { type: 'hello' },
 ];
 
 /** All projects (`/portfolio/all`, UI v2 PR10). */
