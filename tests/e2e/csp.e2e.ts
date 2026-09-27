@@ -55,7 +55,12 @@ for (const route of ROUTES) {
       if (/Content Security Policy|Refused to (execute|load|apply)/i.test(t)) violations.push(t);
     });
 
-    await page.goto(route, { waitUntil: 'networkidle' });
+    // `load` plus a settle window, not `networkidle`: with byte ranges (/media is served
+    // through the Worker) Chromium buffers a playing <video> ahead and then PARKS the open
+    // request, which Playwright counts as in flight — so a page with a banner loop never
+    // goes network-idle. Late violations still land inside the settle window.
+    await page.goto(route, { waitUntil: 'load' });
+    await page.waitForTimeout(2000);
 
     const inPage = await page.evaluate(
       () => (window as unknown as { __cspViolations: string[] }).__cspViolations ?? [],
@@ -73,7 +78,8 @@ for (const route of [
   '/portfolio/the-rider',
 ]) {
   test(`every component script is external on ${route}`, async ({ page }) => {
-    await page.goto(route, { waitUntil: 'networkidle' });
+    // `load`, not `networkidle` — a playing banner video never goes idle (see above).
+    await page.goto(route, { waitUntil: 'load' });
     // A module script with neither `src` nor a nonce would be blocked by our CSP.
     const bad = await page.$$eval(
       'script[type="module"]',

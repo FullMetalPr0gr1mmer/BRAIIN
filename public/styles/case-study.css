@@ -39,6 +39,10 @@
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.08em;
+  /* `normal`, the mockup's leading (its body sets none; ours is 1.6 for running text):
+     the back link, keyword chips and scope rows measured 7-8px taller each in English.
+     In Arabic, Almarai's `normal` is already ~1.6, so nothing moves there. */
+  line-height: normal;
   text-transform: uppercase;
   transition: color 0.3s;
 }
@@ -93,6 +97,7 @@ html[dir='rtl'] .cs-title h1 {
 .cs-kw li {
   font-size: 13px;
   font-weight: 600;
+  line-height: normal; /* 32px chips, as the mockup's — see .cs-title__back */
   padding: 8px 14px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.28);
@@ -198,6 +203,7 @@ html[dir='rtl'] .cs-ov__body p {
   border-bottom: 1px solid var(--bs-line-l);
   font-size: clamp(15px, 1.3vw, 18px);
   font-weight: 600;
+  line-height: normal; /* 34px rows (30px on a phone) — see .cs-title__back */
 }
 .cs-scope li:first-child {
   padding-top: 0;
@@ -411,9 +417,10 @@ html[dir='rtl'] .cs-bd__head h2 {
 .cs-bdi--wide .cs-bdi__open {
   aspect-ratio: 21 / 9;
 }
+/* White, and borderless: the mockup's CSS gives the sketch a 1px frame, but its markup's
+   inline `border:0` overrides it, so the rendered design has none — we port what renders. */
 .cs-bdi--sketch .cs-bdi__open {
   background: var(--bs-paper);
-  border: 1px solid var(--bs-line-l);
 }
 .cs-bdi__open img {
   position: absolute;

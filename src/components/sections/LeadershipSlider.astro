@@ -92,7 +92,7 @@ const cards = leaders.map((l) => ({
             {cards.map((c) => {
               const inner = (
                 <>
-                  <span class="leader__ph">
+                  <span class:list={['leader__ph', { 'leader__ph--photo': c.portrait }]}>
                     {c.portrait ? (
                       <MediaImage
                         image={c.portrait}

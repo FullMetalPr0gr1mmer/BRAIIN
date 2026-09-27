@@ -99,8 +99,9 @@ existing global.css utilities.
 19. **The hero CTA goes to `#selected-work` only when that band will render**
     (`homeHeroCtaHref`): with nothing featured, or the band hidden/removed, it goes to
     `/portfolio` — a dead in-page anchor is a broken button. The route decides and passes
-    it as route data; the accent excludes the trailing `*` (`splitTrailingMark`); the
-    accent stays **cobalt** and the scrim stays (the mockup's Klein measures ~2.0:1 on
+    it as route data; the accent excludes the trailing `*` (`splitTrailingMark`), and the
+    `*` is its own word span with no space before it (`.word--mark`, amended in decision
+    83), so it wraps alone as the design's does; the accent stays **cobalt** and the scrim stays (the mockup's Klein measures ~2.0:1 on
     black — PR6 deviation list).
 20. **No code fallback for the client marquee.** It named eight real brands from code
     whenever the table was empty — a claim no editor could withdraw. The names now come
@@ -209,7 +210,10 @@ names only, validated `^[a-z0-9-]+\.css$`). The Klein social variant stays in gl
     scroller and the chrome stays hidden, as it does whenever the cards fit.
 32. **Leadership motion is compositor-only**: the progress bar is `translateX` + `scaleX` of
     a full-width bar (the mockup animated `margin` and `width`); grayscale → colour is an
-    opacity fade of a `mix-blend-mode: saturation` layer (the mockup transitioned `filter`);
+    opacity fade of a `mix-blend-mode: saturation` layer (the mockup transitioned `filter`)
+    — over a **photo only** (`.leader__ph--photo`; amended 2026-09-27): the mockup greys the
+    `<img>` alone, and the layer over the whole frame had turned the photo-less card's
+    slate-blue gradient and silhouette grey, then blue on hover;
     the Klein underline is `scaleX`. The name's sky colour and the silhouette's shade change
     instantly on hover — no colour transition. Under reduced motion the photo zoom is
     dropped and every scroll is instant.
@@ -500,10 +504,63 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     the hero loop ignoring reduced motion. Digits stay Latin in Arabic for scope numbers,
     result values, the film length and counts (decision 5); result values are LTR-isolated
     so "+XX%" keeps its sign in front, and realigned to the right in Arabic
-    (`text-align: end`) so they sit over their labels.
+    (`text-align: end`) so they sit over their labels. (The contact page's channel values
+    are the opposite case — decision 88.)
 80. **Every part is its own error boundary** (`SectionBoundary`): a failing part leaves an
     empty placeholder, never a 500.
 81. **The lead band paints over a pinned banner** (`.mbanner ~ .lead-band { z-index: 4 }`,
     banner.css — the mockup's `.lead` z-index). The banner stays stuck at the top of its
     page, and the lead band — shared chrome with no z-index of its own — slid UNDER it as it
     scrolled up. This also fixes Our Work, where PR10 shipped the same stacking.
+
+## Acceptance fixes (2026-09-27)
+
+An acceptance check of the live site (main @ fd1bc09) against the mockup, EN + AR at
+1366×900 and 412×915.
+
+82. **The persistent current-page underline and the full-opacity header are kept** — the
+    one finding not fixed. The mockup draws the Cobalt underline on hover only (HOME carries
+    `aria-current` with no mark) and rests the nav at `.85` opacity. The permanent underline
+    on `a[aria-current="page"]` is a wayfinding cue a sighted keyboard or low-vision visitor
+    can see without hovering, and `.85` would lower the contrast of 12.5px link text over a
+    moving video for a purely tonal effect. Both are chrome-wide.
+83. **The split hero headline has real spaces.** Words are separated by a space text node,
+    as the mockup's `splitLetters()` keeps one, not by `margin-inline-end: .26em`: the
+    served h1 read "Creativeworkthatperforms*" to crawlers, reader mode and copy-paste
+    (Pillar 3), and the margin set words ~1.6× the design's gap (a space under the h1's
+    `-0.035em` tracking), which moved the breaks ("LET'S MAKE / IT HAPPEN"). The trailing
+    `*` is its own `.word--mark` (not accented, no space before it — the design's
+    `<em>performs</em>*`), so it may drop to the next line alone; it takes the next word
+    rung of the stagger ladder with letter offset 0. `aria-label` still names the h1.
+84. **Template whitespace next to an element is spelled out** (`{' '}`): Astro's HTML
+    compression drops the whitespace between an expression and an element, which glued
+    "SOMETHINGTHAT LANDS" (home contact CTA) and "See ourCookie Policy" (consent banner) in
+    both languages.
+85. **The desktop header is the mockup's space-between** — logo | link row | language pill.
+    The brand's `margin-inline-end: auto` (pre-UI-v2) had packed the links against the pill;
+    it now applies only at ≤900px, where the key link, menu toggle and pill stay grouped at
+    the end.
+86. **Ported blocks name the mockup's leading** instead of inheriting the body's 1.6 (the
+    mockup's body sets none, so its blocks resolve to `normal`); body line-height is
+    unchanged. `normal`: kickers (`.tag`), the clients and social headings in English (Arabic
+    keeps the mockup's 1.5), marquee items, social cards, form labels and fields, the filter
+    bar (`.fb`), the case study's back link, keyword chips, scope rows and title-band facets,
+    and the banner caption's tag and meta line. The home CTA pill is the mockup's `.skip`:
+    13px (14px Arabic) and 12px with `12px 18px` padding at ≤720px (the Arabic 14px outranks
+    the phone size, as in the mockup). The message box has no `rows`, so the 132px floor is
+    its height.
+87. **The form note is capped, not boxed** (`max-width: 38ch`, the mockup's), so a one-line
+    Arabic note sits flush with the form edge instead of 55px in.
+88. **In Arabic the channel values stay LTR-left** under the right-aligned labels (the
+    mockup's `.tbox__val[dir=ltr]`), and the social card's ↗ is **not mirrored**: it is the
+    external-link glyph, not a reading-direction arrow, and the mockup keeps it (and its
+    up-and-out hover nudge) in both languages.
+89. **`--bs-header-h` is the bar's real height** — `36px + logo width × 1503/2943` (103px at
+    1366, 85px at 412), no longer a flat 72px. About's "who" block (which subtracts it from
+    the mockup's `clamp(150px, 22vh, 220px)`) now starts where the design's does; the case
+    study's no-banner title band, the token's other user, clears the real header too.
+90. **Case-study facets keep their inline flow on phones** (the mockup's `.pt__meta` has no
+    phone rule); the cards' two-column phone rule no longer reaches `.facets--case`.
+91. **The breakdown sketch stills are borderless**: the mockup's CSS gives them a 1px frame
+    but its markup's inline `border:0` overrides it, so the rendered design has none — the
+    port follows what renders.
