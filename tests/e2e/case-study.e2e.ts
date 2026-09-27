@@ -169,9 +169,8 @@ for (const locale of ['en', 'ar'] as const) {
       await page.setViewportSize({ width: 412, height: 915 });
       await page.goto(s.path);
       await page.evaluate(() => document.fonts.ready);
-      const [a, b] = await page.$$eval(
-        '.cs-title .facets--case a.ftag[data-f="service"]',
-        (els) => els.slice(0, 2).map((el) => el.getBoundingClientRect().top),
+      const [a, b] = await page.$$eval('.cs-title .facets--case a.ftag[data-f="service"]', (els) =>
+        els.slice(0, 2).map((el) => el.getBoundingClientRect().top),
       );
       expect(Math.abs(a! - b!)).toBeLessThan(1);
     });
