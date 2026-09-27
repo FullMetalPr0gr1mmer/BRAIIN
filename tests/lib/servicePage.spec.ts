@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ServiceDetailRow } from '@schemas/content';
 import type { Discipline } from '@/lib/data/disciplines';
 import type { ServiceCase } from '@/lib/data/serviceCases';
+import type { ImageRef } from '@/lib/media/resolve';
 import {
   SEED_DISCIPLINES,
   SEED_SERVICES,
@@ -66,8 +67,15 @@ vi.mock('@/lib/seo/head', () => ({
   },
 }));
 
-const { loadServicePage, resolveServiceRoute, serviceTitle, serviceDescription, disciplineOf } =
-  await import('@/lib/services/page');
+const {
+  loadServicePage,
+  resolveServiceRoute,
+  serviceTitle,
+  serviceDescription,
+  serviceHeroSub,
+  disciplineOf,
+} = await import('@/lib/services/page');
+const { caseFigure, CASE_IMAGE_SLOT } = await import('@/lib/services/caseFigure');
 const { serviceCacheEntities } = await import('@/lib/services/page');
 const { RETIRED_SERVICES, RETIRED_CACHE_CONTROL, retiredTarget, retiredRedirect } =
   await import('@/lib/services/retired');
@@ -318,6 +326,14 @@ describe('serviceTitle / serviceDescription / disciplineOf / cache tags', () => 
     );
   });
 
+  it('hero sub: the tagline (Arabic falls back to English), and NONE without one', () => {
+    expect(serviceHeroSub({ tagline: t('A mark') })).toEqual({ en: 'A mark', ar: 'ع-A mark' });
+    expect(serviceHeroSub({ tagline: { en: 'A mark' } })).toEqual({ en: 'A mark', ar: 'A mark' });
+    // null → ServicePage passes `noSub`, so Hero renders no sub line rather than the home
+    // slogan ("From the brain to the real world.") under the service's name.
+    expect(serviceHeroSub({ tagline: null })).toBeNull();
+  });
+
   it('finds the discipline by id, else by the embedded slug; none without an id', () => {
     const list = seedDisciplines();
     const branding = list[0]!;
@@ -380,6 +396,78 @@ describe('service page copy (service.html v.*)', () => {
       expect(SERVICE_PAGE_COPY.ar[key].length, key).toBeGreaterThan(0);
       expect(SERVICE_PAGE_COPY.ar[key], key).not.toBe(SERVICE_PAGE_COPY.en[key]);
     }
+  });
+});
+
+// ── The case image ─────────────────────────────────────────────────────────────────
+
+describe('the case block image', () => {
+  const still = (key: string): ImageRef => ({
+    id: `media-${key}`,
+    src: { src: `/_astro/${key}.jpg`, width: 1600, height: 1000, format: 'jpg' } as ImageMetadata,
+    width: 1600,
+    height: 1000,
+    alt: { en: `${key} still`, ar: `${key} ع` },
+  });
+  const projectPoster = still('notebook');
+  const servicePoster = still('logo');
+  const project = { slug: 'notebook', title: t('Notebook'), poster: projectPoster };
+
+  it("the project's own poster links to its case study, named by the project", () => {
+    const f = caseFigure({ project, fallback: servicePoster, hasContext: true, locale: 'en' })!;
+    expect(f.image).toBe(projectPoster);
+    expect(f.href).toBe('/portfolio/notebook');
+    expect(f.alt).toBe('Notebook');
+    const ar = caseFigure({ project, fallback: servicePoster, hasContext: true, locale: 'ar' })!;
+    expect(ar.href).toBe('/ar/portfolio/notebook');
+    expect(ar.alt).toBe('ع-Notebook');
+  });
+
+  it("a published project with NO poster: the service's still, unlinked, with its own alt", () => {
+    const f = caseFigure({
+      project: { ...project, poster: null },
+      fallback: servicePoster,
+      hasContext: true,
+      locale: 'en',
+    })!;
+    expect(f.image).toBe(servicePoster);
+    // never "Notebook" over the service's still, nor a "See the full project" link on it
+    expect(f.href).toBeNull();
+    expect(f.alt).toBeNull();
+  });
+
+  it("no (published) project: the service's still, unlinked; nothing at all without one", () => {
+    const f = caseFigure({
+      project: null,
+      fallback: servicePoster,
+      hasContext: true,
+      locale: 'en',
+    });
+    expect(f?.image).toBe(servicePoster);
+    expect(f?.href).toBeNull();
+    expect(
+      caseFigure({ project: null, fallback: null, hasContext: true, locale: 'en' }),
+    ).toBeNull();
+    expect(
+      caseFigure({
+        project: { ...project, poster: null },
+        fallback: null,
+        hasContext: false,
+        locale: 'en',
+      }),
+    ).toBeNull();
+  });
+
+  it('is sized for its layout: the wide column beside the context, the whole wrap alone', () => {
+    const split = caseFigure({ project, fallback: null, hasContext: true, locale: 'en' })!;
+    expect(split.layout).toBe('split');
+    expect(split.sizes).toBe('(min-width: 56.3125rem) min(52vw, 700px), 100vw');
+    const solo = caseFigure({ project, fallback: null, hasContext: false, locale: 'en' })!;
+    expect(solo.layout).toBe('solo');
+    // .svc-case__top--solo spans the 1280px wrap: never described as the 700px column
+    expect(solo.sizes).toBe('min(100vw, 1280px)');
+    expect(solo.widths).toContain(1600);
+    expect(CASE_IMAGE_SLOT.split.widths).toEqual([480, 800, 1200]);
   });
 });
 

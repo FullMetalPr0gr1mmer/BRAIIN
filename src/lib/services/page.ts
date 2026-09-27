@@ -70,6 +70,19 @@ export function serviceDescription(service: Pick<ServiceDetail, 'tagline'>, loca
   return pickLocaleStrict(service.tagline, locale) || SERVICE_PAGE_META[locale].description;
 }
 
+/**
+ * The hero's sub line: the tagline, as the {en, ar} pair Hero's Text wants (a missing
+ * Arabic half reads English, as pickLocale would have picked anyway). null for a service
+ * with no tagline, and the hero then renders no sub (`data.noSub`) — never the home
+ * slogan, which is what Hero shows when it is given none.
+ */
+export function serviceHeroSub(
+  service: Pick<ServiceDetail, 'tagline'>,
+): { en: string; ar: string } | null {
+  const tagline = service.tagline;
+  return tagline ? { en: tagline.en, ar: tagline.ar || tagline.en } : null;
+}
+
 /** The service's discipline among the published ones (its siblings), matched by id. */
 export function disciplineOf(
   service: Pick<ServiceDetail, 'disciplineId' | 'discipline'>,

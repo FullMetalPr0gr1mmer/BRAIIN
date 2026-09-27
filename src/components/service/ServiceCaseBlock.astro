@@ -6,6 +6,7 @@ import { localizedHref, pickLocale } from '@/lib/i18n';
 import { pad2 } from '@/lib/portfolio/caseStudy';
 import { facetQuery } from '@/lib/portfolio/catalog';
 import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
+import { caseFigure } from '@/lib/services/caseFigure';
 import MediaImage from '@/components/media/MediaImage.astro';
 
 // The case block (Round 2 — service.html `.case`), a black band, `#case` (the hero CTA's
@@ -18,7 +19,9 @@ import MediaImage from '@/components/media/MediaImage.astro';
 // them): a client RLS hid is "Confidential client" — text, never a link, since a filter URL
 // would disclose its slug. Client and sector chips open All projects filtered by them, as
 // the mockup's did. A case whose project is unpublished (or unset) keeps its words and
-// loses the project link and chip; its image is then the service's own poster, unlinked.
+// loses the project link and chip. The image links to the project only when it IS the
+// project's poster; otherwise it is the service's own poster, unlinked, with its own alt
+// (src/lib/services/caseFigure.ts — which also sizes it for the layout it sits in).
 //
 // The rows are an ordered list, not the mockup's anonymous divs: each cell carries its
 // column name for assistive tech (sr-only), the visual column heads are aria-hidden, and
@@ -61,8 +64,13 @@ const projectHref = project ? localizedHref(`/portfolio/${project.slug}`, locale
 const projectName = project ? pickLocale(project.title, locale) : '';
 if (project && projectHref) chips.push({ label: projectName, href: projectHref });
 
-const image = project?.poster ?? fallbackImage;
 const context = serviceCase.context ? pickLocale(serviceCase.context, locale) : '';
+const figure = caseFigure({
+  project,
+  fallback: fallbackImage,
+  hasContext: Boolean(context),
+  locale,
+});
 const problems = serviceCase.problems.map((p, i) => ({
   n: pad2(i + 1),
   problem: pickLocale(p.problem, locale),
@@ -72,8 +80,7 @@ const results = serviceCase.results.map((r) => ({
   value: r.value,
   label: pickLocale(r.label, locale),
 }));
-const hasTop = Boolean(image || context);
-const sizes = '(min-width: 56.3125rem) min(52vw, 700px), 100vw';
+const hasTop = Boolean(figure || context);
 ---
 
 <section class="svc-case" id="case" aria-labelledby="svc-case-heading">
@@ -90,16 +97,16 @@ const sizes = '(min-width: 56.3125rem) min(52vw, 700px), 100vw';
 
     {
       hasTop && (
-        <div class:list={['svc-case__top', { 'svc-case__top--solo': !image || !context }]}>
-          {image &&
-            (projectHref ? (
-              <a class="svc-case__img rv" href={projectHref}>
+        <div class:list={['svc-case__top', { 'svc-case__top--solo': !figure || !context }]}>
+          {figure &&
+            (figure.href ? (
+              <a class="svc-case__img rv" href={figure.href}>
                 <MediaImage
-                  image={image}
+                  image={figure.image}
                   locale={locale}
-                  altOverride={projectName}
-                  widths={[480, 800, 1200]}
-                  sizes={sizes}
+                  altOverride={figure.alt}
+                  widths={figure.widths}
+                  sizes={figure.sizes}
                 />
                 <span class="svc-case__see">
                   <span>{copy.seeProject}</span>
@@ -119,7 +126,12 @@ const sizes = '(min-width: 56.3125rem) min(52vw, 700px), 100vw';
               </a>
             ) : (
               <div class="svc-case__img rv">
-                <MediaImage image={image} locale={locale} widths={[480, 800, 1200]} sizes={sizes} />
+                <MediaImage
+                  image={figure.image}
+                  locale={locale}
+                  widths={figure.widths}
+                  sizes={figure.sizes}
+                />
               </div>
             ))}
           {context && (

@@ -654,6 +654,11 @@ html[dir='rtl'] .svc-vcard p {
   color: var(--bs-fg);
   padding: clamp(80px, 12vh, 150px) var(--bs-pad-x) clamp(72px, 11vh, 130px);
 }
+/* The design's sky dot on this black band (mockup `.case .tag .dot`), as on .hello: the
+   site's default Klein dot is ~2:1 on black and all but disappears. */
+.svc-case .tag .dot {
+  background: var(--bs-sky);
+}
 .svc-case__t {
   margin: 0;
   max-width: 20ch;
