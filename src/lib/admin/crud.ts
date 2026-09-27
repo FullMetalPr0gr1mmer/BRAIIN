@@ -19,6 +19,8 @@ export interface ListOptions {
   orderBy?: { column: string; ascending?: boolean };
   /** Simple equality filters, e.g. `{ status: 'draft' }`. */
   filters?: Record<string, string | number | boolean | null>;
+  /** Not-equal filters, e.g. `{ status: 'archived' }` (a picker that hides archived rows). */
+  exclude?: Record<string, string>;
   /** Case-insensitive substring match on one column. */
   search?: { column: string; term: string } | undefined;
   limit?: number;
@@ -38,8 +40,18 @@ export interface ListResult<T> {
  */
 export type ConstraintFields = Readonly<Record<string, { field?: string; message: string }>>;
 
+/**
+ * A database REFUSAL (42501) that is a domain rule rather than an authorization failure —
+ * a guard trigger whose message says what to do (the 0028 testimonial sample lock). By
+ * default a 42501 is a 403 ("RLS refused"); a refusal matched here is a 422 with an
+ * editor-facing message on the field instead. Matched on the message, which the trigger
+ * owns — never on anything a caller sends.
+ */
+export type WriteRefusals = readonly { match: RegExp; field?: string; message: string }[];
+
 export interface WriteOptions {
   constraints?: ConstraintFields | undefined;
+  refusals?: WriteRefusals | undefined;
 }
 
 export const MAX_PAGE_SIZE = 100;
@@ -62,6 +74,7 @@ export async function listRows<T>(
   for (const [column, value] of Object.entries(opts.filters ?? {})) {
     q = value === null ? q.is(column, null) : q.eq(column, value);
   }
+  for (const [column, value] of Object.entries(opts.exclude ?? {})) q = q.neq(column, value);
   if (opts.search && opts.search.term.length > 0) {
     // `%` and `_` are PostgREST `ilike` wildcards; escaping them keeps a user's literal
     // search text from turning into a full-table scan pattern.
@@ -110,7 +123,8 @@ export async function insertRow<T>(
     .insert({ ...values, tenant_id: ctx.tenantId })
     .select(columns)
     .single();
-  if (error) throw translateWriteError(error, table, 'write', options.constraints);
+  if (error)
+    throw translateWriteError(error, table, 'write', options.constraints, options.refusals);
   return data as T;
 }
 
@@ -144,7 +158,8 @@ export async function updateRow<T>(
     .select(columns)
     .maybeSingle();
 
-  if (error) throw translateWriteError(error, table, 'write', options.constraints);
+  if (error)
+    throw translateWriteError(error, table, 'write', options.constraints, options.refusals);
   // Lost the race between the read above and the write: someone else's UPDATE landed
   // in between and bumped the version.
   if (!data) throw new OptimisticLockError(table);
@@ -202,6 +217,7 @@ export function translateWriteError(
   table: string,
   op: 'write' | 'delete' = 'write',
   constraints: ConstraintFields = {},
+  refusals: WriteRefusals = [],
 ): Error {
   const name = constraintOf(error);
   const known = name ? constraints[name] : undefined;
@@ -231,8 +247,13 @@ export function translateWriteError(
         known?.message ?? `value violates a constraint on '${table}'`,
         known?.field,
       );
-    case '42501': // insufficient_privilege — a RESTRICTIVE policy's WITH CHECK rejected it
+    case '42501': {
+      // A guard trigger that states a domain rule (WriteRefusals) is the editor's to fix …
+      const refusal = refusals.find((r) => r.match.test(error.message ?? ''));
+      if (refusal) return new ValidationError(refusal.message, refusal.field);
+      // … anything else is a RESTRICTIVE policy's WITH CHECK rejecting it.
       return new AuthorizationError('content.archiveDelete', `RLS refused write on '${table}'`);
+    }
     default:
       return new Error(`write ${table}: ${error.message}`);
   }

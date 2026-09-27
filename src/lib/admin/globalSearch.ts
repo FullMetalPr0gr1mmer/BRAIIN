@@ -8,12 +8,14 @@ import {
   categoryResource,
   certificationResource,
   clientResource,
+  disciplineResource,
   mediaResource,
   pageResource,
   portfolioResource,
   postResource,
   redirectResource,
   sectorResource,
+  serviceCaseResource,
   serviceResource,
   statisticResource,
   teamResource,
@@ -53,7 +55,14 @@ interface SearchTarget {
 }
 
 const TARGETS: readonly SearchTarget[] = [
+  { config: disciplineResource, uiSlug: 'disciplines', group: 'Disciplines', column: 'name->>en' },
   { config: serviceResource, uiSlug: 'services', group: 'Services', column: 'title->>en' },
+  {
+    config: serviceCaseResource,
+    uiSlug: 'service-cases',
+    group: 'Service case studies',
+    column: 'title->>en',
+  },
   { config: postResource, uiSlug: 'blog', group: 'Blog', column: 'title->>en' },
   { config: portfolioResource, uiSlug: 'portfolio', group: 'Our Work', column: 'title->>en' },
   { config: sectorResource, uiSlug: 'sectors', group: 'Sectors', column: 'slug' },

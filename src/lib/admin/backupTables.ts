@@ -13,10 +13,19 @@
 
 /** Content only. Every table here is publishable material or its configuration. */
 export const BACKUP_TABLES: readonly { table: string; columns: string }[] = [
+  // Disciplines before services: a restore inserts in this order, and services point at them.
+  {
+    table: 'disciplines',
+    columns:
+      'id,slug,name,short,blurb,poster_media_id,preview_video_path,preview_start_s,preview_end_s,' +
+      'status,sort_order,published_at,scheduled_for,updated_at',
+  },
   {
     table: 'services',
     columns:
-      'id,slug,title,short_title,blurb,body,hero_video_uid,category,status,is_teaser,sort_order,updated_at',
+      'id,slug,title,short_title,blurb,body,hero_video_uid,category,status,is_teaser,sort_order,' +
+      'updated_at,discipline_id,intro,value_points,deliverables,poster_media_id,' +
+      'preview_video_path,preview_start_s,preview_end_s',
   },
   {
     table: 'blog_posts',
@@ -37,6 +46,13 @@ export const BACKUP_TABLES: readonly { table: string; columns: string }[] = [
     columns:
       'id,portfolio_id,role,kind,media_id,video_uid,video_path,clip_start_s,clip_end_s,' +
       'duration_label,caption,breakdown_kind,layout,sort_order',
+  },
+  // After services and portfolio: a case points at both.
+  {
+    table: 'service_cases',
+    columns:
+      'id,service_id,portfolio_id,title,context,problems,results,status,published_at,' +
+      'scheduled_for,is_placeholder,updated_at',
   },
   { table: 'sectors', columns: 'id,slug,name,visible,sort_order,updated_at' },
   {

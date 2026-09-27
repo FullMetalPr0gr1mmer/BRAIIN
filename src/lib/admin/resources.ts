@@ -11,6 +11,8 @@ import {
   CertificationWriteSchema,
   ClientUpdateSchema,
   ClientWriteSchema,
+  DisciplineUpdateSchema,
+  DisciplineWriteSchema,
   MediaUpdateSchema,
   MediaWriteSchema,
   NavItemUpdateSchema,
@@ -27,6 +29,8 @@ import {
   SectorWriteSchema,
   SectionUpdateSchema,
   SectionWriteSchema,
+  ServiceCaseUpdateSchema,
+  ServiceCaseWriteSchema,
   ServiceUpdateSchema,
   ServiceWriteSchema,
   StatisticUpdateSchema,
@@ -44,7 +48,7 @@ import { sectionContentIssues, type SectionType } from '@schemas/sections';
 import { isStaticMediaKey, staticImage } from '@/lib/media/static';
 import { renderTiptapToHtml, readingMinutes, sanitizeHref } from '@/lib/content/tiptap';
 import { NotFoundError, OptimisticLockError, ValidationError } from './errors';
-import { getRow, translateWriteError, type ConstraintFields } from './crud';
+import { getRow, translateWriteError, type ConstraintFields, type WriteRefusals } from './crud';
 import type { ResourceConfig, ResourcePayload } from './resource';
 
 // One config per CRUD entity. Everything structural (tenant scoping, authz, audit,
@@ -156,9 +160,102 @@ function clipOfColumns(
   return clip;
 }
 
+/**
+ * A path-only clip (disciplines, services — 0028 has no Stream-uid column there) → its
+ * three preview_* columns; `null` clears them. PathClipSchema has already refused a
+ * Stream uid, so there is nothing to drop.
+ */
+function previewPathColumns(clip: VideoClip | null): Input {
+  return {
+    preview_video_path: clip?.path ?? null,
+    preview_start_s: clip?.startS ?? null,
+    preview_end_s: clip?.endS ?? null,
+  };
+}
+
+/** `clip` (the wire name) → the preview_* patch, only when the payload carries it. */
+function withPreviewPath(values: Input, input: Input): Input {
+  const clip = input['clip'];
+  return clip === undefined
+    ? values
+    : { ...values, ...previewPathColumns((clip as VideoClip | null) ?? null) };
+}
+
+/** The stored preview_* columns → the clip the form edits (returned as `preview`). */
+function withPreviewField(row: Input): Input {
+  return {
+    ...row,
+    preview: clipOfColumns(
+      null,
+      row['preview_video_path'],
+      row['preview_start_s'],
+      row['preview_end_s'],
+    ),
+  };
+}
+
+/** A result card still showing the design's placeholder figure ("XXM", "+XX%"). */
+function refusePlaceholderFigures(row: Input): void {
+  const results = Array.isArray(row['results']) ? (row['results'] as Input[]) : [];
+  if (results.some((r) => /X{2,}/i.test(String(r['value'] ?? '')))) {
+    throw new ValidationError('a result card still shows a placeholder figure (XX)', 'results');
+  }
+}
+
 const bySortOrder = (a: Input, b: Input) => Number(a['sort_order']) - Number(b['sort_order']);
 
-// ── Services ────────────────────────────────────────────────────────────────────
+type Db = import('@supabase/supabase-js').SupabaseClient;
+type Auth = import('@/lib/auth/types').AuthContext;
+
+/**
+ * A link that must name a row of the caller's OWN tenant. A bare foreign key accepts
+ * another tenant's id. For the 0028 posters the database cannot say otherwise (a media
+ * policy that read the content tables would recurse), and for a discipline its RESTRICTIVE
+ * WITH CHECK would only answer a bare 403 — so the Worker checks first, under the caller's
+ * RLS and the tenant predicate, and says which field is wrong. Only when the write sets it.
+ */
+async function assertLinkInTenant(
+  ctx: { auth: Auth; sb: Db; changed: Input },
+  link: { column: string; table: string; field: string; message: string; image?: boolean },
+): Promise<void> {
+  const id = ctx.changed[link.column];
+  if (id === undefined || id === null) return;
+  let q = ctx.sb
+    .from(link.table)
+    .select('id')
+    .eq('tenant_id', ctx.auth.tenantId)
+    .eq('id', String(id));
+  if (link.image) q = q.eq('kind', 'image');
+  const { data, error } = await q.maybeSingle();
+  if (error) throw new Error(`check ${link.table}: ${error.message}`);
+  if (!data) throw new ValidationError(link.message, link.field);
+}
+
+const POSTER_LINK = {
+  column: 'poster_media_id',
+  table: 'media_assets',
+  field: 'posterMediaId',
+  message: 'choose the poster from this site’s media library (an image)',
+  image: true,
+} as const;
+
+// ── Services · disciplines · service cases (0028) ───────────────────────────────
+
+const SERVICE_CONSTRAINTS: ConstraintFields = {
+  services_tenant_id_slug_key: { field: 'slug', message: 'another service already uses this slug' },
+  services_intro_check: { field: 'intro', message: 'the intro needs English and Arabic' },
+  services_value_points_check: { field: 'valuePoints', message: 'at most 6 value cards' },
+  services_deliverables_check: { field: 'deliverables', message: 'at most 12 lines' },
+  services_preview_video_path_check: {
+    field: 'clip',
+    message: 'the hero clip is a /media/….mp4 file',
+  },
+  services_preview_window: {
+    field: 'clip',
+    message: 'the hero clip needs a start and an end, at most 30 seconds apart',
+  },
+  services_discipline_id_fkey: { field: 'disciplineId', message: 'that discipline does not exist' },
+};
 
 export const serviceResource: ResourceConfig = {
   table: 'services',
@@ -166,26 +263,114 @@ export const serviceResource: ResourceConfig = {
   writeCap: 'services.write',
   // SEO can list/read a service to author its meta, but not write the row itself.
   readCaps: ['services.write', 'seo.entityMeta'],
-  listColumns: 'id,slug,title,status,is_teaser,sort_order,version,updated_at',
+  listColumns: 'id,slug,title,status,is_teaser,sort_order,discipline_id,version,updated_at',
   columns:
-    'id,slug,title,short_title,blurb,body,body_html,hero_video_uid,category,status,is_teaser,sort_order,version,published_at,scheduled_for,created_at,updated_at',
+    'id,slug,title,short_title,blurb,body,body_html,hero_video_uid,category,status,is_teaser,' +
+    'sort_order,version,published_at,scheduled_for,created_at,updated_at,discipline_id,intro,' +
+    'value_points,deliverables,poster_media_id,preview_video_path,preview_start_s,preview_end_s',
   orderBy: { column: 'sort_order', ascending: true },
   searchColumn: 'slug',
+  // The service-case editor lists the services of one discipline.
+  filterableColumns: ['discipline_id'],
   createSchema: ServiceWriteSchema,
   updateSchema: ServiceUpdateSchema,
+  constraintFields: SERVICE_CONSTRAINTS,
   toRow: (input) =>
     publishStamp(
-      withBodyHtml(
+      withPreviewPath(
+        withBodyHtml(
+          pick(input as Input, {
+            slug: 'slug',
+            title: 'title',
+            blurb: 'blurb',
+            body: 'body',
+            heroVideoUid: 'hero_video_uid',
+            category: 'category',
+            shortTitle: 'short_title',
+            status: 'status',
+            isTeaser: 'is_teaser',
+            sortOrder: 'sort_order',
+            scheduledFor: 'scheduled_for',
+            disciplineId: 'discipline_id',
+            intro: 'intro',
+            valuePoints: 'value_points',
+            deliverables: 'deliverables',
+            posterMediaId: 'poster_media_id',
+          }),
+          input as Input,
+        ),
+        input as Input,
+      ),
+    ),
+  statusOf: (input) => statusOf(input as Input),
+  fromRow: withPreviewField,
+  assertWritable: async (_merged, ctx) => {
+    await assertLinkInTenant(ctx, {
+      column: 'discipline_id',
+      table: 'disciplines',
+      field: 'disciplineId',
+      message: 'that discipline does not exist on this site',
+    });
+    await assertLinkInTenant(ctx, POSTER_LINK);
+  },
+  assertPublishable: (row) => {
+    requireBilingual(row, 'title', 'Service title');
+    // Not a database CHECK: the production cut-over renames services before their
+    // disciplines exist (runbook §6d). Every live service is filed under one.
+    if (!row['discipline_id']) {
+      throw new ValidationError('choose the discipline before publishing', 'disciplineId');
+    }
+  },
+};
+
+export const disciplineResource: ResourceConfig = {
+  table: 'disciplines',
+  entity: 'discipline',
+  // Service content (§5 "Services — create/edit": Admin + Content Creator).
+  writeCap: 'services.write',
+  // SEO reads services to author their meta, and the service form's Discipline picker
+  // loads from here. RLS already admits every staff role (disciplines_read).
+  readCaps: ['services.write', 'seo.entityMeta'],
+  listColumns: 'id,slug,name,status,sort_order,version,updated_at',
+  columns:
+    'id,slug,name,short,blurb,poster_media_id,preview_video_path,preview_start_s,preview_end_s,' +
+    'status,sort_order,version,published_at,scheduled_for,created_at,updated_at',
+  orderBy: { column: 'sort_order', ascending: true },
+  searchColumn: 'slug',
+  createSchema: DisciplineWriteSchema,
+  updateSchema: DisciplineUpdateSchema,
+  constraintFields: {
+    disciplines_tenant_id_slug_key: {
+      field: 'slug',
+      message: 'another discipline already uses this slug',
+    },
+    disciplines_slug_check: {
+      field: 'slug',
+      message: 'lowercase letters, digits and hyphens, at most 64',
+    },
+    disciplines_preview_video_path_check: {
+      field: 'clip',
+      message: 'the card clip is a /media/….mp4 file',
+    },
+    disciplines_preview_window: {
+      field: 'clip',
+      message: 'the card clip needs a start and an end, at most 30 seconds apart',
+    },
+    // On delete: services still point at it (on delete restrict).
+    services_discipline_id_fkey: {
+      message: 'services are still filed under this discipline — move or delete them first',
+    },
+  },
+  toRow: (input) =>
+    publishStamp(
+      withPreviewPath(
         pick(input as Input, {
           slug: 'slug',
-          title: 'title',
+          name: 'name',
+          short: 'short',
           blurb: 'blurb',
-          body: 'body',
-          heroVideoUid: 'hero_video_uid',
-          category: 'category',
-          shortTitle: 'short_title',
+          posterMediaId: 'poster_media_id',
           status: 'status',
-          isTeaser: 'is_teaser',
           sortOrder: 'sort_order',
           scheduledFor: 'scheduled_for',
         }),
@@ -193,7 +378,72 @@ export const serviceResource: ResourceConfig = {
       ),
     ),
   statusOf: (input) => statusOf(input as Input),
-  assertPublishable: (row) => requireBilingual(row, 'title', 'Service title'),
+  fromRow: withPreviewField,
+  assertWritable: (_merged, ctx) => assertLinkInTenant(ctx, POSTER_LINK),
+  assertPublishable: (row) => requireBilingual(row, 'name', 'Discipline name'),
+};
+
+export const serviceCaseResource: ResourceConfig = {
+  table: 'service_cases',
+  entity: 'service_case',
+  writeCap: 'services.write',
+  listColumns: 'id,service_id,portfolio_id,title,is_placeholder,status,version,updated_at',
+  columns:
+    'id,service_id,portfolio_id,title,context,problems,results,is_placeholder,status,version,' +
+    'published_at,scheduled_for,created_at,updated_at',
+  orderBy: { column: 'updated_at', ascending: false },
+  searchColumn: 'title->>en',
+  filterableColumns: ['service_id', 'portfolio_id'],
+  createSchema: ServiceCaseWriteSchema,
+  updateSchema: ServiceCaseUpdateSchema,
+  constraintFields: {
+    service_cases_tenant_id_service_id_key: {
+      field: 'serviceId',
+      message: 'that service already has a case study block — edit that one instead',
+    },
+    service_cases_service_id_fkey: { field: 'serviceId', message: 'that service does not exist' },
+    service_cases_portfolio_id_fkey: {
+      field: 'portfolioId',
+      message: 'that project does not exist',
+    },
+  },
+  toRow: (input) =>
+    publishStamp(
+      pick(input as Input, {
+        serviceId: 'service_id',
+        portfolioId: 'portfolio_id',
+        title: 'title',
+        context: 'context',
+        problems: 'problems',
+        results: 'results',
+        isPlaceholder: 'is_placeholder',
+        status: 'status',
+        scheduledFor: 'scheduled_for',
+      }),
+    ),
+  statusOf: (input) => statusOf(input as Input),
+  // The database fences both links too (service_cases_write); this says which field.
+  assertWritable: async (_merged, ctx) => {
+    await assertLinkInTenant(ctx, {
+      column: 'service_id',
+      table: 'services',
+      field: 'serviceId',
+      message: 'that service does not exist on this site',
+    });
+    await assertLinkInTenant(ctx, {
+      column: 'portfolio_id',
+      table: 'portfolio',
+      field: 'portfolioId',
+      message: 'that project does not exist on this site',
+    });
+  },
+  // The design delivery's 28 case blocks are samples: live only under the owner's audited
+  // override (runbook §6d), never published through the admin.
+  assertPublishable: (row) => {
+    requireBilingual(row, 'title', 'Case study title');
+    refusePlaceholder(row, 'case study block');
+    refusePlaceholderFigures(row);
+  },
 };
 
 // ── Blog ────────────────────────────────────────────────────────────────────────
@@ -417,10 +667,7 @@ export const portfolioResource: ResourceConfig = {
     requireBilingual(row, 'title', 'Case study title');
     requireBilingual(row, 'project_type', 'Project type');
     refusePlaceholder(row, 'case study');
-    const results = Array.isArray(row['results']) ? (row['results'] as Input[]) : [];
-    if (results.some((r) => /X{2,}/i.test(String(r['value'] ?? '')))) {
-      throw new ValidationError('a result card still shows a placeholder figure (XX)', 'results');
-    }
+    refusePlaceholderFigures(row);
     const posterId = row['poster_media_id'];
     if (!posterId)
       throw new ValidationError('choose a poster image before publishing', 'posterMediaId');
@@ -728,6 +975,32 @@ export const clientResource: ResourceConfig = {
   },
 };
 
+/**
+ * The 0028 sample lock (app.tg_testimonial_sample_lock): staff can never create a design
+ * sample, turn a quote into one, or change a sample's words or attribution while it stays
+ * one. Its 42501 is a rule for the editor, not a missing permission — said on the field.
+ * The patterns are the trigger's own messages ("… design sample …").
+ */
+const TESTIMONIAL_REFUSALS: WriteRefusals = [
+  {
+    match: /cannot be created as a design sample/i,
+    field: 'isPlaceholder',
+    message:
+      'A new quote can’t be a design sample. Untick Placeholder and record the person’s consent.',
+  },
+  {
+    match: /cannot be turned into a design sample/i,
+    field: 'isPlaceholder',
+    message: 'A real quote can’t be turned back into a design sample. Leave Placeholder unticked.',
+  },
+  {
+    match: /design sample/i,
+    field: 'isPlaceholder',
+    message:
+      'Sample quotes can’t be edited; replace the words, set consent and untick Placeholder in one save.',
+  },
+];
+
 export const testimonialResource: ResourceConfig = {
   table: 'testimonials',
   entity: 'testimonial',
@@ -761,6 +1034,7 @@ export const testimonialResource: ResourceConfig = {
       message: 'another quote already uses this slug',
     },
   },
+  writeRefusals: TESTIMONIAL_REFUSALS,
   toRow: (input) =>
     publishStamp(
       pick(input as Input, {

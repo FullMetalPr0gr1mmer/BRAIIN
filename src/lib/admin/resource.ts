@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
-import type { ContentStatus } from '@schemas/primitives';
+import { ContentStatusSchema, type ContentStatus } from '@schemas/primitives';
 import { ListQuerySchema } from '@schemas/admin';
 import type { AuthContext } from '@/lib/auth/types';
 import { assertCap, type Access, type Capability } from '@/lib/authz/matrix';
@@ -13,6 +13,7 @@ import {
   listRows,
   updateRow,
   type ConstraintFields,
+  type WriteRefusals,
 } from './crud';
 import { NotFoundError, ValidationError } from './errors';
 
@@ -100,6 +101,8 @@ export interface ResourceConfig {
    * unique/check/foreign-key violation into a message on the right field.
    */
   constraintFields?: ConstraintFields;
+  /** Guard-trigger refusals (42501) that are editor-facing rules, not a 403 — see crud.ts. */
+  writeRefusals?: WriteRefusals;
   /** Shapes a stored row for the API response (resolved thumbnails, derived labels). */
   fromRow?: (row: Row) => Row;
   /** Payload keys `persist` writes outside `toRow` (child sets) — see the empty-PATCH check. */
@@ -168,16 +171,29 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
     input: ListQuerySchema,
     handler: async ({ auth, sb, input, url }) => {
       const filters: Record<string, string> = {};
+      const exclude: Record<string, string> = {};
       if (input.status) filters['status'] = input.status;
+      // `<column>.neq=value` (a relation picker's "is not", uiSchema relationParams): only
+      // for status — a lifecycle value, checked against the enum — and the columns this
+      // resource already lets a list filter on. Any other key is ignored, as before.
+      const notStatus = url.searchParams.get('status.neq');
+      if (notStatus !== null) {
+        const parsed = ContentStatusSchema.safeParse(notStatus);
+        if (!parsed.success) throw new ValidationError('unknown status', 'status');
+        exclude['status'] = parsed.data;
+      }
       for (const column of config.filterableColumns ?? []) {
         const value = url.searchParams.get(column);
         if (value !== null) filters[column] = value;
+        const not = url.searchParams.get(`${column}.neq`);
+        if (not !== null) exclude[column] = not;
       }
 
       const { rows, total } = await listRows(sb, config.table, auth, {
         columns: config.listColumns,
         orderBy: config.orderBy,
         filters,
+        exclude,
         search:
           config.searchColumn && input.q
             ? { column: config.searchColumn, term: input.q }
@@ -212,6 +228,7 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
         ? await config.persist({ auth, sb, id: null, version: null, values, input: payload })
         : await insertRow<Row>(sb, config.table, auth, values, config.columns, {
             constraints: config.constraintFields,
+            refusals: config.writeRefusals,
           });
       audit({
         action: `${config.entity}.create`,
@@ -302,6 +319,7 @@ export function itemRoutes(config: ResourceConfig): {
             config.columns,
             {
               constraints: config.constraintFields,
+              refusals: config.writeRefusals,
             },
           );
       audit({
