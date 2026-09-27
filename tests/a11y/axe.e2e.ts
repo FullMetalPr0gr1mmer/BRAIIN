@@ -15,6 +15,9 @@ const ROUTES = [
   '/ar/portfolio',
   '/portfolio/all',
   '/ar/portfolio/all',
+  // UI v2 PR11 — a seeded case study (every part: quote, breakdown, gallery, next)
+  '/portfolio/the-rider',
+  '/ar/portfolio/the-rider',
   '/about',
   '/ar/about',
   '/contact',

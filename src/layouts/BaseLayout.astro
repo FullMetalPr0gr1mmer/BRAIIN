@@ -30,7 +30,8 @@ interface Props {
       a 404 has no twin, so its switch goes to the other locale's home. */
   langHref?: string;
   /** Route stylesheets under /styles/, linked after global.css (UI v2: `work.css` on Our
-      Work + All projects). A known name, never a URL — the sheet is same-origin, so the
+      Work + All projects; `banner.css` — MediaBanner + its caption — there and on the case
+      study, with `case-study.css`). A known name, never a URL — the sheet is same-origin, so the
       CSP's `style-src 'self'` covers it with no nonce. */
   styles?: readonly RouteStylesheet[];
   /** The Arabic hero face SeoHead preloads — the weight the route's above-the-fold heading
@@ -39,7 +40,7 @@ interface Props {
 }
 
 /** Every route stylesheet in public/styles/ (a closed list: a typo fails `astro check`). */
-type RouteStylesheet = 'about.css' | 'work.css';
+type RouteStylesheet = 'about.css' | 'work.css' | 'banner.css' | 'case-study.css';
 
 const {
   title,

@@ -7,7 +7,8 @@ import type { CatalogPage } from '@/lib/portfolio/pages';
 // The shell of Our Work (`/portfolio`) and All projects (`/portfolio/all`) — UI v2 PR10.
 // The route loads everything (src/lib/portfolio/pages.ts) and sets the cache headers; this
 // renders the head and the section composition — under the overlay header when the page
-// opens on its dark banner/head (page.header), with the pages' route stylesheet (work.css).
+// opens on its dark banner/head (page.header), with the pages' route stylesheets:
+// banner.css (the media banner and its caption, shared with the case study) and work.css.
 //
 // Our Work has no visible h1 (the design opens on a project banner): it carries a
 // visually hidden one, "Our Work". All projects' h1 is its page head; should an editor
@@ -34,7 +35,7 @@ const hasHead = page.sections.some((s) => s.type === 'pageHead' && s.visible !==
   jsonLd={page.jsonLd}
   robots={seo.robots}
   header={page.header}
-  styles={['work.css']}
+  styles={['banner.css', 'work.css']}
   {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >

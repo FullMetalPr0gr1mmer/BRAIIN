@@ -1,0 +1,69 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { PortfolioCard } from '@/lib/data/portfolio';
+import { pickLocale, localizedHref } from '@/lib/i18n';
+import MediaImage from '@/components/media/MediaImage.astro';
+
+// "Next project" (UI v2 PR11 — project.html `.nx`): the whole band is one link to the
+// next case study (the editor's pick, else the next in catalogue order, wrapping — see
+// nextProject()), over that project's poster at .45 opacity (decorative: the link names
+// the project). Its accessible name is spelled out ("Next project: Kitchen Hours") so the
+// kicker and title are not run together.
+//
+// Legibility deviation (docs/design-port-2026-09.md): a .4 black scrim sits over the
+// poster and the kicker is .85 white (the mockup's .75) — over a bright frame at the
+// mockup's hover opacity (.65) the kicker fell to ~2.4:1. Gated in contrast-audit (nx*).
+
+interface Props {
+  locale: Locale;
+  card: PortfolioCard | null;
+}
+
+const { locale, card } = Astro.props;
+
+const STR = {
+  en: { next: 'Next project' },
+  ar: { next: 'المشروع التالي' },
+}[locale];
+
+const name = card ? pickLocale(card.title, locale) : '';
+---
+
+{
+  card && (
+    <a
+      class="cs-next"
+      href={localizedHref(`/portfolio/${card.slug}`, locale)}
+      aria-label={`${STR.next}: ${name}`}
+    >
+      {card.poster && (
+        <MediaImage
+          image={card.poster}
+          locale={locale}
+          decorative
+          widths={[640, 1280, 1600]}
+          sizes="100vw"
+          class="cs-next__img"
+        />
+      )}
+      <span class="cs-next__in">
+        <span>
+          <span class="cs-next__k">{STR.next}</span>
+          <span class="cs-next__t">{name}</span>
+        </span>
+        <span class="cs-next__go" aria-hidden="true">
+          <svg viewBox="0 0 16 16">
+            <path
+              d="M2 8h12M9 3l5 5-5 5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+      </span>
+    </a>
+  )
+}

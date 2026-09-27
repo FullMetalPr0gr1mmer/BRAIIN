@@ -28,6 +28,9 @@ const ROUTES = [
   '/ar/portfolio',
   '/portfolio/all',
   '/ar/portfolio/all',
+  // UI v2 PR11 — the case study (the lightbox, banner and clip enhancements are module scripts)
+  '/portfolio/the-rider',
+  '/ar/portfolio/the-rider',
   '/admin/login',
   '/about',
   '/ar/about',
@@ -61,7 +64,14 @@ for (const route of ROUTES) {
   });
 }
 
-for (const route of ['/contact', '/ar/contact', '/admin/login', '/about', '/portfolio/all']) {
+for (const route of [
+  '/contact',
+  '/ar/contact',
+  '/admin/login',
+  '/about',
+  '/portfolio/all',
+  '/portfolio/the-rider',
+]) {
   test(`every component script is external on ${route}`, async ({ page }) => {
     await page.goto(route, { waitUntil: 'networkidle' });
     // A module script with neither `src` nor a nonce would be blocked by our CSP.

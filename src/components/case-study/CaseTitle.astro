@@ -1,0 +1,64 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { CaseStudy } from '@/lib/data/portfolio';
+import { pickLocale, localizedHref } from '@/lib/i18n';
+import { caseKeywords } from '@/lib/portfolio/caseStudy';
+import FacetTags from '@/components/portfolio/FacetTags.astro';
+
+// The title band (UI v2 PR11 — project.html `.pt`), on black: the "All projects" back
+// link, the h1 = the project's NAME (its type lives in the keyword chips — the mockup's
+// own rule), the keyword chips (the first one Klein; the project type alone when none are
+// authored), then the facet links — Service, Industry (= the sector), Client, Year — each
+// opening All projects filtered by it (FacetTags `case`).
+//
+// `#title` is where the banner caption points. When the page has no banner (a project
+// with no hero or poster) this band opens the page, so it carries `data-hero` for the
+// overlay header to measure; its h1 then also drops the scroll reveal (it may be the LCP
+// element, and text held at opacity 0 is not an LCP candidate until it fades in).
+
+interface Props {
+  locale: Locale;
+  study: CaseStudy;
+  /** The page opens on a banner above this band. */
+  hasBanner: boolean;
+}
+
+const { locale, study, hasBanner } = Astro.props;
+
+const STR = {
+  en: { back: 'All projects', keywords: 'Keywords' },
+  ar: { back: 'كل المشاريع', keywords: 'الكلمات المفتاحية' },
+}[locale];
+
+const keywords = caseKeywords(study).map((k) => pickLocale(k, locale));
+---
+
+<section class="cs-title" id="title" data-hero={hasBanner ? undefined : ''}>
+  <a class="cs-title__back" href={localizedHref('/portfolio#projects', locale)}>
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M14 8H2M7 3L2 8l5 5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"></path>
+    </svg>
+    <span>{STR.back}</span>
+  </a>
+  <h1 class:list={{ rv: hasBanner }}>{pickLocale(study.title, locale)}</h1>
+  <div class="cs-title__row">
+    {
+      keywords.length > 0 && (
+        <ul class="cs-kw rv" role="list" aria-label={STR.keywords}>
+          {keywords.map((k) => (
+            <li>{k}</li>
+          ))}
+        </ul>
+      )
+    }
+    <div class="cs-title__meta rv">
+      <FacetTags card={study} locale={locale} variant="case" />
+    </div>
+  </div>
+</section>

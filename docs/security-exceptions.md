@@ -366,7 +366,7 @@ The scope of this exception therefore grows to cover, **as each surface ships**:
 | Banner hero loops | `/contact` (already live), `/join`, `/portfolio`, `/portfolio/[slug]` | autoplaying muted video window |
 | In-view clip loops | home Selected Work (featured + 2 cards), about "Who we are", Our Work intro (×2), case-study final film | muted loop while on screen |
 | Clients marquee | home (already covered), `/portfolio` | continuous CSS scroll |
-| Work-hero caption dot | `/portfolio` | pulsing indicator |
+| Banner caption dot | `/portfolio`, `/portfolio/[slug]` (UI v2 PR11) | pulsing indicator |
 
 **Compliant, and NOT under this exception** (each must stay that way):
 
@@ -437,3 +437,10 @@ All of:
 2. the `/media/*.mp4` path branch is removed from the `VideoClip` schema (and its DB CHECK);
 3. `public/media/showreel.mp4` is deleted;
 4. mounted `<video>` elements use `preload="none"` or a Stream player facade.
+
+**Watch for (added with UI v2 PR11):** the case study's final film ships as a muted in-view
+loop with no sound control; its Stream replacement (sound + captions, WCAG 1.2.2) is part
+of closing this entry. That player — like every Stream facade — is third-party video and
+must go through the single consent gate (`hasConsent`, CLAUDE.md §7) before it loads
+anything. Today no Stream facade is rendered on the case study, so there is nothing to gate
+there yet (`tests/e2e/case-study.e2e.ts` asserts no `<iframe>` / `.stream` in its HTML).
