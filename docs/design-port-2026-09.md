@@ -777,6 +777,22 @@ The orchestrator renumbers these at integration.
   - Without JS every card, tab and prev/next is a plain `#slug` link, and `:target` does the
     opening. The gate is `tests/e2e/layout-shift.e2e.ts`: a click-open and a keyboard
     switch count 0, and a `#events` load shifts nothing at all.
+  - Before the script (and without it) the addressed panel's pill wears the selected look
+    too: `.svc-xp:not(.is-live):has(.svc-panel:nth-child(k+1):target) .svc-tab:nth-child(k)`,
+    written out to eight disciplines. It is colour only, so the hand-over to
+    `[aria-selected]` shifts nothing.
+  - Every `:has()` selector is a rule of its own (or in a list of only `:has()` selectors).
+    `:has()` is not forgiving: in a mixed list an engine without it (Firefox < 121, Safari
+    < 15.4) drops the whole rule, and the explorer's script-driven hiding went with it, so
+    every panel showed stacked. `tests/lib/cssSelectorLists.spec.ts` holds every served
+    sheet to that rule (two older lists in global.css, the intro cut, are named there and
+    left to their owner).
+  - **Standalone.** With no visible card band (an editor hid or removed it), nothing else
+    on the page can open the explorer: its tabs are inside it, and a collapsed explorer
+    shows nothing. So the route marks it `data.standalone` (`withServicesData`), it renders
+    `.svc-xp--standalone`, and CSS shows its FIRST panel when nothing is addressed (an
+    addressed one still wins). The script starts from that panel and writes no hash for
+    it.
 - **S3-2. The tabs are APG tabs, applied by the script.** `src/lib/client/tabs.ts`:
   `role=tablist` (named "Disciplines" / "التخصصات"), `role=tab` with `aria-controls` and
   `aria-selected`, a roving tabindex, and `role=tabpanel` with `aria-labelledby` →
@@ -789,7 +805,9 @@ The orchestrator renumbers these at integration.
   moves focus to the opened panel and scrolls it into view (its `scroll-margin-top` keeps
   the header's room and the tab row above it); a tab keeps focus on itself. The selected
   card gets S2's `.on` (no ARIA state on the cards: they are links, and the tab carries
-  the selection).
+  the selection). The tab row scrolls on phones, and a scroller clips at its padding
+  edge, so it keeps 6px of room on every side for the global focus ring (2px wide at a
+  3px offset, 5px past the pill), taken back with an equal negative margin.
 - **S3-3. Every panel is server-rendered.** All five disciplines and their 28 service
   links are in the HTML (Tier A, crawlable), each panel's id the discipline's slug; the
   mockup rendered one panel at a time with `innerHTML`. A panel's poster is a lazy
@@ -814,9 +832,13 @@ The orchestrator renumbers these at integration.
   `line` + `lineAccent`).
 - **S3-6. The rating line is content only, and never structured data.** "★★★★★ 4.9 / 5
   average client rating" is a claim with no table behind it. It renders only where it is
-  authored (`rating: {value, label}`), in the default composition and the seeded row, which
-  is flagged `is_placeholder` for exactly this reason (production shows it only under the
-  owner's override, runbook §6d). It is never a component default. There is **no
+  authored (`rating: {value, label}`), and the one place it is authored is the seeded row,
+  which is flagged `is_placeholder` for exactly this reason (production shows it only under
+  the owner's override, runbook §6d). It is never a component default, and never in
+  `DEFAULT_SERVICES_SECTIONS` either: that default renders whenever the composition comes
+  back empty (the page unpublished, every section hidden, a failed read), code is never
+  behind the 0025 fence, and so a sample there would reach production, and the Tier A edge
+  cache, unflagged. The seed-equality test allows the seed row that one extra key. There is **no
   AggregateRating JSON-LD**: it would assert review data the site does not have (a
   manual-action category). The value is isolated LTR (`<b dir="ltr">`), as in the mockup's
   Arabic. The whole band hides with fewer than two published counters, so the rating line
@@ -824,10 +846,11 @@ The orchestrator renumbers these at integration.
 - **S3-7. The page's links follow the bands that are there.** The hero CTA goes to
   `#categories`, the alt link ("Know what you need? **Skip to the inquiry**") and every
   "Start your {Discipline} project" to `#inquiry` — or, with "Say hello" hidden, to
-  `/contact#inquiry`, and the CTA to the form when the cards are hidden
-  (`servicesPageLinks`, the home CTA's rule). And a floor: while the page-mode cards show,
-  the explorer shows too (`ensureServiceExplorer`), because the cards are `#slug` links into
-  it and it carries the page's service links. If the hero is hidden the page wears the solid
+  `/contact#inquiry`. With the cards hidden the CTA goes to the standalone explorer's
+  first panel (`#<slug>`, S3-1), else to the form (`servicesPageLinks`, the home CTA's
+  rule). And a floor: while the page-mode cards show, the explorer shows too
+  (`ensureServiceExplorer`), because the cards are `#slug` links into it and it carries the
+  page's service links. If the hero is hidden the page wears the solid
   header and a visually hidden h1.
 - **S3-8. Explorer copy.** "Inquire" / "اطلب", and "Start your {Discipline} project" /
   "ابدأ مشروع {Discipline}" are the mockup's `x.*`. The section's content is only those two
@@ -845,3 +868,24 @@ The orchestrator renumbers these at integration.
   description are `services.html`'s, verbatim; the Arabic title is the menu label
   ("الخدمات") and the description the English one in the page's own Arabic words. It is
   flagged for owner review.
+- **S3-11. The LCP element is the banner loop's first frame.** Lighthouse records the hero
+  `<video>`, not the h1: the loop mounts after `load`, and its first frame out-sizes the
+  headline, which was the candidate until then. `/contact` behaves the same way, although
+  its §6 row names the h1. The first S3 measurement ran on the S2 tip before S2-12. There,
+  `/ar/services` was over budget (simulated LCP 2.68–2.85 s, perf 0.93–0.95). Rebased onto
+  S2-12, `services.css` is minified too (6.5 → 3.4 KB gzipped) and the budget holds.
+  Lighthouse 12.6 ran the `lighthouserc.json` profiles, 5 interleaved mobile runs and 3
+  desktop runs, with the page's data mocked from the seed (28 rows, card and panel posters,
+  the four `services` counters):
+  - mobile, `/services`: LCP 1.95 s, perf 0.99;
+  - mobile, `/ar/services`: LCP 2.22 s (2.21–2.30), perf 0.98;
+  - mobile, `/ar/contact` (control): LCP 1.92 s;
+  - desktop: 0.55 s and 0.68 s, perf 0.99 or more.
+
+  With the code fallbacks and no data, the mobile LCP is 1.71 s and 2.08 s. The ≈0.15–0.25 s
+  difference is the posters and counters. Since the frame paints after `load`, everything
+  that finishes before `load` sits in its Lantern graph (S2-12). A band that adds eager
+  bytes above the fold on this page therefore spends LCP budget directly. The margin on
+  `/ar/services` is ≈0.28 s. The structural fix is not in the page. It is a Hero-wide
+  treatment that keeps the loop's first frame from becoming a candidate, or Stream
+  (KAN-20). Both are owner items, and so is correcting the contact row.
