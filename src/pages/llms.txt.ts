@@ -1,6 +1,8 @@
 import type { APIRoute } from 'astro';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { getPublishedServices } from '@/lib/data/services';
+import { getPublishedDisciplines } from '@/lib/data/disciplines';
+import { llmsServiceLines } from '@/lib/services/discovery';
 import { getPublishedPosts } from '@/lib/data/blog';
 import { getCaseStudyIndex } from '@/lib/data/portfolio';
 import { TRAINING_DENY, RETRIEVAL_ALLOW } from '@/lib/seo/crawlers';
@@ -19,16 +21,18 @@ export const prerender = false;
 
 export const GET: APIRoute = async ({ locals }) => {
   const site = PUBLIC_SITE_URL.replace(/\/$/, '');
-  const [services, posts, caseStudies, identity] = await Promise.all([
+  const [services, disciplines, posts, caseStudies, identity] = await Promise.all([
     getPublishedServices(),
+    getPublishedDisciplines(),
     getPublishedPosts(),
     // The case-study page's own loader + schema, as the sitemap uses: never a 404.
     getCaseStudyIndex(),
     getIdentity(locals),
   ]);
 
-  // Answer engines cite pages, so list the live ones rather than only a section index.
-  const serviceLines = services.map((s) => `- ${s.title.en} — ${site}/services/${s.slug}`);
+  // Answer engines cite pages, so list the live ones rather than only a section index —
+  // grouped under their discipline (Round 2), still with no count anywhere.
+  const serviceLines = llmsServiceLines(services, disciplines, site);
   // Loader already orders by published_at desc; cap so the file stays a usable index.
   const postLines = posts
     .slice(0, 20)

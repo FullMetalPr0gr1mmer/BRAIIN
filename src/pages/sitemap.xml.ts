@@ -48,6 +48,9 @@ export const GET: APIRoute = async () => {
 
   const entries: { path: string; updated: string | null }[] = [
     ...STATIC_PATHS.map((path) => ({ path, updated: null })),
+    // Every PUBLISHED service — the rule its page answers 200 by (status + RLS, which also
+    // hides one whose discipline is unpublished). Round 1’s retired slugs are
+    // archived, so they are never listed: those URLs answer a 301 (src/lib/services/retired.ts).
     ...services.map((s) => ({ path: `/services/${s.slug}`, updated: s.updated_at })),
     ...portfolio.map((p) => ({ path: `/portfolio/${p.slug}`, updated: p.updatedAt })),
     ...posts.map((p) => ({ path: `/creative-knowledge/${p.slug}`, updated: p.updated_at })),

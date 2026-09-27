@@ -1,7 +1,19 @@
-import { describe, it, expect } from 'vitest';
-import { TRAINING_DENY, RETRIEVAL_ALLOW, USER_FETCH_ALLOW } from '@/lib/seo/crawlers';
-import { GET as robotsGet } from '@/pages/robots.txt';
-import { GET as llmsGet } from '@/pages/llms.txt';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { ServiceRow } from '@schemas/content';
+import type { Discipline } from '@/lib/data/disciplines';
+import { seedDisciplines, seedServiceRows } from '../fixtures/serviceSeeds';
+
+// Services and disciplines default to none (Supabase is unconfigured under test); the
+// Round 2 describe below swaps in the seeded catalogue.
+let services: ServiceRow[] = [];
+let disciplines: Discipline[] = [];
+vi.mock('@/lib/data/services', () => ({ getPublishedServices: async () => services }));
+vi.mock('@/lib/data/disciplines', () => ({ getPublishedDisciplines: async () => disciplines }));
+
+const { TRAINING_DENY, RETRIEVAL_ALLOW, USER_FETCH_ALLOW } = await import('@/lib/seo/crawlers');
+const { GET: robotsGet } = await import('@/pages/robots.txt');
+const { GET: llmsGet } = await import('@/pages/llms.txt');
+const { llmsServiceLines } = await import('@/lib/services/discovery');
 
 // CLAUDE.md Pillar 3 names the exact token set. Asserting against a literal list here —
 // rather than against the arrays themselves — is the point: a test that reads
@@ -122,5 +134,55 @@ describe('/llms.txt agrees with the crawler map', () => {
     expect(body.split('\n')[0]).toBe('# Braiin Statiion (بريّن ستيشن)');
     expect(body).toContain('hello@braiinstatiion.com');
     expect(body).not.toMatch(/Braiin Station\b/);
+  });
+});
+
+describe('/llms.txt lists the services by discipline (Round 2)', () => {
+  afterEach(() => {
+    services = [];
+    disciplines = [];
+  });
+
+  const servicesSection = (body: string) => body.split('## Services\n')[1]?.split('\n## ')[0] ?? '';
+
+  it('one ### heading per discipline, in order, each followed by its services', async () => {
+    services = seedServiceRows();
+    disciplines = seedDisciplines();
+    const section = servicesSection(await (await call(llmsGet)).text());
+    const headings = [...section.matchAll(/^### (.+)$/gm)].map((m) => m[1]);
+    expect(headings).toEqual([
+      'Branding',
+      'Production',
+      'Marketing',
+      'Website Development',
+      'Events & Exhibitions',
+    ]);
+    expect(section.match(/^- /gm)).toHaveLength(28);
+    const branding = section.split('### Branding\n')[1]?.split('\n\n')[0] ?? '';
+    expect(branding.split('\n')[0]).toBe(
+      '- Logo Design — https://www.braiinstation.com/services/logo',
+    );
+    expect(branding.split('\n')).toHaveLength(8);
+  });
+
+  it('still states no count — in a heading or anywhere else', async () => {
+    services = seedServiceRows();
+    disciplines = seedDisciplines();
+    const body = await (await call(llmsGet)).text();
+    expect(body).not.toMatch(/\d+\s+services/i);
+    expect(body).not.toMatch(/^### .*\d/m);
+  });
+
+  it('never drops a service: ungrouped ones go last, and no disciplines means a flat list', () => {
+    const rows = seedServiceRows();
+    const loose = { ...rows[0]!, slug: 'loose', discipline_id: null };
+    const grouped = llmsServiceLines([...rows, loose], seedDisciplines(), 'https://x');
+    expect(grouped.slice(-2)).toEqual([
+      '### Other services',
+      '- Logo Design — https://x/services/loose',
+    ]);
+    const flat = llmsServiceLines(rows, [], 'https://x');
+    expect(flat).toHaveLength(28);
+    expect(flat.some((l) => l.startsWith('###'))).toBe(false);
   });
 });
