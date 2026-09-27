@@ -1,175 +1,246 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import { BUDGET_BANDS, BUDGET_BAND_LABELS } from '@schemas/lead';
 import { pickLocale } from '@/lib/i18n';
 import { getIdentity } from '@/lib/identity';
 import type { ServiceRow } from '@/lib/data/services';
+import Cta from '@/components/ui/Cta.astro';
+import {
+  CONTACT_FORM_FIELDS,
+  type ContactField,
+  type ContactFormVariant,
+  type ContactKind,
+} from '@/lib/forms/contactPayload';
+
+// The lead form — the site's one public write path (/api/contact: same-origin check, Zod,
+// honeypot, tenant resolved server-side, PII envelope-encrypted).
+//
+//   compact  the home form of the UI v2 design: name, email, company, service, message;
+//            "Send message" with a trailing arrow, the button before the note.
+//   full     /contact's form (UI v2 PR9): the same plus the budget range and the
+//            free-text deadline; the badge "Send a message", icon first, before the note.
+//
+// Both carry the PDPL consent checkbox and the honeypot, post valued options (never a
+// visible label — the budget bands are BUDGET_BAND_LABELS, the one map the admin and the
+// CSV read too), and report the REAL outcome with per-field errors
+// (src/lib/client/formErrors.ts). Which fields exist, and the JSON they become, is one
+// list: src/lib/forms/contactPayload.ts — tested against LeadInputSchema's keys. The
+// design's copy is verbatim (its Saudi-voice Arabic); validation and system copy stays MSA
+// (owner decision 6).
 
 interface Props {
   locale: Locale;
-  services: ServiceRow[];
+  services: readonly ServiceRow[];
+  fields?: ContactFormVariant;
+  /** Posted as the lead's `kind`. */
+  kind?: ContactKind;
+  /** CMS overrides from the surrounding section, already in this locale. */
+  note?: string | undefined;
+  okMessage?: string | undefined;
+  submitLabel?: string | undefined;
 }
 
-const { locale, services } = Astro.props;
+const {
+  locale,
+  services,
+  fields = 'full',
+  kind = 'contact',
+  note,
+  okMessage,
+  submitLabel,
+} = Astro.props;
+const compact = fields === 'compact';
+const has = (f: ContactField) => (CONTACT_FORM_FIELDS[fields] as readonly string[]).includes(f);
 
 const STR = {
   en: {
     name: 'Name',
     email: 'Email',
-    phone: 'Phone (optional)',
     company: 'Company',
     companyPh: 'Optional',
     namePh: 'Your full name',
     emailPh: 'you@company.com',
-    phonePh: '+966 5X XXX XXXX',
     messagePh: 'What are you making, who is it for, and when does it need to be ready?',
     service: 'What do you need?',
     budget: 'Budget range',
-    timeline: 'When do you need it?',
+    deadline: 'When do you need it?',
+    deadlinePh: 'A date, a season, or ASAP',
     message: 'Tell us about the project',
     note: 'We read everything and reply within one business day.',
-    choose: 'Choose…',
-    chooseService: "Not sure yet — let's talk",
+    chooseService: "Not sure yet, let's talk",
     chooseBudget: 'Prefer to discuss',
-    chooseTimeline: 'Not sure yet',
-    consent: 'I agree to be contacted about my enquiry.',
-    submit: 'Send a message',
+    consent: 'I agree to be contacted about my inquiry.',
+    submit: compact ? 'Send message' : 'Send a message',
     sending: 'Sending…',
-    ok: 'Thanks — we’ll be in touch shortly.',
-    invalid: 'Please check the highlighted fields and try again.',
+    ok: "Got it. We'll be in touch within one business day.",
+    invalid: 'Please correct the marked fields and try again.',
+    rateLimited: 'Too many attempts. Please wait a minute and try again.',
     unavailable: 'The form isn’t live yet — please email {email}.',
     error: 'Something went wrong. Please try again.',
-    budgets: {
-      lt_10k: 'Under 10k SAR',
-      '10k_50k': '10k–50k SAR',
-      '50k_150k': '50k–150k SAR',
-      gt_150k: '150k+ SAR',
-      undisclosed: 'Prefer not to say',
-    },
-    timelines: { asap: 'ASAP', '1_3m': '1–3 months', '3_6m': '3–6 months', flexible: 'Flexible' },
+    errRequired: 'This field is required.',
+    errEmail: 'Enter a valid email address, like name@company.com.',
+    errTooLong: 'This is longer than we can accept.',
+    errInvalid: 'Please check this field.',
   },
   ar: {
     name: 'الاسم',
     email: 'البريد الإلكتروني',
-    phone: 'الهاتف (اختياري)',
     company: 'الشركة',
     companyPh: 'اختياري',
     namePh: 'اسمك الكامل',
     emailPh: 'you@company.com',
-    phonePh: '+966 5X XXX XXXX',
-    messagePh: 'ما الذي تصنعه، ولمن، ومتى يجب أن يكون جاهزًا؟',
-    service: 'ما الخدمة التي تحتاجها؟',
+    // The design words the placeholder per page: home "builds", /contact "makes".
+    messagePh: compact ? 'وش تبني، ولمين، ومتى لازم يطلع؟' : 'وش تصنع، ولمين، ومتى لازم يكون جاهز؟',
+    service: 'وش تحتاج؟',
     budget: 'نطاق الميزانية',
-    timeline: 'متى تحتاجه؟',
-    message: 'أخبرنا عن المشروع',
-    note: 'نقرأ كل رسالة ونردّ خلال يوم عمل واحد.',
-    choose: 'اختر…',
-    chooseService: 'لم أُحدّد بعد — لنتحدث',
-    chooseBudget: 'أفضّل مناقشتها',
-    chooseTimeline: 'لم أُحدّد بعد',
+    deadline: 'متى تحتاجه؟',
+    deadlinePh: 'تاريخ، أو موسم، أو في أقرب وقت',
+    message: 'احكِ لنا عن المشروع',
+    note: 'نقرأ كل رسالة ونرد خلال يوم عمل واحد.',
+    chooseService: 'لسه ما قررت، خلّنا نتكلم',
+    chooseBudget: 'أفضّل نتناقش فيها',
     consent: 'أوافق على التواصل معي بخصوص طلبي.',
-    submit: 'أرسل رسالتك',
+    submit: compact ? 'أرسل الرسالة' : 'أرسل رسالتك',
     sending: 'جارٍ الإرسال…',
-    ok: 'شكرًا — سنتواصل معك قريبًا.',
-    invalid: 'يرجى مراجعة الحقول والمحاولة مرة أخرى.',
+    ok: 'وصلتنا. بنتواصل معك خلال يوم عمل واحد.',
+    invalid: 'يرجى تصحيح الحقول المشار إليها والمحاولة مرة أخرى.',
+    rateLimited: 'محاولات كثيرة. يرجى الانتظار دقيقة ثم المحاولة مرة أخرى.',
     unavailable: 'النموذج غير مُفعّل بعد — راسلنا على {email}.',
     error: 'حدث خطأ ما. حاول مرة أخرى.',
-    budgets: {
-      lt_10k: 'أقل من 10 آلاف ريال',
-      '10k_50k': '10–50 ألف ريال',
-      '50k_150k': '50–150 ألف ريال',
-      gt_150k: 'أكثر من 150 ألف ريال',
-      undisclosed: 'أفضل عدم الإفصاح',
-    },
-    timelines: { asap: 'في أقرب وقت', '1_3m': '1–3 أشهر', '3_6m': '3–6 أشهر', flexible: 'مرن' },
+    errRequired: 'هذا الحقل مطلوب.',
+    errEmail: 'أدخل بريدًا إلكترونيًا صحيحًا، مثل name@company.com.',
+    errTooLong: 'النص أطول من الحد المسموح.',
+    errInvalid: 'يرجى مراجعة هذا الحقل.',
   },
 }[locale];
+
+const noteText = note ?? STR.note;
+const okText = okMessage ?? STR.ok;
+const submitText = submitLabel ?? STR.submit;
 
 // The fallback mailbox in the 'form unavailable' message is the public identity's, so
 // the one message shown when the form is down never names a stale address.
 const { contactEmail } = await getIdentity(Astro.locals);
 
-const budgetKeys = ['lt_10k', '10k_50k', '50k_150k', 'gt_150k', 'undisclosed'] as const;
-const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
+// The design's bands, in its order; "Prefer to discuss" is the empty option (no answer).
+// The legacy bands stay accepted on input (cached pages) but are never offered.
+const budgets = BUDGET_BANDS.map((k) => ({ value: k, label: BUDGET_BAND_LABELS[k][locale] }));
 ---
 
-<form id="contact-form" class="contact-form" data-locale={locale} novalidate>
-  <div class="field">
-    <label for="cf-name">{STR.name}</label>
-    <input
-      id="cf-name"
-      name="name"
-      type="text"
-      required
-      maxlength="120"
-      autocomplete="name"
-      placeholder={STR.namePh}
-    />
-  </div>
-  <div class="field">
-    <label for="cf-email">{STR.email}</label>
-    <input
-      id="cf-email"
-      name="email"
-      type="email"
-      required
-      maxlength="254"
-      autocomplete="email"
-      placeholder={STR.emailPh}
-    />
-  </div>
-  <div class="field">
-    <label for="cf-phone">{STR.phone}</label>
-    <input
-      id="cf-phone"
-      name="phone"
-      type="tel"
-      maxlength="32"
-      autocomplete="tel"
-      placeholder={STR.phonePh}
-    />
-  </div>
-  <div class="field">
-    <label for="cf-company">{STR.company}</label>
-    <input
-      id="cf-company"
-      name="company"
-      type="text"
-      maxlength="120"
-      autocomplete="organization"
-      placeholder={STR.companyPh}
-    />
-  </div>
-  <div class="field">
-    <label for="cf-service">{STR.service}</label>
-    <select id="cf-service" name="service">
-      <option value="">{STR.chooseService}</option>
-      {services.map((s) => <option value={s.slug}>{pickLocale(s.title, locale, s.slug)}</option>)}
-    </select>
-  </div>
-  <div class="field">
-    <label for="cf-budget">{STR.budget}</label>
-    <select id="cf-budget" name="budget">
-      <option value="">{STR.chooseBudget}</option>
-      {budgetKeys.map((k) => <option value={k}>{STR.budgets[k]}</option>)}
-    </select>
-  </div>
-  <div class="field field-full">
-    <label for="cf-timeline">{STR.timeline}</label>
-    <select id="cf-timeline" name="timeline">
-      <option value="">{STR.chooseTimeline}</option>
-      {timelineKeys.map((k) => <option value={k}>{STR.timelines[k]}</option>)}
-    </select>
-  </div>
-  <div class="field field-full">
-    <label for="cf-message">{STR.message}</label>
-    <textarea
-      id="cf-message"
-      name="message"
-      required
-      maxlength="5000"
-      rows="5"
-      placeholder={STR.messagePh}></textarea>
-  </div>
+<form
+  id="contact-form"
+  class:list={['contact-form', compact ? 'contact-form--compact' : 'contact-form--full']}
+  data-locale={locale}
+  data-kind={kind}
+  data-err-required={STR.errRequired}
+  data-err-email={STR.errEmail}
+  data-err-too-long={STR.errTooLong}
+  data-err-invalid={STR.errInvalid}
+  novalidate
+>
+  {
+    has('name') && (
+      <div class="field">
+        <label for="cf-name">{STR.name}</label>
+        <input
+          id="cf-name"
+          name="name"
+          type="text"
+          required
+          maxlength="120"
+          autocomplete="name"
+          placeholder={STR.namePh}
+        />
+      </div>
+    )
+  }
+  {
+    has('email') && (
+      <div class="field">
+        <label for="cf-email">{STR.email}</label>
+        <input
+          id="cf-email"
+          name="email"
+          type="email"
+          required
+          maxlength="254"
+          autocomplete="email"
+          placeholder={STR.emailPh}
+        />
+      </div>
+    )
+  }
+  {
+    has('company') && (
+      <div class="field">
+        <label for="cf-company">{STR.company}</label>
+        <input
+          id="cf-company"
+          name="company"
+          type="text"
+          maxlength="120"
+          autocomplete="organization"
+          placeholder={STR.companyPh}
+        />
+      </div>
+    )
+  }
+  {
+    has('service') && (
+      <div class="field">
+        <label for="cf-service">{STR.service}</label>
+        <select id="cf-service" name="service">
+          <option value="">{STR.chooseService}</option>
+          {services.map((s) => (
+            <option value={s.slug}>{pickLocale(s.title, locale, s.slug)}</option>
+          ))}
+        </select>
+      </div>
+    )
+  }
+  {
+    has('budget') && (
+      <div class="field">
+        <label for="cf-budget">{STR.budget}</label>
+        <select id="cf-budget" name="budget">
+          <option value="">{STR.chooseBudget}</option>
+          {budgets.map((b) => (
+            <option value={b.value}>{b.label}</option>
+          ))}
+        </select>
+      </div>
+    )
+  }
+  {
+    has('deadline') && (
+      <div class="field">
+        <label for="cf-deadline">{STR.deadline}</label>
+        <input
+          id="cf-deadline"
+          name="deadline"
+          type="text"
+          maxlength="120"
+          autocomplete="off"
+          placeholder={STR.deadlinePh}
+        />
+      </div>
+    )
+  }
+  {
+    has('message') && (
+      <div class="field field-full">
+        <label for="cf-message">{STR.message}</label>
+        <textarea
+          id="cf-message"
+          name="message"
+          required
+          maxlength="5000"
+          rows="5"
+          placeholder={STR.messagePh}
+        />
+      </div>
+    )
+  }
   <div class="field field-full field-check">
     <input id="cf-consent" name="consent" type="checkbox" />
     <label for="cf-consent">{STR.consent}</label>
@@ -180,31 +251,40 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
     <input id="cf-hp" name="hp" type="text" tabindex="-1" autocomplete="off" />
   </div>
   <div class="contact-form__foot field-full">
-    <p class="contact-form__note">{STR.note}</p>
-    <button type="submit" class="cta cta--icon cta--go">
-      <span>{STR.submit}</span>
-      <span class="cta__ico" aria-hidden="true">
-        <svg viewBox="0 0 16 16">
-          <path
-            d="M2 8h12M9 3l5 5-5 5"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"></path>
-        </svg>
-      </span>
-    </button>
+    {
+      compact ? (
+        <button type="submit" class="cta cta--trail">
+          <span>{submitText}</span>
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M2 8h12M9 3l5 5-5 5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+      ) : (
+        <Cta type="submit" icon="go">
+          {submitText}
+        </Cta>
+      )
+    }
+    <p class="contact-form__note">{noteText}</p>
   </div>
   <p
     id="contact-status"
     class="form-status"
     role="status"
     aria-live="polite"
+    tabindex="-1"
     hidden
     data-sending={STR.sending}
-    data-ok={STR.ok}
+    data-ok={okText}
     data-invalid={STR.invalid}
+    data-rate-limited={STR.rateLimited}
     data-unavailable={STR.unavailable.replace('{email}', () => contactEmail)}
     data-error={STR.error}
   >
@@ -212,60 +292,70 @@ const timelineKeys = ['asap', '1_3m', '3_6m', 'flexible'] as const;
 </form>
 
 <script>
+  import {
+    checkForm,
+    clearErrorsOnInput,
+    showFieldErrors,
+    showStatus,
+    statusFromHttp,
+    type FieldProblem,
+  } from '@/lib/client/formErrors';
+  import { buildContactPayload, leadKeysToFields } from '@/lib/forms/contactPayload';
+
   const form = document.getElementById('contact-form') as HTMLFormElement | null;
   const status = document.getElementById('contact-status') as HTMLElement | null;
 
-  function show(state: 'sending' | 'ok' | 'invalid' | 'unavailable' | 'error') {
-    if (!status) return;
-    status.hidden = false;
-    status.textContent = status.dataset[state] ?? '';
-    status.classList.toggle('is-ok', state === 'ok');
-    status.classList.toggle(
-      'is-error',
-      state === 'invalid' || state === 'error' || state === 'unavailable',
-    );
-  }
+  if (form && status) {
+    const d = form.dataset;
+    const messages: Record<FieldProblem, string> = {
+      required: d['errRequired'] ?? '',
+      email: d['errEmail'] ?? '',
+      tooLong: d['errTooLong'] ?? '',
+      invalid: d['errInvalid'] ?? '',
+    };
+    let busy = false;
+    clearErrorsOnInput(form);
 
-  form?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(form);
-    const text = (k: string) => {
-      const v = fd.get(k);
-      return typeof v === 'string' && v.length > 0 ? v : undefined;
-    };
-    const payload = {
-      kind: 'contact',
-      locale: form.dataset.locale || 'en',
-      name: text('name') ?? '',
-      email: text('email') ?? '',
-      phone: text('phone'),
-      company: text('company'),
-      message: text('message') ?? '',
-      serviceOfInterest: text('service'),
-      budgetBand: text('budget'),
-      timelineBand: text('timeline'),
-      consentMarketing: fd.get('consent') === 'on',
-      hp: typeof fd.get('hp') === 'string' ? (fd.get('hp') as string) : '',
-    };
-    show('sending');
-    try {
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        form.reset();
-        show('ok');
-      } else if (res.status === 503) {
-        show('unavailable');
-      } else if (res.status === 422) {
-        show('invalid');
-      } else {
-        show('error');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (busy) return;
+
+      // The client check mirrors the server's bounds, so most mistakes are named before a
+      // round trip; the server remains the gate.
+      const problems = checkForm(form);
+      showFieldErrors(form, problems, messages);
+      if (problems.size > 0) {
+        showStatus(form, status, 'invalid');
+        return;
       }
-    } catch {
-      show('error');
-    }
-  });
+
+      const fd = new FormData(form);
+      const payload = buildContactPayload((k) => fd.get(k), {
+        kind: d['kind'] === 'project_inquiry' ? 'project_inquiry' : 'contact',
+        locale: d['locale'] ?? 'en',
+      });
+      busy = true;
+      showStatus(form, status, 'sending');
+      try {
+        const res = await fetch('/api/contact', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const outcome = statusFromHttp(res.status);
+        if (outcome === 'invalid') {
+          // The server names the schema keys it refused; mark those controls too.
+          const body = (await res.json().catch(() => null)) as { fields?: unknown } | null;
+          const named = leadKeysToFields(Array.isArray(body?.fields) ? body.fields : []);
+          showFieldErrors(form, new Map(named.map((f) => [f, 'invalid' as const])), messages);
+        }
+        if (outcome === 'ok') form.reset();
+        showStatus(form, status, outcome);
+      } catch {
+        showStatus(form, status, 'error');
+      } finally {
+        busy = false;
+      }
+    });
+  }
 </script>

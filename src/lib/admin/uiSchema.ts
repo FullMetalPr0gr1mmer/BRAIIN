@@ -767,26 +767,6 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
     ],
   },
 
-  'partner-logos': {
-    slug: 'partner-logos',
-    title: 'Partner logos',
-    singular: 'Partner logo',
-    reorder: true,
-    columns: [
-      { key: 'name', label: 'Name' },
-      { key: 'logo_url', label: 'Logo' },
-      { key: 'visible', label: 'Visible', kind: 'boolean' },
-    ],
-    fields: [
-      { name: 'name', label: 'Name', kind: 'text', required: true },
-      { name: 'logoUrl', label: 'Logo URL', kind: 'url', required: true },
-      { name: 'scale', label: 'Scale', kind: 'number' },
-      { name: 'offsetY', label: 'Vertical offset', kind: 'number' },
-      { name: 'visible', label: 'Visible', kind: 'checkbox', defaultValue: true },
-      SORT_FIELD,
-    ],
-  },
-
   redirects: {
     slug: 'redirects',
     title: 'Redirects',

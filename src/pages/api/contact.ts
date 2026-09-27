@@ -30,8 +30,19 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   // A filled honeypot (`hp`) fails schema validation (max length 0) → treated as spam.
+  // A 422 names the schema KEYS that failed (never their values) so the form can mark the
+  // right fields; the honeypot is never named — a bot learns nothing about the trap.
   const parsed = LeadInputSchema.safeParse(body);
-  if (!parsed.success) return json({ ok: false, error: 'validation' }, 422);
+  if (!parsed.success) {
+    const fields = [
+      ...new Set(
+        parsed.error.issues
+          .map((i) => i.path[0])
+          .filter((k): k is string => typeof k === 'string' && k !== 'hp'),
+      ),
+    ];
+    return json({ ok: false, error: 'validation', fields }, 422);
+  }
 
   // TODO(KAN-20): verify parsed.data.captchaToken with reCAPTCHA once provisioned.
   const result = await createLead(parsed.data);

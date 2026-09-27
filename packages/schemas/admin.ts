@@ -389,16 +389,6 @@ export const StatisticUpdateSchema = updatable(StatisticWriteBase)
     message: 'give the value (or a number to count up to)',
   });
 
-export const PartnerLogoWriteSchema = z.object({
-  name: ShortTextSchema,
-  logoUrl: UrlFieldSchema,
-  scale: z.number().min(0.1).max(5).default(1),
-  offsetY: z.number().min(-200).max(200).default(0),
-  visible: z.boolean().default(true),
-  sortOrder: SortOrderSchema,
-});
-export const PartnerLogoUpdateSchema = updatable(PartnerLogoWriteSchema);
-
 // ── Sectors · clients · testimonials (UI v2, 0021) ──────────────────────────────
 
 /** 0021's CHECK caps these slugs at 64 characters ('^[a-z0-9][a-z0-9-]{0,63}$'). */

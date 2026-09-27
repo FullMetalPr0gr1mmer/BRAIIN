@@ -1,10 +1,11 @@
 ---
 import ContactPage from '@/components/ContactPage.astro';
-import { getPublishedServices } from '@/lib/data/services';
 import { setTierA } from '@/lib/http/cacheTags';
+import { CONTACT_CACHE_ENTITIES } from '@/lib/sections/contact';
 
-const services = await getPublishedServices();
-setTierA(Astro.response, { route: 'contact', locale: 'ar' });
+// Tier A. Composed from CMS sections (`pages` slug 'contact'); a publish of the page or of
+// a service purges it by tag.
+setTierA(Astro.response, { route: 'contact', locale: 'ar', entities: CONTACT_CACHE_ENTITIES });
 ---
 
-<ContactPage locale="ar" services={services} />
+<ContactPage locale="ar" />

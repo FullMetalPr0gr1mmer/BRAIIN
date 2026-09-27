@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { getPublishedServices } from '@/lib/data/services';
 import { getPublishedPosts } from '@/lib/data/blog';
+import { getCaseStudyIndex } from '@/lib/data/portfolio';
 import { TRAINING_DENY, RETRIEVAL_ALLOW } from '@/lib/seo/crawlers';
 import { getIdentity } from '@/lib/identity';
 
@@ -18,9 +19,11 @@ export const prerender = false;
 
 export const GET: APIRoute = async ({ locals }) => {
   const site = PUBLIC_SITE_URL.replace(/\/$/, '');
-  const [services, posts, identity] = await Promise.all([
+  const [services, posts, caseStudies, identity] = await Promise.all([
     getPublishedServices(),
     getPublishedPosts(),
+    // The case-study page's own loader + schema, as the sitemap uses: never a 404.
+    getCaseStudyIndex(),
     getIdentity(locals),
   ]);
 
@@ -30,6 +33,10 @@ export const GET: APIRoute = async ({ locals }) => {
   const postLines = posts
     .slice(0, 20)
     .map((p) => `- ${p.title.en} — ${site}/creative-knowledge/${p.slug}`);
+  // Catalogue order, capped like the articles. No count anywhere (it would drift).
+  const caseStudyLines = caseStudies
+    .slice(0, 20)
+    .map((p) => `- ${p.title.en} — ${site}/portfolio/${p.slug}`);
 
   const list = (lines: string[]) => (lines.length ? `\n${lines.join('\n')}` : '\n(none published)');
 
@@ -47,12 +54,15 @@ export const GET: APIRoute = async ({ locals }) => {
 
 ## Sections
 - Services: ${site}/services
-- Portfolio: ${site}/portfolio
+- Our Work: ${site}/portfolio
+- All projects: ${site}/portfolio/all
 - Creative Knowledge (blog): ${site}/creative-knowledge
 - About: ${site}/about
 - Contact: ${site}/contact
 
 ## Services${list(serviceLines)}
+
+## Case studies${list(caseStudyLines)}
 
 ## Recent articles${list(postLines)}
 `;

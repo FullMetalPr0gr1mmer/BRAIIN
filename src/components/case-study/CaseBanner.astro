@@ -1,0 +1,60 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { VideoClip } from '@schemas/media';
+import type { ImageRef } from '@/lib/media/resolve';
+import type { CaseStudy } from '@/lib/data/portfolio';
+import { pickLocale } from '@/lib/i18n';
+import MediaBanner from '@/components/media/MediaBanner.astro';
+
+// The case study's opening frame (UI v2 PR11 — project.html `.hero--banner`): the
+// project's hero poster full bleed (the page's LCP image) and its hero loop, under the
+// same glass caption as Our Work's banner (`.work-cap`, banner.css) — "Case study", the
+// name and type, the teaser, the client and year — linking down to the title band. No
+// h1 here, as in the mockup: the title band's h1 is the project's name.
+//
+// The loop is one of EXC-007's banner surfaces and plays under EXC-009; the caption's
+// pulsing dot stops under reduced motion. Legibility deviations (.45 glass, no rest fade)
+// are Our Work's, decision 43 in docs/design-port-2026-09.md.
+
+interface Props {
+  locale: Locale;
+  study: CaseStudy;
+  image: ImageRef | null;
+  clip: VideoClip | null;
+}
+
+const { locale, study, image, clip } = Astro.props;
+
+const STR = {
+  en: { tag: 'Case study', confidential: 'Confidential client' },
+  ar: { tag: 'دراسة حالة', confidential: 'عميل غير مُعلَن' },
+}[locale];
+
+const name = pickLocale(study.title, locale);
+const type = study.projectType ? pickLocale(study.projectType, locale) : null;
+const blurb = study.blurb ? pickLocale(study.blurb, locale) : '';
+const client = study.client
+  ? pickLocale(study.client.name, locale)
+  : study.confidentialClient
+    ? STR.confidential
+    : null;
+---
+
+<MediaBanner image={image} locale={locale} clip={clip} class="cs-banner">
+  <a class="work-cap" href="#title">
+    <span class="work-cap__tag">
+      <span class="work-cap__live" aria-hidden="true"></span>
+      <span>{STR.tag}</span>
+    </span>
+    <span class="work-cap__t">{type ? `${name} | ${type}` : name}</span>
+    {blurb && <span class="work-cap__d">{blurb}</span>}
+    {
+      (client || study.year !== null) && (
+        <span class="work-cap__m">
+          {client && <span>{client}</span>}
+          {study.year !== null && <span>{study.year}</span>}
+        </span>
+      )
+    }
+  </a>
+</MediaBanner>

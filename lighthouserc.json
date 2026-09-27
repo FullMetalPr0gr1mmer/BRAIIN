@@ -1,7 +1,20 @@
 {
   "ci": {
     "collect": {
-      "url": ["http://localhost:8788/", "http://localhost:8788/ar"],
+      "url": [
+        "http://localhost:8788/",
+        "http://localhost:8788/ar",
+        "http://localhost:8788/about",
+        "http://localhost:8788/ar/about",
+        "http://localhost:8788/portfolio",
+        "http://localhost:8788/ar/portfolio",
+        "http://localhost:8788/portfolio/all",
+        "http://localhost:8788/ar/portfolio/all",
+        "http://localhost:8788/contact",
+        "http://localhost:8788/ar/contact",
+        "http://localhost:8788/portfolio/the-rider",
+        "http://localhost:8788/ar/portfolio/the-rider"
+      ],
       "numberOfRuns": 3
     },
     "assert": {

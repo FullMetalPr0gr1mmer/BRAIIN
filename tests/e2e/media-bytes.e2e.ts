@@ -16,9 +16,34 @@ import { expect, test, type Page, type Request } from '@playwright/test';
  * mp4 is reported as `media`, but a prefetch or an <a download> would not be.
  */
 
-const ROUTES = ['/', '/ar', '/contact', '/ar/contact', '/about', '/services'] as const;
+const ROUTES = [
+  '/',
+  '/ar',
+  '/contact',
+  '/ar/contact',
+  '/about',
+  '/ar/about',
+  '/services',
+  // UI v2 PR10: the banner loop (on screen at load — allowed), hover clips on the cards and
+  // the intro's in-view clips (below the fold — never before intersection)
+  '/portfolio',
+  '/ar/portfolio',
+  '/portfolio/all',
+  '/ar/portfolio/all',
+  // UI v2 PR11: the case-study banner loop (on screen at load) and the final film (an in-view
+  // clip below the fold)
+  '/portfolio/the-rider',
+  '/ar/portfolio/the-rider',
+] as const;
 // Pages with a below-the-fold background video surface to scroll to.
-const BELOW_FOLD: Record<string, string> = { '/': '.slogan__media', '/ar': '.slogan__media' };
+const BELOW_FOLD: Record<string, string> = {
+  '/': '.slogan__media',
+  '/ar': '.slogan__media',
+  // Our Work's first intro frame (an in-view clip — clips.ts mounts it at 25 % visible)
+  '/portfolio': '.work-intro__a',
+  // The case study's final film (clips.ts mounts it at 30 % visible)
+  '/portfolio/the-rider': '.cs-final .mf',
+};
 
 const isVideoRequest = (r: Request) =>
   r.resourceType() === 'media' || /\.(mp4|webm|m3u8|mov)(\?|$)/i.test(r.url());

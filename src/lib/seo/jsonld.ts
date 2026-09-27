@@ -95,6 +95,10 @@ export function buildPersonSchema(opts: {
   description?: string;
   url?: string;
   image?: string;
+  /** The person's role (About leadership: "Creative Director"). */
+  jobTitle?: string;
+  /** Profiles that identify the same person (LinkedIn). */
+  sameAs?: readonly string[];
 }): JsonLdNode {
   // E-E-A-T authorship (CLAUDE.md Pillar 3 — no anonymous authorship). Only emit
   // optional fields when present to keep the node clean + CI-valid.
@@ -104,19 +108,36 @@ export function buildPersonSchema(opts: {
     name: opts.name,
     worksFor: orgNode(opts.org),
   };
+  if (opts.jobTitle) node.jobTitle = opts.jobTitle;
   if (opts.description) node.description = opts.description;
   if (opts.url) node.url = opts.url;
   if (opts.image) node.image = opts.image;
+  if (opts.sameAs && opts.sameAs.length > 0) node.sameAs = [...opts.sameAs];
   return node;
 }
 
+/**
+ * CreativeWork — a case study. The optional fields (UI v2 PR11) are emitted only when the
+ * project really has them: `image` (the absolute poster URL), `dateModified` (the row's
+ * `updated_at` — truthful, never request time), `dateCreated` (the project year),
+ * `keywords`, `genre` (the project type), `about` (its sector) and `inLanguage`. There is
+ * deliberately NO Review/AggregateRating: a client quote on our own page is not an
+ * independent review, and marking it up as one is a structured-data policy violation.
+ */
 export function buildCreativeWorkSchema(opts: {
   name: string;
   description: string;
   url: string;
   org: OrgRef;
+  image?: string | undefined;
+  dateModified?: string | null | undefined;
+  year?: number | null | undefined;
+  keywords?: readonly string[] | undefined;
+  genre?: string | undefined;
+  about?: string | undefined;
+  inLanguage?: Locale | undefined;
 }): JsonLdNode {
-  return {
+  const node: JsonLdNode = {
     '@context': 'https://schema.org',
     '@type': 'CreativeWork',
     name: opts.name,
@@ -124,6 +145,14 @@ export function buildCreativeWorkSchema(opts: {
     url: opts.url,
     creator: orgNode(opts.org),
   };
+  if (opts.image) node.image = opts.image;
+  if (opts.dateModified) node.dateModified = opts.dateModified;
+  if (opts.year) node.dateCreated = String(opts.year);
+  if (opts.keywords && opts.keywords.length > 0) node.keywords = opts.keywords.join(', ');
+  if (opts.genre) node.genre = opts.genre;
+  if (opts.about) node.about = { '@type': 'Thing', name: opts.about };
+  if (opts.inLanguage) node.inLanguage = opts.inLanguage;
+  return node;
 }
 
 export function buildArticleSchema(opts: {

@@ -94,4 +94,27 @@ describe('loadHead', () => {
     expect(await locals.identity).toBe(identity);
     expect(started.filter((s) => s === 'identity')).toHaveLength(1);
   });
+
+  // UI v2 PR11: the case study only learns its title and blurb from the content query it
+  // starts alongside the head, so both fallbacks may be promises too.
+  it('accepts the fallback title and description as promises, still in one round', async () => {
+    let resolveStudy!: (v: { title: string; description: string }) => void;
+    const study = new Promise<{ title: string; description: string }>((r) => (resolveStudy = r));
+    const head = loadHead(
+      {},
+      {
+        locale: 'en',
+        fallbackTitle: study.then((s) => s.title),
+        fallbackDescription: study.then((s) => s.description),
+        entity: study.then(() => null),
+      },
+    );
+    await tick();
+    expect(started.sort()).toEqual(['defaults', 'identity']);
+    resolveStudy({ title: 'The Rider | Brand film', description: 'A launch film.' });
+    for (const open of Object.values(gates)) open(undefined);
+    const { seo } = await head;
+    expect(seo.title).toBe('Braiin Statiion | The Rider | Brand film');
+    expect(seo.description).toBe('A launch film.');
+  });
 });
