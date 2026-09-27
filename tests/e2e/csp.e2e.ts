@@ -31,6 +31,9 @@ const ROUTES = [
   // UI v2 PR11 — the case study (the lightbox, banner and clip enhancements are module scripts)
   '/portfolio/the-rider',
   '/ar/portfolio/the-rider',
+  // Round 2 (S4) — a service page (the floating button and the form are module scripts)
+  '/services/logo',
+  '/ar/services/logo',
   '/admin/login',
   '/about',
   '/ar/about',
@@ -76,6 +79,7 @@ for (const route of [
   '/about',
   '/portfolio/all',
   '/portfolio/the-rider',
+  '/services/logo',
 ]) {
   test(`every component script is external on ${route}`, async ({ page }) => {
     // `load`, not `networkidle` — a playing banner video never goes idle (see above).
