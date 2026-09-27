@@ -3,15 +3,22 @@
   "name": "braiin-station",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
-  // NOTE (adapter v14): no `main` here. The Cloudflare Vite plugin resolves the worker
-  // entry during the build and errors if `main` points at a not-yet-emitted output file
-  // (the old v12 value was "./dist/_worker.js/index.js").
+  // NOTE (adapter v14): `main` is a SOURCE file. The Cloudflare Vite plugin resolves and
+  // bundles it during the build, and errors if `main` points at a not-yet-emitted output
+  // file (the old v12 value was "./dist/_worker.js/index.js"). src/worker.ts is the
+  // adapter's own entry with the byte-range media route in front of it.
+  "main": "./src/worker.ts",
   "assets": {
     // Astro 7 splits output into dist/client (public) + dist/server (worker, wrangler.json
     // AND .dev.vars containing real env values). Pointing at ./dist would serve
     // dist/server/.dev.vars over HTTP under `wrangler dev` (the perf-seo-a11y workflow).
     "directory": "./dist/client",
     "binding": "ASSETS",
+    // The asset worker ignores `Range`, so a <video> of /media/showreel.mp4 could never
+    // seek and every clip window played the file from 0 (EXC-009). These paths reach the
+    // Worker first, which answers them with byte ranges (src/lib/http/media.ts). Every
+    // other static file is still served by the asset worker directly.
+    "run_worker_first": ["/media/*"],
   },
   "observability": {
     "enabled": true,
