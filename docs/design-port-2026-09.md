@@ -564,3 +564,134 @@ An acceptance check of the live site (main @ fd1bc09) against the mockup, EN + A
 91. **The breakdown sketch stills are borderless**: the mockup's CSS gives them a 1px frame
     but its markup's inline `border:0` overrides it, so the rendered design has none — the
     port follows what renders.
+
+## Services round 2: shared components and Home (S2)
+
+Round 2 regroups the services into five disciplines (28 services). This slice ports the
+parts the home page and both services pages share. Mockups: `index.html` (home v2.1) and
+`services.html` / `service.html` from the Round 2 delivery.
+
+| Mockup | Site | Where |
+| --- | --- | --- |
+| `.cats` / `.cats--home` / `.cats__head` / `.cats__stage` / `.cats__foot` / `.cats__hint` | `.disc` / `.disc--home` (`.disc--page`) / `.disc__head` / `.disc__stage` / `.disc__foot` / `.disc__hint` — `ServicesOverview.astro` (type `servicesOverview`, kept) | global.css "Discipline cards" |
+| `.cc` / `.cc__top` / `.cc__n` / `.cc__go` / `.cc__bot` / `.cc__cnt` / `.cc__t` / `.cc__s` / `.cc.on` | `.disc-card` (the link) + `.disc-card__clip` (its visual layer) / — / `.disc-card__n` / `.disc-card__go` / `.disc-card__bot` + `.disc-card__s` + `.disc-card__head` / `.disc-card__cnt` / `.disc-card__t` / `.disc-card__line` / `.disc-card.on` + `.disc-card__ring` | global.css |
+| `render()` / `grow()` (JS) | server-rendered cards (`src/lib/services/cards.ts`) / CSS view timeline `--disc-rise` | global.css |
+| `clip()` / `play()` on `pointerenter` | `MediaFrame mode="hover"` + `src/lib/client/clips.ts` | — |
+| the grouped `<select>` (`optgroup` + `cat:<slug>`) | `ContactForm` `groups` / `selected`, `serviceOptionGroups()` (`discipline:<slug>`) | `src/lib/forms/serviceSelect.ts`; global.css (optgroup) |
+| `.hello` / `.hello__grid` / `.hello__side` / `.hello__h(--svc)` / `.hello__p` / `.hello__rule` / `.hello__pts` | the same names — `Hello.astro` (type `hello`) | services.css (new route sheet) |
+| the hello `<form>` | `ContactForm fields="hello"` (`.contact-form--full.contact-form--hello`) | global.css |
+| `.hero__alt` / `.crumb` / `.skipov` / `.hero--one` | Hero `data.altLink` → `.hero__alt` / `data.crumb` → `.crumb` / `data.skipLink` → `.hero__skip` / `.hero--one` (set by `crumb`) | services.css |
+
+## Decisions (S2)
+
+The orchestrator renumbers these at integration.
+
+- **S2-1. The widen is transforms and a clip, never `flex-grow`.** A hover-driven layout
+  change counts toward field CLS, because hover is not "recent input" (only mousedown,
+  pointerdown and keydown are). Over 0.75 s, the mockup's flex-grow moved every
+  neighbour's start position on every frame. Here:
+  - each card's visuals (`.disc-card__clip`) are one layer at the widest width;
+  - `translate` places the card, and `clip-path: inset(… round 18px)` cuts the layer to its
+    current width;
+  - the shares are the mockup's (the active card 2.1, the others 0.8; 1 beside a selected
+    card at rest). They are computed in CSS from the card count (`:has(> :last-child:nth-child(k))`),
+    the card's index (`:nth-child`) and the active card, with container units on the stage;
+  - the active card is the hovered one, else the keyboard-focused one, else `.on`.
+    Keyboard focus widens a card too; the mockup only widened on hover, so a keyboard
+    visitor never saw the short line;
+  - RTL is mirrored: a flipped translate sign and the clip's other side;
+  - at most 6 cards widen; with 7 or more the stage is a plain row.
+
+  The link's own box stays the card at rest and takes no pointer events; the clipped
+  layer does, and clip-path bounds hit-testing too. The arrow, the ring and the poster
+  follow the visible edge with `translate` (the ring's width transitions, a layout change
+  on one absolutely positioned box whose start edge never moves). The poster box is the
+  widest width, re-centred on the visible window, so it crops as the mockup's
+  `object-fit` did. The gate is `tests/e2e/layout-shift.e2e.ts`: a hover sweep over the
+  home cards, EN and AR, sums to 0. Lighthouse cannot see hover CLS.
+- **S2-2. The name size is fixed per stage, and the short line reveals by translation.**
+  The mockup sized the name at `10.4cqi` of the card, so the name grew and reflowed with
+  the card: a layout shift. The name is now `10.4%` of a card AT REST (Arabic: the
+  mockup's `clamp(19px, 1.7vw, 28px)`), and the words never reflow. A squeezed card scales
+  its words down (a transform), which is what the mockup's cqi did. The short line's box
+  holds the name block just above it; at rest the box is translated down by 100% of its
+  own height, which rests the name at the card's foot as drawn. On hover it slides back
+  and the line fades in. There is no JS measuring and no max-height.
+- **S2-3. The rise is a scroll-driven animation.** It is a view timeline on the stage,
+  `transform` + `opacity`, inside `@supports (animation-timeline: view())` and
+  `prefers-reduced-motion: no-preference` (the slogan band's precedent). The mockup's
+  `grow()` progress maps onto scroll ranges:
+  - wide screens: card i starts 4.35vh·i in, eases over 62.1vh, and is opaque after
+    9.75vh;
+  - phones: each card over the 60vh after its own top enters.
+
+  The hidden from-state lives only in the keyframes, and `.disc-card` is in the
+  reduced-motion invariant. Firefox, which has no scroll timelines, shows static cards.
+  The section is `overflow: clip`, not `hidden`: a hidden overflow is a scroll container,
+  and the view timeline would then track the section instead of the page.
+- **S2-4. No clip on touch.** This keeps the existing rule: `clips.ts` never plays on a
+  touch-only device, under reduced motion or with Save-Data, and never on a finger landing
+  on a hybrid's screen. The mockup autoplayed every card at 60% visibility on touch. This
+  is a recorded deviation, and it is part of the EXC-007/EXC-009 surface list.
+- **S2-5. A playing clip never transitions its own transform.** In the tests, a hover clip
+  whose `scale(1.05)` was mid-transition while playing reported tiny layout shifts
+  (≈0.0002 each, Chromium). The poster keeps the mockup's slow zoom; the video, only ever
+  visible at the zoom's end state, sits there.
+- **S2-6. The card scrim and pill are sized for AA over any poster.** The mockup's bands
+  were shares of the card's height (0→26% for the pill, 44%→100% for the words). They left
+  the name and count on raw footage on phones (a 250px card puts its words in its top
+  half) and under 4.5:1 over a light poster. The scrim is now measured in pixels from the
+  card's edges:
+  - at least .6 black behind every line of words (measured: ≤ 183px above the foot on wide
+    screens when hovered, ≤ 150px on phones);
+  - the count at .86 white (the mockup has .74) and the line at .90 (the mockup has .84);
+  - the number pill's glass is dark (.4 black instead of the mockup's .14 white).
+
+  `scripts/contrast-audit.mjs` holds the worst case: a white poster. Visually, the lower
+  third of a light card is darker than the mockup.
+- **S2-7. Counts: Arabic plurals, Western digits.** "8 services" / "8 خدمات", with the
+  noun following the plural categories through `Intl.PluralRules` (1 خدمة, 2 خدمتان, 3–10
+  خدمات, 11–99 خدمةً, 100+ خدمة). The digits stay Western, per decision 5 (counts keep
+  Western digits in Arabic) and as the mockup's Arabic cards draw them. The code fallback
+  (a database outage only) is the five names and lines as text, with no counts and no
+  media.
+- **S2-8. The grouped select.** "Not sure yet", then per discipline an `<optgroup
+  label="01 Branding">` opening with "{Discipline}, help me choose" and its services.
+  - The Arabic label uses the ARABIC comma, "الهوية البصرية، ساعدوني أختار"; the mockup
+    joined every language with a Latin ", ".
+  - The value is `discipline:<slug>` (the mockup had `cat:`), posted as
+    `disciplineOfInterest`; a service slug posts `serviceOfInterest`.
+  - A 422 on either key marks the select.
+  - `selected` preselects server-side (the service page). A stale value renders "not sure"
+    rather than a broken choice.
+  - `[data-preselect]` links set the select on click only while it is empty or on a
+    discipline, so a service the visitor chose is never overridden.
+- **S2-9. "Say hello" wraps the real form.** `ContactForm fields="hello"` (name, email,
+  company, phone, service, budget, message, plus consent and the honeypot) posts as
+  `kind=project_inquiry`. The phone is `type=tel dir=ltr`, and the server envelope-encrypts
+  it. Budget keeps the stable band keys; the mockup posted the visible labels. The
+  deadline field is dropped, as in the mockup.
+- **S2-10. The hero's services links are route data.** `altLink`, `crumb` and `skipLink`
+  render only when given. Their `<b>` run is split into text and a `<b>` element, never
+  injected as HTML (`splitBold`).
+  - The crumb is the h1's sibling with its own flex row, not a wrapper around the LCP
+    element. `crumb` also sets `.hero--one` (the service page's smaller h1).
+  - The skip pill's glass is .5 black and its kicker .88 white (the mockup has .26 / .72),
+    so both pass over a white frame. It sits at least one header height down, and hides
+    with the covered hero (2.4.11).
+  - Its fade-in and the alt link's are registered in services.css's reduced-motion block.
+- **S2-11. The "fourteen" copy is rewritten.** Where the mockup had words, they are used
+  verbatim:
+  - About card c2t: "One studio, five disciplines" / "استوديو واحد، خمسة تخصصات";
+  - the home meta: "…Five disciplines, one studio."
+
+  The rest is authored, for owner review:
+  - AboutWho's paragraph title (mockup wording plus a period);
+  - AboutStory: "five disciplines, one team" / "خمسة تخصصات، وفريق واحد";
+  - LeadershipSlider: "keep five disciplines pulling in the same direction" / "يخلّون خمسة
+    تخصصات تمشي في نفس الاتجاه";
+  - the contact FAQ, which is also its FAQPage JSON-LD: "Take one of the twenty-eight" /
+    "خذ واحدة من الثمان والعشرين";
+  - the Arabic home meta, "…: خمسة تخصصات، استوديو واحد.".
+
+  ServicesIndex's "Fourteen" goes with the component in S3.
