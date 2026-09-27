@@ -7,9 +7,17 @@
 --      too, or app.publish_scheduled() would publish an unconsented quote on a timer);
 --   2. the consent record is never readable by anon — a COLUMN-level grant.
 -- Plus the content-table shape: Admin + Content Creator write, archive/delete Admin-only.
+--
+-- 0028 (owner decision 2026-09-27: show the design's sample quotes): rule 1 becomes
+-- "consent, or a flagged design sample" — and so that the flag cannot become a way round
+-- consent, a trigger locks samples against staff (any JWT carrying a staff role):
+--   • staff can never create a sample, nor turn a quote into one (flag false → true);
+--   • a sample's words and attribution never change while it stays a sample;
+--   • clearing the flag is always allowed — and from then on the consent CHECK applies.
+-- Seeds, psql and the cron carry no JWT: only they create or edit samples.
 
 begin;
-select plan(21);
+select plan(38);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values ('63000000-0000-0000-0000-000000000001', 'QuoteT');
@@ -135,10 +143,90 @@ select throws_ok(
   '23505', null,
   'a second quote cannot be SCHEDULED behind a published one (it would abort the cron at flip time)');
 
+-- ── 5. design samples (0028): consent-or-sample, and the sample lock ─────────
+-- As the owner (no JWT), exactly as the seed files run.
+reset role;
+select _claims(null, null);
+select lives_ok(
+  $$ insert into public.testimonials (tenant_id, slug, quote, author_name, status, is_placeholder)
+     values ('63000000-0000-0000-0000-000000000001', 'pg-q-sample', '{"en":"S","ar":"ع"}',
+             '{"en":"Client name","ar":"اسم العميل"}', 'published', true),
+            ('63000000-0000-0000-0000-000000000001', 'pg-q-sample-d', '{"en":"S2","ar":"ع"}',
+             '{"en":"Client name","ar":"اسم العميل"}', 'draft', true) $$,
+  'consent-or-sample: a flagged design sample may be published without consent (outside production)');
+select lives_ok(
+  $$ update public.testimonials set quote = '{"en":"S, reworded","ar":"ع"}' where slug = 'pg-q-sample-d' $$,
+  'the seed path (no JWT) may still edit a sample — the lock acts for staff only');
+
+set local role authenticated;
+select _claims('admin', _tid());
+select throws_ok(
+  $$ insert into public.testimonials (tenant_id, slug, quote, author_name, status, is_placeholder)
+     values (_tid()::uuid, 'pg-q-fake', '{"en":"Q","ar":"ق"}', '{"en":"A","ar":"أ"}', 'draft', true) $$,
+  '42501', null, 'even admin cannot CREATE a sample, not even as a draft');
+select _claims('content_creator', _tid());
+select throws_ok(
+  $$ update public.testimonials set is_placeholder = true where slug = 'pg-q-pub' $$,
+  '42501', null, 'nor turn a real quote into a sample (the flag is cleared, never set)');
+select throws_ok(
+  $$ update public.testimonials set quote = '{"en":"A real person said this","ar":"ق"}' where slug = 'pg-q-sample' $$,
+  '42501', null, 'nor edit a LIVE sample''s words while it stays a sample');
+select throws_ok(
+  $$ update public.testimonials set author_name = '{"en":"A real name","ar":"اسم"}' where slug = 'pg-q-sample-d' $$,
+  '42501', null, 'nor a DRAFT sample''s attribution (unpublish, rename, republish is the hole)');
+select throws_ok(
+  $$ update public.testimonials set portfolio_id = '63000000-0000-0000-0000-00000000c001' where slug = 'pg-q-sample-d' $$,
+  '42501', null, 'nor tie a sample to a real project');
+select lives_ok(
+  $$ update public.testimonials set sort_order = 7, status = 'draft' where slug = 'pg-q-sample' $$,
+  'a sample''s order and status stay editable (it can always be taken down)');
+select lives_ok(
+  $$ update public.testimonials set status = 'published' where slug = 'pg-q-sample' $$,
+  'and put back up (0025 decides where that is allowed)');
+
+select _claims('admin', _tid());
+select throws_ok(
+  $$ update public.testimonials set is_placeholder = false where slug = 'pg-q-sample' $$,
+  '23514', null, 'clearing the flag of a LIVE sample without consent is refused (it is real now)');
+select lives_ok(
+  $$ update public.testimonials
+        set quote = '{"en":"Real words","ar":"كلمات حقيقية"}', author_name = '{"en":"Real Person","ar":"شخص حقيقي"}',
+            consent_obtained_at = now(), consent_reference = 'signed-form-7', is_placeholder = false
+      where slug = 'pg-q-sample' $$,
+  'make it real in ONE save: the real words, the consent record and the flag cleared together');
+select is(
+  (select is_placeholder::text || '/' || status::text || '/' || (quote ->> 'en')
+     from public.testimonials where slug = 'pg-q-sample'),
+  'false/published/Real words', 'it stays published, now as a real, consented quote');
+
+select _claims('content_creator', _tid());
+select lives_ok(
+  $$ update public.testimonials set is_placeholder = false where slug = 'pg-q-sample-d' $$,
+  'clearing the flag on a DRAFT sample needs no consent yet');
+select throws_ok(
+  $$ update public.testimonials set status = 'published' where slug = 'pg-q-sample-d' $$,
+  '23514', null, 'and publishing it without consent is then refused — the consent CHECK applies');
+
+select _claims('admin', '00000000-0000-0000-0000-0000000000ff');
+update public.testimonials set sort_order = 99 where slug = 'pg-q-sample-d';
+reset role;
+select _claims(null, null);
+select is(
+  (select sort_order from public.testimonials where slug = 'pg-q-sample-d'),
+  0, 'other_tenant: an admin of another tenant changes nothing (0 rows)');
+
 -- ── structural ───────────────────────────────────────────────────────────────
 select ok(
   (select relrowsecurity and relforcerowsecurity from pg_class where oid = 'public.testimonials'::regclass),
   'testimonials has RLS enabled AND forced');
+select ok(
+  exists (select 1 from pg_trigger where tgrelid = 'public.testimonials'::regclass
+             and tgname = 'testimonials_sample_lock' and not tgisinternal),
+  'the 0028 sample lock is attached to testimonials');
+select ok(
+  not has_function_privilege('authenticated', 'app.tg_testimonial_sample_lock()', 'execute')
+  and not has_function_privilege('anon', 'app.tg_testimonial_sample_lock()', 'execute'),
+  'the sample lock is not callable by an API role (0011 §6c default-deny)');
 
 select * from finish();
 rollback;
