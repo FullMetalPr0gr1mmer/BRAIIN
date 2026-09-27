@@ -40,7 +40,11 @@
   --bs-shadow-cobalt: 0 18px 48px rgba(2, 76, 255, 0.45);
   --bs-glow-sky: rgba(34, 169, 255, 0.45);
   --bs-glow-klein: rgba(0, 36, 188, 0.42);
-  --bs-header-h: 72px;
+  /* The header bar's real height: 18px padding each side of the logo, the tallest item
+     (braiin-logo-white.png is 2943x1503). It was a flat 72px while the bar measured 103px
+     at 1366 and 85px at 412, so every offset built on it was out by the difference. */
+  --bs-logo-w: clamp(96px, 10vw, 132px);
+  --bs-header-h: calc(36px + var(--bs-logo-w) * 1503 / 2943);
   --bs-ease: cubic-bezier(0.16, 1, 0.3, 1); /* the mockup's one entrance curve */
 
   /* status */
@@ -381,6 +385,11 @@ html[dir='rtl'] .cta {
   text-transform: uppercase;
   color: var(--bs-klein);
   margin: 0 0 2.2rem;
+  /* The mockup's body sets no line-height, so its ported blocks resolve to `normal`;
+     ours is 1.6 for running text. Blocks that inherited it measured taller than the
+     design (acceptance check, 2026-09-27), so each one names the mockup's metric —
+     body is left alone. */
+  line-height: normal;
 }
 html[dir='rtl'] .tag {
   letter-spacing: 0;
@@ -521,16 +530,20 @@ body:not(:has(.intro)) .site-header--overlay {
   padding: 18px var(--bs-pad-x);
   display: flex;
   align-items: center;
+  /* The mockup's `.nav { justify-content: space-between }`: logo | link row | language
+     pill, the links sitting mid-bar. (The brand used to carry `margin-inline-end: auto`,
+     a pre-UI-v2 rule that packed the links against the pill.) The <=900px bar keeps
+     that auto margin — see the media block below. */
+  justify-content: space-between;
   gap: 1.5rem;
 }
 
 .site-header__brand {
   display: block;
   line-height: 0;
-  margin-inline-end: auto;
 }
 .site-header__brand img {
-  width: clamp(96px, 10vw, 132px);
+  width: var(--bs-logo-w);
   height: auto;
 }
 
@@ -654,6 +667,11 @@ html[dir='rtl'] .site-header__key::after {
    <details> (see SiteHeader.astro), revealed with the subsequent-sibling combinator — a
    closed <details> hides its content no matter what CSS says about the summary. */
 @media (max-width: 56.25rem) {
+  /* Logo at the start; key link, menu toggle and language pill grouped at the end. An
+     auto margin absorbs the free space first, so space-between has nothing to spread. */
+  .site-header__brand {
+    margin-inline-end: auto;
+  }
   .site-nav {
     display: block;
   }
@@ -978,6 +996,24 @@ html[dir='rtl'] .hero__sub {
   height: 15px;
   flex: none;
 }
+/* The home CTA is the mockup's `.skip` pill: 13px (14px Arabic) on `normal` leading —
+   47px tall rather than the 54px .cta's 0.85rem on the body's 1.6 gave — and the
+   design's smaller pill on phones. The contact banner's badge CTA sizes itself. */
+.hero__cta:not(.cta--badge) {
+  font-size: 13px;
+  line-height: normal;
+}
+html[dir='rtl'] .hero__cta:not(.cta--badge) {
+  font-size: 14px;
+}
+@media (max-width: 45rem) {
+  /* The Arabic 14px above outranks this font-size, as the mockup's RTL rule outranks
+     its own phone rule — kept. */
+  .hero__cta:not(.cta--badge) {
+    padding: 12px 18px;
+    font-size: 12px;
+  }
+}
 html[dir='rtl'] .hero__cta svg {
   transform: scaleX(-1);
 }
@@ -1070,12 +1106,15 @@ html[dir='rtl'] .hero__scroll i {
   display: inline-block;
   white-space: nowrap;
 }
-.hero h1 .word {
-  margin-inline-end: 0.26em;
-}
-.hero h1 .word:last-child {
-  margin-inline-end: 0;
-}
+/* No margin between words: Hero.astro emits a real space text node between them (the
+   mockup's splitLetters() does the same). The `.26em` margin this replaces left the
+   served h1 with no spaces at all and set the words ~1.6x wider apart than the design,
+   which moved the line breaks ("LET'S MAKE / IT HAPPEN").
+
+   The footnote mark is its own `.word--mark` span, so it takes the NEXT word rung of the
+   ladder below with letter offset 0. That is the ladder's usual approximation (a word
+   rung is ~5 letters; a longer word overlaps the next one's start), not a special case.
+   An 11th span — a 10-word headline plus the mark — falls back to the last rung. */
 .letter {
   display: inline-block;
   animation: letter-in 0.9s var(--bs-ease) both; /* the mockup's .9s letterIn */
@@ -1464,6 +1503,7 @@ html[dir='rtl'] .slogan__rule::after {
   font-size: clamp(22px, 2.9vw, 42px);
   font-weight: 500;
   letter-spacing: -0.02em;
+  line-height: normal; /* the mockup's (Arabic: 1.5, below) — see .tag */
   max-width: 22ch;
 }
 html[dir='rtl'] .clients__head h2 {
@@ -1522,6 +1562,7 @@ html[dir='rtl'] .clients__head h2 {
   font-size: clamp(24px, 3.5vw, 58px);
   font-weight: 800;
   letter-spacing: -0.03em;
+  line-height: normal; /* the mockup's; 1.6 set the two rows ~25px further apart */
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.45);
   transition: color 0.3s;
@@ -1840,6 +1881,7 @@ html[dir='rtl'] .display-cta {
 .contact-form label {
   font-size: 11.5px;
   font-weight: 700;
+  line-height: normal;
   letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--bs-muted);
@@ -1855,6 +1897,9 @@ html[dir='rtl'] .contact-form label {
 .contact-form textarea {
   font: inherit;
   font-size: 15px;
+  /* `font: inherit` pulls in the body's 1.6; the mockup's fields sit on `normal`
+     (inputs 46px, textarea at its 132px floor — they measured 54px and 150px). */
+  line-height: normal;
   color: var(--bs-fg);
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--bs-line-d);
@@ -1913,6 +1958,8 @@ html[dir='rtl'] .contact-form select {
 
 .contact-form textarea {
   resize: vertical;
+  /* The design's height. No `rows` in the markup (as the mockup): rows="5" on the 1.6
+     leading overrode this floor at 150px. */
   min-height: 132px;
 }
 
@@ -1980,6 +2027,7 @@ html[dir='rtl'] .contact-form select {
   font-size: clamp(22px, 2.9vw, 42px);
   font-weight: 500;
   letter-spacing: -0.02em;
+  line-height: normal; /* the mockup's (Arabic: 1.5, below) — see .tag */
   max-width: 24ch;
 }
 html[dir='rtl'] .social-strip h2 {
@@ -2010,6 +2058,7 @@ html[dir='rtl'] .social-strip h2 {
   background: rgba(0, 0, 0, 0.025);
   color: var(--bs-ink);
   text-decoration: none;
+  line-height: normal; /* the mockup's: name and handle ~20px apart, not ~28px */
   transition:
     transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
     border-color 0.4s;
@@ -2059,12 +2108,8 @@ html[dir='rtl'] .social-strip h2 {
   opacity: 1;
   transform: translate(3px, -3px);
 }
-html[dir='rtl'] .sbox__go {
-  transform: scaleX(-1);
-}
-html[dir='rtl'] .sbox:hover .sbox__go {
-  transform: scaleX(-1) translate(3px, -3px);
-}
+/* NOT mirrored in Arabic: ↗ is the external-link glyph, not a reading-direction arrow,
+   and the mockup keeps it (and its up-and-out hover nudge) in both languages. */
 
 .sbox__name {
   display: block;
@@ -2787,8 +2832,9 @@ html[dir='rtl'] .touch-card__label {
   /* An LTR address inside RTL prose must not re-order around its punctuation. */
   unicode-bidi: isolate;
 }
+/* No `text-align` here: the value is `dir="ltr"`, so it starts at the card's LEFT edge
+   under the right-aligned Arabic label, as the mockup's `.tbox__val[dir=ltr]` does. */
 html[dir='rtl'] .touch-card__val {
-  text-align: end;
   letter-spacing: 0;
 }
 .touch-card__note {
@@ -2948,7 +2994,10 @@ html[dir='rtl'] .faq-item__a p {
   }
 }
 .contact-form--full .contact-form__note {
-  flex: 0 1 38ch;
+  /* A cap, not a basis (the mockup's `max-width: 38ch`): a fixed 38ch box left the short
+     Arabic note ~55px in from the form edge, aligned to the start of an empty box. */
+  flex: 0 1 auto;
+  max-width: 38ch;
   font-size: 12.5px;
   line-height: 1.5;
 }
@@ -3239,6 +3288,7 @@ a.ftag:hover {
 .facets--case {
   gap: clamp(22px, 3vw, 52px);
   margin-top: 0;
+  line-height: normal; /* the mockup's `.pt__meta` leading — labels and tags */
 }
 .facets--case .facets__k {
   letter-spacing: 0.06em;
@@ -3252,6 +3302,10 @@ html[dir='rtl'] .facets--case .facets__k {
 .facets--case .ftag {
   padding: 6px 12px;
   font-size: 13.5px;
+  line-height: normal; /* 29px tall, as the mockup's .pt__tag (1.3 made it 32px) */
+  /* `normal` leading follows each label's glyphs, so an Arabic tag can be a few px taller
+     than its neighbour; top-align keeps a row of tags on one line instead of on baselines. */
+  vertical-align: top;
   color: var(--bs-paper);
   border-color: rgba(255, 255, 255, 0.26);
 }
@@ -3260,11 +3314,14 @@ html[dir='rtl'] .facets--case .facets__k {
   border-color: var(--bs-klein);
   color: var(--bs-paper);
 }
+/* Cards only: the case-study band keeps its inline flow on phones, as the mockup's
+   `.pt__meta` (no phone rule) — the two-column grid stacked "Service" tags one per line
+   and made the band ~65px taller. */
 @media (max-width: 35rem) {
-  .facets {
+  .facets:not(.facets--case) {
     gap: 14px 22px;
   }
-  .facets__f {
+  .facets:not(.facets--case) .facets__f {
     flex: 1 1 40%;
   }
 }
@@ -3952,7 +4009,8 @@ html[dir='rtl'] .cta--trail svg {
   z-index: 4;
 }
 
-/* The accent never takes the footnote asterisk ("<em>performs</em>*"). */
+/* The accent never takes the footnote asterisk ("<em>performs</em>*"). The mark is now its
+   own non-accent word, so this only pins the colour against a future nesting change. */
 .hero h1 .letter--plain {
   color: var(--bs-fg);
 }
@@ -4115,7 +4173,8 @@ html[dir='rtl'] .contact-form--compact .contact-form__foot .cta--trail {
   font-size: 15px;
 }
 .contact-form--compact .contact-form__note {
-  flex: 0 1 38ch;
+  flex: 0 1 auto; /* a cap, not a basis — see .contact-form--full above */
+  max-width: 38ch;
   font-size: 12.5px;
   line-height: 1.5;
 }

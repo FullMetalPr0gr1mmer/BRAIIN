@@ -259,8 +259,11 @@ html[dir='rtl'] .leaders__bar i {
   transition: transform 1.1s var(--bs-ease);
 }
 /* Grayscale at rest, colour on hover/focus — by fading a saturation-blend layer (opacity),
-   not by transitioning `filter` (the mockup's; a paint-heavy property). */
-.leader__ph::before {
+   not by transitioning `filter` (the mockup's; a paint-heavy property). A PHOTO only: the
+   mockup greys the `<img>` alone, so a photo-less card keeps its slate-blue gradient and
+   silhouette. Over the whole frame the layer desaturated them, and hover faded the card
+   from grey to blue — a colour change the design does not have. */
+.leader__ph--photo::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -334,8 +337,8 @@ html[dir='rtl'] .leader__n {
   font-size: 14px;
   color: var(--bs-muted);
 }
-.leader__card:hover .leader__ph::before,
-.leader__card--link:focus-visible .leader__ph::before {
+.leader__card:hover .leader__ph--photo::before,
+.leader__card--link:focus-visible .leader__ph--photo::before {
   opacity: 0;
 }
 .leader__card:hover .leader__ph img,

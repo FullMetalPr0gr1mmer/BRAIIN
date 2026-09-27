@@ -157,6 +157,18 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(page.locator('.cs-title__back')).toHaveAttribute('href', `${base}#projects`);
     });
 
+    test('on a phone the facets keep flowing inline — Service tags side by side', async ({
+      page,
+    }) => {
+      // The cards' two-column phone rule used to apply here too, stacking the two Service
+      // tags one per line. The mockup's `.pt__meta` has no phone rule.
+      await page.setViewportSize({ width: 412, height: 915 });
+      await page.goto(s.path);
+      const tags = page.locator('.cs-title .facets--case a.ftag[data-f="service"]');
+      const [a, b] = [(await tags.nth(0).boundingBox())!, (await tags.nth(1).boundingBox())!];
+      expect(Math.abs(a.y - b.y)).toBeLessThan(1);
+    });
+
     test('the banner poster is the eager LCP image; the caption points at the title band', async ({
       page,
     }) => {
@@ -186,6 +198,13 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(page.locator('#cs-bd-heading em')).toHaveCount(1);
       await expect(page.locator('.cs-bdi')).toHaveCount(6);
       await expect(page.locator('.cs-bdi--sketch .cs-bdi__tag').first()).toHaveText(s.sketch);
+      // Borderless, as the mockup renders (its inline border:0 beats its CSS frame).
+      expect(
+        await page
+          .locator('.cs-bdi--sketch .cs-bdi__open')
+          .first()
+          .evaluate((el) => getComputedStyle(el).borderTopWidth),
+      ).toBe('0px');
       await expect(page.locator('#cs-gal-heading')).toHaveText(s.gallery);
       await expect(page.locator('.cs-gal__count')).toHaveText(s.stills);
       const items = page.locator('.cs-gal__item');

@@ -152,17 +152,34 @@ const src = videoUid ? undefined : videoSrc;
   </div>
 
   <div class="hero__inner">
+    {
+      /* Words are separated by a REAL space text node, as the mockup's splitLetters()
+        keeps one: the served h1 then reads "Creative work that performs*" to crawlers,
+        reader mode and copy-paste (it read "Creativeworkthatperforms*" when the gap was
+        a margin), and the line breaks where the design's do — a space under the h1's
+        -0.035em tracking is narrower than the .26em margin it replaces. The trailing
+        mark is its OWN nowrap word with no space before it (the design's
+        `<em>performs</em>*`), so it may drop to the next line alone instead of dragging
+        the accent word down with it. */
+    }
     <h1 aria-label={headlineText}>
       {
-        parts.map((w) => (
-          <span class:list={['word', { accent: w.accent }]} aria-hidden="true">
-            {perWord ? (
-              <span class="letter">{w.body}</span>
-            ) : (
-              [...w.body].map((ch) => <span class="letter">{ch}</span>)
+        parts.map((w, i) => (
+          <>
+            {i > 0 && ' '}
+            <span class:list={['word', { accent: w.accent }]} aria-hidden="true">
+              {perWord ? (
+                <span class="letter">{w.body}</span>
+              ) : (
+                [...w.body].map((ch) => <span class="letter">{ch}</span>)
+              )}
+            </span>
+            {w.mark && (
+              <span class="word word--mark" aria-hidden="true">
+                <span class="letter letter--plain">{w.mark}</span>
+              </span>
             )}
-            {w.mark && <span class="letter letter--plain">{w.mark}</span>}
-          </span>
+          </>
         ))
       }
     </h1>

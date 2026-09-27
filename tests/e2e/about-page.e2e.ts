@@ -60,6 +60,21 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(page.locator('.social-strip')).toHaveClass(/social-strip--klein/);
     });
 
+    for (const [width, height] of [
+      [1366, 900],
+      [412, 915],
+    ] as const) {
+      test(`the "who" kicker sits where the design's does — ${width}px`, async ({ page }) => {
+        // The mockup's fixed header lets clamp(150px, 22vh, 220px) run from the page top;
+        // ours is in flow, so the padding subtracts the header's REAL height
+        // (--bs-header-h). A flat 72px token put the block 31px (13px on a phone) low.
+        await page.setViewportSize({ width, height });
+        await page.goto(P.path);
+        const y = (await page.locator('#who .tag').boundingBox())!.y;
+        expect(Math.abs(y - Math.min(220, Math.max(150, height * 0.22)))).toBeLessThan(4);
+      });
+    }
+
     test('the h1 is named by its full text; the split words are hidden from AT', async ({
       page,
     }) => {
@@ -125,6 +140,22 @@ for (const locale of ['en', 'ar'] as const) {
       const track = page.locator('[data-slider-track]');
       await expect(track).toHaveAttribute('tabindex', '0');
       await expect(track).toHaveAttribute('role', 'region');
+    });
+
+    test('a photo-less card keeps its slate-blue frame (only a photo is greyed)', async ({
+      page,
+    }) => {
+      await page.goto(P.path);
+      // The saturation layer sat over the whole frame, so the placeholder gradient and
+      // silhouette rendered grey and turned blue on hover. It now exists only over a photo.
+      const layers = await page.$$eval('.leader__ph', (els) =>
+        els.map((el) => ({
+          photo: el.querySelector('img') !== null,
+          layer: getComputedStyle(el, '::before').content !== 'none',
+        })),
+      );
+      expect(layers.length).toBeGreaterThan(0);
+      for (const { photo, layer } of layers) expect(layer).toBe(photo);
     });
 
     test('slider: counter, arrows and keys move one card in the reading direction', async ({
