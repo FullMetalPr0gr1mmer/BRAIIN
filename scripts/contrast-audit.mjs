@@ -72,6 +72,10 @@ const T = {
   // over a WHITE frame under the hero's top scrim (≈ .18 where the pill sits)
   skipWorst: '#686868',
   skipKicker: '#ededed', // .hero__skip small — white .88 over skipWorst
+  // Round 2 (S3) — the /services explorer (services.css): the media caption pill's .7 glass
+  // over a WHITE poster, and the selected tab's number (white .75 over Klein)
+  xpCap: '#4d4d4d',
+  xpTabNum: '#bfc8ee',
 };
 
 // (foreground, background, minRatio, where) — every real on-screen pairing.
@@ -168,6 +172,16 @@ const PAIRS = [
   // Round 2 (S2): the service page's skip pill over footage
   ['fg', 'skipWorst', 4.5, 'skip pill label over a white frame (worst case)'],
   ['skipKicker', 'skipWorst', 4.5, 'skip pill kicker ("Been here before?") over a white frame'],
+  // Round 2 (S3): /services — the proof band and the explorer, both on white
+  ['ink', 'paper', 4.5, 'services proof statement, rating value, stat numbers; explorer copy'],
+  ['klein', 'paper', 4.5, 'services proof accent + stars; explorer key line, tab/row numbers'],
+  ['dim', 'paper', 4.5, 'services proof rating label + stat labels; explorer blurb'],
+  ['tbd', 'paper', 4.5, 'services proof: a non-numeric value'],
+  ['paper', 'klein', 4.5, 'explorer: the selected tab, a hovered Inquire pill'],
+  ['xpTabNum', 'klein', 4.5, "explorer: the selected tab's number"],
+  ['klein', 'paper', 3.0, 'explorer: the row underline and hover borders (UI)'],
+  ['fg', 'xpCap', 4.5, 'explorer media caption name over a white poster (worst case)'],
+  ['skySoft', 'xpCap', 4.5, 'explorer media caption number over a white poster (worst case)'],
 ];
 
 // ---- Admin palette — keep in sync with public/styles/admin.css :root tokens ----

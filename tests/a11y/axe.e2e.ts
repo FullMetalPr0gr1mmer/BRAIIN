@@ -10,6 +10,10 @@ const ROUTES = [
   '/ar',
   '/services',
   '/ar/services',
+  // Round 2 (S3): the explorer OPEN (a deep link opens its panel at first paint) — the APG
+  // tabs, a tabpanel, the service rows and their Inquire pills
+  '/services#events',
+  '/ar/services#events',
   '/portfolio',
   // UI v2 PR10
   '/ar/portfolio',
