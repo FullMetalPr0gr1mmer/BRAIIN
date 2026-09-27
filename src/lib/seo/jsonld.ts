@@ -75,9 +75,12 @@ export function buildWebSiteSchema(siteUrl: string, org: OrgRef): JsonLdNode {
 /**
  * Service — a service page (Round 2). The optional fields are emitted only when the page
  * really has them: `serviceType` (what the service is — its name), `category` (the
- * discipline it sits in: "Branding"), `image` (the absolute poster URL) and `inLanguage`.
- * There is deliberately NO Review/AggregateRating: the page's case block is our own sample
- * content, and a rating we wrote about ourselves is a structured-data policy violation.
+ * discipline it sits in: "Branding") and `image` (the absolute poster URL). No
+ * `inLanguage`: schema.org defines it on CreativeWork, Event and a few others, not on
+ * Service (the validator reports it unrecognised); the page's language is `<html lang>`
+ * and hreflang. There is deliberately NO Review/AggregateRating: the page's case block is
+ * our own sample content, and a rating we wrote about ourselves is a structured-data
+ * policy violation.
  */
 export function buildServiceSchema(opts: {
   name: string;
@@ -87,7 +90,6 @@ export function buildServiceSchema(opts: {
   serviceType?: string | undefined;
   category?: string | undefined;
   image?: string | undefined;
-  inLanguage?: Locale | undefined;
 }): JsonLdNode {
   const node: JsonLdNode = {
     '@context': 'https://schema.org',
@@ -101,7 +103,6 @@ export function buildServiceSchema(opts: {
   if (opts.serviceType) node.serviceType = opts.serviceType;
   if (opts.category) node.category = opts.category;
   if (opts.image) node.image = opts.image;
-  if (opts.inLanguage) node.inLanguage = opts.inLanguage;
   return node;
 }
 

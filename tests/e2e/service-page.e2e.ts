@@ -223,7 +223,8 @@ for (const locale of ['en', 'ar'] as const) {
       expect(service?.serviceType).toBe(s.name);
       expect(service?.category).toBe(s.category);
       expect(service?.areaServed).toBe('SA');
-      expect(service?.inLanguage).toBe(locale);
+      // not a schema.org Service property (the page's language is <html lang> + hreflang)
+      expect(service).not.toHaveProperty('inLanguage');
       expect((service?.provider as { '@type': string })['@type']).toBe('Organization');
       const crumbs = nodes.find((n) => n['@type'] === 'BreadcrumbList');
       expect((crumbs?.itemListElement as unknown[]).length).toBe(3);

@@ -27,7 +27,7 @@ describe('JSON-LD builders', () => {
     expect((s.provider as { '@type': string })['@type']).toBe('Organization');
   });
 
-  it('Service (Round 2 service page): type, discipline, image and language when given', () => {
+  it('Service (Round 2 service page): type, discipline and image when given', () => {
     const s = buildServiceSchema({
       name: 'تصميم الشعار',
       description: 'شعار يشتغل على اللوحة والأيقونة الصغيرة والختم.',
@@ -36,12 +36,13 @@ describe('JSON-LD builders', () => {
       serviceType: 'تصميم الشعار',
       category: 'الهوية البصرية',
       image: 'https://x/_image?href=poster.jpg&w=1200&f=jpg',
-      inLanguage: 'ar',
     });
     expect(s.serviceType).toBe('تصميم الشعار');
     expect(s.category).toBe('الهوية البصرية');
     expect(s.image).toBe('https://x/_image?href=poster.jpg&w=1200&f=jpg');
-    expect(s.inLanguage).toBe('ar');
+    // schema.org has no `inLanguage` on Service (it is CreativeWork's, Event's…): the
+    // validator reports it unrecognised, so the node never carries it.
+    expect(s).not.toHaveProperty('inLanguage');
     expect(s.areaServed).toBe('SA');
     expect(s.provider).toEqual({ '@type': 'Organization', name: 'بريّن ستيشن' });
     // Our own sample case block is not an independent review: no rating markup, ever.
@@ -57,8 +58,61 @@ describe('JSON-LD builders', () => {
       category: '',
       image: undefined,
     });
-    for (const key of ['serviceType', 'category', 'image', 'inLanguage'])
-      expect(s, key).not.toHaveProperty(key);
+    for (const key of ['serviceType', 'category', 'image']) expect(s, key).not.toHaveProperty(key);
+  });
+
+  it('Service carries only properties schema.org defines on Service (or Thing)', () => {
+    // https://schema.org/Service — its own properties plus Thing's. Anything else (as
+    // `inLanguage` once was) is "not recognised" in the Schema Markup Validator.
+    const SERVICE_PROPS = new Set([
+      '@context',
+      '@type',
+      // Thing
+      'additionalType',
+      'alternateName',
+      'description',
+      'disambiguatingDescription',
+      'identifier',
+      'image',
+      'mainEntityOfPage',
+      'name',
+      'potentialAction',
+      'sameAs',
+      'subjectOf',
+      'url',
+      // Service
+      'aggregateRating',
+      'areaServed',
+      'audience',
+      'availableChannel',
+      'award',
+      'brand',
+      'broker',
+      'category',
+      'hasOfferCatalog',
+      'hoursAvailable',
+      'isRelatedTo',
+      'isSimilarTo',
+      'logo',
+      'offers',
+      'provider',
+      'providerMobility',
+      'review',
+      'serviceOutput',
+      'serviceType',
+      'slogan',
+      'termsOfService',
+    ]);
+    const s = buildServiceSchema({
+      name: 'Logo Design',
+      description: 'A mark.',
+      url: 'https://x/services/logo',
+      org,
+      serviceType: 'Logo Design',
+      category: 'Branding',
+      image: 'https://x/poster.jpg',
+    });
+    for (const key of Object.keys(s)) expect(SERVICE_PROPS.has(key), key).toBe(true);
   });
 
   it('BreadcrumbList positions are 1-based and ordered', () => {
