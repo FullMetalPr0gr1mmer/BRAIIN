@@ -249,6 +249,8 @@ for (const route of ROUTES) {
       const hero = page.locator('main > .hero');
       await expect(hero).toHaveClass(/hero--banner/);
       await expect(hero.locator('h1')).toHaveAttribute('aria-label', t.h1);
+      // The split spans keep real spaces between words ("Let'smakeithappen" before).
+      expect(await hero.locator('h1').evaluate((el) => el.textContent)).toBe(t.h1);
       await expect(hero.locator('h1 .accent')).toHaveCount(1);
       await expect(hero.locator('.hero__sub')).toHaveText(t.sub);
       // No intro plate and no scroll cue on a banner.
@@ -377,6 +379,54 @@ for (const route of ROUTES) {
       // never ship as a dead link.
       await expect(page.locator('a[href*="wa.me"]')).toHaveCount(0);
       await expect(page.locator('main')).not.toContainText('5X XXX');
+    });
+
+    test('the design’s metrics: field heights, the LTR address, an unmirrored ↗', async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1366, height: 900 });
+      await page.goto(route);
+      const rtl = route.startsWith('/ar');
+      // `normal` leading as the mockup's fields (the body's 1.6 made them 54px / 150px).
+      // Almarai's `normal` is ~1.6 itself, so only the English input height moves; the
+      // textarea sits at its 132px floor in both.
+      const h = async (sel: string) => (await page.locator(sel).boundingBox())!.height;
+      if (!rtl) expect(await h('#cf-name')).toBeLessThan(49);
+      expect(await h('#cf-message')).toBeLessThan(140);
+
+      // The address is dir=ltr: it starts at the card's left edge in both languages.
+      const card = (await page.locator('.touch-card[href^="mailto:"] > span').boundingBox())!;
+      const val = page.locator('.touch-card[href^="mailto:"] .touch-card__val');
+      const range = await val.evaluate((el) => {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        return r.getBoundingClientRect().x;
+      });
+      expect(Math.abs(range - card.x)).toBeLessThan(2);
+
+      // ↗ is the external-link glyph, not a reading-direction arrow: never mirrored.
+      const go = page.locator('.sbox__go').first();
+      expect(await go.evaluate((el) => getComputedStyle(el).transform)).toBe('none');
+    });
+
+    test('the form note is capped at 38ch, not boxed to it', async ({ page }) => {
+      // A fixed 38ch basis left the short Arabic note ~55px in from the form edge. (The
+      // English note is longer than 38ch and wraps either way, so only a one-line note —
+      // the Arabic — can show the difference.)
+      test.skip(!route.startsWith('/ar'), 'the English note fills 38ch in both layouts');
+      await page.setViewportSize({ width: 1366, height: 900 });
+      await page.goto(route);
+      const w = await page.locator('.contact-form__note').evaluate((el) => {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        return {
+          lines: r.getClientRects().length,
+          text: r.getBoundingClientRect().width,
+          box: el.getBoundingClientRect().width,
+        };
+      });
+      expect(w.lines).toBe(1);
+      expect(w.box - w.text).toBeLessThan(2);
     });
   });
 }

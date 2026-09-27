@@ -27,6 +27,9 @@ const HOME = {
     root: '/',
     prefix: '',
     cta: 'See our work',
+    headline: 'Creative work that performs*',
+    contactCta: "Let's make something that lands",
+    consent: 'See our Cookie Policy.',
     clients: ['Riyadh Season', 'NEOM', 'stc', 'Saudia'],
     since: 'Since 2019',
     featured: 'The Rider',
@@ -45,6 +48,9 @@ const HOME = {
     root: '/ar',
     prefix: '/ar',
     cta: 'شوف أعمالنا',
+    headline: 'شغل إبداعي يحقّق نتائج*',
+    contactCta: 'خلّنا نصنع شيئاً يترك أثراً',
+    consent: 'اطّلع على سياسة ملفات تعريف الارتباط.',
     clients: ['موسم الرياض', 'نيوم', 'stc', 'السعودية'],
     since: 'منذ ٢٠١٩',
     featured: 'الراكب',
@@ -93,8 +99,32 @@ for (const locale of ['en', 'ar'] as const) {
       const cta = page.locator('.hero__cta');
       await expect(cta).toHaveText(t.cta);
       await expect(cta).toHaveAttribute('href', '#selected-work');
-      // The accent stops before the footnote mark: <em>performs</em>*.
-      await expect(page.locator('.hero h1 .accent .letter--plain')).toHaveText('*');
+      // The accent stops before the footnote mark: <em>performs</em>*. The mark is its own
+      // word (it may wrap alone, as in the design), never part of the accented one.
+      await expect(page.locator('.hero h1 .word--mark')).toHaveText('*');
+      await expect(page.locator('.hero h1 .word--mark')).not.toHaveClass(/accent/);
+      await expect(page.locator('.hero h1 .accent .letter--plain')).toHaveCount(0);
+    });
+
+    test('the split hero headline keeps real spaces between its words', async ({ request }) => {
+      // What a non-rendering crawler, reader mode and copy-paste see: the served h1's text,
+      // not its aria-label. The words used to be separated by a margin only, so this read
+      // "Creativeworkthatperforms*".
+      const html = await (await request.get(t.root)).text();
+      const h1 = /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(html)?.[1] ?? '';
+      const text = h1.replace(/<[^>]+>/g, '');
+      expect(text).toBe(t.headline);
+    });
+
+    test('text around an inline element keeps its space (compressHTML)', async ({ page }) => {
+      // Astro's HTML compression drops template whitespace between an expression and an
+      // element: the CTA read "SOMETHINGTHAT LANDS" and the consent banner "See ourCookie
+      // Policy". Both now emit the space explicitly.
+      await page.goto(t.root);
+      const text = async (sel: string) =>
+        ((await page.locator(sel).textContent()) ?? '').replace(/\s+/g, ' ').trim();
+      expect(await text('#home-contact-cta')).toBe(t.contactCta);
+      expect(await text('.consent-text')).toContain(t.consent);
     });
 
     test('clients come from the table, in this language, with the founding year', async ({

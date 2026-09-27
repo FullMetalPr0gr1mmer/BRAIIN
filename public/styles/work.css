@@ -193,6 +193,10 @@ html[dir='rtl'] .pgrid__head h2 {
 .fb {
   margin-bottom: clamp(32px, 5vh, 56px);
   scroll-margin-top: 110px;
+  /* The mockup's controls sit on `normal` leading (its body sets none): chips 37px and
+     selects 40px tall, where the body's 1.6 made both 44px. Set once here — the selects'
+     and Apply's `font: inherit` pick it up from the bar. */
+  line-height: normal;
 }
 .fb__svc {
   display: flex;

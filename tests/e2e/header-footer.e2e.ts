@@ -117,6 +117,41 @@ for (const locale of ['en', 'ar'] as const) {
     await expect(page.locator('.site-nav__toggle')).toBeHidden();
     await expect(page.locator('.site-nav__list')).toBeVisible();
   });
+
+  test(`wide screens spread logo | links | language like the design — ${locale}`, async ({
+    page,
+  }) => {
+    // The mockup's `.nav { justify-content: space-between }`. The links used to be packed
+    // against the language pill by an auto margin on the logo.
+    await page.setViewportSize({ width: 1366, height: 800 });
+    await page.goto(root);
+    const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
+    const brand = await box('.site-header__brand');
+    const nav = await box('.site-nav__panel');
+    const lang = await box('.site-header__lang');
+    // Physical order flips with direction; the free space on either side of the nav is
+    // equal either way.
+    const [first, last] = locale === 'ar' ? [lang, brand] : [brand, lang];
+    const before = nav.x - (first.x + first.width);
+    const after = last.x - (nav.x + nav.width);
+    expect(before).toBeGreaterThan(100);
+    expect(Math.abs(before - after)).toBeLessThan(2);
+  });
+
+  test(`at <=900px the key link, menu and language sit together at the end — ${locale}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 412, height: 823 });
+    await page.goto(root);
+    const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
+    const key = await box('.site-header__key');
+    const toggle = await box('.site-nav__toggle');
+    const lang = await box('.site-header__lang');
+    // Adjacent, one bar gap apart (24px; 12px on small phones) — not spread out.
+    const [a, b, c] = locale === 'ar' ? [lang, toggle, key] : [key, toggle, lang];
+    expect(b.x - (a.x + a.width)).toBeLessThanOrEqual(25);
+    expect(c.x - (b.x + b.width)).toBeLessThanOrEqual(25);
+  });
 }
 
 test('the solid header hides on the way down and returns on the way up', async ({ page }) => {

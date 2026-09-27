@@ -32,8 +32,11 @@ const services = await getPublishedServices();
 <section class="home-contact" id="contact" aria-labelledby="home-contact-cta">
   <div class="section-wrap">
     <h2 class="display-cta rv" id="home-contact-cta">
-      {preText}
-      <em>{accentText}</em>
+      {
+        /* Explicit space: compressHTML drops template whitespace between an expression
+          and an element, which glued "something" to the accent ("SOMETHINGTHAT"). */
+      }
+      {preText}{' '}<em>{accentText}</em>
     </h2>
     <ContactForm locale={locale} services={services} fields="compact" kind="contact" />
   </div>

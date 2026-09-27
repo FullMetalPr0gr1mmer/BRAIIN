@@ -48,8 +48,8 @@ const STR = {
   aria-label={STR.region}
 >
   <p class="consent-text">
-    {STR.before}
-    <a href={localizedPath('/cookie-policy', locale)}>{STR.policy}</a>{STR.after}
+    {/* Explicit space — compressHTML drops the newline here ("See ourCookie Policy"). */}
+    {STR.before}{' '}<a href={localizedPath('/cookie-policy', locale)}>{STR.policy}</a>{STR.after}
   </p>
   <div class="consent-actions">
     <button type="button" data-consent="reject">{STR.reject}</button>
