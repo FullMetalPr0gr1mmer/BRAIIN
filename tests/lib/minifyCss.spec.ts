@@ -18,8 +18,17 @@ describe('minifyCss', () => {
     expect(minifyCss('/* head */\n.a {\n  color: red; /* why */\n}\n')).toBe('.a{color:red}');
   });
 
-  it('keeps a comment between two tokens as a separator', () => {
-    expect(minifyCss('.a/**/.b{x:y}')).toBe('.a .b{x:y}');
+  it('collapses a comment into the whitespace beside it', () => {
+    expect(minifyCss('.a /* x */.b{x:y}')).toBe('.a .b{x:y}');
+    expect(minifyCss('.a/* x */ .b{x:y}')).toBe('.a .b{x:y}');
+    expect(minifyCss('/* head */.a{x:y}')).toBe('.a{x:y}');
+  });
+
+  it('refuses a comment glued to a token on both sides: CSS reads it as nothing', () => {
+    // `.a/**/.b` is the compound `.a.b` and `a/**/:hover` is `a:hover` — a space in the
+    // comment's place would make each a descendant selector.
+    expect(() => minifyCss('.a/**/.b{x:y}')).toThrow(/comment glued/);
+    expect(() => minifyCss('a/* state */:hover{x:y}')).toThrow(/comment glued/);
   });
 
   it('drops the space only where it touches { } ; , or follows a :', () => {

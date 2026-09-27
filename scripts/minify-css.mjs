@@ -10,7 +10,8 @@
 // source keeps its comments; only the served copy loses them.
 //
 // SEMANTICS-PRESERVING BY CONSTRUCTION. This removes only what CSS syntax ignores:
-//   - comments (each replaced by a space, then collapsed — `a/**/b` stays two tokens);
+//   - comments with whitespace on at least one side (each replaced by a space, then
+//     collapsed into that whitespace);
 //   - runs of whitespace, collapsed to one space;
 //   - that space where it touches `{`, `}`, `;` or `,`, or follows a `:` (never
 //     significant there — a space BEFORE a `:` is: `a :hover` is a descendant);
@@ -18,9 +19,11 @@
 // It never reorders, merges or rewrites a declaration, a selector or a value — unlike a
 // full optimiser, it cannot change the cascade. Strings are copied byte for byte. It
 // REFUSES (throws, failing the build) on anything outside that model: an unterminated
-// string or comment, or a backslash outside a string (an escape whose terminating space
-// would need care). `tests/lib/minifyCss.spec.ts` proves every public stylesheet minifies
-// to the same token stream it started as.
+// string or comment, a comment glued to a token on both sides (CSS reads it as nothing,
+// not as a space), or a backslash outside a string (an escape whose terminating space
+// would need care). `tests/lib/minifyCss.spec.ts` proves every public stylesheet keeps
+// every non-whitespace character, in order, and pins which spaces are kept (that check
+// cannot see whitespace, so the space rules above are what the unit cases pin).
 //
 //   npm run build        → runs as part of `postbuild`
 //   node scripts/minify-css.mjs [dir]   (default dist/client/styles)
@@ -56,7 +59,19 @@ export function minifyCss(css) {
     } else if (c === '/' && css[i + 1] === '*') {
       const end = css.indexOf('*/', i + 2);
       if (end < 0) throw new Error(`minifyCss: unterminated comment at offset ${i}`);
-      spaced += ' ';
+      // A comment is NOT whitespace in CSS: `.a/**/.b` is the compound `.a.b`, and
+      // `a/**/:hover` is `a:hover`. A space in its place would be a descendant combinator;
+      // dropping it could merge two tokens (`1/**/2`). Only a comment with whitespace (or
+      // the sheet's edge) on at least one side is modelled — there the space just joins
+      // that whitespace. One glued on both sides is refused.
+      const before = spaced[spaced.length - 1];
+      const after = css[end + 2];
+      if (before !== undefined && before !== ' ' && after !== undefined && !isSpace(after)) {
+        throw new Error(
+          `minifyCss: a comment glued between two tokens at offset ${i} is not supported`,
+        );
+      }
+      if (!spaced.endsWith(' ')) spaced += ' ';
       i = end + 2;
     } else if (c === BACKSLASH) {
       throw new Error(`minifyCss: a backslash outside a string at offset ${i} is not supported`);
