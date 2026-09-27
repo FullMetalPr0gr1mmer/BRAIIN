@@ -732,3 +732,116 @@ The orchestrator renumbers these at integration.
 
   After the fix, local medians of 7 (S1 in brackets): /ar 2135 ms (2479), / 1736 ms
   (1882), /contact 1717 ms (1724). TBT is 0 on all three and CLS is unchanged.
+
+## Services page (S3)
+
+`/services` and `/ar/services`, from the Round 2 `services.html` (and `services.html#events`,
+the explorer open). The page is section-composed (`pages` slug `services`,
+`supabase/seed-data/54-services-page.json`), with `DEFAULT_SERVICES_SECTIONS` until it is:
+banner hero → proof → the discipline cards (page mode) → the explorer → "Say hello". One
+loader (`src/lib/services/servicesPage.ts`) serves both twins.
+
+| Mockup | Site | Where |
+| --- | --- | --- |
+| `.hero.hero--contact` + `HERO_SEG` 13.4–15.9 + `.hero__alt` | Hero `withHeroPreset(…, 'services')` → `.hero--banner`, `data.clip`, `data.altLink` | global.css (banner), services.css (alt link; the 55% crop) |
+| `.proof` / `.proof__grid` / `.proof__line` / `.proof__rate` / `.stars` / `.stats` / `.stat` / `.stat__n` / `.stat__l` | `statistics` variant `services` → `ServicesProof.astro`: `.svc-proof` / `__grid` / `__line` / `__rate` / `__stars` / `__stats` / `__stat` / `__n` / `__l` | services.css |
+| `.cats` (services) | `servicesOverview`, `data.mode: 'page'` (S2) → `.disc.disc--page#categories` | global.css |
+| `.xp` / `.xp.open` / `.xp__pad` / `.xp__body` | `serviceExplorer` → `ServiceExplorer.astro`: `.svc-xp` (+ `.is-live` / `.is-open`) / `.svc-xp__pad` / `.svc-panel` (+ `.is-active` / `.is-entering`) | services.css |
+| `.xp__tabs` / `.xtab` / `.xtab.on` | `.svc-xp__tabs` / `.svc-tab` / `.svc-tab[aria-selected='true']` — `src/lib/client/tabs.ts` | services.css |
+| `.xp__grid` / `.xp__media` / `.xp__cap` | `.svc-xp__grid` (`--solo`) / `.svc-xp__media` + `MediaFrame.svc-xp__mf` (+ `.svc-xp__swap`, `.is-swapped`) / `.svc-xp__cap` | services.css |
+| `.xp__k` / `.xp__h` / `.xp__p` | `.svc-xp__k` / `.svc-xp__h` / `.svc-xp__p` | services.css |
+| `.xl` / `.xi` / `.xi__a` / `.xi__n` / `.xi__t` / `.xi__q` | `.svc-list` / `.svc-row` / `.svc-row__a` / `.svc-row__n` / `.svc-row__t` / `.svc-row__q` | services.css |
+| `.xp__foot` / `.xp__nav` / `.xbtn` / `.cta--go[data-pre]` | `.svc-xp__foot` / `.svc-xp__nav` / `.svc-xp__btn(--prev/--next)` / `<Cta class="svc-xp__start" data-preselect="discipline:<slug>">` | services.css; global.css (`.cta`) |
+| `openCat()` / `renderBody()` / `pageBoot()` (innerHTML) | server-rendered panels + `src/lib/client/serviceExplorer.ts` | — |
+| `.hello` | `hello` (S2) | services.css |
+
+## Decisions (S3)
+
+The orchestrator renumbers these at integration.
+
+- **S3-1. First paint is CSS; after that the script owns the state.** `/services#events`
+  (the home cards, the service pages' crumb, the retired-slug 301s) must open Events with
+  no layout shift. A script opening it after first paint would move everything below it
+  with no input to excuse the move, and that shift counts. So `:target` shows the addressed
+  panel (`.svc-xp:not(.is-live) .svc-panel:not(:target) { display: none }`), and with
+  nothing addressed the whole explorer is collapsed.
+  - The script then adds `.is-live`, which switches the CSS to its own `.is-open` /
+    `.is-active` classes, set to the panel `:target` already showed: the hand-over changes
+    nothing on screen, and plays no entrance.
+  - From then on a card, a tab, prev/next or a `hashchange` opens a panel **instantly**,
+    inside the input's 500 ms window (`hadRecentInput`). Only the panel's inner grid fades
+    and rises (`svc-xp-in`, opacity + transform, 0.7 s). The mockup's 0.9 s
+    `grid-template-rows` expansion would keep pushing the page after the window closed.
+  - The hash follows with `replaceState`, which does not update `:target` — the reason the
+    CSS switches to classes rather than trusting `:target` for good.
+  - Without JS every card, tab and prev/next is a plain `#slug` link, and `:target` does the
+    opening. The gate is `tests/e2e/layout-shift.e2e.ts`: a click-open and a keyboard
+    switch count 0, and a `#events` load shifts nothing at all.
+- **S3-2. The tabs are APG tabs, applied by the script.** `src/lib/client/tabs.ts`:
+  `role=tablist` (named "Disciplines" / "التخصصات"), `role=tab` with `aria-controls` and
+  `aria-selected`, a roving tabindex, and `role=tabpanel` with `aria-labelledby` →
+  its tab and `tabindex=0` (a panel whose first content is not focusable joins the Tab
+  sequence). Automatic activation: ←/→ move and select, mirrored in RTL (→ is "previous"
+  there), wrapping at both ends; Home/End; Enter/Space. There is no region-wide
+  `aria-live` (the mockup had one on the whole explorer): the selected tab's own
+  announcement is the feedback. The roles are applied only when the script runs, so a
+  no-JS page never promises a widget that is not there. Focus: a card click or prev/next
+  moves focus to the opened panel and scrolls it into view (its `scroll-margin-top` keeps
+  the header's room and the tab row above it); a tab keeps focus on itself. The selected
+  card gets S2's `.on` (no ARIA state on the cards: they are links, and the tab carries
+  the selection).
+- **S3-3. Every panel is server-rendered.** All five disciplines and their 28 service
+  links are in the HTML (Tier A, crawlable), each panel's id the discipline's slug; the
+  mockup rendered one panel at a time with `innerHTML`. A panel's poster is a lazy
+  `<Picture>` and its clip an in-view `MediaFrame` (clips.ts), so a hidden panel costs no
+  image and no video bytes until it is shown, and never on touch, under reduced motion or
+  with Save-Data. Outage fallback: the cards' five names as text-only panels (no services,
+  no count, no media), so a fallback card's `#slug` link still opens something.
+- **S3-4. The row hover swap is data attributes, never markup.** Each row carries a
+  server-computed WebP URL (`getImage`, one per distinct still, 1200w — hover means a mouse
+  or pen) and its clip window in `data-xp-*`. On hover or focus the script paints an
+  overlay `<img>` (created once, then only its `src` changes) once decoded, rewrites the
+  caption with `textContent`, and moves the frame's clip with `clips.ts retargetClip()`;
+  leaving the list restores the discipline's. `clips.ts` now reads a frame's window on every
+  tick (it captured it once), which is what makes a live retarget possible. A service with
+  no poster or clip of its own keeps the discipline's, so the media never goes blank. The
+  rows use `data-xp-clip-*`, not `data-clip-*`: the latter would make clips.ts wire every
+  row as a frame.
+- **S3-5. The proof band is the `statistics` `services` variant, namespaced `.svc-proof`.**
+  The mockup's `.proof` / `.stats` names are Our Work's. The numbers are the counters placed
+  on `services` (their Services-page labels), rendered final on the server and counted up
+  by `countUp.ts` only while still off screen. The statement is built-in copy (overridable
+  `line` + `lineAccent`).
+- **S3-6. The rating line is content only, and never structured data.** "★★★★★ 4.9 / 5
+  average client rating" is a claim with no table behind it. It renders only where it is
+  authored (`rating: {value, label}`), in the default composition and the seeded row, which
+  is flagged `is_placeholder` for exactly this reason (production shows it only under the
+  owner's override, runbook §6d). It is never a component default. There is **no
+  AggregateRating JSON-LD**: it would assert review data the site does not have (a
+  manual-action category). The value is isolated LTR (`<b dir="ltr">`), as in the mockup's
+  Arabic. The whole band hides with fewer than two published counters, so the rating line
+  is never the only sample left standing.
+- **S3-7. The page's links follow the bands that are there.** The hero CTA goes to
+  `#categories`, the alt link ("Know what you need? **Skip to the inquiry**") and every
+  "Start your {Discipline} project" to `#inquiry` — or, with "Say hello" hidden, to
+  `/contact#inquiry`, and the CTA to the form when the cards are hidden
+  (`servicesPageLinks`, the home CTA's rule). And a floor: while the page-mode cards show,
+  the explorer shows too (`ensureServiceExplorer`), because the cards are `#slug` links into
+  it and it carries the page's service links. If the hero is hidden the page wears the solid
+  header and a visually hidden h1.
+- **S3-8. Explorer copy.** "Inquire" / "اطلب", and "Start your {Discipline} project" /
+  "ابدأ مشروع {Discipline}" are the mockup's `x.*`. The section's content is only those two
+  labels (strict); `startLabel` must carry `{discipline}` in both languages. The key line
+  reads "01 / 05  8 services", with the cards' plural rule and Western digits (S2-7). The
+  Inquire pill is named "Inquire: Logo Design" (its visible text starts the name, 2.5.3);
+  the prev/next links carry a screen-reader prefix ("Previous discipline: …"), since their
+  visible text is only a name; the row number is `aria-hidden` (the `<ol>` numbers the
+  rows). With a mouse the pill shows on its row's hover or focus, as in the mockup; on touch
+  it is always visible.
+- **S3-9. The caption pill is darker than the mockup's.** Its glass is .7 black (the
+  mockup's .35), so over a white poster the name is 8.4:1 and the number, in sky-soft, 5.4:1
+  (the mockup's sky there is 1.9:1). `scripts/contrast-audit.mjs` holds the worst case.
+- **S3-10. The Arabic head copy is ours.** `PAGE_META.services`: the English title and
+  description are `services.html`'s, verbatim; the Arabic title is the menu label
+  ("الخدمات") and the description the English one in the page's own Arabic words. It is
+  flagged for owner review.
