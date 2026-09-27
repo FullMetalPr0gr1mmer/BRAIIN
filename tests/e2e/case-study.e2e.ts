@@ -162,11 +162,17 @@ for (const locale of ['en', 'ar'] as const) {
     }) => {
       // The cards' two-column phone rule used to apply here too, stacking the two Service
       // tags one per line. The mockup's `.pt__meta` has no phone rule.
+      // Measured settled: reduced motion (the title band's reveal would move it mid-read),
+      // web fonts loaded (an Arabic face swapping in between two reads moved one tag), and
+      // both boxes read in ONE task. This is a layout assertion, not a motion one.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.setViewportSize({ width: 412, height: 915 });
       await page.goto(s.path);
-      const tags = page.locator('.cs-title .facets--case a.ftag[data-f="service"]');
-      const [a, b] = [(await tags.nth(0).boundingBox())!, (await tags.nth(1).boundingBox())!];
-      expect(Math.abs(a.y - b.y)).toBeLessThan(1);
+      await page.evaluate(() => document.fonts.ready);
+      const [a, b] = await page.$$eval('.cs-title .facets--case a.ftag[data-f="service"]', (els) =>
+        els.slice(0, 2).map((el) => el.getBoundingClientRect().top),
+      );
+      expect(Math.abs(a! - b!)).toBeLessThan(1);
     });
 
     test('the banner poster is the eager LCP image; the caption points at the title band', async ({
