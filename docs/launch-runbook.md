@@ -311,6 +311,10 @@ select kind, entity_type, slug from public.dashboard_attention
  where kind = 'placeholder_live';                                          -- expect none
 ```
 
+> **Superseded by §6d (Round 2, 2026-09-27)** for the services: the cut-over renames, re-copies
+> or archives every row below. Kept as the record of what round 1 applied — its titles are what
+> the §6d renames compare against.
+
 **Service copy (owner sign-off).** Fresh environments get the mockup's service titles and
 blurbs; production keeps whatever it holds (seeds never overwrite). Once the owner approves
 the new copy, apply it as a compare-and-set — only rows still holding the old seeded text
@@ -401,6 +405,58 @@ Every such row keeps `is_placeholder = true`, so the admin dashboard keeps listi
    2. Then `delete from app.placeholder_live_override where table_name = '…';`. This is audit-logged as a revoke.
 
    With the allowance gone, the 0025 guard holds again: nothing flagged can go live.
+
+---
+
+### 6d. Round 2: five disciplines, 28 services, sample quotes and cases (migration 0028) — the production cut-over
+
+Owner decisions 2026-09-27: the design's taxonomy replaces the 14 services with **5 disciplines
+holding 28 services** (Gaming and Merchandise retired; every old `/services/<slug>` answers a
+301); each service page carries a **sample case block**; the **9 sample quotes** go live. Both
+kinds of sample stay flagged `is_placeholder` and are replaced from the admin (§6c steps 8–9).
+
+**When.** Immediately before merging the Round 2 stack, in this order. Old code with the new
+data only makes lists longer; new code with the old data would hide whole sections.
+
+**The SQL** is generated from the seed data into `supabase/seeds/round2-cutover.sql`
+(`scripts/round2-cutover.mjs`; `npm run seed:gen` regenerates it with the seeds, and
+`tests/seed/cutover.spec.ts` fails if it is stale), so the copy step 4 writes is the copy fresh
+databases get. It is **not one script**: each step runs on its own. Print one and run it as the
+owner, exactly like `production.sql` (§1b):
+
+```bash
+node scripts/round2-cutover.mjs --step renames > /tmp/r2-renames.sql
+psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/r2-renames.sql
+```
+
+Every writing step is **one transaction** whose assertions compare **exact slug sets** (never
+counts) and raise on a mismatch, so a failed step applied nothing: read the message, fix the
+cause, run that step again. A step run too early refuses (the renames before 0028, the content
+and samples steps before `production.sql`). A step that already ran does not run twice: the
+renames match no row the second time and fail loudly.
+
+| # | Step | What it does | Must see |
+|---|---|---|---|
+| 0 | `--step preflight` | Read-only, **before the push**. One JSON: the current services (slug, EN title, status), `entity_seo` of the 8 services that stay, authored `servicesOverview` / `aboutIntro` / `faq` content, SEO text saying "fourteen" / "أربع عشرة", the legacy `services` counter and `crafts`, the round-1 overrides, the 12 sample projects, the header menu. | Renamed slugs still titled Animation (or Animations) / Videography / Montage / Music; overrides for portfolio, statistics, team_members, clients, page_sections. Anything in `entity_seo_8`, `sections_authored` or `fourteen` is reviewed with the owner and fixed after step 4. |
+| 1 | `npx supabase db push --linked --dry-run`, then `npx supabase db push --linked --skip-vault` | Migration 0028 (S1a: disciplines, service pages, service cases, the sample lock). Needs a valid Supabase access token. | Only 0028 listed by the dry run. |
+| 2 | `--step renames` | In place, keeping the id (so `entity_seo`, `content_versions` and links survive): animations → animation, videography → photo-video, montage → video-editing, music → music-vo-sfx — each a compare-and-set on slug **and** current EN title, refused onto an existing slug, and exactly one row. Archives branding, photography, event-planning, web-development, merchandise, gaming (restorable). | `COMMIT`. |
+| 3 | `--step rehearse`, then `production.sql` | The rehearsal is `production.sql` statement for statement inside `BEGIN … ROLLBACK`: it writes nothing and lists every row the seed would insert, `this_round = false` first. This round adds exactly: 14 `media_assets` (`stills/services/*`), 5 `disciplines`, 20 `services`, 28 `service_cases` (drafts), 4 `statistics` (the Services-page samples, drafts), and the Services page with its sections once the page slice lands. | **No row with `this_round = false`.** Any such row is one an editor deleted since the last run (the seed would bring it back) — stop, and apply a delta seed of this round's files instead: `node scripts/gen-seeds.mjs --only 05-media-stills.json,08-disciplines.json,10-services.json,44-statistics-team.json,45-service-cases.json > /tmp/r2-delta.sql` (plus the page slice's services-page file; the delta is per FILE, so review it for older rows of those files, then psql it). Otherwise: `psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/production.sql`. |
+| 4 | `--step content` | The rows the seed skips. The 8 kept or renamed services get the new copy (title, tagline, intro, body + body_html, value points, deliverables), their discipline, poster, clip window **and sort_order** (so they do not interleave with the new 20). The 12 sample projects' `portfolio_services` are rebuilt by slug. `crafts` → 28, "Services under one roof" (value and value_numeric together). Header Services → `/services`. | `COMMIT`. Then apply what step 0 surfaced (e.g. clear a stale `entity_seo` title or `canonical_override` of a renamed service, after review). |
+| 5 | `--step samples` | The owner's override for `testimonials` and `service_cases` (audit-logged by the override table's trigger — §6c step 5 explains it), then publishes **only flagged drafts**, by exact slug: the 9 sample quotes, the 28 case blocks, the 4 Services-page stats (and the Services page's sample sections, when the seed has them). Asserts: disciplines = the 5, published services = the 28, archived = the 6 (test-service, archived in round 1, aside), live cases = the 28, live quotes = the 9, live Services stats = the 4, both override rows with their audit grants, crafts = 28. | `COMMIT`. |
+| 6 | `--step verify` | Read-only JSON of the same facts, for the report. | 5 disciplines, 28 services each with its discipline, the 6 (+ test-service) archived, `cases_live` 28, 9 quotes, `98% 12+ 85% 250+`, crafts `28`, header `/services`, overrides incl. testimonials + service_cases. |
+| 7 | Merge the stack (top-down, one push) → the deploy job → live checks | — | `/services`, `/services/logo` and the `/ar` twins → 200; `/services/branding` → 301 to `/services#branding`; `/ar/services/music` → 301; home shows the 5 discipline cards, the quote carousel and stat 28; a case study shows its quote. |
+
+**Making the samples real, and taking the override back:** §6c steps 8–9. The Round 2 samples
+are listed on the admin dashboard as "Placeholder content is live" until then.
+
+**Undoing a step** (before the merge; after it, prefer fixing forward):
+
+- Step 5: §6c step 9 (unpublish the flagged rows, then revoke the two overrides).
+- Step 4: the old copy is in `content_versions` (every save snapshots the row); restore a service
+  from its history in the admin. The header link: set it back to `/#services`.
+- Step 2: `update public.services set slug = '<old>' where slug = '<new>'` for each rename, and
+  `set status = 'published'` for the six. Restoring a pre-rename version of a renamed service
+  from its history also restores the old slug, and the retired-slug 301 then stops applying to it.
 
 ---
 

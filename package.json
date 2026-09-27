@@ -27,7 +27,7 @@
     "a11y:contrast": "node scripts/contrast-audit.mjs",
     "seo-ci": "vitest run tests/seo",
     "cf:secrets": "node scripts/push-secrets.mjs",
-    "seed:gen": "node scripts/gen-seeds.mjs",
+    "seed:gen": "node scripts/gen-seeds.mjs && node scripts/round2-cutover.mjs",
     "postbuild": "node scripts/verify-build-origin.mjs"
   },
   "dependencies": {

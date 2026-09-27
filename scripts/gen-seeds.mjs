@@ -84,7 +84,8 @@ export function rowForMode(row, mode) {
 
 const quote = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
-function literal(value) {
+/** A seed value as SQL — also used by scripts/round2-cutover.mjs, so both quote alike. */
+export function literal(value) {
   if (value === null || value === undefined) return 'null';
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (typeof value === 'number') {
