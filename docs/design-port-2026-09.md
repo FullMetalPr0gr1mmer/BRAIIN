@@ -817,3 +817,23 @@ The orchestrator renumbers these at integration.
   catalogue order, with no counts. A service in no discipline goes last under "Other
   services", and a failed disciplines read gives the flat list. A service is never
   dropped because its group could not be named.
+- **S4-13. A fragment arrival lands at once.** `/services/<slug>#inquiry`, reached from
+  an "Inquire" pill or the `/services` explorer, jumps straight to the form, as the
+  mockup's `pageBoot()` did (`immediate: true`). The site's `html { scroll-behavior:
+  smooth }` otherwise turned the browser's fragment scroll into a ~2s sweep through
+  every band above the form. That is disorienting after a page change, and a lot of
+  motion for a reader who has not set reduced motion. `src/lib/client/landOnHash.ts`
+  calls `scrollIntoView({ behavior: 'instant' })` once, on load, and the target's
+  `scroll-margin-top` still applies. In-page links (the hero CTA, the skip pill, the
+  floating button) keep the smooth scroll.
+- **S4-14. The crumb sits on the h1 (a fix to S2's hero layout).** S2's crumb is the h1's
+  flex sibling on a row of its own. Beside the taller side column, the h1 sank to the
+  foot of its row and left the crumb about 60px above it at 1366px, in both languages.
+  From 1081px, `.hero--one .hero__inner` is now a two-column grid: the crumb and the h1
+  stack in the first column, and the side column spans both rows. The crumb's row is
+  `1fr`, so the h1's row hugs the h1. The h1 is still not wrapped, since it is the LCP
+  element. Below 1081px the side column already wraps under the h1 and S2's flex layout
+  reads right. Measured against the mockup at 1366 and 412, EN and AR, for logo,
+  music-vo-sfx and booth-production, every section's top, height and width matches to
+  the pixel. The one exception is the inquiry band, which is 25–64px taller because the
+  site's form carries the PDPL consent row.
