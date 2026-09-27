@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { localizedPath } from '@/lib/i18n';
 import { getPublishedServices } from '@/lib/data/services';
-import { getPublishedPortfolio } from '@/lib/data/portfolio';
+import { getCaseStudyIndex } from '@/lib/data/portfolio';
 import { getPublishedPosts } from '@/lib/data/blog';
 
 // Bilingual sitemap with reciprocal hreflang + truthful <lastmod> (CLAUDE.md Pillar 3).
@@ -18,6 +18,9 @@ const STATIC_PATHS = [
   '/',
   '/services',
   '/portfolio',
+  // UI v2 PR10. Its filtered views (?service=…) are never listed: each is canonicalised to
+  // the bare page and served uncached, so a sitemap entry would contradict both.
+  '/portfolio/all',
   '/about',
   '/creative-knowledge',
   '/contact',
@@ -38,14 +41,15 @@ export const GET: APIRoute = async () => {
   const base = PUBLIC_SITE_URL.replace(/\/$/, '');
   const [services, portfolio, posts] = await Promise.all([
     getPublishedServices(),
-    getPublishedPortfolio(),
+    // The case-study page's own loader + schema (never a URL the page would 404 on).
+    getCaseStudyIndex(),
     getPublishedPosts(),
   ]);
 
   const entries: { path: string; updated: string | null }[] = [
     ...STATIC_PATHS.map((path) => ({ path, updated: null })),
     ...services.map((s) => ({ path: `/services/${s.slug}`, updated: s.updated_at })),
-    ...portfolio.map((p) => ({ path: `/portfolio/${p.slug}`, updated: p.updated_at })),
+    ...portfolio.map((p) => ({ path: `/portfolio/${p.slug}`, updated: p.updatedAt })),
     ...posts.map((p) => ({ path: `/creative-knowledge/${p.slug}`, updated: p.updated_at })),
   ];
 

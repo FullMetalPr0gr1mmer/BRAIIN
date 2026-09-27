@@ -26,5 +26,15 @@ export const SECTION_TYPES = [
   // UI v2 PR7 (home)
   'selectedWork',
   'testimonials',
+  // UI v2 PR8 (About)
+  'aboutWho',
+  'leadership',
+  // UI v2 PR10 — Our Work (/portfolio) and All projects (/portfolio/all)
+  'workHero',
+  'proof',
+  'workIntro',
+  'projectGrid',
+  'pageHead',
+  'projectCatalog',
 ] as const;
 export type SectionType = (typeof SECTION_TYPES)[number];

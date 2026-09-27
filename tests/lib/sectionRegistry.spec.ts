@@ -1,10 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { SECTION_TYPES, SECTION_CONTENT_SCHEMAS } from '@schemas/sections';
+import {
+  SECTION_TYPES,
+  SECTION_CONTENT_SCHEMAS,
+  sectionContentIssues,
+  type SectionType,
+} from '@schemas/sections';
 import { RENDERED_SECTION_TYPES } from '@/lib/sections/registry';
 import {
   DEFAULT_ABOUT_SECTIONS,
+  DEFAULT_CATALOG_SECTIONS,
   DEFAULT_CONTACT_SECTIONS,
   DEFAULT_HOME_SECTIONS,
+  DEFAULT_WORK_SECTIONS,
 } from '@/lib/sections/types';
 import { loadBlocks } from '../../scripts/gen-seeds.mjs';
 
@@ -35,6 +42,8 @@ describe('section type contract', () => {
       ...DEFAULT_HOME_SECTIONS,
       ...DEFAULT_ABOUT_SECTIONS,
       ...DEFAULT_CONTACT_SECTIONS,
+      ...DEFAULT_WORK_SECTIONS,
+      ...DEFAULT_CATALOG_SECTIONS,
     ]) {
       expect(SECTION_TYPES as readonly string[], `default uses '${s.type}'`).toContain(s.type);
     }
@@ -45,5 +54,19 @@ describe('section type contract', () => {
       .filter((b) => b.table === 'page_sections')
       .flatMap((b) => b.rows.map((r) => r.type));
     for (const type of seeded) expect(SECTION_TYPES as readonly string[]).toContain(type);
+  });
+
+  it('every seeded page_section content is valid for its type (else it renders the defaults)', () => {
+    // The public loader silently falls back to built-in copy on invalid content, so a seed
+    // typo would never show as an error — only as the wrong page.
+    const seeded = (
+      loadBlocks() as unknown as { table: string; rows: { type?: string; content?: unknown }[] }[]
+    )
+      .filter((b) => b.table === 'page_sections')
+      .flatMap((b) => b.rows);
+    for (const row of seeded) {
+      const issues = sectionContentIssues(row.type as SectionType, row.content ?? {});
+      expect(issues, `${row.type}: ${JSON.stringify(issues)}`).toEqual([]);
+    }
   });
 });

@@ -23,6 +23,9 @@ const PATHS = [
   '/services',
   '/services/branding',
   '/portfolio',
+  // UI v2 PR10 — the catalogue, plus a filtered view (its own response: private, same markup rules)
+  '/portfolio/all',
+  '/portfolio/all?service=branding',
   // A seeded published case study (local/CI/staging). The legacy demo rows are archived
   // there, so pointing at one would scan the 404 page instead of the detail template.
   '/portfolio/the-rider',

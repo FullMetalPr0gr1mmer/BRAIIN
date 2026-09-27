@@ -103,6 +103,14 @@ describe('/llms.txt agrees with the crawler map', () => {
     expect(body).not.toMatch(/\d+\s+services/i);
   });
 
+  it('lists Our Work and All projects (UI v2), still with no counts', async () => {
+    const body = await (await call(llmsGet)).text();
+    expect(body).toContain('- Our Work: https://www.braiinstation.com/portfolio\n');
+    expect(body).toContain('- All projects: https://www.braiinstation.com/portfolio/all\n');
+    expect(body).toContain('## Case studies');
+    expect(body).not.toMatch(/\d+\s+(projects|case studies)/i);
+  });
+
   it('points at both language roots and defers to robots.txt as authoritative', async () => {
     const body = await (await call(llmsGet)).text();
     expect(body).toContain('/ar/');

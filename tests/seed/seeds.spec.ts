@@ -263,3 +263,39 @@ describe('UI v2 content seed (0020–0025)', () => {
     for (const row of rowsOf('portfolio')) expect(row['slug']).not.toBe('all');
   });
 });
+
+describe('About composition seed (UI v2 PR8)', () => {
+  const about = (loadBlocks() as unknown as (Block & { unlessAuthored?: string[] })[]).filter(
+    (b) => b.source === '51-about.json' && b.table === 'page_sections',
+  );
+  const rows = about.flatMap((b) => b.rows);
+
+  it('composes /about as the mockup orders it', () => {
+    expect(rows.map((r) => r['type'])).toEqual(['aboutWho', 'leadership', 'statistics', 'social']);
+  });
+
+  it('seeds into the page only while it has no sections — never into an edited one', () => {
+    expect(about.map((b) => b.unlessAuthored)).toEqual([['page_id']]);
+  });
+
+  it('every section content validates against its type (else it would render built-ins)', async () => {
+    const { sectionContentIssues } = await import('@schemas/sections');
+    for (const row of rows) {
+      const type = row['type'] as Parameters<typeof sectionContentIssues>[0];
+      expect(sectionContentIssues(type, row['content']), String(type)).toEqual([]);
+    }
+  });
+
+  it('the poster is a seeded still — so it resolves on every environment', () => {
+    const who = rows.find((r) => r['type'] === 'aboutWho')!;
+    const mediaId = (who['content'] as { mediaId: string }).mediaId;
+    const media = blocks.filter((b) => b.table === 'media_assets').flatMap((b) => b.rows);
+    const poster = media.find((m) => m['id'] === mediaId);
+    expect(poster?.['provider']).toBe('static');
+    expect(poster?.['__placeholder']).toBeUndefined();
+  });
+
+  it('is real copy, not placeholder content: it ships visible in production too', () => {
+    for (const row of rows) expect(rowForMode(row, 'production')['visible']).toBe(true);
+  });
+});

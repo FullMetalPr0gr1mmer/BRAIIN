@@ -4,6 +4,7 @@ import type { Locale } from '@schemas/primitives';
 import type { HeroSectionContent } from '@schemas/sections';
 import { localizedHref, pickLocale } from '@/lib/i18n';
 import { splitTrailingMark } from '@/lib/text/accent';
+import Cta from '@/components/ui/Cta.astro';
 import logo from '@/assets/braiin-logo-white.png';
 
 // Full-viewport brand hero (design: "Brain Station UI"). Sticky, so the next section
@@ -27,26 +28,29 @@ interface Props extends HeroSectionContent {
   locale: Locale;
   /** Local fallback loop served from public/ until the Stream account lands. */
   videoSrc?: string;
-  /** Short banner variant (the contact hero): shorter box, icon CTA, no scroll cue. */
-  banner?: boolean;
-  /** Where the hero CTA points (a code default — the contact banner's `#inquiry`).
-      Defaults to the home page's Selected work band. */
-  ctaHref?: string;
-  /** Route-injected (SectionRenderer `data`, never CMS content): the home route's CTA
-      target — `/portfolio` when the Selected work band will not render. */
-  data?: { ctaHref?: string } | undefined;
+  /** Route-injected (SectionRenderer `data`, never CMS content):
+      - `ctaHref`  where the CTA points — the home route's `/portfolio` when the Selected
+                   work band will not render, a preset page's own form (`#inquiry`);
+      - `banner`   a page preset's short banner (withHeroPreset): shorter box, the badge
+                   CTA icon first, no scroll cue, never the intro plate;
+      - `clip`     the window of the loop this page plays (seconds). */
+  data?:
+    | {
+        ctaHref?: string;
+        banner?: boolean;
+        clip?: { start: number; end: number };
+      }
+    | undefined;
 }
 
 const {
   locale,
   videoUid,
   videoSrc = '/media/showreel.mp4',
-  banner = false,
-  ctaHref,
   // Opt-IN, never defaulted on. `intro` now arrives through HeroSectionContent, so a
   // CMS `hero` section dropped onto another page cannot inherit an undismissable
   // full-viewport plate. The CSS reads the state off `body:has(.intro)` — one flag.
-  intro = false,
+  intro: introProp = false,
   headline,
   accentFromEn,
   accentFromAr,
@@ -104,7 +108,11 @@ const parts = words.map((w) => ({
   ...w,
   ...(w.accent ? splitTrailingMark(w.text) : { body: w.text, mark: '' }),
 }));
-const href = localizedHref(data?.ctaHref ?? ctaHref ?? '#selected-work', locale);
+const banner = data?.banner === true;
+// A banner hero never opens with the full-viewport plate, whatever its content says.
+const intro = introProp && !banner;
+const href = localizedHref(data?.ctaHref ?? '#selected-work', locale);
+const clip = data?.clip;
 
 // The intro logo renders at `min(46vw, 520px, 66svh)`, so `width={520}` + densities
 // [1,2] emits the matching 520w/1040w pair. It was `width={1040}` with the same
@@ -135,7 +143,13 @@ const src = videoUid ? undefined : videoSrc;
 }
 
 <section class:list={['hero', { 'hero--banner': banner }]}>
-  <div class="hero__media" data-video-src={src}></div>
+  <div
+    class="hero__media"
+    data-video-src={src}
+    data-clip-start={clip ? String(clip.start) : undefined}
+    data-clip-end={clip ? String(clip.end) : undefined}
+  >
+  </div>
 
   <div class="hero__inner">
     <h1 aria-label={headlineText}>
@@ -154,26 +168,14 @@ const src = videoUid ? undefined : videoSrc;
     </h1>
     <div class="hero__side">
       <p class="hero__sub">{subText}</p>
-      <a
-        class:list={['cta', 'hero__cta', { 'cta--icon': banner, 'cta--down': banner }]}
-        href={href}
-      >
-        <span>{ctaText}</span>
-        {
-          banner ? (
-            <span class="cta__ico" aria-hidden="true">
-              <svg viewBox="0 0 16 16">
-                <path
-                  d="M8 1v13M3 9l5 5 5-5"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </span>
-          ) : (
+      {
+        banner ? (
+          <Cta href={href} icon="down" class="hero__cta">
+            {ctaText}
+          </Cta>
+        ) : (
+          <a class="cta hero__cta" href={href}>
+            <span>{ctaText}</span>
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <path
                 d="M8 1v13M3 9l5 5 5-5"
@@ -184,9 +186,9 @@ const src = videoUid ? undefined : videoSrc;
                 stroke-linejoin="round"
               />
             </svg>
-          )
-        }
-      </a>
+          </a>
+        )
+      }
     </div>
   </div>
 

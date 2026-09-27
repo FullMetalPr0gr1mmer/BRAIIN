@@ -1,17 +1,30 @@
 ---
-import PortfolioDetail from '@/components/PortfolioDetail.astro';
-import { getPortfolioBySlug } from '@/lib/data/portfolio';
+import CaseStudyPage from '@/components/case-study/CaseStudyPage.astro';
+import { loadCaseStudyPage } from '@/lib/portfolio/casePage';
 import { setTierA } from '@/lib/http/cacheTags';
 
+// A case study (UI v2 PR11). Tier A: server-rendered and edge-cached, purged by the
+// project's tag — and by the tags of what else it shows (the next project's card, its
+// sector/client/services, its quote). An unknown or unpublished slug is a REAL 404
+// (status 404, the English 404 page) — never another project's page, as in the mockup.
+// `/portfolio/all` is a static route, so it wins over this one (and `all` is reserved).
+const locale = 'en' as const;
 const { slug } = Astro.params;
-const item = slug ? await getPortfolioBySlug(slug) : null;
-if (!item) return Astro.rewrite('/404');
+const page = slug ? await loadCaseStudyPage(slug, Astro.locals, locale) : null;
+if (!page) return Astro.rewrite('/404');
 
 setTierA(Astro.response, {
   route: 'portfolio-item',
-  locale: 'en',
-  entities: [`portfolio:${item.slug}`],
+  locale,
+  entities: [
+    `portfolio:${page.study.slug}`,
+    'portfolio:all',
+    'sectors:all',
+    'clients:all',
+    'services:all',
+    'testimonials:all',
+  ],
 });
 ---
 
-<PortfolioDetail locale="en" item={item} />
+<CaseStudyPage locale={locale} page={page} />

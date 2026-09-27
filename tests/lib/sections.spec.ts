@@ -4,6 +4,7 @@ import {
   DEFAULT_CONTACT_SECTIONS,
   DEFAULT_HOME_SECTIONS,
   homeHeroCtaHref,
+  workIntroLinkHref,
   withHomeData,
   withHomeIntro,
   type SectionData,
@@ -160,6 +161,26 @@ describe('homeHeroCtaHref: the hero CTA never points at a band that is not there
       '/portfolio',
     );
     expect(homeHeroCtaHref([{ type: 'hero' }], 3)).toBe('/portfolio');
+  });
+});
+
+describe("workIntroLinkHref: Our Work's intro link never points at a grid that is not there", () => {
+  const withGrid: SectionData[] = [{ type: 'workIntro' }, { type: 'projectGrid' }];
+
+  it('goes to the featured grid when it will render', () => {
+    expect(workIntroLinkHref(withGrid, 6, 12)).toBe('#projects');
+  });
+
+  it('goes to All projects when nothing is featured, or the grid is hidden or removed', () => {
+    expect(workIntroLinkHref(withGrid, 0, 12)).toBe('/portfolio/all');
+    expect(
+      workIntroLinkHref([{ type: 'workIntro' }, { type: 'projectGrid', visible: false }], 6, 12),
+    ).toBe('/portfolio/all');
+    expect(workIntroLinkHref([{ type: 'workIntro' }], 6, 12)).toBe('/portfolio/all');
+  });
+
+  it('has no target at all while nothing is published (production starts with drafts)', () => {
+    expect(workIntroLinkHref(withGrid, 0, 0)).toBeNull();
   });
 });
 

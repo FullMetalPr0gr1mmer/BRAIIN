@@ -1,0 +1,498 @@
+/* ============================================================
+   OUR WORK + ALL PROJECTS — route stylesheet (UI v2 PR10)
+   Linked after global.css (and banner.css) by BaseLayout `styles` on /portfolio and
+   /portfolio/all (EN + /ar). Values from the mockup's work.html / projects.html "OUR WORK"
+   and "PROJECT CATALOG" blocks (docs/design-port-2026-09.md); namespaced:
+     .proof         stats + quotes band (ProofBand)        mockup .proof
+     .work-intro    the intro statement (WorkIntro)        mockup .iw-sec / .iw
+     .pgrid         the featured grid (ProjectGrid)        mockup .work
+     .pcat          the whole catalogue (ProjectCatalog)   mockup .work.ap
+     .catalog-head  All projects' head (PageHead)          mockup .ap-head
+     .fb / .fchip / .fpill   the filter bar (FilterBar)    mockup .fb (same names)
+   Logical properties throughout, so RTL needs overrides only for type (no uppercase, no
+   tracking, taller lines) and mirrored glyphs. Motion is compositor-only (opacity +
+   transform). The opening banner and its glass caption (.mbanner, .work-cap) live in
+   banner.css, linked beside this sheet — the case study shares them.
+   ============================================================ */
+
+/* A card the filter left out, a pill that is not active, the no-JS Apply button once
+   the enhancement runs: `hidden` must win over the display these blocks set below. */
+.catalog [hidden],
+.catalog-head [hidden] {
+  display: none !important;
+}
+
+/* ---- Proof: numbers + quotes, on white (ProofBand.astro) ---- */
+.proof {
+  position: relative;
+  z-index: 2;
+  background: var(--bs-paper);
+  color: var(--bs-black);
+  padding: clamp(64px, 10vh, 130px) var(--bs-pad-x) clamp(72px, 11vh, 140px);
+}
+.proof__wrap {
+  max-width: var(--bs-maxw);
+  margin: 0 auto;
+}
+/* No numbers above them (fewer published than the band's minimum): the quotes open the
+   band, so they drop the gap that separated them from the numbers. */
+.proof--quotes-only .tm--light .tm__grid {
+  margin-top: 0;
+}
+
+/* ---- Intro statement between two frames (WorkIntro.astro) ---- */
+.work-intro {
+  position: relative;
+  z-index: 3;
+  background: var(--bs-black);
+  color: var(--bs-paper);
+  padding: clamp(72px, 11vh, 140px) var(--bs-pad-x) clamp(40px, 6vh, 70px);
+}
+.work-intro__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(14px, 1.4vw, 22px);
+  align-items: start;
+}
+.work-intro__a {
+  grid-row: 1 / span 2;
+  align-self: stretch;
+}
+.work-intro__txt {
+  padding-inline: clamp(12px, 4.2vw, 72px) clamp(0px, 2vw, 30px);
+}
+.work-intro__txt p {
+  margin: 0;
+  font-size: clamp(18px, 1.75vw, 26px);
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+}
+html[dir='rtl'] .work-intro__txt p {
+  letter-spacing: 0;
+  line-height: 1.8;
+}
+.work-intro__link {
+  display: inline-block;
+  float: inline-end;
+  margin-top: clamp(22px, 4vh, 44px);
+  padding-bottom: 4px;
+  border-bottom: 2px solid currentColor;
+  color: var(--bs-paper);
+  text-decoration: none;
+  font-size: clamp(15px, 1.4vw, 20px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: color 0.3s;
+}
+html[dir='rtl'] .work-intro__link {
+  letter-spacing: 0;
+  text-transform: none;
+}
+.work-intro__link:hover {
+  color: var(--bs-sky);
+}
+.work-intro__b {
+  margin-top: clamp(16px, 2.4vh, 30px);
+  align-self: end;
+}
+/* No frames configured (or none published): the statement alone, at reading width. */
+.work-intro--text .work-intro__grid {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: var(--bs-maxw);
+  margin: 0 auto;
+}
+.work-intro--text .work-intro__txt {
+  padding-inline: 0;
+  max-width: 48ch;
+}
+@media (max-width: 51.25rem) {
+  .work-intro__grid {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 18px;
+  }
+  .work-intro__a {
+    grid-row: auto;
+    order: 2;
+    align-self: auto;
+  }
+  .work-intro__txt {
+    order: 1;
+    padding: 0 0 10px;
+  }
+  .work-intro__b {
+    order: 3;
+    margin-top: 0;
+  }
+}
+
+/* ---- Project grids (ProjectGrid / ProjectCatalog) ---- */
+.pgrid,
+.pcat {
+  position: relative;
+  z-index: 3;
+  background: var(--bs-black);
+  color: var(--bs-paper);
+  padding: clamp(56px, 8vh, 110px) var(--bs-pad-x) clamp(80px, 12vh, 150px);
+}
+.pcat {
+  padding-top: clamp(24px, 4vh, 40px);
+  border-top: 1px solid var(--bs-line-d);
+}
+.pgrid__head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding-bottom: clamp(24px, 3.6vh, 40px);
+  margin-bottom: clamp(28px, 4vh, 48px);
+  border-bottom: 1px solid var(--bs-line-d);
+}
+.pgrid__head h2 {
+  margin: 0;
+  font-size: clamp(34px, 6vw, 96px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .pgrid__head h2 {
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+.pgrid__count {
+  font-size: 13px;
+  color: var(--bs-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pgrid__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(44px, 6vh, 72px) clamp(14px, 1.4vw, 22px);
+}
+@media (max-width: 47.5rem) {
+  .pgrid__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Card titles are real headings in these grids (h3 under "Projects", h2 in All projects);
+   .pcard__t already sets their type — only the UA heading margin is left to undo. */
+.pgrid__grid .pcard__t {
+  margin-bottom: 0;
+}
+.pgrid__foot {
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(48px, 8vh, 90px);
+}
+
+/* ---- Filter bar (FilterBar.astro) ---- */
+.fb {
+  margin-bottom: clamp(32px, 5vh, 56px);
+  scroll-margin-top: 110px;
+}
+.fb__svc {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 12px;
+  margin: 0 -2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.fb__svc::-webkit-scrollbar {
+  height: 4px;
+}
+.fb__svc::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+/* Chips are links; the label is the state indicator (the .22 border is decoration). */
+.fchip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background 0.25s,
+    border-color 0.25s,
+    color 0.25s;
+}
+/* .6 (the mockup's .45 is 4.4:1 at 11px — under AA). */
+.fchip i {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+.fchip:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+  color: var(--bs-paper);
+}
+.fchip.is-on {
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+  color: var(--bs-paper);
+}
+.fchip.is-on i {
+  color: rgba(255, 255, 255, 0.75);
+}
+.fchip:focus-visible {
+  outline-offset: 2px;
+}
+.fb__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0 0;
+}
+.fb__lbl {
+  margin-inline-end: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bs-muted);
+}
+html[dir='rtl'] .fb__lbl {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 13px;
+}
+.fb__sel {
+  position: relative;
+  display: inline-block;
+}
+.fb__sel select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  min-width: 150px;
+  padding-block: 10px;
+  padding-inline: 16px 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--bs-paper);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  transition:
+    border-color 0.25s,
+    background 0.25s;
+}
+.fb__sel::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  inset-inline-end: 16px;
+  width: 7px;
+  height: 7px;
+  margin-top: -5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: rgba(255, 255, 255, 0.7);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.fb__sel select:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+.fb__sel select:focus-visible {
+  outline: 2px solid var(--bs-cobalt);
+  outline-offset: 2px;
+}
+.fb__sel.is-on select {
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+}
+.fb__sel select option {
+  background: var(--bs-midnight);
+  color: var(--bs-paper);
+}
+.fb__clear {
+  padding: 10px 6px;
+  color: var(--bs-sky);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.fb__clear:hover {
+  color: var(--bs-paper);
+}
+/* The no-JS path only: the selects apply on change once the script runs (which also
+   sets `hidden` on it — this rule covers browsers that know the media feature). */
+.fb__apply {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: transparent;
+  color: var(--bs-paper);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (scripting: enabled) {
+  .fb__apply {
+    display: none;
+  }
+}
+.fb__active {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.fpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-block: 7px;
+  padding-inline: 14px 8px;
+  border-radius: 999px;
+  background: rgba(34, 169, 255, 0.14);
+  color: var(--bs-paper);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+.fpill__k {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+.fpill b {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.25s;
+}
+.fpill:hover b {
+  background: var(--bs-klein);
+}
+.fb__empty {
+  grid-column: 1 / -1;
+  padding: clamp(40px, 8vh, 90px) 16px;
+  text-align: center;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 18px;
+}
+.fb__empty p {
+  margin: 0 0 8px;
+  font-size: clamp(17px, 1.6vw, 22px);
+  font-weight: 600;
+}
+
+/* ---- All projects' head (PageHead.astro) ---- */
+.catalog-head {
+  position: relative;
+  overflow: hidden;
+  background: var(--bs-black);
+  color: var(--bs-paper);
+  padding: clamp(150px, 22vh, 210px) var(--bs-pad-x) clamp(36px, 5vh, 56px);
+}
+.catalog-head::before {
+  content: '';
+  position: absolute;
+  inset: -40% -10% auto auto;
+  width: 70%;
+  height: 130%;
+  background: radial-gradient(closest-side, rgba(0, 36, 188, 0.4), transparent 70%);
+  pointer-events: none;
+}
+html[dir='rtl'] .catalog-head::before {
+  inset: -40% auto auto -10%;
+}
+.catalog-head__wrap {
+  position: relative;
+}
+.catalog-head__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: clamp(22px, 3.4vh, 34px);
+  color: var(--bs-muted);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.3s;
+}
+html[dir='rtl'] .catalog-head__back {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 14px;
+}
+.catalog-head__back:hover {
+  color: var(--bs-paper);
+}
+.catalog-head__back svg {
+  width: 14px;
+  height: 14px;
+}
+html[dir='rtl'] .catalog-head__back svg {
+  transform: scaleX(-1);
+}
+.catalog-head__row {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px 40px;
+  flex-wrap: wrap;
+}
+.catalog-head h1 {
+  margin: 0;
+  font-size: clamp(46px, 8.6vw, 150px);
+  font-weight: 800;
+  line-height: 0.88;
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .catalog-head h1 {
+  font-size: clamp(38px, 6.6vw, 112px);
+  line-height: 1.15;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.catalog-head h1 em {
+  font-style: normal;
+  color: var(--bs-sky);
+}
+.catalog-head__row p {
+  margin: 0;
+  max-width: 36ch;
+  font-size: clamp(15px, 1.3vw, 18px);
+  line-height: 1.6;
+  color: var(--bs-muted);
+}
+.catalog-head__count {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--bs-paper);
+  font-variant-numeric: tabular-nums;
+}
+.catalog-head__count:focus,
+.pgrid__count:focus {
+  outline: none;
+}

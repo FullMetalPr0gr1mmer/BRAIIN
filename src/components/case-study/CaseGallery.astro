@@ -1,0 +1,104 @@
+---
+import { getImage } from 'astro:assets';
+import type { Locale } from '@schemas/primitives';
+import type { Accent } from '@schemas/media';
+import type { CaseMedia } from '@/lib/data/portfolio';
+import { galleryLayout, type GalleryCell } from '@/lib/portfolio/gallery';
+import { stillAlt, stillsCount } from '@/lib/portfolio/caseStudy';
+import MediaImage from '@/components/media/MediaImage.astro';
+import AccentText from '@/components/ui/AccentText.astro';
+
+// The gallery (UI v2 PR11 — project.html `.gal`), black and edge to edge: "Stills from the
+// final" and the count ("09 stills"), then the stills on a six-column grid whose rhythm —
+// wide, two halves, three thirds, two halves, wide — is computed HERE on the server
+// (galleryLayout), including the phone rule that stretches a half left alone on its row;
+// the mockup added those classes with a script after load.
+//
+// Stills are content, so each carries real alt text (the mockup's were alt="" in buttons
+// named "01"): the loader keeps only stills described in both languages. Each is a link
+// to its full-size image, opened in the lightbox when JS runs. Arabic counts follow the
+// plural categories (the mockup wrote "لقطة" for every count — docs/design-port-2026-09.md).
+
+interface Props {
+  locale: Locale;
+  items: CaseMedia[];
+}
+
+const { locale, items } = Astro.props;
+
+const STR = {
+  en: { tag: 'Gallery', heading: 'Stills from the final' },
+  ar: { tag: 'المعرض', heading: 'لقطات من العمل النهائي' },
+}[locale];
+
+/** "the final" / "العمل النهائي" — the mockup's <em>. */
+const ACCENT: Accent = { en: { from: 2 }, ar: { from: 2 } };
+
+// Six columns on wide screens, two-up on phones (a wide still, or a half left alone, is
+// the full width there).
+const sizesFor = (cell: GalleryCell) => {
+  if (cell.span === 'wide') return '100vw';
+  const phone = cell.mobileFill ? '100vw' : '50vw';
+  return `(min-width: 47.5rem) ${cell.span === 'half' ? '50vw' : '34vw'}, ${phone}`;
+};
+
+const images = items.flatMap((m) => (m.image ? [{ media: m, image: m.image }] : []));
+const cells = galleryLayout(images.length);
+const stills = await Promise.all(
+  images.map(async ({ media, image }, i) => {
+    const full = await getImage({
+      src: image.src,
+      width: Math.min(1600, image.width),
+      format: 'webp',
+    });
+    const cell = cells[i] ?? { span: 'third' as const, mobileFill: false };
+    return {
+      image,
+      full: full.src,
+      cell,
+      sizes: sizesFor(cell),
+      alt: stillAlt(media, locale),
+    };
+  }),
+);
+---
+
+{
+  stills.length > 0 && (
+    <section class="cs-gal" aria-labelledby="cs-gal-heading">
+      <div class="cs-gal__head">
+        <div>
+          <p class="tag tag--sky rv">
+            <span class="dot" />
+            {STR.tag}
+          </p>
+          <h2 class="rv" id="cs-gal-heading">
+            <AccentText text={STR.heading} locale={locale} accent={ACCENT} />
+          </h2>
+        </div>
+        <span class="cs-gal__count rv">{stillsCount(stills.length, locale)}</span>
+      </div>
+      <div class="cs-gal__grid">
+        {stills.map((s) => (
+          <a
+            class:list={[
+              'cs-gal__item',
+              `cs-gal__item--${s.cell.span}`,
+              { 'cs-gal__item--fill': s.cell.mobileFill },
+            ]}
+            href={s.full}
+            data-lb="gal"
+          >
+            <MediaImage
+              image={s.image}
+              locale={locale}
+              altOverride={s.alt}
+              widths={[480, 800, 1200, 1600]}
+              sizes={s.sizes}
+            />
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}

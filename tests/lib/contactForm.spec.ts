@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LeadInputSchema } from '@schemas/lead';
+import { BUDGET_BANDS, LEGACY_BUDGET_BANDS, LeadInputSchema } from '@schemas/lead';
 import {
   CONTACT_FIELD_TO_LEAD,
   CONTACT_FIXED_KEYS,
@@ -34,16 +34,31 @@ describe('ContactForm payload ⊆ LeadInputSchema (the contract test)', () => {
     expect(CONTACT_FORM_FIELDS.compact).toEqual(['name', 'email', 'company', 'service', 'message']);
   });
 
+  it('the contact form is the design’s seven fields — no phone, no timeline select (PR9)', () => {
+    expect(CONTACT_FORM_FIELDS.full).toEqual([
+      'name',
+      'email',
+      'company',
+      'service',
+      'budget',
+      'deadline',
+      'message',
+    ]);
+    // The free-text deadline lands in the encrypted timeline_text_enc, never the legacy band.
+    expect(CONTACT_FIELD_TO_LEAD.deadline).toBe('timelineText');
+    expect(Object.values(CONTACT_FIELD_TO_LEAD)).not.toContain('timelineBand');
+    expect(Object.values(CONTACT_FIELD_TO_LEAD)).not.toContain('phone');
+  });
+
   for (const variant of ['compact', 'full'] as const) {
     it(`a filled ${variant} form parses, and the schema keeps EVERY key it was sent`, () => {
       const values: Record<string, string> = {
         name: 'Kareem',
         email: 'someone@example.com',
-        phone: '+966500000000',
         company: 'Studio',
         service: 'branding',
-        budget: 'lt_10k',
-        timeline: 'asap',
+        budget: '25k_75k',
+        deadline: 'Before Ramadan',
         message: 'A brand identity for a launch this year.',
         consent: 'on',
         hp: '',
@@ -88,6 +103,49 @@ describe('ContactForm payload ⊆ LeadInputSchema (the contract test)', () => {
     const payload = buildContactPayload(() => null, { kind: 'contact', locale: 'en' });
     expect(payload).toMatchObject({ name: '', email: '', message: '' });
     expect(LeadInputSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it('a project inquiry carries the budget band and the deadline under their schema keys', () => {
+    const values: Record<string, string> = {
+      name: 'K',
+      email: 'k@example.com',
+      message: 'A launch film.',
+      budget: 'gt_200k',
+      deadline: '  A season, or ASAP  ',
+    };
+    const payload = buildContactPayload((k) => values[k] ?? null, {
+      kind: 'project_inquiry',
+      locale: 'ar',
+    });
+    const parsed = LeadInputSchema.parse(payload);
+    expect(parsed.kind).toBe('project_inquiry');
+    expect(parsed.budgetBand).toBe('gt_200k');
+    expect(parsed.timelineText).toBe('A season, or ASAP'); // trimmed server-side
+  });
+
+  it('offers only the design’s bands, while legacy bands stay accepted on input', () => {
+    // The form renders BUDGET_BANDS; a page cached before PR9 still posts the old keys and
+    // must not get a 422 for submitting what it was shown.
+    for (const band of [...BUDGET_BANDS, ...LEGACY_BUDGET_BANDS]) {
+      const r = LeadInputSchema.safeParse({
+        name: 'K',
+        email: 'k@example.com',
+        message: 'm',
+        budgetBand: band,
+      });
+      expect(r.success, band).toBe(true);
+    }
+    expect(BUDGET_BANDS).toEqual(['lt_25k', '25k_75k', '75k_200k', 'gt_200k', 'not_sure']);
+  });
+
+  it('a deadline over 120 characters is refused', () => {
+    const r = LeadInputSchema.safeParse({
+      name: 'K',
+      email: 'k@example.com',
+      message: 'm',
+      timelineText: 'x'.repeat(121),
+    });
+    expect(r.success).toBe(false);
   });
 
   it('never trusts the locale it is handed', () => {

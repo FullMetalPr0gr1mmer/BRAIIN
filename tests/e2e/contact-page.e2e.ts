@@ -13,8 +13,8 @@ import { expect, test } from '@playwright/test';
 
 const ROUTES = ['/contact', '/ar/contact'] as const;
 
-const BUDGET_BANDS = ['lt_10k', '10k_50k', '50k_150k', 'gt_150k', 'undisclosed'];
-const TIMELINE_BANDS = ['asap', '1_3m', '3_6m', 'flexible'];
+// The UI v2 bands (packages/schemas/lead.ts BUDGET_BANDS) — the form offers only these.
+const BUDGET_BANDS = ['lt_25k', '25k_75k', '75k_200k', 'gt_200k', 'not_sure'];
 
 for (const route of ROUTES) {
   test.describe(`contact — ${route}`, () => {
@@ -65,12 +65,11 @@ for (const route of ROUTES) {
         expect(v, 'service option missing a value attribute').not.toBeNull();
         if (v) expect(v, `service value "${v}" is not a slug`).toMatch(/^[a-z0-9-]+$/);
       }
-      for (const v of await values('#cf-budget')) {
-        if (v) expect(BUDGET_BANDS, `budget value "${v}"`).toContain(v);
-      }
-      for (const v of await values('#cf-timeline')) {
-        if (v) expect(TIMELINE_BANDS, `timeline value "${v}"`).toContain(v);
-      }
+      const budgets = await values('#cf-budget');
+      expect(budgets, 'the design’s bands, after the empty "Prefer to discuss"').toEqual([
+        '',
+        ...BUDGET_BANDS,
+      ]);
     });
 
     test('company is present, bounded, and autocompletable', async ({ page }) => {
@@ -146,6 +145,238 @@ for (const route of ROUTES) {
       );
       expect(html).not.toContain('unpkg.com');
       expect(html).not.toContain('fonts.googleapis.com');
+    });
+  });
+}
+
+// ── UI v2 PR9: the ported contact page ────────────────────────────────────────────────
+// Verified on production before the port: the hero rendered the HOME headline and its
+// "See our work" button, the page had no <main>, the FAQ sat on a paper band where its sky
+// kicker and accent measured 2.56:1, and the Arabic FAQ was an MSA rewrite.
+
+const PAGE = {
+  '/contact': {
+    h1: "Let's make it happen",
+    sub: "Strategy, creative, and production under one roof. Tell us where you want to go, and we'll take it from there.",
+    cta: 'Start your project',
+    inquiry: "Tell us what you're making",
+    touch: 'Talk to us',
+    faq: 'Questions we get every week',
+    firstQ: 'What does a full brand identity include?',
+    submit: 'Send a message',
+    ok: "Got it. We'll be in touch within one business day.",
+    budgets: [
+      'Under 25k SAR',
+      '25k to 75k SAR',
+      '75k to 200k SAR',
+      '200k SAR and up',
+      'Not sure yet',
+    ],
+    locale: 'en',
+  },
+  '/ar/contact': {
+    h1: 'خلّنا نحقّقها',
+    sub: 'استراتيجية وإبداع وإنتاج تحت سقف واحد. قل لنا وين تبي توصل، والباقي علينا.',
+    cta: 'ابدأ مشروعك',
+    inquiry: 'قل لنا وش تصنع',
+    touch: 'كلّمنا مباشرة',
+    faq: 'أسئلة توصلنا كل أسبوع',
+    firstQ: 'وش تشمل الهوية البصرية الكاملة؟',
+    submit: 'أرسل رسالتك',
+    ok: 'وصلتنا. بنتواصل معك خلال يوم عمل واحد.',
+    budgets: [
+      'أقل من ٢٥ ألف ريال',
+      '٢٥ إلى ٧٥ ألف ريال',
+      '٧٥ إلى ٢٠٠ ألف ريال',
+      '٢٠٠ ألف ريال فأكثر',
+      'لسه ما حددنا',
+    ],
+    locale: 'ar',
+  },
+} as const;
+
+/** WCAG contrast of every kicker and heading accent against the band it sits on. */
+function accentContrasts() {
+  const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+  const lum = (v: number[]) => {
+    const ch = (x: number) => {
+      const s = x / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * ch(v[0] ?? 0) + 0.7152 * ch(v[1] ?? 0) + 0.0722 * ch(v[2] ?? 0);
+  };
+  const bandBg = (el: Element) => {
+    for (let n: Element | null = el; n; n = n.parentElement) {
+      const bg = getComputedStyle(n).backgroundColor;
+      if (!/rgba\(0, 0, 0, 0\)|transparent/.test(bg)) return bg;
+    }
+    return 'rgb(255, 255, 255)';
+  };
+  const els = document.querySelectorAll(
+    'main section .tag > span:last-child, main .sec-head h2 em',
+  );
+  return [...els].map((el) => {
+    const a = lum(rgb(getComputedStyle(el).color));
+    const b = lum(rgb(bandBg(el)));
+    return {
+      text: (el.textContent ?? '').trim(),
+      ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+    };
+  });
+}
+
+const SCHEMA_KEYS = [
+  'kind',
+  'locale',
+  'name',
+  'email',
+  'company',
+  'message',
+  'serviceOfInterest',
+  'budgetBand',
+  'timelineText',
+  'consentMarketing',
+  'hp',
+];
+
+for (const route of ROUTES) {
+  const t = PAGE[route];
+
+  test.describe(`contact (UI v2) — ${route}`, () => {
+    test('one <main>, opening with the contact banner — not the home hero', async ({ page }) => {
+      await page.goto(route);
+      await expect(page.locator('main')).toHaveCount(1);
+      const hero = page.locator('main > .hero');
+      await expect(hero).toHaveClass(/hero--banner/);
+      await expect(hero.locator('h1')).toHaveAttribute('aria-label', t.h1);
+      await expect(hero.locator('h1 .accent')).toHaveCount(1);
+      await expect(hero.locator('.hero__sub')).toHaveText(t.sub);
+      // No intro plate and no scroll cue on a banner.
+      await expect(page.locator('.intro')).toHaveCount(0);
+      await expect(hero.locator('.hero__scroll')).toHaveCount(0);
+      // The loop plays the design's later window, so it does not replay the home opening.
+      await expect(hero.locator('.hero__media')).toHaveAttribute('data-clip-start', '6.2');
+      await expect(hero.locator('.hero__media')).toHaveAttribute('data-clip-end', '7.9');
+    });
+
+    test('the hero CTA is the icon-first badge to the inquiry form', async ({ page }) => {
+      await page.goto(route);
+      const cta = page.locator('.hero__cta');
+      await expect(cta).toHaveText(t.cta);
+      await expect(cta).toHaveAttribute('href', '#inquiry');
+      await expect(cta).toHaveClass(/cta--badge/);
+      const iconFirst = await cta.evaluate(
+        (el) => el.firstElementChild?.classList.contains('cta__ico') ?? false,
+      );
+      expect(iconFirst, 'the icon comes first, as the design draws it').toBe(true);
+      await expect(page.locator('#inquiry')).toHaveCount(1);
+    });
+
+    test('the section heads carry the design’s copy and accents', async ({ page }) => {
+      await page.goto(route);
+      await expect(page.locator('#inquiry h2')).toHaveText(t.inquiry);
+      await expect(page.locator('.contact-touch .sec-head h2')).toHaveText(t.touch);
+      await expect(page.locator('#faq h2')).toHaveText(t.faq);
+      for (const sel of ['#inquiry h2 em', '.contact-touch .sec-head h2 em', '#faq h2 em']) {
+        await expect(page.locator(sel), sel).toHaveCount(1);
+      }
+      await expect(page.locator('.faq-item__t').first()).toHaveText(t.firstQ);
+    });
+
+    test('every kicker and heading accent meets AA against its own band', async ({ page }) => {
+      await page.goto(route);
+      const results = await page.evaluate(accentContrasts);
+      expect(results.length).toBeGreaterThanOrEqual(6);
+      for (const r of results) expect(r.ratio, `"${r.text}"`).toBeGreaterThanOrEqual(4.5);
+    });
+
+    test('the FAQ is the design’s dark band', async ({ page }) => {
+      await page.goto(route);
+      const bg = await page.locator('#faq').evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(bg).toBe('rgb(0, 0, 0)');
+    });
+
+    test('the full form: the design’s fields, consent and honeypot', async ({ page }) => {
+      await page.goto(route);
+      const names = await page
+        .locator('#contact-form')
+        .locator('input, select, textarea')
+        .evaluateAll((els) => els.map((e) => e.getAttribute('name')));
+      expect(names).toEqual([
+        'name',
+        'email',
+        'company',
+        'service',
+        'budget',
+        'deadline',
+        'message',
+        'consent',
+        'hp',
+      ]);
+      await expect(page.locator('#cf-phone')).toHaveCount(0);
+      const deadline = page.locator('#cf-deadline');
+      await expect(deadline).toHaveAttribute('type', 'text');
+      await expect(deadline).toHaveAttribute('maxlength', '120'); // mirrors timelineText
+      const labels = await page.$$eval('#cf-budget option', (os) =>
+        os.slice(1).map((o) => (o.textContent ?? '').trim()),
+      );
+      expect(labels).toEqual([...t.budgets]);
+      await expect(page.locator('#contact-form button[type="submit"]')).toHaveText(t.submit);
+    });
+
+    test('a sent inquiry posts kind=project_inquiry with only schema keys', async ({ page }) => {
+      let body: Record<string, unknown> = {};
+      await page.route('**/api/contact', async (r) => {
+        body = r.request().postDataJSON() as Record<string, unknown>;
+        await r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+      });
+      await page.goto(route);
+      await page.locator('#cf-name').fill('Kareem');
+      await page.locator('#cf-email').fill('k@example.com');
+      await page.locator('#cf-budget').selectOption('25k_75k');
+      await page.locator('#cf-deadline').fill('Before Ramadan');
+      await page.locator('#cf-message').fill('A launch film.');
+      await page.locator('#cf-consent').check();
+      await page.locator('#contact-form button[type="submit"]').click();
+
+      const status = page.locator('#contact-status');
+      await expect(status).toHaveText(t.ok);
+      await expect(status).toBeFocused();
+      await expect(page.locator('#cf-name')).toBeHidden();
+      expect(body).toMatchObject({
+        kind: 'project_inquiry',
+        locale: t.locale,
+        budgetBand: '25k_75k',
+        timelineText: 'Before Ramadan',
+        consentMarketing: true,
+      });
+      for (const key of Object.keys(body)) expect(SCHEMA_KEYS, key).toContain(key);
+    });
+
+    test('a bad submission names each field in words; focus goes to the first', async ({
+      page,
+    }) => {
+      await page.goto(route);
+      await page.locator('#contact-form button[type="submit"]').click();
+      const name = page.locator('#cf-name');
+      await expect(name).toHaveAttribute('aria-invalid', 'true');
+      await expect(name).toBeFocused();
+      const describedBy = await name.getAttribute('aria-describedby');
+      await expect(page.locator(`#${describedBy}`)).not.toBeEmpty();
+      await expect(page.locator('#cf-deadline')).not.toHaveAttribute('aria-invalid', 'true');
+    });
+
+    test('channels come from the identity; no WhatsApp card without a real number', async ({
+      page,
+    }) => {
+      await page.goto(route);
+      const mail = page.locator('.touch-card[href^="mailto:"]');
+      await expect(mail).toHaveCount(1);
+      await expect(mail.locator('.touch-card__ico')).toHaveCount(1);
+      // The seed sets no WhatsApp number: the design's wa.me/9665XXXXXXXX placeholder must
+      // never ship as a dead link.
+      await expect(page.locator('a[href*="wa.me"]')).toHaveCount(0);
+      await expect(page.locator('main')).not.toContainText('5X XXX');
     });
   });
 }

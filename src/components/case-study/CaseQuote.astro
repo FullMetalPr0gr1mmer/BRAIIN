@@ -1,0 +1,60 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { Testimonial } from '@/lib/data/taxonomy';
+import { pickLocale } from '@/lib/i18n';
+import { initials } from '@/lib/text/initials';
+import MediaImage from '@/components/media/MediaImage.astro';
+
+// The project's client quote (UI v2 PR11 — project.html `.pq`), on the Klein band. It is
+// ATTRIBUTED TO A PERSON — `author_name` + "Title, Company" (`author_role`) — where the
+// mockup overwrote the name with the client company ("Client A") and drew the company's
+// initials. Their photo when there is one, else their initials. Only a PUBLISHED
+// testimonial reaches the page (RLS; 0021's consent CHECK gates publishing), so with none
+// — production today — the band is simply not rendered.
+
+interface Props {
+  locale: Locale;
+  quote: Testimonial | null;
+}
+
+const { locale, quote } = Astro.props;
+const name = quote ? pickLocale(quote.authorName, locale) : '';
+const role = quote?.authorRole ? pickLocale(quote.authorRole, locale) : null;
+---
+
+{
+  quote && (
+    <section class="cs-quote klein-band">
+      <figure class="cs-quote__wrap">
+        <svg class="cs-quote__mark" viewBox="0 0 40 30" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M0 30V17.6C0 7.4 5.3 1.5 15.8 0l1.6 4.4C11.7 6 9 9.4 8.8 14.5H16V30H0Zm22.6 0V17.6C22.6 7.4 27.9 1.5 38.4 0L40 4.4c-5.7 1.6-8.4 5-8.6 10.1h7.2V30H22.6Z"
+          />
+        </svg>
+        <blockquote class="rv">
+          <p>{pickLocale(quote.quote, locale)}</p>
+        </blockquote>
+        <figcaption class="cs-quote__by rv">
+          <span class="cs-quote__av" aria-hidden="true">
+            {quote.avatar ? (
+              <MediaImage
+                image={quote.avatar}
+                locale={locale}
+                decorative
+                widths={[104]}
+                sizes="52px"
+              />
+            ) : (
+              initials(name)
+            )}
+          </span>
+          <span>
+            <span class="cs-quote__n">{name}</span>
+            {role && <span class="cs-quote__r">{role}</span>}
+          </span>
+        </figcaption>
+      </figure>
+    </section>
+  )
+}
