@@ -695,3 +695,125 @@ The orchestrator renumbers these at integration.
   - the Arabic home meta, "…: خمسة تخصصات، استوديو واحد.".
 
   ServicesIndex's "Fourteen" goes with the component in S3.
+
+## Service page (S4)
+
+`/services/[slug]` and `/ar/services/[slug]`, one per published service (28 seeded), from
+the Round 2 `service.html`. One loader serves both twins (`loadServicePage`,
+`src/lib/services/page.ts`); the route asks `resolveServiceRoute` for one of three answers:
+the page, a 301 for a retired slug, or a real 404.
+
+| Mockup | Site | Where |
+| --- | --- | --- |
+| `service.html?s=<slug>` | `/services/[slug]` + `/ar/services/[slug]` — `ServicePage.astro` + `loadServicePage` / `resolveServiceRoute` | `src/components/service/`, `src/lib/services/page.ts` |
+| `.hero--contact.hero--one` + `.crumb` + `.skipov` | `Hero` direct render: `data.banner`, `data.clip`, `data.crumb`, `data.skipLink` (S2's props) → `.hero--banner.hero--one`, `.crumb`, `.hero__skip` | services.css (S2 block) |
+| `.what` / `.what__grid` / `.what__lead` / `.what__body` / `.get` / `.get__k` / `.get__list` | `.svc-what` / `.svc-what__grid` / `.svc-what__lead` (h2) / `.svc-what__body` / `.svc-get` / `.svc-get__k` (h3) / `.svc-get__list` — `ServiceWhat.astro` | services.css (S4 block) |
+| `.val` / `.val__head` / `.val__grid` / `.vcard` / `.vcard__top` / `.vcard__n` / `.vcard__plus` | `.svc-val` / `.svc-val__head` / `.svc-val__grid` (a list) / `.svc-vcard` (inside its `li`) / `.svc-vcard__top` / `.svc-vcard__n` / `.svc-vcard__plus` — `ServiceValue.astro` | services.css |
+| `.case` / `.case__t` / `.case__meta` / `.case__top` / `.case__img` / `.case__see` / `.case__k` / `.case__ctx` | `.svc-case` (`#case`) / `.svc-case__t` (h2) / `.svc-case__meta` (a list) / `.svc-case__top` / `.svc-case__img` / `.svc-case__see` / `.svc-case__k` (h3) / `.svc-case__ctx` — `ServiceCaseBlock.astro` | services.css |
+| `.probs` / `.probs__head` / `.prob` / `.prob__n` / `.prob__p` / `.prob__s` | `.svc-probs` / `.svc-probs__head` / `.svc-prob` (in `ol.svc-probs__list`) / `.svc-prob__n` / `.svc-prob__p` / `.svc-prob__s` | services.css |
+| `.res` / `.res__i` / `.res__n` / `.res__l` | `.svc-res` (a list) / `.svc-res__i` / `.svc-res__n` / `.svc-res__l` | services.css |
+| the hello section with `v.helloH` / `v.helloP` | S2's `Hello` with `headingOverride` (`serviceHelloHeading`), `leadOverride`, `selected`, `groups` | services.css (S2 block) |
+| `.more` / `.more__head` / `.more__all` / `.xl.more__list` / `.xi` / `.xi__a` / `.xi__n` / `.xi__t` / `.xi.is-here` | `.svc-more` / `.svc-more__head` / `.svc-more__all` / `.svc-more__list` / `.svc-more__row` / its `a` / `.svc-more__n` / `.svc-more__t` / `.svc-more__row.is-here` + `aria-current="page"` — `ServiceMore.astro` | services.css |
+| `.fab` / `.fab__ico` / `pageScroll()` | `.svc-fab` / `.svc-fab__ico` + `.svc-fab__mark` — `ServiceFab.astro` + `src/lib/client/serviceFab.ts` | services.css |
+| `pageLang()` (all of the above filled by script) | server-rendered (Tier A) from `services`, `disciplines`, `service_cases` (0028) | — |
+
+## Decisions (S4)
+
+The orchestrator renumbers these at integration.
+
+- **S4-1. Real URLs, and a real 404.** The mockup read `?s=<slug>` and fell back to Logo
+  Design for anything it did not know, so every mistyped link rendered a page. Here each
+  service lives at its own path, and a slug that is not a published service is a real 404
+  (status 404, in the page's language: the Arabic 404 under `/ar`). RLS decides what is
+  published, including the 0028 rule that hides every service of an unpublished
+  discipline, so archiving a discipline takes its pages down with no code change.
+- **S4-2. The floating button stays hidden after the form.** The mockup hid it only while
+  the form was on screen and brought it back below it, pointing at a form the reader had
+  just passed. Here it shows once 60% of the hero is behind the reader, and hides for good
+  once the form's top rises above 85% of the viewport.
+  - It is driven by two IntersectionObservers, not a scroll handler. The hero is sticky
+    and never leaves the viewport, so a 1px mark in the page's flow stands in for "60% of
+    the hero". Its `top` is set through the CSSOM (CSP-safe) and follows the hero's
+    height through a ResizeObserver.
+  - While hidden it is `inert`, `aria-hidden` and `tabindex="-1"`, and a transform parks
+    it below the viewport. There is no `display` toggle, so showing it moves nothing.
+  - While it shows, `scroll-padding-bottom` keeps keyboard focus from being scrolled
+    under it (WCAG 2.4.11).
+  - Without JS it never shows. The hero's skip pill is the same link and is always there.
+- **S4-3. The body is sanitised on render.** "What it is" renders the service's Tiptap
+  JSON through the allowlist renderer on every render (`toServiceDetail` →
+  `renderBody`), never the stored `body_html`, which the database accepts from writes
+  that skip the admin API's sanitiser. This closes the gap decision 67 recorded for the
+  old ServiceDetail, which is deleted. Links in the body are Klein: the site's sky link
+  colour is 2.6:1 on paper.
+- **S4-4. The title is brand-first.** `%s` is "{Service} | {Discipline}", so the tab reads
+  "Braiin Statiion | Logo Design | Branding". This is the site's title template
+  (`src/lib/seo/title.ts`) and the mockup's static `<title>`; the mockup's script
+  reordered it to "Logo Design | Branding | Braiin Statiion" after load. A service in no
+  discipline is titled with its name alone. The meta description is the tagline, strictly
+  in the page's language; the fallback is service.html's own `<meta>` in English and
+  ours in Arabic (`SERVICE_PAGE_META`, owner review). og:image is the service's poster
+  as a 1200px JPEG, unless the SEO role set one.
+- **S4-5. The retired slugs answer a 301.** `src/lib/services/retired.ts` is the plan's
+  ten-row table, code-owned because the `redirects` table never reaches the edge today.
+  - It is consulted only after the lookup misses, so restoring an archived service in the
+    admin brings its page back and the redirect stops applying.
+  - It is locale-aware (`/ar/services/music` → `/ar/services/music-vo-sfx`), and the
+    fragment stays on the localized path (`/ar/services#branding`).
+  - The 301 carries `Cache-Control: public, max-age=86400`. It is not Tier A and is never
+    purged, so a restore takes effect within a day.
+  - The lookup uses own properties only, so a `/services/constructor` is a 404 and never
+    something on `Object.prototype`.
+  - A test checks the map against the seeds: every target is a live service or discipline
+    panel, no target is itself retired, and no retired slug is a live service.
+- **S4-6. The hero is the banner hero with the service's own clip.** It plays the
+  service's window of the reel. Without one it plays its discipline's window, and without
+  either the default reel, so no page opens on a still. The crumb reads "Services /
+  {Discipline}" and links to `/services#<discipline>`. The CTA is "See the case study" →
+  `#case`, or "Skip to the inquiry" → `#inquiry` when there is no case (no dead link). The
+  LCP element is the h1 (CLAUDE.md §6), as on Contact.
+- **S4-7. The case block.** Its client and sector are the project's, as the chips show.
+  - The client and sector chips open All projects filtered by that value, as the mockup
+    linked `projects.html?client=`. A client RLS hides is "Confidential client" as text,
+    never a link, because a filter URL would disclose its slug.
+  - The image is the project's poster, linking to its case study, with the project's name
+    as its alt. With no published project, the case shows the service's poster, unlinked,
+    with no pill and no project chip.
+  - The "See the full project" glass is .6 black (the mockup's .35), so its label passes AA
+    over a white poster.
+  - The problem → what-we-did rows are an ordered list, not anonymous divs. Each cell
+    carries its column name for assistive tech (sr-only), and the visual column heads are
+    `aria-hidden`. On phones the "What we did" label is drawn from `data-k` with an empty
+    CSS alternative text (`content: attr(data-k) / ''`), so it is read once, not twice.
+  - The result cards fit as many columns as the width allows: three at the mockup's
+    widths, one on phones, and never an empty column for a case with two results.
+  - The band is absent when the service has no published case.
+- **S4-8. The value cards.** The reveal is on each list item and the hover lift on the
+  card inside it, so the two transforms never override each other. The mockup's shared
+  transition also dropped the reveal's fade. On the hover wash the number is the soft sky:
+  the mockup's sky is 3.1:1 where an RTL card's number sits. The cards are not links, so
+  the hover is decoration. It is off under reduced motion, with the case image zoom and
+  the "More" row nudge.
+- **S4-9. "More in {Discipline}" has its own row classes.** The list uses
+  `.svc-more__*`, not the `/services` explorer's `.svc-list` / `.svc-row`. The two were
+  built in parallel, and one page's rows must not restyle the other's (a merge candidate
+  for S5). The current row is Klein and carries `aria-current="page"`; it stays a link, as
+  in the mockup. There are two columns from 900px. The section is absent for a service in
+  no discipline.
+- **S4-10. Structured data.** The Service node carries `serviceType` (its name),
+  `category` (its discipline), the poster as `image`, `inLanguage`, `areaServed: SA` and
+  the studio as `provider`. The BreadcrumbList is Home › Services › Service. The visible
+  crumb's discipline step is left out because its URL would be a fragment
+  (`/services#branding`), which search engines fold into `/services`. There is no
+  Review or AggregateRating markup: the case block is our own sample content.
+- **S4-11. In-page targets clear the header only where they need to.** `#case` and
+  `#inquiry` take a `scroll-margin-top` equal to the header's height minus the band's own
+  top padding. That is zero on most screens, and only a short viewport gets the
+  difference. The band's colour still meets the viewport top, as in the mockup
+  (scroll-margin 0), and `/services/<slug>#inquiry` lands on the form.
+- **S4-12. Discovery.** The sitemap lists every published service, EN + AR, with the
+  row's `lastmod`. It was already built that way; retired slugs are archived, so they
+  never appear. llms.txt lists the services under a `### {Discipline}` heading each, in
+  catalogue order, with no counts. A service in no discipline goes last under "Other
+  services", and a failed disciplines read gives the flat list. A service is never
+  dropped because its group could not be named.
