@@ -11,6 +11,13 @@ const ROUTES = [
   '/services',
   '/ar/services',
   '/portfolio',
+  // UI v2 PR10
+  '/ar/portfolio',
+  '/portfolio/all',
+  '/ar/portfolio/all',
+  // UI v2 PR11 — a seeded case study (every part: quote, breakdown, gallery, next)
+  '/portfolio/the-rider',
+  '/ar/portfolio/the-rider',
   '/about',
   '/ar/about',
   '/contact',
@@ -21,8 +28,15 @@ const ROUTES = [
 // WCAG 2.0/2.1/2.2 level A + AA rule tags.
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
+// Audited under prefers-reduced-motion. Reveal-on-scroll content sits at opacity 0 until it
+// enters the viewport, and axe treats opacity 0 as hidden — so a normal-motion run SKIPPED
+// every below-the-fold block, and one caught mid-fade read as ~1:1 contrast (a flake, not a
+// finding). Reduced motion renders every element in its final state (global.css), so the
+// whole page is checked, deterministically. Motion itself is covered by the hero/intro and
+// reduced-motion e2e specs.
 for (const route of ROUTES) {
   test(`axe: no WCAG A/AA violations on ${route}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(route, { waitUntil: 'networkidle' });
     const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
     expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);

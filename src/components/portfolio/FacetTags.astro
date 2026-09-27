@@ -8,6 +8,8 @@ import { facetQuery, toggleFacet, type Facet, type FacetSelection } from '@/lib/
 // each a LINK to All projects filtered by it (UI v2). Plain links, not script-driven
 // buttons: they work without JS, can be opened in a new tab, and are what a crawler sees.
 // In the catalogue the active value is marked (aria-current) and its link clears it.
+// `data-f` / `data-v` let the catalogue enhancement (src/lib/client/catalogFilter.ts)
+// apply a tag in place instead of navigating.
 //
 // Labels use each service's short title where it has one (SEO / GEO / AEO → "تحسين
 // الظهور"). A client RLS hid (not cleared for disclosure) is named "Confidential client" —
@@ -22,9 +24,18 @@ interface Props {
   base?: string;
   /** The catalogue's current selection — marks active tags and makes their links toggle. */
   selection?: FacetSelection;
+  /** Appended to each link (`#projects` on Our Work, so a no-JS click lands on the grid). */
+  fragment?: string;
 }
 
-const { card, locale, variant, base = '/portfolio/all', selection = {} } = Astro.props;
+const {
+  card,
+  locale,
+  variant,
+  base = '/portfolio/all',
+  selection = {},
+  fragment = '',
+} = Astro.props;
 
 const STR = {
   en: {
@@ -105,7 +116,10 @@ const candidates: Field[] = [
 const fields = candidates.filter((f) => f.tags.length > 0 || f.note);
 
 const hrefFor = (tag: Tag) =>
-  localizedHref(`${base}${facetQuery(toggleFacet(selection, tag.facet, tag.value))}`, locale);
+  localizedHref(
+    `${base}${facetQuery(toggleFacet(selection, tag.facet, tag.value))}${fragment}`,
+    locale,
+  );
 const isOn = (tag: Tag) => selection[tag.facet] === tag.value;
 ---
 
@@ -120,6 +134,8 @@ const isOn = (tag: Tag) => selection[tag.facet] === tag.value;
               <a
                 class:list={['ftag', { 'is-on': isOn(tag) }]}
                 href={hrefFor(tag)}
+                data-f={tag.facet}
+                data-v={tag.value}
                 aria-current={isOn(tag) ? 'true' : undefined}
               >
                 {tag.label}

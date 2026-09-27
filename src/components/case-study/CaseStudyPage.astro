@@ -1,0 +1,140 @@
+---
+import { getImage } from 'astro:assets';
+import type { Locale } from '@schemas/primitives';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import SectionBoundary from '@/components/SectionBoundary.astro';
+import LeadBand from '@/components/sections/LeadBand.astro';
+import { buildBreadcrumbSchema, buildCreativeWorkSchema, orgRef } from '@/lib/seo/jsonld';
+import { PAGE_META } from '@/lib/seo/pageMeta';
+import { localizedPath, pickLocale } from '@/lib/i18n';
+import { caseSchemaDescription, type CaseStudyPage } from '@/lib/portfolio/casePage';
+import { caseKeywords } from '@/lib/portfolio/caseStudy';
+import CaseBanner from './CaseBanner.astro';
+import CaseTitle from './CaseTitle.astro';
+import CaseOverview from './CaseOverview.astro';
+import CaseQuote from './CaseQuote.astro';
+import CaseBreakdown from './CaseBreakdown.astro';
+import CaseGallery from './CaseGallery.astro';
+import Lightbox from './Lightbox.astro';
+import NextProject from './NextProject.astro';
+
+// The case study (UI v2 PR11 — project.html), rendered in full on the server (Tier A) for
+// /portfolio/[slug] and /ar/portfolio/[slug]. In the mockup's order:
+//   banner → title band → overview + final film → quote → breakdown → gallery →
+//   (lightbox) → next project → lead band
+// Each part is its own error boundary (one failing part never 500s the page) and hides
+// when it has nothing to show, so a project with only a card's worth of data still reads
+// as a complete page: banner (its card poster and preview), title, facets, next, lead.
+//
+// Under the overlay header, over the banner — or over the black title band when the
+// project has no image at all. Route stylesheets: banner.css (the banner + caption,
+// shared with Our Work) and case-study.css.
+
+interface Props {
+  locale: Locale;
+  page: CaseStudyPage;
+}
+
+const { locale, page } = Astro.props;
+const { study, next, quote, head } = page;
+const { seo, identity } = head;
+
+// The banner: the project's hero frame and loop, else its card poster and preview (the
+// mockup's own fallback for projects without a written case study). It needs a frame: a
+// clip alone would pin a blank dark block until the loop mounts after `load` (and forever
+// under reduced motion or Save-Data) — the rule Our Work's banner follows (bannerCard).
+// With no frame the black title band opens the page instead (design-port decision 65).
+const bannerImage = study.hero?.image ?? study.poster;
+const bannerClip = study.hero?.clip ?? study.preview;
+const hasBanner = Boolean(bannerImage);
+
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+const logicalPath = `/portfolio/${study.slug}`;
+const url = base + localizedPath(logicalPath, locale);
+const name = pickLocale(study.title, locale);
+
+// A shareable still for JSON-LD `image` and og:image (unless the SEO role set one): the
+// banner frame as a 1200 px JPEG — the format every crawler and link preview reads.
+const shareImage = bannerImage
+  ? new URL(
+      (
+        await getImage({
+          src: bannerImage.src,
+          width: Math.min(1200, bannerImage.width),
+          format: 'jpg',
+        })
+      ).src,
+      `${base}/`,
+    ).href
+  : undefined;
+const ogImage = seo.ogImage ?? shareImage;
+
+const jsonLd = [
+  buildCreativeWorkSchema({
+    name,
+    description: caseSchemaDescription(study, locale, head.brand),
+    url,
+    org: orgRef(identity, locale),
+    image: shareImage,
+    dateModified: study.updatedAt,
+    year: study.year,
+    keywords: caseKeywords(study).map((k) => pickLocale(k, locale)),
+    genre: study.projectType ? pickLocale(study.projectType, locale) : undefined,
+    about: study.sector ? pickLocale(study.sector.name, locale) : undefined,
+    inLanguage: locale,
+  }),
+  buildBreadcrumbSchema([
+    { name: locale === 'ar' ? 'الرئيسية' : 'Home', url: base + localizedPath('/', locale) },
+    { name: PAGE_META.portfolio[locale].title, url: base + localizedPath('/portfolio', locale) },
+    { name, url },
+  ]),
+];
+
+const hasStills = study.breakdown.length > 0 || study.gallery.length > 0;
+---
+
+<BaseLayout
+  title={seo.title}
+  description={seo.description}
+  locale={locale}
+  logicalPath={logicalPath}
+  jsonLd={jsonLd}
+  robots={seo.robots}
+  header="overlay"
+  styles={['banner.css', 'case-study.css']}
+  {...ogImage ? { ogImage } : {}}
+  {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
+>
+  <main class="case-study">
+    {
+      hasBanner && (
+        <SectionBoundary type="caseBanner">
+          <CaseBanner locale={locale} study={study} image={bannerImage} clip={bannerClip} />
+        </SectionBoundary>
+      )
+    }
+    <SectionBoundary type="caseTitle">
+      <CaseTitle locale={locale} study={study} hasBanner={hasBanner} />
+    </SectionBoundary>
+    <SectionBoundary type="caseOverview">
+      <CaseOverview locale={locale} study={study} />
+    </SectionBoundary>
+    <SectionBoundary type="caseQuote">
+      <CaseQuote locale={locale} quote={quote} />
+    </SectionBoundary>
+    <SectionBoundary type="caseBreakdown">
+      <CaseBreakdown locale={locale} items={study.breakdown} />
+    </SectionBoundary>
+    <SectionBoundary type="caseGallery">
+      <CaseGallery locale={locale} items={study.gallery} />
+    </SectionBoundary>
+    <SectionBoundary type="caseNext">
+      <NextProject locale={locale} card={next} />
+    </SectionBoundary>
+    <SectionBoundary type="cta">
+      <LeadBand locale={locale} />
+    </SectionBoundary>
+  </main>
+  {hasStills && <Lightbox locale={locale} />}
+</BaseLayout>

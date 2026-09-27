@@ -1,0 +1,98 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { LocalizedText } from '@schemas/content';
+import type { WorkIntroSectionContent } from '@schemas/sections';
+import { localizedHref, pickLocale } from '@/lib/i18n';
+import { getSectionImages } from '@/lib/data/sectionMedia';
+import MediaFrame from '@/components/media/MediaFrame.astro';
+
+// Our Work's intro statement (UI v2, the `workIntro` section; the mockup's `.iw`): one
+// sentence set between two staggered frames, each a still that loops a short window of
+// the showreel while on screen (MediaFrame + clips.ts: never on touch, under reduced
+// motion or with Save-Data — the still stays; EXC-007 in-view loop). The frames are
+// decorative (alt=""), as in the design: the sentence is the content.
+//
+// The frames are media library images referenced from the section's content by
+// `mediaId`; one that does not resolve (unpublished, unknown) is simply left out, and
+// with none the statement stands alone.
+//
+// The link's target is the route's call (`workIntroLinkHref`): the featured grid below
+// when it renders, else All projects, else no link at all — never an anchor to a section
+// that is not there. Outside the route (no `data`) it keeps the design's `#projects`.
+
+interface Props {
+  locale: Locale;
+  text?: LocalizedText;
+  linkLabel?: LocalizedText;
+  media?: WorkIntroSectionContent['media'];
+  /** Route-injected link target (SectionRenderer `data`) — never CMS content. */
+  data?: { linkHref?: string | null };
+}
+
+const { locale, text, linkLabel, media = [], data } = Astro.props;
+const target = data?.linkHref === undefined ? '#projects' : data.linkHref;
+const linkHref = target === null ? null : localizedHref(target, locale);
+
+const STR = {
+  en: {
+    text: "Every project here started as a sketch in a notebook and ended somewhere people could see it, hold it, or hear it. This is a selection of the work we're proudest of.",
+    link: 'See the projects',
+  },
+  ar: {
+    text: 'كل مشروع هنا بدأ كرسمة في دفتر، وانتهى في مكان يقدر الناس يشوفونه أو يلمسونه أو يسمعونه. هذه مختارات من الشغل اللي نفتخر فيه أكثر.',
+    link: 'شوف المشاريع',
+  },
+}[locale];
+
+const images = await getSectionImages(media.map((m) => m.mediaId));
+const frames = media.flatMap((m) => {
+  const image = images.get(m.mediaId);
+  return image ? [{ image, clip: m.clip ?? null }] : [];
+});
+const [a, b] = frames;
+---
+
+<section class:list={['work-intro', { 'work-intro--text': !a }]}>
+  <div class="work-intro__grid">
+    {
+      a && (
+        <MediaFrame
+          image={a.image}
+          locale={locale}
+          clip={a.clip}
+          mode="inview"
+          threshold={0.25}
+          ratio="intro-a"
+          decorative
+          sizes="(min-width: 51.25rem) 50vw, 100vw"
+          class="work-intro__a rv"
+        />
+      )
+    }
+    <div class="work-intro__txt rv">
+      <p>{text ? pickLocale(text, locale) : STR.text}</p>
+      {
+        linkHref && (
+          <a class="work-intro__link" href={linkHref}>
+            {linkLabel ? pickLocale(linkLabel, locale) : STR.link}
+          </a>
+        )
+      }
+    </div>
+    {
+      b && (
+        <MediaFrame
+          image={b.image}
+          locale={locale}
+          clip={b.clip}
+          mode="inview"
+          threshold={0.25}
+          ratio="intro-b"
+          decorative
+          sizes="(min-width: 51.25rem) 50vw, 100vw"
+          class="work-intro__b rv"
+        />
+      )
+    }
+  </div>
+</section>

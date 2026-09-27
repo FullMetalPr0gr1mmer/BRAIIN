@@ -1,7 +1,7 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import type { PortfolioCard } from '@/lib/data/portfolio';
-import type { FacetSelection } from '@/lib/portfolio/catalog';
+import { facetValues, type FacetSelection } from '@/lib/portfolio/catalog';
 import { pickLocale, localizedHref } from '@/lib/i18n';
 import MediaFrame from '@/components/media/MediaFrame.astro';
 import FacetTags from './FacetTags.astro';
@@ -14,6 +14,11 @@ import FacetTags from './FacetTags.astro';
 //   home     Selected work on the home page (light): the clip plays while on screen.
 //
 // The poster is decorative (alt="") — the link's text already names the project.
+//
+// In a filterable grid (`filterable`) the card carries its facet values for the in-page
+// enhancement (src/lib/client/catalogFilter.ts), and a card the server-side filter left
+// out is rendered `hidden` rather than dropped, so the enhancement can bring it back
+// without building any markup.
 
 interface Props {
   card: PortfolioCard;
@@ -22,16 +27,43 @@ interface Props {
   selection?: FacetSelection;
   /** Lazy by default; the first cards above the fold may ask for eager. */
   priority?: boolean;
+  /** The title as a real heading where the page's outline needs one (h2 in All projects). */
+  heading?: 'h2' | 'h3';
+  /** Logical path the facet tags filter (default: All projects). */
+  base?: string;
+  /** Appended to the facet tag links (`#projects` on Our Work). */
+  fragment?: string;
+  /** In a filterable grid: carry facet values; `hidden` = outside the current filter. */
+  filterable?: boolean;
+  hidden?: boolean;
 }
 
-const { card, locale, variant, selection, priority = false } = Astro.props;
+const {
+  card,
+  locale,
+  variant,
+  selection,
+  priority = false,
+  heading,
+  base,
+  fragment,
+  filterable = false,
+  hidden = false,
+} = Astro.props;
 
 const title = pickLocale(card.title, locale);
 const type = card.projectType ? pickLocale(card.projectType, locale) : null;
 const href = localizedHref(`/portfolio/${card.slug}`, locale);
+const Title = heading ?? 'span';
+const facets = filterable ? JSON.stringify(facetValues(card)) : undefined;
 ---
 
-<article class:list={['pcard', `pcard--${variant}`, 'rv']}>
+<article
+  class:list={['pcard', `pcard--${variant}`, 'rv']}
+  data-card={filterable ? '' : undefined}
+  data-facets={facets}
+  hidden={hidden}
+>
   <a class="pcard__link" href={href} data-clip-trigger>
     <MediaFrame
       image={card.poster}
@@ -44,12 +76,14 @@ const href = localizedHref(`/portfolio/${card.slug}`, locale);
       priority={priority}
       sizes="(min-width: 47.5rem) 50vw, 100vw"
     />
-    <span class="pcard__t">{type ? `${title} | ${type}` : title}</span>
+    <Title class="pcard__t">{type ? `${title} | ${type}` : title}</Title>
   </a>
   <FacetTags
     card={card}
     locale={locale}
     variant={variant === 'catalog' ? 'dark' : 'light'}
     {...selection ? { selection } : {}}
+    {...base ? { base } : {}}
+    {...fragment ? { fragment } : {}}
   />
 </article>

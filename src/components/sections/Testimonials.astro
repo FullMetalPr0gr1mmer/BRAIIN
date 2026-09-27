@@ -27,9 +27,11 @@ interface Props {
   accent?: Accent | undefined;
   id?: string | undefined;
   bare?: boolean;
+  /** How long each quote stays, ms (4000–15000; carousel.ts falls back to 7 s). */
+  intervalMs?: number | undefined;
 }
 
-const { locale, items, variant, id, bare = false } = Astro.props;
+const { locale, items, variant, id, bare = false, intervalMs } = Astro.props;
 
 const STR = {
   en: {
@@ -87,6 +89,7 @@ const headId = `${id ?? `tm-${variant}`}-heading`;
       aria-roledescription={many ? STR.carousel : undefined}
       aria-labelledby={headId}
       data-carousel={many ? '' : undefined}
+      data-interval={many ? intervalMs : undefined}
     >
       <div class="tm__grid">
         <div class="tm__side">

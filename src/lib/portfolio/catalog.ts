@@ -59,11 +59,59 @@ export function isFiltered(params: URLSearchParams): boolean {
   return FACETS.some((facet) => (params.get(facet) ?? '') !== '');
 }
 
-export function matches(card: PortfolioCard, selection: FacetSelection): boolean {
+/** Every facet's values for one card — what a rendered card carries for the enhancement. */
+export type FacetValues = Record<Facet, string[]>;
+
+export function facetValues(card: PortfolioCard): FacetValues {
+  return {
+    service: valuesOf(card, 'service'),
+    sector: valuesOf(card, 'sector'),
+    client: valuesOf(card, 'client'),
+    year: valuesOf(card, 'year'),
+  };
+}
+
+/**
+ * The AND across facets, over plain values — shared by the server (cards) and the browser
+ * enhancement (the values each card element carries), so the two can never disagree about
+ * which projects a filter shows.
+ */
+export function matchesValues(
+  values: Partial<Record<Facet, readonly string[]>>,
+  selection: FacetSelection,
+): boolean {
   return FACETS.every((facet) => {
     const wanted = selection[facet];
-    return wanted === undefined || valuesOf(card, facet).includes(wanted);
+    return wanted === undefined || (values[facet] ?? []).includes(wanted);
   });
+}
+
+export function matches(card: PortfolioCard, selection: FacetSelection): boolean {
+  return matchesValues(facetValues(card), selection);
+}
+
+/** How many facets the selection sets (the active pills). */
+export function activeFacets(selection: FacetSelection): Facet[] {
+  return FACETS.filter((facet) => Boolean(selection[facet]));
+}
+
+/**
+ * A selection read back from markup (the enhancement's `data-state`): only facet keys,
+ * only string values, and only values the page actually offers (`known`). Anything else is
+ * dropped — the attribute is server-written, but the browser re-validates rather than
+ * trusting it, so no value can reach a URL or a label that the server did not render.
+ */
+export function sanitizeSelection(
+  raw: unknown,
+  known: Partial<Record<Facet, ReadonlySet<string>>>,
+): FacetSelection {
+  const out: FacetSelection = {};
+  if (typeof raw !== 'object' || raw === null) return out;
+  for (const facet of FACETS) {
+    const value = (raw as Record<string, unknown>)[facet];
+    if (typeof value === 'string' && known[facet]?.has(value)) out[facet] = value;
+  }
+  return out;
 }
 
 export function filterCards(
@@ -156,6 +204,23 @@ export function catalogueOrder(cards: readonly PortfolioCard[]): PortfolioCard[]
 /** Our Work "latest": newest year first, then catalogue order (no year = oldest). */
 export function latestOrder(cards: readonly PortfolioCard[]): PortfolioCard[] {
   return [...cards].sort((a, b) => (b.year ?? 0) - (a.year ?? 0) || a.sortOrder - b.sortOrder);
+}
+
+/**
+ * The project Our Work's banner shows: the pinned `projectSlug` when that project is
+ * published, else the latest. null when there is none — or when it has no poster: the
+ * poster is the banner (and the page's LCP image); a clip alone would open the page on a
+ * blank dark block, and under reduced motion or Save-Data the loop never starts at all.
+ * ONE decision, shared by WorkHero (what renders) and the route (which header it gets).
+ */
+export function bannerCard(
+  cards: readonly PortfolioCard[],
+  projectSlug?: unknown,
+): PortfolioCard | null {
+  const pinned =
+    typeof projectSlug === 'string' ? cards.find((c) => c.slug === projectSlug) : undefined;
+  const card = pinned ?? latestOrder(cards)[0];
+  return card?.poster ? card : null;
 }
 
 /**

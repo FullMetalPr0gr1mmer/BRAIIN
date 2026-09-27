@@ -1,0 +1,195 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { LeadershipSectionContent } from '@schemas/sections';
+import type { Accent } from '@schemas/media';
+import { pickLocale } from '@/lib/i18n';
+import { pad2 } from '@/lib/client/slider';
+import { getLeadership, type Leader } from '@/lib/data/team';
+import AccentText from '@/components/ui/AccentText.astro';
+import MediaImage from '@/components/media/MediaImage.astro';
+
+// About "Leadership" (UI v2 PR8 — the mockup's `.lead-team`): the head, then a horizontal
+// scroll-snap row of 4:5 portraits (4 per view, 2 at ≤980px, 1.3 at ≤560px), with arrows,
+// an "01 / 06" counter and a progress bar that appear only when the row overflows
+// (src/lib/client/slider.ts). Every card is server-rendered; without JS the row is a
+// native scroller.
+//
+// People: published `team_members` flagged `is_leadership`, in sort order — injected by the
+// route (it also emits their Person JSON-LD), else fetched here. None published → the whole
+// section is omitted (no heading over an empty row). A card links to LinkedIn ONLY when a
+// URL is set; otherwise it is plain content with no tab stop (the mockup made it a
+// `tabindex="0"` div — a focus stop that does nothing). A missing portrait shows the
+// design's neutral silhouette.
+
+interface Props extends LeadershipSectionContent {
+  locale: Locale;
+  /** Route-injected rows (SectionRenderer `data`) — never CMS content. */
+  data?: { leaders?: Leader[] };
+}
+
+const { locale, tag, heading, accent, text } = Astro.props;
+
+const STR = {
+  en: {
+    tag: 'Leadership',
+    heading: 'Meet our leadership team',
+    text: 'The people who keep fourteen crafts pulling in the same direction.',
+    region: 'Leadership team',
+    prev: 'Previous',
+    next: 'Next',
+    linkedin: 'LinkedIn profile (opens in a new tab)',
+  },
+  ar: {
+    tag: 'القيادة',
+    heading: 'تعرّف على فريق القيادة',
+    text: 'الناس اللي يخلّون أربع عشرة حرفة تمشي في نفس الاتجاه.',
+    region: 'فريق القيادة',
+    prev: 'السابق',
+    next: 'التالي',
+    linkedin: 'حساب لينكدإن (يفتح في تبويب جديد)',
+  },
+}[locale];
+// "Meet our <em>leadership</em> team" / "تعرّف على <em>فريق القيادة</em>".
+const DEFAULT_ACCENT: Accent = { en: { from: 2, to: 3 }, ar: { from: 2 } };
+
+const leaders = Astro.props.data?.leaders ?? (await getLeadership());
+const headingText = heading ? pickLocale(heading, locale) : STR.heading;
+const headingAccent = heading ? accent : (accent ?? DEFAULT_ACCENT);
+const cards = leaders.map((l) => ({
+  key: l.slug,
+  name: pickLocale(l.name, locale, l.slug),
+  role: l.role ? pickLocale(l.role, locale) : '',
+  href: l.linkedinUrl,
+  portrait: l.portrait,
+}));
+---
+
+{
+  cards.length > 0 && (
+    <section class="leaders" id="team" aria-labelledby="team-heading" data-slider>
+      <div class="leaders__wrap">
+        <div class="leaders__head">
+          <div>
+            <p class="tag tag--sky rv">
+              <span class="dot" />
+              <span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+            </p>
+            <h2 class="rv" id="team-heading">
+              <AccentText text={headingText} locale={locale} accent={headingAccent} />
+            </h2>
+          </div>
+          <p class="rv">{text ? pickLocale(text, locale) : STR.text}</p>
+        </div>
+        <div
+          class="leaders__track"
+          id="team-track"
+          role="region"
+          aria-label={STR.region}
+          tabindex="0"
+          data-slider-track
+        >
+          <ul class="leaders__list">
+            {cards.map((c) => {
+              const inner = (
+                <>
+                  <span class="leader__ph">
+                    {c.portrait ? (
+                      <MediaImage
+                        image={c.portrait}
+                        locale={locale}
+                        decorative
+                        widths={[320, 480, 640]}
+                        sizes="(min-width: 61.25rem) 24vw, (min-width: 35rem) 48vw, 75vw"
+                      />
+                    ) : (
+                      <svg class="leader__sil" viewBox="0 0 200 220" aria-hidden="true">
+                        <circle cx="100" cy="70" r="44" fill="currentColor" />
+                        <path d="M8 220c4-58 44-96 92-96s88 38 92 96z" fill="currentColor" />
+                      </svg>
+                    )}
+                    {c.href && (
+                      <span class="leader__in" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                          <path d="M4.98 3.5A2.5 2.5 0 1 1 5 8.5a2.5 2.5 0 0 1 0-5ZM3 9.5h4V21H3V9.5Zm6.5 0h3.8v1.6h.05c.53-.95 1.83-1.95 3.77-1.95 4.03 0 4.78 2.5 4.78 5.76V21h-4v-5.3c0-1.27-.02-2.9-1.8-2.9-1.8 0-2.08 1.38-2.08 2.8V21h-4V9.5Z" />
+                        </svg>
+                      </span>
+                    )}
+                  </span>
+                  <h3 class="leader__n">{c.name}</h3>
+                  {c.role && <p class="leader__r">{c.role}</p>}
+                  {c.href && <span class="sr-only">{STR.linkedin}</span>}
+                </>
+              );
+              return (
+                <li class="leader rv">
+                  {c.href ? (
+                    <a
+                      class="leader__card leader__card--link"
+                      href={c.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {inner}
+                    </a>
+                  ) : (
+                    <div class="leader__card">{inner}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+        <div class="leaders__nav" data-slider-nav hidden>
+          <button
+            type="button"
+            class="leaders__btn"
+            aria-controls="team-track"
+            aria-label={STR.prev}
+            data-slider-prev
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d="M14 8H2M7 3L2 8l5 5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="leaders__btn"
+            aria-controls="team-track"
+            aria-label={STR.next}
+            data-slider-next
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d="M2 8h12M9 3l5 5-5 5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <span class="leaders__count" aria-hidden="true" dir="ltr">
+            <b data-slider-current>01</b> / <span data-slider-total>{pad2(cards.length)}</span>
+          </span>
+          <span class="leaders__bar" aria-hidden="true">
+            <i data-slider-bar />
+          </span>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+<script>
+  import { initSliders } from '@/lib/client/slider';
+
+  initSliders();
+</script>

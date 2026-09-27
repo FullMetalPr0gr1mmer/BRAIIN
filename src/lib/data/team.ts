@@ -16,7 +16,7 @@ import { parseRows, reportLoadError } from './parse';
 export type { TeamMemberRow } from '@schemas/content';
 
 const COLUMNS =
-  'slug,name,bio,avatar_url,sort_order,role,linkedin_url,is_leadership,' +
+  'slug,name,bio,avatar_url,sort_order,role,linkedin_url,is_leadership,is_placeholder,' +
   `portrait:portrait_media_id(${PUBLIC_MEDIA_COLUMNS})`;
 
 async function load(leadershipOnly: boolean): Promise<TeamMemberRow[]> {
@@ -50,15 +50,31 @@ export interface Leader {
   role: LocalizedText | null;
   linkedinUrl: string | null;
   portrait: ImageRef | null;
+  /** A seeded placeholder: its card may show (0027 override), but it is never a Person node. */
+  isPlaceholder: boolean;
+}
+
+/**
+ * The shape 0023 CHECKs and the admin validates. Checked again here because the URL
+ * renders into an <a href> on a public page: a row that slipped past both (a hand edit)
+ * shows the card without a link rather than an arbitrary URL.
+ */
+const LINKEDIN_URL = /^https:\/\/([a-z]{2,3}\.)?linkedin\.com\/(in|company)\/[A-Za-z0-9_-]+\/?$/;
+
+/** A published team row → a leadership card. */
+export function toLeader(m: TeamMemberRow): Leader {
+  const url = m.linkedin_url?.trim() ?? '';
+  return {
+    slug: m.slug,
+    name: m.name,
+    role: m.role,
+    linkedinUrl: LINKEDIN_URL.test(url) ? url : null,
+    portrait: imageRef(m.portrait),
+    isPlaceholder: m.is_placeholder,
+  };
 }
 
 /** The leadership slider, in order. */
 export async function getLeadership(): Promise<Leader[]> {
-  return (await load(true)).map((m) => ({
-    slug: m.slug,
-    name: m.name,
-    role: m.role,
-    linkedinUrl: m.linkedin_url,
-    portrait: imageRef(m.portrait),
-  }));
+  return (await load(true)).map(toLeader);
 }

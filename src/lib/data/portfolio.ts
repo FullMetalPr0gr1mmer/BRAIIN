@@ -1,7 +1,6 @@
 import {
   CaseStudyRowSchema,
   PortfolioCardRowSchema,
-  PortfolioRowSchema,
   PUBLIC_MEDIA_COLUMNS,
   type CaseStudyRow,
   type LocalizedProse,
@@ -12,53 +11,22 @@ import {
 } from '@schemas/content';
 import type { VideoClip } from '@schemas/media';
 import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { renderTiptapToHtml } from '@/lib/content/tiptap';
 import { clipOf, imageRef, type ImageRef } from '@/lib/media/resolve';
-import { parseRow, parseRows, reportLoadError } from './parse';
+import { describable } from '@/lib/portfolio/caseStudy';
+import { parseRows, reportLoadError } from './parse';
 
 // Runtime data access for the public portfolio / case studies (Tier A SSR). Tenant +
 // published filtering are enforced by RLS; we still pass status explicitly. Shape lives in
 // `packages/schemas/content.ts` (CLAUDE.md §8). Resilient: []/null on any error.
 //
-// Two generations live here while UI v2 lands page by page:
-//   getPublishedPortfolio / getPortfolioBySlug   the current pages and the sitemap
-//   getPortfolioCards / getCaseStudy             UI v2 (Our Work, All projects, case study)
-// PR10/PR11 move every caller to the second pair so the sitemap can never list a case
-// study the page would 404 on.
-
-export type { PortfolioRow } from '@schemas/content';
-
-const COLUMNS = 'id,slug,title,summary,body_html,sort_order,updated_at';
-
-export async function getPublishedPortfolio() {
-  if (!supabaseConfigured()) return [];
-  try {
-    const { data, error } = await anonClient()
-      .from('portfolio')
-      .select(COLUMNS)
-      .eq('status', 'published')
-      .order('sort_order', { ascending: true });
-    if (error || !data) return [];
-    return parseRows(PortfolioRowSchema, data, 'portfolio');
-  } catch {
-    return [];
-  }
-}
-
-export async function getPortfolioBySlug(slug: string) {
-  if (!supabaseConfigured()) return null;
-  try {
-    const { data, error } = await anonClient()
-      .from('portfolio')
-      .select(COLUMNS)
-      .eq('status', 'published')
-      .eq('slug', slug)
-      .maybeSingle();
-    if (error || !data) return null;
-    return parseRow(PortfolioRowSchema, data, 'portfolio');
-  } catch {
-    return null;
-  }
-}
+//   getPortfolioCards    Our Work, All projects, home Selected work, the case study's
+//                        "Next project"
+//   getCaseStudy         the case study (/portfolio/[slug], PR11)
+//   getCaseStudyIndex    the sitemap and llms.txt
+// getCaseStudy and getCaseStudyIndex share ONE select (CASE_STUDY_COLUMNS) and ONE
+// row→model path (parseCaseStudies), so neither discovery file can list a URL the page
+// would answer 404 for (tests/lib/portfolioLoader.spec.ts asserts the pairing).
 
 // ── UI v2 ──────────────────────────────────────────────────────────────────────
 
@@ -74,8 +42,11 @@ export const CARD_COLUMNS =
   'client:client_id(slug,name,sort_order),' +
   'services:portfolio_services(sort_order,service:service_id(slug,title,short_title,sort_order))';
 
+// `body` (the Tiptap JSON), deliberately NOT `body_html`: the cache is written by the
+// admin API, but the database also accepts it from a direct PostgREST / save_portfolio
+// write that skips that API, so the public page never emits it (see renderBody).
 export const CASE_STUDY_COLUMNS =
-  `${CARD_COLUMNS},body_html,lead,goal,result,scope,keywords,results,next_portfolio_id,` +
+  `${CARD_COLUMNS},body,lead,goal,result,scope,keywords,results,next_portfolio_id,` +
   'media:portfolio_media(role,kind,video_uid,video_path,clip_start_s,clip_end_s,' +
   `duration_label,caption,breakdown_kind,layout,sort_order,asset:media_id${MEDIA})`;
 
@@ -120,6 +91,7 @@ export interface CaseMedia {
 
 export interface CaseStudy extends PortfolioCard {
   summary: LocalizedProse | null;
+  /** Allowlist-rendered from the Tiptap source on every render (renderBody). */
   bodyHtml: LocalizedProse | null;
   lead: LocalizedText | null;
   goal: LocalizedText | null;
@@ -200,19 +172,37 @@ function toCaseMedia(row: PortfolioMediaRow): CaseMedia {
   };
 }
 
+/**
+ * The body as HTML, rendered HERE from its Tiptap JSON by the allowlist renderer
+ * (src/lib/content/tiptap.ts) — CLAUDE.md Pillar 1: "Tiptap sanitised on write AND
+ * render; never `set:html` unsanitised". The stored `body_html` cache is not trusted on
+ * the public path: a caller holding portfolio.write can set it directly (PostgREST PATCH
+ * or rpc/save_portfolio), skipping the admin API that derives it, and the edge would then
+ * cache whatever markup they wrote. The renderer can only emit the tags and attributes
+ * written literally in it. The cost lands on an edge-cache miss only (Security > Perf).
+ */
+export function renderBody(body: CaseStudyRow['body']): LocalizedProse | null {
+  const en = renderTiptapToHtml(body?.en);
+  const ar = renderTiptapToHtml(body?.ar);
+  if (!en && !ar) return null;
+  return ar ? { en, ar } : { en };
+}
+
 export function toCaseStudy(row: CaseStudyRow): CaseStudy {
   const byRole = (role: PortfolioMediaRow['role']) =>
     row.media
       .filter((m) => m.role === role)
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(toCaseMedia);
-  // A gallery or breakdown image that no longer resolves is dropped rather than rendered
-  // as an empty frame; hero/final keep their clip even when the poster is missing.
-  const images = (items: CaseMedia[]) => items.filter((m) => m.image !== null);
+  // A gallery or breakdown still is CONTENT on this page: one that no longer resolves, or
+  // that cannot be described in both languages (no caption, no bilingual alt), is dropped
+  // rather than rendered as an empty frame or with alt="". Hero/final keep their clip even
+  // when the poster is missing.
+  const images = (items: CaseMedia[]) => items.filter(describable);
   return {
     ...toCard(row),
     summary: row.summary,
-    bodyHtml: row.body_html,
+    bodyHtml: renderBody(row.body),
     lead: row.lead,
     goal: row.goal,
     result: row.result,
@@ -251,6 +241,49 @@ export async function getPortfolioCards(
   }
 }
 
+/**
+ * THE row → case-study path, shared by the page and the discovery index: whatever it
+ * rejects (and logs) is a 404 on the page AND absent from the sitemap and llms.txt.
+ */
+export function parseCaseStudies(rows: unknown[]): CaseStudy[] {
+  return parseRows(CaseStudyRowSchema, rows, 'portfolio').map(toCaseStudy);
+}
+
+export interface CaseStudyEntry {
+  slug: string;
+  title: LocalizedText;
+  updatedAt: string | null;
+}
+
+/**
+ * Every published case study the case-study page can render — for the sitemap and
+ * llms.txt. Deliberately the SAME select and the same schema as getCaseStudy (not the
+ * lighter card query): a row the page would reject (and answer 404 for) is dropped here
+ * too, so neither discovery file ever lists a URL that does not resolve.
+ */
+export async function getCaseStudyIndex(): Promise<CaseStudyEntry[]> {
+  if (!supabaseConfigured()) return [];
+  try {
+    const { data, error } = await anonClient()
+      .from('portfolio')
+      .select(CASE_STUDY_COLUMNS)
+      .eq('status', 'published')
+      .order('sort_order', { ascending: true });
+    if (error) {
+      reportLoadError('case_study_index', error);
+      return [];
+    }
+    return parseCaseStudies(data ?? []).map((study) => ({
+      slug: study.slug,
+      title: study.title,
+      updatedAt: study.updatedAt,
+    }));
+  } catch (err) {
+    reportLoadError('case_study_index', err);
+    return [];
+  }
+}
+
 /** One published case study, or null (the page answers a real 404). */
 export async function getCaseStudy(slug: string): Promise<CaseStudy | null> {
   if (!supabaseConfigured()) return null;
@@ -266,8 +299,7 @@ export async function getCaseStudy(slug: string): Promise<CaseStudy | null> {
       return null;
     }
     if (!data) return null;
-    const row = parseRow(CaseStudyRowSchema, data, 'portfolio');
-    return row ? toCaseStudy(row) : null;
+    return parseCaseStudies([data])[0] ?? null;
   } catch (err) {
     reportLoadError('case_study', err);
     return null;

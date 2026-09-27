@@ -1,0 +1,46 @@
+---
+import type { Locale } from '@schemas/primitives';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import SectionRenderer from '@/components/SectionRenderer.astro';
+import type { CatalogPage } from '@/lib/portfolio/pages';
+
+// The shell of Our Work (`/portfolio`) and All projects (`/portfolio/all`) — UI v2 PR10.
+// The route loads everything (src/lib/portfolio/pages.ts) and sets the cache headers; this
+// renders the head and the section composition — under the overlay header when the page
+// opens on its dark banner/head (page.header), with the pages' route stylesheets:
+// banner.css (the media banner and its caption, shared with the case study) and work.css.
+//
+// Our Work has no visible h1 (the design opens on a project banner): it carries a
+// visually hidden one, "Our Work". All projects' h1 is its page head; should an editor
+// remove that section, the hidden h1 stands in, so neither page is ever without one.
+
+interface Props {
+  locale: Locale;
+  logicalPath: '/portfolio' | '/portfolio/all';
+  page: CatalogPage;
+  /** The page's name, for the hidden h1. */
+  name: string;
+}
+
+const { locale, logicalPath, page, name } = Astro.props;
+const { seo } = page.head;
+const hasHead = page.sections.some((s) => s.type === 'pageHead' && s.visible !== false);
+---
+
+<BaseLayout
+  title={seo.title}
+  description={seo.description}
+  locale={locale}
+  logicalPath={logicalPath}
+  jsonLd={page.jsonLd}
+  robots={seo.robots}
+  header={page.header}
+  styles={['banner.css', 'work.css']}
+  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
+>
+  <main class="work-page">
+    {!hasHead && <h1 class="sr-only">{name}</h1>}
+    <SectionRenderer locale={locale} sections={page.sections} />
+  </main>
+</BaseLayout>
