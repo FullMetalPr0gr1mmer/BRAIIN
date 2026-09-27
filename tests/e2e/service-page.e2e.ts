@@ -75,6 +75,23 @@ async function scrollToTopOf(page: Page, selector: string, share = 0) {
   );
 }
 
+/** Where the floating button is, what sits on its centre, and where the consent banner is. */
+async function fabStack(page: Page) {
+  return page.evaluate(() => {
+    const fab = document.querySelector<HTMLElement>('a.svc-fab')!;
+    const banner = document.getElementById('consent-banner');
+    const r = fab.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return {
+      onTop: Boolean(hit && fab.contains(hit)),
+      bottom: r.bottom,
+      gap: innerHeight - r.bottom,
+      bannerOpen: Boolean(banner && !banner.hidden),
+      bannerTop: banner && !banner.hidden ? banner.getBoundingClientRect().top : innerHeight,
+    };
+  });
+}
+
 for (const locale of ['en', 'ar'] as const) {
   const s = STR[locale];
 
@@ -249,6 +266,20 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(fab).toHaveClass(/is-shown/);
       await expect(fab).not.toHaveAttribute('inert', '');
       await expect(fab).not.toHaveAttribute('aria-hidden', 'true');
+
+      // a first visit: the consent banner is open on the same bottom edge, above the
+      // button's layer — the button rides above it, so it is seen (and what a click on it
+      // reaches), never a live control hidden under the banner
+      expect((await fabStack(page)).bannerOpen).toBe(true);
+      await expect.poll(async () => (await fabStack(page)).onTop).toBe(true);
+      const lifted = await fabStack(page);
+      expect(lifted.bottom).toBeLessThanOrEqual(lifted.bannerTop);
+      // …and once a choice closes the banner it drops back to its place at the edge
+      await page.locator('#consent-banner [data-consent="reject"]').click();
+      await expect.poll(async () => (await fabStack(page)).gap).toBeLessThan(40);
+      const settled = await fabStack(page);
+      expect(settled.bannerOpen).toBe(false);
+      expect(settled.onTop).toBe(true);
 
       // the form comes up
       await scrollToTopOf(page, '#inquiry', 0.5);

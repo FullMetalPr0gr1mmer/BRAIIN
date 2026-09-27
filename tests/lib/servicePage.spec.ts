@@ -412,6 +412,14 @@ describe('the floating "Skip to inquiry"', () => {
     expect(fab.markOffset(-5)).toBe(0);
   });
 
+  it('rides above the consent banner while it is open, and drops back once it is not', () => {
+    expect(fab.LIFT_VAR).toBe('--svc-fab-lift');
+    expect(fab.fabLift(null)).toBe(0); // no banner on the page
+    expect(fab.fabLift({ hidden: false, offsetHeight: 154.4 })).toBe(155); // open: clear it
+    expect(fab.fabLift({ hidden: true, offsetHeight: 0 })).toBe(0); // a choice was made
+    expect(fab.fabLift({ hidden: true, offsetHeight: 80 })).toBe(0); // hidden wins
+  });
+
   it('while hidden it is inert, aria-hidden and out of the tab order', () => {
     const attrs = new Map<string, string>();
     const classes = new Set<string>();

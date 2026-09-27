@@ -384,9 +384,11 @@ html[dir='rtl'] .hero__skip b {
     grid-row: 1 / span 2;
   }
 }
-/* Keyboard focus scrolled into view never lands under the floating button (WCAG 2.4.11). */
+/* Keyboard focus scrolled into view never lands under the floating button (WCAG 2.4.11) —
+   nor under the consent banner it rides above while that is open (--svc-fab-lift, set on
+   <html> by serviceFab.ts; 0 once the banner is gone). */
 html:has(.svc-fab.is-shown) {
-  scroll-padding-bottom: calc(52px + clamp(16px, 3vh, 26px) + 12px);
+  scroll-padding-bottom: calc(var(--svc-fab-lift, 0px) + 52px + clamp(16px, 3vh, 26px) + 12px);
 }
 
 /* ---- What it is ---- */
@@ -1091,9 +1093,12 @@ html[dir='rtl'] .svc-fab {
   letter-spacing: 0;
   text-transform: none;
 }
+/* Shown: at its place, or — while the consent banner (z-80, the same bottom edge) is open —
+   lifted clear of it by the banner's height, so a first visit sees it too. A transform,
+   so the drop back when the banner closes is the same compositor-only transition. */
 .svc-fab.is-shown {
   opacity: 1;
-  transform: none;
+  transform: translateY(calc(-1 * var(--svc-fab-lift, 0px)));
 }
 .svc-fab:hover {
   background: var(--bs-cobalt);
