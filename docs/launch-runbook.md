@@ -420,7 +420,7 @@ The Round 2 cut-over (§6d) runs these steps in its overrides transaction; they 
 
    ```sql
    insert into app.placeholder_live_override (tenant_id, table_name, reason)
-   select t.id, x.table_name, 'Owner decision 2026-09-27 (R1/R3): show the sample quotes and case blocks until real ones replace them'
+   select t.id, x.table_name, 'Owner decision 2026-09-27: show the design samples until real content replaces them'
      from public.tenants t
      cross join (values ('testimonials'), ('service_cases')) as x(table_name)
     where t.id = '00000000-0000-0000-0000-0000000000b1'
