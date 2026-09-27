@@ -27,6 +27,40 @@ describe('JSON-LD builders', () => {
     expect((s.provider as { '@type': string })['@type']).toBe('Organization');
   });
 
+  it('Service (Round 2 service page): type, discipline, image and language when given', () => {
+    const s = buildServiceSchema({
+      name: 'تصميم الشعار',
+      description: 'شعار يشتغل على اللوحة والأيقونة الصغيرة والختم.',
+      url: 'https://x/ar/services/logo',
+      org: { name: 'بريّن ستيشن' },
+      serviceType: 'تصميم الشعار',
+      category: 'الهوية البصرية',
+      image: 'https://x/_image?href=poster.jpg&w=1200&f=jpg',
+      inLanguage: 'ar',
+    });
+    expect(s.serviceType).toBe('تصميم الشعار');
+    expect(s.category).toBe('الهوية البصرية');
+    expect(s.image).toBe('https://x/_image?href=poster.jpg&w=1200&f=jpg');
+    expect(s.inLanguage).toBe('ar');
+    expect(s.areaServed).toBe('SA');
+    expect(s.provider).toEqual({ '@type': 'Organization', name: 'بريّن ستيشن' });
+    // Our own sample case block is not an independent review: no rating markup, ever.
+    expect(JSON.stringify(s)).not.toMatch(/Review|Rating/);
+  });
+
+  it('Service omits the optional fields it was not given (no empty keys)', () => {
+    const s = buildServiceSchema({
+      name: 'Logo Design',
+      description: 'A mark.',
+      url: 'https://x/services/logo',
+      org,
+      category: '',
+      image: undefined,
+    });
+    for (const key of ['serviceType', 'category', 'image', 'inLanguage'])
+      expect(s, key).not.toHaveProperty(key);
+  });
+
   it('BreadcrumbList positions are 1-based and ordered', () => {
     const b = buildBreadcrumbSchema([
       { name: 'Home', url: 'https://x/' },

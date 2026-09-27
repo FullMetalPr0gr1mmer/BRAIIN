@@ -103,3 +103,19 @@ export const CASE_STUDY_META: Record<Locale, PageMeta> = {
     description: 'دراسة حالة من %brand%: البريف، ونطاق العمل، والنتيجة، وكيف انصنع الشغل.',
   },
 };
+
+// Round 2 — a service page (/services/[slug]; not section-composed, so outside PAGE_META).
+// Its own title is "<service> | <discipline>" (src/lib/services/page.ts) and its
+// description the service's tagline; this is the fallback for a service with no tagline
+// in the page's language. English: service.html's static <meta> verbatim. Arabic: ours, in
+// the page's own words (القيمة اللي نضيفها، دراسة حالة) — owner review.
+export const SERVICE_PAGE_META: Record<Locale, PageMeta> = {
+  en: {
+    title: 'Service',
+    description: 'What the service is, the value we add, and a client problem we solved with it.',
+  },
+  ar: {
+    title: 'الخدمة',
+    description: 'وش هي الخدمة، والقيمة اللي نضيفها، ومشكلة عميل حلّيناها فيها.',
+  },
+};

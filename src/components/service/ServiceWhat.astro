@@ -1,0 +1,79 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { ServiceDetail } from '@/lib/data/services';
+import { pickLocale } from '@/lib/i18n';
+import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
+
+// "What it is" (Round 2 — service.html `.what`), on paper: the kicker, the service's intro
+// line as the section's h2, then its body and the "What you get" checklist.
+//
+// The body is rendered from the Tiptap JSON by the allowlist renderer at render time
+// (toServiceDetail → renderBody, src/lib/data/portfolio.ts) — never the stored body_html
+// cache, which the database accepts from writes that skip the admin API's sanitiser
+// (CLAUDE.md §3 Pillar 1: sanitised on write AND render). That closes the gap the old
+// ServiceDetail left open.
+//
+// Hidden when the service has none of the three (a service created with a name only).
+
+interface Props {
+  locale: Locale;
+  service: ServiceDetail;
+}
+
+const { locale, service } = Astro.props;
+const copy = SERVICE_PAGE_COPY[locale];
+
+const intro = service.intro ? pickLocale(service.intro, locale) : '';
+const bodyHtml = service.bodyHtml ? pickLocale(service.bodyHtml, locale) : '';
+const deliverables = service.deliverables.map((d) => pickLocale(d, locale)).filter(Boolean);
+const show = Boolean(intro || bodyHtml || deliverables.length > 0);
+// The section's heading: the intro line, else the service's name (it still needs one).
+const heading = intro || pickLocale(service.title, locale);
+---
+
+{
+  show && (
+    <section class="svc-what" id="what" aria-labelledby="svc-what-heading">
+      <div class="svc-wrap">
+        <div class="tag rv">
+          <span class="dot" />
+          <span>{copy.whatTag}</span>
+        </div>
+        <div class="svc-what__grid">
+          <h2 class="svc-what__lead rv" id="svc-what-heading">
+            {heading}
+          </h2>
+          <div class="svc-what__text rv">
+            {bodyHtml && <div class="svc-what__body" set:html={bodyHtml} />}
+            {deliverables.length > 0 && (
+              <div class="svc-get">
+                <h3 class="svc-get__k" id="svc-get-heading">
+                  {copy.get}
+                </h3>
+                <ul class="svc-get__list" role="list" aria-labelledby="svc-get-heading">
+                  {deliverables.map((item) => (
+                    <li>
+                      <i aria-hidden="true">
+                        <svg viewBox="0 0 12 12">
+                          <path
+                            d="M2 6.5l2.6 2.6L10 3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </i>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}

@@ -1,0 +1,179 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { ServiceCase } from '@/lib/data/serviceCases';
+import type { ImageRef } from '@/lib/media/resolve';
+import { localizedHref, pickLocale } from '@/lib/i18n';
+import { pad2 } from '@/lib/portfolio/caseStudy';
+import { facetQuery } from '@/lib/portfolio/catalog';
+import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
+import MediaImage from '@/components/media/MediaImage.astro';
+
+// The case block (Round 2 — service.html `.case`), a black band, `#case` (the hero CTA's
+// target): a client problem this service solved. The kicker, the title as an h2, the meta
+// chips (the client, the sector, this service, the project), the project's poster linking
+// to its case study with a "See the full project" pill, "Where they were", the problem →
+// what-we-did rows, and the result cards.
+//
+// The client and sector ARE the project's (service_cases has no columns of its own for
+// them): a client RLS hid is "Confidential client" — text, never a link, since a filter URL
+// would disclose its slug. Client and sector chips open All projects filtered by them, as
+// the mockup's did. A case whose project is unpublished (or unset) keeps its words and
+// loses the project link and chip; its image is then the service's own poster, unlinked.
+//
+// The rows are an ordered list, not the mockup's anonymous divs: each cell carries its
+// column name for assistive tech (sr-only), the visual column heads are aria-hidden, and
+// on phones each "what we did" cell shows its label from `data-k` in CSS instead.
+
+interface Props {
+  locale: Locale;
+  serviceCase: ServiceCase;
+  /** This service's name — a chip, as in the mockup. */
+  serviceName: string;
+  /** The image when the case has no (published) project, or the project no poster. */
+  fallbackImage: ImageRef | null;
+}
+
+const { locale, serviceCase, serviceName, fallbackImage } = Astro.props;
+const copy = SERVICE_PAGE_COPY[locale];
+const project = serviceCase.project;
+
+const allProjects = (facet: 'client' | 'sector', value: string) =>
+  localizedHref(`/portfolio/all${facetQuery({ [facet]: value })}`, locale);
+
+type Chip = { label: string; href?: string | undefined };
+const chips: Chip[] = [];
+if (project?.client) {
+  chips.push({
+    label: pickLocale(project.client.name, locale),
+    href: allProjects('client', project.client.slug),
+  });
+} else if (project?.confidentialClient) {
+  chips.push({ label: copy.confidential });
+}
+if (project?.sector) {
+  chips.push({
+    label: pickLocale(project.sector.name, locale),
+    href: allProjects('sector', project.sector.slug),
+  });
+}
+chips.push({ label: serviceName });
+const projectHref = project ? localizedHref(`/portfolio/${project.slug}`, locale) : null;
+const projectName = project ? pickLocale(project.title, locale) : '';
+if (project && projectHref) chips.push({ label: projectName, href: projectHref });
+
+const image = project?.poster ?? fallbackImage;
+const context = serviceCase.context ? pickLocale(serviceCase.context, locale) : '';
+const problems = serviceCase.problems.map((p, i) => ({
+  n: pad2(i + 1),
+  problem: pickLocale(p.problem, locale),
+  solution: pickLocale(p.solution, locale),
+}));
+const results = serviceCase.results.map((r) => ({
+  value: r.value,
+  label: pickLocale(r.label, locale),
+}));
+const hasTop = Boolean(image || context);
+const sizes = '(min-width: 56.3125rem) min(52vw, 700px), 100vw';
+---
+
+<section class="svc-case" id="case" aria-labelledby="svc-case-heading">
+  <div class="svc-wrap">
+    <div class="tag tag--sky rv"><span class="dot"></span><span>{copy.caseTag}</span></div>
+    <h2 class="svc-case__t rv" id="svc-case-heading">{pickLocale(serviceCase.title, locale)}</h2>
+    <ul class="svc-case__meta rv" role="list">
+      {
+        chips.map((chip) => (
+          <li>{chip.href ? <a href={chip.href}>{chip.label}</a> : <span>{chip.label}</span>}</li>
+        ))
+      }
+    </ul>
+
+    {
+      hasTop && (
+        <div class:list={['svc-case__top', { 'svc-case__top--solo': !image || !context }]}>
+          {image &&
+            (projectHref ? (
+              <a class="svc-case__img rv" href={projectHref}>
+                <MediaImage
+                  image={image}
+                  locale={locale}
+                  altOverride={projectName}
+                  widths={[480, 800, 1200]}
+                  sizes={sizes}
+                />
+                <span class="svc-case__see">
+                  <span>{copy.seeProject}</span>
+                  <b aria-hidden="true">
+                    <svg viewBox="0 0 16 16">
+                      <path
+                        d="M2 8h12M9 3l5 5-5 5"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </b>
+                </span>
+              </a>
+            ) : (
+              <div class="svc-case__img rv">
+                <MediaImage image={image} locale={locale} widths={[480, 800, 1200]} sizes={sizes} />
+              </div>
+            ))}
+          {context && (
+            <div class="svc-case__ctx rv">
+              <h3 class="svc-case__k">{copy.context}</h3>
+              <p>{context}</p>
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    {
+      problems.length > 0 && (
+        <div class="svc-probs">
+          <div class="svc-probs__head" aria-hidden="true">
+            <span />
+            <span>{copy.problem}</span>
+            <span>{copy.did}</span>
+          </div>
+          <ol class="svc-probs__list" role="list">
+            {problems.map((p) => (
+              <li class="svc-prob rv">
+                <span class="svc-prob__n" aria-hidden="true">
+                  {p.n}
+                </span>
+                <p class="svc-prob__p">
+                  <span class="sr-only">{copy.problem}: </span>
+                  {p.problem}
+                </p>
+                <p class="svc-prob__s" data-k={copy.did}>
+                  <span class="sr-only">{copy.did}: </span>
+                  {p.solution}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )
+    }
+
+    {
+      results.length > 0 && (
+        <ul class="svc-res" role="list">
+          {results.map((r) => (
+            <li class="svc-res__i rv">
+              <span class="svc-res__n" dir="ltr">
+                {r.value}
+              </span>
+              <span class="svc-res__l">{r.label}</span>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  </div>
+</section>

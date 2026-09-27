@@ -1,13 +1,26 @@
 ---
-import ServiceDetail from '@/components/ServiceDetail.astro';
-import { getServiceBySlug } from '@/lib/data/services';
+import ServicePage from '@/components/service/ServicePage.astro';
+import { resolveServiceRoute, serviceCacheEntities } from '@/lib/services/page';
 import { setTierA } from '@/lib/http/cacheTags';
 
-const { slug } = Astro.params;
-const service = slug ? await getServiceBySlug(slug) : null;
-if (!service) return Astro.rewrite('/404');
+// A service page (Round 2). Tier A: server-rendered and edge-cached, purged by the
+// service's tag — and by the tags of everything else it shows (its discipline and
+// siblings, the case block's project, client and sector, the posters). An unknown or
+// unpublished slug is a REAL 404 (status 404, the English 404 page) — never another
+// service's page, as the mockup's `?s=` fell back to Logo Design. A retired Round 1 slug
+// answers a 301 to where it moved (src/lib/services/retired.ts), consulted only after the
+// lookup misses, so restoring an archived service wins.
+const locale = 'en' as const;
+const route = await resolveServiceRoute(Astro.params.slug, Astro.locals, locale);
+if (route.kind === 'redirect') return route.response;
+if (route.kind === 'missing') return Astro.rewrite('/404');
+const { page } = route;
 
-setTierA(Astro.response, { route: 'service', locale: 'en', entities: [`service:${service.slug}`] });
+setTierA(Astro.response, {
+  route: 'service',
+  locale,
+  entities: serviceCacheEntities(page.service.slug),
+});
 ---
 
-<ServiceDetail locale="en" service={service} />
+<ServicePage locale={locale} page={page} />

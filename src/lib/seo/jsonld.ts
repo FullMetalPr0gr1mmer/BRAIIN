@@ -72,13 +72,24 @@ export function buildWebSiteSchema(siteUrl: string, org: OrgRef): JsonLdNode {
   };
 }
 
+/**
+ * Service — a service page (Round 2). The optional fields are emitted only when the page
+ * really has them: `serviceType` (what the service is — its name), `category` (the
+ * discipline it sits in: "Branding"), `image` (the absolute poster URL) and `inLanguage`.
+ * There is deliberately NO Review/AggregateRating: the page's case block is our own sample
+ * content, and a rating we wrote about ourselves is a structured-data policy violation.
+ */
 export function buildServiceSchema(opts: {
   name: string;
   description: string;
   url: string;
   org: OrgRef;
+  serviceType?: string | undefined;
+  category?: string | undefined;
+  image?: string | undefined;
+  inLanguage?: Locale | undefined;
 }): JsonLdNode {
-  return {
+  const node: JsonLdNode = {
     '@context': 'https://schema.org',
     '@type': 'Service',
     name: opts.name,
@@ -87,6 +98,11 @@ export function buildServiceSchema(opts: {
     provider: orgNode(opts.org),
     areaServed: 'SA',
   };
+  if (opts.serviceType) node.serviceType = opts.serviceType;
+  if (opts.category) node.category = opts.category;
+  if (opts.image) node.image = opts.image;
+  if (opts.inLanguage) node.inLanguage = opts.inLanguage;
+  return node;
 }
 
 export function buildPersonSchema(opts: {
