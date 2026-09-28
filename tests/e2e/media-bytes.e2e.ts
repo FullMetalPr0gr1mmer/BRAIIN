@@ -37,6 +37,10 @@ const ROUTES = [
   // clip below the fold)
   '/portfolio/the-rider',
   '/ar/portfolio/the-rider',
+  // Round 2 (S4): the service hero's banner loop (on screen at load — allowed; it mounts
+  // after `load`), and in-content images that are lazy
+  '/services/logo',
+  '/ar/services/logo',
 ] as const;
 // Pages with a below-the-fold background video surface to scroll to.
 const BELOW_FOLD: Record<string, string> = {
@@ -161,6 +165,19 @@ for (const [route, selector] of Object.entries(BELOW_FOLD)) {
 
     await surface.scrollIntoViewIfNeeded();
     await expect(surface.locator('video')).toHaveCount(1, { timeout: 5000 });
+  });
+}
+
+// Round 2 (S4): on a service page the hero's backdrop is CSS and its loop mounts after
+// `load` (above), so every <img> in the page's content — the case block's poster — must be
+// lazy: nothing below the hero may compete with the h1 (the LCP element) for bandwidth.
+for (const route of ['/services/logo', '/ar/services/logo']) {
+  test(`${route}: every in-content image is lazy`, async ({ request }) => {
+    const html = await (await request.get(route)).text();
+    const main = html.slice(html.indexOf('<main'), html.indexOf('</main>'));
+    const imgs = main.match(/<img\b[^>]*>/g) ?? [];
+    expect(imgs.length, 'the case block poster').toBeGreaterThan(0);
+    for (const img of imgs) expect(img).toMatch(/\sloading="lazy"/);
   });
 }
 

@@ -1,0 +1,184 @@
+---
+import { getImage } from 'astro:assets';
+import type { Locale } from '@schemas/primitives';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import SectionBoundary from '@/components/SectionBoundary.astro';
+import Hero from '@/components/sections/Hero.astro';
+import Hello from '@/components/sections/Hello.astro';
+import { buildBreadcrumbSchema, buildServiceSchema, orgRef } from '@/lib/seo/jsonld';
+import { localizedPath, pickLocale } from '@/lib/i18n';
+import { serviceHelloHeading, SERVICE_HELLO_LEAD } from '@/lib/sections/hello';
+import { serviceDescription, serviceHeroSub, type ServicePage } from '@/lib/services/page';
+import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
+import ServiceWhat from './ServiceWhat.astro';
+import ServiceValue from './ServiceValue.astro';
+import ServiceCaseBlock from './ServiceCaseBlock.astro';
+import ServiceMore from './ServiceMore.astro';
+import ServiceFab from './ServiceFab.astro';
+
+// A service page (Round 2 — service.html), rendered in full on the server (Tier A) for
+// /services/[slug] and /ar/services/[slug]. In the mockup's order:
+//   hero → what it is → the value we add → case study → "Let's talk {service}" →
+//   more in {discipline} → (the floating "Skip to inquiry")
+// Each part is its own error boundary (one failing part never 500s the page) and hides
+// when it has nothing to show — a service with only a name still reads as a page: hero,
+// the inquiry form, its siblings.
+//
+// Under the overlay header, over the hero's banner loop: the service's own window of the
+// showreel (EXC-009 until Stream, KAN-20), else its discipline's, mounted after `load`.
+// The LCP element is the h1 (no intro plate, and the hero's backdrop is a CSS background)
+// — CLAUDE.md §6. Route stylesheet: services.css (the "Say hello" block, the hero's crumb
+// and skip pill, and this page's blocks).
+
+interface Props {
+  locale: Locale;
+  page: ServicePage;
+}
+
+const { locale, page } = Astro.props;
+const { service, discipline, disciplines, serviceCase, head } = page;
+const { seo, identity } = head;
+const copy = SERVICE_PAGE_COPY[locale];
+
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+const logicalPath = `/services/${service.slug}`;
+const url = base + localizedPath(logicalPath, locale);
+const name = pickLocale(service.title, locale);
+// The crumb's discipline: the embedded one (it is what the title names), else none.
+const disc = service.discipline;
+const discName = disc ? pickLocale(disc.name, locale) : '';
+
+// The hero loop: the service's own window, else its discipline's (the card's clip). With
+// neither, Hero plays its default reel from the start.
+const clip = service.clip?.path ? service.clip : discipline?.clip?.path ? discipline.clip : null;
+const loop =
+  clip && clip.startS !== undefined && clip.endS !== undefined
+    ? { start: clip.startS, end: clip.endS }
+    : undefined;
+
+// The hero's sub is the tagline; a service with none gets no sub line at all (`noSub`),
+// not the home hero's slogan (serviceHeroSub).
+const sub = serviceHeroSub(service);
+
+const crumb = {
+  items: [
+    { label: copy.services, href: '/services' },
+    ...(disc ? [{ label: discName, href: `/services#${disc.slug}` }] : []),
+  ],
+};
+
+// A shareable still for JSON-LD `image` and og:image (unless the SEO role set one): the
+// service's poster as a 1200 px JPEG — the case-study rule.
+const poster = service.poster;
+const shareImage = poster
+  ? new URL(
+      (
+        await getImage({
+          src: poster.src,
+          width: Math.min(1200, poster.width),
+          format: 'jpg',
+        })
+      ).src,
+      `${base}/`,
+    ).href
+  : undefined;
+const ogImage = seo.ogImage ?? shareImage;
+
+const jsonLd = [
+  buildServiceSchema({
+    name,
+    // The page's own words, strictly in its language; %brand% is filled here because the
+    // JSON-LD builder, unlike resolveSeo, does no substitution.
+    description: serviceDescription(service, locale).replace(/%brand%/g, () => head.brand),
+    url,
+    org: orgRef(identity, locale),
+    serviceType: name,
+    category: discName || undefined,
+    image: shareImage,
+  }),
+  buildBreadcrumbSchema([
+    { name: copy.home, url: base + localizedPath('/', locale) },
+    { name: copy.services, url: base + localizedPath('/services', locale) },
+    { name, url },
+  ]),
+];
+---
+
+<BaseLayout
+  title={seo.title}
+  description={seo.description}
+  locale={locale}
+  logicalPath={logicalPath}
+  jsonLd={jsonLd}
+  robots={seo.robots}
+  header="overlay"
+  styles={['services.css']}
+  {...ogImage ? { ogImage } : {}}
+  {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
+>
+  <main class="svc-page">
+    <SectionBoundary type="serviceHero">
+      <Hero
+        locale={locale}
+        headline={service.title}
+        {...sub ? { sub } : {}}
+        ctaLabel={serviceCase
+          ? { en: SERVICE_PAGE_COPY.en.seeCase, ar: SERVICE_PAGE_COPY.ar.seeCase }
+          : { en: SERVICE_PAGE_COPY.en.skip, ar: SERVICE_PAGE_COPY.ar.skip }}
+        {...clip?.path ? { videoSrc: clip.path } : {}}
+        data={{
+          banner: true,
+          ctaHref: serviceCase ? '#case' : '#inquiry',
+          ...(loop ? { clip: loop } : {}),
+          crumb,
+          skipLink: { kicker: copy.skipKicker, label: copy.skip, href: '#inquiry' },
+          noSub: !sub,
+        }}
+      />
+    </SectionBoundary>
+    <SectionBoundary type="serviceWhat">
+      <ServiceWhat locale={locale} service={service} />
+    </SectionBoundary>
+    <SectionBoundary type="serviceValue">
+      <ServiceValue locale={locale} points={service.valuePoints} />
+    </SectionBoundary>
+    {
+      serviceCase && (
+        <SectionBoundary type="serviceCase">
+          <ServiceCaseBlock
+            locale={locale}
+            serviceCase={serviceCase}
+            serviceName={name}
+            fallbackImage={poster}
+          />
+        </SectionBoundary>
+      )
+    }
+    <SectionBoundary type="hello">
+      <Hello
+        locale={locale}
+        groups={disciplines}
+        selected={service.slug}
+        headingOverride={serviceHelloHeading(name, locale)}
+        leadOverride={SERVICE_HELLO_LEAD[locale]}
+      />
+    </SectionBoundary>
+    {
+      discipline && (
+        <SectionBoundary type="serviceMore">
+          <ServiceMore locale={locale} discipline={discipline} current={service.slug} />
+        </SectionBoundary>
+      )
+    }
+    <ServiceFab locale={locale} />
+  </main>
+  <script>
+    // A `#inquiry` / `#case` arrival lands on its target at once, not through the site's
+    // smooth scroll (src/lib/client/landOnHash.ts). Inside the layout's slot, so it renders
+    // in <body>, not after </html>.
+    import { landOnHash } from '@/lib/client/landOnHash';
+
+    landOnHash();
+  </script>
+</BaseLayout>

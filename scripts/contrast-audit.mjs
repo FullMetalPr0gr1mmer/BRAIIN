@@ -72,6 +72,14 @@ const T = {
   // over a WHITE frame under the hero's top scrim (≈ .18 where the pill sits)
   skipWorst: '#686868',
   skipKicker: '#ededed', // .hero__skip small — white .88 over skipWorst
+  // Round 2 (S4) — the service page (services.css "S4: service page")
+  washMid: '#0138de', // .svc-vcard:hover wash (Klein → Cobalt, 150deg) at its midpoint — the furthest the number ever sits (RTL, top-right)
+  vcardHoverP: '#d6e2ff', // .svc-vcard:hover p — white .84 over the wash's Cobalt end
+  plusDisc: '#ebedfa', // .svc-vcard__plus — rgba(0,36,188,.08) over the white card
+  caseCtx: '#cccccc', // .svc-case__ctx p — white .80 over black
+  resBg: '#000c40', // .svc-res__i — rgba(0,36,188,.34) over black, the gradient's lighter end
+  resLabel: '#b8bbca', // .svc-res__l — white .72 over resBg
+  casePill: '#666666', // .svc-case__see — its .6 black glass over a WHITE poster
   // Round 2 (S3) — the /services explorer (services.css): the media caption pill's .7 glass
   // over a WHITE poster, and the selected tab's number (white .75 over Klein)
   xpCap: '#4d4d4d',
@@ -172,6 +180,28 @@ const PAIRS = [
   // Round 2 (S2): the service page's skip pill over footage
   ['fg', 'skipWorst', 4.5, 'skip pill label over a white frame (worst case)'],
   ['skipKicker', 'skipWorst', 4.5, 'skip pill kicker ("Been here before?") over a white frame'],
+  // Round 2 (S4): the service page — what it is (paper), the value band (mist + white cards),
+  // the case block (black), more in {discipline} (paper), the floating button (Klein)
+  ['dim', 'paper', 4.5, 'service body + "What you get" rows on paper'],
+  ['klein', 'paper', 4.5, 'service kickers, "What you get" label, card numbers, current row'],
+  ['fg', 'klein', 3.0, '"What you get" check (white on its Klein disc, UI)'],
+  ['dim', 'mist', 4.5, 'value band lead line on mist'],
+  ['klein', 'mist', 4.5, 'value band kicker + heading accent on mist'],
+  ['dim', 'paper', 4.5, 'value card text on its white card'],
+  ['klein', 'plusDisc', 3.0, 'value card plus (Klein on its tinted disc, UI)'],
+  ['fg', 'cobalt', 4.5, 'value card title on the hover wash (worst: the Cobalt end)'],
+  ['vcardHoverP', 'cobalt', 4.5, 'value card text on the hover wash (worst: the Cobalt end)'],
+  ['skySoft', 'washMid', 4.5, 'value card number on the hover wash (at most its midpoint)'],
+  ['skySoft', 'klein', 4.5, 'value card number on the hover wash (LTR: the Klein start)'],
+  ['tagDark', 'bg', 4.5, 'case block chips on black'],
+  ['caseCtx', 'bg', 4.5, 'case block "Where they were" copy on black'],
+  ['chipCount', 'bg', 4.5, 'case block column heads (white .6) on black'],
+  ['noteDark', 'bg', 4.5, 'case block "what we did" cells (white .7) on black'],
+  ['accent', 'bg', 4.5, 'case block kicker, labels and row numbers (sky on black)'],
+  ['fg', 'casePill', 4.5, 'case "See the full project" pill over a white poster (worst case)'],
+  ['fg', 'resBg', 4.5, 'case result value on its card'],
+  ['resLabel', 'resBg', 4.5, 'case result label on its card'],
+  ['fg', 'cobalt', 4.5, 'floating "Skip to inquiry", hovered (white on Cobalt)'],
   // Round 2 (S3): /services — the proof band and the explorer, both on white
   ['ink', 'paper', 4.5, 'services proof statement, rating value, stat numbers; explorer copy'],
   ['klein', 'paper', 4.5, 'services proof accent + stars; explorer key line, tab/row numbers'],

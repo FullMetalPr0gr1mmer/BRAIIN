@@ -1,0 +1,73 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { ValuePoint } from '@schemas/content';
+import { pickLocale } from '@/lib/i18n';
+import { pad2 } from '@/lib/portfolio/caseStudy';
+import { SERVICE_PAGE_COPY, VALUE_ACCENT } from '@/lib/services/pageCopy';
+import AccentText from '@/components/ui/AccentText.astro';
+
+// "The value we add" (Round 2 — service.html `.val`), a mist band: the kicker, "Why it's
+// *worth it*", the lead line, then one card per value point (01/02/03 + a plus mark, the
+// title as an h3, the text). The cards are not links: the hover (a Klein wash and a 4px
+// lift) is decoration, transform + opacity only, and off under reduced motion.
+//
+// Hidden when the service has no value points.
+
+interface Props {
+  locale: Locale;
+  points: readonly ValuePoint[];
+}
+
+const { locale, points } = Astro.props;
+const copy = SERVICE_PAGE_COPY[locale];
+const cards = points.map((p, i) => ({
+  n: pad2(i + 1),
+  title: pickLocale(p.title, locale),
+  text: pickLocale(p.text, locale),
+}));
+---
+
+{
+  cards.length > 0 && (
+    <section class="svc-val" aria-labelledby="svc-val-heading">
+      <div class="svc-wrap">
+        <div class="svc-val__head">
+          <div>
+            <div class="tag rv">
+              <span class="dot" />
+              <span>{copy.valueTag}</span>
+            </div>
+            <h2 class="rv" id="svc-val-heading">
+              <AccentText text={copy.valueHeading} locale={locale} accent={VALUE_ACCENT} />
+            </h2>
+          </div>
+          <p class="rv">{copy.valueLead}</p>
+        </div>
+        <ul class="svc-val__grid" role="list">
+          {cards.map((card) => (
+            <li class="rv">
+              <div class="svc-vcard">
+                <div class="svc-vcard__top" aria-hidden="true">
+                  <span class="svc-vcard__n">{card.n}</span>
+                  <span class="svc-vcard__plus">
+                    <svg viewBox="0 0 14 14">
+                      <path
+                        d="M7 1v12M1 7h12"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                  </span>
+                </div>
+                <h3>{card.title}</h3>
+                <p>{card.text}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )
+}

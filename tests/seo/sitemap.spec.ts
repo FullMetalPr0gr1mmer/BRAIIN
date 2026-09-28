@@ -1,5 +1,14 @@
-import { describe, it, expect } from 'vitest';
-import { GET as sitemapGet } from '@/pages/sitemap.xml';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { ServiceRow } from '@schemas/content';
+import { SEED_SERVICES, seedServiceRows } from '../fixtures/serviceSeeds';
+
+// Services default to none — the unconfigured-Supabase case the structure tests below rely
+// on — and one test swaps in the seeded catalogue.
+let services: ServiceRow[] = [];
+vi.mock('@/lib/data/services', () => ({ getPublishedServices: async () => services }));
+
+const { GET: sitemapGet } = await import('@/pages/sitemap.xml');
+const { RETIRED_SERVICES } = await import('@/lib/services/retired');
 
 const call = (h: unknown) => (h as unknown as () => Promise<Response>)();
 
@@ -83,5 +92,35 @@ describe('/sitemap.xml', () => {
     const res = await call(sitemapGet);
     expect(res.headers.get('content-type')).toContain('application/xml');
     expect(res.headers.get('cache-tag')).toContain('sitemap');
+  });
+
+  describe('service pages (Round 2)', () => {
+    afterEach(() => {
+      services = [];
+    });
+
+    it('lists all 28 live service pages, both language twins, with the row’s lastmod', async () => {
+      services = seedServiceRows();
+      const xml = await body();
+      expect(SEED_SERVICES).toHaveLength(28);
+      const locs = [...xml.matchAll(/<loc>([^<]+\/services\/[^<]+)<\/loc>/g)].map((m) => m[1]);
+      expect(locs).toHaveLength(56);
+      for (const { slug } of SEED_SERVICES) {
+        expect(xml).toContain(`<loc>https://www.braiinstation.com/services/${slug}</loc>`);
+        expect(xml).toContain(`<loc>https://www.braiinstation.com/ar/services/${slug}</loc>`);
+      }
+      const logo = xml.match(
+        /<url><loc>https:\/\/www\.braiinstation\.com\/services\/logo<\/loc>[\s\S]*?<\/url>/,
+      )?.[0];
+      expect(logo).toContain('<lastmod>2026-09-27</lastmod>');
+    });
+
+    it('never lists a retired slug — those answer a 301', async () => {
+      services = seedServiceRows();
+      const xml = await body();
+      for (const slug of Object.keys(RETIRED_SERVICES)) {
+        expect(xml).not.toContain(`/services/${slug}<`);
+      }
+    });
   });
 });
