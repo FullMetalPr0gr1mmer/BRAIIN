@@ -1022,7 +1022,8 @@ html[dir='rtl'] .hero__cta svg {
    tab order — a focusable CTA behind an opaque section is WCAG 2.4.11 territory.
    Toggled by the Hero scroll script. */
 .hero--covered .hero__inner,
-.hero--covered .hero__scroll {
+.hero--covered .hero__scroll,
+.hero--covered .hero__skip {
   visibility: hidden;
 }
 
@@ -1618,183 +1619,625 @@ html[dir='rtl'] .marquee-item {
 }
 
 /* ============================================================
-   Services — paper section, numbered rows, Klein hover fill.
+   Discipline cards (Round 2) — ServicesOverview.astro: home's
+   "Five disciplines, one studio" and the /services cards.
+   Namespace: .disc* (the band — the mockup's .cats*) and
+   .disc-card* (a card — the mockup's .cc*).
+
+   The hover WIDEN is layout-free. A hover-driven layout change
+   counts toward field CLS (hover is not "recent input"), and the
+   mockup's flex-grow moved every neighbour on every frame. Here
+   the cards sit absolutely positioned; `translate` places each
+   one, and its visuals (`.disc-card__clip`, the WIDEST width) are
+   cut to its current width by `clip-path: inset()`. The link's
+   own box stays the card at rest and takes no pointer events —
+   the clipped layer does, and clip-path bounds hit-testing too. Both are derived — no script — from the card
+   count (≤ 6; more and there is no widen), each card's index and
+   which card is ACTIVE (hovered › keyboard-focused › `.on`, the
+   /services selected card), with :has(), container units and
+   custom properties. The mockup's shares: the active card 2.1,
+   the others 0.8 (1 beside a selected card at rest).
+
+   The RISE (the cards come out from under the heading, small
+   first) is a scroll-driven transform + opacity — the slogan
+   band's precedent: static wherever scroll timelines or motion
+   are unavailable. docs/design-port-2026-09.md, S2 decisions.
    ============================================================ */
 
-.services-overview {
+.disc {
+  --disc-bg: var(--bs-mist);
   position: relative;
-  z-index: 4;
-  background: var(--bs-paper);
+  z-index: 4; /* above the sticky home hero */
+  background: var(--disc-bg);
   color: var(--bs-ink);
-  padding: clamp(72px, 12vh, 160px) var(--bs-pad-x) clamp(80px, 13vh, 170px);
+  padding: 0 var(--bs-pad-x) clamp(80px, 12vh, 150px);
   margin: 0;
+  /* The rising cards start tucked above the stage. `clip`, NOT `hidden`: a hidden overflow
+     is a scroll container, and the rise's view timeline would then track this section
+     (which never scrolls) instead of the page. */
+  overflow: clip;
+}
+.disc--home {
+  --disc-bg: var(--bs-paper);
 }
 
-.services-overview__head {
+.disc__head {
+  position: relative;
+  z-index: 3; /* the cards rise from under it */
+  background: var(--disc-bg);
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 28px;
   flex-wrap: wrap;
-  margin-bottom: clamp(40px, 6vh, 80px);
+  padding: clamp(72px, 12vh, 150px) 0 clamp(36px, 5.5vh, 70px);
 }
-.services-overview__head h2 {
+.disc__head h2 {
   margin: 0;
+  max-width: 15ch;
   font-size: clamp(34px, 6vw, 96px);
   font-weight: 800;
-  letter-spacing: -0.035em;
   line-height: 0.95;
+  letter-spacing: -0.035em;
   text-transform: uppercase;
-  max-width: 14ch;
 }
-html[dir='rtl'] .services-overview__head h2 {
+html[dir='rtl'] .disc__head h2 {
   font-size: clamp(30px, 5vw, 80px);
   letter-spacing: 0;
   line-height: 1.25;
   text-transform: none;
 }
-.services-overview__head p {
+.disc__head h2 em {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+.disc__head p {
   margin: 0;
-  font-size: 14.5px;
-  line-height: 1.6;
+  max-width: 36ch;
+  font-size: 15px;
+  line-height: 1.65;
   color: var(--bs-dim);
-  max-width: 34ch;
+}
+html[dir='rtl'] .disc__head p {
+  line-height: 1.9;
 }
 
-.svc-list {
-  border-top: 1px solid var(--bs-line-l);
-}
-
-.svc-row {
+/* ---- The stage. The shares are in container units (cqi), so they resolve against THIS
+   box wherever a card uses them: unregistered custom properties carry the unresolved
+   tokens down to the card, where 100cqi is the stage's width. ---- */
+.disc__stage {
+  --disc-n: 5;
+  --disc-g: clamp(8px, 0.9vw, 14px);
+  --disc-dir: 1;
+  /* the room once the gaps are out, and one card's share of it at rest */
+  --disc-a: calc(100cqi - (var(--disc-n) - 1) * var(--disc-g));
+  --disc-rest: calc(var(--disc-a) / var(--disc-n));
   position: relative;
-  display: grid;
-  align-items: center;
-  grid-template-columns: 64px 1fr minmax(0, 1.05fr) 42px;
-  gap: clamp(12px, 2.4vw, 32px);
-  padding: clamp(17px, 2.4vh, 27px) 6px;
-  border-bottom: 1px solid var(--bs-line-l);
-  text-decoration: none;
-  color: inherit;
-  overflow: hidden;
-  transition: color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1;
+  container-type: inline-size;
+  display: flex;
+  gap: var(--disc-g);
+  height: clamp(420px, 64vh, 640px);
 }
-.svc-row::before {
+html[dir='rtl'] .disc__stage {
+  --disc-dir: -1;
+}
+/* The card count (the CMS can publish more or fewer than five). */
+.disc__stage:has(> :last-child:nth-child(1)) {
+  --disc-n: 1;
+}
+.disc__stage:has(> :last-child:nth-child(2)) {
+  --disc-n: 2;
+}
+.disc__stage:has(> :last-child:nth-child(3)) {
+  --disc-n: 3;
+}
+.disc__stage:has(> :last-child:nth-child(4)) {
+  --disc-n: 4;
+}
+.disc__stage:has(> :last-child:nth-child(6)) {
+  --disc-n: 6;
+}
+.disc__stage:has(> :nth-child(7)) {
+  --disc-n: 7; /* 7+: no widen, and the name stops shrinking here */
+}
+
+.disc-card {
+  --disc-i0: 0;
+  position: relative;
+  /* on phones each card slides out from under the one above it */
+  z-index: calc(10 - var(--disc-i0));
+  display: block;
+  flex: 1 1 0;
+  min-width: 0;
+  color: var(--bs-paper);
+  text-decoration: none;
+  transform-origin: 50% 0;
+}
+/* Everything visible. At rest (and wherever there is no widen) it is exactly the card. */
+.disc-card__clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 18px;
+  background: var(--bs-media-bg);
+}
+.disc-card:nth-child(2) {
+  --disc-i0: 1;
+}
+.disc-card:nth-child(3) {
+  --disc-i0: 2;
+}
+.disc-card:nth-child(4) {
+  --disc-i0: 3;
+}
+.disc-card:nth-child(5) {
+  --disc-i0: 4;
+}
+.disc-card:nth-child(6) {
+  --disc-i0: 5;
+}
+
+/* The poster + hover clip (MediaFrame, clips.ts), with the mockup's slow zoom. Two classes:
+   `.mf` (later in this file) would otherwise win back `position: relative`. */
+.disc-card__clip > .disc-card__media {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+}
+.disc-card__media--none {
+  background:
+    radial-gradient(120% 70% at 30% 0%, var(--bs-glow-klein), transparent 70%), var(--bs-media-bg);
+}
+.disc-card .mf img {
+  transition:
+    transform 1.4s var(--bs-ease),
+    opacity 0.6s ease;
+}
+.disc-card:hover .mf img,
+.disc-card:focus-visible .mf img {
+  transform: scale(1.05);
+}
+/* The clip is only ever on screen at the zoom's end state, so it sits there — never
+   transitioning its own transform. A playing video repaints every frame, and a video whose
+   transform was mid-transition registered as tiny layout shifts (tests/e2e/layout-shift). */
+.disc-card .mf video {
+  transform: scale(1.05);
+  transition: opacity 0.6s ease;
+}
+
+/* The scrim, sized in PIXELS from the card's edges — where the pill and the words sit —
+   rather than as shares of its height. The design's bands (0→26% for the pill, 44%→100%
+   for the words) left the name and count on raw footage on phones (a 250px card puts its
+   words in its top half) and under 4.5:1 over a light poster anywhere. With ≥ .6 black
+   behind every line of words (measured: the highest line sits ≤ 183px above the foot on
+   wide screens, hovered, and ≤ 150px on phones), the audited worst case — a WHITE poster —
+   passes AA (scripts/contrast-audit.mjs, "discipline card"). The top band is the mockup's
+   .42 over the 150px it spans on a 1366×900 card. */
+.disc-card__clip::after {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 0;
-  background: var(--bs-klein);
-  transform: scaleY(0);
-  transform-origin: bottom;
-  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.svc-row:hover::before,
-.svc-row:focus-visible::before {
-  transform: scaleY(1);
-  transform-origin: top;
-}
-.svc-row:hover,
-.svc-row:focus-visible {
-  color: #fff;
-}
-.svc-row > * {
-  position: relative;
   z-index: 1;
-  /* the hover indent is a transform, not padding — padding animates layout on the
-     main thread every frame (compositor-only rule, §3 P2) */
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.42) 0, rgba(0, 0, 0, 0) 150px),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.78) 0, rgba(0, 0, 0, 0.6) 190px, rgba(0, 0, 0, 0) 300px);
 }
-.svc-row:hover > :not(.svc-row__a),
-.svc-row:focus-visible > :not(.svc-row__a) {
-  transform: translateX(clamp(10px, 1.6vw, 26px));
-}
-html[dir='rtl'] .svc-row:hover > :not(.svc-row__a),
-html[dir='rtl'] .svc-row:focus-visible > :not(.svc-row__a) {
-  transform: translateX(clamp(-26px, -1.6vw, -10px));
+@media (max-width: 900px) {
+  .disc-card__clip::after {
+    background:
+      linear-gradient(180deg, rgba(0, 0, 0, 0.42) 0, rgba(0, 0, 0, 0) 150px),
+      linear-gradient(0deg, rgba(0, 0, 0, 0.72) 0, rgba(0, 0, 0, 0.6) 155px, rgba(0, 0, 0, 0) 235px);
+  }
 }
 
-.svc-row__n {
+/* The focus ring and the selected outline live on an inner layer sized to the VISIBLE
+   width: the card's own outline would be cut by its clip-path (WCAG 2.4.7). Two tones, so
+   the ring shows over a dark frame (white) and a light one (Klein). */
+.disc-card__ring {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  border-radius: 18px;
+  pointer-events: none;
+}
+.disc-card:focus-visible {
+  outline: none;
+}
+.disc-card:focus-visible .disc-card__ring {
+  box-shadow:
+    inset 0 0 0 2px var(--bs-klein),
+    inset 0 0 0 5px var(--bs-paper);
+}
+.disc-card.on .disc-card__ring {
+  box-shadow: inset 0 0 0 3px var(--bs-klein);
+}
+.disc-card.on:focus-visible .disc-card__ring {
+  box-shadow:
+    inset 0 0 0 3px var(--bs-klein),
+    inset 0 0 0 6px var(--bs-paper);
+}
+@media (forced-colors: active) {
+  .disc-card:focus-visible .disc-card__ring {
+    outline: 3px solid CanvasText;
+    outline-offset: -3px;
+  }
+}
+
+/* The number pill (aria-hidden — the order is visual only) and the arrow, as the mockup's
+   `.cc__top` row: the 28px pill centred on the 44px arrow. The pill's glass is dark, not
+   the mockup's white .14: white digits on that read ~2.5:1 over a light frame (audited
+   worst case: a white poster under the top scrim, "discipline card pill"). */
+.disc-card__n {
+  position: absolute;
+  z-index: 2;
+  top: 26px;
+  inset-inline-start: 18px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 38px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   font-size: 12px;
-  font-weight: 600;
-  color: var(--bs-dim);
-  letter-spacing: 0.08em;
-  transition: color 0.4s;
-}
-.svc-row:hover .svc-row__n {
-  /* sky-soft, not sky: #22a9ff on the Klein fill is 4.14:1 — under AA for 12px text */
-  color: var(--bs-sky-soft);
-}
-
-.svc-row__t {
-  font-size: clamp(19px, 2.8vw, 42px);
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.05;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
 }
-html[dir='rtl'] .svc-row__t {
+html[dir='rtl'] .disc-card__n {
+  font-size: 13px;
   letter-spacing: 0;
 }
-
-.svc-row__soon {
-  display: inline-block;
-  vertical-align: middle;
-  margin-inline-start: 12px;
-  padding: 4px 9px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  background: var(--bs-klein);
-  color: #fff;
+.disc-card__go {
+  position: absolute;
+  z-index: 2;
+  top: 18px;
+  inset-inline-end: 18px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bs-paper);
+  color: var(--bs-klein);
   transition:
-    background 0.4s,
-    color 0.4s;
+    background 0.3s,
+    color 0.3s,
+    translate 0.75s var(--bs-ease);
 }
-html[dir='rtl'] .svc-row__soon {
+.disc-card__go svg {
+  width: 16px;
+  height: 16px;
+}
+/* Intentional glyph mirroring in RTL — the arrow points the way text runs. */
+html[dir='rtl'] .disc-card__go svg {
+  transform: scaleX(-1);
+}
+.disc-card:hover .disc-card__go,
+.disc-card:focus-visible .disc-card__go,
+.disc-card.on .disc-card__go {
+  background: var(--bs-klein);
+  color: var(--bs-paper);
+}
+
+/* The words. `.disc-card__s` is the short line's box; the name + count sit just above it
+   (absolutely, bottom: 100%). Wherever the line is hidden (wide screens at rest) the box is
+   translated down by 100% of its OWN height — which carries the name down to the card's
+   foot, where the design rests it — and it slides back up on hover: the reveal is a
+   transform, never the mockup's max-height. */
+.disc-card__bot {
+  position: absolute;
+  z-index: 2;
+  inset-inline: 18px;
+  bottom: 20px;
+  transform-origin: 0 100%;
+  transition: scale 0.75s var(--bs-ease);
+}
+html[dir='rtl'] .disc-card__bot {
+  transform-origin: 100% 100%;
+}
+.disc-card__s {
+  position: relative;
+  display: block;
+  padding-top: 10px;
+  transition: translate 0.6s var(--bs-ease);
+}
+.disc-card__head {
+  position: absolute;
+  bottom: 100%;
+  inset-inline: 0;
+  display: flex;
+  flex-direction: column-reverse; /* the count above the name, as drawn; the name reads first */
+}
+.disc-card__cnt {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.86);
+}
+html[dir='rtl'] .disc-card__cnt {
+  font-size: 13px;
   letter-spacing: 0;
   text-transform: none;
 }
-.svc-row:hover .svc-row__soon {
-  background: #fff;
-  color: var(--bs-klein);
+/* A FIXED size per stage — the mockup's 10.4cqi of a card at rest — that never changes on
+   hover: the mockup grew it with the card (a text reflow, i.e. a layout shift). */
+.disc-card__t {
+  display: block;
+  font-size: clamp(16px, calc(var(--disc-rest) * 0.104), 30px);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .disc-card__t {
+  font-size: clamp(19px, 1.7vw, 28px);
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.disc-card__line {
+  display: block;
+  max-width: 30ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9);
+  transition: opacity 0.45s ease;
+}
+html[dir='rtl'] .disc-card__line {
+  line-height: 1.8;
 }
 
-.svc-row__d {
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: var(--bs-dim);
-  transition: color 0.4s;
-}
-.svc-row:hover .svc-row__d {
-  color: rgba(255, 255, 255, 0.78);
-}
-
-.svc-row__a {
-  justify-self: end;
-  font-size: 19px;
-  opacity: 0.35;
-  transition:
-    opacity 0.4s,
-    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-html[dir='rtl'] .svc-row__a {
-  transform: scaleX(-1);
-}
-.svc-row:hover .svc-row__a {
-  opacity: 1;
-  transform: translateX(5px);
-}
-html[dir='rtl'] .svc-row:hover .svc-row__a {
-  transform: scaleX(-1) translateX(5px);
-}
-
-@media (max-width: 860px) {
-  .svc-row {
-    grid-template-columns: 40px 1fr 26px;
+/* ---- The widen: a hover-capable pointer on a wide screen, at most six cards ---- */
+@media (hover: hover) and (min-width: 901px) {
+  .disc__stage:not(:has(> :nth-child(7))) {
+    display: block;
   }
-  .svc-row__d {
-    display: none;
+  .disc__stage:not(:has(> :nth-child(7))) > .disc-card {
+    /* one share with an active card (it 2.1, the rest 0.8), and beside a selected card at
+       rest (it 2.1, the rest 1) */
+    --disc-uh: calc(var(--disc-a) / (2.1 + 0.8 * (var(--disc-n) - 1)));
+    --disc-uo: calc(var(--disc-a) / (1.1 + var(--disc-n)));
+    --disc-wmax: calc(2.1 * var(--disc-uh));
+    /* the state (set below): a small card's width, the active card's, a small card's text
+       scale; and whether THIS card is the active one, or comes after it */
+    --disc-small: var(--disc-rest);
+    --disc-big: var(--disc-rest);
+    --disc-k: 1;
+    --disc-self: 0;
+    --disc-after: 0;
+    --disc-v: calc(var(--disc-small) + var(--disc-self) * (var(--disc-big) - var(--disc-small)));
+    --disc-x: calc(
+      var(--disc-i0) * (var(--disc-small) + var(--disc-g)) + var(--disc-after) *
+        (var(--disc-big) - var(--disc-small))
+    );
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    inset-inline-start: 0;
+    width: var(--disc-rest);
+    pointer-events: none;
+    translate: calc(var(--disc-dir) * var(--disc-x)) 0;
+    transition: translate 0.75s var(--bs-ease);
+  }
+  .disc__stage:not(:has(> :nth-child(7))) .disc-card__clip {
+    inset-inline-end: auto;
+    width: var(--disc-wmax);
+    border-radius: 0; /* the clip rounds the visible corners */
+    clip-path: inset(0 calc(var(--disc-wmax) - var(--disc-v)) 0 0 round 18px);
+    pointer-events: auto;
+    transition: clip-path 0.75s var(--bs-ease);
+  }
+  html[dir='rtl'] .disc__stage:not(:has(> :nth-child(7))) .disc-card__clip {
+    clip-path: inset(0 0 0 calc(var(--disc-wmax) - var(--disc-v)) round 18px);
+  }
+
+  /* Active = the hovered card... */
+  .disc__stage:not(:has(> :nth-child(7))):has(> .disc-card:hover) > .disc-card {
+    --disc-small: calc(0.8 * var(--disc-uh));
+    --disc-big: var(--disc-wmax);
+    --disc-k: calc(0.8 * var(--disc-n) / (2.1 + 0.8 * (var(--disc-n) - 1)));
+  }
+  .disc__stage:not(:has(> :nth-child(7))) > .disc-card:hover {
+    --disc-self: 1;
+  }
+  .disc__stage:not(:has(> :nth-child(7))) > .disc-card:hover ~ .disc-card {
+    --disc-after: 1;
+  }
+  /* ...else the keyboard-focused one (the same shares: a keyboard visitor gets the line)... */
+  .disc__stage:not(:has(> :nth-child(7))):not(:has(> .disc-card:hover)):has(
+      > .disc-card:focus-visible
+    )
+    > .disc-card {
+    --disc-small: calc(0.8 * var(--disc-uh));
+    --disc-big: var(--disc-wmax);
+    --disc-k: calc(0.8 * var(--disc-n) / (2.1 + 0.8 * (var(--disc-n) - 1)));
+  }
+  .disc__stage:not(:has(> :nth-child(7))):not(:has(> .disc-card:hover)) > .disc-card:focus-visible {
+    --disc-self: 1;
+  }
+  .disc__stage:not(:has(> :nth-child(7))):not(:has(> .disc-card:hover))
+    > .disc-card:focus-visible
+    ~ .disc-card {
+    --disc-after: 1;
+  }
+  /* ...else the selected card (/services, `.on`): it 2.1, the rest 1. */
+  .disc__stage:not(:has(> :nth-child(7))):not(
+      :has(> .disc-card:hover, > .disc-card:focus-visible)
+    ):has(> .disc-card.on)
+    > .disc-card {
+    --disc-small: var(--disc-uo);
+    --disc-big: calc(2.1 * var(--disc-uo));
+    --disc-k: calc(var(--disc-n) / (1.1 + var(--disc-n)));
+  }
+  .disc__stage:not(:has(> :nth-child(7))):not(:has(> .disc-card:hover, > .disc-card:focus-visible))
+    > .disc-card.on {
+    --disc-self: 1;
+  }
+  .disc__stage:not(:has(> :nth-child(7))):not(:has(> .disc-card:hover, > .disc-card:focus-visible))
+    > .disc-card.on
+    ~ .disc-card {
+    --disc-after: 1;
+  }
+
+  /* Inside a card, what sits at the inline END follows the visible edge by translate. */
+  .disc__stage:not(:has(> :nth-child(7))) .disc-card__go {
+    inset-inline-end: auto;
+    inset-inline-start: 0;
+    translate: calc(var(--disc-dir) * (var(--disc-v) - 62px)) 0;
+  }
+  .disc__stage:not(:has(> :nth-child(7))) .disc-card__ring {
+    inset-inline-end: auto;
+    width: var(--disc-v);
+    transition: width 0.75s var(--bs-ease);
+  }
+  /* The poster box is the widest width; its centre follows the visible window's centre, as
+     object-fit re-cropping the mockup's resized card did. */
+  .disc__stage:not(:has(> :nth-child(7))) .disc-card__media {
+    translate: calc(var(--disc-dir) * (var(--disc-v) - var(--disc-wmax)) / 2) 0;
+    transition: translate 0.75s var(--bs-ease);
+  }
+  /* The words keep the width they wrap at on a card at rest (no reflow); a squeezed card
+     scales them down with it — what the mockup's cqi sizes did, as a transform. */
+  .disc__stage:not(:has(> :nth-child(7))) .disc-card__bot {
+    inset-inline-end: auto;
+    width: calc(var(--disc-rest) - 36px);
+    scale: calc(1 + (var(--disc-k) - 1) * (1 - var(--disc-self)));
+  }
+  .disc__stage:not(:has(> :nth-child(7))) .disc-card__s {
+    translate: 0 calc((1 - var(--disc-self)) * 100%);
+  }
+  .disc__stage:not(:has(> :nth-child(7))) .disc-card__line {
+    opacity: var(--disc-self);
+  }
+}
+
+/* ---- Phones: one column, every line shown, no widen ---- */
+@media (max-width: 900px) {
+  .disc__stage {
+    --disc-rest: 100cqi;
+    --disc-h: clamp(190px, 30vh, 250px);
+    flex-direction: column;
+    height: auto;
+    gap: 12px;
+  }
+  .disc-card {
+    flex: none;
+    height: var(--disc-h);
+  }
+  .disc-card__s {
+    padding-top: 8px;
+  }
+  .disc-card__line {
+    font-size: 13.5px;
+  }
+}
+
+.disc__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: clamp(36px, 5vh, 56px);
+}
+.disc__foot .cta {
+  margin-inline-start: auto;
+}
+.disc__hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: normal;
+  color: var(--bs-dim);
+}
+.disc__hint i {
+  flex: none;
+  width: 26px;
+  height: 1px;
+  background: currentColor;
+}
+
+/* ---- The rise: while the stage scrolls in, the cards come out from under the heading,
+   small first, then full size (the mockup's grow(), as a view timeline). Wide screens
+   stagger across the stage's own progress; phones follow each card's own top. The hidden
+   from-state lives ONLY in the keyframes (the reduced-motion invariant, below). ---- */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .disc__stage {
+      view-timeline: --disc-rise block;
+    }
+    @keyframes disc-rise {
+      from {
+        transform: translateY(-100%) scale(0.3);
+      }
+      to {
+        transform: none;
+      }
+    }
+    @keyframes disc-fade {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    @keyframes disc-rise-m {
+      from {
+        transform: translateY(-45%) scale(0.72);
+      }
+      to {
+        transform: none;
+      }
+    }
+    @keyframes disc-fade-m {
+      from {
+        opacity: 0.2;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    /* grow(): p = the stage's progress over the 82vh after it enters; card i eases (out,
+       cubic) over p·1.32 − 0.07i and is opaque by 40% of its ease. As scroll ranges: card i
+       starts 4.35vh·i in, eases over 62.1vh, and is opaque after 9.75vh. */
+    .disc-card {
+      animation:
+        disc-rise 1ms cubic-bezier(0.33, 1, 0.68, 1) both,
+        disc-fade 1ms linear both;
+      animation-timeline: --disc-rise, --disc-rise;
+      animation-range:
+        cover calc(var(--disc-i0) * 4.35vh) cover calc(62.1vh + var(--disc-i0) * 4.35vh),
+        cover calc(var(--disc-i0) * 4.35vh) cover calc(9.75vh + var(--disc-i0) * 4.35vh);
+    }
+    /* Phones: each card over the 60vh after its OWN top enters (its offset in the stack is
+       i·(height + gap)); it slides out from under the one above, opaque by 57% of its ease. */
+    @media (max-width: 900px) {
+      .disc-card {
+        --disc-at: calc(var(--disc-i0) * (var(--disc-h) + 12px));
+        animation:
+          disc-rise-m 1ms cubic-bezier(0.33, 1, 0.68, 1) both,
+          disc-fade-m 1ms linear both;
+        animation-timeline: --disc-rise, --disc-rise;
+        animation-range:
+          cover var(--disc-at) cover calc(var(--disc-at) + 60vh),
+          cover var(--disc-at) cover calc(var(--disc-at) + 14.8vh);
+      }
+    }
   }
 }
 
@@ -1929,6 +2372,12 @@ html[dir='rtl'] .contact-form label {
 .contact-form select option {
   background: var(--bs-midnight);
   color: var(--bs-fg);
+}
+/* The grouped service select (Round 2): a discipline's "01 Branding" heading in sky. */
+.contact-form select optgroup {
+  background: var(--bs-midnight);
+  color: var(--bs-sky);
+  font-style: normal;
 }
 
 /* The design's select: no native control, a thin two-stroke chevron at the inline end
@@ -2514,7 +2963,6 @@ html[dir='rtl'] .social-strip--klein h2 {
 
 /* (The `.cta-band` block lived here — CtaBand was retired in UI v2 PR10; the `cta`
    section renders LeadBand, styled under "Lead band" below.) */
-.services-overview h2,
 .social-strip h2 {
   margin-top: 0;
 }
@@ -4253,7 +4701,8 @@ html[dir='rtl'] .contact-form--compact .contact-form__foot .cta--trail {
   .hero__scroll i,
   .h-split .hw,
   .tm__bar i,
-  .faq-item[open] .faq-item__a p {
+  .faq-item[open] .faq-item__a p,
+  .disc-card {
     animation: none !important;
   }
   /* Deliberately NOT a blanket `transform: none` — .site-header--overlay must keep
@@ -4272,7 +4721,9 @@ html[dir='rtl'] .contact-form--compact .contact-form__foot .cta--trail {
   .pcard__link:focus-visible .mf video,
   .cta--badge:hover,
   .cta--badge:hover .cta__ico,
-  .tm.is-enhanced .tm__q {
+  .tm.is-enhanced .tm__q,
+  .disc-card:hover .mf img,
+  .disc-card:focus-visible .mf img {
     transform: none !important;
   }
   .sw {

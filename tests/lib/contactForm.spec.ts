@@ -4,9 +4,18 @@ import {
   CONTACT_FIELD_TO_LEAD,
   CONTACT_FIXED_KEYS,
   CONTACT_FORM_FIELDS,
+  SERVICE_LEAD_KEYS,
   buildContactPayload,
   leadKeysToFields,
 } from '@/lib/forms/contactPayload';
+import {
+  DISCIPLINE_PREFIX,
+  initialServiceValue,
+  preselectValue,
+  serviceChoice,
+  serviceOptionGroups,
+  serviceOptionValues,
+} from '@/lib/forms/serviceSelect';
 import { checkField, statusFromHttp } from '@/lib/client/formErrors';
 
 // The contact form's wire contract (UI v2 PR7). LeadInputSchema is a NON-strict z.object,
@@ -18,7 +27,11 @@ const SCHEMA_KEYS = Object.keys(LeadInputSchema.shape);
 
 describe('ContactForm payload ⊆ LeadInputSchema (the contract test)', () => {
   it('every key the form can post is a key the schema reads', () => {
-    for (const key of [...Object.values(CONTACT_FIELD_TO_LEAD), ...CONTACT_FIXED_KEYS]) {
+    for (const key of [
+      ...Object.values(CONTACT_FIELD_TO_LEAD),
+      ...SERVICE_LEAD_KEYS,
+      ...CONTACT_FIXED_KEYS,
+    ]) {
       expect(SCHEMA_KEYS, key).toContain(key);
     }
   });
@@ -47,16 +60,32 @@ describe('ContactForm payload ⊆ LeadInputSchema (the contract test)', () => {
     // The free-text deadline lands in the encrypted timeline_text_enc, never the legacy band.
     expect(CONTACT_FIELD_TO_LEAD.deadline).toBe('timelineText');
     expect(Object.values(CONTACT_FIELD_TO_LEAD)).not.toContain('timelineBand');
-    expect(Object.values(CONTACT_FIELD_TO_LEAD)).not.toContain('phone');
+    expect(CONTACT_FORM_FIELDS.full).not.toContain('phone');
+    expect(CONTACT_FORM_FIELDS.compact).not.toContain('phone');
   });
 
-  for (const variant of ['compact', 'full'] as const) {
+  it('the "Say hello" form is the services design’s seven: phone and budget, no deadline', () => {
+    expect(CONTACT_FORM_FIELDS.hello).toEqual([
+      'name',
+      'email',
+      'company',
+      'phone',
+      'service',
+      'budget',
+      'message',
+    ]);
+    // The phone posts under the schema's own key (envelope-encrypted server-side).
+    expect(CONTACT_FIELD_TO_LEAD.phone).toBe('phone');
+  });
+
+  for (const variant of ['compact', 'full', 'hello'] as const) {
     it(`a filled ${variant} form parses, and the schema keeps EVERY key it was sent`, () => {
       const values: Record<string, string> = {
         name: 'Kareem',
         email: 'someone@example.com',
         company: 'Studio',
-        service: 'branding',
+        phone: '+966 55 123 4567',
+        service: 'logo',
         budget: '25k_75k',
         deadline: 'Before Ramadan',
         message: 'A brand identity for a launch this year.',
@@ -159,6 +188,140 @@ describe('ContactForm payload ⊆ LeadInputSchema (the contract test)', () => {
       leadKeysToFields(['email', 'serviceOfInterest', 'timelineText', 'nope', 'email']),
     ).toEqual(['email', 'service', 'deadline']);
     expect(leadKeysToFields([42, null])).toEqual([]);
+  });
+
+  it('both service keys mark the one select; the phone marks the phone field', () => {
+    expect(leadKeysToFields(['disciplineOfInterest'])).toEqual(['service']);
+    expect(leadKeysToFields(['serviceOfInterest', 'disciplineOfInterest', 'phone'])).toEqual([
+      'service',
+      'phone',
+    ]);
+  });
+});
+
+// ── The grouped service select (Round 2) ──
+
+const GROUPS = [
+  {
+    slug: 'branding',
+    name: { en: 'Branding', ar: 'الهوية البصرية' },
+    services: [
+      { slug: 'logo', title: { en: 'Logo Design', ar: 'تصميم الشعار' } },
+      { slug: 'business-cards', title: { en: 'Business Cards', ar: 'بطاقات العمل' } },
+    ],
+  },
+  {
+    slug: 'events',
+    name: { en: 'Events & Exhibitions', ar: 'الفعاليات والمعارض' },
+    services: [{ slug: '3d-design', title: { en: '3D Design' } }],
+  },
+];
+
+describe('serviceOptionGroups: one optgroup per discipline, "help me choose" first', () => {
+  it('numbers the groups and opens each with its discipline option (English)', () => {
+    expect(serviceOptionGroups(GROUPS, 'en')).toEqual([
+      {
+        label: '01 Branding',
+        options: [
+          { value: 'discipline:branding', label: 'Branding, help me choose' },
+          { value: 'logo', label: 'Logo Design' },
+          { value: 'business-cards', label: 'Business Cards' },
+        ],
+      },
+      {
+        label: '02 Events & Exhibitions',
+        options: [
+          { value: 'discipline:events', label: 'Events & Exhibitions, help me choose' },
+          { value: '3d-design', label: '3D Design' },
+        ],
+      },
+    ]);
+  });
+
+  it('joins with the ARABIC comma in Arabic, and falls back to English for a missing name', () => {
+    const [branding, events] = serviceOptionGroups(GROUPS, 'ar');
+    expect(branding!.label).toBe('01 الهوية البصرية');
+    expect(branding!.options[0]).toEqual({
+      value: 'discipline:branding',
+      label: 'الهوية البصرية، ساعدوني أختار',
+    });
+    expect(branding!.options[0]!.label).not.toContain(',');
+    expect(events!.options[1]).toEqual({ value: '3d-design', label: '3D Design' });
+  });
+
+  it('offers nothing but "not sure" with no disciplines (a database outage)', () => {
+    expect(serviceOptionGroups([], 'en')).toEqual([]);
+  });
+
+  it('every value is a slug or discipline:<slug> the schema accepts', () => {
+    for (const v of serviceOptionValues(serviceOptionGroups(GROUPS, 'en'))) {
+      const choice = serviceChoice(v)!;
+      const parsed = LeadInputSchema.shape[choice.key].safeParse(choice.slug);
+      expect(parsed.success, v).toBe(true);
+    }
+  });
+});
+
+describe('the select value → the lead key it posts under', () => {
+  const post = (service: string) =>
+    buildContactPayload(
+      (k) =>
+        (({ name: 'K', email: 'k@example.com', message: 'Hi', service }) as Record<string, string>)[
+          k
+        ] ?? null,
+      { kind: 'project_inquiry', locale: 'en' },
+    );
+
+  it('"{Discipline}, help me choose" posts disciplineOfInterest, never serviceOfInterest', () => {
+    const payload = post(`${DISCIPLINE_PREFIX}branding`);
+    expect(payload['disciplineOfInterest']).toBe('branding');
+    expect(payload).not.toHaveProperty('serviceOfInterest');
+    expect(LeadInputSchema.parse(payload).disciplineOfInterest).toBe('branding');
+  });
+
+  it('a service posts serviceOfInterest only', () => {
+    const payload = post('logo');
+    expect(payload['serviceOfInterest']).toBe('logo');
+    expect(payload).not.toHaveProperty('disciplineOfInterest');
+  });
+
+  it('"not sure" and a bare prefix post neither', () => {
+    for (const v of ['', '   ', DISCIPLINE_PREFIX]) {
+      const payload = post(v);
+      expect(payload, JSON.stringify(v)).not.toHaveProperty('serviceOfInterest');
+      expect(payload, JSON.stringify(v)).not.toHaveProperty('disciplineOfInterest');
+    }
+  });
+
+  it('a forged value still meets the server: the schema refuses a non-slug', () => {
+    expect(LeadInputSchema.safeParse(post('discipline:<script>')).success).toBe(false);
+    expect(LeadInputSchema.safeParse(post('Logo Design')).success).toBe(false);
+  });
+});
+
+describe('preselection', () => {
+  const groups = serviceOptionGroups(GROUPS, 'en');
+  const values = serviceOptionValues(groups);
+
+  it('renders a known service or discipline selected, anything else as "not sure"', () => {
+    expect(initialServiceValue(groups, 'logo')).toBe('logo');
+    expect(initialServiceValue(groups, 'discipline:events')).toBe('discipline:events');
+    expect(initialServiceValue(groups, 'videography')).toBe('');
+    expect(initialServiceValue(groups, undefined)).toBe('');
+    expect(initialServiceValue([], 'logo')).toBe('');
+  });
+
+  it('a "Start your … project" link fills an empty select or replaces a discipline', () => {
+    expect(preselectValue('', 'discipline:branding', values)).toBe('discipline:branding');
+    expect(preselectValue('discipline:events', 'discipline:branding', values)).toBe(
+      'discipline:branding',
+    );
+  });
+
+  it('never overrides a service the visitor picked, nor sets an option that is not there', () => {
+    expect(preselectValue('logo', 'discipline:branding', values)).toBeNull();
+    expect(preselectValue('', 'discipline:gaming', values)).toBeNull();
+    expect(preselectValue('discipline:branding', 'discipline:branding', values)).toBeNull();
   });
 });
 

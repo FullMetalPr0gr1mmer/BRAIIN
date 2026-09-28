@@ -3,20 +3,25 @@ import type { Locale } from '@schemas/primitives';
 import type { ContactSectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
 import ContactForm from '@/components/ContactForm.astro';
-import { getPublishedServices } from '@/lib/data/services';
+import { getPublishedDisciplines } from '@/lib/data/disciplines';
+import type { ServiceGroupInput } from '@/lib/forms/serviceSelect';
 
 // Home contact — display-size CTA over the real lead form: ContactForm's compact variant
 // (UI v2 PR7 — the design's name, email, company, service and message, posted as
 // kind=contact; Zod-validated server-side at /api/contact, honeypot, consent checkbox,
-// real status and per-field errors). The fallback service rows on this page link to
-// #contact, which is this section. Heading/accent are CMS-overridable
+// real status and per-field errors). Heading/accent are CMS-overridable
 // (ContactSectionContentSchema).
+//
+// The service select is grouped by discipline (Round 2). The home route loads the
+// disciplines once for the cards and this form and hands them over as route `data.groups`
+// (withHomeData); placed anywhere else, the section loads them itself.
 
 interface Props extends ContactSectionContent {
   locale: Locale;
+  data?: { groups?: readonly ServiceGroupInput[] } | undefined;
 }
 
-const { locale, heading, accent } = Astro.props;
+const { locale, heading, accent, data } = Astro.props;
 
 const STR = {
   en: { pre: "Let's make something", accent: 'that lands' },
@@ -26,7 +31,7 @@ const STR = {
 const preText = heading ? pickLocale(heading, locale) : STR.pre;
 const accentText = accent ? pickLocale(accent, locale) : STR.accent;
 
-const services = await getPublishedServices();
+const groups = data?.groups ?? (await getPublishedDisciplines());
 ---
 
 <section class="home-contact" id="contact" aria-labelledby="home-contact-cta">
@@ -38,6 +43,6 @@ const services = await getPublishedServices();
       }
       {preText}{' '}<em>{accentText}</em>
     </h2>
-    <ContactForm locale={locale} services={services} fields="compact" kind="contact" />
+    <ContactForm locale={locale} groups={groups} fields="compact" kind="contact" />
   </div>
 </section>

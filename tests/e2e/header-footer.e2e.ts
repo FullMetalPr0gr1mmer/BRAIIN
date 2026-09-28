@@ -159,9 +159,13 @@ for (const locale of ['en', 'ar'] as const) {
   });
 }
 
+// A page with no hero wears the solid bar. /services was that page until Round 2 gave it a
+// banner hero (it is overlay now); the privacy policy is a plain text page and stays solid.
+const SOLID_PAGE = '/privacy';
+
 test('the solid header hides on the way down and returns on the way up', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 800 });
-  await page.goto('/services');
+  await page.goto(SOLID_PAGE);
   await makeScrollable(page);
   const header = page.locator('.site-header');
   await expect(header).toHaveClass(/site-header--solid/);
@@ -170,6 +174,14 @@ test('the solid header hides on the way down and returns on the way up', async (
   await expect(header).toHaveClass(/is-hidden/);
   await page.mouse.wheel(0, -200);
   await expect(header).not.toHaveClass(/is-hidden/);
+});
+
+test('the Services page opens under the overlay header too (Round 2 banner hero)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await page.goto('/services');
+  await expect(page.locator('.site-header')).toHaveClass(/site-header--overlay/);
 });
 
 test('the home header turns solid once the hero is behind it', async ({ page }) => {
@@ -189,7 +201,7 @@ test('the home header turns solid once the hero is behind it', async ({ page }) 
 
 test('a hidden header comes back for keyboard focus', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 800 });
-  await page.goto('/services');
+  await page.goto(SOLID_PAGE);
   await makeScrollable(page);
   await page.mouse.wheel(0, 900);
   const header = page.locator('.site-header');

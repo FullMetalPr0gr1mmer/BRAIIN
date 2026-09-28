@@ -251,6 +251,7 @@ insert into public.pages (tenant_id, slug, title, status) values
   ('00000000-0000-0000-0000-0000000000b1', 'contact', '{"en":"Contact us","ar":"تواصل معنا"}'::jsonb, 'published'),
   ('00000000-0000-0000-0000-0000000000b1', 'portfolio', '{"en":"Our Work","ar":"أعمالنا"}'::jsonb, 'published'),
   ('00000000-0000-0000-0000-0000000000b1', 'portfolio-all', '{"en":"All projects","ar":"كل المشاريع"}'::jsonb, 'published'),
+  ('00000000-0000-0000-0000-0000000000b1', 'services', '{"en":"Services","ar":"الخدمات"}'::jsonb, 'published'),
   ('00000000-0000-0000-0000-0000000000b1', 'join', '{"en":"Join us","ar":"انضم إلينا"}'::jsonb, 'published')
 on conflict (tenant_id, slug) do nothing;
 
@@ -722,6 +723,19 @@ do $seed$ begin
   end if;
 end $seed$;
 
+-- page_sections (54-services-page.json)
+do $seed$ begin
+  if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services')) then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order, is_placeholder) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000001', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'hero', '{}'::jsonb, true, 10, default),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000002', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'statistics', '{"variant":"services","placement":"services","rating":{"value":"4.9 / 5","label":{"en":"average client rating","ar":"متوسط تقييم عملائنا"}}}'::jsonb, false, 20, true),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000003', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'servicesOverview', '{}'::jsonb, true, 30, default),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000004', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'serviceExplorer', '{}'::jsonb, true, 40, default),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000005', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'hello', '{}'::jsonb, true, 50, default)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
 select (x.tbl, x.key) in (
     ('media_assets', 'stills/services/write.jpg'),
     ('media_assets', 'stills/services/over.jpg'),
@@ -762,6 +776,7 @@ select (x.tbl, x.key) in (
     ('services', '3d-design'),
     ('services', 'booth-production'),
     ('services', 'booth-installation'),
+    ('pages', 'services'),
     ('statistics', 'client-satisfaction'),
     ('statistics', 'years-in-region'),
     ('statistics', 'returning-clients'),
@@ -793,7 +808,12 @@ select (x.tbl, x.key) in (
     ('service_cases', 'venue-booking'),
     ('service_cases', '3d-design'),
     ('service_cases', 'booth-production'),
-    ('service_cases', 'booth-installation')
+    ('service_cases', 'booth-installation'),
+    ('page_sections', 'services/hero'),
+    ('page_sections', 'services/statistics'),
+    ('page_sections', 'services/servicesOverview'),
+    ('page_sections', 'services/serviceExplorer'),
+    ('page_sections', 'services/hello')
   ) as this_round, x.tbl, x.key
   from (
   select 'tenants'::text as tbl, x.id::text as key from public.tenants x
@@ -1160,7 +1180,18 @@ update public.service_cases c set status = 'published', published_at = coalesce(
 update public.statistics set status = 'published'
  where tenant_id = '00000000-0000-0000-0000-0000000000b1' and is_placeholder and status = 'draft' and slug in ('client-satisfaction', 'years-in-region', 'returning-clients', 'projects-on-time');
 
--- (No Services-page sample sections in the seed data yet — nothing to show there.)
+-- The Services page's sample sections (the proof band's rating line …).
+update public.page_sections set visible = true
+ where tenant_id = '00000000-0000-0000-0000-0000000000b1' and is_placeholder and not visible and id in ('5eed5400-0000-4000-8000-000000000002');
+
+do $$
+declare v_got text;
+begin
+  select (select string_agg(id::text, ',' order by id::text collate "C") from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and visible and id in ('5eed5400-0000-4000-8000-000000000002'))::text into v_got;
+  if v_got is distinct from '5eed5400-0000-4000-8000-000000000002' then
+    raise exception 'round2 %: % — expected %, got %', 'samples', 'the Services page''s sample sections are visible', '5eed5400-0000-4000-8000-000000000002', coalesce(v_got, 'null');
+  end if;
+end $$;
 
 do $$
 declare v_got text;

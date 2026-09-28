@@ -134,15 +134,15 @@ describe('the contact composition', () => {
     expect(out[0]!.data).toMatchObject({ banner: true });
   });
 
-  it('hands the services to the inquiry band as route data, never as content', () => {
-    const services = [{ slug: 'branding' }];
+  it('hands the disciplines to the inquiry band as route data, never as content', () => {
+    const groups = [{ slug: 'branding' }];
     const out = withContactData(
-      [{ type: 'hero' }, { type: 'contactInquiry', props: { services: ['forged'] } }],
-      { services },
+      [{ type: 'hero' }, { type: 'contactInquiry', props: { groups: ['forged'] } }],
+      { groups },
     );
     expect(out[0]).toEqual({ type: 'hero' });
-    expect(out[1]!.data).toEqual({ services });
-    expect(out[1]!.props).toEqual({ services: ['forged'] });
+    expect(out[1]!.data).toEqual({ groups });
+    expect(out[1]!.props).toEqual({ groups: ['forged'] });
   });
 
   it('emits the FAQ JSON-LD only while the FAQ band renders', () => {
@@ -151,10 +151,17 @@ describe('the contact composition', () => {
     expect(faqShown([{ type: 'hero' }, { type: 'contactInquiry' }])).toBe(false);
   });
 
-  it('its cache tags cover the composition and the services, within the purge limit', () => {
+  it('its cache tags cover the composition, the disciplines and services, within the purge limit', () => {
     const tags = tierATags({ route: 'contact', locale: 'ar', entities: CONTACT_CACHE_ENTITIES });
     expect(tags).toEqual(
-      expect.arrayContaining(['route:contact', 'page:contact', 'services:all', 'site:identity']),
+      expect.arrayContaining([
+        'route:contact',
+        'page:contact',
+        'services:all',
+        // Round 2: the form's options are grouped by discipline
+        'disciplines:all',
+        'site:identity',
+      ]),
     );
     expect(tags.length).toBeLessThanOrEqual(30);
   });

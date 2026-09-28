@@ -61,6 +61,15 @@ export default defineConfig({
             // chunks that the "public route" glob cannot tell apart from public code,
             // and the 100 KB gate silently starts weighing the CMS.
             if (/\/src\/(components|lib)\/admin\//.test(path)) return 'admin-ui';
+            // The two video helpers, as ONE chunk. Each is shared (lazyVideo by the hero,
+            // the slogan band and MediaBanner; clips by lazyVideo and MediaFrame), so
+            // Rolldown gave each its own file, and every page with a hero loaded a
+            // three-deep module waterfall — Hero → lazyVideo → clips — each hop a full
+            // round trip that Lighthouse's LCP simulation counted (the /ar home: the last
+            // node of the LCP graph was clips.js; S2 perf note in
+            // docs/design-port-2026-09.md). Every page that loads lazyVideo loads clips
+            // anyway; a MediaFrame-only page pays ~1 KB more.
+            if (/\/src\/lib\/client\/(lazyVideo|clips)\.ts$/.test(path)) return 'media-client';
             if (!path.includes('node_modules')) return undefined;
             // Vendor code reachable only from an admin island.
             return /\/node_modules\/(react|react-dom|scheduler|@tiptap|prosemirror-|orderedmap|rope-sequence|w3c-keyname)/.test(

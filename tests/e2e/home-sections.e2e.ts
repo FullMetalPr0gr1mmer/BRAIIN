@@ -43,6 +43,24 @@ const HOME = {
     why: 'Why Braiin Statiion',
     submit: 'Send message',
     ok: "Got it. We'll be in touch within one business day.",
+    services: 'Five disciplines, one studio',
+    servicesAccent: 'one studio',
+    disciplines: [
+      ['Branding', '8 services'],
+      ['Production', '6 services'],
+      ['Marketing', '7 services'],
+      ['Website Development', '3 services'],
+      ['Events & Exhibitions', '4 services'],
+    ],
+    allServices: 'All services',
+    groups: [
+      '01 Branding',
+      '02 Production',
+      '03 Marketing',
+      '04 Website Development',
+      '05 Events & Exhibitions',
+    ],
+    helpBranding: 'Branding, help me choose',
   },
   ar: {
     root: '/ar',
@@ -64,8 +82,30 @@ const HOME = {
     why: 'ليش بريّن ستيشن',
     submit: 'أرسل الرسالة',
     ok: 'وصلتنا. بنتواصل معك خلال يوم عمل واحد.',
+    services: 'خمسة تخصصات، استوديو واحد',
+    servicesAccent: 'استوديو واحد',
+    // Western digits — the site's rule for counts, as the design's Arabic cards have them.
+    disciplines: [
+      ['الهوية البصرية', '8 خدمات'],
+      ['الإنتاج', '6 خدمات'],
+      ['التسويق', '7 خدمات'],
+      ['تطوير المواقع', '3 خدمات'],
+      ['الفعاليات والمعارض', '4 خدمات'],
+    ],
+    allServices: 'كل الخدمات',
+    groups: [
+      '01 الهوية البصرية',
+      '02 الإنتاج',
+      '03 التسويق',
+      '04 تطوير المواقع',
+      '05 الفعاليات والمعارض',
+    ],
+    // The Arabic comma, not the mockup's Latin one.
+    helpBranding: 'الهوية البصرية، ساعدوني أختار',
   },
 } as const;
+
+const DISCIPLINE_SLUGS = ['branding', 'production', 'marketing', 'web', 'events'];
 
 test.beforeEach(async ({ page }) => {
   await skipIntro(page);
@@ -191,6 +231,66 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(band.locator('[data-toggle]')).toBeVisible();
     });
 
+    test('the services band is the five discipline cards, server-rendered', async ({
+      request,
+      page,
+    }) => {
+      // Tier A: every card's name and link is in the response.
+      const html = await (await request.get(t.root)).text();
+      for (const [name] of t.disciplines) expect(html, name).toContain(name.replace('&', '&amp;'));
+
+      await page.goto(t.root);
+      const band = page.locator('#services');
+      await expect(band).toHaveClass(/disc--home/);
+      await expect(band.locator('h2')).toHaveText(t.services);
+      await expect(band.locator('h2 em')).toHaveText(t.servicesAccent);
+      const cards = band.locator('.disc-card');
+      await expect(cards).toHaveCount(5);
+      for (const [i, [name, count]] of t.disciplines.entries()) {
+        const card = cards.nth(i);
+        // Home cards open the discipline on the Services page.
+        await expect(card).toHaveAttribute('href', `${t.prefix}/services#${DISCIPLINE_SLUGS[i]}`);
+        await expect(card.locator('.disc-card__t')).toHaveText(name);
+        await expect(card.locator('.disc-card__cnt')).toHaveText(count);
+        await expect(card.locator('.disc-card__n')).toHaveText(`0${i + 1}`);
+        // The poster is a real, lazy, sized <img>; the clip waits for a hover.
+        const img = card.locator('img');
+        await expect(img).toHaveAttribute('loading', 'lazy');
+        await expect(img).toHaveAttribute('width', /\d+/);
+        await expect(card.locator('[data-clip-mode="hover"]')).toHaveCount(1);
+        await expect(card.locator('video')).toHaveCount(0);
+      }
+      const all = band.locator('.disc__foot a');
+      await expect(all).toHaveText(t.allServices);
+      await expect(all).toHaveAttribute('href', `${t.prefix}/services`);
+    });
+
+    test('the lead form groups its services by discipline', async ({ page }) => {
+      await page.goto(t.root);
+      const select = page.locator('#cf-service');
+      await expect(select.locator('optgroup')).toHaveCount(5);
+      expect(
+        await select
+          .locator('optgroup')
+          .evaluateAll((els) => els.map((e) => e.getAttribute('label'))),
+      ).toEqual([...t.groups]);
+      // Each group opens with "{Discipline}, help me choose", valued discipline:<slug>.
+      const firsts = await select
+        .locator('optgroup')
+        .evaluateAll((els) => els.map((e) => e.querySelector('option')?.getAttribute('value')));
+      expect(firsts).toEqual(DISCIPLINE_SLUGS.map((s) => `discipline:${s}`));
+      await expect(select.locator('optgroup').first().locator('option').first()).toHaveText(
+        t.helpBranding,
+      );
+      // The empty "not sure" first, then 5 disciplines + the 28 services.
+      const values = await select
+        .locator('option')
+        .evaluateAll((os) => os.map((o) => o.getAttribute('value')));
+      expect(values[0]).toBe('');
+      expect(values.filter((v) => v?.startsWith('discipline:'))).toHaveLength(5);
+      expect(values.filter((v) => v && !v.startsWith('discipline:'))).toHaveLength(28);
+    });
+
     test('"Why us" names the brand from the public identity', async ({ page }) => {
       await page.goto(t.root);
       await expect(page.locator('#about .tag')).toHaveText(t.why);
@@ -298,6 +398,23 @@ test.describe('the home lead form reports what really happened', () => {
     });
   }
 
+  test('"Branding, help me choose" posts the discipline, not a service', async ({ page }) => {
+    let body: Record<string, unknown> = {};
+    await page.route('**/api/contact', async (route) => {
+      body = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    });
+    await page.goto('/');
+    await page.locator('#cf-name').fill('Kareem');
+    await page.locator('#cf-email').fill('k@example.com');
+    await page.locator('#cf-service').selectOption('discipline:branding');
+    await page.locator('#cf-message').fill('A brand for a launch.');
+    await page.locator('#contact-form button[type="submit"]').click();
+    await expect(page.locator('#contact-status')).toHaveText(HOME.en.ok);
+    expect(body['disciplineOfInterest']).toBe('branding');
+    expect(body).not.toHaveProperty('serviceOfInterest');
+  });
+
   test('a 429 and a 503 are told apart from a generic failure', async ({ page }) => {
     let answer = 429;
     await page.route('**/api/contact', (route) =>
@@ -314,6 +431,17 @@ test.describe('the home lead form reports what really happened', () => {
     await page.locator('#contact-form button[type="submit"]').click();
     await expect(status).toHaveText(/isn’t live yet/);
   });
+});
+
+test('a card plays its clip on hover, not before (zero video bytes)', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto('/', { waitUntil: 'load' });
+  const card = page.locator('#services .disc-card').first();
+  await card.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(800);
+  expect(await card.locator('video').count(), 'mounted without a hover').toBe(0);
+  await card.hover();
+  await expect(card.locator('video')).toHaveCount(1, { timeout: 5000 });
 });
 
 test('the featured clip mounts on intersection, not before (zero video bytes)', async ({

@@ -127,6 +127,7 @@ insert into public.pages (tenant_id, slug, title, status) values
   ('00000000-0000-0000-0000-0000000000b1', 'contact', '{"en":"Contact us","ar":"تواصل معنا"}'::jsonb, 'published'),
   ('00000000-0000-0000-0000-0000000000b1', 'portfolio', '{"en":"Our Work","ar":"أعمالنا"}'::jsonb, 'published'),
   ('00000000-0000-0000-0000-0000000000b1', 'portfolio-all', '{"en":"All projects","ar":"كل المشاريع"}'::jsonb, 'published'),
+  ('00000000-0000-0000-0000-0000000000b1', 'services', '{"en":"Services","ar":"الخدمات"}'::jsonb, 'published'),
   ('00000000-0000-0000-0000-0000000000b1', 'join', '{"en":"Join us","ar":"انضم إلينا"}'::jsonb, 'published')
 on conflict (tenant_id, slug) do nothing;
 
@@ -594,6 +595,19 @@ do $seed$ begin
       ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000011', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio-all'), 'pageHead', '{"heading":{"en":"All projects","ar":"كل المشاريع"},"accent":{"en":{"from":1},"ar":{"from":1}},"lead":{"en":"Every project we''ve made. Filter by service, sector, client or year, or tap any tag on a project.","ar":"كل المشاريع اللي صنعناها. فلتر حسب الخدمة أو القطاع أو العميل أو السنة، أو اضغط على أي وسم في المشروع."},"backLabel":{"en":"Our Work","ar":"أعمالنا"},"backHref":"/portfolio"}'::jsonb, true, 10),
       ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000012', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio-all'), 'projectCatalog', '{}'::jsonb, true, 20),
       ('00000000-0000-0000-0000-0000000000b1', '5eed5300-0000-4000-8000-000000000013', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'portfolio-all'), 'cta', '{"tag":{"en":"Start a project","ar":"ابدأ مشروعك"},"heading":{"en":"Your idea could be next","ar":"فكرتك ممكن تكون التالية"},"accent":{"en":{"from":4},"ar":{"from":3}},"text":{"en":"Tell us what you''re making. You''ll hear back within one business day with our questions, a rough range, and a time to talk.","ar":"قل لنا وش تصنع. يوصلك رد خلال يوم عمل واحد فيه أسئلتنا، ونطاق سعري مبدئي، وموعد للمكالمة."},"buttonLabel":{"en":"Start an inquiry","ar":"ابدأ طلبك"},"buttonHref":"/contact#inquiry"}'::jsonb, true, 30)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
+-- page_sections (54-services-page.json)
+do $seed$ begin
+  if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services')) then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order, is_placeholder) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000001', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'hero', '{}'::jsonb, true, 10, default),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000002', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'statistics', '{"variant":"services","placement":"services","rating":{"value":"4.9 / 5","label":{"en":"average client rating","ar":"متوسط تقييم عملائنا"}}}'::jsonb, true, 20, true),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000003', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'servicesOverview', '{}'::jsonb, true, 30, default),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000004', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'serviceExplorer', '{}'::jsonb, true, 40, default),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000005', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'hello', '{}'::jsonb, true, 50, default)
     on conflict (id) do nothing;
   end if;
 end $seed$;
