@@ -311,6 +311,10 @@ select kind, entity_type, slug from public.dashboard_attention
  where kind = 'placeholder_live';                                          -- expect none
 ```
 
+> **Superseded by §6d (Round 2, 2026-09-27)** for the services: the cut-over renames, re-copies
+> or archives every row below. Kept as the record of what round 1 applied — its titles are what
+> the §6d renames compare against.
+
 **Service copy (owner sign-off).** Fresh environments get the mockup's service titles and
 blurbs; production keeps whatever it holds (seeds never overwrite). Once the owner approves
 the new copy, apply it as a compare-and-set — only rows still holding the old seeded text
@@ -356,12 +360,12 @@ update public.services set blurb = '{"en":"Worlds, assets, and in-game brand wor
 commit;
 ```
 
-### 6c. Showing the design delivery before real content exists (migration 0027)
+### 6c. Showing the design delivery before real content exists (migrations 0027, 0028)
 
 Owner decision 2026-09-26: until real content replaces it, production shows the design delivery as is:
 
 - **Shown:** the sample projects and case studies, the sample statistics, the leadership cards, and the placeholder clients.
-- **Hidden:** the invented testimonial quotes. No database row can let a placeholder quote go live.
+- **Hidden:** the invented testimonial quotes. *(Superseded 2026-09-27: the owner decided to show the sample quotes too — see "Round 2" below. Steps 1–4 stay as they were for the five original tables.)*
 
 Every such row keeps `is_placeholder = true`, so the admin dashboard keeps listing it as **Placeholder content is live** until someone replaces it and clears the flag.
 
@@ -393,7 +397,7 @@ Every such row keeps `is_placeholder = true`, so the admin dashboard keeps listi
 
 3. **Verify.**
    - `select kind, entity_type, slug from public.dashboard_attention where kind = 'placeholder_live';` lists the rows you just published.
-   - `select count(*) from public.testimonials where status = 'published';` is `0`.
+   - `select count(*) from public.testimonials where status = 'published';` is `0` *(until the Round 2 step below publishes the samples)*.
    - The pages render the samples.
 
 4. **Taking it back**, per table, once real content exists:
@@ -401,6 +405,109 @@ Every such row keeps `is_placeholder = true`, so the admin dashboard keeps listi
    2. Then `delete from app.placeholder_live_override where table_name = '…';`. This is audit-logged as a revoke.
 
    With the allowance gone, the 0025 guard holds again: nothing flagged can go live.
+
+#### Round 2 (2026-09-27, migration 0028): sample quotes and service cases
+
+Owner decisions R1 and R3 (2026-09-27): show the **9 sample quotes** (signed "Client name / CEO, Company") and the **28 sample service case blocks** until real ones replace them from the admin. Migration 0028 makes this possible without weakening what protects a real person's words:
+
+- **The override** may now name `testimonials` and `service_cases` (all seven placeholder tables). Nothing else changed about it: owner-only, per (tenant, table), audit-logged on grant and revoke.
+- **The consent CHECK** (`testimonials_consent_gate`) now reads "consent recorded, **or** a flagged design sample". A real quote still cannot be published or scheduled without consent, by any role.
+- **The sample lock** (`app.tg_testimonial_sample_lock`) holds for every staff session (any JWT with a staff role, i.e. the admin and PostgREST): nobody can create a sample, flag an existing quote as one, or change a sample's `quote`, `author_name`, `author_role`, `avatar_media_id`, `client_id` or `portfolio_id` while it stays a sample. Only the seed files and the owner's psql session, which carry no JWT, create or edit samples. Without the lock, the override plus the looser CHECK would let anyone flag a real person's quote as a "sample" and publish it without consent.
+
+The Round 2 cut-over (§6d) runs these steps in its overrides transaction; they are here so they can also be run, checked or reversed on their own.
+
+5. **Allow the two tables.** As the owner:
+
+   ```sql
+   insert into app.placeholder_live_override (tenant_id, table_name, reason)
+   select t.id, x.table_name, 'Owner decision 2026-09-27: show the design samples until real content replaces them'
+     from public.tenants t
+     cross join (values ('testimonials'), ('service_cases')) as x(table_name)
+    where t.id = '00000000-0000-0000-0000-0000000000b1'
+   on conflict (tenant_id, table_name) do nothing;
+   ```
+
+6. **Publish the samples.** Only flagged rows. A quote without consent that is *not* flagged is refused by the CHECK (23514); that is correct, so leave it as a draft:
+
+   ```sql
+   begin;
+   update public.testimonials  set status = 'published', published_at = coalesce(published_at, now())
+    where is_placeholder and status = 'draft';
+   update public.service_cases set status = 'published', published_at = coalesce(published_at, now())
+    where is_placeholder and status = 'draft';
+   commit;
+   ```
+
+   A service case is public only while its **service** is published too; a case on a draft or archived service stays hidden without any further step.
+
+7. **Verify.**
+   - `select entity_type, count(*) from public.dashboard_attention where kind = 'placeholder_live' group by 1;` shows the `testimonial` and `service_case` rows.
+   - `select action, entity_id, detail ->> 'reason' from public.audit_log where entity_type = 'placeholder_override' order by id desc limit 2;` shows both grants.
+   - Home, Our Work and a case study render the quote carousel; a service page renders its case block.
+
+8. **Making a quote real** (Admin → Testimonials; no SQL needed). In **one save**: replace the words and the author, set "Consent obtained" (date and reference), untick "Placeholder". The quote stays published. Two things the database refuses, on purpose:
+   - unticking "Placeholder" on a published quote **without** recording consent (23514);
+   - editing a sample's words or author while "Placeholder" stays ticked (42501, the sample lock).
+
+   A service case is made real the same way (replace the content, untick "Placeholder"); cases carry no consent record.
+
+9. **Taking it back.** When every quote (or case) is real, or to hide the samples again:
+   1. Unpublish what is still flagged: `update public.testimonials set status = 'draft' where is_placeholder and status = 'published';` (and the same for `service_cases`).
+   2. `delete from app.placeholder_live_override where table_name in ('testimonials', 'service_cases');`, audit-logged as revokes.
+
+   With the allowance gone, the 0025 guard again refuses any flagged quote or case that tries to go live.
+
+---
+
+### 6d. Round 2: five disciplines, 28 services, sample quotes and cases (migration 0028) — the production cut-over
+
+Owner decisions 2026-09-27: the design's taxonomy replaces the 14 services with **5 disciplines
+holding 28 services** (Gaming and Merchandise retired; every old `/services/<slug>` answers a
+301); each service page carries a **sample case block**; the **9 sample quotes** go live. Both
+kinds of sample stay flagged `is_placeholder` and are replaced from the admin (§6c steps 8–9).
+
+**When.** Immediately before merging the Round 2 stack, in this order. Old code with the new
+data only makes lists longer; new code with the old data would hide whole sections.
+
+**The SQL** is generated from the seed data into `supabase/seeds/round2-cutover.sql`
+(`scripts/round2-cutover.mjs`; `npm run seed:gen` regenerates it with the seeds, and
+`tests/seed/cutover.spec.ts` fails if it is stale), so the copy step 4 writes is the copy fresh
+databases get. It is **not one script**: each step runs on its own. Print one and run it as the
+owner, exactly like `production.sql` (§1b):
+
+```bash
+node scripts/round2-cutover.mjs --step renames > /tmp/r2-renames.sql
+psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/r2-renames.sql
+```
+
+Every writing step is **one transaction** whose assertions compare **exact slug sets** (never
+counts) and raise on a mismatch, so a failed step applied nothing: read the message, fix the
+cause, run that step again. A step run too early refuses (the renames before 0028, the content
+and samples steps before `production.sql`). A step that already ran does not run twice: the
+renames match no row the second time and fail loudly.
+
+| # | Step | What it does | Must see |
+|---|---|---|---|
+| 0 | `--step preflight` | Read-only, **before the push**. One JSON: the current services (slug, EN title, status), `entity_seo` of the 8 services that stay, authored `servicesOverview` / `aboutIntro` / `faq` content, SEO text saying "fourteen" / "أربع عشرة", the legacy `services` counter and `crafts`, the round-1 overrides, the 12 sample projects, the header menu. | Renamed slugs still titled Animation (or Animations) / Videography / Montage / Music; overrides for portfolio, statistics, team_members, clients, page_sections. Anything in `entity_seo_8`, `sections_authored` or `fourteen` is reviewed with the owner and fixed after step 4. |
+| 1 | `npx supabase db push --linked --dry-run`, then `npx supabase db push --linked --skip-vault` | Migration 0028 (S1a: disciplines, service pages, service cases, the sample lock). Needs a valid Supabase access token. | Only 0028 listed by the dry run. |
+| 2 | `--step renames` | In place, keeping the id (so `entity_seo`, `content_versions` and links survive): animations → animation, videography → photo-video, montage → video-editing, music → music-vo-sfx — each a compare-and-set on slug **and** current EN title, refused onto an existing slug, and exactly one row. Archives branding, photography, event-planning, web-development, merchandise, gaming (restorable). | `COMMIT`. |
+| 3 | `--step rehearse`, then `production.sql` | The rehearsal is `production.sql` statement for statement inside `BEGIN … ROLLBACK`: it writes nothing and lists every row the seed would insert, `this_round = false` first. This round adds exactly: 14 `media_assets` (`stills/services/*`), 5 `disciplines`, 20 `services`, 28 `service_cases` (drafts), 4 `statistics` (the Services-page samples, drafts), and the Services page with its sections once the page slice lands. | **No row with `this_round = false`.** Any such row is one an editor deleted since the last run (the seed would bring it back) — stop, and apply a delta seed of this round's files instead: `node scripts/gen-seeds.mjs --only 05-media-stills.json,08-disciplines.json,10-services.json,44-statistics-team.json,45-service-cases.json > /tmp/r2-delta.sql` (plus the page slice's services-page file; the delta is per FILE, so review it for older rows of those files, then psql it). Otherwise: `psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/production.sql`. |
+| 4 | `--step content` | The rows the seed skips. The 8 kept or renamed services get the new copy (title, tagline, intro, body + body_html, value points, deliverables), their discipline, poster, clip window **and sort_order** (so they do not interleave with the new 20). The 12 sample projects' `portfolio_services` are rebuilt by slug. `crafts` → 28, "Services under one roof" (value and value_numeric together). Header Services → `/services`. | `COMMIT`. Then apply what step 0 surfaced (e.g. clear a stale `entity_seo` title or `canonical_override` of a renamed service, after review). |
+| 5 | `--step samples` | The owner's override for `testimonials` and `service_cases` (audit-logged by the override table's trigger — §6c step 5 explains it), then publishes **only flagged drafts**, by exact slug: the 9 sample quotes, the 28 case blocks, the 4 Services-page stats (and the Services page's sample sections, when the seed has them). Asserts: disciplines = the 5, published services = the 28, archived = the 6 (test-service, archived in round 1, aside), live cases = the 28, live quotes = the 9, live Services stats = the 4, both override rows with their audit grants, crafts = 28. | `COMMIT`. |
+| 6 | `--step verify` | Read-only JSON of the same facts, for the report. | 5 disciplines, 28 services each with its discipline, the 6 (+ test-service) archived, `cases_live` 28, 9 quotes, `98% 12+ 85% 250+`, crafts `28`, header `/services`, overrides incl. testimonials + service_cases. |
+| 7 | Merge the stack (top-down, one push) → the deploy job → live checks | — | `/services`, `/services/logo` and the `/ar` twins → 200; `/services/branding` → 301 to `/services#branding`; `/ar/services/music` → 301; home shows the 5 discipline cards, the quote carousel and stat 28; a case study shows its quote. |
+
+**Making the samples real, and taking the override back:** §6c steps 8–9. The Round 2 samples
+are listed on the admin dashboard as "Placeholder content is live" until then.
+
+**Undoing a step** (before the merge; after it, prefer fixing forward):
+
+- Step 5: §6c step 9 (unpublish the flagged rows, then revoke the two overrides).
+- Step 4: the old copy is in `content_versions` (every save snapshots the row); restore a service
+  from its history in the admin. The header link: set it back to `/#services`.
+- Step 2: `update public.services set slug = '<old>' where slug = '<new>'` for each rename, and
+  `set status = 'published'` for the six. Restoring a pre-rename version of a renamed service
+  from its history also restores the old slug, and the retired-slug 301 then stops applying to it.
 
 ---
 

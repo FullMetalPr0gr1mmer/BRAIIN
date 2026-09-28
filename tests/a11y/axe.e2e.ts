@@ -10,6 +10,10 @@ const ROUTES = [
   '/ar',
   '/services',
   '/ar/services',
+  // Round 2 (S3): the explorer OPEN (a deep link opens its panel at first paint) — the APG
+  // tabs, a tabpanel, the service rows and their Inquire pills
+  '/services#events',
+  '/ar/services#events',
   '/portfolio',
   // UI v2 PR10
   '/ar/portfolio',
@@ -18,6 +22,9 @@ const ROUTES = [
   // UI v2 PR11 — a seeded case study (every part: quote, breakdown, gallery, next)
   '/portfolio/the-rider',
   '/ar/portfolio/the-rider',
+  // Round 2 (S4) — a seeded service page (hero crumb + skip pill, the case block, the form)
+  '/services/logo',
+  '/ar/services/logo',
   '/about',
   '/ar/about',
   '/contact',

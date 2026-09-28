@@ -1,0 +1,40 @@
+---
+import type { Locale } from '@schemas/primitives';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import SectionRenderer from '@/components/SectionRenderer.astro';
+import type { ServicesPage } from '@/lib/services/servicesPage';
+import { PAGE_META } from '@/lib/seo/pageMeta';
+
+// The shell of the Services page (`/services`, `/ar/services`, Round 2). The route loads
+// everything (src/lib/services/servicesPage.ts) and sets the cache headers; this renders the
+// head and the section composition — banner hero, proof, the discipline cards, the
+// explorer, "Say hello" — under the overlay header when the page opens on its hero, with
+// the services route stylesheet. Should an editor hide the hero, a visually hidden h1
+// stands in, so the page is never without one.
+
+interface Props {
+  locale: Locale;
+  page: ServicesPage;
+}
+
+const { locale, page } = Astro.props;
+const { seo } = page.head;
+---
+
+<BaseLayout
+  title={seo.title}
+  description={seo.description}
+  locale={locale}
+  logicalPath="/services"
+  jsonLd={page.jsonLd}
+  robots={seo.robots}
+  header={page.header}
+  styles={['services.css']}
+  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
+>
+  <main class="services-page">
+    {page.hiddenH1 && <h1 class="sr-only">{PAGE_META.services[locale].title}</h1>}
+    <SectionRenderer locale={locale} sections={page.sections} />
+  </main>
+</BaseLayout>

@@ -136,6 +136,8 @@ describe('the home composition', () => {
       'page:home',
       'portfolio:all',
       'clients:all',
+      'services:all',
+      'disciplines:all',
       'statistics:all',
       'testimonials:all',
     ]) {
@@ -186,11 +188,12 @@ describe("workIntroLinkHref: Our Work's intro link never points at a grid that i
 
 describe('withHomeData: route data, never CMS content', () => {
   const cards = [{ slug: 'the-rider' }];
+  const disciplines = [{ slug: 'branding' }];
 
   it('hands the featured cards to every Selected work band and the CTA to the first hero', () => {
     const out = withHomeData(
       [{ type: 'hero' }, { type: 'selectedWork' }, { type: 'hero' }, { type: 'social' }],
-      { featured: cards, ctaHref: '/portfolio' },
+      { featured: cards, ctaHref: '/portfolio', disciplines },
     );
     expect(out[0]!.data).toEqual({ ctaHref: '/portfolio' });
     expect(out[1]!.data).toEqual({ cards });
@@ -201,7 +204,7 @@ describe('withHomeData: route data, never CMS content', () => {
   it('keeps authored props apart from the injected data', () => {
     const out = withHomeData(
       [{ type: 'selectedWork', props: { featuredSlug: 'notebook', cards: ['forged'] } }],
-      { featured: cards, ctaHref: '#selected-work' },
+      { featured: cards, ctaHref: '#selected-work', disciplines },
     );
     // The component reads its projects from `data`, which SectionRenderer passes AFTER the
     // content spread — a CMS key named `cards` can never replace them.
@@ -211,8 +214,26 @@ describe('withHomeData: route data, never CMS content', () => {
 
   it('does not mutate the shared defaults', () => {
     const before = JSON.stringify(DEFAULT_HOME_SECTIONS);
-    withHomeData(DEFAULT_HOME_SECTIONS, { featured: cards, ctaHref: '/portfolio' });
+    withHomeData(DEFAULT_HOME_SECTIONS, { featured: cards, ctaHref: '/portfolio', disciplines });
     expect(JSON.stringify(DEFAULT_HOME_SECTIONS)).toBe(before);
+  });
+
+  // Round 2: the disciplines load once on home, for the cards and the form's grouped select.
+  it('hands the disciplines to the cards (home mode) and to the lead form', () => {
+    const out = withHomeData(
+      [
+        { type: 'servicesOverview', props: { mode: 'page', disciplines: ['forged'] } },
+        { type: 'contact', props: { groups: ['forged'] } },
+        { type: 'aboutIntro' },
+      ],
+      { featured: cards, ctaHref: '/portfolio', disciplines },
+    );
+    // The mode is the route's — an authored `mode` in content cannot flip the home band
+    // into page mode (links to #slug on a page without the explorer).
+    expect(out[0]!.data).toEqual({ mode: 'home', disciplines });
+    expect(out[0]!.props).toEqual({ mode: 'page', disciplines: ['forged'] });
+    expect(out[1]!.data).toEqual({ groups: disciplines });
+    expect(out[2]).toEqual({ type: 'aboutIntro' });
   });
 });
 

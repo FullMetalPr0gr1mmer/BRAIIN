@@ -60,16 +60,44 @@ for (const route of ROUTES) {
       const values = async (sel: string) =>
         page.$$eval(`${sel} option`, (os) => os.map((o) => o.getAttribute('value')));
 
-      // Empty string is the "no answer" option; everything else must be a slug/enum.
+      // Empty string is the "no answer" option; everything else must be a slug, or a
+      // discipline's "help me choose" (`discipline:<slug>` → disciplineOfInterest, Round 2).
       for (const v of await values('#cf-service')) {
         expect(v, 'service option missing a value attribute').not.toBeNull();
-        if (v) expect(v, `service value "${v}" is not a slug`).toMatch(/^[a-z0-9-]+$/);
+        if (v) {
+          expect(v, `service value "${v}" is not a slug`).toMatch(
+            /^(discipline:)?[a-z0-9][a-z0-9-]*$/,
+          );
+        }
       }
       const budgets = await values('#cf-budget');
       expect(budgets, 'the design’s bands, after the empty "Prefer to discuss"').toEqual([
         '',
         ...BUDGET_BANDS,
       ]);
+    });
+
+    test('the service select is grouped by discipline, a "help me choose" first in each', async ({
+      page,
+    }) => {
+      await page.goto(route, { waitUntil: 'load' });
+      const groups = await page.$$eval('#cf-service optgroup', (els) =>
+        els.map((g) => ({
+          label: g.getAttribute('label'),
+          values: [...g.querySelectorAll('option')].map((o) => o.value),
+        })),
+      );
+      // The seeded disciplines, in order, numbered.
+      expect(groups.map((g) => g.label?.slice(0, 2))).toEqual(['01', '02', '03', '04', '05']);
+      expect(groups.map((g) => g.values[0])).toEqual([
+        'discipline:branding',
+        'discipline:production',
+        'discipline:marketing',
+        'discipline:web',
+        'discipline:events',
+      ]);
+      expect(groups.map((g) => g.values.length - 1)).toEqual([8, 6, 7, 3, 4]);
+      expect(groups[0]!.values).toContain('logo');
     });
 
     test('company is present, bounded, and autocompletable', async ({ page }) => {
@@ -233,6 +261,8 @@ const SCHEMA_KEYS = [
   'company',
   'message',
   'serviceOfInterest',
+  // Round 2: "{Discipline}, help me choose" (LeadInputSchema, 0028)
+  'disciplineOfInterest',
   'budgetBand',
   'timelineText',
   'consentMarketing',

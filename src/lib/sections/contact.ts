@@ -1,21 +1,21 @@
 import type { SectionData } from './types';
 
 // The contact page's Cache-Tag entities (UI v2 PR9): what its bands read, so a publish of
-// any of it purges /contact and /ar/contact — the page composition and the services list
-// (the form's "What do you need?" options). The channels and socials are the public
-// identity, which every Tier-A page already carries (`site:identity`).
-export const CONTACT_CACHE_ENTITIES = ['page:contact', 'services:all'] as const;
+// any of it purges /contact and /ar/contact — the page composition, and the disciplines and
+// services behind the form's grouped "What do you need?" select (Round 2). The channels and
+// socials are the public identity, which every Tier-A page already carries (`site:identity`).
+export const CONTACT_CACHE_ENTITIES = ['page:contact', 'services:all', 'disciplines:all'] as const;
 
 /**
  * The contact route's own data, handed to the inquiry band as `data` (never CMS content):
- * the published services, which become the form's options.
+ * the published disciplines with their services, which become the form's grouped options.
  */
-export function withContactData<Service>(
+export function withContactData<Group>(
   sections: readonly SectionData[],
-  data: { services: readonly Service[] },
+  data: { groups: readonly Group[] },
 ): SectionData[] {
   return sections.map((s) =>
-    s.type === 'contactInquiry' ? { ...s, data: { ...s.data, services: data.services } } : s,
+    s.type === 'contactInquiry' ? { ...s, data: { ...s.data, groups: data.groups } } : s,
   );
 }
 

@@ -6,9 +6,9 @@
       "rows": [
         {
           "slug": "crafts",
-          "label": { "en": "Crafts under one roof", "ar": "حرفة تحت سقف واحد" },
-          "value": "14",
-          "value_numeric": 14,
+          "label": { "en": "Services under one roof", "ar": "خدمة تحت سقف واحد" },
+          "value": "28",
+          "value_numeric": 28,
           "placements": "{home,work}",
           "status": "published",
           "sort_order": 1
@@ -52,6 +52,57 @@
           "status": "published",
           "is_placeholder": true,
           "sort_order": 4,
+          "__placeholder": true
+        },
+        {
+          "slug": "client-satisfaction",
+          "label": {
+            "en": "Client satisfaction across every project",
+            "ar": "رضا العملاء في كل مشاريعنا"
+          },
+          "value": "98%",
+          "value_numeric": 98,
+          "value_suffix": "%",
+          "placements": "{services}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 11,
+          "__placeholder": true
+        },
+        {
+          "slug": "years-in-region",
+          "label": { "en": "Years of experience in the region", "ar": "سنة خبرة في المنطقة" },
+          "value": "12+",
+          "value_numeric": 12,
+          "value_suffix": "+",
+          "placements": "{services}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 12,
+          "__placeholder": true
+        },
+        {
+          "slug": "returning-clients",
+          "label": { "en": "Of clients come back for more", "ar": "من عملائنا يرجعون لنا من جديد" },
+          "value": "85%",
+          "value_numeric": 85,
+          "value_suffix": "%",
+          "placements": "{services}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 13,
+          "__placeholder": true
+        },
+        {
+          "slug": "projects-on-time",
+          "label": { "en": "Projects delivered, on time", "ar": "مشروع سلّمناه في وقته" },
+          "value": "250+",
+          "value_numeric": 250,
+          "value_suffix": "+",
+          "placements": "{services}",
+          "status": "published",
+          "is_placeholder": true,
+          "sort_order": 14,
           "__placeholder": true
         }
       ]

@@ -30,17 +30,23 @@ export default function ClipField({ field, value, onChange, idPrefix }: Props) {
             ['stream', 'Cloudflare Stream'],
             ['path', 'Site file (/media/…)'],
           ] as const
-        ).map(([source, label]) => (
-          <label key={source || 'none'} className="field field-inline">
-            <input
-              type="radio"
-              name={`${id}-source`}
-              checked={state.source === source}
-              onChange={() => set({ source })}
-            />
-            <span>{label}</span>
-          </label>
-        ))}
+        )
+          // A table with no Stream-uid column yet (0028) offers only the site file — a stored
+          // Stream clip would still show, so it can be switched away from.
+          .filter(
+            ([source]) => !(field.pathOnly && source === 'stream' && state.source !== 'stream'),
+          )
+          .map(([source, label]) => (
+            <label key={source || 'none'} className="field field-inline">
+              <input
+                type="radio"
+                name={`${id}-source`}
+                checked={state.source === source}
+                onChange={() => set({ source })}
+              />
+              <span>{label}</span>
+            </label>
+          ))}
       </div>
       {state.source === 'stream' && (
         <label className="field" htmlFor={`${id}-uid`}>

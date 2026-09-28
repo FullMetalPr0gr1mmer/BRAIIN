@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(45);
+select plan(53);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -236,6 +236,40 @@ select ok(has_function_privilege('authenticated', 'public.save_portfolio(uuid, i
   'authenticated can execute the three staff RPCs (RLS / role checks decide the rest)');
 select ok(not has_function_privilege('authenticated', 'app.tg_placeholder_guard()', 'execute'),
   'the 0025 placeholder guard is not callable by authenticated');
+
+-- ---- 10. Round 2 (0028): disciplines and service cases are column-granted ------------
+-- Neither is in the table-level list above: anon reads the listed columns only, never the
+-- schedule, version, actor or placeholder columns.
+select ok(not has_table_privilege('anon', 'public.disciplines', 'select'),
+  'anon has no TABLE-level select on disciplines (column grant only)');
+select ok(has_column_privilege('anon', 'public.disciplines', 'name', 'select')
+          and has_column_privilege('anon', 'public.disciplines', 'preview_video_path', 'select'),
+  'anon reads the public discipline columns');
+select ok(not has_column_privilege('anon', 'public.disciplines', 'scheduled_for', 'select')
+          and not has_column_privilege('anon', 'public.disciplines', 'version', 'select')
+          and not has_column_privilege('anon', 'public.disciplines', 'created_by', 'select')
+          and not has_column_privilege('anon', 'public.disciplines', 'updated_by', 'select'),
+  'anon CANNOT read discipline internals (scheduled_for, version, created_by, updated_by)');
+select ok(not has_table_privilege('anon', 'public.service_cases', 'select'),
+  'anon has no TABLE-level select on service_cases (column grant only)');
+select ok(has_column_privilege('anon', 'public.service_cases', 'title', 'select')
+          and has_column_privilege('anon', 'public.service_cases', 'results', 'select'),
+  'anon reads the public case columns');
+select ok(not has_column_privilege('anon', 'public.service_cases', 'is_placeholder', 'select')
+          and not has_column_privilege('anon', 'public.service_cases', 'scheduled_for', 'select')
+          and not has_column_privilege('anon', 'public.service_cases', 'version', 'select')
+          and not has_column_privilege('anon', 'public.service_cases', 'created_by', 'select')
+          and not has_column_privilege('anon', 'public.service_cases', 'updated_by', 'select'),
+  'anon CANNOT read case internals (is_placeholder, scheduled_for, version, created_by, updated_by)');
+select ok(has_table_privilege('authenticated', 'public.disciplines', 'insert')
+          and has_table_privilege('authenticated', 'public.disciplines', 'delete')
+          and has_table_privilege('authenticated', 'public.service_cases', 'update')
+          and has_table_privilege('authenticated', 'public.service_cases', 'delete'),
+  'the CMS can write both (RLS and assertCap() decide who)');
+select ok(not has_function_privilege('authenticated', 'app.tg_testimonial_sample_lock()', 'execute')
+          and not has_function_privilege('anon', 'app.tg_testimonial_sample_lock()', 'execute')
+          and not has_function_privilege('service_role', 'app.tg_testimonial_sample_lock()', 'execute'),
+  'the 0028 testimonial sample lock is not callable by any API role');
 
 select * from finish();
 rollback;

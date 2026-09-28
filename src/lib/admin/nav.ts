@@ -34,7 +34,9 @@ export const ADMIN_NAV: readonly NavGroup[] = [
   {
     title: 'Content',
     links: [
+      { href: '/admin/disciplines', label: 'Disciplines', caps: ['services.write'] },
       { href: '/admin/services', label: 'Services', caps: ['services.write', 'seo.entityMeta'] },
+      { href: '/admin/service-cases', label: 'Service case studies', caps: ['services.write'] },
       { href: '/admin/blog', label: 'Blog', caps: ['blog.write', 'seo.entityMeta'] },
       { href: '/admin/portfolio', label: 'Our Work', caps: ['portfolio.write', 'seo.entityMeta'] },
       { href: '/admin/sectors', label: 'Sectors', caps: ['categories.manage'] },

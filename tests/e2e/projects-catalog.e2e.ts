@@ -3,8 +3,10 @@ import { expect, test, type Page } from '@playwright/test';
 /*
  * All projects (/portfolio/all, /ar/portfolio/all) — UI v2 PR10.
  *
- * Seeded catalogue (supabase/seed.sql): 12 published projects — branding on 3 (Notebook,
- * Field Notes, Blueprint), 2026 on 2 (The Rider, Kitchen Hours), no branding in 2026.
+ * Seeded catalogue (supabase/seed.sql): 12 published projects — Photography / Videography
+ * on 5 (The Rider, Kitchen Hours, Terrain, The Table, Opening Night), 2026 on 2 (The Rider,
+ * Kitchen Hours), Motion Graphics on 2 (Ink 2025, First Light 2024) and none of them in
+ * 2026 (Round 2 service links, supabase/seed-data/42-portfolio.json).
  * The server renders a complete, filterable catalogue; JavaScript only applies the same
  * controls in place. The query string is untrusted: only values the catalogue carries
  * ever become a filter, and nothing from it is reflected into the page.
@@ -17,10 +19,10 @@ const STR = {
     h1: 'All projects',
     accent: 'projects',
     n12: '12 projects',
-    n3: '03 projects',
+    n5: '05 projects',
     n2: '02 projects',
-    branding: 'Branding',
-    remove: 'Service: Branding, remove filter',
+    photoVideo: 'Photography / Videography',
+    remove: 'Service: Photography / Videography, remove filter',
     none: 'No projects match these filters.',
   },
   ar: {
@@ -30,10 +32,10 @@ const STR = {
     accent: 'المشاريع',
     // Arabic plural forms (the mockup wrote "مشاريع" for every count)
     n12: '12 مشروعًا',
-    n3: '03 مشاريع',
+    n5: '05 مشاريع',
     n2: '02 مشروعان',
-    branding: 'الهوية البصرية',
-    remove: 'الخدمة: الهوية البصرية، إزالة الفلتر',
+    photoVideo: 'التصوير الفوتوغرافي والفيديو',
+    remove: 'الخدمة: التصوير الفوتوغرافي والفيديو، إزالة الفلتر',
     none: 'ما في مشاريع تطابق هذه الفلاتر.',
   },
 } as const;
@@ -81,10 +83,10 @@ for (const locale of ['en', 'ar'] as const) {
       const ctx = await browser.newContext({ javaScriptEnabled: false });
       const page = await ctx.newPage();
       await page.goto(s.path);
-      await page.locator('.fchip[data-v="branding"]').click();
-      await expect(page).toHaveURL(new RegExp(`${s.path}\\?service=branding$`));
-      await expect(visibleCards(page)).toHaveCount(3);
-      await expect(count(page)).toHaveText(s.n3);
+      await page.locator('.fchip[data-v="photo-video"]').click();
+      await expect(page).toHaveURL(new RegExp(`${s.path}\\?service=photo-video$`));
+      await expect(visibleCards(page)).toHaveCount(5);
+      await expect(count(page)).toHaveText(s.n5);
       await expect(page.locator('.fpill[data-pill="service"]')).toHaveAttribute(
         'aria-label',
         s.remove,
@@ -100,7 +102,7 @@ for (const locale of ['en', 'ar'] as const) {
     });
 
     test('a filtered view is private and canonicalised to the bare page', async ({ request }) => {
-      const res = await request.get(`${s.path}?service=branding`);
+      const res = await request.get(`${s.path}?service=photo-video`);
       expect(res.headers()['cache-control']).toContain('no-store');
       expect(res.headers()['cache-tag']).toBeUndefined();
       const html = await res.text();
@@ -140,8 +142,8 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(count(page)).toHaveText(s.n2);
       expect(new URL(page.url()).search).toBe('?year=2026');
 
-      // a second facet with no overlap → the empty state
-      const chip = page.locator('.fchip[data-v="branding"]');
+      // a second facet with no overlap → the empty state (no Motion Graphics project is 2026)
+      const chip = page.locator('.fchip[data-v="motion-graphics"]');
       await chip.click();
       await expect(visibleCards(page)).toHaveCount(0);
       await expect(page.locator('[data-empty]')).toBeVisible();
@@ -159,12 +161,12 @@ for (const locale of ['en', 'ar'] as const) {
 
     test('a card tag filters by its value; the pill removes it', async ({ page }) => {
       await page.goto(s.path);
-      await page.locator('#projects [data-card] .ftag[data-v="branding"]').first().click();
-      await expect(visibleCards(page)).toHaveCount(3);
-      await expect(count(page)).toHaveText(s.n3);
+      await page.locator('#projects [data-card] .ftag[data-v="photo-video"]').first().click();
+      await expect(visibleCards(page)).toHaveCount(5);
+      await expect(count(page)).toHaveText(s.n5);
       const pill = page.locator('.fpill[data-pill="service"]');
       await expect(pill).toBeVisible();
-      await expect(pill).toContainText(s.branding);
+      await expect(pill).toContainText(s.photoVideo);
       await pill.click();
       await expect(visibleCards(page)).toHaveCount(12);
       await expect(pill).toBeHidden();
@@ -177,13 +179,13 @@ for (const locale of ['en', 'ar'] as const) {
     }) => {
       const ctx = await browser.newContext({ javaScriptEnabled: false });
       const noJs = await ctx.newPage();
-      await noJs.goto(`${s.path}?service=branding&year=2026`);
+      await noJs.goto(`${s.path}?service=motion-graphics&year=2026`);
       await expect(visibleCards(noJs)).toHaveCount(0);
       await expect(noJs.locator('[data-empty]')).toBeVisible();
       await ctx.close();
 
-      await page.goto(`${s.path}?service=branding`);
-      await expect(visibleCards(page)).toHaveCount(3);
+      await page.goto(`${s.path}?service=photo-video`);
+      await expect(visibleCards(page)).toHaveCount(5);
     });
   });
 }

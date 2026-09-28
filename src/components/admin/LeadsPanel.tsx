@@ -18,6 +18,8 @@ interface LeadRow {
   company?: string | null;
   status: string;
   service_of_interest: string | null;
+  /** "{Discipline}, help me choose" on the inquiry forms (0028) — a discipline slug. */
+  discipline_of_interest?: string | null;
   locale: string;
   created_at: string;
   message: string;
@@ -46,6 +48,16 @@ export interface LeadsPanelProps {
 }
 
 const PAGE_SIZE = 25;
+
+/** What the visitor asked about: a service slug, or a discipline they want help choosing in. */
+export function interestOf(row: {
+  service_of_interest: string | null;
+  discipline_of_interest?: string | null | undefined;
+}): string {
+  if (row.service_of_interest) return row.service_of_interest;
+  if (row.discipline_of_interest) return `${row.discipline_of_interest} (help me choose)`;
+  return '—';
+}
 const STATUSES = ['new', 'in_progress', 'done', 'spam'] as const;
 
 export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
@@ -155,7 +167,7 @@ export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
               <tr key={row.id}>
                 <td>{new Date(row.created_at).toLocaleDateString()}</td>
                 <td>{row.name}</td>
-                <td>{row.service_of_interest ?? '—'}</td>
+                <td>{interestOf(row)}</td>
                 <td>
                   <label className="visually-hidden" htmlFor={`s-${row.id}`}>
                     Status for {row.name}
@@ -215,6 +227,7 @@ export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
             {new Date(selected.created_at).toLocaleString()} · {selected.locale.toUpperCase()}
             {selected.company ? ` · ${selected.company}` : ''}
           </p>
+          <p className="admin-sub">Interest: {interestOf(selected)}</p>
           <p className="prewrap">{selected.message}</p>
 
           {canSeePii && !piiShown && (

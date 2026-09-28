@@ -1,0 +1,64 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { Discipline } from '@/lib/data/disciplines';
+import { localizedHref, localizedPath, pickLocale } from '@/lib/i18n';
+import { pad2 } from '@/lib/portfolio/caseStudy';
+import { SERVICE_PAGE_COPY, moreHeading, moreTag } from '@/lib/services/pageCopy';
+import AccentText from '@/components/ui/AccentText.astro';
+
+// "More in {Discipline}" (Round 2 — service.html `.more`), on paper: the kicker, the h2
+// "Everything in *Branding*", the "All services" link, then every published service of
+// this discipline in its order — two columns from 900px. The current row is Klein and
+// carries aria-current="page"; it is still a link (the mockup's), so the list reads the
+// same on every sibling page.
+//
+// Row classes are this page's own (.svc-more__*), not the /services explorer's
+// (.svc-list / .svc-row): the two were built in parallel, and one page's rows must not
+// restyle the other's.
+
+interface Props {
+  locale: Locale;
+  discipline: Discipline;
+  /** The page's own service. */
+  current: string;
+}
+
+const { locale, discipline, current } = Astro.props;
+const copy = SERVICE_PAGE_COPY[locale];
+const name = pickLocale(discipline.name, locale);
+const heading = moreHeading(name, locale);
+const rows = discipline.services.map((s, i) => ({
+  n: pad2(i + 1),
+  href: localizedPath(`/services/${s.slug}`, locale),
+  title: pickLocale(s.title, locale),
+  here: s.slug === current,
+}));
+---
+
+<section class="svc-more" aria-labelledby="svc-more-heading">
+  <div class="svc-wrap">
+    <div class="svc-more__head">
+      <div>
+        <div class="tag rv"><span class="dot"></span><span>{moreTag(name, locale)}</span></div>
+        <h2 class="rv" id="svc-more-heading">
+          <AccentText text={heading.text} locale={locale} accent={heading.accent} />
+        </h2>
+      </div>
+      <a class="svc-more__all rv" href={localizedHref('/services', locale)}>{copy.all}</a>
+    </div>
+    <ol class="svc-more__list" role="list">
+      {
+        rows.map((row) => (
+          <li class:list={['svc-more__row', { 'is-here': row.here }]}>
+            <a href={row.href} aria-current={row.here ? 'page' : undefined}>
+              <span class="svc-more__n" aria-hidden="true">
+                {row.n}
+              </span>
+              <span class="svc-more__t">{row.title}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>

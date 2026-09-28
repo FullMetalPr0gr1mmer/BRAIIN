@@ -39,6 +39,9 @@ export const RENDERED_SECTION_TYPES = [
   'projectGrid',
   'pageHead',
   'projectCatalog',
+  // Round 2 (services)
+  'hello',
+  'serviceExplorer',
 ] as const satisfies readonly SectionType[];
 
 export type RenderedSectionType = (typeof RENDERED_SECTION_TYPES)[number];

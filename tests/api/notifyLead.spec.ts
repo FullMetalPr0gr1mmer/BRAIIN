@@ -24,7 +24,8 @@ vi.mock('@/lib/supabase/server', () => ({
         tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
         name: 'A Person',
         message: 'hello',
-        service_of_interest: 'branding',
+        service_of_interest: null,
+        discipline_of_interest: 'branding',
         locale: 'en',
         email_enc: '',
         phone_enc: '',
@@ -111,5 +112,13 @@ describe('notify-lead payload hygiene', () => {
     expect(serialized).not.toContain('hello');
     expect(serialized).not.toContain('3-6m');
     expect(row).toMatchObject({ channel: 'inbox', status: 'queued' });
+  });
+
+  it('names the discipline among the fields a recipient is sent (0028)', async () => {
+    inserted.length = 0;
+    await call(`Bearer ${VALID_TOKEN}`);
+    const row = inserted.find((r) => 'channel' in r) as { detail: { fields: string[] } };
+    expect(row.detail.fields).toContain('discipline');
+    expect(row.detail.fields).toContain('service');
   });
 });

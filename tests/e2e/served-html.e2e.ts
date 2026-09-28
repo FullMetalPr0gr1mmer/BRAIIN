@@ -21,11 +21,13 @@ const PATHS = [
   '/about',
   '/contact',
   '/services',
-  '/services/branding',
+  // A live Round 2 service (the old /services/branding now answers a 301 that Playwright
+  // would follow, and the scan would check the Services page twice instead).
+  '/services/logo',
   '/portfolio',
   // UI v2 PR10 — the catalogue, plus a filtered view (its own response: private, same markup rules)
   '/portfolio/all',
-  '/portfolio/all?service=branding',
+  '/portfolio/all?service=logo',
   // A seeded published case study (local/CI/staging). The legacy demo rows are archived
   // there, so pointing at one would scan the 404 page instead of the detail template.
   '/portfolio/the-rider',

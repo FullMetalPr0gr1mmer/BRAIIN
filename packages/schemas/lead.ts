@@ -65,6 +65,13 @@ export const LeadInputSchema = z.object({
   phone: z.string().min(3).max(32).optional(),
   message: z.string().min(1).max(5000),
   serviceOfInterest: SlugSchema.optional(),
+  /**
+   * "{Discipline}, help me choose" (Round 2): the discipline slug when the visitor picked
+   * a discipline rather than one of its services. Not sensitive — it sits in leads_safe
+   * beside serviceOfInterest. At most 64 characters: the 0028 column CHECK's bound, so an
+   * over-long value is a 422 here rather than a failed insert.
+   */
+  disciplineOfInterest: SlugSchema.max(64).optional(),
   budgetBand: AcceptedBudgetBandSchema.optional(),
   /** Free-text "When do you need it?" — a §3 `timeline` field: encrypted, Admin/Developer only. */
   timelineText: z.string().trim().min(1).max(120).optional(),

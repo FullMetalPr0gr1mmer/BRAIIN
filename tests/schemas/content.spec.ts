@@ -29,6 +29,15 @@ const service = {
   is_teaser: false,
   sort_order: 1,
   updated_at: '2026-07-01T10:00:00Z', // feeds sitemap <lastmod> / dateModified
+  // Round 2 (0028): the service-page fields. All empty is a valid (unplaced) service.
+  discipline_id: null,
+  intro: null,
+  value_points: [],
+  deliverables: [],
+  preview_video_path: null,
+  preview_start_s: null,
+  preview_end_s: null,
+  poster: null,
 };
 
 describe('LocalizedTextSchema — indexable scalars require Arabic', () => {

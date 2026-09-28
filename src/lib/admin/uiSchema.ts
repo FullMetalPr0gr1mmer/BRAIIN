@@ -37,14 +37,36 @@ export type FieldKind =
   | 'sectionContent' // page_sections.content, typed by the sibling `type` field
   | 'upload'; // a file sent to `upload.endpoint`; the field holds the returned id
 
+/**
+ * One filter of a relation's options query: a value means "equals", `{ neq }` means "is
+ * not" — e.g. `{ status: { neq: 'archived' } }` keeps archived rows out of a picker.
+ */
+export type RelationFilterValue = string | { readonly neq: string };
+
 /** Where a relation field loads its options from. */
 export interface RelationDef {
   /** Admin API resource slug: options load from GET /api/admin/<resource>. */
   resource: string;
   /** Row key shown as the option label; a {en, ar} value shows its English. */
   labelKey: string;
-  /** Equality filters for the options query, e.g. { location: 'header' }. */
-  filter?: Readonly<Record<string, string>>;
+  /** Options-query filters: { location: 'header' } (equals), { status: { neq: 'archived' } }. */
+  filter?: Readonly<Record<string, RelationFilterValue>>;
+}
+
+/**
+ * The options query of a relation field. Equality goes as `column=value`, "is not" as
+ * `column.neq=value` — the list endpoint (resource.ts) accepts both for `status` and the
+ * resource's filterableColumns, and ignores any other key. Hiding a row from the picker
+ * never drops it from a record that already links it: the stored id stays selected
+ * (RelationField keeps ids the list does not contain).
+ */
+export function relationParams(relation: RelationDef, limit: number): URLSearchParams {
+  const params = new URLSearchParams({ limit: String(limit) });
+  for (const [column, value] of Object.entries(relation.filter ?? {})) {
+    if (typeof value === 'string') params.set(column, value);
+    else params.set(`${column}.neq`, value.neq);
+  }
+  return params;
 }
 
 export interface FieldDef {
@@ -74,6 +96,11 @@ export interface FieldDef {
   typeField?: string;
   /** `upload`: where the file is POSTed (multipart) and what it may be. */
   upload?: { endpoint: string; accept: string };
+  /**
+   * `clip`: offer only a site file (/media/….mp4) — for tables with no Stream-uid column
+   * yet (disciplines, services: 0028). Stream arrives with KAN-20.
+   */
+  pathOnly?: boolean;
   /**
    * The value a NEW record's form starts with — must equal the create schema's default, or
    * the form shows one thing (an unticked box) while the server stores another.
@@ -130,6 +157,20 @@ const PLACEHOLDER_FIELD: FieldDef = {
   help: 'Sample content from the design delivery. It cannot be published or shown until you replace it and untick this.',
 };
 
+/** Pickers hide archived rows; a record that already links one keeps the link. */
+const NOT_ARCHIVED = { status: { neq: 'archived' } } as const;
+
+/** A window of the showreel in the preview_* columns (0022/0028): a site file, no Stream. */
+const showreelClip = (label: string, help: string): FieldDef => ({
+  name: 'clip',
+  // The API returns the clip derived from the preview_* columns under `preview`.
+  column: 'preview',
+  label,
+  kind: 'clip',
+  pathOnly: true,
+  help,
+});
+
 /** A list of short bilingual phrases stored as [{en, ar}] (the item fields ARE the pair). */
 const bilingualList = (name: string, label: string, maxItems: number, help?: string): FieldDef => ({
   name,
@@ -159,21 +200,61 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
       { key: 'title', label: 'Title', kind: 'bilingual' },
       { key: 'slug', label: 'Slug' },
       { key: 'status', label: 'Status', kind: 'status' },
-      { key: 'is_teaser', label: 'Teaser', kind: 'boolean' },
+      { key: 'sort_order', label: 'Order' },
       { key: 'updated_at', label: 'Updated', kind: 'date' },
     ],
     fields: [
-      { name: 'slug', label: 'Slug', kind: 'slug', required: true },
-      { name: 'title', label: 'Title', kind: 'bilingual', required: true },
-      { name: 'blurb', label: 'Blurb', kind: 'prose' },
-      { name: 'body', label: 'Body', kind: 'richtext' },
       {
-        name: 'heroVideoUid',
-        label: 'Hero video (Cloudflare Stream UID)',
-        kind: 'text',
-        help: 'Video is Stream-only; the poster frame becomes the page’s LCP image.',
+        name: 'slug',
+        label: 'Slug',
+        kind: 'slug',
+        required: true,
+        help: 'The page address: /services/<slug>.',
       },
-      { name: 'category', label: 'Category', kind: 'text' },
+      { name: 'title', label: 'Service name', kind: 'bilingual', required: true },
+      {
+        name: 'disciplineId',
+        label: 'Discipline',
+        kind: 'relation',
+        relation: { resource: 'disciplines', labelKey: 'name', filter: NOT_ARCHIVED },
+        help: 'The group it is listed under (home cards, /services, the inquiry forms). Required to publish.',
+      },
+      {
+        name: 'blurb',
+        label: 'Tagline',
+        kind: 'prose',
+        help: 'The tagline shown under the service name. Also the page’s meta description and search text.',
+      },
+      {
+        name: 'intro',
+        label: 'Intro (the “What it is” heading)',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'One sentence, e.g. “A logo is a promise you repeat thousands of times, so we make it count.”',
+      },
+      { name: 'body', label: 'What it is (body)', kind: 'richtext' },
+      {
+        name: 'valuePoints',
+        label: 'Value we add',
+        kind: 'repeater',
+        maxItems: 6,
+        help: 'The “Why it’s worth it” cards. The design shows three.',
+        itemFields: [
+          { name: 'title', label: 'Title', kind: 'bilingual', required: true },
+          { name: 'text', label: 'Text', kind: 'bilingual', required: true },
+        ],
+      },
+      bilingualList('deliverables', 'What you get', 12, 'The checklist, one line each.'),
+      {
+        name: 'posterMediaId',
+        label: 'Poster',
+        kind: 'media',
+        help: 'The still behind the hero clip, and the service’s image in the Services explorer.',
+      },
+      showreelClip(
+        'Hero clip',
+        'The window of the showreel the page opens with, also played on its explorer row. At most 30 seconds.',
+      ),
       {
         name: 'shortTitle',
         label: 'Short title (chips)',
@@ -182,12 +263,132 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
         help: 'Shown on filter chips and skill tags where the full title is too long (e.g. “SEO / GEO / AEO”). Empty = the title.',
       },
       {
+        name: 'heroVideoUid',
+        label: 'Hero video (Cloudflare Stream UID)',
+        kind: 'text',
+        help: 'Not used yet: the page plays the hero clip above until Stream is provisioned (KAN-20).',
+      },
+      { name: 'category', label: 'Category', kind: 'text' },
+      {
         name: 'isTeaser',
         label: 'Coming-soon teaser',
         kind: 'checkbox',
-        help: 'Published + teaser is how Gaming launches — not a fifth status.',
+        help: 'Published + teaser shows a “Coming soon” note: not a fifth status.',
       },
       SORT_FIELD,
+      STATUS_FIELD,
+      SCHEDULED_FIELD,
+    ],
+  },
+
+  disciplines: {
+    slug: 'disciplines',
+    title: 'Disciplines',
+    singular: 'Discipline',
+    hasStatus: true,
+    reorder: true,
+    columns: [
+      { key: 'name', label: 'Name', kind: 'bilingual' },
+      { key: 'slug', label: 'Slug' },
+      { key: 'status', label: 'Status', kind: 'status' },
+      { key: 'sort_order', label: 'Order' },
+      { key: 'updated_at', label: 'Updated', kind: 'date' },
+    ],
+    fields: [
+      {
+        name: 'slug',
+        label: 'Slug',
+        kind: 'slug',
+        required: true,
+        help: 'Its anchor on the Services page: /services#<slug>. At most 64 characters.',
+      },
+      { name: 'name', label: 'Name', kind: 'bilingual', required: true },
+      {
+        name: 'short',
+        label: 'Card line',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'One line on the discipline card, e.g. “The mark, the system, and everything it touches.”',
+      },
+      {
+        name: 'blurb',
+        label: 'Description',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'The paragraph at the top of its panel in the Services explorer.',
+      },
+      { name: 'posterMediaId', label: 'Poster', kind: 'media', help: 'The card image.' },
+      showreelClip(
+        'Card clip',
+        'The window of the showreel the card plays on hover. At most 30 seconds.',
+      ),
+      SORT_FIELD,
+      {
+        ...STATUS_FIELD,
+        help: 'Archiving a discipline hides every one of its services from the site. Archiving is Admin-only.',
+      },
+      SCHEDULED_FIELD,
+    ],
+  },
+
+  'service-cases': {
+    slug: 'service-cases',
+    title: 'Service case studies',
+    singular: 'Service case study',
+    hasStatus: true,
+    columns: [
+      { key: 'title', label: 'Title', kind: 'bilingual' },
+      { key: 'is_placeholder', label: 'Placeholder', kind: 'boolean' },
+      { key: 'status', label: 'Status', kind: 'status' },
+      { key: 'updated_at', label: 'Updated', kind: 'date' },
+    ],
+    fields: [
+      {
+        name: 'serviceId',
+        label: 'Service',
+        kind: 'relation',
+        required: true,
+        relation: { resource: 'services', labelKey: 'title', filter: NOT_ARCHIVED },
+        help: 'The service page this block appears on. One per service.',
+      },
+      {
+        name: 'portfolioId',
+        label: 'Project',
+        kind: 'relation',
+        relation: { resource: 'portfolio', labelKey: 'title', filter: NOT_ARCHIVED },
+        help: 'The case study it links to. Its client and industry are the block’s chips; a client not cleared for disclosure shows as “Confidential client”.',
+      },
+      { name: 'title', label: 'Title', kind: 'bilingual', required: true },
+      {
+        name: 'context',
+        label: 'Where they were',
+        kind: 'bilingual',
+        nullable: true,
+        help: 'The situation before the work, a sentence or two.',
+      },
+      {
+        name: 'problems',
+        label: 'The problem, and what we did',
+        kind: 'repeater',
+        maxItems: 6,
+        help: 'The design shows three rows.',
+        itemFields: [
+          { name: 'problem', label: 'The problem', kind: 'bilingual', required: true },
+          { name: 'solution', label: 'What we did', kind: 'bilingual', required: true },
+        ],
+      },
+      {
+        name: 'results',
+        label: 'Results',
+        kind: 'repeater',
+        maxItems: 4,
+        help: 'Figures only when they are real. A placeholder figure (XX) cannot be published.',
+        itemFields: [
+          { name: 'value', label: 'Figure', kind: 'text', required: true, help: 'e.g. 4, +27%' },
+          { name: 'label', label: 'What it measures', kind: 'bilingual', required: true },
+        ],
+      },
+      PLACEHOLDER_FIELD,
       STATUS_FIELD,
       SCHEDULED_FIELD,
     ],
@@ -279,9 +480,9 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
         name: 'serviceIds',
         label: 'Services',
         kind: 'multiRelation',
-        relation: { resource: 'services', labelKey: 'title' },
+        relation: { resource: 'services', labelKey: 'title', filter: NOT_ARCHIVED },
         maxItems: 20,
-        help: 'In the order the case study lists them; they are also its catalogue filters.',
+        help: 'In the order the case study lists them; they are also its catalogue filters. Archived services are not offered; one already listed stays until you remove it.',
       },
       {
         name: 'isFeatured',
@@ -738,13 +939,14 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
           { value: 'home', label: 'Home' },
           { value: 'about', label: 'About' },
           { value: 'work', label: 'Our Work' },
+          { value: 'services', label: 'Services page' },
         ],
       },
       {
         name: 'placementLabels',
         label: 'Label on a specific page',
         kind: 'repeater',
-        maxItems: 3,
+        maxItems: 4,
         help: 'Where a page words it differently (“Projects delivered across the region” on About).',
         itemFields: [
           {
@@ -756,6 +958,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
               { value: 'home', label: 'Home' },
               { value: 'about', label: 'About' },
               { value: 'work', label: 'Our Work' },
+              { value: 'services', label: 'Services page' },
             ],
           },
           { name: 'label', label: 'Label', kind: 'bilingual', required: true },

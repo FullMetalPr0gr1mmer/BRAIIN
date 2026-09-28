@@ -4,6 +4,7 @@ import type { Locale } from '@schemas/primitives';
 import type { HeroSectionContent } from '@schemas/sections';
 import { localizedHref, pickLocale } from '@/lib/i18n';
 import { splitTrailingMark } from '@/lib/text/accent';
+import { heroText, splitBold, type HeroText } from '@/lib/text/heroLinks';
 import Cta from '@/components/ui/Cta.astro';
 import logo from '@/assets/braiin-logo-white.png';
 
@@ -33,12 +34,30 @@ interface Props extends HeroSectionContent {
                    work band will not render, a preset page's own form (`#inquiry`);
       - `banner`   a page preset's short banner (withHeroPreset): shorter box, the badge
                    CTA icon first, no scroll cue, never the intro plate;
-      - `clip`     the window of the loop this page plays (seconds). */
+      - `clip`     the window of the loop this page plays (seconds).
+      Round 2 (the services pages; each renders only when given — S3/S4 API):
+      - `altLink`  a small line under the CTA — "Know what you need? **Skip to the
+                   inquiry**" (.hero__alt). `label` may bold ONE run with <b>…</b>; it is
+                   split into text and a <b> element, never injected as HTML.
+      - `crumb`    a breadcrumb nav above the h1 — "Services / Branding" (.crumb). Its
+                   presence also makes this the service-page hero (.hero--one: the smaller
+                   h1 that fits a long service name beside the side column).
+      - `skipLink` the "Been here before? **Skip to the inquiry**" glass pill over the
+                   footage (.hero__skip), first in the hero's tab order.
+      - `noSub`    the page has no sub line of its own (a service with no tagline): render
+                   none, rather than the home slogan the built-in copy would put there.
+      A HeroText is a string in the page's language or an {en, ar} pair. Hrefs are
+      localized (`/services#branding` → `/ar/services#branding`; `#inquiry` stays).
+      Their CSS is in public/styles/services.css — a page using them links that sheet. */
   data?:
     | {
         ctaHref?: string;
         banner?: boolean;
         clip?: { start: number; end: number };
+        altLink?: { label: HeroText; href: string } | undefined;
+        crumb?: { items: readonly { label: HeroText; href: string }[] } | undefined;
+        skipLink?: { kicker: HeroText; label: HeroText; href: string } | undefined;
+        noSub?: boolean;
       }
     | undefined;
 }
@@ -65,12 +84,14 @@ const STR = {
     sub: 'From the brain to the real world.',
     cta: 'See our work',
     scroll: 'Scroll',
+    crumb: 'Breadcrumb',
   },
   ar: {
     headline: 'شغل إبداعي يحقّق نتائج*',
     sub: 'من الدماغ إلى أرض الواقع.',
     cta: 'شوف أعمالنا',
     scroll: 'انزل',
+    crumb: 'مسار التنقل',
   },
 }[locale];
 
@@ -101,7 +122,10 @@ const words: Word[] = headline
       .filter(Boolean)
       .map((text, i) => ({ text, accent: accentFrom !== undefined && i >= accentFrom }))
   : WORDS[locale];
-const subText = sub ? pickLocale(sub, locale) : STR.sub;
+// A given sub wins; without one, the built-in slogan — unless the route says the page has
+// no sub (a service page's is its own tagline: the home slogan under "Logo Design" would be
+// unrelated copy).
+const subText = sub ? pickLocale(sub, locale) : data?.noSub === true ? '' : STR.sub;
 const ctaText = ctaLabel ? pickLocale(ctaLabel, locale) : STR.cta;
 const perWord = locale === 'ar';
 const parts = words.map((w) => ({
@@ -114,10 +138,36 @@ const intro = introProp && !banner;
 const href = localizedHref(data?.ctaHref ?? '#selected-work', locale);
 const clip = data?.clip;
 
-// The intro logo renders at `min(46vw, 520px, 66svh)`, so `width={520}` + densities
-// [1,2] emits the matching 520w/1040w pair. It was `width={1040}` with the same
-// densities, which put a 1040w image in a 520px box on a 1x screen — 4x the pixels,
-// and this is the LCP element.
+const altLink = data?.altLink
+  ? {
+      href: localizedHref(data.altLink.href, locale),
+      runs: splitBold(heroText(data.altLink.label, locale)),
+    }
+  : null;
+const crumbs = (data?.crumb?.items ?? []).map((c) => ({
+  label: heroText(c.label, locale),
+  href: localizedHref(c.href, locale),
+}));
+const skip = data?.skipLink
+  ? {
+      href: localizedHref(data.skipLink.href, locale),
+      kicker: heroText(data.skipLink.kicker, locale),
+      label: heroText(data.skipLink.label, locale),
+    }
+  : null;
+
+// The intro logo renders at `min(46vw, 520px, 66svh)` (global.css `.intro img`) and is
+// the home LCP element. It was `width={520}` + densities [1,2]: a 1x/2x pair keyed to the
+// DESKTOP box, so a phone (a 189px box at DPR 1.75 on Lighthouse's Moto G) took the
+// 1040w file — 3x the pixels it can show, 17 KB on the critical path. Width descriptors
+// + `sizes` let the browser pick by the real box × DPR: that phone takes 520w (9 KB), a
+// 1x desktop 520w and a 2x desktop 1040w, exactly as before. Every width is a multiple
+// of 260, so every candidate is exactly 520:266 — the box never changes shape when the
+// file arrives (a 360w file would be 360×184, a sub-pixel resize). `sizes` leaves out
+// the 66svh bound (a short landscape window over-fetches a little — never under).
+// `width={520}` keeps the img's intrinsic 520×266 attributes (CLS).
+const INTRO_LOGO_WIDTHS = [260, 520, 780, 1040];
+const INTRO_LOGO_SIZES = 'min(46vw, 520px)';
 
 // TEMPORARY EXCEPTION (owner: Kareem, expires: KAN-20 Stream provisioning) — the loop
 // ships as a static mp4 so the launched design has its centerpiece; CLAUDE.md P2 wants
@@ -133,7 +183,8 @@ const src = videoUid ? undefined : videoSrc;
         alt=""
         formats={['avif', 'webp']}
         width={520}
-        densities={[1, 2]}
+        widths={INTRO_LOGO_WIDTHS}
+        sizes={INTRO_LOGO_SIZES}
         decoding="async"
         loading="eager"
         fetchpriority="high"
@@ -142,7 +193,7 @@ const src = videoUid ? undefined : videoSrc;
   ) : null
 }
 
-<section class:list={['hero', { 'hero--banner': banner }]}>
+<section class:list={['hero', { 'hero--banner': banner, 'hero--one': crumbs.length > 0 }]}>
   <div
     class="hero__media"
     data-video-src={src}
@@ -150,6 +201,29 @@ const src = videoUid ? undefined : videoSrc;
     data-clip-end={clip ? String(clip.end) : undefined}
   >
   </div>
+
+  {
+    skip && (
+      <a class="hero__skip" href={skip.href}>
+        <span class="hero__skip-t">
+          <small>{skip.kicker}</small>
+          <b>{skip.label}</b>
+        </span>
+        <span class="hero__skip-go" aria-hidden="true">
+          <svg viewBox="0 0 16 16">
+            <path
+              d="M8 1v13M3 9l5 5 5-5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+      </a>
+    )
+  }
 
   <div class="hero__inner">
     {
@@ -161,6 +235,20 @@ const src = videoUid ? undefined : videoSrc;
         mark is its OWN nowrap word with no space before it (the design's
         `<em>performs</em>*`), so it may drop to the next line alone instead of dragging
         the accent word down with it. */
+    }
+    {
+      /* The service page's crumb, a sibling BEFORE the h1 (services.css gives it its own
+        row above the headline), so no hero gains a wrapper around its LCP element. */
+      crumbs.length > 0 && (
+        <nav class="crumb" aria-label={STR.crumb}>
+          {crumbs.map((c, i) => (
+            <>
+              {i > 0 && <span aria-hidden="true">/</span>}
+              <a href={c.href}>{c.label}</a>
+            </>
+          ))}
+        </nav>
+      )
     }
     <h1 aria-label={headlineText}>
       {
@@ -184,7 +272,7 @@ const src = videoUid ? undefined : videoSrc;
       }
     </h1>
     <div class="hero__side">
-      <p class="hero__sub">{subText}</p>
+      {subText && <p class="hero__sub">{subText}</p>}
       {
         banner ? (
           <Cta href={href} icon="down" class="hero__cta">
@@ -203,6 +291,13 @@ const src = videoUid ? undefined : videoSrc;
                 stroke-linejoin="round"
               />
             </svg>
+          </a>
+        )
+      }
+      {
+        altLink && (
+          <a class="hero__alt" href={altLink.href}>
+            {altLink.runs.map((r) => (r.bold ? <b>{r.text}</b> : r.text))}
           </a>
         )
       }

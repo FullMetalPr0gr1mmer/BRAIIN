@@ -41,7 +41,7 @@ export const CONTACT_FAQ: Record<Locale, FaqItem[]> = {
     },
     {
       q: 'Can we hire you for just one service?',
-      a: 'Yes. Take one of the fourteen or take all of them. Nothing is bundled together to force a bigger invoice.',
+      a: 'Yes. Take one of the twenty-eight or take all of them. Nothing is bundled together to force a bigger invoice.',
     },
     {
       q: 'Do you work with brands that already exist?',
@@ -83,7 +83,7 @@ export const CONTACT_FAQ: Record<Locale, FaqItem[]> = {
     },
     {
       q: 'نقدر نطلب خدمة واحدة بس؟',
-      a: 'أكيد. خذ واحدة من الأربع عشرة أو خذها كلها. ما في شيء مربوط ببعضه عشان تكبر الفاتورة.',
+      a: 'أكيد. خذ واحدة من الثمان والعشرين أو خذها كلها. ما في شيء مربوط ببعضه عشان تكبر الفاتورة.',
     },
     {
       q: 'تشتغلون مع علامات قائمة أصلاً؟',

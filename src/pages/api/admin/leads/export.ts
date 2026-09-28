@@ -100,6 +100,7 @@ export const GET = defineAdminRoute({
           'timeline',
           'timeline_band',
           'service_of_interest',
+          'discipline_of_interest',
           'locale',
           'message',
           'internal_notes',
@@ -111,6 +112,7 @@ export const GET = defineAdminRoute({
           'name',
           'company',
           'service_of_interest',
+          'discipline_of_interest',
           'locale',
           'message',
         ];
@@ -124,6 +126,7 @@ export const GET = defineAdminRoute({
         name: row['name'],
         company: row['company'],
         service_of_interest: row['service_of_interest'],
+        discipline_of_interest: row['discipline_of_interest'],
         locale: row['locale'],
         message: row['message'],
       };

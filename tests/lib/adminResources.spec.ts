@@ -11,6 +11,8 @@ import type { ResourceConfig } from '@/lib/admin/resource';
 
 const CONFIG: Record<string, ResourceConfig> = {
   services: R.serviceResource,
+  disciplines: R.disciplineResource,
+  'service-cases': R.serviceCaseResource,
   blog: R.postResource,
   portfolio: R.portfolioResource,
   sectors: R.sectorResource,

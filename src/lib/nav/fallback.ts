@@ -7,7 +7,8 @@ import type { NavNode } from '@/lib/data/navigation';
 //
 // UI v2 (the Brain Station UI mockup): Home · About · Our Work · Services · Contact us,
 // with Contact us as the key link — the one still visible at <=900px. Join joins both
-// menus with the Join page (PR13). Insights moved from the header to the footer.
+// menus with the Join page (PR13). Insights moved from the header to the footer. Round 2:
+// Services is the Services page (/services), no longer the home section (/#services).
 
 type Entry = { href: string; en: string; ar: string; key?: boolean };
 
@@ -27,7 +28,7 @@ export const HEADER_FALLBACK: NavNode[] = toNodes('fallback-h', [
   { href: '/', en: 'Home', ar: 'الرئيسية' },
   { href: '/about', en: 'About', ar: 'من نحن' },
   { href: '/portfolio', en: 'Our Work', ar: 'أعمالنا' },
-  { href: '/#services', en: 'Services', ar: 'الخدمات' },
+  { href: '/services', en: 'Services', ar: 'الخدمات' },
   { href: '/contact', en: 'Contact us', ar: 'تواصل معنا', key: true },
 ]);
 

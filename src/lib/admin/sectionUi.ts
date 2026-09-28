@@ -63,7 +63,23 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     { name: 'accentFromAr', label: 'Accent from word (Arabic)', kind: 'number', help: accentHelp },
   ],
   clientsMarquee: [tag, heading, { name: 'note', label: 'Note', kind: 'bilingual' }],
-  servicesOverview: [tag, heading, { name: 'sub', label: 'Sub-line', kind: 'bilingual' }],
+  // Round 2: the discipline cards (the disciplines themselves are under Disciplines).
+  servicesOverview: [
+    tag,
+    heading,
+    { name: 'sub', label: 'Sub-line', kind: 'bilingual' },
+    {
+      name: 'hint',
+      label: 'Line under the cards',
+      kind: 'bilingual',
+      help: 'Default: "Open one to see every service inside it" (home) / "Tap a discipline to open it" (Services page).',
+    },
+    {
+      name: 'allLabel',
+      label: '"All services" button label (home only)',
+      kind: 'bilingual',
+    },
+  ],
   contact: [heading, { name: 'accent', label: 'Accent (highlighted words)', kind: 'bilingual' }],
   social: [
     {
@@ -112,6 +128,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
         { value: 'band', label: 'Band (home, on black)' },
         { value: 'reach', label: 'Reach (about, on white)' },
         { value: 'proof', label: 'Proof (Our Work, on white)' },
+        { value: 'services', label: 'Services proof (Services page: a statement, a rating line)' },
       ],
     },
     {
@@ -122,12 +139,19 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
         { value: 'home', label: 'Home' },
         { value: 'about', label: 'About' },
         { value: 'work', label: 'Our Work' },
+        { value: 'services', label: 'Services page' },
       ],
       help: 'Shows the statistics marked for this page, each with its label for this page.',
     },
     { ...tag, label: 'Tag (small label above the heading; Band, Reach and Proof only)' },
     heading,
     { name: 'text', label: 'Text beside the heading (Band and Reach only)', kind: 'bilingual' },
+    {
+      name: 'line',
+      label: 'Statement beside the numbers (Services proof only)',
+      kind: 'bilingual',
+      help: 'Default: "Five disciplines. One team. Zero handoffs." The rating line under it is set in Advanced (JSON) as "rating": {"value", "label"} — remove the key to drop it.',
+    },
     {
       name: 'staticNumbers',
       label: 'Show the numbers without counting up (Band, Reach and Proof only)',
@@ -211,6 +235,31 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     { name: 'whatsappNote', label: 'WhatsApp card note', kind: 'bilingual' },
   ],
   faq: [tag, heading],
+  // Round 2: "Say hello" — the inquiry block closing the services pages. The form itself is
+  // code (its fields are the LeadInputSchema contract).
+  hello: [
+    tag,
+    heading,
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    {
+      name: 'points',
+      label: 'Points beside the form',
+      kind: 'repeater',
+      maxItems: 3,
+      itemFields: [{ name: 'text', label: 'Point', kind: 'bilingual', required: true }],
+    },
+  ],
+  // Round 2: the /services explorer. The disciplines and their services are under
+  // Disciplines and Services; only the two labels around them are content.
+  serviceExplorer: [
+    { name: 'inquireLabel', label: 'Pill beside each service ("Inquire")', kind: 'bilingual' },
+    {
+      name: 'startLabel',
+      label: 'Button closing each panel',
+      kind: 'bilingual',
+      help: 'Write {discipline} where the name goes, in both languages. Default: "Start your {discipline} project".',
+    },
+  ],
   aboutStory: [
     heading,
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
@@ -313,7 +362,9 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
 export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[]>> = {
   hero: ['intro'],
   // A per-locale word range ({en: {from, to}, ar: {…}}) — no typed field kind for it yet.
-  statistics: ['accent'],
+  // Round 2: the Services proof's statement accent (the same kind of range) and its rating
+  // line ({value, label} — a small object, which has no typed field kind either).
+  statistics: ['accent', 'lineAccent', 'rating'],
   // UI v2 PR7: the accent range as above; the card picks (a list of featured-project slugs)
   // and the closing button ({label, href}) have no typed field kind yet either — both fall
   // back to the design's defaults when unset. The carousel interval is a design constant.
@@ -330,6 +381,9 @@ export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[
   contactInquiry: ['accent'],
   contactChannels: ['accent'],
   faq: ['accent'],
+  // Round 2: the accent word ranges, as above.
+  servicesOverview: ['accent'],
+  hello: ['accent'],
 };
 
 /** The fields for one section type, or null when it takes no content (table-backed). */

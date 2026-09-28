@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
-import type { RelationDef } from '@/lib/admin/uiSchema';
+import { relationParams, type RelationDef } from '@/lib/admin/uiSchema';
 
 // Options for a relation field, loaded from the related resource's own admin API — so
 // the list a user can pick from is exactly the rows their role may read (RLS + assertCap
@@ -38,7 +38,7 @@ export function useOptions(relation: RelationDef | undefined): {
   useEffect(() => {
     if (!relation) return;
     const controller = new AbortController();
-    const params = new URLSearchParams({ limit: String(LIMIT), ...(relation.filter ?? {}) });
+    const params = relationParams(relation, LIMIT);
     adminFetch<{ rows: Record<string, unknown>[] }>(
       `/api/admin/${relation.resource}?${params.toString()}`,
       { signal: controller.signal },

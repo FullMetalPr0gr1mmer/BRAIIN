@@ -1,0 +1,100 @@
+{
+  "blocks": [
+    {
+      "table": "disciplines",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "slug": "branding",
+          "name": { "en": "Branding", "ar": "الهوية البصرية" },
+          "short": {
+            "en": "The mark, the system, and everything it touches.",
+            "ar": "الشعار والنظام، وكل شي يلمسه."
+          },
+          "blurb": {
+            "en": "We give a brand a face people remember and a system your team can use. Logo, type, color, and every printed and digital piece built to feel like one voice.",
+            "ar": "نعطي علامتك وجهًا يتذكّره الناس ونظامًا يقدر فريقك يشتغل عليه. الشعار والخطوط والألوان وكل قطعة مطبوعة أو رقمية، مبنية عشان تتكلم بصوت واحد."
+          },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000101",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 5.9,
+          "preview_end_s": 7.9,
+          "status": "published",
+          "sort_order": 10
+        },
+        {
+          "slug": "production",
+          "name": { "en": "Production", "ar": "الإنتاج" },
+          "short": {
+            "en": "Film, motion, photo and sound, made in house.",
+            "ar": "فيديو وموشن وتصوير وصوت، كله ننتجه داخل الفريق."
+          },
+          "blurb": {
+            "en": "Production turns the idea into footage, frames and sound people actually see and hear. We plan, shoot, animate, edit and score under one roof, so the brand looks and sounds like itself everywhere.",
+            "ar": "الإنتاج هو اللي يحوّل الفكرة إلى صورة وحركة وصوت يشوفه الناس ويسمعونه. نخطط ونصوّر ونحرّك ونمنتج ونلحّن تحت سقف واحد، عشان تبان علامتك وتنسمع بنفس الشخصية في كل مكان."
+          },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000108",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 0.05,
+          "preview_end_s": 3.7,
+          "status": "published",
+          "sort_order": 20
+        },
+        {
+          "slug": "marketing",
+          "name": { "en": "Marketing", "ar": "التسويق" },
+          "short": {
+            "en": "Strategy, content, and ads that move people to act.",
+            "ar": "استراتيجية ومحتوى وإعلانات تحرّك الناس للفعل."
+          },
+          "blurb": {
+            "en": "Marketing is how a brand earns attention and turns it into action. We plan where to show up, what to say, and make the content and ads that carry it, in Arabic and English.",
+            "ar": "التسويق هو الطريقة اللي تكسب فيها العلامة الانتباه وتحوّله إلى فعل. نحدد أين تظهر وماذا تقول، ونصنع المحتوى والإعلانات اللي توصل الرسالة، بالعربي والإنجليزي."
+          },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000110",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 3.9,
+          "preview_end_s": 5.9,
+          "status": "published",
+          "sort_order": 30
+        },
+        {
+          "slug": "web",
+          "name": { "en": "Website Development", "ar": "تطوير المواقع" },
+          "short": {
+            "en": "Fast, secure sites that people and AI find.",
+            "ar": "مواقع سريعة وآمنة يلقاها الناس والذكاء الاصطناعي."
+          },
+          "blurb": {
+            "en": "We keep your website fast, secure and online, look after the domain and hosting behind it, and make sure search engines and AI assistants can find it, read it and recommend it.",
+            "ar": "نحافظ على موقعك سريعًا وآمنًا وشغّالًا، ونتولّى الدومين والاستضافة اللي وراه، ونتأكد إن محركات البحث ومساعدات الذكاء الاصطناعي تلقاه وتفهمه وترشّحه."
+          },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000112",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 15.9,
+          "preview_end_s": 18.3,
+          "status": "published",
+          "sort_order": 40
+        },
+        {
+          "slug": "events",
+          "name": { "en": "Events & Exhibitions", "ar": "الفعاليات والمعارض" },
+          "short": {
+            "en": "Booths and event spaces, from 3D to show day.",
+            "ar": "أجنحة ومساحات فعاليات، من تصميم 3D إلى يوم الافتتاح."
+          },
+          "blurb": {
+            "en": "We find the venue, design the space in 3D, then build and install your booth, so your brand shows up at events and exhibitions exactly as planned, on time and on budget.",
+            "ar": "نلقى لك المكان، ونصمّم المساحة بتقنية 3D، ثم نصنّع جناحك ونركّبه، عشان تظهر علامتك في الفعاليات والمعارض بالضبط مثل ما خطّطت، في وقتها وضمن ميزانيتها."
+          },
+          "poster_media_id": "5eed0a00-0000-4000-8000-000000000114",
+          "preview_video_path": "/media/showreel.mp4",
+          "preview_start_s": 13.4,
+          "preview_end_s": 15.9,
+          "status": "published",
+          "sort_order": 50
+        }
+      ]
+    }
+  ]
+}

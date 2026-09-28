@@ -1,0 +1,250 @@
+---
+import { getImage } from 'astro:assets';
+import type { Locale } from '@schemas/primitives';
+import type { ServiceExplorerSectionContent } from '@schemas/sections';
+import { localizedHref, pickLocale } from '@/lib/i18n';
+import { getPublishedDisciplines } from '@/lib/data/disciplines';
+import {
+  EXPLORER_COPY,
+  fallbackExplorerPanels,
+  toExplorerPanels,
+  type ExplorerDisciplineInput,
+} from '@/lib/services/explorer';
+import type { ImageRef } from '@/lib/media/resolve';
+import Cta from '@/components/ui/Cta.astro';
+import MediaFrame from '@/components/media/MediaFrame.astro';
+
+// The /services explorer (Round 2, section type `serviceExplorer`) — the mockup's `.xp`.
+// One panel per published discipline, ALL of them server-rendered (the 28 service links
+// are in the HTML for crawlers and no-JS visitors), each with:
+//   sticky media   the discipline's poster (<Picture>) and clip (clips.ts, in view — never
+//                  on touch, under reduced motion or with Save-Data) + the "01 Branding" pill
+//   key line       "01 / 05  8 services" (the cards' plural rule and digits)
+//   h2 + blurb
+//   the list       NN + the service name → /services/<slug>, and an "Inquire" pill →
+//                  /services/<slug>#inquiry ("Inquire: {name}")
+//   prev / next    wrap around; plain `#slug` links without JS
+//   the CTA        "Start your {Discipline} project" → the page's form, preselecting
+//                  `discipline:<slug>` (ContactForm's [data-preselect] listener)
+//
+// A panel's id is the discipline's slug (`/services#events`). Which panel shows is CSS
+// `:target` until src/lib/client/serviceExplorer.ts takes over (see its header); with
+// nothing addressed the explorer is collapsed — unless it is `standalone`, when it shows its
+// first panel. Tabs are `<a href="#slug">` that the script upgrades to APG tabs
+// (src/lib/client/tabs.ts). Styled in public/styles/services.css.
+//
+//   content  ServiceExplorerSectionContentSchema — { inquireLabel, startLabel } overrides
+//   data     { disciplines?, inquiryHref?, standalone? } — ROUTE data: the published
+//            disciplines with their services (else it loads them itself); where "Start
+//            your…" points (default #inquiry; the route sends it to /contact#inquiry when
+//            the page's own "Say hello" is hidden); `standalone` when the page shows no
+//            discipline cards, which are otherwise the only way in (servicesPage.ts).
+
+interface Props extends ServiceExplorerSectionContent {
+  locale: Locale;
+  data?:
+    | {
+        disciplines?: readonly ExplorerDisciplineInput[] | undefined;
+        inquiryHref?: string | undefined;
+        standalone?: boolean | undefined;
+      }
+    | undefined;
+}
+
+const { locale, inquireLabel, startLabel, data } = Astro.props;
+const COPY = EXPLORER_COPY[locale];
+const labels = {
+  inquire: inquireLabel ? pickLocale(inquireLabel, locale) : undefined,
+  start: startLabel ? pickLocale(startLabel, locale) : undefined,
+};
+
+const disciplines = data?.disciplines ?? (await getPublishedDisciplines());
+const panels =
+  disciplines.length > 0
+    ? toExplorerPanels(disciplines, locale, labels)
+    : fallbackExplorerPanels(locale, labels);
+const inquiryHref = localizedHref(data?.inquiryHref ?? '#inquiry', locale);
+
+// The row-hover poster swap: one server-computed WebP per distinct still, sized to the
+// panel media at 2x (the media is at most ~46% of a 1366px screen). Hover only happens with
+// a mouse or pen, so one width is enough.
+const posterUrls = new Map<string, string>();
+const posterUrl = async (image: ImageRef | null): Promise<string | undefined> => {
+  if (!image) return undefined;
+  const known = posterUrls.get(image.id);
+  if (known) return known;
+  const img = await getImage({
+    src: image.src,
+    width: Math.min(1200, image.width),
+    format: 'webp',
+  });
+  posterUrls.set(image.id, img.src);
+  return img.src;
+};
+const rows = await Promise.all(
+  panels.map((p) =>
+    Promise.all(p.services.map(async (s) => ({ ...s, posterUrl: await posterUrl(s.poster) }))),
+  ),
+);
+---
+
+<section
+  class:list={['svc-xp', { 'svc-xp--standalone': data?.standalone === true }]}
+  aria-label={COPY.region}
+  data-xp
+>
+  <div class="svc-xp__pad">
+    <div class="svc-xp__tabs" data-xp-tabs data-xp-label={COPY.tabs}>
+      {
+        panels.map((p) => (
+          <a class="svc-tab" id={p.tabId} href={`#${p.slug}`} data-xp-tab={p.slug}>
+            {/* Explicit spaces throughout: compressHTML drops template whitespace, and the
+                text (a tab's name, the key line) must not run together without CSS. */}
+            <i>{p.n}</i> {p.name}
+          </a>
+        ))
+      }
+    </div>
+    {
+      panels.map((p, i) => {
+        const hasMedia = Boolean(p.poster || p.clip?.path);
+        return (
+          <div class="svc-panel" id={p.slug} data-xp-panel={p.slug}>
+            <div class:list={['svc-xp__grid', { 'svc-xp__grid--solo': !hasMedia }]}>
+              {hasMedia && (
+                <div class="svc-xp__media" data-xp-media>
+                  <MediaFrame
+                    class="svc-xp__mf"
+                    image={p.poster}
+                    locale={locale}
+                    clip={p.clip}
+                    mode="inview"
+                    decorative
+                    sizes="(min-width: 56.3125rem) 46vw, 100vw"
+                    widths={[480, 800, 1200]}
+                  />
+                  <span class="svc-xp__cap" aria-hidden="true">
+                    <i data-xp-cap-n>{p.n}</i>
+                    <span data-xp-cap>{p.name}</span>
+                  </span>
+                </div>
+              )}
+              <div class="svc-xp__copy">
+                <p class="svc-xp__k">
+                  <span class="dot" />
+                  <span>{p.position}</span>
+                  {p.count && (
+                    <>
+                      {' '}
+                      <span>{p.count}</span>
+                    </>
+                  )}
+                </p>
+                <h2 class="svc-xp__h" id={p.headingId}>
+                  {p.name}
+                </h2>
+                {p.blurb && <p class="svc-xp__p">{p.blurb}</p>}
+                {(rows[i] ?? []).length > 0 && (
+                  <ol class="svc-list" data-xp-list>
+                    {(rows[i] ?? []).map((s) => (
+                      <li
+                        class="svc-row"
+                        data-xp-row
+                        data-xp-n={s.n}
+                        data-xp-name={s.name}
+                        data-xp-poster={s.posterUrl}
+                        data-xp-clip-src={s.clip?.path}
+                        data-xp-clip-start={s.clip?.path ? s.clip.startS : undefined}
+                        data-xp-clip-end={s.clip?.path ? s.clip.endS : undefined}
+                      >
+                        <a class="svc-row__a" href={s.href}>
+                          <span class="svc-row__n" aria-hidden="true">
+                            {s.n}
+                          </span>{' '}
+                          <span class="svc-row__t">{s.name}</span>
+                        </a>
+                        <a class="svc-row__q" href={s.inquireHref} aria-label={s.inquireLabel}>
+                          <span>{labels.inquire ?? COPY.inquire}</span>
+                          <svg viewBox="0 0 16 16" aria-hidden="true">
+                            <path
+                              d="M2 8h12M9 3l5 5-5 5"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            />
+                          </svg>
+                        </a>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                <div class="svc-xp__foot">
+                  {panels.length > 1 && (
+                    <div class="svc-xp__nav">
+                      <a
+                        class="svc-xp__btn svc-xp__btn--prev"
+                        href={`#${p.prev.slug}`}
+                        data-xp-go={p.prev.slug}
+                      >
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                          <path
+                            d="M14 8H2M7 3L2 8l5 5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                        <span>
+                          <span class="sr-only">{COPY.prev}</span>
+                          {p.prev.name}
+                        </span>
+                      </a>
+                      <a
+                        class="svc-xp__btn svc-xp__btn--next"
+                        href={`#${p.next.slug}`}
+                        data-xp-go={p.next.slug}
+                      >
+                        <span>
+                          <span class="sr-only">{COPY.next}</span>
+                          {p.next.name}
+                        </span>
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                          <path
+                            d="M2 8h12M9 3l5 5-5 5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </a>
+                    </div>
+                  )}
+                  <Cta
+                    href={inquiryHref}
+                    icon="go"
+                    class="svc-xp__start"
+                    data-preselect={`discipline:${p.slug}`}
+                  >
+                    {p.startLabel}
+                  </Cta>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })
+    }
+  </div>
+</section>
+
+<script>
+  import { initServiceExplorer } from '@/lib/client/serviceExplorer';
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-xp]')) initServiceExplorer(root);
+</script>

@@ -45,8 +45,11 @@ describe('generated seed files', () => {
 
   it('every statement is idempotent (conflict → do nothing, or insert-where-not-exists)', () => {
     for (const mode of ['published', 'production'] as const) {
+      // Split on a statement's END (`;` then a newline): a value may itself hold `;` — the
+      // renderer escapes an apostrophe in a body_html cache as `&#39;` — but a literal never
+      // holds a newline (JSON.stringify writes it as a backslash escape).
       const statements = generate(mode)
-        .split(';')
+        .split(/;\n/)
         .filter((s: string) => /insert into/.test(s));
       for (const s of statements) {
         expect(/on conflict \([^)]+\) do nothing|where not exists/.test(s), s.slice(0, 80)).toBe(
@@ -114,9 +117,17 @@ describe('site_profile seed', () => {
 });
 
 describe('pages seed', () => {
-  it('creates the six compositions the UI v2 routes read', () => {
+  it('creates the seven compositions the UI v2 routes read (Round 2: services)', () => {
     const slugs = blocks.find((b) => b.table === 'pages')?.rows.map((r) => r['slug']);
-    expect(slugs).toEqual(['home', 'about', 'contact', 'portfolio', 'portfolio-all', 'join']);
+    expect(slugs).toEqual([
+      'home',
+      'about',
+      'contact',
+      'portfolio',
+      'portfolio-all',
+      'services',
+      'join',
+    ]);
   });
 });
 
@@ -172,6 +183,7 @@ describe('UI v2 content seed (0020–0025)', () => {
     'statistics',
     'clients',
     'page_sections',
+    'service_cases', // 0028
   ];
 
   it('every static media key is a file the stills registry will find', () => {
@@ -297,5 +309,259 @@ describe('About composition seed (UI v2 PR8)', () => {
 
   it('is real copy, not placeholder content: it ships visible in production too', () => {
     for (const row of rows) expect(rowForMode(row, 'production')['visible']).toBe(true);
+  });
+});
+
+describe('load order: every reference points at a row an EARLIER block inserts', () => {
+  // gen-seeds concatenates the files by name and each block is one statement. A `$ref`
+  // resolved before its row exists is a subselect that quietly returns NULL (or a 23503
+  // abort), and a bare FK uuid ahead of its row aborts the whole seed. Round 2 moved the
+  // stills to 05 and put disciplines at 08 precisely because services (10) point at both.
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  type Ref = { $ref: { table: string; by: Record<string, unknown> } };
+  const isRef = (v: unknown): v is Ref => typeof v === 'object' && v !== null && '$ref' in v;
+
+  it('holds for every $ref and every *_id uuid, in both modes', () => {
+    const earlier = new Map<string, Row[]>();
+    const all: Row[] = [];
+    let checked = 0;
+    for (const block of blocks) {
+      for (const row of block.rows) {
+        for (const [column, value] of Object.entries(row)) {
+          if (column.startsWith('__')) continue;
+          const where = `${block.source}:${block.table}.${column}`;
+          if (isRef(value)) {
+            const { table, by } = value.$ref;
+            const hit = (earlier.get(table) ?? []).some((r) =>
+              Object.entries(by).every(([k, v]) => r[k] === v),
+            );
+            expect(hit, `${where} → ${table} ${JSON.stringify(by)}`).toBe(true);
+            checked += 1;
+          } else if (
+            column.endsWith('_id') &&
+            column !== 'tenant_id' &&
+            typeof value === 'string' &&
+            UUID.test(value)
+          ) {
+            expect(
+              all.some((r) => r['id'] === value),
+              `${where} → ${value}`,
+            ).toBe(true);
+            checked += 1;
+          }
+        }
+      }
+      // Only AFTER the whole block: a row cannot rely on a sibling of its own statement.
+      earlier.set(block.table, [...(earlier.get(block.table) ?? []), ...block.rows]);
+      all.push(...block.rows);
+    }
+    expect(checked).toBeGreaterThan(100);
+  });
+
+  it('files load stills (05) and disciplines (08) before the services (10) that use them', () => {
+    const at = (file: string) => blocks.findIndex((b) => b.source === file);
+    expect(at('05-media-stills.json')).toBeGreaterThan(-1);
+    expect(at('05-media-stills.json')).toBeLessThan(at('08-disciplines.json'));
+    expect(at('08-disciplines.json')).toBeLessThan(at('10-services.json'));
+    expect(at('42-portfolio.json')).toBeLessThan(at('45-service-cases.json'));
+  });
+});
+
+describe('Round 2 catalogue seed (0028): five disciplines, 28 services, sample cases', () => {
+  const rowsOf = (table: string) => blocks.filter((b) => b.table === table).flatMap((b) => b.rows);
+  const refSlug = (v: unknown) => (v as { $ref: { by: { slug: string } } }).$ref.by.slug;
+
+  const DISCIPLINES = ['branding', 'production', 'marketing', 'web', 'events'];
+  const SERVICES: Record<string, string[]> = {
+    branding: [
+      'logo',
+      'business-cards',
+      'letterhead',
+      'brand-guidelines',
+      'stationery',
+      'packaging',
+      'powerpoint-templates',
+      'company-profile',
+    ],
+    production: [
+      'motion-graphics',
+      'animation',
+      'video-editing',
+      'photo-video',
+      'model-booking',
+      'music-vo-sfx',
+    ],
+    marketing: [
+      'marketing-strategy',
+      'content-strategy',
+      'advertising',
+      'social-media',
+      'campaigns',
+      'content-creation',
+      'copywriting',
+    ],
+    web: ['hosting', 'domain', 'seo-geo-aeo'],
+    events: ['venue-booking', '3d-design', 'booth-production', 'booth-installation'],
+  };
+
+  it('the disciplines, in the design’s order, each with poster and clip window', () => {
+    const d = rowsOf('disciplines');
+    expect(d.map((r) => r['slug'])).toEqual(DISCIPLINES);
+    expect(d.map((r) => r['sort_order'])).toEqual([10, 20, 30, 40, 50]);
+    const windows = d.map((r) => [r['preview_start_s'], r['preview_end_s']]);
+    expect(windows).toEqual([
+      [5.9, 7.9],
+      [0.05, 3.7],
+      [3.9, 5.9],
+      [15.9, 18.3],
+      [13.4, 15.9],
+    ]);
+    for (const r of d) {
+      expect(r['status'], String(r['slug'])).toBe('published');
+      expect(r['__placeholder'], String(r['slug'])).toBeUndefined(); // real copy
+    }
+  });
+
+  it('the 28 services, grouped as the design groups them, sort_order 10…280', () => {
+    const s = rowsOf('services');
+    expect(s.map((r) => r['slug'])).toEqual(Object.values(SERVICES).flat());
+    expect(s.map((r) => r['sort_order'])).toEqual(s.map((_, i) => (i + 1) * 10));
+    for (const r of s) {
+      const discipline = refSlug(r['discipline_id']);
+      expect(SERVICES[discipline], String(r['slug'])).toContain(r['slug']);
+      expect(r['preview_video_path']).toBe('/media/showreel.mp4');
+      expect(r['status']).toBe('published');
+    }
+    // the old 14 are gone from fresh databases (production archives or renames them, §6d)
+    for (const old of ['branding', 'videography', 'montage', 'gaming', 'merchandise']) {
+      expect(s.map((r) => r['slug'])).not.toContain(old);
+    }
+  });
+
+  it('every service row satisfies the admin write schema (an editor can re-save it)', async () => {
+    const { ServiceWriteSchema, DisciplineWriteSchema, ServiceCaseWriteSchema } =
+      await import('@schemas/admin');
+    for (const r of rowsOf('services')) {
+      const parsed = ServiceWriteSchema.safeParse({
+        slug: r['slug'],
+        title: r['title'],
+        blurb: r['blurb'],
+        body: r['body'],
+        shortTitle: r['short_title'],
+        intro: r['intro'],
+        valuePoints: r['value_points'],
+        deliverables: r['deliverables'],
+        clip: {
+          path: r['preview_video_path'],
+          startS: r['preview_start_s'],
+          endS: r['preview_end_s'],
+        },
+      });
+      expect(parsed.success, `${String(r['slug'])}: ${JSON.stringify(parsed.error?.issues)}`).toBe(
+        true,
+      );
+    }
+    for (const r of rowsOf('disciplines')) {
+      const parsed = DisciplineWriteSchema.safeParse({
+        slug: r['slug'],
+        name: r['name'],
+        short: r['short'],
+        blurb: r['blurb'],
+        clip: {
+          path: r['preview_video_path'],
+          startS: r['preview_start_s'],
+          endS: r['preview_end_s'],
+        },
+      });
+      expect(parsed.success, String(r['slug'])).toBe(true);
+    }
+    for (const r of rowsOf('service_cases')) {
+      const parsed = ServiceCaseWriteSchema.safeParse({
+        serviceId: '11111111-1111-4111-8111-111111111111',
+        title: r['title'],
+        context: r['context'],
+        problems: r['problems'],
+        results: r['results'],
+      });
+      expect(parsed.success, refSlug(r['service_id'])).toBe(true);
+    }
+  });
+
+  it('the stored body_html is exactly what the renderer derives from the Tiptap body', async () => {
+    const { renderTiptapToHtml } = await import('@/lib/content/tiptap');
+    for (const r of rowsOf('services')) {
+      const body = r['body'] as { en: unknown; ar: unknown };
+      expect(r['body_html'], String(r['slug'])).toEqual({
+        en: renderTiptapToHtml(body.en),
+        ar: renderTiptapToHtml(body.ar),
+      });
+    }
+  });
+
+  it('each service has one sample case, told through a seeded project', () => {
+    const cases = rowsOf('service_cases');
+    expect(cases.map((r) => refSlug(r['service_id']))).toEqual(Object.values(SERVICES).flat());
+    const projects = new Set(rowsOf('portfolio').map((r) => r['slug']));
+    for (const r of cases) {
+      expect(projects.has(refSlug(r['portfolio_id'])), refSlug(r['service_id'])).toBe(true);
+      expect(r['__placeholder']).toBe(true);
+      expect(r['is_placeholder']).toBe(true);
+      expect(rowForMode(r, 'production')['status']).toBe('draft');
+    }
+  });
+
+  it('the sample projects link the contract’s 14 services (the Our Work chip row)', () => {
+    const links = new Map<string, string[]>();
+    for (const r of rowsOf('portfolio_services')) {
+      const p = refSlug(r['portfolio_id']);
+      links.set(p, [...(links.get(p) ?? []), refSlug(r['service_id'])]);
+    }
+    expect(Object.fromEntries(links)).toEqual({
+      'the-rider': ['photo-video', 'advertising'],
+      'kitchen-hours': ['advertising', 'photo-video', 'social-media'],
+      notebook: ['logo'],
+      ink: ['motion-graphics', 'music-vo-sfx'],
+      terrain: ['photo-video'],
+      'first-light': ['venue-booking', 'motion-graphics'],
+      'dust-trail': ['social-media', 'video-editing'],
+      'the-table': ['photo-video'],
+      'field-notes': ['hosting', 'content-strategy', 'seo-geo-aeo'],
+      'sunday-sessions': ['music-vo-sfx', 'animation'],
+      blueprint: ['business-cards', '3d-design'],
+      'opening-night': ['photo-video', 'video-editing'],
+    });
+    expect(new Set([...links.values()].flat()).size).toBe(14);
+  });
+
+  it('the home stat reads 28 services; the Services page gets four sample stats', () => {
+    const stats = rowsOf('statistics');
+    const crafts = stats.find((r) => r['slug'] === 'crafts')!;
+    expect(crafts['value']).toBe('28');
+    expect(crafts['value_numeric']).toBe(28);
+    expect(crafts['label']).toEqual({ en: 'Services under one roof', ar: 'خدمة تحت سقف واحد' });
+    const services = stats.filter((r) => String(r['placements']).includes('services'));
+    expect(services.map((r) => r['value'])).toEqual(['98%', '12+', '85%', '250+']);
+    for (const r of services) {
+      expect(r['is_placeholder']).toBe(true);
+      // value = number + suffix (the 0023 statistics_value_consistent CHECK)
+      expect(r['value']).toBe(`${String(r['value_numeric'])}${String(r['value_suffix'])}`);
+    }
+  });
+
+  it('no two live quotes share a project (testimonials_one_per_project)', () => {
+    const live = rowsOf('testimonials').filter(
+      (r) => rowForMode(r, 'published')['status'] === 'published' && r['portfolio_id'],
+    );
+    const projects = live.map((r) => refSlug(r['portfolio_id']));
+    expect(new Set(projects).size).toBe(projects.length);
+  });
+
+  it('a delta seed of just this round’s files is available (runbook §6d)', async () => {
+    const { onlyBlocks } = (await import('../../scripts/gen-seeds.mjs')) as unknown as {
+      onlyBlocks: (files: string[]) => Block[];
+    };
+    const delta = onlyBlocks(['08-disciplines.json', '45-service-cases.json']);
+    expect([...new Set(delta.map((b) => b.table))]).toEqual(['disciplines', 'service_cases']);
+    expect(() => onlyBlocks(['99-nope.json'])).toThrow();
   });
 });
