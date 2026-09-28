@@ -311,3 +311,1424 @@ html[dir='rtl'] .hero__skip b {
     transform: none;
   }
 }
+
+/* ---- S3: /services — the proof band, the explorer ----
+   ServicesProof.astro (the `statistics` section's `services` variant) and
+   ServiceExplorer.astro (`serviceExplorer`). Namespace: .svc-proof* (the mockup's
+   .proof / .stats — Our Work owns .proof), .svc-xp* / .svc-tab / .svc-panel (its .xp* /
+   .xtab), .svc-list / .svc-row* (its .xl / .xi*). Values: services.html "SERVICES PAGE". */
+
+/* The design's services crop of the banner loop (the contact page keeps 42%). */
+.services-page .hero--banner .hero__media video {
+  object-position: center 55%;
+}
+
+/* ============================================================
+   S3: proof — a statement, a rating line, the numbers
+   ============================================================ */
+
+.svc-proof {
+  position: relative;
+  z-index: 4;
+  background: var(--bs-paper);
+  color: var(--bs-ink);
+  padding: clamp(56px, 9vh, 110px) var(--bs-pad-x);
+}
+.svc-proof__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.6fr);
+  gap: clamp(32px, 5vw, 90px);
+  align-items: end;
+}
+.svc-proof__line {
+  margin: 0;
+  font-size: clamp(24px, 2.7vw, 42px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .svc-proof__line {
+  font-size: clamp(22px, 2.4vw, 36px);
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-proof__line em {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+.svc-proof__rate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 22px 0 0;
+  font-size: 14px;
+  line-height: normal;
+  color: var(--bs-dim);
+}
+.svc-proof__stars {
+  display: flex;
+  gap: 3px;
+  color: var(--bs-klein);
+}
+.svc-proof__stars svg {
+  width: 16px;
+  height: 16px;
+}
+.svc-proof__rate b {
+  font-weight: 800;
+  color: var(--bs-ink);
+  unicode-bidi: isolate;
+}
+.svc-proof__stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--bs-line-l);
+}
+.svc-proof__stat {
+  padding: 22px clamp(12px, 1.6vw, 26px) 4px;
+  border-inline-start: 1px solid var(--bs-line-l);
+}
+/* The first cell of every row drops its rule; a later row gets one above it (more than
+   four counters is an editor's choice: placements are content). */
+.svc-proof__stat:nth-child(4n + 1) {
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+.svc-proof__stat:nth-child(n + 5) {
+  border-top: 1px solid var(--bs-line-l);
+  margin-top: 18px;
+}
+.svc-proof__n {
+  display: block;
+  font-size: clamp(38px, 4.6vw, 76px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+html[dir='rtl'] .svc-proof__n {
+  text-align: right;
+}
+.svc-proof__n i {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+/* A value that is not a number yet ("TBD") — the stat bands' muted 4.8:1 grey. */
+.svc-proof__n--text {
+  color: #6b7384;
+}
+.svc-proof__l {
+  display: block;
+  margin-top: 12px;
+  max-width: 20ch;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--bs-dim);
+}
+@media (max-width: 63.75rem) {
+  .svc-proof__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 40rem) {
+  .svc-proof__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .svc-proof__stat:nth-child(2n + 1) {
+    border-inline-start: 0;
+    padding-inline-start: 0;
+  }
+  .svc-proof__stat:nth-child(2n) {
+    border-inline-start: 1px solid var(--bs-line-l);
+    padding-inline-start: clamp(12px, 1.6vw, 26px);
+  }
+  .svc-proof__stat:nth-child(n + 3) {
+    border-top: 1px solid var(--bs-line-l);
+    margin-top: 18px;
+  }
+}
+
+/* ============================================================
+   S3: the explorer — one panel per discipline
+   ============================================================ */
+
+.svc-xp {
+  position: relative;
+  z-index: 4;
+  background: var(--bs-paper);
+  color: var(--bs-ink);
+}
+.svc-xp__pad {
+  padding: clamp(56px, 9vh, 110px) var(--bs-pad-x) clamp(72px, 11vh, 140px);
+}
+
+/* Which panel shows. Before the script (and without it): the one the URL addresses, by
+   :target — `/services#events` opens Events at FIRST PAINT, so the opening can never be a
+   layout shift — and with nothing addressed the explorer is collapsed. Once the script
+   runs (.is-live) the classes it sets decide instead, starting from the same panel
+   (replaceState, which the script uses, does not update :target).
+   A `:has()` selector is always a rule of its own: `:has()` is not forgiving, so in a
+   selector list an engine without it drops the WHOLE rule — every panel would show
+   stacked, whatever the script set. Alone, it costs such an engine only the pre-script
+   states (tests/lib/cssSelectorLists.spec.ts). */
+.svc-xp:not(.is-live):not(.svc-xp--standalone):not(:has(.svc-panel:target)) {
+  display: none;
+}
+.svc-xp:not(.is-live) .svc-panel:not(:target),
+.svc-xp.is-live:not(.is-open),
+.svc-xp.is-live .svc-panel:not(.is-active) {
+  display: none;
+}
+/* Standalone (the page shows no discipline cards, the only other way in): never collapsed —
+   with nothing addressed its FIRST panel shows, and the script starts from it. The pad's
+   first child is the tab row, so the first panel is its second child. */
+.svc-xp.svc-xp--standalone:not(.is-live) .svc-panel:nth-child(2) {
+  display: block;
+}
+.svc-xp.svc-xp--standalone:not(.is-live):has(.svc-panel:target)
+  .svc-panel:nth-child(2):not(:target) {
+  display: none;
+}
+/* A jump to a panel (the fragment, or the script's scrollIntoView) keeps the header's room
+   and the tab row above it on screen. */
+.svc-panel {
+  scroll-margin-top: calc(var(--bs-header-h) + 44px + clamp(34px, 5vh, 60px) + 12px);
+  border-radius: 12px;
+}
+.svc-panel:focus-visible {
+  outline-offset: 10px;
+}
+/* The opening motion: the body alone fades and rises (compositor — opacity + transform).
+   The box itself appears at once, inside the click's input window; the mockup's 0.9 s
+   row expansion would keep moving the page after it. The hidden from-state lives only in
+   the keyframes (reduced motion: see the block's end). */
+.svc-panel.is-entering .svc-xp__grid {
+  animation: svc-xp-in 0.7s var(--bs-ease) both;
+}
+@keyframes svc-xp-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- The discipline pills (APG tabs once the script runs) ---- */
+.svc-xp__tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  /* Room inside the scroller for the focus ring, taken back from the layout. A scroller
+     clips at its padding edge, and the global ring reaches 5px past a pill (2px wide, 3px
+     offset), so 6px on every side: at 4px only 1px of it showed at the top, and at the
+     first and last pill's outer ends. */
+  padding: 6px;
+  margin: -6px -6px clamp(34px, 5vh, 60px);
+  scrollbar-width: none;
+}
+.svc-xp__tabs::-webkit-scrollbar {
+  display: none;
+}
+.svc-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bs-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: normal;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background 0.25s,
+    border-color 0.25s,
+    color 0.25s;
+}
+.svc-tab i {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--svc-tab-n, var(--bs-klein));
+  font-variant-numeric: tabular-nums;
+}
+.svc-tab:hover {
+  border-color: var(--bs-klein);
+  color: var(--bs-klein);
+}
+.svc-tab[aria-selected='true'] {
+  --svc-tab-n: rgba(255, 255, 255, 0.75);
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+  color: var(--bs-paper);
+}
+/* The same selected look before the script (and without it), for the pill of the panel on
+   show: the addressed one (:target), else a standalone explorer's first. Colour only, so
+   the hand-over to [aria-selected] can shift nothing. The k-th pill is the (k+1)-th child
+   of the pad (the tab row comes first), written out to eight disciplines; past that a
+   pre-script pill just stays plain. All :has(), so the list drops as one (see above). */
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(2):target) .svc-tab:nth-child(1),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(3):target) .svc-tab:nth-child(2),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(4):target) .svc-tab:nth-child(3),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(5):target) .svc-tab:nth-child(4),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(6):target) .svc-tab:nth-child(5),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(7):target) .svc-tab:nth-child(6),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(8):target) .svc-tab:nth-child(7),
+.svc-xp:not(.is-live):has(.svc-panel:nth-child(9):target) .svc-tab:nth-child(8),
+.svc-xp.svc-xp--standalone:not(.is-live):not(:has(.svc-panel:target)) .svc-tab:nth-child(1) {
+  --svc-tab-n: rgba(255, 255, 255, 0.75);
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+  color: var(--bs-paper);
+}
+
+/* ---- A panel ---- */
+.svc-xp__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+  gap: clamp(28px, 4.4vw, 80px);
+  align-items: start;
+}
+/* A discipline with no poster and no clip (and the outage fallback): the copy alone. */
+.svc-xp__grid--solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+.svc-xp__media {
+  position: sticky;
+  top: 96px;
+  aspect-ratio: 4 / 4.6;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--bs-media-bg);
+}
+.svc-xp__mf {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+/* The row-hover poster (serviceExplorer.ts creates it): over the discipline's poster, under
+   a playing clip; it fades in once decoded. */
+.svc-xp__swap {
+  opacity: 0;
+}
+.svc-xp__mf.is-swapped .svc-xp__swap {
+  opacity: 1;
+}
+/* The caption pill. Its glass is .7 black (the mockup's .35), so over a WHITE poster the name
+   is 8.4:1 and the number, sky-soft, 5.4:1 (the mockup's sky there is 1.9:1). */
+.svc-xp__cap {
+  position: absolute;
+  z-index: 2;
+  inset-inline-start: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  padding-inline-start: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--bs-paper);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: normal;
+}
+.svc-xp__cap i {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bs-sky-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.svc-xp__k {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bs-klein);
+}
+html[dir='rtl'] .svc-xp__k {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-xp__k .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.svc-xp__h {
+  margin: 16px 0 0;
+  font-size: clamp(38px, 5.4vw, 88px);
+  font-weight: 800;
+  line-height: 0.94;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .svc-xp__h {
+  font-size: clamp(32px, 4.4vw, 70px);
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-xp__p {
+  margin: 20px 0 0;
+  max-width: 48ch;
+  font-size: clamp(16px, 1.3vw, 19px);
+  line-height: 1.6;
+  color: var(--bs-dim);
+}
+html[dir='rtl'] .svc-xp__p {
+  line-height: 1.95;
+}
+
+/* ---- The services, one row each ---- */
+.svc-list {
+  list-style: none;
+  margin: clamp(30px, 4.4vh, 50px) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: clamp(20px, 2.4vw, 40px);
+}
+@media (min-width: 80rem) {
+  .svc-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.svc-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--bs-line-l);
+}
+.svc-row::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--bs-klein);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.5s var(--bs-ease);
+}
+html[dir='rtl'] .svc-row::after {
+  transform-origin: right;
+}
+.svc-row:hover::after,
+.svc-row:focus-within::after {
+  transform: scaleX(1);
+}
+.svc-row__a {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: clamp(16px, 2.2vh, 22px) 0;
+  color: inherit;
+  text-decoration: none;
+}
+.svc-row__n {
+  flex: none;
+  min-width: 22px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bs-klein);
+  font-variant-numeric: tabular-nums;
+}
+.svc-row__t {
+  font-size: clamp(18px, 1.55vw, 23px);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  transition:
+    color 0.3s,
+    transform 0.45s var(--bs-ease);
+}
+html[dir='rtl'] .svc-row__t {
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+.svc-row:hover .svc-row__t,
+.svc-row__a:focus-visible .svc-row__t {
+  color: var(--bs-klein);
+  transform: translateX(4px);
+}
+html[dir='rtl'] .svc-row:hover .svc-row__t,
+html[dir='rtl'] .svc-row__a:focus-visible .svc-row__t {
+  transform: translateX(-4px);
+}
+.svc-row__q {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  color: var(--bs-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background 0.25s,
+    border-color 0.25s,
+    color 0.25s,
+    opacity 0.3s;
+}
+.svc-row__q svg {
+  width: 11px;
+  height: 11px;
+}
+html[dir='rtl'] .svc-row__q svg {
+  transform: scaleX(-1);
+}
+.svc-row__q:hover {
+  background: var(--bs-klein);
+  border-color: var(--bs-klein);
+  color: var(--bs-paper);
+}
+/* With a mouse the pill shows on its row (hover, or keyboard focus inside it); on touch it
+   is always there — there is no hover to reveal it. */
+@media (hover: hover) {
+  .svc-row__q {
+    opacity: 0;
+  }
+  .svc-row:hover .svc-row__q,
+  .svc-row:focus-within .svc-row__q {
+    opacity: 1;
+  }
+}
+
+/* ---- Prev / next and the panel's call to action ---- */
+.svc-xp__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: clamp(34px, 5vh, 56px);
+}
+.svc-xp__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.svc-xp__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+  color: var(--bs-ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: normal;
+  text-decoration: none;
+  transition:
+    border-color 0.25s,
+    color 0.25s;
+}
+.svc-xp__btn svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+html[dir='rtl'] .svc-xp__btn svg {
+  transform: scaleX(-1);
+}
+.svc-xp__btn:hover {
+  border-color: var(--bs-klein);
+  color: var(--bs-klein);
+}
+
+/* The cards' hint ("Tap a discipline to open it") has done its job once one is open —
+   the mockup hides it (visibility: no layout change). */
+.disc.is-picked .disc__hint {
+  visibility: hidden;
+}
+
+@media (max-width: 56.25rem) {
+  .svc-xp__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .svc-xp__media {
+    position: relative;
+    top: auto;
+    aspect-ratio: 16 / 10;
+  }
+}
+
+/* ---- S3 motion safety net (global.css holds the invariant) ----
+   The panel entrance is revealed by KILLING its animation: its hidden from-state lives only
+   in @keyframes. The row's hover nudge is the one transform left to pin. */
+@media (prefers-reduced-motion: reduce) {
+  .svc-panel.is-entering .svc-xp__grid {
+    animation: none !important;
+  }
+  .svc-row:hover .svc-row__t,
+  .svc-row__a:focus-visible .svc-row__t {
+    transform: none !important;
+  }
+}
+
+/* ---- S4: service page ---- */
+/* ============================================================
+   S4: the service page (/services/[slug] — ServicePage.astro and src/components/service/*)
+   — the mockup's service.html [C] block, namespaced:
+     .svc-what   what it is + "What you get" (ServiceWhat)     mockup .what / .get
+     .svc-val    the value we add (ServiceValue)               mockup .val / .vcard
+     .svc-case   the case block (ServiceCaseBlock)             mockup .case / .probs / .res
+     .svc-more   more in this discipline (ServiceMore)         mockup .more (+ its .xi rows)
+     .svc-fab    the floating "Skip to inquiry" (ServiceFab)   mockup .fab
+   The hero's crumb and skip pill are S2's (.crumb, .hero__skip, .hero--one above), the
+   inquiry block is S2's .hello. Motion is compositor-only; this block's share of the
+   reduced-motion net is at its end.
+   ============================================================ */
+
+/* The FAB's 1px mark is placed in the page's flow, relative to this (serviceFab.ts). */
+.svc-page {
+  position: relative;
+}
+/* Every band paints over the sticky hero (z-index 1), as .hello does. */
+.svc-what,
+.svc-val,
+.svc-case,
+.svc-more {
+  position: relative;
+  z-index: 4;
+  margin: 0;
+}
+.svc-wrap {
+  position: relative;
+  max-width: 1280px;
+  margin-inline: auto;
+}
+/* In-page targets (#case from the hero CTA, #inquiry from the skip links and the FAB): the
+   band's own top padding clears the fixed header on every screen we measured, so this only
+   adds the difference where a short viewport's padding does not — the band's colour still
+   meets the viewport top, as in the mockup (scroll-margin 0). */
+.svc-case {
+  scroll-margin-top: max(0px, calc(var(--bs-header-h) + 12px - clamp(80px, 12vh, 150px)));
+}
+.svc-page .hello {
+  scroll-margin-top: max(0px, calc(var(--bs-header-h) + 12px - clamp(80px, 13vh, 160px)));
+}
+/* The hero: the crumb sits right on top of the h1, as the mockup's .hero__main (crumb + h1 in
+   one column) draws it. S2's crumb is the h1's flex sibling on a row of its own; beside the
+   taller side column the h1 sank to the foot of its row and left the crumb ~60px above it
+   (1366px, both languages). A grid keeps the h1 unwrapped — it is the LCP element — and puts
+   the side column beside both. Below 1081px the side column wraps under the h1 (global.css),
+   the rows stack, and S2's flex layout already reads right. */
+@media (min-width: 1081px) {
+  .hero--one .hero__inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
+    /* The crumb's row takes whatever the taller side column adds, so the h1's row hugs it. */
+    grid-template-rows: 1fr auto;
+    column-gap: clamp(24px, 4vw, 56px);
+    row-gap: 0;
+    align-items: end;
+  }
+  .hero--one .crumb {
+    grid-column: 1;
+    grid-row: 1;
+    margin-bottom: clamp(12px, 1.8vh, 20px);
+  }
+  .hero--one h1 {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .hero--one .hero__side {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+/* Keyboard focus scrolled into view never lands under the floating button (WCAG 2.4.11) —
+   nor under the consent banner it rides above while that is open (--svc-fab-lift, set on
+   <html> by serviceFab.ts; 0 once the banner is gone). */
+html:has(.svc-fab.is-shown) {
+  scroll-padding-bottom: calc(var(--svc-fab-lift, 0px) + 52px + clamp(16px, 3vh, 26px) + 12px);
+}
+
+/* ---- What it is ---- */
+.svc-what {
+  background: var(--bs-paper);
+  color: var(--bs-ink);
+  padding: clamp(72px, 12vh, 150px) var(--bs-pad-x) clamp(72px, 11vh, 140px);
+}
+.svc-what__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: clamp(32px, 5vw, 96px);
+  align-items: start;
+}
+.svc-what__lead {
+  margin: 0;
+  font-size: clamp(28px, 3.4vw, 54px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+html[dir='rtl'] .svc-what__lead {
+  letter-spacing: 0;
+  line-height: 1.55;
+}
+/* The body is the allowlist-rendered Tiptap HTML: paragraphs, lists, marks, links. */
+.svc-what__body {
+  font-size: clamp(16px, 1.3vw, 19px);
+  line-height: 1.7;
+  color: var(--bs-dim);
+}
+html[dir='rtl'] .svc-what__body {
+  line-height: 2;
+}
+.svc-what__body > * {
+  margin: 0;
+}
+.svc-what__body > * + * {
+  margin-top: 1em;
+}
+/* Links in authored copy: Klein on paper (the site's sky link colour is 2.6:1 here). */
+.svc-what__body a {
+  color: var(--bs-klein);
+}
+.svc-get {
+  margin-top: clamp(30px, 4.4vh, 48px);
+}
+.svc-get__k {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bs-klein);
+}
+html[dir='rtl'] .svc-get__k {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-get__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--bs-line-l);
+}
+.svc-get__list li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--bs-line-l);
+  font-size: clamp(15px, 1.2vw, 17px);
+  font-weight: 600;
+  line-height: normal;
+}
+.svc-get__list i {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bs-klein);
+  color: var(--bs-paper);
+}
+.svc-get__list svg {
+  width: 11px;
+  height: 11px;
+}
+@media (max-width: 900px) {
+  .svc-what__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- The value we add (mist band) ---- */
+.svc-val {
+  background: var(--bs-mist);
+  color: var(--bs-ink);
+  padding: clamp(72px, 11vh, 140px) var(--bs-pad-x);
+}
+.svc-val__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+  margin-bottom: clamp(36px, 5vh, 64px);
+}
+.svc-val__head h2 {
+  margin: 0;
+  font-size: clamp(32px, 5vw, 78px);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .svc-val__head h2 {
+  font-size: clamp(28px, 4.2vw, 64px);
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-val__head h2 em {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+.svc-val__head p {
+  margin: 0;
+  max-width: 36ch;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--bs-dim);
+}
+.svc-val__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(12px, 1.4vw, 20px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The reveal is on the list item and the hover lift on the card inside it, so the two
+   transforms never override each other. */
+.svc-val__grid > li {
+  display: flex;
+}
+.svc-vcard {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: clamp(22px, 2.2vw, 32px);
+  min-height: clamp(250px, 32vh, 330px);
+  background: var(--bs-paper);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  transition:
+    transform 0.45s var(--bs-ease),
+    color 0.4s;
+}
+.svc-vcard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(150deg, var(--bs-klein), var(--bs-cobalt));
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+.svc-vcard > * {
+  position: relative;
+  z-index: 1;
+}
+.svc-vcard:hover {
+  transform: translateY(-4px);
+  color: var(--bs-paper);
+}
+.svc-vcard:hover::before {
+  opacity: 1;
+}
+.svc-vcard__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: auto;
+}
+.svc-vcard__n {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  color: var(--bs-klein);
+  font-variant-numeric: tabular-nums;
+  transition: color 0.4s;
+}
+/* The mockup's sky is 3.1:1 on the wash where an RTL card's number sits (its midpoint); the
+   soft sky passes (contrast-audit "value card number"). */
+.svc-vcard:hover .svc-vcard__n {
+  color: var(--bs-sky-soft);
+}
+.svc-vcard__plus {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 36, 188, 0.08);
+  color: var(--bs-klein);
+  transition:
+    background 0.4s,
+    color 0.4s,
+    transform 0.5s var(--bs-ease);
+}
+.svc-vcard__plus svg {
+  width: 14px;
+  height: 14px;
+}
+.svc-vcard:hover .svc-vcard__plus {
+  background: var(--bs-paper);
+  color: var(--bs-klein);
+  transform: rotate(90deg);
+}
+.svc-vcard h3 {
+  margin: clamp(28px, 5vh, 56px) 0 0;
+  font-size: clamp(20px, 1.8vw, 27px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+html[dir='rtl'] .svc-vcard h3 {
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+.svc-vcard p {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--bs-dim);
+  transition: color 0.4s;
+}
+html[dir='rtl'] .svc-vcard p {
+  line-height: 1.9;
+}
+.svc-vcard:hover p {
+  color: rgba(255, 255, 255, 0.84);
+}
+@media (max-width: 900px) {
+  .svc-val__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .svc-vcard {
+    min-height: 0;
+  }
+}
+
+/* ---- The case block (black band, #case) ---- */
+.svc-case {
+  background: var(--bs-black);
+  color: var(--bs-fg);
+  padding: clamp(80px, 12vh, 150px) var(--bs-pad-x) clamp(72px, 11vh, 130px);
+}
+/* The design's sky dot on this black band (mockup `.case .tag .dot`), as on .hello: the
+   site's default Klein dot is ~2:1 on black and all but disappears. */
+.svc-case .tag .dot {
+  background: var(--bs-sky);
+}
+.svc-case__t {
+  margin: 0;
+  max-width: 20ch;
+  font-size: clamp(30px, 4.4vw, 70px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+html[dir='rtl'] .svc-case__t {
+  font-size: clamp(26px, 3.6vw, 56px);
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+.svc-case__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.svc-case__meta a,
+.svc-case__meta span {
+  display: inline-block;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: normal;
+  color: rgba(255, 255, 255, 0.92);
+  text-decoration: none;
+  transition:
+    border-color 0.25s,
+    color 0.25s;
+}
+.svc-case__meta a:hover {
+  border-color: var(--bs-sky);
+  color: var(--bs-sky);
+}
+.svc-case__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 72px);
+  align-items: center;
+  margin-top: clamp(36px, 5vh, 60px);
+}
+.svc-case__top--solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+.svc-case__img {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bs-media-bg);
+}
+.svc-case__img img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 1.2s var(--bs-ease);
+}
+a.svc-case__img:hover img,
+a.svc-case__img:focus-visible img {
+  transform: scale(1.04);
+}
+/* The glass is .6 black (the mockup's .35): the pill sits on the raw poster, and .6 keeps
+   its white label at 4.5:1 over a white frame (contrast-audit "case pill"). */
+.svc-case__see {
+  position: absolute;
+  inset-inline-start: 14px;
+  bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px;
+  padding-inline-start: 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--bs-fg);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: normal;
+}
+.svc-case__see b {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bs-klein);
+}
+.svc-case__see svg {
+  width: 13px;
+  height: 13px;
+}
+html[dir='rtl'] .svc-case__see svg {
+  transform: scaleX(-1);
+}
+.svc-case__k {
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bs-sky);
+}
+html[dir='rtl'] .svc-case__k {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-case__ctx p {
+  margin: 0;
+  font-size: clamp(16px, 1.35vw, 20px);
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.8);
+}
+html[dir='rtl'] .svc-case__ctx p {
+  line-height: 1.95;
+}
+
+/* Problem → what we did: numbered rows under two column heads (aria-hidden — each cell
+   names its column for assistive tech itself). */
+.svc-probs {
+  margin-top: clamp(56px, 8vh, 96px);
+}
+.svc-probs__head,
+.svc-prob {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: clamp(16px, 2.6vw, 44px);
+}
+.svc-probs__head {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--bs-line-d);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+html[dir='rtl'] .svc-probs__head {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-probs__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.svc-prob {
+  align-items: start;
+  padding: clamp(20px, 3vh, 32px) 0;
+  border-bottom: 1px solid var(--bs-line-d);
+}
+.svc-prob__n {
+  font-size: clamp(26px, 2.4vw, 38px);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--bs-sky);
+  font-variant-numeric: tabular-nums;
+}
+.svc-prob__p {
+  margin: 0;
+  font-size: clamp(17px, 1.5vw, 22px);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+html[dir='rtl'] .svc-prob__p {
+  line-height: 1.7;
+  letter-spacing: 0;
+}
+.svc-prob__s {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.7);
+}
+html[dir='rtl'] .svc-prob__s {
+  line-height: 1.95;
+}
+@media (max-width: 760px) {
+  .svc-probs__head {
+    display: none;
+  }
+  .svc-prob {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+  .svc-prob__s {
+    grid-column: 2;
+  }
+  /* The label is DRAWN from data-k; its alternative text is empty (`/ ''`), so a screen
+     reader reads the cell's own sr-only label once, not twice. Browsers without the alt
+     syntax keep the first declaration. */
+  .svc-prob__s::before {
+    content: attr(data-k);
+    content: attr(data-k) / '';
+    display: block;
+    margin-bottom: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--bs-sky);
+  }
+  html[dir='rtl'] .svc-prob__s::before {
+    font-size: 12.5px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+}
+
+/* Result cards: as many columns as fit (three at the mockup's widths, one on phones). */
+.svc-res {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: clamp(12px, 1.4vw, 20px);
+  margin: clamp(40px, 6vh, 72px) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.svc-res__i {
+  padding: clamp(20px, 2.2vw, 30px);
+  border-radius: 16px;
+  background: linear-gradient(160deg, rgba(0, 36, 188, 0.34), rgba(0, 36, 188, 0.12));
+  border: 1px solid rgba(34, 169, 255, 0.22);
+}
+.svc-res__n {
+  display: block;
+  font-size: clamp(40px, 4.8vw, 80px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  unicode-bidi: isolate;
+}
+html[dir='rtl'] .svc-res__n {
+  text-align: right;
+}
+.svc-res__l {
+  display: block;
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: normal;
+  color: rgba(255, 255, 255, 0.72);
+}
+@media (max-width: 900px) {
+  .svc-case__top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .svc-res {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- More in this discipline ---- */
+.svc-more {
+  background: var(--bs-paper);
+  color: var(--bs-ink);
+  padding: clamp(64px, 10vh, 130px) var(--bs-pad-x) clamp(64px, 10vh, 120px);
+}
+.svc-more__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.svc-more__head h2 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 62px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .svc-more__head h2 {
+  font-size: clamp(26px, 3.4vw, 52px);
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-more__head h2 em {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+.svc-more__all {
+  padding-bottom: 4px;
+  border-bottom: 2px solid currentColor;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bs-ink);
+  text-decoration: none;
+  transition: color 0.25s;
+}
+html[dir='rtl'] .svc-more__all {
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.svc-more__all:hover {
+  color: var(--bs-klein);
+}
+.svc-more__list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: clamp(20px, 2.4vw, 40px);
+  margin: clamp(26px, 4vh, 44px) 0 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 900px) {
+  .svc-more__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.svc-more__row {
+  position: relative;
+  border-bottom: 1px solid var(--bs-line-l);
+}
+/* The Klein underline grows from the row's start edge on hover / focus. */
+.svc-more__row::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--bs-klein);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.5s var(--bs-ease);
+}
+html[dir='rtl'] .svc-more__row::after {
+  transform-origin: right;
+}
+.svc-more__row:hover::after,
+.svc-more__row:focus-within::after {
+  transform: scaleX(1);
+}
+.svc-more__row a {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: clamp(16px, 2.2vh, 22px) 0;
+  color: inherit;
+  text-decoration: none;
+}
+.svc-more__n {
+  flex: none;
+  min-width: 22px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  color: var(--bs-klein);
+  font-variant-numeric: tabular-nums;
+}
+.svc-more__t {
+  font-size: clamp(18px, 1.55vw, 23px);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  transition:
+    color 0.3s,
+    transform 0.45s var(--bs-ease);
+}
+html[dir='rtl'] .svc-more__t {
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+.svc-more__row:hover .svc-more__t,
+.svc-more__row.is-here .svc-more__t {
+  color: var(--bs-klein);
+}
+.svc-more__row:hover .svc-more__t {
+  transform: translateX(4px);
+}
+html[dir='rtl'] .svc-more__row:hover .svc-more__t {
+  transform: translateX(-4px);
+}
+
+/* ---- The floating "Skip to inquiry" ----
+   Served hidden: parked below the viewport by a transform and faded out (never display
+   toggling, so showing it moves nothing). serviceFab.ts adds .is-shown. */
+.svc-fab__mark {
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+.svc-fab {
+  position: fixed;
+  z-index: 58;
+  bottom: clamp(16px, 3vh, 26px);
+  inset-inline-end: clamp(16px, 2.4vw, 30px);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px;
+  padding-inline-end: 20px;
+  border-radius: 999px;
+  background: var(--bs-klein);
+  color: var(--bs-fg);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  box-shadow: 0 12px 34px rgba(0, 36, 188, 0.45);
+  opacity: 0;
+  transform: translateY(160%);
+  transition:
+    transform 0.55s var(--bs-ease),
+    opacity 0.4s,
+    background 0.3s;
+}
+html[dir='rtl'] .svc-fab {
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* Shown: at its place, or — while the consent banner (z-80, the same bottom edge) is open —
+   lifted clear of it by the banner's height, so a first visit sees it too. A transform,
+   so the drop back when the banner closes is the same compositor-only transition. */
+.svc-fab.is-shown {
+  opacity: 1;
+  transform: translateY(calc(-1 * var(--svc-fab-lift, 0px)));
+}
+.svc-fab:hover {
+  background: var(--bs-cobalt);
+}
+.svc-fab:focus-visible {
+  outline-color: var(--bs-paper);
+}
+.svc-fab__ico {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bs-paper);
+  color: var(--bs-klein);
+}
+.svc-fab__ico svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---- Motion safety net (S4): hover lifts, zooms and nudges. The reveals are global.css's
+   .rv; the FAB's show/hide is a transition, which global.css's blanket rule already makes
+   instant. Nothing in this block has a hidden from-state of its own. */
+@media (prefers-reduced-motion: reduce) {
+  .svc-vcard:hover,
+  .svc-vcard:hover .svc-vcard__plus,
+  a.svc-case__img:hover img,
+  a.svc-case__img:focus-visible img,
+  .svc-more__row:hover .svc-more__t,
+  html[dir='rtl'] .svc-more__row:hover .svc-more__t {
+    transform: none !important;
+  }
+}

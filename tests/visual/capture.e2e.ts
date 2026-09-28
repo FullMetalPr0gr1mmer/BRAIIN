@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from '@playwright/test';
 
@@ -59,6 +59,18 @@ test.describe('design capture', () => {
           await page.waitForTimeout(600);
           mkdirSync(DIR!, { recursive: true });
           await page.screenshot({ path: join(DIR!, `${name}.png`), fullPage: true });
+          // The page's words beside its picture, so the comparison with the design can diff
+          // the copy (verbatim EN + AR is a Round 2 requirement) and not only the pixels.
+          const text = await page.evaluate(() => ({
+            title: document.title,
+            lang: document.documentElement.lang,
+            dir: document.documentElement.dir,
+            hs: [...document.querySelectorAll('h1,h2,h3')].map(
+              (h) => `${h.tagName} ${(h.textContent ?? '').replace(/\s+/g, ' ').trim()}`,
+            ),
+            body: document.body.innerText,
+          }));
+          writeFileSync(join(DIR!, `${name}.json`), JSON.stringify(text, null, 1));
           await context.close();
         });
       }

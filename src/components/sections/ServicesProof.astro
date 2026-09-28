@@ -1,0 +1,122 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { Accent } from '@schemas/media';
+import type { LocalizedText, StatisticRow } from '@schemas/content';
+import type { StatRating } from '@schemas/sections';
+import { pickLocale } from '@/lib/i18n';
+import { SERVICES_PROOF_COPY } from '@/lib/services/proof';
+import AccentText from '@/components/ui/AccentText.astro';
+
+// The Services page proof band (Round 2) — the `statistics` section's `services` variant,
+// the mockup's `.proof` (namespaced `.svc-proof`: Our Work already owns `.proof`). White:
+//   the statement   "Five disciplines. One team. *Zero handoffs.*" (overridable `line`)
+//   the rating      "★★★★★ 4.9 / 5 average client rating" — ONLY when authored (`rating`),
+//                   never a component default: it is a claim with no table behind it, the
+//                   design's sample (the seeded row is flagged is_placeholder for it). Text
+//                   only — no AggregateRating JSON-LD, which would assert review data the
+//                   site does not have.
+//   the numbers     the counters placed on `services`, labelled for that page, rendered
+//                   FINAL on the server and counted up by countUp.ts only while still off
+//                   screen (the StatBand pattern: an .sr-only final value, the animated digits
+//                   aria-hidden).
+// Fewer counters than `minItems` (default 2) and the whole band renders nothing — a rating
+// line with no numbers under it would be the one sample left standing. CSS: services.css.
+
+interface Props {
+  locale: Locale;
+  items: StatisticRow[];
+  line?: LocalizedText | undefined;
+  lineAccent?: Accent | undefined;
+  rating?: StatRating | undefined;
+  staticNumbers?: boolean | undefined;
+  minItems?: number | undefined;
+}
+
+const {
+  locale,
+  items,
+  line,
+  lineAccent,
+  rating,
+  staticNumbers = false,
+  minItems = 2,
+} = Astro.props;
+
+const STR = SERVICES_PROOF_COPY[locale];
+const lineText = line ? pickLocale(line, locale) : STR.line;
+// An authored line keeps only an authored accent (the built-in range counts the built-in words).
+const accent = line ? lineAccent : SERVICES_PROOF_COPY.accent;
+const rate = rating ? { value: rating.value, label: pickLocale(rating.label, locale) } : null;
+
+const cells = items.map((s) => {
+  const n = s.value_numeric;
+  const countable = typeof n === 'number' && Number.isInteger(n) && n > 0 && !staticNumbers;
+  return {
+    label: pickLocale(s.label, locale),
+    numeric: typeof n === 'number' ? { n, suffix: s.value_suffix ?? '', countable } : null,
+    value: s.value,
+  };
+});
+const STAR = 'M8 1.2l2.1 4.3 4.7.7-3.4 3.3.8 4.7L8 12l-4.2 2.2.8-4.7L1.2 6.2l4.7-.7z';
+---
+
+{
+  cells.length >= minItems && (
+    <section class="svc-proof">
+      <div class="svc-proof__grid">
+        <div class="svc-proof__lead rv">
+          <p class="svc-proof__line">
+            <AccentText text={lineText} locale={locale} accent={accent} />
+          </p>
+          {rate && (
+            <p class="svc-proof__rate">
+              <span class="svc-proof__stars" aria-hidden="true">
+                {[0, 1, 2, 3, 4].map(() => (
+                  <svg viewBox="0 0 16 16">
+                    <path fill="currentColor" d={STAR} />
+                  </svg>
+                ))}
+              </span>
+              <span>
+                <b dir="ltr">{rate.value}</b> {rate.label}
+              </span>
+            </p>
+          )}
+        </div>
+        <ul class="svc-proof__stats rv">
+          {cells.map((c) => (
+            <li class="svc-proof__stat">
+              {c.numeric ? (
+                <span class="svc-proof__n">
+                  {c.numeric.countable ? (
+                    <>
+                      <span class="sr-only">{`${c.numeric.n}${c.numeric.suffix}`}</span>
+                      <span aria-hidden="true">
+                        <span data-count-to={c.numeric.n}>{c.numeric.n}</span>
+                        {c.numeric.suffix && <i>{c.numeric.suffix}</i>}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{c.numeric.n}</span>
+                      {c.numeric.suffix && <i>{c.numeric.suffix}</i>}
+                    </>
+                  )}
+                </span>
+              ) : (
+                <span class="svc-proof__n svc-proof__n--text">{c.value}</span>
+              )}
+              <span class="svc-proof__l">{c.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )
+}
+
+<script>
+  import { initCountUp } from '@/lib/client/countUp';
+
+  initCountUp();
+</script>

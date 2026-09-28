@@ -86,8 +86,39 @@ export type LoginInput = z.infer<typeof LoginSchema>;
 
 // ── Services · disciplines · service cases (0028) ───────────────────────────────
 
-/** 0028's slug CHECK on disciplines ('^[a-z0-9][a-z0-9-]{0,63}$'): at most 64 characters. */
-const DisciplineSlugSchema = SlugSchema.max(64);
+/**
+ * A discipline's slug is also an element id on /services (the `/services#<slug>` contract:
+ * the explorer panel is `id="<slug>"`), so it may not collide with an id the page already
+ * has — `#main` would land on the landmark, `#inquiry` on the form. The list is the ids
+ * the services page, its header/footer chrome, the form and the consent banner render.
+ */
+export const RESERVED_DISCIPLINE_SLUGS = Object.freeze([
+  'main',
+  'top',
+  'services',
+  'categories',
+  'inquiry',
+  'contact-form',
+  'contact-status',
+  'consent-banner',
+  'hello-heading',
+  'nav',
+  'menu',
+  'footer',
+  'skip',
+] as const);
+
+/**
+ * 0028's slug CHECK on disciplines ('^[a-z0-9][a-z0-9-]{0,63}$'): at most 64 characters —
+ * and never a reserved page id, nor the `svc-` / `cf-` prefixes the page's own ids use.
+ */
+const DisciplineSlugSchema = SlugSchema.max(64).refine(
+  (s) =>
+    !(RESERVED_DISCIPLINE_SLUGS as readonly string[]).includes(s) &&
+    !s.startsWith('svc-') &&
+    !s.startsWith('cf-'),
+  { message: 'this slug is reserved by the services page' },
+);
 
 /** A bilingual line with a length ceiling, both languages trimmed and required. */
 const boundedBilingual = (max: number) =>

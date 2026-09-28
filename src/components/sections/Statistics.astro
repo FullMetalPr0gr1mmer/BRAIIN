@@ -4,10 +4,14 @@ import type { Accent } from '@schemas/media';
 import type { LocalizedText, StatPlacement } from '@schemas/content';
 import { pickLocale } from '@/lib/i18n';
 import { getPublishedStatistics, type StatisticRow } from '@/lib/data/statistics';
+import type { StatRating } from '@schemas/sections';
 import StatBand from './StatBand.astro';
+import ServicesProof from './ServicesProof.astro';
 
 // The `statistics` section. UI v2 layouts (`band` home, `reach` About, `proof` Our Work)
 // render StatBand with the counters marked for `placement`, each under that page's label;
+// Round 2's `services` (the Services page proof band: a statement, an authored rating line
+// and the numbers) renders ServicesProof;
 // `cards` (the default — an existing composition renders unchanged) is the original grid;
 // it reads only `heading` and `minItems` (default 1 there, 2 in the bands).
 // The numbers always come from the statistics table; the section only chooses the layout
@@ -15,12 +19,16 @@ import StatBand from './StatBand.astro';
 
 interface Props {
   locale: Locale;
-  variant?: 'cards' | 'band' | 'reach' | 'proof';
+  variant?: 'cards' | 'band' | 'reach' | 'proof' | 'services';
   placement?: StatPlacement;
   tag?: LocalizedText;
   heading?: LocalizedText;
   accent?: Accent;
   text?: LocalizedText;
+  /** `services` only (Round 2). */
+  line?: LocalizedText;
+  lineAccent?: Accent;
+  rating?: StatRating;
   staticNumbers?: boolean;
   minItems?: number;
   /** Route-injected rows (SectionRenderer `data`) — never CMS content. */
@@ -55,6 +63,16 @@ const items =
         </div>
       </section>
     )
+  ) : variant === 'services' ? (
+    <ServicesProof
+      locale={locale}
+      items={items}
+      line={Astro.props.line}
+      lineAccent={Astro.props.lineAccent}
+      rating={Astro.props.rating}
+      staticNumbers={Astro.props.staticNumbers}
+      minItems={Astro.props.minItems}
+    />
   ) : (
     <StatBand
       locale={locale}

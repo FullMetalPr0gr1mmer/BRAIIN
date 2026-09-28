@@ -14,6 +14,7 @@ import {
 import {
   DisciplineUpdateSchema,
   DisciplineWriteSchema,
+  RESERVED_DISCIPLINE_SLUGS,
   ServiceCaseUpdateSchema,
   ServiceCaseWriteSchema,
   ServiceUpdateSchema,
@@ -196,6 +197,22 @@ describe('admin writes', () => {
     expect(DisciplineWriteSchema.safeParse({ ...d, clip: uid }).success).toBe(false);
     expect(DisciplineUpdateSchema.safeParse({ short: t('x') }).success).toBe(false); // no version
     expect(DisciplineUpdateSchema.safeParse({ short: t('x'), version: 1 }).success).toBe(true);
+  });
+
+  it('a discipline slug never collides with an id the services page renders', () => {
+    // The slug IS the explorer panel's id (`/services#<slug>`): `#main` or `#inquiry`
+    // would land on the landmark or the form instead of a discipline.
+    const d = { name: t('X') };
+    for (const slug of ['main', 'inquiry', 'categories', 'contact-form', 'svc-tab', 'cf-name']) {
+      const r = DisciplineWriteSchema.safeParse({ ...d, slug });
+      expect(r.success, slug).toBe(false);
+      expect(!r.success && r.error.issues[0]?.path).toEqual(['slug']);
+    }
+    for (const slug of ['branding', 'production', 'web', 'events', 'main-stage']) {
+      expect(DisciplineWriteSchema.safeParse({ ...d, slug }).success, slug).toBe(true);
+    }
+    // Every slug the seed ships is allowed.
+    expect(RESERVED_DISCIPLINE_SLUGS).not.toContain('marketing');
   });
 
   it('a service case: its service is required; problems and results bounded', () => {

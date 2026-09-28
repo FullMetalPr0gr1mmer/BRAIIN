@@ -19,7 +19,8 @@ export interface PageMeta {
   description: string;
 }
 
-export type MetaRoute = 'home' | 'about' | 'contact' | 'notFound' | 'portfolio' | 'portfolioAll';
+export type MetaRoute =
+  'home' | 'about' | 'contact' | 'notFound' | 'portfolio' | 'portfolioAll' | 'services';
 
 export const PAGE_META: Record<MetaRoute, Record<Locale, PageMeta>> = {
   home: {
@@ -86,6 +87,21 @@ export const PAGE_META: Record<MetaRoute, Record<Locale, PageMeta>> = {
       description: 'كل مشاريع %brand%، مع فلترة حسب الخدمة والقطاع والعميل والسنة.',
     },
   },
+  // Round 2. English: services.html <title> + <meta> verbatim. Arabic: ours — the title is
+  // the Arabic menu label (nav.services), the description the English one in the page's own
+  // Arabic words (s.sub, s.catP) — owner review.
+  services: {
+    en: {
+      title: 'Services',
+      description:
+        'Branding, production, marketing, website development, and events and exhibitions. Five disciplines and one team in Jeddah, from the first sketch to launch.',
+    },
+    ar: {
+      title: 'الخدمات',
+      description:
+        'الهوية البصرية، والإنتاج، والتسويق، وتطوير المواقع، والفعاليات والمعارض. خمسة تخصصات وفريق واحد في جدة، من أول رسمة إلى الإطلاق.',
+    },
+  },
 };
 
 // UI v2 PR11 — the case study (not a section-composed route, so outside PAGE_META). Its
@@ -101,5 +117,21 @@ export const CASE_STUDY_META: Record<Locale, PageMeta> = {
   ar: {
     title: 'دراسة حالة',
     description: 'دراسة حالة من %brand%: البريف، ونطاق العمل، والنتيجة، وكيف انصنع الشغل.',
+  },
+};
+
+// Round 2 — a service page (/services/[slug]; not section-composed, so outside PAGE_META).
+// Its own title is "<service> | <discipline>" (src/lib/services/page.ts) and its
+// description the service's tagline; this is the fallback for a service with no tagline
+// in the page's language. English: service.html's static <meta> verbatim. Arabic: ours, in
+// the page's own words (القيمة اللي نضيفها، دراسة حالة) — owner review.
+export const SERVICE_PAGE_META: Record<Locale, PageMeta> = {
+  en: {
+    title: 'Service',
+    description: 'What the service is, the value we add, and a client problem we solved with it.',
+  },
+  ar: {
+    title: 'الخدمة',
+    description: 'وش هي الخدمة، والقيمة اللي نضيفها، ومشكلة عميل حلّيناها فيها.',
   },
 };

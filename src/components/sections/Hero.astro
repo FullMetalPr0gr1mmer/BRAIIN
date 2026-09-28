@@ -44,6 +44,8 @@ interface Props extends HeroSectionContent {
                    h1 that fits a long service name beside the side column).
       - `skipLink` the "Been here before? **Skip to the inquiry**" glass pill over the
                    footage (.hero__skip), first in the hero's tab order.
+      - `noSub`    the page has no sub line of its own (a service with no tagline): render
+                   none, rather than the home slogan the built-in copy would put there.
       A HeroText is a string in the page's language or an {en, ar} pair. Hrefs are
       localized (`/services#branding` → `/ar/services#branding`; `#inquiry` stays).
       Their CSS is in public/styles/services.css — a page using them links that sheet. */
@@ -55,6 +57,7 @@ interface Props extends HeroSectionContent {
         altLink?: { label: HeroText; href: string } | undefined;
         crumb?: { items: readonly { label: HeroText; href: string }[] } | undefined;
         skipLink?: { kicker: HeroText; label: HeroText; href: string } | undefined;
+        noSub?: boolean;
       }
     | undefined;
 }
@@ -119,7 +122,10 @@ const words: Word[] = headline
       .filter(Boolean)
       .map((text, i) => ({ text, accent: accentFrom !== undefined && i >= accentFrom }))
   : WORDS[locale];
-const subText = sub ? pickLocale(sub, locale) : STR.sub;
+// A given sub wins; without one, the built-in slogan — unless the route says the page has
+// no sub (a service page's is its own tagline: the home slogan under "Logo Design" would be
+// unrelated copy).
+const subText = sub ? pickLocale(sub, locale) : data?.noSub === true ? '' : STR.sub;
 const ctaText = ctaLabel ? pickLocale(ctaLabel, locale) : STR.cta;
 const perWord = locale === 'ar';
 const parts = words.map((w) => ({
@@ -266,7 +272,7 @@ const src = videoUid ? undefined : videoSrc;
       }
     </h1>
     <div class="hero__side">
-      <p class="hero__sub">{subText}</p>
+      {subText && <p class="hero__sub">{subText}</p>}
       {
         banner ? (
           <Cta href={href} icon="down" class="hero__cta">

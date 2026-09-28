@@ -11,7 +11,11 @@ import { expect, test, type Page } from '@playwright/test';
  * any of it — this file is the only gate. The port places the cards with `translate` and
  * cuts their width with `clip-path`; the sum over a full sweep must be exactly 0.
  *
- * S3 adds the /services cases (the page-mode cards, the explorer opening, /services#events).
+ * /services (Round 2, S3): the page-mode cards get the same sweep; opening an explorer panel
+ * by a card click must shift nothing that COUNTS (the open is instant, inside the click's
+ * 500 ms input window, so its own shift is excluded exactly as field CLS excludes it —
+ * `hadRecentInput` — and nothing may keep moving after that window); and a deep link to
+ * /services#events must open Events at first paint, with no shift at all from navigation on.
  */
 
 // The home intro is a timed plate over everything; start as a returning visitor.
@@ -27,17 +31,21 @@ async function skipIntro(page: Page): Promise<void> {
 
 interface Shift {
   value: number;
+  /** Within 500 ms of a discrete input (click, key): field CLS excludes it. */
+  recent: boolean;
   sources: string[];
 }
 
-/** Starts collecting layout shifts that happen from now on (buffered, so none is missed). */
-async function watchShifts(page: Page): Promise<void> {
-  await page.evaluate(() => {
+/** Starts collecting layout shifts that happen from now on (buffered, so none is missed);
+    `fromStart` collects every one since navigation. */
+async function watchShifts(page: Page, fromStart = false): Promise<void> {
+  await page.evaluate((all) => {
     const w = window as unknown as { __shifts: Shift[] };
     w.__shifts = [];
-    const since = performance.now();
+    const since = all ? 0 : performance.now();
     type Entry = PerformanceEntry & {
       value: number;
+      hadRecentInput: boolean;
       sources?: {
         node?: Node | null;
         previousRect: DOMRectReadOnly;
@@ -49,6 +57,7 @@ async function watchShifts(page: Page): Promise<void> {
         if (e.startTime < since) continue;
         w.__shifts.push({
           value: e.value,
+          recent: e.hadRecentInput,
           // "parent-classes > tag.classes", so a failure names what moved.
           sources: (e.sources ?? []).map((s) => {
             const el = s.node instanceof Element ? s.node : s.node?.parentElement;
@@ -63,8 +72,12 @@ async function watchShifts(page: Page): Promise<void> {
         });
       }
     }).observe({ type: 'layout-shift', buffered: true });
-  });
+  }, fromStart);
 }
+
+/** The shifts CLS counts (the ones with no recent input), summed. */
+const counted = (seen: Shift[]) =>
+  seen.filter((s) => !s.recent).reduce((sum, s) => sum + s.value, 0);
 
 async function shifts(page: Page): Promise<Shift[]> {
   return page.evaluate(() => (window as unknown as { __shifts: Shift[] }).__shifts);
@@ -153,5 +166,74 @@ for (const locale of ['en', 'ar'] as const) {
     await page.waitForTimeout(1000);
     expect(await card.evaluate((el) => (el as HTMLElement).offsetWidth)).toBe(linkBefore);
     expect((await ring.boundingBox())!.width).toBeCloseTo(rest, 0);
+  });
+}
+
+// ── /services (Round 2, S3) ─────────────────────────────────────────────────────────
+
+for (const locale of ['en', 'ar'] as const) {
+  const path = locale === 'ar' ? '/ar/services' : '/services';
+
+  test(`services discipline cards: a full hover sweep shifts nothing — ${locale}`, async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.goto(path, { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
+
+    const cards = await sweep(page, '#categories .disc__stage');
+    expect(cards).toBe(5);
+
+    const seen = await shifts(page);
+    const total = seen.reduce((sum, s) => sum + s.value, 0);
+    expect(total, `layout shifts during the sweep: ${JSON.stringify(seen)}`).toBe(0);
+  });
+
+  test(`services explorer: opening a panel by a card click counts no shift — ${locale}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.goto(path, { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(() => document.getElementById('consent-banner')?.remove());
+    await park(page, '#categories .disc__stage');
+    await watchShifts(page);
+
+    await pointAt(page, '#categories .disc__stage', 2);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(page.locator('.svc-panel.is-active')).toHaveCount(1);
+    // Past the 500 ms input window and the body's entrance, the page must be still.
+    await page.waitForTimeout(1500);
+    // ...and switching panels by keyboard is the same instant swap.
+    await page.locator('[role="tab"][aria-selected="true"]').focus();
+    await page.keyboard.press('End');
+    await page.waitForTimeout(1500);
+
+    const seen = await shifts(page);
+    expect(counted(seen), `counted layout shifts: ${JSON.stringify(seen)}`).toBe(0);
+  });
+
+  test(`services explorer: /services#events opens at first paint, no shift — ${locale}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1366, height: 900 });
+    // Warm the font cache first (a returning visitor): load the page once, then the deep link
+    // as a NEW document (the query makes it one; the route ignores it). A COLD Arabic visit
+    // also shifts the banner copy and the numbers when Almarai (and its Latin subset, the
+    // digits) replaces the metric-matched fallback, whose advance widths differ — ≈0.01, the
+    // site-wide web-font swap /ar/contact shows too. That is not the explorer's to fix, and
+    // it would hide what this test is for: the explorer's own opening and hand-over.
+    await page.goto(path, { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
+    await page.goto(`${path}?warm=1#events`, { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
+    await watchShifts(page, true);
+    await page.waitForTimeout(1500);
+    await expect(page.locator('.svc-panel#events')).toBeVisible();
+    const seen = await shifts(page);
+    const total = seen.reduce((sum, s) => sum + s.value, 0);
+    expect(total, `layout shifts since navigation: ${JSON.stringify(seen)}`).toBe(0);
   });
 }

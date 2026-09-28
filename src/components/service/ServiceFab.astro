@@ -1,0 +1,42 @@
+---
+import type { Locale } from '@schemas/primitives';
+import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
+
+// The floating "Skip to inquiry" (Round 2 — service.html `.fab`) → #inquiry. Served
+// HIDDEN (inert, aria-hidden, out of the tab order, parked off-screen by a transform);
+// src/lib/client/serviceFab.ts shows it once 60% of the hero is behind the reader and
+// hides it for good once the inquiry form comes up. The 1px mark is what that script
+// observes for "past 60% of the hero" (the sticky hero itself never leaves the viewport).
+// While the consent banner is open on the same bottom edge, the script lifts the button
+// clear of it (--svc-fab-lift). Without JS it never shows: the hero's skip pill is the
+// same link, always there.
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const copy = SERVICE_PAGE_COPY[locale];
+---
+
+<div class="svc-fab__mark" aria-hidden="true"></div>
+<a class="svc-fab" href="#inquiry" inert aria-hidden="true" tabindex="-1">
+  <span class="svc-fab__ico" aria-hidden="true">
+    <svg viewBox="0 0 16 16">
+      <path
+        d="M8 1v13M3 9l5 5 5-5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"></path>
+    </svg>
+  </span>
+  <span>{copy.fab}</span>
+</a>
+
+<script>
+  import { initServiceFab } from '@/lib/client/serviceFab';
+
+  initServiceFab();
+</script>
