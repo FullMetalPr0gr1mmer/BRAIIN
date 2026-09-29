@@ -1056,6 +1056,33 @@ The orchestrator renumbers these at integration.
 
 ## Round 3: gap fixes (R3)
 
+- **R3-0. No `ch`-unit boxes on swap-font headings above the fold; Almarai's fallback is
+  per weight and per script.** The post-deploy desktop Lighthouse run on main measured
+  CLS 0.116 on `/ar/about` (budget 0.1) on the tree that had passed hours earlier. A
+  `ch` is the advance of "0" in the font that is painting, so About's `max-width: 20ch`
+  h1 was 540px wide under the fallback and 597px once Almarai 700 arrived; the re-wrap
+  moved the heading and the row below it (the LCP poster included), 0.034 on every cold
+  load and 0.14 when it landed in the same frame as the body-copy swap. The cap is now
+  the same width in `em` (11.5em Archivo, 11.06em Almarai), measured once under the
+  loaded faces. The audit of the other Arabic desktop routes found the larger, systemic
+  cause: `Almarai Fallback` is metric-matched for Latin glyphs only, so every weight that
+  was not the preloaded hero face re-wrapped Arabic nav links, kickers and filter chips on
+  arrival — `/ar/portfolio/all`, whose header is in flow, measured 0.13–0.26 (Lighthouse
+  locally; CI had passed it by timing). Measured with Chromium's platform-font report,
+  Almarai's Arabic is 26–33% wider than Arial's at every weight, and the one fallback face
+  faked bold from Arial regular. `Almarai Fallback` is now six faces — per weight (400 on
+  Arial, 700/800 on Arial Bold) and per script (a Latin face and an Arabic-range face with
+  its own `size-adjust`) — with vertical overrides matching each weight file's line box.
+  Widths now agree within 1%; cold loads of `/ar/about`, `/ar/portfolio/all`, `/ar` and
+  `/ar/services` measure 0.000–0.003. `font-display: optional` was tried first and
+  rejected: Chrome holds first paint for a loading optional face, and Lighthouse then put
+  both non-preloaded Arabic files on the LCP chain (`/ar/services` mobile LCP 2.62 s
+  against 2.5 s, twice in CI). Archivo's single fallback is right as it is (EN routes
+  measure 0). Where Arial is absent (Linux, Android) the fallback is unmatched, as before.
+  Gate:
+  `layout-shift.e2e.ts` cold-loads the four routes at 1350×940 and fails at ≥ 0.02 with
+  the element named (Lighthouse's 3-run median could miss the race).
+
 - **R3-4. Lead interest slugs read as labels; stored rows are never rewritten** (owner
   decision G1). A lead's `service_of_interest` / `discipline_of_interest` is shown with a
   label beside the raw slug everywhere a lead is read: the admin list and detail, the CSV
@@ -1083,6 +1110,7 @@ The orchestrator renumbers these at integration.
   the conversion never reads the table, so a renamed slug must not be re-used as a
   service slug while that window is open — remove the conversion with the window. No
   list filter (skipped on purpose).
+
 - **R3-5. The pre-0023 counters are archived by a runbook transaction, not a migration.**
   Production still held `services` (14), and likely `projects` (150+) and `years` (8),
   published with `placements = '{}'`: rendered nowhere since 0023 (a counter shows only on
@@ -1098,6 +1126,7 @@ The orchestrator renumbers these at integration.
   placement. A `dashboard_attention` kind for "published, unplaced" is deferred: it needs
   a migration (0029+ is Join's this round, R3-c). An owner psql statement writes no audit
   row — the run is recorded in the PR / ops log.
+
 - **R3-6. The proof band's rating line has typed fields; the sample cannot go live
   unflagged; dashboard rows link to their editor.** A new field kind, `object` (a
   fixed-shape object edited with `itemFields`, like one repeater item without add /
