@@ -161,7 +161,7 @@ body:has(.intro) {
   font-family: 'Almarai';
   font-style: normal;
   font-weight: 400;
-  font-display: optional;
+  font-display: swap;
   src: url('/fonts/almarai-400-latin.woff2') format('woff2');
   unicode-range:
     U+0020-007E, U+00A0, U+00A9, U+00AB, U+00B7, U+00BB, U+00D7, U+2013-2014, U+2018-201D, U+2022,
@@ -171,7 +171,7 @@ body:has(.intro) {
   font-family: 'Almarai';
   font-style: normal;
   font-weight: 400;
-  font-display: optional;
+  font-display: swap;
   src: url('/fonts/almarai-400-arabic.woff2') format('woff2');
   unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
@@ -179,7 +179,7 @@ body:has(.intro) {
   font-family: 'Almarai';
   font-style: normal;
   font-weight: 700;
-  font-display: optional;
+  font-display: swap;
   src: url('/fonts/almarai-700-latin.woff2') format('woff2');
   unicode-range:
     U+0020-007E, U+00A0, U+00A9, U+00AB, U+00B7, U+00BB, U+00D7, U+2013-2014, U+2018-201D, U+2022,
@@ -189,7 +189,7 @@ body:has(.intro) {
   font-family: 'Almarai';
   font-style: normal;
   font-weight: 700;
-  font-display: optional;
+  font-display: swap;
   src: url('/fonts/almarai-700-arabic.woff2') format('woff2');
   unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
@@ -211,13 +211,75 @@ body:has(.intro) {
   src: url('/fonts/almarai-800-arabic.woff2') format('woff2');
   unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
+/* Almarai's fallback, per weight AND per script (Round 3, R3-0). One Arial face with one
+   size-adjust could only match Almarai's Latin glyphs: measured with Chromium's platform-
+   font report, Almarai's Arabic is 26% (400) wider than Arial's and 27.7% (700) / 33.1%
+   (800) wider than Arial Bold's — and a fallback with no bold face fakes bold from Arial
+   regular, wider still from the truth. Every Arabic heading, nav link, kicker, chip and
+   paragraph therefore re-wrapped when the web font arrived (CLS 0.13–0.26 on
+   /ar/portfolio/all, 0.034–0.14 on /ar/about). The vertical overrides follow each weight
+   file's own line box (normal line-height, measured: 400 → 1.10em, 700 → 1.55em, 800 →
+   1.10em) so a `line-height: normal` box keeps its height too. Measure with the real
+   face in use (`CSS.getPlatformFontsForNode`): a `swap` face that has not arrived, or an
+   `optional` one that missed first paint, silently measures the fallback instead. The Arabic faces are declared AFTER the Latin ones
+   and claim the spaces, mirroring the web-font declarations above. Where Arial is
+   absent (Linux, Android) the fallback falls through to `system-ui`, unmatched. */
 @font-face {
   font-family: 'Almarai Fallback';
-  src: local('Arial');
+  font-weight: 400;
+  src: local('Arial'), local('ArialMT');
   size-adjust: 95.11%;
   ascent-override: 95.15%;
   descent-override: 22.18%;
   line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Almarai Fallback';
+  font-weight: 400;
+  src: local('Arial'), local('ArialMT');
+  size-adjust: 126.2%;
+  ascent-override: 70.6%;
+  descent-override: 16.6%;
+  line-gap-override: 0%;
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
+}
+@font-face {
+  font-family: 'Almarai Fallback';
+  font-weight: 700;
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 92.4%;
+  ascent-override: 135.9%;
+  descent-override: 31.9%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Almarai Fallback';
+  font-weight: 700;
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 127.7%;
+  ascent-override: 98.3%;
+  descent-override: 23.1%;
+  line-gap-override: 0%;
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
+}
+@font-face {
+  font-family: 'Almarai Fallback';
+  font-weight: 800;
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 100.75%;
+  ascent-override: 88.4%;
+  descent-override: 20.8%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Almarai Fallback';
+  font-weight: 800;
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 133.1%;
+  ascent-override: 66.9%;
+  descent-override: 15.7%;
+  line-gap-override: 0%;
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
 
 /* ---- Reset / base ---- */

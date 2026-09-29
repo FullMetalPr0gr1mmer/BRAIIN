@@ -1056,8 +1056,8 @@ The orchestrator renumbers these at integration.
 
 ## Round 3: gap fixes (R3)
 
-- **R3-0. No `ch`-unit boxes on swap-font headings above the fold; Almarai is
-  `font-display: optional`.** The post-deploy desktop Lighthouse run on main measured
+- **R3-0. No `ch`-unit boxes on swap-font headings above the fold; Almarai's fallback is
+  per weight and per script.** The post-deploy desktop Lighthouse run on main measured
   CLS 0.116 on `/ar/about` (budget 0.1) on the tree that had passed hours earlier. A
   `ch` is the advance of "0" in the font that is painting, so About's `max-width: 20ch`
   h1 was 540px wide under the fallback and 597px once Almarai 700 arrived; the re-wrap
@@ -1068,14 +1068,17 @@ The orchestrator renumbers these at integration.
   cause: `Almarai Fallback` is metric-matched for Latin glyphs only, so every weight that
   was not the preloaded hero face re-wrapped Arabic nav links, kickers and filter chips on
   arrival — `/ar/portfolio/all`, whose header is in flow, measured 0.13–0.26 (Lighthouse
-  locally; CI had passed it by timing). Almarai 400 and 700 now use `font-display:
-  optional`: a face not ready at first paint is not swapped in on that page view (and is
-  cached for the next one). The 800 face — the preloaded hero face on most routes — stays
-  `swap`: Chrome holds the first paint of text set in a preloaded `optional` face until it
-  arrives, and as `optional` it cost `/ar/services` ~200 ms of mobile LCP (2.62 s in CI).
-  Its preload lands before first paint in practice, so only the headline could move.
-  Cold loads of `/ar/about`, `/ar/portfolio/all`, `/ar` and `/ar/services` now measure
-  0.0000 (0.0001 on the services proof digits); Archivo stays `swap` because EN routes
-  measure 0. Trade: a slow first visit renders one page's body copy in the fallback. Gate:
+  locally; CI had passed it by timing). Measured with Chromium's platform-font report,
+  Almarai's Arabic is 26–33% wider than Arial's at every weight, and the one fallback face
+  faked bold from Arial regular. `Almarai Fallback` is now six faces — per weight (400 on
+  Arial, 700/800 on Arial Bold) and per script (a Latin face and an Arabic-range face with
+  its own `size-adjust`) — with vertical overrides matching each weight file's line box.
+  Widths now agree within 1%; cold loads of `/ar/about`, `/ar/portfolio/all`, `/ar` and
+  `/ar/services` measure 0.000–0.003. `font-display: optional` was tried first and
+  rejected: Chrome holds first paint for a loading optional face, and Lighthouse then put
+  both non-preloaded Arabic files on the LCP chain (`/ar/services` mobile LCP 2.62 s
+  against 2.5 s, twice in CI). Archivo's single fallback is right as it is (EN routes
+  measure 0). Where Arial is absent (Linux, Android) the fallback is unmatched, as before.
+  Gate:
   `layout-shift.e2e.ts` cold-loads the four routes at 1350×940 and fails at ≥ 0.02 with
   the element named (Lighthouse's 3-run median could miss the race).

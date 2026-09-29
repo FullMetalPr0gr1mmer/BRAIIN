@@ -246,9 +246,9 @@ for (const locale of ['en', 'ar'] as const) {
 //   - the Almarai fallback is metric-matched for LATIN glyphs only, so every non-preloaded
 //     weight re-wrapped Arabic nav links, kickers and filter chips on arrival — on
 //     /ar/portfolio/all, whose header is in flow, that pushed the whole catalogue
-//     (CLS 0.13–0.26). Almarai 400/700 now use `font-display: optional`: a face that is not
-//     ready at first paint is not swapped in later on that page view (the preloaded 800
-//     hero face keeps `swap` — Chrome would hold first paint for it, at a cost in LCP).
+//     (CLS 0.13–0.26). The fallback is now six faces, per weight and per script, so the
+//     swap keeps every line where it was (`font-display: optional` was rejected: it puts
+//     the Arabic files on the LCP chain).
 // Lighthouse's 3-run median can miss a race; this names the element on the first failure.
 // 0.02 is the documented site-wide allowance for a metric-mismatched swap (≈0.01).
 for (const path of ['/about', '/ar/about', '/portfolio/all', '/ar/portfolio/all']) {
