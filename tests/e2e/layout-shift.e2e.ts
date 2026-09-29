@@ -237,3 +237,30 @@ for (const locale of ['en', 'ar'] as const) {
     expect(total, `layout shifts since navigation: ${JSON.stringify(seen)}`).toBe(0);
   });
 }
+
+// Cold loads at Lighthouse's desktop viewport: the web fonts are not cached (a fresh
+// context per test), so this is the visit where a late font swap can move the page.
+// Two mechanisms shipped in Round 2 and were only caught after the deploy (Round 3, E):
+//   - a `ch`-unit cap on a swap-font heading (About's h1: 540 px → 597 px when Almarai
+//     replaced the fallback, CLS 0.034–0.14 on /ar/about);
+//   - the Almarai fallback is metric-matched for LATIN glyphs only, so every non-preloaded
+//     weight re-wrapped Arabic nav links, kickers and filter chips on arrival — on
+//     /ar/portfolio/all, whose header is in flow, that pushed the whole catalogue
+//     (CLS 0.13–0.26). Almarai now uses `font-display: optional`: a face that is not ready
+//     at first paint is not swapped in later on that page view.
+// Lighthouse's 3-run median can miss a race; this names the element on the first failure.
+// 0.02 is the documented site-wide allowance for a metric-mismatched swap (≈0.01).
+for (const path of ['/about', '/ar/about', '/portfolio/all', '/ar/portfolio/all']) {
+  test(`cold desktop load is still: ${path}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1350, height: 940 });
+    await page.goto(path, { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
+    await watchShifts(page, true);
+    await page.waitForTimeout(1500);
+    const seen = await shifts(page);
+    expect(
+      counted(seen),
+      `counted layout shifts since navigation: ${JSON.stringify(seen)}`,
+    ).toBeLessThan(0.02);
+  });
+}

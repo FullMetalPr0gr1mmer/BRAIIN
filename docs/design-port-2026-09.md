@@ -1053,3 +1053,25 @@ The orchestrator renumbers these at integration.
   music-vo-sfx and booth-production, every section's top, height and width matches to
   the pixel. The one exception is the inquiry band, which is 25–64px taller because the
   site's form carries the PDPL consent row.
+
+## Round 3: gap fixes (R3)
+
+- **R3-0. No `ch`-unit boxes on swap-font headings above the fold; Almarai is
+  `font-display: optional`.** The post-deploy desktop Lighthouse run on main measured
+  CLS 0.116 on `/ar/about` (budget 0.1) on the tree that had passed hours earlier. A
+  `ch` is the advance of "0" in the font that is painting, so About's `max-width: 20ch`
+  h1 was 540px wide under the fallback and 597px once Almarai 700 arrived; the re-wrap
+  moved the heading and the row below it (the LCP poster included), 0.034 on every cold
+  load and 0.14 when it landed in the same frame as the body-copy swap. The cap is now
+  the same width in `em` (11.5em Archivo, 11.06em Almarai), measured once under the
+  loaded faces. The audit of the other Arabic desktop routes found the larger, systemic
+  cause: `Almarai Fallback` is metric-matched for Latin glyphs only, so every weight that
+  was not the preloaded hero face re-wrapped Arabic nav links, kickers and filter chips on
+  arrival — `/ar/portfolio/all`, whose header is in flow, measured 0.13–0.26 (Lighthouse
+  locally; CI had passed it by timing). Almarai now uses `font-display: optional`: a face
+  not ready at first paint is not swapped in on that page view (and is cached for the
+  next one). Ten cold loads of each route now measure 0.0000; Archivo stays `swap`
+  because EN routes measure 0. Trade: a slow first visit renders one page in the
+  fallback; the hero-face preload keeps the headline in Almarai on every visit. Gate:
+  `layout-shift.e2e.ts` cold-loads the four routes at 1350×940 and fails at ≥ 0.02 with
+  the element named (Lighthouse's 3-run median could miss the race).

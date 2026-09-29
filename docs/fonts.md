@@ -32,8 +32,8 @@
 |---|---|
 | EN + AR fonts **per route** | ≤ 180 KB woff2 (AR face counts) |
 | Hero face (the one preloaded — per route) | ≤ 35 KB Latin / 45 KB Arabic |
-| `font-display` | `swap` (never blocks render) |
-| CLS from fonts | 0 — via `size-adjust` + `ascent/descent-override` |
+| `font-display` | Archivo: `swap` (never blocks render). Almarai: `optional` (step 2b) |
+| CLS from fonts | 0 — Archivo via `size-adjust` + `ascent/descent-override`; Almarai via `optional` (its fallback cannot be metric-matched for Arabic glyphs) |
 
 ## Steps
 
@@ -78,6 +78,24 @@
    :root { --bs-font-sans: 'Brand', 'Brand-fallback', system-ui, sans-serif; }
    ```
 
+2b. **Almarai is `font-display: optional`, not `swap`** (Round 3, 2026-09-29). The
+   metric overrides above are measured against LATIN glyphs (`@capsizecss/metrics` vs
+   Arial); Arabic glyph advances in Arial and Almarai differ per glyph, so no
+   `size-adjust` can make the fallback wrap Arabic text the same way. With `swap`, every
+   Almarai weight that was NOT the preloaded hero face arrived after first paint and
+   re-wrapped what it touched: header nav links, kickers, filter chips, body copy. Measured
+   cold at Lighthouse's desktop viewport: `/ar/about` 0.034–0.14 (the h1's `20ch` cap
+   widened 540 → 597 px on the swap), `/ar/portfolio/all` 0.13–0.26 (its header is in
+   flow, so the re-wrapped nav and chips pushed the whole catalogue). With `optional` a
+   face that is not ready when the text is first painted is simply not used for that page
+   view — no late swap, so no shift — and it is still downloaded, so the next page uses it
+   from cache. The preloaded hero face arrives inside the block period on every route, and
+   on a fast connection so do the others (the probe showed every face in use at 0 CLS);
+   only a slow first visit renders that one page in the fallback. Archivo stays `swap`: its
+   fallback IS metric-matched and EN routes measure 0. Rule for headings (R3-0): never cap a
+   swap-font heading's box in `ch` (it is the width of "0" in whichever font is painting);
+   measure the cap once under the loaded face and write it in `em`.
+
 3. **Preload ONLY the hero face** (the one above the fold), per locale, in
    `src/components/SeoHead.astro` — preloading more than one face wastes the budget:
    ```html
@@ -92,9 +110,11 @@
    is weight 600). Still exactly one preload. Why: `/ar/about` preloaded 800 while its h1
    rendered in 700, and the late 700 swap reflowed the split heading — Lighthouse CLS 0.14
    against the 0.1 budget, on `/ar/about` only. The `Almarai Fallback` metrics are tuned to
-   `local('Arial')`, which Linux/Android lack, so the swap is not CLS-free there and the
-   preload is what keeps the shift out of the window. `tests/seo/fonts.spec.ts` locks the
-   hrefs and each preloadable face's hero budget (every Almarai arabic face is ≈ 25 KB).
+   `local('Arial')`, which Linux/Android lack, so the swap was not CLS-free there and the
+   preload was what kept the shift out of the window. Since 2b the preload's job is to
+   make sure the hero face is *used* on a first visit (it must be ready at first paint);
+   the shift itself can no longer happen. `tests/seo/fonts.spec.ts` locks the hrefs and
+   each preloadable face's hero budget (every Almarai arabic face is ≈ 25 KB).
 
 4. **Verify:** `npm run a11y:contrast` (already green), then run the staged
    `perf-seo-a11y` workflow — Lighthouse asserts `font-display`, unsized-images, and the

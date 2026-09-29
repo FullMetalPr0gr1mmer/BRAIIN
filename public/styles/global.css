@@ -161,7 +161,7 @@ body:has(.intro) {
   font-family: 'Almarai';
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
+  font-display: optional;
   src: url('/fonts/almarai-400-latin.woff2') format('woff2');
   unicode-range:
     U+0020-007E, U+00A0, U+00A9, U+00AB, U+00B7, U+00BB, U+00D7, U+2013-2014, U+2018-201D, U+2022,
@@ -171,7 +171,7 @@ body:has(.intro) {
   font-family: 'Almarai';
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
+  font-display: optional;
   src: url('/fonts/almarai-400-arabic.woff2') format('woff2');
   unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
@@ -179,7 +179,7 @@ body:has(.intro) {
   font-family: 'Almarai';
   font-style: normal;
   font-weight: 700;
-  font-display: swap;
+  font-display: optional;
   src: url('/fonts/almarai-700-latin.woff2') format('woff2');
   unicode-range:
     U+0020-007E, U+00A0, U+00A9, U+00AB, U+00B7, U+00BB, U+00D7, U+2013-2014, U+2018-201D, U+2022,
@@ -189,7 +189,7 @@ body:has(.intro) {
   font-family: 'Almarai';
   font-style: normal;
   font-weight: 700;
-  font-display: swap;
+  font-display: optional;
   src: url('/fonts/almarai-700-arabic.woff2') format('woff2');
   unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
@@ -197,7 +197,7 @@ body:has(.intro) {
   font-family: 'Almarai';
   font-style: normal;
   font-weight: 800;
-  font-display: swap;
+  font-display: optional;
   src: url('/fonts/almarai-800-latin.woff2') format('woff2');
   unicode-range:
     U+0020-007E, U+00A0, U+00A9, U+00AB, U+00B7, U+00BB, U+00D7, U+2013-2014, U+2018-201D, U+2022,
@@ -207,7 +207,7 @@ body:has(.intro) {
   font-family: 'Almarai';
   font-style: normal;
   font-weight: 800;
-  font-display: swap;
+  font-display: optional;
   src: url('/fonts/almarai-800-arabic.woff2') format('woff2');
   unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
