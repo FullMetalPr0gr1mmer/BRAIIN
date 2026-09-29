@@ -48,6 +48,9 @@ import { sectionContentIssues, type SectionType } from '@schemas/sections';
 import { isStaticMediaKey, staticImage } from '@/lib/media/static';
 import { renderTiptapToHtml, readingMinutes, sanitizeHref } from '@/lib/content/tiptap';
 import { NotFoundError, OptimisticLockError, ValidationError } from './errors';
+import { isReservedRedirectPath, normalizeRedirectPath } from '@/lib/http/redirects';
+import { chainRefusal, liveRouteRefusal, targetPathOf, type RedirectRow } from './redirectRules';
+import { syncRedirectsToEdge } from './redirectSync';
 import { getRow, translateWriteError, type ConstraintFields, type WriteRefusals } from './crud';
 import type { ResourceConfig, ResourcePayload } from './resource';
 
@@ -1113,37 +1116,115 @@ export const navigationResource: ResourceConfig = {
 
 // ── Redirects (Admin + SEO) ─────────────────────────────────────────────────────
 
+/** A LIKE pattern for "starts with": `%` and `_` in the path are literal (crud.ts does the same). */
+const startsWithPattern = (prefix: string) => `${prefix.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+
+/**
+ * Every save and delete rebuilds the tenant's edge snapshot (src/lib/admin/redirectSync.ts,
+ * design-port R3-1). Both hooks run through the kernel's `runHook`, so a KV failure is
+ * `kvSynced: false` in the response and the audit row — never a failed save.
+ *
+ * The domain rules live in `assertWritable`, which judges the MERGED row: the old
+ * `toRow` loop check saw only the patch, so a PATCH sending only `targetPath` equal to
+ * the stored source sailed through and made a loop.
+ */
 export const redirectResource: ResourceConfig = {
   table: 'redirects',
   entity: 'redirect',
   writeCap: 'redirects.manage',
+  // §5 grants SEO the whole module ("full"), deletes included — the content default
+  // (`content.archiveDelete`, Admin-only) would refuse the role that owns the table.
+  deleteCap: 'redirects.manage',
   listColumns: 'id,source_path,target_path,status,version,created_at',
   columns: 'id,source_path,target_path,status,version,created_at,updated_at',
   orderBy: { column: 'source_path', ascending: true },
   searchColumn: 'source_path',
   createSchema: RedirectWriteSchema,
   updateSchema: RedirectUpdateSchema,
+  constraintFields: {
+    redirects_tenant_id_source_path_key: {
+      field: 'sourcePath',
+      message: 'A rule for this source already exists — edit that one.',
+    },
+  },
   toRow: (input) => {
     const values = pick(input as Input, {
       sourcePath: 'source_path',
       targetPath: 'target_path',
       status: 'status',
     });
-    // A rule whose source equals its target is an infinite redirect loop, and the
-    // middleware consults this table on EVERY public request — so one bad row is a
-    // sitewide outage, not a broken page.
-    if (
-      typeof values['source_path'] === 'string' &&
-      typeof values['target_path'] === 'string' &&
-      values['source_path'] === values['target_path']
-    ) {
-      throw new ValidationError('a redirect cannot point at itself', 'targetPath');
+    if (typeof values['source_path'] === 'string') {
+      // One spelling per source: the edge map is keyed by the normalised path, and two
+      // rows differing only by a trailing slash would silently shadow each other.
+      values['source_path'] = normalizeRedirectPath(values['source_path']);
     }
-    if (typeof values['source_path'] === 'string' && values['source_path'].startsWith('/admin')) {
-      throw new ValidationError('cannot redirect /admin paths', 'sourcePath');
+    if ('target_path' in values) {
+      // The target becomes a Location header. Same scheme allowlist as nav links and
+      // rich-text hrefs: the schema already limits it to site-relative or https://, this
+      // is the shared belt-and-braces.
+      const href = sanitizeHref(values['target_path']);
+      if (!href) throw new ValidationError('unsupported link scheme', 'targetPath');
+      values['target_path'] = href;
     }
     return values;
   },
+  assertWritable: async (merged, { changed, sb, auth }) => {
+    if (!('source_path' in changed) && !('target_path' in changed)) return;
+    const source = String(merged['source_path'] ?? '');
+    const target = String(merged['target_path'] ?? '');
+
+    if (isReservedRedirectPath(source)) {
+      throw new ValidationError(
+        'this path is reserved (the admin, its API, the health probe and the asset routes cannot be redirected)',
+        'sourcePath',
+      );
+    }
+
+    const own: RedirectRow = {
+      id: typeof merged['id'] === 'string' ? merged['id'] : undefined,
+      source_path: source,
+      target_path: target,
+    };
+    // Self-loop first (pure) so the obvious mistake costs no reads.
+    const selfLoop = chainRefusal(own, []);
+    if (selfLoop) throw new ValidationError(selfLoop.message, selfLoop.field);
+
+    // The rows that could chain with this one: those whose source is this target, and
+    // those whose target starts with this source (a stored `/old?x` still chains with a
+    // new `/old` rule; chainRefusal compares the exact path part). Two parameter-encoded
+    // reads — never a PostgREST `.or()` string built from editor input.
+    const related: RedirectRow[] = [];
+    const targetPath = targetPathOf(target);
+    if (targetPath) {
+      const { data, error } = await sb
+        .from('redirects')
+        .select('id,source_path,target_path')
+        .eq('tenant_id', auth.tenantId)
+        .eq('source_path', targetPath)
+        .limit(5);
+      if (error) throw new Error(`read redirects: ${error.message}`);
+      related.push(...((data ?? []) as RedirectRow[]));
+    }
+    {
+      const { data, error } = await sb
+        .from('redirects')
+        .select('id,source_path,target_path')
+        .eq('tenant_id', auth.tenantId)
+        .like('target_path', startsWithPattern(source))
+        .limit(50);
+      if (error) throw new Error(`read redirects: ${error.message}`);
+      related.push(...((data ?? []) as RedirectRow[]));
+    }
+    const chain = chainRefusal(own, related);
+    if (chain) throw new ValidationError(chain.message, chain.field);
+
+    if ('source_path' in changed) {
+      const live = await liveRouteRefusal(source, sb, auth);
+      if (live) throw new ValidationError(live.message, live.field);
+    }
+  },
+  afterWrite: async ({ auth, sb }) => ({ ...(await syncRedirectsToEdge(sb, auth)) }),
+  afterDelete: async ({ auth, sb }) => ({ ...(await syncRedirectsToEdge(sb, auth)) }),
 };
 
 // ── Media ───────────────────────────────────────────────────────────────────────

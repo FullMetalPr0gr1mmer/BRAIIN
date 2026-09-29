@@ -8,7 +8,9 @@ import { collectionRoutes, itemRoutes, type ResourceConfig } from '@/lib/admin/r
 import { sectionResource } from '@/lib/admin/resources';
 import type { Role } from '@/lib/auth/types';
 
-const { systemLog } = vi.hoisted(() => ({ systemLog: vi.fn(async () => true) }));
+const { systemLog } = vi.hoisted(() => ({
+  systemLog: vi.fn(async (_entry: Record<string, unknown>) => true),
+}));
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: systemLog }));
 vi.mock('@/lib/admin/audit', () => ({ writeAudit: async () => undefined }));
 

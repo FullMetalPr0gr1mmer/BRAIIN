@@ -15,7 +15,10 @@ import {
   type RedirectMap,
 } from '@/lib/http/redirects';
 import { RETIRED_CACHE_CONTROL } from '@/lib/services/retired';
-import { env, __kv } from '../stubs/cloudflare-workers';
+import { env as stubEnv, __kv } from '../stubs/cloudflare-workers';
+
+/** The stub as the module types its parameter (tsc sees the real KVNamespace here). */
+const env = stubEnv as unknown as { SESSION?: KVNamespace };
 
 // The edge half of the redirects module (Round 3, item A). Pure functions plus the KV
 // round-trip through the in-memory stub — the same store the middleware and the admin
