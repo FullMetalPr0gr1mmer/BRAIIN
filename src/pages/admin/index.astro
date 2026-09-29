@@ -59,10 +59,42 @@ if (session && sb) {
   }
 }
 
+// A sample quote is listed twice — as a placeholder (live, or still a draft under
+// `placeholder_pending`) AND as "no consent" (a sample has none, by design) — so the
+// consent list keeps only rows that are not samples: the sample's fix is "make it real"
+// (runbook §6c step 8), and whichever placeholder list holds it already says so.
+const sampleIds = new Set(
+  attention.filter((row) => row.kind.startsWith('placeholder_')).map((row) => row.id),
+);
 const byKind = new Map<string, Attention[]>();
 for (const row of attention) {
+  if (row.kind === 'consent_missing' && sampleIds.has(row.id)) continue;
   byKind.set(row.kind, [...(byKind.get(row.kind) ?? []), row]);
 }
+
+/**
+ * The view's `entity_type` → the admin resource whose editor opens the row (Round 3).
+ * The strings are the ones `dashboard_attention` (0028) emits; a type this map does not
+ * know renders as text, never as a broken link.
+ */
+const RESOURCE_OF: Record<string, string> = {
+  service: 'services',
+  blog_post: 'blog',
+  portfolio: 'portfolio',
+  testimonial: 'testimonials',
+  team_member: 'team',
+  statistic: 'statistics',
+  client: 'clients',
+  page_section: 'sections',
+  service_case: 'service-cases',
+};
+
+const editorHref = (row: Attention): string | null =>
+  RESOURCE_OF[row.entity_type] ? `/admin/${RESOURCE_OF[row.entity_type]}/${row.id}` : null;
+
+/** Where the row lives: a section names its page (its title is only its type). */
+const whereOf = (row: Attention): string =>
+  row.entity_type === 'page_section' ? `page: ${row.slug}` : '—';
 
 const KIND_LABEL: Record<string, string> = {
   scheduled_today: 'Going live today',
@@ -124,17 +156,31 @@ const shortcuts = sections.flatMap((group) => group.links).slice(0, 8);
             <tr>
               <th scope="col">Title</th>
               <th scope="col">Type</th>
+              <th scope="col">Where</th>
               <th scope="col">When</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr>
-                <td>{row.title?.['en'] ?? row.slug}</td>
-                <td>{row.entity_type.replace('_', ' ')}</td>
-                <td>{row.at ? new Date(row.at).toLocaleDateString() : '—'}</td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const href = editorHref(row);
+              const title = row.title?.['en'] ?? row.slug;
+              return (
+                <tr>
+                  <td>
+                    {href ? (
+                      <a class="data-link" href={href}>
+                        {title}
+                      </a>
+                    ) : (
+                      title
+                    )}
+                  </td>
+                  <td>{row.entity_type.replace('_', ' ')}</td>
+                  <td>{whereOf(row)}</td>
+                  <td>{row.at ? new Date(row.at).toLocaleDateString() : '—'}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

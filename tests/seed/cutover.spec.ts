@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { generate } from '../../scripts/gen-seeds.mjs';
 import * as C from '../../scripts/round2-cutover.mjs';
+import { RENAMED_SERVICE_SLUGS, renamedServiceSlug } from '@/lib/services/retired';
 
 // supabase/seeds/round2-cutover.sql — the Round 2 production data move (runbook §6d) — is
 // GENERATED from the same seed data as production.sql. These tests make that true (a hand
@@ -103,6 +104,17 @@ describe('the renames (plan step 2)', () => {
       expect(stmt).toContain(`not exists (select 1 from public.services`);
       expect(stmt).toContain('if n <> 1 then');
     }
+  });
+
+  it('is the same four renames the lead path converts (src/lib/services/retired.ts)', () => {
+    // One truth: the cut-over's RENAMES and the code's rename map (Round 3 lead labels).
+    expect(Object.keys(RENAMED_SERVICE_SLUGS)).toEqual(cut.RENAMES.map((r) => r.from));
+    for (const r of cut.RENAMES) {
+      expect(renamedServiceSlug(r.from), r.from).toBe(r.to);
+      // the old EN title the label shows is one the cut-over's compare-and-set matched on
+      expect(r.titles, r.from).toContain(RENAMED_SERVICE_SLUGS[r.from]?.en);
+    }
+    for (const slug of cut.ARCHIVE) expect(renamedServiceSlug(slug), slug).toBeNull();
   });
 
   it('archives exactly the six, and asserts exact slug sets (never counts)', () => {

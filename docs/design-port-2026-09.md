@@ -1128,6 +1128,78 @@ The orchestrator renumbers these at integration.
   own `deleteCap`; redirects name `redirects.manage`, and the content default is unchanged
   — SEO deletes nothing else.
 
+- **R3-4. Lead interest slugs read as labels; stored rows are never rewritten** (owner
+  decision G1). A lead's `service_of_interest` / `discipline_of_interest` is shown with a
+  label beside the raw slug everywhere a lead is read: the admin list and detail, the CSV
+  export (`service_label` / `service_label_ar` right after the slug, the same for the
+  discipline) and the notify-lead payload (EN). Labels are derived on the way out by
+  `src/lib/leads/interestLabel.ts`, never columns, and resolved server-side on the
+  caller's own connection: Developer holds `leads.*` but not `services.write`, so the
+  panel cannot look them up. Two queries per batch (`services`, `disciplines`), not two
+  per row. The order per slug: its own row (an archived row reads "Title (retired)" /
+  "العنوان (متوقفة)" — which settles `branding`, both an archived service and a live
+  discipline) → a Round 2 rename, labelled from the row it moved to ("Videography (now
+  Photography / Videography)" / "(الآن …)") → any other retired slug ("Merchandise
+  (retired)") → the raw slug; a discipline falls back to `FALLBACK_DISCIPLINES` instead
+  and never into the retired service map. Only the **four one-to-one renames**
+  (`RENAMED_SERVICE_SLUGS`, equal to the cut-over's `RENAMES` by test) are converted at
+  save time (`canonicalServiceSlug`): the retired map's targets alone cannot tell a
+  rename from a merge (`photography` also points at `/services/photo-video`, but its row
+  still exists, archived under its own title), so the rename set is named in code and
+  the target still comes from the one map. The old half of a renamed or retired label is
+  the title the row carried before Round 2 (`RENAMED_SERVICE_SLUGS` /
+  `RETIRED_SERVICE_TITLES`, verbatim from the last Round 1 seed), EN and AR — never a
+  humanised slug inside the Arabic label. A failed table read is fail-open but logged
+  (`system_logs`, source `lead-labels`: table + batch size, no slug or label text).
+  Time-boxed like `LEGACY_BUDGET_BANDS`: drop both once cached pages have turned over;
+  the conversion never reads the table, so a renamed slug must not be re-used as a
+  service slug while that window is open — remove the conversion with the window. No
+  list filter (skipped on purpose).
+
+- **R3-5. The pre-0023 counters are archived by a runbook transaction, not a migration.**
+  Production still held `services` (14), and likely `projects` (150+) and `years` (8),
+  published with `placements = '{}'`: rendered nowhere since 0023 (a counter shows only on
+  the pages its placements name), unflagged (0023 defaulted `is_placeholder` to false and
+  the seed never overwrites a row), so invisible to the dashboard. They are three rows of
+  one tenant's data, so the fix is runbook §6e: one transaction, a compare-and-set on
+  `(slug, value)` ∈ the known three AND still published AND unplaced, archive (restorable),
+  `value_numeric`/`value_suffix` nulled so the NOT VALID 0023 CHECK cannot refuse the
+  row's own update, the archived set returned, and a `DO` block that rolls the whole
+  thing back if any published counter is still unplaced (an editor's row is reviewed, not
+  archived). The cut-over's preflight gains `unplaced_published` and its verify step
+  raises unless it is empty; the seed spec refuses a published seed counter without a
+  placement. A `dashboard_attention` kind for "published, unplaced" is deferred: it needs
+  a migration (0029+ is Join's this round, R3-c). An owner psql statement writes no audit
+  row — the run is recorded in the PR / ops log.
+
+- **R3-6. The proof band's rating line has typed fields; the sample cannot go live
+  unflagged; dashboard rows link to their editor.** A new field kind, `object` (a
+  fixed-shape object edited with `itemFields`, like one repeater item without add /
+  remove / move — `ObjectField.tsx`), gives the Services page's `statistics` section a
+  "Rating line" editor (`value` text, `label` bilingual, both required) instead of
+  "Advanced (JSON)". Its payload shaping omits the key while every part is blank, so an
+  untouched editor saves no `rating` (the schema is strict) and a half-filled one is
+  sent through so the server names the missing part. The band's `accent` and
+  `lineAccent` stay JSON-only, recorded: there is still no accent field kind. The
+  design's "4.9 / 5" lives inside the section's content, where the row-level placeholder
+  rules (the admin's `refusePlaceholder`, the 0025 trigger) cannot see it — so
+  `sectionResource.assertWritable` refuses a save that leaves a `statistics` section
+  unflagged with the sample rating stored (422 on `isPlaceholder` when the flag changed,
+  on `content` otherwise); the seed's rating is asserted equal to
+  `SERVICES_PROOF_SAMPLE_RATING` (`src/lib/sections/samples.ts`, refusal-only, never
+  rendered). "The sample" is the sample's number under the sample's label — in either
+  language, since a half-translated claim is still the claim — or under no label at
+  all; a genuine "4.9 / 5" is told apart by its real, sourced label, and the refusal
+  and the field help both say so. Untick + a real rating (or no rating) in the same
+  save passes; a reorder never trips it; the 0025/0027 machinery stays the database
+  half. The dashboard's attention lists now link each title to `/admin/<resource>/<id>`
+  (`RESOURCE_OF`, the view's `entity_type` strings), show a "Where" column
+  (`page: <slug>` for a section, whose title is only its type), and no longer list a
+  sample quote twice: a `consent_missing` row whose id is also listed under any
+  `placeholder_*` kind (live, or still a draft under `placeholder_pending`) is dropped
+  from the consent list, since its fix is "make it real" and the placeholder list
+  already says so.
+
 - **R3-7. One motion switch in the header, not a control per surface (closes EXC-007).**
   The reference design ships no pause control anywhere; the owner chose to build one
   (G3) and put it where EXC-007's close condition recommended: a 32 px round icon button

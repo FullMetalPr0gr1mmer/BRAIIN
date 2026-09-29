@@ -13,6 +13,7 @@ import {
   stripSensitive,
 } from '@/lib/admin/leadFields';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
+import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 
 // A single lead, and the only place envelope-encrypted PII is ever decrypted for the
 // admin (CLAUDE.md Pillar 1: "role-checked decrypt path as the gate of record").
@@ -58,9 +59,12 @@ export const GET = defineAdminRoute({
       wantsPii ? FULL_LEAD_COLUMNS : SAFE_LEAD_COLUMNS,
     );
 
+    // Readable labels for the interest slugs (Round 3) — derived, never columns.
+    const labels = await resolveLeadInterests(sb, auth.tenantId, [row]);
+
     if (!wantsPii) {
       audit({ action: 'lead.view', entityType: 'lead', entityId: id, detail: { pii: false } });
-      return stripSensitive(row);
+      return withInterestLabels(stripSensitive(row), labels);
     }
 
     // Re-verify against the live profile row immediately before decrypting — a session
@@ -94,7 +98,7 @@ export const GET = defineAdminRoute({
     });
 
     const { email_enc: _e, phone_enc: _p, budget_enc: _b, timeline_text_enc: _t, ...rest } = row;
-    return { ...rest, ...decrypted };
+    return { ...withInterestLabels(rest, labels), ...decrypted };
   },
 });
 
@@ -142,6 +146,8 @@ export const PATCH = defineAdminRoute({
     // `as unknown as` because leadColumnsFor() builds the select list at runtime, and
     // PostgREST's typings parse that string at the TYPE level — a non-literal defeats
     // the parser and it degrades to an error type rather than a row type.
-    return stripSensitive(data as unknown as Record<string, unknown>);
+    const updated = stripSensitive(data as unknown as Record<string, unknown>);
+    const labels = await resolveLeadInterests(sb, auth.tenantId, [updated]);
+    return withInterestLabels(updated, labels);
   },
 });

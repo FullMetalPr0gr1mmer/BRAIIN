@@ -460,6 +460,18 @@ table.data td {
   vertical-align: top;
 }
 
+/* A row's title as a link to its editor (the dashboard's attention lists, Round 3):
+   underlined, so the link is not told apart by colour alone (1.4.1). */
+table.data a.data-link {
+  color: var(--ad-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+table.data a.data-link:hover {
+  color: var(--ad-fg);
+}
+
 table.data th {
   color: var(--ad-muted);
   font-weight: 500;

@@ -119,6 +119,15 @@ function assertEq(step, what, got, want) {
   );
 }
 
+/**
+ * Published counters that render nowhere (`cardinality(placements) = 0`) — the pre-0023
+ * legacy rows. Read by the preflight (review) and the verify step (must be empty after
+ * runbook §6e), as `[]` rather than null so the JSON reads the same either way.
+ */
+const unplacedPublished = () =>
+  `(select coalesce(json_agg(json_build_object('slug', slug, 'value', value, 'is_placeholder', is_placeholder) order by slug), '[]')
+     from public.statistics where tenant_id = ${T} and status = 'published' and cardinality(placements) = 0)`;
+
 /** `string_agg` of slugs in "C" order — the canonical text of an exact slug set. */
 const slugSet = (from, where) =>
   `select string_agg(slug::text, ',' order by slug::text collate "C") from ${from} where ${where}`;
@@ -137,6 +146,9 @@ function preflight(f) {
 --                       copy wins over the new code defaults
 --   fourteen            SEO text still saying "fourteen" / "أربع عشرة"
 --   stats               the legacy "services" counter (14) and crafts — is either published?
+--   unplaced_published  every published counter with NO placement (pre-0023 rows: the
+--                       legacy services 14 / projects 150+ / years 8) — rendered nowhere,
+--                       unflagged, invisible to the dashboard. Archived by runbook §6e.
 --   overrides           the round-1 overrides (portfolio, statistics, team_members, clients,
 --                       page_sections) should all still exist
 --   sample_projects     the 12 projects whose services step 4 rebuilds
@@ -160,6 +172,7 @@ select json_build_object(
                         or (meta_title::text || meta_description::text) like '%أربع عشرة%')) x),
   'stats', (select json_agg(json_build_object('slug', slug, 'value', value, 'status', status, 'placements', placements))
               from public.statistics where tenant_id = ${T} and (slug in ('services', 'crafts') or value = '14')),
+  'unplaced_published', ${unplacedPublished()},
   'overrides', (select coalesce(json_agg(table_name order by table_name), '[]') from app.placeholder_live_override where tenant_id = ${T}),
   'sample_projects', (select json_agg(json_build_object('slug', slug, 'status', status, 'placeholder', is_placeholder) order by sort_order)
                         from public.portfolio where tenant_id = ${T} and slug in ${inList([...f.links.keys()])}),
@@ -601,8 +614,21 @@ select json_build_object(
                         where tenant_id = ${T} and entity_type = 'placeholder_override' and action = 'placeholder_override.grant'),
   'placeholder_live', (select json_agg(json_build_object('type', entity_type, 'slug', slug) order by entity_type, slug)
                          from public.dashboard_attention where kind = 'placeholder_live'
-                          and entity_type in ('testimonial', 'service_case', 'statistic'))
-) as round2_verify;`;
+                          and entity_type in ('testimonial', 'service_case', 'statistic')),
+  'unplaced_published', ${unplacedPublished()}
+) as round2_verify;
+
+-- Round 3 (runbook §6e): no published counter may render nowhere. Raised AFTER the JSON
+-- above has printed, so the report still shows what is wrong.
+do $$
+declare v_bad text;
+begin
+  select string_agg(slug::text || '=' || value, ',' order by slug::text collate "C") into v_bad
+    from public.statistics where tenant_id = ${T} and status = 'published' and cardinality(placements) = 0;
+  if v_bad is not null then
+    raise exception 'round2 verify: published counters with no placement (run runbook §6e): %', v_bad;
+  end if;
+end $$;`;
 }
 
 // ── The file ────────────────────────────────────────────────────────────────────────

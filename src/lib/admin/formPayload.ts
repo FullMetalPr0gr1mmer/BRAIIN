@@ -84,6 +84,8 @@ function valueToForm(raw: unknown, field: FieldDef, siblings: Row): unknown {
       return Array.isArray(raw)
         ? raw.map((item) => objectToForm(item, field.itemFields ?? []))
         : [];
+    case 'object':
+      return objectToForm(raw, field.itemFields ?? []);
     case 'clip': {
       const c = (raw && typeof raw === 'object' ? raw : {}) as Row;
       const state: ClipState = {
@@ -220,6 +222,13 @@ function overrideToPayload(value: unknown, field: FieldDef, siblings: Row): unkn
       const items = repeaterToPayload(value, field);
       return items.length > 0 ? items : undefined;
     }
+    case 'object': {
+      // Blank → the KEY is omitted (an untouched rating editor saves no `rating`, which
+      // a strict schema needs); a half-filled object is sent as-is so the server can say
+      // which part is missing.
+      const shaped = objectToPayload((value ?? {}) as Row, field.itemFields ?? []);
+      return Object.keys(shaped).length > 0 ? shaped : undefined;
+    }
     default: {
       const shaped = valueToPayload(value, field, siblings);
       return isBlank(shaped) ? undefined : shaped;
@@ -261,6 +270,8 @@ function valueToPayload(value: unknown, field: FieldDef, siblings: Row): unknown
         : [];
     case 'repeater':
       return repeaterToPayload(value, field);
+    case 'object':
+      return objectToPayload((value ?? {}) as Row, field.itemFields ?? []);
     case 'clip':
       return clipToPayload(value, field.label);
     case 'sectionContent': {

@@ -2,6 +2,7 @@ import { LeadListQuerySchema } from '@schemas/admin';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { listRows } from '@/lib/admin/crud';
 import { SAFE_LEAD_COLUMNS, stripSensitive } from '@/lib/admin/leadFields';
+import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 
 // Lead list — `leads.manage` (Admin + Developer). Content Creator and SEO hold `none`
 // and are refused by assertCap before a query is built.
@@ -27,8 +28,12 @@ export const GET = defineAdminRoute({
       offset: input.offset,
     });
 
+    // Readable labels for the interest slugs (old or new), resolved once per page under
+    // the caller's connection — derived fields, never columns (Round 3).
+    const labels = await resolveLeadInterests(sb, auth.tenantId, rows);
+
     return {
-      rows: rows.map(stripSensitive),
+      rows: rows.map((row) => withInterestLabels(stripSensitive(row), labels)),
       total,
       limit: input.limit,
       offset: input.offset,

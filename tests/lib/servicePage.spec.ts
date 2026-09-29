@@ -77,8 +77,16 @@ const {
 } = await import('@/lib/services/page');
 const { caseFigure, CASE_IMAGE_SLOT } = await import('@/lib/services/caseFigure');
 const { serviceCacheEntities } = await import('@/lib/services/page');
-const { RETIRED_SERVICES, RETIRED_CACHE_CONTROL, retiredTarget, retiredRedirect } =
-  await import('@/lib/services/retired');
+const {
+  RETIRED_SERVICES,
+  RETIRED_CACHE_CONTROL,
+  RENAMED_SERVICE_SLUGS,
+  RETIRED_SERVICE_TITLES,
+  retiredTarget,
+  retiredRedirect,
+  renamedServiceSlug,
+  canonicalServiceSlug,
+} = await import('@/lib/services/retired');
 const { SERVICE_PAGE_COPY, VALUE_ACCENT, moreHeading, moreTag } =
   await import('@/lib/services/pageCopy');
 const { SERVICE_PAGE_META } = await import('@/lib/seo/pageMeta');
@@ -171,6 +179,75 @@ describe('retired service slugs → where they moved', () => {
     for (const slug of ['logo', 'nope', 'constructor', '__proto__', 'toString', 'hasOwnProperty'])
       expect(retiredTarget(slug, 'en'), slug).toBeNull();
     expect(retiredRedirect('constructor', 'en')).toBeNull();
+  });
+
+  it('names exactly the four one-to-one renames, each to the slug its row now carries', () => {
+    // Round 3 (lead labels): a rename kept the row's id under a new slug, so no row with the
+    // old slug exists; a merge (photography → photo-video) left its own row archived. Only
+    // the renames are converted at lead-save time; a merged slug is labelled from its row.
+    const renames: Record<string, string | null> = {};
+    for (const slug of Object.keys(PLAN_TABLE)) renames[slug] = renamedServiceSlug(slug);
+    expect(renames).toEqual({
+      animations: 'animation',
+      videography: 'photo-video',
+      montage: 'video-editing',
+      music: 'music-vo-sfx',
+      branding: null,
+      photography: null,
+      'event-planning': null,
+      'web-development': null,
+      merchandise: null,
+      gaming: null,
+    });
+    expect(Object.keys(RENAMED_SERVICE_SLUGS)).toEqual([
+      'animations',
+      'videography',
+      'montage',
+      'music',
+    ]);
+    // every rename's target is the plan table's, so there is still one map of targets
+    for (const slug of Object.keys(RENAMED_SERVICE_SLUGS)) {
+      expect(`/services/${renamedServiceSlug(slug)}`).toBe(PLAN_TABLE[slug]);
+    }
+    for (const slug of ['logo', 'nope', 'constructor', '__proto__', 'toString'])
+      expect(renamedServiceSlug(slug), slug).toBeNull();
+  });
+
+  it('carries every retired slug’s pre-Round-2 title exactly once, verbatim from the Round 1 seed', () => {
+    // The last Round 1 seed (supabase/seed-data/10-services.json at 06b029d^), restated
+    // literally: a lead's label for an old slug uses these, EN and AR, once the row is
+    // gone (renamed) or cannot be read (archived).
+    const OLD_TITLES: Record<string, { en: string; ar: string }> = {
+      animations: { en: 'Animation', ar: 'الرسوم المتحركة' },
+      videography: { en: 'Videography', ar: 'الإنتاج المرئي' },
+      montage: { en: 'Montage', ar: 'المونتاج' },
+      music: { en: 'Music', ar: 'الموسيقى' },
+      branding: { en: 'Branding', ar: 'الهوية البصرية' },
+      photography: { en: 'Photography', ar: 'التصوير الفوتوغرافي' },
+      'event-planning': { en: 'Event Planning', ar: 'تنظيم الفعاليات' },
+      'web-development': { en: 'Web Development', ar: 'تطوير المواقع' },
+      merchandise: { en: 'Merchandise', ar: 'المنتجات الترويجية' },
+      gaming: { en: 'Gaming', ar: 'الألعاب' },
+    };
+    expect({ ...RENAMED_SERVICE_SLUGS, ...RETIRED_SERVICE_TITLES }).toEqual(OLD_TITLES);
+    // the two title maps are disjoint and together cover the retired map's keys exactly
+    const renamed = Object.keys(RENAMED_SERVICE_SLUGS);
+    const retired = Object.keys(RETIRED_SERVICE_TITLES);
+    expect(renamed.filter((slug) => retired.includes(slug))).toEqual([]);
+    expect([...renamed, ...retired].sort()).toEqual(Object.keys(RETIRED_SERVICES).sort());
+    for (const title of Object.values(OLD_TITLES)) {
+      expect(title.en.trim().length).toBeGreaterThan(0);
+      expect(title.ar).toMatch(/[؀-ۿ]/);
+    }
+  });
+
+  it('canonicalServiceSlug converts a rename and keeps everything else', () => {
+    expect(canonicalServiceSlug('videography')).toBe('photo-video');
+    expect(canonicalServiceSlug('animations')).toBe('animation');
+    expect(canonicalServiceSlug('photography')).toBe('photography');
+    expect(canonicalServiceSlug('branding')).toBe('branding');
+    expect(canonicalServiceSlug('logo')).toBe('logo');
+    expect(canonicalServiceSlug('constructor')).toBe('constructor');
   });
 
   it('is a permanent redirect cached for a day, not a Tier-A page', () => {

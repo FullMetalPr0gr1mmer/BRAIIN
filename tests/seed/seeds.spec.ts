@@ -548,6 +548,38 @@ describe('Round 2 catalogue seed (0028): five disciplines, 28 services, sample c
     }
   });
 
+  it('every published counter has at least one placement, in both seed modes (Round 3)', () => {
+    // A published counter with `placements = '{}'` renders nowhere (the loaders filter by
+    // placement) and, unflagged, is invisible to the dashboard — the state the pre-0023
+    // legacy rows were left in on production (runbook §6e archives them). The seed must
+    // never create another: the legacy rows are archived in both modes, so they pass.
+    const stats = rowsOf('statistics');
+    expect(stats.length).toBeGreaterThan(0);
+    for (const mode of ['published', 'production'] as const) {
+      for (const row of stats) {
+        const out = rowForMode(row, mode);
+        if (out['status'] !== 'published') continue;
+        const placements = String(out['placements'] ?? '{}');
+        expect(placements, `${mode}: ${String(row['slug'])}`).toMatch(
+          /^\{[a-z0-9_-]+(,[a-z0-9_-]+)*\}$/,
+        );
+      }
+    }
+    // …and the three legacy rows are exactly the ones §6e names, archived here
+    const legacy = stats.filter((r) =>
+      ['services', 'projects', 'years'].includes(String(r['slug'])),
+    );
+    expect(legacy.map((r) => [r['slug'], r['value']])).toEqual([
+      ['projects', '150+'],
+      ['services', '14'],
+      ['years', '8'],
+    ]);
+    for (const row of legacy) {
+      expect(rowForMode(row, 'published')['status'], String(row['slug'])).toBe('archived');
+      expect(rowForMode(row, 'production')['status'], String(row['slug'])).toBe('draft');
+    }
+  });
+
   it('no two live quotes share a project (testimonials_one_per_project)', () => {
     const live = rowsOf('testimonials').filter(
       (r) => rowForMode(r, 'published')['status'] === 'published' && r['portfolio_id'],

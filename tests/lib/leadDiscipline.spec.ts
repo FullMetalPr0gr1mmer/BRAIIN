@@ -70,6 +70,18 @@ describe('the public insert', () => {
     expect(row['service_of_interest']).toBe('logo');
     expect(row).not.toHaveProperty('discipline_of_interest');
   });
+
+  it('stores a renamed slug under the slug the service lives at now (Round 3)', async () => {
+    // A cached page still posts `videography`; the row that was `videography` is
+    // `photo-video` now, so the lead is filed there. Nothing else is rewritten: an
+    // archived slug is stored as given and labelled from its own row.
+    await createLead(input({ serviceOfInterest: 'videography' }));
+    expect(inserts.at(-1)!.row['service_of_interest']).toBe('photo-video');
+    await createLead(input({ serviceOfInterest: 'photography' }));
+    expect(inserts.at(-1)!.row['service_of_interest']).toBe('photography');
+    await createLead(input({ serviceOfInterest: 'logo' }));
+    expect(inserts.at(-1)!.row['service_of_interest']).toBe('logo');
+  });
 });
 
 describe('where a lead is read', () => {
@@ -96,12 +108,23 @@ describe('where a lead is read', () => {
       },
     ];
     const { GET } = await import('@/pages/api/admin/leads/export');
+    // The caller's connection answers the lead query AND the label lookups (Round 3).
+    const titled: Record<string, Record<string, unknown>[]> = {
+      disciplines: [
+        {
+          slug: 'events',
+          name: { en: 'Events & Exhibitions', ar: 'الفعاليات' },
+          status: 'published',
+        },
+      ],
+      services: [],
+    };
     const sb = {
-      from: () => {
+      from: (table: string) => {
         const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'order', 'limit', 'gte', 'lte']) b[m] = () => b;
+        for (const m of ['select', 'eq', 'in', 'order', 'limit', 'gte', 'lte']) b[m] = () => b;
         b['then'] = (ok: (v: unknown) => unknown) =>
-          Promise.resolve({ data: leadRows, error: null }).then(ok);
+          Promise.resolve({ data: titled[table] ?? leadRows, error: null }).then(ok);
         return b;
       },
     };
@@ -129,6 +152,21 @@ describe('where a lead is read', () => {
     const columns = cells(header!);
     expect(columns).toContain('discipline_of_interest');
     expect(cells(first!)[columns.indexOf('discipline_of_interest')]).toBe('events');
+    // Round 3: the readable labels sit right after the slug they explain, EN then AR.
+    const at = (name: string) => columns.indexOf(name);
+    expect(columns.slice(at('service_of_interest'), at('service_of_interest') + 3)).toEqual([
+      'service_of_interest',
+      'service_label',
+      'service_label_ar',
+    ]);
+    expect(columns.slice(at('discipline_of_interest'), at('discipline_of_interest') + 3)).toEqual([
+      'discipline_of_interest',
+      'discipline_label',
+      'discipline_label_ar',
+    ]);
+    expect(cells(first!)[at('discipline_label')]).toBe('Events & Exhibitions');
+    expect(cells(first!)[at('discipline_label_ar')]).toBe('الفعاليات');
+    expect(cells(first!)[at('service_label')]).toBe('');
   });
 
   it('the panel shows the discipline when no service was picked', async () => {
@@ -138,5 +176,31 @@ describe('where a lead is read', () => {
       'events (help me choose)',
     );
     expect(interestOf({ service_of_interest: null })).toBe('—');
+  });
+
+  it('the panel prefers the server’s label over the raw slug (Round 3)', async () => {
+    const { interestOf } = await import('@/components/admin/LeadsPanel');
+    expect(
+      interestOf({
+        service_of_interest: 'videography',
+        discipline_of_interest: null,
+        service_label: { en: 'Videography (now Photography / Videography)', ar: 'x' },
+      }),
+    ).toBe('Videography (now Photography / Videography)');
+    expect(
+      interestOf({
+        service_of_interest: null,
+        discipline_of_interest: 'events',
+        discipline_label: { en: 'Events & Exhibitions', ar: 'الفعاليات' },
+      }),
+    ).toBe('Events & Exhibitions (help me choose)');
+    // a service wins over a discipline, label or not
+    expect(
+      interestOf({
+        service_of_interest: 'logo',
+        discipline_of_interest: 'events',
+        discipline_label: { en: 'Events & Exhibitions', ar: 'الفعاليات' },
+      }),
+    ).toBe('logo');
   });
 });

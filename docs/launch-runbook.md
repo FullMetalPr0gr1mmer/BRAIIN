@@ -511,6 +511,102 @@ are listed on the admin dashboard as "Placeholder content is live" until then.
 
 ---
 
+### 6e. Legacy counters that render nowhere (statistics pre-0023)
+
+Round 3 (2026-09-29), data only — no migration. Production still holds the pre-0023 demo
+counters — `services` (14), and likely `projects` (150+) and `years` (8) — as
+**published** rows with `placements = '{}'`. Since 0023 a counter renders only on the pages
+its placements name, so these render nowhere; and 0023 added `is_placeholder` with a default
+of `false` while the seed never overwrites an existing row, so they are unflagged and invisible
+to the dashboard's placeholder lists. They are archived, not deleted: the admin can restore one
+and give it a placement if it is ever wanted.
+
+**When.** After PR3 of Round 3 is live (it adds `unplaced_published` to the preflight and
+makes the verify step insist on none). Run as the owner: `supabase db query --linked` (the
+`db query` allow rule; needs a valid Supabase access token) or psql with `$PROD_DB_URL`.
+
+1. **Preflight** (read-only). `node scripts/round2-cutover.mjs --step preflight`, then run it
+   and read `unplaced_published`: every published counter with no placement, as
+   `{slug, value, is_placeholder}`. Expected: a subset of `services=14`, `projects=150+`,
+   `years=8`. **Anything else is a counter an editor published without a page — stop and ask
+   before archiving it**; the transaction below refuses to commit while it exists.
+
+2. **Archive them — one transaction.** A compare-and-set on `(slug, value)` — only the three
+   known rows, only while still published and unplaced — so a re-run matches nothing and a
+   row an editor has since placed or edited is left alone. `value_numeric` and `value_suffix`
+   are cleared so the row's own update cannot be refused by the 0023
+   `statistics_value_consistent` CHECK (NOT VALID on production precisely because these rows
+   predate it — it is still checked on every edited row):
+
+   ```sql
+   begin;
+
+   with archived as (
+     update public.statistics
+        set status = 'archived', value_numeric = null, value_suffix = null
+      where tenant_id = '00000000-0000-0000-0000-0000000000b1'
+        and status = 'published' and cardinality(placements) = 0
+        and (slug::text, value) in (('services', '14'), ('projects', '150+'), ('years', '8'))
+     returning slug, value
+   )
+   select coalesce(string_agg(slug::text || '=' || value, ',' order by slug::text collate "C"), '(none)')
+     as archived
+     from archived;
+
+   -- Nothing published may render nowhere once this commits. A row outside the known set
+   -- (an editor's) is not archived by the statement above: this raises, the transaction
+   -- rolls back, and the row is reviewed with the owner first.
+   do $$
+   declare v_bad text;
+   begin
+     select string_agg(slug::text || '=' || value, ',' order by slug::text collate "C") into v_bad
+       from public.statistics
+      where tenant_id = '00000000-0000-0000-0000-0000000000b1'
+        and status = 'published' and cardinality(placements) = 0;
+     if v_bad is not null then
+       raise exception '§6e: published counters still render nowhere — review before archiving: %', v_bad;
+     end if;
+   end $$;
+
+   commit;
+   ```
+
+   **Must see:** `archived` equal to the preflight's `unplaced_published` set (slug=value,
+   in that order), then `COMMIT`. A `ROLLBACK` names the row to review.
+
+3. **Verify** (read-only). `node scripts/round2-cutover.mjs --step verify`: its JSON now
+   carries `unplaced_published` (**must be `[]`**), and the step raises if it is not — so a
+   verify run before this section fails on purpose. Or directly:
+   `select count(*) from public.statistics where status = 'published' and cardinality(placements) = 0;`
+   is `0`. Nothing visible changes on the site (the rows rendered nowhere already).
+
+4. **Record the run.** An owner psql statement carries no JWT, so **no `audit_log` row is
+   written** for this change — record the date, the `archived` set and who ran it in the
+   PR / ops log (as for §6c–§6d).
+
+**Undo:** in the admin (Statistics → the row → status Published, choose a page under
+"Shown on", and set the number and suffix again), or the statement below — tenant-scoped,
+a compare-and-set on the same three `(slug, value)` pairs, and restoring each row's
+`value_numeric` / `value_suffix` (step 2 cleared them, and **the count-up needs them**: a
+counter with no `value_numeric` renders its text but never counts up):
+
+```sql
+update public.statistics as s
+   set status = 'published', value_numeric = v.value_numeric, value_suffix = v.value_suffix
+  from (values ('projects', '150+', 150, '+'), ('services', '14', 14, null), ('years', '8', 8, null))
+       as v (slug, value, value_numeric, value_suffix)
+ where s.tenant_id = '00000000-0000-0000-0000-0000000000b1'
+   and s.slug::text = v.slug and s.value = v.value and s.status = 'archived';
+```
+
+The row then renders nowhere again until it has a placement, and the verify step fails again
+until it does.
+
+**Why not a migration or a `dashboard_attention` kind:** the fix is to three rows of one
+tenant's data, and a view change would need migration 0029+, which Join's PRs hold this round
+(R3-c). The seed spec (`tests/seed/seeds.spec.ts`) refuses a published seed counter without a
+placement, so the state cannot be seeded again.
+
 ### 6f. Redirects — first edge snapshot after deploy (Round 3)
 
 Since Round 3 the admin's **Redirects** table reaches the edge: every save and delete rebuilds

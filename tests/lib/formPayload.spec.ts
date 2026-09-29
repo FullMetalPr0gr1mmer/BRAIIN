@@ -5,6 +5,8 @@ import {
   formToPayload,
   enterAdvanced,
   leaveAdvanced,
+  objectToForm,
+  objectToPayload,
   type SectionContentState,
 } from '@/lib/admin/formPayload';
 import { SeoDefaultsSchema } from '@schemas/admin';
@@ -102,6 +104,35 @@ describe('formToPayload — composite kinds', () => {
       [rep],
     );
     expect(out).toEqual({ columns: [{ title: { en: 'A', ar: 'أ' } }] });
+  });
+
+  it('an object (Round 3): round-trips, is OMITTED while blank, and passes a half-filled one through', () => {
+    const rating = f({
+      name: 'rating',
+      kind: 'object',
+      itemFields: [
+        f({ name: 'value', kind: 'text', required: true }),
+        f({ name: 'label', kind: 'bilingual', required: true }),
+      ],
+    });
+    const stored = { value: '4.8 / 5', label: { en: 'average rating', ar: 'متوسط التقييم' } };
+    // inside a jsonb object (section content): an override, keyed by field name
+    expect(objectToPayload(objectToForm({ rating: stored }, [rating]), [rating])).toEqual({
+      rating: stored,
+    });
+    // an untouched editor saves NO `rating` key (StatRatingSchema is strict; a stray
+    // `{}` or `{value:''}` would be a 422 on every save of the band)
+    expect(objectToPayload({ rating: { value: '', label: { en: '', ar: '' } } }, [rating])).toEqual(
+      {},
+    );
+    expect(objectToPayload({ rating: null }, [rating])).toEqual({});
+    expect(objectToPayload(objectToForm({}, [rating]), [rating])).toEqual({});
+    // half-filled: sent as-is so the server can say which part is missing
+    expect(
+      objectToPayload({ rating: { value: '4.8 / 5', label: { en: '', ar: '' } } }, [rating]),
+    ).toEqual({ rating: { value: '4.8 / 5' } });
+    // as a top-level column it is the object itself
+    expect(formToPayload({ rating: stored }, [rating])).toEqual({ rating: stored });
   });
 
   it('a clip is either/or, and its window is both-or-neither', () => {

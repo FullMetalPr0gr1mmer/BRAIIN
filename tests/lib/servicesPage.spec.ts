@@ -26,6 +26,7 @@ import {
   type ExplorerDisciplineInput,
 } from '@/lib/services/explorer';
 import { FALLBACK_DISCIPLINES } from '@/lib/services/cards';
+import { SERVICES_PROOF_SAMPLE_RATING, isSampleRating } from '@/lib/sections/samples';
 import { rovingTabIndexes, tabIndexAfter, tabKeyMove } from '@/lib/client/tabs';
 import { panelFromHash, rowClip } from '@/lib/client/serviceExplorer';
 import { sameClip } from '@/lib/client/clips';
@@ -116,6 +117,46 @@ describe('the Services page composition', () => {
       value: '4.9 / 5',
       label: { en: 'average client rating', ar: 'متوسط تقييم عملائنا' },
     });
+    // …and it is the constant the admin's sample-rating guard refuses (Round 3), so the
+    // seed and the guard cannot drift apart.
+    expect(proof.content['rating']).toEqual(SERVICES_PROOF_SAMPLE_RATING);
+    expect(isSampleRating(proof.content['rating'])).toBe(true);
+  });
+
+  it('isSampleRating: the sample value under the sample label (either language) or no label — never a real label, a real rating or a non-object', () => {
+    const { label } = SERVICES_PROOF_SAMPLE_RATING;
+    expect(isSampleRating(SERVICES_PROOF_SAMPLE_RATING)).toBe(true);
+    // spacing and case are not edits, in the value or the label
+    expect(
+      isSampleRating({ value: '4.9/5', label: { en: ' Average Client Rating ', ar: label.ar } }),
+    ).toBe(true);
+    // no label, a blank one or a malformed one: nothing backs the number
+    expect(isSampleRating({ value: ' 4.9 / 5 ' })).toBe(true);
+    expect(isSampleRating({ value: '4.9 / 5', label: { en: '', ar: ' ' } })).toBe(true);
+    expect(isSampleRating({ value: '4.9 / 5', label: 'average client rating' })).toBe(true);
+    // one language re-worded while the other still says the sample: still the claim
+    expect(isSampleRating({ value: '4.9 / 5', label: { en: 'reworded', ar: label.ar } })).toBe(
+      true,
+    );
+    expect(isSampleRating({ value: '4.9 / 5', label: { en: label.en, ar: 'معاد صياغته' } })).toBe(
+      true,
+    );
+    // a real, sourced label under the same number is a real rating (the reviewer's case)
+    expect(
+      isSampleRating({
+        value: '4.9 / 5',
+        label: { en: 'average rating, 212 reviews', ar: 'متوسط التقييم، 212 مراجعة' },
+      }),
+    ).toBe(false);
+    // a different number is never the sample, whatever the label
+    expect(isSampleRating({ value: '4.8 / 5', label })).toBe(false);
+    expect(isSampleRating({ value: '4.9 / 10', label })).toBe(false);
+    expect(isSampleRating({ value: '', label })).toBe(false);
+    expect(isSampleRating({})).toBe(false);
+    expect(isSampleRating(undefined)).toBe(false);
+    expect(isSampleRating(null)).toBe(false);
+    expect(isSampleRating('4.9 / 5')).toBe(false);
+    expect(isSampleRating(['4.9 / 5'])).toBe(false);
   });
 
   it('seeds the services page itself, published', () => {
