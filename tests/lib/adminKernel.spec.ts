@@ -364,7 +364,10 @@ describe('resource routes — afterWrite / afterDelete run through runHook', () 
     const res = await DELETE(ctx('admin', 'DELETE', undefined));
     expect((res as Response).status).toBe(200);
     expect(await body(res)).toEqual({ deleted: ID, kvSynced: true, count: 0 });
-    expect(afterDelete).toHaveBeenCalledWith(expect.objectContaining({ id: ID }));
+    // …and receives the row as it was, so a hook can say what went (review finding 7).
+    expect(afterDelete).toHaveBeenCalledWith(
+      expect.objectContaining({ id: ID, row: expect.objectContaining({ id: ID, version: 1 }) }),
+    );
   });
 
   it('a throwing afterDelete does not undo a 200 either', async () => {

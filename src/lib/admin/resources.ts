@@ -48,8 +48,12 @@ import { sectionContentIssues, type SectionType } from '@schemas/sections';
 import { isStaticMediaKey, staticImage } from '@/lib/media/static';
 import { renderTiptapToHtml, readingMinutes, sanitizeHref } from '@/lib/content/tiptap';
 import { NotFoundError, OptimisticLockError, ValidationError } from './errors';
-import { isReservedRedirectPath, normalizeRedirectPath } from '@/lib/http/redirects';
-import { chainRefusal, liveRouteRefusal, targetPathOf, type RedirectRow } from './redirectRules';
+import {
+  REDIRECT_MAP_LIMIT,
+  isReservedRedirectPath,
+  normalizeRedirectPath,
+} from '@/lib/http/redirects';
+import { chainRefusal, liveRouteRefusal, type RedirectRow } from './redirectRules';
 import { syncRedirectsToEdge } from './redirectSync';
 import { getRow, translateWriteError, type ConstraintFields, type WriteRefusals } from './crud';
 import type { ResourceConfig, ResourcePayload } from './resource';
@@ -1117,7 +1121,16 @@ export const navigationResource: ResourceConfig = {
 // ── Redirects (Admin + SEO) ─────────────────────────────────────────────────────
 
 /** A LIKE pattern for "starts with": `%` and `_` in the path are literal (crud.ts does the same). */
-const startsWithPattern = (prefix: string) => `${prefix.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+/**
+ * What a redirect's audit row and response carry beside the sync outcome: the rule itself.
+ * Paths are public URLs, not PII, and "which rule, and did the edge take it" belongs in
+ * one row — an audit entry naming only an id is useless once the row is deleted.
+ */
+const ruleOf = (row: Record<string, unknown>) => ({
+  source_path: row['source_path'] ?? null,
+  target_path: row['target_path'] ?? null,
+  status: row['status'] ?? null,
+});
 
 /**
  * Every save and delete rebuilds the tenant's edge snapshot (src/lib/admin/redirectSync.ts,
@@ -1189,33 +1202,19 @@ export const redirectResource: ResourceConfig = {
     const selfLoop = chainRefusal(own, []);
     if (selfLoop) throw new ValidationError(selfLoop.message, selfLoop.field);
 
-    // The rows that could chain with this one: those whose source is this target, and
-    // those whose target starts with this source (a stored `/old?x` still chains with a
-    // new `/old` rule; chainRefusal compares the exact path part). Two parameter-encoded
-    // reads — never a PostgREST `.or()` string built from editor input.
-    const related: RedirectRow[] = [];
-    const targetPath = targetPathOf(target);
-    if (targetPath) {
-      const { data, error } = await sb
-        .from('redirects')
-        .select('id,source_path,target_path')
-        .eq('tenant_id', auth.tenantId)
-        .eq('source_path', targetPath)
-        .limit(5);
-      if (error) throw new Error(`read redirects: ${error.message}`);
-      related.push(...((data ?? []) as RedirectRow[]));
-    }
-    {
-      const { data, error } = await sb
-        .from('redirects')
-        .select('id,source_path,target_path')
-        .eq('tenant_id', auth.tenantId)
-        .like('target_path', startsWithPattern(source))
-        .limit(50);
-      if (error) throw new Error(`read redirects: ${error.message}`);
-      related.push(...((data ?? []) as RedirectRow[]));
-    }
-    const chain = chainRefusal(own, related);
+    // The tenant's whole rule set, so the chain check is complete: a prefix read
+    // (`LIKE '/old%'`, capped) let an exact `/old` hide behind look-alike rows, and the
+    // /ar twin fallback means the rows that interact are not a prefix of anything. One
+    // parameter-encoded read — never a PostgREST `.or()` string built from editor input
+    // — bounded like the snapshot this same request rebuilds next.
+    const { data, error } = await sb
+      .from('redirects')
+      .select('id,source_path,target_path')
+      .eq('tenant_id', auth.tenantId)
+      .order('source_path', { ascending: true })
+      .limit(REDIRECT_MAP_LIMIT);
+    if (error) throw new Error(`read redirects: ${error.message}`);
+    const chain = chainRefusal(own, (data ?? []) as RedirectRow[]);
     if (chain) throw new ValidationError(chain.message, chain.field);
 
     if ('source_path' in changed) {
@@ -1223,8 +1222,14 @@ export const redirectResource: ResourceConfig = {
       if (live) throw new ValidationError(live.message, live.field);
     }
   },
-  afterWrite: async ({ auth, sb }) => ({ ...(await syncRedirectsToEdge(sb, auth)) }),
-  afterDelete: async ({ auth, sb }) => ({ ...(await syncRedirectsToEdge(sb, auth)) }),
+  afterWrite: async ({ auth, sb, row }) => ({
+    ...ruleOf(row),
+    ...(await syncRedirectsToEdge(sb, auth)),
+  }),
+  afterDelete: async ({ auth, sb, row }) => ({
+    ...ruleOf(row),
+    ...(await syncRedirectsToEdge(sb, auth)),
+  }),
 };
 
 // ── Media ───────────────────────────────────────────────────────────────────────

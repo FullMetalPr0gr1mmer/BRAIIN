@@ -137,8 +137,17 @@ export interface ResourceConfig {
     input: ResourcePayload;
     operation: 'create' | 'update';
   }) => Promise<HookResult | void>;
-  /** The DELETE counterpart of `afterWrite` (same contract; the row is gone by then). */
-  afterDelete?: (ctx: { auth: AuthContext; sb: Db; id: string }) => Promise<HookResult | void>;
+  /**
+   * The DELETE counterpart of `afterWrite` (same contract). `row` is the row as it was
+   * before the delete (read with `columns`), so a hook can name what went — an audit
+   * entry naming only an id says nothing once the row is gone.
+   */
+  afterDelete?: (ctx: {
+    auth: AuthContext;
+    sb: Db;
+    id: string;
+    row: Row;
+  }) => Promise<HookResult | void>;
   /**
    * Capability that guards DELETE. Defaults to `content.archiveDelete` (Admin-only, §5) —
    * the right default for content. A resource whose §5 row grants another role the
@@ -407,10 +416,16 @@ export function itemRoutes(config: ResourceConfig): {
       // content.archiveDelete alone would let an Admin-only role delete rows in a table
       // it has no write capability for, which is not what the matrix says.
       assertCap(auth, config.writeCap, ['full']);
+      // Only a resource with a hook pays the extra read; deleteRow confirms existence on
+      // `id` alone for the rest.
+      const row = config.afterDelete
+        ? await getRow<Row>(sb, config.table, auth, id, config.columns)
+        : undefined;
       await deleteRow(sb, config.table, auth, id, { constraints: config.constraintFields });
-      const effect = config.afterDelete
-        ? await runHook(config, 'afterDelete', () => config.afterDelete!({ auth, sb, id }))
-        : {};
+      const effect =
+        row && config.afterDelete
+          ? await runHook(config, 'afterDelete', () => config.afterDelete!({ auth, sb, id, row }))
+          : {};
       audit({
         action: `${config.entity}.delete`,
         entityType: config.entity,

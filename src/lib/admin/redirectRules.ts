@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
-import { toLogicalPath } from '@/lib/i18n';
-import { normalizeRedirectPath } from '@/lib/http/redirects';
+import { localeFromPath, toLogicalPath } from '@/lib/i18n';
+import { normalizeRedirectPath, targetPathOf } from '@/lib/http/redirects';
+
+export { targetPathOf };
 
 // The domain rules of a redirect rule, judged on the MERGED row (stored + patch) by
 // `redirectResource.assertWritable`. Pure where they can be (chains), one indexed read
@@ -53,9 +55,11 @@ const LIVE_MESSAGE = 'this path renders a page; a redirect from it would never a
 
 /**
  * Refuses a source that a page answers: a static route, or a detail slug whose row is
- * live (published, or scheduled — the cron publishes it without asking again). A
- * `/<slug>` source is checked against `pages`. Checked on the logical path, so `/ar/x`
- * is refused exactly when `/x` is. The read runs under the caller's RLS.
+ * live (published, or scheduled — the cron publishes it without asking again). A bare
+ * `/<slug>` consults no table: no route renders `pages` by slug (its rows — `home`,
+ * `join`, `portfolio-all` — are the section containers of the static routes), so only
+ * STATIC_PUBLIC_ROUTES applies there. Checked on the logical path, so `/ar/x` is refused
+ * exactly when `/x` is. The read runs under the caller's RLS.
  */
 export async function liveRouteRefusal(
   sourcePath: string,
@@ -81,7 +85,7 @@ export async function liveRouteRefusal(
   return data ? { message: LIVE_MESSAGE, field: 'sourcePath' } : null;
 }
 
-/** Which table a one-level-deep logical path would render from, and the slug it names. */
+/** Which table a detail-route logical path would render from, and the slug it names. */
 function slugTable(logical: string): { table: string; slug: string } | null {
   for (const route of DETAIL_ROUTES) {
     if (logical.startsWith(route.prefix)) {
@@ -89,15 +93,7 @@ function slugTable(logical: string): { table: string; slug: string } | null {
       return slug && !slug.includes('/') ? { table: route.table, slug } : null;
     }
   }
-  const slug = logical.slice(1);
-  return slug && !slug.includes('/') ? { table: 'pages', slug } : null;
-}
-
-/** The path part of a site-relative target (`/new?x#y` → `/new`); null for an absolute one. */
-export function targetPathOf(target: string): string | null {
-  if (!target.startsWith('/') || target.startsWith('//')) return null;
-  const cut = target.search(/[?#]/);
-  return normalizeRedirectPath(cut === -1 ? target : target.slice(0, cut));
+  return null;
 }
 
 export interface RedirectRow {
@@ -106,12 +102,19 @@ export interface RedirectRow {
   target_path: string;
 }
 
+/** The locale-free spelling of a normalised path (`/ar/x` and `/x` → `/x`). */
+const logicalOf = (path: string): string => normalizeRedirectPath(toLogicalPath(path));
+
 /**
  * Refuses a rule that would form a chain or a loop with the existing rows. Pure: the
- * resource passes the rows that could interact (those whose source is this target, or
- * whose target is this source — two indexed reads, never a PostgREST `.or()` string).
+ * resource passes the tenant's rows (one read, bounded like the edge snapshot) and this
+ * decides. Every comparison also follows the `/ar` twin fallback (design-port R3-2): a
+ * request to `/ar/old` with no row of its own answers the `/old` rule, so a target of
+ * `/ar/old` hops again whenever `/old` is redirected, and a new rule for `/old` adds a
+ * hop to every rule that already points at `/ar/old`.
  *
- *   self-loop  source → source
+ *   self-loop  source → source, or source → its own language twin (`/x → /ar/x`: the
+ *              fallback would re-localise that target onto the request itself)
  *   chain      source → X where X is itself redirected (point at X's destination)
  *   chain      Y → source already exists (Y would now hop twice)
  *   loop       both of the above between the same two rows
@@ -128,21 +131,46 @@ export function chainRefusal(
   if (target === source) {
     return { message: 'a redirect cannot point at itself', field: 'targetPath' };
   }
+  if (target !== null && logicalOf(target) === logicalOf(source)) {
+    return {
+      message:
+        'a redirect cannot point at its own /ar twin — the two URLs are one page in two languages',
+      field: 'targetPath',
+    };
+  }
   const others = existing.filter((row) => !merged.id || row.id !== merged.id);
-  const next = target
-    ? others.find((row) => normalizeRedirectPath(row.source_path) === target)
-    : undefined;
-  const previous = others.find((row) => targetPathOf(row.target_path) === source);
+  const sourceOf = (row: RedirectRow) => normalizeRedirectPath(row.source_path);
 
-  if (next && targetPathOf(next.target_path) === source) {
+  // The rule a request to `path` answers: its own, else — for an /ar URL — the English
+  // rule for its logical path.
+  const ruleFor = (path: string): RedirectRow | undefined =>
+    others.find((row) => sourceOf(row) === path) ??
+    (localeFromPath(path) === 'ar'
+      ? others.find((row) => sourceOf(row) === logicalOf(path))
+      : undefined);
+  // Whether a target lands on this source: exactly, or on its /ar twin when the source is
+  // English — the twin has no row of its own, so it answers this one.
+  const landsHere = (path: string | null): boolean =>
+    path !== null &&
+    (path === source ||
+      (localeFromPath(source) !== 'ar' &&
+        localeFromPath(path) === 'ar' &&
+        logicalOf(path) === source));
+
+  const next = target === null ? undefined : ruleFor(target);
+  const previous = others.find((row) => landsHere(targetPathOf(row.target_path)));
+
+  if (next && landsHere(targetPathOf(next.target_path))) {
     return {
       message: `${next.source_path} already redirects here — the two rules would loop`,
       field: 'targetPath',
     };
   }
   if (next) {
+    const viaTwin =
+      sourceOf(next) === target ? '' : ` (${merged.target_path} follows that English rule)`;
     return {
-      message: `${next.source_path} is itself redirected to ${next.target_path} — point at that destination directly (no chains)`,
+      message: `${next.source_path} is itself redirected to ${next.target_path}${viaTwin} — point at that destination directly (no chains)`,
       field: 'targetPath',
     };
   }

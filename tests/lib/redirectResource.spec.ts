@@ -52,22 +52,22 @@ function fakeDb(state: Fake) {
       let op: 'select' | 'insert' | 'update' | 'delete' = 'select';
       let head = false;
 
+      let limit = Infinity;
+      let orderBy: string | null = null;
+
       const rowsOf = (): Record<string, unknown>[] => {
         if (table === 'redirects') {
-          return state.redirects.filter((row) =>
+          const rows = state.redirects.filter((row) =>
             filters.every((f) => {
               if (f.column === 'tenant_id') return f.value === TENANT;
               const cell = String(row[f.column as keyof RedirectRow]);
               if (f.op === 'eq') return cell === String(f.value);
-              if (f.op === 'like') {
-                const prefix = String(f.value)
-                  .slice(0, -1)
-                  .replace(/\\([%_\\])/g, '$1');
-                return cell.startsWith(prefix);
-              }
+              if (f.op === 'in') return (f.value as unknown[]).map(String).includes(cell);
               return true;
             }),
           );
+          if (orderBy) rows.sort((a, b) => String(a[orderBy!]).localeCompare(String(b[orderBy!])));
+          return rows.slice(0, limit);
         }
         const slug = filters.find((f) => f.column === 'slug')?.value;
         const live = state.live[table] ?? [];
@@ -100,15 +100,22 @@ function fakeDb(state: Fake) {
         head = opts?.head === true;
         return builder;
       };
-      for (const m of ['order', 'limit', 'range', 'is', 'neq', 'ilike'] as const)
-        builder[m] = chain;
-      builder['in'] = chain;
+      for (const m of ['range', 'is', 'neq', 'ilike'] as const) builder[m] = chain;
+      // `order` and `limit` are honoured so a read's window is what the test sees.
+      builder['order'] = (column: string) => {
+        orderBy = column;
+        return builder;
+      };
+      builder['limit'] = (n: number) => {
+        limit = n;
+        return builder;
+      };
       builder['eq'] = (column: string, value: unknown) => {
         filters.push({ op: 'eq', column, value });
         return builder;
       };
-      builder['like'] = (column: string, value: unknown) => {
-        filters.push({ op: 'like', column, value });
+      builder['in'] = (column: string, value: unknown) => {
+        filters.push({ op: 'in', column, value });
         return builder;
       };
       builder['insert'] = (values: Record<string, unknown>) => {
@@ -212,6 +219,39 @@ describe('redirectResource — the rules on the merged row', () => {
     }
   });
 
+  it('refuses a rule that points at its own /ar twin — the fallback would loop it (finding 2)', async () => {
+    const { status, body } = await call(
+      POST,
+      ctx('admin', 'POST', { sourcePath: '/x', targetPath: '/ar/x' }, state),
+    );
+    expect(status).toBe(422);
+    expect(body['field']).toBe('targetPath');
+    expect(String(body['detail'])).toContain('twin');
+    expect(state.redirects).toHaveLength(0);
+  });
+
+  it('refuses a backslash in a site-relative source or target — `/\host` is `//host` (finding 3)', async () => {
+    for (const body of [
+      { sourcePath: '/old', targetPath: '/\\evil.test/x' },
+      { sourcePath: '/\\evil.test/x', targetPath: '/new' },
+      { sourcePath: '/old', targetPath: '/new/\\evil.test' },
+    ]) {
+      const { status } = await call(POST, ctx('admin', 'POST', body, state));
+      expect(status, JSON.stringify(body)).toBe(422);
+    }
+    expect(state.redirects).toHaveLength(0);
+  });
+
+  it('stores an Arabic source in the percent-encoded spelling the request carries (finding 4)', async () => {
+    const { status } = await call(
+      POST,
+      ctx('admin', 'POST', { sourcePath: '/عن', targetPath: '/about' }, state),
+    );
+    expect(status).toBe(200);
+    expect(state.redirects[0]?.source_path).toBe('/%D8%B9%D9%86');
+    expect(edgeMap()).toEqual({ '/%D8%B9%D9%86': { to: '/about', status: 301 } });
+  });
+
   it('a PATCH sending only targetPath equal to the STORED source is a loop → 422', async () => {
     state.redirects.push(stored());
     const { status, body } = await call(
@@ -241,6 +281,47 @@ describe('redirectResource — the rules on the merged row', () => {
     );
     expect(status).toBe(422);
     expect(body['field']).toBe('sourcePath');
+  });
+
+  it('finds the rule that points here behind any number of look-alike rows (finding 9)', async () => {
+    // The old prefix read (`LIKE '/old%'`, 50 unordered rows) could miss the exact match
+    // among rows targeting `/old-<n>`. The check now reads the tenant's whole set.
+    for (let i = 0; i < 60; i += 1) {
+      state.redirects.push(
+        stored({
+          id: `${OTHER.slice(0, -2)}${String(i).padStart(2, '0')}`,
+          source_path: `/x${i}`,
+          target_path: `/old-${i}`,
+        }),
+      );
+    }
+    state.redirects.push(stored({ id: OTHER, source_path: '/y', target_path: '/old?utm=1' }));
+    const { status, body } = await call(
+      POST,
+      ctx('admin', 'POST', { sourcePath: '/old', targetPath: '/new' }, state),
+    );
+    expect(status).toBe(422);
+    expect(body['field']).toBe('sourcePath');
+    expect(String(body['detail'])).toContain('/y');
+  });
+
+  it('refuses a chain through the /ar twin (finding 8)', async () => {
+    // /campaign → /ar/old exists; a new /old rule would make /ar/old hop twice.
+    state.redirects.push(stored({ id: OTHER, source_path: '/campaign', target_path: '/ar/old' }));
+    const backward = await call(
+      POST,
+      ctx('admin', 'POST', { sourcePath: '/old', targetPath: '/new' }, state),
+    );
+    expect(backward.status).toBe(422);
+    expect(backward.body['field']).toBe('sourcePath');
+    // …and the other way round: a target under /ar whose English rule exists.
+    state.redirects = [stored({ id: OTHER, source_path: '/old', target_path: '/new' })];
+    const forward = await call(
+      POST,
+      ctx('admin', 'POST', { sourcePath: '/campaign', targetPath: '/ar/old' }, state),
+    );
+    expect(forward.status).toBe(422);
+    expect(forward.body['field']).toBe('targetPath');
   });
 
   it('refuses a loop between two rows', async () => {
@@ -279,6 +360,8 @@ describe('redirectResource — the rules on the merged row', () => {
       services: ['logo'],
       portfolio: ['notebook'],
       blog_posts: ['hello'],
+      // A `pages` row is a section container, not a route: `/faq` renders nothing even
+      // with a published `faq` page row, so it is redirectable (finding 5).
       pages: ['faq'],
     };
     for (const sourcePath of [
@@ -286,7 +369,6 @@ describe('redirectResource — the rules on the merged row', () => {
       '/ar/services/logo',
       '/portfolio/notebook',
       '/creative-knowledge/hello',
-      '/faq',
     ]) {
       const { status } = await call(
         POST,
@@ -295,7 +377,7 @@ describe('redirectResource — the rules on the merged row', () => {
       expect(status, sourcePath).toBe(422);
     }
     state.redirects = [];
-    for (const sourcePath of ['/services/branding', '/portfolio/gone', '/old-page']) {
+    for (const sourcePath of ['/services/branding', '/portfolio/gone', '/old-page', '/faq']) {
       state.redirects = [];
       const { status } = await call(
         POST,
@@ -338,10 +420,34 @@ describe('redirectResource — the edge snapshot', () => {
     expect(status).toBe(200);
     expect(body['data']).toMatchObject({ kvSynced: true, count: 1, truncated: false });
     expect(edgeMap()).toEqual({ '/old': { to: '/new', status: 302 } });
-    // …and the audit row carries the same outcome.
+    // …and the audit row carries the same outcome, and names the rule (finding 7).
     expect(audits[0]).toMatchObject({
       action: 'redirect.create',
-      detail: expect.objectContaining({ kvSynced: true, count: 1 }),
+      detail: expect.objectContaining({
+        kvSynced: true,
+        count: 1,
+        source_path: '/old',
+        target_path: '/new',
+        status: 302,
+      }),
+    });
+  });
+
+  it('an update is audited with the rule as it now is (finding 7)', async () => {
+    state.redirects.push(stored());
+    const { status } = await call(
+      PATCH,
+      ctx('admin', 'PATCH', { targetPath: '/newer', version: 1 }, state),
+    );
+    expect(status).toBe(200);
+    expect(audits[0]).toMatchObject({
+      action: 'redirect.update',
+      detail: expect.objectContaining({
+        fields: ['target_path'],
+        source_path: '/old',
+        target_path: '/newer',
+        kvSynced: true,
+      }),
     });
   });
 
@@ -363,7 +469,12 @@ describe('redirectResource — the edge snapshot', () => {
     expect(status).toBe(200);
     expect(body['data']).toMatchObject({ deleted: ID, kvSynced: true, count: 1 });
     expect(edgeMap()).toEqual({ '/keep': { to: '/k', status: 301 } });
-    expect(audits[0]).toMatchObject({ action: 'redirect.delete' });
+    // The audit row names the rule that went, not only its id (finding 7).
+    expect(audits[0]).toMatchObject({
+      action: 'redirect.delete',
+      entityId: ID,
+      detail: expect.objectContaining({ source_path: '/old', target_path: '/new', status: 301 }),
+    });
   });
 
   it('Content Creator and Developer cannot delete a redirect', async () => {
