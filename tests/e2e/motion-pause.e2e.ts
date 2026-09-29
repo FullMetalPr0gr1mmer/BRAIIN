@@ -271,29 +271,32 @@ for (const locale of ['en', 'ar'] as const) {
   });
 }
 
-test('/portfolio: the banner loop and the caption dot stop', async ({ page }) => {
-  await page.setViewportSize({ width: 1366, height: 800 });
-  await page.goto('/portfolio', { waitUntil: 'load' });
-  await settle(page);
-  const banner = page.locator('[data-banner] video');
-  await expect(banner).toHaveCount(1);
-  await expect.poll(() => banner.evaluate((v) => (v as HTMLVideoElement).paused)).toBe(false);
-  expect(await playState(page, '.work-cap__live', '::after')).toBe('running');
+for (const path of ['/portfolio', '/ar/portfolio']) {
+  test(`${path}: the banner loop and the caption dot stop`, async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 800 });
+    await page.goto(path, { waitUntil: 'load' });
+    await settle(page);
+    const banner = page.locator('[data-banner] video');
+    await expect(banner).toHaveCount(1);
+    await expect.poll(() => banner.evaluate((v) => (v as HTMLVideoElement).paused)).toBe(false);
+    expect(await playState(page, '.work-cap__live', '::after')).toBe('running');
 
-  await page.locator(BTN).click();
-  await expect.poll(() => allPaused(page)).toBe(true);
-  expect(await playState(page, '.work-cap__live', '::after')).toBe('paused');
+    await page.locator(BTN).click();
+    await expect.poll(() => allPaused(page)).toBe(true);
+    expect(await playState(page, '.work-cap__live', '::after')).toBe('paused');
 
-  await page.locator(BTN).click();
-  await expect.poll(() => banner.evaluate((v) => (v as HTMLVideoElement).paused)).toBe(false);
-  expect(await playState(page, '.work-cap__live', '::after')).toBe('running');
-});
+    await page.locator(BTN).click();
+    await expect.poll(() => banner.evaluate((v) => (v as HTMLVideoElement).paused)).toBe(false);
+    expect(await playState(page, '.work-cap__live', '::after')).toBe('running');
+  });
+}
 
 test('a mouse click on the switch does not keep the header from hiding on scroll', async ({
   page,
 }) => {
-  // The header's "in use" check counts keyboard focus only (`:focus-visible`): focus left
-  // on the button by a click used to pin the bar for the rest of the scroll.
+  // Both halves count keyboard focus only (`:focus-visible`): the script's "in use" check
+  // and the CSS restore of a hidden bar. Focus left on the button by a click used to pin
+  // the bar for the rest of the scroll. The visible state is the transform, not the class.
   await page.setViewportSize({ width: 1366, height: 800 });
   await page.goto('/privacy');
   await page.evaluate(() => {
@@ -302,5 +305,7 @@ test('a mouse click on the switch does not keep the header from hiding on scroll
   await page.locator(BTN).click();
   await page.locator(BTN).click(); // back to playing; focus stays on the button
   await page.mouse.wheel(0, 900);
-  await expect(page.locator('.site-header')).toHaveClass(/is-hidden/);
+  const header = page.locator('.site-header');
+  await expect(header).toHaveClass(/is-hidden/);
+  await expect.poll(() => header.evaluate((el) => getComputedStyle(el).transform)).not.toBe('none');
 });

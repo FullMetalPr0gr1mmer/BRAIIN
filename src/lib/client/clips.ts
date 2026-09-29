@@ -177,7 +177,9 @@ export function retargetClip(frame: HTMLElement, next: ClipTarget): void {
   if (next.end === undefined) delete frame.dataset.clipEnd;
   else frame.dataset.clipEnd = String(next.end);
   const video = frame.querySelector<HTMLVideoElement>('video');
-  if (!video) return;
+  // Paused visitor: the attributes are rewritten (the resume's play() reads them and the
+  // timeupdate loop seeks into the new window), but no src swap or seek — each is a fetch.
+  if (!video || isMotionPaused()) return;
   frame.classList.remove('is-playing');
   video.addEventListener(
     'seeked',

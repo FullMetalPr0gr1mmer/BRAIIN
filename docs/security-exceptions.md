@@ -387,6 +387,8 @@ all under `prefers-reduced-motion` or Save-Data; zero video bytes before interse
 one signed on 2026-08-24; this entry must be re-signed (and its expiry revisited) before
 the first new surface merges. The close conditions above are unchanged — the header pause
 control remains the one-button fix for all of it (`setMotionPaused()` is still retained).
+*(Overtaken by the close below: the re-sign never happened; the surfaces shipped and the
+entry was closed on 2026-09-29.)*
 
 ### Widened 2026-09-27 — Round 2 (services redesign)
 
@@ -412,12 +414,17 @@ bytes before intersection (the Round 2 slices add these surfaces to
 `tests/e2e/media-bytes.e2e.ts`); in-content clips never autoplay on touch.
 
 ⚠ **Owner re-sign required again** before the Round 2 PRs merge. The header pause control
-would still fix every surface at once.
+would still fix every surface at once. *(Overtaken by the close below: the Round 2 PRs
+merged on 2026-09-29 without the re-sign; the owner's decision at the Round 3 plan review
+was to close the entry instead.)*
 
 ### Closed 2026-09-29
 
-Close condition 1 was met as written, in the place it recommended: **the site header, next
-to the language switch**. Round 3 (plan `check-latest-folder-in-dazzling-widget`, item F,
+Neither widening (2026-09-25, 2026-09-27) was ever re-signed: the UI v2 and Round 2
+surfaces shipped with the entry still marked "owner re-sign pending". At the Round 3 plan
+review (G3, "do what you see best fit") the owner's sign-off was to close the failure
+rather than re-sign it a third time. Close condition 1 was met as written, in the place it
+recommended: **the site header, next to the language switch**. Round 3 (plan `check-latest-folder-in-dazzling-widget`, item F,
 design-port decision R3-7; the owner's G3 answer) adds a 32 px icon button after the
 language pill on every page — `src/components/SiteHeader.astro`, one fixed accessible name
 ("Pause motion" / "إيقاف الحركة") plus `aria-pressed`, perceivable to mouse, keyboard and

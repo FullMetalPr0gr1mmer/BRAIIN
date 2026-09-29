@@ -56,7 +56,9 @@ for (const route of ROUTES) {
 // contrast) in both directions, on a route with no intro plate.
 for (const route of ['/contact', '/ar/contact']) {
   test(`axe: the header, normal motion, with the motion switch — ${route}`, async ({ page }) => {
-    await page.goto(route, { waitUntil: 'networkidle' });
+    // `load`, not `networkidle`: with motion on, the contact hero's loop mounts after load
+    // and its open range request never lets the network go idle (csp.e2e.ts records it).
+    await page.goto(route, { waitUntil: 'load' });
     await expect
       .poll(() => page.locator('.site-header').evaluate((el) => getComputedStyle(el).opacity))
       .toBe('1');

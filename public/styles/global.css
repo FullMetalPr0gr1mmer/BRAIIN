@@ -518,9 +518,12 @@ body:not(:has(.intro)) .site-header--overlay {
   transform: translateY(-110%);
 }
 /* Keyboard focus must never sit inside an off-screen header (WCAG 2.4.7/2.4.11):
-   tabbing into the hidden bar brings it back. The script also never hides a header
-   with focus inside or its menu open. */
-.site-header.is-hidden:focus-within {
+   tabbing into the hidden bar brings it back. KEYBOARD focus only (`:focus-visible`, one
+   selector, so browsers without `:has()` only lose this restore): a plain `:focus-within`
+   also matched the motion switch after a mouse click, and pinned the bar for the rest of
+   the scroll no matter what the script decided (R3-7). The script likewise never hides a
+   header with keyboard focus inside or its menu open. */
+.site-header.is-hidden:has(:focus-visible) {
   transform: none;
 }
 
@@ -664,10 +667,18 @@ html[dir='rtl'] .site-header__key::after {
     background 0.25s,
     border-color 0.25s;
 }
-.site-header__motion:hover,
+/* Pressed = Klein fill under the white glyph (8.6:1) with the white boundary kept (5.3:1
+   on both bars — Klein on the solid black bar alone is 1.98:1). Hover is gated to
+   pointers that hover: on touch the fill would otherwise outlive the tap that RESUMED
+   and read as "still pressed". */
 .site-header__motion[aria-pressed='true'] {
   background: var(--bs-klein);
-  border-color: var(--bs-klein);
+}
+@media (hover: hover) {
+  .site-header__motion:hover {
+    background: var(--bs-klein);
+    border-color: var(--bs-klein);
+  }
 }
 .site-header__motion svg {
   width: 12px;
