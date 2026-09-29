@@ -26,8 +26,7 @@ existing global.css utilities.
 
 ## Decisions (PR6)
 
-1. **No clip autoplay on touch** (EXC-009; an EXC-007 surface until R3-7 closed it): touch
-   devices see the poster. The mockup
+1. **No clip autoplay on touch** (EXC-007/EXC-009): touch devices see the poster. The mockup
    autoplayed catalog cards at 60 % visibility and every in-view clip on touch. A finger on a
    hybrid's touchscreen never starts a hover preview either (only a mouse or pen does). The
    play badge shows only where a clip can actually play — never on touch, under reduced
@@ -289,9 +288,8 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
 43. **The banner caption is legible over any frame**: .45 glass (mockup .26), .7 meta (.58),
     a stronger bottom scrim under it, and no 4.5 s "rest" fade to half opacity. Contrast is
     gated for the worst case (a white frame) in `scripts/contrast-audit.mjs`. Its entrance
-    and pulsing dot stop under reduced motion; the dot and the banner loop stop with the
-    header's motion switch (R3-7); the loop plays under EXC-009 and pauses once the whole
-    banner is covered. The
+    and pulsing dot stop under reduced motion; the dot and the banner loop are EXC-007
+    surfaces; the loop plays under EXC-009 and pauses once the whole banner is covered. The
     caption leaves paint and the tab order earlier — as soon as the next section's edge
     passes the caption's own top, i.e. once it is entirely painted over (WCAG 2.4.11
     Focus Not Obscured); measured against the whole banner, it stayed focusable while
@@ -455,8 +453,8 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     edge-cache miss only. BlogDetail/ServiceDetail still emit their cache — follow-up.
 68. **The final film is a muted in-view loop** (30 % visible, the mockup's threshold) and
     never plays on touch, under reduced motion or with Save-Data. The mockup's in-place
-    "Sound on" toggle is not shipped: sound and captions (WCAG 1.2.2) arrive with the
-    Stream player (KAN-20); the pause control is the header's motion switch (R3-7). **No Stream facade is rendered on the case
+    "Sound on" toggle is not shipped: sound, captions (WCAG 1.2.2) and a pause control
+    arrive with the Stream player (KAN-20). **No Stream facade is rendered on the case
     study** — nothing third-party loads, so there is nothing to consent-gate today; the
     player that replaces the loop must go through `hasConsent` (recorded as a KAN-20
     prerequisite in EXC-009).
@@ -634,8 +632,7 @@ The orchestrator renumbers these at integration.
 - **S2-4. No clip on touch.** This keeps the existing rule: `clips.ts` never plays on a
   touch-only device, under reduced motion or with Save-Data, and never on a finger landing
   on a hybrid's screen. The mockup autoplayed every card at 60% visibility on touch. This
-  is a recorded deviation, and it is part of the EXC-009 surface list (and was on
-  EXC-007's until R3-7 closed it).
+  is a recorded deviation, and it is part of the EXC-007/EXC-009 surface list.
 - **S2-5. A playing clip never transitions its own transform.** In the tests, a hover clip
   whose `scale(1.05)` was mid-transition while playing reported tiny layout shifts
   (≈0.0002 each, Chromium). The poster keeps the mockup's slow zoom; the video, only ever
@@ -1058,6 +1055,33 @@ The orchestrator renumbers these at integration.
   site's form carries the PDPL consent row.
 
 ## Round 3: gap fixes (R3)
+
+- **R3-0. No `ch`-unit boxes on swap-font headings above the fold; Almarai's fallback is
+  per weight and per script.** The post-deploy desktop Lighthouse run on main measured
+  CLS 0.116 on `/ar/about` (budget 0.1) on the tree that had passed hours earlier. A
+  `ch` is the advance of "0" in the font that is painting, so About's `max-width: 20ch`
+  h1 was 540px wide under the fallback and 597px once Almarai 700 arrived; the re-wrap
+  moved the heading and the row below it (the LCP poster included), 0.034 on every cold
+  load and 0.14 when it landed in the same frame as the body-copy swap. The cap is now
+  the same width in `em` (11.5em Archivo, 11.06em Almarai), measured once under the
+  loaded faces. The audit of the other Arabic desktop routes found the larger, systemic
+  cause: `Almarai Fallback` is metric-matched for Latin glyphs only, so every weight that
+  was not the preloaded hero face re-wrapped Arabic nav links, kickers and filter chips on
+  arrival — `/ar/portfolio/all`, whose header is in flow, measured 0.13–0.26 (Lighthouse
+  locally; CI had passed it by timing). Measured with Chromium's platform-font report,
+  Almarai's Arabic is 26–33% wider than Arial's at every weight, and the one fallback face
+  faked bold from Arial regular. `Almarai Fallback` is now six faces — per weight (400 on
+  Arial, 700/800 on Arial Bold) and per script (a Latin face and an Arabic-range face with
+  its own `size-adjust`) — with vertical overrides matching each weight file's line box.
+  Widths now agree within 1%; cold loads of `/ar/about`, `/ar/portfolio/all`, `/ar` and
+  `/ar/services` measure 0.000–0.003. `font-display: optional` was tried first and
+  rejected: Chrome holds first paint for a loading optional face, and Lighthouse then put
+  both non-preloaded Arabic files on the LCP chain (`/ar/services` mobile LCP 2.62 s
+  against 2.5 s, twice in CI). Archivo's single fallback is right as it is (EN routes
+  measure 0). Where Arial is absent (Linux, Android) the fallback is unmatched, as before.
+  Gate:
+  `layout-shift.e2e.ts` cold-loads the four routes at 1350×940 and fails at ≥ 0.02 with
+  the element named (Lighthouse's 3-run median could miss the race).
 
 - **R3-7. One motion switch in the header, not a control per surface (closes EXC-007).**
   The reference design ships no pause control anywhere; the owner chose to build one
