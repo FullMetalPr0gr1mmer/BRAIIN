@@ -1056,8 +1056,32 @@ The orchestrator renumbers these at integration.
 
 ## Round 3: gap fixes (R3)
 
-Round 3 (2026-09-29) closes the gaps Round 2's report listed. Nothing here changes the
-mockup's look; the entries record the mechanisms an editor meets in the admin.
+- **R3-0. No `ch`-unit boxes on swap-font headings above the fold; Almarai's fallback is
+  per weight and per script.** The post-deploy desktop Lighthouse run on main measured
+  CLS 0.116 on `/ar/about` (budget 0.1) on the tree that had passed hours earlier. A
+  `ch` is the advance of "0" in the font that is painting, so About's `max-width: 20ch`
+  h1 was 540px wide under the fallback and 597px once Almarai 700 arrived; the re-wrap
+  moved the heading and the row below it (the LCP poster included), 0.034 on every cold
+  load and 0.14 when it landed in the same frame as the body-copy swap. The cap is now
+  the same width in `em` (11.5em Archivo, 11.06em Almarai), measured once under the
+  loaded faces. The audit of the other Arabic desktop routes found the larger, systemic
+  cause: `Almarai Fallback` is metric-matched for Latin glyphs only, so every weight that
+  was not the preloaded hero face re-wrapped Arabic nav links, kickers and filter chips on
+  arrival — `/ar/portfolio/all`, whose header is in flow, measured 0.13–0.26 (Lighthouse
+  locally; CI had passed it by timing). Measured with Chromium's platform-font report,
+  Almarai's Arabic is 26–33% wider than Arial's at every weight, and the one fallback face
+  faked bold from Arial regular. `Almarai Fallback` is now six faces — per weight (400 on
+  Arial, 700/800 on Arial Bold) and per script (a Latin face and an Arabic-range face with
+  its own `size-adjust`) — with vertical overrides matching each weight file's line box.
+  Widths now agree within 1%; cold loads of `/ar/about`, `/ar/portfolio/all`, `/ar` and
+  `/ar/services` measure 0.000–0.003. `font-display: optional` was tried first and
+  rejected: Chrome holds first paint for a loading optional face, and Lighthouse then put
+  both non-preloaded Arabic files on the LCP chain (`/ar/services` mobile LCP 2.62 s
+  against 2.5 s, twice in CI). Archivo's single fallback is right as it is (EN routes
+  measure 0). Where Arial is absent (Linux, Android) the fallback is unmatched, as before.
+  Gate:
+  `layout-shift.e2e.ts` cold-loads the four routes at 1350×940 and fails at ≥ 0.02 with
+  the element named (Lighthouse's 3-run median could miss the race).
 
 - **R3-1. Authored redirects reach the edge — and only after a 404.** The Redirects
   table was written by the admin and read by nobody: the middleware looked up KV
@@ -1083,6 +1107,7 @@ mockup's look; the entries record the mechanisms an editor meets in the admin.
   query before the target's fragment (`/services?utm=x#branding`, never after it, where it
   would be part of the fragment); a 301/308 is cached for a day, a 302 is `no-cache` — it
   is temporary because it may change.
+
 - **R3-2. The `/ar` twin falls back to the English rule.** An editor writes `/old →
   /new` once. `/ar/old` has no row of its own, so the lookup tries the logical path and
   re-localises a site-relative target (`/ar/old → /ar/new`); an explicit `/ar/…` row wins,
@@ -1093,6 +1118,7 @@ mockup's look; the entries record the mechanisms an editor meets in the admin.
   fallback (`/campaign → /ar/old` plus `/old → /new` is two hops for `/ar/old`). The
   lookup itself never answers a rule that resolves to the requested path, whatever the
   snapshot holds.
+
 - **R3-3. SEO may delete a redirect.** The kernel's DELETE was gated on
   `content.archiveDelete` (Admin-only, right for content), so the role §5 gives the whole
   module could create and edit a rule but never remove one. A resource may now name its
