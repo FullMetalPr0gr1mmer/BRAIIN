@@ -152,11 +152,35 @@ for (const locale of ['en', 'ar'] as const) {
     const key = await box('.site-header__key');
     const toggle = await box('.site-nav__toggle');
     const lang = await box('.site-header__lang');
-    // Adjacent, one bar gap apart (24px; 12px on small phones) — not spread out.
+    // Adjacent, one bar gap apart (24px; 12px on phones, 8px on small ones) — not spread out.
     const [a, b, c] = locale === 'ar' ? [lang, toggle, key] : [key, toggle, lang];
     expect(b.x - (a.x + a.width)).toBeLessThanOrEqual(25);
     expect(c.x - (b.x + b.width)).toBeLessThanOrEqual(25);
   });
+
+  // Round 3 (R3-7): the motion switch is a sixth item in the phone bar. The logo's <img>
+  // is `max-width: 100%`, so a bar that no longer fits squeezes the LOGO (measured: 76px
+  // at 412 before the phone sizing was tightened) — the pill and the switch keep their
+  // size. The logo's floor is the token's 96px, and nothing may scroll sideways.
+  for (const width of [360, 412]) {
+    test(`at ${width}px the logo keeps its 96px minimum and the bar does not overflow — ${locale}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 823 });
+      await page.goto(root);
+      await expect(page.locator('.site-header__motion')).toBeVisible();
+      const logo = (await page.locator('.site-header__brand img').boundingBox())!;
+      expect(logo.width).toBeGreaterThanOrEqual(96);
+      const overflow = await page.evaluate(() => {
+        const bar = document.querySelector('.site-header__bar')!;
+        return {
+          bar: bar.scrollWidth - bar.clientWidth,
+          page: document.documentElement.scrollWidth - window.innerWidth,
+        };
+      });
+      expect(overflow).toEqual({ bar: 0, page: 0 });
+    });
+  }
 }
 
 // A page with no hero wears the solid bar. /services was that page until Round 2 gave it a
