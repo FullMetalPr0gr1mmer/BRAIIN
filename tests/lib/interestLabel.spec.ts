@@ -215,14 +215,16 @@ describe('resolveLeadInterests — the queries', () => {
 describe('withInterestLabels', () => {
   it('appends derived fields only for the interests the row carries', async () => {
     const labels = await resolveLeadInterests(stubDb(), TENANT, [lead('branding', 'events')]);
-    const row = { id: 'l1', name: 'Sam', ...lead('branding', 'events') };
+    // typed as a record: a lead row is one, and LeadInterestRow alone is a weak type
+    const row: Row = { id: 'l1', name: 'Sam', ...lead('branding', 'events') };
     expect(withInterestLabels(row, labels)).toEqual({
       ...row,
       service_label: { en: 'Branding (retired)', ar: 'الهوية (متوقفة)' },
       service_status: 'archived',
       discipline_label: { en: 'Events & Exhibitions', ar: 'الفعاليات والمعارض' },
     });
-    const bare = withInterestLabels({ id: 'l2', ...lead(null) }, labels);
+    const bareRow: Row = { id: 'l2', ...lead(null) };
+    const bare = withInterestLabels(bareRow, labels);
     expect(bare).not.toHaveProperty('service_label');
     expect(bare).not.toHaveProperty('discipline_label');
   });
