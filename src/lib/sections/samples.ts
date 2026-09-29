@@ -18,14 +18,33 @@ export const SERVICES_PROOF_SAMPLE_RATING: Readonly<StatRating> = Object.freeze(
 });
 
 const norm = (s: unknown): string => (typeof s === 'string' ? s.trim().toLowerCase() : '');
+const normValue = (s: unknown): string => norm(s).replace(/\s+/g, '');
+
+const SAMPLE_VALUE = normValue(SERVICES_PROOF_SAMPLE_RATING.value);
+const SAMPLE_LABEL = {
+  en: norm(SERVICES_PROOF_SAMPLE_RATING.label.en),
+  ar: norm(SERVICES_PROOF_SAMPLE_RATING.label.ar),
+};
 
 /**
- * Whether a stored rating is (still) the design sample. The value alone decides — the
- * label re-worded around the sample number is the same unbacked claim — and whitespace
- * or case is not a real edit.
+ * Whether a stored rating is (still) the design sample: the sample's VALUE under the
+ * sample's LABEL — in either language, since a half-translated claim is still the
+ * claim — or under no label at all (missing, blank or malformed: nothing backs the
+ * number). A genuine "4.9 / 5" is told apart by its label: a real, sourced label under
+ * the same number passes. Whitespace or case is not a real edit, in either part.
  */
 export function isSampleRating(rating: unknown): boolean {
   if (!rating || typeof rating !== 'object' || Array.isArray(rating)) return false;
-  const value = norm((rating as Record<string, unknown>)['value']);
-  return value !== '' && value.replace(/\s+/g, '') === '4.9/5';
+  const r = rating as Record<string, unknown>;
+  const value = normValue(r['value']);
+  if (value === '' || value !== SAMPLE_VALUE) return false;
+  const label = r['label'];
+  const halves =
+    label && typeof label === 'object' && !Array.isArray(label)
+      ? (label as Record<string, unknown>)
+      : {};
+  const en = norm(halves['en']);
+  const ar = norm(halves['ar']);
+  if (en === '' && ar === '') return true;
+  return en === SAMPLE_LABEL.en || ar === SAMPLE_LABEL.ar;
 }

@@ -764,7 +764,7 @@ export const sectionResource: ResourceConfig = {
       isSampleRating((merged['content'] as Record<string, unknown> | null)?.['rating'])
     ) {
       throw new ValidationError(
-        'the rating line still shows the design sample (4.9 / 5) — replace it with a real, sourced rating or remove it before unticking “Placeholder”',
+        'the rating line still shows the design sample (4.9 / 5 under its sample label) — give it a real, sourced rating (a real label under the same number passes) or remove it before unticking “Placeholder”',
         'is_placeholder' in changed ? 'isPlaceholder' : 'content',
       );
     }

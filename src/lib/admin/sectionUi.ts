@@ -160,7 +160,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
         { name: 'value', label: 'Rating as shown ("4.8 / 5")', kind: 'text', required: true },
         { name: 'label', label: 'Label after it', kind: 'bilingual', required: true },
       ],
-      help: 'Text only, never structured data; leave both blank to drop the line. The design sample (4.9 / 5) cannot go live: replace it with a real, sourced rating before unticking "Placeholder".',
+      help: 'Text only, never structured data; leave both blank to drop the line. The design sample (4.9 / 5 under its sample label, in either language) cannot go live: give it a real, sourced rating before unticking "Placeholder" — a real label under the same number passes.',
     },
     {
       name: 'staticNumbers',

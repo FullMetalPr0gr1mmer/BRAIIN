@@ -123,15 +123,35 @@ describe('the Services page composition', () => {
     expect(isSampleRating(proof.content['rating'])).toBe(true);
   });
 
-  it('isSampleRating: the sample value in any spelling, never a real rating or a non-object', () => {
+  it('isSampleRating: the sample value under the sample label (either language) or no label — never a real label, a real rating or a non-object', () => {
+    const { label } = SERVICES_PROOF_SAMPLE_RATING;
     expect(isSampleRating(SERVICES_PROOF_SAMPLE_RATING)).toBe(true);
-    expect(isSampleRating({ value: '4.9/5', label: { en: 'x', ar: 'y' } })).toBe(true);
-    expect(isSampleRating({ value: ' 4.9 / 5 ', label: { en: 'reworded', ar: 'y' } })).toBe(true);
-    expect(isSampleRating({ value: '4.8 / 5', label: SERVICES_PROOF_SAMPLE_RATING.label })).toBe(
-      false,
+    // spacing and case are not edits, in the value or the label
+    expect(
+      isSampleRating({ value: '4.9/5', label: { en: ' Average Client Rating ', ar: label.ar } }),
+    ).toBe(true);
+    // no label, a blank one or a malformed one: nothing backs the number
+    expect(isSampleRating({ value: ' 4.9 / 5 ' })).toBe(true);
+    expect(isSampleRating({ value: '4.9 / 5', label: { en: '', ar: ' ' } })).toBe(true);
+    expect(isSampleRating({ value: '4.9 / 5', label: 'average client rating' })).toBe(true);
+    // one language re-worded while the other still says the sample: still the claim
+    expect(isSampleRating({ value: '4.9 / 5', label: { en: 'reworded', ar: label.ar } })).toBe(
+      true,
     );
-    expect(isSampleRating({ value: '4.9 / 10' })).toBe(false);
-    expect(isSampleRating({ value: '' })).toBe(false);
+    expect(isSampleRating({ value: '4.9 / 5', label: { en: label.en, ar: 'معاد صياغته' } })).toBe(
+      true,
+    );
+    // a real, sourced label under the same number is a real rating (the reviewer's case)
+    expect(
+      isSampleRating({
+        value: '4.9 / 5',
+        label: { en: 'average rating, 212 reviews', ar: 'متوسط التقييم، 212 مراجعة' },
+      }),
+    ).toBe(false);
+    // a different number is never the sample, whatever the label
+    expect(isSampleRating({ value: '4.8 / 5', label })).toBe(false);
+    expect(isSampleRating({ value: '4.9 / 10', label })).toBe(false);
+    expect(isSampleRating({ value: '', label })).toBe(false);
     expect(isSampleRating({})).toBe(false);
     expect(isSampleRating(undefined)).toBe(false);
     expect(isSampleRating(null)).toBe(false);

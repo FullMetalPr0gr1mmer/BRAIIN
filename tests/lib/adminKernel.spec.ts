@@ -315,6 +315,39 @@ describe('resource routes — the sample-rating guard (Round 3)', () => {
     expect(await statusOf(PATCH, ctx('admin', 'PATCH', body, SAMPLE))).toBe(200);
   });
 
+  it('a genuine 4.9 / 5 — the same number under a real, sourced label — is allowed', async () => {
+    const { PATCH } = itemRoutes(sectionResource);
+    const genuine = {
+      value: '4.9 / 5',
+      label: { en: 'average rating, 212 reviews', ar: 'متوسط التقييم، 212 مراجعة' },
+    };
+    const body = {
+      isPlaceholder: false,
+      content: { ...SAMPLE.content, rating: genuine },
+      version: 1,
+    };
+    expect(await statusOf(PATCH, ctx('admin', 'PATCH', body, SAMPLE))).toBe(200);
+  });
+
+  it('re-wording only one language of the sample label is still the sample: 422', async () => {
+    const { PATCH } = itemRoutes(sectionResource);
+    const halfDone = {
+      value: '4.9 / 5',
+      label: { en: 'average rating, 212 reviews', ar: 'متوسط تقييم عملائنا' },
+    };
+    const body = {
+      isPlaceholder: false,
+      content: { ...SAMPLE.content, rating: halfDone },
+      version: 1,
+    };
+    const res = (await PATCH(ctx('admin', 'PATCH', body, SAMPLE))) as Response;
+    expect(res.status).toBe(422);
+    const out = (await res.json()) as { field?: string; detail?: string };
+    expect(out.field).toBe('isPlaceholder');
+    // the message tells the editor how a real rating with the same number gets through
+    expect(out.detail).toMatch(/real label under the same number passes/);
+  });
+
   it('a content save that keeps the sample on an UNFLAGGED row is refused on content', async () => {
     const { PATCH } = itemRoutes(sectionResource);
     const stored = { ...SAMPLE, is_placeholder: false };
