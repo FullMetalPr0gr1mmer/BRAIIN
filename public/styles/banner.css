@@ -199,10 +199,17 @@ html[dir='rtl'] .work-cap__m {
   font-size: 12.5px;
 }
 
+/* The sitewide motion switch (global.css `body.motion-paused`, the header's pause
+   button): the pulse holds in place. The banner loop itself is a background video,
+   stopped by lazyVideo.ts under the same class. */
+body.motion-paused .work-cap__live::after {
+  animation-play-state: paused;
+}
+
 /* ---- Motion safety net (this sheet's share of global.css's reduced-motion block) ----
    Same INVARIANT as there: each entrance below is revealed by KILLING its animation,
    which works only because its hidden from-state lives exclusively in @keyframes (the
-   caption is `both`-filled). The pulse is one of EXC-007's loops; it simply stops. */
+   caption is `both`-filled). The pulse is an infinite loop; it simply stops. */
 @media (prefers-reduced-motion: reduce) {
   .work-cap,
   .work-cap__live::after {

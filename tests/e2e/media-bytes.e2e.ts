@@ -135,6 +135,29 @@ for (const route of ROUTES) {
       await ctx.close();
     });
 
+    // Round 3 (R3-7): a visitor who pressed the header's motion switch (remembered per tab
+    // in sessionStorage) downloads nothing either — the loops defer their mount and the
+    // clips never create their <video> while `body.motion-paused` is set.
+    test('paused visitor: no clip/banner bytes after a full scroll', async ({ browser }) => {
+      const ctx = await browser.newContext();
+      await ctx.addInitScript(() => {
+        try {
+          sessionStorage.setItem('bs_motion', 'paused');
+        } catch {
+          /* storage blocked: the visitor is not paused, and the test would not apply */
+        }
+      });
+      const page = await ctx.newPage();
+      const seen = collectVideo(page);
+      await page.goto(route, { waitUntil: 'load' });
+      await expect(page.locator('body')).toHaveClass(/motion-paused/);
+      await settle(page);
+      await scrollThrough(page);
+      expect(seen, 'video requested while motion is paused').toEqual([]);
+      expect(await page.locator('video').count()).toBe(0);
+      await ctx.close();
+    });
+
     // In-content clips (work cards, case-study frames) must never autoplay on touch —
     // enabled with lazyVideo v2 (PR6), which introduces the `data-clip-mode` surfaces.
     test.fixme('touch: in-content clips fetch no video bytes', async () => {});

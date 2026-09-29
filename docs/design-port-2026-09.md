@@ -1154,3 +1154,38 @@ The orchestrator renumbers these at integration.
   `placeholder_*` kind (live, or still a draft under `placeholder_pending`) is dropped
   from the consent list, since its fix is "make it real" and the placeholder list
   already says so.
+
+- **R3-7. One motion switch in the header, not a control per surface (closes EXC-007).**
+  The reference design ships no pause control anywhere; the owner chose to build one
+  (G3) and put it where EXC-007's close condition recommended: a 32 px round icon button
+  after the language pill, styled like it, on every page (`SiteHeader.astro`). It is the
+  single WCAG 2.2.2 control for everything that moves on its own — the hero, slogan,
+  banner and service hero loops, the in-view and hover clips and the explorer clip, the
+  clients marquee, the hero scroll cue, the banner caption's pulse — and it composes with
+  the testimonials carousel's own APG control (a global pause sets `userPaused`, so its
+  button honestly shows Play; a global resume leaves it stopped — only its own Play
+  restarts it). One fixed accessible name ("Pause motion" / "إيقاف الحركة") + `aria-pressed`
+  (the removed hero control swapped label and pressed state, an APG anti-pattern); two
+  inline SVGs swapped by CSS on the pressed state. The state is `body.motion-paused`,
+  owned by `src/lib/client/motion.ts` (no imports, so the header never pulls video code)
+  and broadcast as a `motion-updated` event, the `consent-updated` pattern. Remembered
+  per tab in `sessionStorage` (`bs_motion`, the removed control's key) — a functional
+  setting, so no consent gate. **A paused visitor downloads nothing:** `lazyVideo.ts`
+  defers the mount (a pending set, mounted on resume, played only if still on screen)
+  and `clips.ts` never creates the `<video>` (hover clips included — simpler and stricter
+  than arguing a hover is user-initiated). The CSS loops are held with
+  `animation-play-state: paused` (a resume continues where it stopped), never `animation:
+  none`, and **never a blanket `body.motion-paused *`**: a stored pause restored on home
+  would freeze the intro plate opaque. The button is hidden by CSS under
+  `prefers-reduced-motion` (nothing moves there) and `@media (scripting: none)` (nothing
+  would answer it), and is never shown or hidden by script after first paint (the
+  layout-shift gate). The header's "in use" check now counts only `:focus-visible`: a
+  mouse click leaves focus on the button, and any-focus kept the bar from hiding for the
+  rest of the scroll. Phone sizing: the switch is a sixth bar item; at 412 px the old
+  24 px gap squeezed the logo (`max-width: 100%`) to 76 px, so the phone breakpoints
+  tighten gaps, paddings and the switch (28 px, above the 24 px WCAG 2.5.8 floor) and
+  the logo holds its 96 px minimum from 360 px up in both languages
+  (`tests/e2e/header-footer.e2e.ts`). Asserted in `tests/e2e/motion-pause.e2e.ts` (EN + AR),
+  a normal-motion axe pass scoped to the header (the reduced-motion pass never saw the
+  button), and `media-bytes.e2e.ts`'s "paused visitor". EXC-009 is re-signed, not
+  closed: only Stream (KAN-20) closes it.

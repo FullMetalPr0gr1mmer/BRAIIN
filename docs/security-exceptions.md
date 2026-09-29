@@ -12,8 +12,8 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-004 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-12-24 | Open (re-justified 2026-09-25; first expiry 2026-09-01 lapsed) | Live on `*.workers.dev` with **no WAF rate limits and no crawler blocks** — both are zone-scoped and there is no zone |
 | EXC-005 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | **Closed 2026-09-25** | `js-yaml` GHSA-5p4m-2wfm-xmqj allowlisted in the prod audit gate — js-yaml 4.3.2 shipped the 4.x fix; entry removed |
 | EXC-006 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open (re-scoped 2026-09-25) | `extract-zip` GHSA-jmr9-qjv8-65gv **+ GHSA-7pqw-9j4j-h8q3** allowlisted in the dev audit gate — every published version is affected |
-| EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | Open — **widened 2026-09-25 and 2026-09-27, owner re-sign pending** | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee (and, from the UI v2 port, every banner/in-view video loop; from Round 2, the discipline card clips, the `/services` explorer clip and the service hero loops) have no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**) |
-| EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open — **widened 2026-09-27, owner re-sign pending** | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops |
+| EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | **Closed 2026-09-29** | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee (and, from the UI v2 port, every banner/in-view video loop; from Round 2, the discipline card clips, the `/services` explorer clip and the service hero loops) had no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**). Closed by the header's motion switch (Round 3, R3-7): one button stops every loop, clip and the marquee |
+| EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open (re-signed 2026-09-29) | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops |
 
 ---
 
@@ -315,7 +315,7 @@ condition now requires **both** entries removed.
 
 **Pillar:** the Definition of Done, point 4 (Accessible — WCAG 2.2 AA). CLAUDE.md §4, §9 (axe WCAG 2.2 AA zero violations).
 **Opened:** 2026-08-24 · **Owner:** Kareem (kareem@floppytech.ai) · **Expiry:** 2026-11-24
-**Status:** Open
+**Status:** **Closed 2026-09-29** — close condition 1 met (the header motion switch, Round 3 R3-7)
 
 ### What was weakened
 
@@ -374,7 +374,8 @@ The scope of this exception therefore grows to cover, **as each surface ships**:
   keyboard focus entering it stops the rotation until Play is pressed (APG — focus leaving
   does not restart it); stops when off-screen; never auto-advances under
   `prefers-reduced-motion`.
-- **Card hover previews** — user-initiated, stop on pointer-leave / blur; never autoplay on touch.
+- **Card hover previews** — user-initiated, stop on pointer-leave / blur, and pausable (since
+  Round 3 the header switch stops them too); never autoplay on touch.
 - **Count-up numbers and scroll reveals** — finish in under 5 s (2.2.2 does not apply).
 - **Leadership slider and case-study lightbox** — no autoplay.
 
@@ -386,6 +387,8 @@ all under `prefers-reduced-motion` or Save-Data; zero video bytes before interse
 one signed on 2026-08-24; this entry must be re-signed (and its expiry revisited) before
 the first new surface merges. The close conditions above are unchanged — the header pause
 control remains the one-button fix for all of it (`setMotionPaused()` is still retained).
+*(Overtaken by the close below: the re-sign never happened; the surfaces shipped and the
+entry was closed on 2026-09-29.)*
 
 ### Widened 2026-09-27 — Round 2 (services redesign)
 
@@ -411,7 +414,58 @@ bytes before intersection (the Round 2 slices add these surfaces to
 `tests/e2e/media-bytes.e2e.ts`); in-content clips never autoplay on touch.
 
 ⚠ **Owner re-sign required again** before the Round 2 PRs merge. The header pause control
-would still fix every surface at once.
+would still fix every surface at once. *(Overtaken by the close below: the Round 2 PRs
+merged on 2026-09-29 without the re-sign; the owner's decision at the Round 3 plan review
+was to close the entry instead.)*
+
+### Closed 2026-09-29
+
+Neither widening (2026-09-25, 2026-09-27) was ever re-signed: the UI v2 and Round 2
+surfaces shipped with the entry still marked "owner re-sign pending". At the Round 3 plan
+review (G3, "do what you see best fit") the owner's sign-off was to close the failure
+rather than re-sign it a third time. Close condition 1 was met as written, in the place it
+recommended: **the site header, next to the language switch**. Round 3 (plan `check-latest-folder-in-dazzling-widget`, item F,
+design-port decision R3-7; the owner's G3 answer) adds a 32 px icon button after the
+language pill on every page — `src/components/SiteHeader.astro`, one fixed accessible name
+("Pause motion" / "إيقاف الحركة") plus `aria-pressed`, perceivable to mouse, keyboard and
+touch users, remembered per tab in `sessionStorage` (`bs_motion`, a functional setting, no
+consent gate). Its state is `body.motion-paused`, owned by the new `src/lib/client/motion.ts`
+(no imports, so the header never pulls video code) and broadcast as a `motion-updated`
+event that each moving subsystem subscribes to.
+
+"A button plus one listener" turned out to be true only for the two surfaces this entry
+was opened on. The retained `setMotionPaused()` covered the background loops and the
+marquee; every surface widened in since then needed its own wiring, which is what the
+close actually took:
+
+| Surface | Before | Now |
+| --- | --- | --- |
+| Hero / slogan / banner / service hero loops (`lazyVideo.ts`) | paused, but still **mounted** (`preload="auto"` + `src`), so a paused visitor downloaded the file | paused, and the mount is **deferred** until resume (a pending set) — a paused visitor downloads nothing (`tests/e2e/media-bytes.e2e.ts`, "paused visitor") |
+| In-view clips, card hover clips, the explorer clip (`clips.ts`) | never checked the class | `play()` returns before creating the `<video>`; the visibility handler and `retargetClip` are guarded; a global pause stops every frame, a resume plays the frames still wanted |
+| Clients marquee (`global.css`) | already paused under the class | unchanged |
+| Hero scroll cue (`.hero__scroll i`), banner caption dot (`.work-cap__live::after`) | no rule | `animation-play-state: paused` under the class (`global.css`, `banner.css`) |
+| Testimonials carousel (`carousel.ts`) | its own APG control | composes: a global pause sets its `userPaused` so its own button honestly shows Play; a global resume leaves it stopped (only its own Play restarts it); it starts stopped when the page is already paused |
+
+Deliberately **not** a blanket `body.motion-paused *`: a paused choice restored on home
+would freeze the intro plate opaque and the hero entrances at their from-frame. The button
+is hidden by CSS under `prefers-reduced-motion` (nothing moves there — no video mounts,
+the loops are static) and under `@media (scripting: none)`; it is never shown or hidden by
+script after first paint (`tests/e2e/layout-shift.e2e.ts`).
+
+**The detection gap above still holds** and is now covered by a test instead of a
+register entry: `tests/e2e/motion-pause.e2e.ts` (EN + AR) asserts the name and pressed
+state, click / Space / Enter / tap, every `<video>` paused and the three CSS loops held,
+no clip created by a full scroll or a card hover while paused, the on-screen hero alone
+resuming, the choice surviving navigation but not a new tab, the button hidden under
+reduced motion, and the carousel composition. axe still cannot decide 2.2.2 — a green
+a11y run is still not evidence of it; that test is.
+
+**Watch for (the standing rule that replaces this entry):** any new autoplaying video,
+CSS loop or carousel must stop under `body.motion-paused` — a `<video>` through
+`lazyVideo.ts`/`clips.ts`, a CSS loop through an `animation-play-state: paused` rule
+under the class, a script-driven motion through `onMotionChange()` — and must add itself
+to `motion-pause.e2e.ts`. The header switch is the one 2.2.2 control; a surface that
+ignores it reopens this failure without any gate noticing.
 
 ---
 
@@ -420,7 +474,7 @@ would still fix every surface at once.
 **Pillar:** 2 (Performance) — CLAUDE.md §3 Pillar 2 ("Video via Cloudflare Stream only;
 poster is the LCP `<img>`; `preload="none"`"), §6.
 **Opened:** 2026-09-25 · **Owner:** Kareem (kareem@floppytech.ai) · **Expiry:** 2026-12-24
-**Status:** Open
+**Status:** Open (re-signed 2026-09-29)
 
 ### What deviates
 
@@ -481,7 +535,7 @@ All of:
 3. `public/media/showreel.mp4` is deleted;
 4. mounted `<video>` elements use `preload="none"` or a Stream player facade.
 
-### Widened 2026-09-27 — Round 2 surfaces (owner re-sign pending)
+### Widened 2026-09-27 — Round 2 surfaces (owner re-signed 2026-09-29, below)
 
 Round 2 adds three surfaces, all windows of the same `/media/showreel.mp4`, so a visitor
 still downloads ranges of one file:
@@ -508,3 +562,14 @@ of closing this entry. That player — like every Stream facade — is third-par
 must go through the single consent gate (`hasConsent`, CLAUDE.md §7) before it loads
 anything. Today no Stream facade is rendered on the case study, so there is nothing to gate
 there yet (`tests/e2e/case-study.e2e.ts` asserts no `<iframe>` / `.stream` in its HTML).
+
+### Owner re-sign 2026-09-29
+
+**Owner re-sign 2026-09-29: widened scope confirmed, expiry 2026-12-24 unchanged.** The
+Round 3 plan review (G3) confirmed the Round 2 widening above; only Stream (KAN-20) can
+close this entry, and the close conditions are unchanged. One compensating control was
+added with the close of EXC-007: a visitor who pressed the header's motion switch
+downloads **no video bytes at all** — the background loops defer their mount and the
+clips never create their `<video>` while `body.motion-paused` is set, and
+`tests/e2e/media-bytes.e2e.ts` ("paused visitor: no clip/banner bytes after a full
+scroll") asserts it on every route it covers.

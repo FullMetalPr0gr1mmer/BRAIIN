@@ -580,9 +580,12 @@ body:not(:has(.intro)) .site-header--overlay {
   transform: translateY(-110%);
 }
 /* Keyboard focus must never sit inside an off-screen header (WCAG 2.4.7/2.4.11):
-   tabbing into the hidden bar brings it back. The script also never hides a header
-   with focus inside or its menu open. */
-.site-header.is-hidden:focus-within {
+   tabbing into the hidden bar brings it back. KEYBOARD focus only (`:focus-visible`, one
+   selector, so browsers without `:has()` only lose this restore): a plain `:focus-within`
+   also matched the motion switch after a mouse click, and pinned the bar for the rest of
+   the scroll no matter what the script decided (R3-7). The script likewise never hides a
+   header with keyboard focus inside or its menu open. */
+.site-header.is-hidden:has(:focus-visible) {
   transform: none;
 }
 
@@ -696,6 +699,66 @@ html[dir='rtl'] .site-header__key::after {
   border-color: var(--bs-klein);
 }
 
+/* The pill and the motion switch are one flex item (SiteHeader.astro), so the bar still
+   spreads logo | links | tools; inside, the switch sits at the pill's inline end. */
+.site-header__tools {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: none;
+}
+
+/* The motion switch (Round 3, R3-7 — WCAG 2.2.2, closes EXC-007): a 32px round icon
+   button styled like the pill. Server-rendered on every page and never toggled by script
+   (the layout-shift gate); only CSS hides it — under reduced motion (nothing moves) and
+   without script (nothing would answer it). The icon follows `aria-pressed` — the label
+   never changes. */
+.site-header__motion {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  background: none;
+  color: var(--bs-fg);
+  cursor: pointer;
+  transition:
+    background 0.25s,
+    border-color 0.25s;
+}
+/* Pressed = Klein fill under the white glyph (8.6:1) with the white boundary kept (5.3:1
+   on both bars — Klein on the solid black bar alone is 1.98:1). Hover is gated to
+   pointers that hover: on touch the fill would otherwise outlive the tap that RESUMED
+   and read as "still pressed". */
+.site-header__motion[aria-pressed='true'] {
+  background: var(--bs-klein);
+}
+@media (hover: hover) {
+  .site-header__motion:hover {
+    background: var(--bs-klein);
+    border-color: var(--bs-klein);
+  }
+}
+.site-header__motion svg {
+  width: 12px;
+  height: 12px;
+}
+.site-header__motion .site-header__motion-play,
+.site-header__motion[aria-pressed='true'] .site-header__motion-pause {
+  display: none;
+}
+.site-header__motion[aria-pressed='true'] .site-header__motion-play {
+  display: block;
+}
+@media (scripting: none) {
+  .site-header__motion {
+    display: none;
+  }
+}
+
 /* Wide screens: the navigation is simply a row in the bar, and the disclosure control
    does not exist. `display: none` on the <details> itself (not just on its <summary>)
    is what makes that true — hiding only the summary left a closed <details> in the
@@ -771,12 +834,48 @@ html[dir='rtl'] .site-header__key::after {
   }
 }
 
-/* Small phones (360–400px): logo, key link, menu toggle and language pill share one row.
-   A tighter gap keeps the logo at its 96px minimum; below that the logo — not the
-   language pill — is what gives way. */
-@media (max-width: 25rem) {
+/* Phones (to 480px): logo, key link, menu toggle, language pill and motion switch share
+   one row. A tighter gap keeps the logo at its 96px minimum — the logo's <img> is
+   `max-width: 100%`, so when the row is short the logo, not the pill, is what gives way.
+   Measured (R3-7): at 412px the 24px gap left the logo 76px once the switch arrived. */
+@media (max-width: 30rem) {
   .site-header__bar {
     gap: 0.75rem;
+  }
+  .site-header__tools {
+    gap: 0.5rem;
+  }
+}
+/* Small phones (360–416px): six items in 360px. Everything but the logo tightens — the
+   gutter (14px; the page token is at its 20px floor here), the gaps, the pill and the
+   toggle paddings, the key link's tracking and the switch (26px, above the 24px WCAG
+   2.5.8 minimum). Measured (R3-7): with the previous values the logo had 12px to spare
+   at 360 on Windows, but CI's Linux text rendering (FreeType hinting of the same web
+   fonts) came out ~14px wider across the three text items and read the logo at 94px, so
+   the row gives ~16px more. At 320 the logo gives way, as before. */
+@media (max-width: 26rem) {
+  .site-header__bar {
+    padding-inline: 14px;
+    gap: 0.375rem;
+  }
+  .site-header__tools {
+    gap: 0.25rem;
+  }
+  .site-header__key {
+    letter-spacing: 0.05em;
+  }
+  html[dir='rtl'] .site-header__key {
+    font-size: 13px;
+  }
+  .site-nav__toggle {
+    padding: 0.3rem 0.35rem;
+  }
+  .site-header__lang {
+    padding: 7px 8px;
+  }
+  .site-header__motion {
+    width: 26px;
+    height: 26px;
   }
 }
 
@@ -1089,19 +1188,17 @@ html[dir='rtl'] .hero__cta svg {
   visibility: hidden;
 }
 
-/* The visible pause control was REMOVED under EXC-007 (docs/security-exceptions.md) to
-   match the Brain Station UI reference hero, which ships no such control. That is a
-   WCAG 2.2.2 (Pause, Stop, Hide) regression and is logged as one — it is not an
-   oversight. `prefers-reduced-motion` remains fully honoured: lazyVideo.ts bails before
-   attaching any video at all, so those visitors get the still poster and a frozen
-   marquee.
-
-   The MECHANISM below is deliberately retained even though nothing currently toggles
-   it: `body.motion-paused` still pauses the marquee, and setMotionPaused() in
-   lazyVideo.ts still pauses every background video. Restoring the control is therefore
-   re-adding a button and one listener, not rebuilding the plumbing — which is what
-   makes EXC-007's close condition cheap to satisfy. */
-body.motion-paused .marquee-track {
+/* The sitewide motion switch — the header's pause button (SiteHeader.astro,
+   src/lib/client/motion.ts; Round 3 R3-7, WCAG 2.2.2). `body.motion-paused` is the state:
+   the scripts stop every background loop and clip under it, and these rules hold the
+   infinite CSS loops — the clients marquee and the hero scroll cue here, the banner
+   caption's pulse in banner.css. PAUSED, never `animation: none`, so a resume continues
+   from where it stopped. Deliberately NOT a blanket `body.motion-paused *`: a paused
+   choice restored on home would freeze the intro plate opaque and the hero entrances at
+   their from-frame. `prefers-reduced-motion` is separate and untouched: lazyVideo.ts
+   attaches no video at all, the marquee is static (below) and the switch is hidden. */
+body.motion-paused .marquee-track,
+body.motion-paused .hero__scroll i {
   animation-play-state: paused;
 }
 
@@ -4795,5 +4892,10 @@ html[dir='rtl'] .contact-form--compact .contact-form__foot .cta--trail {
   .rv-init {
     opacity: 1;
     transform: none;
+  }
+  /* The header's motion switch: nothing moves on its own here (no video mounts, the
+     loops above are static), so a pause control would be a control over nothing. */
+  .site-header__motion {
+    display: none;
   }
 }
