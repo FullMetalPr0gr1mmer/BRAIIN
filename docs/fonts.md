@@ -32,8 +32,8 @@
 |---|---|
 | EN + AR fonts **per route** | ≤ 180 KB woff2 (AR face counts) |
 | Hero face (the one preloaded — per route) | ≤ 35 KB Latin / 45 KB Arabic |
-| `font-display` | Archivo: `swap` (never blocks render). Almarai: `optional` (step 2b) |
-| CLS from fonts | 0 — Archivo via `size-adjust` + `ascent/descent-override`; Almarai via `optional` (its fallback cannot be metric-matched for Arabic glyphs) |
+| `font-display` | Archivo: `swap` (never blocks render). Almarai 400/700: `optional`; Almarai 800 (the preloaded hero face): `swap` (step 2b) |
+| CLS from fonts | 0 — Archivo via `size-adjust` + `ascent/descent-override`; Almarai 400/700 via `optional` (its fallback cannot be metric-matched for Arabic glyphs); the preloaded 800 face lands before first paint |
 
 ## Steps
 
@@ -78,7 +78,8 @@
    :root { --bs-font-sans: 'Brand', 'Brand-fallback', system-ui, sans-serif; }
    ```
 
-2b. **Almarai is `font-display: optional`, not `swap`** (Round 3, 2026-09-29). The
+2b. **Almarai 400 and 700 are `font-display: optional`; the 800 hero face stays `swap`**
+   (Round 3, 2026-09-29). The
    metric overrides above are measured against LATIN glyphs (`@capsizecss/metrics` vs
    Arial); Arabic glyph advances in Arial and Almarai differ per glyph, so no
    `size-adjust` can make the fallback wrap Arabic text the same way. With `swap`, every
@@ -91,8 +92,13 @@
    view — no late swap, so no shift — and it is still downloaded, so the next page uses it
    from cache. The preloaded hero face arrives inside the block period on every route, and
    on a fast connection so do the others (the probe showed every face in use at 0 CLS);
-   only a slow first visit renders that one page in the fallback. Archivo stays `swap`: its
-   fallback IS metric-matched and EN routes measure 0. Rule for headings (R3-0): never cap a
+   only a slow first visit renders that one page in the fallback. The 800 face is the
+   preloaded hero face on most routes, and Chrome holds the first paint of text set in a
+   *preloaded* `optional` face until it arrives: as `optional` it cost `/ar/services`
+   ~200 ms of mobile LCP (2.62 s against 2.5 s in CI), so it keeps `swap` — its preload
+   lands before first paint in practice, and only the headline can move if it does not.
+   Archivo stays `swap`: its fallback IS metric-matched and EN routes measure 0. Rule for
+   headings (R3-0): never cap a
    swap-font heading's box in `ch` (it is the width of "0" in whichever font is painting);
    measure the cap once under the loaded face and write it in `em`.
 

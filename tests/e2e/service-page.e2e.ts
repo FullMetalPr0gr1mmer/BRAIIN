@@ -272,8 +272,14 @@ for (const locale of ['en', 'ar'] as const) {
       // reaches), never a live control hidden under the banner
       expect((await fabStack(page)).bannerOpen).toBe(true);
       await expect.poll(async () => (await fabStack(page)).onTop).toBe(true);
-      const lifted = await fabStack(page);
-      expect(lifted.bottom).toBeLessThanOrEqual(lifted.bannerTop);
+      // The lift is a transition: `onTop` is true from its first frame, the button reaches
+      // its lifted place a few hundred ms later (a one-shot read here was 1–6px short on CI).
+      await expect
+        .poll(async () => {
+          const s = await fabStack(page);
+          return s.bottom - s.bannerTop;
+        })
+        .toBeLessThanOrEqual(0);
       // …and once a choice closes the banner it drops back to its place at the edge
       await page.locator('#consent-banner [data-consent="reject"]').click();
       await expect.poll(async () => (await fabStack(page)).gap).toBeLessThan(40);

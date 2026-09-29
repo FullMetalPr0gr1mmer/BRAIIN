@@ -1068,10 +1068,14 @@ The orchestrator renumbers these at integration.
   cause: `Almarai Fallback` is metric-matched for Latin glyphs only, so every weight that
   was not the preloaded hero face re-wrapped Arabic nav links, kickers and filter chips on
   arrival — `/ar/portfolio/all`, whose header is in flow, measured 0.13–0.26 (Lighthouse
-  locally; CI had passed it by timing). Almarai now uses `font-display: optional`: a face
-  not ready at first paint is not swapped in on that page view (and is cached for the
-  next one). Ten cold loads of each route now measure 0.0000; Archivo stays `swap`
-  because EN routes measure 0. Trade: a slow first visit renders one page in the
-  fallback; the hero-face preload keeps the headline in Almarai on every visit. Gate:
+  locally; CI had passed it by timing). Almarai 400 and 700 now use `font-display:
+  optional`: a face not ready at first paint is not swapped in on that page view (and is
+  cached for the next one). The 800 face — the preloaded hero face on most routes — stays
+  `swap`: Chrome holds the first paint of text set in a preloaded `optional` face until it
+  arrives, and as `optional` it cost `/ar/services` ~200 ms of mobile LCP (2.62 s in CI).
+  Its preload lands before first paint in practice, so only the headline could move.
+  Cold loads of `/ar/about`, `/ar/portfolio/all`, `/ar` and `/ar/services` now measure
+  0.0000 (0.0001 on the services proof digits); Archivo stays `swap` because EN routes
+  measure 0. Trade: a slow first visit renders one page's body copy in the fallback. Gate:
   `layout-shift.e2e.ts` cold-loads the four routes at 1350×940 and fails at ≥ 0.02 with
   the element named (Lighthouse's 3-run median could miss the race).
