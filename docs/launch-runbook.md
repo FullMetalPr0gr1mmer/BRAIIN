@@ -539,11 +539,12 @@ the edge until it is snapshotted once.
    ```
 
 From then on no step is needed: a save is live within a minute. A rule whose source renders
-a page (a live service, project, post or page, or a static route) is refused at save time
+a page (a static route, or a live service, project or post) is refused at save time
 — "this path renders a page; a redirect from it would never apply" — as are chains (point
-at the final destination), loops and the reserved paths (`/admin`, `/api/`, `/healthz`, the
+at the final destination — judged through the `/ar` twin fallback too), loops, a rule
+pointing at its own `/ar` twin, and the reserved paths (`/admin`, `/api/`, `/healthz`, the
 asset routes). Deleting a rule stops it at the edge within a minute; a browser that cached
-the 301 keeps it for up to a day (`max-age=86400`).
+a 301/308 keeps it for up to a day (`max-age=86400`), while a 302 is never cached.
 
 ---
 

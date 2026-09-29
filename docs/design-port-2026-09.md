@@ -1074,14 +1074,25 @@ mockup's look; the entries record the mechanisms an editor meets in the admin.
   `private, no-store` (it had no Cache-Control at all), so a rule authored after a URL was
   404'd is not hidden behind an edge-cached 404; and a rule is refused at save time when
   its source renders a page today (a static route, or a published/scheduled service,
-  project, post or page slug), when it chains or loops with another rule, or when it names
-  a reserved path (`/admin`, `/api/`, `/healthz`, the asset routes). The map is read with
-  a 60 s `cacheTtl`; the design is that TTL, not a purge call on the save path.
+  project or post slug — a `pages` row is a section container, not a route, so a bare
+  `/<slug>` is judged by the static-route list alone), when it chains or loops with
+  another rule, or when it names a reserved path (`/admin`, `/api/`, `/healthz`, the asset
+  routes). The map is read with a 60 s `cacheTtl`; the design is that TTL, not a purge
+  call on the save path. Keys are the percent-encoded spelling the browser sends (`/عن`
+  is keyed as `/%D8%B9%D9%86`), so an Arabic source matches. The 30x carries the request's
+  query before the target's fragment (`/services?utm=x#branding`, never after it, where it
+  would be part of the fragment); a 301/308 is cached for a day, a 302 is `no-cache` — it
+  is temporary because it may change.
 - **R3-2. The `/ar` twin falls back to the English rule.** An editor writes `/old →
   /new` once. `/ar/old` has no row of its own, so the lookup tries the logical path and
   re-localises a site-relative target (`/ar/old → /ar/new`); an explicit `/ar/…` row wins,
   and an absolute target is left as written. Without it every rule needed authoring twice
-  and the Arabic twin was the one forgotten.
+  and the Arabic twin was the one forgotten. The fallback has two consequences the save
+  path enforces: a rule cannot point at its own twin (`/x → /ar/x` would re-localise onto
+  `/ar/x` = the request — an infinite redirect), and chains are judged through the
+  fallback (`/campaign → /ar/old` plus `/old → /new` is two hops for `/ar/old`). The
+  lookup itself never answers a rule that resolves to the requested path, whatever the
+  snapshot holds.
 - **R3-3. SEO may delete a redirect.** The kernel's DELETE was gated on
   `content.archiveDelete` (Admin-only, right for content), so the role §5 gives the whole
   module could create and edit a rule but never remove one. A resource may now name its
