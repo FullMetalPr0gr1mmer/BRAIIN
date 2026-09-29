@@ -27,7 +27,7 @@ const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const ID = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
 
-interface RedirectRow {
+interface RedirectRow extends Record<string, unknown> {
   id: string;
   source_path: string;
   target_path: string;
