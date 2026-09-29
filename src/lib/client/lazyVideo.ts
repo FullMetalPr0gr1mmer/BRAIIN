@@ -10,7 +10,10 @@
 // (sections report that through setVideoInView).
 //
 // Respects prefers-reduced-motion and Save-Data (no video at all — the still poster
-// stays), and the sitewide WCAG 2.2.2 motion toggle (setMotionPaused).
+// stays), and the sitewide WCAG 2.2.2 motion switch (src/lib/client/motion.ts, the header
+// button): while `body.motion-paused` is set nothing plays AND nothing mounts — a paused
+// visitor downloads no video; surfaces that asked to mount meanwhile are mounted on
+// resume, and only played if their section is still on screen.
 //
 // A container may play a WINDOW of its file (`data-clip-start` / `data-clip-end`, e.g. a
 // banner hero on one showreel window): the loop seeks back to the start, and the sync
@@ -18,8 +21,11 @@
 // must never adopt each other's clock.
 
 import { clipWindow, seekTarget } from './clips';
+import { isMotionPaused, onMotionChange } from './motion';
 
 const groupTime = new Map<string, number>();
+// Containers whose mount was asked for while motion was paused (mounted on resume).
+const pending = new Set<HTMLElement>();
 
 function videoOf(container: HTMLElement): HTMLVideoElement | null {
   return container.querySelector('video');
@@ -42,13 +48,9 @@ function adopt(video: HTMLVideoElement): void {
   }
 }
 
-function motionPaused(): boolean {
-  return document.body.classList.contains('motion-paused');
-}
-
 function play(container: HTMLElement): void {
   const video = videoOf(container);
-  if (!video || motionPaused()) return;
+  if (!video || isMotionPaused()) return;
   adopt(video);
   void video.play().catch(() => {});
 }
@@ -68,29 +70,47 @@ function pause(container: HTMLElement): void {
  */
 export function setVideoInView(container: HTMLElement, inView: boolean): void {
   container.dataset.videoInView = inView ? '1' : '0';
-  if (inView) play(container);
-  else pause(container);
+  if (!inView) pause(container);
+  // A mount deferred while paused, whose section arrives after the resume: mount now
+  // (which plays it) rather than on the next global resume that may never come.
+  else if (pending.has(container) && !isMotionPaused()) mountLazyVideo(container);
+  else play(container);
 }
 
-/**
- * The hero's WCAG 2.2.2 toggle: pauses every background video, resumes only the
- * on-screen ones. The CSS marquee pauses via the body class this sets.
- */
-export function setMotionPaused(paused: boolean): void {
-  document.body.classList.toggle('motion-paused', paused);
-  for (const container of document.querySelectorAll<HTMLElement>('[data-video-src]')) {
-    if (paused) pause(container);
-    else if (container.dataset.videoInView !== '0') play(container);
-  }
+// The sitewide motion switch (motion.ts). Pause: every background video stops (the
+// group clock is recorded by each one's `pause` listener). Resume: the mounts deferred
+// meanwhile happen — only for surfaces still on screen; the others wait for their
+// section (setVideoInView) — and the on-screen videos play again. Subscribed on first
+// use, not at import: the module is also imported by unit tests with no `document`.
+let motionBound = false;
+function bindMotion(): void {
+  if (motionBound) return;
+  motionBound = true;
+  onMotionChange((paused) => {
+    for (const container of document.querySelectorAll<HTMLElement>('[data-video-src]')) {
+      if (paused) pause(container);
+      else if (container.dataset.videoInView !== '0') {
+        if (pending.has(container)) mountLazyVideo(container);
+        else play(container);
+      }
+    }
+  });
 }
 
 export function mountLazyVideo(container: HTMLElement): void {
+  bindMotion();
   if (container.querySelector('video')) return;
   const src = container.dataset.videoSrc;
   if (!src) return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const nav = navigator as Navigator & { connection?: { saveData?: boolean } };
   if (nav.connection?.saveData) return;
+  // Paused visitors download nothing: the mount waits for the resume (bindMotion above).
+  if (isMotionPaused()) {
+    pending.add(container);
+    return;
+  }
+  pending.delete(container);
 
   const video = document.createElement('video');
   video.muted = true;
@@ -126,7 +146,7 @@ export function mountLazyVideo(container: HTMLElement): void {
   video.addEventListener('pause', () => record(video));
   container.appendChild(video);
 
-  if (container.dataset.videoInView !== '0' && !motionPaused()) {
+  if (container.dataset.videoInView !== '0' && !isMotionPaused()) {
     void video.play().catch(() => {});
   }
 }

@@ -26,6 +26,17 @@ import logo from '@/assets/braiin-logo-white.png';
 //            the way down and returns on the way up.
 // The mockup has no scrim on the bar itself; legibility over bright video comes from the
 // hero's own top gradient (.hero__media::after), which is where it belongs.
+//
+// ── The motion switch (Round 3, R3-7 — closes EXC-007) ───────────────────────────
+// A 32 px icon button after the language pill, on every page: the one WCAG 2.2.2 (Pause,
+// Stop, Hide) control for everything that moves on its own — the background loops, the
+// in-content clips, the clients marquee, the hero scroll cue, the banner caption's pulse
+// and the testimonials carousel (which keeps its own APG control and composes). The
+// state is `body.motion-paused` (src/lib/client/motion.ts); the button is its only
+// writer, remembered per tab. One fixed accessible name + `aria-pressed` (the removed
+// hero control swapped label and pressed state, an APG anti-pattern). It is server-
+// rendered and never shown or hidden by script after first paint (layout-shift gate):
+// CSS hides it under prefers-reduced-motion (nothing to pause there) and without script.
 
 export type HeaderVariant = 'overlay' | 'solid';
 
@@ -60,8 +71,8 @@ const otherLocale: Locale = locale === 'ar' ? 'en' : 'ar';
 const switchHref = langHref ?? localizedPath(logical, otherLocale);
 
 const STR = {
-  en: { skip: 'Skip to content', menu: 'Menu', nav: 'Main navigation' },
-  ar: { skip: 'تخطَّ إلى المحتوى', menu: 'القائمة', nav: 'التنقل الرئيسي' },
+  en: { skip: 'Skip to content', menu: 'Menu', nav: 'Main navigation', motion: 'Pause motion' },
+  ar: { skip: 'تخطَّ إلى المحتوى', menu: 'القائمة', nav: 'التنقل الرئيسي', motion: 'إيقاف الحركة' },
 }[locale];
 ---
 
@@ -144,11 +155,59 @@ const STR = {
       </ul>
     </nav>
 
-    <a class="site-header__lang" href={switchHref} hreflang={otherLocale} lang={otherLocale}>
-      {otherLocale === 'ar' ? 'العربية' : 'English'}
-    </a>
+    {
+      /* The language pill and the motion switch share one flex item so the bar's
+         space-between still spreads logo | links | tools. The button comes AFTER the pill:
+         the pill keeps its place at the bar's inline end (the layout tests measure it). */
+    }
+    <div class="site-header__tools">
+      <a class="site-header__lang" href={switchHref} hreflang={otherLocale} lang={otherLocale}>
+        {otherLocale === 'ar' ? 'العربية' : 'English'}
+      </a>
+      <button
+        class="site-header__motion"
+        type="button"
+        data-motion-toggle
+        aria-pressed="false"
+        aria-label={STR.motion}
+      >
+        <svg class="site-header__motion-pause" viewBox="0 0 16 16" aria-hidden="true"
+          ><path
+            d="M5 3v10M11 3v10"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"></path></svg
+        >
+        <svg class="site-header__motion-play" viewBox="0 0 16 16" aria-hidden="true"
+          ><path d="M5 3l8 5-8 5z" fill="currentColor"></path></svg
+        >
+      </button>
+    </div>
   </div>
 </header>
+
+<script>
+  import { readStoredMotion, setMotionPaused, writeStoredMotion } from '@/lib/client/motion';
+
+  // The motion switch. The tab's remembered choice is applied before anything mounts a
+  // video (the loops wait for `load`, the clips for intersection), so a paused visitor's
+  // next page downloads nothing; the click toggles the sitewide state and remembers it.
+  const toggle = document.querySelector<HTMLButtonElement>('[data-motion-toggle]');
+  if (toggle) {
+    const apply = (paused: boolean) => {
+      setMotionPaused(paused);
+      toggle.setAttribute('aria-pressed', String(paused));
+    };
+    let paused = readStoredMotion();
+    if (paused) apply(true);
+    toggle.addEventListener('click', () => {
+      paused = !paused;
+      apply(paused);
+      writeStoredMotion(paused);
+    });
+  }
+</script>
 
 <script>
   // Solid backdrop once past the page's hero, hidden while scrolling down, back on any
@@ -184,8 +243,11 @@ const STR = {
       const y = window.scrollY;
       const past = y > threshold;
       if (overlay) header.classList.toggle('is-solid', past);
-      // Never hide a header the visitor is using: an open menu, or focus inside it.
-      const inUse = menu?.open === true || header.contains(document.activeElement);
+      // Never hide a header the visitor is using: an open menu, or KEYBOARD focus inside
+      // it (`:focus-visible`, not any focus — a mouse click on the motion switch leaves
+      // focus on the button, and would otherwise stop the bar hiding for the rest of the
+      // scroll; the CSS `:focus-within` restore still brings a hidden bar back on Tab).
+      const inUse = menu?.open === true || header.querySelector(':focus-visible') !== null;
       if (past && y - lastY > 4 && !inUse) header.classList.add('is-hidden');
       else if (y - lastY < -4 || y < threshold * 0.55) header.classList.remove('is-hidden');
       lastY = y;
