@@ -1113,10 +1113,15 @@ The orchestrator renumbers these at integration.
   unflagged with the sample rating stored (422 on `isPlaceholder` when the flag changed,
   on `content` otherwise); the seed's rating is asserted equal to
   `SERVICES_PROOF_SAMPLE_RATING` (`src/lib/sections/samples.ts`, refusal-only, never
-  rendered). Untick + a real rating (or no rating) in the same save passes; a reorder
-  never trips it; the 0025/0027 machinery stays the database half. The dashboard's
-  attention lists now link each title to `/admin/<resource>/<id>` (`RESOURCE_OF`, the
-  view's `entity_type` strings), show a "Where" column (`page: <slug>` for a section,
-  whose title is only its type), and no longer list a sample quote twice: a
-  `consent_missing` row that is also `placeholder_live` is dropped from the consent
-  list, since its fix is "make it real" and the placeholder list already says so.
+  rendered). "The sample" is the sample's number under the sample's label — in either
+  language, since a half-translated claim is still the claim — or under no label at
+  all; a genuine "4.9 / 5" is told apart by its real, sourced label, and the refusal
+  and the field help both say so. Untick + a real rating (or no rating) in the same
+  save passes; a reorder never trips it; the 0025/0027 machinery stays the database
+  half. The dashboard's attention lists now link each title to `/admin/<resource>/<id>`
+  (`RESOURCE_OF`, the view's `entity_type` strings), show a "Where" column
+  (`page: <slug>` for a section, whose title is only its type), and no longer list a
+  sample quote twice: a `consent_missing` row whose id is also listed under any
+  `placeholder_*` kind (live, or still a draft under `placeholder_pending`) is dropped
+  from the consent list, since its fix is "make it real" and the placeholder list
+  already says so.

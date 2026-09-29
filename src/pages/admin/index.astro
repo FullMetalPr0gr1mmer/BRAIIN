@@ -59,11 +59,12 @@ if (session && sb) {
   }
 }
 
-// A sample quote is listed twice — as a live placeholder AND as "no consent" (a sample
-// has none, by design) — so the consent list keeps only rows that are not samples: the
-// sample's fix is "make it real" (runbook §6c step 8), and that list already says so.
+// A sample quote is listed twice — as a placeholder (live, or still a draft under
+// `placeholder_pending`) AND as "no consent" (a sample has none, by design) — so the
+// consent list keeps only rows that are not samples: the sample's fix is "make it real"
+// (runbook §6c step 8), and whichever placeholder list holds it already says so.
 const sampleIds = new Set(
-  attention.filter((row) => row.kind === 'placeholder_live').map((row) => row.id),
+  attention.filter((row) => row.kind.startsWith('placeholder_')).map((row) => row.id),
 );
 const byKind = new Map<string, Attention[]>();
 for (const row of attention) {
