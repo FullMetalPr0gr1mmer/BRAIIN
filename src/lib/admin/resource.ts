@@ -16,6 +16,7 @@ import {
   type WriteRefusals,
 } from './crud';
 import { NotFoundError, ValidationError } from './errors';
+import { writeSystemLog } from '@/lib/data/systemLog';
 
 // A declarative CRUD resource. Fifteen entities in this CMS have the same lifecycle —
 // list, read, create, optimistically update, delete — differing only in table name,
@@ -121,14 +122,58 @@ export interface ResourceConfig {
     values: Row;
     input: ResourcePayload;
   }) => Promise<Row>;
-  /** Runs after a successful write (cache purge, derived rows). Never fatal. */
+  /**
+   * Runs after a successful write (an edge snapshot, derived rows). NEVER fatal, by
+   * construction: it goes through `runHook`, which turns a throw into a system_logs row
+   * and `{ kvSynced: false }` — the row is committed by then, so a 500 here would report
+   * a failure that did not happen and skip the audit row of one that did. A record it
+   * returns (`{ kvSynced, count }`) is spread into the audit detail and the response, so
+   * the editor is told when the edge did not pick the change up.
+   */
   afterWrite?: (ctx: {
     auth: AuthContext;
-    sb: import('@supabase/supabase-js').SupabaseClient;
-    row: Record<string, unknown>;
+    sb: Db;
+    row: Row;
     input: ResourcePayload;
     operation: 'create' | 'update';
-  }) => Promise<void>;
+  }) => Promise<HookResult | void>;
+  /** The DELETE counterpart of `afterWrite` (same contract; the row is gone by then). */
+  afterDelete?: (ctx: { auth: AuthContext; sb: Db; id: string }) => Promise<HookResult | void>;
+  /**
+   * Capability that guards DELETE. Defaults to `content.archiveDelete` (Admin-only, §5) —
+   * the right default for content. A resource whose §5 row grants another role the
+   * whole module (redirects: Admin + SEO "full") names its own; the write capability is
+   * still required alongside it.
+   */
+  deleteCap?: Capability;
+}
+
+/** What a side-effect hook reports back: metadata about the effect, never row values. */
+export type HookResult = Record<string, unknown>;
+
+/**
+ * Runs an after-write/after-delete hook so that it cannot fail the request. The database
+ * write already committed; what is left is telling the operator whether the side effect
+ * landed. A throw is logged (Developer-visible, §10) and reported as `kvSynced: false` —
+ * the one side effect these hooks perform today is an edge snapshot, and "the row is
+ * saved but the edge did not pick it up" is exactly the fact the editor must act on.
+ */
+async function runHook(
+  config: ResourceConfig,
+  hook: 'afterWrite' | 'afterDelete',
+  fn: () => Promise<HookResult | void>,
+): Promise<HookResult> {
+  try {
+    return (await fn()) ?? {};
+  } catch (err) {
+    void writeSystemLog({
+      level: 'error',
+      source: `admin:${config.entity}.${hook}`,
+      message: err instanceof Error ? err.message : `${hook} failed`,
+      detail: { table: config.table },
+    });
+    return { kvSynced: false };
+  }
 }
 
 function readCapsOf(config: ResourceConfig): readonly Capability[] {
@@ -230,6 +275,14 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
             constraints: config.constraintFields,
             refusals: config.writeRefusals,
           });
+      // The hook runs BEFORE the audit row is queued so its outcome is part of the record
+      // (`kvSynced: false` in the audit detail is how "the edge never saw this rule" is
+      // found later), and so a hook failure cannot skip the audit row.
+      const effect = config.afterWrite
+        ? await runHook(config, 'afterWrite', () =>
+            config.afterWrite!({ auth, sb, row, input: payload, operation: 'create' }),
+          )
+        : {};
       audit({
         action: `${config.entity}.create`,
         entityType: config.entity,
@@ -237,10 +290,10 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
         detail: {
           status: values['status'] ?? null,
           children: (config.childKeys ?? []).filter((key) => payload[key] !== undefined),
+          ...effect,
         },
       });
-      await config.afterWrite?.({ auth, sb, row, input: payload, operation: 'create' });
-      return shape(config, row);
+      return { ...shape(config, row), ...effect };
     },
   });
 
@@ -322,23 +375,32 @@ export function itemRoutes(config: ResourceConfig): {
               refusals: config.writeRefusals,
             },
           );
+      const effect = config.afterWrite
+        ? await runHook(config, 'afterWrite', () =>
+            config.afterWrite!({ auth, sb, row, input: payload, operation: 'update' }),
+          )
+        : {};
       audit({
         action: `${config.entity}.update`,
         entityType: config.entity,
         entityId: id,
         // Field NAMES, never values — this table is read by anyone with `audit.view`
         // and some of these entities carry PII-adjacent copy.
-        detail: { fields: [...Object.keys(values), ...childFields], version: payload.version },
+        detail: {
+          fields: [...Object.keys(values), ...childFields],
+          version: payload.version,
+          ...effect,
+        },
       });
-      await config.afterWrite?.({ auth, sb, row, input: payload, operation: 'update' });
-      return shape(config, row);
+      return { ...shape(config, row), ...effect };
     },
   });
 
   const DELETE = defineAdminRoute({
-    // NOT the write capability: deleting is `content.archiveDelete`, which in §5 is
-    // Admin-only even for entities Content Creator may freely author.
-    cap: 'content.archiveDelete',
+    // NOT the write capability: deleting content is `content.archiveDelete`, which in §5
+    // is Admin-only even for entities Content Creator may freely author. A resource may
+    // name its own `deleteCap` (redirects → `redirects.manage`, so SEO's "full" row holds).
+    cap: config.deleteCap ?? 'content.archiveDelete',
     handler: async ({ auth, sb, params, audit }) => {
       const id = requireId(params);
       // BOTH capabilities: you may only delete a thing you were allowed to author.
@@ -346,8 +408,16 @@ export function itemRoutes(config: ResourceConfig): {
       // it has no write capability for, which is not what the matrix says.
       assertCap(auth, config.writeCap, ['full']);
       await deleteRow(sb, config.table, auth, id, { constraints: config.constraintFields });
-      audit({ action: `${config.entity}.delete`, entityType: config.entity, entityId: id });
-      return { deleted: id };
+      const effect = config.afterDelete
+        ? await runHook(config, 'afterDelete', () => config.afterDelete!({ auth, sb, id }))
+        : {};
+      audit({
+        action: `${config.entity}.delete`,
+        entityType: config.entity,
+        entityId: id,
+        detail: effect,
+      });
+      return { deleted: id, ...effect };
     },
   });
 
