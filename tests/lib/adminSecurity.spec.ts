@@ -224,7 +224,14 @@ describe('redirects', () => {
   });
 
   it('a source is a bare pathname: no query, fragment or protocol-relative host', () => {
-    for (const sourcePath of ['/old?x=1', '/old#top', '//evil.test/x', '/with space']) {
+    // `/\host/x`: the URL standard reads the backslash as a slash — it IS `//host/x`.
+    for (const sourcePath of [
+      '/old?x=1',
+      '/old#top',
+      '//evil.test/x',
+      '/\\evil.test/x',
+      '/with space',
+    ]) {
       expect(
         RedirectWriteSchema.safeParse({ sourcePath, targetPath: '/a' }).success,
         sourcePath,
@@ -243,6 +250,8 @@ describe('redirects', () => {
       'http://example.test/x',
       'javascript:alert(1)',
       '//evil.test/x',
+      '/\\evil.test/x',
+      '/new/\\evil.test',
       'new',
       'mailto:x@y.z',
     ]) {

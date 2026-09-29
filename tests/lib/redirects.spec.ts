@@ -4,6 +4,7 @@ import {
   REDIRECT_CACHE_CONTROL,
   REDIRECT_MAP_CACHE_TTL_S,
   RESERVED_REDIRECT_PREFIXES,
+  TEMPORARY_REDIRECT_CACHE_CONTROL,
   buildRedirectMap,
   getRedirectMap,
   isReservedRedirectPath,
@@ -11,7 +12,10 @@ import {
   normalizeRedirectPath,
   parseRedirectMap,
   putRedirectMap,
+  redirectLocation,
   redirectResponse,
+  sitePathOf,
+  targetPathOf,
   type RedirectMap,
 } from '@/lib/http/redirects';
 import { RETIRED_CACHE_CONTROL } from '@/lib/services/retired';
@@ -40,8 +44,50 @@ describe('normalizeRedirectPath', () => {
   });
 
   it('is idempotent', () => {
-    for (const p of ['/a/b/', '/a/b', '/']) {
+    for (const p of ['/a/b/', '/a/b', '/', '/عن', '/a%20b']) {
       expect(normalizeRedirectPath(normalizeRedirectPath(p))).toBe(normalizeRedirectPath(p));
+    }
+  });
+
+  it('canonicalises to the percent-encoded spelling the request carries', () => {
+    // An editor types `/عن`; the browser sends `/%D8%B9%D9%86`. One key for both, or an
+    // Arabic source could never match (review finding 4).
+    expect(normalizeRedirectPath('/عن')).toBe('/%D8%B9%D9%86');
+    expect(normalizeRedirectPath('/%D8%B9%D9%86')).toBe('/%D8%B9%D9%86');
+    expect(normalizeRedirectPath('/ar/عن/')).toBe('/ar/%D8%B9%D9%86');
+    expect(normalizeRedirectPath('/a b')).toBe('/a%20b');
+    expect(normalizeRedirectPath('/a%20b')).toBe('/a%20b');
+    expect(normalizeRedirectPath('/a/./b/../c/')).toBe('/a/c');
+  });
+
+  it('drops a query or fragment (they never belong in a key) and keeps case', () => {
+    expect(normalizeRedirectPath('/old?x=1#top')).toBe('/old');
+    expect(normalizeRedirectPath('/Old')).toBe('/Old');
+  });
+});
+
+describe('sitePathOf / targetPathOf', () => {
+  it('is the canonical pathname of a site-relative reference', () => {
+    expect(sitePathOf('/new/')).toBe('/new/');
+    expect(sitePathOf('/new?x=1#top')).toBe('/new');
+    expect(targetPathOf('/new')).toBe('/new');
+    expect(targetPathOf('/new/')).toBe('/new');
+    expect(targetPathOf('/new?x=1#top')).toBe('/new');
+    expect(targetPathOf('/services#branding')).toBe('/services');
+  });
+
+  it('is null for a reference that is not a site path or resolves off the site', () => {
+    // WHATWG reads a backslash as a slash in an https URL: `/\host/x` IS `//host/x`.
+    for (const ref of [
+      'https://example.test/x',
+      '//example.test/x',
+      '/\\evil.test/x',
+      '/\\\\evil.test',
+      'relative',
+      '',
+    ]) {
+      expect(sitePathOf(ref), ref).toBeNull();
+      expect(targetPathOf(ref), ref).toBeNull();
     }
   });
 });
@@ -122,6 +168,25 @@ describe('buildRedirectMap', () => {
     ]);
     expect(map).toEqual({});
   });
+
+  it('drops a "site-relative" target or source that resolves off the site', () => {
+    // The schema refuses these on write; the map refuses them again because the map is
+    // what the edge serves, whatever path a row took into the table.
+    const map = buildRedirectMap([
+      { source_path: '/a', target_path: '/\\evil.test/x' },
+      { source_path: '/b', target_path: '//evil.test/x' },
+      { source_path: '//evil.test/c', target_path: '/fine' },
+      { source_path: '/\\evil.test/d', target_path: '/fine' },
+      { source_path: '/ok', target_path: '/fine' },
+      { source_path: '/abs', target_path: 'https://example.test/y' },
+    ]);
+    expect(Object.keys(map)).toEqual(['/ok', '/abs']);
+  });
+
+  it('keys an Arabic source by its percent-encoded spelling', () => {
+    const map = buildRedirectMap([{ source_path: '/عن', target_path: '/about' }]);
+    expect(Object.keys(map)).toEqual(['/%D8%B9%D9%86']);
+  });
 });
 
 describe('parseRedirectMap', () => {
@@ -192,6 +257,27 @@ describe('lookupRedirect', () => {
     expect(lookupRedirect('/explicit-missing', map)).toBeNull();
     expect(lookupRedirect('/ar', map)).toBeNull();
   });
+
+  it('finds a source authored in Arabic from the percent-encoded request path', () => {
+    const arabic = buildRedirectMap([{ source_path: '/عن', target_path: '/about' }]);
+    expect(lookupRedirect('/%D8%B9%D9%86', arabic)).toEqual(rule('/about'));
+    expect(lookupRedirect('/ar/%D8%B9%D9%86', arabic)).toEqual(rule('/ar/about'));
+    expect(
+      lookupRedirect('/a%20b', buildRedirectMap([{ source_path: '/a b', target_path: '/c' }])),
+    ).toEqual(rule('/c'));
+  });
+
+  it('never answers a rule that resolves to the requested path itself (review finding 2)', () => {
+    // `/x → /ar/x`: the twin fallback re-localises the target onto `/ar/x` = the request
+    // — an infinite redirect if served. The save path refuses the rule; the lookup is the
+    // last line of defence for a snapshot that carries one anyway.
+    const twin: RedirectMap = { '/x': rule('/ar/x') };
+    expect(lookupRedirect('/ar/x', twin)).toBeNull();
+    expect(lookupRedirect('/x', twin)).toEqual(rule('/ar/x'));
+    // …and an explicit self-reference hidden by a query or a trailing slash.
+    expect(lookupRedirect('/self', { '/self': rule('/self?tab=1') })).toBeNull();
+    expect(lookupRedirect('/self/', { '/self': rule('/self/') })).toBeNull();
+  });
 });
 
 describe('redirectResponse', () => {
@@ -213,6 +299,31 @@ describe('redirectResponse', () => {
   it('a target with its own query wins over the request query', () => {
     const res = redirectResponse(rule('/new?tab=2'), url('/old?utm=x'));
     expect(res.headers.get('location')).toBe('/new?tab=2');
+  });
+
+  it('puts the request query BEFORE a target fragment (review finding 1)', () => {
+    // `/services#branding?utm=x` would make the query part of the fragment — never sent
+    // to the server, and the campaign tag lost.
+    expect(redirectLocation(rule('/services#branding'), '?utm=x')).toBe('/services?utm=x#branding');
+    expect(redirectLocation(rule('/services#branding'), '')).toBe('/services#branding');
+    expect(redirectLocation(rule('/new'), '?utm=x')).toBe('/new?utm=x');
+    // Both: the target's own query wins, and its fragment stays where it was.
+    expect(redirectLocation(rule('/new?tab=2#top'), '?utm=x')).toBe('/new?tab=2#top');
+    const res = redirectResponse(rule('/services#branding'), url('/old?utm=x&b=1'));
+    expect(res.headers.get('location')).toBe('/services?utm=x&b=1#branding');
+  });
+
+  it('a 302 is never cached; 301 and 308 carry the day-long lifetime (review finding 6)', () => {
+    expect(redirectResponse(rule('/new', 302), url('/old')).headers.get('cache-control')).toBe(
+      TEMPORARY_REDIRECT_CACHE_CONTROL,
+    );
+    expect(TEMPORARY_REDIRECT_CACHE_CONTROL).toBe('no-cache');
+    for (const status of [301, 308] as const) {
+      expect(
+        redirectResponse(rule('/new', status), url('/old')).headers.get('cache-control'),
+        String(status),
+      ).toBe(REDIRECT_CACHE_CONTROL);
+    }
   });
 
   it('the Cache-Control equals the retired-services map (one constant, two consumers)', () => {

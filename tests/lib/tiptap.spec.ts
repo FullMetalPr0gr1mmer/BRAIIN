@@ -95,6 +95,9 @@ describe('sanitizeHref — scheme allowlist', () => {
     'file:///etc/passwd',
     // Protocol-relative: looks relative, is absolute and cross-origin.
     '//evil.example/path',
+    // …and its backslash twin: the URL standard reads `\` as `/` in an https URL.
+    '/\\evil.example/path',
+    '/\\\\evil.example',
   ];
   for (const href of rejected) {
     it(`rejects ${JSON.stringify(href)}`, () => {
@@ -108,6 +111,7 @@ describe('sanitizeHref — scheme allowlist', () => {
     'mailto:a@b.test',
     'tel:+966500000000',
     '/services',
+    '/services?x=1#top',
     '#anchor',
     '?q=1',
   ];

@@ -88,7 +88,7 @@ jobs:
       - name: Seed the authored-redirects snapshot into local KV
         run: >-
           npx wrangler kv key put site:redirects
-          '{"/e2e-old":{"to":"/about","status":301},"/e2e-temp":{"to":"/contact?from=e2e","status":302},"/api/e2e-old":{"to":"/about","status":301}}'
+          '{"/e2e-old":{"to":"/about","status":301},"/e2e-temp":{"to":"/contact?from=e2e","status":302},"/e2e-anchor":{"to":"/services#e2e","status":308},"/api/e2e-old":{"to":"/about","status":301}}'
           --binding SESSION --local --preview
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium

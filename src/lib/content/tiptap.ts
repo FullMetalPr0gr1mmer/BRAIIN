@@ -43,22 +43,35 @@ const ALLOWED_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:']);
 /**
  * Returns a safe href, or null to drop the link entirely (the text survives).
  *
- * Relative URLs are allowed by prefix check rather than by parsing, because parsing a
- * relative URL requires inventing a base and the answer would then depend on the base
- * we invented. Scheme-relative `//evil.example` is rejected for the same reason it
- * looks harmless: it is an absolute cross-origin URL wearing a relative costume.
+ * A relative href is resolved against a throwaway base and kept only when it stays on
+ * that base's origin. The base is invented, but the answer does not depend on it: a
+ * same-site reference resolves onto whatever origin it is given, while scheme-relative
+ * `//evil.example` and `/\evil.example` (the URL standard reads a backslash as a slash
+ * in an https URL) resolve to another host from ANY base. Both look harmless precisely
+ * because they are absolute cross-origin URLs wearing a relative costume.
  */
 export function sanitizeHref(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const href = raw.trim();
   if (href.length === 0 || href.length > 2048) return null;
-  if (href.startsWith('//')) return null;
-  if (href.startsWith('/') || href.startsWith('#') || href.startsWith('?')) return href;
+  if (href.startsWith('/') || href.startsWith('#') || href.startsWith('?')) {
+    return staysOnSite(href) ? href : null;
+  }
   try {
     const parsed = new URL(href);
     return ALLOWED_SCHEMES.has(parsed.protocol) ? href : null;
   } catch {
     return null;
+  }
+}
+
+const SAME_SITE_BASE = 'https://same-site.invalid';
+
+function staysOnSite(href: string): boolean {
+  try {
+    return new URL(href, SAME_SITE_BASE).origin === SAME_SITE_BASE;
+  } catch {
+    return false;
   }
 }
 

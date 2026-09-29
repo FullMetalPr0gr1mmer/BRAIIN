@@ -23,12 +23,14 @@ import { expect, test } from '@playwright/test';
 export const SEEDED_MAP = {
   '/e2e-old': { to: '/about', status: 301 },
   '/e2e-temp': { to: '/contact?from=e2e', status: 302 },
+  '/e2e-anchor': { to: '/services#e2e', status: 308 },
   // Reserved: the map builder drops it on a real sync, and the middleware never consults
   // the map under /api anyway — seeded here to prove the second fence end to end.
   '/api/e2e-old': { to: '/about', status: 301 },
 } as const;
 
 const REDIRECT_CACHE_CONTROL = 'public, max-age=86400';
+const TEMPORARY_REDIRECT_CACHE_CONTROL = 'no-cache';
 const NO_STORE = 'private, no-store';
 
 test.describe('authored redirects reach the edge', () => {
@@ -62,6 +64,17 @@ test.describe('authored redirects reach the edge', () => {
     const res = await request.get('/e2e-temp?x=1', { maxRedirects: 0 });
     expect(res.status()).toBe(302);
     expect(res.headers()['location']).toBe('/contact?from=e2e');
+    // Temporary means it may change: a 302 is never cached, at the edge or in the browser.
+    expect(res.headers()['cache-control']).toBe(TEMPORARY_REDIRECT_CACHE_CONTROL);
+  });
+
+  test('the request query lands before a target fragment, never inside it', async ({ request }) => {
+    const res = await request.get('/e2e-anchor?utm=x', { maxRedirects: 0 });
+    expect(res.status()).toBe(308);
+    expect(res.headers()['location']).toBe('/services?utm=x#e2e');
+    expect(res.headers()['cache-control']).toBe(REDIRECT_CACHE_CONTROL);
+    const bare = await request.get('/e2e-anchor', { maxRedirects: 0 });
+    expect(bare.headers()['location']).toBe('/services#e2e');
   });
 
   test('the /ar twin of an English rule redirects to the Arabic target (R3-2)', async ({

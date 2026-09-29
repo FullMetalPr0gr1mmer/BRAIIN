@@ -622,9 +622,12 @@ export const SeoDefaultsSchema = z.object({
  * request pathname, so a query or fragment in a source could never match (and a
  * protocol-relative `//host` is not a path at all). The target is what the Location
  * header will carry: a site-relative href (query/fragment allowed) or an https:// URL.
+ * A backslash is refused anywhere in a site-relative value: the URL standard reads `\`
+ * as `/` in an https URL, so `/\host/x` IS `//host/x` — a cross-origin URL wearing a
+ * site-relative costume (sanitizeHref and the map builder refuse it again by origin).
  */
-export const REDIRECT_SOURCE_PATTERN = /^\/(?!\/)[^\s?#]*$/;
-export const REDIRECT_TARGET_PATTERN = /^(\/(?!\/)\S*|https:\/\/\S+)$/;
+export const REDIRECT_SOURCE_PATTERN = /^\/(?!\/)[^\s?#\\]*$/;
+export const REDIRECT_TARGET_PATTERN = /^(\/(?!\/)[^\s\\]*|https:\/\/\S+)$/;
 
 export const RedirectWriteSchema = z.object({
   sourcePath: z
