@@ -8,7 +8,10 @@ import { collectionRoutes, itemRoutes, type ResourceConfig } from '@/lib/admin/r
 import { sectionResource } from '@/lib/admin/resources';
 import type { Role } from '@/lib/auth/types';
 
-vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+const { systemLog } = vi.hoisted(() => ({
+  systemLog: vi.fn(async (_entry: Record<string, unknown>) => true),
+}));
+vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: systemLog }));
 vi.mock('@/lib/admin/audit', () => ({ writeAudit: async () => undefined }));
 
 // ── Postgres errors → what an editor is told ─────────────────────────────────────
@@ -93,6 +96,9 @@ function stubDb(stored: Record<string, unknown>) {
     builder[m] = () => builder;
   builder['single'] = async () => ({ data: { id: ID, version: 1, ...stored }, error: null });
   builder['maybeSingle'] = async () => ({ data: { id: ID, version: 1, ...stored }, error: null });
+  // Awaiting the builder itself is how a list (and deleteRow's `.select('id')`) resolves.
+  builder['then'] = (resolve: (value: unknown) => unknown) =>
+    Promise.resolve(resolve({ data: [{ id: ID, version: 1, ...stored }], error: null, count: 1 }));
   return { from: () => builder };
 }
 
@@ -155,6 +161,7 @@ function config(extra: Extra = {}): ResourceConfig {
 // Braces matter: a function RETURNED from beforeEach is run as a teardown by vitest.
 beforeEach(() => {
   publishable.mockReset();
+  systemLog.mockClear();
 });
 
 describe('resource routes — the publish preconditions', () => {
@@ -309,5 +316,98 @@ describe('resource routes — fromRow shapes every response', () => {
     const res = (await GET(ctx('admin', 'GET', undefined))) as Response;
     const body = (await res.json()) as { data: Record<string, unknown> };
     expect(body.data['label']).toBe(`#${ID}`);
+  });
+});
+
+// ── Side-effect hooks and the delete capability (Round 3, design-port R3-3) ──────
+describe('resource routes — afterWrite / afterDelete run through runHook', () => {
+  const body = async (res: unknown) =>
+    ((await (res as Response).json()) as { data: Record<string, unknown> }).data;
+
+  it('a throwing afterWrite is a 200 with kvSynced:false and a system log, never a 500', async () => {
+    const { POST } = collectionRoutes(
+      config({
+        afterWrite: async () => {
+          throw new Error('kv down');
+        },
+      }),
+    );
+    const res = await POST(ctx('admin', 'POST', { title: 'x', status: 'draft' }));
+    expect((res as Response).status).toBe(200);
+    expect((await body(res))['kvSynced']).toBe(false);
+    expect(systemLog).toHaveBeenCalledTimes(1);
+    expect(systemLog.mock.calls[0]?.[0]).toMatchObject({
+      level: 'error',
+      source: 'admin:thing.afterWrite',
+    });
+  });
+
+  it('what the hook returns is in the response, on create and on update', async () => {
+    const hooked = config({ afterWrite: async () => ({ kvSynced: true, count: 3 }) });
+    const { POST } = collectionRoutes(hooked);
+    const { PATCH } = itemRoutes(hooked);
+    const created = await body(await POST(ctx('admin', 'POST', { title: 'x', status: 'draft' })));
+    expect(created).toMatchObject({ id: ID, kvSynced: true, count: 3 });
+    const updated = await body(await PATCH(ctx('admin', 'PATCH', { title: 'y', version: 1 })));
+    expect(updated).toMatchObject({ id: ID, kvSynced: true, count: 3 });
+  });
+
+  it('a hook returning nothing leaves the response as before', async () => {
+    const { POST } = collectionRoutes(config({ afterWrite: async () => undefined }));
+    const created = await body(await POST(ctx('admin', 'POST', { title: 'x', status: 'draft' })));
+    expect(created).not.toHaveProperty('kvSynced');
+  });
+
+  it('afterDelete runs after the row is gone and its result is in the response', async () => {
+    const afterDelete = vi.fn(async () => ({ kvSynced: true, count: 0 }));
+    const { DELETE } = itemRoutes(config({ afterDelete }));
+    const res = await DELETE(ctx('admin', 'DELETE', undefined));
+    expect((res as Response).status).toBe(200);
+    expect(await body(res)).toEqual({ deleted: ID, kvSynced: true, count: 0 });
+    // …and receives the row as it was, so a hook can say what went (review finding 7).
+    expect(afterDelete).toHaveBeenCalledWith(
+      expect.objectContaining({ id: ID, row: expect.objectContaining({ id: ID, version: 1 }) }),
+    );
+  });
+
+  it('a throwing afterDelete does not undo a 200 either', async () => {
+    const { DELETE } = itemRoutes(
+      config({
+        afterDelete: async () => {
+          throw new Error('kv down');
+        },
+      }),
+    );
+    const res = await DELETE(ctx('admin', 'DELETE', undefined));
+    expect((res as Response).status).toBe(200);
+    expect((await body(res))['kvSynced']).toBe(false);
+    expect(systemLog.mock.calls[0]?.[0]).toMatchObject({ source: 'admin:thing.afterDelete' });
+  });
+});
+
+describe('resource routes — deleteCap', () => {
+  it('defaults to content.archiveDelete: SEO cannot delete even where it may write', async () => {
+    const { DELETE } = itemRoutes(config({ writeCap: 'redirects.manage', statusOf: undefined }));
+    expect(await statusOf(DELETE, ctx('seo', 'DELETE', undefined))).toBe(403);
+    expect(await statusOf(DELETE, ctx('admin', 'DELETE', undefined))).toBe(200);
+  });
+
+  it('a resource naming its own deleteCap lets that role delete, and only that role', async () => {
+    const { DELETE } = itemRoutes(
+      config({ writeCap: 'redirects.manage', deleteCap: 'redirects.manage', statusOf: undefined }),
+    );
+    expect(await statusOf(DELETE, ctx('seo', 'DELETE', undefined))).toBe(200);
+    expect(await statusOf(DELETE, ctx('admin', 'DELETE', undefined))).toBe(200);
+    expect(await statusOf(DELETE, ctx('content_creator', 'DELETE', undefined))).toBe(403);
+    expect(await statusOf(DELETE, ctx('developer', 'DELETE', undefined))).toBe(403);
+  });
+
+  it('deleteCap never waives the write capability (both must hold)', async () => {
+    // Content Creator holds content.publish but not redirects.manage: naming a cap it
+    // holds as deleteCap must still be refused on the write capability.
+    const { DELETE } = itemRoutes(
+      config({ writeCap: 'redirects.manage', deleteCap: 'content.publish', statusOf: undefined }),
+    );
+    expect(await statusOf(DELETE, ctx('content_creator', 'DELETE', undefined))).toBe(403);
   });
 });

@@ -511,6 +511,43 @@ are listed on the admin dashboard as "Placeholder content is live" until then.
 
 ---
 
+### 6f. Redirects — first edge snapshot after deploy (Round 3)
+
+Since Round 3 the admin's **Redirects** table reaches the edge: every save and delete rebuilds
+the tenant's whole map into KV `site:redirects` (the maintenance pattern — the row for
+durability and audit, the key for the read path), and the middleware consults that map
+**only where the render answered 404**, so a rule can never shadow a page that exists
+(precedence: live page > the code-owned retired-services map > the table > 404). Before
+Round 3 nothing wrote the key: every rule authored until then is in the table and **not** at
+the edge until it is snapshotted once.
+
+**Once, after the Round 3 deploy** (and after any KV incident), as Admin or SEO:
+
+1. Admin → **Redirects**. The status line beside **Sync to edge** reads
+   "N in the database · nothing at the edge yet".
+2. Click **Sync to edge**. The line becomes "N in the database · N at the edge" and the
+   audit log gains a `redirect.sync` row with `kvSynced: true` and the count. A red
+   "Saved to the database, but the edge did not pick it up" means KV refused the write —
+   `/admin/logs` has the reason (`admin:redirect.sync`); fix, then click again.
+3. Verify from outside (the map is read with a 60 s `cacheTtl`, so allow a minute):
+
+   ```bash
+   curl -sI $BASE/<an-authored-source> | grep -i '^HTTP\|^location\|^cache-control'
+   # 301 (or the rule's code) · location: <target> · cache-control: public, max-age=86400
+   curl -sI $BASE/ar/<the-same-source> | grep -i '^location'     # the /ar twin, re-localised
+   curl -s -o /dev/null -w '%{http_code}\n' $BASE/<the-target>    # 200 — a live page is never shadowed
+   ```
+
+From then on no step is needed: a save is live within a minute. A rule whose source renders
+a page (a static route, or a live service, project or post) is refused at save time
+— "this path renders a page; a redirect from it would never apply" — as are chains (point
+at the final destination — judged through the `/ar` twin fallback too), loops, a rule
+pointing at its own `/ar` twin, and the reserved paths (`/admin`, `/api/`, `/healthz`, the
+asset routes). Deleting a rule stops it at the edge within a minute; a browser that cached
+a 301/308 keeps it for up to a day (`max-age=86400`), while a 302 is never cached.
+
+---
+
 ## 7. Cloudflare WAF (CLAUDE.md §3)
 
 Not code; nothing enforces these until they are created.
@@ -539,6 +576,8 @@ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' $BASE/admin      # 302 
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/api/admin/services         # 401
 curl -s -X POST -d '{}' -o /dev/null -w '%{http_code}\n' $BASE/api/admin/services  # 403 (csrf)
 curl -sI $BASE/admin/login | grep -i 'cache-control\|content-security'    # no-store; no unsafe-inline
+curl -sI $BASE/services/branding | grep -i '^HTTP\|^location'            # 301 → /services#branding (code map)
+curl -sI $BASE/<an-authored-redirect-source> | grep -i '^HTTP\|^location' # 301 → its target (table, §6f); a mistyped URL → 404 private, no-store
 ```
 
 Then in a browser:

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { toast } from '@/lib/admin/toast';
-import { uiFor, type ColumnDef } from '@/lib/admin/uiSchema';
+import { uiFor, type ColumnDef, type SyncActionDef } from '@/lib/admin/uiSchema';
 
 // The list view for every CRUD resource. Reads its shape from RESOURCE_UI, so adding an
 // entity is a config entry rather than a component.
@@ -42,6 +42,9 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(true);
+  // Bumped after every delete so the edge status line re-reads (a delete rebuilds the
+  // snapshot server-side; the line must not keep showing the old count).
+  const [syncEpoch, setSyncEpoch] = useState(0);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -78,8 +81,12 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
     if (!confirmed) return;
     setError('');
     try {
-      await adminFetch(`/api/admin/${ui.slug}/${row.id}`, { method: 'DELETE' });
+      const result = await adminFetch<{ kvSynced?: boolean }>(`/api/admin/${ui.slug}/${row.id}`, {
+        method: 'DELETE',
+      });
       toast(`${ui.singular} deleted.`, 'ok');
+      if (result.kvSynced === false) setError(EDGE_NOT_SYNCED);
+      setSyncEpoch((n) => n + 1);
       await load();
     } catch (err) {
       // Errors stay inline, never in a toast — they must not auto-dismiss.
@@ -159,6 +166,8 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
         </p>
       )}
 
+      {ui.syncAction && <SyncStatus action={ui.syncAction} epoch={syncEpoch} />}
+
       <div className="card table-wrap">
         <table className="data">
           <caption className="visually-hidden">{ui.title}</caption>
@@ -236,6 +245,94 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
           Next
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The maintenance panel's wording (MaintenancePanel.tsx), reused: the row is committed,
+ * the edge snapshot is not, and the operator must act — never a silent 200.
+ */
+export const EDGE_NOT_SYNCED =
+  'Saved to the database, but the edge did not pick it up. The site is still serving the previous rules — retry with “Sync to edge” before relying on this.';
+
+interface SyncStatusProps {
+  action: SyncActionDef;
+  /** Any change bumps it and the counts are re-read. */
+  epoch: number;
+}
+
+/**
+ * "Sync to edge" and the status line beside it. The table is the source of truth, the
+ * snapshot is what the public request path reads (Round 3, design-port R3-1); this is
+ * the one place the two are compared, so an operator can see "12 in the database, none
+ * at the edge" after a deploy and fix it with one click (runbook §6f).
+ */
+function SyncStatus({ action, epoch }: SyncStatusProps) {
+  const [counts, setCounts] = useState<{ db: number; edge: number | null } | null>(null);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      setCounts(await adminFetch<{ db: number; edge: number | null }>(action.endpoint));
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }, [action.endpoint]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh, epoch]);
+
+  async function sync() {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await adminFetch<{ kvSynced: boolean; count: number; truncated: boolean }>(
+        action.endpoint,
+        { method: 'POST' },
+      );
+      await refresh();
+      if (!result.kvSynced) setError(EDGE_NOT_SYNCED);
+      else
+        setNotice(
+          `${result.count} rule${result.count === 1 ? '' : 's'} live at the edge.` +
+            (result.truncated ? ' The table holds more rules than one snapshot carries.' : ''),
+        );
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="toolbar" data-sync>
+      <button type="button" onClick={() => void sync()} disabled={busy}>
+        {action.label}
+      </button>
+      <span className="admin-sub" aria-live="polite">
+        {counts === null
+          ? 'Edge status unknown.'
+          : counts.edge === null
+            ? `${counts.db} in the database · nothing at the edge yet — sync to make the rules live.`
+            : counts.db === counts.edge
+              ? `${counts.db} in the database · ${counts.edge} at the edge.`
+              : `${counts.db} in the database · ${counts.edge} at the edge — out of step, sync.`}
+      </span>
+      {notice && (
+        <span className="msg" data-kind="ok" role="status">
+          {notice}
+        </span>
+      )}
+      {error && (
+        <span className="msg" data-kind="error" role="alert">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

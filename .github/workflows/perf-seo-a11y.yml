@@ -76,6 +76,20 @@ jobs:
       - run: npm run build
       - name: Preview config (local KV simulation, no Cloudflare credentials)
         run: node scripts/local-preview-config.mjs
+      # Authored redirects (Round 3): the admin's table reaches the edge as a KV snapshot,
+      # and no admin journey can author one here (no auth hook, no seeded staff user), so
+      # the snapshot is seeded straight into the local KV the preview reads. Run from the
+      # repo root AFTER the preview config: wrangler follows the build's
+      # .wrangler/deploy/config.json redirect, so the key lands in the same .wrangler/state
+      # `wrangler dev` opens (`--config dist/server/wrangler.json` would persist under
+      # dist/server/.wrangler and the Worker would never see it — measured). `--preview`
+      # targets the namespace `wrangler dev` binds. The JSON must equal SEEDED_MAP in
+      # tests/e2e/redirects.e2e.ts.
+      - name: Seed the authored-redirects snapshot into local KV
+        run: >-
+          npx wrangler kv key put site:redirects
+          '{"/e2e-old":{"to":"/about","status":301},"/e2e-temp":{"to":"/contact?from=e2e","status":302},"/e2e-anchor":{"to":"/services#e2e","status":308},"/api/e2e-old":{"to":"/about","status":301}}'
+          --binding SESSION --local --preview
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Start preview (wrangler dev)

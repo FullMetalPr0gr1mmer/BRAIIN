@@ -3,8 +3,13 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import { getIdentity, brandName } from '@/lib/identity';
 import { siteTitle } from '@/lib/seo/title';
 import { PAGE_META } from '@/lib/seo/pageMeta';
+import { noEdgeCache } from '@/lib/http/cacheTags';
 
 Astro.response.status = 404;
+// Never edge-cached (Round 3, design-port R3-1): the middleware consults the authored
+// redirects only when the render answered 404, so a 404 that stuck in the edge cache
+// would shadow a rule authored afterwards for that URL. It had no Cache-Control at all.
+noEdgeCache(Astro.response);
 
 // siteTitle, not loadHead: a 404 is noindex and answers every mistyped or probing URL,
 // so it skips the seo_defaults read. The identity is shared with the header and footer.
