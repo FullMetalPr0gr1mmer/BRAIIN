@@ -584,9 +584,22 @@ makes the verify step insist on none). Run as the owner: `supabase db query --li
    written** for this change — record the date, the `archived` set and who ran it in the
    PR / ops log (as for §6c–§6d).
 
-**Undo:** in the admin (Statistics → the row → status Published, and choose a page under
-"Shown on"), or `update public.statistics set status = 'published' where slug = '<slug>'` —
-the row then renders nowhere again until it has a placement, and the verify step fails again
+**Undo:** in the admin (Statistics → the row → status Published, choose a page under
+"Shown on", and set the number and suffix again), or the statement below — tenant-scoped,
+a compare-and-set on the same three `(slug, value)` pairs, and restoring each row's
+`value_numeric` / `value_suffix` (step 2 cleared them, and **the count-up needs them**: a
+counter with no `value_numeric` renders its text but never counts up):
+
+```sql
+update public.statistics as s
+   set status = 'published', value_numeric = v.value_numeric, value_suffix = v.value_suffix
+  from (values ('projects', '150+', 150, '+'), ('services', '14', 14, null), ('years', '8', 8, null))
+       as v (slug, value, value_numeric, value_suffix)
+ where s.tenant_id = '00000000-0000-0000-0000-0000000000b1'
+   and s.slug::text = v.slug and s.value = v.value and s.status = 'archived';
+```
+
+The row then renders nowhere again until it has a placement, and the verify step fails again
 until it does.
 
 **Why not a migration or a `dashboard_attention` kind:** the fix is to three rows of one
