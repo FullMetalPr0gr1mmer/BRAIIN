@@ -248,12 +248,17 @@ bound. Past the last rung the stagger flattens into a simultaneous pop.
 
 ## 6. Related decisions
 
-- **EXC-007** (`docs/security-exceptions.md`) — the motion pause control was removed from
-  the hero for parity with the Brain Station UI reference. That is a **WCAG 2.2.2
-  (Level A)** regression covering the hero loop, the slogan-band loop and the clients
-  marquee together. The *mechanism* (`setMotionPaused()`, `body.motion-paused`) is
-  deliberately retained with no caller so restoring it is a button plus one listener.
-  **No CI gate detects this** — axe cannot decide it and Lighthouse a11y stays at 100.
+- **The motion switch** (`SiteHeader.astro`, `src/lib/client/motion.ts`; Round 3 R3-7,
+  which closed **EXC-007** in `docs/security-exceptions.md` on 2026-09-29) — the hero
+  itself still carries no pause control, for parity with the Brain Station UI reference;
+  the **WCAG 2.2.2** control for the hero loop, the slogan-band loop, the clients marquee
+  and the scroll cue is the header's button, on every page. The state is
+  `body.motion-paused`; the CSS loops pause through `animation-play-state: paused` on the
+  **named** selectors only — never a blanket `body.motion-paused *`, which would freeze
+  the intro plate opaque when a tab's stored pause is restored on home, and the h1 words
+  at opacity 0. A paused visitor's hero mount is deferred (no video bytes), and a resume
+  plays it only while on screen. **No CI gate detects 2.2.2** — axe cannot decide it and
+  Lighthouse a11y stays at 100; `tests/e2e/motion-pause.e2e.ts` asserts it directly.
 - **`withHomeIntro()`** (`src/lib/sections/types.ts`) — the plate is opted into at the
   **route** level, not baked into CMS content, so authoring the home page in the CMS
   cannot silently drop it and a `hero` section on any other page can never inherit an

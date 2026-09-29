@@ -12,9 +12,9 @@ import MediaImage from './MediaImage.astro';
 // Pinned like the home hero (position: sticky) so the next section slides over it. The
 // video is created by lazyVideo.ts after `load` (zero video bytes before the page has
 // painted — tests/e2e/media-bytes.e2e.ts), never under reduced motion or Save-Data, and
-// pauses once the banner is covered. A Stream UID renders the poster alone until the
-// Stream player lands (KAN-20); a self-hosted window plays under EXC-009. The loop is
-// one of EXC-007's banner surfaces (no pause control — docs/security-exceptions.md).
+// pauses once the banner is covered — and with the header's motion switch (R3-7, WCAG
+// 2.2.2; while it is off the loop does not even mount). A Stream UID renders the poster
+// alone until the Stream player lands (KAN-20); a self-hosted window plays under EXC-009.
 //
 // `data-hero` is what the overlay header measures to decide when its bar turns solid.
 

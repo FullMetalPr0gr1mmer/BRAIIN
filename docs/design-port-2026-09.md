@@ -26,7 +26,8 @@ existing global.css utilities.
 
 ## Decisions (PR6)
 
-1. **No clip autoplay on touch** (EXC-007/EXC-009): touch devices see the poster. The mockup
+1. **No clip autoplay on touch** (EXC-009; an EXC-007 surface until R3-7 closed it): touch
+   devices see the poster. The mockup
    autoplayed catalog cards at 60 % visibility and every in-view clip on touch. A finger on a
    hybrid's touchscreen never starts a hover preview either (only a mouse or pen does). The
    play badge shows only where a clip can actually play — never on touch, under reduced
@@ -288,8 +289,9 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
 43. **The banner caption is legible over any frame**: .45 glass (mockup .26), .7 meta (.58),
     a stronger bottom scrim under it, and no 4.5 s "rest" fade to half opacity. Contrast is
     gated for the worst case (a white frame) in `scripts/contrast-audit.mjs`. Its entrance
-    and pulsing dot stop under reduced motion; the dot and the banner loop are EXC-007
-    surfaces; the loop plays under EXC-009 and pauses once the whole banner is covered. The
+    and pulsing dot stop under reduced motion; the dot and the banner loop stop with the
+    header's motion switch (R3-7); the loop plays under EXC-009 and pauses once the whole
+    banner is covered. The
     caption leaves paint and the tab order earlier — as soon as the next section's edge
     passes the caption's own top, i.e. once it is entirely painted over (WCAG 2.4.11
     Focus Not Obscured); measured against the whole banner, it stayed focusable while
@@ -453,8 +455,8 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     edge-cache miss only. BlogDetail/ServiceDetail still emit their cache — follow-up.
 68. **The final film is a muted in-view loop** (30 % visible, the mockup's threshold) and
     never plays on touch, under reduced motion or with Save-Data. The mockup's in-place
-    "Sound on" toggle is not shipped: sound, captions (WCAG 1.2.2) and a pause control
-    arrive with the Stream player (KAN-20). **No Stream facade is rendered on the case
+    "Sound on" toggle is not shipped: sound and captions (WCAG 1.2.2) arrive with the
+    Stream player (KAN-20); the pause control is the header's motion switch (R3-7). **No Stream facade is rendered on the case
     study** — nothing third-party loads, so there is nothing to consent-gate today; the
     player that replaces the loop must go through `hasConsent` (recorded as a KAN-20
     prerequisite in EXC-009).
@@ -632,7 +634,8 @@ The orchestrator renumbers these at integration.
 - **S2-4. No clip on touch.** This keeps the existing rule: `clips.ts` never plays on a
   touch-only device, under reduced motion or with Save-Data, and never on a finger landing
   on a hybrid's screen. The mockup autoplayed every card at 60% visibility on touch. This
-  is a recorded deviation, and it is part of the EXC-007/EXC-009 surface list.
+  is a recorded deviation, and it is part of the EXC-009 surface list (and was on
+  EXC-007's until R3-7 closed it).
 - **S2-5. A playing clip never transitions its own transform.** In the tests, a hover clip
   whose `scale(1.05)` was mid-transition while playing reported tiny layout shifts
   (≈0.0002 each, Chromium). The poster keeps the mockup's slow zoom; the video, only ever
@@ -1053,3 +1056,40 @@ The orchestrator renumbers these at integration.
   music-vo-sfx and booth-production, every section's top, height and width matches to
   the pixel. The one exception is the inquiry band, which is 25–64px taller because the
   site's form carries the PDPL consent row.
+
+## Round 3: gap fixes (R3)
+
+- **R3-7. One motion switch in the header, not a control per surface (closes EXC-007).**
+  The reference design ships no pause control anywhere; the owner chose to build one
+  (G3) and put it where EXC-007's close condition recommended: a 32 px round icon button
+  after the language pill, styled like it, on every page (`SiteHeader.astro`). It is the
+  single WCAG 2.2.2 control for everything that moves on its own — the hero, slogan,
+  banner and service hero loops, the in-view and hover clips and the explorer clip, the
+  clients marquee, the hero scroll cue, the banner caption's pulse — and it composes with
+  the testimonials carousel's own APG control (a global pause sets `userPaused`, so its
+  button honestly shows Play; a global resume leaves it stopped — only its own Play
+  restarts it). One fixed accessible name ("Pause motion" / "إيقاف الحركة") + `aria-pressed`
+  (the removed hero control swapped label and pressed state, an APG anti-pattern); two
+  inline SVGs swapped by CSS on the pressed state. The state is `body.motion-paused`,
+  owned by `src/lib/client/motion.ts` (no imports, so the header never pulls video code)
+  and broadcast as a `motion-updated` event, the `consent-updated` pattern. Remembered
+  per tab in `sessionStorage` (`bs_motion`, the removed control's key) — a functional
+  setting, so no consent gate. **A paused visitor downloads nothing:** `lazyVideo.ts`
+  defers the mount (a pending set, mounted on resume, played only if still on screen)
+  and `clips.ts` never creates the `<video>` (hover clips included — simpler and stricter
+  than arguing a hover is user-initiated). The CSS loops are held with
+  `animation-play-state: paused` (a resume continues where it stopped), never `animation:
+  none`, and **never a blanket `body.motion-paused *`**: a stored pause restored on home
+  would freeze the intro plate opaque. The button is hidden by CSS under
+  `prefers-reduced-motion` (nothing moves there) and `@media (scripting: none)` (nothing
+  would answer it), and is never shown or hidden by script after first paint (the
+  layout-shift gate). The header's "in use" check now counts only `:focus-visible`: a
+  mouse click leaves focus on the button, and any-focus kept the bar from hiding for the
+  rest of the scroll. Phone sizing: the switch is a sixth bar item; at 412 px the old
+  24 px gap squeezed the logo (`max-width: 100%`) to 76 px, so the phone breakpoints
+  tighten gaps, paddings and the switch (28 px, above the 24 px WCAG 2.5.8 floor) and
+  the logo holds its 96 px minimum from 360 px up in both languages
+  (`tests/e2e/header-footer.e2e.ts`). Asserted in `tests/e2e/motion-pause.e2e.ts` (EN + AR),
+  a normal-motion axe pass scoped to the header (the reduced-motion pass never saw the
+  button), and `media-bytes.e2e.ts`'s "paused visitor". EXC-009 is re-signed, not
+  closed: only Stream (KAN-20) closes it.
