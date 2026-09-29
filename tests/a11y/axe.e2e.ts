@@ -49,24 +49,3 @@ for (const route of ROUTES) {
     expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
   });
 }
-
-// Round 3 (R3-7): the header's motion switch is hidden under reduced motion (nothing to
-// pause there), so the pass above never sees it. One normal-motion pass, scoped to the
-// header — once its entrance has settled — audits the button (name, role, pressed state,
-// contrast) in both directions, on a route with no intro plate.
-for (const route of ['/contact', '/ar/contact']) {
-  test(`axe: the header, normal motion, with the motion switch — ${route}`, async ({ page }) => {
-    // `load`, not `networkidle`: with motion on, the contact hero's loop mounts after load
-    // and its open range request never lets the network go idle (csp.e2e.ts records it).
-    await page.goto(route, { waitUntil: 'load' });
-    await expect
-      .poll(() => page.locator('.site-header').evaluate((el) => getComputedStyle(el).opacity))
-      .toBe('1');
-    await expect(page.locator('[data-motion-toggle]')).toBeVisible();
-    const { violations } = await new AxeBuilder({ page })
-      .include('.site-header')
-      .withTags(TAGS)
-      .analyze();
-    expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
-  });
-}

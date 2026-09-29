@@ -9,7 +9,7 @@
 //   • a visible Pause/Play button beside the arrows: a plain button whose label changes
 //     (the APG carousel's rotation control), so no aria-pressed;
 //   • never auto-advances under prefers-reduced-motion (the button is not shown then);
-//   • the sitewide motion switch (src/lib/client/motion.ts, the header button) composes
+//   • the sitewide motion state (src/lib/client/motion.ts; no control ships today) composes
 //     with it: a global pause sets `userPaused`, so its own button honestly shows Play;
 //     a global resume leaves it stopped — APG: only its own Play restarts it — and a
 //     carousel that initialises while the page is already paused starts stopped;

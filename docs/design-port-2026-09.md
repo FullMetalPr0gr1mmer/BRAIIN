@@ -26,7 +26,7 @@ existing global.css utilities.
 
 ## Decisions (PR6)
 
-1. **No clip autoplay on touch** (EXC-009; an EXC-007 surface until R3-7 closed it): touch
+1. **No clip autoplay on touch** (EXC-007/EXC-009): touch
    devices see the poster. The mockup
    autoplayed catalog cards at 60 % visibility and every in-view clip on touch. A finger on a
    hybrid's touchscreen never starts a hover preview either (only a mouse or pen does). The
@@ -290,7 +290,7 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
     a stronger bottom scrim under it, and no 4.5 s "rest" fade to half opacity. Contrast is
     gated for the worst case (a white frame) in `scripts/contrast-audit.mjs`. Its entrance
     and pulsing dot stop under reduced motion; the dot and the banner loop stop with the
-    header's motion switch (R3-7); the loop plays under EXC-009 and pauses once the whole
+    sitewide motion state (R3-7; no control ships today, EXC-007); the loop plays under EXC-009 and pauses once the whole
     banner is covered. The
     caption leaves paint and the tab order earlier — as soon as the next section's edge
     passes the caption's own top, i.e. once it is entirely painted over (WCAG 2.4.11
@@ -456,7 +456,7 @@ Page CSS lives in the route sheet `public/styles/work.css`, linked through BaseL
 68. **The final film is a muted in-view loop** (30 % visible, the mockup's threshold) and
     never plays on touch, under reduced motion or with Save-Data. The mockup's in-place
     "Sound on" toggle is not shipped: sound and captions (WCAG 1.2.2) arrive with the
-    Stream player (KAN-20); the pause control is the header's motion switch (R3-7). **No Stream facade is rendered on the case
+    Stream player (KAN-20); a pause control arrives with the Stream player (EXC-007 open). **No Stream facade is rendered on the case
     study** — nothing third-party loads, so there is nothing to consent-gate today; the
     player that replaces the loop must go through `hasConsent` (recorded as a KAN-20
     prerequisite in EXC-009).
@@ -1200,7 +1200,7 @@ The orchestrator renumbers these at integration.
   from the consent list, since its fix is "make it real" and the placeholder list
   already says so.
 
-- **R3-7. One motion switch in the header, not a control per surface (closes EXC-007).**
+- **R3-7. One motion switch in the header, not a control per surface — built, then removed the same day.**
   The reference design ships no pause control anywhere; the owner chose to build one
   (G3) and put it where EXC-007's close condition recommended: a 32 px round icon button
   after the language pill, styled like it, on every page (`SiteHeader.astro`). It is the
@@ -1234,3 +1234,8 @@ The orchestrator renumbers these at integration.
   a normal-motion axe pass scoped to the header (the reduced-motion pass never saw the
   button), and `media-bytes.e2e.ts`'s "paused visitor". EXC-009 is re-signed, not
   closed: only Stream (KAN-20) closes it.
+  **Outcome (later on 2026-09-29):** the owner, seeing the button in the live header, chose
+  the mockup's header over it ("keep the header matching the mockup"). PR #27 removed the
+  button, its CSS and its tests; EXC-007 is open again, re-signed for the widened scope by
+  that decision; `motion.ts` and the subsystem wiring stay with no writer, so restoring the
+  control is `SiteHeader.astro` plus one script.

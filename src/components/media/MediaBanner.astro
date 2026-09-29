@@ -12,7 +12,7 @@ import MediaImage from './MediaImage.astro';
 // Pinned like the home hero (position: sticky) so the next section slides over it. The
 // video is created by lazyVideo.ts after `load` (zero video bytes before the page has
 // painted — tests/e2e/media-bytes.e2e.ts), never under reduced motion or Save-Data, and
-// pauses once the banner is covered — and with the header's motion switch (R3-7, WCAG
+// pauses once the banner is covered — and with the sitewide motion state (no control ships today — EXC-007) (R3-7, WCAG
 // 2.2.2; while it is off the loop does not even mount). A Stream UID renders the poster
 // alone until the Stream player lands (KAN-20); a self-hosted window plays under EXC-009.
 //

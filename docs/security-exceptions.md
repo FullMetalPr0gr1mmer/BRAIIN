@@ -12,7 +12,7 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-004 | 2026-08-01 | Developer (tech@purecoffee.sa) | 2026-12-24 | Open (re-justified 2026-09-25; first expiry 2026-09-01 lapsed) | Live on `*.workers.dev` with **no WAF rate limits and no crawler blocks** — both are zone-scoped and there is no zone |
 | EXC-005 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | **Closed 2026-09-25** | `js-yaml` GHSA-5p4m-2wfm-xmqj allowlisted in the prod audit gate — js-yaml 4.3.2 shipped the 4.x fix; entry removed |
 | EXC-006 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open (re-scoped 2026-09-25) | `extract-zip` GHSA-jmr9-qjv8-65gv **+ GHSA-7pqw-9j4j-h8q3** allowlisted in the dev audit gate — every published version is affected |
-| EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | **Closed 2026-09-29** | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee (and, from the UI v2 port, every banner/in-view video loop; from Round 2, the discipline card clips, the `/services` explorer clip and the service hero loops) had no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**). Closed by the header's motion switch (Round 3, R3-7): one button stops every loop, clip and the marquee |
+| EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | Open (re-signed 2026-09-29; control built and removed) | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee (and, from the UI v2 port, every banner/in-view video loop; from Round 2, the discipline card clips, the `/services` explorer clip and the service hero loops) had no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**). A header control was built (Round 3, R3-7) and removed the same day at the owner's decision for mockup parity; the `body.motion-paused` wiring stays |
 | EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open (re-signed 2026-09-29) | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops |
 
 ---
@@ -315,7 +315,7 @@ condition now requires **both** entries removed.
 
 **Pillar:** the Definition of Done, point 4 (Accessible — WCAG 2.2 AA). CLAUDE.md §4, §9 (axe WCAG 2.2 AA zero violations).
 **Opened:** 2026-08-24 · **Owner:** Kareem (kareem@floppytech.ai) · **Expiry:** 2026-11-24
-**Status:** **Closed 2026-09-29** — close condition 1 met (the header motion switch, Round 3 R3-7)
+**Status:** Open — **re-signed 2026-09-29** for the widened scope (expiry 2026-11-24, not extended); the header control was built and removed the same day (below)
 
 ### What was weakened
 
@@ -387,8 +387,7 @@ all under `prefers-reduced-motion` or Save-Data; zero video bytes before interse
 one signed on 2026-08-24; this entry must be re-signed (and its expiry revisited) before
 the first new surface merges. The close conditions above are unchanged — the header pause
 control remains the one-button fix for all of it (`setMotionPaused()` is still retained).
-*(Overtaken by the close below: the re-sign never happened; the surfaces shipped and the
-entry was closed on 2026-09-29.)*
+*(Overtaken: see 2026-09-29 below.)*
 
 ### Widened 2026-09-27 — Round 2 (services redesign)
 
@@ -414,13 +413,20 @@ bytes before intersection (the Round 2 slices add these surfaces to
 `tests/e2e/media-bytes.e2e.ts`); in-content clips never autoplay on touch.
 
 ⚠ **Owner re-sign required again** before the Round 2 PRs merge. The header pause control
-would still fix every surface at once. *(Overtaken by the close below: the Round 2 PRs
-merged on 2026-09-29 without the re-sign; the owner's decision at the Round 3 plan review
-was to close the entry instead.)*
+would still fix every surface at once. *(Overtaken: see 2026-09-29 below.)*
 
-### Closed 2026-09-29
+### 2026-09-29 — built, then removed at the owner's decision; widened scope re-signed
 
-Neither widening (2026-09-25, 2026-09-27) was ever re-signed: the UI v2 and Round 2
+**What stands:** the control described below shipped in PR #26 and was removed the same
+day in PR #27 — the owner, seeing the button in the live header, chose the mockup's header
+over it ("keep the header matching the mockup"). `src/lib/client/motion.ts`, the
+subsystem wiring (lazyVideo, clips, carousel) and the `body.motion-paused` CSS rules stay
+with no writer, so restoring the control is `SiteHeader.astro` plus one script. **That
+decision is the owner's re-sign of the 2026-09-25 and 2026-09-27 widenings:** scope as
+listed above, expiry 2026-11-24 unchanged (not extended), close conditions unchanged. The
+rest of this section records what the control did while it existed.
+
+Neither widening (2026-09-25, 2026-09-27) had been re-signed before that: the UI v2 and Round 2
 surfaces shipped with the entry still marked "owner re-sign pending". At the Round 3 plan
 review (G3, "do what you see best fit") the owner's sign-off was to close the failure
 rather than re-sign it a third time. Close condition 1 was met as written, in the place it

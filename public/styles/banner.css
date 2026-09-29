@@ -199,8 +199,8 @@ html[dir='rtl'] .work-cap__m {
   font-size: 12.5px;
 }
 
-/* The sitewide motion switch (global.css `body.motion-paused`, the header's pause
-   button): the pulse holds in place. The banner loop itself is a background video,
+/* The sitewide motion state (global.css `body.motion-paused`; no control ships today —
+   EXC-007, owner decision 2026-09-29): the pulse holds in place. The banner loop itself is a background video,
    stopped by lazyVideo.ts under the same class. */
 body.motion-paused .work-cap__live::after {
   animation-play-state: paused;
