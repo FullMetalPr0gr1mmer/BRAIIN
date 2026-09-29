@@ -274,6 +274,101 @@ describe('resource routes — assertWritable judges the merged row', () => {
   });
 });
 
+describe('resource routes — the sample-rating guard (Round 3)', () => {
+  // The Services page's proof band as seeded: flagged, with the design's "4.9 / 5".
+  const SAMPLE = {
+    type: 'statistics',
+    is_placeholder: true,
+    content: {
+      variant: 'services',
+      placement: 'services',
+      rating: { value: '4.9 / 5', label: { en: 'average client rating', ar: 'متوسط' } },
+    },
+  };
+  const REAL = { value: '4.7 / 5', label: { en: 'average rating, 212 reviews', ar: 'متوسط' } };
+
+  it('unticking "Placeholder" with the sample still stored is a 422 on isPlaceholder', async () => {
+    const { PATCH } = itemRoutes(sectionResource);
+    const res = (await PATCH(
+      ctx('admin', 'PATCH', { isPlaceholder: false, version: 1 }, SAMPLE),
+    )) as Response;
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { field?: string; detail?: string };
+    expect(body.field).toBe('isPlaceholder');
+    expect(body.detail).toMatch(/4\.9 \/ 5/);
+  });
+
+  it('unticking with a real rating in the SAME save is allowed', async () => {
+    const { PATCH } = itemRoutes(sectionResource);
+    const body = {
+      isPlaceholder: false,
+      content: { ...SAMPLE.content, rating: REAL },
+      version: 1,
+    };
+    expect(await statusOf(PATCH, ctx('admin', 'PATCH', body, SAMPLE))).toBe(200);
+  });
+
+  it('unticking with the rating REMOVED is allowed too', async () => {
+    const { PATCH } = itemRoutes(sectionResource);
+    const { rating: _r, ...withoutRating } = SAMPLE.content;
+    const body = { isPlaceholder: false, content: withoutRating, version: 1 };
+    expect(await statusOf(PATCH, ctx('admin', 'PATCH', body, SAMPLE))).toBe(200);
+  });
+
+  it('a content save that keeps the sample on an UNFLAGGED row is refused on content', async () => {
+    const { PATCH } = itemRoutes(sectionResource);
+    const stored = { ...SAMPLE, is_placeholder: false };
+    const res = (await PATCH(
+      ctx('admin', 'PATCH', { content: SAMPLE.content, version: 1 }, stored),
+    )) as Response;
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { field?: string }).field).toBe('content');
+  });
+
+  it('a reorder (sortOrder only) never trips it, flagged or not', async () => {
+    const { PATCH } = itemRoutes(sectionResource);
+    expect(await statusOf(PATCH, ctx('admin', 'PATCH', { sortOrder: 4, version: 1 }, SAMPLE))).toBe(
+      200,
+    );
+    expect(
+      await statusOf(
+        PATCH,
+        ctx('admin', 'PATCH', { sortOrder: 4, version: 1 }, { ...SAMPLE, is_placeholder: false }),
+      ),
+    ).toBe(200);
+  });
+
+  it('keeping the flag while editing the sample is fine (still a sample)', async () => {
+    const { PATCH } = itemRoutes(sectionResource);
+    const body = { content: { ...SAMPLE.content, line: { en: 'x', ar: 'س' } }, version: 1 };
+    expect(await statusOf(PATCH, ctx('admin', 'PATCH', body, SAMPLE))).toBe(200);
+  });
+
+  it('a hero section unticking its flag is not a statistics band: 200', async () => {
+    const { PATCH } = itemRoutes(sectionResource);
+    const hero = {
+      type: 'hero',
+      is_placeholder: true,
+      content: { headline: { en: 'Old', ar: 'قديم' }, rating: { value: '4.9 / 5' } },
+    };
+    expect(
+      await statusOf(PATCH, ctx('admin', 'PATCH', { isPlaceholder: false, version: 1 }, hero)),
+    ).toBe(200);
+  });
+
+  it('creating an unflagged statistics band with the sample is refused as well', async () => {
+    const { POST } = collectionRoutes(sectionResource);
+    const body = {
+      pageId: '22222222-2222-4222-8222-222222222222',
+      type: 'statistics',
+      content: SAMPLE.content,
+      isPlaceholder: false,
+    };
+    expect(await statusOf(POST, ctx('admin', 'POST', body))).toBe(422);
+    expect(await statusOf(POST, ctx('admin', 'POST', { ...body, isPlaceholder: true }))).toBe(200);
+  });
+});
+
 describe("resource routes — publishFlag: 'visible'", () => {
   it('turning visible on is a publish: preconditions run', async () => {
     const { PATCH } = itemRoutes(config({ publishFlag: 'visible', statusOf: undefined }));

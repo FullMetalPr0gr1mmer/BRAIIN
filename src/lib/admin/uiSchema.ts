@@ -33,6 +33,9 @@ export type FieldKind =
   | 'multiSelect' // several of `options`, as a string array
   | 'media' // one media asset id, chosen in a <dialog> picker
   | 'repeater' // an array of objects, each edited with `itemFields`
+  // Round 3: a fixed-shape object ({value, label} — the proof band's rating line), edited
+  // with `itemFields` like one repeater item; omitted from the payload while all blank
+  | 'object'
   | 'clip' // a video clip: a Stream UID or a /media/*.mp4 path, plus a ≤30s window
   | 'sectionContent' // page_sections.content, typed by the sibling `type` field
   | 'upload'; // a file sent to `upload.endpoint`; the field holds the returned id
@@ -88,7 +91,7 @@ export interface FieldDef {
   nullable?: boolean;
   /** `relation` / `multiRelation`: the resource the ids point at. */
   relation?: RelationDef;
-  /** `repeater`: the fields of one item. */
+  /** `repeater`: the fields of one item; `object`: the fields of the object. */
   itemFields?: readonly FieldDef[];
   /** `repeater` / `multiRelation` / `multiSelect`: the most items the schema accepts. */
   maxItems?: number;

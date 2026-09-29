@@ -4,6 +4,7 @@ import RichText from './RichText';
 import RelationField from './fields/RelationField';
 import MediaField from './fields/MediaField';
 import RepeaterField, { type RenderField } from './fields/RepeaterField';
+import ObjectField from './fields/ObjectField';
 import ClipField from './fields/ClipField';
 import SectionContentField from './fields/SectionContentField';
 import UploadField from './fields/UploadField';
@@ -45,6 +46,17 @@ export function Field({ field, value, onChange, values = {}, idPrefix = 'f' }: F
   if (field.kind === 'repeater') {
     return (
       <RepeaterField
+        field={field}
+        value={value}
+        onChange={onChange}
+        renderField={renderField}
+        idPrefix={idPrefix}
+      />
+    );
+  }
+  if (field.kind === 'object') {
+    return (
+      <ObjectField
         field={field}
         value={value}
         onChange={onChange}

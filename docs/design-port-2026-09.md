@@ -1091,3 +1091,25 @@ The orchestrator renumbers these at integration.
   placement. A `dashboard_attention` kind for "published, unplaced" is deferred: it needs
   a migration (0029+ is Join's this round, R3-c). An owner psql statement writes no audit
   row — the run is recorded in the PR / ops log.
+- **R3-6. The proof band's rating line has typed fields; the sample cannot go live
+  unflagged; dashboard rows link to their editor.** A new field kind, `object` (a
+  fixed-shape object edited with `itemFields`, like one repeater item without add /
+  remove / move — `ObjectField.tsx`), gives the Services page's `statistics` section a
+  "Rating line" editor (`value` text, `label` bilingual, both required) instead of
+  "Advanced (JSON)". Its payload shaping omits the key while every part is blank, so an
+  untouched editor saves no `rating` (the schema is strict) and a half-filled one is
+  sent through so the server names the missing part. The band's `accent` and
+  `lineAccent` stay JSON-only, recorded: there is still no accent field kind. The
+  design's "4.9 / 5" lives inside the section's content, where the row-level placeholder
+  rules (the admin's `refusePlaceholder`, the 0025 trigger) cannot see it — so
+  `sectionResource.assertWritable` refuses a save that leaves a `statistics` section
+  unflagged with the sample rating stored (422 on `isPlaceholder` when the flag changed,
+  on `content` otherwise); the seed's rating is asserted equal to
+  `SERVICES_PROOF_SAMPLE_RATING` (`src/lib/sections/samples.ts`, refusal-only, never
+  rendered). Untick + a real rating (or no rating) in the same save passes; a reorder
+  never trips it; the 0025/0027 machinery stays the database half. The dashboard's
+  attention lists now link each title to `/admin/<resource>/<id>` (`RESOURCE_OF`, the
+  view's `entity_type` strings), show a "Where" column (`page: <slug>` for a section,
+  whose title is only its type), and no longer list a sample quote twice: a
+  `consent_missing` row that is also `placeholder_live` is dropped from the consent
+  list, since its fix is "make it real" and the placeholder list already says so.

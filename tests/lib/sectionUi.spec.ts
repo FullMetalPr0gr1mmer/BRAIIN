@@ -29,6 +29,8 @@ function sample(field: FieldDef): unknown {
       return 'https://instagram.com/braiinstatiion';
     case 'repeater':
       return [Object.fromEntries((field.itemFields ?? []).map((f) => [f.name, sample(f)]))];
+    case 'object':
+      return Object.fromEntries((field.itemFields ?? []).map((f) => [f.name, sample(f)]));
     case 'select':
       return field.options?.[0]?.value ?? 'value';
     case 'checkbox':
@@ -85,15 +87,30 @@ describe('SECTION_UI agrees with SECTION_CONTENT_SCHEMAS', () => {
 
     it(`${type}: an untouched editor saves {} (the built-in copy)`, () => {
       const fields = SECTION_UI[type] ?? [];
-      const blank = Object.fromEntries(
-        fields.map((f) => [
-          f.name,
-          f.kind === 'bilingual' ? { en: '', ar: '' } : f.kind === 'repeater' ? [{}] : null,
-        ]),
-      );
+      const blankOf = (f: FieldDef): unknown =>
+        f.kind === 'bilingual'
+          ? { en: '', ar: '' }
+          : f.kind === 'repeater'
+            ? [{}]
+            : f.kind === 'object'
+              ? Object.fromEntries((f.itemFields ?? []).map((sub) => [sub.name, blankOf(sub)]))
+              : null;
+      const blank = Object.fromEntries(fields.map((f) => [f.name, blankOf(f)]));
       expect(objectToPayload(blank, fields)).toEqual({});
     });
   }
+
+  it('statistics: the proof band’s rating line is a typed field, not JSON-only (Round 3)', () => {
+    const rating = SECTION_UI.statistics!.find((f) => f.name === 'rating')!;
+    expect(rating.kind).toBe('object');
+    expect(rating.itemFields?.map((f) => [f.name, f.kind, f.required])).toEqual([
+      ['value', 'text', true],
+      ['label', 'bilingual', true],
+    ]);
+    expect(rating.help).toMatch(/cannot go live/);
+    // the accents stay JSON-only, recorded: there is no accent field kind
+    expect(SECTION_ADVANCED_ONLY.statistics).toEqual(['accent', 'lineAccent']);
+  });
 
   it('table-backed and unknown types have no editor', () => {
     expect(sectionFields('team')).toBeNull();

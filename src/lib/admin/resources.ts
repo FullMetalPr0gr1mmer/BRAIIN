@@ -46,6 +46,7 @@ import {
 import type { VideoClip } from '@schemas/media';
 import { sectionContentIssues, type SectionType } from '@schemas/sections';
 import { isStaticMediaKey, staticImage } from '@/lib/media/static';
+import { isSampleRating } from '@/lib/sections/samples';
 import { renderTiptapToHtml, readingMinutes, sanitizeHref } from '@/lib/content/tiptap';
 import { NotFoundError, OptimisticLockError, ValidationError } from './errors';
 import { getRow, translateWriteError, type ConstraintFields, type WriteRefusals } from './crud';
@@ -744,11 +745,28 @@ export const sectionResource: ResourceConfig = {
   // PATCH of content alone (or of type alone) is checked here, against the type the row
   // will have — otherwise it saves "fine" and the loader silently drops it.
   assertWritable: (merged, { changed }) => {
-    if (!('type' in changed) && !('content' in changed)) return;
-    const [issue] = sectionContentIssues(merged['type'] as SectionType, merged['content'] ?? {});
-    if (issue) {
-      const where = issue.path.slice(1).join('.');
-      throw new ValidationError(where ? `${where}: ${issue.message}` : issue.message, 'content');
+    if ('type' in changed || 'content' in changed) {
+      const [issue] = sectionContentIssues(merged['type'] as SectionType, merged['content'] ?? {});
+      if (issue) {
+        const where = issue.path.slice(1).join('.');
+        throw new ValidationError(where ? `${where}: ${issue.message}` : issue.message, 'content');
+      }
+    }
+    // The sample-rating guard (Round 3). The proof band's "4.9 / 5" lives INSIDE the
+    // section's content, where the row-level placeholder rule (refusePlaceholder, the
+    // 0025 trigger) cannot see it: unticking "Placeholder" with the sample still stored
+    // would publish a rating no review data backs, unflagged. Judged on the merged row,
+    // so untick + a real rating in the same save passes, and a reorder never trips it.
+    if (
+      ('is_placeholder' in changed || 'content' in changed) &&
+      merged['is_placeholder'] !== true &&
+      merged['type'] === 'statistics' &&
+      isSampleRating((merged['content'] as Record<string, unknown> | null)?.['rating'])
+    ) {
+      throw new ValidationError(
+        'the rating line still shows the design sample (4.9 / 5) — replace it with a real, sourced rating or remove it before unticking “Placeholder”',
+        'is_placeholder' in changed ? 'isPlaceholder' : 'content',
+      );
     }
   },
 };

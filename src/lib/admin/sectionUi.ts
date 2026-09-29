@@ -150,7 +150,17 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       name: 'line',
       label: 'Statement beside the numbers (Services proof only)',
       kind: 'bilingual',
-      help: 'Default: "Five disciplines. One team. Zero handoffs." The rating line under it is set in Advanced (JSON) as "rating": {"value", "label"} — remove the key to drop it.',
+      help: 'Default: "Five disciplines. One team. Zero handoffs."',
+    },
+    {
+      name: 'rating',
+      label: 'Rating line under the statement (Services proof only)',
+      kind: 'object',
+      itemFields: [
+        { name: 'value', label: 'Rating as shown ("4.8 / 5")', kind: 'text', required: true },
+        { name: 'label', label: 'Label after it', kind: 'bilingual', required: true },
+      ],
+      help: 'Text only, never structured data; leave both blank to drop the line. The design sample (4.9 / 5) cannot go live: replace it with a real, sourced rating before unticking "Placeholder".',
     },
     {
       name: 'staticNumbers',
@@ -362,9 +372,9 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
 export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[]>> = {
   hero: ['intro'],
   // A per-locale word range ({en: {from, to}, ar: {…}}) — no typed field kind for it yet.
-  // Round 2: the Services proof's statement accent (the same kind of range) and its rating
-  // line ({value, label} — a small object, which has no typed field kind either).
-  statistics: ['accent', 'lineAccent', 'rating'],
+  // Round 2: the Services proof's statement accent is the same kind of range. (Round 3
+  // gave the rating line a typed `object` field; there is still no accent kind.)
+  statistics: ['accent', 'lineAccent'],
   // UI v2 PR7: the accent range as above; the card picks (a list of featured-project slugs)
   // and the closing button ({label, href}) have no typed field kind yet either — both fall
   // back to the design's defaults when unset. The carousel interval is a design constant.

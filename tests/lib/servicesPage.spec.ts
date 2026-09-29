@@ -26,6 +26,7 @@ import {
   type ExplorerDisciplineInput,
 } from '@/lib/services/explorer';
 import { FALLBACK_DISCIPLINES } from '@/lib/services/cards';
+import { SERVICES_PROOF_SAMPLE_RATING, isSampleRating } from '@/lib/sections/samples';
 import { rovingTabIndexes, tabIndexAfter, tabKeyMove } from '@/lib/client/tabs';
 import { panelFromHash, rowClip } from '@/lib/client/serviceExplorer';
 import { sameClip } from '@/lib/client/clips';
@@ -116,6 +117,26 @@ describe('the Services page composition', () => {
       value: '4.9 / 5',
       label: { en: 'average client rating', ar: 'متوسط تقييم عملائنا' },
     });
+    // …and it is the constant the admin's sample-rating guard refuses (Round 3), so the
+    // seed and the guard cannot drift apart.
+    expect(proof.content['rating']).toEqual(SERVICES_PROOF_SAMPLE_RATING);
+    expect(isSampleRating(proof.content['rating'])).toBe(true);
+  });
+
+  it('isSampleRating: the sample value in any spelling, never a real rating or a non-object', () => {
+    expect(isSampleRating(SERVICES_PROOF_SAMPLE_RATING)).toBe(true);
+    expect(isSampleRating({ value: '4.9/5', label: { en: 'x', ar: 'y' } })).toBe(true);
+    expect(isSampleRating({ value: ' 4.9 / 5 ', label: { en: 'reworded', ar: 'y' } })).toBe(true);
+    expect(isSampleRating({ value: '4.8 / 5', label: SERVICES_PROOF_SAMPLE_RATING.label })).toBe(
+      false,
+    );
+    expect(isSampleRating({ value: '4.9 / 10' })).toBe(false);
+    expect(isSampleRating({ value: '' })).toBe(false);
+    expect(isSampleRating({})).toBe(false);
+    expect(isSampleRating(undefined)).toBe(false);
+    expect(isSampleRating(null)).toBe(false);
+    expect(isSampleRating('4.9 / 5')).toBe(false);
+    expect(isSampleRating(['4.9 / 5'])).toBe(false);
   });
 
   it('seeds the services page itself, published', () => {

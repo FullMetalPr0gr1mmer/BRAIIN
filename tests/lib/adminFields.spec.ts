@@ -104,6 +104,33 @@ describe('admin field kinds render', () => {
     expectUniqueIds(html);
   });
 
+  it('object (Round 3): its fields, labelled, with ids under the object’s name, no add/remove', () => {
+    const rating = f({
+      name: 'rating',
+      label: 'Rating line',
+      kind: 'object',
+      required: true,
+      help: 'Text only.',
+      itemFields: [
+        f({ name: 'value', label: 'Rating as shown', kind: 'text', required: true }),
+        f({ name: 'label', label: 'Label after it', kind: 'bilingual', required: true }),
+      ],
+    });
+    const html = render(rating, { value: '4.8 / 5', label: { en: 'avg', ar: 'متوسط' } });
+    expect(html).toContain('Rating line *');
+    expect(html).toContain('Rating as shown');
+    expect(html).toContain('id="f-rating-value"');
+    expect(html).toContain('id="f-rating-label-en"');
+    expect(html).toContain('value="4.8 / 5"');
+    expect(html).toContain('Text only.');
+    expect(html).not.toContain('Remove');
+    expect(html).not.toContain('Add ');
+    expect(html).not.toContain('Move up');
+    expectUniqueIds(html);
+    // nothing stored: still renders every input, empty
+    expect(render(rating, null)).toContain('id="f-rating-value"');
+  });
+
   it('clip: shows only the chosen source, and its window', () => {
     const clip = f({ name: 'clip', label: 'Clip', kind: 'clip' });
     const none = render(clip, { source: '', streamUid: '', path: '', startS: '', endS: '' });
