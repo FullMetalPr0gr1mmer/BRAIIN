@@ -1,5 +1,6 @@
-// Testimonials carousel, built to the WAI-ARIA APG carousel pattern (and so outside
-// EXC-007: it has its own pause control). The design's visuals, a different motion model:
+// Testimonials carousel, built to the WAI-ARIA APG carousel pattern (it has its own
+// pause control — it was compliant before the sitewide switch existed, and composes with
+// it now). The design's visuals, a different motion model:
 //
 //   • auto-advances every 7 s only once 40% of it has been on screen, and pauses whenever
 //     it is off screen, the page is hidden or the pointer is over it;
@@ -8,6 +9,10 @@
 //   • a visible Pause/Play button beside the arrows: a plain button whose label changes
 //     (the APG carousel's rotation control), so no aria-pressed;
 //   • never auto-advances under prefers-reduced-motion (the button is not shown then);
+//   • the sitewide motion switch (src/lib/client/motion.ts, the header button) composes
+//     with it: a global pause sets `userPaused`, so its own button honestly shows Play;
+//     a global resume leaves it stopped — APG: only its own Play restarts it — and a
+//     carousel that initialises while the page is already paused starts stopped;
 //   • the slide region is aria-live="off" while rotating and "polite" otherwise, so an
 //     automatic change is never announced over whatever the reader is doing;
 //   • Arrow Left/Right move in the reading direction (RTL-aware).
@@ -17,6 +22,8 @@
 //
 // The timing decisions are pure functions (carouselRunning, focusEntryStops) so they are
 // unit-tested.
+
+import { isMotionPaused, onMotionChange } from './motion';
 
 export const SLIDE_MS = 7000;
 
@@ -82,7 +89,7 @@ export function initCarousel(root: HTMLElement): void {
     onScreen: false,
     pageVisible: !document.hidden,
     reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
-    userPaused: false,
+    userPaused: isMotionPaused(),
     hovered: false,
   };
   let index = 0;
@@ -169,6 +176,11 @@ export function initCarousel(root: HTMLElement): void {
   });
   document.addEventListener('visibilitychange', () => {
     flags.pageVisible = !document.hidden;
+    sync();
+  });
+  onMotionChange((paused) => {
+    if (!paused) return; // only its own Play restarts it (APG)
+    flags.userPaused = true;
     sync();
   });
   new IntersectionObserver(

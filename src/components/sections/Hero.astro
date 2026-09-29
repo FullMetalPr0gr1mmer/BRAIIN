@@ -397,12 +397,12 @@ const src = videoUid ? undefined : videoSrc;
   const hero = document.querySelector<HTMLElement>('.hero');
   const media = document.querySelector<HTMLElement>('.hero__media');
 
-  // NOTE: there is no visible pause control. It was removed under EXC-007
-  // (docs/security-exceptions.md) to match the Brain Station UI reference hero — a
-  // logged WCAG 2.2.2 regression, not an oversight. `prefers-reduced-motion` is still
-  // honoured upstream in lazyVideo (it attaches no video at all), and the underlying
-  // setMotionPaused()/body.motion-paused mechanism is retained, so restoring the
-  // control is a button plus one listener.
+  // The hero itself carries no pause control (the reference design ships none): the
+  // WCAG 2.2.2 control is the header's motion switch (SiteHeader.astro, Round 3 R3-7 —
+  // it closed EXC-007), which stops this loop, the slogan band's, the marquee and the
+  // scroll cue through `body.motion-paused` (src/lib/client/motion.ts). While it is off
+  // the mount below is deferred, so a paused visitor downloads nothing.
+  // `prefers-reduced-motion` is still honoured upstream in lazyVideo (no video at all).
 
   // Hero loop: the poster backdrop is the immediate paint; video bytes wait for `load`
   // so they never compete with the LCP.

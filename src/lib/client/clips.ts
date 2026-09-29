@@ -16,8 +16,12 @@
 //                      the rule MediaBanner and the hero apply
 //
 // Never plays: under prefers-reduced-motion, with Save-Data, or on a touch-only device
-// ("in-content clips never autoplay on touch" — EXC-007/EXC-009); the poster stays. Pauses
-// with the page hidden. When a clip pauses the poster comes back (the mockup left the
+// ("in-content clips never autoplay on touch" — design-port decision 1, a compensating
+// control of EXC-009); the poster stays. Pauses with the page hidden, and while the
+// sitewide motion switch is off (`body.motion-paused`, src/lib/client/motion.ts — the
+// header's pause button): then no clip plays or even mounts, hover clips included (simpler
+// and stricter than arguing a hover is user-initiated), and the frames that were wanted
+// meanwhile play on resume. When a clip pauses the poster comes back (the mockup left the
 // frozen video frame up and never restored its play badge). Every frame wired here gets
 // .can-clip, which is what shows the play badge: no badge where nothing can play (touch,
 // reduced motion, Save-Data, no JS).
@@ -25,6 +29,8 @@
 // Deliberately separate from lazyVideo.ts's sync group: that keeps same-file BACKGROUND
 // loops on one clock; clips are different windows of one file and must never adopt each
 // other's position.
+
+import { isMotionPaused, onMotionChange } from './motion';
 
 export interface ClipWindow {
   start: number;
@@ -130,7 +136,8 @@ function ensureVideo(frame: HTMLElement): HTMLVideoElement | null {
 
 function play(frame: HTMLElement): void {
   wanted.set(frame, true);
-  if (document.hidden) return;
+  // `wanted` is recorded first, so a hidden tab or a paused visitor resumes into it.
+  if (document.hidden || isMotionPaused()) return;
   const video = ensureVideo(frame);
   void video?.play().catch(() => {});
 }
@@ -170,7 +177,9 @@ export function retargetClip(frame: HTMLElement, next: ClipTarget): void {
   if (next.end === undefined) delete frame.dataset.clipEnd;
   else frame.dataset.clipEnd = String(next.end);
   const video = frame.querySelector<HTMLVideoElement>('video');
-  if (!video) return;
+  // Paused visitor: the attributes are rewritten (the resume's play() reads them and the
+  // timeupdate loop seeks into the new window), but no src swap or seek — each is a fetch.
+  if (!video || isMotionPaused()) return;
   frame.classList.remove('is-playing');
   video.addEventListener(
     'seeked',
@@ -189,21 +198,33 @@ export function retargetClip(frame: HTMLElement, next: ClipTarget): void {
       // not seekable yet — timeupdate brings it into the window
     }
   }
-  if (wanted.get(frame) && !document.hidden) void video.play().catch(() => {});
+  if (wanted.get(frame) && !document.hidden && !isMotionPaused()) {
+    void video.play().catch(() => {});
+  }
 }
 
-let visibilityBound = false;
+let globalBound = false;
 const frames = new Set<HTMLElement>();
 
-function bindVisibility(): void {
-  if (visibilityBound) return;
-  visibilityBound = true;
+// The two things that stop every clip at once: the tab going hidden, and the sitewide
+// motion switch. Both resume only the frames still `wanted` (on screen / hovered) — and
+// the switch resumes them through play(), which also creates the <video> a frame never
+// got while paused.
+function bindGlobal(): void {
+  if (globalBound) return;
+  globalBound = true;
   document.addEventListener('visibilitychange', () => {
     for (const frame of frames) {
       const video = frame.querySelector<HTMLVideoElement>('video');
       if (!video) continue;
       if (document.hidden) video.pause();
-      else if (wanted.get(frame)) void video.play().catch(() => {});
+      else if (wanted.get(frame) && !isMotionPaused()) void video.play().catch(() => {});
+    }
+  });
+  onMotionChange((paused) => {
+    for (const frame of frames) {
+      if (paused) frame.querySelector<HTMLVideoElement>('video')?.pause();
+      else if (wanted.get(frame) && !document.hidden) play(frame);
     }
   });
 }
@@ -211,7 +232,7 @@ function bindVisibility(): void {
 /** Wires every clip frame under `root` (idempotent per frame). */
 export function initClips(root: ParentNode = document): void {
   if (!clipsAllowed(environment())) return;
-  bindVisibility();
+  bindGlobal();
   const inview = new Map<number, IntersectionObserver>();
   for (const frame of root.querySelectorAll<HTMLElement>('[data-clip-src]')) {
     if (frames.has(frame)) continue;
