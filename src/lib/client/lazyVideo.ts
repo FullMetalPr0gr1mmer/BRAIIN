@@ -10,8 +10,8 @@
 // (sections report that through setVideoInView).
 //
 // Respects prefers-reduced-motion and Save-Data (no video at all — the still poster
-// stays), and the sitewide WCAG 2.2.2 motion switch (src/lib/client/motion.ts, the header
-// button): while `body.motion-paused` is set nothing plays AND nothing mounts — a paused
+// stays), and the sitewide WCAG 2.2.2 motion state (src/lib/client/motion.ts; no control
+// ships today — EXC-007): while `body.motion-paused` is set nothing plays AND nothing mounts — a paused
 // visitor downloads no video; surfaces that asked to mount meanwhile are mounted on
 // resume, and only played if their section is still on screen.
 //
@@ -77,7 +77,7 @@ export function setVideoInView(container: HTMLElement, inView: boolean): void {
   else play(container);
 }
 
-// The sitewide motion switch (motion.ts). Pause: every background video stops (the
+// The sitewide motion state (motion.ts; no control ships today — EXC-007). Pause: every background video stops (the
 // group clock is recorded by each one's `pause` listener). Resume: the mounts deferred
 // meanwhile happen — only for surfaces still on screen; the others wait for their
 // section (setVideoInView) — and the on-screen videos play again. Subscribed on first

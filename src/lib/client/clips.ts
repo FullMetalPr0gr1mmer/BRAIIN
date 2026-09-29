@@ -18,8 +18,8 @@
 // Never plays: under prefers-reduced-motion, with Save-Data, or on a touch-only device
 // ("in-content clips never autoplay on touch" — design-port decision 1, a compensating
 // control of EXC-009); the poster stays. Pauses with the page hidden, and while the
-// sitewide motion switch is off (`body.motion-paused`, src/lib/client/motion.ts — the
-// header's pause button): then no clip plays or even mounts, hover clips included (simpler
+// sitewide motion state is paused (`body.motion-paused`, src/lib/client/motion.ts — no
+// control ships today, EXC-007): then no clip plays or even mounts, hover clips included (simpler
 // and stricter than arguing a hover is user-initiated), and the frames that were wanted
 // meanwhile play on resume. When a clip pauses the poster comes back (the mockup left the
 // frozen video frame up and never restored its play badge). Every frame wired here gets
@@ -207,7 +207,7 @@ let globalBound = false;
 const frames = new Set<HTMLElement>();
 
 // The two things that stop every clip at once: the tab going hidden, and the sitewide
-// motion switch. Both resume only the frames still `wanted` (on screen / hovered) — and
+// motion state. Both resume only the frames still `wanted` (on screen / hovered) — and
 // the switch resumes them through play(), which also creates the <video> a frame never
 // got while paused.
 function bindGlobal(): void {

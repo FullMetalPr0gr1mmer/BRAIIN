@@ -248,17 +248,14 @@ bound. Past the last rung the stagger flattens into a simultaneous pop.
 
 ## 6. Related decisions
 
-- **The motion switch** (`SiteHeader.astro`, `src/lib/client/motion.ts`; Round 3 R3-7,
-  which closed **EXC-007** in `docs/security-exceptions.md` on 2026-09-29) — the hero
-  itself still carries no pause control, for parity with the Brain Station UI reference;
-  the **WCAG 2.2.2** control for the hero loop, the slogan-band loop, the clients marquee
-  and the scroll cue is the header's button, on every page. The state is
-  `body.motion-paused`; the CSS loops pause through `animation-play-state: paused` on the
-  **named** selectors only — never a blanket `body.motion-paused *`, which would freeze
-  the intro plate opaque when a tab's stored pause is restored on home, and the h1 words
-  at opacity 0. A paused visitor's hero mount is deferred (no video bytes), and a resume
-  plays it only while on screen. **No CI gate detects 2.2.2** — axe cannot decide it and
-  Lighthouse a11y stays at 100; `tests/e2e/motion-pause.e2e.ts` asserts it directly.
+- **EXC-007** (`docs/security-exceptions.md`) — the hero carries no pause control, for parity
+  with the Brain Station UI reference: a **WCAG 2.2.2 (Level A)** deviation covering the hero
+  loop, the slogan-band loop and the clients marquee (and the UI v2 and Round 2 loops). A
+  header control was built and removed on 2026-09-29 at the owner's decision; the
+  *mechanism* (`src/lib/client/motion.ts`, `body.motion-paused`, the **named**
+  `animation-play-state` rules — never a blanket `body.motion-paused *`, which would freeze
+  the intro plate opaque) is retained with no writer, so restoring it is one button. **No CI
+  gate detects this** — axe cannot decide it and Lighthouse a11y stays at 100.
 - **`withHomeIntro()`** (`src/lib/sections/types.ts`) — the plate is opted into at the
   **route** level, not baked into CMS content, so authoring the home page in the CMS
   cannot silently drop it and a `hero` section on any other page can never inherit an

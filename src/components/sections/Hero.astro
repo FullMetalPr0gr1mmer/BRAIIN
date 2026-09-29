@@ -398,8 +398,9 @@ const src = videoUid ? undefined : videoSrc;
   const media = document.querySelector<HTMLElement>('.hero__media');
 
   // The hero itself carries no pause control (the reference design ships none): the
-  // WCAG 2.2.2 control is the header's motion switch (SiteHeader.astro, Round 3 R3-7 —
-  // it closed EXC-007), which stops this loop, the slogan band's, the marquee and the
+  // WCAG 2.2.2 control was the header's motion switch (Round 3 R3-7), built and removed on
+  // 2026-09-29 at the owner's decision (EXC-007 stays open); `body.motion-paused` would
+  // still stop this loop, the slogan band's, the marquee and the
   // scroll cue through `body.motion-paused` (src/lib/client/motion.ts). While it is off
   // the mount below is deferred, so a paused visitor downloads nothing.
   // `prefers-reduced-motion` is still honoured upstream in lazyVideo (no video at all).

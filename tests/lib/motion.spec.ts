@@ -12,7 +12,8 @@ import {
   writeStoredMotion,
 } from '@/lib/client/motion';
 
-// Round 3 (R3-7): the sitewide motion switch behind the header pause button. The pure
+// Round 3 (R3-7): the sitewide motion state (its header button was built and removed the
+// same day — EXC-007 stays open; the module stays for the day it returns). The pure
 // parts are tested as values; the DOM parts run against a minimal stand-in for
 // `document` (an EventTarget with a body classList) — there is no jsdom in this suite,
 // and the contract here is the class + the event, not layout.

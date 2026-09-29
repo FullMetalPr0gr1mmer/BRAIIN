@@ -1,10 +1,12 @@
-// The sitewide motion switch (WCAG 2.2.2 Pause, Stop, Hide — Round 3, closes EXC-007).
+// The sitewide motion state (WCAG 2.2.2 Pause, Stop, Hide — Round 3 R3-7). No control ships
+// today: the header button was built and removed on 2026-09-29 at the owner's decision
+// (mockup parity; EXC-007 stays open), so this state has no writer until it returns.
 //
 // One state, `body.motion-paused`, read by everything that moves on its own: the CSS
 // loops (the clients marquee, the hero scroll cue, the banner caption's pulse — each has
 // an `animation-play-state: paused` rule under the class), the background loops
 // (lazyVideo.ts), the in-content clips (clips.ts) and the testimonials carousel
-// (carousel.ts). The header button (SiteHeader.astro) is the only writer.
+// (carousel.ts). A header button (SiteHeader.astro; removed) was its only writer.
 //
 // Changes are broadcast as a `motion-updated` CustomEvent on `document` — the
 // `consent-updated` pattern — so each subsystem subscribes on its own and this module
