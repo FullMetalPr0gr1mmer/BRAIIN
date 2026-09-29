@@ -1,17 +1,25 @@
 import type { BilingualText, Locale } from '@schemas/primitives';
 import { localizedHref } from '@/lib/i18n';
+import { REDIRECT_CACHE_CONTROL } from '@/lib/http/redirects';
 
 // Where the retired service URLs go (Round 2: 14 services regrouped into five disciplines
 // holding 28). Every old `/services/<slug>` answers a 301 to its nearest new page, so no
 // inbound link, bookmark or search result lands on a 404.
 //
-// Code-owned, not the `redirects` table: that module never takes effect today (middleware
-// reads KV `site:redirects` and nothing writes it — a pre-existing gap, plan "Redirects
-// for retired slugs"). The map is consulted ONLY when a slug misses, so restoring an
-// archived service in the admin wins: its page renders again and this entry stops applying.
+// Code-owned on purpose, and kept after Round 3 made the admin's `redirects` table reach
+// the edge (owner decision G2: "restore wins" keeps holding). Precedence, plan R3-d:
 //
-// The 301 carries an explicit `Cache-Control: public, max-age=86400` — it is not Tier A
-// (never purged on publish), so a restore takes effect within a day at worst.
+//   live page  >  this map (route-level, services only)  >  the `redirects` table  >  404
+//
+// The service route consults this map ONLY when a slug misses, so restoring an archived
+// service in the admin wins: its page renders again and this entry stops applying. The
+// table is consulted by the middleware only after the render answered 404 — so it can
+// never shadow a page either, and a rule authored for a retired slug simply never runs
+// while this map answers it first (src/lib/http/redirects.ts, src/middleware.ts).
+//
+// The 301 carries the same `Cache-Control` as a table rule (REDIRECT_CACHE_CONTROL: one
+// day) — not Tier A, never purged on publish, so a restore takes effect within a day at
+// worst, and a browser that cached the hop longer is the visitor's cache, not ours.
 //
 // One constraint on that "restore wins" rule: `canonicalServiceSlug` (below) converts the
 // four RENAMED slugs at lead-save time unconditionally — it never reads the table — so a
@@ -33,7 +41,8 @@ export const RETIRED_SERVICES: Readonly<Record<string, string>> = Object.freeze(
   gaming: '/services',
 });
 
-export const RETIRED_CACHE_CONTROL = 'public, max-age=86400';
+/** The one lifetime every 30x on this site carries (shared with the table's rules). */
+export const RETIRED_CACHE_CONTROL = REDIRECT_CACHE_CONTROL;
 
 /**
  * The old slugs that were RENAMED in place (Round 2 cut-over, `RENAMES` in

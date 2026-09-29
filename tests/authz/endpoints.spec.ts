@@ -529,12 +529,43 @@ const CASES: Case[] = [
     body: { robotsDirectives: 'index,follow', version: 1 },
     allow: ['admin', 'seo'],
   },
+  // Redirects: §5 grants Admin + SEO the whole module — reads, writes AND deletes (the
+  // resource names `deleteCap: 'redirects.manage'`, Round 3) and the edge sync.
+  {
+    name: 'redirects list',
+    load: () => import('@/pages/api/admin/redirects/index'),
+    method: 'GET',
+    url: '/api/admin/redirects',
+    allow: ['admin', 'seo'],
+  },
   {
     name: 'redirects create',
     load: () => import('@/pages/api/admin/redirects/index'),
     method: 'POST',
     url: '/api/admin/redirects',
     body: { sourcePath: '/old', targetPath: '/new', status: 301 },
+    allow: ['admin', 'seo'],
+  },
+  {
+    name: 'redirects update',
+    load: () => import('@/pages/api/admin/redirects/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/redirects/${UUID}`,
+    body: { targetPath: '/new', version: 1 },
+    allow: ['admin', 'seo'],
+  },
+  {
+    name: 'redirects delete (SEO may — not the content default)',
+    load: () => import('@/pages/api/admin/redirects/[id]'),
+    method: 'DELETE',
+    url: `/api/admin/redirects/${UUID}`,
+    allow: ['admin', 'seo'],
+  },
+  {
+    name: 'redirects sync to edge',
+    load: () => import('@/pages/api/admin/redirects/sync'),
+    method: 'POST',
+    url: '/api/admin/redirects/sync',
     allow: ['admin', 'seo'],
   },
 

@@ -223,6 +223,45 @@ describe('redirects', () => {
     );
   });
 
+  it('a source is a bare pathname: no query, fragment or protocol-relative host', () => {
+    // `/\host/x`: the URL standard reads the backslash as a slash — it IS `//host/x`.
+    for (const sourcePath of [
+      '/old?x=1',
+      '/old#top',
+      '//evil.test/x',
+      '/\\evil.test/x',
+      '/with space',
+    ]) {
+      expect(
+        RedirectWriteSchema.safeParse({ sourcePath, targetPath: '/a' }).success,
+        sourcePath,
+      ).toBe(false);
+    }
+  });
+
+  it('a target is site-relative (query/fragment allowed) or https:// — never another scheme', () => {
+    for (const targetPath of ['/new', '/new?utm=x#top', 'https://example.test/x', '/']) {
+      expect(
+        RedirectWriteSchema.safeParse({ sourcePath: '/a', targetPath }).success,
+        targetPath,
+      ).toBe(true);
+    }
+    for (const targetPath of [
+      'http://example.test/x',
+      'javascript:alert(1)',
+      '//evil.test/x',
+      '/\\evil.test/x',
+      '/new/\\evil.test',
+      'new',
+      'mailto:x@y.z',
+    ]) {
+      expect(
+        RedirectWriteSchema.safeParse({ sourcePath: '/a', targetPath }).success,
+        targetPath,
+      ).toBe(false);
+    }
+  });
+
   it('accepts only the three documented status codes', () => {
     expect(
       RedirectWriteSchema.safeParse({ sourcePath: '/a', targetPath: '/b', status: 307 }).success,

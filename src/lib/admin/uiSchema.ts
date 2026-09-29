@@ -117,6 +117,16 @@ export interface ColumnDef {
   kind?: 'status' | 'date' | 'bilingual' | 'text' | 'boolean';
 }
 
+/**
+ * A table whose rows are snapshotted somewhere the public request path reads (redirects
+ * → KV, Round 3). `endpoint` answers GET `{ db, edge }` for the status line and POST
+ * `{ kvSynced, count, truncated }` to rebuild the snapshot by hand.
+ */
+export interface SyncActionDef {
+  endpoint: string;
+  label: string;
+}
+
 export interface ResourceUi {
   /** URL segment for both /admin/<slug> and /api/admin/<slug>. */
   slug: string;
@@ -128,6 +138,8 @@ export interface ResourceUi {
   hasStatus?: boolean;
   /** Exposes drag-free up/down reordering (POSTs to <slug>/reorder). */
   reorder?: boolean;
+  /** Exposes a "push to the edge" button and its status line (ResourceTable). */
+  syncAction?: SyncActionDef;
 }
 
 const STATUS_FIELD: FieldDef = {
@@ -982,9 +994,25 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
       { key: 'target_path', label: 'To' },
       { key: 'status', label: 'Code' },
     ],
+    // Every save and delete rebuilds the edge snapshot (design-port R3-1); the button is
+    // for the first snapshot after a deploy and for a retry after "the edge did not pick
+    // it up". The status line beside it is the one place the two counts are compared.
+    syncAction: { endpoint: '/api/admin/redirects/sync', label: 'Sync to edge' },
     fields: [
-      { name: 'sourcePath', label: 'From (site-relative)', kind: 'text', required: true },
-      { name: 'targetPath', label: 'To', kind: 'text', required: true },
+      {
+        name: 'sourcePath',
+        label: 'From (site-relative)',
+        kind: 'text',
+        required: true,
+        help: 'The old path, e.g. /old-page (no ?query or #fragment; /old and /old/ are the same rule). A rule applies only where nothing renders: a path that answers a page today — a static route, or a live service, project or post — is refused, and /ar/… falls back to the English rule automatically.',
+      },
+      {
+        name: 'targetPath',
+        label: 'To',
+        kind: 'text',
+        required: true,
+        help: 'A site-relative path (/new-page, /services#branding — a ?query is allowed) or an https:// URL. Point at the final destination: a target that is itself redirected is refused (no chains), and so is a rule pointing at its own /ar twin.',
+      },
       {
         name: 'status',
         label: 'HTTP status',
@@ -994,6 +1022,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = {
           { value: '302', label: '302 — temporary' },
           { value: '308', label: '308 — permanent, method-preserving' },
         ],
+        help: 'Takes effect at the edge within a minute of saving. Browsers may keep a permanent redirect (301, 308) for up to a day; a temporary one (302) is never cached, so it can be changed or removed at once.',
       },
     ],
   },

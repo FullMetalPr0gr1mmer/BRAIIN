@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { uiFor } from '@/lib/admin/uiSchema';
 import { Field, formToPayload, rowToForm, type Row } from './FormField';
+import { EDGE_NOT_SYNCED } from './ResourceTable';
 
 // The create/edit form for every CRUD resource, driven by RESOURCE_UI.
 //
@@ -39,6 +40,15 @@ export default function ResourceForm({ resource, id }: ResourceFormProps) {
   const [version, setVersion] = useState(1);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  // A resource with an edge snapshot (redirects) reports `kvSynced` on every write. False
+  // is a committed row the public request path does not see yet — shown with the
+  // maintenance panel's wording, and carried across the create → edit navigation as
+  // `?edge=missed` (the create response is gone once the page changes).
+  const [edgeMissed, setEdgeMissed] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('edge') === 'missed',
+  );
   const [busy, setBusy] = useState(!isNew);
 
   const load = useCallback(async () => {
@@ -63,6 +73,7 @@ export default function ResourceForm({ resource, id }: ResourceFormProps) {
 
   function set(name: string, value: unknown) {
     setSaved(false);
+    setEdgeMissed(false);
     setValues((previous) => ({ ...previous, [name]: value }));
   }
 
@@ -74,7 +85,8 @@ export default function ResourceForm({ resource, id }: ResourceFormProps) {
       const body = formToPayload(values, ui.fields);
       if (isNew) {
         const created = await adminFetch<Row>(`/api/admin/${ui.slug}`, { method: 'POST', body });
-        window.location.href = `/admin/${ui.slug}/${String(created['id'])}`;
+        const missed = created['kvSynced'] === false ? '?edge=missed' : '';
+        window.location.href = `/admin/${ui.slug}/${String(created['id'])}${missed}`;
         return;
       }
       for (const field of ui.fields) {
@@ -93,6 +105,7 @@ export default function ResourceForm({ resource, id }: ResourceFormProps) {
       setValues(reseeded);
       setInitial(reseeded);
       setVersion(Number(updated['version'] ?? version + 1));
+      setEdgeMissed(updated['kvSynced'] === false);
       setSaved(true);
     } catch (err) {
       setError(describeError(err));
@@ -108,9 +121,14 @@ export default function ResourceForm({ resource, id }: ResourceFormProps) {
           {error}
         </p>
       )}
-      {saved && (
+      {saved && !edgeMissed && (
         <p className="msg" data-kind="ok" role="status">
           Saved.
+        </p>
+      )}
+      {edgeMissed && (
+        <p className="msg" data-kind="error" role="alert">
+          {EDGE_NOT_SYNCED}
         </p>
       )}
 

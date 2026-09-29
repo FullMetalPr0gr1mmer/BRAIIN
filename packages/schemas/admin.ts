@@ -617,14 +617,31 @@ export const SeoDefaultsSchema = z.object({
   version: VersionSchema,
 });
 
+/**
+ * A redirect's source is a bare site-relative PATHNAME: the edge map is keyed by the
+ * request pathname, so a query or fragment in a source could never match (and a
+ * protocol-relative `//host` is not a path at all). The target is what the Location
+ * header will carry: a site-relative href (query/fragment allowed) or an https:// URL.
+ * A backslash is refused anywhere in a site-relative value: the URL standard reads `\`
+ * as `/` in an https URL, so `/\host/x` IS `//host/x` — a cross-origin URL wearing a
+ * site-relative costume (sanitizeHref and the map builder refuse it again by origin).
+ */
+export const REDIRECT_SOURCE_PATTERN = /^\/(?!\/)[^\s?#\\]*$/;
+export const REDIRECT_TARGET_PATTERN = /^(\/(?!\/)[^\s\\]*|https:\/\/\S+)$/;
+
 export const RedirectWriteSchema = z.object({
   sourcePath: z
     .string()
     .trim()
     .min(1)
     .max(2048)
-    .regex(/^\//, 'must be a site-relative path starting with /'),
-  targetPath: z.string().trim().min(1).max(2048),
+    .regex(REDIRECT_SOURCE_PATTERN, 'must be a site-relative path starting with / (no ? or #)'),
+  targetPath: z
+    .string()
+    .trim()
+    .min(1)
+    .max(2048)
+    .regex(REDIRECT_TARGET_PATTERN, 'must be a site-relative path or an https:// URL'),
   status: z.union([z.literal(301), z.literal(302), z.literal(308)]).default(301),
 });
 export const RedirectUpdateSchema = updatable(RedirectWriteSchema);
