@@ -8,7 +8,7 @@ import {
   withSecurityHeaders,
 } from '@/lib/http/securityHeaders';
 import { getMaintenanceState, clientIp, maintenanceResponse } from '@/lib/http/maintenance';
-import { lookupRedirect } from '@/lib/http/redirects';
+import { getRedirectMap, lookupRedirect, redirectResponse } from '@/lib/http/redirects';
 import {
   isSameOrigin,
   csrfTokenMatches,
@@ -20,9 +20,17 @@ import {
 import { createSessionClient, clearSessionCookies, HOST_COOKIE_BASE } from '@/lib/auth/session';
 import { resolveAuthContext } from '@/lib/auth/context';
 
-// Single enforcement point for: maintenance pre-cache check → redirects →
-// per-request CSP nonce → strict security headers → admin session + CSRF.
+// Single enforcement point for: maintenance pre-cache check → per-request CSP nonce →
+// strict security headers → admin session + CSRF → render → authored redirects on a 404.
 // (CLAUDE.md §8.)
+//
+// Redirect precedence (design-port R3-1, plan R3-d): live page > route-level code map
+// (src/lib/services/retired.ts, services only) > the authored `redirects` table (KV
+// snapshot, src/lib/http/redirects.ts) > 404. The table is consulted ONLY after the
+// render answered 404, which is what makes the first two hold — an authored rule can
+// never shadow a page that exists — and it removes a KV read from every request that
+// renders. The 404 page itself is `private, no-store` (src/pages/404.astro) so a rule
+// authored later is never hidden behind an edge-cached 404.
 //
 // CSP rollout: ship Report-Only for one cycle to collect violations, then flip to
 // enforce. Toggle here (or wire to an env flag) — but it ALWAYS ships without
@@ -33,6 +41,9 @@ const CSP_REPORT_ONLY = false;
 const PRIVATE_CACHE = 'private, no-store, max-age=0, must-revalidate';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/** The methods an authored redirect answers: a 30x on a POST would replay nothing useful. */
+const REDIRECTABLE_METHODS = new Set(['GET', 'HEAD']);
 
 /**
  * The only two private paths reachable without a session — the login form and the
@@ -137,15 +148,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  // 2) Redirects (301/302/308) — slug/canonical hygiene. Public paths only: the
-  //    redirects table is authored by the SEO role, and letting an authored rule shadow
-  //    /admin would let a content edit lock everyone out of the CMS.
-  if (!isAdmin) {
-    const rule = await lookupRedirect(url.pathname, env);
-    if (rule) return secured(context.redirect(rule.to, rule.status));
-  }
-
-  // 3) Admin: session resolution + CSRF. Everything below is Tier C.
+  // 2) Admin: session resolution + CSRF. Everything below is Tier C.
   if (isPrivate) {
     const supabase = createSessionClient(cookies);
     locals.supabase = supabase;
@@ -190,6 +193,25 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  // 4) Render, then apply the same headers to the rendered response.
-  return secured(await next());
+  // 3) Render.
+  const rendered = await next();
+
+  // 4) Authored redirects (301/302/308), only where the render answered 404 — see the
+  //    precedence note in the header. Public paths only: the table is authored by the
+  //    SEO role, and a rule over /admin, /api or /healthz could lock the CMS, break the
+  //    admin's own API calls or silence the synthetic monitors; the map builder drops
+  //    those sources too, so this exemption is belt-and-braces. The map read fails open.
+  if (
+    rendered.status === 404 &&
+    !isAdmin &&
+    !isApi &&
+    !isHealth &&
+    REDIRECTABLE_METHODS.has(request.method)
+  ) {
+    const rule = lookupRedirect(url.pathname, await getRedirectMap(env));
+    if (rule) return secured(redirectResponse(rule, url));
+  }
+
+  // 5) Apply the same headers to the rendered response.
+  return secured(rendered);
 });
