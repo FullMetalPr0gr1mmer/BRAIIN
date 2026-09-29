@@ -7,6 +7,7 @@ import { decryptPII } from '@/lib/crypto/pii';
 import { canSeeLeadPii } from '@/lib/admin/leadFields';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { timingSafeEqual } from '@/lib/http/csrf';
+import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 
 // Lead-notification receiver (CLAUDE.md §10). Called by the `leads_notify` AFTER INSERT
 // trigger via pg_net, over the public `*.workers.dev` hop.
@@ -91,6 +92,14 @@ export const POST: APIRoute = async ({ request }) => {
     canSeeLeadPii((r as { role: 'admin' | 'developer' }).role),
   );
 
+  // Readable labels for the interest slugs (Round 3): the recipient reads "Videography
+  // (now Photography / Videography)", not a slug a cached page posted. EN — the
+  // notification channel is staff-facing; the admin shows both languages.
+  const labelled = withInterestLabels(
+    lead,
+    await resolveLeadInterests(sb, parsed.data.tenant_id, [lead]),
+  );
+
   // Build the two payload shapes once. Everything below the gate is omitted for a
   // recipient without `leads.pii` — the same rule the admin API applies.
   const safe = {
@@ -99,8 +108,10 @@ export const POST: APIRoute = async ({ request }) => {
     company: lead['company'],
     message: lead['message'],
     service: lead['service_of_interest'],
+    serviceLabel: labelled.service_label?.en ?? null,
     // "{Discipline}, help me choose" (0028): the visitor picked a discipline, not a service.
     discipline: lead['discipline_of_interest'],
+    disciplineLabel: labelled.discipline_label?.en ?? null,
     locale: lead['locale'],
     receivedAt: lead['created_at'],
   };

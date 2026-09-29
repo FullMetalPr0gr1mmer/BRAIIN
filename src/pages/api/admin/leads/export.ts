@@ -9,6 +9,7 @@ import { decryptPII } from '@/lib/crypto/pii';
 import { budgetBandLabel } from '@schemas/lead';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { toCsv } from '@/lib/admin/csv';
+import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 
 // Lead CSV export — the full §3 lockdown, in order:
 //
@@ -83,6 +84,10 @@ export const GET = defineAdminRoute({
     // which PostgREST's literal-string typings cannot follow.
     const rows = (data ?? []) as unknown as Record<string, unknown>[];
 
+    // The interest labels (Round 3): resolved ONCE for the whole batch — two queries, not
+    // two per row — and written as EN + AR columns right after the slug they explain.
+    const labels = await resolveLeadInterests(sb, auth.tenantId, rows);
+
     // `company` is business-contact data in leads_safe (0015), so it is in BOTH projections.
     // `budget` is exported as its human label (BUDGET_BAND_LABELS — the same map the form
     // and the admin panel read), and `timeline` is the decrypted free-text deadline (0017),
@@ -100,7 +105,11 @@ export const GET = defineAdminRoute({
           'timeline',
           'timeline_band',
           'service_of_interest',
+          'service_label',
+          'service_label_ar',
           'discipline_of_interest',
+          'discipline_label',
+          'discipline_label_ar',
           'locale',
           'message',
           'internal_notes',
@@ -112,13 +121,18 @@ export const GET = defineAdminRoute({
           'name',
           'company',
           'service_of_interest',
+          'service_label',
+          'service_label_ar',
           'discipline_of_interest',
+          'discipline_label',
+          'discipline_label_ar',
           'locale',
           'message',
         ];
 
     const records: Record<string, unknown>[] = [];
     for (const row of rows) {
+      const labelled = withInterestLabels(row, labels);
       const base: Record<string, unknown> = {
         id: row['id'],
         created_at: row['created_at'],
@@ -126,7 +140,11 @@ export const GET = defineAdminRoute({
         name: row['name'],
         company: row['company'],
         service_of_interest: row['service_of_interest'],
+        service_label: labelled.service_label?.en ?? '',
+        service_label_ar: labelled.service_label?.ar ?? '',
         discipline_of_interest: row['discipline_of_interest'],
+        discipline_label: labelled.discipline_label?.en ?? '',
+        discipline_label_ar: labelled.discipline_label?.ar ?? '',
         locale: row['locale'],
         message: row['message'],
       };

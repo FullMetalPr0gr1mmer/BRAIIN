@@ -15,6 +15,13 @@ export type LeadKind = z.infer<typeof LeadKindSchema>;
 // submitting exactly what the page offered them. Drop LEGACY_BUDGET_BANDS from the input
 // union once cached pages have turned over (plan: "later cleanup"); keep them in the
 // label map for as long as rows carrying them exist.
+//
+// The same window covers `serviceOfInterest`: a cached page still posts a Round 2 slug
+// (`videography`, `merchandise`…). The input schema keeps accepting any slug; the four
+// one-to-one renames are converted at save time (`canonicalServiceSlug`,
+// src/lib/services/retired.ts) and every other old slug is stored as given and shown
+// with a readable label (src/lib/leads/interestLabel.ts). Stored rows are never
+// rewritten (owner decision G1, Round 3).
 export const BUDGET_BANDS = ['lt_25k', '25k_75k', '75k_200k', 'gt_200k', 'not_sure'] as const;
 export const LEGACY_BUDGET_BANDS = [
   'lt_10k',

@@ -30,6 +30,42 @@ export const RETIRED_SERVICES: Readonly<Record<string, string>> = Object.freeze(
 export const RETIRED_CACHE_CONTROL = 'public, max-age=86400';
 
 /**
+ * The old slugs that were RENAMED in place (Round 2 cut-over, `RENAMES` in
+ * scripts/round2-cutover.mjs — tests/seed/cutover.spec.ts holds the two equal): the row
+ * kept its id and took the new slug, so no row with the old slug exists any more. The
+ * map above cannot tell these apart from a merge on its own — `photography` also points
+ * at `/services/photo-video`, but its row still exists, archived under its own title —
+ * so the rename set is named here; the target still comes from the one map.
+ */
+export const RENAMED_SERVICE_SLUGS: readonly string[] = Object.freeze([
+  'animations',
+  'videography',
+  'montage',
+  'music',
+]);
+
+/**
+ * The slug an old service slug was renamed to (`videography` → `photo-video`), or null
+ * for a slug that was archived, is live, or was never ours. Own-property lookup, as
+ * `retiredTarget`.
+ */
+export function renamedServiceSlug(slug: string): string | null {
+  if (!RENAMED_SERVICE_SLUGS.includes(slug) || !Object.hasOwn(RETIRED_SERVICES, slug)) return null;
+  const match = /^\/services\/([a-z0-9-]+)$/.exec(RETIRED_SERVICES[slug] ?? '');
+  return match?.[1] ?? null;
+}
+
+/**
+ * The slug a lead's service interest is stored under: the renamed slug for the four
+ * renames, else the slug as given. Cached pages (edge `s-maxage` of a year, no purge)
+ * still post the old slugs — the same window LEGACY_BUDGET_BANDS covers
+ * (packages/schemas/lead.ts); drop this with them once cached pages have turned over.
+ */
+export function canonicalServiceSlug(slug: string): string {
+  return renamedServiceSlug(slug) ?? slug;
+}
+
+/**
  * The page a retired slug moved to, in the visitor's language (`/ar/services#branding`),
  * or null for a slug that was never ours. An own-property lookup: `constructor`,
  * `__proto__` or `toString` in a URL must not resolve to something on Object.prototype.

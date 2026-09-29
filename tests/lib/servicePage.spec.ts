@@ -77,8 +77,15 @@ const {
 } = await import('@/lib/services/page');
 const { caseFigure, CASE_IMAGE_SLOT } = await import('@/lib/services/caseFigure');
 const { serviceCacheEntities } = await import('@/lib/services/page');
-const { RETIRED_SERVICES, RETIRED_CACHE_CONTROL, retiredTarget, retiredRedirect } =
-  await import('@/lib/services/retired');
+const {
+  RETIRED_SERVICES,
+  RETIRED_CACHE_CONTROL,
+  RENAMED_SERVICE_SLUGS,
+  retiredTarget,
+  retiredRedirect,
+  renamedServiceSlug,
+  canonicalServiceSlug,
+} = await import('@/lib/services/retired');
 const { SERVICE_PAGE_COPY, VALUE_ACCENT, moreHeading, moreTag } =
   await import('@/lib/services/pageCopy');
 const { SERVICE_PAGE_META } = await import('@/lib/seo/pageMeta');
@@ -171,6 +178,42 @@ describe('retired service slugs → where they moved', () => {
     for (const slug of ['logo', 'nope', 'constructor', '__proto__', 'toString', 'hasOwnProperty'])
       expect(retiredTarget(slug, 'en'), slug).toBeNull();
     expect(retiredRedirect('constructor', 'en')).toBeNull();
+  });
+
+  it('names exactly the four one-to-one renames, each to the slug its row now carries', () => {
+    // Round 3 (lead labels): a rename kept the row's id under a new slug, so no row with the
+    // old slug exists; a merge (photography → photo-video) left its own row archived. Only
+    // the renames are converted at lead-save time; a merged slug is labelled from its row.
+    const renames: Record<string, string | null> = {};
+    for (const slug of Object.keys(PLAN_TABLE)) renames[slug] = renamedServiceSlug(slug);
+    expect(renames).toEqual({
+      animations: 'animation',
+      videography: 'photo-video',
+      montage: 'video-editing',
+      music: 'music-vo-sfx',
+      branding: null,
+      photography: null,
+      'event-planning': null,
+      'web-development': null,
+      merchandise: null,
+      gaming: null,
+    });
+    expect([...RENAMED_SERVICE_SLUGS]).toEqual(['animations', 'videography', 'montage', 'music']);
+    // every rename's target is the plan table's, so there is still one map of targets
+    for (const slug of RENAMED_SERVICE_SLUGS) {
+      expect(`/services/${renamedServiceSlug(slug)}`).toBe(PLAN_TABLE[slug]);
+    }
+    for (const slug of ['logo', 'nope', 'constructor', '__proto__', 'toString'])
+      expect(renamedServiceSlug(slug), slug).toBeNull();
+  });
+
+  it('canonicalServiceSlug converts a rename and keeps everything else', () => {
+    expect(canonicalServiceSlug('videography')).toBe('photo-video');
+    expect(canonicalServiceSlug('animations')).toBe('animation');
+    expect(canonicalServiceSlug('photography')).toBe('photography');
+    expect(canonicalServiceSlug('branding')).toBe('branding');
+    expect(canonicalServiceSlug('logo')).toBe('logo');
+    expect(canonicalServiceSlug('constructor')).toBe('constructor');
   });
 
   it('is a permanent redirect cached for a day, not a Tier-A page', () => {

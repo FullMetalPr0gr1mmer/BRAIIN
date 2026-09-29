@@ -1053,3 +1053,26 @@ The orchestrator renumbers these at integration.
   music-vo-sfx and booth-production, every section's top, height and width matches to
   the pixel. The one exception is the inquiry band, which is 25–64px taller because the
   site's form carries the PDPL consent row.
+
+## Round 3: gap fixes (R3)
+
+- **R3-4. Lead interest slugs read as labels; stored rows are never rewritten** (owner
+  decision G1). A lead's `service_of_interest` / `discipline_of_interest` is shown with a
+  label beside the raw slug everywhere a lead is read: the admin list and detail, the CSV
+  export (`service_label` / `service_label_ar` right after the slug, the same for the
+  discipline) and the notify-lead payload (EN). Labels are derived on the way out by
+  `src/lib/leads/interestLabel.ts`, never columns, and resolved server-side on the
+  caller's own connection: Developer holds `leads.*` but not `services.write`, so the
+  panel cannot look them up. Two queries per batch (`services`, `disciplines`), not two
+  per row. The order per slug: its own row (an archived row reads "Title (retired)" /
+  "العنوان (متوقفة)" — which settles `branding`, both an archived service and a live
+  discipline) → a Round 2 rename, labelled from the row it moved to ("Videography (now
+  Photography / Videography)" / "(الآن …)") → any other retired slug ("Merchandise
+  (retired)") → the raw slug; a discipline falls back to `FALLBACK_DISCIPLINES` instead
+  and never into the retired service map. Only the **four one-to-one renames**
+  (`RENAMED_SERVICE_SLUGS`, equal to the cut-over's `RENAMES` by test) are converted at
+  save time (`canonicalServiceSlug`): the retired map's targets alone cannot tell a
+  rename from a merge (`photography` also points at `/services/photo-video`, but its row
+  still exists, archived under its own title), so the rename set is named in code and
+  the target still comes from the one map. Time-boxed like `LEGACY_BUDGET_BANDS`: drop
+  both once cached pages have turned over. No list filter (skipped on purpose).

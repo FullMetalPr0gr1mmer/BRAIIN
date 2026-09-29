@@ -4,6 +4,7 @@ import { serviceClient } from '@/lib/supabase/server';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import { encryptPII } from '@/lib/crypto/pii';
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
+import { canonicalServiceSlug } from '@/lib/services/retired';
 
 // Server-side lead creation (the "submit-contact-form" path). Resolves the tenant
 // SERVER-SIDE (anon tenant fence — never client-chosen), envelope-encrypts PII, and
@@ -46,7 +47,14 @@ export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
     // keeps the old shape; set requires 0017 (which the deploy guard enforces).
     ...(timeline_text_enc ? { timeline_text_enc } : {}),
     message: input.message,
-    service_of_interest: input.serviceOfInterest ?? null,
+    // Stored under the slug the service lives at now: the four Round 2 renames
+    // (`videography` → `photo-video`) are converted, everything else is kept as given —
+    // an archived slug stays what the visitor asked for and is labelled from its own row
+    // (src/lib/leads/interestLabel.ts). Time-boxed exactly like LEGACY_BUDGET_BANDS
+    // (packages/schemas/lead.ts): cached pages post the old slugs until they turn over.
+    service_of_interest: input.serviceOfInterest
+      ? canonicalServiceSlug(input.serviceOfInterest)
+      : null,
     // "{Discipline}, help me choose" (0028). Sent only when present, like
     // timeline_text_enc above: an always-present key would fail every submission in the
     // window between this code deploying and 0028 being applied.

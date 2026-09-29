@@ -20,6 +20,14 @@ interface LeadRow {
   service_of_interest: string | null;
   /** "{Discipline}, help me choose" on the inquiry forms (0028) — a discipline slug. */
   discipline_of_interest?: string | null;
+  /**
+   * Readable labels for the two slugs, derived by the server (Round 3): a slug an old
+   * cached page posted still reads as a name ("Merchandise (retired)"). Absent when the
+   * lead carries no interest.
+   */
+  service_label?: { en: string; ar: string } | null;
+  service_status?: string | null;
+  discipline_label?: { en: string; ar: string } | null;
   locale: string;
   created_at: string;
   message: string;
@@ -49,13 +57,20 @@ export interface LeadsPanelProps {
 
 const PAGE_SIZE = 25;
 
-/** What the visitor asked about: a service slug, or a discipline they want help choosing in. */
+/**
+ * What the visitor asked about: a service, or a discipline they want help choosing in.
+ * The server's label is preferred; the raw slug is what an older API answer carries.
+ */
 export function interestOf(row: {
   service_of_interest: string | null;
   discipline_of_interest?: string | null | undefined;
+  service_label?: { en: string; ar: string } | null | undefined;
+  discipline_label?: { en: string; ar: string } | null | undefined;
 }): string {
-  if (row.service_of_interest) return row.service_of_interest;
-  if (row.discipline_of_interest) return `${row.discipline_of_interest} (help me choose)`;
+  if (row.service_of_interest) return row.service_label?.en || row.service_of_interest;
+  if (row.discipline_of_interest) {
+    return `${row.discipline_label?.en || row.discipline_of_interest} (help me choose)`;
+  }
   return '—';
 }
 const STATUSES = ['new', 'in_progress', 'done', 'spam'] as const;

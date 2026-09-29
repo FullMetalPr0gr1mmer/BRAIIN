@@ -121,4 +121,16 @@ describe('notify-lead payload hygiene', () => {
     expect(row.detail.fields).toContain('discipline');
     expect(row.detail.fields).toContain('service');
   });
+
+  it('sends readable labels beside the slugs (Round 3), still as field NAMES only', async () => {
+    inserted.length = 0;
+    await call(`Bearer ${VALID_TOKEN}`);
+    const row = inserted.find((r) => 'channel' in r) as { detail: { fields: string[] } };
+    expect(row.detail.fields).toContain('serviceLabel');
+    expect(row.detail.fields).toContain('disciplineLabel');
+    // the label lookup ran on the service client, tenant-scoped, and wrote nothing
+    const serialized = JSON.stringify(row);
+    expect(serialized).not.toContain('A Person');
+    expect(serialized).not.toContain('Branding');
+  });
 });
