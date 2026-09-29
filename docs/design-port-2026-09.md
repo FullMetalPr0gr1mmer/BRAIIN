@@ -1076,3 +1076,18 @@ The orchestrator renumbers these at integration.
   still exists, archived under its own title), so the rename set is named in code and
   the target still comes from the one map. Time-boxed like `LEGACY_BUDGET_BANDS`: drop
   both once cached pages have turned over. No list filter (skipped on purpose).
+- **R3-5. The pre-0023 counters are archived by a runbook transaction, not a migration.**
+  Production still held `services` (14), and likely `projects` (150+) and `years` (8),
+  published with `placements = '{}'`: rendered nowhere since 0023 (a counter shows only on
+  the pages its placements name), unflagged (0023 defaulted `is_placeholder` to false and
+  the seed never overwrites a row), so invisible to the dashboard. They are three rows of
+  one tenant's data, so the fix is runbook §6e: one transaction, a compare-and-set on
+  `(slug, value)` ∈ the known three AND still published AND unplaced, archive (restorable),
+  `value_numeric`/`value_suffix` nulled so the NOT VALID 0023 CHECK cannot refuse the
+  row's own update, the archived set returned, and a `DO` block that rolls the whole
+  thing back if any published counter is still unplaced (an editor's row is reviewed, not
+  archived). The cut-over's preflight gains `unplaced_published` and its verify step
+  raises unless it is empty; the seed spec refuses a published seed counter without a
+  placement. A `dashboard_attention` kind for "published, unplaced" is deferred: it needs
+  a migration (0029+ is Join's this round, R3-c). An owner psql statement writes no audit
+  row — the run is recorded in the PR / ops log.
