@@ -1053,3 +1053,37 @@ The orchestrator renumbers these at integration.
   music-vo-sfx and booth-production, every section's top, height and width matches to
   the pixel. The one exception is the inquiry band, which is 25–64px taller because the
   site's form carries the PDPL consent row.
+
+## Round 3: gap fixes (R3)
+
+Round 3 (2026-09-29) closes the gaps Round 2's report listed. Nothing here changes the
+mockup's look; the entries record the mechanisms an editor meets in the admin.
+
+- **R3-1. Authored redirects reach the edge — and only after a 404.** The Redirects
+  table was written by the admin and read by nobody: the middleware looked up KV
+  `site:redirects` on every public request and nothing ever wrote the key. Now every save
+  and delete rebuilds the tenant's whole map into that key (the maintenance pattern: the
+  row for durability and audit, the key for the read path — Postgres is never on a public
+  request's critical path), and the response says `kvSynced` so a KV failure is a red
+  notice, not a silent 200; a "Sync to edge" button with a database-vs-edge status line
+  backfills the first snapshot after a deploy (runbook §6f). The map is consulted **only
+  where the render answered 404** — precedence: live page > the route-level retired-services
+  map > the table > 404. The alternative, a pre-render lookup, would let an authored rule
+  shadow a page that exists (a restored service, a new post at an old URL) and cost a KV
+  read on every request that renders. Two consequences: the 404 page is now explicitly
+  `private, no-store` (it had no Cache-Control at all), so a rule authored after a URL was
+  404'd is not hidden behind an edge-cached 404; and a rule is refused at save time when
+  its source renders a page today (a static route, or a published/scheduled service,
+  project, post or page slug), when it chains or loops with another rule, or when it names
+  a reserved path (`/admin`, `/api/`, `/healthz`, the asset routes). The map is read with
+  a 60 s `cacheTtl`; the design is that TTL, not a purge call on the save path.
+- **R3-2. The `/ar` twin falls back to the English rule.** An editor writes `/old →
+  /new` once. `/ar/old` has no row of its own, so the lookup tries the logical path and
+  re-localises a site-relative target (`/ar/old → /ar/new`); an explicit `/ar/…` row wins,
+  and an absolute target is left as written. Without it every rule needed authoring twice
+  and the Arabic twin was the one forgotten.
+- **R3-3. SEO may delete a redirect.** The kernel's DELETE was gated on
+  `content.archiveDelete` (Admin-only, right for content), so the role §5 gives the whole
+  module could create and edit a rule but never remove one. A resource may now name its
+  own `deleteCap`; redirects name `redirects.manage`, and the content default is unchanged
+  — SEO deletes nothing else.
