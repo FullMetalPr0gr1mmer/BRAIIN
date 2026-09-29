@@ -21,7 +21,9 @@ export type LeadKind = z.infer<typeof LeadKindSchema>;
 // one-to-one renames are converted at save time (`canonicalServiceSlug`,
 // src/lib/services/retired.ts) and every other old slug is stored as given and shown
 // with a readable label (src/lib/leads/interestLabel.ts). Stored rows are never
-// rewritten (owner decision G1, Round 3).
+// rewritten (owner decision G1, Round 3). The conversion never reads the table, so a
+// renamed slug must not be re-used as a service slug while the conversion window is
+// open; remove the conversion with the window.
 export const BUDGET_BANDS = ['lt_25k', '25k_75k', '75k_200k', 'gt_200k', 'not_sure'] as const;
 export const LEGACY_BUDGET_BANDS = [
   'lt_10k',

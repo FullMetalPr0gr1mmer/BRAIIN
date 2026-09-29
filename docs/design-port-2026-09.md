@@ -1074,8 +1074,15 @@ The orchestrator renumbers these at integration.
   save time (`canonicalServiceSlug`): the retired map's targets alone cannot tell a
   rename from a merge (`photography` also points at `/services/photo-video`, but its row
   still exists, archived under its own title), so the rename set is named in code and
-  the target still comes from the one map. Time-boxed like `LEGACY_BUDGET_BANDS`: drop
-  both once cached pages have turned over. No list filter (skipped on purpose).
+  the target still comes from the one map. The old half of a renamed or retired label is
+  the title the row carried before Round 2 (`RENAMED_SERVICE_SLUGS` /
+  `RETIRED_SERVICE_TITLES`, verbatim from the last Round 1 seed), EN and AR — never a
+  humanised slug inside the Arabic label. A failed table read is fail-open but logged
+  (`system_logs`, source `lead-labels`: table + batch size, no slug or label text).
+  Time-boxed like `LEGACY_BUDGET_BANDS`: drop both once cached pages have turned over;
+  the conversion never reads the table, so a renamed slug must not be re-used as a
+  service slug while that window is open — remove the conversion with the window. No
+  list filter (skipped on purpose).
 - **R3-5. The pre-0023 counters are archived by a runbook transaction, not a migration.**
   Production still held `services` (14), and likely `projects` (150+) and `years` (8),
   published with `placements = '{}'`: rendered nowhere since 0023 (a counter shows only on

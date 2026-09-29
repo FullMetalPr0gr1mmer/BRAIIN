@@ -81,6 +81,7 @@ const {
   RETIRED_SERVICES,
   RETIRED_CACHE_CONTROL,
   RENAMED_SERVICE_SLUGS,
+  RETIRED_SERVICE_TITLES,
   retiredTarget,
   retiredRedirect,
   renamedServiceSlug,
@@ -198,13 +199,46 @@ describe('retired service slugs → where they moved', () => {
       merchandise: null,
       gaming: null,
     });
-    expect([...RENAMED_SERVICE_SLUGS]).toEqual(['animations', 'videography', 'montage', 'music']);
+    expect(Object.keys(RENAMED_SERVICE_SLUGS)).toEqual([
+      'animations',
+      'videography',
+      'montage',
+      'music',
+    ]);
     // every rename's target is the plan table's, so there is still one map of targets
-    for (const slug of RENAMED_SERVICE_SLUGS) {
+    for (const slug of Object.keys(RENAMED_SERVICE_SLUGS)) {
       expect(`/services/${renamedServiceSlug(slug)}`).toBe(PLAN_TABLE[slug]);
     }
     for (const slug of ['logo', 'nope', 'constructor', '__proto__', 'toString'])
       expect(renamedServiceSlug(slug), slug).toBeNull();
+  });
+
+  it('carries every retired slug’s pre-Round-2 title exactly once, verbatim from the Round 1 seed', () => {
+    // The last Round 1 seed (supabase/seed-data/10-services.json at 06b029d^), restated
+    // literally: a lead's label for an old slug uses these, EN and AR, once the row is
+    // gone (renamed) or cannot be read (archived).
+    const OLD_TITLES: Record<string, { en: string; ar: string }> = {
+      animations: { en: 'Animation', ar: 'الرسوم المتحركة' },
+      videography: { en: 'Videography', ar: 'الإنتاج المرئي' },
+      montage: { en: 'Montage', ar: 'المونتاج' },
+      music: { en: 'Music', ar: 'الموسيقى' },
+      branding: { en: 'Branding', ar: 'الهوية البصرية' },
+      photography: { en: 'Photography', ar: 'التصوير الفوتوغرافي' },
+      'event-planning': { en: 'Event Planning', ar: 'تنظيم الفعاليات' },
+      'web-development': { en: 'Web Development', ar: 'تطوير المواقع' },
+      merchandise: { en: 'Merchandise', ar: 'المنتجات الترويجية' },
+      gaming: { en: 'Gaming', ar: 'الألعاب' },
+    };
+    expect({ ...RENAMED_SERVICE_SLUGS, ...RETIRED_SERVICE_TITLES }).toEqual(OLD_TITLES);
+    // the two title maps are disjoint and together cover the retired map's keys exactly
+    const renamed = Object.keys(RENAMED_SERVICE_SLUGS);
+    const retired = Object.keys(RETIRED_SERVICE_TITLES);
+    expect(renamed.filter((slug) => retired.includes(slug))).toEqual([]);
+    expect([...renamed, ...retired].sort()).toEqual(Object.keys(RETIRED_SERVICES).sort());
+    for (const title of Object.values(OLD_TITLES)) {
+      expect(title.en.trim().length).toBeGreaterThan(0);
+      expect(title.ar).toMatch(/[؀-ۿ]/);
+    }
   });
 
   it('canonicalServiceSlug converts a rename and keeps everything else', () => {

@@ -1,11 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { humanizeSlug, resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 import { FALLBACK_DISCIPLINES } from '@/lib/services/cards';
 
 // Round 3 (G1): a lead's interest slugs — old or new — read as labels, EN and AR, and the
 // stored rows are never touched. The lookup runs under the caller's connection, one query
-// per table, and every miss falls through a known order down to the raw slug.
+// per table, and every miss falls through a known order down to the raw slug — and a read
+// that FAILS (not one that finds nothing) leaves one warning in system_logs.
+
+const { logged } = vi.hoisted(() => ({ logged: vi.fn(async () => true) }));
+vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: logged }));
 
 const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
@@ -33,6 +37,7 @@ function stubDb(): SupabaseClient {
 }
 
 beforeEach(() => {
+  logged.mockClear();
   queries.length = 0;
   for (const k of Object.keys(tables)) delete tables[k];
   tables['services'] = [
@@ -86,9 +91,11 @@ describe('resolveLeadInterests — services', () => {
       slug: 'videography',
       status: 'renamed',
       currentSlug: 'photo-video',
+      // the OLD half is the title the row carried before the rename (RENAMED_SERVICE_SLUGS),
+      // in each language — never a humanised English slug inside the Arabic label
       label: {
         en: 'Videography (now Photography / Videography)',
-        ar: 'Videography (الآن التصوير والفيديو)',
+        ar: 'الإنتاج المرئي (الآن التصوير والفيديو)',
       },
     });
     // …and the new slug was fetched in the SAME query as the old one
@@ -100,7 +107,26 @@ describe('resolveLeadInterests — services', () => {
     tables['services'] = [];
     const labels = await resolveLeadInterests(stubDb(), TENANT, [lead('montage')]);
     expect(labels.get('service:montage')?.label.en).toBe('Montage (now Video Editing)');
+    // the old title is still Arabic; only the unreadable NEW row's name is humanised
+    expect(labels.get('service:montage')?.label.ar).toBe('المونتاج (الآن Video Editing)');
     expect(labels.get('service:montage')?.currentSlug).toBe('video-editing');
+  });
+
+  it('every rename reads by its old title in both languages, with its new slug', async () => {
+    tables['services'] = [];
+    const labels = await resolveLeadInterests(stubDb(), TENANT, [
+      lead('animations'),
+      lead('videography'),
+      lead('montage'),
+      lead('music'),
+    ]);
+    const heads = [...labels.values()].map((l) => [l.currentSlug, l.label.en, l.label.ar]);
+    expect(heads).toEqual([
+      ['animation', 'Animation (now Animation)', 'الرسوم المتحركة (الآن Animation)'],
+      ['photo-video', 'Videography (now Photo Video)', 'الإنتاج المرئي (الآن Photo Video)'],
+      ['video-editing', 'Montage (now Video Editing)', 'المونتاج (الآن Video Editing)'],
+      ['music-vo-sfx', 'Music (now Music Vo Sfx)', 'الموسيقى (الآن Music Vo Sfx)'],
+    ]);
   });
 
   it('any other retired slug (merged into a panel) reads as retired', async () => {
@@ -109,8 +135,22 @@ describe('resolveLeadInterests — services', () => {
       slug: 'merchandise',
       status: 'retired',
       currentSlug: 'merchandise',
-      label: { en: 'Merchandise (retired)', ar: 'Merchandise (متوقفة)' },
+      label: { en: 'Merchandise (retired)', ar: 'المنتجات الترويجية (متوقفة)' },
     });
+  });
+
+  it('an archived slug whose row cannot be read still reads by its old title (RETIRED_SERVICE_TITLES)', async () => {
+    tables['services'] = [];
+    const labels = await resolveLeadInterests(stubDb(), TENANT, [
+      lead('branding'),
+      lead('event-planning'),
+      lead('gaming'),
+    ]);
+    expect([...labels.values()].map((l) => [l.status, l.label.en, l.label.ar])).toEqual([
+      ['retired', 'Branding (retired)', 'الهوية البصرية (متوقفة)'],
+      ['retired', 'Event Planning (retired)', 'تنظيم الفعاليات (متوقفة)'],
+      ['retired', 'Gaming (retired)', 'الألعاب (متوقفة)'],
+    ]);
   });
 
   it('an unknown slug falls back to the raw slug, never throws', async () => {
@@ -209,6 +249,63 @@ describe('resolveLeadInterests — the queries', () => {
       lead('logo'),
     ]);
     expect(l2.get('service:logo')?.status).toBe('unknown');
+  });
+
+  it('a read that FAILS is logged once per table — table and batch size only — and the labels fall back', async () => {
+    // PostgREST answers with `error` (a permission or timeout failure, not an empty result)
+    const failing = {
+      from: (table: string) => {
+        const b: Record<string, unknown> = {};
+        for (const m of ['select', 'eq', 'in']) b[m] = () => b;
+        b['then'] = (ok: (v: unknown) => unknown) =>
+          Promise.resolve({
+            data: null,
+            error: { code: '57014', message: `canceling statement on ${table}` },
+          }).then(ok);
+        return b;
+      },
+    } as unknown as SupabaseClient;
+    const labels = await resolveLeadInterests(failing, TENANT, [
+      lead('videography', 'events'),
+      lead('merchandise', 'web'),
+    ]);
+    // fail open: the code fallbacks label everything
+    expect(labels.get('service:videography')?.label.en).toBe('Videography (now Photo Video)');
+    expect(labels.get('service:merchandise')?.status).toBe('retired');
+    expect(labels.get('discipline:events')?.status).toBe('fallback');
+    // …and each failed table read left exactly one warning naming the table and the count
+    expect(logged).toHaveBeenCalledTimes(2);
+    const calls = logged.mock.calls.map((c: unknown[]) => c[0] as Record<string, unknown>);
+    expect(calls.map((c) => c['level'])).toEqual(['warn', 'warn']);
+    expect(calls.map((c) => c['source'])).toEqual(['lead-labels', 'lead-labels']);
+    expect(calls.map((c) => c['detail'])).toEqual(
+      expect.arrayContaining([
+        { table: 'services', count: 3 }, // videography + photo-video + merchandise
+        { table: 'disciplines', count: 2 },
+      ]),
+    );
+    // never a slug, a label or a lead field in the log line
+    const text = JSON.stringify(calls);
+    for (const leak of ['videography', 'photo-video', 'merchandise', 'events', 'web', 'الآن'])
+      expect(text, leak).not.toContain(leak);
+  });
+
+  it('a client that throws is logged the same way; an empty result is NOT a failure', async () => {
+    const broken = {
+      from: () => ({
+        select: () => {
+          throw new Error('down');
+        },
+      }),
+    } as unknown as SupabaseClient;
+    await resolveLeadInterests(broken, TENANT, [lead('logo', 'events')]);
+    expect(logged).toHaveBeenCalledTimes(2);
+
+    logged.mockClear();
+    tables['services'] = [];
+    tables['disciplines'] = [];
+    await resolveLeadInterests(stubDb(), TENANT, [lead('logo', 'events')]);
+    expect(logged).not.toHaveBeenCalled();
   });
 });
 

@@ -107,9 +107,13 @@ describe('the renames (plan step 2)', () => {
   });
 
   it('is the same four renames the lead path converts (src/lib/services/retired.ts)', () => {
-    // One truth: the cut-over's RENAMES and the code's rename set (Round 3 lead labels).
-    expect([...RENAMED_SERVICE_SLUGS]).toEqual(cut.RENAMES.map((r) => r.from));
-    for (const r of cut.RENAMES) expect(renamedServiceSlug(r.from), r.from).toBe(r.to);
+    // One truth: the cut-over's RENAMES and the code's rename map (Round 3 lead labels).
+    expect(Object.keys(RENAMED_SERVICE_SLUGS)).toEqual(cut.RENAMES.map((r) => r.from));
+    for (const r of cut.RENAMES) {
+      expect(renamedServiceSlug(r.from), r.from).toBe(r.to);
+      // the old EN title the label shows is one the cut-over's compare-and-set matched on
+      expect(r.titles, r.from).toContain(RENAMED_SERVICE_SLUGS[r.from]?.en);
+    }
     for (const slug of cut.ARCHIVE) expect(renamedServiceSlug(slug), slug).toBeNull();
   });
 

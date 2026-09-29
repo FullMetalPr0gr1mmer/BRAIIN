@@ -1,6 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { FALLBACK_DISCIPLINES } from '@/lib/services/cards';
-import { RETIRED_SERVICES, renamedServiceSlug } from '@/lib/services/retired';
+import {
+  RENAMED_SERVICE_SLUGS,
+  RETIRED_SERVICES,
+  RETIRED_SERVICE_TITLES,
+  renamedServiceSlug,
+} from '@/lib/services/retired';
+import { writeSystemLog } from '@/lib/data/systemLog';
 
 // Readable labels for a lead's `service_of_interest` / `discipline_of_interest` slugs
 // (Round 3, owner decision G1): every slug a lead can carry — old or new, EN and AR —
@@ -14,12 +20,18 @@ import { RETIRED_SERVICES, renamedServiceSlug } from '@/lib/services/retired';
 // `services.write`, so the label must be resolved server-side, never by the panel.
 //
 // Order, per slug:
-//   service     its row (archived → "Title (retired)") → renamed (`videography` →
-//               the `photo-video` row's title, "Videography (now Photography / Videography)")
-//               → any other retired slug ("Merchandise (retired)") → the raw slug
+//   service     its row (archived → "Title (retired)") → renamed (`videography` → its OLD
+//               title from RENAMED_SERVICE_SLUGS + the `photo-video` row's title,
+//               "Videography (now Photography / Videography)" / "الإنتاج المرئي (الآن …)")
+//               → any other retired slug, by its old title from RETIRED_SERVICE_TITLES
+//               ("Merchandise (retired)" / "المنتجات الترويجية (متوقفة)") → the raw slug
 //   discipline  its row → FALLBACK_DISCIPLINES (the five, text only) → the raw slug
 // The two orders differ on purpose: a discipline slug must never fall into the retired
 // SERVICE map (`branding` is in both).
+//
+// A failed table read is fail-open (the fallbacks label everything) but never silent: it
+// is written to system_logs as a warning naming the table and the batch size — no slug,
+// no label text, no lead field.
 
 export type InterestKind = 'service' | 'discipline';
 
@@ -51,13 +63,28 @@ interface TitledRow {
 
 const RETIRED_SUFFIX = { en: ' (retired)', ar: ' (متوقفة)' } as const;
 
-/** `photo-video` → "Photo Video": the old slug's own title is gone with its rename. */
+/** `photo-video` → "Photo Video": the last resort when a row cannot be read. */
 export function humanizeSlug(slug: string): string {
   return slug
     .split('-')
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+const humanized = (slug: string): { en: string; ar: string } => {
+  const text = humanizeSlug(slug);
+  return { en: text, ar: text };
+};
+
+/** The one log line for a failed read: table + batch size only, never the slugs. */
+async function logReadFailure(table: string, count: number): Promise<void> {
+  await writeSystemLog({
+    level: 'warn',
+    source: 'lead-labels',
+    message: `lead interest labels: the ${table} read failed; labels fell back to code`,
+    detail: { table, count },
+  });
 }
 
 const isText = (v: unknown): v is { en: string; ar: string } =>
@@ -76,7 +103,8 @@ const STATUSES: readonly string[] = ['published', 'draft', 'scheduled', 'archive
 /**
  * One `.in('slug', …)` query per table, tolerant of a stub client (a test double that
  * answers every table with lead rows, or with rows lacking `slug`) and of a failed read:
- * a row that cannot be read is simply not a DB label, and the fallbacks take over.
+ * a row that cannot be read is simply not a DB label, and the fallbacks take over — after
+ * one warning in system_logs, so a broken read is not mistaken for missing rows.
  */
 async function readTitled(
   sb: SupabaseClient,
@@ -93,7 +121,11 @@ async function readTitled(
       .select(`slug,${titleColumn},status`)
       .eq('tenant_id', tenantId)
       .in('slug', [...slugs]);
-    if (error || !Array.isArray(data)) return out;
+    if (error) {
+      await logReadFailure(table, slugs.length);
+      return out;
+    }
+    if (!Array.isArray(data)) return out;
     for (const row of data as unknown as Record<string, unknown>[]) {
       const slug = row['slug'];
       const title = row[titleColumn];
@@ -106,7 +138,7 @@ async function readTitled(
       });
     }
   } catch {
-    // fail open — see above
+    await logReadFailure(table, slugs.length); // fail open — see above
   }
   return out;
 }
@@ -127,24 +159,24 @@ function serviceLabel(slug: string, rows: Map<string, TitledRow>): InterestLabel
   const renamed = renamedServiceSlug(slug);
   if (renamed) {
     const now = rows.get(renamed);
-    const old = humanizeSlug(slug);
+    const old = RENAMED_SERVICE_SLUGS[slug] ?? humanized(slug);
     return {
       slug,
       status: 'renamed',
       currentSlug: renamed,
       label: {
-        en: `${old} (now ${now?.title.en ?? humanizeSlug(renamed)})`,
-        ar: `${old} (الآن ${now?.title.ar ?? humanizeSlug(renamed)})`,
+        en: `${old.en} (now ${now?.title.en ?? humanizeSlug(renamed)})`,
+        ar: `${old.ar} (الآن ${now?.title.ar ?? humanizeSlug(renamed)})`,
       },
     };
   }
   if (Object.hasOwn(RETIRED_SERVICES, slug)) {
-    const old = humanizeSlug(slug);
+    const old = RETIRED_SERVICE_TITLES[slug] ?? humanized(slug);
     return {
       slug,
       status: 'retired',
       currentSlug: slug,
-      label: { en: old + RETIRED_SUFFIX.en, ar: old + RETIRED_SUFFIX.ar },
+      label: { en: old.en + RETIRED_SUFFIX.en, ar: old.ar + RETIRED_SUFFIX.ar },
     };
   }
   return { slug, status: 'unknown', currentSlug: slug, label: { en: slug, ar: slug } };
