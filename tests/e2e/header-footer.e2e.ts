@@ -169,6 +169,10 @@ for (const locale of ['en', 'ar'] as const) {
       await page.setViewportSize({ width, height: 823 });
       await page.goto(root);
       await expect(page.locator('.site-header__motion')).toBeVisible();
+      // With the site's fonts: before they arrive, CI's Linux fallback sets "Contact us"
+      // wide enough to squeeze the logo to 94px for a frame (the swap is metric-matched
+      // for Archivo, but the Linux fallback is not Arial).
+      await page.evaluate(() => document.fonts.ready);
       const logo = (await page.locator('.site-header__brand img').boundingBox())!;
       expect(logo.width).toBeGreaterThanOrEqual(96);
       const overflow = await page.evaluate(() => {
