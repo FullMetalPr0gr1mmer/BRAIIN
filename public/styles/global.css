@@ -785,17 +785,19 @@ html[dir='rtl'] .site-header__key::after {
   }
 }
 /* Small phones (360–416px): six items in 360px. Everything but the logo tightens — the
-   gutter (16px; the page token is at its 20px floor here), the gaps, the pill and the
-   toggle paddings, the key link's tracking and the switch (28px, above the 24px WCAG
-   2.5.8 minimum). Measured (R3-7): the logo is 96px from 360 up in both languages, with
-   12px to spare at 360; at 320 it gives way, as before. */
+   gutter (14px; the page token is at its 20px floor here), the gaps, the pill and the
+   toggle paddings, the key link's tracking and the switch (26px, above the 24px WCAG
+   2.5.8 minimum). Measured (R3-7): with the previous values the logo had 12px to spare
+   at 360 on Windows, but CI's Linux text rendering (FreeType hinting of the same web
+   fonts) came out ~14px wider across the three text items and read the logo at 94px, so
+   the row gives ~16px more. At 320 the logo gives way, as before. */
 @media (max-width: 26rem) {
   .site-header__bar {
-    padding-inline: 16px;
-    gap: 0.5rem;
+    padding-inline: 14px;
+    gap: 0.375rem;
   }
   .site-header__tools {
-    gap: 0.375rem;
+    gap: 0.25rem;
   }
   .site-header__key {
     letter-spacing: 0.05em;
@@ -804,14 +806,14 @@ html[dir='rtl'] .site-header__key::after {
     font-size: 13px;
   }
   .site-nav__toggle {
-    padding: 0.3rem 0.4rem;
+    padding: 0.3rem 0.35rem;
   }
   .site-header__lang {
-    padding: 7px 9px;
+    padding: 7px 8px;
   }
   .site-header__motion {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
   }
 }
 
