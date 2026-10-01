@@ -63,6 +63,17 @@ const ALLOWLIST = [
       'from Google over TLS, never attacker-controlled, never in the Worker (EXC-006).',
     expires: '2026-11-30',
   },
+  {
+    id: 'GHSA-c475-qrg2-pj4r',
+    pkg: 'basic-ftp',
+    reason:
+      'Quadratic-time CPU DoS in the FTP directory-listing parser, published 2026-09; every ' +
+      '5.x is affected and the fix (6.2.1) is a major no dependent takes — the chain ' +
+      '@lhci/cli → proxy-agent → pac-proxy-agent → get-uri requires basic-ftp ^5 (even ' +
+      'get-uri 8.0.1). Dev/CI only: it runs only to fetch a PAC file over ftp://, CI sets ' +
+      'no proxy and Lighthouse never lists an FTP server; never in the Worker (EXC-010).',
+    expires: '2026-11-30',
+  },
 ];
 
 function runAudit() {

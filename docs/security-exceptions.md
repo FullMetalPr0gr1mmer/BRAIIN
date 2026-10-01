@@ -15,6 +15,7 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | Open (re-signed 2026-09-29; control built and removed) | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee (and, from the UI v2 port, every banner/in-view video loop; from Round 2, the discipline card clips, the `/services` explorer clip and the service hero loops) had no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**). A header control was built (Round 3, R3-7) and removed the same day at the owner's decision for mockup parity; the `body.motion-paused` wiring stays |
 | EXC-008 | 2026-09-30 | Kareem (kareem@floppytech.ai)  | 2026-12-31 | Open | Join CVs (PDF / .docx, ≤ 10 MB) are stored and downloaded **without a virus scan** — no AV service on the free tier. Compensated by a structural check at upload, a private bucket, attachment-only download under a sandbox CSP, and a "Not virus-scanned" badge |
 | EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open (re-signed 2026-09-29) | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops |
+| EXC-010 | 2026-10-01 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `basic-ftp` GHSA-c475-qrg2-pj4r allowlisted in the dev audit gate — every 5.x is affected and no dependent in the Lighthouse CI chain takes the 6.x fix |
 
 ---
 
@@ -635,3 +636,39 @@ downloads **no video bytes at all** — the background loops defer their mount a
 clips never create their `<video>` while `body.motion-paused` is set, and
 `tests/e2e/media-bytes.e2e.ts` ("paused visitor: no clip/banner bytes after a full
 scroll") asserts it on every route it covers.
+
+---
+
+## EXC-010 — `basic-ftp` CPU-DoS advisory allowlisted in the dev audit gate
+
+**Pillar:** 1 (Security) — CLAUDE.md §3 (supply chain), §11.
+**Opened:** 2026-10-01 · **Owner:** Developer (tech@purecoffee.sa) · **Expiry:** 2026-11-30.
+
+### What changed
+
+`GHSA-c475-qrg2-pj4r` (HIGH — quadratic-time CPU denial of service in `Client.list()`'s Unix
+directory-listing parser) was published against `basic-ftp`, affected range `<=6.2.0`:
+every 5.x release. The fix, 6.2.1, is a major that nothing in our tree can take — the
+package arrives as `@lhci/cli` → `proxy-agent` → `pac-proxy-agent` → `get-uri`, and every
+`get-uri` up to the newest (8.0.1) requires `basic-ftp ^5`. Forcing 6.x with an override
+would hand `get-uri` a major it never asked for; npm's own suggestion is again downgrading
+`@lhci/cli` to 0.6.1 (the wrong answer EXC-006 describes). It is a documented, expiring
+`ALLOWLIST` entry in `scripts/audit-gate.mjs` (dev scope; the package is not in the prod
+tree). The same Join PR pinned the two other new advisories it met to their fixed releases
+instead: `devalue` ^5.9.4 (prod — Astro's) and `brace-expansion@1` ^1.1.21 (dev).
+
+### Why the residual risk is acceptable
+
+`basic-ftp` runs only when `get-uri` fetches an `ftp://` URL, which in this chain means a
+proxy auto-config file served over FTP. CI sets no proxy, Lighthouse never lists an FTP
+directory, and exploiting the parser needs a hostile FTP server answering that listing. It
+never ships in the Worker.
+
+### Remediation plan (clears this exception)
+
+1. ☐ Watch for `get-uri` (or `pac-proxy-agent`) moving to `basic-ftp` 6, or a 5.x backport —
+   either clears this with a routine bump.
+
+**Close condition:** `npm run audit:all` reports 0 unallowlisted high/critical with the
+`GHSA-c475-qrg2-pj4r` entry REMOVED from `scripts/audit-gate.mjs`. If nothing lands by
+expiry, re-justify — never extend silently.
