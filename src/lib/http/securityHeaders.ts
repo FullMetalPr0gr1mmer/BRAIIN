@@ -170,6 +170,9 @@ export function applySecurityHeaders(headers: Headers, opts: CspOptions): void {
   // below may only ever ADD restrictions to what a route set, never drop one. Hashes and
   // `sandbox` are the only parts of a route's CSP that survive — no route can widen ours.
   headers.set(headerName, sandboxed ? `${csp}; sandbox` : csp);
+  // Browsers ignore `sandbox` in a Report-Only policy, so in that mode a sandboxed response
+  // also carries an ENFORCED one holding just the sandbox.
+  if (sandboxed && opts.reportOnly) headers.set('Content-Security-Policy', 'sandbox');
   headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');

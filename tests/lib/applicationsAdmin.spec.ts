@@ -40,8 +40,7 @@ vi.mock('@/lib/crypto/pii', () => ({
   },
 }));
 vi.mock('@/lib/admin/rateLimit', () => ({
-  assertPrivilegedOpAllowed: async () => undefined,
-  recordPrivilegedOp: async () => undefined,
+  claimPrivilegedOp: async () => undefined,
 }));
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 vi.mock('@/lib/supabase/server', () => ({

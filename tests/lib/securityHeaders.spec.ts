@@ -218,6 +218,19 @@ describe('applySecurityHeaders — merging Astro CSP', () => {
     expect(csp).not.toContain('default-src *');
   });
 
+  it('under Report-Only, a sandboxed response still carries an ENFORCED sandbox', () => {
+    // Browsers ignore `sandbox` in a Report-Only policy; without this the CV download would
+    // lose its sandbox the day the site ships a Report-Only cycle.
+    const h = new Headers({ 'Content-Security-Policy': 'sandbox' });
+    applySecurityHeaders(h, { nonce: NONCE, reportOnly: true });
+    expect(h.get('Content-Security-Policy')).toBe('sandbox');
+    expect(h.get('Content-Security-Policy-Report-Only')?.endsWith('; sandbox')).toBe(true);
+    // …and an ordinary Report-Only response still carries no enforcing header at all.
+    const plain = new Headers();
+    applySecurityHeaders(plain, { nonce: NONCE, reportOnly: true });
+    expect(plain.get('Content-Security-Policy')).toBeNull();
+  });
+
   it('adds no sandbox to an ordinary page', () => {
     const h = new Headers();
     applySecurityHeaders(h, { nonce: NONCE });

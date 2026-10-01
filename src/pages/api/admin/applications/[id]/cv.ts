@@ -6,7 +6,7 @@ import { AuthorizationError } from '@/lib/authz/errors';
 import { getRow } from '@/lib/admin/crud';
 import { writeAudit } from '@/lib/admin/audit';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
-import { assertPrivilegedOpAllowed, recordPrivilegedOp } from '@/lib/admin/rateLimit';
+import { claimPrivilegedOp } from '@/lib/admin/rateLimit';
 import { serviceClient } from '@/lib/supabase/server';
 import { downloadCv } from '@/lib/applications/storage';
 
@@ -32,8 +32,7 @@ export const GET = defineAdminRoute({
     if (!id || !z.string().uuid().safeParse(id).success) throw new NotFoundError('application');
 
     await liveRecheck(auth);
-    await assertPrivilegedOpAllowed(auth, 'application-cv', CV_LIMITS);
-    await recordPrivilegedOp(auth, 'application-cv');
+    await claimPrivilegedOp(auth, 'application-cv', CV_LIMITS);
 
     const row = await getRow<{ cv_path: string | null; cv_content_type: string | null }>(
       sb,

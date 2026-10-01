@@ -3,7 +3,7 @@ import { ExportQuerySchema } from '@schemas/admin';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { writeAudit } from '@/lib/admin/audit';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
-import { assertPrivilegedOpAllowed, recordPrivilegedOp } from '@/lib/admin/rateLimit';
+import { claimPrivilegedOp } from '@/lib/admin/rateLimit';
 import { canSeeLeadPii, FULL_LEAD_COLUMNS, SAFE_LEAD_COLUMNS } from '@/lib/admin/leadFields';
 import { decryptPII } from '@/lib/crypto/pii';
 import { budgetBandLabel } from '@schemas/lead';
@@ -40,8 +40,7 @@ export const GET = defineAdminRoute({
   input: ExportQuerySchema,
   handler: async ({ auth, sb, input }) => {
     await liveRecheck(auth);
-    await assertPrivilegedOpAllowed(auth, 'export-csv');
-    await recordPrivilegedOp(auth, 'export-csv');
+    await claimPrivilegedOp(auth, 'export-csv');
 
     const withPii = canSeeLeadPii(auth.role);
 

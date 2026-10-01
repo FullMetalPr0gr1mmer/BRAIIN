@@ -33,15 +33,37 @@ export const EXPORT_LIMITS: RateLimitOptions = {
   windowMinutes: 60,
 };
 
-export async function assertPrivilegedOpAllowed(
+/**
+ * Claims one slot for a privileged operation, or refuses with RateLimitError. Call it
+ * BEFORE the work, so an operation that dies halfway still consumed its slot.
+ *
+ * The record is written FIRST and the window counted after, including it. Counting first
+ * and recording after let parallel requests all pass a count none of them had joined yet
+ * (N simultaneous downloads through a limit of 3). Written first, at most `limit` claims
+ * can ever see a count within the limit: each count includes its own row and every row
+ * committed before it. A refused claim deletes its own row again, so retrying while over
+ * the limit does not keep the window full.
+ *
+ * FAILS CLOSED: a ledger that cannot be written or read refuses the operation.
+ */
+export async function claimPrivilegedOp(
   auth: AuthContext,
   op: string,
   limits: RateLimitOptions = EXPORT_LIMITS,
 ): Promise<void> {
   const since = new Date(Date.now() - limits.windowMinutes * 60_000).toISOString();
   const sb = serviceClient();
+  let ownId: unknown = null;
 
   try {
+    const { data, error } = await sb
+      .from('privileged_ops')
+      .insert({ tenant_id: auth.tenantId, actor_id: auth.userId, op })
+      .select('id')
+      .single();
+    if (error || !data) throw new Error('rate-limit ledger unavailable');
+    ownId = (data as { id?: unknown }).id ?? null;
+
     const [userResult, tenantResult] = await Promise.all([
       sb
         .from('privileged_ops')
@@ -59,20 +81,18 @@ export async function assertPrivilegedOpAllowed(
     ]);
 
     if (userResult.error || tenantResult.error) throw new Error('rate-limit ledger unavailable');
-    if ((userResult.count ?? 0) >= limits.perUser) throw new RateLimitError(`${op}:user`);
-    if ((tenantResult.count ?? 0) >= limits.perTenant) throw new RateLimitError(`${op}:tenant`);
+    if ((userResult.count ?? Infinity) > limits.perUser) throw new RateLimitError(`${op}:user`);
+    if ((tenantResult.count ?? Infinity) > limits.perTenant)
+      throw new RateLimitError(`${op}:tenant`);
   } catch (err) {
+    if (ownId !== null) {
+      try {
+        await sb.from('privileged_ops').delete().eq('id', ownId);
+      } catch {
+        // Best effort: a row left behind only makes the limit stricter.
+      }
+    }
     if (err instanceof RateLimitError) throw err;
     throw new RateLimitError(`${op}:unavailable`);
   }
-}
-
-/**
- * Records that the operation happened. Called BEFORE the work, so a dump that dies
- * halfway still consumed its slot — the limit bounds attempts, not successes.
- */
-export async function recordPrivilegedOp(auth: AuthContext, op: string): Promise<void> {
-  await serviceClient()
-    .from('privileged_ops')
-    .insert({ tenant_id: auth.tenantId, actor_id: auth.userId, op });
 }
