@@ -63,6 +63,7 @@ export const GET: APIRoute = async ({ locals }) => {
 - Creative Knowledge (blog): ${site}/creative-knowledge
 - About: ${site}/about
 - Contact: ${site}/contact
+- Join (careers): ${site}/join
 
 ## Services${list(serviceLines)}
 
