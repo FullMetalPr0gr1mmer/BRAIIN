@@ -13,6 +13,7 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-005 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | **Closed 2026-09-25** | `js-yaml` GHSA-5p4m-2wfm-xmqj allowlisted in the prod audit gate — js-yaml 4.3.2 shipped the 4.x fix; entry removed |
 | EXC-006 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open (re-scoped 2026-09-25) | `extract-zip` GHSA-jmr9-qjv8-65gv **+ GHSA-7pqw-9j4j-h8q3** allowlisted in the dev audit gate — every published version is affected |
 | EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | Open (re-signed 2026-09-29; control built and removed) | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee (and, from the UI v2 port, every banner/in-view video loop; from Round 2, the discipline card clips, the `/services` explorer clip and the service hero loops) had no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**). A header control was built (Round 3, R3-7) and removed the same day at the owner's decision for mockup parity; the `body.motion-paused` wiring stays |
+| EXC-008 | 2026-09-30 | Kareem (kareem@floppytech.ai)  | 2026-12-31 | Open | Join CVs (PDF / .docx, ≤ 10 MB) are stored and downloaded **without a virus scan** — no AV service on the free tier. Compensated by a structural check at upload, a private bucket, attachment-only download under a sandbox CSP, and a "Not virus-scanned" badge |
 | EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open (re-signed 2026-09-29) | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops |
 
 ---
@@ -231,11 +232,17 @@ are unauthenticated paths to a service-role write. Waiting for the zone is no lo
 acceptable answer for those two, so the exception is **narrowed by a code-level control
 that does not need a zone**:
 
-- ☐ **Two-ring limiter on `/api/contact` and `/api/apply`** (UI v2 PR12a): the Workers Rate
-  Limiting binding per IP over 60 s, then a service-role Postgres counter
-  (`public_write_attempts`, HMAC-keyed, purged after 48 h) for the hour / day / per-email
-  / global windows. `/api/apply` fails **closed**, `/api/contact` fails open and logs.
-- **Hard rule:** `/api/apply` does not ship without that limiter in front of it.
+- ☑ **Limiter on `/api/contact` and `/api/apply`** (Join, 2026-09-30 — migration 0029,
+  `src/lib/http/publicRateLimit.ts`): a service-role Postgres counter
+  (`public_write_attempts`, bumped atomically by `public.public_write_hit()`, keyed by an
+  HMAC of the address or e-mail — never the raw value — and purged after 48 h by the
+  Worker's daily cron). `/api/apply`: 5 per hour per address and 3 per day per e-mail,
+  **fails closed**. `/api/contact`: 10 per hour per address, **fails open** (a lost lead is
+  worse than an unthrottled minute). **One ring, not the two this entry first named:** the
+  Workers Rate Limiting binding was not adopted — the Postgres counter is the authoritative
+  count across isolates, and the per-second ring arrives with the WAF and the zone.
+- **Hard rule:** `/api/apply` does not ship without that limiter in front of it. *(Held:
+  it shipped with it.)*
 
 The four WAF rows for search, style-finder, the hooks and the telemetry beacons, and both
 crawler rows, remain open under the original remediation plan — the code limiter is not a
@@ -474,6 +481,41 @@ to `motion-pause.e2e.ts`. The header switch is the one 2.2.2 control; a surface 
 ignores it reopens this failure without any gate noticing.
 
 ---
+
+## EXC-008 — Job-application CVs are not virus-scanned
+
+**Pillar:** 1 (Security) — CLAUDE.md §3 (every public form validated server-side) and the
+Join design's AV requirement.
+**Opened:** 2026-09-30 · **Owner:** Kareem (kareem@floppytech.ai) · **Expiry:** 2026-12-31
+**Status:** Open
+
+### What deviates
+The Join form (`/join`, `/ar/join`; `src/pages/api/apply.ts`) accepts a CV of up to 10 MB,
+stores it in a private Supabase Storage bucket and lets an Admin download it. No antivirus
+engine looks at it at any point: there is none on the Cloudflare Workers free plan or the
+current Supabase plan, and the owner chose the free route (decision J1, 2026-09-30).
+
+### What still holds (compensating controls)
+- **A structural check before anything is stored** (`src/lib/applications/fileSniff.ts`):
+  the bytes, not the browser's type or the file name, decide. PDF must start `%PDF-` and end
+  `%%EOF`; a `.docx` must be a well-formed ZIP with the Word parts, and is refused if it
+  carries macros (`vbaProject.bin`, a macro-enabled main part), ActiveX, embedded objects,
+  encrypted entries or any external relationship other than a hyperlink (the
+  remote-template attack). Legacy `.doc` is refused outright — its macros cannot be checked
+  without parsing the whole compound file.
+- **Nobody but an Admin can reach a file:** the bucket is private, no storage policy names
+  it (a RESTRICTIVE belt where the migration role may add one), and the only way out is
+  `GET /api/admin/applications/[id]/cv` — `applications.pii`, live-rechecked,
+  rate-limited and audited before the file is sent.
+- **The browser never renders it:** `Content-Disposition: attachment`, `nosniff`,
+  `no-store`, and a CSP `sandbox` (kept by `applySecurityHeaders`) for a URL opened in a tab.
+- **The reviewer is told:** the admin panel puts "Not virus-scanned" beside every download.
+- **What it does not cover:** a PDF exploit aimed at the reader that opens it. That is the
+  residual risk this entry records; open CVs in an up-to-date reader or a sandboxed viewer.
+
+### Close condition
+An antivirus scan runs on every CV before it is downloadable (a scanning service or a
+provider feature), and the panel's badge is driven by its verdict.
 
 ## EXC-009 — Background video self-hosted as MP4 instead of Cloudflare Stream
 
