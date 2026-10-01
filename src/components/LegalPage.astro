@@ -42,7 +42,7 @@ const { seo } = await loadHead(Astro.locals, {
     <p>{doc.intro}</p>
     {
       doc.sections.map((s) => (
-        <section>
+        <section id={s.id}>
           <h2>{s.heading}</h2>
           {s.body.map((p) => (
             <p>{p}</p>
