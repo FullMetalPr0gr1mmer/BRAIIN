@@ -23,6 +23,12 @@
   "observability": {
     "enabled": true,
   },
+  // The daily jobs (src/worker.ts `scheduled` → src/lib/cron/daily.ts): the Join retention
+  // run — expired CVs out of the private Storage bucket, then their rows — and the public
+  // write limiter's old counters. Cron triggers are free on every Workers plan.
+  "triggers": {
+    "crons": ["23 3 * * *"],
+  },
   // ⚠ NO `PUBLIC_*` ENTRIES HERE — THEY OVERRIDE THE BUILD ENVIRONMENT.
   //
   // All three PUBLIC_* vars are declared `context: 'client'` in astro.config.mjs, so

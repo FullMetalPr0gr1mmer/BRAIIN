@@ -2,11 +2,19 @@ import type { APIRoute } from 'astro';
 import { LeadInputSchema } from '@schemas/lead';
 import { createLead } from '@/lib/data/leads';
 import { isSameOrigin } from '@/lib/http/csrf';
+import { clientIp } from '@/lib/http/maintenance';
+import { CONTACT_LIMITS, checkPublicLimits } from '@/lib/http/publicRateLimit';
+import { serviceClient } from '@/lib/supabase/server';
+import { supabaseConfigured } from '@/lib/supabase/client';
+import { resolveLaunchTenantId } from '@/lib/data/tenant';
+import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 
 // Public contact / project-inquiry submission — the ONLY public write path (RLS denies
 // anon on the leads table). Server-side Zod validation + honeypot (schema) + same-origin
 // CSRF check; the tenant is resolved server-side and PII is envelope-encrypted in
-// createLead(). Edge rate-limit is added at the WAF (KAN-20).
+// createLead(). A per-address limit (10 an hour, the public write limiter — EXC-004) runs
+// before the insert and FAILS OPEN: an unreachable limiter must not cost a real lead. The
+// edge rate limit is added at the WAF with the zone (KAN-20).
 export const prerender = false;
 
 function json(body: unknown, status: number): Response {
@@ -42,6 +50,16 @@ export const POST: APIRoute = async ({ request }) => {
       ),
     ];
     return json({ ok: false, error: 'validation', fields }, 422);
+  }
+
+  if (supabaseConfigured()) {
+    const tenantId = await resolveLaunchTenantId();
+    if (tenantId) {
+      const outcome = await checkPublicLimits(serviceClient(), tenantId, LEAD_PII_ENC_KEY, [
+        { scope: 'contact:ip', value: clientIp(request) ?? 'unknown', ...CONTACT_LIMITS.perIp },
+      ]);
+      if (outcome === 'limited') return json({ ok: false, error: 'rate-limit' }, 429);
+    }
   }
 
   // TODO(KAN-20): verify parsed.data.captchaToken with reCAPTCHA once provisioned.
