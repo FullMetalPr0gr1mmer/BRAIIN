@@ -31,6 +31,7 @@ export const STATIC_PUBLIC_ROUTES: readonly string[] = [
   '/creative-knowledge',
   '/creative-knowledge/rss.xml',
   '/healthz',
+  '/join',
   '/llms.txt',
   '/portfolio',
   '/portfolio/all',

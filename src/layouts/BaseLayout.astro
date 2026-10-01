@@ -32,7 +32,8 @@ interface Props {
   /** Route stylesheets under /styles/, linked after global.css (UI v2: `work.css` on Our
       Work + All projects; `banner.css` — MediaBanner + its caption — there and on the case
       study, with `case-study.css`; Round 2: `services.css` — the "Say hello" block and the
-      services hero links — on /services and the service pages). A known name, never a URL —
+      services hero links — on /services and the service pages; `join.css` — the Join bands
+      and the application form — on /join). A known name, never a URL —
       the sheet is same-origin, so the CSP's `style-src 'self'` covers it with no nonce. */
   styles?: readonly RouteStylesheet[];
   /** The Arabic hero face SeoHead preloads — the weight the route's above-the-fold heading
@@ -41,7 +42,8 @@ interface Props {
 }
 
 /** Every route stylesheet in public/styles/ (a closed list: a typo fails `astro check`). */
-type RouteStylesheet = 'about.css' | 'work.css' | 'banner.css' | 'case-study.css' | 'services.css';
+type RouteStylesheet =
+  'about.css' | 'work.css' | 'banner.css' | 'case-study.css' | 'services.css' | 'join.css';
 
 const {
   title,
