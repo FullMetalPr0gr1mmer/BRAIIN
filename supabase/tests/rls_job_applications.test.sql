@@ -1,7 +1,7 @@
 -- pgTAP: job applications (0029) — Admin only; the public write limiter is service-role
 -- only. Six principals: anon, content_creator, seo, developer, admin, other_tenant.
 begin;
-select plan(27);
+select plan(30);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -114,9 +114,17 @@ select ok(not has_function_privilege('anon', 'public.public_write_hit(uuid, text
   'anon cannot execute public_write_hit');
 select ok(not has_function_privilege('authenticated', 'public.public_write_hit(uuid, text, text, int)', 'execute'),
   'authenticated cannot execute public_write_hit');
+select ok(not has_function_privilege('anon', 'public.application_orphan_cvs(int, int)', 'execute'),
+  'anon cannot list orphaned CVs');
+select ok(not has_function_privilege('authenticated', 'public.application_orphan_cvs(int, int)', 'execute'),
+  'authenticated cannot list orphaned CVs');
 
 reset role;
 set local role service_role;
+-- The range check runs before `storage` is touched, so this holds without Storage too.
+select throws_ok(
+  $$ select * from public.application_orphan_cvs(-1, 10) $$,
+  '22023', null, 'the orphan sweep refuses a negative grace period');
 select is(public.public_write_hit('00000000-0000-0000-0000-000000000001', 'apply:ip',
   repeat('a', 64), 3600), 1, 'the first attempt in a window counts 1');
 select is(public.public_write_hit('00000000-0000-0000-0000-000000000001', 'apply:ip',

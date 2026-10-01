@@ -181,4 +181,34 @@ test.describe('a real application, end to end', () => {
     if (!anonWrite.error) await svc.storage.from('applications').remove([intruder]);
     expect(anonWrite.error).not.toBeNull();
   });
+
+  test('the daily sweep finds a CV no row names — and never one a row does', async () => {
+    // An orphan, as a Worker stopped between upload and insert would leave it.
+    const orphan = `e2e-orphan/${randomUUID()}.pdf`;
+    const up = await svc.storage
+      .from('applications')
+      .upload(orphan, new Blob([PDF], { type: 'application/pdf' }), {
+        contentType: 'application/pdf',
+      });
+    expect(up.error).toBeNull();
+    try {
+      // Grace 0 here; the cron passes an hour (ORPHAN_GRACE_MINUTES).
+      const { data, error } = await svc.rpc('application_orphan_cvs', {
+        p_older_than_minutes: 0,
+        p_limit: 1000,
+      });
+      expect(error).toBeNull();
+      const found = ((data ?? []) as { object_name: string }[]).map((o) => o.object_name);
+      expect(found).toContain(orphan);
+      const { data: rows } = await svc
+        .from('job_applications')
+        .select('cv_path')
+        .not('cv_path', 'is', null);
+      for (const r of (rows ?? []) as { cv_path: string }[]) {
+        expect(found, 'a CV its row still names is never an orphan').not.toContain(r.cv_path);
+      }
+    } finally {
+      await svc.storage.from('applications').remove([orphan]);
+    }
+  });
 });

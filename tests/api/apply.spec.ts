@@ -12,6 +12,8 @@ let accepting: boolean | 'error' = true;
 let hitCount = 1;
 let rpcError = false;
 let insertError = false;
+let insertThrows = false;
+let encryptThrows = false;
 let uploadError = false;
 const inserts: Record<string, unknown>[] = [];
 const uploads: { path: string; type: string }[] = [];
@@ -30,6 +32,7 @@ vi.mock('@/lib/supabase/server', () => ({
             : { data: { accepting_applications: accepting }, error: null }
           : { data: null, error: null };
       b['insert'] = async (row: Record<string, unknown>) => {
+        if (insertThrows) throw new Error('socket closed');
         inserts.push(row);
         return { data: null, error: insertError ? { message: 'nope' } : null };
       };
@@ -61,6 +64,16 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/supabase/client', () => ({ supabaseConfigured: () => true }));
 vi.mock('@/lib/data/tenant', () => ({ resolveLaunchTenantId: async () => TENANT }));
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+vi.mock('@/lib/crypto/pii', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/crypto/pii')>();
+  return {
+    ...real,
+    encryptPII: async (...a: Parameters<typeof real.encryptPII>) => {
+      if (encryptThrows) throw new Error('bad key');
+      return real.encryptPII(...a);
+    },
+  };
+});
 
 const { POST } = await import('@/pages/api/apply');
 
@@ -124,6 +137,8 @@ beforeEach(() => {
   hitCount = 1;
   rpcError = false;
   insertError = false;
+  insertThrows = false;
+  encryptThrows = false;
   uploadError = false;
   inserts.length = 0;
   uploads.length = 0;
@@ -279,6 +294,20 @@ describe('POST /api/apply — storing', () => {
     expect(res.status).toBe(500);
     expect(await statusOf(res)).toBe('error');
     expect(removed).toEqual([[uploads[0]!.path]]);
+  });
+
+  it('an insert that throws still deletes its CV again', async () => {
+    insertThrows = true;
+    expect(await statusOf(await send(form()))).toBe('error');
+    expect(uploads).toHaveLength(1);
+    expect(removed).toEqual([[uploads[0]!.path]]);
+  });
+
+  it('a failed encryption uploads nothing and stores nothing (it runs before the upload)', async () => {
+    encryptThrows = true;
+    expect(await statusOf(await send(form()))).toBe('error');
+    expect(uploads).toHaveLength(0);
+    expect(inserts).toHaveLength(0);
   });
 
   it('a failed upload stores no row', async () => {

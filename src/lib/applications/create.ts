@@ -9,15 +9,19 @@ import { encryptPII } from '@/lib/crypto/pii';
 import { APPLICANT_PII_LABEL, labelledKeyMaterial } from './keys';
 import { cvObjectPath, removeCvs, uploadCv } from './storage';
 
-// Writes one application: the CV object first, then the row; if the row fails, the object
-// is deleted again (a compensating delete), so a failure never leaves an orphaned CV that
-// no row — and so no retention job — knows about.
+// Writes one application: everything that can fail without touching Storage first (the
+// encryption, building the row), then the CV object, then the row; if the row fails, the
+// object is deleted again (a compensating delete). So the ONLY step between an upload and
+// its row is the insert. What even that cannot cover — the Worker stopped between the two, or the
+// compensating delete failing too — the daily job's orphan sweep removes
+// (`application_orphan_cvs()`, src/lib/applications/retention.ts).
 //
 // The caller has already: checked origin, size, the open flag, the limits, the honeypot,
 // the schema, and sniffed the CV. This function decides nothing about the visitor.
 
 export type CreateApplicationResult =
-  { ok: true; id: string } | { ok: false; reason: 'upload-failed' | 'insert-failed' };
+  | { ok: true; id: string }
+  | { ok: false; reason: 'encrypt-failed' | 'upload-failed' | 'insert-failed' };
 
 /** now + n months, in UTC. */
 export function monthsFrom(now: Date, months: number): Date {
@@ -37,20 +41,22 @@ export async function createApplication(
   const id = crypto.randomUUID();
   const path = cv ? cvObjectPath(tenantId, id, cv.kind) : null;
 
-  if (cv && path && !(await uploadCv(svc, path, cv.file, cv.kind))) {
-    return { ok: false, reason: 'upload-failed' };
+  let email_enc: string;
+  let phone_enc: string;
+  try {
+    const key = labelledKeyMaterial(rootKey, APPLICANT_PII_LABEL);
+    [email_enc, phone_enc] = await Promise.all([
+      encryptPII(input.email, key),
+      encryptPII(input.phone, key),
+    ]);
+  } catch {
+    return { ok: false, reason: 'encrypt-failed' };
   }
-
-  const key = labelledKeyMaterial(rootKey, APPLICANT_PII_LABEL);
-  const [email_enc, phone_enc] = await Promise.all([
-    encryptPII(input.email, key),
-    encryptPII(input.phone, key),
-  ]);
   const months = input.consentFutureRoles
     ? APPLICATION_RETENTION_MONTHS.futureRoles
     : APPLICATION_RETENTION_MONTHS.application;
 
-  const { error } = await svc.from('job_applications').insert({
+  const row = {
     id,
     tenant_id: tenantId,
     locale: input.locale,
@@ -73,9 +79,20 @@ export async function createApplication(
     consent_version: input.policyVersion,
     future_roles_consent: input.consentFutureRoles,
     retention_delete_after: monthsFrom(now, months).toISOString(),
-  });
+  };
 
-  if (error) {
+  if (cv && path && !(await uploadCv(svc, path, cv.file, cv.kind))) {
+    return { ok: false, reason: 'upload-failed' };
+  }
+
+  let inserted = false;
+  try {
+    const { error } = await svc.from('job_applications').insert(row);
+    inserted = !error;
+  } catch {
+    inserted = false;
+  }
+  if (!inserted) {
     if (path) await removeCvs(svc, [path]);
     return { ok: false, reason: 'insert-failed' };
   }

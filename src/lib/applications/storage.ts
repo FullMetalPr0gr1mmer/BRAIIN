@@ -19,7 +19,11 @@ export function cvObjectPath(tenantId: string, applicationId: string, kind: CvKi
 /**
  * Stores the file under the content type the SNIFF decided, never the browser's: the
  * bucket's MIME allowlist checks this type, and a browser on some systems sends
- * `application/octet-stream` for a .docx.
+ * `application/octet-stream` for a .docx. `slice` re-types the blob without copying its
+ * bytes (a copy of 10 MB is CPU time the free plan does not have).
+ *
+ * None of these throws: a storage failure is an answer (false / null), so a caller's
+ * order — upload, insert, compensate — always runs to its end.
  */
 export async function uploadCv(
   svc: SupabaseClient,
@@ -27,22 +31,36 @@ export async function uploadCv(
   file: Blob,
   kind: CvKind,
 ): Promise<boolean> {
-  const typed = new Blob([file], { type: CV_KINDS[kind].contentType });
-  const { error } = await svc.storage.from(CV_BUCKET).upload(path, typed, {
-    contentType: CV_KINDS[kind].contentType,
-    upsert: false,
-    cacheControl: '0',
-  });
-  return !error;
+  const { contentType } = CV_KINDS[kind];
+  try {
+    const { error } = await svc.storage
+      .from(CV_BUCKET)
+      .upload(path, file.slice(0, file.size, contentType), {
+        contentType,
+        upsert: false,
+        cacheControl: '0',
+      });
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
 export async function removeCvs(svc: SupabaseClient, paths: readonly string[]): Promise<boolean> {
   if (paths.length === 0) return true;
-  const { error } = await svc.storage.from(CV_BUCKET).remove([...paths]);
-  return !error;
+  try {
+    const { error } = await svc.storage.from(CV_BUCKET).remove([...paths]);
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
 export async function downloadCv(svc: SupabaseClient, path: string): Promise<Blob | null> {
-  const { data, error } = await svc.storage.from(CV_BUCKET).download(path);
-  return error || !data ? null : data;
+  try {
+    const { data, error } = await svc.storage.from(CV_BUCKET).download(path);
+    return error || !data ? null : data;
+  } catch {
+    return null;
+  }
 }

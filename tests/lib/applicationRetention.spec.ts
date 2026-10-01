@@ -2,17 +2,26 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SPAM_RETENTION_DAYS } from '@schemas/application';
-import { runApplicationRetention, LIMITER_KEEP_HOURS } from '@/lib/applications/retention';
+import {
+  runApplicationRetention,
+  LIMITER_KEEP_HOURS,
+  ORPHAN_GRACE_MINUTES,
+} from '@/lib/applications/retention';
 import { monthsFrom } from '@/lib/applications/create';
 
 // The daily Join retention job: expired CVs out of Storage FIRST, then their rows; if the
 // object delete fails, the rows stay for tomorrow's run (the reverse would orphan the file).
+// Then the orphan sweep: objects no row names, older than the grace period.
 
 interface Fake {
   expired: { id: string; cv_path: string | null }[];
+  orphans?: string[];
+  orphanError?: boolean;
   removeFails?: boolean;
   calls: string[];
+  removed: string[][];
   deletedIds: string[];
+  orphanArgs?: Record<string, unknown>;
   limiterCutoff?: string;
 }
 
@@ -45,10 +54,18 @@ function client(f: Fake): SupabaseClient {
       };
       return b;
     },
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      f.calls.push(fn);
+      f.orphanArgs = args;
+      return f.orphanError
+        ? { data: null, error: { message: 'x' } }
+        : { data: (f.orphans ?? []).map((object_name) => ({ object_name })), error: null };
+    },
     storage: {
       from: () => ({
         remove: async (paths: string[]) => {
           f.calls.push(`remove:${paths.length}`);
+          f.removed.push(paths);
           return f.removeFails
             ? { data: null, error: { message: 'x' } }
             : { data: [], error: null };
@@ -66,15 +83,22 @@ describe('runApplicationRetention', () => {
         { id: 'b', cv_path: null },
       ],
       calls: [],
+      removed: [],
       deletedIds: [],
     };
     const now = new Date('2026-10-01T03:23:00Z');
     const run = await runApplicationRetention(client(f), now);
-    expect(f.calls).toEqual(['remove:1', 'delete-rows', 'delete-limiter']);
+    expect(f.calls).toEqual([
+      'remove:1',
+      'delete-rows',
+      'application_orphan_cvs',
+      'delete-limiter',
+    ]);
     expect(f.deletedIds).toEqual(['a', 'b']);
     expect(run).toEqual({
       applicationsDeleted: 2,
       cvsDeleted: 1,
+      orphansDeleted: 0,
       limiterRowsDeleted: 3,
       errors: [],
     });
@@ -86,6 +110,7 @@ describe('runApplicationRetention', () => {
       expired: [{ id: 'a', cv_path: 't/a/x.pdf' }],
       removeFails: true,
       calls: [],
+      removed: [],
       deletedIds: [],
     };
     const run = await runApplicationRetention(client(f));
@@ -93,10 +118,43 @@ describe('runApplicationRetention', () => {
     expect(run.errors).toContain('delete-objects');
   });
 
-  it('nothing expired: only the limiter is swept', async () => {
-    const f: Fake = { expired: [], calls: [], deletedIds: [] };
+  it('nothing expired: the orphan sweep and the limiter still run', async () => {
+    const f: Fake = { expired: [], calls: [], removed: [], deletedIds: [] };
     await runApplicationRetention(client(f));
-    expect(f.calls).toEqual(['delete-limiter']);
+    expect(f.calls).toEqual(['application_orphan_cvs', 'delete-limiter']);
+  });
+
+  it('deletes CV objects no row names, after the grace period', async () => {
+    const f: Fake = {
+      expired: [],
+      orphans: ['t/x/1.pdf', 't/y/2.docx'],
+      calls: [],
+      removed: [],
+      deletedIds: [],
+    };
+    const run = await runApplicationRetention(client(f));
+    expect(f.orphanArgs).toEqual({ p_older_than_minutes: ORPHAN_GRACE_MINUTES, p_limit: 200 });
+    expect(ORPHAN_GRACE_MINUTES).toBeGreaterThanOrEqual(60);
+    expect(f.removed).toEqual([['t/x/1.pdf', 't/y/2.docx']]);
+    expect(run.orphansDeleted).toBe(2);
+    expect(f.deletedIds).toEqual([]);
+  });
+
+  it('an unreachable sweep or a failed delete is reported, and the rest of the job runs', async () => {
+    const down: Fake = { expired: [], orphanError: true, calls: [], removed: [], deletedIds: [] };
+    expect((await runApplicationRetention(client(down))).errors).toEqual(['select-orphans']);
+    expect(down.calls).toContain('delete-limiter');
+    const stuck: Fake = {
+      expired: [],
+      orphans: ['t/x/1.pdf'],
+      removeFails: true,
+      calls: [],
+      removed: [],
+      deletedIds: [],
+    };
+    const run = await runApplicationRetention(client(stuck));
+    expect(run.errors).toEqual(['delete-orphans']);
+    expect(run.orphansDeleted).toBe(0);
   });
 });
 

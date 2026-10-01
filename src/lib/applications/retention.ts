@@ -11,15 +11,23 @@ import { removeCvs } from './storage';
 //
 // Order: the CV objects first, then the rows. If the object delete fails the rows stay, so
 // tomorrow's run retries them; the reverse order would forget the file forever.
+//
+// Then the orphans: CV objects no row names (the Worker stopped between an upload and its
+// insert, or a compensating delete failed). Retention works from rows, so without this
+// sweep such a file would be kept forever. Only objects older than an hour — an upload
+// whose insert is still in flight is never one.
 
 /** How many expired applications one run handles (the rest wait a day). */
 export const RETENTION_BATCH = 200;
 /** Limiter counters older than this are dead weight (the longest window is a day). */
 export const LIMITER_KEEP_HOURS = 48;
+/** An object younger than this may belong to an application still being stored. */
+export const ORPHAN_GRACE_MINUTES = 60;
 
 export interface RetentionRun {
   applicationsDeleted: number;
   cvsDeleted: number;
+  orphansDeleted: number;
   limiterRowsDeleted: number;
   errors: string[];
 }
@@ -31,6 +39,7 @@ export async function runApplicationRetention(
   const run: RetentionRun = {
     applicationsDeleted: 0,
     cvsDeleted: 0,
+    orphansDeleted: 0,
     limiterRowsDeleted: 0,
     errors: [],
   };
@@ -61,6 +70,22 @@ export async function runApplicationRetention(
       } else {
         run.errors.push('delete-objects');
       }
+    }
+  }
+
+  const { data: orphans, error: orphanError } = await svc.rpc('application_orphan_cvs', {
+    p_older_than_minutes: ORPHAN_GRACE_MINUTES,
+    p_limit: RETENTION_BATCH,
+  });
+  if (orphanError) {
+    run.errors.push('select-orphans');
+  } else {
+    const names = ((orphans ?? []) as { object_name?: unknown }[])
+      .map((o) => o.object_name)
+      .filter((n): n is string => typeof n === 'string' && n.length > 0);
+    if (names.length > 0) {
+      if (await removeCvs(svc, names)) run.orphansDeleted = names.length;
+      else run.errors.push('delete-orphans');
     }
   }
 

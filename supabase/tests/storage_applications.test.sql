@@ -1,7 +1,7 @@
 -- pgTAP: the private CV bucket (0029). Runs where Supabase Storage's schema exists (CI's
 -- `supabase start`); the local PGlite replay has no storage schema and skips this file.
 begin;
-select plan(5);
+select plan(6);
 
 select is((select public from storage.buckets where id = 'applications'), false,
   'the applications bucket is private');
@@ -41,6 +41,14 @@ select throws_ok(
 set local role anon;
 select _claims(null, null);
 select is(_anon_visible(), 0, 'anon sees no object in the CV bucket');
+
+-- The orphan sweep (the Worker's daily job) runs as the service role against the real
+-- storage schema: an empty bucket has no orphan. (tests/e2e/apply-roundtrip.e2e.ts proves
+-- it finds a real one and leaves a referenced CV alone.)
+reset role;
+set local role service_role;
+select is((select count(*)::int from public.application_orphan_cvs(0, 10)), 0,
+  'the orphan sweep reads storage as the service role and finds nothing in an empty bucket');
 
 select * from finish();
 rollback;

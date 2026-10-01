@@ -21,7 +21,8 @@
 -- derivation of LEAD_PII_ENC_KEY — src/lib/applications/keys.ts); the CV is stored as
 -- uploaded, under the provider's encryption at rest, and leaves only through the audited
 -- admin download. Retention is a column set at insert (12 or 24 months by consent); `spam`
--- caps it at 30 days; the Worker's daily cron deletes the CV object, then the row.
+-- caps it at 30 days; the Worker's daily cron deletes the CV object, then the row, and
+-- sweeps any CV object no row names (`application_orphan_cvs()`, service role only).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ---- Applications --------------------------------------------------------------
@@ -78,6 +79,10 @@ create index if not exists job_applications_tenant_status_idx
   on public.job_applications (tenant_id, status, created_at desc);
 create index if not exists job_applications_retention_idx
   on public.job_applications (retention_delete_after);
+-- One object, one row: erasing one application can never delete another's CV, and the
+-- orphan sweep below looks a path up by this index.
+create unique index if not exists job_applications_cv_path_key
+  on public.job_applications (cv_path) where cv_path is not null;
 
 alter table public.job_applications enable row level security;
 alter table public.job_applications force row level security;
@@ -170,6 +175,41 @@ end $$;
 revoke all on function public.public_write_hit(uuid, text, text, int) from public, anon, authenticated;
 grant execute on function public.public_write_hit(uuid, text, text, int) to service_role;
 
+-- ---- Orphaned CVs -----------------------------------------------------------------------
+-- A CV object no application row names: the Worker stopped between the upload and the
+-- insert (a CPU-limit kill, a deploy mid-request), both the insert and its compensating
+-- delete failed, or a row went another way (a tenant deleted). Retention works from rows,
+-- so such a file would otherwise be kept forever. The Worker's daily job asks this
+-- function for them — older than a grace period, so an upload whose insert is still in
+-- flight is never one — and deletes them through the Storage API (a SQL delete on
+-- storage.objects would leave the file). Service role only; SECURITY INVOKER, so it reads
+-- what its caller may read and nothing more. PL/pgSQL: `storage` is resolved when the
+-- function runs, not when it is created (bare Postgres and the PGlite replay have none).
+create or replace function public.application_orphan_cvs(p_older_than_minutes int, p_limit int)
+returns table (object_name text)
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $$
+begin
+  if p_older_than_minutes is null or p_older_than_minutes < 0
+     or p_limit is null or p_limit < 1 or p_limit > 1000 then
+    raise exception 'application_orphan_cvs: argument out of range' using errcode = '22023';
+  end if;
+  return query
+    select o.name
+      from storage.objects o
+     where o.bucket_id = 'applications'
+       and o.created_at < now() - make_interval(mins => p_older_than_minutes)
+       and not exists (select 1 from public.job_applications a where a.cv_path = o.name)
+     order by o.created_at
+     limit p_limit;
+end
+$$;
+revoke all on function public.application_orphan_cvs(int, int) from public, anon, authenticated;
+grant execute on function public.application_orphan_cvs(int, int) to service_role;
+
 -- ---- The CV bucket ------------------------------------------------------------------
 -- Guarded: bare Postgres (and the local PGlite replay) has no `storage` schema. On
 -- Supabase it always exists, so this branch always runs there, and the postcondition below
@@ -235,6 +275,10 @@ begin
   if has_function_privilege('anon', 'public.public_write_hit(uuid, text, text, int)', 'execute')
      or has_function_privilege('authenticated', 'public.public_write_hit(uuid, text, text, int)', 'execute') then
     raise exception '0029: an API role other than service_role can execute public_write_hit';
+  end if;
+  if has_function_privilege('anon', 'public.application_orphan_cvs(int, int)', 'execute')
+     or has_function_privilege('authenticated', 'public.application_orphan_cvs(int, int)', 'execute') then
+    raise exception '0029: an API role other than service_role can execute application_orphan_cvs';
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'public'
                   and tablename = 'job_applications' and policyname = 'job_applications_admin_only'
