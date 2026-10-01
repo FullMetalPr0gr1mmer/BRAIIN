@@ -217,7 +217,7 @@ describe('POST /api/apply — refusals, in order', () => {
     expect(JSON.stringify(body)).not.toContain('not-an-email');
   });
 
-  it('the required consent must be given; an unknown field is refused (strict schema)', async () => {
+  it('the required consent must be given — the 422 names it', async () => {
     const noConsent = await send(form({ consent_application: null }));
     expect(((await noConsent.json()) as { fields: string[] }).fields).toContain(
       'consentApplication',
@@ -237,6 +237,18 @@ describe('POST /api/apply — refusals, in order', () => {
     const res = await send(form());
     rpcCalls.push = realPush;
     expect(res.status).toBe(429);
+  });
+
+  it('a refused CV is not counted against the e-mail (no lockout, no "did they apply" oracle)', async () => {
+    const exe = new File([enc.encode('MZ not a cv')], 'cv.pdf', { type: 'application/pdf' });
+    expect(await statusOf(await send(form({}, exe)))).toBe('bad_type');
+    expect(rpcCalls.map((c) => c['p_scope'])).toEqual(['apply:ip']);
+  });
+
+  it('a notice version that was never published is refused', async () => {
+    const res = await send(form({ policy_version: '2025-01-01' }));
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { fields: string[] }).fields).toEqual(['policyVersion']);
   });
 
   it('a CV that is not a PDF or .docx → 415 bad_type, nothing stored', async () => {

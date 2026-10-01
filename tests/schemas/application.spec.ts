@@ -119,6 +119,8 @@ describe('ApplicationInputSchema', () => {
       { workType: 'part-time' },
       { availability: 'never' },
       { policyVersion: '30-09-2026' },
+      // Date-shaped, but no such notice was ever published.
+      { policyVersion: '2025-01-01' },
       { locale: 'fr' },
     ];
     for (const patch of bad) {

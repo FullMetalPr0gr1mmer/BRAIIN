@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RECRUITMENT_POLICY_VERSIONS } from '../consent/recruitment';
 import { LocaleSchema } from './primitives';
 
 // The Join application (careers page, `/join` + `/ar/join`) — the second public write
@@ -105,10 +106,16 @@ const HttpsUrl = z
   .refine((v) => /^https:\/\//i.test(v), 'must be an https:// link');
 
 /**
- * The recruitment notice version the form was shown. Bumped when the consent text in
- * packages/consent/recruitment.ts changes; stored on the row as the consent record.
+ * The recruitment notice version the form was shown — stored on the row as the consent
+ * record, so it must name a notice that was published (packages/consent/recruitment.ts),
+ * never whatever date a client sends.
  */
-export const RecruitmentPolicyVersionSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const RecruitmentPolicyVersionSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((v) => (RECRUITMENT_POLICY_VERSIONS as readonly string[]).includes(v), {
+    message: 'not a published recruitment notice',
+  });
 
 export const ApplicationInputSchema = z
   .object({

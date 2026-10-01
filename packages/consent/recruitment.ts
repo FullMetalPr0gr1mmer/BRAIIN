@@ -10,10 +10,18 @@
 // required one. The required box covers THIS application; the optional box covers future
 // roles and lengthens retention from 12 to 24 months.
 //
-// Bump RECRUITMENT_POLICY_VERSION whenever these words change; the version a form showed
-// is stored with the consent, so an application can always be read against its text.
+// Bump the version whenever these words change — APPEND to RECRUITMENT_POLICY_VERSIONS,
+// never replace: the version a form showed is stored with the consent, so an application
+// can always be read against its text (each version's text is in git at the commit that
+// added it). The endpoint accepts only a version on this list, so a stored version always
+// names a notice that existed; older ones stay accepted because an edge-cached page can
+// keep showing its notice long after a deploy.
 
-export const RECRUITMENT_POLICY_VERSION = '2026-09-30';
+/** Every recruitment notice ever published, oldest first. Append-only. */
+export const RECRUITMENT_POLICY_VERSIONS = ['2026-09-30'] as const;
+/** The notice the form shows now. */
+export const RECRUITMENT_POLICY_VERSION: (typeof RECRUITMENT_POLICY_VERSIONS)[number] =
+  RECRUITMENT_POLICY_VERSIONS[RECRUITMENT_POLICY_VERSIONS.length - 1]!;
 
 /** `{brand}` is filled from site_profile (the brand is data — CLAUDE.md §1); see recruitmentConsent(). */
 export interface RecruitmentConsentCopy {

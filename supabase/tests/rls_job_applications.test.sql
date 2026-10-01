@@ -1,7 +1,9 @@
 -- pgTAP: job applications (0029) — Admin only; the public write limiter is service-role
--- only. Six principals: anon, content_creator, seo, developer, admin, other_tenant.
+-- only. Six principals: anon, content_creator, seo, developer, admin, other_tenant — and
+-- the live half of "Admin only": an admin token whose profile has since been demoted,
+-- deactivated or locked sees nothing (app.is_live_admin(), CLAUDE.md §9(b)).
 begin;
-select plan(30);
+select plan(37);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -14,11 +16,27 @@ values ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000
         'freelance', 'month', array['animation', 'motion-graphics'],
         'https://example.com/work', 'My best piece', '2026-09-30', now() + interval '12 months');
 
-create function _claims(p_role text, p_tid text) returns void language sql as $$
+-- Four admins of T1 by token. Only b1's profile still says so: b2 was demoted, b3
+-- deactivated, b4 locked — each still holding a JWT that says admin.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000000b1', 'live-admin@example.test'),
+  ('00000000-0000-0000-0000-0000000000b2', 'demoted-admin@example.test'),
+  ('00000000-0000-0000-0000-0000000000b3', 'inactive-admin@example.test'),
+  ('00000000-0000-0000-0000-0000000000b4', 'locked-admin@example.test');
+insert into public.profiles (id, tenant_id, role, is_active, locked_until) values
+  ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-000000000001', 'admin', true, null),
+  ('00000000-0000-0000-0000-0000000000b2', '00000000-0000-0000-0000-000000000001', 'developer', true, null),
+  ('00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-000000000001', 'admin', false, null),
+  ('00000000-0000-0000-0000-0000000000b4', '00000000-0000-0000-0000-000000000001', 'admin', true, now() + interval '1 hour');
+
+create function _claims(p_role text, p_tid text, p_sub text default null) returns void
+  language sql as $$
   select set_config(
     'request.jwt.claims',
     case when p_role is null then ''
-         else json_build_object('app_metadata', json_build_object('role', p_role, 'tenant_id', p_tid))::text end,
+         else jsonb_strip_nulls(jsonb_build_object(
+                'sub', p_sub,
+                'app_metadata', jsonb_build_object('role', p_role, 'tenant_id', p_tid)))::text end,
     true
   )
 $$;
@@ -71,8 +89,23 @@ select is(
   _rows($q$ update public.job_applications set status = 'declined' $q$),
   0, 'admin of another tenant changes nothing');
 
--- ---- admin: read, review, cannot insert or touch the record fields -------------------
+-- ---- an admin token the profile no longer backs: nothing -------------------------------
 select _claims('admin', '00000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.job_applications)::int, 0,
+  'an admin claim with no subject sees nothing');
+select _claims('admin', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b2');
+select is((select count(*) from public.job_applications)::int, 0,
+  'a demoted admin with an unexpired admin token sees nothing');
+select is(
+  _rows($q$ update public.job_applications set status = 'declined' $q$),
+  0, 'a demoted admin with an unexpired admin token changes nothing');
+select _claims('admin', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b3');
+select is((select count(*) from public.job_applications)::int, 0, 'a deactivated admin sees nothing');
+select _claims('admin', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b4');
+select is((select count(*) from public.job_applications)::int, 0, 'a locked admin sees nothing');
+
+-- ---- admin: read, review, cannot insert or touch the record fields -------------------
+select _claims('admin', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b1');
 select is((select count(*) from public.job_applications)::int, 1, 'admin sees the application');
 select throws_ok(
   $$ insert into public.job_applications (name, email_enc, phone_enc, city, role, experience,
@@ -118,6 +151,8 @@ select ok(not has_function_privilege('anon', 'public.application_orphan_cvs(int,
   'anon cannot list orphaned CVs');
 select ok(not has_function_privilege('authenticated', 'public.application_orphan_cvs(int, int)', 'execute'),
   'authenticated cannot list orphaned CVs');
+select ok(not has_function_privilege('anon', 'app.is_live_admin()', 'execute'),
+  'anon cannot execute the live admin check');
 
 reset role;
 set local role service_role;
@@ -133,10 +168,19 @@ select throws_ok(
   $$ select public.public_write_hit('00000000-0000-0000-0000-000000000001', 'apply:ip', 'not-a-hash', 3600) $$,
   '23514', null, 'a key that is not a 64-hex HMAC is refused');
 
+-- Not even the service role can store a horizon longer than the consent allows.
+select throws_ok(
+  $$ insert into public.job_applications (tenant_id, name, email_enc, phone_enc, city, role,
+       experience, work_type, availability, portfolio_url, message, consent_version,
+       retention_delete_after)
+     values ('00000000-0000-0000-0000-000000000001', 'x', 'x', 'x', 'x', 'x', '1-3', 'any',
+             'month', 'https://x.test', 'x', '2026-09-30', now() + interval '13 months') $$,
+  '23514', null, 'retention beyond 12 months without the future-roles consent is refused');
+
 -- ---- admin erase (last: it removes the fixture) -------------------------------------------
 reset role;
 set local role authenticated;
-select _claims('admin', '00000000-0000-0000-0000-000000000001');
+select _claims('admin', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b1');
 select is(
   _rows($q$ delete from public.job_applications where id = '00000000-0000-0000-0000-0000000000a1' $q$),
   1, 'admin can erase an application (DSAR)');

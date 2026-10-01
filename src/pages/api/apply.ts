@@ -30,7 +30,7 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 //   origin → multipart → Content-Length (411/413, before reading a byte) → configured →
 //   tenant (server-side, the anon fence) → applications open (re-read, never the cached
 //   page's copy) → per-IP limit (FAILS CLOSED, EXC-004) → parse → honeypot (silent ok) →
-//   strict schema (422 + field names) → per-e-mail limit → CV size and sniff → store.
+//   strict schema (422 + field names) → CV size and sniff → per-e-mail limit → store.
 //
 // Answers: `{ status }` (+ `fields` on a 422) with `Accept: application/json`, else a 303
 // to `/join?status=…#apply` (`/ar/join…` for an Arabic form) so the page works without
@@ -135,12 +135,6 @@ export const POST: APIRoute = async ({ request }) => {
   }
   const input = parsed.data;
 
-  const emailLimit = await checkPublicLimits(svc, tenantId, LEAD_PII_ENC_KEY, [
-    { scope: 'apply:email', value: input.email, ...APPLY_LIMITS.perEmail },
-  ]);
-  if (emailLimit === 'limited') return answer('rate_limited');
-  if (emailLimit === 'unavailable') return answer('unavailable');
-
   // The CV is optional; an empty file input arrives as a zero-byte File.
   const raw = form.get(CV_FIELD);
   let cv: { file: Blob; kind: 'pdf' | 'docx' } | null = null;
@@ -151,10 +145,20 @@ export const POST: APIRoute = async ({ request }) => {
     cv = { file: raw, kind: sniff.kind };
   }
 
+  // The per-e-mail limit counts only an application that would be stored. Counted earlier,
+  // a stranger who knows someone's address could spend that person's daily allowance with
+  // refused uploads — locking them out, and learning from the 429 whether they had applied.
+  const emailLimit = await checkPublicLimits(svc, tenantId, LEAD_PII_ENC_KEY, [
+    { scope: 'apply:email', value: input.email, ...APPLY_LIMITS.perEmail },
+  ]);
+  if (emailLimit === 'limited') return answer('rate_limited');
+  if (emailLimit === 'unavailable') return answer('unavailable');
+
   const result = await createApplication(svc, tenantId, input, cv, LEAD_PII_ENC_KEY);
   if (!result.ok) {
-    // The reason only — never a field value.
-    void writeSystemLog({
+    // The reason only — never a field value. Awaited: a Worker may cancel I/O still running
+    // after the response, and this is the only trace a failed application leaves.
+    await writeSystemLog({
       level: 'error',
       source: 'apply',
       message: `application not stored (${result.reason})`,

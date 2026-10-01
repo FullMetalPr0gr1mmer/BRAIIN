@@ -73,6 +73,14 @@ create table if not exists public.job_applications (
   updated_by uuid,
   constraint job_applications_cv_shape check (
     (cv_path is null) = (cv_content_type is null) and (cv_path is null) = (cv_bytes is null)
+  ),
+  -- Never kept longer than the consent allows: 12 months, or 24 with the future-roles
+  -- consent (a day of slack for calendar arithmetic — JS and Postgres round a 29 February
+  -- differently). After insert it can only shrink (the spam trigger).
+  constraint job_applications_retention_bound check (
+    retention_delete_after <= consent_at
+      + case when future_roles_consent then interval '24 months' else interval '12 months' end
+      + interval '1 day'
   )
 );
 create index if not exists job_applications_tenant_status_idx
@@ -110,9 +118,40 @@ drop trigger if exists job_applications_spam_retention on public.job_application
 create trigger job_applications_spam_retention before update of status on public.job_applications
   for each row execute function app.tg_job_application_spam_retention();
 
+-- The LIVE half of "Admin only" (CLAUDE.md §9(b): a demotion is effective immediately).
+-- `app.is_admin()` reads the role from the JWT, and a JWT outlives a demotion until it
+-- expires (up to an hour): a demoted, deactivated or locked admin calling the API directly
+-- with the old token would still pass it. For applicants' data the RESTRICTIVE policy below
+-- also asks the profiles row, now. SECURITY DEFINER because profiles' own RLS would hide
+-- the row; it reads one row by primary key and answers a boolean, nothing more. Executable
+-- by `authenticated` only (RLS evaluates it as the caller).
+create or replace function app.is_live_admin() returns boolean
+  language sql stable security definer set search_path = ''
+as $$
+  with claims as (
+    select nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub' as sub
+  )
+  select exists (
+    select 1
+      from claims c
+      -- CASE, not AND: SQL does not promise to test the shape before the cast.
+      join public.profiles p
+        on p.id = case
+                    when c.sub ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                    then c.sub::uuid
+                  end
+     where p.role = 'admin'
+       and p.is_active
+       and (p.locked_until is null or p.locked_until <= now())
+       and p.tenant_id = app.effective_tenant_id()
+  )
+$$;
+revoke all on function app.is_live_admin() from public, anon, authenticated, service_role;
+grant execute on function app.is_live_admin() to authenticated;
+
 -- Two layers inside the database, as for the other Admin-only tables (ai_config, 0009):
 -- the permissive policy names the tenant and the role; the RESTRICTIVE one makes "Admin
--- only" hold even if a later permissive policy is added by mistake.
+-- only" hold even if a later permissive policy is added by mistake — and checks it live.
 drop policy if exists job_applications_admin_all on public.job_applications;
 create policy job_applications_admin_all on public.job_applications for all
   using (tenant_id = app.effective_tenant_id() and app.is_admin())
@@ -120,8 +159,8 @@ create policy job_applications_admin_all on public.job_applications for all
 drop policy if exists job_applications_admin_only on public.job_applications;
 create policy job_applications_admin_only on public.job_applications
   as restrictive for all
-  using (app.is_admin())
-  with check (app.is_admin());
+  using (app.is_admin() and (select app.is_live_admin()))
+  with check (app.is_admin() and (select app.is_live_admin()));
 
 -- Stated, never inherited (0011): no anon access at all; staff read, change the review
 -- fields and erase; no API role inserts (the apply endpoint uses the service role).
@@ -282,8 +321,12 @@ begin
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'public'
                   and tablename = 'job_applications' and policyname = 'job_applications_admin_only'
-                  and permissive = 'RESTRICTIVE') then
-    raise exception '0029: the RESTRICTIVE admin-only policy is missing';
+                  and permissive = 'RESTRICTIVE' and qual like '%is_live_admin%'
+                  and with_check like '%is_live_admin%') then
+    raise exception '0029: the RESTRICTIVE admin-only policy is missing or not live-checked';
+  end if;
+  if has_function_privilege('anon', 'app.is_live_admin()', 'execute') then
+    raise exception '0029: anon can execute app.is_live_admin';
   end if;
   if to_regclass('storage.buckets') is not null then
     if not exists (select 1 from storage.buckets where id = 'applications' and public = false) then
