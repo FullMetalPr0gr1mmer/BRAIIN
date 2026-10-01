@@ -497,12 +497,22 @@ current Supabase plan, and the owner chose the free route (decision J1, 2026-09-
 
 ### What still holds (compensating controls)
 - **A structural check before anything is stored** (`src/lib/applications/fileSniff.ts`):
-  the bytes, not the browser's type or the file name, decide. PDF must start `%PDF-` and end
-  `%%EOF`; a `.docx` must be a well-formed ZIP with the Word parts, and is refused if it
-  carries macros (`vbaProject.bin`, a macro-enabled main part), ActiveX, embedded objects,
-  encrypted entries or any external relationship other than a hyperlink (the
-  remote-template attack). Legacy `.doc` is refused outright — its macros cannot be checked
-  without parsing the whole compound file.
+  the bytes, not the browser's type or the file name, decide. A PDF must start `%PDF-` and
+  end `%%EOF`. A `.docx` is checked the way Word reads one, not the way Word usually writes
+  one: the ZIP must be unambiguous (nothing before or after the archive, no duplicate names
+  or shared data, local headers that agree with the directory, no encrypted entries); the
+  main document is the one the package's `_rels/.rels` names, and a plain Word document;
+  and **every** part's declared content type and **every** relationship in every
+  `_rels/*.rels` is checked, wherever it lives. Refused: macros (a VBA project, a
+  macro-enabled type), ActiveX, an embedded object other than a native chart's own
+  workbook, an altChunk or subdocument, a mail-merge data source, and any link out of the
+  file other than a hyperlink or a template on the author's own disk (the remote-template
+  attack: a web address or a network share is refused). Relationship XML is read by its
+  attribute grammar with references decoded; UTF-16, NUL bytes and DTDs are refused. The
+  work is bounded (64 relationship files, 2 MB inflated in total) for the free plan's CPU.
+  Legacy `.doc` is refused outright — its macros cannot be checked without parsing the
+  whole compound file. (Hardened 2026-10-01 after an independent review found the first
+  version looked only where Word usually puts things.)
 - **Nobody but an Admin can reach a file:** the bucket is private, no storage policy names
   it (a RESTRICTIVE belt where the migration role may add one), and the only way out is
   `GET /api/admin/applications/[id]/cv` — `applications.pii`, live-rechecked,
@@ -510,8 +520,12 @@ current Supabase plan, and the owner chose the free route (decision J1, 2026-09-
 - **The browser never renders it:** `Content-Disposition: attachment`, `nosniff`,
   `no-store`, and a CSP `sandbox` (kept by `applySecurityHeaders`) for a URL opened in a tab.
 - **The reviewer is told:** the admin panel puts "Not virus-scanned" beside every download.
-- **What it does not cover:** a PDF exploit aimed at the reader that opens it. That is the
-  residual risk this entry records; open CVs in an up-to-date reader or a sandboxed viewer.
+- **What it does not cover:** a PDF exploit aimed at the reader that opens it, and field
+  codes in a `.docx`'s text (DDE, INCLUDEPICTURE — the check never reads the document body;
+  Word asks before it updates them, and Protected View holds a downloaded file until
+  editing is enabled). That is the residual risk this entry records; open CVs in an
+  up-to-date reader, keep Protected View on, and do not enable editing for a CV you do not
+  need to edit.
 
 ### Close condition
 An antivirus scan runs on every CV before it is downloadable (a scanning service or a
