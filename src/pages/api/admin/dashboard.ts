@@ -58,6 +58,18 @@ export const GET = defineAdminRoute({
       openLeads = count ?? 0;
     }
 
-    return { role: auth.role, attention, counts, openLeads };
+    // Join applications: Admin only (owner decision J6), gated on their own capability for
+    // the same reason as leads — the count itself is information.
+    let newApplications: number | null = null;
+    if (can(auth.role, 'applications.manage') === 'full') {
+      const { count } = await sb
+        .from('job_applications')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', auth.tenantId)
+        .eq('status', 'new');
+      newApplications = count ?? 0;
+    }
+
+    return { role: auth.role, attention, counts, openLeads, newApplications };
   },
 });

@@ -26,6 +26,7 @@ interface Attention {
 
 let attention: Attention[] = [];
 let openLeads: number | null = null;
+let newApplications: number | null = null;
 let failed = false;
 
 if (session && sb) {
@@ -56,6 +57,16 @@ if (session && sb) {
       .eq('tenant_id', session.tenantId)
       .eq('status', 'new');
     openLeads = count ?? 0;
+  }
+
+  // Join applications — Admin only (owner decision J6); the count is gated the same way.
+  if (can(session.role, 'applications.manage') === 'full') {
+    const { count } = await sb
+      .from('job_applications')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', session.tenantId)
+      .eq('status', 'new');
+    newApplications = count ?? 0;
   }
 }
 
@@ -126,6 +137,18 @@ const shortcuts = sections.flatMap((group) => group.links).slice(0, 8);
         <div class="card">
           <p class="stat">{openLeads}</p>
           <p class="stat-label">New leads</p>
+        </div>
+      )
+    }
+    {
+      newApplications !== null && (
+        <div class="card">
+          <p class="stat">{newApplications}</p>
+          <p class="stat-label">
+            <a class="data-link" href="/admin/applications">
+              New job applications
+            </a>
+          </p>
         </div>
       )
     }

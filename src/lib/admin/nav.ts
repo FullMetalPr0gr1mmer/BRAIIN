@@ -71,7 +71,11 @@ export const ADMIN_NAV: readonly NavGroup[] = [
   },
   {
     title: 'Leads',
-    links: [{ href: '/admin/leads', label: 'Leads', caps: ['leads.manage'] }],
+    links: [
+      { href: '/admin/leads', label: 'Leads', caps: ['leads.manage'] },
+      // Join (careers): Admin only — owner decision J6.
+      { href: '/admin/applications', label: 'Job applications', caps: ['applications.manage'] },
+    ],
   },
   {
     title: 'Insights',
