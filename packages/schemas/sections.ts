@@ -486,6 +486,71 @@ export const PageHeadSectionContentSchema = z
   })
   .strict();
 
+// ── Join (/join) ─────────────────────────────────────────────────────────────────────
+// The careers page's three bands take copy overrides only — strict, like the rest of UI v2.
+// The application form itself is code (src/components/ApplicationForm.astro): its fields
+// are the ApplicationInputSchema contract (packages/schemas/application.ts) and its consent
+// wording is versioned (packages/consent/recruitment.ts), so neither may be content. Text
+// may name the studio as `%brand%` (filled from the public identity, as on About).
+
+/** Most items a Join band lists — the design's four, laid out as a four-column grid. */
+export const JOIN_ITEMS_MAX = 4;
+
+/** "Why {brand}": tag, heading, lead and up to four reasons (a heading and a line each). */
+export const JoinWhySectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    /** Only read with an authored heading. */
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    items: z
+      .array(z.object({ heading: Text, text: Text }).strict())
+      .min(1)
+      .max(JOIN_ITEMS_MAX)
+      .optional(),
+  })
+  .strict();
+
+/** "How it works": up to four hiring steps, each with its time label ("Within two weeks"). */
+export const JoinStepsSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    /** Only read with an authored heading. */
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    items: z
+      .array(z.object({ heading: Text, text: Text, time: Text }).strict())
+      .min(1)
+      .max(JOIN_ITEMS_MAX)
+      .optional(),
+  })
+  .strict();
+
+/**
+ * The application band: the copy around the form — never the form. `note` and
+ * `successMessage` reach the form itself; its fields, options, consent text and validation
+ * copy are code.
+ */
+export const JoinApplySectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    /** Only read with an authored heading. */
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    /** The form's three group titles ("About you", "The role", "Your work"). */
+    groupAbout: Text.optional(),
+    groupRole: Text.optional(),
+    groupWork: Text.optional(),
+    /** Beside the send button ("We reply to every application within two weeks…"). */
+    note: Text.optional(),
+    /** The confirmation that replaces the fields once the application is received. */
+    successMessage: Text.optional(),
+  })
+  .strict();
+
 export { SECTION_TYPES, type SectionType } from './sectionTypes';
 /** Zod form of the canonical list in ./sectionTypes (kept zod-free for the admin bundle). */
 export const SectionTypeSchema = z.enum(SECTION_TYPES);
@@ -520,6 +585,10 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
   // Round 2 (services)
   hello: HelloSectionContentSchema,
   serviceExplorer: ServiceExplorerSectionContentSchema,
+  // Join
+  joinWhy: JoinWhySectionContentSchema,
+  joinSteps: JoinStepsSectionContentSchema,
+  joinApply: JoinApplySectionContentSchema,
 };
 
 /**
@@ -591,3 +660,6 @@ export type HelloSectionContent = z.infer<typeof HelloSectionContentSchema>;
 export type ServiceExplorerSectionContent = z.infer<typeof ServiceExplorerSectionContentSchema>;
 export type StatisticsSectionContent = z.infer<typeof StatisticsSectionContentSchema>;
 export type StatRating = z.infer<typeof StatRatingSchema>;
+export type JoinWhySectionContent = z.infer<typeof JoinWhySectionContentSchema>;
+export type JoinStepsSectionContent = z.infer<typeof JoinStepsSectionContentSchema>;
+export type JoinApplySectionContent = z.infer<typeof JoinApplySectionContentSchema>;

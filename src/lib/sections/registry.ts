@@ -42,6 +42,10 @@ export const RENDERED_SECTION_TYPES = [
   // Round 2 (services)
   'hello',
   'serviceExplorer',
+  // Join
+  'joinWhy',
+  'joinSteps',
+  'joinApply',
 ] as const satisfies readonly SectionType[];
 
 export type RenderedSectionType = (typeof RENDERED_SECTION_TYPES)[number];
