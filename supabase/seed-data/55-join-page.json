@@ -1,0 +1,71 @@
+{
+  "blocks": [
+    {
+      "table": "page_sections",
+      "conflict": ["id"],
+      "unlessAuthored": ["page_id"],
+      "rows": [
+        {
+          "id": "5eed5500-0000-4000-8000-000000000001",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "join"
+              }
+            }
+          },
+          "type": "hero",
+          "content": {},
+          "visible": true,
+          "sort_order": 10
+        },
+        {
+          "id": "5eed5500-0000-4000-8000-000000000002",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "join"
+              }
+            }
+          },
+          "type": "joinWhy",
+          "content": {},
+          "visible": true,
+          "sort_order": 20
+        },
+        {
+          "id": "5eed5500-0000-4000-8000-000000000003",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "join"
+              }
+            }
+          },
+          "type": "joinSteps",
+          "content": {},
+          "visible": true,
+          "sort_order": 30
+        },
+        {
+          "id": "5eed5500-0000-4000-8000-000000000004",
+          "page_id": {
+            "$ref": {
+              "table": "pages",
+              "by": {
+                "slug": "join"
+              }
+            }
+          },
+          "type": "joinApply",
+          "content": {},
+          "visible": true,
+          "sort_order": 40
+        }
+      ]
+    }
+  ]
+}
