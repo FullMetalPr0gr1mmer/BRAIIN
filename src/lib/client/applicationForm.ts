@@ -154,8 +154,10 @@ export function openFromStatusBody(body: unknown): boolean | null {
 async function applicationsOpen(url: string): Promise<boolean | null> {
   try {
     const res = await fetch(url, { headers: { accept: 'application/json' }, cache: 'no-store' });
-    if (!res.ok) return null;
-    return openFromStatusBody(await res.json());
+    // The body is read even when it is not an answer (a 404 page, a proxy's error): an
+    // unread body is a response Chromium never finishes — the page would never go idle.
+    const body: unknown = await res.json().catch(() => null);
+    return res.ok ? openFromStatusBody(body) : null;
   } catch {
     return null;
   }

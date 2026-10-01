@@ -30,6 +30,21 @@
 .join-steps .sec-head p {
   color: var(--bs-dim);
 }
+/* No `ch` box on swap-font text above the fold (CLAUDE.md §6, R3-0): this band's head is in
+   the first screen, right under the banner, and a `ch` follows whichever font is painting.
+   .sec-head's 16ch / 46ch, measured once under the loaded faces, in em: */
+.join-why .sec-head h2 {
+  max-width: 10em; /* 16ch of Archivo 800 */
+}
+html[dir='rtl'] .join-why .sec-head h2 {
+  max-width: 9.18em; /* 16ch of Almarai 800 */
+}
+.join-why .sec-head p {
+  max-width: 26.36em; /* 46ch of Archivo 400 */
+}
+html[dir='rtl'] .join-why .sec-head p {
+  max-width: 24.29em; /* 46ch of Almarai 400 */
+}
 /* Klein on the two light bands (sky is 2.56:1 on white — never an accent there). */
 .join-why .sec-head h2 em,
 .join-steps .sec-head h2 em {
@@ -532,10 +547,16 @@ html[dir='rtl'] .af-grid select {
   line-height: normal;
   cursor: pointer;
 }
+/* A file name keeps its own direction (dir=auto), so a Latin name on the Arabic page is cut
+   at its END, not its start; it sits on the line just above its size. */
 .af-drop__name {
+  align-self: end;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+html[dir='rtl'] .af-drop__name {
+  text-align: right;
 }
 .af-drop__s {
   font-size: 12.5px;
