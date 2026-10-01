@@ -203,6 +203,8 @@ export function mountApplicationForm(form: HTMLFormElement): void {
     if (lead) lead.dataset['closed'] = String(next);
     submit.disabled = next;
   };
+  // A no-JS `?status=closed` answer arrives with the notice shown: Send matches it at once.
+  setClosed(closed);
   void applicationsOpen(d['statusUrl'] ?? '/api/apply/status').then((open) => {
     if (open !== null) setClosed(!open);
   });
