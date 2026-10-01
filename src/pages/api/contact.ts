@@ -3,7 +3,7 @@ import { LeadInputSchema } from '@schemas/lead';
 import { createLead } from '@/lib/data/leads';
 import { isSameOrigin } from '@/lib/http/csrf';
 import { clientIp } from '@/lib/http/maintenance';
-import { CONTACT_LIMITS, checkPublicLimits } from '@/lib/http/publicRateLimit';
+import { CONTACT_LIMITS, checkPublicLimits, ipLimitValue } from '@/lib/http/publicRateLimit';
 import { serviceClient } from '@/lib/supabase/server';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import { resolveLaunchTenantId } from '@/lib/data/tenant';
@@ -56,7 +56,7 @@ export const POST: APIRoute = async ({ request }) => {
     const tenantId = await resolveLaunchTenantId();
     if (tenantId) {
       const outcome = await checkPublicLimits(serviceClient(), tenantId, LEAD_PII_ENC_KEY, [
-        { scope: 'contact:ip', value: clientIp(request) ?? 'unknown', ...CONTACT_LIMITS.perIp },
+        { scope: 'contact:ip', value: ipLimitValue(clientIp(request)), ...CONTACT_LIMITS.perIp },
       ]);
       if (outcome === 'limited') return json({ ok: false, error: 'rate-limit' }, 429);
     }

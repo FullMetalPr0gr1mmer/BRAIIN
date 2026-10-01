@@ -38,6 +38,38 @@ export const CONTACT_LIMITS = { perIp: { max: 10, windowSeconds: 3600 } } as con
 
 const enc = new TextEncoder();
 
+/**
+ * What a per-address rule counts. IPv4: the address. IPv6: its /64 — one subscriber line
+ * or host is handed a whole /64 and can rotate through 2^64 addresses at will, so counting
+ * single IPv6 addresses would let one visitor never be counted twice. An IPv4-mapped IPv6
+ * address counts as its IPv4. Anything unparseable is counted as given; no address at all
+ * is one shared `unknown` (on Cloudflare `cf-connecting-ip` is always set).
+ */
+export function ipLimitValue(ip: string | null | undefined): string {
+  if (!ip) return 'unknown';
+  const v = ip.trim().toLowerCase();
+  if (!v.includes(':')) return v;
+  const mapped = /^(?:0{0,4}:){0,5}:?ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(v);
+  if (mapped) return mapped[1]!;
+  const gap = v.indexOf('::');
+  let groups: string[];
+  if (gap === -1) {
+    groups = v.split(':');
+  } else {
+    if (v.indexOf('::', gap + 1) !== -1) return v;
+    const left = gap === 0 ? [] : v.slice(0, gap).split(':');
+    const right = gap + 2 >= v.length ? [] : v.slice(gap + 2).split(':');
+    const fill = 8 - left.length - right.length;
+    if (fill < 1) return v;
+    groups = [...left, ...Array<string>(fill).fill('0'), ...right];
+  }
+  if (groups.length !== 8 || !groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return v;
+  return `${groups
+    .slice(0, 4)
+    .map((g) => g.replace(/^0+(?=.)/, ''))
+    .join(':')}::/64`;
+}
+
 /** HMAC-SHA-256(key, message) as 64 lowercase hex characters. */
 export async function hmacHex(keyMaterial: string, message: string): Promise<string> {
   const key = await crypto.subtle.importKey(

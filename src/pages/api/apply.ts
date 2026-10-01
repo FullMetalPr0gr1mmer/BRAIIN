@@ -12,7 +12,7 @@ import {
 } from '@schemas/application';
 import { isSameOrigin } from '@/lib/http/csrf';
 import { clientIp } from '@/lib/http/maintenance';
-import { APPLY_LIMITS, checkPublicLimits } from '@/lib/http/publicRateLimit';
+import { APPLY_LIMITS, checkPublicLimits, ipLimitValue } from '@/lib/http/publicRateLimit';
 import { serviceClient } from '@/lib/supabase/server';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import { resolveLaunchTenantId } from '@/lib/data/tenant';
@@ -104,7 +104,7 @@ export const POST: APIRoute = async ({ request }) => {
     return answer('closed');
   }
 
-  const ip = clientIp(request) ?? 'unknown';
+  const ip = ipLimitValue(clientIp(request));
   const ipLimit = await checkPublicLimits(svc, tenantId, LEAD_PII_ENC_KEY, [
     { scope: 'apply:ip', value: ip, ...APPLY_LIMITS.perIp },
   ]);
