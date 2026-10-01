@@ -651,17 +651,19 @@ Owner decisions 2026-09-30 (J1–J6): CVs go to a **private Supabase Storage buc
 paid plan or a new secret: the applicant key and the limiter key are labelled derivations of
 `LEAD_PII_ENC_KEY`, the daily retention job is a Workers cron trigger (free on every plan).
 
-**When.** Immediately before merging the Join PR, in this order. The new code with the old
-database answers every apply `unavailable` (no limiter function) and the admin page errors; the
-old code with the new database changes nothing visible.
+**When.** Around the merge of the Join PR, in this order. Migration 0029 goes FIRST: the deploy
+job's guard refuses code whose migrations production lacks, and the old code ignores the new
+tables. The seed delta goes LAST, after the deploy: its header and footer rows would give the
+old code a Join link to a page it does not have, while the new code without them simply
+renders the page from its built-in defaults, with no link yet.
 
 | # | Step | What it does | Must see |
 |---|---|---|---|
 | 0 | Preflight (read-only): `select accepting_applications from public.site_profile;` and `select id, public from storage.buckets;` | Confirms the starting state. | `accepting_applications = false`; no `applications` bucket yet. |
 | 1 | `npx supabase db push --linked --dry-run`, then `npx supabase db push --linked --skip-vault` | Migration 0029: `job_applications` (Admin-only RLS, column UPDATE grant on status/notes only), the spam-retention trigger, the public write limiter (`public_write_attempts` + `public.public_write_hit()`, service role only), the orphan-CV lookup the daily job uses (`public.application_orphan_cvs()`, service role only), the private bucket and a RESTRICTIVE belt policy on `storage.objects`. In-file postconditions refuse a push that left RLS unforced, anon with a privilege, or the bucket public. | Only 0029 listed by the dry run. A `WARNING: 0029: not permitted to add the storage.objects belt policy` is acceptable (the bucket still has no policy naming it, so anon and authenticated are refused); report it — it means the belt is missing, not the lock. |
 | 2 | Verify (read-only) | `select id, public, file_size_limit, allowed_mime_types from storage.buckets where id = 'applications';` · `select policyname, permissive from pg_policies where tablename in ('job_applications', 'objects') and policyname like '%applications%';` | `public = false`, `10485760`, the two MIME types; `job_applications_admin_all`, `job_applications_admin_only` (RESTRICTIVE) and, unless step 1 warned, `applications_bucket_service_only` (RESTRICTIVE). |
-| 3 | The Join seed rows — a **delta**, never the whole `production.sql` | `node scripts/gen-seeds.mjs --only 26-navigation-join.json,55-join-page.json > /tmp/join-delta.sql`, review it (the Join header and footer links, the `join` page and its sections — inserted by fixed id, `on conflict do nothing`), then `psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/join-delta.sql`. Nothing in it opens applications. | `COMMIT`. A re-run inserts nothing. |
-| 4 | Merge → the deploy job → live checks | — | `/join` and `/ar/join` → 200, the form shows the closed notice; Join is the last header item and in the footer; `curl -s -X POST $BASE/api/apply -H "Origin: $BASE" -H 'Accept: application/json' -F name=x` → `409 {"status":"closed"}`; `/admin/applications` → 401 when signed out. Cloudflare dashboard → the Worker → Settings → Triggers lists `23 3 * * *`. |
+| 3 | Merge → the deploy job → live checks | — | The deploy job's log ends `Deployed` and lists the schedule `23 3 * * *`. `/join` and `/ar/join` → 200, the form shows the closed notice (the page renders its built-in sections until step 4); `curl -s -X POST $BASE/api/apply -H "Origin: $BASE" -H 'Accept: application/json' -F name=x` → `409 {"status":"closed"}`; `/admin/applications` → 401 when signed out. |
+| 4 | The Join seed rows — a **delta**, never the whole `production.sql` | `node scripts/gen-seeds.mjs --only 26-navigation-join.json,55-join-page.json > /tmp/join-delta.sql`, review it (the Join header and footer links, the `join` page and its sections — inserted by fixed id, `on conflict do nothing`), then run it as the owner (`psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/join-delta.sql`, or `npx supabase db query --linked -f`). Nothing in it opens applications. | `COMMIT`. A re-run inserts nothing. Join is the last header item and in the footer once the edge copy of each page refreshes (purge, or its next render). |
 | 5 | The next morning | The first cron run: expired applications (CV first, then the row), orphaned CVs, old limiter counters. | `/admin/logs`: a `cron:retention` **info** row, `join retention ran`, counts all `0` (`orphansDeleted` included). An **error** row names the step that failed; the next day's run retries it. |
 
 **Opening applications (the owner, after the sign-offs).** Before the switch: legal review of
