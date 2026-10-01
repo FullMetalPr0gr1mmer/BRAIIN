@@ -1,0 +1,376 @@
+---
+import type { Locale } from '@schemas/primitives';
+import {
+  AVAILABILITY,
+  CRAFTS,
+  CV_FIELD,
+  CV_KINDS,
+  EXPERIENCE_LEVELS,
+  HONEYPOT_FIELD,
+  WORK_TYPES,
+  type ApplicationFormField,
+  type ApplyStatus,
+} from '@schemas/application';
+import { RECRUITMENT_POLICY_VERSION, recruitmentConsent } from '@consent/recruitment';
+import { localizedHref } from '@/lib/i18n';
+import { APPLY_FORM_COPY, applyStatusText } from '@/lib/forms/applicationCopy';
+import Cta from '@/components/ui/Cta.astro';
+
+// The Join application form — the site's second public write path, and the first with a
+// file. A real <form>: multipart/form-data to /api/apply (for both locales; the hidden
+// `locale` carries `ar`), so it works with no script at all — the endpoint then answers
+// with a 303 to /join?status=<status>#apply, and that status renders here, server-side,
+// in the ONE status region. With script (src/lib/client/applicationForm.ts) the same post
+// goes through fetch with `Accept: application/json` and the region reports the answer
+// in place.
+//
+// The contract is packages/schemas/application.ts: every control is named from
+// APPLICATION_FORM_FIELDS (typed — a renamed field fails `astro check`), the selects and
+// the craft chips post stable KEYS (the label is the visible text only), bounds mirror the
+// schema (maxlength, required, type=email|url), and the CV is `cv` — PDF or .docx, ≤ 10 MB.
+// Consent is TWO boxes (owner decision J4): the required one covers this application, the
+// optional one future roles (12 months' retention becomes 24); the wording is
+// packages/consent/recruitment.ts with the brand filled in, and the version the form showed
+// is posted with it (`policy_version`). The honeypot `hp` must stay empty.
+//
+// Copy: src/lib/forms/applicationCopy.ts (the mockup's labels, verbatim; the messages ours).
+// ONE form per page: its ids are fixed (apply-form, apply-status, af-*).
+
+export interface Props {
+  locale: Locale;
+  /** The studio's name in this locale, for the consent wording. */
+  brand: string;
+  /** The three group titles, already in this locale (CMS-overridable). */
+  groups: { about: string; role: string; work: string };
+  /** Beside the send button. */
+  note: string;
+  /** The confirmation once the application is received (the band's `successMessage`). */
+  okMessage: string;
+  /** A no-JS answer (`?status=`) to render in the status region; null for none. */
+  answer?: ApplyStatus | null | undefined;
+  /** The element holding the lead line and the closed notice (its `data-closed` flips). */
+  closedTarget?: string | undefined;
+}
+
+const { locale, brand, groups, note, okMessage, answer = null, closedTarget } = Astro.props;
+
+const STR = APPLY_FORM_COPY[locale];
+const consent = recruitmentConsent(locale, brand);
+const privacyHref = localizedHref('/privacy#recruitment', locale);
+
+/** A control's name, checked against APPLICATION_FORM_FIELDS at compile time: a field
+    renamed on one side fails `astro check`, not a post. */
+const f = (name: ApplicationFormField) => name;
+
+const options = (table: Record<string, { en: string; ar: string }>) =>
+  Object.entries(table).map(([value, label]) => ({ value, label: label[locale] }));
+const levels = options(EXPERIENCE_LEVELS);
+const workTypes = options(WORK_TYPES);
+const starts = options(AVAILABILITY);
+const crafts = options(CRAFTS);
+
+// `.pdf,.docx` and their media types — CV_KINDS, in that order.
+const kinds = Object.values(CV_KINDS);
+const accept = [...kinds.map((k) => `.${k.extension}`), ...kinds.map((k) => k.contentType)].join(
+  ',',
+);
+
+// The no-JS answer is rendered at the TOP of the form: the 303 lands on `#apply`, and a
+// message at the foot of a long form would be a screen or more below the fold. With script
+// the region sits at the foot, next to the button that was just pressed.
+const answerAtTop = answer !== null;
+const region = {
+  id: 'apply-status',
+  class: [
+    'form-status',
+    'af-status',
+    answer === 'ok' ? 'is-ok' : '',
+    answer !== null && answer !== 'ok' ? 'is-error' : '',
+  ]
+    .filter(Boolean)
+    .join(' '),
+  role: 'status' as const,
+  'aria-live': 'polite' as const,
+  tabindex: -1,
+  hidden: answer === null,
+  'data-sending': STR.status.sending,
+  'data-ok': okMessage,
+  'data-invalid': STR.status.invalid,
+  'data-too-large': STR.status.too_large,
+  'data-bad-type': STR.status.bad_type,
+  'data-rate-limited': STR.status.rate_limited,
+  'data-unavailable': STR.status.unavailable,
+  'data-closed': STR.status.closed,
+  'data-error': STR.status.error,
+};
+const regionText = answer === null ? '' : applyStatusText(STR, answer, okMessage);
+---
+
+<form
+  id="apply-form"
+  class:list={['apply-form', { 'is-sent': answer === 'ok' }]}
+  method="post"
+  action="/api/apply"
+  enctype="multipart/form-data"
+  novalidate
+  data-locale={locale}
+  data-status-url="/api/apply/status"
+  data-closed-target={closedTarget}
+  data-err-required={STR.errors.required}
+  data-err-email={STR.errors.email}
+  data-err-url={STR.errors.url}
+  data-err-too-long={STR.errors.tooLong}
+  data-err-invalid={STR.errors.invalid}
+  data-err-consent={STR.errors.consent}
+>
+  {answerAtTop && <p {...region}>{regionText}</p>}
+
+  <fieldset class="af-group">
+    <legend class="af-group__t">{groups.about}</legend>
+    <div class="af-grid">
+      <div class="field">
+        <label for="af-name">{STR.name}</label>
+        <input
+          id="af-name"
+          name={f('name')}
+          type="text"
+          required
+          maxlength="120"
+          autocomplete="name"
+          placeholder={STR.namePh}
+        />
+      </div>
+      <div class="field">
+        <label for="af-email">{STR.email}</label>
+        <input
+          id="af-email"
+          name={f('email')}
+          type="email"
+          required
+          maxlength="254"
+          autocomplete="email"
+          dir="ltr"
+          placeholder={STR.emailPh}
+        />
+      </div>
+      <div class="field">
+        <label for="af-phone">{STR.phone}</label>
+        <input
+          id="af-phone"
+          name={f('phone')}
+          type="tel"
+          required
+          minlength="6"
+          maxlength="32"
+          autocomplete="tel"
+          inputmode="tel"
+          dir="ltr"
+          placeholder={STR.phonePh}
+        />
+      </div>
+      <div class="field">
+        <label for="af-city">{STR.city}</label>
+        <input
+          id="af-city"
+          name={f('city')}
+          type="text"
+          required
+          maxlength="80"
+          autocomplete="address-level2"
+          placeholder={STR.cityPh}
+        />
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="af-group">
+    <legend class="af-group__t">{groups.role}</legend>
+    <div class="af-grid">
+      <div class="field">
+        <label for="af-role">{STR.role}</label>
+        <input
+          id="af-role"
+          name={f('role')}
+          type="text"
+          required
+          maxlength="120"
+          autocomplete="off"
+          placeholder={STR.rolePh}
+        />
+      </div>
+      <div class="field">
+        <label for="af-experience">{STR.experience}</label>
+        <select id="af-experience" name={f('experience')} required>
+          <option value="">{STR.pick}</option>
+          {levels.map((o) => <option value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      <div class="field">
+        <label for="af-work-type">{STR.workType}</label>
+        <select id="af-work-type" name={f('work_type')} required>
+          <option value="">{STR.pick}</option>
+          {workTypes.map((o) => <option value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      <div class="field">
+        <label for="af-availability">{STR.availability}</label>
+        <select id="af-availability" name={f('availability')} required>
+          <option value="">{STR.pick}</option>
+          {starts.map((o) => <option value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      {
+        /* The craft chips: real checkboxes (keyboard-operable, posted by KEY), visually the
+          design's pills. The group is named by its visible label. */
+      }
+      <div class="af-chips af-full" role="group" aria-labelledby="af-skills-label">
+        <p class="af-label" id="af-skills-label">{STR.skills}</p>
+        <div class="af-chips__row">
+          {
+            crafts.map((c) => (
+              <label class="af-chip">
+                <input type="checkbox" name={f('skills')} value={c.value} />
+                <span>{c.label}</span>
+              </label>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="af-group">
+    <legend class="af-group__t">{groups.work}</legend>
+    <div class="af-grid">
+      <div class="field">
+        <label for="af-portfolio">{STR.portfolio}</label>
+        <input
+          id="af-portfolio"
+          name={f('portfolio')}
+          type="url"
+          required
+          maxlength="2048"
+          autocomplete="url"
+          inputmode="url"
+          dir="ltr"
+          placeholder={STR.portfolioPh}
+        />
+      </div>
+      <div class="field">
+        <label for="af-linkedin">
+          {STR.linkedin}<span class="af-opt">{STR.optional}</span>
+        </label>
+        <input
+          id="af-linkedin"
+          name={f('linkedin')}
+          type="url"
+          maxlength="2048"
+          autocomplete="url"
+          inputmode="url"
+          dir="ltr"
+          placeholder={STR.linkedinPh}
+        />
+      </div>
+      {
+        /* The CV. The input covers the whole zone (transparent), so a click anywhere opens
+           the picker and a file can be dropped on it; Remove sits OUTSIDE the label, above
+           the input, so pressing it never reopens the picker. Each line is a stack of
+           every text it can show (one visible at a time), so the zone is sized for the
+           longest from first paint and a chosen, dropped or refused file moves nothing. */
+      }
+      <div
+        class="af-drop af-full"
+        data-cv-drop
+        data-state="empty"
+        data-kb={STR.kb}
+        data-mb={STR.mb}
+      >
+        <input
+          id="af-cv"
+          class="af-drop__input"
+          name={CV_FIELD}
+          type="file"
+          accept={accept}
+          aria-describedby="af-cv-hint"
+        />
+        <span class="af-drop__ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M12 16V4M7 9l5-5 5 5M4 20h16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"></path>
+          </svg>
+        </span>
+        <span class="af-drop__txt">
+          <label for="af-cv" class="af-drop__t">
+            <span class="af-drop__default">{STR.cvTitle}</span>
+            <span class="af-drop__name" data-cv-name></span>
+          </label>
+          <span class="af-drop__s">
+            <span id="af-cv-hint" class="af-drop__hint" data-cv-hint>{STR.cvHint}</span>
+            <span id="af-cv-size" class="af-drop__size" data-cv-size></span>
+            <span id="af-cv-bad" class="af-drop__bad" data-cv-bad>{STR.cvBad}</span>
+          </span>
+        </span>
+        <button type="button" class="af-drop__x" data-cv-remove>{STR.cvRemove}</button>
+      </div>
+      <div class="field af-full">
+        <label for="af-message">{STR.message}</label>
+        <textarea
+          id="af-message"
+          name={f('message')}
+          required
+          maxlength="4000"
+          placeholder={STR.messagePh}></textarea>
+      </div>
+    </div>
+  </fieldset>
+
+  <div class="af-consents">
+    <div class="field af-consent">
+      <input
+        id="af-consent-application"
+        name={f('consent_application')}
+        type="checkbox"
+        value="yes"
+        required
+      />
+      <label for="af-consent-application">{consent.application}</label>
+    </div>
+    <div class="field af-consent">
+      <input id="af-consent-future" name={f('consent_future')} type="checkbox" value="yes" />
+      <label for="af-consent-future">{consent.futureRoles}</label>
+    </div>
+    {/* A new tab, so reading the notice never costs the visitor what they have typed. */}
+    <p class="af-privacy">
+      <a href={privacyHref} target="_blank" rel="noopener"
+        >{consent.noticeLink}<span class="sr-only"> {STR.newTab}</span></a
+      >
+    </p>
+  </div>
+
+  {/* Honeypot — visually hidden; bots fill it, the endpoint refuses a non-empty value. */}
+  <div class="hp-field" aria-hidden="true">
+    <label for="af-hp">Leave this field empty</label>
+    <input id="af-hp" name={HONEYPOT_FIELD} type="text" tabindex="-1" autocomplete="off" />
+  </div>
+  <input type="hidden" name={f('locale')} value={locale} />
+  <input type="hidden" name={f('policy_version')} value={RECRUITMENT_POLICY_VERSION} />
+
+  <div class="af-foot">
+    <Cta type="submit" icon="go">{STR.submit}</Cta>
+    <p class="af-note">{note}</p>
+  </div>
+
+  {!answerAtTop && <p {...region}>{regionText}</p>}
+</form>
+
+<script>
+  import { mountApplicationForm } from '@/lib/client/applicationForm';
+
+  const form = document.getElementById('apply-form');
+  if (form instanceof HTMLFormElement) mountApplicationForm(form);
+</script>
