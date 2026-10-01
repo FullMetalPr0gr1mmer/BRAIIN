@@ -257,12 +257,16 @@ Legend: ● full · ◐ limited/own · ○ none.
 | Exports — `export-backup` | ● | ○ | ○ | ● |
 | Leads — list/manage (status, notes) | ● | ○ | ○ | ● |
 | **Leads — budget/timeline/internal_notes/ip (PII)** | ● | ○ | ○ | ● |
+| Job applications — view / manage status / notes / erase | ● | ○ | ○ | ○ |
+| **Job applications — contact details & CV download (PII)** | ● | ○ | ○ | ○ |
 | Theme editor | ● | ○ | ○ | ● |
 | System logs (view / clear) | ● | ○ | ○ | ◐ *(view; clear=Admin)* |
 | Audit log (view) | ● | ○ | ○ | ● |
 | Site-health & performance panel | ● | ○ | ○ | ● *(exclusive owner)* |
 
 **Lead PII note.** `budget`/`timeline`/`internal_notes`/`ip_inet` are Admin + Developer only; Content Creator and SEO can never read leads. A Developer `export-backup` decrypts PII (Developer holds `leads.sensitive`) but is audit-logged with row counts + status (§4.9).
+
+**Applicant PII note (Join, 0029).** Job applications are **Admin only** — `applications.manage` (list, status, notes, erase) and `applications.pii` (decrypted e-mail/phone, the CV download), both Admin in `ROLE_CAPS`, both enforced by RLS (`job_applications_admin_all` + the RESTRICTIVE `job_applications_admin_only`). Developer is excluded on purpose (owner decision J6): holding `leads.sensitive` does not reach applicants, and `export-backup` never includes `job_applications` (`FORBIDDEN_BACKUP_TABLES`). The CV sits in the private Supabase Storage bucket `applications`, reachable only by the service role; it leaves through one audited Admin route (CLAUDE.md §3).
 
 ```ts
 // src/lib/authz/matrix.ts

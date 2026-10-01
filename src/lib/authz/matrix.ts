@@ -39,6 +39,8 @@ export const CAPABILITIES = [
   'leads.manage',
   'leads.pii',
   'export.csv',
+  'applications.manage',
+  'applications.pii',
   'analytics.read',
   'analytics.search',
   'ai.editContent',
@@ -79,6 +81,8 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': F,
     'leads.pii': F,
     'export.csv': F,
+    'applications.manage': F,
+    'applications.pii': F,
     'analytics.read': F,
     'analytics.search': F,
     'ai.editContent': F,
@@ -113,6 +117,8 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': N,
     'leads.pii': N,
     'export.csv': N,
+    'applications.manage': N,
+    'applications.pii': N,
     'analytics.read': F,
     'analytics.search': N,
     'ai.editContent': F,
@@ -147,6 +153,8 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': N,
     'leads.pii': N,
     'export.csv': N,
+    'applications.manage': N,
+    'applications.pii': N,
     'analytics.read': F,
     'analytics.search': F,
     'ai.editContent': N,
@@ -159,7 +167,8 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
   },
   // Developer — technical role: settings/identity/maintenance/theme, logs/audit/
   // site-health, leads management + PII + backup export. NO content authoring, NO
-  // publish/schedule, NO archive/delete.
+  // publish/schedule, NO archive/delete — and NO job applications (Join, owner decision
+  // J6: applicants' CVs and contact details are Admin-only, unlike leads).
   developer: {
     'users.manage': N,
     'settings.general': F,
@@ -182,6 +191,8 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': F,
     'leads.pii': F,
     'export.csv': F,
+    'applications.manage': N,
+    'applications.pii': N,
     'analytics.read': F,
     'analytics.search': F,
     'ai.editContent': N,
