@@ -569,8 +569,11 @@ for (const route of ROUTES) {
       expect(html).toMatch(/<p[^>]*id="apply-status"[^>]*>/);
       expect(html.match(/<p[^>]*id="apply-status"[^>]*>/)![0]).not.toMatch(/\shidden/);
       expect(html).toContain(t.ok.replace(/'/g, '&#39;'));
-      // Its canonical is the bare page.
-      expect(html).toContain(`rel="canonical" href="https://www.braiinstation.com${route}"`);
+      // Its canonical is the bare page — whatever origin the build was given (CI builds with
+      // the preview's own, as projects-catalog.e2e.ts reads it).
+      const canonical = /<link rel="canonical" href="([^"]+)"/.exec(html)?.[1] ?? '';
+      expect(canonical.endsWith(route)).toBe(true);
+      expect(canonical).not.toContain('?');
 
       // ...and a browser with no script shows it at the top of the form, where #apply lands.
       const ctx = await browser.newContext({ javaScriptEnabled: false });
