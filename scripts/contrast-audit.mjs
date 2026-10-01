@@ -84,6 +84,13 @@ const T = {
   // over a WHITE poster, and the selected tab's number (white .75 over Klein)
   xpCap: '#4d4d4d',
   xpTabNum: '#bfc8ee',
+  // Join (join.css) — the application band on black, its Klein glow, and the form's
+  // translucent grounds precomposited over black
+  applyGlow: '#000f4f', // .join-apply::before — rgba(0,36,188,.42) over black, the glow's peak
+  fieldBg: '#0b0b0b', // .af-grid .field input — white .045 over black
+  placeholder: '#858585', // its placeholder — white .5 over fieldBg (the mockup's .34 fails AA)
+  afChip: '#d1d1d1', // .af-chip span — white .82 over black
+  dropBg: '#080808', // .af-drop — white .03 over black
 };
 
 // (foreground, background, minRatio, where) — every real on-screen pairing.
@@ -212,6 +219,27 @@ const PAIRS = [
   ['klein', 'paper', 3.0, 'explorer: the row underline and hover borders (UI)'],
   ['fg', 'xpCap', 4.5, 'explorer media caption name over a white poster (worst case)'],
   ['skySoft', 'xpCap', 4.5, 'explorer media caption number over a white poster (worst case)'],
+  // Join: "Why" on paper, "How it works" on mist (white cards), the application on black
+  ['klein', 'paper', 4.5, 'join why: kicker, heading accent, reason numbers'],
+  ['dim', 'paper', 4.5, 'join why: lead and reasons; steps: card text'],
+  ['klein', 'mist', 4.5, 'join steps: kicker + heading accent on mist'],
+  ['dim', 'mist', 4.5, 'join steps: lead on mist'],
+  ['klein', 'paper', 4.5, 'join steps: time label on its white card'],
+  ['paper', 'klein', 4.5, 'join steps: the number badge; a checked craft chip'],
+  ['accent', 'applyGlow', 4.5, 'join apply: kicker + heading accent under the Klein glow'],
+  ['fg', 'applyGlow', 4.5, 'join apply: heading and the closed notice under the glow'],
+  ['muted', 'applyGlow', 4.5, 'join apply: lead line under the glow'],
+  ['accent', 'bg', 4.5, 'join form: group titles, the privacy link (sky on black)'],
+  ['muted', 'bg', 4.5, 'join form: field labels, consent text, the note'],
+  ['chipCount', 'bg', 4.5, 'join form: "optional" (white .6; the mockup’s .4 is 3.7:1)'],
+  ['fg', 'fieldBg', 4.5, 'join form: a field value'],
+  ['placeholder', 'fieldBg', 4.5, 'join form: a placeholder'],
+  ['afChip', 'bg', 4.5, 'join form: a craft chip label'],
+  ['cobalt', 'bg', 3.0, 'join form: a checked chip edge, the chip and dropzone focus ring (UI)'],
+  ['fg', 'dropBg', 4.5, 'join CV dropzone: title, file name, Remove'],
+  ['muted', 'dropBg', 4.5, 'join CV dropzone: the rules line, the size'],
+  ['errSoft', 'dropBg', 4.5, 'join CV dropzone: a refused file'],
+  ['errSoft', 'bg', 4.5, 'join form: field errors, a refused consent'],
 ];
 
 // ---- Admin palette — keep in sync with public/styles/admin.css :root tokens ----

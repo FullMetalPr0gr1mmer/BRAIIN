@@ -39,6 +39,9 @@ const ROUTES = [
   '/admin/login',
   '/about',
   '/ar/about',
+  // Join — the application form and its dropzone are module scripts
+  '/join',
+  '/ar/join',
 ];
 
 for (const route of ROUTES) {
@@ -83,6 +86,7 @@ for (const route of [
   '/portfolio/the-rider',
   '/services/logo',
   '/services',
+  '/join',
 ]) {
   test(`every component script is external on ${route}`, async ({ page }) => {
     // `load`, not `networkidle` — a playing banner video never goes idle (see above).
