@@ -3,6 +3,7 @@ import {
   DEFAULT_ABOUT_SECTIONS,
   DEFAULT_CONTACT_SECTIONS,
   DEFAULT_HOME_SECTIONS,
+  DEFAULT_JOIN_SECTIONS,
   homeHeroCtaHref,
   workIntroLinkHref,
   withHomeData,
@@ -121,6 +122,7 @@ describe('the home composition', () => {
       ...DEFAULT_HOME_SECTIONS,
       ...DEFAULT_ABOUT_SECTIONS,
       ...DEFAULT_CONTACT_SECTIONS,
+      ...DEFAULT_JOIN_SECTIONS,
     ]) {
       const schema = SECTION_CONTENT_SCHEMAS[s.type as SectionType];
       // The contact hero's `banner`/`ctaHref` are code-only route props, not CMS content.

@@ -270,6 +270,63 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       help: 'Write {discipline} where the name goes, in both languages. Default: "Start your {discipline} project".',
     },
   ],
+  // Join (/join): the copy around the three bands. The application form's fields, options
+  // and consent wording are code (the ApplicationInputSchema contract and the versioned
+  // recruitment consent), so only the words around it are content.
+  joinWhy: [
+    {
+      ...tag,
+      help: 'Default: "Why %brand%". Write %brand% for the studio name (Public identity).',
+    },
+    heading,
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    {
+      name: 'items',
+      label: 'Reasons (up to 4)',
+      kind: 'repeater',
+      maxItems: 4,
+      itemFields: [
+        { name: 'heading', label: 'Heading', kind: 'bilingual', required: true },
+        { name: 'text', label: 'Text', kind: 'bilingual', required: true },
+      ],
+    },
+  ],
+  joinSteps: [
+    tag,
+    heading,
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    {
+      name: 'items',
+      label: 'Steps (up to 4, in order)',
+      kind: 'repeater',
+      maxItems: 4,
+      itemFields: [
+        { name: 'heading', label: 'Step', kind: 'bilingual', required: true },
+        { name: 'text', label: 'Text', kind: 'bilingual', required: true },
+        {
+          name: 'time',
+          label: 'Time label ("Within two weeks")',
+          kind: 'bilingual',
+          required: true,
+        },
+      ],
+    },
+  ],
+  joinApply: [
+    tag,
+    heading,
+    { name: 'lead', label: 'Lead', kind: 'bilingual' },
+    { name: 'groupAbout', label: 'Group title: "About you"', kind: 'bilingual' },
+    { name: 'groupRole', label: 'Group title: "The role"', kind: 'bilingual' },
+    { name: 'groupWork', label: 'Group title: "Your work"', kind: 'bilingual' },
+    { name: 'note', label: 'Note beside the send button', kind: 'bilingual' },
+    {
+      name: 'successMessage',
+      label: 'Confirmation after sending',
+      kind: 'bilingual',
+      help: 'Replaces the form once the application has been received.',
+    },
+  ],
   aboutStory: [
     heading,
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
@@ -394,6 +451,10 @@ export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[
   // Round 2: the accent word ranges, as above.
   servicesOverview: ['accent'],
   hello: ['accent'],
+  // Join: the accent word ranges, as above.
+  joinWhy: ['accent'],
+  joinSteps: ['accent'],
+  joinApply: ['accent'],
 };
 
 /** The fields for one section type, or null when it takes no content (table-backed). */

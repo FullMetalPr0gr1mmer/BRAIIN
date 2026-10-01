@@ -251,7 +251,16 @@ for (const locale of ['en', 'ar'] as const) {
 //     the Arabic files on the LCP chain).
 // Lighthouse's 3-run median can miss a race; this names the element on the first failure.
 // 0.02 is the documented site-wide allowance for a metric-mismatched swap (≈0.01).
-for (const path of ['/about', '/ar/about', '/portfolio/all', '/ar/portfolio/all']) {
+// Join: its "Why" band heads the first screen under the banner (its caps are in em, not ch),
+// and the application form's closed notice and CV states only ever swap visibility.
+for (const path of [
+  '/about',
+  '/ar/about',
+  '/portfolio/all',
+  '/ar/portfolio/all',
+  '/join',
+  '/ar/join',
+]) {
   test(`cold desktop load is still: ${path}`, async ({ page }) => {
     await page.setViewportSize({ width: 1350, height: 940 });
     await page.goto(path, { waitUntil: 'load' });

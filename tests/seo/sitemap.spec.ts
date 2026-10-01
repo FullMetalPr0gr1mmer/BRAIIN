@@ -29,7 +29,14 @@ describe('/sitemap.xml', () => {
 
   it('lists BOTH language twins for every path (CLAUDE.md: both languages in the sitemap)', async () => {
     const xml = await body();
-    for (const path of ['/services', '/portfolio', '/portfolio/all', '/about', '/contact']) {
+    for (const path of [
+      '/services',
+      '/portfolio',
+      '/portfolio/all',
+      '/about',
+      '/contact',
+      '/join',
+    ]) {
       expect(xml).toContain(`<loc>https://www.braiinstation.com${path}</loc>`);
       expect(xml).toContain(`<loc>https://www.braiinstation.com/ar${path}</loc>`);
     }

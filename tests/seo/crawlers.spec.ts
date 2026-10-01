@@ -123,6 +123,11 @@ describe('/llms.txt agrees with the crawler map', () => {
     expect(body).not.toMatch(/\d+\s+(projects|case studies)/i);
   });
 
+  it('lists the Join page (careers)', async () => {
+    const body = await (await call(llmsGet)).text();
+    expect(body).toContain('- Join (careers): https://www.braiinstation.com/join\n');
+  });
+
   it('points at both language roots and defers to robots.txt as authoritative', async () => {
     const body = await (await call(llmsGet)).text();
     expect(body).toContain('/ar/');

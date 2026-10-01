@@ -29,6 +29,11 @@ const ROUTES = [
   '/ar/about',
   '/contact',
   '/ar/contact',
+  // Join — the bands, the application form (fieldsets, chips, the CV dropzone, the two
+  // consents), and a no-JS answer rendered in the status region
+  '/join',
+  '/ar/join',
+  '/join?status=bad_type',
   '/search',
 ];
 

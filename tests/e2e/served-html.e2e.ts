@@ -34,6 +34,9 @@ const PATHS = [
   '/creative-knowledge',
   '/creative-knowledge/arabic-first-brand-systems',
   '/search',
+  // Join, plus a no-JS answer (?status= — its own response: private, same markup rules)
+  '/join',
+  '/join?status=ok',
   '/privacy',
   '/terms',
   '/cookie-policy',

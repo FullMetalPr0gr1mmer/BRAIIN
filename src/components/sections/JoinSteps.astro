@@ -1,0 +1,71 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { JoinStepsSectionContent } from '@schemas/sections';
+import { pickLocale } from '@/lib/i18n';
+import { brandName, getIdentity } from '@/lib/identity';
+import { JOIN_STEPS_COPY, withBrand } from '@/lib/sections/join';
+import AccentText from '@/components/ui/AccentText.astro';
+
+// "How it works" (Join): the mist band — tag, heading, lead and the four hiring steps as an
+// ordered list of white cards, each with its time label (the mockup's .steps-sec). Copy is
+// the design's (JOIN_STEPS_COPY), every key overridable from the CMS
+// (JoinStepsSectionContentSchema). Styled in public/styles/join.css.
+
+interface Props extends JoinStepsSectionContent {
+  locale: Locale;
+}
+
+const { locale, tag, heading, accent, lead, items } = Astro.props;
+
+const STR = JOIN_STEPS_COPY[locale];
+const brand = brandName(await getIdentity(Astro.locals), locale);
+const text = (authored: { en: string; ar: string } | undefined, fallback: string) =>
+  withBrand(authored ? pickLocale(authored, locale) : fallback, brand);
+
+const title = heading
+  ? { text: text(heading, ''), accent }
+  : { text: text(undefined, STR.heading), accent: JOIN_STEPS_COPY.accent };
+const steps =
+  items && items.length > 0
+    ? items.map((s) => ({
+        heading: text(s.heading, ''),
+        text: text(s.text, ''),
+        time: text(s.time, ''),
+      }))
+    : STR.items.map((s) => ({
+        heading: withBrand(s.heading, brand),
+        text: withBrand(s.text, brand),
+        time: withBrand(s.time, brand),
+      }));
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<section class="join-steps" aria-labelledby="join-steps-heading">
+  <div class="section-wrap">
+    <div class="tag rv"><span class="dot"></span><span>{text(tag, STR.tag)}</span></div>
+    <div class="sec-head">
+      <h2 class="rv" id="join-steps-heading">
+        <AccentText text={title.text} locale={locale} accent={title.accent} />
+      </h2>
+      <p class="rv">{text(lead, STR.lead)}</p>
+    </div>
+    {
+      /* role="list": `list-style: none` drops an <ol>'s list semantics in Safari. The badge
+        numbers repeat the list's own, so they are hidden from assistive tech. */
+    }
+    <ol class="join-steps__list" role="list">
+      {
+        steps.map((s, i) => (
+          <li class="join-step rv">
+            <span class="join-step__n" aria-hidden="true">
+              {pad(i + 1)}
+            </span>
+            <h3>{s.heading}</h3>
+            <p>{s.text}</p>
+            <span class="join-step__time">{s.time}</span>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>

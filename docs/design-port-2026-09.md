@@ -1239,3 +1239,142 @@ The orchestrator renumbers these at integration.
   button, its CSS and its tests; EXC-007 is open again, re-signed for the widened scope by
   that decision; `motion.ts` and the subsystem wiring stay with no writer, so restoring the
   control is `SiteHeader.astro` plus one script.
+
+## Join (J)
+
+The careers page (`/join`, `/ar/join`, join.html): banner hero → why join → how it works →
+the application. The bands are CMS sections (`joinWhy`, `joinSteps`, `joinApply`); the
+form is code — the site's second public write path, and the first with a file. The
+endpoint (`POST /api/apply`, `GET /api/apply/status`) is built separately against the same
+contract (`packages/schemas/application.ts`, `packages/consent/recruitment.ts`).
+
+| Mockup | Site | Where |
+|---|---|---|
+| `.hero--contact` (join) | `Hero` with `withHeroPreset(…, 'join')` → `.hero--banner` (route data: banner, `#apply`, clip 17.4–18.3 s) | `/join` hero |
+| `.why` / `.why__grid` / `.why__item` | `JoinWhy.astro` (`.join-why`, `.sec-head`, `AccentText`) | why |
+| `.steps-sec` / `.steps` / `.step` | `JoinSteps.astro` (`.join-steps`, an `<ol role="list">`) | how it works |
+| `.apply` + `.sec__head` | `JoinApply.astro` (`.join-apply`, the lead / closed-notice cell) | `#apply` |
+| `.form` / `.form__group` / `.field` / `.chips` / `.drop` / `.consent` / `.form__foot` / `.form__ok` | `ApplicationForm.astro` (`.apply-form`, three `<fieldset>`s, `.af-*`) + `src/lib/client/applicationForm.ts` + `formErrors.ts` | `#apply` |
+
+- **J-1. Two consent boxes, not the design's one** (owner decision J4). The design's single
+  required box ("…contact me about this and future roles") bundles an optional purpose
+  into a required one, which PDPL does not allow. The required box covers this
+  application; the optional one, future roles (retention 12 → 24 months). The wording is
+  `packages/consent/recruitment.ts` with the brand filled in from the public identity, and
+  the version the form showed is posted with it (`policy_version`). The link to the
+  privacy notice's recruitment section opens in a new tab (announced, visually hidden), so
+  reading it never costs the visitor what they typed.
+- **J-2. The selects and the craft chips post keys, never labels.** The design posted the
+  English label (`<option value="Student or graduate">`, `value="Branding"`), so a renamed
+  label would orphan stored answers and the Arabic page had no answer of its own. They post
+  the stable keys of `EXPERIENCE_LEVELS`, `WORK_TYPES`, `AVAILABILITY` and `CRAFTS`; the
+  label is the visible text only. The sixteen chips are real `<input type="checkbox"
+  name="skills">` inside their labels — transparent, never removed, so they keep focus,
+  state and name; Space toggles one, and its pill shows the focus ring — named as a group by
+  their visible "Crafts you work in". The checked pill keeps the design's Klein fill and
+  gains a Cobalt edge: Klein alone is ~2:1 against the black band (WCAG 1.4.11).
+- **J-3. A `.doc` is refused** (owner decision J2). The design's `accept=".pdf,.doc,.docx"`
+  and "PDF or Word" become `.pdf,.docx` plus their media types (from `CV_KINDS`) and "PDF or
+  Word (.docx)" (the Arabic keeps "(.docx)" on its side of "Word" with U+200F). The client
+  checks the extension and the 10 MB limit before the upload — an empty file counts as the
+  wrong type — and the server checks again (`too_large` 413, `bad_type` 415, the bytes too).
+- **J-4. Closed is a notice in the lead line's place, and Send off.** `/api/apply/status` is
+  asked on load; `{ open: false }` shows "We're not taking applications right now. Check
+  back soon." and disables Send (the fields stay, as the brief has it). The notice shares
+  ONE grid cell with the band's lead line — both always laid out, only one visible — so the
+  cell is sized for the taller from first paint and the answer, whenever it lands, moves
+  nothing (`tests/e2e/join-page.e2e.ts`: zero counted layout shift, the form's top
+  unmoved). No answer at all (an error, a 404 page) leaves the form as served: the endpoint
+  is the gate either way and answers `closed` (409). A no-JS `?status=closed` answer
+  renders the notice shown.
+- **J-5. Remove sits outside the label.** The design's dropzone was one `<label>` with the
+  Remove button inside, so pressing Remove also opened the file picker (the mockup cancelled
+  it in script). Here the file input covers the zone, transparent — a click anywhere opens
+  the picker and a dropped file lands on it (the script also takes a drop on the zone and
+  keeps one file) — the `<label>` holds the title only, and Remove is a sibling above the
+  input. Remove also shows for a refused file (the design hid it, leaving no way to clear
+  one), and keeps its space while hidden. Without script nothing could name the chosen
+  file, so the browser's own control shows (`@media (scripting: none)`).
+- **J-6. "Fourteen crafts" is rewritten** to the five disciplines, as Round 2 did elsewhere
+  (S2-11): j.whyP "Five disciplines and 28 services sit in the same room here. …" /
+  "خمسة تخصصات و٢٨ خدمة في نفس المكان. …", and the first reason "Five disciplines, one
+  room" / "خمسة تخصصات، غرفة واحدة". Everything else is the design's copy, verbatim (its
+  Saudi-voice Arabic included). For owner review.
+- **J-7. The no-JS path is real.** The form is a plain multipart POST to `/api/apply` for
+  both locales (the hidden `locale` carries `ar`); the endpoint answers a 303 to
+  `/join?status=<status>#apply`, and that page renders the status server-side in the
+  form's ONE status region — at the TOP of the form for an answer (the fragment lands on
+  `#apply`; at the foot of a long form it would be a screen below), at the foot otherwise,
+  next to the button just pressed — and `ok` hides the fields as the script does. Any
+  `?status=` request is `private, no-store`, valid value or not (the catalogue-facet rule),
+  with the bare page as its canonical; an unknown value renders nothing. The form keeps
+  `novalidate`, so without script the endpoint is the only check.
+- **J-8. Nothing moves after first paint.** Every state the script sets swaps visibility
+  inside a box the server already sized: the lead / notice cell; the dropzone's title
+  (default / file name) and rules line (rules / size / refused) are stacks, so a chosen,
+  dropped or refused file keeps the zone's height; Remove keeps its space. The Why band's
+  head is in the first screen under the banner, so `.sec-head`'s `16ch` / `46ch` caps are
+  pinned in `em` there (R3-0: a `ch` follows whichever face is painting) — 10em / 26.36em
+  in Archivo 800 / 400 and 9.18em / 24.29em in Almarai, measured under the loaded faces.
+  Cold loads of `/join` and `/ar/join` measured 0.0000–0.0002 and join the layout-shift
+  gate.
+- **J-9. The form's client module is zod-free.** `packages/schemas/application.ts` builds
+  its zod schemas at module scope, and a probe bundle importing only `applicationKeyToField`
+  came out at 75 KB minified. The browser module mirrors the few contract values it needs
+  (the schema key → control map, the CV limit and extensions) and
+  `tests/lib/applicationForm.spec.ts` holds them equal to the schema module (and reads the
+  component to prove it names every `APPLICATION_FORM_FIELDS` control); the server side
+  imports the schema module directly. `formErrors.ts` gains the endpoint's three outcomes
+  (`too_large`, `bad_type`, `closed` — the set is `APPLY_STATUSES` exactly),
+  `applyStatusFromHttp`, an https `url` rule (as loose as the server's `z.url()` and no
+  looser), `markFieldError` (a checkbox's note goes after its label) and a `focus: false`
+  option for `showFieldErrors`; the contact forms are unchanged. A JSON answer's `status` is
+  taken at its word, but "received" needs both a 2xx and `status: "ok"`: a proxy page or an
+  empty 200 is never reported as a sent application.
+- **J-10. The status check reads every body.** A non-2xx whose body was never read is a
+  request Chromium never finishes: the page never went network-idle, and the axe pass timed
+  out on it (found on the local build, where the endpoint does not exist yet). The body is
+  read whatever the answer; the e2e routes the check to a real, streamed 404 (a fulfilled
+  mock arrives whole and would not show it).
+- **J-11. The design's greys, raised.** Placeholders are .5 white (the design's .34 fails
+  AA) and "optional" .6 (the design's .4 is 3.7:1); labels, consent text and the note use
+  the site's muted grey (9.4:1), as the contact form does. Every pair is in
+  `scripts/contrast-audit.mjs`, and the e2e measures each kicker and heading accent against
+  its own band.
+- **J-12. Join is the last item of both menus** — after the Contact us key link, never the
+  key — in the code fallbacks and a seed block of its own (`26-navigation-join.json`:
+  fixed ids, conflict on id, no `unlessAuthored`). Appended to `25-navigation.json`, the
+  rows would sit in slices production's menus already fill, and the slice guard would skip
+  them forever. The trade-off: an editor who deletes the Join row sees it return if the
+  seed is re-run.
+- **J-13. The composition and its floor.** CMS-composed (`pages` slug `join`, seeded by
+  `55-join-page.json` while it has no sections, each band `{}`); `withHeroPreset('join')`
+  gives the banner the design's copy (accent from the third word) and its layout;
+  `ensureJoinApply` keeps the form on the page — shown if hidden, appended at the end
+  (where the design has it) if removed, a second copy dropped (the form's ids are fixed).
+  The header is the overlay only while the page opens on its hero (else the solid bar and a
+  visually hidden h1), as on Services. The bands take copy overrides only (strict schemas:
+  the Why and Steps items are one to four bilingual items, a step with its time label; the
+  apply band its group titles, note and confirmation); `%brand%` names the studio, in
+  defaults and authored copy alike. The bare page is Tier A (`route:join`, `page:join`; the
+  brand in the consent and `accepting_applications` ride on `site:identity`).
+- **J-14. Meta.** `PAGE_META.join`: "Join us" / "انضم إلينا". The English description is the
+  design's, less "See open roles" — the page lists no roles, and a search result promising
+  them is a false claim (Contact's WhatsApp rule) — completed with the page's own words;
+  the Arabic is ours. For owner review.
+- **J-15. LCP is Contact's.** The same banner hero; measured on a local build, Lighthouse's
+  element is the first band's heading under the banner (`h2#join-why-heading`; Contact's is
+  `h2#inquiry-heading`) on desktop and the consent banner's text on a first mobile visit
+  (#26); unthrottled Chromium records the loop's first frame once it mounts, on both. Scores
+  on that build: 0.96–0.99 performance, 1.0 accessibility and SEO, CLS ≤ 0.001, TBT 0. The
+  one difference from Contact is a second render-blocking sheet (`join.css`, 2.7 KB gz),
+  as on Services.
+- **J-16. The privacy notice's recruitment section** (`/privacy#recruitment`):
+  `LegalSection` gains an optional `id`, rendered on its `<section>`. It covers what the
+  form collects, why, consent as the basis, retention (12 months, 24 with the future-roles
+  consent, spam 30 days, deleted automatically), administrators only, storage (Supabase,
+  London, United Kingdom; CVs in a private bucket, downloaded only by administrators), that
+  CVs are not virus-scanned and are opened only as downloads, and the rights, through the
+  same mailbox as the DSAR line (one constant now). "Data we collect" points at it, and the
+  notice's date moved to 1 October 2026. MSA in Arabic; pending legal review with the rest
+  of the notice.

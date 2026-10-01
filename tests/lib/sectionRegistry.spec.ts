@@ -11,6 +11,7 @@ import {
   DEFAULT_CATALOG_SECTIONS,
   DEFAULT_CONTACT_SECTIONS,
   DEFAULT_HOME_SECTIONS,
+  DEFAULT_JOIN_SECTIONS,
   DEFAULT_WORK_SECTIONS,
 } from '@/lib/sections/types';
 import { loadBlocks } from '../../scripts/gen-seeds.mjs';
@@ -44,6 +45,7 @@ describe('section type contract', () => {
       ...DEFAULT_CONTACT_SECTIONS,
       ...DEFAULT_WORK_SECTIONS,
       ...DEFAULT_CATALOG_SECTIONS,
+      ...DEFAULT_JOIN_SECTIONS,
     ]) {
       expect(SECTION_TYPES as readonly string[], `default uses '${s.type}'`).toContain(s.type);
     }

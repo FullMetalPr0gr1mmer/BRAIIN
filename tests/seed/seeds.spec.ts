@@ -171,6 +171,31 @@ describe('navigation seed', () => {
     expect(blocks).toHaveLength(2);
     for (const block of blocks) expect(block).toContain('on conflict (id) do nothing');
   });
+
+  it('Join reaches menus that were already authored: its own block, keyed on id alone', () => {
+    // Appended to 25-navigation.json, the Join rows would sit inside the header and footer
+    // slices — which production's menus already fill — so the slice guard would skip them
+    // forever. Their own block inserts each row once, by its fixed id (a re-run is a no-op),
+    // last in both menus and never the key link.
+    const join = (loadBlocks() as unknown as (Block & { unlessAuthored?: string[] })[]).filter(
+      (b) => b.source === '26-navigation-join.json',
+    );
+    expect(join).toHaveLength(1);
+    expect(join[0]!.unlessAuthored).toBeUndefined();
+    expect((join[0] as unknown as { conflict: string[] }).conflict).toEqual(['id']);
+    expect(join[0]!.rows.map((r) => [r['location'], r['href'], r['is_key']])).toEqual([
+      ['header', '/join', false],
+      ['footer', '/join', false],
+    ]);
+    for (const location of ['header', 'footer']) {
+      const menu = rows(location);
+      expect(menu.at(-1)?.href, location).toBe('/join');
+    }
+    const sql = generate('production');
+    expect(sql).toMatch(
+      /-- navigation \(26-navigation-join\.json\)\ninsert into public\.navigation [^;]*on conflict \(id\) do nothing;/,
+    );
+  });
 });
 
 describe('UI v2 content seed (0020–0025)', () => {

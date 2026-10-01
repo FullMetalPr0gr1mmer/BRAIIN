@@ -17,7 +17,9 @@
         "http://localhost:8788/portfolio/the-rider",
         "http://localhost:8788/ar/portfolio/the-rider",
         "http://localhost:8788/services/logo",
-        "http://localhost:8788/ar/services/logo"
+        "http://localhost:8788/ar/services/logo",
+        "http://localhost:8788/join",
+        "http://localhost:8788/ar/join"
       ],
       "numberOfRuns": 3,
       "settings": {

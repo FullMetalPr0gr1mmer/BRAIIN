@@ -20,7 +20,7 @@ export interface PageMeta {
 }
 
 export type MetaRoute =
-  'home' | 'about' | 'contact' | 'notFound' | 'portfolio' | 'portfolioAll' | 'services';
+  'home' | 'about' | 'contact' | 'notFound' | 'portfolio' | 'portfolioAll' | 'services' | 'join';
 
 export const PAGE_META: Record<MetaRoute, Record<Locale, PageMeta>> = {
   home: {
@@ -100,6 +100,23 @@ export const PAGE_META: Record<MetaRoute, Record<Locale, PageMeta>> = {
       title: 'الخدمات',
       description:
         'الهوية البصرية، والإنتاج، والتسويق، وتطوير المواقع، والفعاليات والمعارض. خمسة تخصصات وفريق واحد في جدة، من أول رسمة إلى الإطلاق.',
+    },
+  },
+  // Join. English: join.html's <title> ("Join us") and <meta>, less its "See open roles": the
+  // page lists no roles, and a description promising them is a false claim in a search
+  // result (as Contact's WhatsApp) — the rest is the page's own words (step 1). Arabic: ours
+  // — the title is the page's Arabic name (seed-data/20-pages.json), the description the
+  // same words from the page's Arabic copy — owner review.
+  join: {
+    en: {
+      title: 'Join us',
+      description:
+        'Join %brand%, a creative studio in Jeddah. Send your portfolio and a few details: five minutes, no cover letter.',
+    },
+    ar: {
+      title: 'انضم إلينا',
+      description:
+        'انضم إلى %brand%، استوديو إبداعي في جدة. أرسل أعمالك وبعض التفاصيل: خمس دقائق، بدون خطاب تقديم.',
     },
   },
 };

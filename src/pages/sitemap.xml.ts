@@ -24,6 +24,8 @@ const STATIC_PATHS = [
   '/about',
   '/creative-knowledge',
   '/contact',
+  // Join: the bare page only — its `?status=` answers are private and canonicalised to it.
+  '/join',
   '/privacy',
   '/terms',
   '/cookie-policy',

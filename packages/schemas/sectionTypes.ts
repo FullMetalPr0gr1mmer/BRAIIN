@@ -40,5 +40,10 @@ export const SECTION_TYPES = [
   // /services explorer (one panel per discipline, listing its services)
   'hello',
   'serviceExplorer',
+  // Join (/join): why join, the hiring steps, and the application band around the form
+  // (the form itself is code — ApplicationForm.astro — never content)
+  'joinWhy',
+  'joinSteps',
+  'joinApply',
 ] as const;
 export type SectionType = (typeof SECTION_TYPES)[number];

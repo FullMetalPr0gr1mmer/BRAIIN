@@ -1,0 +1,28 @@
+{
+  "blocks": [
+    {
+      "table": "navigation",
+      "conflict": ["id"],
+      "rows": [
+        {
+          "id": "00000000-0000-4000-8000-00000000a106",
+          "location": "header",
+          "label": { "en": "Join", "ar": "انضم" },
+          "href": "/join",
+          "sort_order": 6,
+          "visible": true,
+          "is_key": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000a206",
+          "location": "footer",
+          "label": { "en": "Join", "ar": "انضم" },
+          "href": "/join",
+          "sort_order": 6,
+          "visible": true,
+          "is_key": false
+        }
+      ]
+    }
+  ]
+}

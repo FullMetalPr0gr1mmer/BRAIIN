@@ -3,11 +3,21 @@ import type { Locale } from '@schemas/primitives';
 // Legal content (PDPL-oriented) for the v1 legal pages. DRAFT skeletons — the copy
 // is structurally complete (data, lawful basis, retention, rights/DSAR, cookies)
 // but pending legal sign-off. Retention numbers mirror CLAUDE.md / architecture.
+//
+// Join: the privacy notice's `recruitment` section is what the application form's consent
+// links to (/privacy#recruitment). Its retention horizons are the application rows' own
+// (APPLICATION_RETENTION_MONTHS, SPAM_RETENTION_DAYS in packages/schemas/application.ts —
+// tests/lib/legal.spec.ts holds the words to the numbers).
 
 export interface LegalSection {
+  /** The section's fragment id (`/privacy#recruitment`), for a section linked to directly. */
+  id?: string;
   heading: string;
   body: string[];
 }
+
+/** The mailbox the rights requests go to (the DSAR text and the recruitment section). */
+export const PRIVACY_MAILBOX = 'privacy@braiinstation.com';
 export interface LegalDoc {
   title: string;
   updated: string;
@@ -21,7 +31,7 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
   en: {
     privacy: {
       title: 'Privacy Policy',
-      updated: 'Last updated: 10 June 2026',
+      updated: 'Last updated: 1 October 2026',
       draftNotice: 'Draft — pending legal review before launch.',
       intro:
         "This policy explains what personal data Braiin Station collects, why, and your rights under Saudi Arabia's Personal Data Protection Law (PDPL).",
@@ -32,6 +42,7 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
             'Contact and project-inquiry submissions: name, email, optional phone, and your message.',
             'Optional project details: service of interest, budget band, and timeline.',
             'Consent-gated, first-party analytics about how pages are used.',
+            'Job applications sent through the Join form — see “Job applications” below.',
           ],
         },
         {
@@ -52,7 +63,7 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
           heading: 'Your rights (DSAR)',
           body: [
             'You may request access, correction, or deletion of your data, and withdraw consent at any time.',
-            'To exercise these rights, contact privacy@braiinstation.com.',
+            `To exercise these rights, contact ${PRIVACY_MAILBOX}.`,
           ],
         },
         {
@@ -60,6 +71,20 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
           body: [
             'Sensitive personal data is encrypted at rest; access is role-restricted and logged.',
             'We do not sell your personal data.',
+          ],
+        },
+        {
+          id: 'recruitment',
+          heading: 'Job applications (the Join form)',
+          body: [
+            'What we collect: your name, email address, phone number and city; the role you are interested in, your experience, how you would like to work, when you could start and the crafts you work in; your portfolio link and, if you add one, your LinkedIn link; your answer about the work you are proudest of; and your CV, if you attach one.',
+            'Why: to review your application and to contact you about it. If you also tick the box for future roles, we keep your application on file and may contact you about roles that open later.',
+            'Lawful basis: your consent, given with the boxes on the form. You can withdraw it at any time; withdrawing does not affect what was done before.',
+            'Retention: an application is kept for 12 months, or for 24 months if you agreed to be contacted about future roles. Applications marked as spam are kept for 30 days. Each is deleted automatically when its period ends.',
+            'Who can see it: administrators only. No other staff role can open applications or CVs.',
+            'Where it is stored: with Supabase, in London, United Kingdom. CVs are kept in a private storage bucket, never public, and only administrators can download them.',
+            'CVs are not scanned for viruses. Administrators open them only as downloads, never inside the site.',
+            `Your rights: you can ask to see, correct or erase your application, and withdraw your consent, at any time — write to ${PRIVACY_MAILBOX}, as under “Your rights” above.`,
           ],
         },
       ],
@@ -132,7 +157,7 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
   ar: {
     privacy: {
       title: 'سياسة الخصوصية',
-      updated: 'آخر تحديث: 10 يونيو 2026',
+      updated: 'آخر تحديث: 1 أكتوبر 2026',
       draftNotice: 'مسودة — قيد المراجعة القانونية قبل الإطلاق.',
       intro:
         'توضح هذه السياسة البيانات الشخصية التي تجمعها بريّن ستيشن، وسبب جمعها، وحقوقك بموجب نظام حماية البيانات الشخصية (PDPL) في المملكة العربية السعودية.',
@@ -143,6 +168,7 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
             'بيانات التواصل وطلبات المشاريع: الاسم، البريد الإلكتروني، الهاتف (اختياري)، ورسالتك.',
             'تفاصيل المشروع الاختيارية: الخدمة المطلوبة، نطاق الميزانية، والجدول الزمني.',
             'تحليلات أولية الطرف خاضعة للموافقة حول طريقة استخدام الصفحات.',
+            'طلبات التوظيف المرسلة عبر نموذج الانضمام — انظر «طلبات التوظيف» أدناه.',
           ],
         },
         {
@@ -163,7 +189,7 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
           heading: 'حقوقك',
           body: [
             'يمكنك طلب الوصول إلى بياناتك أو تصحيحها أو حذفها، وسحب موافقتك في أي وقت.',
-            'لممارسة هذه الحقوق، تواصل عبر privacy@braiinstation.com.',
+            `لممارسة هذه الحقوق، تواصل عبر ${PRIVACY_MAILBOX}.`,
           ],
         },
         {
@@ -171,6 +197,20 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
           body: [
             'تُشفّر البيانات الحساسة أثناء التخزين، والوصول إليها مقيّد بالأدوار ومُسجّل.',
             'لا نبيع بياناتك الشخصية.',
+          ],
+        },
+        {
+          id: 'recruitment',
+          heading: 'طلبات التوظيف (نموذج الانضمام)',
+          body: [
+            'ما نجمعه: اسمك وبريدك الإلكتروني ورقم جوالك ومدينتك؛ والوظيفة التي تهمك، وخبرتك، وطريقة العمل التي تفضّلها، والموعد الذي يمكنك البدء فيه، والمجالات التي تعمل فيها؛ ورابط أعمالك، ورابط حسابك على لينكدإن إن أضفته؛ وإجابتك عن العمل الذي تفخر به أكثر؛ وسيرتك الذاتية إن أرفقتها.',
+            'الغرض: مراجعة طلبك والتواصل معك بشأنه. وإن وافقت أيضًا على التواصل بشأن وظائف مستقبلية، نحتفظ بطلبك وقد نتواصل معك بشأن وظائف تُتاح لاحقًا.',
+            'الأساس النظامي: موافقتك التي تمنحها عبر مربعات الموافقة في النموذج. ويمكنك سحبها في أي وقت، ولا يؤثر سحبها في ما تم قبل ذلك.',
+            'مدة الاحتفاظ: نحتفظ بالطلب 12 شهرًا، أو 24 شهرًا إن وافقت على التواصل بشأن وظائف مستقبلية، ونحتفظ بالطلبات المصنّفة كرسائل مزعجة 30 يومًا. ويُحذف كل طلب تلقائيًا عند انتهاء مدته.',
+            'من يطّلع عليه: مديرو الموقع فقط، ولا يستطيع أي دور آخر من فريق العمل فتح الطلبات أو السير الذاتية.',
+            'مكان التخزين: لدى Supabase في لندن بالمملكة المتحدة. وتُحفظ السير الذاتية في مستودع تخزين خاص غير متاح للعامة، ولا يمكن تنزيلها إلا لمديري الموقع.',
+            'لا تُفحص السير الذاتية بحثًا عن الفيروسات، ويفتحها مديرو الموقع كملفات مُنزَّلة فقط، لا داخل الموقع.',
+            `حقوقك: يمكنك في أي وقت طلب الاطلاع على طلبك أو تصحيحه أو حذفه، وسحب موافقتك، بمراسلة ${PRIVACY_MAILBOX} كما في قسم «حقوقك» أعلاه.`,
           ],
         },
       ],
