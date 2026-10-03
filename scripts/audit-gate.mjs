@@ -74,6 +74,18 @@ const ALLOWLIST = [
       'no proxy and Lighthouse never lists an FTP server; never in the Worker (EXC-010).',
     expires: '2026-11-30',
   },
+  {
+    id: 'GHSA-ch52-4w7c-c8xp',
+    pkg: 'http-cache-semantics',
+    reason:
+      'max-stale handling can disclose cross-user cached responses, published 2026-10; ' +
+      'affected range <=4.2.0 is every release (4.2.0 is the latest), so there is no fix to ' +
+      'pin. PRODUCTION scope only because astro lists it as a dependency: the one importer ' +
+      'is astro/dist/assets/build/remote.js, the BUILD-time cache for remote images, and ' +
+      'this site fetches none (image.domains is []). It is absent from the Worker bundle ' +
+      '(dist/server) and serves no responses to anyone, shared or not (EXC-011).',
+    expires: '2026-11-30',
+  },
 ];
 
 function runAudit() {
