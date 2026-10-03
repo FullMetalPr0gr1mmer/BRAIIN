@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { LeadUpdateSchema } from '@schemas/admin';
 import { defineAdminRoute } from '@/lib/admin/route';
+import { writeAudit } from '@/lib/admin/audit';
 import { NotFoundError } from '@/lib/admin/errors';
+import { AuthorizationError } from '@/lib/authz/errors';
 import { getRow } from '@/lib/admin/crud';
 import { decryptPII } from '@/lib/crypto/pii';
 import {
@@ -27,6 +29,10 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 // Every decryption is audited BEFORE the plaintext is returned. If the audit write
 // fails the request fails: an unlogged read of someone's phone number is the one
 // outcome PDPL accountability cannot tolerate, and "the log was down" is not a defence.
+// That is why the reveal writes its row DIRECTLY (writeAudit, checked) instead of the
+// kernel's queued `audit()`: the queue is flushed after the handler returns and a failed
+// write there cannot stop a response that already holds the plaintext. The job
+// applications reveal (applications/[id].ts) works the same way.
 
 export const prerender = false;
 
@@ -51,25 +57,30 @@ export const GET = defineAdminRoute({
     const id = requireId(params);
     const wantsPii = url.searchParams.get('pii') === '1' && canSeeLeadPii(auth.role);
 
-    const row = await getRow<Record<string, unknown>>(
-      sb,
-      'leads',
-      auth,
-      id,
-      wantsPii ? FULL_LEAD_COLUMNS : SAFE_LEAD_COLUMNS,
-    );
-
-    // Readable labels for the interest slugs (Round 3) — derived, never columns.
-    const labels = await resolveLeadInterests(sb, auth.tenantId, [row]);
-
     if (!wantsPii) {
+      const row = await getRow<Record<string, unknown>>(sb, 'leads', auth, id, SAFE_LEAD_COLUMNS);
+      // Readable labels for the interest slugs (Round 3) — derived, never columns.
+      const labels = await resolveLeadInterests(sb, auth.tenantId, [row]);
       audit({ action: 'lead.view', entityType: 'lead', entityId: id, detail: { pii: false } });
       return withInterestLabels(stripSensitive(row), labels);
     }
 
-    // Re-verify against the live profile row immediately before decrypting — a session
+    // Re-verify against the live profile row BEFORE any ciphertext is read — a session
     // that was Developer when the request arrived may not be one now.
     await liveRecheck(auth);
+
+    const row = await getRow<Record<string, unknown>>(sb, 'leads', auth, id, FULL_LEAD_COLUMNS);
+
+    // Fail closed, before decrypting. Field NAMES only: an audit entry that quoted the
+    // decrypted values would move the PII into a table that is append-only and
+    // un-deletable by design — the retention purge could never reach it.
+    const logged = await writeAudit(sb, auth, {
+      action: 'lead.view_pii',
+      entityType: 'lead',
+      entityId: id,
+      detail: { pii: true, fields: Object.keys(DECRYPTED_FIELDS) },
+    });
+    if (!logged) throw new AuthorizationError('leads.pii', 'audit unavailable — refused');
 
     const decrypted: Record<string, string | null> = {};
     for (const [field, column] of Object.entries(DECRYPTED_FIELDS)) {
@@ -87,16 +98,7 @@ export const GET = defineAdminRoute({
       }
     }
 
-    // Field NAMES only. An audit entry that quoted the decrypted values would move the
-    // PII into a table that is append-only and un-deletable by design — the retention
-    // purge could never reach it.
-    audit({
-      action: 'lead.view_pii',
-      entityType: 'lead',
-      entityId: id,
-      detail: { pii: true, fields: Object.keys(DECRYPTED_FIELDS) },
-    });
-
+    const labels = await resolveLeadInterests(sb, auth.tenantId, [row]);
     const { email_enc: _e, phone_enc: _p, budget_enc: _b, timeline_text_enc: _t, ...rest } = row;
     return { ...withInterestLabels(rest, labels), ...decrypted };
   },
@@ -116,7 +118,6 @@ export const PATCH = defineAdminRoute({
       // commentary attached to a named person.
       await liveRecheck(auth);
       if (!canSeeLeadPii(auth.role)) {
-        const { AuthorizationError } = await import('@/lib/authz/errors');
         throw new AuthorizationError('leads.pii', `role '${auth.role}' cannot write notes`);
       }
       values['internal_notes'] = input.internalNotes;
