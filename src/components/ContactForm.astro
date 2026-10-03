@@ -387,6 +387,8 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
       email: d['errEmail'] ?? '',
       tooLong: d['errTooLong'] ?? '',
       invalid: d['errInvalid'] ?? '',
+      // No link fields on this form (the https rule is the Join application's).
+      url: d['errInvalid'] ?? '',
     };
     let busy = false;
     clearErrorsOnInput(form);

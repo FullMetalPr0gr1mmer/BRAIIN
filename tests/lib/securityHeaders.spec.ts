@@ -6,6 +6,7 @@ import {
   extractHashes,
   collectInlineHashes,
   withSecurityHeaders,
+  hasSandbox,
 } from '@/lib/http/securityHeaders';
 
 // CLAUDE.md §7: "Don't call CSP 'strict' while shipping 'unsafe-inline'." This suite is
@@ -203,6 +204,40 @@ describe('applySecurityHeaders — merging Astro CSP', () => {
     applySecurityHeaders(h, { nonce: NONCE, reportOnly: true });
     expect(h.get('Content-Security-Policy')).toBeNull();
     expect(h.get('Content-Security-Policy-Report-Only')).toContain(ASTRO_SCRIPT_HASH);
+  });
+
+  it("keeps a route's `sandbox` (the admin CV download) and nothing else of its policy", () => {
+    const h = new Headers({
+      'Content-Security-Policy': "sandbox; default-src *; script-src 'unsafe-inline'",
+    });
+    applySecurityHeaders(h, { nonce: NONCE });
+    const csp = h.get('Content-Security-Policy') ?? '';
+    expect(csp.endsWith('; sandbox')).toBe(true);
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).not.toContain('unsafe-inline');
+    expect(csp).not.toContain('default-src *');
+  });
+
+  it('under Report-Only, a sandboxed response still carries an ENFORCED sandbox', () => {
+    // Browsers ignore `sandbox` in a Report-Only policy; without this the CV download would
+    // lose its sandbox the day the site ships a Report-Only cycle.
+    const h = new Headers({ 'Content-Security-Policy': 'sandbox' });
+    applySecurityHeaders(h, { nonce: NONCE, reportOnly: true });
+    expect(h.get('Content-Security-Policy')).toBe('sandbox');
+    expect(h.get('Content-Security-Policy-Report-Only')?.endsWith('; sandbox')).toBe(true);
+    // …and an ordinary Report-Only response still carries no enforcing header at all.
+    const plain = new Headers();
+    applySecurityHeaders(plain, { nonce: NONCE, reportOnly: true });
+    expect(plain.get('Content-Security-Policy')).toBeNull();
+  });
+
+  it('adds no sandbox to an ordinary page', () => {
+    const h = new Headers();
+    applySecurityHeaders(h, { nonce: NONCE });
+    expect(hasSandbox(h.get('Content-Security-Policy') ?? '')).toBe(false);
+    expect(hasSandbox('sandbox allow-downloads')).toBe(true);
+    expect(hasSandbox("default-src 'self'; sandbox")).toBe(true);
+    expect(hasSandbox("script-src 'self' sandboxed.example")).toBe(false);
   });
 
   it('accepts caller-supplied hashes (the dev-only runtime path)', () => {

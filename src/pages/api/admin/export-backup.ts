@@ -1,7 +1,7 @@
 import { defineAdminRoute } from '@/lib/admin/route';
 import { writeAudit } from '@/lib/admin/audit';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
-import { assertPrivilegedOpAllowed, recordPrivilegedOp } from '@/lib/admin/rateLimit';
+import { claimPrivilegedOp } from '@/lib/admin/rateLimit';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { BACKUP_TABLES } from '@/lib/admin/backupTables';
@@ -20,8 +20,7 @@ export const GET = defineAdminRoute({
   cap: 'export.backup',
   handler: async ({ auth, sb }) => {
     await liveRecheck(auth);
-    await assertPrivilegedOpAllowed(auth, 'export-backup');
-    await recordPrivilegedOp(auth, 'export-backup');
+    await claimPrivilegedOp(auth, 'export-backup');
 
     const attemptLogged = await writeAudit(sb, auth, {
       action: 'export.backup.attempt',

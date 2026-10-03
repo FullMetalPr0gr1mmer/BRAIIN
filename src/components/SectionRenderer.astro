@@ -30,6 +30,9 @@ import PageHead from '@/components/sections/PageHead.astro';
 import ProjectCatalog from '@/components/sections/ProjectCatalog.astro';
 import Hello from '@/components/sections/Hello.astro';
 import ServiceExplorer from '@/components/sections/ServiceExplorer.astro';
+import JoinWhy from '@/components/sections/JoinWhy.astro';
+import JoinSteps from '@/components/sections/JoinSteps.astro';
+import JoinApply from '@/components/sections/JoinApply.astro';
 
 interface Props {
   locale: Locale;
@@ -80,6 +83,10 @@ const REGISTRY: Record<RenderedSectionType, AnyComponent> = {
   // Round 2 (services)
   hello: Hello,
   serviceExplorer: ServiceExplorer,
+  // Join
+  joinWhy: JoinWhy,
+  joinSteps: JoinSteps,
+  joinApply: JoinApply,
 };
 
 // Every section takes `locale`, its content props and the route's `data`. The map's type

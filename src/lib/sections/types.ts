@@ -196,6 +196,23 @@ export const HERO_PRESETS = {
       },
     },
   },
+  // Join (/join): join.html `j.h1` / `j.sub` / `j.cta`, verbatim. "Join the <em>station</em>"
+  // / "انضم إلى <em>المحطة</em>": the accent is the third word in both.
+  join: {
+    content: {
+      headline: { en: 'Join the station', ar: 'انضم إلى المحطة' },
+      accentFromEn: 2,
+      accentFromAr: 2,
+      sub: {
+        en: 'For people who can take an idea out of their head and make it real.',
+        ar: 'للناس اللي يقدرون يطلّعون الفكرة من راسهم ويخلّونها حقيقة.',
+      },
+      ctaLabel: { en: 'Apply now', ar: 'قدّم الآن' },
+    },
+    // The design's join loop (START/END): 17.4–18.3 s, "holds on the glowing-orb shot". The
+    // CTA opens the application band, which ensureJoinApply keeps on the page.
+    data: { banner: true, ctaHref: '#apply', clip: { start: 17.4, end: 18.3 } },
+  },
 } as const satisfies Record<
   string,
   {
@@ -253,6 +270,38 @@ export function ensureContactInquiry(sections: SectionData[]): SectionData[] {
   const heroAt = restored.findIndex((s) => s.type === 'hero');
   const at = heroAt === -1 ? 0 : heroAt + 1;
   return [...restored.slice(0, at), { type: 'contactInquiry' }, ...restored.slice(at)];
+}
+
+/**
+ * The Join page (`/join`): banner hero → why join → how it works → the application, the
+ * design's order. Mirrored by the seeded composition (supabase/seed-data/55-join-page.json;
+ * tests/lib/joinPage.spec.ts holds the two together). No band carries content here: the
+ * hero's copy and banner layout come from `withHeroPreset(…, 'join')`, the bands' copy from
+ * src/lib/sections/join.ts.
+ */
+export const DEFAULT_JOIN_SECTIONS: SectionData[] = [
+  { type: 'hero' },
+  { type: 'joinWhy' },
+  { type: 'joinSteps' },
+  { type: 'joinApply' },
+];
+
+/**
+ * The application band holds the page's form — the second public write path — and the
+ * hero's "Apply now" points at it. Like ensureContactInquiry, a floor an editor may not
+ * lower: shown if hidden, put back at the END (where the design has it) if removed. A
+ * second copy is dropped: the form's ids are fixed (ONE form per page), and two would put
+ * two `#apply` targets and two status regions on the page. Reordering it stays free.
+ */
+export function ensureJoinApply(sections: readonly SectionData[]): SectionData[] {
+  let seen = false;
+  const restored = sections.flatMap((s) => {
+    if (s.type !== 'joinApply') return [s];
+    if (seen) return [];
+    seen = true;
+    return [{ ...s, visible: true }];
+  });
+  return seen ? restored : [...restored, { type: 'joinApply' }];
 }
 
 // UI v2 (PR8) — the mockup's About: who we are → leadership → our reach → follow. The

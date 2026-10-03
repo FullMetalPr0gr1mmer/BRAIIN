@@ -1,0 +1,19 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import ApplicationsPanel from '@/components/admin/ApplicationsPanel';
+import { can } from '@/lib/authz/matrix';
+
+export const prerender = false;
+
+// UX hint from the same ROLE_CAPS the server enforces; the routes re-check
+// `applications.manage` / `applications.pii` and RLS refuses every role but Admin.
+const role = Astro.locals.session?.role ?? 'content_creator';
+const canSeePii = can(role, 'applications.pii') === 'full';
+---
+
+<AdminLayout
+  title="Job applications"
+  subtitle="From the Join page. Contact details are encrypted; revealing them or downloading a CV is logged against your account."
+>
+  <ApplicationsPanel client:load canSeePii={canSeePii} />
+</AdminLayout>

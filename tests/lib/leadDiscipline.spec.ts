@@ -20,7 +20,13 @@ vi.mock('@/lib/supabase/server', () => ({
       for (const m of ['select', 'eq', 'gte', 'in', 'order', 'limit']) b[m] = () => b;
       b['insert'] = (row: Record<string, unknown>) => {
         inserts.push({ table, row });
-        return Promise.resolve({ data: null, error: null });
+        // Awaited directly (a lead) or chained to read the new id back (the export's
+        // privileged-op claim, src/lib/admin/rateLimit.ts).
+        return {
+          select: () => ({ single: async () => ({ data: { id: 1 }, error: null }) }),
+          then: (ok: (v: unknown) => unknown) =>
+            Promise.resolve({ data: null, error: null }).then(ok),
+        };
       };
       b['maybeSingle'] = async () => ({
         data: { role: 'developer', is_active: true, locked_until: null },

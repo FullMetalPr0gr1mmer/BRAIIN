@@ -2,13 +2,15 @@ import type { NavNode } from '@/lib/data/navigation';
 
 // The menus shown until the CMS has navigation rows, and whenever the query fails — so
 // the site is never navigation-less. These are the SAME lists supabase/seed-data/
-// 25-navigation.json seeds (tests/seed/seeds.spec.ts fails if they drift), which is what
-// makes "the fallback" and "a freshly seeded site" look identical.
+// 25-navigation.json and 26-navigation-join.json seed (tests/seed/seeds.spec.ts fails if
+// they drift), which is what makes "the fallback" and "a freshly seeded site" look
+// identical.
 //
-// UI v2 (the Brain Station UI mockup): Home · About · Our Work · Services · Contact us,
-// with Contact us as the key link — the one still visible at <=900px. Join joins both
-// menus with the Join page (PR13). Insights moved from the header to the footer. Round 2:
-// Services is the Services page (/services), no longer the home section (/#services).
+// UI v2 (the Brain Station UI mockup): Home · About · Our Work · Services · Contact us ·
+// Join, with Contact us as the key link — the one still visible at <=900px. Join is the
+// LAST item of both menus (the mockup's header order; not a key link). Insights moved from
+// the header to the footer. Round 2: Services is the Services page (/services), no longer
+// the home section (/#services).
 
 type Entry = { href: string; en: string; ar: string; key?: boolean };
 
@@ -30,6 +32,7 @@ export const HEADER_FALLBACK: NavNode[] = toNodes('fallback-h', [
   { href: '/portfolio', en: 'Our Work', ar: 'أعمالنا' },
   { href: '/services', en: 'Services', ar: 'الخدمات' },
   { href: '/contact', en: 'Contact us', ar: 'تواصل معنا', key: true },
+  { href: '/join', en: 'Join', ar: 'انضم' },
 ]);
 
 export const FOOTER_FALLBACK: NavNode[] = toNodes('fallback-f', [
@@ -38,6 +41,7 @@ export const FOOTER_FALLBACK: NavNode[] = toNodes('fallback-f', [
   { href: '/creative-knowledge', en: 'Insights', ar: 'المعرفة' },
   { href: '/about', en: 'About', ar: 'من نحن' },
   { href: '/contact', en: 'Contact', ar: 'تواصل معنا' },
+  { href: '/join', en: 'Join', ar: 'انضم' },
 ]);
 
 /**

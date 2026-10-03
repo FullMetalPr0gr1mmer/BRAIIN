@@ -114,6 +114,11 @@ export function extractHashes(csp: string | null | undefined, directive: string)
   return [...found];
 }
 
+/** True when a CSP header value carries the `sandbox` directive (with or without flags). */
+export function hasSandbox(csp: string): boolean {
+  return csp.split(';').some((d) => /^sandbox(\s|$)/i.test(d.trim()));
+}
+
 export function buildCsp(nonce: string, extras?: CspExtras): string {
   const stream = 'https://*.cloudflarestream.com https://iframe.videodelivery.net';
   const videoFallback = 'https://www.youtube-nocookie.com https://player.vimeo.com';
@@ -144,24 +149,30 @@ export function applySecurityHeaders(headers: Headers, opts: CspOptions): void {
   // header left behind by Astro would keep blocking even while we ship Report-Only.
   const scriptHashes: string[] = [...(opts.scriptHashes ?? [])];
   const styleHashes: string[] = [...(opts.styleHashes ?? [])];
+  let sandboxed = false;
   for (const name of CSP_HEADER_NAMES) {
     const existing = headers.get(name);
     if (existing === null) continue;
     scriptHashes.push(...extractHashes(existing, 'script-src'));
     styleHashes.push(...extractHashes(existing, 'style-src'));
+    sandboxed ||= hasSandbox(existing);
     headers.delete(name);
   }
 
   const headerName = opts.reportOnly
     ? 'Content-Security-Policy-Report-Only'
     : 'Content-Security-Policy';
-  headers.set(
-    headerName,
-    buildCsp(opts.nonce, {
-      scriptHashes: [...new Set(scriptHashes)],
-      styleHashes: [...new Set(styleHashes)],
-    }),
-  );
+  const csp = buildCsp(opts.nonce, {
+    scriptHashes: [...new Set(scriptHashes)],
+    styleHashes: [...new Set(styleHashes)],
+  });
+  // A response that asked for `sandbox` keeps it (the admin's CV download, Join): the rebuild
+  // below may only ever ADD restrictions to what a route set, never drop one. Hashes and
+  // `sandbox` are the only parts of a route's CSP that survive — no route can widen ours.
+  headers.set(headerName, sandboxed ? `${csp}; sandbox` : csp);
+  // Browsers ignore `sandbox` in a Report-Only policy, so in that mode a sandboxed response
+  // also carries an ENFORCED one holding just the sandbox.
+  if (sandboxed && opts.reportOnly) headers.set('Content-Security-Policy', 'sandbox');
   headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');

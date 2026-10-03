@@ -1,0 +1,14 @@
+---
+import JoinPage from '@/components/JoinPage.astro';
+import { noEdgeCache, setTierA } from '@/lib/http/cacheTags';
+import { JOIN_CACHE_ENTITIES, joinAnswer } from '@/lib/sections/join';
+
+// Join (Arabic twin). Tier A for the bare URL; a `?status=` answer (the no-JS form post's
+// 303 lands here for `locale=ar`) is private, no-store — see src/pages/join.astro.
+const locale = 'ar' as const;
+const answer = joinAnswer(Astro.url.searchParams);
+if (answer.present) noEdgeCache(Astro.response);
+else setTierA(Astro.response, { route: 'join', locale, entities: JOIN_CACHE_ENTITIES });
+---
+
+<JoinPage locale={locale} answer={answer.status} />

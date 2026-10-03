@@ -49,6 +49,11 @@ jobs:
   e2e:
     name: E2E + axe + CSP + video bytes
     runs-on: ubuntu-latest
+    env:
+      # As above, but WITH storage-api: tests/e2e/apply-roundtrip.e2e.ts sends one real Join
+      # application, and its CV must reach the private `applications` bucket (migration
+      # 0029). imgproxy stays out — storage runs without image transformations.
+      SUPABASE_EXCLUDE: studio,imgproxy,edge-runtime,logflare,vector,realtime,postgres-meta
     steps:
       - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
       - uses: actions/setup-node@v4

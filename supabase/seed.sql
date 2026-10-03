@@ -157,6 +157,12 @@ do $seed$ begin
   end if;
 end $seed$;
 
+-- navigation (26-navigation-join.json)
+insert into public.navigation (tenant_id, id, location, label, href, sort_order, visible, is_key) values
+  ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a106', 'header', '{"en":"Join","ar":"انضم"}'::jsonb, '/join', 6, true, false),
+  ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-4000-8000-00000000a206', 'footer', '{"en":"Join","ar":"انضم"}'::jsonb, '/join', 6, true, false)
+on conflict (id) do nothing;
+
 -- portfolio (30-legacy-demo.json)
 insert into public.portfolio (tenant_id, slug, title, summary, status, is_placeholder, sort_order) values
   ('00000000-0000-0000-0000-0000000000b1', 'riyadh-season-launch', '{"en":"Riyadh Season Launch","ar":"إطلاق موسم الرياض"}'::jsonb, '{"en":"A full-funnel campaign — brand film, motion graphics, and always-on social.","ar":"حملة متكاملة — فيلم للعلامة، وموشن جرافيك، وحضور دائم على وسائل التواصل."}'::jsonb, 'archived', true, 1),
@@ -608,6 +614,18 @@ do $seed$ begin
       ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000003', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'servicesOverview', '{}'::jsonb, true, 30, default),
       ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000004', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'serviceExplorer', '{}'::jsonb, true, 40, default),
       ('00000000-0000-0000-0000-0000000000b1', '5eed5400-0000-4000-8000-000000000005', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'services'), 'hello', '{}'::jsonb, true, 50, default)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
+-- page_sections (55-join-page.json)
+do $seed$ begin
+  if not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'join')) then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5500-0000-4000-8000-000000000001', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'join'), 'hero', '{}'::jsonb, true, 10),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5500-0000-4000-8000-000000000002', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'join'), 'joinWhy', '{}'::jsonb, true, 20),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5500-0000-4000-8000-000000000003', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'join'), 'joinSteps', '{}'::jsonb, true, 30),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5500-0000-4000-8000-000000000004', (select id from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and slug = 'join'), 'joinApply', '{}'::jsonb, true, 40)
     on conflict (id) do nothing;
   end if;
 end $seed$;

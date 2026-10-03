@@ -1,0 +1,729 @@
+/* Route stylesheet: /join (+ /ar/join). Linked only through BaseLayout's `styles` prop
+   (styles={['join.css']}); the tokens and the shared blocks — the banner hero, .tag,
+   .sec-head, the badge CTA, .field-error, .hp-field, .form-status — are in global.css.
+
+   Blocks, in page order:
+     .join-why     "Why {brand}" on paper          (the mockup's .why)
+     .join-steps   "How it works" on mist          (.steps-sec)
+     .join-apply   the application band on black   (.apply) and its form, .apply-form /
+                   .af-*                            (.form / .field / .chips / .drop / .consent)
+
+   Values are join.html's (its third <style> block and the shared .form / .field rules),
+   with the site tokens for the mockup's (--black → --bs-black, --dim-l → --bs-dim, …).
+   Where the mockup's value fails a contrast pair the site's is used and noted
+   (scripts/contrast-audit.mjs holds the pairs). Nothing here moves after first paint:
+   every state the script sets swaps visibility inside a box the server already sized. */
+
+/* ============================================================
+   Why {brand} — paper
+   ============================================================ */
+
+.join-why {
+  position: relative;
+  z-index: 2;
+  background: var(--bs-paper);
+  color: var(--bs-ink);
+  padding: clamp(72px, 11vh, 140px) var(--bs-pad-x);
+  margin: 0;
+}
+.join-why .sec-head p,
+.join-steps .sec-head p {
+  color: var(--bs-dim);
+}
+/* No `ch` box on swap-font text above the fold (CLAUDE.md §6, R3-0): this band's head is in
+   the first screen, right under the banner, and a `ch` follows whichever font is painting.
+   .sec-head's 16ch / 46ch, measured once under the loaded faces, in em: */
+.join-why .sec-head h2 {
+  max-width: 10em; /* 16ch of Archivo 800 */
+}
+html[dir='rtl'] .join-why .sec-head h2 {
+  max-width: 9.18em; /* 16ch of Almarai 800 */
+}
+.join-why .sec-head p {
+  max-width: 26.36em; /* 46ch of Archivo 400 */
+}
+html[dir='rtl'] .join-why .sec-head p {
+  max-width: 24.29em; /* 46ch of Almarai 400 */
+}
+/* Klein on the two light bands (sky is 2.56:1 on white — never an accent there). */
+.join-why .sec-head h2 em,
+.join-steps .sec-head h2 em {
+  color: var(--bs-klein);
+}
+.join-why__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--bs-line-l);
+}
+.join-why__item {
+  padding: clamp(24px, 3.6vh, 36px) clamp(16px, 2vw, 28px) 0;
+  border-inline-start: 1px solid var(--bs-line-l);
+}
+.join-why__item:first-child {
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+.join-why__n {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.08em;
+  color: var(--bs-klein);
+  font-variant-numeric: tabular-nums;
+}
+.join-why__item h3 {
+  margin: 16px 0 0;
+  font-size: clamp(18px, 1.6vw, 22px);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+html[dir='rtl'] .join-why__item h3 {
+  letter-spacing: 0;
+  line-height: 1.5;
+}
+.join-why__item p {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--bs-dim);
+}
+html[dir='rtl'] .join-why__item p {
+  line-height: 1.9;
+}
+@media (max-width: 900px) {
+  .join-why__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 34px;
+  }
+  .join-why__item:nth-child(3) {
+    border-inline-start: 0;
+    padding-inline-start: 0;
+  }
+}
+@media (max-width: 560px) {
+  .join-why__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .join-why__item {
+    border-inline-start: 0;
+    padding-inline-start: 0;
+  }
+}
+
+/* ============================================================
+   How it works — mist
+   ============================================================ */
+
+.join-steps {
+  position: relative;
+  z-index: 3;
+  background: var(--bs-mist); /* the mockup's #F3F5FA */
+  color: var(--bs-ink);
+  padding: clamp(72px, 11vh, 140px) var(--bs-pad-x);
+  margin: 0;
+}
+.join-steps__list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(12px, 1.4vw, 20px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.join-step {
+  position: relative;
+  padding: clamp(22px, 3vh, 30px);
+  border-radius: 18px;
+  background: var(--bs-paper);
+  border: 1px solid var(--bs-line-l);
+}
+.join-step__n {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--bs-klein);
+  color: var(--bs-paper);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: normal;
+}
+.join-step h3 {
+  margin: 22px 0 0;
+  font-size: clamp(17px, 1.5vw, 21px);
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: -0.015em;
+}
+html[dir='rtl'] .join-step h3 {
+  letter-spacing: 0;
+}
+.join-step p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--bs-dim);
+}
+html[dir='rtl'] .join-step p {
+  line-height: 1.9;
+}
+.join-step__time {
+  display: inline-block;
+  margin-top: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  color: var(--bs-klein);
+}
+@media (max-width: 900px) {
+  .join-steps__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .join-steps__list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ============================================================
+   The application — black, under the Klein glow
+   ============================================================ */
+
+.join-apply {
+  position: relative;
+  z-index: 3;
+  overflow: hidden;
+  background: var(--bs-black);
+  color: var(--bs-fg);
+  padding: clamp(72px, 12vh, 150px) var(--bs-pad-x) clamp(72px, 11vh, 140px);
+  margin: 0;
+}
+.join-apply::before {
+  content: '';
+  position: absolute;
+  inset-block: -30% auto;
+  inset-inline: -10%;
+  height: 80%;
+  background: radial-gradient(55% 100% at 50% 0%, rgba(0, 36, 188, 0.42), transparent 70%);
+  pointer-events: none;
+}
+.join-apply .section-wrap {
+  position: relative;
+  z-index: 1;
+}
+
+/* The lead line and the closed notice share ONE grid cell: both are always laid out and
+   only one is visible, so the cell is sized for the taller from first paint and the
+   script's status check flips `data-closed` without moving anything. */
+.join-apply__lead {
+  display: grid;
+  margin: 16px 0 0;
+  max-width: 46ch;
+}
+.join-apply__lead > p {
+  grid-area: 1 / 1;
+  margin: 0;
+}
+.join-apply__lead[data-closed='true'] > .join-apply__p,
+.join-apply__lead:not([data-closed='true']) > .join-apply__closed {
+  visibility: hidden;
+}
+.join-apply__closed {
+  color: var(--bs-fg);
+  font-weight: 600;
+}
+.join-apply__closed::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-inline-end: 10px;
+  border-radius: 50%;
+  background: var(--bs-sky);
+  vertical-align: middle;
+}
+
+/* ---- The form: three groups, each the design's two columns ---- */
+.apply-form {
+  display: grid;
+  gap: clamp(16px, 2vw, 26px);
+  margin: 0;
+  border-top: 1px solid var(--bs-line-d);
+  padding-top: clamp(34px, 5vh, 58px);
+}
+.apply-form > * {
+  min-width: 0;
+}
+.af-group {
+  min-width: 0;
+  margin: clamp(10px, 2vh, 20px) 0 0; /* the mockup's .form__group margin */
+  padding: 0;
+  border: 0;
+}
+/* The group title: the design's sky caps with a rule running to the far edge. */
+.af-group__t {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bs-sky);
+}
+.af-group__t::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--bs-line-d);
+}
+html[dir='rtl'] .af-group__t {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 13px;
+}
+.af-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(16px, 2vw, 26px);
+  margin-top: clamp(16px, 2vw, 26px);
+}
+.af-grid > * {
+  min-width: 0;
+}
+.af-full {
+  grid-column: 1 / -1;
+}
+@media (max-width: 720px) {
+  .af-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- Fields (the values of the contact form's, which are the design's) ---- */
+.apply-form .field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.af-grid .field > label,
+.af-label {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--bs-muted);
+}
+html[dir='rtl'] .af-grid .field > label,
+html[dir='rtl'] .af-label {
+  letter-spacing: 0;
+  font-size: 13px;
+  text-transform: none;
+}
+/* "optional": .6 white (the mockup's .4 is 3.7:1 on black). */
+.af-opt {
+  margin-inline-start: 6px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.6);
+}
+.af-grid .field input,
+.af-grid .field select,
+.af-grid .field textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 15px;
+  /* `font: inherit` pulls in the body's 1.6; the design's fields sit on `normal`. */
+  line-height: normal;
+  color: var(--bs-fg);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--bs-line-d);
+  border-radius: 10px;
+  padding: 14px 15px;
+  transition:
+    border-color 0.3s,
+    background 0.3s,
+    box-shadow 0.3s;
+}
+.af-grid .field input:focus,
+.af-grid .field select:focus,
+.af-grid .field textarea:focus {
+  outline: none;
+  border-color: var(--bs-cobalt);
+  /* colour only — the shorthand would reset the select's chevron (background-image) */
+  background-color: rgba(2, 76, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(2, 76, 255, 0.18);
+}
+/* .5 white, as the contact form (the mockup's .34 is under AA). */
+.af-grid .field input::placeholder,
+.af-grid .field textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+.af-grid textarea {
+  resize: vertical;
+  min-height: 132px;
+}
+.af-grid select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-inline-end: 38px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(255, 255, 255, 0.6) 50%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.6) 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) 22px,
+    calc(100% - 14px) 22px;
+  background-size:
+    6px 6px,
+    6px 6px;
+  background-repeat: no-repeat;
+}
+html[dir='rtl'] .af-grid select {
+  background-position:
+    20px 22px,
+    26px 22px;
+}
+.af-grid select option {
+  background: var(--bs-midnight);
+  color: var(--bs-fg);
+}
+/* A red border alone fails WCAG 3.3.1 / 1.4.1: .field-error carries the words. */
+.apply-form .field.is-invalid input,
+.apply-form .field.is-invalid select,
+.apply-form .field.is-invalid textarea {
+  border-color: var(--bs-err);
+}
+.apply-form .field-error {
+  color: var(--bs-err-soft);
+}
+
+/* ---- The craft chips: checkboxes drawn as the design's pills ---- */
+.af-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.af-chips__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.af-chip {
+  position: relative;
+  cursor: pointer;
+}
+/* Transparent, not removed: the checkbox keeps its focus, its state and its name. */
+.af-chip input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.af-chip span {
+  display: inline-block;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--bs-line-d);
+  font-size: 13.5px;
+  line-height: normal;
+  color: rgba(255, 255, 255, 0.82);
+  transition:
+    background 0.25s,
+    border-color 0.25s,
+    color 0.25s;
+}
+.af-chip:hover span {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+/* Checked: the design's Klein fill, with a Cobalt edge so the state holds 3:1 against the
+   black band (Klein alone is ~2:1 there — WCAG 1.4.11). */
+.af-chip input:checked + span {
+  background: var(--bs-klein);
+  border-color: var(--bs-cobalt);
+  color: var(--bs-paper);
+}
+.af-chip input:focus-visible + span {
+  outline: 2px solid var(--bs-cobalt);
+  outline-offset: 2px;
+}
+
+/* ---- The CV dropzone ---- */
+.af-drop {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px;
+  border-radius: 14px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.03);
+  transition:
+    border-color 0.3s,
+    background 0.3s;
+}
+.af-drop:hover,
+.af-drop.is-over {
+  border-color: var(--bs-cobalt);
+  background: rgba(2, 76, 255, 0.1);
+}
+.af-drop[data-state='ok'] {
+  border-style: solid;
+  border-color: rgba(34, 169, 255, 0.6);
+}
+.af-drop[data-state='bad'] {
+  border-color: var(--bs-err);
+}
+/* The input covers the zone, transparent: a click anywhere opens the picker, a dropped file
+   lands on it. Its focus ring is drawn around the whole zone by the next sibling's
+   ::before (the zone is its containing block) — no `:has()` needed. */
+.af-drop__input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.af-drop__input:focus-visible + .af-drop__ico::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid var(--bs-cobalt);
+  border-radius: 18px;
+  pointer-events: none;
+}
+.af-drop__ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--bs-klein);
+  color: var(--bs-paper);
+}
+.af-drop__ico svg {
+  width: 20px;
+  height: 20px;
+}
+.af-drop__txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+/* Each line is a stack of every text it can show, one visible at a time: the zone is sized
+   for the longest from first paint, so a chosen, dropped or refused file moves nothing. */
+.af-drop__t,
+.af-drop__s {
+  display: grid;
+}
+.af-drop__t > *,
+.af-drop__s > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+.af-drop__t {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: normal;
+  cursor: pointer;
+}
+/* A file name keeps its own direction (dir=auto), so a Latin name on the Arabic page is cut
+   at its END, not its start; it sits on the line just above its size. */
+.af-drop__name {
+  align-self: end;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html[dir='rtl'] .af-drop__name {
+  text-align: right;
+}
+.af-drop__s {
+  font-size: 12.5px;
+  line-height: normal;
+  color: var(--bs-muted);
+}
+.af-drop__bad {
+  color: var(--bs-err-soft);
+}
+.af-drop[data-state='empty'] .af-drop__name,
+.af-drop[data-state='empty'] .af-drop__size,
+.af-drop[data-state='empty'] .af-drop__bad,
+.af-drop[data-state='ok'] .af-drop__default,
+.af-drop[data-state='ok'] .af-drop__hint,
+.af-drop[data-state='ok'] .af-drop__bad,
+.af-drop[data-state='bad'] .af-drop__default,
+.af-drop[data-state='bad'] .af-drop__hint,
+.af-drop[data-state='bad'] .af-drop__size {
+  visibility: hidden;
+}
+/* Remove: above the input, outside the label. Its space is always held (hidden, not gone)
+   so the text column never re-wraps when a file is chosen. */
+.af-drop__x {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  margin-inline-start: auto;
+  padding: 6px 12px;
+  border: 1px solid var(--bs-line-d);
+  border-radius: 999px;
+  background: none;
+  color: var(--bs-fg);
+  font: inherit;
+  font-size: 12px;
+  line-height: normal;
+  cursor: pointer;
+}
+.af-drop__x:hover {
+  border-color: var(--bs-fg);
+}
+.af-drop[data-state='empty'] .af-drop__x {
+  visibility: hidden;
+}
+/* Without script nothing can name the chosen file, so the browser's own control shows. */
+@media (scripting: none) {
+  .af-drop {
+    flex-wrap: wrap;
+  }
+  .af-drop__input {
+    position: static;
+    order: 3;
+    flex: 1 1 100%;
+    width: auto;
+    height: auto;
+    opacity: 1;
+    color: var(--bs-fg);
+  }
+  .af-drop__x {
+    display: none;
+  }
+}
+
+/* ---- Consent (two boxes) and the privacy link ---- */
+.af-consents {
+  display: grid;
+  gap: 14px;
+}
+.apply-form .af-consent {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+.af-consent input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 4px 0 0;
+  accent-color: var(--bs-klein);
+  cursor: pointer;
+}
+.af-consent label {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--bs-muted);
+  cursor: pointer;
+}
+html[dir='rtl'] .af-consent label {
+  line-height: 1.8;
+}
+.af-consent.is-invalid label {
+  color: var(--bs-err-soft);
+}
+.af-consent .field-error {
+  flex: 1 1 100%;
+  margin: 0;
+  padding-inline-start: 30px;
+}
+.af-privacy {
+  margin: 0;
+  padding-inline-start: 30px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.af-privacy a {
+  color: var(--bs-sky);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---- Foot: send + note ---- */
+.af-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.af-foot .cta {
+  flex: none;
+  width: auto;
+  margin: 0;
+}
+.af-foot .cta:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.af-foot .cta:disabled:hover {
+  background: var(--bs-klein);
+  transform: none;
+}
+.af-note {
+  flex: 0 1 auto;
+  max-width: 38ch;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--bs-muted);
+}
+
+/* ---- The status region; sent ---- */
+.apply-form .af-status {
+  margin: 0;
+}
+.apply-form .af-status.is-ok:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: rgba(2, 76, 255, 0.14);
+  border: 1px solid rgba(2, 76, 255, 0.45);
+  font-size: 14.5px;
+}
+.apply-form .af-status.is-ok::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bs-sky);
+}
+/* Sent: the fields give way to the confirmation (the design's .form.sent + .form__ok). */
+.apply-form.is-sent > :not(.af-status) {
+  display: none;
+}

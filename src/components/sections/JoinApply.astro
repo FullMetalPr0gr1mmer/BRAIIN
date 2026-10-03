@@ -1,0 +1,82 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { JoinApplySectionContent } from '@schemas/sections';
+import type { ApplyStatus } from '@schemas/application';
+import { pickLocale } from '@/lib/i18n';
+import { brandName, getIdentity } from '@/lib/identity';
+import { JOIN_APPLY_COPY, withBrand } from '@/lib/sections/join';
+import { APPLY_FORM_COPY } from '@/lib/forms/applicationCopy';
+import AccentText from '@/components/ui/AccentText.astro';
+import ApplicationForm from '@/components/ApplicationForm.astro';
+
+// The application band (Join): tag, section head and the real form — ApplicationForm, the
+// second public write path (multipart POST to /api/apply, works without script). The band's
+// copy is CMS-overridable (JoinApplySectionContentSchema); the form's fields, options,
+// consent wording and messages are code. `id="apply"` is the hero's "Apply now" target and
+// the fragment the no-JS answer (303 → /join?status=…#apply) lands on.
+//
+// The closed notice ("We're not taking applications right now…") shares ONE grid cell with
+// the lead line (public/styles/join.css): both are always laid out and only one is visible,
+// so the cell is as tall as the taller of the two from first paint, and the form's script
+// can show the notice after its status check without moving anything (no layout shift).
+// A no-JS `?status=closed` answer renders it shown.
+//
+// Route data (never content): `answer`, the no-JS answer to render (src/lib/sections/join.ts).
+
+interface Props extends JoinApplySectionContent {
+  locale: Locale;
+  data?: { answer?: ApplyStatus | null | undefined } | undefined;
+}
+
+const {
+  locale,
+  tag,
+  heading,
+  accent,
+  lead,
+  groupAbout,
+  groupRole,
+  groupWork,
+  note,
+  successMessage,
+  data,
+} = Astro.props;
+
+const STR = JOIN_APPLY_COPY[locale];
+const brand = brandName(await getIdentity(Astro.locals), locale);
+const text = (authored: { en: string; ar: string } | undefined, fallback: string) =>
+  withBrand(authored ? pickLocale(authored, locale) : fallback, brand);
+
+const title = heading
+  ? { text: text(heading, ''), accent }
+  : { text: text(undefined, STR.heading), accent: JOIN_APPLY_COPY.accent };
+const answer = data?.answer ?? null;
+---
+
+<section class="join-apply" id="apply" aria-labelledby="join-apply-heading">
+  <div class="section-wrap">
+    <div class="tag tag--sky rv"><span class="dot"></span><span>{text(tag, STR.tag)}</span></div>
+    <div class="sec-head">
+      <h2 class="rv" id="join-apply-heading">
+        <AccentText text={title.text} locale={locale} accent={title.accent} />
+      </h2>
+      <div class="join-apply__lead rv" id="apply-lead" data-closed={String(answer === 'closed')}>
+        <p class="join-apply__p">{text(lead, STR.lead)}</p>
+        <p class="join-apply__closed">{APPLY_FORM_COPY[locale].status.closed}</p>
+      </div>
+    </div>
+    <ApplicationForm
+      locale={locale}
+      brand={brand}
+      groups={{
+        about: text(groupAbout, STR.groups.about),
+        role: text(groupRole, STR.groups.role),
+        work: text(groupWork, STR.groups.work),
+      }}
+      note={text(note, STR.note)}
+      okMessage={text(successMessage, STR.ok)}
+      answer={answer}
+      closedTarget="apply-lead"
+    />
+  </div>
+</section>

@@ -642,6 +642,49 @@ pointing at its own `/ar` twin, and the reserved paths (`/admin`, `/api/`, `/hea
 asset routes). Deleting a rule stops it at the edge within a minute; a browser that cached
 a 301/308 keeps it for up to a day (`max-age=86400`), while a 302 is never cached.
 
+### 6g. Join — the careers page and job applications (migration 0029)
+
+Owner decisions 2026-09-30 (J1–J6): CVs go to a **private Supabase Storage bucket**
+(`applications`, ≤ 10 MB, PDF or .docx), reviewed by **Admin only**, kept **12 months**
+(24 with the "future roles" consent), and the form **ships closed** —
+`site_profile.accepting_applications` stays false until the owner opens it. Nothing here needs a
+paid plan or a new secret: the applicant key and the limiter key are labelled derivations of
+`LEAD_PII_ENC_KEY`, the daily retention job is a Workers cron trigger (free on every plan).
+
+**When.** Around the merge of the Join PR, in this order. Migration 0029 goes FIRST: the deploy
+job's guard refuses code whose migrations production lacks, and the old code ignores the new
+tables. The seed delta goes LAST, after the deploy: its header and footer rows would give the
+old code a Join link to a page it does not have, while the new code without them simply
+renders the page from its built-in defaults, with no link yet.
+
+| # | Step | What it does | Must see |
+|---|---|---|---|
+| 0 | Preflight (read-only): `select accepting_applications from public.site_profile;` and `select id, public from storage.buckets;` | Confirms the starting state. | `accepting_applications = false`; no `applications` bucket yet. |
+| 1 | `npx supabase db push --linked --dry-run`, then `npx supabase db push --linked --skip-vault` | Migration 0029: `job_applications` (Admin-only RLS, column UPDATE grant on status/notes only), the spam-retention trigger, the public write limiter (`public_write_attempts` + `public.public_write_hit()`, service role only), the orphan-CV lookup the daily job uses (`public.application_orphan_cvs()`, service role only), the private bucket and a RESTRICTIVE belt policy on `storage.objects`. In-file postconditions refuse a push that left RLS unforced, anon with a privilege, or the bucket public. | Only 0029 listed by the dry run. A `WARNING: 0029: not permitted to add the storage.objects belt policy` is acceptable (the bucket still has no policy naming it, so anon and authenticated are refused); report it — it means the belt is missing, not the lock. |
+| 2 | Verify (read-only) | `select id, public, file_size_limit, allowed_mime_types from storage.buckets where id = 'applications';` · `select policyname, permissive from pg_policies where tablename in ('job_applications', 'objects') and policyname like '%applications%';` | `public = false`, `10485760`, the two MIME types; `job_applications_admin_all`, `job_applications_admin_only` (RESTRICTIVE) and, unless step 1 warned, `applications_bucket_service_only` (RESTRICTIVE). |
+| 3 | Merge → the deploy job → live checks | — | The deploy job's log ends `Deployed` and lists the schedule `23 3 * * *`. `/join` and `/ar/join` → 200, the form shows the closed notice (the page renders its built-in sections until step 4); `curl -s -X POST $BASE/api/apply -H "Origin: $BASE" -H 'Accept: application/json' -F name=x` → `409 {"status":"closed"}`; `/admin/applications` → 401 when signed out. |
+| 4 | The Join seed rows — a **delta**, never the whole `production.sql` | `node scripts/gen-seeds.mjs --only 26-navigation-join.json,55-join-page.json > /tmp/join-delta.sql`, review it (the Join header and footer links, the `join` page and its sections — inserted by fixed id, `on conflict do nothing`), then run it as the owner (`psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/join-delta.sql`, or `npx supabase db query --linked -f`). Nothing in it opens applications. | `COMMIT`. A re-run inserts nothing. Join is the last header item and in the footer once the edge copy of each page refreshes (purge, or its next render). |
+| 5 | The next morning | The first cron run: expired applications (CV first, then the row), orphaned CVs, old limiter counters. | `/admin/logs`: a `cron:retention` **info** row, `join retention ran`, counts all `0` (`orphansDeleted` included). An **error** row names the step that failed; the next day's run retries it. |
+
+**Opening applications (the owner, after the sign-offs).** Before the switch: legal review of
+the privacy notice's recruitment section and the two consent sentences (EN + AR), the DPO's note
+on storage in **London** (the Supabase project's region — a transfer outside the Kingdom), and
+EXC-008 (CVs are not virus-scanned) signed. Then Admin → **Site profile** → tick **Accepting
+applications** → Save (Admin only, in both layers). The page reads the switch through
+`/api/apply/status`, so no purge is needed. **A first real test:** submit one application with a
+small PDF, open it in Admin → Job applications, reveal the contact details, download the CV,
+then **Erase** it — the audit log shows `application.view_pii`, `application.cv_download` and
+`application.erase`, and the bucket is empty again.
+
+**Closing them again** is the same tick, instantly. **Taking Join down entirely:** close, then
+hide the two Join navigation rows; the page answers 200 with the closed notice until its
+sections are archived. Migration 0029 is forward-only; its tables stay (empty is harmless).
+
+**DSAR.** An applicant's request to see or erase their data is served from Admin → Job
+applications: the detail view is everything stored about them (plus the CV), and **Erase**
+removes the CV object first, then the row — never the reverse, so a failed erase can be retried
+and no CV is ever left without the row that would expire it.
+
 ---
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)

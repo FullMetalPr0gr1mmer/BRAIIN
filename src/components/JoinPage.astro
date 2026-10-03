@@ -1,0 +1,81 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { ApplyStatus } from '@schemas/application';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import SectionRenderer from '@/components/SectionRenderer.astro';
+import { getPageComposition } from '@/lib/data/pageSections';
+import { buildBreadcrumbSchema } from '@/lib/seo/jsonld';
+import { localizedPath } from '@/lib/i18n';
+import { loadHead } from '@/lib/seo/head';
+import { PAGE_META } from '@/lib/seo/pageMeta';
+import { composeJoinPage, firstVisibleType, shown } from '@/lib/sections/join';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+
+// Join (`/join`, `/ar/join`) — a CMS-composed section page (`pages` slug 'join' +
+// `page_sections`): banner hero → why join → how it works → the application. The default
+// composition renders until the page is composed. The route sets the cache headers (Tier A
+// for the bare URL; a `?status=` answer is private, no-store) and hands over the answer.
+//
+// Route-level guarantees on top of whatever the CMS says (src/lib/sections/join.ts):
+//   withHeroPreset('join')  the banner hero with the join copy and loop window, its CTA
+//                           pointing at #apply;
+//   ensureJoinApply         the application band (the form) cannot be hidden or removed;
+//   withJoinData            the no-JS answer reaches the form as route data.
+
+interface Props {
+  locale: Locale;
+  /** The no-JS answer (`?status=`) to render in the form's status region. */
+  answer: ApplyStatus | null;
+}
+
+const { locale, answer } = Astro.props;
+
+const HOME = { en: 'Home', ar: 'الرئيسية' }[locale];
+const meta = PAGE_META.join[locale];
+
+// The composition and the head (whose per-page SEO override needs the page id, so it is
+// handed the composition query rather than its result) load together.
+const compositionQuery = getPageComposition('join');
+const [composition, { seo }] = await Promise.all([
+  compositionQuery,
+  loadHead(Astro.locals, {
+    locale,
+    fallbackTitle: meta.title,
+    fallbackDescription: meta.description,
+    entity: compositionQuery.then((c) => (c ? { type: 'page' as const, id: c.page.id } : null)),
+  }),
+]);
+const sections = composeJoinPage(composition?.sections ?? [], answer);
+
+// `overlay` only while the page opens on its dark banner hero: an editor who hides the hero
+// would otherwise put a white-on-white header over the white "Why" band. With no visible
+// hero there is no visible h1, so a visually hidden one stands in.
+const header = firstVisibleType(sections) === 'hero' ? 'overlay' : 'solid';
+const hiddenH1 = !shown(sections, 'hero');
+
+const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+const jsonLd = [
+  buildBreadcrumbSchema([
+    { name: HOME, url: base + localizedPath('/', locale) },
+    { name: meta.title, url: base + localizedPath('/join', locale) },
+  ]),
+];
+---
+
+<BaseLayout
+  title={seo.title}
+  description={seo.description}
+  locale={locale}
+  logicalPath="/join"
+  jsonLd={jsonLd}
+  robots={seo.robots}
+  header={header}
+  styles={['join.css']}
+  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
+>
+  <main class="join-page">
+    {hiddenH1 && <h1 class="sr-only">{meta.title}</h1>}
+    <SectionRenderer locale={locale} sections={sections} />
+  </main>
+</BaseLayout>

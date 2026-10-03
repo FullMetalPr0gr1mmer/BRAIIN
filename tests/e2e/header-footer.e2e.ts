@@ -37,6 +37,8 @@ const HEADER = {
       ['Our Work', '/portfolio'],
       ['Services', '/services'],
       ['Contact us', '/contact'],
+      // Join: the last item, after the key link (the mockup's header order)
+      ['Join', '/join'],
     ],
   },
   ar: {
@@ -47,6 +49,7 @@ const HEADER = {
       ['أعمالنا', '/ar/portfolio'],
       ['الخدمات', '/ar/services'],
       ['تواصل معنا', '/ar/contact'],
+      ['انضم', '/ar/join'],
     ],
   },
 } as const;
@@ -243,6 +246,7 @@ test('the footer keeps the section links and the PDPL legal links', async ({ pag
     'المعرفة',
     'من نحن',
     'تواصل معنا',
+    'انضم',
   ]);
   await expect(lists.nth(1).locator('a')).toHaveText(['الخصوصية', 'الشروط', 'ملفات الارتباط']);
   await expect(lists.nth(1).locator('a').first()).toHaveAttribute('href', '/ar/privacy');

@@ -30,6 +30,8 @@ const LABEL_TO_CAP: Record<string, Capability> = {
   'Leads — view list / manage status / notes': 'leads.manage',
   'Leads — budget/timeline/internal_notes/ip (PII)': 'leads.pii',
   'Leads / analytics — export CSV': 'export.csv',
+  'Job applications — view / manage status / notes / erase': 'applications.manage',
+  'Job applications — contact details & CV download (PII)': 'applications.pii',
   'Analytics — read dashboards': 'analytics.read',
   'Search analytics': 'analytics.search',
   'AI Style-Finder — questions/styles editor': 'ai.editContent',
@@ -80,7 +82,7 @@ function parseDocMatrix(): Record<Role, Partial<Record<Capability, Access>>> {
 describe('ROLE_CAPS matches CLAUDE.md §5', () => {
   const doc = parseDocMatrix();
 
-  it('parses all 30 capabilities from the documented table', () => {
+  it('parses all 32 capabilities from the documented table', () => {
     expect(Object.keys(doc.admin).sort()).toEqual([...CAPABILITIES].sort());
   });
 

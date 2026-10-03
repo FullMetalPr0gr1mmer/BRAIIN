@@ -41,6 +41,9 @@ const ROUTES = [
   // after `load`), and in-content images that are lazy
   '/services/logo',
   '/ar/services/logo',
+  // Join: the banner loop (on screen at load — allowed; it mounts after `load`)
+  '/join',
+  '/ar/join',
 ] as const;
 // Pages with a below-the-fold background video surface to scroll to.
 const BELOW_FOLD: Record<string, string> = {
