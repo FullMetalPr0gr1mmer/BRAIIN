@@ -24,7 +24,7 @@ import { RECRUITMENT_POLICY_VERSION } from '@consent/recruitment';
 const LOCALES = ['en', 'ar'] as const;
 const KEYS = ['privacy', 'terms', 'cookie'] as const;
 
-/** How the notices spell a month (MSA, the Gregorian names the copy already uses). */
+/** How the notices spell a month: English, and the Gregorian names of the MSA copy. */
 const EN_MONTHS = [
   'January',
   'February',
