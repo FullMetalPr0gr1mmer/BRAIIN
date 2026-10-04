@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { SKIP_REASON, STAFF_ROLES, authFile, staffEnv } from './staff';
@@ -20,18 +19,13 @@ import { expectedSidebar, sweepRoutes, type SweepRoute } from './routes';
  *           violation, no error message on the screen, no horizontal overflow (the
  *           client's scrollWidth <= clientWidth + 2), and the sidebar the server derives
  *           for the role.
- *   axe     WCAG 2.2 A/AA. Violations present when the harness landed are recorded per
- *           route pattern in baseline.json, and anything new fails. The baseline only
- *           shrinks: fix a screen, delete its entry.
+ *   axe     zero WCAG 2.2 A/AA violations, as on the public routes (CLAUDE.md §9). The
+ *           first run found none on any admin screen, so there is no baseline to carry.
+ *
+ * Its first CI run found two live defects, both fixed in F0: every rich-text editor
+ * injected a runtime <style> that style-src refused (Tiptap's injectCSS), and the header
+ * search could not search two bilingual tables (ilike on a jsonb column).
  */
-
-interface Baseline {
-  axe: Record<string, string[]>;
-}
-
-const BASELINE = JSON.parse(
-  readFileSync(new URL('./baseline.json', import.meta.url), 'utf8'),
-) as Baseline;
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
@@ -150,11 +144,12 @@ for (const role of STAFF_ROLES) {
 
         // ---- axe --------------------------------------------------------------------
         const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
-        const known = new Set(BASELINE.axe[route.pattern] ?? []);
-        const fresh = violations
-          .filter((violation) => !known.has(violation.id))
-          .map((v) => `${v.id} [${v.impact ?? 'n/a'}] ${v.nodes.length}x: ${v.help}`);
-        expect.soft(fresh, `axe on ${route.pattern}: violations not in baseline.json`).toEqual([]);
+        expect
+          .soft(
+            violations.map((v) => `${v.id} [${v.impact ?? 'n/a'}] ${v.nodes.length}x: ${v.help}`),
+            `axe WCAG 2.2 A/AA on ${route.pattern}`,
+          )
+          .toEqual([]);
       });
     }
   });

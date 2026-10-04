@@ -35,6 +35,17 @@ function walk(dir: string, exts: readonly string[]): string[] {
 const rel = (path: string) => relative(ROOT, path).split(sep).join('/');
 const read = (path: string) => readFileSync(path, 'utf8');
 
+/** Blanks comments (keeping line breaks, so line numbers hold): rules apply to code. */
+function code(path: string): string {
+  const blank = (text: string) => text.replace(/[^\n]/g, ' ');
+  return read(path)
+    .replace(/\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->/g, blank)
+    .replace(
+      /(^|[^:])(\/\/[^\n]*)/gm,
+      (_m, before: string, comment: string) => before + blank(comment),
+    );
+}
+
 const ADMIN_PAGES = walk(join(ROOT, 'src/pages/admin'), ['.astro']);
 const ADMIN_MARKUP = [
   ...ADMIN_PAGES,
@@ -63,14 +74,14 @@ const LEGACY_ISLANDS = [
 describe('admin pages carry no <script>', () => {
   it('outside the grandfathered pages', () => {
     const offenders = ADMIN_PAGES.map(rel).filter(
-      (file) => /<script\b/i.test(read(join(ROOT, file))) && !(file in SCRIPT_GRANDFATHERED),
+      (file) => /<script\b/i.test(code(join(ROOT, file))) && !(file in SCRIPT_GRANDFATHERED),
     );
     expect(offenders).toEqual([]);
   });
 
   it('and a grandfathered page that no longer needs its entry loses it', () => {
     for (const file of Object.keys(SCRIPT_GRANDFATHERED)) {
-      expect(/<script\b/i.test(read(join(ROOT, file))), `${file}: drop its entry`).toBe(true);
+      expect(/<script\b/i.test(code(join(ROOT, file))), `${file}: drop its entry`).toBe(true);
     }
   });
 });
@@ -78,12 +89,44 @@ describe('admin pages carry no <script>', () => {
 describe('admin markup carries no style attribute', () => {
   it('no style= or style={…} in admin pages, components or the layout', () => {
     const offenders = ADMIN_MARKUP.flatMap((path) =>
-      read(path)
+      code(path)
         .split('\n')
         .map((line, i) => ({ line, at: `${rel(path)}:${i + 1}` }))
         .filter(({ line }) => /(^|[\s<])style\s*=\s*["'{]/.test(line))
         .map(({ at }) => at),
     );
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('admin code adds no <style> at runtime', () => {
+  // A <style> element created after load is refused by style-src exactly like a style=
+  // attribute in markup. The F0 sweep found Tiptap doing it on every editor screen.
+  const editors = walk(join(ROOT, 'src'), ['.ts', '.tsx']).filter((path) =>
+    /\buseEditor\(|\bnew Editor\(/.test(read(path)),
+  );
+
+  it('every Tiptap editor turns its CSS injection off', () => {
+    expect(editors.length).toBeGreaterThan(0);
+    for (const path of editors) expect(read(path), rel(path)).toMatch(/injectCSS:\s*false/);
+  });
+
+  it('and admin.css carries the ProseMirror rules Tiptap would have injected', () => {
+    const css = read(join(ROOT, 'public/styles/admin.css'));
+    expect(css).toMatch(/\.ProseMirror\s*\{[^}]*white-space:\s*pre-wrap/);
+    expect(css).toContain('.ProseMirror-gapcursor');
+  });
+
+  it('no admin module creates a style element', () => {
+    const modules = [
+      ...walk(join(ROOT, 'src/components/admin'), ['.ts', '.tsx']),
+      ...walk(join(ROOT, 'src/lib/admin'), ['.ts', '.tsx']),
+    ];
+    const offenders = modules
+      .filter((path) =>
+        /createElement\(\s*['"]style['"]|<style[\s>]|adoptedStyleSheets/.test(code(path)),
+      )
+      .map(rel);
     expect(offenders).toEqual([]);
   });
 });

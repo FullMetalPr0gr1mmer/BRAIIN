@@ -53,6 +53,12 @@ export default function RichText({ value, onChange, label, locale = 'en' }: Rich
     // Astro renders islands on the server first; Tiptap must not try to measure a DOM
     // that does not exist yet.
     immediatelyRender: false,
+    // No runtime <style>. By default Tiptap appends its ProseMirror base CSS to <head> as
+    // an inline <style>, which style-src (nonce-only, no 'unsafe-inline') refuses: every
+    // editor screen logged a CSP violation and ran WITHOUT ProseMirror's required
+    // `white-space: pre-wrap`. The same rules ship in public/styles/admin.css instead
+    // (the Tiptap section), found by the Admin v2 F0 sweep.
+    injectCSS: false,
     editorProps: {
       attributes: {
         class: 'tiptap',

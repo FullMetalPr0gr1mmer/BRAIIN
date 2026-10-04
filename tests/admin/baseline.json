@@ -1,4 +1,0 @@
-{
-  "$comment": "Admin axe baseline (Admin v2 F0, tests/admin/sweep.e2e.ts): WCAG 2.2 A/AA rule ids present on each admin route pattern when the harness landed. New violations fail the sweep; this list may only shrink. Fix a screen, then delete its entry.",
-  "axe": {}
-}
