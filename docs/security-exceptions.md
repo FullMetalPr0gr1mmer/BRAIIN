@@ -582,9 +582,10 @@ the approved design does not accept.
   each surface played the reel from 0 and pulled the whole file, so the "ranges of one
   asset" line above was not true in production. The route admits only the `VideoClip`
   allow-list (`StaticVideoPathSchema`, the same pattern as the DB CHECK), GET/HEAD only,
-  forwards no client headers but the validators, and carries the middleware's security
-  headers. It is an Astro-bypassing entry on purpose — the adapter answers every
-  `dist/client` file before routing and drops `Range` — see the header of `media.ts`.
+  forwards no client headers but the validators, and carries the same security headers as
+  a page (`ensureSecurityHeaders`). It is an Astro-bypassing entry on purpose — the adapter
+  answers every `dist/client` file before routing and drops `Range` — see the header of
+  `media.ts`.
   Guarded by `tests/lib/range.spec.ts`, `tests/lib/mediaRoute.spec.ts` and
   `tests/e2e/media-range.e2e.ts` (206/200/416 on the wire, a seekable `<video>`, and the
   contact hero looping inside its 6.2–7.9 s window). Closing this exception (Stream)

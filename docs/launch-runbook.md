@@ -715,6 +715,10 @@ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' $BASE/admin      # 302 
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/api/admin/services         # 401
 curl -s -X POST -d '{}' -o /dev/null -w '%{http_code}\n' $BASE/api/admin/services  # 403 (csrf)
 curl -sI $BASE/admin/login | grep -i 'cache-control\|content-security'    # no-store; no unsafe-inline
+curl -sI $BASE/styles/global.css | grep -i 'strict-transport\|content-security'  # HSTS; default-src 'none' (public/_headers)
+curl -sI $BASE/media/hero-poster-blur.jpg | grep -i 'strict-transport\|content-security'  # HSTS + a CSP
+curl -s -o /dev/null -D - -X POST -H 'Origin: https://evil.example' -d x=1 $BASE/contact \
+  | grep -i '^HTTP\|strict-transport'   # 403 WITH HSTS: Astro's origin check, secured by the Worker backstop
 curl -sI $BASE/services/branding | grep -i '^HTTP\|^location'            # 301 → /services#branding (code map)
 curl -sI $BASE/<an-authored-redirect-source> | grep -i '^HTTP\|^location' # 301 → its target (table, §6f); a mistyped URL → 404 private, no-store
 ```
@@ -746,7 +750,7 @@ commitment CLAUDE.md makes that is not yet met, and each should be tracked.
 | PITR + off-platform `pg_dump` to a separate-account R2; quarterly restore drill | Supabase's own backups only | §10 |
 | Playwright per-role negative-authz e2e | Covered at unit + pgTAP level; not end-to-end in a browser | §9 |
 | `RAW_TELEMETRY_RETENTION` legal sign-off | Implemented at 90 days, capped so it can only shorten | Pillar 4 |
-| CSP Report-Only cycle | Shipping **enforcing** from day one. Watch `/api/clientlog` for violations in week 1 and be ready to flip `CSP_REPORT_ONLY` in `src/middleware.ts` | §3 |
+| CSP Report-Only cycle | Shipping **enforcing** from day one. Watch `/api/clientlog` for violations in week 1 and be ready to flip `CSP_REPORT_ONLY` in `src/lib/http/securityHeaders.ts` (one switch: the middleware, the Worker backstop and the media route all read it) | §3 |
 
 ---
 
