@@ -703,6 +703,15 @@ deadline; an unread request misses it):
 select contact_email, brand_name, legal_name from public.site_profile;  -- the mailbox, brand and controller the notices render
 ```
 
+Compare the result with what `packages/consent/recruitment.ts` records for the newest
+recruitment notice version: that record is the only copy of what the notice rendered, since
+these values live in the database. If they differ (a legal name set, another address),
+correct the record before merging. **The date:** the three notices read 4 October 2026 and
+the newest version is `2026-10-04`, the day this was meant to merge. Merging later, re-date
+them first, in one commit: the six `updated` lines in `src/lib/legal/content.ts`, the version
+and its record, and design-port J-17 (`tests/lib/legal.spec.ts` fails while the notices and
+the version disagree).
+
 **The standing rule (design-port J-17).** `brand_name`, `legal_name` and `contact_email` are
 legal-notice fields: an edit in Admin → Site profile changes the Privacy Policy, Terms, Cookie
 Policy and the recruitment notice. Ship it with a code change that moves the notices' `updated`
@@ -722,8 +731,8 @@ select entity_type, entity_id, og_image from public.entity_seo
  where coalesce(trim(og_image), '') <> '';                                          -- per-page overrides
 ```
 
-Keep a stored default only if it is a reachable, current-brand image of about 1200×630 on
-`https://`. Otherwise clear it — compare-and-set on the value you just read:
+Keep a stored default only if it is an absolute `https://` URL to a reachable, current-brand
+image of about 1200×630. Otherwise clear it — compare-and-set on the value you just read:
 
 ```sql
 update public.seo_defaults set default_og_image = null
@@ -731,10 +740,16 @@ update public.seo_defaults set default_og_image = null
    and default_og_image = '<the value read above>';   -- UPDATE 1; the version trigger bumps it
 ```
 
-The admin now accepts only an `https://` URL or a `/path` in both fields
-(`ShareImageUrlSchema`), so a stored value of another shape must be corrected before that form
-saves again. At render the head still uses any http(s) or relative value, and skips only an
-unusable one (another scheme, credentials, malformed) for the next candidate.
+Why only an absolute `https://` URL: the API accepts an `https://` URL or a `/path` on the site
+for both columns (`ShareImageUrlSchema`), but the one Admin field — SEO defaults → **Default OG
+image** — is a URL input, which takes an absolute URL only, and the form submits every field. So
+a stored default of any other shape, a `/path` included, keeps the whole SEO defaults form from
+saving until it changes. A good `/path` image can go back in through Admin, after the clear, as
+its absolute `https://` URL. `entity_seo.og_image` has no Admin field: it is written only through
+`/api/admin/entity-seo`, which applies the same schema. At render the head still uses any
+http(s) or relative value, and skips only an unusable one (another scheme, credentials,
+malformed) for the next candidate.
+
 After the deploy: `curl -s $BASE/ | grep -o 'og:image" content="[^"]*'` prints
 `$BASE/og/default.jpg` (unless a default was kept), and `/services/logo` its poster; re-scrape
 the key pages in the Facebook and LinkedIn preview tools, which cache a card per URL.
