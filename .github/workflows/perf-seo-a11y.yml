@@ -117,14 +117,18 @@ jobs:
         env:
           CAPTURE_DIR: visual-capture
         run: npx playwright test tests/visual/capture.e2e.ts tests/admin/capture.e2e.ts --retries=0
+      # Nor is its upload: an artifact-service error must not fail the gate either, and
+      # `overwrite` lets a re-run (launch runbook §5b) replace an earlier attempt's artifact.
       - name: Upload design capture
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: design-capture
           path: visual-capture
           retention-days: 7
           if-no-files-found: ignore
+          overwrite: true
       - name: Stop Supabase
         if: always()
         run: supabase stop
