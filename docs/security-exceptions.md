@@ -191,7 +191,7 @@ The Worker is deployed and publicly reachable at `https://braiin-station.braiin.
 
 ### Why (justification)
 
-Not a decision — a **hard blocker**. Cloudflare WAF custom rules and rate-limiting rules are **zone-scoped**, and `braiinstation.com` currently has no NS records at all: the domain is not delegated to Cloudflare, so the account has no zone to attach a rule to. `*.workers.dev` sits in Cloudflare's own zone, not the customer's, and cannot carry customer WAF rules. There is no configuration that closes this before DNS cutover.
+Not a decision — a **hard blocker**. Cloudflare WAF custom rules and rate-limiting rules are **zone-scoped**, and the studio's domain, `braiinstatiion.com` (two *i*'s — corrected 2026-10-04, see the correction below), is registered at GoDaddy and served by GoDaddy's nameservers (`domaincontrol.com`): it is not delegated to Cloudflare, so the account has no zone to attach a rule to. `*.workers.dev` sits in Cloudflare's own zone, not the customer's, and cannot carry customer WAF rules. There is no configuration that closes this before DNS cutover.
 
 ### What still holds, and what genuinely does not
 
@@ -213,8 +213,8 @@ Bounding the exposure: the origin is an unadvertised workers.dev subdomain with 
 
 ### Remediation plan (clears this exception)
 
-1. ☐ Register/delegate `braiinstation.com` to Cloudflare; confirm the zone is active.
-2. ☐ Add the custom domain to the Worker; rebuild with `PUBLIC_SITE_URL=https://www.braiinstation.com` (it is inlined at build time — a binding cannot override it) and redeploy.
+1. ☐ Delegate `braiinstatiion.com` to Cloudflare, **copying every DNS record first** — above all the Microsoft 365 MX, SPF, DKIM and autodiscover records that carry `hello@braiinstatiion.com`, which is now the privacy notice's rights contact (design-port J-17): a delegation that drops them silently stops privacy requests arriving. Confirm mail still flows, then that the zone is active.
+2. ☐ Add the custom domain to the Worker; rebuild with `PUBLIC_SITE_URL=https://www.braiinstatiion.com` (it is inlined at build time — a binding cannot override it) and redeploy.
 3. ☐ Create all six rules from runbook §7. Cross-check the crawler tokens against `src/lib/seo/crawlers.ts`, the one code-owned map `tests/seo/crawlers.spec.ts` snapshots.
 4. ☐ Verify by observation, not by reading the dashboard: 31 requests in a minute to `/api/search` gets a block; a `User-Agent: GPTBot` request gets a block; a `User-Agent: PerplexityBot` request does not.
 
@@ -224,8 +224,9 @@ Bounding the exposure: the origin is an unadvertised workers.dev subdomain with 
 
 The 2026-09-01 expiry passed with the entry still open and nobody revisiting it. That is
 the failure this register exists to prevent, so the lapse is recorded rather than quietly
-re-dated. **Nothing in the remediation plan has moved:** `braiinstation.com` is still not
-delegated, so there is still no zone to hold a rule.
+re-dated. **Nothing in the remediation plan has moved:** `braiinstation.com` *(sic — the
+wrong domain; corrected 2026-10-04 below)* is still not delegated, so there is still no zone
+to hold a rule.
 
 What changed is the exposure. The UI v2 port (plan `check-latest-folder-in-dazzling-widget`)
 adds a **second public write path** — `/api/apply`, a multipart job application with a CV
@@ -251,6 +252,22 @@ crawler rows, remain open under the original remediation plan — the code limit
 substitute for them.
 
 **New expiry 2026-12-24.** Close condition unchanged.
+
+### Correction 2026-10-04 — the entry named a domain that is not the studio's
+
+Until this date the entry, the runbook and the code named `braiinstation.com` — one *i*. That
+domain is nobody's: the live verification of 2026-10-03 found no registration (RDAP 404) and
+no DNS, which is why it "had no NS records". The studio's domain is **`braiinstatiion.com`**,
+two *i*'s, registered at GoDaddy (nameservers `domaincontrol.com`) with Microsoft 365 mail —
+the `hello@` address the Site profile shows. The blocker stands exactly as written (that
+domain is not delegated to Cloudflare either, so there is still no zone), and the remediation
+plan above now names it, with one step added: copy every record, the mail ones above all,
+before delegating. The one-*i* spelling is gone from the code, config and seeds
+(`tests/lib/staleDomain.spec.ts` keeps it out; the served-HTML gate checks every page and
+discovery file); production's `tenants.primary_domain` is corrected by runbook §6h. The
+one-*i* name stays unregistered, so anyone could register it and receive mail still sent
+there — registering it defensively is the owner's option. Expiry and close condition
+unchanged.
 
 ---
 

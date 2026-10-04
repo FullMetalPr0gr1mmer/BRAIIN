@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ServiceRow } from '@schemas/content';
 import { SEED_SERVICES, seedServiceRows } from '../fixtures/serviceSeeds';
+import { PUBLIC_SITE_URL as SITE } from '../stubs/astro-env-client';
+
+/** The origin, escaped for a RegExp (Node 22 has no RegExp.escape). */
+const SITE_RE = SITE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Services default to none — the unconfigured-Supabase case the structure tests below rely
 // on — and one test swaps in the seeded catalogue.
@@ -37,12 +41,12 @@ describe('/sitemap.xml', () => {
       '/contact',
       '/join',
     ]) {
-      expect(xml).toContain(`<loc>https://www.braiinstation.com${path}</loc>`);
-      expect(xml).toContain(`<loc>https://www.braiinstation.com/ar${path}</loc>`);
+      expect(xml).toContain(`<loc>${SITE}${path}</loc>`);
+      expect(xml).toContain(`<loc>${SITE}/ar${path}</loc>`);
     }
     // Home is the special case where /ar has no trailing path segment.
-    expect(xml).toContain('<loc>https://www.braiinstation.com/</loc>');
-    expect(xml).toContain('<loc>https://www.braiinstation.com/ar</loc>');
+    expect(xml).toContain(`<loc>${SITE}/</loc>`);
+    expect(xml).toContain(`<loc>${SITE}/ar</loc>`);
   });
 
   it('gives every URL reciprocal hreflang alternates plus x-default', async () => {
@@ -68,9 +72,9 @@ describe('/sitemap.xml', () => {
     // fetch. Static routes have no row and therefore no truthful lastmod, so they get
     // none. Pillar 3 asks for a TRUTHFUL dateModified, not a present one.
     const xml = await body();
-    const homeEntry = (xml.match(
-      /<url><loc>https:\/\/www\.braiinstation\.com\/<\/loc>[\s\S]*?<\/url>/,
-    ) ?? [''])[0];
+    const homeEntry = (xml.match(new RegExp(`<url><loc>${SITE_RE}/</loc>[\\s\\S]*?</url>`)) ?? [
+      '',
+    ])[0];
     expect(homeEntry).not.toContain('<lastmod>');
   });
 
@@ -113,11 +117,11 @@ describe('/sitemap.xml', () => {
       const locs = [...xml.matchAll(/<loc>([^<]+\/services\/[^<]+)<\/loc>/g)].map((m) => m[1]);
       expect(locs).toHaveLength(56);
       for (const { slug } of SEED_SERVICES) {
-        expect(xml).toContain(`<loc>https://www.braiinstation.com/services/${slug}</loc>`);
-        expect(xml).toContain(`<loc>https://www.braiinstation.com/ar/services/${slug}</loc>`);
+        expect(xml).toContain(`<loc>${SITE}/services/${slug}</loc>`);
+        expect(xml).toContain(`<loc>${SITE}/ar/services/${slug}</loc>`);
       }
       const logo = xml.match(
-        /<url><loc>https:\/\/www\.braiinstation\.com\/services\/logo<\/loc>[\s\S]*?<\/url>/,
+        new RegExp(`<url><loc>${SITE_RE}/services/logo</loc>[\\s\\S]*?</url>`),
       )?.[0];
       expect(logo).toContain('<lastmod>2026-09-27</lastmod>');
     });

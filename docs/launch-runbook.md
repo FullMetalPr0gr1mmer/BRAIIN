@@ -103,7 +103,7 @@ broken" cause — it is not broken, it is unclaimed.
 2. Then, in the SQL editor:
 
 ```sql
-select public.bootstrap_admin('you@braiinstation.com');
+select public.bootstrap_admin('you@braiinstatiion.com');
 ```
 
 That writes the `profiles` row **and** mirrors the claim into `auth.users.raw_app_meta_data`,
@@ -165,10 +165,11 @@ extension exists, so after enabling it:
 create trigger leads_notify after insert on public.leads
   for each row execute function app.tg_notify_lead();
 
--- Where the trigger posts, and the shared secret it presents:
+-- Where the trigger posts — the DEPLOYED origin (workers.dev until the DNS cutover, then
+-- https://www.braiinstatiion.com) — and the shared secret it presents:
 update public.site_settings
    set identity = identity || jsonb_build_object(
-         'notify_lead_url', 'https://www.braiinstation.com/api/hooks/notify-lead')
+         'notify_lead_url', 'https://braiin-station.braiin.workers.dev/api/hooks/notify-lead')
  where tenant_id = (select id from public.tenants order by created_at limit 1);
 
 select vault.create_secret('<same value as NOTIFY_LEAD_SECRET>', 'notify_lead_secret',
@@ -738,6 +739,17 @@ After the deploy: `curl -s $BASE/ | grep -o 'og:image" content="[^"]*'` prints
 `$BASE/og/default.jpg` (unless a default was kept), and `/services/logo` its poster; re-scrape
 the key pages in the Facebook and LinkedIn preview tools, which cache a card per URL.
 
+**3. The one-*i* domain.** The studio's domain is `braiinstatiion.com` (two *i*'s); the one-*i*
+spelling was never registered by anyone (EXC-004, correction of 2026-10-04). The seeds now
+carry the right one; production's tenant row still has the old value. Nothing reads it, so
+this is hygiene, not an outage — compare-and-set:
+
+```sql
+update public.tenants set primary_domain = 'www.braiinstatiion.com'
+ where id = '00000000-0000-0000-0000-0000000000b1'
+   and primary_domain = 'www.braiinstation.com';   -- UPDATE 1 (UPDATE 0: already corrected)
+```
+
 ---
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)
@@ -761,7 +773,7 @@ snapshot-tests the code-owned map against robots.txt, but nothing can test the W
 ## 8. Smoke test
 
 ```bash
-BASE=https://www.braiinstation.com
+BASE=https://braiin-station.braiin.workers.dev   # after the DNS cutover: https://www.braiinstatiion.com
 
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/healthz                    # 200
 curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' $BASE/admin      # 302 → /admin/login

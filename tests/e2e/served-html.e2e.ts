@@ -62,9 +62,28 @@ for (const route of ROUTES) {
   test(`served HTML uses the current brand on ${route}`, async ({ request }) => {
     // Owner decision 1 (UI v2): "Braiin Statiion". The single-i "Station" spelling must
     // not reach any displayed string — the legal pages included, since their copy names the
-    // brand and the controller from the identity (J-17) instead of spelling them; the
-    // domain `braiinstation.com` is unaffected (this matches the two-word name only).
+    // brand and the controller from the identity (J-17) instead of spelling them. This
+    // matches the two-word name only; the one-i DOMAIN has its own gate below.
     const html = await (await request.get(route)).text();
     expect(html.match(/Braiin Station\b/g) ?? [], `old brand name on ${route}`).toHaveLength(0);
+  });
+}
+
+// The one-i domain was never the studio's (theirs is braiinstatiion.com, two i's): mail to
+// it bounced, and whoever registers it would receive whatever a page still sends there
+// (2026-10-03; tests/lib/staleDomain.spec.ts keeps it out of the source). This is the
+// served side — every page and every discovery file, where seeded or authored content and
+// the build's origin end up.
+for (const path of [
+  ...ROUTES,
+  '/robots.txt',
+  '/sitemap.xml',
+  '/llms.txt',
+  '/creative-knowledge/rss.xml',
+  '/ar/creative-knowledge/rss.xml',
+]) {
+  test(`no one-i domain on ${path}`, async ({ request }) => {
+    const body = await (await request.get(path)).text();
+    expect(body.match(/braiinstation\.com/gi) ?? [], `one-i domain on ${path}`).toEqual([]);
   });
 }
