@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { GET as enRss } from '@/pages/creative-knowledge/rss.xml';
 import { GET as arRss } from '@/pages/ar/creative-knowledge/rss.xml';
+import { PUBLIC_SITE_URL as SITE } from '../stubs/astro-env-client';
 
 // The AR feed did not exist — the route comment said it "can be added later", which is
 // how a bilingual site ships a monolingual feed. Both twins now share one builder, and
@@ -24,20 +25,16 @@ describe('RSS feeds — both language twins exist', () => {
   });
 
   it('points each feed at its OWN language channel, not the EN one', async () => {
-    expect(await text(enRss)).toContain(
-      '<link>https://www.braiinstation.com/creative-knowledge</link>',
-    );
-    expect(await text(arRss)).toContain(
-      '<link>https://www.braiinstation.com/ar/creative-knowledge</link>',
-    );
+    expect(await text(enRss)).toContain(`<link>${SITE}/creative-knowledge</link>`);
+    expect(await text(arRss)).toContain(`<link>${SITE}/ar/creative-knowledge</link>`);
   });
 
   it('carries a self-referential atom:link per feed', async () => {
     expect(await text(enRss)).toContain(
-      '<atom:link href="https://www.braiinstation.com/creative-knowledge/rss.xml" rel="self"',
+      `<atom:link href="${SITE}/creative-knowledge/rss.xml" rel="self"`,
     );
     expect(await text(arRss)).toContain(
-      '<atom:link href="https://www.braiinstation.com/ar/creative-knowledge/rss.xml" rel="self"',
+      `<atom:link href="${SITE}/ar/creative-knowledge/rss.xml" rel="self"`,
     );
   });
 

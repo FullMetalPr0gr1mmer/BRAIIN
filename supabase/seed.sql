@@ -18,7 +18,7 @@ end $$;
 
 -- tenants (00-tenant.json)
 insert into public.tenants (id, name, primary_domain) values
-  ('00000000-0000-0000-0000-0000000000b1', 'Braiin Station', 'www.braiinstation.com')
+  ('00000000-0000-0000-0000-0000000000b1', 'Braiin Station', 'www.braiinstatiion.com')
 on conflict (id) do nothing;
 
 -- site_settings (00-tenant.json)

@@ -18,8 +18,11 @@ import react from '@astrojs/react';
  * so a CMS edit never triggers a full SSG rebuild.
  */
 export default defineConfig({
-  // TODO(phase-0): replace with the real production origin before launch.
-  site: 'https://www.braiinstation.com',
+  // No `site`: PUBLIC_SITE_URL (astro:env, inlined at build) is the ONE origin — every
+  // canonical, hreflang, og:url, sitemap <loc> and feed link reads it. Astro reads `site`
+  // for `Astro.site`, prerendering and the `astro:i18n` absolute-URL helpers, none of which
+  // this app uses; the value that sat here was a one-i domain the studio never owned
+  // (tests/lib/staleDomain.spec.ts).
   output: 'server',
   // 'ignore': both `/x` and `/x/` resolve (no 404s); the per-page self-referential
   // canonical in <SeoHead> consolidates to the non-trailing URL for SEO.

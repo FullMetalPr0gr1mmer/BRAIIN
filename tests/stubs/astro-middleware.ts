@@ -1,6 +1,6 @@
 // Stub for the `astro:middleware` virtual module, which only exists inside the Astro
 // build. Same reasoning as the `cloudflare:workers` stub beside it: without one,
-// src/middleware.ts — the single security enforcement point — cannot be imported by a
+// src/middleware.ts — the primary security enforcement point — cannot be imported by a
 // unit test at all, so its ordering rules (maintenance before cache, redirects only
 // after a 404, headers on every exit) were guarded by reading it carefully.
 //
