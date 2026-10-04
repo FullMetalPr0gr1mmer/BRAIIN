@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PortfolioCard } from '@/lib/data/portfolio';
 import type { SectionData } from '@/lib/sections/types';
+import { PUBLIC_SITE_URL as SITE } from '../stubs/astro-env-client';
 
 // The route loaders behind Our Work and All projects (src/lib/portfolio/pages.ts): which
 // cards a filter is validated against, which sections receive route data, when the
@@ -62,7 +63,7 @@ vi.mock('@/lib/seo/head', () => ({
 }));
 
 const { loadOurWork, loadAllProjects } = await import('@/lib/portfolio/pages');
-const url = (q = '') => new URL(`https://www.braiinstation.com/portfolio${q}`);
+const url = (q = '') => new URL(`${SITE}/portfolio${q}`);
 const byType = (sections: SectionData[], type: string) => sections.find((s) => s.type === type);
 
 beforeEach(() => {
@@ -134,7 +135,7 @@ describe('loadOurWork', () => {
     const page = await loadOurWork(url(), {} as never, 'ar');
     expect(entities).toEqual([{ type: 'page', id: 'id-portfolio' }]);
     expect(page.head.seo.title).toBe('أعمالنا');
-    expect(JSON.stringify(page.jsonLd)).toContain('https://www.braiinstation.com/ar/portfolio');
+    expect(JSON.stringify(page.jsonLd)).toContain(`${SITE}/ar/portfolio`);
   });
 });
 

@@ -35,6 +35,9 @@ const ROUTES = [
   '/ar/join',
   '/join?status=bad_type',
   '/search',
+  // The privacy notice: its rights lines are mailto: links inside the prose (J-17)
+  '/privacy',
+  '/ar/privacy',
 ];
 
 // WCAG 2.0/2.1/2.2 level A + AA rule tags.
