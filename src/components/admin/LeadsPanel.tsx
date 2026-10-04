@@ -73,6 +73,17 @@ export function interestOf(row: {
   }
   return '—';
 }
+
+/**
+ * The notes editor appears only after the audited reveal. Notes are one of the
+ * `leads.pii` columns, so the plain detail fetch strips them: an editor shown before
+ * the reveal would start empty, and "Save notes" would overwrite the real notes
+ * with nothing.
+ */
+export function showNotesEditor(canSeePii: boolean, piiShown: boolean): boolean {
+  return canSeePii && piiShown;
+}
+
 const STATUSES = ['new', 'in_progress', 'done', 'spam'] as const;
 
 export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
@@ -247,7 +258,7 @@ export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
 
           {canSeePii && !piiShown && (
             <button type="button" onClick={() => void open(selected.id, true)}>
-              Reveal contact details (this access is logged)
+              Reveal contact details and notes (this access is logged)
             </button>
           )}
 
@@ -264,7 +275,7 @@ export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
             </dl>
           )}
 
-          {canSeePii && (
+          {showNotesEditor(canSeePii, piiShown) && (
             <label className="field">
               <span>Internal notes</span>
               <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />

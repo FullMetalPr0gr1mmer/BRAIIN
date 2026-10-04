@@ -29,7 +29,7 @@ export default defineConfig({
         new URL('./tests/stubs/cloudflare-workers.ts', import.meta.url),
       ),
       // `astro:middleware` likewise: `defineMiddleware` is an identity in Astro, and the
-      // stub makes src/middleware.ts — the one security enforcement point — drivable
+      // stub makes src/middleware.ts — the primary security enforcement point — drivable
       // with a fake context and `next` (tests/lib/middlewareRedirects.spec.ts).
       'astro:middleware': fileURLToPath(
         new URL('./tests/stubs/astro-middleware.ts', import.meta.url),

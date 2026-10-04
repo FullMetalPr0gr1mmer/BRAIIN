@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolveSeo, type EntitySeo, type SeoDefaults } from '@/lib/data/seo';
 import { DEFAULT_TITLE_TEMPLATE, applyTitleTemplate, siteTitle } from '@/lib/seo/title';
+import { ogImageCandidates, resolveOgImage } from '@/lib/seo/ogImage';
 import { AnalyticsEventSchema, ConsentRecordSchema } from '@schemas/analytics';
 
 // The precedence rule the SEO role's whole surface depends on, plus the bounds on the
@@ -34,7 +35,35 @@ describe('resolveSeo precedence', () => {
     const seo = resolveSeo({ ...en, entity, defaults, fallbackTitle: 'Fallback' });
     expect(seo.title).toBe('Braiin Statiion | Branding');
     expect(seo.description).toBe('Identity systems.');
-    expect(seo.ogImage).toBe('https://cdn.test/branding.png');
+    expect(seo.entityOgImage).toBe('https://cdn.test/branding.png');
+    expect(seo.defaultOgImage).toBe('https://cdn.test/default.png');
+  });
+
+  it('keeps the share-image override and the tenant default APART (the page’s image sits between)', () => {
+    // Merged here, as they were until 2026-10, the tenant default reached the page before
+    // its own poster or banner could — one authored default replaced them all.
+    const seo = resolveSeo({ ...en, entity: null, defaults, fallbackTitle: 'Logo Design' });
+    expect(seo.entityOgImage).toBeUndefined();
+    expect(seo.defaultOgImage).toBe('https://cdn.test/default.png');
+    const own = 'https://site.test/_image?href=poster.jpg';
+    const og = resolveOgImage(ogImageCandidates(seo, own), {
+      base: 'https://site.test',
+      locale: 'en',
+      brand: BRAND,
+    });
+    expect(og.url).toBe(own);
+  });
+
+  it('treats a blank share image, override or default, as unset', () => {
+    const blank: EntitySeo = { ...entity, og_image: '  ' };
+    const seo = resolveSeo({
+      ...en,
+      entity: blank,
+      defaults: { ...defaults, default_og_image: '' },
+      fallbackTitle: 'X',
+    });
+    expect(seo.entityOgImage).toBeUndefined();
+    expect(seo.defaultOgImage).toBeUndefined();
   });
 
   it("ranks the page's own title ABOVE the tenant default title", () => {
