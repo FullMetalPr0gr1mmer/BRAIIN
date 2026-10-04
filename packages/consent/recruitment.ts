@@ -10,15 +10,28 @@
 // required one. The required box covers THIS application; the optional box covers future
 // roles and lengthens retention from 12 to 24 months.
 //
-// Bump the version whenever these words change — APPEND to RECRUITMENT_POLICY_VERSIONS,
-// never replace: the version a form showed is stored with the consent, so an application
-// can always be read against its text (each version's text is in git at the commit that
-// added it). The endpoint accepts only a version on this list, so a stored version always
-// names a notice that existed; older ones stay accepted because an edge-cached page can
-// keep showing its notice long after a deploy.
+// Bump the version whenever these words change — or the privacy notice's recruitment
+// section (src/lib/legal/content.ts), or the identity values either renders: the brand,
+// the registered legal name and the contact email in the Site profile fill them, so an
+// edit there is a notice change too (design-port J-17). APPEND to
+// RECRUITMENT_POLICY_VERSIONS, never replace: the version a form showed is stored with the
+// consent, so an application can always be read against its text (each version's text is
+// in git at the commit that added it; the identity values it rendered are recorded below,
+// since those live in the database, not in git). The endpoint accepts only a version on
+// this list, so a stored version always names a notice that existed; older ones stay
+// accepted because an edge-cached page can keep showing its notice long after a deploy.
+//
+// What each version rendered, beyond the words in git:
+//   2026-09-30  brand "Braiin Statiion" / "بريّن ستيشن"; no legal name; rights requests to
+//               privacy@braiinstation[.]com — hardcoded, on a one-i domain the studio never
+//               owned (the defect the next version fixes; written defanged so no usable copy
+//               of it stays in the code).
+//   2026-10-04  brand "Braiin Statiion" / "بريّن ستيشن"; no legal name (the controller is
+//               the brand); rights requests to the Site profile's contact address,
+//               hello@braiinstatiion.com.
 
 /** Every recruitment notice ever published, oldest first. Append-only. */
-export const RECRUITMENT_POLICY_VERSIONS = ['2026-09-30'] as const;
+export const RECRUITMENT_POLICY_VERSIONS = ['2026-09-30', '2026-10-04'] as const;
 /** The notice the form shows now. */
 export const RECRUITMENT_POLICY_VERSION: (typeof RECRUITMENT_POLICY_VERSIONS)[number] =
   RECRUITMENT_POLICY_VERSIONS[RECRUITMENT_POLICY_VERSIONS.length - 1]!;

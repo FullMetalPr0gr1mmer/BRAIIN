@@ -2,6 +2,8 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import type { LegalDoc } from '@/lib/legal/content';
+import { legalParty, legalSegments, legalText } from '@/lib/legal/render';
+import { getIdentity } from '@/lib/identity';
 import { setTierA } from '@/lib/http/cacheTags';
 import { loadHead } from '@/lib/seo/head';
 
@@ -17,14 +19,20 @@ const { doc, locale, logicalPath } = Astro.props;
 // content routes. Set here so all 6 legal routes (EN/AR × privacy/terms/cookie) inherit it.
 setTierA(Astro.response, { route: 'legal', locale });
 
-// The <title> follows the site format like every page. The legal BODY copy is not yet
-// identity-driven: it names the data controller, and the registered legal entity is an
-// open owner item (site_profile.legal_name) awaiting legal review.
-const { seo } = await loadHead(Astro.locals, {
+// The copy names the brand, the data controller and the privacy mailbox through tokens
+// filled from the public identity (src/lib/legal/render.ts, design-port J-17): the
+// registered legal name when the Site profile has one, else the brand; the contact address
+// as the mailbox, rendered as a mailto: link with dir="ltr" (the footer's pattern — an
+// address must not be re-ordered inside RTL text). The identity read is memoised per
+// request, so the description's read below and the head's are one query.
+const { seo, identity } = await loadHead(Astro.locals, {
   locale,
   fallbackTitle: doc.title,
-  fallbackDescription: doc.intro,
+  fallbackDescription: getIdentity(Astro.locals).then((id) =>
+    legalText(doc.intro, legalParty(id, locale)),
+  ),
 });
+const party = legalParty(identity, locale);
 ---
 
 <BaseLayout
@@ -39,13 +47,23 @@ const { seo } = await loadHead(Astro.locals, {
     <h1>{doc.title}</h1>
     <p><small>{doc.updated}</small></p>
     <p class="notice" role="note">{doc.draftNotice}</p>
-    <p>{doc.intro}</p>
+    <p>{legalText(doc.intro, party)}</p>
     {
       doc.sections.map((s) => (
         <section id={s.id}>
           <h2>{s.heading}</h2>
           {s.body.map((p) => (
-            <p>{p}</p>
+            <p>
+              {legalSegments(p, party).map((seg) =>
+                seg.kind === 'mailbox' ? (
+                  <a href={`mailto:${seg.address}`} dir="ltr">
+                    {seg.address}
+                  </a>
+                ) : (
+                  seg.text
+                ),
+              )}
+            </p>
           ))}
         </section>
       ))

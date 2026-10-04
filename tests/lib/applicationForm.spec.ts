@@ -14,7 +14,11 @@ import {
   applicationKeyToField,
   formToApplicationInput,
 } from '@schemas/application';
-import { RECRUITMENT_POLICY_VERSION, recruitmentConsent } from '@consent/recruitment';
+import {
+  RECRUITMENT_POLICY_VERSION,
+  RECRUITMENT_POLICY_VERSIONS,
+  recruitmentConsent,
+} from '@consent/recruitment';
 import {
   FORM_OUTCOMES,
   applyStatusFromHttp,
@@ -371,5 +375,18 @@ describe('the form’s copy', () => {
     expect(en.application).not.toContain('{brand}');
     expect(recruitmentConsent('ar', 'بريّن ستيشن').application).toContain('بريّن ستيشن');
     expect(RECRUITMENT_POLICY_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('the notice versions only grow: dated, oldest first, the form showing the newest', () => {
+    // Append-only (packages/consent/recruitment.ts): a stored consent names its version, so
+    // an old one is never removed and a new one always sorts after it. 2026-10-04 is the
+    // notice whose rights line comes from the Site profile (design-port J-17).
+    expect(RECRUITMENT_POLICY_VERSIONS[0]).toBe('2026-09-30');
+    expect(RECRUITMENT_POLICY_VERSIONS).toContain('2026-10-04');
+    for (const [i, version] of RECRUITMENT_POLICY_VERSIONS.entries()) {
+      expect(version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      if (i > 0) expect(version > RECRUITMENT_POLICY_VERSIONS[i - 1]!, version).toBe(true);
+    }
+    expect(RECRUITMENT_POLICY_VERSION).toBe(RECRUITMENT_POLICY_VERSIONS.at(-1));
   });
 });

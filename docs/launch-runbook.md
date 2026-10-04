@@ -685,6 +685,30 @@ applications: the detail view is everything stored about them (plus the CV), and
 removes the CV object first, then the row — never the reverse, so a failed erase can be retried
 and no CV is ever left without the row that would expire it.
 
+### 6h. Post-Join hardening (2026-10) — before merging the site fixes
+
+No migration ships with these changes, so the deploy guard has nothing to wait for. The checks
+below are read-only unless marked; run them in the Supabase dashboard's SQL editor on
+`braiin-prod` **before merging** — no secret appears in any of them.
+
+**1. The privacy contact (owner decision H1).** From this deploy the privacy notice sends rights
+requests — its DSAR line and the Join recruitment section, EN + AR — to the Site profile's
+**contact email**, the address the footer shows, instead of a hardcoded mailbox on a one-*i*
+domain nobody had registered. Read what the notices will render, and have the owner confirm
+the inbox is **monitored** for privacy requests (PDPL gives the data subject a response
+deadline; an unread request misses it):
+
+```sql
+select contact_email, brand_name, legal_name from public.site_profile;  -- the mailbox, brand and controller the notices render
+```
+
+**The standing rule (design-port J-17).** `brand_name`, `legal_name` and `contact_email` are
+legal-notice fields: an edit in Admin → Site profile changes the Privacy Policy, Terms, Cookie
+Policy and the recruitment notice. Ship it with a code change that moves the notices' `updated`
+dates (`src/lib/legal/content.ts`) and appends a recruitment notice version recording the new
+values (`packages/consent/recruitment.ts`) — once the site is behind a zone cache, with a
+`site:identity` purge. Setting the registered legal name (an open owner item) is such an edit.
+
 ---
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)

@@ -44,10 +44,6 @@ const PATHS = [
 ];
 const ROUTES = PATHS.flatMap((p) => [p, p === '/' ? '/ar' : `/ar${p}`]);
 
-// Legal copy names the data controller, which must be the registered legal entity — an
-// open owner decision. Exempt from the brand check until that name is settled.
-const LEGAL = /\/(privacy|terms|cookie-policy)$/;
-
 const BANNED: [RegExp, string][] = [
   [/<style[\s>]/i, 'inline <style> block'],
   [/\sstyle\s*=\s*["']/i, 'inline style attribute'],
@@ -58,6 +54,9 @@ const BANNED: [RegExp, string][] = [
   [/formspree/i, 'third-party form endpoint'],
   [/data:image\//i, 'data: image URI'],
   [/class\s*=\s*["'][^"']*\bsection-error\b/i, 'a section failed to render (SectionBoundary)'],
+  // The legal copy's tokens are filled from the identity at render (src/lib/legal/render.ts,
+  // design-port J-17); one reaching the page is a slot that bypassed the filler.
+  [/%(?:brand|controller|mailbox)%/, 'unfilled legal-copy token'],
 ];
 
 for (const route of ROUTES) {
@@ -86,13 +85,12 @@ for (const route of ROUTES) {
     );
   });
 
-  if (!LEGAL.test(route)) {
-    test(`served HTML uses the current brand on ${route}`, async ({ request }) => {
-      // Owner decision 1 (UI v2): "Braiin Statiion". The single-i "Station" spelling must
-      // not reach any displayed string; the domain `braiinstation.com` is unaffected (this
-      // matches the two-word name only).
-      const html = await (await request.get(route)).text();
-      expect(html.match(/Braiin Station\b/g) ?? [], `old brand name on ${route}`).toHaveLength(0);
-    });
-  }
+  test(`served HTML uses the current brand on ${route}`, async ({ request }) => {
+    // Owner decision 1 (UI v2): "Braiin Statiion". The single-i "Station" spelling must
+    // not reach any displayed string — the legal pages included, since their copy names the
+    // brand and the controller from the identity (J-17) instead of spelling them; the
+    // domain `braiinstation.com` is unaffected (this matches the two-word name only).
+    const html = await (await request.get(route)).text();
+    expect(html.match(/Braiin Station\b/g) ?? [], `old brand name on ${route}`).toHaveLength(0);
+  });
 }
