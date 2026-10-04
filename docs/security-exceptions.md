@@ -16,6 +16,7 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-008 | 2026-09-30 | Kareem (kareem@floppytech.ai)  | 2026-12-31 | Open | Join CVs (PDF / .docx, ≤ 10 MB) are stored and downloaded **without a virus scan** — no AV service on the free tier. Compensated by a structural check at upload, a private bucket, attachment-only download under a sandbox CSP, and a "Not virus-scanned" badge |
 | EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open (re-signed 2026-09-29) | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops |
 | EXC-010 | 2026-10-01 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `basic-ftp` GHSA-c475-qrg2-pj4r allowlisted in the dev audit gate — every 5.x is affected and no dependent in the Lighthouse CI chain takes the 6.x fix |
+| EXC-011 | 2026-10-03 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `http-cache-semantics` GHSA-ch52-4w7c-c8xp allowlisted in the prod audit gate — every release is affected (no fix exists); its only importer is Astro's build-time remote-image cache, which this site never uses, and it is absent from the Worker |
 
 ---
 
@@ -671,4 +672,45 @@ never ships in the Worker.
 
 **Close condition:** `npm run audit:all` reports 0 unallowlisted high/critical with the
 `GHSA-c475-qrg2-pj4r` entry REMOVED from `scripts/audit-gate.mjs`. If nothing lands by
+expiry, re-justify — never extend silently.
+
+---
+
+## EXC-011 — `http-cache-semantics` advisory allowlisted in the production audit gate
+
+**Pillar:** 1 (Security) — CLAUDE.md §3 (supply chain), §11.
+**Opened:** 2026-10-03 · **Owner:** Developer (tech@purecoffee.sa) · **Expiry:** 2026-11-30.
+
+### What changed
+
+`GHSA-ch52-4w7c-c8xp` (HIGH, CVSS 7.5 — `max-stale` request handling can let a shared cache
+serve one user's cached response to another) was published against `http-cache-semantics`,
+affected range `<=4.2.0`. 4.2.0 is the newest release, so there is no fixed version to pin
+or override to. It reaches the production scope only because `astro` lists it as a
+dependency (`astro@7.3.5 → http-cache-semantics@4.2.0`); npm's suggested "fix" is
+downgrading Astro to 2.10.9, which is not an option. It is a documented, expiring
+`ALLOWLIST` entry in `scripts/audit-gate.mjs`. Without it the blocking production gate
+fails every pull request, unrelated ones included.
+
+### Why the residual risk is acceptable
+
+- **One importer, build-time only.** The package is imported by
+  `node_modules/astro/dist/assets/build/remote.js` alone: the cache Astro keeps of REMOTE
+  images it downloads while running `astro build`.
+- **That path never runs here.** `image.domains` is empty in `astro.config.mjs`, so the build
+  fetches no remote images.
+- **Not in the Worker.** A search of the built server bundle (`dist/server`) finds no
+  reference to the package. Nothing the site serves is cached with it.
+- **The advisory needs a shared cache answering many users.** A build-step cache on a CI
+  runner serves no one.
+
+### Remediation plan (clears this exception)
+
+1. ☐ Watch for an `http-cache-semantics` release above 4.2.0, or an Astro release that drops
+   or replaces it. Either clears this with a routine bump.
+2. ☐ If remote images are ever allowed (`image.domains` / `remotePatterns`, e.g. the Admin v2
+   uploads bucket), re-assess before that ships: the build-time cache would then run.
+
+**Close condition:** `npm run audit` reports 0 unallowlisted high/critical with the
+`GHSA-ch52-4w7c-c8xp` entry REMOVED from `scripts/audit-gate.mjs`. If nothing lands by
 expiry, re-justify — never extend silently.
