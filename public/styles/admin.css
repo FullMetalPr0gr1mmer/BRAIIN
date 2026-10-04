@@ -654,26 +654,40 @@ textarea[lang='ar'],
   font-weight: 700;
 }
 
-.topbar-search {
-  position: relative;
+/* The search trigger: a link to /admin/search that opens the palette with JS. It looks
+   like the prototype's search field; the edge is --ad-control because it reads as one. */
+.top__search {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  inline-size: min(360px, 30vw);
+  min-inline-size: 12rem;
+  padding: 8px 12px;
+  border: 1px solid var(--ad-control);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-bg);
+  color: var(--ad-dim);
+  text-decoration: none;
+}
+
+.top__search:hover {
+  border-color: var(--ad-ink);
+}
+
+.top__search kbd {
   margin-inline-start: auto;
 }
 
-.topbar-search .ic {
-  position: absolute;
-  inset-inline-start: 12px;
-  inset-block-start: 50%;
-  translate: 0 -50%;
-  color: var(--ad-dim);
-  pointer-events: none;
-}
-
-.topbar-search input[type='search'] {
-  inline-size: min(360px, 30vw);
-  min-inline-size: 12rem;
-  padding-block: 8px;
-  padding-inline: 36px 12px;
-  background: var(--ad-bg);
+kbd {
+  padding: 2px 6px;
+  border: 1px solid var(--ad-line-2);
+  border-radius: 6px;
+  background: var(--ad-card);
+  color: var(--ad-dim2);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .top__view {
@@ -1526,22 +1540,134 @@ dialog.media-dialog {
     transform 0.35s var(--ad-ease);
 }
 
-.toast::before {
-  content: '';
-  inline-size: 8px;
-  block-size: 8px;
-  border-radius: 50%;
-  background: var(--ad-focus-dark);
-  flex: none;
+/* The icon carries the kind in colour; the words carry it for everyone. */
+.toast .ic {
+  color: var(--ad-focus-dark);
 }
 
-.toast[data-kind='ok']::before {
-  background: var(--ad-ok);
+.toast[data-kind='ok'] .ic {
+  color: var(--ad-ok);
 }
 
 .toast[data-state='leaving'] {
   opacity: 0;
   transform: translateY(10px);
+}
+
+/* ---- Command palette (F3): the prototype's .cmd, on a native modal <dialog> ---- */
+
+dialog.cmd {
+  inline-size: 100%;
+  block-size: 100%;
+  max-inline-size: none;
+  max-block-size: none;
+  margin: 0;
+  padding: 12vh 20px 20px;
+  border: 0;
+  background: transparent;
+  color: var(--ad-ink);
+}
+
+dialog.cmd[open] {
+  display: grid;
+  place-items: start center;
+}
+
+dialog.cmd::backdrop {
+  background: var(--ad-scrim);
+  backdrop-filter: blur(3px);
+}
+
+.cmd__box {
+  inline-size: min(640px, 94vw);
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--ad-card);
+  box-shadow: var(--ad-shadow);
+}
+
+.cmd__in {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ad-line);
+  color: var(--ad-dim);
+}
+
+/* The combobox field is the dialog's own input: its edge is the box around it, and its
+   focus ring is drawn on its row (an outline, so forced colours keep it). */
+.cmd__in:focus-within {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: -2px;
+}
+
+.cmd__in input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ad-ink);
+  font-size: 16px;
+}
+
+.cmd__in input:focus-visible {
+  outline: 0;
+}
+
+.cmd__list {
+  max-block-size: 50vh;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.cmd__g {
+  margin: 8px 0 4px;
+  padding: 0 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ad-dim2);
+}
+
+.cmd__i {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--ad-r-sm);
+  cursor: pointer;
+}
+
+.cmd__i .ic {
+  color: var(--ad-primary);
+}
+
+.cmd__i span {
+  flex: 1;
+  min-width: 0;
+}
+
+.cmd__i i {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--ad-dim2);
+}
+
+/* The active option: the ground, a primary bar and the weight together, so it is never
+   colour alone (1.4.1), and visible in forced colours (see below). */
+.cmd__i[aria-selected='true'] {
+  background: var(--ad-bg);
+  box-shadow: inset 3px 0 0 var(--ad-primary);
+  font-weight: 600;
+}
+
+.cmd__empty {
+  margin: 0;
+  padding: 18px 12px;
+  color: var(--ad-dim);
 }
 
 /* ---- Rich text (Tiptap): the prototype's .rich ---- */
@@ -1820,7 +1946,8 @@ img.ProseMirror-separator {
   .admin-nav-group a[aria-current='page'],
   .tabs a[aria-current],
   .editor-toolbar button[aria-pressed='true'],
-  .media-pick[aria-pressed='true'] {
+  .media-pick[aria-pressed='true'],
+  .cmd__i[aria-selected='true'] {
     border: 1px solid CanvasText;
   }
 

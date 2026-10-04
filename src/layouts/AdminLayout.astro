@@ -7,6 +7,8 @@ import { getIdentity } from '@/lib/identity';
 import Sidebar from '@/components/admin/ui/Sidebar.astro';
 import Topbar from '@/components/admin/ui/Topbar.astro';
 import PageHead from '@/components/admin/ui/PageHead.astro';
+import AdminChrome from '@/components/admin/islands/AdminChrome';
+import { paletteGroupsFor } from '@/lib/admin/paletteSources';
 
 // Tier C shell (CLAUDE.md §2): on-demand, `private, no-store` (set in middleware),
 // never indexable. Deliberately NOT built on BaseLayout — that one carries <SeoHead>,
@@ -123,6 +125,12 @@ const initials = session ? initialsOf(shell.displayName, session.email) : '';
       announces nothing. src/lib/admin/toast.ts appends into it.
     -->
     <div id="admin-toasts" class="toasts" aria-live="polite"></div>
+
+    {
+      /* The shell's one island: the command palette (F3). `client:load`, because ⌘K must
+         work the moment the page is usable. Its sources are built here, on the server. */
+      app && session && <AdminChrome client:load palette={paletteGroupsFor(session.role)} />
+    }
 
     <script>
       // Sign-out is a POST, never a GET link: a GET logout can be fired by any <img src>
