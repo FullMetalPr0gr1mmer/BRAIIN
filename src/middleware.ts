@@ -3,6 +3,7 @@ import { defineMiddleware } from 'astro:middleware';
 // come from the runtime module instead — works in `astro dev` (workerd) and in prod.
 import { env } from 'cloudflare:workers';
 import {
+  CSP_REPORT_ONLY,
   collectInlineHashes,
   generateNonce,
   withSecurityHeaders,
@@ -21,9 +22,12 @@ import {
 import { createSessionClient, clearSessionCookies, HOST_COOKIE_BASE } from '@/lib/auth/session';
 import { resolveAuthContext } from '@/lib/auth/context';
 
-// Single enforcement point for: maintenance pre-cache check → per-request CSP nonce →
+// The PRIMARY enforcement point for: maintenance pre-cache check → per-request CSP nonce →
 // strict security headers → admin session + CSRF → render → authored redirects on a 404.
-// (CLAUDE.md §8.)
+// (CLAUDE.md §8.) src/worker.ts backstops what Astro answers before this runs and what
+// the ASSETS binding passes through (`ensureSecurityHeaders`); public/_headers covers the
+// static files the asset worker serves without the Worker. The CSP's Report-Only switch is
+// `CSP_REPORT_ONLY` in src/lib/http/securityHeaders.ts — one switch for all three.
 //
 // Redirect precedence (design-port R3-1, plan R3-d): live page > route-level code map
 // (src/lib/services/retired.ts, services only) > the authored `redirects` table (KV
@@ -32,11 +36,6 @@ import { resolveAuthContext } from '@/lib/auth/context';
 // never shadow a page that exists — and it removes a KV read from every request that
 // renders. The 404 page itself is `private, no-store` (src/pages/404.astro) so a rule
 // authored later is never hidden behind an edge-cached 404.
-//
-// CSP rollout: ship Report-Only for one cycle to collect violations, then flip to
-// enforce. Toggle here (or wire to an env flag) — but it ALWAYS ships without
-// 'unsafe-inline'.
-const CSP_REPORT_ONLY = false;
 
 /** Tier C (CLAUDE.md §2): the admin and its API are never cached, anywhere. */
 const PRIVATE_CACHE = 'private, no-store, max-age=0, must-revalidate';

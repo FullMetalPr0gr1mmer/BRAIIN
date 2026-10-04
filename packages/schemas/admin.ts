@@ -73,6 +73,18 @@ const SortOrderSchema = z.number().int().min(-10_000).max(10_000).default(0);
 const ShortTextSchema = z.string().trim().min(1).max(200);
 const UrlFieldSchema = z.string().trim().max(2048);
 
+/**
+ * A share image (og:image): an https:// URL or a path on this site, which the head makes
+ * absolute (src/lib/seo/ogImage.ts). Not `http:` — a crawler or an https page may refuse a
+ * mixed-content preview — and the redirect target's rules for a site path: no `//host` and
+ * no backslash, since the URL standard reads `/\host` as `//host`. Empty = unset.
+ */
+export const SHARE_IMAGE_URL_PATTERN = /^(\/(?!\/)[^\s\\]*|https:\/\/\S+)$/;
+export const ShareImageUrlSchema = UrlFieldSchema.refine(
+  (v) => v === '' || SHARE_IMAGE_URL_PATTERN.test(v),
+  'an https:// URL or a /path on this site',
+);
+
 // ── Auth ────────────────────────────────────────────────────────────────────────
 
 export const LoginSchema = z.object({
@@ -600,7 +612,7 @@ export const EntitySeoWriteSchema = z.object({
   entityId: UuidSchema,
   metaTitle: BilingualTextSchema,
   metaDescription: BilingualTextSchema,
-  ogImage: UrlFieldSchema.nullish(),
+  ogImage: ShareImageUrlSchema.nullish(),
   canonicalOverride: UrlFieldSchema.nullish(),
   robots: z.string().trim().max(120).nullish(),
   schemaType: z.string().trim().max(60).nullish(),
@@ -611,7 +623,7 @@ export const SeoDefaultsSchema = z.object({
   titleTemplate: BilingualTextSchema.partial().optional(),
   defaultTitle: BilingualTextSchema.partial().optional(),
   defaultDescription: BilingualTextSchema.partial().optional(),
-  defaultOgImage: UrlFieldSchema.nullish(),
+  defaultOgImage: ShareImageUrlSchema.nullish(),
   organization: z.record(z.string(), z.unknown()).optional(),
   robotsDirectives: z.string().trim().max(120).optional(),
   version: VersionSchema,

@@ -7,6 +7,7 @@ import type { JsonLdNode } from '@/lib/seo/jsonld';
 import { hreflangAlternates, localizedPath } from '@/lib/i18n';
 import { getIdentity, brandName } from '@/lib/identity';
 import { heroFontPreload, type HeroFace } from '@/lib/seo/fonts';
+import { resolveOgImage, type OgImageCandidates } from '@/lib/seo/ogImage';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import JsonLd from './JsonLd.astro';
 
@@ -15,7 +16,12 @@ interface Props {
   description: string;
   locale: Locale;
   logicalPath: string;
-  ogImage?: string;
+  /**
+   * The page's share-image candidates in precedence order — `ogImageCandidates(seo, own)`
+   * (src/lib/seo/ogImage.ts). The first usable one is emitted; with none, the logo card.
+   * Every page gets an og:image either way.
+   */
+  ogImages?: OgImageCandidates;
   robots?: string;
   jsonLd?: JsonLdNode[];
   /**
@@ -36,7 +42,7 @@ const {
   description,
   locale,
   logicalPath,
-  ogImage,
+  ogImages = [],
   robots = 'index,follow',
   jsonLd = [],
   canonicalOverride,
@@ -59,6 +65,9 @@ function safeCanonical(override: string | undefined, fallback: string): string {
 }
 
 const canonical = safeCanonical(canonicalOverride, base + localizedPath(logicalPath, locale));
+// The size, type and alt are emitted for the code default only — the one image whose
+// dimensions are known here; a platform measures any other image itself.
+const ogImage = resolveOgImage(ogImages, { base, locale, brand: siteName });
 const alternates = hreflangAlternates(logicalPath, PUBLIC_SITE_URL);
 const ogLocale = locale === 'ar' ? 'ar_SA' : 'en_US';
 
@@ -104,9 +113,14 @@ const hasDescription = description.trim().length > 0;
 {hasDescription ? <meta property="og:description" content={description} /> : null}
 <meta property="og:url" content={canonical} />
 <meta property="og:locale" content={ogLocale} />
-{ogImage ? <meta property="og:image" content={ogImage} /> : null}
+<meta property="og:image" content={ogImage.url} />
+{ogImage.type ? <meta property="og:image:type" content={ogImage.type} /> : null}
+{ogImage.width ? <meta property="og:image:width" content={String(ogImage.width)} /> : null}
+{ogImage.height ? <meta property="og:image:height" content={String(ogImage.height)} /> : null}
+{ogImage.alt ? <meta property="og:image:alt" content={ogImage.alt} /> : null}
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content={title} />
 {hasDescription ? <meta name="twitter:description" content={description} /> : null}
-{ogImage ? <meta name="twitter:image" content={ogImage} /> : null}
+<meta name="twitter:image" content={ogImage.url} />
+{ogImage.alt ? <meta name="twitter:image:alt" content={ogImage.alt} /> : null}
 {jsonLd.map((node) => <JsonLd data={node} />)}

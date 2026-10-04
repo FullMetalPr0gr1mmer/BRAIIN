@@ -17,7 +17,10 @@
     // The asset worker ignores `Range`, so a <video> of /media/showreel.mp4 could never
     // seek and every clip window played the file from 0 (EXC-009). These paths reach the
     // Worker first, which answers them with byte ranges (src/lib/http/media.ts). Every
-    // other static file is still served by the asset worker directly.
+    // other static file is still served by the asset worker directly — so their security
+    // headers come from public/_headers, not from the Worker. Keep this list to /media:
+    // widening it would make every stylesheet and font a Worker invocation (counted
+    // against the plan's request quota, and a hop slower) instead of a free asset hit.
     "run_worker_first": ["/media/*"],
   },
   "observability": {
