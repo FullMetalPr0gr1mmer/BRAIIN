@@ -3,9 +3,10 @@ import { readFileSync } from 'node:fs';
 import { ASSET_CSP, STATIC_SECURITY_HEADERS } from '@/lib/http/securityHeaders';
 
 // public/_headers — the security headers of every static file (CLAUDE.md §2, amendment
-// 2026-10). Workers Static Assets serves dist/client without running the Worker, so this
-// file is the ONLY layer those responses get; a drift from the constants the middleware
-// and the Worker backstop use would be invisible until someone curled a stylesheet.
+// 2026-10). Workers Static Assets serves dist/client without running the Worker (all but
+// /media/*, run_worker_first), so this file is the ONLY layer those responses get; a drift
+// from the constants the middleware and the Worker backstop use would be invisible until
+// someone curled a stylesheet.
 //
 // The parse follows the stricter of the two readers. The adapter treats every unindented,
 // non-comment line as a path (`headers.js`, when it decides whether to add `/_astro/*`

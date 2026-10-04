@@ -142,7 +142,11 @@ describe('a thrown error', () => {
     expect(await res.text()).toBe('Internal Server Error');
     expectSecured(res);
 
+    // Workers Logs get the stack, scrubbed exactly as the system_logs copy is.
     expect(consoleError).toHaveBeenCalledTimes(1);
+    const logged = consoleError.mock.calls[0]!.map(String).join(' ');
+    expect(logged).toContain('[worker] unhandled error Error: render failed for [email]');
+    expect(logged).not.toContain('jane@example.com');
     expect(mocks.writeSystemLog).toHaveBeenCalledWith({
       level: 'error',
       source: 'worker',
@@ -165,6 +169,23 @@ describe('a thrown error', () => {
       level: 'error',
       source: 'worker',
       message: 'unhandled error',
+    });
+  });
+
+  it('scrubs a thrown non-Error the same way, in both logs', async () => {
+    vi.stubEnv('DEV', false);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.handle.mockRejectedValueOnce('lookup failed for +966 55 123 4567');
+    const res = await run('/contact');
+    expect(res.status).toBe(500);
+    expect(consoleError).toHaveBeenCalledWith(
+      '[worker] unhandled error',
+      'lookup failed for [phone]',
+    );
+    expect(mocks.writeSystemLog).toHaveBeenCalledWith({
+      level: 'error',
+      source: 'worker',
+      message: 'lookup failed for [phone]',
     });
   });
 

@@ -22,9 +22,9 @@ import { scrubPii } from './lib/log/scrub';
 // included.
 //
 // A THROWN error becomes a secured, uncached 500 instead of Cloudflare's 1101 error page:
-// logged to Workers Logs and to `system_logs` (`source: 'worker'`, the message scrubbed of
-// PII — never the request). Under `astro dev` it is rethrown, so the dev server's error
-// overlay still shows the stack.
+// logged to Workers Logs (the stack) and to `system_logs` (`source: 'worker'`, the
+// message), both scrubbed of PII — never the request. Under `astro dev` it is rethrown, so
+// the dev server's error overlay still shows the stack.
 //
 // `scheduled` is the daily cron (wrangler.jsonc `triggers.crons`): the Join retention job —
 // expired CVs out of Storage, then their rows — and the limiter's old counters. Importing
@@ -39,7 +39,10 @@ export default {
       );
     } catch (err) {
       if (import.meta.env.DEV) throw err;
-      console.error('[worker] unhandled error', err);
+      // Workers Logs are retained and readable by every account member, so the stack is
+      // scrubbed there exactly as the system_logs copy is (CLAUDE.md §10).
+      const detail = err instanceof Error ? (err.stack ?? err.message) : String(err);
+      console.error('[worker] unhandled error', scrubPii(detail));
       const message = scrubPii(err instanceof Error ? err.message : String(err)).slice(0, 500);
       // writeSystemLog never throws, and is given nothing from the request.
       ctx.waitUntil(

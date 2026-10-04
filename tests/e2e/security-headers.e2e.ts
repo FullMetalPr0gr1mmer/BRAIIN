@@ -8,9 +8,9 @@ import { ASSET_CSP, STATIC_SECURITY_HEADERS } from '../../src/lib/http/securityH
  * The production gap this guards (found 2026-10-03): Astro answers some requests before the
  * middleware runs — the origin check's cross-site 403, the 400 for a multiply-encoded path,
  * the 301 that collapses a duplicate slash — and the asset worker serves every static file
- * without the Worker at all. All of them shipped with no HSTS, no nosniff and no CSP. The
- * Worker backstop (src/worker.ts → ensureSecurityHeaders) secures the first kind;
- * public/_headers the second, with the asset policy (ASSET_CSP).
+ * but /media/* without the Worker at all. All of them shipped with no HSTS, no nosniff and
+ * no CSP. The Worker backstop (src/worker.ts → ensureSecurityHeaders) secures the first
+ * kind; public/_headers the second, with the asset policy (ASSET_CSP).
  *
  * Runs against the built Worker under `wrangler dev`, whose asset worker applies
  * public/_headers as production's does.

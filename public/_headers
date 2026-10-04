@@ -1,6 +1,9 @@
 # Security headers for static files (Workers Static Assets, CLAUDE.md section 2, amendment 2026-10).
 # The asset worker serves dist/client without running the Worker, so neither
-# src/middleware.ts nor the src/worker.ts backstop ever sees these responses.
+# src/middleware.ts nor the src/worker.ts backstop sees these responses - except under
+# /media/* (wrangler.jsonc run_worker_first): the Worker answers .mp4 itself and fetches
+# every other /media file from the ASSETS binding, where these rules still arrive (the
+# backstop, finding HSTS, leaves them as they are).
 #
 # The values are STATIC_SECURITY_HEADERS and ASSET_CSP in src/lib/http/securityHeaders.ts;
 # tests/lib/headersFile.spec.ts fails when this file and those constants differ.
