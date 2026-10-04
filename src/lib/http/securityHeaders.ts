@@ -16,6 +16,45 @@
 // A nonce and a hash are alternative allow-conditions for the same source list, so the
 // two mechanisms coexist without weakening either: the nonce covers OUR inline blocks
 // (the maintenance 503 page), the hashes cover Astro's. Neither admits 'unsafe-inline'.
+//
+// WHO APPLIES IT. src/middleware.ts is the primary enforcement point: every response it
+// produces leaves through `withSecurityHeaders`. Two kinds of response never pass through
+// it, and each has its own layer (CLAUDE.md §2, amendment 2026-10):
+//   - what Astro answers BEFORE the middleware runs (the origin-check 403, the over-encoded
+//     path 400, the duplicate-slash 301, a bare 500) and what the adapter passes straight
+//     from the ASSETS binding — src/worker.ts wraps every response in
+//     `ensureSecurityHeaders`, which secures whatever arrives without them;
+//   - static files the asset worker serves without running the Worker at all —
+//     public/_headers carries STATIC_SECURITY_HEADERS + ASSET_CSP for those
+//     (tests/lib/headersFile.spec.ts holds the file equal to the constants below).
+
+/**
+ * CSP rollout: ship Report-Only for one cycle to collect violations, then flip to enforce.
+ * THE switch — the middleware, the Worker backstop and the media route all read it. It
+ * ALWAYS ships without 'unsafe-inline', in either mode.
+ */
+export const CSP_REPORT_ONLY = false;
+
+/** The seven non-CSP headers on every response — pages, the Worker's own answers and static files. */
+export const STATIC_SECURITY_HEADERS = Object.freeze({
+  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), browsing-topics=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'X-Frame-Options': 'SAMEORIGIN',
+});
+
+/**
+ * The policy for static files (public/_headers). A stylesheet, font, image or script file is
+ * never a document that should run or load anything, so it allows nothing — opened directly
+ * in a tab it still cannot be framed by another site, re-based or made to submit a form.
+ * A page's policy (nonce + hashes) cannot apply here: these responses are built by the asset
+ * worker from a static file, with no per-request nonce to give them.
+ */
+export const ASSET_CSP =
+  "default-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'";
 
 /** Both spellings, because a stale header of either name would be intersected by the browser. */
 const CSP_HEADER_NAMES = [
@@ -173,13 +212,7 @@ export function applySecurityHeaders(headers: Headers, opts: CspOptions): void {
   // Browsers ignore `sandbox` in a Report-Only policy, so in that mode a sandboxed response
   // also carries an ENFORCED one holding just the sandbox.
   if (sandboxed && opts.reportOnly) headers.set('Content-Security-Policy', 'sandbox');
-  headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
-  headers.set('X-Content-Type-Options', 'nosniff');
-  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), browsing-topics=()');
-  headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-  headers.set('Cross-Origin-Resource-Policy', 'same-origin');
-  headers.set('X-Frame-Options', 'SAMEORIGIN');
+  for (const [name, value] of Object.entries(STATIC_SECURITY_HEADERS)) headers.set(name, value);
 }
 
 /**
@@ -203,4 +236,31 @@ export function withSecurityHeaders(response: Response, opts: CspOptions): Respo
     applySecurityHeaders(copy.headers, opts);
     return copy;
   }
+}
+
+/**
+ * The Worker's backstop (src/worker.ts): secure a response that left WITHOUT the headers,
+ * and leave every other one exactly as it is.
+ *
+ * Keyed on HSTS, never on CSP. Only `applySecurityHeaders` and public/_headers set HSTS, so
+ * its presence means one of the two layers already ran: the middleware's page (its nonce
+ * matches the page's nonced blocks, and it may be Report-Only — overwriting that with an
+ * enforcing policy carrying a nonce the page lacks would break it), or a static file with
+ * ASSET_CSP. Keying on CSP instead would also take Astro's own `security.csp` header — which
+ * a response escaping the middleware can carry — for a finished policy.
+ *
+ * A WebSocket upgrade (101, or a response carrying `webSocket`) goes through untouched: its
+ * headers belong to the handshake, and a rebuilt copy would not carry the socket. The site
+ * has none today; the guard keeps the backstop from being what breaks the first one.
+ */
+export function ensureSecurityHeaders(
+  response: Response,
+  opts: { reportOnly?: boolean } = {},
+): Response {
+  if (response.status === 101 || (response as { webSocket?: unknown }).webSocket) return response;
+  if (response.headers.has('Strict-Transport-Security')) return response;
+  return withSecurityHeaders(response, {
+    nonce: generateNonce(),
+    reportOnly: opts.reportOnly ?? CSP_REPORT_ONLY,
+  });
 }

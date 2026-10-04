@@ -1,6 +1,7 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { ogImageCandidates } from '@/lib/seo/ogImage';
 import SectionRenderer from '@/components/SectionRenderer.astro';
 import type { ServicesPage } from '@/lib/services/servicesPage';
 import { PAGE_META } from '@/lib/seo/pageMeta';
@@ -30,7 +31,7 @@ const { seo } = page.head;
   robots={seo.robots}
   header={page.header}
   styles={['services.css']}
-  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  ogImages={ogImageCandidates(seo)}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >
   <main class="services-page">

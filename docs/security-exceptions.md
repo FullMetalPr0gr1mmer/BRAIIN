@@ -16,6 +16,7 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-008 | 2026-09-30 | Kareem (kareem@floppytech.ai)  | 2026-12-31 | Open | Join CVs (PDF / .docx, ≤ 10 MB) are stored and downloaded **without a virus scan** — no AV service on the free tier. Compensated by a structural check at upload, a private bucket, attachment-only download under a sandbox CSP, and a "Not virus-scanned" badge |
 | EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open (re-signed 2026-09-29) | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops |
 | EXC-010 | 2026-10-01 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `basic-ftp` GHSA-c475-qrg2-pj4r allowlisted in the dev audit gate — every 5.x is affected and no dependent in the Lighthouse CI chain takes the 6.x fix |
+| EXC-011 | 2026-10-03 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `http-cache-semantics` GHSA-ch52-4w7c-c8xp allowlisted in the prod audit gate — every release is affected (no fix exists); its only importer is Astro's build-time remote-image cache, which this site never uses, and it is absent from the Worker |
 
 ---
 
@@ -190,7 +191,7 @@ The Worker is deployed and publicly reachable at `https://braiin-station.braiin.
 
 ### Why (justification)
 
-Not a decision — a **hard blocker**. Cloudflare WAF custom rules and rate-limiting rules are **zone-scoped**, and `braiinstation.com` currently has no NS records at all: the domain is not delegated to Cloudflare, so the account has no zone to attach a rule to. `*.workers.dev` sits in Cloudflare's own zone, not the customer's, and cannot carry customer WAF rules. There is no configuration that closes this before DNS cutover.
+Not a decision — a **hard blocker**. Cloudflare WAF custom rules and rate-limiting rules are **zone-scoped**, and the studio's domain, `braiinstatiion.com` (two *i*'s — corrected 2026-10-04, see the correction below), is registered at GoDaddy and served by GoDaddy's nameservers (`domaincontrol.com`): it is not delegated to Cloudflare, so the account has no zone to attach a rule to. `*.workers.dev` sits in Cloudflare's own zone, not the customer's, and cannot carry customer WAF rules. There is no configuration that closes this before DNS cutover.
 
 ### What still holds, and what genuinely does not
 
@@ -212,8 +213,8 @@ Bounding the exposure: the origin is an unadvertised workers.dev subdomain with 
 
 ### Remediation plan (clears this exception)
 
-1. ☐ Register/delegate `braiinstation.com` to Cloudflare; confirm the zone is active.
-2. ☐ Add the custom domain to the Worker; rebuild with `PUBLIC_SITE_URL=https://www.braiinstation.com` (it is inlined at build time — a binding cannot override it) and redeploy.
+1. ☐ Delegate `braiinstatiion.com` to Cloudflare, **copying every DNS record first** — above all the Microsoft 365 MX, SPF, DKIM and autodiscover records that carry `hello@braiinstatiion.com`, which is now the privacy notice's rights contact (design-port J-17): a delegation that drops them silently stops privacy requests arriving. Confirm mail still flows, then that the zone is active.
+2. ☐ Add the custom domain to the Worker; rebuild with `PUBLIC_SITE_URL=https://www.braiinstatiion.com` (it is inlined at build time — a binding cannot override it) and redeploy.
 3. ☐ Create all six rules from runbook §7. Cross-check the crawler tokens against `src/lib/seo/crawlers.ts`, the one code-owned map `tests/seo/crawlers.spec.ts` snapshots.
 4. ☐ Verify by observation, not by reading the dashboard: 31 requests in a minute to `/api/search` gets a block; a `User-Agent: GPTBot` request gets a block; a `User-Agent: PerplexityBot` request does not.
 
@@ -223,8 +224,9 @@ Bounding the exposure: the origin is an unadvertised workers.dev subdomain with 
 
 The 2026-09-01 expiry passed with the entry still open and nobody revisiting it. That is
 the failure this register exists to prevent, so the lapse is recorded rather than quietly
-re-dated. **Nothing in the remediation plan has moved:** `braiinstation.com` is still not
-delegated, so there is still no zone to hold a rule.
+re-dated. **Nothing in the remediation plan has moved:** `braiinstation.com` *(sic — the
+wrong domain; corrected 2026-10-04 below)* is still not delegated, so there is still no zone
+to hold a rule.
 
 What changed is the exposure. The UI v2 port (plan `check-latest-folder-in-dazzling-widget`)
 adds a **second public write path** — `/api/apply`, a multipart job application with a CV
@@ -250,6 +252,24 @@ crawler rows, remain open under the original remediation plan — the code limit
 substitute for them.
 
 **New expiry 2026-12-24.** Close condition unchanged.
+
+### Correction 2026-10-04 — the entry named a domain that is not the studio's
+
+Until this date the entry, the runbook and the code named `braiinstation.com` — one *i*. That
+domain is nobody's: the live verification of 2026-10-03 found no registration (RDAP 404) and
+no DNS, which is why it "had no NS records". The studio's domain is **`braiinstatiion.com`**,
+two *i*'s, registered at GoDaddy (nameservers `domaincontrol.com`) with Microsoft 365 mail —
+the `hello@` address the Site profile shows. The blocker stands exactly as written (that
+domain is not delegated to Cloudflare either, so there is still no zone), and the remediation
+plan above now names it, with one step added: copy every record, the mail ones above all,
+before delegating. The one-*i* spelling is gone from the code, config and seeds, but for
+one line the CI restructure moves: `ci.yml`'s placeholder build origin
+(`tests/lib/staleDomain.spec.ts` keeps it out, `.github/` included, with one allowance for
+that line that fails once the line is gone; the served-HTML gate checks every page and
+discovery file); production's `tenants.primary_domain` is corrected by runbook §6h. The
+one-*i* name stays unregistered, so anyone could register it and receive mail still sent
+there — registering it defensively is the owner's option. Expiry and close condition
+unchanged.
 
 ---
 
@@ -581,9 +601,10 @@ the approved design does not accept.
   each surface played the reel from 0 and pulled the whole file, so the "ranges of one
   asset" line above was not true in production. The route admits only the `VideoClip`
   allow-list (`StaticVideoPathSchema`, the same pattern as the DB CHECK), GET/HEAD only,
-  forwards no client headers but the validators, and carries the middleware's security
-  headers. It is an Astro-bypassing entry on purpose — the adapter answers every
-  `dist/client` file before routing and drops `Range` — see the header of `media.ts`.
+  forwards no client headers but the validators, and carries the same security headers as
+  a page (`ensureSecurityHeaders`). It is an Astro-bypassing entry on purpose — the adapter
+  answers every `dist/client` file before routing and drops `Range` — see the header of
+  `media.ts`.
   Guarded by `tests/lib/range.spec.ts`, `tests/lib/mediaRoute.spec.ts` and
   `tests/e2e/media-range.e2e.ts` (206/200/416 on the wire, a seekable `<video>`, and the
   contact hero looping inside its 6.2–7.9 s window). Closing this exception (Stream)
@@ -671,4 +692,45 @@ never ships in the Worker.
 
 **Close condition:** `npm run audit:all` reports 0 unallowlisted high/critical with the
 `GHSA-c475-qrg2-pj4r` entry REMOVED from `scripts/audit-gate.mjs`. If nothing lands by
+expiry, re-justify — never extend silently.
+
+---
+
+## EXC-011 — `http-cache-semantics` advisory allowlisted in the production audit gate
+
+**Pillar:** 1 (Security) — CLAUDE.md §3 (supply chain), §11.
+**Opened:** 2026-10-03 · **Owner:** Developer (tech@purecoffee.sa) · **Expiry:** 2026-11-30.
+
+### What changed
+
+`GHSA-ch52-4w7c-c8xp` (HIGH, CVSS 7.5 — `max-stale` request handling can let a shared cache
+serve one user's cached response to another) was published against `http-cache-semantics`,
+affected range `<=4.2.0`. 4.2.0 is the newest release, so there is no fixed version to pin
+or override to. It reaches the production scope only because `astro` lists it as a
+dependency (`astro@7.3.5 → http-cache-semantics@4.2.0`); npm's suggested "fix" is
+downgrading Astro to 2.10.9, which is not an option. It is a documented, expiring
+`ALLOWLIST` entry in `scripts/audit-gate.mjs`. Without it the blocking production gate
+fails every pull request, unrelated ones included.
+
+### Why the residual risk is acceptable
+
+- **One importer, build-time only.** The package is imported by
+  `node_modules/astro/dist/assets/build/remote.js` alone: the cache Astro keeps of REMOTE
+  images it downloads while running `astro build`.
+- **That path never runs here.** `image.domains` is empty in `astro.config.mjs`, so the build
+  fetches no remote images.
+- **Not in the Worker.** A search of the built server bundle (`dist/server`) finds no
+  reference to the package. Nothing the site serves is cached with it.
+- **The advisory needs a shared cache answering many users.** A build-step cache on a CI
+  runner serves no one.
+
+### Remediation plan (clears this exception)
+
+1. ☐ Watch for an `http-cache-semantics` release above 4.2.0, or an Astro release that drops
+   or replaces it. Either clears this with a routine bump.
+2. ☐ If remote images are ever allowed (`image.domains` / `remotePatterns`, e.g. the Admin v2
+   uploads bucket), re-assess before that ships: the build-time cache would then run.
+
+**Close condition:** `npm run audit` reports 0 unallowlisted high/critical with the
+`GHSA-ch52-4w7c-c8xp` entry REMOVED from `scripts/audit-gate.mjs`. If nothing lands by
 expiry, re-justify — never extend silently.

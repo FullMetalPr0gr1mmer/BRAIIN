@@ -6,6 +6,7 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import SectionBoundary from '@/components/SectionBoundary.astro';
 import LeadBand from '@/components/sections/LeadBand.astro';
 import { buildBreadcrumbSchema, buildCreativeWorkSchema, orgRef } from '@/lib/seo/jsonld';
+import { ogImageCandidates } from '@/lib/seo/ogImage';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import { caseSchemaDescription, type CaseStudyPage } from '@/lib/portfolio/casePage';
@@ -54,8 +55,9 @@ const logicalPath = `/portfolio/${study.slug}`;
 const url = base + localizedPath(logicalPath, locale);
 const name = pickLocale(study.title, locale);
 
-// A shareable still for JSON-LD `image` and og:image (unless the SEO role set one): the
-// banner frame as a 1200 px JPEG — the format every crawler and link preview reads.
+// A shareable still for JSON-LD `image` and og:image: the banner frame as a 1200 px JPEG —
+// the format every crawler and link preview reads. It outranks the tenant's default share
+// image and yields only to the SEO role's per-page override (src/lib/seo/ogImage.ts).
 const shareImage = bannerImage
   ? new URL(
       (
@@ -68,7 +70,6 @@ const shareImage = bannerImage
       `${base}/`,
     ).href
   : undefined;
-const ogImage = seo.ogImage ?? shareImage;
 
 const jsonLd = [
   buildCreativeWorkSchema({
@@ -103,7 +104,7 @@ const hasStills = study.breakdown.length > 0 || study.gallery.length > 0;
   robots={seo.robots}
   header="overlay"
   styles={['banner.css', 'case-study.css']}
-  {...ogImage ? { ogImage } : {}}
+  ogImages={ogImageCandidates(seo, shareImage)}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >
   <main class="case-study">

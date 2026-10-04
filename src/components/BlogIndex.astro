@@ -6,6 +6,7 @@ import { localizedPath, formatDate, pickLocale } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import type { PostRow } from '@/lib/data/blog';
 import { loadHead } from '@/lib/seo/head';
+import { ogImageCandidates } from '@/lib/seo/ogImage';
 
 interface Props {
   locale: Locale;
@@ -55,7 +56,7 @@ const { seo } = await loadHead(Astro.locals, {
   logicalPath="/creative-knowledge"
   jsonLd={[breadcrumb]}
   robots={seo.robots}
-  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  ogImages={ogImageCandidates(seo)}
 >
   <main class="container">
     <h1>{STR.title}</h1>
