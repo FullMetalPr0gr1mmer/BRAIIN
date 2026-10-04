@@ -12,9 +12,8 @@ import { test, expect } from '@playwright/test';
 
 // `/admin/login` is in the list because Phase 3 introduced the first HYDRATED React on
 // this site, and hydration is exactly where a nonce-less inline script would appear.
-// The login screen is the only admin route reachable without a session, so it is the
-// only one this suite can visit — but it exercises the same AdminLayout, the same
-// external-script guarantee, and the same policy header as every other admin page.
+// It is the only admin route reachable without a session. Every signed-in admin screen
+// gets the same checks, per role, in the admin sweep (tests/admin/sweep.e2e.ts).
 const ROUTES = [
   '/',
   '/ar',
@@ -105,8 +104,16 @@ test('admin pages carry no inline style attributes', async ({ page }) => {
   // silently ignored and the element renders unstyled. React's `style={{…}}` prop emits
   // exactly that during Astro's server render, which is why the admin uses `data-*`
   // buckets and utility classes instead. This is the check that keeps it that way.
-  await page.goto('/admin/login', { waitUntil: 'networkidle' });
-  const inlineStyled = await page.$$eval('[style]', (nodes) => nodes.length);
+  //
+  // It reads the SERVER HTML (parsed, never run), not the live DOM: a style a script sets
+  // through the CSSOM after hydration is allowed by the policy, and blaming it would push
+  // a screen towards the markup styles that are not.
+  const html = await (await page.request.get('/admin/login')).text();
+  const inlineStyled = await page.evaluate(
+    (markup) =>
+      new DOMParser().parseFromString(markup, 'text/html').querySelectorAll('[style]').length,
+    html,
+  );
   expect(inlineStyled, 'elements carrying a blocked inline style attribute').toBe(0);
 });
 
