@@ -199,6 +199,8 @@
   --ad-side-hover: rgba(255, 255, 255, 0.06);
   --ad-side-rule: rgba(255, 255, 255, 0.08);
   --ad-on-dark: #ffffff;
+  --ad-count: #2d2f35;
+  --ad-count-current: rgba(255, 255, 255, 0.22);
 
   /* Focus: cobalt on light grounds, sky on midnight (cobalt there is only 3.22:1) */
   --ad-focus: #024cff;
@@ -275,9 +277,6 @@
 .admin-body {
   margin: 0;
   min-height: 100vh;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
   background: var(--ad-bg);
   color: var(--ad-ink);
   font-family: var(--ad-font);
@@ -293,13 +292,43 @@
   color: var(--ad-on-primary);
 }
 
+/* The sign-in screen: one centred card, no shell. */
 .admin-body[data-layout='bare'] {
+  display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .admin-body[data-layout='bare'] .admin-main {
   flex: 0 1 auto;
+}
+
+/* From 900px the sidebar and the main column share one grid row (the shell's one
+   viewport breakpoint); below it the sidebar is a popover and main takes the width. */
+@media (min-width: 900px) {
+  .admin-body[data-layout='app'] {
+    display: grid;
+    grid-template-columns: var(--ad-side) minmax(0, 1fr);
+  }
+}
+
+/* Off screen until focused, then the first thing a keyboard user meets. */
+.skip-link {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-start: 8px;
+  z-index: 100;
+  padding: 10px 16px;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+  color: var(--ad-primary);
+  font-weight: 700;
+  box-shadow: var(--ad-shadow);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: none;
 }
 
 /* Focus: one ring, an outline (never a box-shadow, which forced colours drop). */
@@ -346,19 +375,64 @@ textarea[lang='ar'],
 }
 
 /* ---- Sidebar (the prototype's .side) ----
-   The sidebar sits beside the main column until the main column can no longer have
-   --ad-main-min, then wraps to its own row: the layout reads the space it has. `flex:
-   999` on main vs `flex: 1` here keeps the sidebar at its basis on a wide screen. */
+   Below 900px a popover drawer from the inline start: the topbar's Menu button toggles
+   it, and the browser supplies light dismiss, Escape and the top layer. From 900px it is
+   a column of the page grid: the column runs the full page height (midnight to the
+   bottom of any page) while its inner block sticks, so the menu stays in view. */
 
 .admin-sidebar {
-  flex: 1 1 var(--ad-side);
-  min-width: 0;
   background: var(--ad-midnight);
   color: var(--ad-on-dark);
-  padding: 20px 12px;
+}
+
+.admin-sidebar:popover-open {
+  inset-block: 0;
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+  inline-size: min(300px, 86vw);
+  block-size: 100%;
+  max-block-size: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow-y: auto;
+}
+
+.admin-sidebar::backdrop {
+  background: var(--ad-scrim);
+}
+
+@media (min-width: 900px) {
+  .admin-sidebar,
+  .admin-sidebar:popover-open {
+    display: block;
+    position: static;
+    inset: auto;
+    inline-size: auto;
+    block-size: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+  }
+}
+
+.side__inner {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  min-block-size: 100%;
+  padding: 20px 12px 12px;
+}
+
+@media (min-width: 900px) {
+  .side__inner {
+    position: sticky;
+    top: 0;
+    block-size: 100vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ad-side-label) transparent;
+  }
 }
 
 .admin-sidebar :focus-visible {
@@ -367,18 +441,24 @@ textarea[lang='ar'],
 
 .admin-brand {
   display: block;
+  inline-size: max-content;
   padding: 0 10px 12px;
-  color: var(--ad-on-dark);
-  font-size: 19px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-  text-decoration: none;
 }
 
-.admin-nav-group {
-  display: flex;
-  flex-direction: column;
+.admin-brand img {
+  display: block;
+  inline-size: 104px;
+  block-size: auto;
+}
+
+.side__nav {
+  flex: 1;
+}
+
+.admin-nav-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .admin-nav-title {
@@ -391,7 +471,7 @@ textarea[lang='ar'],
   color: var(--ad-side-label);
 }
 
-.admin-nav-group > a {
+.admin-nav-group a {
   display: flex;
   align-items: center;
   gap: 11px;
@@ -405,31 +485,107 @@ textarea[lang='ar'],
     color 0.2s;
 }
 
-.admin-nav-group > a:hover {
+.admin-nav-group a .ic {
+  opacity: 0.85;
+}
+
+/* A long label wraps instead of pushing the count off the row. */
+.side__label {
+  min-width: 0;
+}
+
+.admin-nav-group a:hover {
   background: var(--ad-side-hover);
   color: var(--ad-on-dark);
 }
 
 /* Fill, weight and colour together mark "you are here", so colour is never the only cue
    (1.4.1). White on Klein is 10.6:1. */
-.admin-nav-group > a[aria-current='page'] {
+.admin-nav-group a[aria-current='page'] {
   background: var(--ad-primary);
   color: var(--ad-on-primary);
   font-weight: 600;
 }
 
+.cnt {
+  margin-inline-start: auto;
+  padding: 2px 7px;
+  border-radius: var(--ad-r-pill);
+  background: var(--ad-count);
+  color: var(--ad-on-dark);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-nav-group a[aria-current='page'] .cnt {
+  background: var(--ad-count-current);
+}
+
+.side__foot {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ad-side-rule);
+}
+
+.side__user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--ad-r-sm);
+  color: var(--ad-on-dark);
+}
+
+.side__user:hover {
+  background: var(--ad-side-hover);
+}
+
+.side__who {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+
+.side__who b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.side__who span {
+  font-size: 11.5px;
+  color: var(--ad-side-label);
+  text-transform: capitalize;
+}
+
+/* The account menu opens upward from the foot of the sidebar, on a light panel. */
+.side__foot .menu-panel {
+  inset-block-start: auto;
+  inset-block-end: calc(100% + 8px);
+  inset-inline: 0;
+  color: var(--ad-ink);
+}
+
+.side__foot .menu-panel :focus-visible {
+  outline-color: var(--ad-focus);
+}
+
 /* ---- Main column ---- */
 
 .admin-main {
-  flex: 999 1 var(--ad-main-min);
-  /* Lets a wide table scroll inside its own .table-wrap instead of widening the page:
-     a flex item's automatic minimum is its min-content width. */
+  /* Lets a wide table scroll inside its own .table-wrap instead of widening the page. */
   min-width: 0;
   padding: var(--ad-pad-b) var(--ad-pad-i) 60px;
 }
 
-/* The readable-width cap lives on the CHILDREN: max-width on a flex item hands the
-   space it frees to the sidebar. */
+/* The skip link's target: focusable by script only, so no ring around the whole page. */
+.admin-main:focus {
+  outline: none;
+}
+
+/* The readable-width cap lives on the children. */
 .admin-main > * {
   max-width: 80rem;
 }
@@ -439,9 +595,12 @@ textarea[lang='ar'],
   margin-top: 18px;
 }
 
-/* ---- Topbar (the prototype's .top): a white bar across the main column ---- */
+/* ---- Topbar (the prototype's .top): white, across the main column, always in view ---- */
 
 .admin-main > .admin-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   max-width: none;
   margin: calc(-1 * var(--ad-pad-b)) calc(-1 * var(--ad-pad-i)) 28px;
   padding: 10px var(--ad-pad-i);
@@ -452,6 +611,12 @@ textarea[lang='ar'],
   flex-wrap: wrap;
   background: var(--ad-card);
   border-bottom: 1px solid var(--ad-line);
+}
+
+@media (min-width: 900px) {
+  .top__menu {
+    display: none;
+  }
 }
 
 .crumbs ol {
@@ -490,14 +655,31 @@ textarea[lang='ar'],
 }
 
 .topbar-search {
+  position: relative;
   margin-inline-start: auto;
+}
+
+.topbar-search .ic {
+  position: absolute;
+  inset-inline-start: 12px;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  color: var(--ad-dim);
+  pointer-events: none;
 }
 
 .topbar-search input[type='search'] {
   inline-size: min(360px, 30vw);
   min-inline-size: 12rem;
-  padding: 8px 12px;
+  padding-block: 8px;
+  padding-inline: 36px 12px;
   background: var(--ad-bg);
+}
+
+.top__view {
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
 }
 
 details.menu {
@@ -546,6 +728,7 @@ details.menu > summary::-webkit-details-marker {
   block-size: 34px;
   display: inline-grid;
   place-items: center;
+  flex: none;
   background: var(--ad-primary);
   color: var(--ad-on-primary);
   font-size: 12px;
@@ -563,6 +746,13 @@ details.menu > summary::-webkit-details-marker {
   gap: 12px 20px;
   flex-wrap: wrap;
   margin-bottom: 22px;
+}
+
+/* An area's tabs sit right under its head; the head's own margin then separates them
+   from the head, and the next block gets the usual rhythm. */
+.admin-header + .tabs {
+  margin-top: 0;
+  margin-block-end: 0;
 }
 
 .admin-header h1 {
@@ -786,6 +976,15 @@ button[disabled],
 
 .badge[data-plain]::before {
   display: none;
+}
+
+/* A badge that links (the topbar's "Maintenance on") is a pill, not inline text. */
+a.badge {
+  text-decoration: none;
+}
+
+a.badge:hover {
+  text-decoration: underline;
 }
 
 .badge[data-tone='klein'] {
@@ -1618,7 +1817,7 @@ img.ProseMirror-separator {
   .badge,
   .msg,
   .toast,
-  .admin-nav-group > a[aria-current='page'],
+  .admin-nav-group a[aria-current='page'],
   .tabs a[aria-current],
   .editor-toolbar button[aria-pressed='true'],
   .media-pick[aria-pressed='true'] {
