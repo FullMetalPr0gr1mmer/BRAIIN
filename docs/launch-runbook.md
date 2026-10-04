@@ -95,6 +95,11 @@ Until this is on, **every login is correctly refused**: the JWT carries no
 resolves the user into the anon fence. This is the single most common "the CMS is
 broken" cause — it is not broken, it is unclaimed.
 
+Local stacks (`supabase start`, and the CI jobs) enable the same hook in
+`supabase/config.toml` (`[auth.hook.custom_access_token]`, Admin v2 F0); the signed-in
+admin e2e harness (`tests/admin`) depends on it. Hosted projects are governed by the
+dashboard setting above, so this step stays a blocker for staging and production.
+
 ## 3. Create and promote the first admin  ⛔ blocker
 
 `users.manage` is Admin-only, so there is no in-product path to the first admin.
