@@ -217,30 +217,44 @@ would override the pinned TLS. `tests/ci/deploy-guard.spec.ts` checks the finger
 every build and goes red 90 days before the root expires — commit Supabase's next root, its
 fingerprint compared against the dashboard copy, before then.
 
-**Create or rotate the role and the secret** — the owner, in Git Bash at the repo root,
-logged in to the Supabase CLI (`npx supabase@2.119.0 login`; no token ever appears in a
-command) and to `gh` as the repository owner. Postgres only ever receives a SCRAM verifier:
-the password exists only in a shell variable and in the pipe to `gh`, which encrypts it
-client-side; the SQL file holds only the verifier and is deleted on exit, and the query
-output is redacted. Running the block again **rotates** the password — the old one stops
-working at once, and the secret is replaced in the same run.
+**Create or rotate the role and the secret** — `bash scripts/deploy-guard-role.sh`, run by
+the owner from the root of a checkout linked to production (`npx supabase@2.119.0 link
+--project-ref xkxthzcmmvtnwicerlup`). Prerequisites:
 
-```bash
-( set -euo pipefail; umask 077
-  sb() { npx --yes supabase@2.119.0 "$@"; }; unset SUPABASE_ACCESS_TOKEN
-  ref=xkxthzcmmvtnwicerlup; host=aws-1-eu-west-2.pooler.supabase.com; repo=FullMetalPr0gr1mmer/BRAIIN
-  sb projects list -o json >/dev/null 2>&1 || { echo "CLI not logged in: npx supabase@2.119.0 login" >&2; exit 1; }
-  [ "$(gh api user --jq .login)" = FullMetalPr0gr1mmer ] || { echo "gh is not the repository owner" >&2; exit 1; }
-  work="$(mktemp -d)"; trap 'rm -rf "$work"; unset pw verifier url' EXIT INT TERM
-  pw="$(openssl rand -hex 24)"
-  verifier="$(printf '%s' "$pw" | node -e 'const c=require("node:crypto");let p="";process.stdin.on("data",d=>p+=d).on("end",()=>{const s=c.randomBytes(16),i=4096,k=c.pbkdf2Sync(p,s,i,32,"sha256"),h=(a,b)=>c.createHmac("sha256",a).update(b).digest();process.stdout.write("SCRAM-SHA-256$"+i+":"+s.toString("base64")+"$"+c.createHash("sha256").update(h(k,"Client Key")).digest("base64")+":"+h(k,"Server Key").toString("base64"))})')"
-  [[ "$verifier" =~ ^SCRAM-SHA-256\$4096:[A-Za-z0-9+/=]+\$[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+$ ]]
-  cat > "$work/role.tpl" <<'SQL'
+- logged in to the Supabase CLI (`npx supabase@2.119.0 login`; no token ever appears in a
+  command);
+- the repository owner's GitHub credential stored for git (Git Credential Manager). The
+  script reads it for its `gh` calls only; it never reaches the Supabase CLI or the output.
+
+Postgres only ever receives a SCRAM verifier. The password exists only in a shell variable
+and in the pipe to `gh`, which encrypts it client-side. Running the script again
+**rotates** the password: the old one stops working at once, and the secret is replaced in
+the same run.
+
+The script works in a fixed order, and anything that can fail without writing runs before
+the first write:
+
+1. **Checks.** The CLI login, the owner identity, and the link: the `--project-ref` is
+   pinned on every query.
+2. **A read-only preflight of production.** Every migration in the checkout must be applied
+   (the guard's own rule, so production may be ahead), and `app.deployment` must be
+   `production`.
+3. **The role:** the one production write.
+4. **A read-back.** The role's attributes and its four grants are checked.
+5. **The secret,** last.
+
+It refuses at the first failed check. Between steps 3 and 5 a failure leaves a password no
+secret holds: on a rotation, deploys then fail closed at the guard. Run the script again;
+it rotates. `tests/ci/deploy-guard-role.spec.ts` drives every path against stub tools.
+
+The SQL it runs:
+
+```sql
 do $g$ begin
   if exists (select 1 from pg_roles where rolname = 'deploy_guard') then
-    alter role deploy_guard with login connection limit 5 password '__V__';
+    alter role deploy_guard with login connection limit 5 password '<SCRAM verifier>';
   else
-    create role deploy_guard with login nosuperuser nocreatedb nocreaterole noinherit connection limit 5 password '__V__';
+    create role deploy_guard with login nosuperuser nocreatedb nocreaterole noinherit connection limit 5 password '<SCRAM verifier>';
   end if; end $g$;
 alter role deploy_guard set default_transaction_read_only = on;
 alter role deploy_guard set statement_timeout = '15s';
@@ -248,20 +262,13 @@ grant usage on schema supabase_migrations to deploy_guard;
 grant select on supabase_migrations.schema_migrations to deploy_guard;
 grant usage on schema app to deploy_guard;
 grant select on app.deployment to deploy_guard;
-SQL
-  sed "s|__V__|${verifier}|g" "$work/role.tpl" > "$work/role.sql"
-  sb db query --linked --project-ref "$ref" -f "$work/role.sql" -o json 2>&1 |
-    V="$verifier" node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(s.split(process.env.V).join("<redacted>")))'
-  url="postgresql://deploy_guard.${ref}:${pw}@${host}:5432/postgres"   # bare: the guard pins TLS
-  printf '%s' "$url" | gh secret set SUPABASE_GUARD_DB_URL --repo "$repo"
-  gh secret list --repo "$repo" )
 ```
 
 The grant alone is not what lets the guard read the marker: `app.deployment` has row
 security FORCED, and `deploy_guard` is NOBYPASSRLS, so it reads through the one policy
 0016 creates for it (`deployment_read_deploy_guard`, `current_user = 'deploy_guard'`).
 
-**Verify** (read-only — `npx --yes supabase@2.119.0 db query --linked -f <file>` with):
+**Verify by hand** (read-only — the script runs this check itself before setting the secret; `npx --yes supabase@2.119.0 db query --linked --project-ref xkxthzcmmvtnwicerlup -f <file>` with):
 
 ```sql
 select r.rolcanlogin, r.rolsuper, r.rolinherit, r.rolcreaterole, r.rolcreatedb, r.rolreplication, r.rolbypassrls,
