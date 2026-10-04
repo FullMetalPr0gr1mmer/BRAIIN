@@ -9,6 +9,7 @@ import {
 } from '@/lib/legal/render';
 import { IDENTITY_FALLBACK, type Identity } from '@/lib/identity/fallback';
 import { APPLICATION_RETENTION_MONTHS, SPAM_RETENTION_DAYS } from '@schemas/application';
+import { RECRUITMENT_POLICY_VERSION } from '@consent/recruitment';
 
 // The legal copy (src/lib/legal/content.ts), filled from the public identity by
 // src/lib/legal/render.ts and rendered by LegalPage.astro. Join: the application form's
@@ -22,6 +23,36 @@ import { APPLICATION_RETENTION_MONTHS, SPAM_RETENTION_DAYS } from '@schemas/appl
 
 const LOCALES = ['en', 'ar'] as const;
 const KEYS = ['privacy', 'terms', 'cookie'] as const;
+
+/** How the notices spell a month (MSA, the Gregorian names the copy already uses). */
+const EN_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+const AR_MONTHS = [
+  'يناير',
+  'فبراير',
+  'مارس',
+  'أبريل',
+  'مايو',
+  'يونيو',
+  'يوليو',
+  'أغسطس',
+  'سبتمبر',
+  'أكتوبر',
+  'نوفمبر',
+  'ديسمبر',
+] as const;
 
 const recruitment = (locale: 'en' | 'ar') =>
   LEGAL[locale].privacy.sections.find((s) => s.id === 'recruitment');
@@ -101,10 +132,22 @@ describe('legal content', () => {
     }
   });
 
-  it('every notice carries the same date — they changed together (J-17)', () => {
+  it('every notice carries the newest recruitment notice’s date — one change (J-17)', () => {
+    // Derived, never spelled here: the notices' `updated` lines and the version appended to
+    // RECRUITMENT_POLICY_VERSIONS name the day the change merges, so a re-date moves both
+    // and this fails when only one moves. J-17's rule (an identity edit moves the dates and
+    // appends a version) keeps them equal; a later edit to the notices that changes no
+    // recruitment text revises this test.
+    const [year, month, day] = RECRUITMENT_POLICY_VERSION.split('-').map(Number) as [
+      number,
+      number,
+      number,
+    ];
+    const en = `Last updated: ${day} ${EN_MONTHS[month - 1]!} ${year}`;
+    const ar = `آخر تحديث: ${day} ${AR_MONTHS[month - 1]!} ${year}`;
     for (const key of KEYS) {
-      expect(LEGAL.en[key].updated, key).toBe('Last updated: 4 October 2026');
-      expect(LEGAL.ar[key].updated, key).toBe('آخر تحديث: 4 أكتوبر 2026');
+      expect(LEGAL.en[key].updated, key).toBe(en);
+      expect(LEGAL.ar[key].updated, key).toBe(ar);
     }
   });
 });
