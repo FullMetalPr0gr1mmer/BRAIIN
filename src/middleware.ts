@@ -9,6 +9,7 @@ import {
 } from '@/lib/http/securityHeaders';
 import { getMaintenanceState, clientIp, maintenanceResponse } from '@/lib/http/maintenance';
 import { getRedirectMap, lookupRedirect, redirectResponse } from '@/lib/http/redirects';
+import { checkImageRequest, imageGuardResponse } from '@/lib/http/imageGuard';
 import {
   isSameOrigin,
   csrfTokenMatches,
@@ -146,6 +147,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
       // page. A maintenance notice that renders unstyled is a bad look at a bad time.
       if (!allowed) return secured(maintenanceResponse(nonce));
     }
+  }
+
+  // 1b) Image transforms answer only the URLs our own markup emits. Every other
+  //     combination of width, height and format would be a new "unique transformation"
+  //     against the Images free-plan quota (src/lib/http/imageGuard.ts).
+  if (url.pathname === '/_image' && !checkImageRequest(url.searchParams).ok) {
+    return secured(imageGuardResponse());
   }
 
   // 2) Admin: session resolution + CSRF. Everything below is Tier C.

@@ -69,6 +69,12 @@ jobs:
         run: npm run a11y:contrast
       - name: Build (Cloudflare adapter)
         run: npm run build
+      # CLAUDE.md §6 gate B. size-limit sums the gzipped files each glob in
+      # .size-limit.json matches, and exits non-zero over a limit. §6 says failing any
+      # budget blocks the PR, but until this step nothing ran it, so a regression could
+      # merge unseen.
+      - name: Bundle budgets — public ≤ 100 KB, admin ≤ 300 KB gz (size-limit)
+        run: npm run size
 
   supply-chain:
     runs-on: ubuntu-latest
