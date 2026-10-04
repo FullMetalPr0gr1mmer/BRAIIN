@@ -265,10 +265,7 @@ function Health({ data }: { data: HealthData }) {
                   {row.withinBudget === null ? (
                     '—'
                   ) : (
-                    <span
-                      className="badge"
-                      data-status={row.withinBudget ? 'published' : 'archived'}
-                    >
+                    <span className="badge" data-tone={row.withinBudget ? 'ok' : 'err'}>
                       {row.withinBudget ? 'within budget' : 'over budget'}
                     </span>
                   )}

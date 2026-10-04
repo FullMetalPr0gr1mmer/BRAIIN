@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 // WCAG 2.2 AA contrast gate (CLAUDE.md DoD #4 — "neon-on-dark passes AA"). Pure Node, no
 // browser: computes the contrast ratio for every foreground/background PAIR actually used
 // in the public UI and fails CI if any is below its AA threshold. This complements the
@@ -242,78 +244,115 @@ const PAIRS = [
   ['errSoft', 'bg', 4.5, 'join form: field errors, a refused consent'],
 ];
 
-// ---- Admin palette — keep in sync with public/styles/admin.css :root tokens ----
+// ---- Admin palette — READ from public/styles/admin.css :root (Admin v2 F1) ----
 //
 // The CMS needs its own suite: /admin is exempt from Core Web Vitals but NOT from DoD
-// #4, and the light editorial palette is a port of a reference design that fails AA in
-// two places on its own site. Asserting the pairs here is what stops those two values
-// coming back the next time someone "restores" a colour to match the source.
-const A_LIGHT = {
-  bg: '#ffffff', // --ad-bg (card ground, inputs)
-  surface: '#faf8f4', // --ad-surface (sidebar, table head)
-  surface2: '#f2efe9', // --ad-surface-2 (content ground, default button, badge)
-  fg: '#111111', // --ad-fg
-  muted: '#666666', // --ad-muted — #888888 in the source is 3.54:1 and fails
-  accentText: '#7f6026', // --ad-accent-text (accent TEXT only)
-  accent: '#8a6a2a', // --ad-accent (fills/rules; the source's #b8955a fails 1.4.11)
-  primary: '#111111', // --ad-primary (filled button ground)
-  primaryFg: '#ffffff', // --ad-primary-fg
-  focus: '#111111', // --ad-focus
-  ok: '#2d6a4f',
-  warn: '#8a5a00',
-  danger: '#a63232',
-  info: '#1e4d8c',
-};
+// #4. The tokens are parsed out of the stylesheet's :root block rather than copied here,
+// so the gate checks the colours that ship and cannot drift from them. A token may be a
+// hex literal, a reference to another token, a theme reference with a fallback
+// (`var(--bs-klein, #0024bc)`: the admin does not load the public theme yet, so the
+// fallback is what renders), or `color-mix(in srgb, A p%, B)`.
+const ADMIN_CSS = readFileSync(new URL('../public/styles/admin.css', import.meta.url), 'utf8');
 
-// The dormant dark theme under :root[data-theme='dark']. Asserted even though no toggle
-// ships yet — an unasserted palette is where the next regression hides, and the tokens
-// whose job is contrast (primary, focus) are re-decided per theme rather than mirrored,
-// which is exactly the kind of decision worth pinning down in CI.
-const A_DARK = {
-  bg: '#0b0b0f',
-  surface: '#14141b',
-  surface2: '#1c1c26',
-  fg: '#e8e8ea',
-  muted: '#a0a0ab',
-  accentText: '#00e5ff',
-  accent: '#00e5ff',
-  primary: '#00e5ff',
-  primaryFg: '#04141a',
-  focus: '#00e5ff',
-  ok: '#4ade80',
-  warn: '#ffb84d',
-  danger: '#ff6b6b',
-  info: '#7fb0f0',
-};
+function adminTokens(css = ADMIN_CSS) {
+  const block = /:root\s*\{([\s\S]*?)\n\}/.exec(css.replace(/\/\*[\s\S]*?\*\//g, ''));
+  if (!block) throw new Error('admin.css: no :root token block');
+  const raw = {};
+  for (const m of block[1].matchAll(/--ad-([\w-]+)\s*:\s*([^;]+);/g)) raw[m[1]] = m[2].trim();
+  const resolved = {};
+  const resolve = (value, depth = 0) => {
+    if (depth > 8) throw new Error(`admin.css: token cycle at ${value}`);
+    let v = value.trim();
+    if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase();
+    if (/^#[0-9a-f]{3}$/i.test(v))
+      return `#${[...v.slice(1)].map((c) => c + c).join('')}`.toLowerCase();
+    let m = /^var\(\s*--ad-([\w-]+)\s*\)$/.exec(v);
+    if (m) return resolve(raw[m[1]] ?? '', depth + 1);
+    m = /^var\(\s*--[\w-]+\s*,\s*(.+)\)$/.exec(v);
+    if (m) return resolve(m[1], depth + 1);
+    m = /^color-mix\(\s*in srgb\s*,\s*(.+?)\s+(\d+(?:\.\d+)?)%\s*,\s*(.+)\)$/.exec(v);
+    if (m) {
+      const a = resolve(m[1], depth + 1);
+      const b = resolve(m[3], depth + 1);
+      if (!a || !b) return null;
+      const p = Number(m[2]) / 100;
+      const ch = (hex, i) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+      return `#${[0, 1, 2]
+        .map((i) =>
+          Math.round(ch(a, i) * p + ch(b, i) * (1 - p))
+            .toString(16)
+            .padStart(2, '0'),
+        )
+        .join('')}`;
+    }
+    return null; // rgba lines, shadows, sizes: not colours a pair can use
+  };
+  for (const [name, value] of Object.entries(raw)) {
+    const hex = resolve(value);
+    if (hex) resolved[name] = hex;
+  }
+  return resolved;
+}
 
-// Same pair list for both themes — the point of a token layer is that the component
-// pairings do not change when the palette does.
+const A = adminTokens();
+
+// Each pair names two tokens (without the --ad- prefix). Text pairs need 4.5:1, the
+// rest (control edges, focus rings, chart strokes, status dots) 3:1 (WCAG 1.4.11).
 const ADMIN_PAIRS = [
-  ['fg', 'bg', 4.5, 'body text on a card'],
-  ['fg', 'surface', 4.5, 'sidebar nav label'],
-  ['fg', 'surface2', 4.5, 'text on the content ground'],
-  ['muted', 'bg', 4.5, 'help text / .stat-label on a card'],
-  ['muted', 'surface', 4.5, 'table th, sidebar group title'],
-  ['muted', 'surface2', 4.5, '.badge[data-status=draft]'],
-  ['accentText', 'bg', 4.5, 'accent text on a card'],
-  ['accentText', 'surface', 4.5, 'accent text on the sidebar'],
-  ['accentText', 'surface2', 4.5, 'accent text on a default button'],
-  ['primaryFg', 'primary', 4.5, '[data-variant=primary] label'],
-  ['ok', 'bg', 4.5, ".msg[data-kind='ok']"],
-  ['ok', 'surface2', 4.5, '.badge[data-status=published]'],
-  ['warn', 'surface2', 4.5, '.badge[data-status=scheduled]'],
-  ['danger', 'bg', 4.5, ".msg[data-kind='error']"],
-  ['danger', 'surface2', 4.5, '.badge[data-status=archived]'],
-  ['info', 'bg', 4.5, 'informational text'],
-  // Non-text (1.4.11): focus ring, and the gold in its only legitimate role.
-  ['focus', 'bg', 3.0, 'focus outline on a card (UI)'],
-  ['focus', 'surface2', 3.0, 'focus outline on the content ground (UI)'],
-  ['accent', 'bg', 3.0, 'gold bar fill on a card (UI)'],
-  ['accent', 'surface2', 3.0, 'gold bar fill on the content ground (UI)'],
+  // Text on the grounds
+  ...['card', 'bg', 'surface-2', 'preview'].flatMap((g) => [
+    ['ink', g, 4.5, `body text on ${g}`],
+    ['dim', g, 4.5, `secondary text, .admin-sub on ${g}`],
+    ['dim2', g, 4.5, `table heads, hints, placeholders on ${g}`],
+  ]),
+  // Brand
+  ['on-primary', 'primary', 4.5, 'primary button label, the current sidebar item'],
+  ['on-primary', 'primary-hover', 4.5, 'primary button label on hover'],
+  ['primary', 'card', 4.5, 'links (a.data-link, search hits) on a card'],
+  ['primary', 'surface-2', 4.5, 'a link in a hovered table row'],
+  ['primary', 'primary-soft', 4.5, '.msg, soft button, klein badge, pressed toolbar button'],
+  ['primary', 'primary-soft-2', 4.5, 'soft button on hover'],
+  // Status badges and messages
+  ['ok-text', 'ok-soft', 4.5, 'published / ok badge'],
+  ['warn-text', 'warn-soft', 4.5, 'draft / warn badge'],
+  ['err-text', 'err-soft', 4.5, 'err badge, .msg error, danger button on hover'],
+  ['sky-text', 'sky-soft', 4.5, 'scheduled / sky badge'],
+  ['dim', 'gray-soft', 4.5, 'archived / gray badge'],
+  ['note-ok-text', 'ok-soft', 4.5, ".msg[data-kind='ok']"],
+  ['note-warn-text', 'warn-soft', 4.5, '.pii labels'],
+  ['ink', 'warn-soft', 4.5, '.pii values'],
+  ['err-text', 'card', 4.5, 'danger button, .field-error'],
+  // The midnight sidebar, toasts and dark badges
+  ['side-text', 'midnight', 4.5, 'sidebar links'],
+  ['side-label', 'midnight', 4.5, 'sidebar group titles'],
+  ['on-dark', 'midnight', 4.5, 'brand, hovered link, toast, dark badge and button'],
+  // Avatar grounds behind white initials
+  ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => [
+    'on-primary',
+    `tone-${i}`,
+    4.5,
+    `white initials on tone ${i}`,
+  ]),
+  // Non-text (1.4.11)
+  ...['card', 'bg', 'surface-2'].flatMap((g) => [
+    ['control', g, 3.0, `input, select, textarea and switch-off edge on ${g}`],
+    ['focus', g, 3.0, `focus ring on ${g}`],
+  ]),
+  ['primary', 'card', 3.0, 'switch on, checkbox and radio fill'],
+  ['focus-dark', 'midnight', 3.0, 'focus ring in the sidebar'],
+  ['warn-text', 'card', 3.0, '.pii border'],
+  ...[1, 2, 3, 4, 5, 6, 7].flatMap((i) => [
+    [`series-${i}`, 'card', 3.0, `chart series ${i} on a card`],
+    [`series-${i}`, 'bg', 3.0, `chart series ${i} on the ground`],
+  ]),
+  ['ok', 'midnight', 3.0, 'ok dot on a toast'],
+  ['warn', 'midnight', 3.0, 'warn dot on a toast'],
+  ['err', 'midnight', 3.0, 'err dot on a toast'],
+  ['focus-dark', 'midnight', 3.0, 'info dot on a toast'],
 ];
 
-// --ad-disabled is deliberately absent: WCAG 1.4.3 exempts inactive controls, and
-// asserting a threshold the spec does not require would be false rigour.
+// No disabled-state pair: WCAG 1.4.3 exempts inactive controls, and asserting a threshold
+// the spec does not require would be false rigour.
 
 function channel(c) {
   const s = c / 255;
@@ -340,6 +379,11 @@ function suite(title, tokens, pairs, source) {
   console.log('  ratio   min   fg/bg                         where');
   let bad = 0;
   for (const [fg, bg, min, where] of pairs) {
+    if (!tokens[fg] || !tokens[bg]) {
+      bad++;
+      console.log(`  ✗ missing token: ${tokens[fg] ? bg : fg}  (${where})`);
+      continue;
+    }
     const r = ratio(tokens[fg], tokens[bg]);
     const pass = r >= min;
     if (!pass) bad++;
@@ -354,13 +398,7 @@ function suite(title, tokens, pairs, source) {
 }
 
 suite('public palette', T, PAIRS, 'public/styles/global.css');
-suite('admin palette (light)', A_LIGHT, ADMIN_PAIRS, 'public/styles/admin.css :root');
-suite(
-  'admin palette (dark, dormant)',
-  A_DARK,
-  ADMIN_PAIRS,
-  "public/styles/admin.css :root[data-theme='dark']",
-);
+suite('admin palette (Admin v2)', A, ADMIN_PAIRS, 'public/styles/admin.css :root');
 
 if (failed) {
   console.log(`Contrast gate: FAIL (${failed} pair(s) below AA).`);
