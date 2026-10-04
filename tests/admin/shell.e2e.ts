@@ -61,7 +61,10 @@ test.describe('the shell from a keyboard', () => {
 
   test('the sidebar stays in view when a long page scrolls', async ({ page }) => {
     await page.goto('/admin', { waitUntil: 'networkidle' });
-    await page.mouse.wheel(0, 4000);
+    // The WINDOW scrolls. A mouse wheel over the sidebar would scroll the sidebar's own
+    // list instead (it scrolls when the menu is taller than the screen).
+    await page.evaluate(() => window.scrollTo(0, 4000));
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
     await expect(
       page.locator('#admin-side').getByRole('link', { name: 'Dashboard' }),
     ).toBeInViewport();

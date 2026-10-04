@@ -429,6 +429,9 @@ textarea[lang='ar'],
     position: sticky;
     top: 0;
     block-size: 100vh;
+    /* The drawer's fill-the-height floor would make the block as tall as its column, and
+       a sticky box as tall as its container has no room to stick. */
+    min-block-size: 0;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--ad-side-label) transparent;
