@@ -28,7 +28,7 @@ The 5 disciplines and 28 services (Round 2, 2026-09-27 — the `disciplines` tab
 
 - **Build:** GREENFIELD / fresh. Every `[reuse]`-tagged feature is **built new**. RBAC from scratch.
 - **Stack:** Astro + React admin (islands) + Supabase (Postgres, Auth, Edge Functions, Storage) + Tiptap. **TypeScript strict.** Zod for all content + form input.
-- **Hosting/adapter:** **Cloudflare Workers Builds — not Pages** (the Astro Cloudflare adapter dropped Pages support) via the Astro Cloudflare adapter. Cloudflare WAF, Stream, image transforms/cache, MENA edge. On-demand `/admin`; static-first public shell.
+- **Hosting/adapter:** **Cloudflare Workers — not Pages** (the Astro Cloudflare adapter dropped Pages support) via the Astro Cloudflare adapter, deployed by `ci.yml`'s `deploy` job after every gate — **never** dashboard-connected Workers Builds, which ships whatever lands on the branch (locked as "Workers Builds" on 2026-06-10; see the deploys amendment below). Cloudflare WAF, Stream, image transforms/cache, MENA edge. On-demand `/admin`; static-first public shell.
 - **Tenancy:** **SINGLE-TENANT at launch, TENANT-READY schema.** `tenant_id` + tenant-scoped RLS on **every** table from day 1.
 - **i18n:** path-based `/` (EN) + `/ar/` (AR). hreflang + `x-default`, per-language self-referential canonicals, both languages in sitemap, complete AR metadata/OG.
 - **Analytics canonical source:** **first-party self-hosted analytics is the single source of truth** (PDPL-friendly, consent-gated, no double-write). GA4 secondary, behind consent.

@@ -205,14 +205,17 @@ migration production lacks is red before the merge.
 root, and Supavisor asks for the password in cleartext inside TLS — so the guard pins
 `PGSSLMODE=verify-full` against the committed root, `scripts/certs/supabase-root-2021-ca.crt`
 (*Supabase Root 2021 CA*, valid to 2031-04-26, SHA-256
-`80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA`;
-the dashboard offers the same certificate as `prod-ca-2021.crt`, under Project Settings →
-Database → SSL Configuration), sets `PGCONNECT_TIMEOUT=10` and `PGGSSENCMODE=disable`,
-clears every other `PG*` variable (a service file named by `PGSERVICE` would override the
-pins), and asserts `current_user = deploy_guard`. The secret is therefore a **bare** URL:
-the guard refuses any query string, because URL parameters would override the pinned TLS. `tests/ci/deploy-guard.spec.ts`
-checks the fingerprint on every build and goes red 90 days before the root expires — commit
-Supabase's next root, its fingerprint compared against the dashboard copy, before then.
+`80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA`).
+It was taken from the pooler's own handshake and checked over a second channel: it is
+byte-identical to the dashboard's `prod-ca-2021.crt` (Project Settings → Database → SSL
+Configuration), the file its Download button links to in Supabase's public bucket, fetched
+over WebPKI TLS (compared 2026-10-04). The guard also sets `PGCONNECT_TIMEOUT=10` and
+`PGGSSENCMODE=disable`, clears every other `PG*` variable (a service file named by
+`PGSERVICE` would override the pins), and asserts `current_user = deploy_guard`. The secret
+is therefore a **bare** URL: the guard refuses any query string, because URL parameters
+would override the pinned TLS. `tests/ci/deploy-guard.spec.ts` checks the fingerprint on
+every build and goes red 90 days before the root expires — commit Supabase's next root, its
+fingerprint compared against the dashboard copy, before then.
 
 **Create or rotate the role and the secret** — the owner, in Git Bash at the repo root,
 logged in to the Supabase CLI (`npx supabase@2.119.0 login`; no token ever appears in a
@@ -323,12 +326,17 @@ old names would otherwise never report again and block every PR, that one includ
 Reverting a CI change follows the same rule in reverse: apply the contexts the reverted
 workflows produce first.
 
-**Merging and deploys.** Merge through the PR (or `gh api -X PUT "$R/pulls/<n>/merge" -f
-sha=<tested head> -f merge_method=merge`, which refuses if the head moved). The deploy
-follows ~30 min later, when `main`'s own run has every gate green. When two merges land
-close together, the older run's `deploy` fails its freshness step ("main is at …") — benign:
-the newer run deploys both. To retry a deploy after a flaky Lighthouse or e2e result,
-re-run the failed jobs of the **newest** `main` run; an older run cannot deploy.
+**Merging and deploys.** Merge through the PR, or by API with the tested head pinned (it
+refuses if the head moved):
+
+```bash
+gh api -X PUT repos/FullMetalPr0gr1mmer/BRAIIN/pulls/<n>/merge -f sha=<tested head> -f merge_method=merge
+```
+
+The deploy follows ~30 min later, when `main`'s own run has every gate green. When two
+merges land close together, the older run's `deploy` fails its freshness step ("main is at
+…") — benign: the newer run deploys both. To retry a deploy after a flaky Lighthouse or e2e
+result, re-run the failed jobs of the **newest** `main` run; an older run cannot deploy.
 
 **Break-glass** — a fix must merge while a required check cannot go green for a reason
 outside the code (GitHub Actions down, a runner image regression): lift admin enforcement,
@@ -352,15 +360,29 @@ Production deploys are CI's: a merge to `main` → every gate green (§5b) → t
 characters, `--message "ci <sha> run <id>"`; `npx wrangler versions list` shows both).
 Nobody deploys from a laptop.
 
-**Break-glass only** — CI cannot deploy and production needs the change now: from a clean
-checkout of `main`'s head, with the `deploy` job's build env exported exactly as ci.yml has
-it (never a local `.env`, whose origin is localhost), after confirming production has every
-migration (`npx --yes supabase@2.119.0 migration list --linked` lists no local-only one):
+**Break-glass only** — CI cannot deploy and production needs the change now. Build from a
+**fresh clone** of `main`'s head, never a working checkout: its `.env` is git-ignored, so
+`git status` cannot show it, and its localhost origin beats an exported one in part of the
+bundle (`scripts/check-site-url.mjs`) — the build would stop at its origin check, and the
+file's other keys would reach the build. Logged in to the Supabase CLI (§5a) and to
+wrangler (`npx wrangler login`), first clone and compare the migrations:
 
 ```bash
-git switch main && git pull --ff-only && test -z "$(git status --porcelain)"
-npm ci && npm run build      # with the deploy job's eight env values exported
-npx wrangler deploy --tag "$(git rev-parse --short=12 HEAD)" --message "break-glass: <reason>"
+cd "$(mktemp -d)" && git clone --quiet --depth 1 --branch main https://github.com/FullMetalPr0gr1mmer/BRAIIN . &&
+  npx --yes supabase@2.119.0 link --project-ref xkxthzcmmvtnwicerlup &&
+  npx --yes supabase@2.119.0 migration list --linked   # every Local version needs its Remote
+```
+
+Only when production has every migration (else apply it first, §1), in the same directory —
+the build env is the `deploy` job's own, read from `ci.yml`:
+
+```bash
+( set -euo pipefail
+  npm ci
+  vars="$(node -e 'const { jobs } = require("yaml").parse(require("fs").readFileSync(".github/workflows/ci.yml", "utf8")); for (const [k, v] of Object.entries(jobs.deploy.env)) { if (!/^\w+$/.test(k) || !/^[\w.:\/@-]+$/.test(String(v))) throw new Error(`unsafe value for ${k}`); console.log(`export ${k}=${v}`); }')"
+  eval "$vars"
+  npm run build
+  npx --no wrangler deploy --tag "$(git rev-parse --short=12 HEAD)" --message "break-glass: <reason>" )
 ```
 
 Then let the next `main` run prove the gates (re-run the newest one).
