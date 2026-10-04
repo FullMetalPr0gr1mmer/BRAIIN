@@ -9,7 +9,7 @@
 -- rules; and the grants. CLAUDE.md §3, §8, §9.
 
 begin;
-select plan(52);
+select plan(53);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -226,6 +226,17 @@ select throws_ok(
        where tenant_id = '00000000-0000-0000-0000-0000000000ff' and key = 'won')
       where id = '00000000-0000-0000-0000-00000000aa02' $$,
   '23503', null, 'a lead cannot point at another tenant''s stage (composite key)');
+
+-- The public form writes as the SERVICE ROLE, through every new trigger (the actor trigger
+-- calls auth.uid() in that role). The suites above insert as the owner, so prove this one.
+set local role service_role;
+select _as(null, null, null);
+select lives_ok(
+  $$ insert into public.leads (id, tenant_id, name, email_enc, message)
+     values ('00000000-0000-0000-0000-00000000aa04', '00000000-0000-0000-0000-000000000001',
+             'From the form', 'x', 'hi') $$,
+  'the service role (the public contact form) still inserts a lead');
+reset role;
 
 -- A lead that arrives as spam is capped at once.
 insert into public.leads (id, tenant_id, name, email_enc, message, status)
