@@ -12,6 +12,12 @@
 
 export const APPLICANT_PII_LABEL = 'applicant/v1';
 export const RATE_LIMIT_LABEL = 'ratelimit/v1';
+/**
+ * The CRM blind indexes (src/lib/crm/blindIndex.ts): exact-match lookups of a lead's
+ * e-mail and phone without storing either in the clear. Versioned so a rotation can
+ * compute v2 beside v1 (from the ciphertext, in a cron) and then switch.
+ */
+export const CRM_INDEX_LABEL = 'crm-index/v1';
 
 /** `base` + NUL + `label`. NUL cannot occur in an env secret, so labels cannot collide. */
 export function labelledKeyMaterial(base: string, label: string): string {

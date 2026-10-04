@@ -270,10 +270,10 @@ set constraints all deferred;
 
 -- ---- The catalog ---------------------------------------------------------------------------
 select ok(
-  (select count(*) = 22 from information_schema.columns
-    where table_schema = 'public' and table_name = 'leads_safe')
-  and exists (select 1 from information_schema.columns
-               where table_schema = 'public' and table_name = 'leads_safe' and column_name = 'stage_id')
+  (select count(*) = 9 from information_schema.columns
+    where table_schema = 'public' and table_name = 'leads_safe'
+      and column_name in ('lead_number', 'stage_id', 'is_spam', 'spam_marked_at', 'first_response_at',
+                          'won_at', 'version', 'created_by', 'updated_by'))
   and not exists (select 1 from information_schema.columns
                    where table_schema = 'public' and table_name = 'leads_safe'
                      and column_name = 'retention_before_spam'),

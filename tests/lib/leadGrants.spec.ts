@@ -119,4 +119,24 @@ describe('gated lead columns have a short, named list of readers', () => {
       'src/pages/api/hooks/notify-lead.ts',
     ]);
   });
+
+  // The check above sees a file that builds its own service client. A module handed one
+  // (the daily cron's) needs this second net: `budget_enc` exists only on leads, so a file
+  // naming it is handling lead ciphertext.
+  it('only these files handle the lead ciphertext', () => {
+    const handlers = files
+      .filter((f) => /\bbudget_enc\b/.test(f.code))
+      .map((f) => f.path)
+      .sort();
+    expect(handlers).toEqual([
+      'src/lib/admin/leadFields.ts',
+      // The daily cron's indexing (C1b): decrypts in the Worker, computes indexes and
+      // signals, writes them through crm_index_lead. No person sees the values.
+      'src/lib/crm/indexBackfill.ts',
+      'src/lib/data/leads.ts',
+      'src/pages/api/admin/leads/[id].ts',
+      'src/pages/api/admin/leads/export.ts',
+      'src/pages/api/hooks/notify-lead.ts',
+    ]);
+  });
 });
