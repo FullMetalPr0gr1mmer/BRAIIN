@@ -635,6 +635,36 @@ const CASES: Case[] = [
     url: '/api/admin/crm/people',
     allow: ['admin', 'developer'],
   },
+  // One lead in the CRM (Admin v2 C2b): contact details and notes are leads.pii.
+  {
+    name: 'lead contact reveal',
+    load: () => import('@/pages/api/admin/leads/[id]/reveal'),
+    method: 'POST',
+    url: `/api/admin/leads/${UUID}/reveal`,
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'lead notes thread (read)',
+    load: () => import('@/pages/api/admin/leads/[id]/notes'),
+    method: 'GET',
+    url: `/api/admin/leads/${UUID}/notes`,
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'lead notes thread (add)',
+    load: () => import('@/pages/api/admin/leads/[id]/notes'),
+    method: 'POST',
+    url: `/api/admin/leads/${UUID}/notes`,
+    body: { body: 'Called back' },
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'lead timeline',
+    load: () => import('@/pages/api/admin/leads/[id]/events'),
+    method: 'GET',
+    url: `/api/admin/leads/${UUID}/events`,
+    allow: ['admin', 'developer'],
+  },
 
   // ---- Job applications (Join) — Admin only, owner decision J6 ----
   {

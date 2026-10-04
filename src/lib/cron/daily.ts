@@ -51,4 +51,24 @@ export async function runDailyJobs(): Promise<void> {
       message: err instanceof Error ? err.message : 'lead indexing failed',
     });
   }
+
+  // The privileged-op ledger (exports, lead reveals) only needs its last hour; keep two
+  // days for investigation and drop the rest. The audit log is the record, not this.
+  try {
+    const cutoff = new Date(Date.now() - PRIVILEGED_OPS_KEEP_MS).toISOString();
+    const { error } = await serviceClient()
+      .from('privileged_ops')
+      .delete()
+      .lt('created_at', cutoff);
+    if (error) throw new Error(error.message);
+  } catch (err) {
+    await writeSystemLog({
+      level: 'error',
+      source: 'cron:privileged-ops',
+      message: err instanceof Error ? err.message : 'privileged-ops purge failed',
+    });
+  }
 }
+
+/** How long the privileged-op ledger keeps a row: two days (docs/retention.md). */
+export const PRIVILEGED_OPS_KEEP_MS = 48 * 60 * 60 * 1000;
