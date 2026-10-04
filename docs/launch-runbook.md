@@ -281,10 +281,24 @@ grants true; `dep_write` and `leads_select` false; `applied` = the migrations in
 `✓ connected as deploy_guard (TLS verified against the Supabase root CA).`,
 `✓ production has every migration in the repo (N applied).` and `✓ app.deployment = production.`
 
-**Revoke:** `drop owned by deploy_guard; drop role deploy_guard;` (as the owner, through
-`db query --linked`), then `gh secret delete SUPABASE_GUARD_DB_URL --repo
-FullMetalPr0gr1mmer/BRAIIN`. Every deploy then fails at the guard until both exist again —
-which also makes revoking the way to stop all deploys.
+**Revoke** — as the owner, through `db query --linked --project-ref xkxthzcmmvtnwicerlup`:
+
+```sql
+alter role deploy_guard nologin;
+revoke all on app.deployment from deploy_guard;
+revoke all on schema app from deploy_guard;
+revoke all on supabase_migrations.schema_migrations from deploy_guard;
+revoke all on schema supabase_migrations from deploy_guard;
+drop role deploy_guard;
+```
+
+then `gh secret delete SUPABASE_GUARD_DB_URL --repo FullMetalPr0gr1mmer/BRAIIN`. Not
+`drop owned by deploy_guard`: on Postgres 16+ the role that created it — Supabase's
+`postgres`, CREATEROLE but not a superuser — holds only ADMIN OPTION on it, so `drop owned`
+fails (42501, "Only roles with privileges of role deploy_guard may drop objects owned by
+it") and the whole request rolls back, password and grants intact. Explicit revokes and
+`drop role` work whatever `createrole_self_grant` is. Every deploy then fails at the guard
+until both exist again — which also makes revoking the way to stop all deploys.
 
 ## 5b. Branch protection on `main` (the gates bind everyone)
 
