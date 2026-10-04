@@ -29,6 +29,7 @@ interface Job {
   'runs-on'?: string;
   uses?: string;
   secrets?: unknown;
+  permissions?: unknown;
   env?: Record<string, unknown>;
   concurrency?: unknown;
   'continue-on-error'?: unknown;
@@ -108,11 +109,13 @@ describe('ci.yml — the deploy waits for every gate', () => {
   });
 
   it('cancels superseded PR runs only — each main run is its own group', () => {
-    expect(ci.concurrency?.['cancel-in-progress']).toBe(
-      "${{ github.event_name == 'pull_request' }}",
-    );
-    expect(ci.concurrency?.group).toContain("format('ci-pr-{0}', github.ref)");
-    expect(ci.concurrency?.group).toContain("format('ci-main-{0}', github.run_id)");
+    // Exact: with the branches swapped, every main run would share one group, and a later
+    // merge would cancel an earlier one still waiting to start.
+    expect(ci.concurrency).toEqual({
+      group:
+        "${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.ref) || format('ci-main-{0}', github.run_id) }}",
+      'cancel-in-progress': "${{ github.event_name == 'pull_request' }}",
+    });
   });
 
   it('checks freshness first, guards before any dependency code, deploys last', () => {
@@ -230,7 +233,6 @@ describe('the gate workflows ci.yml calls', () => {
       for (const [id, job] of Object.entries(wf.jobs)) {
         expect(job.concurrency, id).toBeUndefined();
         expect(job.if, id).toBeUndefined();
-        expect(job['continue-on-error'], id).toBeUndefined();
       }
     });
   }
@@ -246,14 +248,28 @@ describe('the gate workflows ci.yml calls', () => {
 });
 
 describe('every workflow', () => {
-  it('has read-only permissions and a timeout on every job that runs', () => {
-    for (const [file, wf] of workflows) {
-      expect(wf.permissions, file).toEqual({ contents: 'read' });
-      for (const [id, job] of Object.entries(wf.jobs)) {
-        if (job['runs-on'] === undefined) continue; // a call: its jobs carry their own
-        expect(job['timeout-minutes'], `${file} ${id}`).toBeGreaterThan(0);
-        expect(job['timeout-minutes'], `${file} ${id}`).toBeLessThanOrEqual(60);
-      }
+  const everyJob = workflows.flatMap(([file, wf]) =>
+    Object.entries(wf.jobs).map(([id, job]) => ({ label: `${file} ${id}`, job })),
+  );
+
+  it('is read-only: the workflow and every job that sets its own permissions', () => {
+    for (const [file, wf] of workflows) expect(wf.permissions, file).toEqual({ contents: 'read' });
+    // A job's `permissions` replaces the workflow's — a calling job's, for the jobs it calls.
+    for (const { label, job } of everyJob) {
+      if (job.permissions === undefined) continue; // the workflow's applies
+      expect(job.permissions, label).toEqual({ contents: 'read' });
+    }
+  });
+
+  it('lets no job fail quietly: a job allowed to fail is no gate', () => {
+    for (const { label, job } of everyJob) expect(job['continue-on-error'], label).toBeUndefined();
+  });
+
+  it('has a timeout on every job that runs', () => {
+    for (const { label, job } of everyJob) {
+      if (job['runs-on'] === undefined) continue; // a call: its jobs carry their own
+      expect(job['timeout-minutes'], label).toBeGreaterThan(0);
+      expect(job['timeout-minutes'], label).toBeLessThanOrEqual(60);
     }
   });
 });
