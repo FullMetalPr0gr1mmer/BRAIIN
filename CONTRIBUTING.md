@@ -56,7 +56,7 @@ Hooks are what turn "Claude _should_ run the checks" into "the checks run regard
 
 ## Conventions
 
-- **Branches:** `phase-N/<topic>` for phase work (e.g. `phase-0/foundation`); `chore/…`, `fix/…` otherwise. Open PRs into `main`.
+- **Branches:** `phase-N/<topic>` for phase work (e.g. `phase-0/foundation`); `chore/…`, `fix/…` otherwise. Open PRs into `main` — the only way in: `main` is protected (every required check green, branch up to date with `main`, admins included), and a merge deploys ~30 min later, once every gate has passed on `main` (`docs/launch-runbook.md` §5b).
 - **Migrations:** forward-only, expand/contract. Never edit an applied migration — add a new one.
 - **Commits** end with the `Co-Authored-By` trailer; **PR bodies** end with the generated-with line — both applied automatically by the `attribution` block in `.claude/settings.json`. CI gate order follows pillar priority (`CLAUDE.md` §8).
 - **Tests ship with the change.** Every sensitive op needs a per-role authz row over `admin, content_creator, seo, developer, anon, other_tenant` — `other_tenant` = deny on every row.

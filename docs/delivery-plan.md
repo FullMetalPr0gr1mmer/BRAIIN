@@ -18,7 +18,7 @@ When two requirements conflict, the **higher pillar wins**. CI gate order mirror
 
 ### Definition of Done (DoD) — all 7, every feature
 1. **Server-side authorized** — RLS + Edge/API role guard; UI gating is UX-only.
-2. **Within performance budget** — Gate A (Lighthouse), Gate B (size-limit), Gate C (budget.json).
+2. **Within performance budget** — Gate A (Lighthouse, incl. font bytes per route), Gate B (size-limit), and the budget tests that stand in for Gate C's `budget.json` (CLAUDE.md §6).
 3. **Server-rendered if indexable** — Tier-A HTML, never client-only.
 4. **Accessible** — WCAG 2.2 AA; zero axe violations; neon-on-dark/reduced-motion/captions/RTL checks.
 5. **Tested** — per-role authz matrix `{admin, content_creator, seo, developer, anon, other_tenant}` with `other_tenant=deny` on every row.

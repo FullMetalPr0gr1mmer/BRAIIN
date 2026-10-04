@@ -358,7 +358,7 @@ Auth/RBAC/RLS authoring → §3. **Cookie-consent store, category model, and gat
 | Poster image | ≤ 80 KB | Stream thumbnail |
 
 ### 5.2 CI gates
-Gate A `@lhci/cli` (minScore 0.95, numeric LCP/CLS/TBT caps, unsized-images/modern-formats/font-display as errors, incl. `/ar/`); Gate B `size-limit` (per-island JS ≤100 KB, fonts ≤180 KB, hero face ≤35 KB); Gate C `budget.json`.
+Gate A `@lhci/cli` (minScore 0.95, numeric LCP/CLS/TBT caps, unsized-images/modern-formats/font-display as errors, font bytes per route ≤ 180 KB via `resource-summary:font:size`, incl. `/ar/`, mobile and desktop); Gate B `size-limit` (client JS only: public routes ≤ 100 KB gz, admin ≤ 300 KB gz); Gate C has no `budget.json` — Lighthouse 12 removed budgets and LHCI refuses a budgets file beside assertions — so the per-file budgets are tests (hero face: `tests/seo/fonts.spec.ts`; poster: `tests/e2e/poster-bytes.e2e.ts`). Every gate is a required check on `main` and blocks the deploy (CLAUDE.md §2).
 
 ### 5.3–5.7 Images / Fonts / Animation / Caching / RUM
 Astro `<Picture>` (AVIF→WebP, explicit width/height); edge transforms with `cacheKey` = full-size source URL only, `format=auto`. Self-hosted woff2 subset per script; `font-display: swap` + metric-overrides; preload only the hero face per language. Compositor-only animation; `content-visibility: auto`; `prefers-reduced-motion` disables (not slows); CSS-only marquee with a dedicated field-INP probe. Static shell edge-cached, tag-based purge tied to publish; image transform cache is a separate namespace. RUM web-vitals beacon is **consent-gated, same-origin, first-party only** (§4.12), wired to the §5.1 budgets.

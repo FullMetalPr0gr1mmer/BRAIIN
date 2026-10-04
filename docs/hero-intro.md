@@ -268,11 +268,16 @@ bound. Past the last rung the stagger flattens into a simultaneous pop.
 
 The last verified-good state is tagged **`hero-intro-baseline-2026-08-24`** (`d145aee`).
 
-Preferred — revert the bad change, keep history:
+Preferred — revert the bad change, keep history. `main` is protected (launch runbook §5b),
+so the revert goes through a PR, and it deploys ~30 min after the merge, once every gate is
+green; if production is hurting now, roll the Worker back first (seconds) and let the revert
+follow:
 
 ```bash
+npx wrangler rollback                     # only if urgent: the previous Worker version
+git switch -c revert/hero-intro origin/main
 git revert <bad-sha>
-git push origin main          # CI re-runs and redeploys
+git push -u origin revert/hero-intro      # then open the PR
 ```
 
 Just the hero files, if a later change went wrong but you want to keep everything else:
@@ -291,11 +296,11 @@ git diff hero-intro-baseline-2026-08-24 -- \
 ```
 
 **Verifying a rollback took, in production** — the deploy is `ci.yml`'s `deploy` job on
-push to `main`, and it *skips* (green) if the Cloudflare secrets are missing, so a green
-run is not proof of a deploy:
+push to `main`: it runs after every gate and *fails* (never skips) when a secret is missing,
+so a green `deploy` is a deploy. Each push to `main` has exactly one run, `CI`:
 
 ```bash
-gh run list --branch main --limit 4 --json databaseId,name,conclusion   # pick the CI run, not DB tests
+gh run list --branch main --workflow CI --limit 4 --json databaseId,headSha,conclusion
 gh run view <id> --json jobs --jq '.jobs[] | select(.name=="deploy") | .steps[] | "\(.conclusion)\t\(.name)"'
 curl -s https://braiin-station.braiin.workers.dev/styles/global.css | grep -A6 '^\.intro {'
 ```

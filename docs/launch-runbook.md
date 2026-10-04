@@ -31,9 +31,10 @@ npx supabase db push          # applies every migration not yet recorded in prod
 ```
 
 **Order for every change that ships a migration: apply it here FIRST, then merge.**
-Merging to `main` auto-deploys the Worker; code that reads a column production does not
-have yet fails closed to empty content (§5a's deploy guard refuses such a deploy once
-configured).
+Merging to `main` auto-deploys the Worker (~30 min later, once every gate is green); code
+that reads a column production does not have yet fails closed to empty content. §5a's
+deploy guard refuses such a deploy, and fails closed whenever it cannot check; on the PR,
+the `deploy-guard-preview` check stays red until production has the migration.
 
 ### 1a. Mark this database as production  ⛔ blocker — immediately after 0016
 
@@ -143,8 +144,11 @@ lead. Back it up somewhere that is not this repository before any lead is submit
 > including service-role, can skip or forge it. The `astro:env` entry exists because the
 > schema declares it; the Vault secret from step 1 is the one that matters.
 
-Public vars (`wrangler.jsonc` / dashboard vars, not secrets):
-`PUBLIC_SITE_URL`, `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`.
+Public values (not secrets) — `PUBLIC_SITE_URL`, `PUBLIC_SUPABASE_URL`,
+`PUBLIC_SUPABASE_ANON_KEY` — are inlined at BUILD time, so they live only in the build
+environment: the `deploy` job's `env:` in `.github/workflows/ci.yml` (and `.env` locally).
+**Never** in `wrangler.jsonc` `vars` or dashboard vars, which override the build (see the
+note in `wrangler.jsonc`).
 
 ---
 
@@ -187,48 +191,178 @@ holds a session, which transaction-mode pooling cannot provide.
 ## 5a. Deploy guard role (CI refuses to deploy ahead of migrations)
 
 Merging to `main` auto-deploys the Worker, but migrations are applied by hand (§1). The
-deploy job runs `scripts/deploy-guard.sh` first, which fails the deploy when production is
-missing any migration in the repo. **Order for every change that ships a migration:
-apply it to production (§1) → merge → auto-deploy.** Code first is how content silently
-vanishes: loaders fail closed to empty results, not to an error page.
+deploy job runs `scripts/deploy-guard.sh` first — before `npm ci`, as a read-only role — and
+it **fails the deploy** when production is missing any migration in the repo, when
+`app.deployment` is not `production`, and on anything it cannot check: no secret, a URL it
+will not use, a server it cannot verify, a role other than `deploy_guard`. **Order for every
+change that ships a migration: apply it to production (§1) → merge → auto-deploy.** Code
+first is how content silently vanishes: loaders fail closed to empty results, not to an
+error page. On a PR, the `deploy-guard-preview` check runs the same script against
+production, read-only (the owner's own same-repo PRs; not a required check), so a PR whose
+migration production lacks is red before the merge.
 
-The guard reads two things and nothing else, so it gets its own read-only role — never
-the `postgres` password:
+**What it trusts.** The session pooler's certificate chain ends at Supabase's own private
+root, and Supavisor asks for the password in cleartext inside TLS — so the guard pins
+`PGSSLMODE=verify-full` against the committed root, `scripts/certs/supabase-root-2021-ca.crt`
+(*Supabase Root 2021 CA*, valid to 2031-04-26, SHA-256
+`80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA`;
+the dashboard offers the same certificate as `prod-ca-2021.crt`, under Project Settings →
+Database → SSL Configuration), sets `PGCONNECT_TIMEOUT=10`, and asserts `current_user =
+deploy_guard`. The secret is therefore a **bare** URL: the guard refuses any query string,
+because URL parameters would override the pinned TLS. `tests/ci/deploy-guard.spec.ts`
+checks the fingerprint on every build and goes red 90 days before the root expires — commit
+Supabase's next root, its fingerprint compared against the dashboard copy, before then.
 
-```sql
-create role deploy_guard login password '<openssl rand -hex 24>'
-  nosuperuser nocreatedb nocreaterole noinherit;
+**Create or rotate the role and the secret** — the owner, in Git Bash at the repo root,
+logged in to the Supabase CLI (`npx supabase@2.119.0 login`; no token ever appears in a
+command) and to `gh` as the repository owner. Postgres only ever receives a SCRAM verifier:
+the password exists only in a shell variable and in the pipe to `gh`, which encrypts it
+client-side; the SQL file holds only the verifier and is deleted on exit, and the query
+output is redacted. Running the block again **rotates** the password — the old one stops
+working at once, and the secret is replaced in the same run.
+
+```bash
+( set -euo pipefail; umask 077
+  sb() { npx --yes supabase@2.119.0 "$@"; }; unset SUPABASE_ACCESS_TOKEN
+  ref=xkxthzcmmvtnwicerlup; host=aws-1-eu-west-2.pooler.supabase.com; repo=FullMetalPr0gr1mmer/BRAIIN
+  sb projects list -o json >/dev/null 2>&1 || { echo "CLI not logged in: npx supabase@2.119.0 login" >&2; exit 1; }
+  [ "$(gh api user --jq .login)" = FullMetalPr0gr1mmer ] || { echo "gh is not the repository owner" >&2; exit 1; }
+  work="$(mktemp -d)"; trap 'rm -rf "$work"; unset pw verifier url' EXIT INT TERM
+  pw="$(openssl rand -hex 24)"
+  verifier="$(printf '%s' "$pw" | node -e 'const c=require("node:crypto");let p="";process.stdin.on("data",d=>p+=d).on("end",()=>{const s=c.randomBytes(16),i=4096,k=c.pbkdf2Sync(p,s,i,32,"sha256"),h=(a,b)=>c.createHmac("sha256",a).update(b).digest();process.stdout.write("SCRAM-SHA-256$"+i+":"+s.toString("base64")+"$"+c.createHash("sha256").update(h(k,"Client Key")).digest("base64")+":"+h(k,"Server Key").toString("base64"))})')"
+  [[ "$verifier" =~ ^SCRAM-SHA-256\$4096:[A-Za-z0-9+/=]+\$[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+$ ]]
+  cat > "$work/role.tpl" <<'SQL'
+do $g$ begin
+  if exists (select 1 from pg_roles where rolname = 'deploy_guard') then
+    alter role deploy_guard with login connection limit 5 password '__V__';
+  else
+    create role deploy_guard with login nosuperuser nocreatedb nocreaterole noinherit connection limit 5 password '__V__';
+  end if; end $g$;
+alter role deploy_guard set default_transaction_read_only = on;
+alter role deploy_guard set statement_timeout = '15s';
 grant usage on schema supabase_migrations to deploy_guard;
 grant select on supabase_migrations.schema_migrations to deploy_guard;
--- Once migration 0016 is applied (it creates the app.deployment marker):
 grant usage on schema app to deploy_guard;
 grant select on app.deployment to deploy_guard;
+SQL
+  sed "s|__V__|${verifier}|g" "$work/role.tpl" > "$work/role.sql"
+  sb db query --linked --project-ref "$ref" -f "$work/role.sql" -o json 2>&1 |
+    V="$verifier" node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(s.split(process.env.V).join("<redacted>")))'
+  url="postgresql://deploy_guard.${ref}:${pw}@${host}:5432/postgres"   # bare: the guard pins TLS
+  printf '%s' "$url" | gh secret set SUPABASE_GUARD_DB_URL --repo "$repo"
+  gh secret list --repo "$repo" )
 ```
 
 The grant alone is not what lets the guard read the marker: `app.deployment` has row
 security FORCED, and `deploy_guard` is NOBYPASSRLS, so it reads through the one policy
 0016 creates for it (`deployment_read_deploy_guard`, `current_user = 'deploy_guard'`).
-Verify with the guard's own credentials, after §1a — it must print `production`, not an
-empty result:
 
-```bash
-psql "$SUPABASE_GUARD_DB_URL" -At -c "select env from app.deployment"
+**Verify** (read-only — `npx --yes supabase@2.119.0 db query --linked -f <file>` with):
+
+```sql
+select r.rolcanlogin, r.rolsuper, r.rolinherit, r.rolcreaterole, r.rolcreatedb, r.rolreplication, r.rolbypassrls,
+  r.rolconnlimit, r.rolconfig, (select count(*) from pg_auth_members m where m.member = r.oid) member_of,
+  has_schema_privilege(r.oid,'supabase_migrations','usage') mig_usage, has_table_privilege(r.oid,'supabase_migrations.schema_migrations','select') mig_select,
+  has_schema_privilege(r.oid,'app','usage') app_usage, has_table_privilege(r.oid,'app.deployment','select') dep_select,
+  has_table_privilege(r.oid,'app.deployment','insert,update,delete,truncate') dep_write, has_table_privilege(r.oid,'public.leads','select') leads_select,
+  (select count(*) from supabase_migrations.schema_migrations) applied, (select env from app.deployment) env
+from pg_roles r where r.rolname = 'deploy_guard';
 ```
 
-Store the connection URL as the repository secret **`SUPABASE_GUARD_DB_URL`** (Settings →
-Secrets and variables → Actions), using the session pooler on `:5432`:
-`postgresql://deploy_guard.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`.
-While the secret is absent the guard step skips with a warning, exactly like the deploy
-step does without its Cloudflare secrets.
+Expect `rolcanlogin` true; `rolsuper`, `rolinherit`, `rolcreaterole`, `rolcreatedb`,
+`rolreplication` and `rolbypassrls` false; `rolconnlimit` 5; `rolconfig` holding
+`default_transaction_read_only=on` and `statement_timeout=15s`; `member_of` 0; the four
+grants true; `dep_write` and `leads_select` false; `applied` = the migrations in the repo;
+`env` = `production`. Then from CI: on any PR of the owner's, `deploy-guard-preview` prints
+`✓ connected as deploy_guard (TLS verified against the Supabase root CA).`,
+`✓ production has every migration in the repo (N applied).` and `✓ app.deployment = production.`
+
+**Revoke:** `drop owned by deploy_guard; drop role deploy_guard;` (as the owner, through
+`db query --linked`), then `gh secret delete SUPABASE_GUARD_DB_URL --repo
+FullMetalPr0gr1mmer/BRAIIN`. Every deploy then fails at the guard until both exist again —
+which also makes revoking the way to stop all deploys.
+
+## 5b. Branch protection on `main` (the gates bind everyone)
+
+`main` takes changes only through a pull request whose required checks are green on a
+branch **up to date with `main`** (strict), admins included, with no force-push or deletion
+(owner decision 2026-10-04). With the deploy needing every gate (§5a; CLAUDE.md §2), this is
+what makes "a red gate never ships" hold for the merge as well as the deploy, and `strict`
+keeps the migration ledger honest: every PR is checked against the `main` it lands on.
+
+The settings are code. `.github/branch-protection.json` is the exact body of the API call:
+seven required checks — `migrations`, `build-test`, `supply-chain`, `deploy-preflight`,
+`db-tests / pgtap`, `perf-seo-a11y / E2E + axe + CSP + video bytes` and
+`perf-seo-a11y / Lighthouse budgets` — each pinned to the GitHub Actions app (id 15368), so
+a status posted with a token cannot stand in for a check. `tests/ci/workflows.spec.ts` fails
+unless they are exactly the checks the workflows produce. `deploy-guard-preview` is
+deliberately not required: it reads production and runs only on the owner's PRs.
+
+**Apply** (owner's `gh`, from a checkout of the PR that last changed the file, once its
+checks have reported — a required context that never reports blocks every PR):
+
+```bash
+( set -euo pipefail
+  R=repos/FullMetalPr0gr1mmer/BRAIIN; sha="$(git rev-parse HEAD)"
+  missing="$(gh api "$R/commits/$sha/check-runs?per_page=100" --jq '[.check_runs[]|select(.app.id==15368)|.name]' |
+    node -e 'const w=require("./.github/branch-protection.json").required_status_checks.checks.map(c=>c.context);let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const h=new Set(JSON.parse(s));process.stdout.write(w.filter(x=>!h.has(x)).join("\n"))})')"
+  [ -z "$missing" ] || { echo "not reported on $sha: $missing" >&2; exit 1; }
+  gh api -X PUT "$R/branches/main/protection" -H 'Accept: application/vnd.github+json' --input .github/branch-protection.json >/dev/null
+  gh api "$R/branches/main/protection" --jq '{strict:.required_status_checks.strict,checks:[.required_status_checks.checks[].context],admins:.enforce_admins.enabled}' )
+```
+
+Expect `strict: true`, the seven checks and `admins: true`. From then on
+`gh pr view <n> --json mergeStateStatus` reads BLOCKED while a required check is pending or
+red, and BEHIND when `main` has moved.
+
+**Renaming a check** (a job in ci.yml or in a workflow it calls, or adding or removing a
+gate): change `.github/branch-protection.json` in the same PR (the spec fails until you do),
+and once that PR's checks have reported, apply the file as above **before** merging it — the
+old names would otherwise never report again and block every PR, that one included.
+Reverting a CI change follows the same rule in reverse: apply the contexts the reverted
+workflows produce first.
+
+**Merging and deploys.** Merge through the PR (or `gh api -X PUT "$R/pulls/<n>/merge" -f
+sha=<tested head> -f merge_method=merge`, which refuses if the head moved). The deploy
+follows ~30 min later, when `main`'s own run has every gate green. When two merges land
+close together, the older run's `deploy` fails its freshness step ("main is at …") — benign:
+the newer run deploys both. To retry a deploy after a flaky Lighthouse or e2e result,
+re-run the failed jobs of the **newest** `main` run; an older run cannot deploy.
+
+**Break-glass** — a fix must merge while a required check cannot go green for a reason
+outside the code (GitHub Actions down, a runner image regression): lift admin enforcement,
+merge as admin, restore it at once.
+
+```bash
+gh api -X DELETE repos/FullMetalPr0gr1mmer/BRAIIN/branches/main/protection/enforce_admins
+# merge the PR as admin
+gh api -X POST repos/FullMetalPr0gr1mmer/BRAIIN/branches/main/protection/enforce_admins
+```
+
+The deploy is still gated by `main`'s own run; when production needs the fix before the
+gates can pass, §6's manual deploy is the other half of break-glass.
 
 ---
 
 ## 6. Deploy
 
+Production deploys are CI's: a merge to `main` → every gate green (§5b) → the deploy guard
+(§5a) → build → `wrangler deploy`, tagged with the commit (`--tag` = its first 12
+characters, `--message "ci <sha> run <id>"`; `npx wrangler versions list` shows both).
+Nobody deploys from a laptop.
+
+**Break-glass only** — CI cannot deploy and production needs the change now: from a clean
+checkout of `main`'s head, with the `deploy` job's build env exported exactly as ci.yml has
+it (never a local `.env`, whose origin is localhost), after confirming production has every
+migration (`npx --yes supabase@2.119.0 migration list --linked` lists no local-only one):
+
 ```bash
-npm run build
-npx wrangler deploy
+git switch main && git pull --ff-only && test -z "$(git status --porcelain)"
+npm ci && npm run build      # with the deploy job's eight env values exported
+npx wrangler deploy --tag "$(git rev-parse --short=12 HEAD)" --message "break-glass: <reason>"
 ```
+
+Then let the next `main` run prove the gates (re-run the newest one).
 
 Bindings required in `wrangler.jsonc`: `SESSION` (KV), `IMAGES`.
 The KV binding is load-bearing beyond sessions — maintenance mode is read from it before
@@ -501,7 +635,7 @@ renames match no row the second time and fail loudly.
 | 4 | `--step content` | The rows the seed skips. The 8 kept or renamed services get the new copy (title, tagline, intro, body + body_html, value points, deliverables), their discipline, poster, clip window **and sort_order** (so they do not interleave with the new 20). The 12 sample projects' `portfolio_services` are rebuilt by slug. `crafts` → 28, "Services under one roof" (value and value_numeric together). Header Services → `/services`. | `COMMIT`. Then apply what step 0 surfaced (e.g. clear a stale `entity_seo` title or `canonical_override` of a renamed service, after review). |
 | 5 | `--step samples` | The owner's override for `testimonials` and `service_cases` (audit-logged by the override table's trigger — §6c step 5 explains it), then publishes **only flagged drafts**, by exact slug: the 9 sample quotes, the 28 case blocks, the 4 Services-page stats (and the Services page's sample sections, when the seed has them). Asserts: disciplines = the 5, published services = the 28, archived = the 6 (test-service, archived in round 1, aside), live cases = the 28, live quotes = the 9, live Services stats = the 4, both override rows with their audit grants, crafts = 28. | `COMMIT`. |
 | 6 | `--step verify` | Read-only JSON of the same facts, for the report. | 5 disciplines, 28 services each with its discipline, the 6 (+ test-service) archived, `cases_live` 28, 9 quotes, `98% 12+ 85% 250+`, crafts `28`, header `/services`, overrides incl. testimonials + service_cases. |
-| 7 | Merge the stack (top-down, one push) → the deploy job → live checks | — | `/services`, `/services/logo` and the `/ar` twins → 200; `/services/branding` → 301 to `/services#branding`; `/ar/services/music` → 301; home shows the 5 discipline cards, the quote carousel and stat 28; a case study shows its quote. |
+| 7 | Merge the stack one PR at a time (protection is strict, §5b: each is updated with `main` and green before its merge, and deploys ~30 min after it, once its gates pass) → the deploy job → live checks | — | `/services`, `/services/logo` and the `/ar` twins → 200; `/services/branding` → 301 to `/services#branding`; `/ar/services/music` → 301; home shows the 5 discipline cards, the quote carousel and stat 28; a case study shows its quote. |
 
 **Making the samples real, and taking the override back:** §6c steps 8–9. The Round 2 samples
 are listed on the admin dashboard as "Placeholder content is live" until then.
@@ -668,7 +802,7 @@ renders the page from its built-in defaults, with no link yet.
 | 0 | Preflight (read-only): `select accepting_applications from public.site_profile;` and `select id, public from storage.buckets;` | Confirms the starting state. | `accepting_applications = false`; no `applications` bucket yet. |
 | 1 | `npx supabase db push --linked --dry-run`, then `npx supabase db push --linked --skip-vault` | Migration 0029: `job_applications` (Admin-only RLS, column UPDATE grant on status/notes only), the spam-retention trigger, the public write limiter (`public_write_attempts` + `public.public_write_hit()`, service role only), the orphan-CV lookup the daily job uses (`public.application_orphan_cvs()`, service role only), the private bucket and a RESTRICTIVE belt policy on `storage.objects`. In-file postconditions refuse a push that left RLS unforced, anon with a privilege, or the bucket public. | Only 0029 listed by the dry run. A `WARNING: 0029: not permitted to add the storage.objects belt policy` is acceptable (the bucket still has no policy naming it, so anon and authenticated are refused); report it — it means the belt is missing, not the lock. |
 | 2 | Verify (read-only) | `select id, public, file_size_limit, allowed_mime_types from storage.buckets where id = 'applications';` · `select policyname, permissive from pg_policies where tablename in ('job_applications', 'objects') and policyname like '%applications%';` | `public = false`, `10485760`, the two MIME types; `job_applications_admin_all`, `job_applications_admin_only` (RESTRICTIVE) and, unless step 1 warned, `applications_bucket_service_only` (RESTRICTIVE). |
-| 3 | Merge → the deploy job → live checks | — | The deploy job's log ends `Deployed` and lists the schedule `23 3 * * *`. `/join` and `/ar/join` → 200, the form shows the closed notice (the page renders its built-in sections until step 4); `curl -s -X POST $BASE/api/apply -H "Origin: $BASE" -H 'Accept: application/json' -F name=x` → `409 {"status":"closed"}`; `/admin/applications` → 401 when signed out. |
+| 3 | Merge → the deploy job (~30 min later: it waits for every gate) → live checks | — | The deploy job's log ends `Deployed` and lists the schedule `23 3 * * *`. `/join` and `/ar/join` → 200, the form shows the closed notice (the page renders its built-in sections until step 4); `curl -s -X POST $BASE/api/apply -H "Origin: $BASE" -H 'Accept: application/json' -F name=x` → `409 {"status":"closed"}`; `/admin/applications` → 401 when signed out. |
 | 4 | The Join seed rows — a **delta**, never the whole `production.sql` | `node scripts/gen-seeds.mjs --only 26-navigation-join.json,55-join-page.json > /tmp/join-delta.sql`, review it (the Join header and footer links, the `join` page and its sections — inserted by fixed id, `on conflict do nothing`), then run it as the owner (`psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/join-delta.sql`, or `npx supabase db query --linked -f`). Nothing in it opens applications. | `COMMIT`. A re-run inserts nothing. Join is the last header item and in the footer once the edge copy of each page refreshes (purge, or its next render). |
 | 5 | The next morning | The first cron run: expired applications (CV first, then the row), orphaned CVs, old limiter counters. | `/admin/logs`: a `cron:retention` **info** row, `join retention ran`, counts all `0` (`orphansDeleted` included). An **error** row names the step that failed; the next day's run retries it. |
 
@@ -844,6 +978,13 @@ commitment CLAUDE.md makes that is not yet met, and each should be tracked.
 ```bash
 npx wrangler rollback            # previous Worker version, seconds
 ```
+
+CI never rolls back: the deploy job ships only `main`'s current head (its freshness step
+fails a superseded or re-run older run rather than ship it), so going back is always this
+deliberate command. For a specific version, pick it from `npx wrangler versions list` —
+each CI deploy carries its commit's first 12 characters as the tag and `ci <sha> run <id>`
+as the message — and run `npx wrangler rollback <version-id>`. Then revert or fix forward
+through a PR (§5b): the next deploy ships whatever `main` holds.
 
 Migrations are forward-only (expand/contract), so a Worker rollback is always safe: an
 older Worker never sees a column it does not know about, only extra ones it ignores.

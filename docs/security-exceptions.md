@@ -617,7 +617,9 @@ All of:
 1. Stream is provisioned (KAN-20) and every `VideoClip` in content uses `streamUid`;
 2. the `/media/*.mp4` path branch is removed from the `VideoClip` schema (and its DB CHECK);
 3. `public/media/showreel.mp4` is deleted;
-4. mounted `<video>` elements use `preload="none"` or a Stream player facade.
+4. mounted `<video>` elements use `preload="none"` or a Stream player facade;
+5. the poster budget (≤ 80 KB, CLAUDE.md §6) is asserted on the Stream thumbnail bytes as
+   served — `tests/e2e/poster-bytes.e2e.ts` (2026-10-04) covers only the build's own stills.
 
 ### Widened 2026-09-27 — Round 2 surfaces (owner re-signed 2026-09-29, below)
 
