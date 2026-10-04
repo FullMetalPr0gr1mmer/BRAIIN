@@ -10,7 +10,8 @@ import { extname, join } from 'node:path';
 // seeds and the test stub; this gate keeps it out of everything that ships or seeds.
 //
 // Scanned: the site (src, public's text files), the shared packages, the scripts, the seed
-// data and the generated seeds, and the root config and docs a newcomer reads first.
+// data and the generated seeds, the CI workflows, and the root config and docs a newcomer
+// reads first.
 //
 // NOT scanned, on purpose:
 //   - supabase/migrations/ — applied migrations are history and never edited; 0019's
@@ -18,12 +19,31 @@ import { extname, join } from 'node:path';
 //   - docs/ — the record of what happened, the EXC-004 correction included, has to be able
 //     to name the domain it corrects;
 //   - tests/ — fixtures where a host is the test's own input (request origins, the CSRF
-//     cases) and the assertions that the domain is gone;
-//   - .github/ — owned by the CI restructure, which moves ci.yml's placeholder origin.
+//     cases) and the assertions that the domain is gone.
+//
+// ONE allowance: ci.yml's build-test placeholder origin, which the CI restructure (branch
+// ci/deploy-waits-for-every-gate) moves to the two-i domain. An allowance must still match
+// its line, so the moment ci.yml is fixed the last test below fails until the entry is
+// deleted — it cannot outlive its reason, and .github/ is then held like everything else.
 
 const STALE = /braiinstation\.com/i;
 
-const ROOTS = ['src', 'public', 'packages', 'scripts', 'supabase/seed-data', 'supabase/seeds'];
+const ALLOWED: readonly { path: string; line: RegExp }[] = [
+  {
+    path: '.github/workflows/ci.yml',
+    line: /^\s+PUBLIC_SITE_URL: https:\/\/www\.braiinstation\.com$/,
+  },
+];
+
+const ROOTS = [
+  'src',
+  'public',
+  'packages',
+  'scripts',
+  'supabase/seed-data',
+  'supabase/seeds',
+  '.github',
+];
 const FILES = [
   'supabase/seed.sql',
   'astro.config.mjs',
@@ -70,17 +90,35 @@ describe('the one-i domain', () => {
       'scripts/gen-seeds.mjs',
       'supabase/seed-data/00-tenant.json',
       'supabase/seeds/production.sql',
+      '.github/workflows/ci.yml',
     ]) {
       expect(scanned, path).toContain(path);
     }
   });
 
-  it('appears in no file that ships, seeds or configures the site', () => {
+  it('appears in no file that ships, seeds, builds or configures the site', () => {
+    const allowed = (path: string, line: string) =>
+      ALLOWED.some((a) => a.path === path && a.line.test(line));
     const hits = scanned.flatMap((path) =>
       readFileSync(path, 'utf8')
         .split(/\r?\n/)
-        .flatMap((line, i) => (STALE.test(line) ? [`${path}:${i + 1}: ${line.trim()}`] : [])),
+        .flatMap((line, i) =>
+          STALE.test(line) && !allowed(path, line) ? [`${path}:${i + 1}: ${line.trim()}`] : [],
+        ),
     );
     expect(hits).toEqual([]);
+  });
+
+  it('keeps no allowance past its reason', () => {
+    for (const { path, line } of ALLOWED) {
+      const used =
+        existsSync(path) &&
+        readFileSync(path, 'utf8')
+          .split(/\r?\n/)
+          .some((text) => line.test(text));
+      expect(used, `${path} no longer has the line ${line} allows: delete the allowance`).toBe(
+        true,
+      );
+    }
   });
 });

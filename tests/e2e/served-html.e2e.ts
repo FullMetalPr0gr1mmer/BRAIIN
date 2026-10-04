@@ -83,7 +83,11 @@ for (const path of [
   '/ar/creative-knowledge/rss.xml',
 ]) {
   test(`no one-i domain on ${path}`, async ({ request }) => {
-    const body = await (await request.get(path)).text();
+    const res = await request.get(path);
+    // The route itself, never an error page scanned in its place: no other e2e fetches the
+    // discovery files, so a 404 or 500 here would otherwise pass without checking anything.
+    expect(res.status(), `${path} did not render`).toBe(path.endsWith('/404') ? 404 : 200);
+    const body = await res.text();
     expect(body.match(/braiinstation\.com/gi) ?? [], `one-i domain on ${path}`).toEqual([]);
   });
 }

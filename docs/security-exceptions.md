@@ -262,8 +262,10 @@ two *i*'s, registered at GoDaddy (nameservers `domaincontrol.com`) with Microsof
 the `hello@` address the Site profile shows. The blocker stands exactly as written (that
 domain is not delegated to Cloudflare either, so there is still no zone), and the remediation
 plan above now names it, with one step added: copy every record, the mail ones above all,
-before delegating. The one-*i* spelling is gone from the code, config and seeds
-(`tests/lib/staleDomain.spec.ts` keeps it out; the served-HTML gate checks every page and
+before delegating. The one-*i* spelling is gone from the code, config and seeds, but for
+one line the CI restructure moves: `ci.yml`'s placeholder build origin
+(`tests/lib/staleDomain.spec.ts` keeps it out, `.github/` included, with one allowance for
+that line that fails once the line is gone; the served-HTML gate checks every page and
 discovery file); production's `tenants.primary_domain` is corrected by runbook §6h. The
 one-*i* name stays unregistered, so anyone could register it and receive mail still sent
 there — registering it defensively is the owner's option. Expiry and close condition
