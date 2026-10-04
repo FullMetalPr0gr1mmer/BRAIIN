@@ -39,10 +39,20 @@ export type SeoDefaults = z.infer<typeof SeoDefaultsSchema>;
 export interface ResolvedSeo {
   title: string;
   description: string;
-  ogImage: string | undefined;
+  /**
+   * The share-image candidates this layer knows, kept APART: between them sits the page's
+   * own image (a poster, a banner, a cover), which only the page has — see
+   * src/lib/seo/ogImage.ts for the order. Blank values are unset.
+   */
+  entityOgImage: string | undefined;
+  defaultOgImage: string | undefined;
   canonicalOverride: string | undefined;
   robots: string;
 }
+
+/** An authored value, or undefined when it is missing or only whitespace. */
+const nonBlank = (value: string | null | undefined): string | undefined =>
+  value?.trim() || undefined;
 
 export async function getEntitySeo(
   entityType: EntityType,
@@ -84,11 +94,15 @@ export async function getSeoDefaults(): Promise<SeoDefaults | null> {
  *
  *   title        entity override → the page's own title → tenant default title
  *   description  entity override → the page's own blurb → tenant default description
+ *   share image  entity override → the page's own image → tenant default → the code
+ *                default (the logo card) — resolved by src/lib/seo/ogImage.ts, since only
+ *                the page knows its own image; this returns the two authored ends apart
  *
  * The page's own value outranks the tenant default. The default is the LAST resort for a
  * page that has nothing of its own; ranked above the page title (as it was before UI v2),
  * authoring a default title would have given every service, article and project on the
- * site the same <title>.
+ * site the same <title> — and, until 2026-10, an authored default share image would have
+ * replaced every service poster and case-study banner in link previews the same way.
  *
  * The title then goes through the template (`seo_defaults.title_template`, default
  * `%brand% | %s`) — see src/lib/seo/title.ts for `%brand%`, and why a title that already
@@ -127,7 +141,8 @@ export function resolveSeo(options: {
   return {
     title: applyTitleTemplate(template, rawTitle, brand),
     description: description.replace(/%brand%/g, () => brand),
-    ogImage: entity?.og_image ?? defaults?.default_og_image ?? undefined,
+    entityOgImage: nonBlank(entity?.og_image),
+    defaultOgImage: nonBlank(defaults?.default_og_image),
     canonicalOverride: entity?.canonical_override ?? undefined,
     robots: entity?.robots ?? defaults?.robots_directives ?? 'index,follow',
   };

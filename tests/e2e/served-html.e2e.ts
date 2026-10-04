@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { ROUTES, isArabic } from './publicRoutes';
 
 /*
  * Served-markup gate for every public route, EN + AR.
@@ -13,40 +14,9 @@ import { expect, test } from '@playwright/test';
  * Every design delivery so far has arrived as standalone HTML full of exactly these
  * patterns (inline <style>/<script>, lenis from unpkg, Google Fonts, data: images, JS-built
  * content). This is the check that a port actually removed them — on every route, not
- * just the one the porter happened to look at.
+ * just the one the porter happened to look at. The routes are tests/e2e/publicRoutes.ts,
+ * shared with the share-image gate.
  */
-
-const PATHS = [
-  '/',
-  '/about',
-  '/contact',
-  '/services',
-  // A live Round 2 service (the old /services/branding now answers a 301 that Playwright
-  // would follow, and the scan would check the Services page twice instead).
-  '/services/logo',
-  '/portfolio',
-  // UI v2 PR10 — the catalogue, plus a filtered view (its own response: private, same markup rules)
-  '/portfolio/all',
-  '/portfolio/all?service=logo',
-  // A seeded published case study (local/CI/staging). The legacy demo rows are archived
-  // there, so pointing at one would scan the 404 page instead of the detail template.
-  '/portfolio/the-rider',
-  '/creative-knowledge',
-  '/creative-knowledge/arabic-first-brand-systems',
-  '/search',
-  // Join, plus a no-JS answer (?status= — its own response: private, same markup rules)
-  '/join',
-  '/join?status=ok',
-  '/privacy',
-  '/terms',
-  '/cookie-policy',
-  '/404',
-];
-const ROUTES = PATHS.flatMap((p) => [p, p === '/' ? '/ar' : `/ar${p}`]);
-
-// Legal copy names the data controller, which must be the registered legal entity — an
-// open owner decision. Exempt from the brand check until that name is settled.
-const LEGAL = /\/(privacy|terms|cookie-policy)$/;
 
 const BANNED: [RegExp, string][] = [
   [/<style[\s>]/i, 'inline <style> block'],
@@ -58,6 +28,9 @@ const BANNED: [RegExp, string][] = [
   [/formspree/i, 'third-party form endpoint'],
   [/data:image\//i, 'data: image URI'],
   [/class\s*=\s*["'][^"']*\bsection-error\b/i, 'a section failed to render (SectionBoundary)'],
+  // The legal copy's tokens are filled from the identity at render (src/lib/legal/render.ts,
+  // design-port J-17); one reaching the page is a slot that bypassed the filler.
+  [/%(?:brand|controller|mailbox)%/, 'unfilled legal-copy token'],
 ];
 
 for (const route of ROUTES) {
@@ -78,7 +51,7 @@ for (const route of ROUTES) {
   // without it is a route that bypassed the title template (src/lib/seo/title.ts).
   test(`<title> and og:site_name carry the brand on ${route}`, async ({ request }) => {
     const html = await (await request.get(route)).text();
-    const brand = route === '/ar' || route.startsWith('/ar/') ? 'بريّن ستيشن' : 'Braiin Statiion';
+    const brand = isArabic(route) ? 'بريّن ستيشن' : 'Braiin Statiion';
     const title = /<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '';
     expect(title, `title on ${route}`).toContain(brand);
     expect(html, `og:site_name on ${route}`).toContain(
@@ -86,13 +59,35 @@ for (const route of ROUTES) {
     );
   });
 
-  if (!LEGAL.test(route)) {
-    test(`served HTML uses the current brand on ${route}`, async ({ request }) => {
-      // Owner decision 1 (UI v2): "Braiin Statiion". The single-i "Station" spelling must
-      // not reach any displayed string; the domain `braiinstation.com` is unaffected (this
-      // matches the two-word name only).
-      const html = await (await request.get(route)).text();
-      expect(html.match(/Braiin Station\b/g) ?? [], `old brand name on ${route}`).toHaveLength(0);
-    });
-  }
+  test(`served HTML uses the current brand on ${route}`, async ({ request }) => {
+    // Owner decision 1 (UI v2): "Braiin Statiion". The single-i "Station" spelling must
+    // not reach any displayed string — the legal pages included, since their copy names the
+    // brand and the controller from the identity (J-17) instead of spelling them. This
+    // matches the two-word name only; the one-i DOMAIN has its own gate below.
+    const html = await (await request.get(route)).text();
+    expect(html.match(/Braiin Station\b/g) ?? [], `old brand name on ${route}`).toHaveLength(0);
+  });
+}
+
+// The one-i domain was never the studio's (theirs is braiinstatiion.com, two i's): mail to
+// it bounced, and whoever registers it would receive whatever a page still sends there
+// (2026-10-03; tests/lib/staleDomain.spec.ts keeps it out of the source). This is the
+// served side — every page and every discovery file, where seeded or authored content and
+// the build's origin end up.
+for (const path of [
+  ...ROUTES,
+  '/robots.txt',
+  '/sitemap.xml',
+  '/llms.txt',
+  '/creative-knowledge/rss.xml',
+  '/ar/creative-knowledge/rss.xml',
+]) {
+  test(`no one-i domain on ${path}`, async ({ request }) => {
+    const res = await request.get(path);
+    // The route itself, never an error page scanned in its place: no other e2e fetches the
+    // discovery files, so a 404 or 500 here would otherwise pass without checking anything.
+    expect(res.status(), `${path} did not render`).toBe(path.endsWith('/404') ? 404 : 200);
+    const body = await res.text();
+    expect(body.match(/braiinstation\.com/gi) ?? [], `one-i domain on ${path}`).toEqual([]);
+  });
 }

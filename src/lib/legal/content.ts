@@ -8,6 +8,19 @@ import type { Locale } from '@schemas/primitives';
 // links to (/privacy#recruitment). Its retention horizons are the application rows' own
 // (APPLICATION_RETENTION_MONTHS, SPAM_RETENTION_DAYS in packages/schemas/application.ts —
 // tests/lib/legal.spec.ts holds the words to the numbers).
+//
+// WHO and WHERE are the site's identity, never spelled here (CLAUDE.md §1: the brand is data;
+// design-port J-17). Three tokens, filled at render by src/lib/legal/render.ts from
+// `site_profile`, in the intro and body only:
+//   %brand%       the brand, in the page's language
+//   %controller%  the data controller: the registered legal name (`legal_name`) in that
+//                 language, else the brand
+//   %mailbox%     where privacy requests go: the contact address (`contact_email`), rendered
+//                 as a mailto: link
+// So an edit to those three Site profile fields IS an edit to these notices: their
+// `updated` dates and the recruitment notice version (packages/consent/recruitment.ts) move
+// with it. The Arabic avoids making a token the subject of a gendered verb — the value may be
+// a brand or a company name, masculine or feminine.
 
 export interface LegalSection {
   /** The section's fragment id (`/privacy#recruitment`), for a section linked to directly. */
@@ -16,8 +29,6 @@ export interface LegalSection {
   body: string[];
 }
 
-/** The mailbox the rights requests go to (the DSAR text and the recruitment section). */
-export const PRIVACY_MAILBOX = 'privacy@braiinstation.com';
 export interface LegalDoc {
   title: string;
   updated: string;
@@ -31,10 +42,10 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
   en: {
     privacy: {
       title: 'Privacy Policy',
-      updated: 'Last updated: 1 October 2026',
+      updated: 'Last updated: 4 October 2026',
       draftNotice: 'Draft — pending legal review before launch.',
       intro:
-        "This policy explains what personal data Braiin Station collects, why, and your rights under Saudi Arabia's Personal Data Protection Law (PDPL).",
+        "This policy explains what personal data %controller% collects, why, and your rights under Saudi Arabia's Personal Data Protection Law (PDPL).",
       sections: [
         {
           heading: 'Data we collect',
@@ -63,7 +74,7 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
           heading: 'Your rights (DSAR)',
           body: [
             'You may request access, correction, or deletion of your data, and withdraw consent at any time.',
-            `To exercise these rights, contact ${PRIVACY_MAILBOX}.`,
+            'To exercise these rights, contact %mailbox%.',
           ],
         },
         {
@@ -84,16 +95,16 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
             'Who can see it: administrators only. No other staff role can open applications or CVs.',
             'Where it is stored: with Supabase, in London, United Kingdom. CVs are kept in a private storage bucket, never public, and only administrators can download them.',
             'CVs are not scanned for viruses. Administrators open them only as downloads, never inside the site.',
-            `Your rights: you can ask to see, correct or erase your application, and withdraw your consent, at any time — write to ${PRIVACY_MAILBOX}, as under “Your rights” above.`,
+            'Your rights: you can ask to see, correct or erase your application, and withdraw your consent, at any time — write to %mailbox%, as under “Your rights” above.',
           ],
         },
       ],
     },
     terms: {
       title: 'Terms of Service',
-      updated: 'Last updated: 10 June 2026',
+      updated: 'Last updated: 4 October 2026',
       draftNotice: 'Draft — pending legal review before launch.',
-      intro: 'These terms govern your use of the Braiin Station website.',
+      intro: 'These terms govern your use of the %brand% website.',
       sections: [
         {
           heading: 'Use of the site',
@@ -104,7 +115,7 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
         {
           heading: 'Intellectual property',
           body: [
-            'All content, branding, and creative work are owned by Braiin Station unless stated otherwise.',
+            'All content, branding, and creative work are owned by %controller% unless stated otherwise.',
           ],
         },
         {
@@ -116,7 +127,7 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
         {
           heading: 'Limitation of liability',
           body: [
-            'Braiin Station is not liable for indirect or consequential losses arising from use of the site.',
+            '%controller% is not liable for indirect or consequential losses arising from use of the site.',
           ],
         },
         {
@@ -127,9 +138,9 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
     },
     cookie: {
       title: 'Cookie Policy',
-      updated: 'Last updated: 10 June 2026',
+      updated: 'Last updated: 4 October 2026',
       draftNotice: 'Draft — pending legal review before launch.',
-      intro: 'How Braiin Station uses cookies and similar technologies.',
+      intro: 'How %brand% uses cookies and similar technologies.',
       sections: [
         {
           heading: 'Categories',
@@ -157,10 +168,10 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
   ar: {
     privacy: {
       title: 'سياسة الخصوصية',
-      updated: 'آخر تحديث: 1 أكتوبر 2026',
+      updated: 'آخر تحديث: 4 أكتوبر 2026',
       draftNotice: 'مسودة — قيد المراجعة القانونية قبل الإطلاق.',
       intro:
-        'توضح هذه السياسة البيانات الشخصية التي تجمعها بريّن ستيشن، وسبب جمعها، وحقوقك بموجب نظام حماية البيانات الشخصية (PDPL) في المملكة العربية السعودية.',
+        'توضح هذه السياسة البيانات الشخصية التي تُجمع لدى %controller%، وسبب جمعها، وحقوقك بموجب نظام حماية البيانات الشخصية (PDPL) في المملكة العربية السعودية.',
       sections: [
         {
           heading: 'البيانات التي نجمعها',
@@ -189,7 +200,7 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
           heading: 'حقوقك',
           body: [
             'يمكنك طلب الوصول إلى بياناتك أو تصحيحها أو حذفها، وسحب موافقتك في أي وقت.',
-            `لممارسة هذه الحقوق، تواصل عبر ${PRIVACY_MAILBOX}.`,
+            'لممارسة هذه الحقوق، تواصل عبر %mailbox%.',
           ],
         },
         {
@@ -210,16 +221,16 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
             'من يطّلع عليه: مديرو الموقع فقط، ولا يستطيع أي دور آخر من فريق العمل فتح الطلبات أو السير الذاتية.',
             'مكان التخزين: لدى Supabase في لندن بالمملكة المتحدة. وتُحفظ السير الذاتية في مستودع تخزين خاص غير متاح للعامة، ولا يمكن تنزيلها إلا لمديري الموقع.',
             'لا تُفحص السير الذاتية بحثًا عن الفيروسات، ويفتحها مديرو الموقع كملفات مُنزَّلة فقط، لا داخل الموقع.',
-            `حقوقك: يمكنك في أي وقت طلب الاطلاع على طلبك أو تصحيحه أو حذفه، وسحب موافقتك، بمراسلة ${PRIVACY_MAILBOX} كما في قسم «حقوقك» أعلاه.`,
+            'حقوقك: يمكنك في أي وقت طلب الاطلاع على طلبك أو تصحيحه أو حذفه، وسحب موافقتك، بمراسلة %mailbox% كما في قسم «حقوقك» أعلاه.',
           ],
         },
       ],
     },
     terms: {
       title: 'شروط الخدمة',
-      updated: 'آخر تحديث: 10 يونيو 2026',
+      updated: 'آخر تحديث: 4 أكتوبر 2026',
       draftNotice: 'مسودة — قيد المراجعة القانونية قبل الإطلاق.',
-      intro: 'تحكم هذه الشروط استخدامك لموقع بريّن ستيشن.',
+      intro: 'تحكم هذه الشروط استخدامك لموقع %brand%.',
       sections: [
         {
           heading: 'استخدام الموقع',
@@ -228,7 +239,7 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
         {
           heading: 'الملكية الفكرية',
           body: [
-            'جميع المحتويات والهوية والأعمال الإبداعية مملوكة لبريّن ستيشن ما لم يُذكر خلاف ذلك.',
+            'تعود ملكية جميع المحتويات والهوية والأعمال الإبداعية إلى %controller% ما لم يُذكر خلاف ذلك.',
           ],
         },
         {
@@ -237,16 +248,18 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
         },
         {
           heading: 'حدود المسؤولية',
-          body: ['لا تتحمل بريّن ستيشن مسؤولية الأضرار غير المباشرة الناتجة عن استخدام الموقع.'],
+          body: [
+            'لا تقع على %controller% أي مسؤولية عن الأضرار غير المباشرة الناتجة عن استخدام الموقع.',
+          ],
         },
         { heading: 'القانون الحاكم', body: ['تخضع هذه الشروط لأنظمة المملكة العربية السعودية.'] },
       ],
     },
     cookie: {
       title: 'سياسة ملفات تعريف الارتباط',
-      updated: 'آخر تحديث: 10 يونيو 2026',
+      updated: 'آخر تحديث: 4 أكتوبر 2026',
       draftNotice: 'مسودة — قيد المراجعة القانونية قبل الإطلاق.',
-      intro: 'كيف تستخدم بريّن ستيشن ملفات تعريف الارتباط والتقنيات المشابهة.',
+      intro: 'كيف يستخدم موقع %brand% ملفات تعريف الارتباط والتقنيات المشابهة.',
       sections: [
         {
           heading: 'الفئات',

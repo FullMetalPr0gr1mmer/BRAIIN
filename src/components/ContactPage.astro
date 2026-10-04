@@ -7,6 +7,7 @@ import { getPublishedDisciplines } from '@/lib/data/disciplines';
 import { buildBreadcrumbSchema, buildFaqSchema } from '@/lib/seo/jsonld';
 import { localizedPath } from '@/lib/i18n';
 import { loadHead } from '@/lib/seo/head';
+import { ogImageCandidates } from '@/lib/seo/ogImage';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { CONTACT_FAQ } from '@/lib/content/contactFaq';
 import {
@@ -79,7 +80,7 @@ const jsonLd = faqShown(sections)
   logicalPath="/contact"
   jsonLd={jsonLd}
   robots={seo.robots}
-  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  ogImages={ogImageCandidates(seo)}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
   header="overlay"
 >

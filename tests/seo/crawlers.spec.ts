@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ServiceRow } from '@schemas/content';
 import type { Discipline } from '@/lib/data/disciplines';
 import { seedDisciplines, seedServiceRows } from '../fixtures/serviceSeeds';
+import { PUBLIC_SITE_URL as SITE } from '../stubs/astro-env-client';
 
 // Services and disciplines default to none (Supabase is unconfigured under test); the
 // Round 2 describe below swaps in the seeded catalogue.
@@ -117,15 +118,15 @@ describe('/llms.txt agrees with the crawler map', () => {
 
   it('lists Our Work and All projects (UI v2), still with no counts', async () => {
     const body = await (await call(llmsGet)).text();
-    expect(body).toContain('- Our Work: https://www.braiinstation.com/portfolio\n');
-    expect(body).toContain('- All projects: https://www.braiinstation.com/portfolio/all\n');
+    expect(body).toContain(`- Our Work: ${SITE}/portfolio\n`);
+    expect(body).toContain(`- All projects: ${SITE}/portfolio/all\n`);
     expect(body).toContain('## Case studies');
     expect(body).not.toMatch(/\d+\s+(projects|case studies)/i);
   });
 
   it('lists the Join page (careers)', async () => {
     const body = await (await call(llmsGet)).text();
-    expect(body).toContain('- Join (careers): https://www.braiinstation.com/join\n');
+    expect(body).toContain(`- Join (careers): ${SITE}/join\n`);
   });
 
   it('points at both language roots and defers to robots.txt as authoritative', async () => {
@@ -164,9 +165,7 @@ describe('/llms.txt lists the services by discipline (Round 2)', () => {
     ]);
     expect(section.match(/^- /gm)).toHaveLength(28);
     const branding = section.split('### Branding\n')[1]?.split('\n\n')[0] ?? '';
-    expect(branding.split('\n')[0]).toBe(
-      '- Logo Design — https://www.braiinstation.com/services/logo',
-    );
+    expect(branding.split('\n')[0]).toBe(`- Logo Design — ${SITE}/services/logo`);
     expect(branding.split('\n')).toHaveLength(8);
   });
 

@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
+  ASSET_CSP,
+  CSP_REPORT_ONLY,
+  STATIC_SECURITY_HEADERS,
   buildCsp,
   applySecurityHeaders,
+  ensureSecurityHeaders,
   generateNonce,
   extractHashes,
   collectInlineHashes,
@@ -308,5 +313,152 @@ describe('withSecurityHeaders', () => {
     expect(out.headers.get('x-keep')).toBe('yes');
     expect(out.headers.get('Content-Security-Policy')).toContain(`'nonce-${NONCE}'`);
     expect(await out.text()).toBe('img-bytes');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Worker's backstop (src/worker.ts → ensureSecurityHeaders). Astro answers some
+// requests before src/middleware.ts runs — the origin check's cross-site 403, the 400 for
+// a multiply-encoded path, the duplicate-slash 301, a bare 500 — and the adapter passes
+// ASSETS responses straight through; all of them used to leave with no CSP, no HSTS and no
+// nosniff. The backstop secures exactly what arrives without HSTS and nothing else.
+// ---------------------------------------------------------------------------
+
+/** The CSP's nonce sources — one per directive that takes it, all the same value. */
+const nonces = (csp: string | null) =>
+  [...(csp ?? '').matchAll(/'nonce-([^']+)'/g)].map((m) => m[1]);
+
+describe('ensureSecurityHeaders (the Worker backstop)', () => {
+  const expectStatic = (h: Headers) => {
+    for (const [name, value] of Object.entries(STATIC_SECURITY_HEADERS)) {
+      expect(h.get(name), name).toBe(value);
+    }
+  };
+
+  it('secures a bare 403 in place: the seven headers and ONE enforcing nonce policy', () => {
+    const bare = new Response('Cross-site POST form submissions are forbidden', { status: 403 });
+    const out = ensureSecurityHeaders(bare);
+    expect(out).toBe(bare);
+    expectStatic(out.headers);
+    const csp = out.headers.get('Content-Security-Policy');
+    expect(csp).toContain("default-src 'self'");
+    expect(new Set(nonces(csp)).size).toBe(1);
+    expect(csp).not.toContain('unsafe-inline');
+    expect(out.headers.get('Content-Security-Policy-Report-Only')).toBeNull();
+  });
+
+  it('follows the one CSP_REPORT_ONLY switch by default', () => {
+    const out = ensureSecurityHeaders(new Response(null, { status: 400 }));
+    expect(out.headers.has('Content-Security-Policy-Report-Only')).toBe(CSP_REPORT_ONLY);
+    expect(out.headers.has('Content-Security-Policy')).toBe(!CSP_REPORT_ONLY);
+  });
+
+  it('honours { reportOnly: true }', () => {
+    const out = ensureSecurityHeaders(new Response(null, { status: 500 }), { reportOnly: true });
+    expect(out.headers.get('Content-Security-Policy')).toBeNull();
+    expect(out.headers.get('Content-Security-Policy-Report-Only')).toContain("'nonce-");
+    expectStatic(out.headers);
+  });
+
+  it('leaves a response the middleware secured untouched — no second nonce', () => {
+    const page = new Response('<p>ok</p>', { headers: { 'content-type': 'text/html' } });
+    applySecurityHeaders(page.headers, { nonce: NONCE });
+    const before = page.headers.get('Content-Security-Policy');
+    const out = ensureSecurityHeaders(page);
+    expect(out).toBe(page);
+    expect(out.headers.get('Content-Security-Policy')).toBe(before);
+    expect(nonces(before)).toEqual([NONCE, NONCE]);
+  });
+
+  it('keeps a Report-Only page Report-Only (keyed on HSTS, never on CSP)', () => {
+    // Keyed on CSP, the backstop would have found no enforcing header here and added one
+    // with a nonce the page's inline blocks do not carry — breaking the very page the
+    // Report-Only cycle exists to observe.
+    const page = new Response('<p>ok</p>');
+    applySecurityHeaders(page.headers, { nonce: NONCE, reportOnly: true });
+    const out = ensureSecurityHeaders(page);
+    expect(out.headers.get('Content-Security-Policy')).toBeNull();
+    expect(out.headers.get('Content-Security-Policy-Report-Only')).toContain(`'nonce-${NONCE}'`);
+  });
+
+  it("does not take Astro's own CSP for a finished policy: HSTS and ours, hashes lifted in", () => {
+    const astro = new Response('<p>ok</p>', {
+      headers: {
+        'Content-Security-Policy': `script-src 'self' ${ASTRO_SCRIPT_HASH}; style-src 'self' ${ASTRO_STYLE_HASH}`,
+      },
+    });
+    const out = ensureSecurityHeaders(astro);
+    expectStatic(out.headers);
+    const csp = out.headers.get('Content-Security-Policy') ?? '';
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain(ASTRO_SCRIPT_HASH);
+    expect(csp).toContain(ASTRO_STYLE_HASH);
+    expect(new Set(nonces(csp)).size).toBe(1);
+  });
+
+  it('keeps a static file’s ASSET_CSP (public/_headers already secured it)', () => {
+    const asset = new Response('body{}', {
+      headers: {
+        'content-type': 'text/css',
+        ...STATIC_SECURITY_HEADERS,
+        'Content-Security-Policy': ASSET_CSP,
+      },
+    });
+    const out = ensureSecurityHeaders(asset);
+    expect(out).toBe(asset);
+    expect(out.headers.get('Content-Security-Policy')).toBe(ASSET_CSP);
+  });
+
+  it('passes a WebSocket upgrade through untouched (101, or a webSocket)', () => {
+    const upgrade = new Response(null, { status: 200 });
+    Object.defineProperty(upgrade, 'status', { value: 101 });
+    expect(ensureSecurityHeaders(upgrade)).toBe(upgrade);
+    expect(upgrade.headers.get('Strict-Transport-Security')).toBeNull();
+
+    const socket = new Response(null, { status: 200 });
+    Object.defineProperty(socket, 'webSocket', { value: {} });
+    expect(ensureSecurityHeaders(socket)).toBe(socket);
+    expect(socket.headers.get('Content-Security-Policy')).toBeNull();
+  });
+
+  it('rebuilds a response with immutable headers (Response.redirect) instead of throwing', () => {
+    const redirect = Response.redirect('https://example.test/about/', 301);
+    const out = ensureSecurityHeaders(redirect);
+    expect(out).not.toBe(redirect);
+    expect(out.status).toBe(301);
+    expect(out.headers.get('location')).toBe('https://example.test/about/');
+    expectStatic(out.headers);
+    expect(out.headers.get('Content-Security-Policy')).toContain("'nonce-");
+  });
+});
+
+describe('the shared constants', () => {
+  it('applySecurityHeaders sets exactly STATIC_SECURITY_HEADERS beside the CSP', () => {
+    const h = new Headers();
+    applySecurityHeaders(h, { nonce: NONCE });
+    const rest = Object.fromEntries([...h].filter(([name]) => name !== 'content-security-policy'));
+    const expected = Object.fromEntries(
+      Object.entries(STATIC_SECURITY_HEADERS).map(([k, v]) => [k.toLowerCase(), v]),
+    );
+    expect(rest).toEqual(expected);
+  });
+
+  it('ASSET_CSP allows nothing and admits no inline code', () => {
+    expect(ASSET_CSP).toContain("default-src 'none'");
+    expect(ASSET_CSP).toContain("frame-ancestors 'self'");
+    expect(ASSET_CSP).not.toMatch(/unsafe-inline|unsafe-eval|\*/);
+  });
+
+  it('CSP_REPORT_ONLY lives in securityHeaders.ts alone — the middleware and media import it', () => {
+    // One switch. A local copy in either file would let the middleware enforce while the
+    // backstop and the media route ran Report-Only (or the reverse).
+    for (const file of ['src/middleware.ts', 'src/lib/http/media.ts', 'src/worker.ts']) {
+      const source = readFileSync(file, 'utf8');
+      expect(source, file).not.toMatch(/\b(?:const|let|var)\s+CSP_REPORT_ONLY\b/);
+      expect(source, file).not.toMatch(/reportOnly:\s*(?:true|false)\b/);
+    }
+    expect(readFileSync('src/middleware.ts', 'utf8')).toMatch(
+      /import\s*\{[^}]*\bCSP_REPORT_ONLY\b[^}]*\}\s*from\s*'@\/lib\/http\/securityHeaders'/,
+    );
   });
 });

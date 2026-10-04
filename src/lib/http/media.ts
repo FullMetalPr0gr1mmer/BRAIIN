@@ -1,6 +1,6 @@
 import { StaticVideoPathSchema } from '@schemas/media';
 import { contentRange, ifRangeAllows, parseRange, sliceStream } from './range';
-import { generateNonce, withSecurityHeaders } from './securityHeaders';
+import { ensureSecurityHeaders } from './securityHeaders';
 
 // `/media/*.mp4` with byte ranges — the self-hosted showreel of EXC-009, served through the
 // Worker so a <video> can seek (docs/security-exceptions.md EXC-009).
@@ -12,7 +12,9 @@ import { generateNonce, withSecurityHeaders } from './securityHeaders';
 // ever sees the request. src/worker.ts therefore calls this first and hands everything else
 // to Astro. `assets.run_worker_first: ["/media/*"]` (wrangler.jsonc) is what routes these
 // paths to the Worker at all; without it the asset worker answers them directly, and it
-// ignores Range.
+// ignores Range. Never reaching the middleware, every answer here is secured on the spot
+// (`ensureSecurityHeaders` — the page policy with a fresh nonce, following the one
+// `CSP_REPORT_ONLY` switch), and the Worker's backstop then finds it already secured.
 //
 // No recursion: a fetch on the ASSETS binding goes straight to the asset worker —
 // `run_worker_first` applies to incoming requests only.
@@ -42,9 +44,8 @@ export function isMediaPath(pathname: string): boolean {
   return StaticVideoPathSchema.safeParse(pathname).success && !pathname.includes('//');
 }
 
-function secured(response: Response): Response {
-  return withSecurityHeaders(response, { nonce: generateNonce() });
-}
+/** Media responses are always built fresh here, so this always applies the headers. */
+const secured = (response: Response): Response => ensureSecurityHeaders(response);
 
 /** The headers every media response carries, whatever its status. */
 function baseHeaders(upstream: Response): Headers {
