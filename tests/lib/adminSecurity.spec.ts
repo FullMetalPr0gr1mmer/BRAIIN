@@ -4,7 +4,8 @@ import { csrfTokenMatches, generateCsrfToken, timingSafeEqual } from '@/lib/http
 import {
   canSeeLeadPii,
   canManageLeads,
-  leadColumnsFor,
+  GATED_LEAD_COLUMNS,
+  SAFE_LEAD_COLUMNS,
   stripSensitive,
 } from '@/lib/admin/leadFields';
 import { ADMIN_NAV, isVisible, visibleNav } from '@/lib/admin/nav';
@@ -99,19 +100,23 @@ describe('lead field visibility', () => {
     for (const role of ['content_creator', 'seo'] as Role[]) {
       expect(canManageLeads(role)).toBe(false);
       expect(canSeeLeadPii(role)).toBe(false);
-      // Even the safe projection is unreachable for them — assertCap refuses first —
-      // but the projection itself must never include the four gated columns.
-      const columns = leadColumnsFor(role);
-      for (const column of [
-        'budget_enc',
-        'timeline_band',
-        'internal_notes',
-        'ip_inet',
-        'email_enc',
-        'phone_enc',
-      ]) {
-        expect(columns, `${role} projection leaked ${column}`).not.toContain(column);
-      }
+    }
+  });
+
+  it('keeps every gated column out of the safe projection (the one staff tokens can read)', () => {
+    const safe = SAFE_LEAD_COLUMNS.split(',');
+    const gated = GATED_LEAD_COLUMNS.split(',');
+    for (const column of [
+      'budget_enc',
+      'timeline_band',
+      'timeline_text_enc',
+      'internal_notes',
+      'ip_inet',
+      'email_enc',
+      'phone_enc',
+    ]) {
+      expect(safe, `safe projection leaked ${column}`).not.toContain(column);
+      expect(gated, `${column} is not marked gated`).toContain(column);
     }
   });
 

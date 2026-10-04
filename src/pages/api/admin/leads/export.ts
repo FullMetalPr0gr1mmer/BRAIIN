@@ -10,6 +10,7 @@ import { budgetBandLabel } from '@schemas/lead';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { toCsv } from '@/lib/admin/csv';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
+import { serviceClient } from '@/lib/supabase/server';
 
 // Lead CSV export — the full §3 lockdown, in order:
 //
@@ -19,7 +20,9 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 //   4. audit entry #1 — ATTEMPT         written BEFORE any lead is read, and FATAL if
 //                                       it fails: "we could not record that someone
 //                                       exported the lead table" is a reason not to
-//   5. the dump itself                  tenant-scoped, capped
+//   5. the dump itself                  tenant-scoped, capped; with PII it reads as the
+//                                       service role, because staff tokens cannot read
+//                                       the gated columns at all (0033)
 //   6. audit entry #2 — OUTCOME         with the row count
 //   7. abnormal-volume alert
 //
@@ -59,7 +62,12 @@ export const GET = defineAdminRoute({
       throw new AuthorizationError('export.csv', 'audit unavailable — export refused');
     }
 
-    let query = sb
+    // The gated columns are refused to the caller's own client (0033), so a PII export
+    // reads as the service role: only after steps 1-4, and scoped to the caller's tenant
+    // here, since the service role bypasses RLS. Without PII it stays on the caller's
+    // client and RLS.
+    const reader = withPii ? serviceClient() : sb;
+    let query = reader
       .from('leads')
       .select(withPii ? FULL_LEAD_COLUMNS : SAFE_LEAD_COLUMNS)
       .eq('tenant_id', auth.tenantId)
