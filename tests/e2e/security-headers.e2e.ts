@@ -83,7 +83,8 @@ test.describe('what Astro answers before the middleware — the Worker backstop'
 });
 
 test.describe('static files — public/_headers', () => {
-  for (const path of ['/styles/global.css', '/fonts/archivo-var-latin.woff2']) {
+  // The share card too: every link preview fetches it (tests/e2e/share-image.e2e.ts).
+  for (const path of ['/styles/global.css', '/fonts/archivo-var-latin.woff2', '/og/default.jpg']) {
     test(`${path} carries the headers and the asset policy`, async ({ request }) => {
       const res = await request.get(path);
       expect(res.status()).toBe(200);

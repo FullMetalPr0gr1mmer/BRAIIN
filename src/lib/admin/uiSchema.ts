@@ -1188,6 +1188,7 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         label: 'Default OG image',
         kind: 'url',
         column: 'default_og_image',
+        help: 'The link-preview image for pages with no image of their own — a service’s poster, a case study’s banner or a post’s cover always wins. An https:// URL to an image about 1200×630. Empty: the built-in logo card.',
       },
       {
         name: 'organization',

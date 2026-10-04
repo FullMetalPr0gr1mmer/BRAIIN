@@ -6,6 +6,7 @@ import { legalParty, legalSegments, legalText } from '@/lib/legal/render';
 import { getIdentity } from '@/lib/identity';
 import { setTierA } from '@/lib/http/cacheTags';
 import { loadHead } from '@/lib/seo/head';
+import { ogImageCandidates } from '@/lib/seo/ogImage';
 
 interface Props {
   doc: LegalDoc;
@@ -41,7 +42,7 @@ const party = legalParty(identity, locale);
   locale={locale}
   logicalPath={logicalPath}
   robots={seo.robots}
-  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  ogImages={ogImageCandidates(seo)}
 >
   <main class="container">
     <h1>{doc.title}</h1>

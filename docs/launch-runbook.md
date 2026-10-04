@@ -709,6 +709,35 @@ dates (`src/lib/legal/content.ts`) and appends a recruitment notice version reco
 values (`packages/consent/recruitment.ts`) — once the site is behind a zone cache, with a
 `site:identity` purge. Setting the registered legal name (an open owner item) is such an edit.
 
+**2. The share image (owner decision H2).** From this deploy every page names an `og:image`:
+its SEO override, else its own image (a service poster, a case-study banner, a post cover),
+else the tenant default, else the logo card `/og/default.jpg`. The tenant default used to
+outrank a page's own image; it no longer does — but any stored value still becomes the image
+of every page with nothing of its own. Nothing seeds these rows, so look before merging:
+
+```sql
+select default_og_image from public.seo_defaults;                                   -- decide
+select entity_type, entity_id, og_image from public.entity_seo
+ where coalesce(trim(og_image), '') <> '';                                          -- per-page overrides
+```
+
+Keep a stored default only if it is a reachable, current-brand image of about 1200×630 on
+`https://`. Otherwise clear it — compare-and-set on the value you just read:
+
+```sql
+update public.seo_defaults set default_og_image = null
+ where tenant_id = '00000000-0000-0000-0000-0000000000b1'
+   and default_og_image = '<the value read above>';   -- UPDATE 1; the version trigger bumps it
+```
+
+The admin now accepts only an `https://` URL or a `/path` in both fields
+(`ShareImageUrlSchema`), so a stored value of another shape must be corrected before that form
+saves again. At render the head still uses any http(s) or relative value, and skips only an
+unusable one (another scheme, credentials, malformed) for the next candidate.
+After the deploy: `curl -s $BASE/ | grep -o 'og:image" content="[^"]*'` prints
+`$BASE/og/default.jpg` (unless a default was kept), and `/services/logo` its poster; re-scrape
+the key pages in the Facebook and LinkedIn preview tools, which cache a card per URL.
+
 ---
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)

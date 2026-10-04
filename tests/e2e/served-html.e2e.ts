@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { ROUTES, isArabic } from './publicRoutes';
 
 /*
  * Served-markup gate for every public route, EN + AR.
@@ -13,36 +14,9 @@ import { expect, test } from '@playwright/test';
  * Every design delivery so far has arrived as standalone HTML full of exactly these
  * patterns (inline <style>/<script>, lenis from unpkg, Google Fonts, data: images, JS-built
  * content). This is the check that a port actually removed them — on every route, not
- * just the one the porter happened to look at.
+ * just the one the porter happened to look at. The routes are tests/e2e/publicRoutes.ts,
+ * shared with the share-image gate.
  */
-
-const PATHS = [
-  '/',
-  '/about',
-  '/contact',
-  '/services',
-  // A live Round 2 service (the old /services/branding now answers a 301 that Playwright
-  // would follow, and the scan would check the Services page twice instead).
-  '/services/logo',
-  '/portfolio',
-  // UI v2 PR10 — the catalogue, plus a filtered view (its own response: private, same markup rules)
-  '/portfolio/all',
-  '/portfolio/all?service=logo',
-  // A seeded published case study (local/CI/staging). The legacy demo rows are archived
-  // there, so pointing at one would scan the 404 page instead of the detail template.
-  '/portfolio/the-rider',
-  '/creative-knowledge',
-  '/creative-knowledge/arabic-first-brand-systems',
-  '/search',
-  // Join, plus a no-JS answer (?status= — its own response: private, same markup rules)
-  '/join',
-  '/join?status=ok',
-  '/privacy',
-  '/terms',
-  '/cookie-policy',
-  '/404',
-];
-const ROUTES = PATHS.flatMap((p) => [p, p === '/' ? '/ar' : `/ar${p}`]);
 
 const BANNED: [RegExp, string][] = [
   [/<style[\s>]/i, 'inline <style> block'],
@@ -77,7 +51,7 @@ for (const route of ROUTES) {
   // without it is a route that bypassed the title template (src/lib/seo/title.ts).
   test(`<title> and og:site_name carry the brand on ${route}`, async ({ request }) => {
     const html = await (await request.get(route)).text();
-    const brand = route === '/ar' || route.startsWith('/ar/') ? 'بريّن ستيشن' : 'Braiin Statiion';
+    const brand = isArabic(route) ? 'بريّن ستيشن' : 'Braiin Statiion';
     const title = /<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '';
     expect(title, `title on ${route}`).toContain(brand);
     expect(html, `og:site_name on ${route}`).toContain(
