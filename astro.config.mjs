@@ -44,39 +44,79 @@ export default defineConfig({
   // 0 = never inline. Astro's top-level `build.assetsInlineLimit` does NOT propagate to
   // the Vite client environment — it must be set here.
   //
-  // `manualChunks` keeps the two budgets separable. `.size-limit.json` measures a
-  // directory glob, not a route graph, so once the admin hydrates React the public
-  // "≤100 KB per route" gate would silently start weighing react-dom and Tiptap and
-  // fail on JS no public visitor ever downloads. Forcing every admin-only vendor into
-  // a predictably-named `admin-vendor` chunk lets the public entry exclude it by name
-  // (`!.../admin-vendor*.js`) and gives /admin its own honest budget instead.
+  // The named chunk groups below keep the two budgets separable. `.size-limit.json`
+  // measures a directory glob, not a route graph, so once the admin hydrates React the
+  // public "≤100 KB per route" gate would silently start weighing react-dom and Tiptap
+  // and fail on JS no public visitor ever downloads. Forcing every admin-only module into
+  // a predictably-named `admin-*` chunk lets the public entry exclude it by name and
+  // gives /admin its own honest budget instead.
   vite: {
     build: {
       assetsInlineLimit: 0,
       rollupOptions: {
         output: {
-          manualChunks(id) {
-            const path = id.replace(/\\/g, '/');
-            // Our own admin-only modules. Without this they land in anonymously-named
-            // chunks that the "public route" glob cannot tell apart from public code,
-            // and the 100 KB gate silently starts weighing the CMS.
-            if (/\/src\/(components|lib)\/admin\//.test(path)) return 'admin-ui';
-            // The two video helpers, as ONE chunk. Each is shared (lazyVideo by the hero,
-            // the slogan band and MediaBanner; clips by lazyVideo and MediaFrame), so
-            // Rolldown gave each its own file, and every page with a hero loaded a
-            // three-deep module waterfall — Hero → lazyVideo → clips — each hop a full
-            // round trip that Lighthouse's LCP simulation counted (the /ar home: the last
-            // node of the LCP graph was clips.js; S2 perf note in
-            // docs/design-port-2026-09.md). Every page that loads lazyVideo loads clips
-            // anyway; a MediaFrame-only page pays ~1 KB more.
-            if (/\/src\/lib\/client\/(lazyVideo|clips)\.ts$/.test(path)) return 'media-client';
-            if (!path.includes('node_modules')) return undefined;
-            // Vendor code reachable only from an admin island.
-            return /\/node_modules\/(react|react-dom|scheduler|@tiptap|prosemirror-|orderedmap|rope-sequence|w3c-keyname)/.test(
-              path,
-            )
-              ? 'admin-vendor'
-              : undefined;
+          // Named groups, highest priority first (Admin v2 F4). A group captures the
+          // modules its `test` matches PLUS their dependencies (Rolldown's default, the
+          // behaviour `manualChunks` had), but a module a higher group already claimed
+          // stays there. So the order is the design: React first, then the admin's small
+          // shared helpers, then the rich-text editor, then everything else admin.
+          //
+          // Why named at all: `.size-limit.json` splits public from admin by FILE NAME,
+          // so an admin module in an anonymous chunk would be weighed against the public
+          // 100 KB budget. Every admin chunk is `admin-*` (src/pages entries are `Admin*`
+          // or listed). tests/lib/adminChunks.spec.ts checks a real build: what each
+          // chunk holds, that the editor is lazy, and that no public chunk imports one.
+          codeSplitting: {
+            groups: [
+              {
+                // Vite's import() preload helper is shared by every module that loads
+                // code lazily, public ones included (the RUM beacon). Its own neutral
+                // chunk, claimed first: inside admin-ui it made public pages import an
+                // admin chunk (caught by scripts/admin-bundle.mjs).
+                name: 'preload-helper',
+                test: (id) => id.includes('preload-helper'),
+                priority: 60,
+              },
+              {
+                name: 'admin-vendor',
+                test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+                priority: 50,
+              },
+              {
+                // What every admin script needs and nothing more: the sign-in page loads
+                // this (the fetch helper) instead of the whole admin.
+                name: 'admin-client',
+                test: /[\\/]src[\\/]lib[\\/]admin[\\/](client|toast|confirm|icons)\.ts$/,
+                priority: 40,
+              },
+              {
+                // The rich-text editor and its ProseMirror stack (~100 KB gz). Lazy:
+                // FormField imports RichText with import(), so only a form that has a
+                // rich-text field downloads it.
+                name: 'admin-rich',
+                test: /[\\/](node_modules[\\/](@tiptap|prosemirror-|orderedmap|rope-sequence|w3c-keyname|linkifyjs)|src[\\/]components[\\/]admin[\\/]RichText\.tsx$)/,
+                priority: 30,
+              },
+              {
+                // Our own admin-only modules, and what they need (zod, the schemas).
+                name: 'admin-ui',
+                test: /[\\/]src[\\/](components|lib)[\\/]admin[\\/]/,
+                priority: 20,
+              },
+              {
+                // The two video helpers, as ONE chunk. Each is shared (lazyVideo by the
+                // hero, the slogan band and MediaBanner; clips by lazyVideo and
+                // MediaFrame), so Rolldown gave each its own file, and every page with a
+                // hero loaded a three-deep module waterfall — Hero → lazyVideo → clips —
+                // each hop a full round trip that Lighthouse's LCP simulation counted
+                // (the /ar home: the last node of the LCP graph was clips.js; S2 perf
+                // note in docs/design-port-2026-09.md). Every page that loads lazyVideo
+                // loads clips anyway; a MediaFrame-only page pays ~1 KB more.
+                name: 'media-client',
+                test: /[\\/]src[\\/]lib[\\/]client[\\/](lazyVideo|clips)\.ts$/,
+                priority: 10,
+              },
+            ],
           },
         },
       },
