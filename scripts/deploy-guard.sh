@@ -40,9 +40,14 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # The pooler's certificate chain ends at Supabase's PRIVATE root (no public CA vouches for
 # it), and Supavisor asks for the password in cleartext inside TLS: verifying the server
 # against this root is what keeps the password from an impostor. Connection parameters in a
-# URL (or a key=value string) would override these PG* variables — hence the refusals above.
+# URL (or a key=value string) would override these PG* variables — hence the refusals above —
+# and so would a connection service file (PGSERVICE names one; its settings beat the
+# environment's). So no PG* variable from the runner survives: the URL names the server, and
+# these pin the rest. gssencmode=disable, because libpq prefers GSSAPI encryption to TLS,
+# whatever sslmode says, wherever Kerberos credentials exist.
+unset "${!PG@}"
 export PGSSLMODE=verify-full PGSSLROOTCERT="$here/certs/supabase-root-2021-ca.crt"
-export PGCONNECT_TIMEOUT=10 PGAPPNAME=deploy-guard
+export PGGSSENCMODE=disable PGCONNECT_TIMEOUT=10 PGAPPNAME=deploy-guard
 [[ -s "$PGSSLROOTCERT" ]] || fail "missing $PGSSLROOTCERT"
 
 q() { psql "$SUPABASE_GUARD_DB_URL" -X -v ON_ERROR_STOP=1 -At -c "$1"; }

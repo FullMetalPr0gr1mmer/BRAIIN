@@ -207,9 +207,10 @@ root, and Supavisor asks for the password in cleartext inside TLS — so the gua
 (*Supabase Root 2021 CA*, valid to 2031-04-26, SHA-256
 `80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA`;
 the dashboard offers the same certificate as `prod-ca-2021.crt`, under Project Settings →
-Database → SSL Configuration), sets `PGCONNECT_TIMEOUT=10`, and asserts `current_user =
-deploy_guard`. The secret is therefore a **bare** URL: the guard refuses any query string,
-because URL parameters would override the pinned TLS. `tests/ci/deploy-guard.spec.ts`
+Database → SSL Configuration), sets `PGCONNECT_TIMEOUT=10` and `PGGSSENCMODE=disable`,
+clears every other `PG*` variable (a service file named by `PGSERVICE` would override the
+pins), and asserts `current_user = deploy_guard`. The secret is therefore a **bare** URL:
+the guard refuses any query string, because URL parameters would override the pinned TLS. `tests/ci/deploy-guard.spec.ts`
 checks the fingerprint on every build and goes red 90 days before the root expires — commit
 Supabase's next root, its fingerprint compared against the dashboard copy, before then.
 

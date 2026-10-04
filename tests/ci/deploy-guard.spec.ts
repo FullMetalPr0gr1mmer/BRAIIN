@@ -11,9 +11,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  *
  * The CA checks run on every platform. The script itself runs on Linux (CI's build-test job;
  * skipped on Windows) against a stub `psql` first on PATH. The stub refuses to "connect"
- * unless the guard pinned verify-full TLS, the committed root CA and the connect timeout, and
- * answers the guard's four queries from STUB_* variables — so every refusal path is driven
- * without a database, and none of them may print the password the URL carries.
+ * unless the guard pinned verify-full TLS (GSSAPI encryption off), the committed root CA and
+ * the connect timeout, with no other PG* variable left in its environment, and answers the
+ * guard's four queries from STUB_* variables — so every refusal path is driven without a
+ * database, and none of them may print the password the URL carries.
  */
 
 const CA = 'scripts/certs/supabase-root-2021-ca.crt';
@@ -49,9 +50,14 @@ const GUARD_URL = `postgresql://deploy_guard.xkxthzcmmvtnwicerlup:${PASSWORD}@aw
 
 // The psql stand-in. It never echoes its arguments: the first one is the URL, password and all.
 const STUB_PSQL = String.raw`#!/usr/bin/env bash
-if [[ "$PGSSLMODE" != verify-full || "$PGCONNECT_TIMEOUT" != 10 ]] ||
+if [[ "$PGSSLMODE" != verify-full || "$PGGSSENCMODE" != disable || "$PGCONNECT_TIMEOUT" != 10 ]] ||
   [[ "$PGSSLROOTCERT" != */scripts/certs/supabase-root-2021-ca.crt || ! -s "$PGSSLROOTCERT" ]]; then
   echo 'psql: error: the stub refuses: TLS or the connect timeout is not pinned' >&2
+  exit 2
+fi
+stray="$(compgen -e | grep '^PG' | grep -vxE 'PGSSLMODE|PGSSLROOTCERT|PGGSSENCMODE|PGCONNECT_TIMEOUT|PGAPPNAME')"
+if [[ -n "$stray" ]]; then
+  echo "psql: error: the stub refuses: $stray reached psql" >&2
   exit 2
 fi
 if [[ -n "$STUB_DOWN" ]]; then
@@ -130,11 +136,19 @@ describe.skipIf(process.platform === 'win32')('scripts/deploy-guard.sh', () => {
     expect(out).not.toContain(PASSWORD);
   });
 
-  it('pins TLS itself: weaker PG* settings in its environment never reach psql', () => {
+  it('pins TLS itself: no PG* variable from its environment reaches psql', () => {
+    // The stub refuses any PG* variable but the five the guard pins. PGSERVICE above all: it
+    // names a service file, whose settings (sslmode=disable, another root) beat the pins.
     const { status, out } = guard({
       PGSSLMODE: 'disable',
       PGSSLROOTCERT: '/nonexistent.crt',
       PGCONNECT_TIMEOUT: '0',
+      PGGSSENCMODE: 'prefer',
+      PGSERVICE: 'impostor',
+      PGSERVICEFILE: '/tmp/pg_service.conf',
+      PGSYSCONFDIR: '/tmp',
+      PGHOSTADDR: '203.0.113.7',
+      PGSSLMINPROTOCOLVERSION: 'TLSv1',
     });
     expect(status, out).toBe(0);
   });
