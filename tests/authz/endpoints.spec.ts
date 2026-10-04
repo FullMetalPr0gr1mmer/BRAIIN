@@ -106,7 +106,12 @@ function makeStubClient(options: StubOptions = {}) {
 
   return {
     from: () => builder,
-    rpc: async () => ({ data: null, error: null }),
+    // An RPC that takes the tenant from the Worker (`p_tenant`) is a scoped read as much as
+    // an `.eq('tenant_id', …)` is, so the scoping assertions below see it too.
+    rpc: async (_fn: string, args?: Record<string, unknown>) => {
+      if (typeof args?.['p_tenant'] === 'string') observedTenantFilters.push(args['p_tenant']);
+      return { data: null, error: null };
+    },
     auth: {
       getUser: async () => ({ data: { user: null }, error: null }),
       signOut: async () => ({ error: null }),
@@ -589,6 +594,45 @@ const CASES: Case[] = [
     load: () => import('@/pages/api/admin/leads/export'),
     method: 'GET',
     url: '/api/admin/leads/export',
+    allow: ['admin', 'developer'],
+  },
+  // CRM read side (Admin v2 C2a): leads.manage, like the list.
+  {
+    name: 'lead query (CRM list)',
+    load: () => import('@/pages/api/admin/leads/query'),
+    method: 'POST',
+    url: '/api/admin/leads/query',
+    body: { q: 'acme', sort: 'newest' },
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'lead pipeline board',
+    load: () => import('@/pages/api/admin/leads/board'),
+    method: 'POST',
+    url: '/api/admin/leads/board',
+    body: {},
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'lead KPIs',
+    load: () => import('@/pages/api/admin/leads/summary'),
+    method: 'POST',
+    url: '/api/admin/leads/summary',
+    body: {},
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'CRM stages',
+    load: () => import('@/pages/api/admin/crm/stages'),
+    method: 'GET',
+    url: '/api/admin/crm/stages',
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'CRM people (assignees)',
+    load: () => import('@/pages/api/admin/crm/people'),
+    method: 'GET',
+    url: '/api/admin/crm/people',
     allow: ['admin', 'developer'],
   },
 

@@ -59,3 +59,39 @@ export const LEAD_CHANNELS = [
   'unknown',
 ] as const;
 export type LeadChannel = (typeof LEAD_CHANNELS)[number];
+
+// ---- Reading the pipeline (Admin v2 C2a) --------------------------------------------------
+// The filter the lead list, board and summary accept. The database validates it again
+// (app.lead_filter, migration 0036): two layers, and a 22023 for anything outside them.
+
+const Instant = z.string().datetime({ offset: true });
+
+export const LeadQuerySchema = z
+  .object({
+    stage: z.string().uuid().optional(),
+    spam: z.boolean().optional(),
+    q: z.string().max(64).optional(),
+    from: Instant.optional(),
+    to: Instant.optional(),
+    sort: z.enum(['newest', 'oldest', 'score']).optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+    offset: z.number().int().min(0).max(10000).optional(),
+  })
+  .strict();
+export type LeadQuery = z.infer<typeof LeadQuerySchema>;
+
+/** The board shows every stage and no spam, so it takes no stage, spam flag or page. */
+export const LeadBoardQuerySchema = z
+  .object({
+    q: z.string().max(64).optional(),
+    from: Instant.optional(),
+    to: Instant.optional(),
+    perStage: z.number().int().min(1).max(50).optional(),
+  })
+  .strict();
+export type LeadBoardQuery = z.infer<typeof LeadBoardQuerySchema>;
+
+/** The KPIs take a date range and nothing else. */
+export const LeadSummaryQuerySchema = z
+  .object({ from: Instant.optional(), to: Instant.optional() })
+  .strict();
