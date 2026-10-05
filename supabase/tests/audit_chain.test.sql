@@ -1,4 +1,4 @@
--- pgTAP: audit_log append-only + HMAC hash chain (migrations 0002 / 0012).
+-- pgTAP: audit_log append-only + HMAC hash chain (migrations 0002 / 0012 / 0031).
 --
 -- Written after the chain spent its entire life unable to write a single row. 0002's
 -- trigger computed `encode(hmac(...), 'hex')` with `hmac` UNQUALIFIED, while the
@@ -15,7 +15,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9, §10.
 
 begin;
-select plan(11);
+select plan(14);
 
 insert into public.tenants (id, name) values ('00000000-0000-0000-0000-000000000001', 'T1');
 
@@ -88,7 +88,35 @@ select is(
   'a second tenant starts its own chain — chains never interleave across tenants'
 );
 
--- ---- 5. Append-only: no UPDATE, no DELETE --------------------------------------------
+-- ---- 5. Id order is chain order, one writer at a time (0031) -------------------------
+-- Two inserts at once used to read the same predecessor and fork the chain, and an id
+-- taken by the column default BEFORE the trigger could sit below the row it followed.
+-- The trigger now takes a per-tenant lock and the id under it. Reusing an existing id
+-- makes the point: the caller's value is replaced, so it cannot collide or reorder.
+insert into public.audit_log (id, tenant_id, actor_role, action, detail)
+values ((select id from public.audit_log where action = 'test.first'),
+        '00000000-0000-0000-0000-000000000001', 'admin', 'test.reordered', '{}'::jsonb);
+
+select ok(
+  (select id from public.audit_log where action = 'test.reordered')
+    > (select max(id) from public.audit_log
+        where tenant_id = '00000000-0000-0000-0000-000000000001' and action <> 'test.reordered'),
+  'a row''s id is taken under the chain lock, after every row it follows (caller id replaced)'
+);
+select is(
+  (select prev_hash from public.audit_log where action = 'test.reordered'),
+  (select hash from public.audit_log
+    where tenant_id = '00000000-0000-0000-0000-000000000001' and action <> 'test.reordered'
+    order by id desc limit 1),
+  'it links to the highest id before it: walking by id walks the chain'
+);
+select ok(
+  exists (select 1 from pg_locks
+           where locktype = 'advisory' and pid = pg_backend_pid() and granted),
+  'an insert holds the per-tenant chain lock until its transaction ends'
+);
+
+-- ---- 6. Append-only: no UPDATE, no DELETE --------------------------------------------
 -- 0002 grants no update/delete policy (so RLS denies) AND hard-revokes the privilege, so
 -- even service_role cannot tamper. Checked as `authenticated`, the role staff connect as.
 set local role authenticated;
