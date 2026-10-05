@@ -54,7 +54,9 @@
   /* type + layout */
   --bs-font-sans:
     'Archivo', 'Archivo Fallback', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --bs-font-ar: 'Almarai', 'Almarai Fallback', 'Archivo', system-ui, 'Segoe UI', sans-serif;
+  --bs-font-ar:
+    'Almarai', 'Almarai Fallback', 'Almarai Fallback Linux', 'Archivo', system-ui, 'Segoe UI',
+    sans-serif;
   --bs-maxw: 73.75rem;
   --bs-pad-x: clamp(20px, 4.4vw, 72px);
   --bs-fs-display: clamp(42px, 7.4vw, 132px);
@@ -126,7 +128,11 @@ body:has(.intro) {
    35 KB Latin hero-face budget). Almarai is static 400/700/800 × {arabic, latin}
    subsets. Preloads live in SeoHead.astro (hero face only, per locale). The `*Fallback`
    faces carry metric overrides (@capsizecss/metrics values vs Arial) so the swap is
-   CLS-zero. */
+   CLS-zero. Where Arial is absent (Linux — the CI runner included) Liberation Sans takes
+   its place under the same `Archivo Fallback` overrides: its advance widths are Arial's,
+   glyph for glyph (regular and bold, compared with fontTools), and Archivo's own vertical
+   metrics are the same on every platform (USE_TYPO_METRICS set, hhea = typo). Almarai's
+   Linux faces are their own family below (docs/fonts.md 2c). */
 
 @font-face {
   font-family: 'Archivo';
@@ -141,10 +147,60 @@ body:has(.intro) {
 }
 @font-face {
   font-family: 'Archivo Fallback';
-  src: local('Arial');
+  src: local('Arial'), local('Liberation Sans'), local('LiberationSans');
   size-adjust: 98.7%;
   ascent-override: 88.96%;
   descent-override: 21.28%;
+  line-gap-override: 0%;
+}
+/* Archivo's fallback per weight (docs/fonts.md 2c). Archivo is variable and widens with its
+   weight; the one face above, at weight normal, drew 600–800 in synthetic bold — Arial
+   regular's widths, 3.5% (600) to 11.2% (800) narrower than Archivo's. A late Archivo then
+   re-wrapped every bold heading: English /portfolio/all moved its whole catalogue (CLS 0.58
+   on a cold load of production from a real network), /join 0.05. size-adjust measured in
+   Chromium against the site's English copy (1,024 strings): per string within -2.2% /
+   +0.7% at p10/p90. Arial Bold above 500 (Liberation Sans Bold on Linux — its widths are
+   Arial Bold's); every face keeps Archivo's box, 0.878 / 0.210 (override x size-adjust). */
+@font-face {
+  font-family: 'Archivo Fallback';
+  font-weight: 500;
+  src: local('Arial'), local('Liberation Sans'), local('LiberationSans');
+  size-adjust: 100.23%;
+  ascent-override: 87.6%;
+  descent-override: 20.95%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Archivo Fallback';
+  font-weight: 600;
+  src:
+    local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'),
+    local('LiberationSans-Bold');
+  size-adjust: 94.77%;
+  ascent-override: 92.65%;
+  descent-override: 22.16%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Archivo Fallback';
+  font-weight: 700;
+  src:
+    local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'),
+    local('LiberationSans-Bold');
+  size-adjust: 98.06%;
+  ascent-override: 89.54%;
+  descent-override: 21.42%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Archivo Fallback';
+  font-weight: 800;
+  src:
+    local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'),
+    local('LiberationSans-Bold');
+  size-adjust: 103.01%;
+  ascent-override: 85.23%;
+  descent-override: 20.39%;
   line-gap-override: 0%;
 }
 /* Almarai, subset by scripts/subset-fonts.py (docs/fonts.md). Per weight:
@@ -222,8 +278,10 @@ body:has(.intro) {
    1.10em) so a `line-height: normal` box keeps its height too. Measure with the real
    face in use (`CSS.getPlatformFontsForNode`): a `swap` face that has not arrived, or an
    `optional` one that missed first paint, silently measures the fallback instead. The Arabic faces are declared AFTER the Latin ones
-   and claim the spaces, mirroring the web-font declarations above. Where Arial is
-   absent (Linux, Android) the fallback falls through to `system-ui`, unmatched. */
+   and claim the spaces, mirroring the web-font declarations above. These faces are
+   Arial-only on purpose: where Arial is absent they resolve NOTHING, so the whole of
+   `Almarai Fallback Linux` below (listed after this family in --bs-font-ar) takes over,
+   spaces included. Android has neither and still falls through to `system-ui`. */
 @font-face {
   font-family: 'Almarai Fallback';
   font-weight: 400;
@@ -278,6 +336,77 @@ body:has(.intro) {
   size-adjust: 133.1%;
   ascent-override: 66.9%;
   descent-override: 15.7%;
+  line-gap-override: 0%;
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
+}
+/* Almarai's fallback on Linux (docs/fonts.md 2c) — the CI runner, where the layout-shift and
+   Lighthouse gates run, and Linux desktops. Latin on Liberation Sans (Arial's advance widths,
+   so the Arial faces' size-adjust holds); Arabic on DejaVu Sans 2.37 (it draws every glyph
+   the site's Arabic copy uses), size-adjust measured in Chromium against the site's own
+   copy — 1,484 strings, the shipped subsets: total width within 0.25% of Almarai's, p10/p90
+   per string -4.4% / +3.4% (the Arial faces above: -8.3% / +6.6%).
+   The vertical overrides target Almarai's box AS LINUX DRAWS IT, which is not always the
+   Arial faces' box: every Almarai subset has hhea = typo = 0.905 / 0.211 (1.116em), but the
+   700 files lack the OS/2 USE_TYPO_METRICS bit, so only Windows (DirectWrite) falls back to
+   their win metrics and draws 700 at 1.561em — the box the Arial 700 faces copy. FreeType
+   (Linux) and CoreText (macOS) draw hhea at every weight. So here: override × size-adjust =
+   0.905 / 0.211 at 400, 700 and 800. A separate family, listed after the Arial one, because
+   one face cannot carry both boxes, and so that Windows and macOS — even with these fonts
+   installed (an office suite ships them) — keep the Arial faces exactly as they were. */
+@font-face {
+  font-family: 'Almarai Fallback Linux';
+  font-weight: 400;
+  src: local('Liberation Sans'), local('LiberationSans');
+  size-adjust: 95.11%;
+  ascent-override: 95.15%;
+  descent-override: 22.18%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Almarai Fallback Linux';
+  font-weight: 400;
+  src: local('DejaVu Sans'), local('DejaVuSans');
+  size-adjust: 96.92%;
+  ascent-override: 93.38%;
+  descent-override: 21.77%;
+  line-gap-override: 0%;
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
+}
+@font-face {
+  font-family: 'Almarai Fallback Linux';
+  font-weight: 700;
+  src: local('Liberation Sans Bold'), local('LiberationSans-Bold');
+  size-adjust: 92.4%;
+  ascent-override: 97.94%;
+  descent-override: 22.84%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Almarai Fallback Linux';
+  font-weight: 700;
+  src: local('DejaVu Sans Bold'), local('DejaVuSans-Bold');
+  size-adjust: 85.63%;
+  ascent-override: 105.69%;
+  descent-override: 24.64%;
+  line-gap-override: 0%;
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
+}
+@font-face {
+  font-family: 'Almarai Fallback Linux';
+  font-weight: 800;
+  src: local('Liberation Sans Bold'), local('LiberationSans-Bold');
+  size-adjust: 100.75%;
+  ascent-override: 89.83%;
+  descent-override: 20.94%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Almarai Fallback Linux';
+  font-weight: 800;
+  src: local('DejaVu Sans Bold'), local('DejaVuSans-Bold');
+  size-adjust: 89.25%;
+  ascent-override: 101.4%;
+  descent-override: 23.64%;
   line-gap-override: 0%;
   unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
@@ -3095,8 +3224,26 @@ html[dir='rtl'] .social-strip--klein h2 {
 
 .consent-text {
   margin: 0;
-  max-width: 60ch;
+  /* 60ch of the face it paints in, written in em (R3-0: a `ch` box follows whichever font is
+     painting, so the fallback's "0" moved the cap — DejaVu's wide one did, on Linux): Archivo
+     400's "0" is 0.573em, Almarai's 0.528em. */
+  max-width: 34.38em;
   font-size: 0.9rem;
+}
+/* The Arabic copy sits on a two/three-line boundary at that cap. Drawn by DirectWrite
+   (Windows) it is three lines in Almarai and two in the matched fallback wherever the cap
+   applies (viewports >= ~500px); pinned to the bottom edge, the bar grew upward when Almarai
+   arrived (79 -> 102px at 1350px, 131 -> 154px at 768px; CLS 0.023-0.086). So its third line
+   is reserved, and the banner still shows at once (design-port #26). On Linux (FreeType's
+   whole-pixel advances) the copy is two lines in both, the em cap alone keeps the box, and the
+   final bar shows its two lines over the reserved third. On phones the copy is three lines in
+   Almarai and in the fallbacks alike, so the reservation changes nothing there. Not covered:
+   a few px-wide bands where the buttons' row fits beside the copy in one font and not the
+   other (~790-798px Arabic, ~852-864px English), and below ~355px on Arial platforms, where
+   the fallback copy runs a line longer — both as on main (docs/fonts.md 2c). */
+html[dir='rtl'] .consent-text {
+  max-width: 31.68em;
+  min-height: 3lh;
 }
 
 .consent-actions {
