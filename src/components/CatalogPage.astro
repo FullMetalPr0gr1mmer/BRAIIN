@@ -1,6 +1,7 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { ogImageCandidates } from '@/lib/seo/ogImage';
 import SectionRenderer from '@/components/SectionRenderer.astro';
 import type { CatalogPage } from '@/lib/portfolio/pages';
 
@@ -36,7 +37,7 @@ const hasHead = page.sections.some((s) => s.type === 'pageHead' && s.visible !==
   robots={seo.robots}
   header={page.header}
   styles={['banner.css', 'work.css']}
-  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  ogImages={ogImageCandidates(seo)}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >
   <main class="work-page">

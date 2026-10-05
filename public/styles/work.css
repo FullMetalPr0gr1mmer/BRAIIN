@@ -472,6 +472,9 @@ html[dir='rtl'] .catalog-head__back svg {
   letter-spacing: -0.05em;
   text-transform: uppercase;
 }
+html[dir='rtl'] .catalog-head__row p {
+  max-width: 19.01em; /* 36ch of Almarai 400 */
+}
 html[dir='rtl'] .catalog-head h1 {
   font-size: clamp(38px, 6.6vw, 112px);
   line-height: 1.15;
@@ -484,7 +487,11 @@ html[dir='rtl'] .catalog-head h1 {
 }
 .catalog-head__row p {
   margin: 0;
-  max-width: 36ch;
+  /* 36ch of Archivo 400, in em (R3-0): as a `ch` box it followed whichever font was painting,
+     347px in the Arial fallback against 362px in Archivo at 1350px, so a late Archivo pushed
+     the row past its width — the paragraph wrapped under the heading and the whole catalogue
+     dropped 120px (CLS 0.58, docs/fonts.md 2c). */
+  max-width: 20.63em;
   font-size: clamp(15px, 1.3vw, 18px);
   line-height: 1.6;
   color: var(--bs-muted);

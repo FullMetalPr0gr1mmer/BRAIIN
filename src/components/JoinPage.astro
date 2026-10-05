@@ -7,6 +7,7 @@ import { getPageComposition } from '@/lib/data/pageSections';
 import { buildBreadcrumbSchema } from '@/lib/seo/jsonld';
 import { localizedPath } from '@/lib/i18n';
 import { loadHead } from '@/lib/seo/head';
+import { ogImageCandidates } from '@/lib/seo/ogImage';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { composeJoinPage, firstVisibleType, shown } from '@/lib/sections/join';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
@@ -71,7 +72,7 @@ const jsonLd = [
   robots={seo.robots}
   header={header}
   styles={['join.css']}
-  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  ogImages={ogImageCandidates(seo)}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >
   <main class="join-page">

@@ -1378,3 +1378,29 @@ contract (`packages/schemas/application.ts`, `packages/consent/recruitment.ts`).
   same mailbox as the DSAR line (one constant now). "Data we collect" points at it, and the
   notice's date moved to 1 October 2026. MSA in Arabic; pending legal review with the rest
   of the notice.
+- **J-17. The legal notices name whoever the Site profile names** (2026-10, post-Join
+  hardening; owner decision H1). J-16's one constant was a mailbox on a one-*i* domain the
+  studio never registered: rights requests bounced, and whoever registered the domain would
+  have received applicants' requests. The copy (`src/lib/legal/content.ts`) now spells
+  nobody. Three tokens, in the intro and body only, are filled at render from `site_profile`
+  by `src/lib/legal/render.ts`: `%brand%`, `%controller%` (the registered `legal_name` in
+  the page's language, else the brand) and `%mailbox%` (`contact_email` — the address the
+  footer shows). One pass with a function replacer, so a value is never re-read as a token
+  or as a `$` pattern. The mailbox renders as a `mailto:` link with `dir="ltr"` (the
+  footer's pattern; segments, never `set:html`). With the brand no longer spelled, the legal
+  pages lost their exemption from the served-HTML brand check, and an unfilled token on any
+  page fails it; `/privacy` and `/ar/privacy` joined the axe pass. The Arabic is reworded
+  so no token is the subject of a gendered verb — the value may be a brand or a company name,
+  masculine or feminine: "تُجمع لدى %controller%", "تعود ملكية … إلى %controller%", "لا تقع
+  على %controller% أي مسؤولية", "كيف يستخدم موقع %brand%". For owner and legal review, with
+  the rest of the draft notices. All three notices read 4 October 2026, and the recruitment
+  notice is version `2026-10-04` (`2026-09-30` stays accepted). **The rule this creates:**
+  `brand_name`, `legal_name` and `contact_email` are legal-notice fields. Editing one
+  changes the Privacy Policy, Terms and Cookie Policy (and the recruitment notice), so it
+  ships with a code change that moves the notices' `updated` dates and appends a recruitment
+  notice version — `packages/consent/recruitment.ts` records the identity values each
+  version rendered, since those live in the database, not in git — and the contact address
+  must be a monitored inbox. The admin's help text on the three fields says so. Admin and
+  Developer can still edit them without a deploy, so the rule is procedural (runbook §6h);
+  making them Admin-only in both layers (as `accepting_applications` is) is the owner's
+  option.

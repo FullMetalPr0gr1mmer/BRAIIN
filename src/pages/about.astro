@@ -6,6 +6,7 @@ import { leadershipJsonLd, showsSection, withLeaders } from '@/lib/sections/abou
 import { getPageComposition } from '@/lib/data/pageSections';
 import { getLeadership, getPublishedTeam } from '@/lib/data/team';
 import { loadHead } from '@/lib/seo/head';
+import { ogImageCandidates } from '@/lib/seo/ogImage';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { buildPersonSchema, buildBreadcrumbSchema, orgRef } from '@/lib/seo/jsonld';
 import { setTierA } from '@/lib/http/cacheTags';
@@ -84,7 +85,7 @@ setTierA(Astro.response, {
   robots={seo.robots}
   styles={['about.css']}
   heroFace="almarai-700"
-  {...seo.ogImage ? { ogImage: seo.ogImage } : {}}
+  ogImages={ogImageCandidates(seo)}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >
   <main>

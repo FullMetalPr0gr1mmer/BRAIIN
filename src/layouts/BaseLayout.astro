@@ -3,6 +3,7 @@ import type { Locale } from '@schemas/primitives';
 import type { JsonLdNode } from '@/lib/seo/jsonld';
 import SeoHead from '@/components/SeoHead.astro';
 import type { HeroFace } from '@/lib/seo/fonts';
+import type { OgImageCandidates } from '@/lib/seo/ogImage';
 import SiteHeader, { type HeaderVariant } from '@/components/SiteHeader.astro';
 import SiteFooter from '@/components/SiteFooter.astro';
 import ConsentBanner from '@/components/ConsentBanner.astro';
@@ -18,7 +19,9 @@ interface Props {
   logicalPath: string;
   jsonLd?: JsonLdNode[];
   robots?: string;
-  ogImage?: string;
+  /** Share-image candidates, `ogImageCandidates(seo, own)` (src/lib/seo/ogImage.ts). Omitted:
+      the logo card — a noindex 404 skips the SEO read and gets the code default. */
+  ogImages?: OgImageCandidates;
   /** CMS-authored canonical override (`entity_seo.canonical_override`). */
   canonicalOverride?: string;
   /** Set on routes that render their own chrome (none today) or a bare error page. */
@@ -52,7 +55,7 @@ const {
   logicalPath,
   jsonLd = [],
   robots = 'index,follow',
-  ogImage,
+  ogImages,
   canonicalOverride,
   chrome = true,
   header = 'solid',
@@ -73,7 +76,7 @@ const direction = dir(locale);
       logicalPath={logicalPath}
       jsonLd={jsonLd}
       robots={robots}
-      {...ogImage ? { ogImage } : {}}
+      {...ogImages ? { ogImages } : {}}
       {...canonicalOverride ? { canonicalOverride } : {}}
       {...heroFace ? { heroFace } : {}}
     />

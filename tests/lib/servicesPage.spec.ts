@@ -17,6 +17,7 @@ import {
 import { tierATags } from '@/lib/http/cacheTags';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { SERVICES_PROOF_COPY } from '@/lib/services/proof';
+import { PUBLIC_SITE_URL as SITE } from '../stubs/astro-env-client';
 import {
   EXPLORER_COPY,
   fallbackExplorerPanels,
@@ -619,7 +620,7 @@ describe('loadServicesPage', () => {
     const page = await loadServicesPage({} as never, 'ar');
     const crumb = JSON.stringify(page.jsonLd);
     expect(crumb).toContain('BreadcrumbList');
-    expect(crumb).toContain('https://www.braiinstation.com/ar/services');
+    expect(crumb).toContain(`${SITE}/ar/services`);
     expect(crumb).toContain('الخدمات');
     expect(crumb).not.toContain('AggregateRating');
   });

@@ -7,6 +7,7 @@ import SectionBoundary from '@/components/SectionBoundary.astro';
 import Hero from '@/components/sections/Hero.astro';
 import Hello from '@/components/sections/Hello.astro';
 import { buildBreadcrumbSchema, buildServiceSchema, orgRef } from '@/lib/seo/jsonld';
+import { ogImageCandidates } from '@/lib/seo/ogImage';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import { serviceHelloHeading, SERVICE_HELLO_LEAD } from '@/lib/sections/hello';
 import { serviceDescription, serviceHeroSub, type ServicePage } from '@/lib/services/page';
@@ -68,8 +69,9 @@ const crumb = {
   ],
 };
 
-// A shareable still for JSON-LD `image` and og:image (unless the SEO role set one): the
-// service's poster as a 1200 px JPEG — the case-study rule.
+// A shareable still for JSON-LD `image` and og:image: the service's poster as a 1200 px
+// JPEG — the case-study rule. It outranks the tenant's default share image and yields only
+// to the SEO role's per-page override (src/lib/seo/ogImage.ts).
 const poster = service.poster;
 const shareImage = poster
   ? new URL(
@@ -83,7 +85,6 @@ const shareImage = poster
       `${base}/`,
     ).href
   : undefined;
-const ogImage = seo.ogImage ?? shareImage;
 
 const jsonLd = [
   buildServiceSchema({
@@ -114,7 +115,7 @@ const jsonLd = [
   robots={seo.robots}
   header="overlay"
   styles={['services.css']}
-  {...ogImage ? { ogImage } : {}}
+  ogImages={ogImageCandidates(seo, shareImage)}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >
   <main class="svc-page">

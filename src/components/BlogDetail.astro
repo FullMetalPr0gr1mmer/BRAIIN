@@ -5,6 +5,7 @@ import { buildArticleSchema, buildBreadcrumbSchema, orgRef } from '@/lib/seo/jso
 import { localizedPath, formatDate, pickLocale, pickLocaleStrict } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { loadHead } from '@/lib/seo/head';
+import { absoluteHttpUrl, ogImageCandidates } from '@/lib/seo/ogImage';
 import type { PostRow } from '@/lib/data/blog';
 
 interface Props {
@@ -42,6 +43,9 @@ const { seo, identity } = await loadHead(Astro.locals, {
   entity: { type: 'blog_post', id: post.id },
 });
 const org = orgRef(identity, locale);
+// The cover, absolute (og:image and JSON-LD `image` both need it) and http(s) only — a
+// stored relative path or an odd scheme must not reach either.
+const cover = absoluteHttpUrl(post.cover_image_url, base);
 
 const jsonLd = [
   buildArticleSchema({
@@ -52,7 +56,7 @@ const jsonLd = [
     ...(author ? { authorName: author } : {}),
     ...(post.published_at ? { datePublished: post.published_at } : {}),
     ...(post.updated_at ? { dateModified: post.updated_at } : {}),
-    ...(post.cover_image_url ? { image: post.cover_image_url } : {}),
+    ...(cover ? { image: cover } : {}),
   }),
   buildBreadcrumbSchema([
     { name: STR.home, url: base + localizedPath('/', locale) },
@@ -69,9 +73,7 @@ const jsonLd = [
   logicalPath={`/creative-knowledge/${post.slug}`}
   jsonLd={jsonLd}
   robots={seo.robots}
-  {...(seo.ogImage ?? post.cover_image_url)
-    ? { ogImage: seo.ogImage ?? (post.cover_image_url as string) }
-    : {}}
+  ogImages={ogImageCandidates(seo, cover)}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >
   <main class="container">

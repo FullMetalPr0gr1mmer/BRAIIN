@@ -103,7 +103,7 @@ broken" cause — it is not broken, it is unclaimed.
 2. Then, in the SQL editor:
 
 ```sql
-select public.bootstrap_admin('you@braiinstation.com');
+select public.bootstrap_admin('you@braiinstatiion.com');
 ```
 
 That writes the `profiles` row **and** mirrors the claim into `auth.users.raw_app_meta_data`,
@@ -165,10 +165,11 @@ extension exists, so after enabling it:
 create trigger leads_notify after insert on public.leads
   for each row execute function app.tg_notify_lead();
 
--- Where the trigger posts, and the shared secret it presents:
+-- Where the trigger posts — the DEPLOYED origin (workers.dev until the DNS cutover, then
+-- https://www.braiinstatiion.com) — and the shared secret it presents:
 update public.site_settings
    set identity = identity || jsonb_build_object(
-         'notify_lead_url', 'https://www.braiinstation.com/api/hooks/notify-lead')
+         'notify_lead_url', 'https://braiin-station.braiin.workers.dev/api/hooks/notify-lead')
  where tenant_id = (select id from public.tenants order by created_at limit 1);
 
 select vault.create_secret('<same value as NOTIFY_LEAD_SECRET>', 'notify_lead_secret',
@@ -685,6 +686,85 @@ applications: the detail view is everything stored about them (plus the CV), and
 removes the CV object first, then the row — never the reverse, so a failed erase can be retried
 and no CV is ever left without the row that would expire it.
 
+### 6h. Post-Join hardening (2026-10) — before merging the site fixes
+
+No migration ships with these changes, so the deploy guard has nothing to wait for. The checks
+below are read-only unless marked; run them in the Supabase dashboard's SQL editor on
+`braiin-prod` **before merging** — no secret appears in any of them.
+
+**1. The privacy contact (owner decision H1).** From this deploy the privacy notice sends rights
+requests — its DSAR line and the Join recruitment section, EN + AR — to the Site profile's
+**contact email**, the address the footer shows, instead of a hardcoded mailbox on a one-*i*
+domain nobody had registered. Read what the notices will render, and have the owner confirm
+the inbox is **monitored** for privacy requests (PDPL gives the data subject a response
+deadline; an unread request misses it):
+
+```sql
+select contact_email, brand_name, legal_name from public.site_profile;  -- the mailbox, brand and controller the notices render
+```
+
+Compare the result with what `packages/consent/recruitment.ts` records for the newest
+recruitment notice version: that record is the only copy of what the notice rendered, since
+these values live in the database. If they differ (a legal name set, another address),
+correct the record before merging. **The date:** the three notices read 4 October 2026 and
+the newest version is `2026-10-04`, the day this was meant to merge. Merging later, re-date
+them first, in one commit: the six `updated` lines in `src/lib/legal/content.ts`, the version
+and its record, and design-port J-17 (`tests/lib/legal.spec.ts` fails while the notices and
+the version disagree).
+
+**The standing rule (design-port J-17).** `brand_name`, `legal_name` and `contact_email` are
+legal-notice fields: an edit in Admin → Site profile changes the Privacy Policy, Terms, Cookie
+Policy and the recruitment notice. Ship it with a code change that moves the notices' `updated`
+dates (`src/lib/legal/content.ts`) and appends a recruitment notice version recording the new
+values (`packages/consent/recruitment.ts`) — once the site is behind a zone cache, with a
+`site:identity` purge. Setting the registered legal name (an open owner item) is such an edit.
+
+**2. The share image (owner decision H2).** From this deploy every page names an `og:image`:
+its SEO override, else its own image (a service poster, a case-study banner, a post cover),
+else the tenant default, else the logo card `/og/default.jpg`. The tenant default used to
+outrank a page's own image; it no longer does — but any stored value still becomes the image
+of every page with nothing of its own. Nothing seeds these rows, so look before merging:
+
+```sql
+select default_og_image from public.seo_defaults;                                   -- decide
+select entity_type, entity_id, og_image from public.entity_seo
+ where coalesce(trim(og_image), '') <> '';                                          -- per-page overrides
+```
+
+Keep a stored default only if it is an absolute `https://` URL to a reachable, current-brand
+image of about 1200×630. Otherwise clear it — compare-and-set on the value you just read:
+
+```sql
+update public.seo_defaults set default_og_image = null
+ where tenant_id = '00000000-0000-0000-0000-0000000000b1'
+   and default_og_image = '<the value read above>';   -- UPDATE 1; the version trigger bumps it
+```
+
+Why only an absolute `https://` URL: the API accepts an `https://` URL or a `/path` on the site
+for both columns (`ShareImageUrlSchema`), but the one Admin field — SEO defaults → **Default OG
+image** — is a URL input, which takes an absolute URL only, and the form submits every field. So
+a stored default of any other shape, a `/path` included, keeps the whole SEO defaults form from
+saving until it changes. A good `/path` image can go back in through Admin, after the clear, as
+its absolute `https://` URL. `entity_seo.og_image` has no Admin field: it is written only through
+`/api/admin/entity-seo`, which applies the same schema. At render the head still uses any
+http(s) or relative value, and skips only an unusable one (another scheme, credentials,
+malformed) for the next candidate.
+
+After the deploy: `curl -s $BASE/ | grep -o 'og:image" content="[^"]*'` prints
+`$BASE/og/default.jpg` (unless a default was kept), and `/services/logo` its poster; re-scrape
+the key pages in the Facebook and LinkedIn preview tools, which cache a card per URL.
+
+**3. The one-*i* domain.** The studio's domain is `braiinstatiion.com` (two *i*'s); the one-*i*
+spelling was never registered by anyone (EXC-004, correction of 2026-10-04). The seeds now
+carry the right one; production's tenant row still has the old value. Nothing reads it, so
+this is hygiene, not an outage — compare-and-set:
+
+```sql
+update public.tenants set primary_domain = 'www.braiinstatiion.com'
+ where id = '00000000-0000-0000-0000-0000000000b1'
+   and primary_domain = 'www.braiinstation.com';   -- UPDATE 1 (UPDATE 0: already corrected)
+```
+
 ---
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)
@@ -708,13 +788,17 @@ snapshot-tests the code-owned map against robots.txt, but nothing can test the W
 ## 8. Smoke test
 
 ```bash
-BASE=https://www.braiinstation.com
+BASE=https://braiin-station.braiin.workers.dev   # after the DNS cutover: https://www.braiinstatiion.com
 
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/healthz                    # 200
 curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' $BASE/admin      # 302 → /admin/login
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/api/admin/services         # 401
 curl -s -X POST -d '{}' -o /dev/null -w '%{http_code}\n' $BASE/api/admin/services  # 403 (csrf)
 curl -sI $BASE/admin/login | grep -i 'cache-control\|content-security'    # no-store; no unsafe-inline
+curl -sI $BASE/styles/global.css | grep -i 'strict-transport\|content-security'  # HSTS; default-src 'none' (public/_headers)
+curl -sI $BASE/media/hero-poster-blur.jpg | grep -i 'strict-transport\|content-security'  # HSTS + a CSP
+curl -s -o /dev/null -D - -X POST -H 'Origin: https://evil.example' -d x=1 $BASE/contact \
+  | grep -i '^HTTP\|strict-transport'   # 403 WITH HSTS: Astro's origin check, secured by the Worker backstop
 curl -sI $BASE/services/branding | grep -i '^HTTP\|^location'            # 301 → /services#branding (code map)
 curl -sI $BASE/<an-authored-redirect-source> | grep -i '^HTTP\|^location' # 301 → its target (table, §6f); a mistyped URL → 404 private, no-store
 ```
@@ -746,7 +830,7 @@ commitment CLAUDE.md makes that is not yet met, and each should be tracked.
 | PITR + off-platform `pg_dump` to a separate-account R2; quarterly restore drill | Supabase's own backups only | §10 |
 | Playwright per-role negative-authz e2e | Covered at unit + pgTAP level; not end-to-end in a browser | §9 |
 | `RAW_TELEMETRY_RETENTION` legal sign-off | Implemented at 90 days, capped so it can only shorten | Pillar 4 |
-| CSP Report-Only cycle | Shipping **enforcing** from day one. Watch `/api/clientlog` for violations in week 1 and be ready to flip `CSP_REPORT_ONLY` in `src/middleware.ts` | §3 |
+| CSP Report-Only cycle | Shipping **enforcing** from day one. Watch `/api/clientlog` for violations in week 1 and be ready to flip `CSP_REPORT_ONLY` in `src/lib/http/securityHeaders.ts` (one switch: the middleware, the Worker backstop and the media route all read it) | §3 |
 
 ---
 

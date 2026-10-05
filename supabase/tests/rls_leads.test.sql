@@ -3,7 +3,7 @@
 -- `anon`/`authenticated` roles and injecting JWT claims (set_config), the Supabase pattern.
 
 begin;
-select plan(18);
+select plan(26);
 
 -- Setup runs as the migration/superuser role (RLS bypassed here).
 insert into public.tenants (id, name) values ('00000000-0000-0000-0000-000000000001', 'T1');
@@ -135,6 +135,48 @@ select ok(
      where table_schema = 'public' and table_name = 'leads_safe' and column_name = 'discipline_of_interest'),
   'leads_safe exposes discipline_of_interest (0028)'
 );
+
+-- 0030: the GRANT layer, stated (hotfix H2). Admin and Developer hold the FOR ALL
+-- policy, so without these grants RLS alone would stand between a staff token and a
+-- forged, deleted or rewritten lead. Inserts belong to the service role (the public
+-- form), deletes to the retention job; the admin writes status and notes only.
+set local role authenticated;
+select _claims('admin', '00000000-0000-0000-0000-000000000001');
+select throws_ok(
+  $$ insert into public.leads (tenant_id, name, email_enc, message)
+     values ('00000000-0000-0000-0000-000000000001', 'x', '\x00', 'y') $$,
+  '42501', null, 'admin cannot insert a lead through the API (0030)');
+select throws_ok(
+  $$ delete from public.leads where id = '00000000-0000-0000-0000-0000000000aa' $$,
+  '42501', null, 'admin cannot delete a lead through the API (0030)');
+select throws_ok(
+  $$ update public.leads set email_enc = '\x01' where id = '00000000-0000-0000-0000-0000000000aa' $$,
+  '42501', null, 'admin cannot rewrite email_enc (0030)');
+select throws_ok(
+  $$ update public.leads set retention_delete_after = now() + interval '10 years'
+     where id = '00000000-0000-0000-0000-0000000000aa' $$,
+  '42501', null, 'admin cannot extend a lead''s retention (0030)');
+select lives_ok(
+  $$ update public.leads set status = 'in_progress', internal_notes = 'Called back'
+     where id = '00000000-0000-0000-0000-0000000000aa' $$,
+  'admin can still update status and notes (0030)');
+select _claims('developer', '00000000-0000-0000-0000-000000000001');
+select throws_ok(
+  $$ insert into public.leads (tenant_id, name, email_enc, message)
+     values ('00000000-0000-0000-0000-000000000001', 'x', '\x00', 'y') $$,
+  '42501', null, 'developer cannot insert a lead through the API (0030)');
+select throws_ok(
+  $$ delete from public.leads where id = '00000000-0000-0000-0000-0000000000aa' $$,
+  '42501', null, 'developer cannot delete a lead through the API (0030)');
+reset role;
+select _claims(null, null);
+select ok(
+  not has_table_privilege('authenticated', 'public.leads', 'insert')
+  and not has_table_privilege('authenticated', 'public.leads', 'delete')
+  and not has_table_privilege('authenticated', 'public.leads', 'truncate')
+  and not has_table_privilege('authenticated', 'public.leads', 'update')
+  and has_column_privilege('authenticated', 'public.leads', 'status', 'update'),
+  'authenticated: no insert/delete/truncate, UPDATE only on named columns (0030)');
 
 select is(1, 1, 'cleanup ok');
 

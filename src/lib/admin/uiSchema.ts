@@ -1188,6 +1188,7 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         label: 'Default OG image',
         kind: 'url',
         column: 'default_og_image',
+        help: 'The link-preview image for pages with no image of their own — a service’s poster, a case study’s banner or a post’s cover always wins. An https:// URL to an image about 1200×630. Empty: the built-in logo card.',
       },
       {
         name: 'organization',
@@ -1214,7 +1215,7 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         kind: 'bilingual',
         column: 'brand_name',
         required: true,
-        help: 'Shown in the header, footer, page titles and Organization JSON-LD on every page.',
+        help: 'Shown in the header, footer, page titles and Organization JSON-LD on every page — and named in the Privacy Policy, Terms, Cookie Policy and the job-application consent. Changing it changes those notices: tell the owner, so their dates and the recruitment notice version are updated with it.',
       },
       {
         name: 'legalName',
@@ -1222,7 +1223,7 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         kind: 'bilingual',
         column: 'legal_name',
         nullable: true,
-        help: 'The data controller named in the privacy notice and terms. Leave empty to use the brand name.',
+        help: 'The data controller named in the Privacy Policy and Terms (and so in the recruitment notice). Leave empty to use the brand name. Changing it changes those notices: tell the owner, so their dates and the recruitment notice version are updated with it.',
       },
       {
         name: 'contactEmail',
@@ -1230,6 +1231,7 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
         kind: 'text',
         column: 'contact_email',
         required: true,
+        help: 'Shown in the footer and on Contact — and the address the Privacy Policy gives for privacy requests and applicants’ rights, so it must be a monitored inbox. Changing it changes the Privacy Policy: tell the owner, so its date and the recruitment notice version are updated with it.',
       },
       {
         name: 'whatsappE164',
