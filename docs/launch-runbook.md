@@ -197,7 +197,12 @@ it **fails the deploy** when production is missing any migration in the repo, wh
 will not use, a server it cannot verify, a role other than `deploy_guard`. **Order for every
 change that ships a migration: apply it to production (§1) → merge → auto-deploy.** Code
 first is how content silently vanishes: loaders fail closed to empty results, not to an
-error page. On a PR, the `deploy-guard-preview` check runs the same script against
+error page. The one reverse case is a **contraction** — a migration that takes away
+something the deployed code still uses (a revoked grant, a dropped column). It ships as
+**two PRs**: first the code that no longer needs it (merge → deploy), then the migration
+on its own (apply → merge). The guard refuses a deploy whose repo carries a migration
+production lacks, so code and contraction can never share a PR. On a PR, the
+`deploy-guard-preview` check runs the same script against
 production, read-only (the owner's own same-repo PRs; not a required check), so a PR whose
 migration production lacks is red before the merge.
 
