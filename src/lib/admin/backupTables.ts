@@ -124,6 +124,10 @@ export const BACKUP_TABLES: readonly { table: string; columns: string }[] = [
 export const FORBIDDEN_BACKUP_TABLES: readonly string[] = [
   'leads',
   'leads_safe',
+  // The CRM (0034): operational data about people, never site content.
+  'lead_notes',
+  'lead_events',
+  'lead_stages',
   'job_applications',
   'applications_safe',
   'cv_deletion_queue',

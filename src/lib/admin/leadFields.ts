@@ -15,6 +15,12 @@ import { can } from '@/lib/authz/matrix';
 // neither `leads.manage` nor `leads.pii`, so they get nothing at all. "timeline" is two
 // columns since migration 0017: the legacy `timeline_band` select value and the encrypted
 // free-text deadline the v2 contact form collects (`timeline_text_enc`).
+//
+// Since migration 0033 the database holds the same line. A staff token can SELECT only
+// SAFE_LEAD_COLUMNS (plus tenant_id): the caller's own client (`sb`) asking for any other
+// lead column gets a permission error, whatever the role. The gated columns are read as
+// the service role, by the two audited paths only: the per-lead reveal
+// (src/pages/api/admin/leads/[id].ts) and the CSV export (export.ts).
 
 export const SENSITIVE_LEAD_COLUMNS = [
   'budget_enc',
@@ -32,8 +38,15 @@ export const SENSITIVE_LEAD_COLUMNS = [
 export const SAFE_LEAD_COLUMNS =
   'id,kind,locale,name,company,message,service_of_interest,status,consent_marketing,created_at,updated_at,discipline_of_interest';
 
-/** Safe columns plus the ciphertext/sensitive ones. Only for `leads.pii` holders. */
-export const FULL_LEAD_COLUMNS = `${SAFE_LEAD_COLUMNS},email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,internal_notes,ip_inet`;
+/**
+ * The ciphertext and the gated columns. `authenticated` cannot read any of them (0033):
+ * only the service role can, after assertCap, a live recheck and a fail-closed audit row.
+ */
+export const GATED_LEAD_COLUMNS =
+  'email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,internal_notes,ip_inet';
+
+/** Safe columns plus the gated ones: the PII export's projection, read as the service role. */
+export const FULL_LEAD_COLUMNS = `${SAFE_LEAD_COLUMNS},${GATED_LEAD_COLUMNS}`;
 
 export function canSeeLeadPii(role: Role): boolean {
   return can(role, 'leads.pii') === 'full';
@@ -43,18 +56,13 @@ export function canManageLeads(role: Role): boolean {
   return can(role, 'leads.manage') === 'full';
 }
 
-/** Column list for a role — the projection, decided in one place. */
-export function leadColumnsFor(role: Role): string {
-  return canSeeLeadPii(role) ? FULL_LEAD_COLUMNS : SAFE_LEAD_COLUMNS;
-}
-
 /**
  * Strips sensitive keys from an outbound lead object.
  *
- * Defence in depth behind `leadColumnsFor`: the projection above is what should keep
- * these out of the result set, and this is what keeps them out of the RESPONSE if some
- * future caller passes `select('*')`. Both are cheap; only one of them is load-bearing
- * on any given day, and it is not always the same one.
+ * Defence in depth behind the projection and the column grant: SAFE_LEAD_COLUMNS is what
+ * keeps these out of the result set, 0033 is what refuses them to the caller's client,
+ * and this is what keeps them out of the RESPONSE if a service-role row is ever passed
+ * through by mistake.
  */
 export function stripSensitive<T extends Record<string, unknown>>(row: T): Partial<T> {
   const out: Record<string, unknown> = { ...row };
