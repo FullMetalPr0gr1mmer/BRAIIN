@@ -44,17 +44,22 @@ import {
 //     search-safety class of bug §9(e) tests for. A single .ilike() argument is
 //     parameter-encoded by supabase-js and carries no grammar.
 
-interface SearchTarget {
+export interface SearchTarget {
   config: ResourceConfig;
   /** URL segment of the editor route: /admin/<uiSlug>/<id>. */
   uiSlug: string;
   /** Group heading on the results page. */
   group: string;
-  /** Column matched by ilike. `title->>en` for the bilingual-JSONB content types. */
+  /**
+   * Column matched by ilike: a text column, or `<col>->>en` for a bilingual JSONB one.
+   * An ilike straight on a jsonb column is an SQL error, which the results page shows as
+   * "could not be searched" (tests/lib/globalSearch.spec.ts checks every target against
+   * the migrations).
+   */
   column: string;
 }
 
-const TARGETS: readonly SearchTarget[] = [
+export const SEARCH_TARGETS: readonly SearchTarget[] = [
   { config: disciplineResource, uiSlug: 'disciplines', group: 'Disciplines', column: 'name->>en' },
   { config: serviceResource, uiSlug: 'services', group: 'Services', column: 'title->>en' },
   {
@@ -70,12 +75,12 @@ const TARGETS: readonly SearchTarget[] = [
   { config: testimonialResource, uiSlug: 'testimonials', group: 'Testimonials', column: 'slug' },
   { config: pageResource, uiSlug: 'pages', group: 'Pages', column: 'title->>en' },
   { config: categoryResource, uiSlug: 'categories', group: 'Categories', column: 'slug' },
-  { config: teamResource, uiSlug: 'team', group: 'Team & authors', column: 'name' },
+  { config: teamResource, uiSlug: 'team', group: 'Team & authors', column: 'name->>en' },
   {
     config: certificationResource,
     uiSlug: 'certifications',
     group: 'Certifications',
-    column: 'name',
+    column: 'name->>en',
   },
   { config: statisticResource, uiSlug: 'statistics', group: 'Statistics', column: 'slug' },
   { config: redirectResource, uiSlug: 'redirects', group: 'Redirects', column: 'source_path' },
@@ -173,7 +178,7 @@ export async function searchAdmin(
   // Sequential, not Promise.all: each call shares the caller's RLS-bound client, the
   // per-entity limit keeps every query trivial, and one slow entity failing fast-first
   // beats fourteen concurrent queries hitting the pooler from one keystroke.
-  for (const target of TARGETS) {
+  for (const target of SEARCH_TARGETS) {
     if (!canRead(auth, target.config)) continue;
 
     const { data, error } = await sb

@@ -326,7 +326,7 @@ export default function ApplicationsPanel({ canSeePii }: ApplicationsPanelProps)
               <a className="btn" href={`/api/admin/applications/${selected.id}/cv`} download>
                 Download CV ({formatBytes(selected.cv_bytes)}) — this access is logged
               </a>{' '}
-              <span className="badge" data-status="scheduled">
+              <span className="badge" data-tone="warn">
                 Not virus-scanned
               </span>
             </p>

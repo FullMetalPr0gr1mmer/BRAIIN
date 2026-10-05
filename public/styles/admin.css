@@ -1,36 +1,38 @@
 /* Admin CMS styles. Loaded only by AdminLayout, so none of this weight reaches a
    public route (Pillar 2 budgets are per-route).
 
-   Every colour is a CSS custom property because the theme editor writes custom
-   properties and nothing else — CLAUDE.md §7 forbids `'unsafe-inline'` in style-src, so
-   a theme cannot ship a stylesheet or an inline rule. Tokens are the only channel. */
+   Admin v2 (F1): the look of the client's admin prototype, ported verbatim-first from its
+   app.css onto the hooks the CMS already renders (docs/admin-v2/ui.md §1). Deliberate
+   departures from the prototype, each because the standard requires it:
+   - Colours are tokens, and several are darker than the prototype's so every text and
+     control pair passes WCAG 2.2 AA (§1.1 of the design; scripts/contrast-audit.mjs
+     reads the token block below and asserts each pair).
+   - No inline styles, no runtime <style>, no data: images: style-src is nonce-only
+     (CLAUDE.md §3), so every dynamic value is a data-* bucket, an SVG attribute or a
+     CSSOM write after hydration.
+   - Focus is an outline, never a box-shadow, so it survives forced colours.
+   - Element resets are not ported: the prototype's `* { margin: 0; padding: 0 }` would
+     restyle every island. Each component sets its own spacing instead.
+   A test forbids colour literals outside the token block (tests/lib/adminStyles.spec.ts):
+   a palette change stays a one-block edit. */
 
-/* Border-box everywhere. Without this, `width: 100%` on an input means "100% of the
-   track PLUS my own padding and border" — 22px of overflow per control here
-   (2 × 0.625rem padding + 2 × 1px border). That is not cosmetic: in `.row-2` the
-   bilingual EN/AR pair is a 1fr 1fr grid with a 0.75rem gutter, so each half overruns
-   its track by 22px and the two inputs end up OVERLAPPING by 10px (12 − 22). The
-   Arabic field of every bilingual pair in the CMS was sitting under the English one. */
+/* Border-box everywhere. Without it, `width: 100%` on an input means 100% of the track
+   PLUS its own padding and border, and the two halves of every bilingual EN/AR pair
+   overlapped. */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
-/* The brand faces. Declared HERE rather than shared with global.css on purpose: the
-   admin does not load global.css, and adding a second render-blocking stylesheet to
-   the public routes to share four @font-face rules would put an extra round trip on
-   the critical path of pages that have an LCP budget (CLAUDE.md §6). /admin is exempt
-   from CWV, so the duplication buys the public side something and costs us nothing.
-   Source of truth for the FILES and their budgets is docs/fonts.md — if a face is
-   ever re-subset, both stylesheets change together.
+/* ---- Fonts -------------------------------------------------------------------------
+   An exact copy of global.css's @font-face set (docs/fonts.md), so authors proof Arabic,
+   800 headings included, in the faces visitors see. Declared here because the admin does
+   not load global.css, and sharing the rules would put a second render-blocking sheet on
+   the public routes. tests/lib/adminStyles.spec.ts asserts the two sets are identical:
+   if a face is re-subset, both stylesheets change together. No preloads: /admin is
+   exempt from the font budget (CLAUDE.md §6). */
 
-   Archivo carries no unicode-range: there is one Latin file and no second candidate,
-   so range-splitting would only describe what the fallback chain already does. Almarai
-   does carry one, because Arabic and Latin are separate files and the browser must not
-   fetch the Arabic subset to render an English label. Only the Arabic halves are
-   declared — Archivo comes first in --ad-font-ar, so Latin text inside an Arabic field
-   renders in Archivo rather than pulling a second Latin file for the same glyphs. */
 @font-face {
   font-family: 'Archivo';
   font-style: normal;
@@ -38,6 +40,9 @@
   font-stretch: 100%;
   font-display: swap;
   src: url('/fonts/archivo-var-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
   font-family: 'Archivo Fallback';
@@ -52,10 +57,28 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('/fonts/almarai-400-arabic.woff2') format('woff2');
+  src: url('/fonts/almarai-400-latin.woff2') format('woff2');
   unicode-range:
-    U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E,
-    U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+    U+0020-007E, U+00A0, U+00A9, U+00AB, U+00B7, U+00BB, U+00D7, U+2013-2014, U+2018-201D, U+2022,
+    U+2026, U+20AC, U+2122, U+2190-2193, U+2212;
+}
+@font-face {
+  font-family: 'Almarai';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/almarai-400-arabic.woff2') format('woff2');
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
+}
+@font-face {
+  font-family: 'Almarai';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/almarai-700-latin.woff2') format('woff2');
+  unicode-range:
+    U+0020-007E, U+00A0, U+00A9, U+00AB, U+00B7, U+00BB, U+00D7, U+2013-2014, U+2018-201D, U+2022,
+    U+2026, U+20AC, U+2122, U+2190-2193, U+2212;
 }
 @font-face {
   font-family: 'Almarai';
@@ -63,461 +86,970 @@
   font-weight: 700;
   font-display: swap;
   src: url('/fonts/almarai-700-arabic.woff2') format('woff2');
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
+}
+@font-face {
+  font-family: 'Almarai';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/almarai-800-latin.woff2') format('woff2');
   unicode-range:
-    U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E,
-    U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+    U+0020-007E, U+00A0, U+00A9, U+00AB, U+00B7, U+00BB, U+00D7, U+2013-2014, U+2018-201D, U+2022,
+    U+2026, U+20AC, U+2122, U+2190-2193, U+2212;
+}
+@font-face {
+  font-family: 'Almarai';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/almarai-800-arabic.woff2') format('woff2');
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
+}
+@font-face {
+  font-family: 'Almarai Fallback';
+  font-weight: 400;
+  src: local('Arial'), local('ArialMT');
+  size-adjust: 95.11%;
+  ascent-override: 95.15%;
+  descent-override: 22.18%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Almarai Fallback';
+  font-weight: 400;
+  src: local('Arial'), local('ArialMT');
+  size-adjust: 126.2%;
+  ascent-override: 70.6%;
+  descent-override: 16.6%;
+  line-gap-override: 0%;
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
+}
+@font-face {
+  font-family: 'Almarai Fallback';
+  font-weight: 700;
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 92.4%;
+  ascent-override: 135.9%;
+  descent-override: 31.9%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Almarai Fallback';
+  font-weight: 700;
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 127.7%;
+  ascent-override: 98.3%;
+  descent-override: 23.1%;
+  line-gap-override: 0%;
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
+}
+@font-face {
+  font-family: 'Almarai Fallback';
+  font-weight: 800;
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 100.75%;
+  ascent-override: 88.4%;
+  descent-override: 20.8%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Almarai Fallback';
+  font-weight: 800;
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 133.1%;
+  ascent-override: 66.9%;
+  descent-override: 15.7%;
+  line-gap-override: 0%;
+  unicode-range: U+0020, U+00A0, U+0600-06FF, U+200C-200E, U+2010-2011;
 }
 
-/* Light editorial palette (CLAUDE.md §2 amendment, 2026-08-27).
-   Ported from the reference CMS, with three deliberate deviations — see the ACCENT
-   block below. Every value here is a custom property because a theme cannot ship a
-   stylesheet or an inline rule under a CSP with no 'unsafe-inline' in style-src;
-   tokens are the only channel. */
+/* ---- Tokens ------------------------------------------------------------------------
+   The only colour literals in this file. Only primary, hover and accent follow the
+   published theme (through the public --bs-* properties, once the admin wears the theme
+   in E4); everything else is fixed, so no accepted theme can break the admin's AA. */
 :root {
-  /* ---- Ground ---- */
-  --ad-bg: #ffffff;
-  --ad-surface: #faf8f4;
-  --ad-surface-2: #f2efe9;
-  --ad-border: #d4cfc8;
-  --ad-border-strong: #b3aca1;
+  /* Brand (theme-following) */
+  --ad-primary: var(--bs-klein, #0024bc);
+  --ad-primary-hover: var(--bs-cobalt, #024cff);
+  --ad-accent: var(--bs-sky, #22a9ff); /* decorative only: white on it is 2.56:1 */
+  --ad-on-primary: #ffffff;
+  --ad-primary-soft: color-mix(in srgb, var(--ad-primary) 8%, #ffffff);
+  --ad-primary-soft-2: color-mix(in srgb, var(--ad-primary) 14%, #ffffff);
+  --ad-primary-shadow: color-mix(in srgb, var(--ad-primary) 25%, transparent);
 
-  /* ---- Ink ----
-     #666666 (5.74:1 on white), NOT the reference's #888888. #888888 is 3.54:1, under
-     the 4.5:1 floor for body text, and the reference spends it on table headers and
-     "Modified:" lines — i.e. on real text. Our a11y gate is blocking (axe zero
-     violations, Lighthouse A11y ≥ 95), so inheriting that value would fail CI. */
-  --ad-fg: #111111;
-  --ad-muted: #666666;
-  --ad-disabled: #a9a29a;
-  --ad-fg-inverse: #ffffff;
+  /* Ink and grounds */
+  --ad-ink: #0b0d14;
+  --ad-midnight: #0b0d14;
+  --ad-bg: #f5f6fa;
+  --ad-card: #ffffff;
+  --ad-surface-2: #fafbfe;
+  --ad-preview: #e9ecf3;
+  --ad-dim: #5b6478;
+  --ad-dim2: #626a7f; /* the prototype's #8A93A6 is 2.86:1 on its own ground */
 
-  /* ---- Accent ----
-     One functional gold, deliberately darker than the reference's #b8955a.
+  /* Lines: decorative only (1.24:1). A control's edge is --ad-control (WCAG 1.4.11). */
+  --ad-line: rgba(11, 13, 20, 0.08);
+  --ad-line-2: rgba(11, 13, 20, 0.14);
+  --ad-control: #828b9e;
 
-     #b8955a is 2.81:1 on white and 2.44:1 on the content ground. That fails 4.5:1 as
-     text, which was expected — but it also fails WCAG 2.2 1.4.11's 3:1 for NON-text,
-     which was not. The bar fills in the insight panels are graphical objects required
-     to understand the content, so 1.4.11 applies to them in full and the pale gold
-     cannot be the fill. There is no ground in this palette light enough to rescue it.
+  /* The midnight sidebar */
+  --ad-side-text: #bbbbbd;
+  --ad-side-label: #919295; /* the prototype's white at .38 is 3.54:1 */
+  --ad-side-hover: rgba(255, 255, 255, 0.06);
+  --ad-side-rule: rgba(255, 255, 255, 0.08);
+  --ad-on-dark: #ffffff;
+  --ad-count: #2d2f35;
+  --ad-count-current: rgba(255, 255, 255, 0.22);
 
-     So the gold that ships is #8a6a2a (5.04:1 on white, 4.39:1 on the content ground):
-     unmistakably the same hue, legal in every role, and dark enough to read as
-     deliberate rather than washed out. The pale value is not kept as a token — an
-     unused token with a "decorative only" caveat is how the failing value finds its
-     way back in. Phase 6's theme-preset swatches can introduce it then, where the
-     colour genuinely IS the content and 1.4.11 exempts it.
+  /* Focus: cobalt on light grounds, sky on midnight (cobalt there is only 3.22:1) */
+  --ad-focus: #024cff;
+  --ad-focus-dark: #22a9ff;
 
-     --ad-accent-text is a shade darker again, because a token is only safe if it is
-     safe on every ground it can plausibly land on, and --ad-surface-2 is both the
-     default button ground and the content ground.
+  /* Status: text on its own soft tint, AA. The prototype's text tones were 3.3-4.1:1. */
+  --ad-ok-text: #067647;
+  --ad-ok-soft: #e3f6ed;
+  --ad-warn-text: #b54708;
+  --ad-warn-soft: #feefdd;
+  --ad-err-text: #b42318;
+  --ad-err-soft: #feeceb;
+  --ad-sky-text: #0b6eb0;
+  --ad-sky-soft: #e0f3ff;
+  --ad-gray-soft: #eff0f2;
+  --ad-note-warn-text: #8a4b00;
+  --ad-note-ok-text: #0a6b3e;
+  --ad-err-line: rgba(180, 35, 24, 0.35);
 
-     --ad-primary is the filled-button ground. It is INK, not gold: the reference's own
-     alias layer resolves `--primary: var(--color-text)`, which is why its "+ New Post"
-     and "SIGN IN" buttons are black.
+  /* Status dots and icons ON MIDNIGHT ONLY (toasts, the savebar): fail on light grounds */
+  --ad-ok: #12b76a;
+  --ad-warn: #f79009;
+  --ad-err: #f04438;
 
-     --ad-focus is INK too, for 1.4.11 again. This is the token the previous dark
-     palette got for free — cyan on near-black is high contrast — and which quietly
-     breaks on inversion. */
-  --ad-accent: #8a6a2a;
-  --ad-accent-hover: #7f6026;
-  --ad-accent-text: #7f6026;
-  --ad-primary: #111111;
-  --ad-primary-fg: #ffffff;
-  --ad-focus: #111111;
+  /* Chart series and avatar tones, each >= 4.5:1 (the prototype's sky/amber/green fail) */
+  --ad-series-1: var(--ad-primary);
+  --ad-series-2: #0b6eb0;
+  --ad-series-3: #b54708;
+  --ad-series-4: #067647;
+  --ad-series-5: #6941c6;
+  --ad-series-6: #c11574;
+  --ad-series-7: #475467;
+  --ad-tone-0: #0024bc;
+  --ad-tone-1: #024cff;
+  --ad-tone-2: #0b6eb0;
+  --ad-tone-3: #6941c6;
+  --ad-tone-4: #c11574;
+  --ad-tone-5: #067647;
+  --ad-tone-6: #b54708;
+  --ad-tone-7: #475467;
 
-  /* ---- Semantic. All four ≥ 5.7:1 on white; the reference has no warn, so #8a5a00
-     is ours (5.9:1) rather than a second job for the gold. ---- */
-  --ad-ok: #2d6a4f;
-  --ad-warn: #8a5a00;
-  --ad-danger: #a63232;
-  --ad-info: #1e4d8c;
+  /* Shape, depth, motion */
+  --ad-r: 14px;
+  --ad-r-sm: 10px;
+  --ad-r-xs: 8px;
+  --ad-r-pill: 999px;
+  --ad-shadow: 0 10px 40px rgba(11, 13, 20, 0.08);
+  --ad-shadow-sm: 0 2px 10px rgba(11, 13, 20, 0.06);
+  --ad-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ad-scrim: rgba(11, 13, 20, 0.45);
 
-  /* ---- Form. Square corners are the reference's defining move, so this is 0 rather
-     than a small radius: half-measures read as a mistake. ---- */
-  --ad-radius: 0;
+  /* Type */
+  --ad-font:
+    'Archivo', 'Archivo Fallback', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ad-font-ar: 'Almarai', 'Almarai Fallback', 'Archivo', system-ui, 'Segoe UI', sans-serif;
+  --ad-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* ---- Type scale. Admin-specific and deliberately small. The scale captured from
-     the reference (--font-display 72px, --space-section 96px) is its PUBLIC theme,
-     which in a CMS is reachable only inside the theme-preview iframe. ---- */
-  --ad-text-label: 0.6875rem;
-  --ad-text-sm: 0.8125rem;
-  --ad-text-base: 0.875rem;
-  --ad-text-lg: 1rem;
-  --ad-text-title: 1.25rem;
-  --ad-text-stat: 2.5rem;
-  --ad-tracking-label: 0.1em;
-
-  /* ---- Space scale. 24px card padding is the reference's --space-card-pad; the rest
-     is the existing file's rhythm named rather than repeated. ---- */
-  --ad-gap-tight: 0.5rem;
-  --ad-gap: 1rem;
-  --ad-gap-loose: 1.5rem;
-  --ad-card-pad: 1.5rem;
-
-  /* Modal backdrop. rgba, not a hex + opacity pair, so it reads as one value. */
-  --ad-scrim: rgba(17, 17, 17, 0.45);
-
-  /* ---- Font stacks ---- */
-  --ad-font: Archivo, 'Archivo Fallback', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --ad-font-ar: Archivo, Almarai, 'Archivo Fallback', system-ui, sans-serif;
-
-  /* ---- Shell ---- */
-  --ad-sidebar: 15rem;
-  /* The width .admin-main refuses to drop below before the sidebar wraps out of its
-     way. This is the only threshold in the file, and it is a statement about CONTENT
-     ("a form column stops being usable under this width"), not about a device. */
+  /* Layout. The main column's padding is named because the topbar bleeds through it. */
+  --ad-side: 256px;
+  --ad-top: 64px;
   --ad-main-min: 32rem;
+  --ad-pad-b: clamp(18px, 2.4vw, 28px);
+  --ad-pad-i: clamp(16px, 2.4vw, 28px);
 }
 
-/* The previous dark palette, retained and dormant. No toggle ships with it yet.
-   Keeping it costs one block and buys two things: the option stays open without an
-   archaeology dig through git, and — the reason that actually matters — it keeps every
-   new component honest. The palette swap above was a single-block edit precisely
-   because nothing in 680 lines had reached for a literal; a second live palette is
-   what makes that property testable rather than aspirational.
-
-   Note what is NOT simply inverted: --ad-primary and --ad-focus stay on the cyan here
-   because on a #0b0b0f ground cyan clears 3:1 comfortably, while ink would vanish.
-   Tokens whose job is contrast have to be re-decided per theme, not mirrored. */
-:root[data-theme='dark'] {
-  --ad-bg: #0b0b0f;
-  --ad-surface: #14141b;
-  --ad-surface-2: #1c1c26;
-  --ad-border: #2a2a37;
-  --ad-border-strong: #3d3d4d;
-
-  --ad-fg: #e8e8ea;
-  --ad-muted: #a0a0ab;
-  --ad-disabled: #6b6b78;
-  --ad-fg-inverse: #04141a;
-
-  --ad-accent: #00e5ff;
-  --ad-accent-hover: #5cf0ff;
-  --ad-accent-text: #00e5ff;
-  --ad-primary: #00e5ff;
-  --ad-primary-fg: #04141a;
-  --ad-focus: #00e5ff;
-
-  --ad-ok: #4ade80;
-  --ad-warn: #ffb84d;
-  --ad-danger: #ff6b6b;
-  --ad-info: #7fb0f0;
-
-  --ad-scrim: rgba(0, 0, 0, 0.6);
+/* A dialog's ::backdrop inherits from its dialog only from Chromium 122, and the
+   browser floor is 117, so the scrim token is set on the backdrop itself too. */
+::backdrop {
+  --ad-scrim: rgba(11, 13, 20, 0.45);
 }
 
-/* Shell: the sidebar sits beside the main column until the main column can no longer
-   have --ad-main-min, at which point it wraps to its own row. No media query — the
-   layout reads the space it actually has, so it behaves the same whether the window is
-   narrow, the browser is zoomed, or the root font size is larger.
+/* ---- Base ---- */
 
-   `flex: 999` on main vs `flex: 1` on the sidebar is what keeps the sidebar at its
-   15rem basis on a wide screen instead of the two splitting the free space evenly. */
 .admin-body {
   margin: 0;
   min-height: 100vh;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  /* The content area is the WARM GREY, not white, and cards are white on top of it.
-     That inversion is most of what makes the reference read as "editorial" rather than
-     "a page with borders": the card boundary is a change in ground, so the 1px rule
-     around it is confirming an edge the eye already found instead of being the only
-     thing announcing it. The sidebar sets its own lighter ground below. */
-  background: var(--ad-surface-2);
-  color: var(--ad-fg);
+  background: var(--ad-bg);
+  color: var(--ad-ink);
   font-family: var(--ad-font);
-  font-size: var(--ad-text-base);
-  line-height: 1.55;
-  /* A slug, URL or token with no break opportunity is otherwise wider than any track
-     that could hold it, and widens the whole page rather than wrapping. */
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* A slug, URL or token with no break opportunity would otherwise widen the page. */
   overflow-wrap: break-word;
 }
 
+.admin-body ::selection {
+  background: var(--ad-primary);
+  color: var(--ad-on-primary);
+}
+
+/* The sign-in screen: one centred card, no shell. */
 .admin-body[data-layout='bare'] {
+  display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* The login screen has no sidebar, so main should be a centred column sized to its
-   card rather than a full-width region. */
 .admin-body[data-layout='bare'] .admin-main {
   flex: 0 1 auto;
 }
 
-/* ---- Sidebar ---- */
+/* From 900px the sidebar and the main column share one grid row (the shell's one
+   viewport breakpoint); below it the sidebar is a popover and main takes the width. */
+@media (min-width: 900px) {
+  .admin-body[data-layout='app'] {
+    display: grid;
+    grid-template-columns: var(--ad-side) minmax(0, 1fr);
+  }
+}
+
+/* Off screen until focused, then the first thing a keyboard user meets. */
+.skip-link {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-start: 8px;
+  z-index: 100;
+  padding: 10px 16px;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+  color: var(--ad-primary);
+  font-weight: 700;
+  box-shadow: var(--ad-shadow);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
+/* Focus: one ring, an outline (never a box-shadow, which forced colours drop). */
+:where(:focus-visible) {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: 2px;
+}
+
+/* An icon from the sprite (Icon.astro / Icon.tsx). Its size is the width/height
+   attributes; it takes the text colour, and never shrinks in a flex row. */
+.ic {
+  display: inline-block;
+  flex: none;
+  vertical-align: middle;
+}
+
+/* The hidden attribute wins over any component's display (the sign-in error box). */
+[hidden] {
+  display: none !important;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The Arabic half of every bilingual field renders RTL in Almarai, so authors see the
+   reading order and the face visitors do. */
+[dir='rtl'],
+input[lang='ar'],
+textarea[lang='ar'] {
+  direction: rtl;
+  text-align: right;
+}
+
+input[lang='ar'],
+textarea[lang='ar'],
+[lang='ar'] {
+  font-family: var(--ad-font-ar);
+}
+
+/* ---- Sidebar (the prototype's .side) ----
+   Below 900px a popover drawer from the inline start: the topbar's Menu button toggles
+   it, and the browser supplies light dismiss, Escape and the top layer. From 900px it is
+   a column of the page grid: the column runs the full page height (midnight to the
+   bottom of any page) while its inner block sticks, so the menu stays in view. */
 
 .admin-sidebar {
-  flex: 1 1 var(--ad-sidebar);
-  /* Flex items floor at min-content by default, so a long nav label would stop the
-     sidebar from ever shrinking to its basis. */
-  min-width: 0;
-  background: var(--ad-surface);
-  border-inline-end: 1px solid var(--ad-border);
-  padding: 1rem 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  /* No `min-height: 100vh` here. `align-items: stretch` on .admin-body already runs the
-     sidebar the full height of its row — and stretch is per-ROW, so once the sidebar
-     wraps onto its own row it sizes to its content instead of pushing a full viewport
-     of navigation above the page. */
+  background: var(--ad-midnight);
+  color: var(--ad-on-dark);
 }
 
-/* Ink, not accent. The wordmark is ~16px at 700, which WCAG does not count as large
-   text (that starts at 18.66px bold), so the gold's 2.73:1 would apply in full. */
+.admin-sidebar:popover-open {
+  inset-block: 0;
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+  inline-size: min(300px, 86vw);
+  block-size: 100%;
+  max-block-size: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow-y: auto;
+}
+
+.admin-sidebar::backdrop {
+  background: var(--ad-scrim);
+}
+
+@media (min-width: 900px) {
+  .admin-sidebar,
+  .admin-sidebar:popover-open {
+    display: block;
+    position: static;
+    inset: auto;
+    inline-size: auto;
+    block-size: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+  }
+}
+
+.side__inner {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100%;
+  padding: 20px 12px 12px;
+}
+
+@media (min-width: 900px) {
+  .side__inner {
+    position: sticky;
+    top: 0;
+    block-size: 100vh;
+    /* The drawer's fill-the-height floor would make the block as tall as its column, and
+       a sticky box as tall as its container has no room to stick. */
+    min-block-size: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ad-side-label) transparent;
+  }
+}
+
+.admin-sidebar :focus-visible {
+  outline-color: var(--ad-focus-dark);
+}
+
 .admin-brand {
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 0.5rem;
-  color: var(--ad-fg);
-  text-decoration: none;
+  display: block;
+  inline-size: max-content;
+  padding: 0 10px 12px;
 }
 
-.admin-nav-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
+.admin-brand img {
+  display: block;
+  inline-size: 104px;
+  block-size: auto;
+}
+
+.side__nav {
+  flex: 1;
+}
+
+.admin-nav-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .admin-nav-title {
-  font-size: var(--ad-text-label);
+  margin: 18px 0 0;
+  padding: 0 10px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  letter-spacing: var(--ad-tracking-label);
-  color: var(--ad-muted);
-  padding: 0.5rem 0.5rem 0.25rem;
+  color: var(--ad-side-label);
 }
 
-/* The transparent inline-start border is load-bearing, not decoration: the current
-   item marks itself with a 2px accent rule, and if only that item had a border every
-   other label would sit 2px to its left. Declaring it transparent on all of them keeps
-   one text edge down the whole rail. */
-.admin-nav a {
-  display: block;
-  padding: 0.4rem 0.5rem;
-  border-inline-start: 2px solid transparent;
-  border-radius: var(--ad-radius);
-  color: var(--ad-fg);
+.admin-nav-group a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border-radius: var(--ad-r-sm);
+  color: var(--ad-side-text);
+  font-weight: 500;
   text-decoration: none;
-  font-size: var(--ad-text-base);
+  transition:
+    background-color 0.2s,
+    color 0.2s;
 }
 
-.admin-nav a:hover {
-  background: var(--ad-surface-2);
+.admin-nav-group a .ic {
+  opacity: 0.85;
 }
 
-/* Ground, weight and rule together carry "you are here" — three cues, so colour is
-   never doing the work alone (1.4.1). The rule is INK, matching the reference, whose
-   active item is marked with a dark bar rather than a gold one. */
-.admin-nav a[aria-current='page'] {
-  background: var(--ad-surface-2);
-  border-inline-start-color: var(--ad-fg);
-  color: var(--ad-fg);
+/* A long label wraps instead of pushing the count off the row. */
+.side__label {
+  min-width: 0;
+}
+
+.admin-nav-group a:hover {
+  background: var(--ad-side-hover);
+  color: var(--ad-on-dark);
+}
+
+/* Fill, weight and colour together mark "you are here", so colour is never the only cue
+   (1.4.1). White on Klein is 10.6:1. */
+.admin-nav-group a[aria-current='page'] {
+  background: var(--ad-primary);
+  color: var(--ad-on-primary);
   font-weight: 600;
 }
 
-/* ---- Main ---- */
-
-.admin-main {
-  flex: 999 1 var(--ad-main-min);
-  /* THE load-bearing line for wide content. A flex item's automatic minimum size is its
-     min-content size, so one wide table would make .admin-main refuse to shrink, push
-     past the viewport, and scroll the whole page sideways — with .table-wrap's
-     `overflow-x: auto` never getting the chance to do its job, because the container it
-     would scroll inside was itself oversized. `min-width: 0` lets it shrink so the
-     overflow lands where it was designed to. */
-  min-width: 0;
-  /* Gutters scale with the viewport instead of costing a phone 4rem of its width. */
-  padding: clamp(1rem, 2.5vw, 1.5rem) clamp(1rem, 3vw, 2rem) 4rem;
+.cnt {
+  margin-inline-start: auto;
+  padding: 2px 7px;
+  border-radius: var(--ad-r-pill);
+  background: var(--ad-count);
+  color: var(--ad-on-dark);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-/* The readable-width cap lives on the CHILDREN, not on .admin-main.
-   `max-width` on a flex item is not a ceiling the flex algorithm respects up front — it
-   clamps the item afterwards, freezes it, and redistributes the freed space to whatever
-   can still grow. The only other growable item here is the sidebar, so an 80rem cap on
-   .admin-main handed the remainder straight to it: a 15rem sidebar became 640px at
-   1920 and 1280px at 2560. .admin-main is a plain block container, so capping its
-   children has no such side effect. */
+.admin-nav-group a[aria-current='page'] .cnt {
+  background: var(--ad-count-current);
+}
+
+.side__foot {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ad-side-rule);
+}
+
+.side__user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--ad-r-sm);
+  color: var(--ad-on-dark);
+}
+
+.side__user:hover {
+  background: var(--ad-side-hover);
+}
+
+.side__who {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+
+.side__who b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.side__who span {
+  font-size: 11.5px;
+  color: var(--ad-side-label);
+  text-transform: capitalize;
+}
+
+/* The account menu opens upward from the foot of the sidebar, on a light panel. */
+.side__foot .menu-panel {
+  inset-block-start: auto;
+  inset-block-end: calc(100% + 8px);
+  inset-inline: 0;
+  color: var(--ad-ink);
+}
+
+.side__foot .menu-panel :focus-visible {
+  outline-color: var(--ad-focus);
+}
+
+/* ---- Main column ---- */
+
+.admin-main {
+  /* Lets a wide table scroll inside its own .table-wrap instead of widening the page. */
+  min-width: 0;
+  padding: var(--ad-pad-b) var(--ad-pad-i) 60px;
+}
+
+/* The skip link's target: focusable by script only, so no ring around the whole page. */
+.admin-main:focus {
+  outline: none;
+}
+
+/* The readable-width cap lives on the children. */
 .admin-main > * {
   max-width: 80rem;
 }
 
+/* Vertical rhythm for a page's top-level blocks, owned by the parent. */
+.admin-main > * + * {
+  margin-top: 18px;
+}
+
+/* ---- Topbar (the prototype's .top): white, across the main column, always in view ---- */
+
+.admin-main > .admin-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  max-width: none;
+  margin: calc(-1 * var(--ad-pad-b)) calc(-1 * var(--ad-pad-i)) 28px;
+  padding: 10px var(--ad-pad-i);
+  min-height: var(--ad-top);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  background: var(--ad-card);
+  border-bottom: 1px solid var(--ad-line);
+}
+
+@media (min-width: 900px) {
+  .top__menu {
+    display: none;
+  }
+}
+
+.crumbs ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  font-weight: 600;
+  color: var(--ad-dim);
+}
+
+.crumbs a {
+  color: var(--ad-dim);
+  text-decoration: none;
+}
+
+.crumbs a:hover {
+  color: var(--ad-ink);
+  text-decoration: underline;
+}
+
+/* '/' as the separator: direction-neutral, so the trail needs no RTL mirror. */
+.crumbs li + li::before {
+  content: '/';
+  color: var(--ad-dim2);
+  margin-inline-end: 8px;
+  font-weight: 400;
+}
+
+.crumbs [aria-current='page'] {
+  color: var(--ad-ink);
+  font-weight: 700;
+}
+
+/* The search trigger: a link to /admin/search that opens the palette with JS. It looks
+   like the prototype's search field; the edge is --ad-control because it reads as one. */
+.top__search {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  inline-size: min(360px, 30vw);
+  min-inline-size: 12rem;
+  padding: 8px 12px;
+  border: 1px solid var(--ad-control);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-bg);
+  color: var(--ad-dim);
+  text-decoration: none;
+}
+
+.top__search:hover {
+  border-color: var(--ad-ink);
+}
+
+.top__search kbd {
+  margin-inline-start: auto;
+}
+
+kbd {
+  padding: 2px 6px;
+  border: 1px solid var(--ad-line-2);
+  border-radius: 6px;
+  background: var(--ad-card);
+  color: var(--ad-dim2);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.top__view {
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+details.menu {
+  position: relative;
+}
+
+details.menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+details.menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu-panel {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + 8px);
+  min-inline-size: 15rem;
+  background: var(--ad-card);
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r);
+  box-shadow: var(--ad-shadow);
+  padding: 14px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.menu-id {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ad-dim);
+  overflow-wrap: anywhere;
+}
+
+.menu-id strong {
+  color: var(--ad-ink);
+}
+
+.avatar {
+  inline-size: 34px;
+  block-size: 34px;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  background: var(--ad-primary);
+  color: var(--ad-on-primary);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  border-radius: 50%;
+}
+
+/* ---- Page head (the prototype's .ph) ---- */
+
 .admin-header {
   display: flex;
-  align-items: baseline;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 0.5rem 1rem;
-  /* Page actions drop under the title rather than crushing it. */
+  gap: 12px 20px;
   flex-wrap: wrap;
-  margin-bottom: 1.25rem;
+  margin-bottom: 22px;
+}
+
+/* An area's tabs sit right under its head; the head's own margin then separates them
+   from the head, and the next block gets the usual rhythm. */
+.admin-header + .tabs {
+  margin-top: 0;
+  margin-block-end: 0;
 }
 
 .admin-header h1 {
   margin: 0;
-  font-size: var(--ad-text-title);
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 
 .admin-sub {
-  color: var(--ad-muted);
-  font-size: 0.875rem;
-  margin: 0.25rem 0 0;
+  margin: 4px 0 0;
+  color: var(--ad-dim);
 }
 
-/* ---- Cards, tables, forms ---- */
+/* ---- Cards and grids ---- */
 
 .card {
-  background: var(--ad-bg);
-  border: 1px solid var(--ad-border);
-  border-radius: var(--ad-radius);
-  padding: var(--ad-card-pad);
+  background: var(--ad-card);
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r);
+  padding: 20px;
 }
 
-/* Vertical rhythm for a page's top-level blocks, owned by the PARENT rather than by a
-   `.card + .card` sibling rule. The sibling rule only ever fired between two cards, so a
-   card following the stat `.grid` — the dashboard's "Published without a cover image"
-   table, and every list page built the same way — got no spacing at all and sat flush
-   against the row above it. Stating it once here covers cards, grids, tables and panels
-   in any order, including blocks that do not exist yet. */
-.admin-main > * + * {
-  margin-top: 1rem;
-}
-
-/* Still needed for cards stacked INSIDE another container (panels, detail views), which
-   the rule above does not reach. */
 .card + .card {
-  margin-top: 1rem;
+  margin-top: 18px;
 }
 
-/* Card grid, column count chosen by available space rather than by a device width.
-   `auto-fit` collapses the empty tracks so two cards share the full row instead of
-   sitting in the first two of six. `min(100%, 14rem)` is the guard that matters: a bare
-   `minmax(14rem, 1fr)` overflows the moment the container is narrower than 14rem, which
-   on a 320px phone with the sidebar's gutters is reachable. */
+/* A card's title reads as the prototype's card header: a band with a hairline under it. */
+.card-title {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.card > .card-title:first-child {
+  margin: -20px -20px 20px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ad-line);
+}
+
+.card-detail {
+  margin-top: 22px;
+}
+
+/* Grid of cards: the column count follows the space, not a device width. */
 .grid {
   display: grid;
-  gap: 1rem;
+  gap: 18px;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
 }
 
-/* Grid items floor at min-content too — same failure mode as .admin-main above. */
 .grid > * {
   min-width: 0;
 }
 
-/* …but .grid already spaces its children with `gap`, and the rule above would apply a
-   SECOND time to every card after the first. Inside a grid that margin does two visible
-   things: it pushes the card 1rem below its neighbour's top edge, and — because a
-   stretched grid item fills the row height MINUS its own margins — it also renders the
-   card 1rem shorter. The dashboard stat row showed both. */
 .grid > .card + .card {
   margin-top: 0;
 }
 
+/* The KPI look: label above, the figure large. The markup puts the figure first (it is
+   the content), so the label moves up visually only. */
+.card:has(> .stat) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 20px;
+}
+
 .stat {
-  font-size: var(--ad-text-stat);
-  font-weight: 600;
-  line-height: 1.1;
-  /* Counters sit in a row of cards and are read as a column of figures. */
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
   margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-label {
-  color: var(--ad-muted);
-  font-size: var(--ad-text-label);
-  text-transform: uppercase;
-  letter-spacing: var(--ad-tracking-label);
+  order: -1;
   margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ad-dim);
 }
 
-/* Wide tables scroll inside their own container; the page never scrolls sideways. */
-.table-wrap {
-  overflow-x: auto;
+/* ---- Buttons ---- */
+
+button,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: var(--ad-r-sm);
+  border: 1px solid var(--ad-line-2);
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s,
+    color 0.2s;
 }
 
-/* A table sits FLUSH in its card. With the card's 24px inset the header band stopped
-   short of the border on both sides and read as a floating stripe; the reference runs
-   it edge to edge. The cells' own padding supplies the gutter, so nothing touches the
-   border. */
-.card.table-wrap {
-  padding: 0;
+button:hover,
+.btn:hover {
+  border-color: var(--ad-ink);
 }
 
-table.data {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
+button[data-variant='primary'],
+.btn[data-variant='primary'] {
+  background: var(--ad-primary);
+  border-color: var(--ad-primary);
+  color: var(--ad-on-primary);
+  box-shadow: 0 6px 18px var(--ad-primary-shadow);
 }
 
-table.data th,
-table.data td {
-  text-align: start;
-  padding: 0.625rem 0.875rem;
-  border-bottom: 1px solid var(--ad-border);
-  vertical-align: top;
+button[data-variant='primary']:hover,
+.btn[data-variant='primary']:hover {
+  background: var(--ad-primary-hover);
+  border-color: var(--ad-primary-hover);
 }
 
-/* A row's title as a link to its editor (the dashboard's attention lists, Round 3):
-   underlined, so the link is not told apart by colour alone (1.4.1). */
-table.data a.data-link {
-  color: var(--ad-accent-text);
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
+button[data-variant='dark'],
+.btn[data-variant='dark'] {
+  background: var(--ad-midnight);
+  border-color: var(--ad-midnight);
+  color: var(--ad-on-dark);
 }
 
-table.data a.data-link:hover {
-  color: var(--ad-fg);
+button[data-variant='ghost'],
+.btn[data-variant='ghost'] {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ad-dim);
 }
 
-table.data th {
-  color: var(--ad-muted);
-  font-weight: 500;
-  font-size: var(--ad-text-label);
-  text-transform: uppercase;
-  letter-spacing: var(--ad-tracking-label);
-  background: var(--ad-surface);
-  border-bottom: 1px solid var(--ad-border-strong);
-  white-space: nowrap;
+button[data-variant='ghost']:hover,
+.btn[data-variant='ghost']:hover {
+  background: var(--ad-bg);
+  border-color: transparent;
+  color: var(--ad-ink);
 }
+
+button[data-variant='danger'],
+.btn[data-variant='danger'] {
+  color: var(--ad-err-text);
+  border-color: var(--ad-err-line);
+}
+
+button[data-variant='danger']:hover,
+.btn[data-variant='danger']:hover {
+  background: var(--ad-err-soft);
+  border-color: var(--ad-err-text);
+}
+
+button[data-variant='soft'],
+.btn[data-variant='soft'] {
+  background: var(--ad-primary-soft);
+  border-color: transparent;
+  color: var(--ad-primary);
+}
+
+button[data-variant='soft']:hover,
+.btn[data-variant='soft']:hover {
+  background: var(--ad-primary-soft-2);
+  border-color: transparent;
+}
+
+button[data-size='sm'],
+.btn[data-size='sm'] {
+  padding: 6px 11px;
+  font-size: 12.5px;
+  border-radius: var(--ad-r-xs);
+}
+
+.btn--icon {
+  inline-size: 36px;
+  block-size: 36px;
+  padding: 8px;
+}
+
+button[disabled],
+.btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Badges: a pill with a dot; the word always carries the state ---- */
 
 .badge {
-  display: inline-block;
-  padding: 0.1rem 0.45rem;
-  border-radius: var(--ad-radius);
-  font-size: 0.7rem;
-  border: 1px solid var(--ad-border);
-  background: var(--ad-surface-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: var(--ad-r-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  background: var(--ad-gray-soft);
+  color: var(--ad-dim);
 }
 
-.badge[data-status='published'] {
-  color: var(--ad-ok);
-  border-color: var(--ad-ok);
+.badge::before {
+  content: '';
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
 }
-.badge[data-status='draft'] {
-  color: var(--ad-muted);
+
+.badge[data-plain]::before {
+  display: none;
 }
+
+/* A badge that links (the topbar's "Maintenance on") is a pill, not inline text. */
+a.badge {
+  text-decoration: none;
+}
+
+a.badge:hover {
+  text-decoration: underline;
+}
+
+.badge[data-tone='klein'] {
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+}
+.badge[data-tone='sky'],
 .badge[data-status='scheduled'] {
-  color: var(--ad-warn);
-  border-color: var(--ad-warn);
+  background: var(--ad-sky-soft);
+  color: var(--ad-sky-text);
 }
+.badge[data-tone='ok'],
+.badge[data-status='published'] {
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok-text);
+}
+.badge[data-tone='warn'],
+.badge[data-status='draft'] {
+  background: var(--ad-warn-soft);
+  color: var(--ad-warn-text);
+}
+.badge[data-tone='err'] {
+  background: var(--ad-err-soft);
+  color: var(--ad-err-text);
+}
+.badge[data-tone='gray'],
 .badge[data-status='archived'] {
-  color: var(--ad-danger);
-  border-color: var(--ad-danger);
+  background: var(--ad-gray-soft);
+  color: var(--ad-dim);
 }
+.badge[data-tone='dark'] {
+  background: var(--ad-midnight);
+  color: var(--ad-on-dark);
+}
+
+/* ---- Forms ---- */
 
 .field {
   display: block;
-  margin-bottom: 0.875rem;
+  margin-bottom: 16px;
 }
 
 .field > span {
   display: block;
-  font-size: 0.8rem;
-  color: var(--ad-muted);
-  margin-bottom: 0.25rem;
+  margin-bottom: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ad-ink);
 }
 
 input[type='text'],
@@ -526,38 +1058,323 @@ input[type='password'],
 input[type='number'],
 input[type='url'],
 input[type='search'],
+input[type='date'],
 input[type='datetime-local'],
+input[type='tel'],
 select,
 textarea {
   width: 100%;
-  padding: 0.5rem 0.625rem;
-  background: var(--ad-bg);
-  color: var(--ad-fg);
-  border: 1px solid var(--ad-border);
-  border-radius: var(--ad-radius);
+  padding: 10px 12px;
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  border: 1px solid var(--ad-control);
+  border-radius: var(--ad-r-sm);
   font: inherit;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: var(--ad-focus);
+  outline-offset: 0;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ad-dim2);
 }
 
 textarea {
-  min-height: 6rem;
+  min-height: 96px;
   resize: vertical;
+  line-height: 1.55;
 }
 
-/* Bar rows for the insight panels.
+/* The prototype's chevron: two gradient triangles, no image (img-src has no data:). */
+select {
+  appearance: none;
+  padding-inline-end: 36px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ad-dim) 50%),
+    linear-gradient(135deg, var(--ad-dim) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 13px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
 
-   The width comes from a `data-width` bucket, NOT from an inline `style` attribute.
-   That is a CSP consequence, not a stylistic preference: Astro server-renders these
-   islands before hydrating them, so a React `style={{…}}` prop is emitted into the HTML
-   as a real `style="…"` attribute — which `style-src 'self' 'nonce-…'` with no
-   'unsafe-inline' blocks outright. The bar would render at zero width until hydration
-   and log a violation on every page view. Twenty-one bucket rules cost nothing and
-   render identically before and after hydration. */
+[dir='rtl'] select,
+select[dir='rtl'] {
+  background-position:
+    18px 50%,
+    13px 50%;
+}
+
+select[multiple] {
+  background-image: none;
+  padding-inline-end: 12px;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  inline-size: 16px;
+  block-size: 16px;
+  margin: 0;
+  accent-color: var(--ad-primary);
+  cursor: pointer;
+}
+
+.field-group {
+  border: 0;
+  padding: 0;
+  margin: 0 0 18px;
+  min-width: 0;
+}
+
+.field-legend {
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--ad-ink);
+}
+
+.field-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.field-inline input[type='checkbox'] {
+  inline-size: 16px;
+}
+
+.field-inline > span {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* A field's help line, the prototype's .f__hint: under its control, not its label. */
+.field + .admin-sub,
+.field-group > .admin-sub {
+  margin: -9px 0 16px;
+  font-size: 12px;
+  color: var(--ad-dim2);
+}
+
+.field-error {
+  color: var(--ad-err-text);
+  font-weight: 600;
+}
+
+.form-actions {
+  margin-top: 16px;
+}
+
+/* The bilingual EN / AR pair: two columns while each half can have 16rem, decided by
+   this element's width, not the window's. */
+.row-2 {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+}
+
+.row-2 > * {
+  min-width: 0;
+}
+
+.row-3 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+/* A control in a toolbar is inline, not a full-width field. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.toolbar input[type='text'],
+.toolbar input[type='search'],
+.toolbar select {
+  inline-size: auto;
+  min-inline-size: 12rem;
+}
+
+/* Switch (<button role="switch" aria-checked>): the prototype's .tog. The off track is
+   --ad-control so the control's edge clears 3:1 (1.4.11). */
+button[role='switch'] {
+  inline-size: 40px;
+  block-size: 22px;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--ad-r-pill);
+  background: var(--ad-control);
+  box-shadow: none;
+  justify-content: flex-start;
+}
+
+button[role='switch']::before {
+  content: '';
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: 50%;
+  background: var(--ad-card);
+  transition: transform 0.25s var(--ad-ease);
+}
+
+button[role='switch'][aria-checked='true'] {
+  background: var(--ad-primary);
+}
+
+button[role='switch'][aria-checked='true']::before {
+  transform: translateX(18px);
+}
+
+[dir='rtl'] button[role='switch'][aria-checked='true']::before {
+  transform: translateX(-18px);
+}
+
+/* ---- Messages (inline; errors never only in a toast) ---- */
+
+.msg {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.msg[data-kind='error'] {
+  background: var(--ad-err-soft);
+  color: var(--ad-err-text);
+}
+
+.msg[data-kind='ok'] {
+  background: var(--ad-ok-soft);
+  color: var(--ad-note-ok-text);
+}
+
+/* The revealed contact details of one lead or applicant: a warm, bordered block, because
+   this is the one place personal data is on screen. */
+.pii {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  gap: 6px 16px;
+  margin: 14px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--ad-warn-text);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-warn-soft);
+}
+
+.pii dt {
+  color: var(--ad-note-warn-text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.pii dd {
+  margin: 0;
+}
+
+.prewrap {
+  white-space: pre-wrap;
+}
+
+.spaced-top {
+  margin-top: 8px;
+}
+
+/* ---- Tables (table.data takes the prototype's .tbl look) ---- */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+/* A table sits flush in its card; the cells' padding is the gutter. */
+.card.table-wrap {
+  padding: 0;
+}
+
+.card.table-wrap > .card-title {
+  margin: 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ad-line);
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.data th,
+table.data td {
+  text-align: start;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ad-line);
+  vertical-align: middle;
+}
+
+table.data th {
+  padding-block: 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ad-dim2);
+  white-space: nowrap;
+}
+
+table.data tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+table.data tbody tr {
+  transition: background-color 0.15s;
+}
+
+table.data tbody tr:hover {
+  background: var(--ad-surface-2);
+}
+
+/* A row's title as a link to its editor: underlined, so not told apart by colour alone. */
+a.data-link {
+  color: var(--ad-primary);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+a.data-link:hover {
+  color: var(--ad-primary-hover);
+}
+
+.cell-secondary {
+  color: var(--ad-dim);
+  font-size: 12px;
+}
+
+/* ---- Bars (insight panels) ----
+   The width is a data-width bucket, never a style attribute: islands render on the
+   server first, and a React style prop becomes a style="" that style-src refuses. */
+
 .bar {
   display: block;
   inline-size: 8rem;
-  block-size: 0.55rem;
-  background: var(--ad-surface-2);
-  border-radius: var(--ad-radius);
+  block-size: 8px;
+  background: var(--ad-bg);
+  border-radius: var(--ad-r-pill);
   overflow: hidden;
 }
 
@@ -565,7 +1382,8 @@ textarea {
   display: block;
   block-size: 100%;
   inline-size: 0;
-  background: var(--ad-accent);
+  background: var(--ad-primary);
+  border-radius: var(--ad-r-pill);
 }
 .bar-fill[data-width='0'] {
   inline-size: 0%;
@@ -631,503 +1449,437 @@ textarea {
   inline-size: 100%;
 }
 
-.pii {
-  display: grid;
-  grid-template-columns: 8rem 1fr;
-  gap: 0.25rem 1rem;
-  border: 1px solid var(--ad-warn);
-  border-radius: var(--ad-radius);
-  padding: 0.75rem;
-  margin: 0.75rem 0;
-}
-
-.pii dt {
-  color: var(--ad-muted);
-  font-size: 0.8rem;
-}
-
-.pii dd {
-  margin: 0;
-}
-
-.field-group {
-  border: 0;
-  padding: 0;
-  margin: 0 0 1rem;
-}
-
-.field-legend {
-  font-size: 0.8rem;
-  color: var(--ad-muted);
-  margin: 0 0 0.25rem;
-  padding: 0;
-}
-
-.field-inline {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.field-inline input[type='checkbox'] {
-  width: auto;
-}
-
-.field-inline > span {
-  margin: 0;
-}
-
-.form-actions {
-  margin-top: 1rem;
-}
-
-/* The bilingual EN / AR pair. Two columns while both halves can have 16rem, one column
-   below that — decided by the width of THIS element, not the window.
-   That distinction was a real bug, not a purity argument: the old rule collapsed at a
-   48rem *viewport*, but the form sits inside .admin-main, which is the viewport minus a
-   15rem sidebar and its gutters. Between roughly 48rem and 63rem the sidebar was still
-   showing and the pair was still two-up inside a container with about 29rem to give —
-   so each half got ~14rem, and the Arabic input was unusable in exactly the window
-   sizes where the media query claimed everything was fine. */
-.row-2 {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
-}
-
-.row-2 > * {
-  min-width: 0;
-}
-
-/* The Arabic half of every bilingual field renders RTL so authors see what visitors
-   will. Without this the editor shows correct text with wrong punctuation placement,
-   which is exactly the class of bug that survives review. */
-[dir='rtl'],
-input[lang='ar'],
-textarea[lang='ar'] {
-  direction: rtl;
-  text-align: right;
-}
-
-/* Almarai for Arabic authoring. Until now these fields rendered in system-ui, so an
-   author was proofing Arabic copy in a face no visitor ever sees. */
-input[lang='ar'],
-textarea[lang='ar'],
-[lang='ar'] {
-  font-family: var(--ad-font-ar);
-}
-
-button,
-.btn {
-  font: inherit;
-  padding: 0.45rem 0.85rem;
-  border-radius: var(--ad-radius);
-  border: 1px solid var(--ad-border);
-  background: var(--ad-surface-2);
-  color: var(--ad-fg);
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-}
-
-button:hover,
-.btn:hover {
-  border-color: var(--ad-accent-hover);
-}
-
-/* Ink fill, white label — the reference's black "+ New Post" / "SIGN IN". Both halves
-   are tokens now: the old literal #04141a was a near-black picked to sit on cyan, and
-   it was the one colour in this file that could not survive a palette change. */
-button[data-variant='primary'],
-.btn[data-variant='primary'] {
-  background: var(--ad-primary);
-  color: var(--ad-primary-fg);
-  border-color: var(--ad-primary);
-  font-weight: 600;
-}
-
-button[data-variant='primary']:hover,
-.btn[data-variant='primary']:hover {
-  background: var(--ad-accent-hover);
-  border-color: var(--ad-accent-hover);
-}
-
-button[data-variant='danger'] {
-  color: var(--ad-danger);
-  border-color: var(--ad-danger);
-}
-
-button[disabled] {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.toolbar {
-  display: flex;
-  gap: var(--ad-gap-tight);
-  flex-wrap: wrap;
-  align-items: center;
-  margin-bottom: 0.875rem;
-}
-
-/* A control in a toolbar is an inline control, not a form field. The global
-   `width: 100%` below is correct inside .field — a stacked label above a full-width
-   input — and wrong in a flex row, where it made the status <select> claim the entire
-   line and push the search box onto a row of its own. */
-.toolbar input[type='text'],
-.toolbar input[type='search'],
-.toolbar select {
-  inline-size: auto;
-  min-inline-size: 12rem;
-}
-
-.msg {
-  padding: 0.6rem 0.85rem;
-  border-radius: var(--ad-radius);
-  border: 1px solid var(--ad-border);
-  margin-bottom: 0.875rem;
-  font-size: 0.875rem;
-}
-
-.msg[data-kind='error'] {
-  border-color: var(--ad-danger);
-  color: var(--ad-danger);
-}
-
-.msg[data-kind='ok'] {
-  border-color: var(--ad-ok);
-  color: var(--ad-ok);
-}
-
-/* ---- Login ---- */
-
-.login-card {
-  width: min(24rem, 92vw);
-  background: var(--ad-bg);
-  border: 1px solid var(--ad-border);
-  border-radius: var(--ad-radius);
-  padding: 1.75rem;
-}
-
-.login-card h1 {
-  margin: 0 0 0.25rem;
-  font-size: 1.25rem;
-}
-
-/* ---- Tiptap ---- */
-
-.editor-toolbar {
-  display: flex;
-  gap: 0.25rem;
-  flex-wrap: wrap;
-  border: 1px solid var(--ad-border);
-  border-bottom: 0;
-  border-radius: var(--ad-radius) var(--ad-radius) 0 0;
-  padding: 0.35rem;
-  background: var(--ad-surface-2);
-}
-
-.editor-toolbar button {
-  padding: 0.2rem 0.5rem;
-  font-size: 0.8rem;
-}
-
-.editor-toolbar button[aria-pressed='true'] {
-  background: var(--ad-primary);
-  border-color: var(--ad-primary);
-  color: var(--ad-primary-fg);
-}
-
-.editor-surface .tiptap {
-  min-height: 14rem;
-  padding: 0.75rem;
-  border: 1px solid var(--ad-border);
-  border-radius: 0 0 var(--ad-radius) var(--ad-radius);
-  background: var(--ad-bg);
-}
-
-.editor-surface .tiptap:focus {
-  outline: 2px solid var(--ad-focus);
-  outline-offset: -2px;
-}
-
-/* Ink, not accent. WCAG 2.2 1.4.11 asks a focus indicator for 3:1 against what is
-   adjacent to it, and the gold is 2.73:1 on white — so on this palette the accent is
-   the one colour the focus ring must not be. On the dark theme the token resolves back
-   to cyan, which clears it easily. */
-:where(:focus-visible) {
-  outline: 2px solid var(--ad-focus);
-  outline-offset: 2px;
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.card-title {
-  margin-block: 0 0.5rem;
-  font-size: 1rem;
-}
-
-.card-detail {
-  margin-top: 1.25rem;
-}
-
-.prewrap {
-  white-space: pre-wrap;
-}
-
-.spaced-top {
-  margin-top: 0.5rem;
-}
-
-.cell-secondary {
-  opacity: 0.75;
-  font-size: 0.85em;
-}
-
-/* ---- Topbar: breadcrumb · search · account (phase 1 shell chrome) ---- */
-
-.admin-topbar {
-  display: flex;
-  align-items: center;
-  gap: var(--ad-gap);
-  flex-wrap: wrap;
-  padding-block-end: 0.75rem;
-  border-bottom: 1px solid var(--ad-border);
-  margin-block-end: var(--ad-gap);
-}
-
-.crumbs ol {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  font-size: var(--ad-text-sm);
-}
-
-.crumbs a {
-  color: var(--ad-muted);
-  text-decoration: none;
-}
-
-.crumbs a:hover {
-  color: var(--ad-fg);
-  text-decoration: underline;
-}
-
-/* '/' as the separator, not '›': a slash is direction-neutral, so the trail needs no
-   [dir='rtl'] mirror rule the day the chrome grows Arabic strings. */
-.crumbs li + li::before {
-  content: '/';
-  color: var(--ad-disabled);
-  margin-inline-end: 0.5rem;
-}
-
-.crumbs [aria-current='page'] {
-  color: var(--ad-fg);
-  font-weight: 600;
-}
-
-/* margin-inline-start: auto is what pushes search + avatar to the far edge while the
-   breadcrumb holds the near one — no wrapper divs, and it flips for free in RTL. */
-.topbar-search {
-  margin-inline-start: auto;
-}
-
-.topbar-search input {
-  inline-size: 14rem;
-}
-
-/* ---- Dropdown menu on <details> ---- */
-
-details.menu {
-  position: relative;
-}
-
-details.menu > summary {
-  list-style: none;
-  cursor: pointer;
-}
-
-details.menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.menu-panel {
-  position: absolute;
-  inset-inline-end: 0;
-  inset-block-start: calc(100% + 0.375rem);
-  min-inline-size: 14rem;
-  background: var(--ad-bg);
-  border: 1px solid var(--ad-border-strong);
-  padding: 0.75rem;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.5rem;
-}
-
-.menu-id {
-  margin: 0;
-  font-size: var(--ad-text-sm);
-  color: var(--ad-muted);
-  overflow-wrap: anywhere;
-}
-
-/* A circle in a square-cornered design, on purpose: an avatar is read as an identity
-   mark, not a control, and the reference keeps it circular for the same reason. This
-   and the switch knob below are the only two radius exceptions in the file. */
-.avatar {
-  inline-size: 2.25rem;
-  block-size: 2.25rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--ad-primary);
-  color: var(--ad-primary-fg);
-  font-size: var(--ad-text-label);
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  border-radius: 50%;
-}
-
-/* ---- Toasts (success confirmations only — errors stay inline) ---- */
-
-.toasts {
-  position: fixed;
-  inset-block-end: 1rem;
-  inset-inline-end: 1rem;
-  display: grid;
-  gap: 0.5rem;
-  z-index: 100;
-  max-inline-size: min(22rem, calc(100vw - 2rem));
-}
-
-.toast {
-  background: var(--ad-bg);
-  border: 1px solid var(--ad-border-strong);
-  border-inline-start: 3px solid var(--ad-info);
-  padding: 0.6rem 0.85rem;
-  font-size: var(--ad-text-sm);
-  transition: opacity 0.2s ease;
-}
-
-.toast[data-kind='ok'] {
-  border-inline-start-color: var(--ad-ok);
-}
-
-.toast[data-state='leaving'] {
-  opacity: 0;
-}
-
-/* ---- Tabs (server-rendered links; phase 2's status filter consumes this) ---- */
+/* ---- Tabs: server-rendered links, the prototype's segmented look ---- */
 
 .tabs {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
-  border-bottom: 1px solid var(--ad-border);
-  margin-block-end: var(--ad-gap);
+  gap: 2px;
+  padding: 3px;
+  margin-block-end: 16px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-bg);
 }
 
 .tabs a {
-  padding: 0.5rem 0.875rem;
-  color: var(--ad-muted);
+  padding: 6px 12px;
+  border-radius: var(--ad-r-xs);
+  color: var(--ad-dim);
+  font-size: 12.5px;
+  font-weight: 600;
   text-decoration: none;
-  font-size: var(--ad-text-base);
-  border-bottom: 2px solid transparent;
-  /* The active underline sits ON the container's rule, not above it. */
-  margin-block-end: -1px;
 }
 
 .tabs a:hover {
-  color: var(--ad-fg);
+  color: var(--ad-ink);
 }
 
 .tabs a[aria-current] {
-  color: var(--ad-fg);
-  font-weight: 600;
-  border-bottom-color: var(--ad-fg);
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  box-shadow: var(--ad-shadow-sm);
 }
 
-/* ---- Switch (<button role="switch" aria-checked>) ----
-   Pill-shaped — the second deliberate radius exception. A square toggle reads as a
-   broken checkbox; the pill silhouette IS the affordance. State is carried by
-   aria-checked, so the accessible state and the visual state cannot disagree. */
-
-button[role='switch'] {
-  inline-size: 2.5rem;
-  block-size: 1.375rem;
-  padding: 2px;
-  border: 1px solid var(--ad-border-strong);
-  border-radius: 999px;
-  background: var(--ad-surface-2);
-  display: inline-flex;
-  align-items: center;
-}
-
-button[role='switch']::before {
-  content: '';
-  inline-size: 1rem;
-  block-size: 1rem;
-  border-radius: 50%;
-  background: var(--ad-bg);
-  border: 1px solid var(--ad-border-strong);
-  transition: transform 0.15s ease;
-}
-
-button[role='switch'][aria-checked='true'] {
-  background: var(--ad-primary);
-  border-color: var(--ad-primary);
-}
-
-button[role='switch'][aria-checked='true']::before {
-  transform: translateX(1.125rem);
-}
-
-/* translateX is physical, so RTL needs the mirror the logical properties above get
-   for free. */
-[dir='rtl'] button[role='switch'][aria-checked='true']::before {
-  transform: translateX(-1.125rem);
-}
-
-/* ---- Dialog (native <dialog>, opened via showModal) ---- */
+/* ---- Dialogs (native <dialog>, opened with showModal) ---- */
 
 dialog.admin-dialog {
-  inline-size: min(26rem, calc(100vw - 2rem));
-  border: 1px solid var(--ad-border-strong);
-  border-radius: var(--ad-radius);
-  background: var(--ad-bg);
-  color: var(--ad-fg);
-  padding: var(--ad-card-pad);
+  inline-size: min(560px, calc(100vw - 40px));
+  max-block-size: 90vh;
+  padding: 22px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  box-shadow: var(--ad-shadow);
 }
 
-/* ::backdrop inherits custom properties from the dialog's originating element in
-   every current engine; the var() fallback covers the stragglers rather than leaving
-   them a fully transparent scrim. */
 dialog.admin-dialog::backdrop {
-  background: var(--ad-scrim, rgba(17, 17, 17, 0.45));
+  background: var(--ad-scrim);
+  backdrop-filter: blur(3px);
 }
 
 .dialog-message {
-  margin: 0 0 1rem;
+  margin: 0 0 18px;
+  font-size: 15px;
 }
 
 .dialog-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 10px;
   justify-content: flex-end;
   margin: 0;
+}
+
+dialog.media-dialog {
+  inline-size: min(960px, calc(100vw - 40px));
+}
+
+/* ---- Toasts: the prototype's midnight pills (success confirmations only) ---- */
+
+.toasts {
+  position: fixed;
+  inset-block-end: 22px;
+  inset-inline-end: 22px;
+  display: grid;
+  gap: 8px;
+  z-index: 90;
+  max-inline-size: min(24rem, calc(100vw - 44px));
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--ad-midnight);
+  color: var(--ad-on-dark);
+  font-size: 13.5px;
+  font-weight: 600;
+  box-shadow: var(--ad-shadow);
+  transition:
+    opacity 0.25s,
+    transform 0.35s var(--ad-ease);
+}
+
+/* The icon carries the kind in colour; the words carry it for everyone. */
+.toast .ic {
+  color: var(--ad-focus-dark);
+}
+
+.toast[data-kind='ok'] .ic {
+  color: var(--ad-ok);
+}
+
+.toast[data-state='leaving'] {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* ---- Command palette (F3): the prototype's .cmd, on a native modal <dialog> ---- */
+
+dialog.cmd {
+  inline-size: 100%;
+  block-size: 100%;
+  max-inline-size: none;
+  max-block-size: none;
+  margin: 0;
+  padding: 12vh 20px 20px;
+  border: 0;
+  background: transparent;
+  color: var(--ad-ink);
+}
+
+dialog.cmd[open] {
+  display: grid;
+  place-items: start center;
+}
+
+dialog.cmd::backdrop {
+  background: var(--ad-scrim);
+  backdrop-filter: blur(3px);
+}
+
+.cmd__box {
+  inline-size: min(640px, 94vw);
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--ad-card);
+  box-shadow: var(--ad-shadow);
+}
+
+.cmd__in {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ad-line);
+  color: var(--ad-dim);
+}
+
+/* The combobox field is the dialog's own input: its edge is the box around it, and its
+   focus ring is drawn on its row (an outline, so forced colours keep it). */
+.cmd__in:focus-within {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: -2px;
+}
+
+.cmd__in input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ad-ink);
+  font-size: 16px;
+}
+
+.cmd__in input:focus-visible {
+  outline: 0;
+}
+
+.cmd__list {
+  max-block-size: 50vh;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.cmd__g {
+  margin: 8px 0 4px;
+  padding: 0 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ad-dim2);
+}
+
+.cmd__i {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--ad-r-sm);
+  cursor: pointer;
+}
+
+.cmd__i .ic {
+  color: var(--ad-primary);
+}
+
+.cmd__i span {
+  flex: 1;
+  min-width: 0;
+}
+
+.cmd__i i {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--ad-dim2);
+}
+
+/* The active option: the ground, a primary bar and the weight together, so it is never
+   colour alone (1.4.1), and visible in forced colours (see below). */
+.cmd__i[aria-selected='true'] {
+  background: var(--ad-bg);
+  box-shadow: inset 3px 0 0 var(--ad-primary);
+  font-weight: 600;
+}
+
+.cmd__empty {
+  margin: 0;
+  padding: 18px 12px;
+  color: var(--ad-dim);
+}
+
+/* ---- Rich text (Tiptap): the prototype's .rich ---- */
+
+/* ProseMirror's base rules, which Tiptap would otherwise inject at runtime as an inline
+   <style> that style-src refuses (RichText.tsx sets injectCSS: false). Copied from
+   @tiptap/core's bundled `style`; only the gap cursor's colour changed, black to
+   currentColor. `white-space: pre-wrap` is not cosmetic: without it the editor collapses
+   the spaces an author types. */
+.ProseMirror {
+  position: relative;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  white-space: break-spaces;
+  -webkit-font-variant-ligatures: none;
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0;
+}
+
+.ProseMirror [contenteditable='false'] {
+  white-space: normal;
+}
+
+.ProseMirror [contenteditable='false'] [contenteditable='true'] {
+  white-space: pre-wrap;
+}
+
+.ProseMirror pre {
+  white-space: pre-wrap;
+}
+
+img.ProseMirror-separator {
+  display: inline !important;
+  border: none !important;
+  margin: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+  margin: 0;
+}
+
+.ProseMirror-gapcursor::after {
+  content: '';
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid currentColor;
+  animation: ProseMirror-cursor-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes ProseMirror-cursor-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+.ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+
+.ProseMirror-hideselection * {
+  caret-color: transparent;
+}
+
+.ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+.editor-surface {
+  border: 1px solid var(--ad-control);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+}
+
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px;
+  border-bottom: 1px solid var(--ad-line);
+}
+
+.editor-toolbar button {
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ad-dim);
+  font-size: 12.5px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.editor-toolbar button:hover {
+  background: var(--ad-bg);
+  color: var(--ad-ink);
+}
+
+.editor-toolbar button[aria-pressed='true'] {
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+}
+
+.editor-surface .tiptap {
+  min-height: 14rem;
+  padding: 10px 12px;
+  line-height: 1.55;
+  border-radius: 0 0 var(--ad-r-sm) var(--ad-r-sm);
+}
+
+.editor-surface .tiptap:focus-visible {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: -2px;
+}
+
+/* ---- Composite fields: relations, repeaters, the media picker ---- */
+
+.item-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.item-row,
+.media-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.item-row {
+  padding: 10px 12px;
+  border: 1px solid var(--ad-line);
+  border-radius: 12px;
+  background: var(--ad-card);
+}
+
+.item-label {
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.repeater-item {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--ad-line);
+  border-radius: 12px;
+  background: var(--ad-surface-2);
+}
+
+.media-thumb {
+  display: block;
+  object-fit: cover;
+  border-radius: var(--ad-r-xs);
+  background: var(--ad-bg);
+}
+
+.media-grid {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.media-pick {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  text-align: start;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: inherit;
+  white-space: normal;
+  background: var(--ad-card);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.media-pick:hover {
+  border-color: var(--ad-line-2);
+}
+
+.media-pick[aria-pressed='true'] {
+  border-color: var(--ad-primary);
+}
+
+.media-pick .media-thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
 }
 
 /* ---- Global search results ---- */
@@ -1137,111 +1889,76 @@ dialog.admin-dialog::backdrop {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
-/* Without this, result links render UA-default blue — the one colour on the page
-   nobody chose. Accent text here is also the palette's gold earning a text role. */
 .search-hits a {
-  color: var(--ad-accent-text);
+  color: var(--ad-primary);
+  font-weight: 600;
   text-underline-offset: 2px;
 }
 
 .search-hits a:hover {
-  color: var(--ad-fg);
+  color: var(--ad-primary-hover);
 }
 
+/* ---- Sign in ---- */
+
+.login-card {
+  width: min(400px, 92vw);
+  padding: 32px;
+  background: var(--ad-card);
+  border: 1px solid var(--ad-line);
+  border-radius: 18px;
+  box-shadow: var(--ad-shadow);
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.login-card .admin-sub {
+  margin: 6px 0 26px;
+}
+
+.login-card button[type='submit'] {
+  width: 100%;
+  margin-top: 6px;
+}
+
+/* ---- Motion and forced colours ---- */
+
 @media (prefers-reduced-motion: reduce) {
-  .toast,
-  button[role='switch']::before {
-    transition: none;
+  .admin-body *,
+  .admin-body *::before,
+  .admin-body *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
   }
 }
 
-/* ---- Composite fields (UI v2 PR3): relations, repeaters, media picker, clips ---- */
-.field-error {
-  color: var(--ad-danger);
-  font-weight: 600;
-}
+/* Forced colours drop backgrounds, so states that are only a fill get a real border. */
+@media (forced-colors: active) {
+  .badge,
+  .msg,
+  .toast,
+  .admin-nav-group a[aria-current='page'],
+  .tabs a[aria-current],
+  .editor-toolbar button[aria-pressed='true'],
+  .media-pick[aria-pressed='true'],
+  .cmd__i[aria-selected='true'] {
+    border: 1px solid CanvasText;
+  }
 
-.row-3 {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
-}
+  button[role='switch'] {
+    border: 1px solid ButtonText;
+  }
 
-.item-list {
-  list-style: none;
-  margin: 0 0 0.75rem;
-  padding: 0;
-  display: grid;
-  gap: 0.4rem;
-}
-
-.item-row,
-.media-current {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.item-label {
-  flex: 1 1 12rem;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.repeater-item {
-  border: 1px solid var(--ad-border);
-  border-radius: var(--ad-radius);
-  padding: 0.75rem 1rem;
-  margin: 0 0 0.75rem;
-}
-
-.media-thumb {
-  display: block;
-  object-fit: cover;
-  border-radius: calc(var(--ad-radius) / 2);
-  background: var(--ad-surface-2);
-}
-
-dialog.media-dialog {
-  width: min(56rem, calc(100vw - 2rem));
-}
-
-.media-grid {
-  list-style: none;
-  margin: 0.75rem 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-  gap: 0.75rem;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.media-pick {
-  width: 100%;
-  display: grid;
-  gap: 0.35rem;
-  padding: 0.4rem;
-  text-align: start;
-  font: inherit;
-  color: inherit;
-  background: none;
-  border: 1px solid var(--ad-border);
-  border-radius: var(--ad-radius);
-  cursor: pointer;
-}
-
-.media-pick:hover,
-.media-pick[aria-pressed='true'] {
-  border-color: var(--ad-accent);
-}
-
-.media-pick .media-thumb {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 3 / 2;
+  .bar-fill {
+    background: Highlight;
+  }
 }

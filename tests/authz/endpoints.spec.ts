@@ -841,6 +841,14 @@ const CASES: Case[] = [
     allow: ['admin', 'developer'],
   },
   {
+    name: 'admin search (the command palette)',
+    load: () => import('@/pages/api/admin/search'),
+    method: 'GET',
+    url: '/api/admin/search?q=logo',
+    // Any staff role: what each one FINDS is gated per entity inside searchAdmin().
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+  },
+  {
     name: 'analytics dashboards',
     load: () => import('@/pages/api/admin/analytics/index'),
     method: 'GET',

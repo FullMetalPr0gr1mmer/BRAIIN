@@ -1,0 +1,102 @@
+---
+import { Picture } from 'astro:assets';
+import logo from '@/assets/braiin-logo-white.png';
+import type { NavGroup, NavLink } from '@/lib/admin/nav';
+import type { ShellState } from '@/lib/admin/shell';
+import Icon from './Icon.astro';
+
+// The midnight sidebar (Admin v2 F2, the prototype's .side). Server-rendered, zero JS.
+//
+// Below 900px it is a popover: the topbar's Menu button toggles it, and the browser gives
+// light dismiss, Escape and the top layer for free (WCAG 1.4.10: the menu is never lost
+// at 320px or 400% zoom). From 900px admin.css shows it in the page grid instead.
+//
+// The account chip at its foot is a <details> menu, as the topbar one was: name, role
+// and Sign out without any client code (the layout's script only adds light dismiss).
+
+interface Props {
+  nav: readonly NavGroup[];
+  current: NavLink | null;
+  brand: string;
+  shell: ShellState;
+  email: string;
+  role: string;
+  initials: string;
+}
+
+const { nav, current, brand, shell, email, role, initials } = Astro.props;
+const roleLabel = role.replace('_', ' ');
+---
+
+<nav id="admin-side" class="admin-sidebar admin-nav" popover="auto" aria-label="Admin sections">
+  <div class="side__inner">
+    <a class="admin-brand" href="/admin">
+      {/* 104 CSS px; 264 is the 2x candidate (both on the /_image width allow-list). */}
+      <Picture
+        src={logo}
+        alt={brand}
+        formats={['avif', 'webp']}
+        width={104}
+        widths={[104, 264]}
+        sizes="104px"
+        decoding="async"
+        loading="eager"
+      />
+    </a>
+
+    <div class="side__nav">
+      {
+        nav.map((group, index) => (
+          <div class="admin-nav-group">
+            <p class="admin-nav-title" id={`nav-group-${index}`}>
+              {group.title}
+            </p>
+            <ul aria-labelledby={`nav-group-${index}`}>
+              {group.links.map((link) => {
+                const count = link.count ? shell.counts[link.count] : undefined;
+                return (
+                  <li>
+                    <a href={link.href} aria-current={link === current ? 'page' : undefined}>
+                      <Icon name={link.icon} />
+                      <span class="side__label">{link.label}</span>
+                      {count !== undefined && count > 0 && (
+                        <span class="cnt">
+                          {count}
+                          <span class="visually-hidden"> new</span>
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+
+    <div class="side__foot">
+      <details class="menu account-menu">
+        <summary class="side__user">
+          <span class="avatar" aria-hidden="true">{initials}</span>
+          <span class="side__who">
+            <b>{shell.displayName ?? email}</b>
+            <span>{roleLabel}</span>
+          </span>
+          <Icon name="chevd" size={16} />
+        </summary>
+        <div class="menu-panel">
+          <p class="menu-id">
+            {email}
+            <br />
+            Role: <strong>{roleLabel}</strong>
+          </p>
+          <button type="button" data-action="logout">
+            <Icon name="logout" size={16} />
+            Sign out
+          </button>
+        </div>
+      </details>
+    </div>
+  </div>
+</nav>

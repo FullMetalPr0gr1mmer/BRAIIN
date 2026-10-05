@@ -34,6 +34,8 @@ supabase/.temp/
 coverage/
 playwright-report/
 test-results/
+# Saved admin sessions from tests/admin/staff.setup.ts (live cookies; never commit)
+playwright/.auth/
 .lighthouseci/
 lhci_reports/
 
