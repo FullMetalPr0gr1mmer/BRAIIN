@@ -127,12 +127,12 @@ Every value below is asserted by `scripts/contrast-audit.mjs`. Contrast was comp
 **Faces.** admin.css copies global.css's `@font-face` set exactly:
 - Archivo variable latin, with its unicode-range;
 - Almarai 400, 700 and 800, each in latin and arabic, with the same ranges;
-- `Archivo Fallback`;
-- the per-weight, per-script `Almarai Fallback`.
+- `Archivo Fallback`, per weight (docs/fonts.md 2c);
+- the per-weight, per-script `Almarai Fallback`, and its Linux family `Almarai Fallback Linux`.
 
 Today admin.css declares only Almarai 400 and 700 Arabic, under a range wider than the files.
 
-**Arabic stack.** `--ad-font-ar` is `'Almarai','Almarai Fallback','Archivo',system-ui`, which equals `--bs-font-ar`. Authors therefore proof Arabic, including 800 headings, in the face visitors see.
+**Arabic stack.** `--ad-font-ar` is `'Almarai','Almarai Fallback','Almarai Fallback Linux','Archivo',system-ui`, which equals `--bs-font-ar`. Authors therefore proof Arabic, including 800 headings, in the face visitors see.
 
 **Other rules**
 - No Google Fonts (Pillar 2; `font-src 'self'`).

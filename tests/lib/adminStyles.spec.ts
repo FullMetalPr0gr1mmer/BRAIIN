@@ -34,8 +34,16 @@ describe('admin.css fonts', () => {
     expect(admin).toEqual(fontFaces(GLOBAL));
   });
 
-  it('sets Arabic in Almarai first, as the public site does', () => {
-    expect(ADMIN).toMatch(/--ad-font-ar:\s*'Almarai', 'Almarai Fallback'/);
+  it('sets Arabic in the public site’s stack, Almarai and both fallbacks first', () => {
+    const stack = (css: string, token: string) =>
+      new RegExp(`${token}:\\s*([^;]+);`).exec(css)?.[1]?.replace(/\s+/g, ' ').trim() ?? '';
+    const admin = stack(ADMIN, '--ad-font-ar');
+    expect(admin.split(',').slice(0, 3).map((s) => s.trim().replace(/'/g, ''))).toEqual([
+      'Almarai',
+      'Almarai Fallback',
+      'Almarai Fallback Linux',
+    ]);
+    expect(admin).toBe(stack(GLOBAL, '--bs-font-ar'));
   });
 });
 
