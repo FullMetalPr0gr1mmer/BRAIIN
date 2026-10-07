@@ -130,8 +130,9 @@ describe('gated lead columns have a short, named list of readers', () => {
     ]);
   });
 
-  // lead_notes is service-role only (0034); this route is the thread's one door, and it
-  // writes an audit row before reading (C2b).
+  // lead_notes is service-role only (0034); this route is the Worker's one door to the
+  // thread, for reading (an audit row first) and for adding (C2b). The legacy
+  // internal_notes mirror is kept by a definer trigger, not by Worker code.
   it('only the notes route touches the notes thread', () => {
     const doors = files
       .filter((f) => /from\(\s*['"]lead_notes['"]\s*\)/.test(f.code))
