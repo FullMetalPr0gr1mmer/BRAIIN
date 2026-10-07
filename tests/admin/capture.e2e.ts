@@ -59,6 +59,18 @@ test.describe('admin design capture', () => {
           await page.evaluate(() => document.fonts.ready);
           mkdirSync(join(DIR!, 'admin'), { recursive: true });
           await page.screenshot({ path: join(DIR!, 'admin', `${name}.png`), fullPage: true });
+          if (vp.tag === 'd') {
+            // The hydrated DOM beside its picture, so the admin can be restyled locally
+            // against real markup and seeded data (F1 onwards). Markup to look at, not a
+            // page to run: scripts dropped, the CSRF token blanked.
+            const html = await page.evaluate(() => {
+              const root = document.documentElement.cloneNode(true) as HTMLElement;
+              root.querySelectorAll('script').forEach((node) => node.remove());
+              root.querySelector('meta[name="csrf-token"]')?.setAttribute('content', '');
+              return `<!doctype html>\n${root.outerHTML}`;
+            });
+            writeFileSync(join(DIR!, 'admin', `${name}.html`), html);
+          }
           await context.close();
         });
       }

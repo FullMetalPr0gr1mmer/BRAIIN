@@ -129,6 +129,11 @@
    `perf-seo-a11y` workflow — Lighthouse asserts `font-display`, unsized-images, and the
    per-route weight budget; axe asserts zero WCAG violations on the themed output.
 
+5. **The admin mirrors these faces.** `public/styles/admin.css` declares the same
+   `@font-face` set as `global.css`, byte for byte after whitespace (Admin v2 F1), so a
+   re-subset changes both files; `tests/lib/adminStyles.spec.ts` fails if they differ. The
+   admin preloads nothing: `/admin` is exempt from the font budget (CLAUDE.md §6).
+
 ## What's already done
 
 - ✅ WCAG 2.2 AA contrast audit — every UI token pair passes (lowest text pair 7.08:1 vs

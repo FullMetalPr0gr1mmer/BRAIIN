@@ -1,6 +1,11 @@
+import { Suspense, lazy } from 'react';
 import type { TiptapDoc } from '@schemas/tiptap';
 import type { FieldDef } from '@/lib/admin/uiSchema';
-import RichText from './RichText';
+
+// The rich-text editor is Tiptap plus ProseMirror, about 100 KB gzipped: loaded with
+// import() so only a form that HAS a rich-text field downloads it (the admin-rich chunk,
+// astro.config.mjs; tests/lib/adminChunks.spec.ts keeps it lazy).
+const RichText = lazy(() => import('./RichText'));
 import RelationField from './fields/RelationField';
 import MediaField from './fields/MediaField';
 import RepeaterField, { type RenderField } from './fields/RepeaterField';
@@ -177,20 +182,22 @@ export function Field({ field, value, onChange, values = {}, idPrefix = 'f' }: F
     const doc = (value ?? {}) as Record<string, TiptapDoc | undefined>;
     return (
       <div className="field-group">
-        <p className="field-legend">{field.label} — English</p>
-        <RichText
-          label={`${field.label} English`}
-          locale="en"
-          value={doc['en'] ?? null}
-          onChange={(next) => onChange(field.name, { ...doc, en: next })}
-        />
-        <p className="field-legend">{field.label} — العربية</p>
-        <RichText
-          label={`${field.label} Arabic`}
-          locale="ar"
-          value={doc['ar'] ?? null}
-          onChange={(next) => onChange(field.name, { ...doc, ar: next })}
-        />
+        <Suspense fallback={<div className="editor-surface">Loading editor…</div>}>
+          <p className="field-legend">{field.label} — English</p>
+          <RichText
+            label={`${field.label} English`}
+            locale="en"
+            value={doc['en'] ?? null}
+            onChange={(next) => onChange(field.name, { ...doc, en: next })}
+          />
+          <p className="field-legend">{field.label} — العربية</p>
+          <RichText
+            label={`${field.label} Arabic`}
+            locale="ar"
+            value={doc['ar'] ?? null}
+            onChange={(next) => onChange(field.name, { ...doc, ar: next })}
+          />
+        </Suspense>
       </div>
     );
   }

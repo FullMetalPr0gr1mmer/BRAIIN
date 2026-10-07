@@ -2,10 +2,16 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ROLES, type Role } from '@/lib/auth/types';
 import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
-import { ADMIN_NAV, visibleNav } from '@/lib/admin/nav';
+import { reachableHrefs, visibleNav } from '@/lib/admin/nav';
 import * as resources from '@/lib/admin/resources';
 import type { ResourceConfig } from '@/lib/admin/resource';
-import { EXTRA_LINKS, expectedSidebar, pageFileFor, sweepRoutes } from '../admin/routes';
+import {
+  EXTRA_LINKS,
+  expectedSidebar,
+  menuScreens,
+  pageFileFor,
+  sweepRoutes,
+} from '../admin/routes';
 
 // The admin sweep's route map (tests/admin/routes.ts) against the server. The sweep only
 // visits what a role should be able to use; these checks make "should" mean what the
@@ -100,20 +106,20 @@ describe('the sweep route map', () => {
     }
   });
 
-  it('Admin is swept on every sidebar link, and the extras', () => {
+  it('Admin is swept on every sidebar link and tab, and the extras', () => {
     const paths = new Set(sweepRoutes('admin').map((r) => r.path));
-    for (const link of [...ADMIN_NAV.flatMap((g) => g.links), ...EXTRA_LINKS]) {
-      expect(paths, link.href).toContain(link.href);
+    for (const screen of [...menuScreens(), ...EXTRA_LINKS]) {
+      expect(paths, screen.href).toContain(screen.href);
     }
   });
 
-  it('each role is swept on exactly its sidebar, plus the extras it may open', () => {
+  it('each role is swept on exactly the screens its menu reaches, plus the extras', () => {
     for (const role of ROLES) {
       const screens = sweepRoutes(role)
         .filter((r) => r.kind === 'screen')
-        .map((r) => r.path);
-      const sidebar = visibleNav(role).flatMap((g) => g.links.map((l) => l.href));
-      expect(screens.filter((p) => !EXTRA_LINKS.some((l) => l.href === p))).toEqual(sidebar);
+        .map((r) => r.path)
+        .filter((p) => !EXTRA_LINKS.some((l) => l.href === p));
+      expect(new Set(screens)).toEqual(new Set(reachableHrefs(role)));
     }
   });
 
