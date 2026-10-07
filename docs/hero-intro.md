@@ -274,7 +274,7 @@ green; if production is hurting now, roll the Worker back first (seconds) and le
 follow:
 
 ```bash
-npx wrangler rollback                     # only if urgent: the previous Worker version
+npx wrangler rollback                     # only if urgent: the previous Worker version, never past a contraction (launch runbook §10)
 git switch -c revert/hero-intro origin/main
 git revert <bad-sha>
 git push -u origin revert/hero-intro      # then open the PR

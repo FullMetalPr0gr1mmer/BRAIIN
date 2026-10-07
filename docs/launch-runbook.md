@@ -30,7 +30,8 @@ npx supabase link --project-ref <prod-ref>
 npx supabase db push          # applies every migration not yet recorded in production
 ```
 
-**Order for every change that ships a migration: apply it here FIRST, then merge.**
+**Order for every change that ships a migration: apply it here FIRST, then merge.** A
+contraction ships in a PR of its own, after the code that stops using it (§5a).
 Merging to `main` auto-deploys the Worker (~30 min later, once every gate is green); code
 that reads a column production does not have yet fails closed to empty content. §5a's
 deploy guard refuses such a deploy, and fails closed whenever it cannot check; on the PR,
@@ -288,7 +289,9 @@ from pg_roles r where r.rolname = 'deploy_guard';
 Expect `rolcanlogin` true; `rolsuper`, `rolinherit`, `rolcreaterole`, `rolcreatedb`,
 `rolreplication` and `rolbypassrls` false; `rolconnlimit` 5; `rolconfig` holding
 `default_transaction_read_only=on` and `statement_timeout=15s`; `member_of` 0; the four
-grants true; `dep_write` and `leads_select` false; `applied` = the migrations in the repo;
+grants true; `dep_write` and `leads_select` false; `applied` at least the number of migration files in the checkout (more while a migration
+applied first, §1, waits for its PR; the count is only a rough check, the preflight and the
+preview below check each version);
 `env` = `production`. Then from CI: on any PR of the owner's, `deploy-guard-preview` prints
 `✓ connected as deploy_guard (TLS verified against the Supabase root CA).`,
 `✓ production has every migration in the repo (N applied).` and `✓ app.deployment = production.`
@@ -1035,5 +1038,16 @@ each CI deploy carries its commit's first 12 characters as the tag and `ci <sha>
 as the message — and run `npx wrangler rollback <version-id>`. Then revert or fix forward
 through a PR (§5b): the next deploy ships whatever `main` holds.
 
-Migrations are forward-only (expand/contract), so a Worker rollback is always safe: an
-older Worker never sees a column it does not know about, only extra ones it ignores.
+Migrations are forward-only, so a rollback is safe across an **expand** (an older Worker only
+meets columns it ignores) but **not across a contraction** (§5a): the older Worker still uses
+what the contraction took away, and nothing automated stops it (`wrangler rollback` bypasses
+CI, and the guard accepts a production ahead of the checkout). Never roll back past the code
+PR of the newest contraction production has applied; past that line, fix forward through a
+PR (§5b). Today the line is #43 (merged as `cc8c6c4`) once `0033` is applied: a Worker older
+than #43 reads lead columns `0033` revoked from staff tokens, so the PII reveal, every lead
+update and the PII export fail (42501); the lead list and the plain lead view keep working.
+Before a rollback, check that the target contains the line: CI's deploys carry their commit
+in the version message (`ci <sha> run <id>`), so `git merge-base --is-ancestor cc8c6c4 <sha>`
+must succeed; versions deployed before this pipeline carry no commit, so place them by deploy
+time against `cc8c6c4`'s deploy. A new contraction moves the line: its migration PR updates
+this paragraph.

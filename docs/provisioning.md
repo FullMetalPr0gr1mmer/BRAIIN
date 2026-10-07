@@ -21,7 +21,7 @@ chat or commit them** — they live in Cloudflare Worker Secrets / Supabase Vaul
    supabase login
    supabase link --project-ref <your-ref>
    ```
-4. **Apply migrations** (0001–0003) to the remote DB:
+4. **Apply migrations** (all of them: the deploy guard refuses a deploy while any is missing) to the remote DB:
    ```bash
    supabase db push
    ```
@@ -66,7 +66,7 @@ chat or commit them** — they live in Cloudflare Worker Secrets / Supabase Vaul
    - Block the **training-crawler** user-agent set (same tokens as `src/lib/seo/crawlers.ts`): `GPTBot, ClaudeBot, Google-Extended, CCBot, Applebot-Extended, Meta-ExternalAgent`. Allow retrieval crawlers.
 7. **(Optional) trailing-slash 301** — the app uses `trailingSlash: 'ignore'` + canonical consolidation. If you prefer hard 301s, add a Cloudflare redirect rule `/(.*)/ → /$1`.
 8. **Custom domain + TLS** — set `PUBLIC_SITE_URL` in the `deploy` job's env (`ci.yml`) to the real origin (it is the only origin the build uses); add the domain, DNS, and confirm HSTS preload.
-9. **Deploy** — merge to `main`; the CI `deploy` job ships ~30 min later, once every gate is green. A manual `wrangler deploy` is break-glass only (launch runbook §6).
+9. **Deploy** — the `deploy` job fails closed until its prerequisites exist: every migration applied and `app.deployment` = `production` (launch runbook §1, §1a); the read-only `deploy_guard` role and the `SUPABASE_GUARD_DB_URL` secret (`bash scripts/deploy-guard-role.sh`, launch runbook §5a); the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets (table below). Then merge to `main`; the CI `deploy` job ships ~30 min later, once every gate is green. A manual `wrangler deploy` is break-glass only (launch runbook §6).
 
 ---
 
