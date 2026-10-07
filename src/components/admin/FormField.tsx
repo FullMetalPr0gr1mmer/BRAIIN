@@ -4,7 +4,8 @@ import type { FieldDef } from '@/lib/admin/uiSchema';
 
 // The rich-text editor is Tiptap plus ProseMirror, about 100 KB gzipped: loaded with
 // import() so only a form that HAS a rich-text field downloads it (the admin-rich chunk,
-// astro.config.mjs; tests/lib/adminChunks.spec.ts keeps it lazy).
+// astro.config.mjs). scripts/admin-bundle.mjs, run by `npm run size` on the build, fails
+// if any screen loads it eagerly.
 const RichText = lazy(() => import('./RichText'));
 import RelationField from './fields/RelationField';
 import MediaField from './fields/MediaField';
