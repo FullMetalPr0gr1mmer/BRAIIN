@@ -68,7 +68,11 @@ describe('the PII export is fenced to the caller’s tenant (service-role read, 
       // The read really is the service role's (the gated columns need it)…
       expect(leadCalls.some((c) => c.method === 'select')).toBe(true);
       // …so its tenant filter is the fence, with the session's tenant, not a request value.
-      expect(leadCalls).toContainEqual({ table: 'leads', method: 'eq', args: ['tenant_id', TENANT] });
+      expect(leadCalls).toContainEqual({
+        table: 'leads',
+        method: 'eq',
+        args: ['tenant_id', TENANT],
+      });
       // And the caller's own client never reads the lead table on this path.
       expect(callerCalls.filter((c) => c.table === 'leads')).toEqual([]);
     });
