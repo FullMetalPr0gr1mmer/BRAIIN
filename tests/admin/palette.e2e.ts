@@ -63,19 +63,14 @@ test.describe('as admin', () => {
     await expect(trigger).toBeFocused();
   });
 
-  test('"/" opens it, but not while typing in a field', async ({ page }) => {
+  test('a bare "/" never opens it: no one-character shortcut (WCAG 2.1.4)', async ({ page }) => {
+    // The handler would open the dialog during the keydown itself, so it is either open
+    // by the time press() returns or not at all.
     await page.keyboard.press('/');
     const dialog = page.getByRole('dialog', { name: 'Search the admin' });
-    await expect(dialog).toBeVisible();
-    await page.keyboard.press('Escape');
-
-    await page.goto('/admin/services/new', { waitUntil: 'networkidle' });
-    await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
-    const field = page.locator('input[type="text"]').first();
-    await field.click();
-    await page.keyboard.type('a/b');
     await expect(dialog).toBeHidden();
-    await expect(field).toHaveValue(/a\/b/);
+    await page.keyboard.press('Control+k');
+    await expect(dialog).toBeVisible();
   });
 
   test('meets WCAG 2.2 A/AA with the palette open, its full list scrolling', async ({ page }) => {

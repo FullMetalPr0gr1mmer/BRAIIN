@@ -415,7 +415,7 @@ The existing id pins (`f-<name>[-en|-ar]`) and labels stay, so `adminFields.spec
 ### 2.7 Command palette (inside AdminChrome, `client:load`)
 
 **Opening and markup**
-- Opens on ⌘/Ctrl+K anywhere, on "/" when focus is not in a field, or from the topbar trigger.
+- Opens on ⌘/Ctrl+K anywhere, or from the topbar trigger. The prototype's bare "/" is not ported: a one-character shortcut must be switchable off or remappable (WCAG 2.1.4, Level A; [deviations.md](deviations.md)).
 - A native modal `<dialog aria-label="Search the admin">` holds `input role=combobox aria-expanded aria-controls aria-activedescendant` and a grouped `role=listbox`.
 - Arrow keys, Enter, Escape; focus returns to the trigger.
 
@@ -1409,7 +1409,7 @@ AdminLayout rewrite.
 - The AdminChrome island (client:load).
 - CommandPalette:
   - ARIA combobox/listbox;
-  - ⌘K, / and the trigger;
+  - ⌘K and the trigger (no bare "/", WCAG 2.1.4);
   - nav destinations from props, cap-filtered quick actions that navigate with intent params, and GET /api/admin/search;
   - the endpoint is a defineAdminRoute JSON wrapper around searchAdmin. It never indexes leads, contacts or applications, and fixes the team and certifications jsonb name columns.
 - /admin/search stays as the no-JS fallback.

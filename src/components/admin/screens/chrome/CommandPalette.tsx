@@ -13,8 +13,11 @@ import {
 } from '@/lib/admin/palette';
 import Icon from '@/components/admin/kit/Icon';
 
-// The command palette (Admin v2 F3, docs/admin-v2/ui.md §2.7): ⌘/Ctrl+K anywhere, "/"
-// outside a text field, or the topbar's search trigger.
+// The command palette (Admin v2 F3, docs/admin-v2/ui.md §2.7): ⌘/Ctrl+K anywhere, or the
+// topbar's search trigger. The prototype's bare "/" is not ported: a one-character
+// shortcut fires on a stray keypress or a dictated "slash", and WCAG 2.1.4 (Level A)
+// requires one to be switchable off or remappable, so it is left out instead
+// (docs/admin-v2/deviations.md).
 //
 // A native modal <dialog> brings the focus trap, Escape, the top layer and focus return
 // to whatever had focus before. Inside, the ARIA combobox pattern: the input owns the
@@ -32,17 +35,6 @@ const LIST_ID = 'cmd-list';
 export interface CommandPaletteProps {
   /** The role's screens and quick actions, built on the server from ROLE_CAPS. */
   groups: PaletteGroup[];
-}
-
-function inEditableField(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  return (
-    el.isContentEditable ||
-    el.tagName === 'INPUT' ||
-    el.tagName === 'TEXTAREA' ||
-    el.tagName === 'SELECT'
-  );
 }
 
 export default function CommandPalette({ groups }: CommandPaletteProps) {
@@ -71,19 +63,10 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
     inputRef.current?.focus();
   }, []);
 
-  // ⌘/Ctrl+K anywhere; "/" only when the keystroke is not typing into a field.
+  // ⌘/Ctrl+K anywhere. Always with a modifier: never a single character (see above).
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
-      const key = event.key.toLowerCase();
-      if ((event.metaKey || event.ctrlKey) && key === 'k') {
-        event.preventDefault();
-        open();
-      } else if (
-        key === '/' &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !inEditableField(event.target)
-      ) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         open();
       }

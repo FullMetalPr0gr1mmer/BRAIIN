@@ -39,6 +39,7 @@
   - no smooth scroll or parallax (compositor-only; design-port #44/#79);
   - colours must pass the contrast gate.
 - **Header**: the language switch always shows (owner-approved product call, O-13).
+- **Shortcuts**: the command palette opens on ⌘/Ctrl+K and from the topbar trigger, not on a bare "/". A one-character shortcut fires on a stray keypress or a dictated "slash", and WCAG 2.1.4 (Level A) requires it to be switchable off or remappable (DoD #4).
 - **Footer**: legal links are locked (PDPL); copyright is a template (brand is data, §1).
 - **Forms**:
   - closed field sets, no new fields (Zod boundary, per-column PII encryption);
