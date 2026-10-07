@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // The CRM's closed vocabularies (Admin v2, docs/admin-v2/crm.md §4 and §6.3). The SQL
 // CHECKs in supabase/migrations/0035_crm_ingest.sql carry the same lists; a test parses
-// the migration and compares (tests/schemas/crm.spec.ts).
+// the migration and compares (tests/lib/crmScore.spec.ts).
 
 /**
  * Why a lead scores what it scores. Computed in the Worker from the plaintext BEFORE it is
@@ -101,10 +101,18 @@ export const LeadSummaryQuerySchema = z
 /** A note on a lead: 1 to 5,000 characters, trimmed. Append-only. */
 export const LeadNoteInputSchema = z.object({ body: z.string().trim().min(1).max(5000) }).strict();
 
-/** A page of a lead's timeline: the events before an instant, at most 100. */
+/**
+ * A page of a lead's timeline, at most 100: the events before the last one already shown,
+ * named by its `at` AND its `id` (several events can share one instant), or neither.
+ */
 export const LeadEventsQuerySchema = z
   .object({
     before: Instant.optional(),
+    beforeId: z.coerce.number().int().positive().optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
   })
-  .strict();
+  .strict()
+  .refine((page) => (page.before === undefined) === (page.beforeId === undefined), {
+    message: 'before and beforeId go together',
+    path: ['beforeId'],
+  });

@@ -16,14 +16,14 @@ export const POST = defineAdminRoute({
   handler: async ({ auth, sb, params }) => {
     const id = params['id'];
     if (!id || !z.string().uuid().safeParse(id).success) throw new NotFoundError('lead');
-    const { plain, decrypted } = await revealLead(auth, sb, id);
+    // The legacy select value too, kept until the daily cron has moved it into `timeline`.
+    const { plain, decrypted } = await revealLead(auth, sb, id, ['timeline_band']);
     return {
       email: decrypted.email,
       phone: decrypted.phone,
       budget: decrypted.budget,
       timeline: decrypted.timeline,
-      // The legacy select value, kept until the daily cron has moved it into `timeline`.
-      timeline_band: plain['timeline_band'] ?? null,
+      timeline_band: plain.timeline_band ?? null,
     };
   },
 });

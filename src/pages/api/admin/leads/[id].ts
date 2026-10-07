@@ -6,7 +6,7 @@ import { AuthorizationError } from '@/lib/authz/errors';
 import { getRow } from '@/lib/admin/crud';
 import { SAFE_LEAD_COLUMNS, canSeeLeadPii, stripSensitive } from '@/lib/admin/leadFields';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
-import { revealLead } from '@/lib/crm/reveal';
+import { PLAIN_GATED_FIELDS, revealLead } from '@/lib/crm/reveal';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 
 // A single lead. With `?pii=1` this is the legacy panel's contact-details reveal; the CRM
@@ -48,10 +48,10 @@ export const GET = defineAdminRoute({
       return withInterestLabels(stripSensitive(row), labels);
     }
 
-    const { row, plain, decrypted } = await revealLead(auth, sb, id);
-    const labels = await resolveLeadInterests(sb, auth.tenantId, [row]);
     // The legacy shape: the safe row, the gated-but-plain fields (timeline_band,
     // internal_notes, ip_inet) and the decrypted ones. Never a ciphertext column.
+    const { row, plain, decrypted } = await revealLead(auth, sb, id, PLAIN_GATED_FIELDS);
+    const labels = await resolveLeadInterests(sb, auth.tenantId, [row]);
     return { ...withInterestLabels(row, labels), ...plain, ...decrypted };
   },
 });

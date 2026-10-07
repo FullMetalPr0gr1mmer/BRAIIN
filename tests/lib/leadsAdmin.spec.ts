@@ -40,6 +40,8 @@ let liveRole = 'admin';
 let rlsSeesLead = true;
 let revealLimited = false;
 const events: string[] = [];
+const audits: { action: string; detail?: Record<string, unknown> }[] = [];
+const claimedLimits: unknown[] = [];
 const serviceFilters: Record<string, unknown>[] = [];
 const row: Record<string, unknown> = {
   id: LEAD,
@@ -68,8 +70,13 @@ const project = (select: string) =>
   Object.fromEntries(select.split(',').map((column) => [column, row[column]]));
 
 vi.mock('@/lib/admin/audit', () => ({
-  writeAudit: async (_sb: unknown, _auth: unknown, entry: { action: string }) => {
+  writeAudit: async (
+    _sb: unknown,
+    _auth: unknown,
+    entry: { action: string; detail?: Record<string, unknown> },
+  ) => {
     events.push(`audit:${entry.action}`);
+    audits.push(entry);
     return auditOk;
   },
 }));
@@ -80,13 +87,17 @@ vi.mock('@/lib/crypto/pii', () => ({
   },
 }));
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
-// The reveal limiter (C2b): recorded in order; can refuse like the real ledger.
+// The reveal limiter (C2b): the real module with only the ledger call replaced, recorded in
+// order with the limits it was given; can refuse like the real ledger.
 vi.mock('@/lib/admin/rateLimit', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/lib/admin/rateLimit')>('@/lib/admin/rateLimit');
   const { RateLimitError } = await import('@/lib/admin/errors');
   return {
-    PII_REVEAL_LIMITS: { perUser: 60, perTenant: 300, windowMinutes: 60 },
-    claimPrivilegedOp: async (_auth: unknown, op: string) => {
+    ...actual,
+    claimPrivilegedOp: async (_auth: unknown, op: string, limits?: unknown) => {
       events.push(`ops:${op}`);
+      claimedLimits.push(limits);
       if (revealLimited) throw new RateLimitError(`${op}:user`);
     },
   };
@@ -176,7 +187,8 @@ function ctx(path: string, role = 'admin', init?: { method: string; body: unknow
 }
 
 const detail = await import('@/pages/api/admin/leads/[id]');
-const { showNotesEditor } = await import('@/components/admin/LeadsPanel');
+const { afterSave, saveLead, showNotesEditor } = await import('@/components/admin/LeadsPanel');
+const { PII_REVEAL_LIMITS } = await import('@/lib/admin/rateLimit');
 
 beforeEach(() => {
   auditOk = true;
@@ -184,6 +196,8 @@ beforeEach(() => {
   rlsSeesLead = true;
   revealLimited = false;
   events.length = 0;
+  audits.length = 0;
+  claimedLimits.length = 0;
   serviceFilters.length = 0;
 });
 
@@ -216,6 +230,27 @@ describe('lead contact details (?pii=1)', () => {
   it("reads the gated columns for this one lead in the caller's tenant only", async () => {
     await detail.GET(ctx(`/api/admin/leads/${LEAD}?pii=1`));
     expect(serviceFilters).toEqual([{ tenant_id: TENANT, id: LEAD }]);
+  });
+
+  it('the audit row names every gated field the response carries (notes and IP too)', async () => {
+    const res = await detail.GET(ctx(`/api/admin/leads/${LEAD}?pii=1`));
+    const body = (await res.json()) as { data: Record<string, unknown> };
+    const disclosed = [
+      'email',
+      'phone',
+      'budget',
+      'timeline',
+      'timeline_band',
+      'internal_notes',
+      'ip_inet',
+    ].filter((field) => field in body.data);
+    expect(disclosed).toHaveLength(7);
+    expect([...(audits[0]!.detail!['fields'] as string[])].sort()).toEqual(disclosed.sort());
+  });
+
+  it('spends a slot of the REVEAL limit (60 an hour), not the export one', async () => {
+    await detail.GET(ctx(`/api/admin/leads/${LEAD}?pii=1`));
+    expect(claimedLimits).toEqual([PII_REVEAL_LIMITS]);
   });
 
   it("never asks the caller's client for a gated column", async () => {
@@ -317,5 +352,83 @@ describe('the notes editor', () => {
     expect(showNotesEditor(true, true)).toBe(true);
     expect(showNotesEditor(false, true)).toBe(false);
     expect(showNotesEditor(false, false)).toBe(false);
+  });
+});
+
+describe('after a save, the panel', () => {
+  const open = {
+    id: LEAD,
+    name: 'Sara',
+    status: 'new',
+    service_of_interest: 'logo',
+    locale: 'en',
+    created_at: '2026-10-01T10:00:00Z',
+    message: 'Hello',
+    email: 'sara@example.com',
+    phone: '+966500000000',
+    internal_notes: 'Called back on Monday',
+  };
+  // What PATCH answers: the safe columns only.
+  const answer = {
+    id: LEAD,
+    name: 'Sara',
+    status: 'in_progress',
+    service_of_interest: 'logo',
+    locale: 'en',
+    created_at: '2026-10-01T10:00:00Z',
+    message: 'Hello',
+  };
+
+  it('keeps the details it already revealed and shows the saved notes: no second reveal', () => {
+    const next = afterSave(
+      open,
+      LEAD,
+      { status: 'in_progress', name: 'Sara' },
+      {
+        internalNotes: 'Sent the proposal',
+      },
+    );
+    expect(next).toMatchObject({
+      status: 'in_progress',
+      email: 'sara@example.com',
+      phone: '+966500000000',
+      internal_notes: 'Sent the proposal',
+    });
+    expect(afterSave(open, 'another-lead', { status: 'done' }, {})).toBe(open);
+    expect(afterSave(null, LEAD, { status: 'done' }, {})).toBeNull();
+  });
+
+  it('reports a save that stood as saved, even when the list cannot be refreshed', async () => {
+    const outcome = await saveLead(
+      LEAD,
+      { status: 'in_progress' },
+      {
+        save: async () => ({ ...answer }),
+        refresh: async () => {
+          throw new Error('Rate limit exceeded');
+        },
+      },
+    );
+    expect(outcome.error).toBe('');
+    expect(outcome.saved).toMatchObject({ status: 'in_progress' });
+    expect(outcome.notice).toMatch(/^Saved\./);
+  });
+
+  it('reports a save that failed as an error, and refreshes nothing', async () => {
+    let refreshed = false;
+    const outcome = await saveLead(
+      LEAD,
+      { status: 'in_progress' },
+      {
+        save: async () => {
+          throw new Error('That item no longer exists.');
+        },
+        refresh: async () => {
+          refreshed = true;
+        },
+      },
+    );
+    expect(outcome).toEqual({ saved: null, error: 'That item no longer exists.', notice: '' });
+    expect(refreshed).toBe(false);
   });
 });

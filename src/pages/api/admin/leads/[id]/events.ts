@@ -5,8 +5,11 @@ import { NotFoundError } from '@/lib/admin/errors';
 
 // A lead's timeline (Admin v2 C2b): `leads.manage`. Metadata only (stage keys, ids, a
 // channel; never a note body or contact details), read as the caller: RLS and the live
-// check decide (lead_events_live, 0034). Newest first, a page at a time: pass the last
-// event's `at` back as `before`.
+// check decide (lead_events_live, 0034). Newest first, a page at a time, on the (at, id)
+// keyset the rows are ordered by: one statement writes several events at the same instant
+// (a stage move and a spam flag, say), so a page that ends inside such a group must pick up
+// after its last EVENT, not after its instant. Pass the last event's `at` and `id` back as
+// `before` and `beforeId`.
 
 export const prerender = false;
 
@@ -25,13 +28,17 @@ export const GET = defineAdminRoute({
       .order('at', { ascending: false })
       .order('id', { ascending: false })
       .limit(limit);
-    if (input.before) query = query.lt('at', input.before);
+    if (input.before !== undefined && input.beforeId !== undefined) {
+      // Both values are schema-checked (an instant, a positive integer), and the instant is
+      // quoted for PostgREST's filter syntax.
+      query = query.or(
+        `at.lt."${input.before}",and(at.eq."${input.before}",id.lt.${input.beforeId})`,
+      );
+    }
     const { data, error } = await query;
     if (error) throw new Error(`lead events: ${error.message}`);
-    const events = (data ?? []) as { at: string }[];
-    return {
-      events,
-      before: events.length === limit ? (events.at(-1)?.at ?? null) : null,
-    };
+    const events = (data ?? []) as { id: number; at: string }[];
+    const last = events.length === limit ? events.at(-1) : undefined;
+    return { events, before: last?.at ?? null, beforeId: last?.id ?? null };
   },
 });
