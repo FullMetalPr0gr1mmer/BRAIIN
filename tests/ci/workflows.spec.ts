@@ -240,7 +240,7 @@ describe('the gate workflows ci.yml calls', () => {
   it('lets no step fail quietly except the design capture and its upload (not assertions)', () => {
     const tolerated = allSteps.filter(({ step }) => step['continue-on-error'] !== undefined);
     expect(tolerated.map(({ label }) => label)).toEqual([
-      './.github/workflows/perf-seo-a11y.yml e2e: Design capture (full-page screenshots for the mockup comparison, not assertions)',
+      './.github/workflows/perf-seo-a11y.yml e2e: Design capture (public + admin full-page screenshots for the mockup comparison, not assertions)',
       './.github/workflows/perf-seo-a11y.yml e2e: Upload design capture',
     ]);
     for (const { step } of tolerated) expect(step['continue-on-error']).toBe(true);
