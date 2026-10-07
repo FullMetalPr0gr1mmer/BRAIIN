@@ -71,6 +71,7 @@ Static, cacheable shell **+** Server Islands (`server:defer`) **+** on-demand `/
 ### Pillar 1 — Security
 - [ ] Authorization in **two independent server layers that must both pass**: Postgres RLS (primary) + `assertCap()` (secondary). React `can()` is UX only.
 - [ ] Every table: `tenant_id uuid not null`, RLS `ENABLE` + `FORCE`; every policy `USING`/`WITH CHECK` includes `tenant_id = app.effective_tenant_id()` (the JWT tenant, else the single launch tenant — the anon fence; there is no `auth.current_tenant_id()`).
+- [ ] Grants are **stated, never inherited** from Supabase's default privileges (revoke, then grant exactly): staff (`authenticated`) only read telemetry, rollups, the search/consent/notification ledgers, `tenants` and `profiles`; their one write there is the users screen's column UPDATE on `profiles.role`/`is_active`/`display_name`; the service role and definer functions write the rest (0030, 0037).
 - [ ] Role + `tenant_id` via the Custom Access Token Hook from `app_metadata` (never `user_metadata`). On role/tenant change, force-revoke sessions.
 - [ ] Publish/archive/delete gated by RESTRICTIVE RLS, not hidden buttons.
 - [ ] `leads.budget`/`timeline`/`internal_notes`/`ip_inet` restricted to **Admin + Developer** at the column level (column GRANT + `leads_safe` view omitting them + role-checked decrypt path as the gate of record); Content Creator and SEO get **no** lead access. `leads_safe`'s GRANT is **not** to all `authenticated`.
