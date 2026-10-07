@@ -38,11 +38,12 @@ describe('admin.css fonts', () => {
     const stack = (css: string, token: string) =>
       new RegExp(`${token}:\\s*([^;]+);`).exec(css)?.[1]?.replace(/\s+/g, ' ').trim() ?? '';
     const admin = stack(ADMIN, '--ad-font-ar');
-    expect(admin.split(',').slice(0, 3).map((s) => s.trim().replace(/'/g, ''))).toEqual([
-      'Almarai',
-      'Almarai Fallback',
-      'Almarai Fallback Linux',
-    ]);
+    expect(
+      admin
+        .split(',')
+        .slice(0, 3)
+        .map((s) => s.trim().replace(/'/g, '')),
+    ).toEqual(['Almarai', 'Almarai Fallback', 'Almarai Fallback Linux']);
     expect(admin).toBe(stack(GLOBAL, '--bs-font-ar'));
   });
 });
