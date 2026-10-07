@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { ROLES, type Role } from '@/lib/auth/types';
@@ -17,7 +19,10 @@ import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
  * deliberately unreachable by every API role (migration 0016), so a test runner cannot
  * ask the database what it is. A loopback Supabase URL is a stricter test anyway: it
  * rules out staging as well as production. The preview the browser signs in to must be
- * loopback too, or the sign-ins would land as failed attempts on a real project.
+ * loopback too, AND built against this same Supabase: the preview reaches whatever project
+ * its build inlined (astro:env), so a local preview built from a .env that names a hosted
+ * project would send the sign-ins there, as failed attempts on a real project. The build
+ * the preview serves is read to check it (builtSupabaseUrls).
  */
 
 export const STAFF_ROLES: readonly Role[] = ROLES;
@@ -61,21 +66,60 @@ export interface StaffEnv {
   serviceKey: string;
 }
 
+/** The build `wrangler dev` serves: playwright.config.ts's recipe and the e2e job's. */
+const BUILD_DIR = fileURLToPath(new URL('../../dist/server/', import.meta.url));
+
+/** Both spellings a build emits (scripts/verify-build-origin.mjs reads PUBLIC_SITE_URL so). */
+const SUPABASE_URL_BINDING = /PUBLIC_SUPABASE_URL["']?\s*[:=]\s*["']([^"']+)["']/g;
+
+/**
+ * The Supabase origins a build was compiled against, trailing slash dropped. astro:env
+ * inlines PUBLIC_SUPABASE_URL at build time and every server-side client reads it from
+ * there (src/lib/supabase, src/lib/auth/session.ts), so this, not the shell the tests run
+ * in, decides which project the preview's sign-ins reach. Empty when there is no build.
+ */
+export function builtSupabaseUrls(dir: string = BUILD_DIR): string[] {
+  const found = new Set<string>();
+  const walk = (path: string) => {
+    for (const name of readdirSync(path)) {
+      const full = join(path, name);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (/\.m?js$/.test(name)) {
+        for (const m of readFileSync(full, 'utf8').matchAll(SUPABASE_URL_BINDING)) {
+          found.add((m[1] ?? '').replace(/\/$/, ''));
+        }
+      }
+    }
+  };
+  if (existsSync(dir)) walk(dir);
+  return [...found];
+}
+
+let built: readonly string[] | null = null;
+/** Read once per process: every spec asks staffEnv() at load time. */
+const servedBuild = () => (built ??= builtSupabaseUrls());
+
 /**
  * The local Supabase the harness may write to, or null, in which case every admin spec
- * skips. Null unless the Supabase URL AND the preview are loopback and the service key
- * is present (the perf-seo-a11y e2e job exports all three).
+ * skips. Null unless the Supabase URL AND the preview are loopback, the service key is
+ * present (the perf-seo-a11y e2e job exports all three), and the build the preview serves
+ * names that Supabase and no other.
  */
-export function staffEnv(env: Record<string, string | undefined> = process.env): StaffEnv | null {
+export function staffEnv(
+  env: Record<string, string | undefined> = process.env,
+  buildUrls: () => readonly string[] = servedBuild,
+): StaffEnv | null {
   const url = (env['PUBLIC_SUPABASE_URL'] ?? '').replace(/\/$/, '');
   const serviceKey = env['SUPABASE_SERVICE_ROLE_KEY'] ?? '';
   const preview = env['PREVIEW_URL'] ?? 'http://localhost:8788';
   if (!serviceKey || !isLoopbackUrl(url) || !isLoopbackUrl(preview)) return null;
+  const origins = buildUrls();
+  if (origins.length === 0 || origins.some((origin) => origin !== url)) return null;
   return { url, serviceKey };
 }
 
 export const SKIP_REASON =
-  'needs the e2e job: a LOCAL seeded Supabase, its service key, and a loopback preview';
+  'needs the e2e job: a LOCAL seeded Supabase, its service key, and a loopback preview built against it';
 
 /**
  * Creates (or resets) the role's account and profile, and returns credentials valid for

@@ -1,8 +1,16 @@
-import { readFileSync } from 'node:fs';
-import { isAbsolute } from 'node:path';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ROLES } from '@/lib/auth/types';
-import { STAFF_ROLES, authFile, isLoopbackUrl, staffEmail, staffEnv } from '../admin/staff';
+import {
+  STAFF_ROLES,
+  authFile,
+  builtSupabaseUrls,
+  isLoopbackUrl,
+  staffEmail,
+  staffEnv,
+} from '../admin/staff';
 
 // The admin e2e harness creates staff accounts with the service role (tests/admin/staff.ts).
 // Its one safety property is WHERE it may do that: a local stack, never staging or
@@ -10,6 +18,8 @@ import { STAFF_ROLES, authFile, isLoopbackUrl, staffEmail, staffEnv } from '../a
 
 const LOCAL = 'http://127.0.0.1:54321';
 const KEY = 'local-service-role-key';
+/** A preview build compiled against the local Supabase, as the e2e job's is. */
+const BUILT_LOCAL = () => [LOCAL];
 
 describe('isLoopbackUrl', () => {
   it.each([
@@ -34,8 +44,10 @@ describe('isLoopbackUrl', () => {
 });
 
 describe('staffEnv', () => {
-  it('is available for a local Supabase and a local preview', () => {
-    expect(staffEnv({ PUBLIC_SUPABASE_URL: `${LOCAL}/`, SUPABASE_SERVICE_ROLE_KEY: KEY })).toEqual({
+  const env = { PUBLIC_SUPABASE_URL: LOCAL, SUPABASE_SERVICE_ROLE_KEY: KEY };
+
+  it('is available for a local Supabase and a local preview built against it', () => {
+    expect(staffEnv({ ...env, PUBLIC_SUPABASE_URL: `${LOCAL}/` }, BUILT_LOCAL)).toEqual({
       url: LOCAL,
       serviceKey: KEY,
     });
@@ -43,26 +55,66 @@ describe('staffEnv', () => {
 
   it('refuses a remote Supabase, whatever the key', () => {
     expect(
-      staffEnv({
-        PUBLIC_SUPABASE_URL: 'https://xkxthzcmmvtnwicerlup.supabase.co',
-        SUPABASE_SERVICE_ROLE_KEY: KEY,
-      }),
+      staffEnv({ ...env, PUBLIC_SUPABASE_URL: 'https://xkxthzcmmvtnwicerlup.supabase.co' }, () => [
+        'https://xkxthzcmmvtnwicerlup.supabase.co',
+      ]),
     ).toBeNull();
   });
 
   it('refuses a remote preview: the sign-ins would land on a real project', () => {
     expect(
-      staffEnv({
-        PUBLIC_SUPABASE_URL: LOCAL,
-        SUPABASE_SERVICE_ROLE_KEY: KEY,
-        PREVIEW_URL: 'https://braiin-station.braiin.workers.dev',
-      }),
+      staffEnv({ ...env, PREVIEW_URL: 'https://braiin-station.braiin.workers.dev' }, BUILT_LOCAL),
     ).toBeNull();
   });
 
+  it('refuses a local preview built against a hosted project (a .env build)', () => {
+    expect(staffEnv(env, () => ['https://xkxthzcmmvtnwicerlup.supabase.co'])).toBeNull();
+    // A build holding both (shell env and .env disagree: scripts/check-site-url.mjs).
+    expect(staffEnv(env, () => [LOCAL, 'https://xkxthzcmmvtnwicerlup.supabase.co'])).toBeNull();
+  });
+
+  it('refuses when there is no build to read', () => {
+    expect(staffEnv(env, () => [])).toBeNull();
+  });
+
   it('refuses without the service key', () => {
-    expect(staffEnv({ PUBLIC_SUPABASE_URL: LOCAL })).toBeNull();
-    expect(staffEnv({ PUBLIC_SUPABASE_URL: LOCAL, SUPABASE_SERVICE_ROLE_KEY: '' })).toBeNull();
+    expect(staffEnv({ PUBLIC_SUPABASE_URL: LOCAL }, BUILT_LOCAL)).toBeNull();
+    expect(staffEnv({ ...env, SUPABASE_SERVICE_ROLE_KEY: '' }, BUILT_LOCAL)).toBeNull();
+  });
+});
+
+describe('builtSupabaseUrls', () => {
+  function build(files: Record<string, string>): string {
+    const dir = mkdtempSync(join(tmpdir(), 'preview-build-'));
+    for (const [name, source] of Object.entries(files)) {
+      mkdirSync(join(dir, name, '..'), { recursive: true });
+      writeFileSync(join(dir, name), source);
+    }
+    return dir;
+  }
+
+  it('reads both spellings a build emits, in nested chunks, once each', () => {
+    const dir = build({
+      'entry.mjs': `var PUBLIC_SUPABASE_URL = "${LOCAL}";`,
+      'chunks/admin-ui_X.mjs': `const env = { "PUBLIC_SUPABASE_URL": "${LOCAL}/" };`,
+      'chunks/other_Y.mjs': 'const unrelated = "http://localhost:9999";',
+      'wrangler.json': `{ "PUBLIC_SUPABASE_URL": "https://ignored.example" }`,
+    });
+    expect(builtSupabaseUrls(dir)).toEqual([LOCAL]);
+  });
+
+  it('reports every project a build names', () => {
+    const dir = build({
+      'a.mjs': `var PUBLIC_SUPABASE_URL = "${LOCAL}";`,
+      'b.mjs': `var PUBLIC_SUPABASE_URL = "https://xkxthzcmmvtnwicerlup.supabase.co";`,
+    });
+    expect(builtSupabaseUrls(dir).sort()).toEqual(
+      [LOCAL, 'https://xkxthzcmmvtnwicerlup.supabase.co'].sort(),
+    );
+  });
+
+  it('is empty without a build', () => {
+    expect(builtSupabaseUrls(join(tmpdir(), 'no-such-build-dir'))).toEqual([]);
   });
 });
 

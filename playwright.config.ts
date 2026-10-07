@@ -11,7 +11,8 @@ import { defineConfig, devices } from '@playwright/test';
 // Admin specs (tests/admin, Admin v2 F0) run signed in. `admin-setup` creates one staff
 // account per role on the LOCAL Supabase and saves each role's session; `admin` depends on
 // it and opens contexts from those sessions. Both skip unless the Supabase URL and the
-// preview are loopback and the service key is exported (tests/admin/staff.ts).
+// preview are loopback, the service key is exported, and the build in dist/ names that same
+// Supabase (tests/admin/staff.ts); in CI the setup fails instead of skipping.
 const ADMIN_SPECS = /[\\/]tests[\\/]admin[\\/]/;
 
 export default defineConfig({

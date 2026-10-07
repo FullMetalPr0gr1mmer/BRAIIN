@@ -16,10 +16,14 @@ import { SKIP_REASON, STAFF_ROLES, authFile, ensureStaff, staffEnv } from './sta
  */
 
 const env = staffEnv();
-setup.skip(!env, SKIP_REASON);
+// The e2e job always provides the local stack and a build against it (perf-seo-a11y.yml),
+// so in CI a null here is a broken export or build: failing beats quietly skipping every
+// admin spec. Locally, skipping stays the safe default.
+setup.skip(!env && !process.env['CI'], SKIP_REASON);
 
 for (const role of STAFF_ROLES) {
   setup(`sign in as ${role}`, async ({ browser }) => {
+    expect(env, `CI must run the admin harness: ${SKIP_REASON}`).not.toBeNull();
     const { email, password } = await ensureStaff(env!, role);
     const context = await browser.newContext();
     const page = await context.newPage();
