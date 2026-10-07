@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import type { AuthContext, Role } from '@/lib/auth/types';
+import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
 import {
   cleanQuery,
   escapeLike,
@@ -165,6 +165,49 @@ const as = (role: Role): AuthContext => ({
   role,
   isActive: true,
   email: 'someone@example.com',
+});
+
+// What each role's search may reach, from CLAUDE.md §5, written out rather than derived:
+// RLS lets every staff role read most of these tables, so canRead() is the only thing
+// between a Developer and the draft titles of every service, post and project.
+const SEARCHED_BY: Record<Role, readonly string[]> = {
+  admin: SEARCH_TARGETS.map((t) => t.group),
+  content_creator: SEARCH_TARGETS.map((t) => t.group).filter(
+    (group) => group !== 'Redirects' && group !== 'Themes',
+  ),
+  seo: [
+    'Disciplines',
+    'Services',
+    'Blog',
+    'Our Work',
+    'Sectors',
+    'Clients',
+    'Pages',
+    'Categories',
+    'Team & authors',
+    'Redirects',
+    'Media',
+  ],
+  developer: ['Pages', 'Media', 'Themes'],
+};
+
+describe('what each role searches', () => {
+  it.each(ROLES)('%s: exactly the entities §5 lets it open', async (role) => {
+    const { sb, tables } = fakeDb();
+    const outcome = await searchAdmin(sb, as(role), 'logo');
+    // Every table answers a row, so the groups are the entities searched.
+    expect(outcome.groups.map((g) => g.group)).toEqual(SEARCHED_BY[role]);
+    const tableOf = new Map(SEARCH_TARGETS.map((t) => [t.group, t.config.table]));
+    expect(tables).toEqual(SEARCHED_BY[role].map((group) => tableOf.get(group)));
+  });
+
+  it('never asks the database for an entity the role may not open', async () => {
+    const { sb, tables } = fakeDb();
+    await searchAdmin(sb, as('seo'), 'logo');
+    for (const table of ['testimonials', 'custom_themes', 'ai_questions', 'ai_styles']) {
+      expect(tables).not.toContain(table);
+    }
+  });
 });
 
 describe('a search that cannot reach an entity (DoD #6)', () => {

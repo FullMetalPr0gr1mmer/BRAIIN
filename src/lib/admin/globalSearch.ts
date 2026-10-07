@@ -39,8 +39,11 @@ import {
 //     a second, less-guarded read path — the exact thing §5's column gates exist to
 //     prevent. The leads page has its own search.
 //   - Per-entity capability gating uses the SAME rule as the sidebar (nav.ts): any of
-//     the resource's read caps at full/view/meta. This is UX-layer filtering on top of
-//     RLS — an entity the role cannot read returns zero rows from Postgres regardless.
+//     the resource's read caps at full/view/meta. RLS does NOT back it up here: most
+//     searched tables are readable by every staff role (services_read, redirects_read,
+//     custom_themes_read, testimonials_read… allow app.is_staff()), so canRead() alone
+//     keeps a Developer's results to Pages, Media and Themes. tests/lib/globalSearch.spec.ts
+//     pins what each role searches.
 //   - One ilike COLUMN per entity, no .or() chains: PostgREST's or-filter syntax gives
 //     commas and parens meaning, which turns user input into filter grammar — the
 //     search-safety class of bug §9(e) tests for. A single .ilike() argument is

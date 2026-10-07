@@ -894,6 +894,38 @@ describe('admin endpoints — {principal × capability} matrix', () => {
   });
 });
 
+// ── The search route searches as its caller ─────────────────────────────────────
+// Every staff role may call it, so the matrix above proves only "not 403". What a role
+// FINDS is decided per entity inside searchAdmin(), pinned role by role in
+// tests/lib/globalSearch.spec.ts; this checks the route hands it the caller rather than
+// anyone else. The stub answers a row from every table, so the groups are what it searched.
+describe('GET /api/admin/search searches as its caller', () => {
+  it.each([
+    ['developer', ['Pages', 'Media', 'Themes']],
+    [
+      'seo',
+      [
+        'Disciplines',
+        'Services',
+        'Blog',
+        'Our Work',
+        'Sectors',
+        'Clients',
+        'Pages',
+        'Categories',
+        'Team & authors',
+        'Redirects',
+        'Media',
+      ],
+    ],
+  ] as const)('%s', async (role, groups) => {
+    const { GET } = (await import('@/pages/api/admin/search')) as { GET: APIRoute };
+    const response = (await GET(makeContext(role, '/api/admin/search?q=logo'))) as Response;
+    const body = (await response.json()) as { data: { groups: { group: string }[] } };
+    expect(body.data.groups.map((g) => g.group)).toEqual(groups);
+  });
+});
+
 // ── Database refusals after assertCap passed ─────────────────────────────────────
 // A singleton write the Worker allowed can still be refused by the database: a guard
 // trigger (42501) or a CHECK the PATCH could not see because it spans stored columns
