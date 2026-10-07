@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 // The command palette (Admin v2 F3) in a real browser, signed in: the shortcuts, the
@@ -20,7 +20,7 @@ test.describe('as admin', () => {
     await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
   });
 
-  test('Ctrl+K opens it, the arrows walk the list, Enter goes there', async ({ page }) => {
+  test('Ctrl+K opens it, the best match is active, Enter goes there', async ({ page }) => {
     await page.keyboard.press('Control+k');
     const dialog = page.getByRole('dialog', { name: 'Search the admin' });
     await expect(dialog).toBeVisible();
@@ -35,6 +35,45 @@ test.describe('as admin', () => {
 
     await page.keyboard.press('Enter');
     await page.waitForURL((url) => url.pathname === '/admin/service-cases');
+  });
+
+  test('the arrows walk the list and wrap at both ends; Enter takes the option reached', async ({
+    page,
+  }) => {
+    // One character: the server is not asked, so the list cannot change under the keys.
+    // For Admin, "n" lists Numbers, then the six "New …" actions, "New redirect" last.
+    await page.keyboard.press('Control+k');
+    const dialog = page.getByRole('dialog', { name: 'Search the admin' });
+    const input = dialog.getByRole('combobox');
+    await input.fill('n');
+    const options = dialog.getByRole('option');
+    await expect(options.last()).toContainText('New redirect');
+    expect(await options.count()).toBeGreaterThanOrEqual(3);
+
+    const expectActive = async (option: Locator) => {
+      await expect(option).toHaveAttribute('aria-selected', 'true');
+      await expect(dialog.locator('[role="option"][aria-selected="true"]')).toHaveCount(1);
+      await expect(input).toHaveAttribute(
+        'aria-activedescendant',
+        (await option.getAttribute('id'))!,
+      );
+    };
+    await expectActive(options.first());
+    await page.keyboard.press('ArrowUp'); // from the first, round to the last
+    await expectActive(options.last());
+    await page.keyboard.press('ArrowDown'); // from the last, round to the first
+    await expectActive(options.first());
+    await page.keyboard.press('ArrowDown');
+    await expectActive(options.nth(1));
+    await page.keyboard.press('ArrowUp');
+    await expectActive(options.first());
+    // The keys move the selection, not the caret (preventDefault): it stays after the "n".
+    expect(await input.evaluate((el) => (el as HTMLInputElement).selectionStart)).toBe(1);
+
+    await page.keyboard.press('ArrowUp');
+    await expectActive(options.last());
+    await page.keyboard.press('Enter');
+    await page.waitForURL((url) => url.pathname === '/admin/redirects/new');
   });
 
   test('finds a record through the server search and opens it', async ({ page }) => {
