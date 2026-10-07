@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { ADMIN_NAV, isVisible, visibleNav, type NavTab } from '@/lib/admin/nav';
-import { ROLE_CAPS } from '@/lib/authz/matrix';
-import type { Role } from '@/lib/auth/types';
+import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
+import { ROLES, type Role } from '@/lib/auth/types';
 
 /*
  * Which admin screens the per-role sweep visits (Admin v2 F0).
@@ -40,6 +40,39 @@ export const UNSEEDED_LISTS: Readonly<Record<string, string>> = {
   '/api/admin/ai-questions': 'ai_questions',
   '/api/admin/ai-styles': 'ai_styles',
 };
+
+/**
+ * Screens only the holders of one capability may use, with the API each one's island loads
+ * on mount (tests/admin/refusals.e2e.ts). Every role WITHOUT the capability, which has the
+ * screen outside its menu (tests/lib/adminRoutes.spec.ts), must get the server's 403 from
+ * the API and see it on the screen: the hidden menu link is not what protects them.
+ */
+export interface LockedScreen {
+  href: string;
+  api: string;
+  cap: Capability;
+}
+
+export const LOCKED_SCREENS: readonly LockedScreen[] = [
+  { href: '/admin/users', api: '/api/admin/users', cap: 'users.manage' },
+  { href: '/admin/applications', api: '/api/admin/applications', cap: 'applications.manage' },
+  { href: '/admin/leads', api: '/api/admin/leads', cap: 'leads.manage' },
+  { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view' },
+  { href: '/admin/logs', api: '/api/admin/logs', cap: 'logs.view' },
+  { href: '/admin/site-health', api: '/api/admin/site-health', cap: 'siteHealth.view' },
+  { href: '/admin/settings', api: '/api/admin/settings', cap: 'settings.general' },
+  { href: '/admin/integrations', api: '/api/admin/integrations', cap: 'settings.integrations' },
+  { href: '/admin/themes', api: '/api/admin/themes', cap: 'theme.edit' },
+  { href: '/admin/redirects', api: '/api/admin/redirects', cap: 'redirects.manage' },
+  { href: '/admin/service-cases', api: '/api/admin/service-cases', cap: 'services.write' },
+  { href: '/admin/analytics/search', api: '/api/admin/analytics/search', cap: 'analytics.search' },
+  { href: '/admin/ai-config', api: '/api/admin/ai-config', cap: 'ai.config' },
+];
+
+/** The roles a locked screen must refuse: those with no access at all to its capability. */
+export function refusedRoles(screen: LockedScreen): Role[] {
+  return ROLES.filter((role) => ROLE_CAPS[role][screen.cap] === 'none');
+}
 
 /** Reached from inside other screens, never from the sidebar or an area's tabs. */
 export const EXTRA_LINKS: readonly NavTab[] = [

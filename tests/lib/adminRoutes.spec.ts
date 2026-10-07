@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ROLES, type Role } from '@/lib/auth/types';
 import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
@@ -7,10 +7,12 @@ import * as resources from '@/lib/admin/resources';
 import type { ResourceConfig } from '@/lib/admin/resource';
 import {
   EXTRA_LINKS,
+  LOCKED_SCREENS,
   UNSEEDED_LISTS,
   expectedSidebar,
   menuScreens,
   pageFileFor,
+  refusedRoles,
   sweepRoutes,
 } from '../admin/routes';
 
@@ -147,6 +149,39 @@ describe('the sweep route map', () => {
         .filter((p) => !EXTRA_LINKS.some((l) => l.href === p));
       expect(new Set(screens)).toEqual(new Set(reachableHrefs(role)));
     }
+  });
+});
+
+// tests/admin/refusals.e2e.ts opens each locked screen as every role without its capability.
+// These keep that list honest: real screens and APIs, each refused to exactly the roles
+// whose menu leaves it out, and refused to some role at all.
+describe('the locked screens the refusals e2e opens', () => {
+  it('are menu screens with a page and an API', () => {
+    const hrefs = menuScreens().map((s) => s.href);
+    for (const screen of LOCKED_SCREENS) {
+      expect(hrefs, screen.href).toContain(screen.href);
+      expect(() => pageFileFor(screen.href), screen.href).not.toThrow();
+      const api = `src/pages${screen.api}`;
+      expect(existsSync(`${api}.ts`) || existsSync(`${api}/index.ts`), api).toBe(true);
+    }
+  });
+
+  it('are refused to exactly the roles whose menu leaves them out, never to Admin', () => {
+    for (const screen of LOCKED_SCREENS) {
+      const refused = refusedRoles(screen);
+      expect(refused.length, screen.href).toBeGreaterThan(0);
+      expect(refused, screen.href).not.toContain('admin');
+      for (const role of ROLES) {
+        expect(reachableHrefs(role).includes(screen.href), `${role} ${screen.href}`).toBe(
+          !refused.includes(role),
+        );
+      }
+    }
+  });
+
+  it('cover every role but Admin', () => {
+    const covered = new Set(LOCKED_SCREENS.flatMap(refusedRoles));
+    expect([...covered].sort()).toEqual(ROLES.filter((r) => r !== 'admin').sort());
   });
 });
 

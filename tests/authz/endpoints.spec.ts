@@ -653,6 +653,36 @@ const CASES: Case[] = [
     body: { email: 'new@example.test', role: 'seo' },
     allow: ['admin'],
   },
+  // The reads behind the settings-like screens: what their forms load on mount, and what
+  // tests/admin/refusals.e2e.ts asks the real stack for as each role without the capability.
+  {
+    name: 'general settings read',
+    load: () => import('@/pages/api/admin/settings/index'),
+    method: 'GET',
+    url: '/api/admin/settings',
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'integrations read',
+    load: () => import('@/pages/api/admin/integrations'),
+    method: 'GET',
+    url: '/api/admin/integrations',
+    allow: ['admin', 'seo'],
+  },
+  {
+    name: 'theme list',
+    load: () => import('@/pages/api/admin/themes/index'),
+    method: 'GET',
+    url: '/api/admin/themes',
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'style-finder logic config read',
+    load: () => import('@/pages/api/admin/ai-config'),
+    method: 'GET',
+    url: '/api/admin/ai-config',
+    allow: ['admin'],
+  },
   {
     name: 'general settings write',
     load: () => import('@/pages/api/admin/settings/index'),
