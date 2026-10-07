@@ -34,6 +34,16 @@ export const EXPORT_LIMITS: RateLimitOptions = {
 };
 
 /**
+ * Revealing one lead's contact details (Admin v2 C2b, owner item O-9): generous for real
+ * work, one lead at a time, but a ceiling on walking the table reveal by reveal.
+ */
+export const PII_REVEAL_LIMITS: RateLimitOptions = {
+  perUser: 60,
+  perTenant: 300,
+  windowMinutes: 60,
+};
+
+/**
  * Claims one slot for a privileged operation, or refuses with RateLimitError. Call it
  * BEFORE the work, so an operation that dies halfway still consumed its slot.
  *

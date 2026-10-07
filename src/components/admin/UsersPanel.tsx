@@ -138,9 +138,14 @@ export default function UsersPanel({ selfId }: UsersPanelProps) {
                 <tr key={row.id}>
                   <td>
                     {row.display_name ?? row.id.slice(0, 8)}
-                    {isSelf && <span className="badge"> you</span>}
+                    {isSelf && (
+                      <span className="badge" data-tone="klein">
+                        {' '}
+                        you
+                      </span>
+                    )}
                     {locked && (
-                      <span className="badge" data-status="archived">
+                      <span className="badge" data-tone="err">
                         {' '}
                         locked
                       </span>
