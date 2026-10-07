@@ -27,6 +27,29 @@ function withoutTokenBlocks(css: string): string {
   return css.replace(/:root\s*\{[\s\S]*?\n\}/, '').replace(/::backdrop\s*\{[^}]*\}/, '');
 }
 
+/**
+ * Colour literals in declaration VALUES, as `property: literal`. Selectors such as
+ * [data-tone='gray'] and properties such as white-space are not colours. A declaration
+ * ends at `;` or at its rule's `}` (the last one may have no `;`). A token reference is
+ * not a literal, but its fallback is: `var(--x, #123)` renders #123 whenever --x is unset.
+ */
+function colourLiterals(css: string): string[] {
+  return [...css.matchAll(/([a-z-]+)\s*:\s*([^;{}]+)(?=[;}])/gi)].flatMap((m) => {
+    const value = (m[2] ?? '')
+      .replace(/var\(\s*--[\w-]+\s*,/g, '(')
+      .replace(/var\(\s*--[\w-]+\s*\)/g, '');
+    return [
+      ...value.matchAll(
+        /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:black|white|red|green|blue|gray|grey)\b/gi,
+      ),
+    ].map((hit) => `${m[1]}: ${hit[0]}`);
+  });
+}
+
+/** What the colour rule applies to: everything but the token blocks and the font faces. */
+const outsideTokens = (css: string) =>
+  withoutTokenBlocks(css).replace(/@font-face\s*\{[^}]*\}/g, '');
+
 describe('admin.css fonts', () => {
   it('declares exactly the @font-face set global.css does', () => {
     const admin = fontFaces(ADMIN);
@@ -54,24 +77,26 @@ describe('admin.css colours', () => {
   });
 
   it('keeps every colour literal inside the token block', () => {
-    const rest = withoutTokenBlocks(ADMIN).replace(/@font-face\s*\{[^}]*\}/g, '');
-    // Declaration VALUES only (selectors such as [data-tone='gray'] and properties such
-    // as white-space are not colours), with token references removed.
-    const literals = [...rest.matchAll(/([a-z-]+)\s*:\s*([^;{}]+);/gi)].flatMap((m) => {
-      const value = (m[2] ?? '').replace(/var\([^)]*\)/g, '');
-      return [
-        ...value.matchAll(
-          /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:black|white|red|green|blue|gray|grey)\b/gi,
-        ),
-      ].map((hit) => `${m[1]}: ${hit[0]}`);
-    });
-    expect(literals).toEqual([]);
+    expect(colourLiterals(outsideTokens(ADMIN))).toEqual([]);
   });
 
   it('would catch a literal outside the block (the check is not vacuous)', () => {
-    const planted = `${ADMIN}\n.x { color: #123456; border-color: gray; }`;
-    const rest = withoutTokenBlocks(planted);
-    expect(rest).toMatch(/color:\s*#123456/);
+    // Planted after the real stylesheet, so the token-block cut is exercised too: it must
+    // not swallow what follows it.
+    const planted = `${ADMIN}
+.x { color: #123456; border-color: gray; }
+.y { background: var(--ad-card, #fafafa) }
+.z { box-shadow: 0 0 0 1px var(--ad-line, var(--ad-line-2)); outline-color: rgb(0 0 0) }`;
+    expect(colourLiterals(outsideTokens(planted))).toEqual([
+      'color: #123456',
+      'border-color: gray',
+      'background: #fafafa',
+      'outline-color: rgb(',
+    ]);
+  });
+
+  it('finds the token block’s own literals, so it is the cut that keeps them out', () => {
+    expect(colourLiterals(ADMIN).length).toBeGreaterThan(20);
   });
 
   it('has one reduced-motion block', () => {
