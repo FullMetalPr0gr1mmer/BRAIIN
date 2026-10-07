@@ -11,8 +11,9 @@ const USER = '11111111-1111-4111-8111-111111111111';
 const inserts: { table: string; row: Record<string, unknown> }[] = [];
 let leadRows: Record<string, unknown>[] = [];
 
-// The service-role client: the public lead insert, the export's live recheck and its
-// rate-limit ledger.
+// The service-role client: the public lead insert, the export's live recheck, its
+// rate-limit ledger and, since 0033, the PII export's lead read (staff tokens cannot read
+// the gated columns, so a leads.pii export reads as the service role).
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
     from: (table: string) => {
@@ -33,7 +34,11 @@ vi.mock('@/lib/supabase/server', () => ({
         error: null,
       });
       b['then'] = (ok: (v: unknown) => unknown) =>
-        Promise.resolve({ data: [], error: null, count: 0 }).then(ok);
+        Promise.resolve({
+          data: table === 'leads' ? leadRows : [],
+          error: null,
+          count: 0,
+        }).then(ok);
       return b;
     },
   }),
@@ -114,7 +119,8 @@ describe('where a lead is read', () => {
       },
     ];
     const { GET } = await import('@/pages/api/admin/leads/export');
-    // The caller's connection answers the lead query AND the label lookups (Round 3).
+    // The caller's connection answers the label lookups (Round 3); Developer holds
+    // leads.pii, so the lead query itself goes to the service role (above).
     const titled: Record<string, Record<string, unknown>[]> = {
       disciplines: [
         {
@@ -130,7 +136,7 @@ describe('where a lead is read', () => {
         const b: Record<string, unknown> = {};
         for (const m of ['select', 'eq', 'in', 'order', 'limit', 'gte', 'lte']) b[m] = () => b;
         b['then'] = (ok: (v: unknown) => unknown) =>
-          Promise.resolve({ data: titled[table] ?? leadRows, error: null }).then(ok);
+          Promise.resolve({ data: titled[table] ?? [], error: null }).then(ok);
         return b;
       },
     };
