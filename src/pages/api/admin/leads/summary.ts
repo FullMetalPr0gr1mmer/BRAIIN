@@ -4,7 +4,8 @@ import { ValidationError } from '@/lib/admin/errors';
 
 // The lead KPIs (Admin v2 C2a): counts per stage kind, spam, and the average first
 // response time, for an optional date range. Counts only, never a lead. `leads.manage`;
-// runs as the caller (public.lead_summary), so a Content Creator cannot learn the volume.
+// runs as the caller (public.lead_summary), for the caller's tenant, so a Content Creator
+// cannot learn the volume.
 
 export const prerender = false;
 
@@ -13,11 +14,14 @@ const COUNT_KEYS = ['total', 'new', 'open', 'won', 'lost', 'spam'] as const;
 export const POST = defineAdminRoute({
   cap: 'leads.manage',
   input: LeadSummaryQuerySchema,
-  handler: async ({ sb, input }) => {
+  handler: async ({ auth, sb, input }) => {
     const filter: Record<string, unknown> = {};
     if (input.from) filter['from'] = input.from;
     if (input.to) filter['to'] = input.to;
-    const { data, error } = await sb.rpc('lead_summary', { p_filter: filter });
+    const { data, error } = await sb.rpc('lead_summary', {
+      p_tenant: auth.tenantId,
+      p_filter: filter,
+    });
     if (error) {
       if (error.code === '22023') throw new ValidationError('summary filter refused');
       throw new Error(`lead_summary: ${error.message}`);

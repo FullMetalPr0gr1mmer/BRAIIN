@@ -6,7 +6,8 @@ import { LEAD_CARD_FIELDS, pick, tenantCountry, toRpcFilter } from '@/lib/crm/le
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 
 // The pipeline board (Admin v2 C2a): every stage of the caller's tenant with its count and
-// newest cards, spam excluded. `leads.manage`; runs as the caller (public.leads_board).
+// newest cards, spam excluded. `leads.manage`; runs as the caller (public.leads_board), for
+// the caller's tenant.
 
 export const prerender = false;
 
@@ -20,7 +21,10 @@ export const POST = defineAdminRoute({
       input,
       tenantCountry(sb, auth.tenantId),
     );
-    const { data, error } = await sb.rpc('leads_board', { p_filter: filter });
+    const { data, error } = await sb.rpc('leads_board', {
+      p_tenant: auth.tenantId,
+      p_filter: filter,
+    });
     if (error) {
       if (error.code === '22023') throw new ValidationError('board filter refused');
       throw new Error(`leads_board: ${error.message}`);

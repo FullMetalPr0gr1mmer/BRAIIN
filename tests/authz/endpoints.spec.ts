@@ -199,6 +199,8 @@ interface Case {
   body?: unknown;
   /** Roles that must NOT get 403. Everyone else must. */
   allow: Role[];
+  /** A read sent as a POST (its search stays out of URLs): checked for scoping like a GET. */
+  read?: true;
 }
 
 const VALID_BILINGUAL = { en: 'Example', ar: 'مثال' };
@@ -604,6 +606,7 @@ const CASES: Case[] = [
     url: '/api/admin/leads/query',
     body: { q: 'acme', sort: 'newest' },
     allow: ['admin', 'developer'],
+    read: true,
   },
   {
     name: 'lead pipeline board',
@@ -612,6 +615,7 @@ const CASES: Case[] = [
     url: '/api/admin/leads/board',
     body: {},
     allow: ['admin', 'developer'],
+    read: true,
   },
   {
     name: 'lead KPIs',
@@ -620,6 +624,7 @@ const CASES: Case[] = [
     url: '/api/admin/leads/summary',
     body: {},
     allow: ['admin', 'developer'],
+    read: true,
   },
   {
     name: 'CRM stages',
@@ -936,7 +941,9 @@ describe('admin endpoints — {principal × capability} matrix', () => {
     // The companion to the test above: filtering on the right tenant is worthless if a
     // handler forgets to filter on any tenant. Checked over the list endpoints, where
     // an unscoped read would return every tenant's rows.
-    const listCases = CASES.filter((c) => c.method === 'GET' && !c.url.includes('export'));
+    const listCases = CASES.filter(
+      (c) => (c.method === 'GET' || c.read) && !c.url.includes('export'),
+    );
     for (const testCase of listCases) {
       const module = await testCase.load();
       const route = module[testCase.method] as APIRoute;
