@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 
 /*
  * Hover CLS — Round 2's discipline cards (ServicesOverview.astro, global.css "Discipline
@@ -274,3 +274,111 @@ for (const path of [
     ).toBeLessThan(0.02);
   });
 }
+
+// The same cold load with the race decided against us: every web-font request is held until the
+// page has painted — the consent banner included, which its script reveals — so every swap
+// lands AFTER first paint, the side the tests above only sometimes see. That side failed
+// /ar/portfolio/all in CI on the first run of #38 and of #41 (2026-10-04): the Linux runner has
+// no Arial, so no metric-matched fallback applied (chips, nav: 0.012), and the banner's Arabic
+// copy re-wrapped and the bar grew (0.023 — on Windows too, and up to 0.086 at tablet widths).
+// And it is where English /portfolio/all moved its whole catalogue on production (0.58: the
+// heading in synthetic bold, the paragraph beside it capped in ch). Since then: Linux has its
+// own faces, Archivo's fallback has a face per weight, those caps are in em, and the consent
+// copy's box holds (docs/fonts.md 2c). Measured on an emulated Linux, 5 runs: main 0.051 /
+// 0.192 / 0.020, now 0.003 / 0.005–0.007 / 0.003. Deterministic there, so never retried.
+// Linux only — the gate's platform, the one these faces were measured for. On Windows the
+// Arial faces' per-string spread still leaves /ar/portfolio/all at 0.007–0.024 in this worst
+// case, so there it would flip, not test. Not here: the home hero at 412 px and Join's "Why"
+// heading on Windows, borderline headlines that re-wrap in the worst case (as on main; 2c).
+test.describe('fonts arriving after the page has painted', () => {
+  test.describe.configure({ retries: 0 });
+  test.skip(
+    process.platform !== 'linux',
+    'measured for the Linux faces; the Arial faces leave 0.007–0.024 here (docs/fonts.md 2c)',
+  );
+  for (const [path, viewport, face] of [
+    ['/ar/portfolio/all', { width: 1350, height: 940 }, ['400 16px Almarai', 'ا']],
+    ['/ar/portfolio/all', { width: 768, height: 1024 }, ['400 16px Almarai', 'ا']],
+    ['/portfolio/all', { width: 1350, height: 940 }, ['800 16px Archivo', 'A']],
+  ] as const) {
+    test(`move nothing: ${path} @ ${viewport.width}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      const held: Route[] = [];
+      let open = false;
+      await page.route('**/fonts/*.woff2', async (route) => {
+        if (open) await route.continue();
+        else held.push(route);
+      });
+      await page.goto(path, { waitUntil: 'domcontentloaded' });
+      // Module scripts have run (the banner is shown); two frames later it has painted too.
+      await page.evaluate(
+        () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+      );
+      expect(held.length, 'precondition: a web-font request was held').toBeGreaterThan(0);
+      open = true;
+      for (const route of held.splice(0)) await route.continue();
+      await page.waitForLoadState('load');
+      await page.evaluate(() => document.fonts.ready);
+      expect(
+        await page.evaluate(([font, text]) => document.fonts.check(font, text), face),
+        'precondition: the web font did arrive',
+      ).toBe(true);
+      await watchShifts(page, true);
+      await page.waitForTimeout(1500);
+      const seen = await shifts(page);
+      expect(
+        counted(seen),
+        `counted layout shifts since navigation: ${JSON.stringify(seen)}`,
+      ).toBeLessThan(0.02);
+    });
+  }
+});
+
+// Which fallback drew the page before Almarai arrived — the faces whose overrides were measured
+// for this platform: `Almarai Fallback` (Arial) on Windows/macOS, `Almarai Fallback Linux`
+// (Liberation Sans, DejaVu Sans) on Linux, the CI runner included. Asked of the faces
+// themselves: a local() face reports 'loaded' once it resolved and drew text, 'error' when its
+// font is absent. The platform-font report alone could not tell them apart — a face with
+// overrides and the same font reached through system-ui report the same family.
+test('the fallback that draws the page before Almarai is the one measured for this platform', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1350, height: 940 });
+  await page.route('**/fonts/almarai-*.woff2', (route) => route.abort());
+  await page.goto('/ar/portfolio/all', { waitUntil: 'load' });
+  await page.evaluate(() => document.fonts.ready);
+
+  const linux = process.platform === 'linux';
+  const family = linux ? 'Almarai Fallback Linux' : 'Almarai Fallback';
+  const used = await page.evaluate(
+    (fam) =>
+      [...document.fonts]
+        .filter((f) => f.family.replace(/["']/g, '') === fam && f.status === 'loaded')
+        .map((f) => `${f.weight} ${/600/.test(f.unicodeRange) ? 'arabic' : 'latin'}`),
+    family,
+  );
+  // Body copy at 400; the nav and the filter chips at 600, which resolves to the 700 face.
+  for (const face of ['400 arabic', '700 arabic']) {
+    expect(used, `${family} faces in use: ${JSON.stringify(used)}`).toContain(face);
+  }
+
+  const MATCHED = linux ? ['Liberation Sans', 'DejaVu Sans'] : ['Arial'];
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('DOM.enable');
+  await cdp.send('CSS.enable');
+  const { root } = await cdp.send('DOM.getDocument');
+  // getPlatformFontsForNode reports a node's own text runs, so: elements that hold text.
+  for (const selector of [
+    '#consent-banner .consent-text',
+    'nav.site-nav__panel a',
+    '.fb__svc a.fchip',
+  ]) {
+    const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector });
+    expect(nodeId, selector).toBeTruthy();
+    const { fonts } = await cdp.send('CSS.getPlatformFontsForNode', { nodeId });
+    expect(fonts.length, selector).toBeGreaterThan(0);
+    for (const font of fonts) {
+      expect(MATCHED, `${selector}: ${JSON.stringify(fonts)}`).toContain(font.familyName);
+    }
+  }
+});
