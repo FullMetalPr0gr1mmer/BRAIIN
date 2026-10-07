@@ -26,11 +26,12 @@ import { scrubPii } from './lib/log/scrub';
 // message), both scrubbed of PII — never the request. Under `astro dev` it is rethrown, so
 // the dev server's error overlay still shows the stack.
 //
-// `scheduled` is the daily cron (wrangler.jsonc `triggers.crons`): the Join retention job —
-// expired CVs out of Storage, then their rows — and the limiter's old counters. Importing
-// the adapter's handler above is what wires `astro:env` for this path too (it calls
-// `setGetEnv` at module load from `cloudflare:workers`' env), so the job uses the same
-// service client as every endpoint.
+// `scheduled` is the daily cron (wrangler.jsonc `triggers.crons`, src/lib/cron/daily.ts),
+// cheapest step first: the privileged-op ledger's old rows, the Join retention job (expired
+// CVs out of Storage, then their rows) and the limiter's old counters, then the CRM's lead
+// index backfill. Importing the adapter's handler above is what wires `astro:env` for this
+// path too (it calls `setGetEnv` at module load from `cloudflare:workers`' env), so the job
+// uses the same service client as every endpoint.
 export default {
   async fetch(request, env, ctx) {
     try {

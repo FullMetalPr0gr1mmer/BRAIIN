@@ -9,6 +9,8 @@ const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER = '11111111-1111-4111-8111-111111111111';
 
 const inserts: { table: string; row: Record<string, unknown> }[] = [];
+const ingests: Record<string, unknown>[] = [];
+let ingestError: { code?: string } | null = null;
 let leadRows: Record<string, unknown>[] = [];
 
 // The service-role client: the public lead insert, the export's live recheck, its
@@ -16,6 +18,11 @@ let leadRows: Record<string, unknown>[] = [];
 // the gated columns, so a leads.pii export reads as the service role).
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
+    // Since 0035 a public lead arrives through crm_ingest_lead (src/lib/data/leads.ts).
+    rpc: async (fn: string, args: { p_lead: Record<string, unknown> }) => {
+      if (fn === 'crm_ingest_lead') ingests.push(args.p_lead);
+      return { data: null, error: ingestError };
+    },
     from: (table: string) => {
       const b: Record<string, unknown> = {};
       for (const m of ['select', 'eq', 'gte', 'in', 'order', 'limit']) b[m] = () => b;
@@ -64,18 +71,21 @@ const input = (over: Record<string, unknown> = {}) =>
 
 beforeEach(() => {
   inserts.length = 0;
+  ingests.length = 0;
+  ingestError = null;
   leadRows = [];
 });
 
 describe('the public insert', () => {
   it('writes discipline_of_interest when the visitor chose "help me choose"', async () => {
     expect((await createLead(input({ disciplineOfInterest: 'branding' }))).ok).toBe(true);
-    const row = inserts.find((i) => i.table === 'leads')!.row;
-    expect(row['discipline_of_interest']).toBe('branding');
-    expect(row['service_of_interest']).toBeNull();
+    const lead = ingests.at(-1)!;
+    expect(lead['discipline_of_interest']).toBe('branding');
+    expect(lead['service_of_interest']).toBeNull();
   });
 
-  it('omits the key otherwise (a code-before-migration deploy keeps working)', async () => {
+  it('the fallback insert omits the key otherwise (a code-before-migration deploy keeps working)', async () => {
+    ingestError = { code: 'PGRST202' };
     await createLead(input({ serviceOfInterest: 'logo' }));
     const row = inserts.find((i) => i.table === 'leads')!.row;
     expect(row['service_of_interest']).toBe('logo');
@@ -87,11 +97,11 @@ describe('the public insert', () => {
     // `photo-video` now, so the lead is filed there. Nothing else is rewritten: an
     // archived slug is stored as given and labelled from its own row.
     await createLead(input({ serviceOfInterest: 'videography' }));
-    expect(inserts.at(-1)!.row['service_of_interest']).toBe('photo-video');
+    expect(ingests.at(-1)!['service_of_interest']).toBe('photo-video');
     await createLead(input({ serviceOfInterest: 'photography' }));
-    expect(inserts.at(-1)!.row['service_of_interest']).toBe('photography');
+    expect(ingests.at(-1)!['service_of_interest']).toBe('photography');
     await createLead(input({ serviceOfInterest: 'logo' }));
-    expect(inserts.at(-1)!.row['service_of_interest']).toBe('logo');
+    expect(ingests.at(-1)!['service_of_interest']).toBe('logo');
   });
 });
 

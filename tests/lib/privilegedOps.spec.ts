@@ -66,7 +66,7 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
 }));
 
-const { claimPrivilegedOp } = await import('@/lib/admin/rateLimit');
+const { claimPrivilegedOp, PII_REVEAL_LIMITS } = await import('@/lib/admin/rateLimit');
 const { RateLimitError } = await import('@/lib/admin/errors');
 
 const auth = (userId: string, tenantId = 'T'): AuthContext =>
@@ -135,5 +135,20 @@ describe('claimPrivilegedOp', () => {
     await claimPrivilegedOp(auth('u1'), 'export-csv', LIMITS);
     await claimPrivilegedOp(auth('u1'), 'export-csv', LIMITS);
     await expect(claimPrivilegedOp(auth('u1'), 'application-cv', LIMITS)).resolves.toBeUndefined();
+  });
+});
+
+describe('the lead-reveal limits (owner item O-9)', () => {
+  it('are 60 an hour per person and 300 per tenant', () => {
+    expect(PII_REVEAL_LIMITS).toEqual({ perUser: 60, perTenant: 300, windowMinutes: 60 });
+  });
+
+  it('let a person reveal 60 leads in the window, and refuse the 61st', async () => {
+    for (let i = 0; i < 60; i += 1) {
+      await claimPrivilegedOp(auth('u1'), 'pii-reveal', PII_REVEAL_LIMITS);
+    }
+    await expect(claimPrivilegedOp(auth('u1'), 'pii-reveal', PII_REVEAL_LIMITS)).rejects.toThrow(
+      /pii-reveal:user/,
+    );
   });
 });

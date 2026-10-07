@@ -64,11 +64,19 @@ describe('the leads SELECT grant (0033)', () => {
     expect(granted).toContain('tenant_id');
   });
 
-  it('grants no gated column, ciphertext or retention date', () => {
+  it('grants no gated column, ciphertext, retention date or CRM-internal column', () => {
     const forbidden = [
       ...GATED_LEAD_COLUMNS.split(','),
       ...SENSITIVE_LEAD_COLUMNS,
       'retention_delete_after',
+      // What the CRM keeps from staff tokens: the saved spam horizon (0034), the blind
+      // indexes, the score's reasons (two derive from budget and timeline) and the index
+      // cursor (0035).
+      'retention_before_spam',
+      'email_hmac',
+      'phone_hmac',
+      'score_signals',
+      'crm_indexed_at',
     ];
     for (const column of forbidden) expect(granted, column).not.toContain(column);
   });
@@ -99,7 +107,8 @@ describe('gated lead columns have a short, named list of readers', () => {
       .sort();
     expect(users).toEqual([
       'src/lib/admin/leadFields.ts',
-      'src/pages/api/admin/leads/[id].ts',
+      // The one reveal path, for the legacy ?pii=1 and the CRM's POST /reveal (C2b).
+      'src/lib/crm/reveal.ts',
       'src/pages/api/admin/leads/export.ts',
     ]);
   });
@@ -110,12 +119,44 @@ describe('gated lead columns have a short, named list of readers', () => {
       .map((f) => f.path)
       .sort();
     expect(readers).toEqual([
+      // The reveal: after assertCap, a live recheck, the limiter and a fail-closed audit.
+      'src/lib/crm/reveal.ts',
       // The public form's insert (service role, tenant resolved server-side).
       'src/lib/data/leads.ts',
-      // The reveal and the export: after assertCap, a live recheck and a fail-closed audit.
-      'src/pages/api/admin/leads/[id].ts',
+      // The export: the §3 lockdown.
       'src/pages/api/admin/leads/export.ts',
       // The notification hook: a signed call, re-fetches the row, filters by recipient role.
+      'src/pages/api/hooks/notify-lead.ts',
+    ]);
+  });
+
+  // lead_notes is service-role only (0034); this route is the Worker's one door to the
+  // thread, for reading (an audit row first) and for adding (C2b). The legacy
+  // internal_notes mirror is kept by a definer trigger, not by Worker code.
+  it('only the notes route touches the notes thread', () => {
+    const doors = files
+      .filter((f) => /from\(\s*['"]lead_notes['"]\s*\)/.test(f.code))
+      .map((f) => f.path)
+      .sort();
+    expect(doors).toEqual(['src/pages/api/admin/leads/[id]/notes.ts']);
+  });
+
+  // The check above sees a file that builds its own service client. A module handed one
+  // (the daily cron's) needs this second net: `budget_enc` exists only on leads, so a file
+  // naming it is handling lead ciphertext.
+  it('only these files handle the lead ciphertext', () => {
+    const handlers = files
+      .filter((f) => /\bbudget_enc\b/.test(f.code))
+      .map((f) => f.path)
+      .sort();
+    expect(handlers).toEqual([
+      'src/lib/admin/leadFields.ts',
+      // The daily cron's indexing (C1b): decrypts in the Worker, computes indexes and
+      // signals, writes them through crm_index_lead. No person sees the values.
+      'src/lib/crm/indexBackfill.ts',
+      'src/lib/crm/reveal.ts',
+      'src/lib/data/leads.ts',
+      'src/pages/api/admin/leads/export.ts',
       'src/pages/api/hooks/notify-lead.ts',
     ]);
   });

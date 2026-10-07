@@ -19,8 +19,12 @@ import { can } from '@/lib/authz/matrix';
 // Since migration 0033 the database holds the same line. A staff token can SELECT only
 // SAFE_LEAD_COLUMNS (plus tenant_id): the caller's own client (`sb`) asking for any other
 // lead column gets a permission error, whatever the role. The gated columns are read as
-// the service role, by the two audited paths only: the per-lead reveal
-// (src/pages/api/admin/leads/[id].ts) and the CSV export (export.ts).
+// the service role, and only two audited paths return them to a person: the per-lead
+// reveal (src/lib/crm/reveal.ts, behind both GET /api/admin/leads/[id]?pii=1 and the CRM's
+// POST /reveal) and the CSV export (export.ts). Two server-side processes read them and
+// return nothing: the signed notify-lead hook, which stores field names only, and the
+// daily index cron (src/lib/crm/indexBackfill.ts), which keeps HMACs and signal names.
+// tests/lib/leadGrants.spec.ts names every reader.
 
 export const SENSITIVE_LEAD_COLUMNS = [
   'budget_enc',
@@ -40,7 +44,8 @@ export const SAFE_LEAD_COLUMNS =
 
 /**
  * The ciphertext and the gated columns. `authenticated` cannot read any of them (0033):
- * only the service role can, after assertCap, a live recheck and a fail-closed audit row.
+ * only the service role can. A person sees them only after assertCap, a live recheck and a
+ * fail-closed audit row (the reveal and the export).
  */
 export const GATED_LEAD_COLUMNS =
   'email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,internal_notes,ip_inet';
