@@ -3,8 +3,9 @@ import { expect, test } from '@playwright/test';
 import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 // The command palette (Admin v2 F3) in a real browser, signed in: the shortcuts, the
-// combobox keyboard model, a record found by the server search, focus return, and axe
-// with the dialog open. The model's rules are unit-tested (tests/lib/adminPalette.spec.ts).
+// combobox keyboard model, a record found by the server search, focus return, the status
+// line, and axe with the dialog open, full and empty. The model's rules are unit-tested
+// (tests/lib/adminPalette.spec.ts).
 
 test.skip(!staffEnv(), SKIP_REASON);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
@@ -79,6 +80,39 @@ test.describe('as admin', () => {
     await expect(page.getByRole('option').first()).toBeVisible();
     const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
     expect(violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+  });
+
+  test('says "No matches." from outside the list, and meets WCAG 2.2 A/AA', async ({ page }) => {
+    // One character, so the server is not asked: no screen or action has a word in "x".
+    await page.keyboard.press('Control+k');
+    const dialog = page.getByRole('dialog', { name: 'Search the admin' });
+    await dialog.getByRole('combobox').fill('x');
+    await expect(dialog.getByRole('option')).toHaveCount(0);
+    await expect(dialog.getByRole('status')).toHaveText('No matches.');
+    // A listbox may own only options and groups (axe aria-required-children).
+    await expect(dialog.getByRole('listbox').getByRole('status')).toHaveCount(0);
+    const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+    expect(violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+  });
+
+  test('says "Searching…" while the server search is out', async ({ page }) => {
+    // The search answers only when released, so the in-flight state can be seen.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = () => resolve();
+    });
+    await page.route(/\/api\/admin\/search\?/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.keyboard.press('Control+k');
+    const dialog = page.getByRole('dialog', { name: 'Search the admin' });
+    await dialog.getByRole('combobox').fill('logo');
+    const status = dialog.getByRole('status');
+    await expect(status).toHaveText('Searching…');
+    release();
+    await expect(dialog.getByRole('option', { name: /Logo Design/ }).first()).toBeVisible();
+    await expect(status).toBeEmpty();
   });
 });
 

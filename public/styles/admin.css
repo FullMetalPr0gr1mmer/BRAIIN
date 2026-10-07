@@ -1800,10 +1800,17 @@ dialog.cmd::backdrop {
   font-weight: 600;
 }
 
-.cmd__empty {
+/* The status line under the list: "Searching…", "No matches." or nothing, in which
+   case it takes no room (an empty list does the same). */
+.cmd__status {
   margin: 0;
-  padding: 18px 12px;
+  padding: 14px 20px;
   color: var(--ad-dim);
+}
+
+.cmd__status:empty,
+.cmd__list:empty {
+  padding: 0;
 }
 
 /* ---- Rich text (Tiptap): the prototype's .rich ---- */

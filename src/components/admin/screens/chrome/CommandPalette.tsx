@@ -52,6 +52,7 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
     return list;
   }, [groups, query, remote]);
   const items = useMemo(() => flatten(shown), [shown]);
+  const status = busy ? 'Searching…' : query.trim() && items.length === 0 ? 'No matches.' : '';
 
   const open = useCallback(() => {
     const dialog = dialogRef.current;
@@ -210,12 +211,12 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
               })}
             </div>
           ))}
-          {items.length === 0 && (
-            <p className="cmd__empty" role="status">
-              {busy ? 'Searching…' : 'No matches.'}
-            </p>
-          )}
         </div>
+        {/* Outside the listbox, which may own only options and groups, and mounted with
+            the dialog, so a screen reader announces each change of its text. */}
+        <p className="cmd__status" role="status">
+          {status}
+        </p>
       </div>
     </dialog>
   );
