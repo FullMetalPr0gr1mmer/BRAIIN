@@ -15,7 +15,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9, §10.
 
 begin;
-select plan(14);
+select plan(15);
 
 insert into public.tenants (id, name) values ('00000000-0000-0000-0000-000000000001', 'T1');
 
@@ -110,10 +110,29 @@ select is(
     order by id desc limit 1),
   'it links to the highest id before it: walking by id walks the chain'
 );
+-- The lock held must be THIS tenant's chain key, not just any advisory lock. A bigint key
+-- shows in pg_locks as objsubid 1, its high half in classid and its low half in objid.
 select ok(
-  exists (select 1 from pg_locks
-           where locktype = 'advisory' and pid = pg_backend_pid() and granted),
-  'an insert holds the per-tenant chain lock until its transaction ends'
+  exists (select 1 from pg_locks l,
+                 (select hashtextextended('audit_log:00000000-0000-0000-0000-000000000001', 0) as k) x
+           where l.locktype = 'advisory' and l.pid = pg_backend_pid() and l.granted
+             and l.objsubid = 1
+             and l.classid::text::bigint = (x.k >> 32) & 4294967295
+             and l.objid::text::bigint = x.k & 4294967295),
+  'an insert holds its tenant''s chain lock (the per-tenant key) until its transaction ends'
+);
+-- A single session cannot race, so the order inside the trigger is asserted on its
+-- source, here against the FINAL schema (a later migration replacing the function is
+-- checked too): isolation check, lock, id, then the predecessor read. A read moved above
+-- the lock, or an id taken before it, forks the chain again.
+select ok(
+  (select 0 < position('transaction_isolation' in s)
+          and position('transaction_isolation' in s) < position('pg_advisory_xact_lock' in s)
+          and position('pg_advisory_xact_lock' in s) < position('nextval(pg_get_serial_sequence' in s)
+          and position('nextval(pg_get_serial_sequence' in s) < position('select hash into v_prev' in s)
+     from (select p.prosrc as s from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'app' and p.proname = 'tg_audit_chain') f),
+  'the trigger checks the isolation level, locks, takes the id, and only then reads its predecessor'
 );
 
 -- ---- 6. Append-only: no UPDATE, no DELETE --------------------------------------------

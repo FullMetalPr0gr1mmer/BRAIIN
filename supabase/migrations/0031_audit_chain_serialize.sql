@@ -24,16 +24,24 @@
 --      VOLATILE, so under READ COMMITTED its SELECT takes a fresh snapshot after the wait.
 --   2. The id is taken UNDER the lock (`nextval`, replacing the default's value; a gap
 --      in the sequence is harmless), so id order is chain order.
+--   3. Only READ COMMITTED is accepted. Under REPEATABLE READ or SERIALIZABLE the
+--      snapshot is fixed when the statement starts, so the read after the wait would still
+--      miss the row the lock waited for and fork the chain without an error. Every path
+--      today (PostgREST, the cron, `db query`) runs at READ COMMITTED; anything else is
+--      refused (0A000) rather than allowed to fork the chain without an error.
 -- Everything else is unchanged: the same payload, the same HMAC, the same Vault key.
 --
--- CHAINS WRITTEN BEFORE THIS MIGRATION may already hold forks. A fork is recognisable:
--- two rows naming the SAME prev_hash, each a valid HMAC over its own payload. That is the
--- race this fixes; any other mismatch is not. Find candidates with:
---   select id, prev_hash from (
---     select id, prev_hash, lag(hash) over (partition by tenant_id order by id) as expected
---       from public.audit_log) t
---    where expected is not null and prev_hash is distinct from expected;
--- The log is append-only by design; record what you find, do not edit rows.
+-- CHAINS WRITTEN BEFORE THIS MIGRATION may already hold breaks from the race: forks (two
+-- rows naming the same prev_hash) and id reorders (a row linking to a HIGHER id). Both
+-- leave every prev_hash naming a row that exists. A deleted or edited row does not: its
+-- successor's prev_hash then names a hash no row carries. So classify old breaks by
+-- following the links, not by id order. Rows this returns are unexplained by the race:
+--   select a.id from public.audit_log a
+--    where a.prev_hash is not null
+--      and not exists (select 1 from public.audit_log b
+--                       where b.tenant_id = a.tenant_id and b.hash = a.prev_hash);
+-- (Each row's own HMAC is checked separately, as the verifier does.) The log is
+-- append-only by design; record what you find, do not edit rows.
 --
 -- CLAUDE.md §3 (Pillar 1: audit_log append-only + HMAC-hash-chained), §9 (h), §10.
 
@@ -44,6 +52,11 @@ declare
   v_key text;
   v_payload text;
 begin
+  -- The lock below serializes writers only if the read after it sees what they committed.
+  if current_setting('transaction_isolation') <> 'read committed' then
+    raise exception 'audit_log inserts must run at READ COMMITTED (0031 chain serialization)'
+      using errcode = '0A000';
+  end if;
   -- One writer per tenant chain at a time (released at commit or rollback).
   perform pg_advisory_xact_lock(hashtextextended('audit_log:' || new.tenant_id::text, 0));
   -- The id is taken under the lock, so walking the chain by id walks it in link order.
@@ -79,8 +92,12 @@ begin
   select p.prosrc into v_src
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'app' and p.proname = 'tg_audit_chain';
-  if v_src is null or position('pg_advisory_xact_lock' in v_src) = 0
-     or position('nextval(pg_get_serial_sequence' in v_src) = 0 then
+  -- In this order: the isolation check, the lock, the id, then the predecessor read.
+  if v_src is null
+     or not (0 < position('transaction_isolation' in v_src)
+             and position('transaction_isolation' in v_src) < position('pg_advisory_xact_lock' in v_src)
+             and position('pg_advisory_xact_lock' in v_src) < position('nextval(pg_get_serial_sequence' in v_src)
+             and position('nextval(pg_get_serial_sequence' in v_src) < position('select hash into v_prev' in v_src)) then
     raise exception '0031: app.tg_audit_chain() does not serialize the chain';
   end if;
   if not exists (
