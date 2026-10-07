@@ -184,7 +184,7 @@ describe.skipIf(process.platform === 'win32')('scripts/deploy-guard-role.sh', ()
     [
       'production lacks a migration this checkout has',
       { STUB_PREFLIGHT: preflight(['0001', '0016']) },
-      /production lacks 0030/,
+      /production lacks 0030: apply it first/,
       ['preflight'],
     ],
     [

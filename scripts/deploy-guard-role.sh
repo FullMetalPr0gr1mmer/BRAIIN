@@ -74,7 +74,7 @@ let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
   const missing = local.filter((v) => !applied.has(v));
   const bad = [];
   if (!local.length) bad.push("no migrations in this checkout");
-  if (missing.length) bad.push("production lacks " + missing.join(", "));
+  if (missing.length) bad.push("production lacks " + missing.join(", ") + ": apply it first (launch runbook section 1: db push from a clean checkout of main), then re-run");
   if (p.env !== "production") bad.push("app.deployment = " + JSON.stringify(p.env));
   if (bad.length) { console.error("refusing before any write: " + bad.join("; ")); process.exit(1); }
   console.log(`production: every one of ${local.length} local migrations applied (${applied.size} recorded), env=production`);
