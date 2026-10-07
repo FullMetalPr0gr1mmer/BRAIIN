@@ -644,7 +644,9 @@ revoke all on public.lead_events from public, anon, authenticated;
 grant select on public.lead_events to authenticated;
 grant select, insert, delete on public.lead_events to service_role;
 
-revoke all on public.lead_notes from public, anon, authenticated;
+-- The service role too: Supabase's bootstrap grants it ALL on a new table, and a thread
+-- note is append-only for every API role (only the definer mirror rewrites a note).
+revoke all on public.lead_notes from public, anon, authenticated, service_role;
 grant select, insert, delete on public.lead_notes to service_role;
 
 -- ---- Postconditions ---------------------------------------------------------------------
