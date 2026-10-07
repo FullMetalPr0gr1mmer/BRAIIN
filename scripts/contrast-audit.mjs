@@ -325,6 +325,7 @@ const ADMIN_PAIRS = [
   // The midnight sidebar, toasts and dark badges
   ['side-text', 'midnight', 4.5, 'sidebar links'],
   ['side-label', 'midnight', 4.5, 'sidebar group titles'],
+  ['on-dark', 'count', 4.5, 'a count beside a sidebar link'],
   ['on-dark', 'midnight', 4.5, 'brand, hovered link, toast, dark badge and button'],
   // Avatar grounds behind white initials
   ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => [

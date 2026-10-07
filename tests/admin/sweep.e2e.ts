@@ -124,8 +124,10 @@ for (const role of STAFF_ROLES) {
             sidebar: [...document.querySelectorAll('nav.admin-sidebar .admin-nav-group')].map(
               (group) => ({
                 title: (group.querySelector('.admin-nav-title')?.textContent ?? '').trim(),
+                // The label alone: a link also holds its icon and a count.
                 links: [...group.querySelectorAll('a')].map(
-                  (a) => `${(a.textContent ?? '').trim()} ${a.getAttribute('href') ?? ''}`,
+                  (a) =>
+                    `${(a.querySelector('.side__label')?.textContent ?? '').trim()} ${a.getAttribute('href') ?? ''}`,
                 ),
               }),
             ),

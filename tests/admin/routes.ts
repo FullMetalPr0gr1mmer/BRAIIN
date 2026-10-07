@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { ADMIN_NAV, isVisible, visibleNav, type NavLink } from '@/lib/admin/nav';
+import { ADMIN_NAV, isVisible, visibleNav, type NavTab } from '@/lib/admin/nav';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
 import type { Role } from '@/lib/auth/types';
 
@@ -8,7 +8,7 @@ import type { Role } from '@/lib/auth/types';
  *
  * Derived from ADMIN_NAV, the sidebar the server renders from ROLE_CAPS, so a capability
  * moved in CLAUDE.md §5 moves the sweep with it. Per role:
- *   - every sidebar link (the list or singleton screen);
+ *   - every sidebar link and every tab of its area (the list or singleton screens);
  *   - its create screen (`new.astro`) when the role holds the link's FIRST capability in
  *     full: the authoring one (`services.write` on Services, not SEO's `seo.entityMeta`);
  *   - one edit screen (`[id].astro`) for every list the role sees, opened on the first
@@ -28,14 +28,26 @@ export interface SweepRoute {
   listApi?: string;
 }
 
-/** Reached from inside other screens, never from the sidebar. */
-export const EXTRA_LINKS: readonly NavLink[] = [
-  // The section editor, opened from a page in Pages & sections.
-  { href: '/admin/sections', label: 'Sections', caps: ['pages.write'] },
+/** Reached from inside other screens, never from the sidebar or an area's tabs. */
+export const EXTRA_LINKS: readonly NavTab[] = [
   // The header search's results page. The page has no capability gate (each entity is
   // gated inside searchAdmin()), so every role may open it.
   { href: '/admin/search?q=logo', label: 'Search', caps: [] },
 ];
+
+/** Every screen of the menu: sidebar links, then their tabs, each once. */
+export function menuScreens(): NavTab[] {
+  const seen = new Set<string>();
+  const screens: NavTab[] = [];
+  for (const link of ADMIN_NAV.flatMap((group) => group.links)) {
+    for (const screen of [link, ...(link.tabs ?? [])]) {
+      if (seen.has(screen.href)) continue;
+      seen.add(screen.href);
+      screens.push(screen);
+    }
+  }
+  return screens;
+}
 
 type Exists = (path: string) => boolean;
 
@@ -54,7 +66,7 @@ export function pageFileFor(href: string, exists: Exists = existsSync): string {
 }
 
 export function sweepRoutes(role: Role, exists: Exists = existsSync): SweepRoute[] {
-  const links = [...ADMIN_NAV.flatMap((group) => group.links), ...EXTRA_LINKS];
+  const links = [...menuScreens(), ...EXTRA_LINKS];
   const routes: SweepRoute[] = [];
   for (const link of links) {
     if (link.caps.length > 0 && !isVisible(role, link)) continue;
