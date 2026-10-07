@@ -13,13 +13,18 @@ type Result = { count?: number | null; data?: unknown; error?: unknown };
 
 function fakeSupabase(results: Record<string, Result>) {
   const tables: string[] = [];
+  /** Every `.eq(column, value)` per table, so a dropped tenant or status filter shows. */
+  const filters: Record<string, [string, unknown][]> = {};
   const sb = {
     from(table: string) {
       tables.push(table);
       const result = results[table] ?? {};
       const builder: Record<string, unknown> = {
         select: () => builder,
-        eq: () => builder,
+        eq: (column: string, value: unknown) => {
+          (filters[table] ??= []).push([column, value]);
+          return builder;
+        },
         maybeSingle: () =>
           Promise.resolve({ data: result.data ?? null, error: result.error ?? null }),
         then: (resolve: (value: unknown) => unknown) =>
@@ -28,7 +33,7 @@ function fakeSupabase(results: Record<string, Result>) {
       return builder;
     },
   };
-  return { sb: sb as unknown as SupabaseClient, tables };
+  return { sb: sb as unknown as SupabaseClient, tables, filters };
 }
 
 const auth = (role: Role): AuthContext => ({
@@ -54,6 +59,18 @@ describe('loadShellState', () => {
     expect(state.counts).toEqual({ leads: 4, applications: 2 });
     expect(state.displayName).toBe('Kareem Hassan');
     expect(tables).toEqual(expect.arrayContaining(['leads', 'job_applications']));
+  });
+
+  it("counts only the caller's tenant's NEW leads and applications, as the dashboard does", async () => {
+    const { sb, filters } = fakeSupabase({ leads: { count: 4 }, job_applications: { count: 2 } });
+    await loadShellState(sb, auth('admin'), visibleNav('admin'), kv(null));
+    for (const table of ['leads', 'job_applications']) {
+      expect(filters[table], table).toEqual([
+        ['tenant_id', 't-1'],
+        ['status', 'new'],
+      ]);
+    }
+    expect(filters['profiles']).toEqual([['id', 'u-1']]);
   });
 
   it('never queries a count a role has no link for', async () => {
