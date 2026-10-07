@@ -95,3 +95,16 @@ export type LeadBoardQuery = z.infer<typeof LeadBoardQuerySchema>;
 export const LeadSummaryQuerySchema = z
   .object({ from: Instant.optional(), to: Instant.optional() })
   .strict();
+
+// ---- One lead (Admin v2 C2b) --------------------------------------------------------------
+
+/** A note on a lead: 1 to 5,000 characters, trimmed. Append-only. */
+export const LeadNoteInputSchema = z.object({ body: z.string().trim().min(1).max(5000) }).strict();
+
+/** A page of a lead's timeline: the events before an instant, at most 100. */
+export const LeadEventsQuerySchema = z
+  .object({
+    before: Instant.optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .strict();
