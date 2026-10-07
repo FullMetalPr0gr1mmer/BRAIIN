@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ROLES, type Role } from '@/lib/auth/types';
 import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
-import { reachableHrefs, visibleNav } from '@/lib/admin/nav';
+import { reachableHrefs } from '@/lib/admin/nav';
 import * as resources from '@/lib/admin/resources';
 import type { ResourceConfig } from '@/lib/admin/resource';
 import {
@@ -61,7 +61,8 @@ describe('the sweep route map', () => {
       expect(entry, `no resource mapped for ${route.pattern}`).toBeDefined();
       const api = readFileSync(`src/pages/api/admin/${segment}/index.ts`, 'utf8');
       expect(api, `src/pages/api/admin/${segment}/index.ts`).toContain(entry!.exportName);
-      expect(route.listApi ?? `/api/admin/${segment}`).toBe(`/api/admin/${segment}`);
+      // An edit screen opens the first row of the list that file serves.
+      if (route.kind === 'edit') expect(route.listApi).toBe(`/api/admin/${segment}`);
     }
   });
 
@@ -122,13 +123,89 @@ describe('the sweep route map', () => {
       expect(new Set(screens)).toEqual(new Set(reachableHrefs(role)));
     }
   });
+});
 
-  it('the expected sidebar is the server-rendered one, label and href', () => {
-    expect(expectedSidebar('seo')).toEqual(
-      visibleNav('seo').map((g) => ({
-        title: g.title,
-        links: g.links.map((l) => `${l.label} ${l.href}`),
-      })),
+// Each role's sidebar, written out from the CLAUDE.md §5 matrix rather than computed: the
+// sweep holds the sidebar the server renders to expectedSidebar(), so expectedSidebar()
+// needs an oracle that is not nav.ts itself. A capability or menu change that alters what
+// a role sees has to be made here too, on purpose.
+const SIDEBAR: Record<Role, Record<string, string[]>> = {
+  admin: {
+    Overview: ['Dashboard /admin'],
+    Content: [
+      'Pages /admin/pages',
+      'Services /admin/services',
+      'Projects /admin/portfolio',
+      'Creative Knowledge /admin/blog',
+      'Testimonials /admin/testimonials',
+      'Clients /admin/clients',
+      'Team /admin/team',
+      'Numbers /admin/statistics',
+      'Certifications /admin/certifications',
+      'Media library /admin/media',
+    ],
+    CRM: ['Leads /admin/leads'],
+    Hiring: ['Job applications /admin/applications'],
+    Growth: [
+      'Website stats /admin/analytics',
+      'Site health /admin/site-health',
+      'Style-Finder /admin/ai-questions',
+    ],
+    Appearance: ['Theme /admin/themes', 'Menus /admin/navigation'],
+    Settings: [
+      'General /admin/settings',
+      'SEO /admin/seo',
+      'Integrations /admin/integrations',
+      'Users & roles /admin/users',
+      'Activity log /admin/audit',
+    ],
+  },
+  // Authors and publishes; no leads, applications, settings, logs or theme.
+  content_creator: {
+    Overview: ['Dashboard /admin'],
+    Content: [
+      'Pages /admin/pages',
+      'Services /admin/services',
+      'Projects /admin/portfolio',
+      'Creative Knowledge /admin/blog',
+      'Testimonials /admin/testimonials',
+      'Clients /admin/clients',
+      'Team /admin/team',
+      'Numbers /admin/statistics',
+      'Certifications /admin/certifications',
+      'Media library /admin/media',
+    ],
+    Growth: ['Website stats /admin/analytics', 'Style-Finder /admin/ai-questions'],
+    Appearance: ['Menus /admin/navigation'],
+  },
+  // Entity meta (so the content lists, not their bodies), media meta, SEO, integrations.
+  seo: {
+    Overview: ['Dashboard /admin'],
+    Content: [
+      'Pages /admin/pages',
+      'Services /admin/services',
+      'Projects /admin/portfolio',
+      'Creative Knowledge /admin/blog',
+      'Media library /admin/media',
+    ],
+    Growth: ['Website stats /admin/analytics'],
+    Settings: ['SEO /admin/seo', 'Integrations /admin/integrations'],
+  },
+  // Technical: media, leads, health, theme, settings, audit; no content, no applications.
+  developer: {
+    Overview: ['Dashboard /admin'],
+    Content: ['Media library /admin/media'],
+    CRM: ['Leads /admin/leads'],
+    Growth: ['Website stats /admin/analytics', 'Site health /admin/site-health'],
+    Appearance: ['Theme /admin/themes'],
+    Settings: ['General /admin/settings', 'Activity log /admin/audit'],
+  },
+};
+
+describe("the sweep's expected sidebar", () => {
+  it.each(ROLES)('%s: the menu §5 gives the role, label and href', (role) => {
+    expect(expectedSidebar(role)).toEqual(
+      Object.entries(SIDEBAR[role]).map(([title, links]) => ({ title, links })),
     );
   });
 });
