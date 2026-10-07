@@ -40,6 +40,17 @@ export type BudgetBand = z.infer<typeof AcceptedBudgetBandSchema>;
 export const TimelineBandSchema = z.enum(['asap', '1_3m', '3_6m', 'flexible']);
 
 /**
+ * What a legacy band says, in the words the old form used. Since 0035 a band is stored as
+ * this text, encrypted, in the timeline field (it used to sit in plaintext `timeline_band`).
+ */
+export const TIMELINE_BAND_LABELS: Readonly<Record<z.infer<typeof TimelineBandSchema>, string>> = {
+  asap: 'As soon as possible (legacy band)',
+  '1_3m': 'In 1 to 3 months (legacy band)',
+  '3_6m': 'In 3 to 6 months (legacy band)',
+  flexible: 'Flexible (legacy band)',
+};
+
+/**
  * The ONE label map for budget bands — the form, the admin leads panel and the CSV export
  * all read it, so a band never shows as a raw key anywhere. New bands carry the design's
  * copy verbatim, including its Arabic-Indic digits; legacy bands keep the labels the old

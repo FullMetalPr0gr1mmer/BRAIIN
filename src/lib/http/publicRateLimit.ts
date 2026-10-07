@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { RATE_LIMIT_LABEL, labelledKeyMaterial } from '@/lib/applications/keys';
+import { hmacHex } from '@/lib/crypto/hmac';
+
+// Re-exported for the callers that imported it from here before it moved (C1b).
+export { hmacHex };
 
 // The public write limiter (EXC-004): counters in Postgres (`public_write_attempts`,
 // migration 0029), one row per (scope, hashed key, fixed window), bumped atomically by
@@ -36,8 +40,6 @@ export const APPLY_LIMITS = {
 } as const;
 export const CONTACT_LIMITS = { perIp: { max: 10, windowSeconds: 3600 } } as const;
 
-const enc = new TextEncoder();
-
 /**
  * What a per-address rule counts. IPv4: the address. IPv6: its /64 — one subscriber line
  * or host is handed a whole /64 and can rotate through 2^64 addresses at will, so counting
@@ -68,21 +70,6 @@ export function ipLimitValue(ip: string | null | undefined): string {
     .slice(0, 4)
     .map((g) => g.replace(/^0+(?=.)/, ''))
     .join(':')}::/64`;
-}
-
-/** HMAC-SHA-256(key, message) as 64 lowercase hex characters. */
-export async function hmacHex(keyMaterial: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(keyMaterial),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(message)));
-  let hex = '';
-  for (const b of mac) hex += b.toString(16).padStart(2, '0');
-  return hex;
 }
 
 /** The stored key for a rule: never the raw value. */
