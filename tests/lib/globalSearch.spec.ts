@@ -108,3 +108,15 @@ describe('search targets', () => {
     },
   );
 });
+
+describe('what search never touches', () => {
+  // Personal data has its own pages and audit trail (leads: the audited reveal; job
+  // applications: Admin only, CV downloads audited). A search box is a second, wider read
+  // path, so these tables are never targets, for the results page or the palette.
+  it('never searches leads, contacts or job applications', () => {
+    const tables = SEARCH_TARGETS.map((target) => target.config.table);
+    for (const table of ['leads', 'job_applications', 'contacts', 'crm_contacts']) {
+      expect(tables).not.toContain(table);
+    }
+  });
+});

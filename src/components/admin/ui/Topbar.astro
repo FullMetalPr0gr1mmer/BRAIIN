@@ -5,10 +5,11 @@ import Icon from './Icon.astro';
 // The white topbar (Admin v2 F2, the prototype's .top): the menu button on narrow screens,
 // the breadcrumb, search, the maintenance badge and View site.
 //
-// Search is a plain GET form to the server-rendered results page: it works with no JS
-// and cannot show a result the server did not authorize. The command palette (F3)
-// enhances it. The maintenance badge is a read of the KV flag (a boolean, never the
-// allowlist); it links to the switch only for roles that may flip it.
+// Search is a link to the server-rendered results page, which works with no JS and
+// cannot show a result the server did not authorize. With JS the same link opens the
+// command palette (data-open="palette", F3). The maintenance badge is a read of the KV
+// flag (a boolean, never the allowlist); it links to the switch only for roles that may
+// flip it.
 
 interface Props {
   section: NavLink | null;
@@ -49,18 +50,11 @@ const showSection = section && section.href !== '/admin' && current !== section.
     </ol>
   </nav>
 
-  <form class="topbar-search" role="search" action="/admin/search" method="get">
-    <label class="visually-hidden" for="topbar-q">Search the admin</label>
+  <a class="top__search" href="/admin/search" data-open="palette">
     <Icon name="search" size={16} />
-    <input
-      id="topbar-q"
-      type="search"
-      name="q"
-      placeholder="Search anything…"
-      minlength="2"
-      maxlength="64"
-    />
-  </form>
+    <span>Search anything…</span>
+    <kbd data-kbd-hint aria-hidden="true">Ctrl K</kbd>
+  </a>
 
   {
     maintenance &&
