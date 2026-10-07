@@ -19,22 +19,32 @@
 --   • THE SPAM HORIZON (D2): app.purge_leads never knew about spam, so "spam: 30 days"
 --     (docs/retention.md) was never applied and spam was kept 24 months. Marking spam now
 --     caps retention_delete_after at now() + spam_days, never lengthening it; clearing
---     spam restores the horizon it had before. The trigger compares OLD and NEW on every
---     update, because a legacy `status = 'spam'` write never names is_spam (a
---     column-specific trigger would not fire for it). Leads already marked spam get the
---     cap now, so they are purged spam_days after this migration.
+--     spam gives back the horizon it had before, but never more than a horizon set while
+--     the lead was flagged (an erasure, docs/retention.md), so un-marking cannot undo one.
+--     The trigger compares OLD and NEW on every update, because a legacy
+--     `status = 'spam'` write never names is_spam (a column-specific trigger would not
+--     fire for it). Leads already marked spam get the cap now, so they are purged
+--     spam_days after this migration.
 --   • lead_events: the product timeline (created, stage changes, spam, notes), metadata
 --     only. Written by definer triggers, read by lead workers. It is not audit_log.
 --   • lead_notes: the notes thread that replaces internal_notes. The service role is its
---     only reader and writer (the audited path, as for the gated lead columns); no API
---     role holds any privilege on it. Existing notes are copied in, and every legacy
---     write to internal_notes is mirrored until C14.
+--     only API reader and writer (the audited path, as for the gated lead columns); no
+--     other API role holds any privilege on it. Thread notes are append-only, and each
+--     one's timeline event is written by a trigger in the same statement. Until C14 the
+--     legacy internal_notes field is mirrored as ONE note per lead (source 'legacy'),
+--     rewritten in place when the field is saved and removed when it is cleared, so text
+--     taken out of the field leaves the thread too. The mirror runs one way: a thread
+--     note never reaches internal_notes, so the legacy panel and the CSV export show the
+--     old field only (a transitional gap: C4 moves the panel to the thread, C14 drops
+--     the field).
 --
 -- ONE trigger function per phase, so the order is written down instead of resting on
--- alphabetical trigger names: app.tg_lead_pipeline (BEFORE: sync, then the spam horizon,
--- then the stamps, then the version) and app.tg_lead_timeline (AFTER: events and notes).
--- The definer functions are owned by the migration role, which must bypass RLS to write
--- the FORCE RLS tables they feed; a postcondition checks that.
+-- alphabetical trigger names: app.tg_lead_pipeline (BEFORE: the number, the sync, the
+-- spam horizon, the stamps, the version, then who changed the lead and when) and
+-- app.tg_lead_timeline (AFTER: events and the notes mirror). 0002's timestamps trigger on
+-- leads is dropped, its job folded into the BEFORE phase. The definer functions are owned
+-- by the migration role, which must bypass RLS to write the FORCE RLS tables they feed; a
+-- postcondition checks that.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ---- 1. lead_stages ----------------------------------------------------------------------
@@ -161,7 +171,7 @@ alter table public.leads
   add column if not exists created_by uuid,
   add column if not exists updated_by uuid;
 comment on column public.leads.retention_before_spam is
-  'The horizon a lead had before it was marked spam, restored when spam is cleared (0034). Never granted to staff.';
+  'The horizon a lead had before it was marked spam, given back when spam is cleared, never past a horizon set while flagged (0034). Never granted to staff.';
 
 -- Composite keys: a lead points only at its own tenant's stage, and the timeline and notes
 -- point only at their own tenant's lead, whatever a direct API write tries.
@@ -173,7 +183,8 @@ alter table public.leads add constraint leads_stage_fk foreign key (tenant_id, s
 create index if not exists leads_tenant_stage_idx on public.leads (tenant_id, stage_id, created_at desc);
 
 -- Per-tenant lead numbers, never reused: a counter, not max() + 1, so an erased lead's
--- number is never given to someone else. Only the definer trigger touches it.
+-- number is never given to someone else. Only the definer trigger (and the backfill)
+-- touches it.
 create table if not exists app.lead_counters (
   tenant_id uuid primary key references public.tenants (id) on delete cascade,
   last_number int not null check (last_number >= 0)
@@ -208,18 +219,42 @@ create table if not exists public.lead_notes (
   tenant_id uuid not null references public.tenants (id) on delete cascade,
   lead_id uuid not null,
   body text not null check (char_length(body) between 1 and 5000),
+  -- 'staff': a thread note, append-only. 'legacy': the mirror of the old internal_notes
+  -- field, one per lead (the index below), rewritten in place until C14.
   source text not null check (source in ('staff', 'legacy')),
-  -- The author. Null only for notes copied from internal_notes by this migration.
+  -- The author (for the legacy mirror, whoever saved the field last). Null only for
+  -- notes copied from internal_notes by this migration.
   created_by uuid,
   created_at timestamptz not null default now(),
   constraint lead_notes_lead_fk foreign key (tenant_id, lead_id)
     references public.leads (tenant_id, id) on delete cascade
 );
 create index if not exists lead_notes_lead_idx on public.lead_notes (tenant_id, lead_id, created_at desc);
+create unique index if not exists lead_notes_one_legacy on public.lead_notes (tenant_id, lead_id)
+  where source = 'legacy';
 alter table public.lead_notes enable row level security;
 alter table public.lead_notes force row level security;
 -- No policies: the service role (the Worker's audited path) and the definer triggers
--- below are its only readers and writers. Append-only: corrections are a new note.
+-- are its only readers and writers. No API role may UPDATE it, so a thread note is
+-- append-only (a correction is a new note); only the legacy mirror is rewritten, by the
+-- definer trigger on leads.
+
+-- A note's timeline event, in the statement that adds the note: a failure leaves neither,
+-- so retrying after an error cannot put the same note in the thread twice. Fires for an
+-- INSERT only, so rewriting the legacy mirror adds no event; removing it leaves the event
+-- (metadata only: the note's id).
+create or replace function app.tg_lead_note_event() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+begin
+  insert into public.lead_events (tenant_id, lead_id, at, actor_id, kind, detail)
+  values (new.tenant_id, new.lead_id, new.created_at, new.created_by, 'note_added',
+          jsonb_build_object('note_id', new.id));
+  return null;
+end $$;
+revoke all on function app.tg_lead_note_event() from public, anon, authenticated, service_role;
+drop trigger if exists lead_notes_event on public.lead_notes;
+create trigger lead_notes_event after insert on public.lead_notes
+  for each row execute function app.tg_lead_note_event();
 
 -- ---- 4. Helpers ---------------------------------------------------------------------------
 -- The tenant's retention settings (site_settings.retention), with app.purge_leads'
@@ -268,59 +303,89 @@ create or replace function app.lead_stage_for_status(p_tenant uuid, p_status tex
 $$;
 revoke all on function app.lead_stage_for_status(uuid, text, uuid) from public, anon, authenticated, service_role;
 
--- ---- 5. Backfill (the timestamps trigger is paused so no lead looks freshly edited) ----
-alter table public.leads disable trigger leads_updated_at;
+-- ---- 5. Backfill ------------------------------------------------------------------------
+-- Every lead that predates this migration: its notes, its first events, the spam horizon,
+-- its number and, last, its stage. A function rather than inline statements, so pgTAP can
+-- run it on legacy-shaped rows (supabase/tests/lead_pipeline_backfill.test.sql): CI applies
+-- this file to an empty table, where every statement below is vacuous. A legacy lead is
+-- one with no stage yet, and the stage is set last, so a second run changes nothing.
+--
+-- 0002's timestamps trigger is dropped first (app.tg_lead_pipeline takes over its job), and
+-- the lead triggers are created only after the backfill, so no lead looks freshly edited.
+drop trigger if exists leads_updated_at on public.leads;
 
--- Notes first, each keeping the time its lead was last edited.
-insert into public.lead_notes (tenant_id, lead_id, body, source, created_by, created_at)
-select l.tenant_id, l.id, left(l.internal_notes, 5000), 'legacy', null, l.updated_at
-  from public.leads l
- where nullif(btrim(l.internal_notes), '') is not null
-   and not exists (select 1 from public.lead_notes n where n.lead_id = l.id and n.source = 'legacy');
+create or replace function app.backfill_lead_pipeline() returns void
+  language plpgsql set search_path = '' as $$
+begin
+  -- Notes first, each keeping the time its lead was last edited (its note_added event,
+  -- app.tg_lead_note_event, takes the same time).
+  insert into public.lead_notes (tenant_id, lead_id, body, source, created_by, created_at)
+  select l.tenant_id, l.id, left(l.internal_notes, 5000), 'legacy', null, l.updated_at
+    from public.leads l
+   where l.stage_id is null
+     and nullif(btrim(l.internal_notes), '') is not null
+     and not exists (select 1 from public.lead_notes n
+                      where n.tenant_id = l.tenant_id and n.lead_id = l.id and n.source = 'legacy');
 
-update public.leads l
-   set stage_id = s.id
-  from public.lead_stages s
- where l.stage_id is null
-   and s.tenant_id = l.tenant_id
-   and s.key = case l.status
-                 when 'in_progress' then 'contacted'
-                 when 'done' then 'lost'
-                 else 'new'
-               end;
+  -- Every timeline starts at the lead's arrival; a mapped status is marked for re-triage.
+  insert into public.lead_events (tenant_id, lead_id, at, actor_id, kind, detail)
+  select l.tenant_id, l.id, l.created_at, null, 'created', '{}'::jsonb
+    from public.leads l
+   where l.stage_id is null
+     and not exists (select 1 from public.lead_events e
+                      where e.tenant_id = l.tenant_id and e.lead_id = l.id and e.kind = 'created');
+  insert into public.lead_events (tenant_id, lead_id, at, actor_id, kind, detail)
+  select l.tenant_id, l.id, now(), null, 'legacy_backfill', jsonb_build_object('from', l.status)
+    from public.leads l
+   where l.stage_id is null
+     and l.status in ('in_progress', 'done', 'spam')
+     and not exists (select 1 from public.lead_events e
+                      where e.tenant_id = l.tenant_id and e.lead_id = l.id
+                        and e.kind = 'legacy_backfill');
 
-update public.leads l
-   set is_spam = true,
-       spam_marked_at = now(),
-       retention_before_spam = l.retention_delete_after,
-       retention_delete_after = least(
-         coalesce(l.retention_delete_after,
-                  l.created_at + make_interval(months => app.lead_retention_months(l.tenant_id))),
-         now() + make_interval(days => app.lead_spam_days(l.tenant_id)))
- where l.status = 'spam' and not l.is_spam;
+  -- Spam gets its horizon now: spam_days from today, never longer than it had.
+  update public.leads l
+     set is_spam = true,
+         spam_marked_at = now(),
+         retention_before_spam = l.retention_delete_after,
+         retention_delete_after = least(
+           coalesce(l.retention_delete_after,
+                    l.created_at + make_interval(months => app.lead_retention_months(l.tenant_id))),
+           now() + make_interval(days => app.lead_spam_days(l.tenant_id)))
+   where l.stage_id is null and l.status = 'spam' and not l.is_spam;
 
-with numbered as (
-  select id, row_number() over (partition by tenant_id order by created_at, id) as n
-    from public.leads
-   where lead_number is null
-)
-update public.leads l set lead_number = numbered.n from numbered where numbered.id = l.id;
+  -- Numbers in arrival order, after any the tenant has already given out.
+  with numbered as (
+    select l.id,
+           coalesce(c.last_number, 0)
+             + row_number() over (partition by l.tenant_id order by l.created_at, l.id) as n
+      from public.leads l
+      left join app.lead_counters c on c.tenant_id = l.tenant_id
+     where l.lead_number is null
+  )
+  update public.leads l set lead_number = numbered.n from numbered where numbered.id = l.id;
+  insert into app.lead_counters as c (tenant_id, last_number)
+  select l.tenant_id, max(l.lead_number) from public.leads l
+   where l.lead_number is not null
+   group by l.tenant_id
+  on conflict (tenant_id) do update set last_number = greatest(c.last_number, excluded.last_number);
 
-insert into app.lead_counters as c (tenant_id, last_number)
-select tenant_id, max(lead_number) from public.leads group by tenant_id
-on conflict (tenant_id) do update set last_number = greatest(c.last_number, excluded.last_number);
+  -- Last, the stage. A lead mapped past New keeps a null first response: when it was
+  -- first answered is not known, so the KPI leaves it out rather than invent a time.
+  update public.leads l
+     set stage_id = s.id
+    from public.lead_stages s
+   where l.stage_id is null
+     and s.tenant_id = l.tenant_id
+     and s.key = case l.status
+                   when 'in_progress' then 'contacted'
+                   when 'done' then 'lost'
+                   else 'new'
+                 end;
+end $$;
+revoke all on function app.backfill_lead_pipeline() from public, anon, authenticated, service_role;
 
-insert into public.lead_events (tenant_id, lead_id, at, actor_id, kind, detail)
-select l.tenant_id, l.id, l.created_at, null, 'created', '{}'::jsonb
-  from public.leads l
- where not exists (select 1 from public.lead_events e where e.lead_id = l.id and e.kind = 'created');
-insert into public.lead_events (tenant_id, lead_id, at, actor_id, kind, detail)
-select l.tenant_id, l.id, now(), null, 'legacy_backfill', jsonb_build_object('from', l.status)
-  from public.leads l
- where l.status in ('in_progress', 'done', 'spam')
-   and not exists (select 1 from public.lead_events e where e.lead_id = l.id and e.kind = 'legacy_backfill');
-
-alter table public.leads enable trigger leads_updated_at;
+select app.backfill_lead_pipeline();
 
 alter table public.leads alter column stage_id set not null;
 alter table public.leads alter column lead_number set not null;
@@ -328,27 +393,45 @@ alter table public.leads drop constraint if exists leads_tenant_lead_number;
 alter table public.leads add constraint leads_tenant_lead_number unique (tenant_id, lead_number);
 
 -- ---- 6. Triggers on leads ---------------------------------------------------------------
-create or replace function app.tg_lead_number() returns trigger
-  language plpgsql security definer set search_path = '' as $$
-begin
-  insert into app.lead_counters as c (tenant_id, last_number)
-  values (new.tenant_id, 1)
-  on conflict (tenant_id) do update set last_number = c.last_number + 1
-  returning c.last_number into new.lead_number;
-  return new;
-end $$;
-revoke all on function app.tg_lead_number() from public, anon, authenticated, service_role;
-
 create or replace function app.tg_lead_pipeline() returns trigger
   language plpgsql security definer set search_path = '' as $$
 declare
+  -- What the CRM works out for itself (the blind indexes, the score and its reasons, the
+  -- index cursor: 0035, 0036). A write that changes only these is not an edit.
+  c_derived constant text[] := array['email_hmac', 'phone_hmac', 'score', 'score_signals',
+    'crm_indexed_at', 'search_text', 'updated_at', 'updated_by'];
+  v_skip text[] := c_derived;
+  v_edited boolean := true;
   v_kind text;
   v_initial boolean;
+  v_old_kind text;
+  v_old_initial boolean;
+  v_moved boolean := false;
   v_marking boolean := false;
   v_clearing boolean := false;
-  v_versioned boolean := false;
+  v_default timestamptz;
 begin
-  -- 1. Legacy sync (expand window). Old code writes status; new code writes stage_id or
+  -- 0. Is this write an edit? Read before any step below changes NEW. Moving a legacy
+  --    plaintext timeline band into the encrypted timeline (the daily cron, 0035) changes
+  --    no answer, so it is not one either. (A generated column reads as null in NEW here;
+  --    search_text is in the list for that reason too.)
+  if tg_op = 'UPDATE' then
+    if old.timeline_band is not null and new.timeline_band is null then
+      v_skip := v_skip || array['timeline_band', 'timeline_text_enc'];
+    end if;
+    v_edited := (to_jsonb(new) - v_skip) is distinct from (to_jsonb(old) - v_skip);
+  end if;
+
+  -- 1. The number, on arrival: a per-tenant counter, never reused. (BEFORE INSERT fires
+  --    even for a row ON CONFLICT then skips, so a caller that may retry checks first.)
+  if tg_op = 'INSERT' then
+    insert into app.lead_counters as c (tenant_id, last_number)
+    values (new.tenant_id, 1)
+    on conflict (tenant_id) do update set last_number = c.last_number + 1
+    returning c.last_number into new.lead_number;
+  end if;
+
+  -- 2. Legacy sync (expand window). Old code writes status; new code writes stage_id or
   --    is_spam. Whichever moved, the other side is derived from it.
   if tg_op = 'INSERT' then
     if new.stage_id is null then
@@ -377,16 +460,25 @@ begin
     else 'in_progress'
   end;
 
-  -- 2. The spam horizon (D2). Marking caps it at spam_days from now, never lengthening
-  --    it; clearing restores what it was before. (OLD is read only on UPDATE.)
   if tg_op = 'INSERT' then
     v_marking := new.is_spam;
   else
+    v_moved := new.stage_id is distinct from old.stage_id;
     v_marking := new.is_spam and not old.is_spam;
     v_clearing := old.is_spam and not new.is_spam;
-    v_versioned := new.stage_id is distinct from old.stage_id
-                   or new.is_spam is distinct from old.is_spam;
   end if;
+  if v_moved then
+    select s.kind, s.is_initial into v_old_kind, v_old_initial
+      from public.lead_stages s
+     where s.tenant_id = old.tenant_id and s.id = old.stage_id;
+  end if;
+
+  -- 3. The spam horizon (D2). Marking caps it at spam_days from now, never lengthening
+  --    it, and saves the horizon it had. Clearing gives that back, but never more than a
+  --    horizon set while the lead was flagged, or by this same write: an erasure
+  --    (docs/retention.md) shortens retention_delete_after, and un-marking spam must not
+  --    undo it. (OLD is read only on UPDATE: nested IFs, because SQL does not promise to
+  --    test tg_op first inside one expression.)
   if v_marking then
     new.spam_marked_at := now();
     new.retention_before_spam := new.retention_delete_after;
@@ -394,28 +486,58 @@ begin
       coalesce(new.retention_delete_after,
                new.created_at + make_interval(months => app.lead_retention_months(new.tenant_id))),
       now() + make_interval(days => app.lead_spam_days(new.tenant_id)));
-  elsif v_clearing then
-    new.spam_marked_at := null;
-    new.retention_delete_after := old.retention_before_spam;
-    new.retention_before_spam := null;
+  elsif tg_op = 'UPDATE' then
+    if old.is_spam then
+      if new.retention_delete_after is distinct from old.retention_delete_after then
+        v_default := new.created_at
+                     + make_interval(months => app.lead_retention_months(new.tenant_id));
+        if new.retention_delete_after < coalesce(old.retention_before_spam, v_default) then
+          new.retention_before_spam := new.retention_delete_after;
+        end if;
+      end if;
+      if v_clearing then
+        new.spam_marked_at := null;
+        new.retention_delete_after := new.retention_before_spam;
+        new.retention_before_spam := null;
+      end if;
+    end if;
   end if;
 
-  -- 3. Pipeline stamps: the first time a lead leaves the initial stage, and when it is won.
-  if new.first_response_at is null and v_initial is false then
+  -- 4. Pipeline stamps, on a real move only (a note, a status rewrite to the same stage or
+  --    the index cron never stamps): the first response is the first time a lead LEAVES
+  --    the initial stage, and won_at is when it enters a won stage. A lead the backfill
+  --    mapped past New keeps a null first response; a manual add sets its own (C3).
+  if v_moved and v_old_initial and v_initial is false and new.first_response_at is null then
     new.first_response_at := now();
   end if;
-  if v_kind = 'won' then
-    new.won_at := coalesce(new.won_at, now());
-  else
+  if v_kind is distinct from 'won' then
     new.won_at := null;
+  elsif new.won_at is null
+        and (tg_op = 'INSERT' or (v_moved and v_old_kind is distinct from 'won')) then
+    new.won_at := now();
   end if;
 
-  -- 4. The version moves only when a versioned field does, so writing a note or a stamp
+  -- 5. The version moves only when a versioned field does, so writing a note or a stamp
   --    never causes a 409. (Later slices add assignee, value, tags and contact.)
-  if v_versioned then
-    if new.version = old.version then
+  if tg_op = 'UPDATE' then
+    if (v_moved or new.is_spam is distinct from old.is_spam) and new.version = old.version then
       new.version := old.version + 1;
     end if;
+  end if;
+
+  -- 6. Who changed the lead, and when (app.tg_set_actor's and app.tg_set_updated_at's job,
+  --    done here so nothing later in the phase can undo it). A write that is not an edit
+  --    (step 0) keeps both: the index cron never makes a lead look freshly edited, or
+  --    erases who last moved it.
+  if tg_op = 'INSERT' then
+    new.created_by := coalesce(new.created_by, auth.uid());
+    new.updated_by := auth.uid();
+  elsif v_edited then
+    new.updated_at := now();
+    new.updated_by := auth.uid();
+  else
+    new.updated_at := old.updated_at;
+    new.updated_by := old.updated_by;
   end if;
   return new;
 end $$;
@@ -425,7 +547,6 @@ create or replace function app.tg_lead_timeline() returns trigger
   language plpgsql security definer set search_path = '' as $$
 declare
   v_actor uuid := auth.uid();
-  v_note uuid;
 begin
   if tg_op = 'INSERT' then
     insert into public.lead_events (tenant_id, lead_id, actor_id, kind)
@@ -447,28 +568,36 @@ begin
     values (new.tenant_id, new.id, v_actor, 'spam_cleared');
   end if;
 
-  -- Legacy notes (expand window): a write to the old single field joins the thread.
-  if new.internal_notes is distinct from old.internal_notes
-     and nullif(btrim(new.internal_notes), '') is not null then
-    insert into public.lead_notes (tenant_id, lead_id, body, source, created_by)
-    values (new.tenant_id, new.id, left(new.internal_notes, 5000), 'legacy', v_actor)
-    returning id into v_note;
-    insert into public.lead_events (tenant_id, lead_id, actor_id, kind, detail)
-    values (new.tenant_id, new.id, v_actor, 'note_added', jsonb_build_object('note_id', v_note));
+  -- The legacy notes field (expand window): mirrored as ONE note per lead, rewritten in
+  -- place when the field is saved and removed when it is cleared, so text taken out of
+  -- the field leaves the thread as well. Its author and time are the last save's. The
+  -- first save adds the note, and app.tg_lead_note_event its timeline event.
+  if new.internal_notes is distinct from old.internal_notes then
+    if nullif(btrim(new.internal_notes), '') is null then
+      delete from public.lead_notes
+       where tenant_id = new.tenant_id and lead_id = new.id and source = 'legacy';
+    else
+      update public.lead_notes
+         set body = left(new.internal_notes, 5000), created_by = v_actor, created_at = now()
+       where tenant_id = new.tenant_id and lead_id = new.id and source = 'legacy';
+      if not found then
+        insert into public.lead_notes (tenant_id, lead_id, body, source, created_by)
+        values (new.tenant_id, new.id, left(new.internal_notes, 5000), 'legacy', v_actor);
+      end if;
+    end if;
   end if;
   return null;
 end $$;
 revoke all on function app.tg_lead_timeline() from public, anon, authenticated, service_role;
 
+-- One BEFORE trigger and one AFTER trigger (a postcondition holds it): 0002's timestamps
+-- trigger is gone (section 5) and the number, the actor and the timestamps are steps of
+-- app.tg_lead_pipeline.
 drop trigger if exists leads_number on public.leads;
-create trigger leads_number before insert on public.leads
-  for each row execute function app.tg_lead_number();
+drop trigger if exists leads_actor on public.leads;
 drop trigger if exists leads_pipeline on public.leads;
 create trigger leads_pipeline before insert or update on public.leads
   for each row execute function app.tg_lead_pipeline();
-drop trigger if exists leads_actor on public.leads;
-create trigger leads_actor before insert or update on public.leads
-  for each row execute function app.tg_set_actor();
 drop trigger if exists leads_timeline on public.leads;
 create trigger leads_timeline after insert or update on public.leads
   for each row execute function app.tg_lead_timeline();
@@ -589,6 +718,32 @@ begin
       raise exception '0034: service_role lacks % on a CRM table', p;
     end if;
   end loop;
+  -- A thread note is append-only for every API role: only the definer mirror rewrites a
+  -- note, and only the legacy one.
+  if has_table_privilege('service_role', 'public.lead_notes', 'update') then
+    raise exception '0034: service_role may update lead_notes (thread notes are append-only)';
+  end if;
+  if not exists (select 1 from pg_indexes
+                  where schemaname = 'public' and tablename = 'lead_notes'
+                    and indexname = 'lead_notes_one_legacy'
+                    and indexdef like 'CREATE UNIQUE INDEX%' and indexdef like '%legacy%') then
+    raise exception '0034: lead_notes_one_legacy (one legacy mirror per lead) is missing';
+  end if;
+
+  -- One function per phase: exactly one BEFORE and one AFTER row trigger of this
+  -- migration's on leads, and none of 0002's left behind (leads_notify, 0010, is the
+  -- notification hook's AFTER INSERT and stays).
+  if (select coalesce(array_agg(distinct t.trigger_name::text order by t.trigger_name::text), '{}')
+        from information_schema.triggers t
+       where t.event_object_schema = 'public' and t.event_object_table = 'leads'
+         and t.action_timing = 'BEFORE') <> array['leads_pipeline'] then
+    raise exception '0034: leads must have exactly one BEFORE trigger, leads_pipeline';
+  end if;
+  if not exists (select 1 from information_schema.triggers t
+                  where t.event_object_schema = 'public' and t.event_object_table = 'leads'
+                    and t.action_timing = 'AFTER' and t.trigger_name = 'leads_timeline') then
+    raise exception '0034: leads_timeline is missing';
+  end if;
   if not exists (select 1 from pg_policies
                   where schemaname = 'public' and tablename = 'lead_events' and policyname = 'lead_events_live'
                     and permissive = 'RESTRICTIVE'
@@ -611,8 +766,8 @@ begin
 
   -- The definers write FORCE RLS tables with no policy for them, so their owner must
   -- bypass RLS (Supabase's postgres does; 0011). Otherwise every lead write would fail.
-  foreach v_fn in array array['app.tg_lead_number()', 'app.tg_lead_pipeline()',
-                              'app.tg_lead_timeline()', 'app.tg_tenant_crm_defaults()'] loop
+  foreach v_fn in array array['app.tg_lead_pipeline()', 'app.tg_lead_timeline()',
+                              'app.tg_lead_note_event()', 'app.tg_tenant_crm_defaults()'] loop
     if not exists (select 1 from pg_proc f join pg_roles r on r.oid = f.proowner
                     where f.oid = v_fn::regprocedure and f.prosecdef
                       and (r.rolsuper or r.rolbypassrls)) then

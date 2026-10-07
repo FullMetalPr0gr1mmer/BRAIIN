@@ -205,31 +205,23 @@ describe('the notes thread', () => {
     expect(events).not.toContain('svc:list:lead_notes');
   });
 
-  it('POST writes the note as the session user, then its timeline event', async () => {
+  it('POST is ONE insert, as the session user; the database writes its timeline event', async () => {
     const res = await notes.POST(
       ctx(`/api/admin/leads/${LEAD}/notes`, 'POST', { body: '  Called back  ' }),
     );
     expect(res.status).toBe(200);
-    expect(inserts[0]).toEqual({
-      table: 'lead_notes',
-      row: {
-        tenant_id: TENANT,
-        lead_id: LEAD,
-        body: 'Called back',
-        source: 'staff',
-        created_by: USER,
+    expect(inserts).toEqual([
+      {
+        table: 'lead_notes',
+        row: {
+          tenant_id: TENANT,
+          lead_id: LEAD,
+          body: 'Called back',
+          source: 'staff',
+          created_by: USER,
+        },
       },
-    });
-    expect(inserts[1]).toEqual({
-      table: 'lead_events',
-      row: {
-        tenant_id: TENANT,
-        lead_id: LEAD,
-        actor_id: USER,
-        kind: 'note_added',
-        detail: { note_id: NOTE },
-      },
-    });
+    ]);
   });
 
   it('POST refuses an empty note, or an author smuggled in', async () => {

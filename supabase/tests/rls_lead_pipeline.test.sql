@@ -4,12 +4,14 @@
 -- Covers: who reads stages and the timeline (six principals plus a stale token); that
 -- nobody writes them through the API, and nobody reaches the notes thread at all; the
 -- legacy sync both ways (old status writes move the stage, new stage writes set the
--- status); the spam horizon (D2) applied to a LEGACY status='spam' write, and restored
--- on clearing; the stamps, the version rule and per-tenant lead numbers; the stage-set
--- rules; and the grants. CLAUDE.md §3, §8, §9.
+-- status); the spam horizon (D2) applied to a LEGACY status='spam' write, never
+-- lengthened, and given back on clearing without undoing an erasure made while flagged;
+-- the legacy notes field mirrored as one note rewritten in place, and a thread note's
+-- event written with it; the stamps (on a real move only), the version rule and
+-- per-tenant lead numbers; the stage-set rules; and the grants. CLAUDE.md §3, §8, §9.
 
 begin;
-select plan(53);
+select plan(71);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -187,6 +189,50 @@ select ok(
      from public.leads where id = '00000000-0000-0000-0000-00000000aa01'),
   'clearing spam restores the horizon it had (the default here) and the initial stage');
 
+-- The horizon a mark saves, the cap it applies and what clearing gives back. aa05 keeps a
+-- long explicit horizon; aa06 is three days from the end of its 24 months; aa07 is erased
+-- by an operator (the documented path: a shorter retention_delete_after) while flagged.
+-- One transaction, so now() is one instant and every horizon below is exact.
+insert into public.leads (id, tenant_id, name, email_enc, message, created_at, retention_delete_after) values
+  ('00000000-0000-0000-0000-00000000aa05', '00000000-0000-0000-0000-000000000001', 'Kept long', 'x', 'hi',
+   now(), now() + interval '400 days'),
+  ('00000000-0000-0000-0000-00000000aa06', '00000000-0000-0000-0000-000000000001', 'Nearly due', 'x', 'hi',
+   now() - interval '24 months' + interval '3 days', null),
+  ('00000000-0000-0000-0000-00000000aa07', '00000000-0000-0000-0000-000000000001', 'Erased', 'x', 'hi',
+   now(), null);
+set local role authenticated;
+select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
+select is(_rows($$ update public.leads set status = 'spam'
+                    where id in ('00000000-0000-0000-0000-00000000aa05', '00000000-0000-0000-0000-00000000aa06',
+                                 '00000000-0000-0000-0000-00000000aa07') $$), 3,
+  'three legacy spam marks');
+reset role;
+select ok(
+  (select retention_delete_after = now() + interval '10 days'
+          and retention_before_spam = now() + interval '400 days'
+     from public.leads where id = '00000000-0000-0000-0000-00000000aa05'),
+  'marking caps a long horizon at spam_days and saves that horizon exactly');
+select ok(
+  (select retention_delete_after = created_at + interval '24 months' and retention_before_spam is null
+     from public.leads where id = '00000000-0000-0000-0000-00000000aa06'),
+  'marking never lengthens: a lead due in three days keeps its own horizon, not spam_days');
+-- The erasure, while aa07 is flagged.
+update public.leads set retention_delete_after = now() + interval '1 day'
+ where id = '00000000-0000-0000-0000-00000000aa07';
+set local role authenticated;
+select is(_rows($$ update public.leads set status = 'new'
+                    where id in ('00000000-0000-0000-0000-00000000aa05', '00000000-0000-0000-0000-00000000aa07') $$), 2,
+  'two legacy writes clear spam');
+reset role;
+select ok(
+  (select retention_delete_after = now() + interval '400 days' and retention_before_spam is null
+     from public.leads where id = '00000000-0000-0000-0000-00000000aa05'),
+  'clearing spam gives back exactly the horizon the mark saved');
+select ok(
+  (select not is_spam and retention_delete_after = now() + interval '1 day'
+     from public.leads where id = '00000000-0000-0000-0000-00000000aa07'),
+  'clearing spam never undoes a horizon shortened while flagged: the erasure stands');
+
 set local role authenticated;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.leads set status = 'done'
@@ -208,6 +254,68 @@ select is((select count(*)::int from public.lead_events
               and detail ? 'note_id' and not detail ? 'body'),
   1, 'the timeline records the note by id, never its text');
 
+-- The legacy panel saves the whole field each time: the mirror is rewritten in place, so
+-- the thread holds one copy, and text taken out of the field is gone from it too.
+set local role authenticated;
+select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
+select is(_rows($$ update public.leads set internal_notes = 'Call back on Sunday. ID 1234567890'
+                    where id = '00000000-0000-0000-0000-00000000aa02' $$), 1,
+  'the field saved again, with an ID number pasted in by mistake');
+select is(_rows($$ update public.leads set internal_notes = 'Call back on Sunday'
+                    where id = '00000000-0000-0000-0000-00000000aa02' $$), 1,
+  'and again, with the ID number taken out');
+reset role;
+select is((select count(*)::int || '/' || max(body) from public.lead_notes
+            where lead_id = '00000000-0000-0000-0000-00000000aa02' and source = 'legacy'),
+  '1/Call back on Sunday', 'one mirror note per lead, rewritten in place');
+select is((select count(*)::int from public.lead_notes where body like '%1234567890%'), 0,
+  'text taken out of the field leaves the thread too');
+select is(_events('00000000-0000-0000-0000-00000000aa02', 'note_added'), 1,
+  'rewriting the mirror adds no timeline event');
+
+-- A thread note, as the notes route writes it (the service role): its timeline event comes
+-- in the same statement, and nobody can rewrite it afterwards.
+set local role service_role;
+select _as(null, null, null);
+insert into public.lead_notes (tenant_id, lead_id, body, source, created_by)
+values ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000aa02',
+        'Sent the proposal', 'staff', '00000000-0000-0000-0000-0000000000a1');
+select throws_ok($$ update public.lead_notes set body = 'rewritten' $$, '42501', null,
+  'the service role cannot rewrite a thread note (append-only)');
+reset role;
+select is((select count(*)::int from public.lead_events e
+             join public.lead_notes n on n.id = (e.detail ->> 'note_id')::uuid
+            where n.lead_id = '00000000-0000-0000-0000-00000000aa02' and n.source = 'staff'
+              and e.kind = 'note_added' and e.actor_id = '00000000-0000-0000-0000-0000000000a1'),
+  1, 'a thread note writes its own timeline event, by its author');
+
+set local role authenticated;
+select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
+select is(_rows($$ update public.leads set internal_notes = '  '
+                    where id = '00000000-0000-0000-0000-00000000aa02' $$), 1, 'the field cleared');
+reset role;
+select is((select string_agg(source, ',') from public.lead_notes
+            where lead_id = '00000000-0000-0000-0000-00000000aa02'),
+  'staff', 'clearing the field removes its mirror; the thread note stays');
+
+-- Stamps on a real move only. aa08 arrives already past New (a legacy-style insert): when
+-- it was first answered is not known, and an unrelated write must not claim it was now.
+insert into public.leads (id, tenant_id, name, email_enc, message, status)
+values ('00000000-0000-0000-0000-00000000aa08', '00000000-0000-0000-0000-000000000001',
+        'Old hand', 'x', 'hi', 'in_progress');
+set local role authenticated;
+select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
+select is(_rows($$ update public.leads set internal_notes = 'Spoke last spring'
+                    where id = '00000000-0000-0000-0000-00000000aa08' $$), 1,
+  'a notes write on a lead past New');
+select is(_rows($$ update public.leads set status = 'done'
+                    where id = '00000000-0000-0000-0000-00000000aa08' $$), 1,
+  'and a move from Contacted to Lost');
+reset role;
+select ok((select first_response_at is null and _stage(id) = 'lost' from public.leads
+            where id = '00000000-0000-0000-0000-00000000aa08'),
+  'neither stamps a first response: only leaving the initial stage does');
+
 -- ---- New-style writes set the status (as the service role will, from C3) ---------------
 update public.leads set stage_id = (select id from public.lead_stages
   where tenant_id = '00000000-0000-0000-0000-000000000001' and key = 'won')
@@ -227,7 +335,7 @@ select throws_ok(
       where id = '00000000-0000-0000-0000-00000000aa02' $$,
   '23503', null, 'a lead cannot point at another tenant''s stage (composite key)');
 
--- The public form writes as the SERVICE ROLE, through every new trigger (the actor trigger
+-- The public form writes as the SERVICE ROLE, through every new trigger (the BEFORE phase
 -- calls auth.uid() in that role). The suites above insert as the owner, so prove this one.
 set local role service_role;
 select _as(null, null, null);

@@ -10,12 +10,16 @@ import { serviceClient } from '@/lib/supabase/server';
 
 // A lead's notes thread (Admin v2 C2b): `leads.pii` (Admin, Developer), the capability the
 // old internal_notes column carried. lead_notes is reachable by the service role only
-// (0034), so this route is the thread's only door, and it is audited:
+// (0034), so this route is the thread's only door for reading it and for adding to it, and
+// it is audited. (Until C14 the thread also holds one mirror of the legacy internal_notes
+// field, which the 0034 trigger keeps in step with that field.)
 //
 //   GET   live recheck → the caller's own client must see the lead (RLS, live check) → an
 //         audit row WRITTEN (fail-closed: no row, no notes) → the thread, newest first
-//   POST  live recheck → the lead must be visible → the note, as the service role, its
-//         author the session's user (never a client-supplied id) → its timeline event
+//   POST  live recheck → the lead must be visible → ONE insert as the service role, its
+//         author the session's user (never a client-supplied id). Its timeline event is
+//         written by the database in the same statement (app.tg_lead_note_event), so a
+//         failure leaves neither and a retry cannot put the note in twice.
 //
 // Notes are append-only: a correction is a new note.
 
@@ -108,15 +112,6 @@ export const POST = defineAdminRoute({
       .single();
     if (error || !data) throw new Error(`add lead note: ${error?.message ?? 'no row'}`);
     const note = data as { id: string; created_at: string };
-
-    const { error: eventError } = await svc.from('lead_events').insert({
-      tenant_id: auth.tenantId,
-      lead_id: id,
-      actor_id: auth.userId,
-      kind: 'note_added',
-      detail: { note_id: note.id },
-    });
-    if (eventError) throw new Error(`lead note event: ${eventError.message}`);
 
     audit({ action: 'lead.note_add', entityType: 'lead', entityId: id, detail: { note: note.id } });
     return { id: note.id, created_at: note.created_at };

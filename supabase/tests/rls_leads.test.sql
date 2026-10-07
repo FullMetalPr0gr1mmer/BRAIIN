@@ -168,7 +168,10 @@ select is((select count(*) from public.leads)::int, 0, 'a token with no subject 
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 select is(
   _readable(array['email_enc', 'phone_enc', 'budget_enc', 'timeline_band', 'timeline_text_enc',
-                  'internal_notes', 'ip_inet', 'retention_delete_after']),
+                  'internal_notes', 'ip_inet', 'retention_delete_after',
+                  -- and what the CRM keeps from staff (0034, 0035)
+                  'retention_before_spam', 'email_hmac', 'phone_hmac', 'score_signals',
+                  'crm_indexed_at']),
   '{}'::text[], 'admin reads no gated lead column through the API (0033)');
 select throws_ok(
   $$ select * from public.leads $$,
@@ -181,7 +184,10 @@ select lives_ok(
 select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0000-0000-000000000001');
 select is(
   _readable(array['email_enc', 'phone_enc', 'budget_enc', 'timeline_band', 'timeline_text_enc',
-                  'internal_notes', 'ip_inet', 'retention_delete_after']),
+                  'internal_notes', 'ip_inet', 'retention_delete_after',
+                  -- and what the CRM keeps from staff (0034, 0035)
+                  'retention_before_spam', 'email_hmac', 'phone_hmac', 'score_signals',
+                  'crm_indexed_at']),
   '{}'::text[], 'developer reads no gated lead column through the API (0033)');
 
 -- ---- writes: status and notes only (0030) -----------------------------------------

@@ -64,11 +64,19 @@ describe('the leads SELECT grant (0033)', () => {
     expect(granted).toContain('tenant_id');
   });
 
-  it('grants no gated column, ciphertext or retention date', () => {
+  it('grants no gated column, ciphertext, retention date or CRM-internal column', () => {
     const forbidden = [
       ...GATED_LEAD_COLUMNS.split(','),
       ...SENSITIVE_LEAD_COLUMNS,
       'retention_delete_after',
+      // What the CRM keeps from staff tokens: the saved spam horizon (0034), the blind
+      // indexes, the score's reasons (two derive from budget and timeline) and the index
+      // cursor (0035).
+      'retention_before_spam',
+      'email_hmac',
+      'phone_hmac',
+      'score_signals',
+      'crm_indexed_at',
     ];
     for (const column of forbidden) expect(granted, column).not.toContain(column);
   });

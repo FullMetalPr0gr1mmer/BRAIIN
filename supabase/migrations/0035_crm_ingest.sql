@@ -13,17 +13,20 @@
 --       score / score_signals    0-100, readable; the reasons are not (two of them come
 --                                from the budget and the timeline).
 --       source / channel         server-set. Never chosen by the client.
---       crm_indexed_at           when the indexes and signals were computed (the daily
---                                backfill's cursor; also set at arrival).
+--       crm_indexed_at           when the indexes and signals were computed: the daily
+--                                backfill's cursor. Set at arrival only when the Worker
+--                                computed them; a lead that arrives without them stays
+--                                null until the cron does.
 --   • email_enc becomes optional, with "at least one channel" (manual phone-only leads, C3).
 --   • public.crm_ingest_lead(p_tenant, p_lead): the service-role door for a new lead. An
 --     allow-listed jsonb; the Worker's own id, so a retry after an ambiguous failure is a
 --     no-op instead of a second lead (Admin v2 verification); the `returning` signal and
 --     the score computed here, in the same transaction as the timeline's `created` event.
 --   • public.crm_index_lead(...): the daily cron's door for leads that arrived before this
---     migration, or through the fallback insert. It also moves a legacy plaintext
---     timeline_band into the encrypted timeline (Admin v2 plan, "timeline_band is
---     encrypted"); the Worker does the encrypting.
+--     migration, without their indexes, or through the fallback insert. It also moves a
+--     legacy plaintext timeline_band into the encrypted timeline (Admin v2 plan,
+--     "timeline_band is encrypted"); the Worker does the encrypting. Not an edit: the
+--     lead keeps its updated_at and updated_by.
 -- Both functions are SECURITY INVOKER and executable by the service role only, like
 -- public.public_write_hit (0029).
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -164,7 +167,7 @@ begin
   end if;
   -- A retry of a lead that did arrive (its answer was lost): nothing to do. Checked first
   -- because BEFORE INSERT triggers fire even for a row ON CONFLICT then skips, and the
-  -- number trigger would spend a lead number on it.
+  -- BEFORE phase (app.tg_lead_pipeline, 0034) would spend a lead number on it.
   if exists (select 1 from public.leads where id = v_id) then
     return v_id;
   end if;
@@ -193,7 +196,10 @@ begin
     coalesce((p_lead ->> 'consent_marketing')::boolean, false), v_email_hmac, v_phone_hmac,
     v_signals, app.lead_score(v_signals, coalesce(v_scoring, '{}'::jsonb)),
     coalesce(p_lead ->> 'source', 'web_form'), coalesce(p_lead ->> 'channel', 'unknown'),
-    now(), nullif(p_lead ->> 'created_by', '')::uuid)
+    -- Indexed only if the Worker computed the indexes (it sends the signals with them);
+    -- otherwise the daily cron picks the lead up.
+    case when p_lead ? 'score_signals' then now() end,
+    nullif(p_lead ->> 'created_by', '')::uuid)
   -- The same id again is the same lead (a retry after a lost response): nothing to do.
   on conflict (id) do nothing;
   return v_id;
@@ -231,6 +237,8 @@ begin
   end if;
   select scoring into v_scoring from public.crm_settings where tenant_id = p_tenant;
 
+  -- Not an edit: it changes only what the CRM derives (and moves the band), so the lead
+  -- keeps its updated_at and updated_by (0034, app.tg_lead_pipeline step 0).
   update public.leads
      set email_hmac = p_email_hmac,
          phone_hmac = p_phone_hmac,
