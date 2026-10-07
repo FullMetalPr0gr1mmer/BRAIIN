@@ -10,8 +10,8 @@ import { sweepRoutes } from './routes';
 // job sets it after the real suites and uploads the directory with the public capture.
 //
 // Admin sees every screen, so Admin is captured on all of them, at a laptop width and a
-// phone width (the shell has no small-screen layout until F2: these pictures are its
-// "before"). The other roles are captured on the dashboard only, for their sidebars.
+// phone width (where F2's shell puts the sidebar in a popover and wraps the topbar). The
+// other roles are captured on the dashboard only, for their sidebars.
 const DIR = process.env.CAPTURE_DIR;
 
 const VIEWPORTS = [

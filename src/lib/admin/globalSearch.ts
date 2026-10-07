@@ -31,9 +31,10 @@ import {
 //
 // Deliberate boundaries:
 //
-//   - SERVER-RENDERED, not a live combobox. A GET form to /admin/search costs zero
-//     client JS, is fully keyboard- and screen-reader-accessible for free, and cannot
-//     leak a result the server did not authorize. Live suggestions are a later nicety.
+//   - TWO CALLERS, ONE FUNCTION. The server-rendered /admin/search page (zero client JS,
+//     the path that works without it) and GET /api/admin/search, which feeds the command
+//     palette's live suggestions (Admin v2 F3). Both return exactly what this function
+//     does, so the palette can never show a result the results page would not.
 //   - LEADS ARE EXCLUDED. Lead data is Admin+Developer-gated PII behind its own page
 //     and audit trail; surfacing lead names in a cross-entity search box would create
 //     a second, less-guarded read path — the exact thing §5's column gates exist to

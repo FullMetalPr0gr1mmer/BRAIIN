@@ -1,5 +1,5 @@
 // Toast notifications for the admin shell. Browser-only; islands and layout scripts
-// share it, and manualChunks routes it into the admin-ui chunk either way.
+// share it, and the admin-client chunk group (astro.config.mjs) holds it either way.
 //
 // The region is server-rendered in AdminLayout with `aria-live="polite"` — it must
 // exist BEFORE anything is appended, because a live region announces changes to its

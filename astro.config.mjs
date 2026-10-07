@@ -3,7 +3,7 @@ import { defineConfig, envField } from 'astro/config';
 import cloudflare from '@astrojs/cloudflare';
 // Phase 3: the React integration is registered for the /admin islands. Public pages
 // still ship ZERO React — Astro only emits the runtime for routes that actually
-// hydrate an island, and `manualChunks` below quarantines that runtime into
+// hydrate an island, and the `codeSplitting` groups below put that runtime in
 // `admin-vendor-*.js` so the public 100 KB budget keeps measuring only public JS.
 import react from '@astrojs/react';
 

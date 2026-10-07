@@ -4,9 +4,10 @@ import { useEffect } from 'react';
 import type { JSONContent } from '@tiptap/core';
 import type { TiptapDoc } from '@schemas/tiptap';
 
-// Tiptap island. The ONLY hydrated React on the admin, which is why the vendor chunk
-// carrying it is quarantined by name in astro.config.mjs — see the `manualChunks` note
-// there for why the public 100 KB budget would otherwise start measuring this.
+// The rich-text editor: Tiptap and ProseMirror, about 100 KB gzipped. FormField loads
+// this module with import(), and astro.config.mjs's `admin-rich` group keeps it and its
+// stack in their own lazy chunk, so only a form with a rich-text field downloads them
+// (scripts/admin-bundle.mjs checks that on every build).
 //
 // ── The editor is not a security boundary ────────────────────────────────────────
 // Nothing here sanitises anything, deliberately. What this component produces is Tiptap
