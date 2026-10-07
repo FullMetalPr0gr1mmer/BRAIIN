@@ -99,7 +99,8 @@ describe('gated lead columns have a short, named list of readers', () => {
       .sort();
     expect(users).toEqual([
       'src/lib/admin/leadFields.ts',
-      'src/pages/api/admin/leads/[id].ts',
+      // The one reveal path, for the legacy ?pii=1 and the CRM's POST /reveal (C2b).
+      'src/lib/crm/reveal.ts',
       'src/pages/api/admin/leads/export.ts',
     ]);
   });
@@ -110,14 +111,25 @@ describe('gated lead columns have a short, named list of readers', () => {
       .map((f) => f.path)
       .sort();
     expect(readers).toEqual([
+      // The reveal: after assertCap, a live recheck, the limiter and a fail-closed audit.
+      'src/lib/crm/reveal.ts',
       // The public form's insert (service role, tenant resolved server-side).
       'src/lib/data/leads.ts',
-      // The reveal and the export: after assertCap, a live recheck and a fail-closed audit.
-      'src/pages/api/admin/leads/[id].ts',
+      // The export: the §3 lockdown.
       'src/pages/api/admin/leads/export.ts',
       // The notification hook: a signed call, re-fetches the row, filters by recipient role.
       'src/pages/api/hooks/notify-lead.ts',
     ]);
+  });
+
+  // lead_notes is service-role only (0034); this route is the thread's one door, and it
+  // writes an audit row before reading (C2b).
+  it('only the notes route touches the notes thread', () => {
+    const doors = files
+      .filter((f) => /from\(\s*['"]lead_notes['"]\s*\)/.test(f.code))
+      .map((f) => f.path)
+      .sort();
+    expect(doors).toEqual(['src/pages/api/admin/leads/[id]/notes.ts']);
   });
 
   // The check above sees a file that builds its own service client. A module handed one
@@ -133,8 +145,8 @@ describe('gated lead columns have a short, named list of readers', () => {
       // The daily cron's indexing (C1b): decrypts in the Worker, computes indexes and
       // signals, writes them through crm_index_lead. No person sees the values.
       'src/lib/crm/indexBackfill.ts',
+      'src/lib/crm/reveal.ts',
       'src/lib/data/leads.ts',
-      'src/pages/api/admin/leads/[id].ts',
       'src/pages/api/admin/leads/export.ts',
       'src/pages/api/hooks/notify-lead.ts',
     ]);

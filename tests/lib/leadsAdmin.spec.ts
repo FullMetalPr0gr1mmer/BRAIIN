@@ -38,6 +38,7 @@ const GRANTED = new Set([
 let auditOk = true;
 let liveRole = 'admin';
 let rlsSeesLead = true;
+let revealLimited = false;
 const events: string[] = [];
 const serviceFilters: Record<string, unknown>[] = [];
 const row: Record<string, unknown> = {
@@ -79,6 +80,17 @@ vi.mock('@/lib/crypto/pii', () => ({
   },
 }));
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+// The reveal limiter (C2b): recorded in order; can refuse like the real ledger.
+vi.mock('@/lib/admin/rateLimit', async () => {
+  const { RateLimitError } = await import('@/lib/admin/errors');
+  return {
+    PII_REVEAL_LIMITS: { perUser: 60, perTenant: 300, windowMinutes: 60 },
+    claimPrivilegedOp: async (_auth: unknown, op: string) => {
+      events.push(`ops:${op}`);
+      if (revealLimited) throw new RateLimitError(`${op}:user`);
+    },
+  };
+});
 vi.mock('@/lib/leads/interestLabel', () => ({
   resolveLeadInterests: async () => new Map(),
   withInterestLabels: (r: Record<string, unknown>) => r,
@@ -170,22 +182,24 @@ beforeEach(() => {
   auditOk = true;
   liveRole = 'admin';
   rlsSeesLead = true;
+  revealLimited = false;
   events.length = 0;
   serviceFilters.length = 0;
 });
 
 describe('lead contact details (?pii=1)', () => {
-  it('recheck, RLS read, audit row, THEN the gated columns and decrypt; never ciphertext', async () => {
+  it('recheck, rate limit, RLS read, audit row, THEN the gated columns and decrypt; never ciphertext', async () => {
     const res = await detail.GET(ctx(`/api/admin/leads/${LEAD}?pii=1`));
     const body = (await res.json()) as { data: Record<string, unknown> };
     expect(res.status).toBe(200);
-    expect(events.slice(0, 4)).toEqual([
+    expect(events.slice(0, 5)).toEqual([
       'svc:profiles',
+      'ops:pii-reveal',
       'rls:select',
       'audit:lead.view_pii',
       'svc:leads',
     ]);
-    expect(events.slice(4).every((e) => e === 'decrypt')).toBe(true);
+    expect(events.slice(5).every((e) => e === 'decrypt')).toBe(true);
     expect(events.filter((e) => e.startsWith('audit:'))).toEqual(['audit:lead.view_pii']);
     expect(body.data['email']).toBe('sara@example.com');
     expect(body.data['phone']).toBe('+966500000000');
@@ -224,7 +238,14 @@ describe('lead contact details (?pii=1)', () => {
     rlsSeesLead = false;
     const res = await detail.GET(ctx(`/api/admin/leads/${LEAD}?pii=1`));
     expect(res.status).toBe(404);
-    expect(events).toEqual(['svc:profiles', 'rls:select']);
+    expect(events).toEqual(['svc:profiles', 'ops:pii-reveal', 'rls:select']);
+  });
+
+  it('the 61st reveal in an hour is a 429, before any read, audit or decrypt (C2b)', async () => {
+    revealLimited = true;
+    const res = await detail.GET(ctx(`/api/admin/leads/${LEAD}?pii=1`));
+    expect(res.status).toBe(429);
+    expect(events).toEqual(['svc:profiles', 'ops:pii-reveal']);
   });
 
   it('a demoted user is refused at once (live recheck), before any read, audit or decrypt', async () => {
@@ -238,8 +259,9 @@ describe('lead contact details (?pii=1)', () => {
     liveRole = 'developer';
     const res = await detail.GET(ctx(`/api/admin/leads/${LEAD}?pii=1`, 'developer'));
     expect(res.status).toBe(200);
-    expect(events.slice(0, 4)).toEqual([
+    expect(events.slice(0, 5)).toEqual([
       'svc:profiles',
+      'ops:pii-reveal',
       'rls:select',
       'audit:lead.view_pii',
       'svc:leads',
