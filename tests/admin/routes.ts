@@ -28,6 +28,19 @@ export interface SweepRoute {
   listApi?: string;
 }
 
+/**
+ * The edit screens' lists the seed leaves EMPTY (supabase/seed.sql inserts no row into these
+ * tables, list API → table), so those screens have no row to open. Any other list that
+ * answers no row fails the sweep: a filter or RLS change that hides rows looks exactly
+ * like that. tests/lib/adminRoutes.spec.ts holds this map to the seed.
+ */
+export const UNSEEDED_LISTS: Readonly<Record<string, string>> = {
+  '/api/admin/redirects': 'redirects',
+  '/api/admin/themes': 'custom_themes',
+  '/api/admin/ai-questions': 'ai_questions',
+  '/api/admin/ai-styles': 'ai_styles',
+};
+
 /** Reached from inside other screens, never from the sidebar or an area's tabs. */
 export const EXTRA_LINKS: readonly NavTab[] = [
   // The header search's results page. The page has no capability gate (each entity is

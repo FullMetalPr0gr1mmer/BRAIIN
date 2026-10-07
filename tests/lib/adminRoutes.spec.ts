@@ -7,6 +7,7 @@ import * as resources from '@/lib/admin/resources';
 import type { ResourceConfig } from '@/lib/admin/resource';
 import {
   EXTRA_LINKS,
+  UNSEEDED_LISTS,
   expectedSidebar,
   menuScreens,
   pageFileFor,
@@ -75,16 +76,40 @@ describe('the sweep route map', () => {
     }
   });
 
-  it('a role is sent to an edit screen only if it holds a read capability', () => {
+  it('a role is sent to an edit screen only if its list API admits it', () => {
+    // The sweep fails on a refused list, so this must hold exactly as the kernel reads
+    // it: any read capability, at the resource's own read access.
     for (const role of ROLES) {
       for (const route of sweepRoutes(role).filter((r) => r.kind === 'edit')) {
         const { config } = RESOURCE_BY_SEGMENT[segmentOf(route.pattern)]!;
         const readCaps = config.readCaps ?? [config.writeCap];
+        const access = config.readAccess ?? ['full', 'view', 'meta'];
         expect(
-          readCaps.some((cap) => holds(role, cap, ['full', 'view', 'meta'])),
+          readCaps.some((cap) => holds(role, cap, access)),
           `${role} ${route.path}`,
         ).toBe(true);
       }
+    }
+  });
+
+  it('skips an edit screen only where the seed leaves its table empty', () => {
+    const seed = readFileSync('supabase/seed.sql', 'utf8');
+    const seeds = (table: string) =>
+      new RegExp(String.raw`insert into (?:public\.)?${table}\b`, 'i').test(seed);
+    const edits = sweepRoutes('admin').filter((r) => r.kind === 'edit');
+    for (const [listApi, table] of Object.entries(UNSEEDED_LISTS)) {
+      expect(seeds(table), `seed.sql inserts ${table} rows: drop it from UNSEEDED_LISTS`).toBe(
+        false,
+      );
+      expect(
+        edits.map((r) => r.listApi),
+        listApi,
+      ).toContain(listApi);
+    }
+    // And every other edit screen's table has seed rows, so an empty list there is a defect.
+    for (const route of edits.filter((r) => !((r.listApi ?? '') in UNSEEDED_LISTS))) {
+      const { table } = RESOURCE_BY_SEGMENT[segmentOf(route.pattern)]!.config;
+      expect(seeds(table), `${route.pattern}: seed.sql inserts no ${table} row`).toBe(true);
     }
   });
 

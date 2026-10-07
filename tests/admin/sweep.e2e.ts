@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { SKIP_REASON, STAFF_ROLES, authFile, staffEnv } from './staff';
-import { expectedSidebar, sweepRoutes, type SweepRoute } from './routes';
+import { UNSEEDED_LISTS, expectedSidebar, sweepRoutes, type SweepRoute } from './routes';
 
 /*
  * The per-role admin sweep (Admin v2 F0): the client's adfull.mjs acceptance run on the
@@ -36,14 +36,24 @@ test.skip(!staffEnv(), SKIP_REASON);
 // Every element in its final state, as the public axe suite does (tests/a11y/axe.e2e.ts).
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
-/** The URL to open: an edit screen takes the first row its role's own list API returns. */
+/**
+ * The URL to open: an edit screen takes the first row its role's own list API returns.
+ * Null only for a list the seed leaves empty (UNSEEDED_LISTS). A refused or failing list,
+ * or an empty one the seed fills, fails the test: the role's menu offers that screen.
+ */
 async function resolvePath(page: Page, route: SweepRoute): Promise<string | null> {
   if (route.kind !== 'edit') return route.path;
-  const res = await page.request.get(`${route.listApi}?limit=1`);
-  if (!res.ok()) return null;
+  const listApi = route.listApi ?? '';
+  const res = await page.request.get(`${listApi}?limit=1`);
+  expect(res.status(), `${listApi} answers the signed-in role`).toBe(200);
   const body = (await res.json()) as { data?: { rows?: { id?: unknown }[] } };
   const id = body.data?.rows?.[0]?.id;
-  return typeof id === 'string' ? route.path.replace('[id]', id) : null;
+  if (typeof id === 'string') return route.path.replace('[id]', id);
+  expect(
+    UNSEEDED_LISTS[listApi],
+    `${listApi} answered no row, but the seed has rows for it`,
+  ).toBeDefined();
+  return null;
 }
 
 for (const role of STAFF_ROLES) {
@@ -54,9 +64,10 @@ for (const role of STAFF_ROLES) {
       test(route.kind === 'edit' ? route.pattern : route.path, async ({ page }) => {
         const path = await resolvePath(page, route);
         if (path === null) {
-          // The seed has no row of this kind (redirects, themes and the Style-Finder
-          // tables start empty), so there is no edit screen to open.
-          test.skip(true, `${route.listApi} returned no row for ${role}`);
+          test.skip(
+            true,
+            `the seed has no ${UNSEEDED_LISTS[route.listApi ?? '']} row: no edit screen to open`,
+          );
           return;
         }
 
