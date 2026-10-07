@@ -1,0 +1,27 @@
+---
+import { ICON_SPRITE, type IconName } from '@/lib/admin/icons';
+
+// One icon from the admin sprite (public/styles/admin-icons.svg), server-rendered: zero JS.
+// Size is the width/height ATTRIBUTES, never a style (style-src is nonce-only). Decorative
+// by default (aria-hidden); pass `label` when the icon is the only thing naming a control.
+// Icon.tsx renders the same markup inside islands.
+
+interface Props {
+  name: IconName;
+  size?: number;
+  label?: string | undefined;
+  class?: string | undefined;
+}
+
+const { name, size = 18, label, class: className } = Astro.props;
+---
+
+<svg
+  class:list={['ic', className]}
+  width={size}
+  height={size}
+  aria-hidden={label ? undefined : 'true'}
+  role={label ? 'img' : undefined}
+  aria-label={label}
+  focusable="false"><use href={`${ICON_SPRITE}#i-${name}`}></use></svg
+>

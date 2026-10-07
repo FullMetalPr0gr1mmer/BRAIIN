@@ -82,8 +82,9 @@ jobs:
       - name: Preview config (local KV simulation, no Cloudflare credentials)
         run: node scripts/local-preview-config.mjs
       # Authored redirects (Round 3): the admin's table reaches the edge as a KV snapshot,
-      # and no admin journey can author one here (no auth hook, no seeded staff user), so
-      # the snapshot is seeded straight into the local KV the preview reads. Run from the
+      # and redirects.e2e.ts tests what the edge DOES with one, not the admin journey that
+      # writes it, so the snapshot is seeded straight into the local KV the preview reads
+      # (the signed-in admin journeys are tests/admin, Admin v2 F0). Run from the
       # repo root AFTER the preview config: wrangler follows the build's
       # .wrangler/deploy/config.json redirect, so the key lands in the same .wrangler/state
       # `wrangler dev` opens (`--config dist/server/wrangler.json` would persist under
@@ -101,13 +102,17 @@ jobs:
         run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env &
       - name: Wait for preview
         run: npx wait-on http://localhost:8788 --timeout 90000
-      - name: Playwright (e2e, axe WCAG 2.2 AA, CSP, served HTML, video bytes)
+      # Includes the signed-in admin sweep (tests/admin): the `admin-setup` project creates
+      # one staff account per role in THIS job's local Supabase (the hook in
+      # supabase/config.toml stamps their roles) and saves each role's session; the sweep
+      # then opens every screen each role's sidebar offers. Nothing is seeded for it.
+      - name: Playwright (e2e, axe WCAG 2.2 AA, CSP, served HTML, video bytes, admin sweep)
         run: npm run test:e2e
-      - name: Design capture (full-page screenshots for the mockup comparison, not assertions)
+      - name: Design capture (public + admin full-page screenshots for the mockup comparison, not assertions)
         if: always()
         env:
           CAPTURE_DIR: visual-capture
-        run: npx playwright test tests/visual/capture.e2e.ts --retries=0
+        run: npx playwright test tests/visual/capture.e2e.ts tests/admin/capture.e2e.ts --retries=0
       - name: Upload design capture
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

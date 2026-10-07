@@ -653,6 +653,36 @@ const CASES: Case[] = [
     body: { email: 'new@example.test', role: 'seo' },
     allow: ['admin'],
   },
+  // The reads behind the settings-like screens: what their forms load on mount, and what
+  // tests/admin/refusals.e2e.ts asks the real stack for as each role without the capability.
+  {
+    name: 'general settings read',
+    load: () => import('@/pages/api/admin/settings/index'),
+    method: 'GET',
+    url: '/api/admin/settings',
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'integrations read',
+    load: () => import('@/pages/api/admin/integrations'),
+    method: 'GET',
+    url: '/api/admin/integrations',
+    allow: ['admin', 'seo'],
+  },
+  {
+    name: 'theme list',
+    load: () => import('@/pages/api/admin/themes/index'),
+    method: 'GET',
+    url: '/api/admin/themes',
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'style-finder logic config read',
+    load: () => import('@/pages/api/admin/ai-config'),
+    method: 'GET',
+    url: '/api/admin/ai-config',
+    allow: ['admin'],
+  },
   {
     name: 'general settings write',
     load: () => import('@/pages/api/admin/settings/index'),
@@ -765,6 +795,14 @@ const CASES: Case[] = [
     method: 'GET',
     url: '/api/admin/export-backup',
     allow: ['admin', 'developer'],
+  },
+  {
+    name: 'admin search (the command palette)',
+    load: () => import('@/pages/api/admin/search'),
+    method: 'GET',
+    url: '/api/admin/search?q=logo',
+    // Any staff role: what each one FINDS is gated per entity inside searchAdmin().
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
   },
   {
     name: 'analytics dashboards',
@@ -883,6 +921,38 @@ describe('admin endpoints — {principal × capability} matrix', () => {
       const status = await statusOf(route, ctx);
       expect([401, 403]).toContain(status);
     }
+  });
+});
+
+// ── The search route searches as its caller ─────────────────────────────────────
+// Every staff role may call it, so the matrix above proves only "not 403". What a role
+// FINDS is decided per entity inside searchAdmin(), pinned role by role in
+// tests/lib/globalSearch.spec.ts; this checks the route hands it the caller rather than
+// anyone else. The stub answers a row from every table, so the groups are what it searched.
+describe('GET /api/admin/search searches as its caller', () => {
+  it.each([
+    ['developer', ['Pages', 'Media', 'Themes']],
+    [
+      'seo',
+      [
+        'Disciplines',
+        'Services',
+        'Blog',
+        'Our Work',
+        'Sectors',
+        'Clients',
+        'Pages',
+        'Categories',
+        'Team & authors',
+        'Redirects',
+        'Media',
+      ],
+    ],
+  ] as const)('%s', async (role, groups) => {
+    const { GET } = (await import('@/pages/api/admin/search')) as { GET: APIRoute };
+    const response = (await GET(makeContext(role, '/api/admin/search?q=logo'))) as Response;
+    const body = (await response.json()) as { data: { groups: { group: string }[] } };
+    expect(body.data.groups.map((g) => g.group)).toEqual(groups);
   });
 });
 
