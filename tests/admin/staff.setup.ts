@@ -30,8 +30,9 @@ for (const role of STAFF_ROLES) {
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.waitForURL((url) => url.pathname === '/admin');
     // The account menu prints the role the SERVER resolved, so a session that signed in
-    // but came back as another role (a stale hook, a wrong profile) fails here.
-    await expect(page.locator('.account-menu .menu-id')).toContainText(role.replace('_', ' '));
+    // but came back as another role (a stale hook, a wrong profile) fails here. The role
+    // alone, exactly: the e-mail printed beside it carries the role's name as well.
+    await expect(page.locator('.account-menu .menu-id strong')).toHaveText(role.replace('_', ' '));
 
     mkdirSync(dirname(authFile(role)), { recursive: true });
     await context.storageState({ path: authFile(role) });
