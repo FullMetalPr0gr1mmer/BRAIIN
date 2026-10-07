@@ -1,0 +1,37 @@
+---
+import type { NavTab } from '@/lib/admin/nav';
+
+// The page head (Admin v2 F2, the prototype's .ph): the h1, its plain-language sub-line,
+// a wrapping actions slot, and the area's tabs. Tabs are the screens the prototype folds
+// into one area (Services · Disciplines · Case studies…): server-rendered links, the
+// current one marked aria-current, shown only when the role can open two or more.
+
+interface Props {
+  title: string;
+  subtitle?: string | undefined;
+  tabs?: readonly NavTab[] | undefined;
+  currentTab?: NavTab | null | undefined;
+  area?: string | undefined;
+}
+
+const { title, subtitle, tabs = [], currentTab = null, area = title } = Astro.props;
+---
+
+<header class="admin-header">
+  <div>
+    <h1>{title}</h1>
+    {subtitle && <p class="admin-sub">{subtitle}</p>}
+  </div>
+  <slot name="actions" />
+</header>
+{
+  tabs.length > 1 && (
+    <nav class="tabs" aria-label={`${area} sections`}>
+      {tabs.map((tab) => (
+        <a href={tab.href} aria-current={tab === currentTab ? 'page' : undefined}>
+          {tab.label}
+        </a>
+      ))}
+    </nav>
+  )
+}

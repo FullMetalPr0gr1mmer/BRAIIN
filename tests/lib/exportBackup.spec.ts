@@ -70,6 +70,16 @@ describe('content backup', () => {
     for (const forbidden of FORBIDDEN_BACKUP_TABLES) expect(tables).not.toContain(forbidden);
   });
 
+  // CRM data is operational, never content (docs/admin-v2/crm.md §0): every lead_ or crm_
+  // table a migration creates is forbidden, so the guard above covers it from day one.
+  it('forbids every CRM table the migrations create', () => {
+    const crm = [
+      ...SQL.matchAll(/create table (?:if not exists )?public\.((?:lead|crm)_[a-z_0-9]+)/g),
+    ].map((m) => m[1]!);
+    expect(crm).toContain('crm_settings');
+    for (const table of crm) expect(FORBIDDEN_BACKUP_TABLES, table).toContain(table);
+  });
+
   it('dumps no column that looks like personal or secret data', () => {
     const suspicious = /(^|_)(email|phone|ip_inet|budget|internal_notes)$|_enc$|password|token/;
     for (const { table, columns } of BACKUP_TABLES) {

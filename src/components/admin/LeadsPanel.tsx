@@ -84,6 +84,61 @@ export function showNotesEditor(canSeePii: boolean, piiShown: boolean): boolean 
   return canSeePii && piiShown;
 }
 
+/**
+ * The open lead after a save: the server's answer (the safe columns) over what is on
+ * screen, and the notes as sent. The contact details already revealed stay as they are:
+ * fetching them again would spend another reveal (60 an hour, audited) on values the
+ * panel already holds.
+ */
+export function afterSave(
+  current: LeadDetail | null,
+  id: string,
+  saved: Partial<LeadRow>,
+  body: Record<string, unknown>,
+): LeadDetail | null {
+  if (!current || current.id !== id) return current;
+  const next: LeadDetail = { ...current, ...saved };
+  if (typeof body['internalNotes'] === 'string') next.internal_notes = body['internalNotes'];
+  return next;
+}
+
+export interface SaveOutcome {
+  saved: LeadRow | null;
+  error: string;
+  notice: string;
+}
+
+/**
+ * Saves a lead, then refreshes the list. Only a failed SAVE is an error: once the save has
+ * stood, a list that cannot be refreshed is a notice, never "the save failed". It never
+ * reveals anything (see afterSave).
+ */
+export async function saveLead(
+  id: string,
+  body: Record<string, unknown>,
+  io: {
+    save: (id: string, body: Record<string, unknown>) => Promise<LeadRow>;
+    refresh: () => Promise<void>;
+  },
+): Promise<SaveOutcome> {
+  let saved: LeadRow;
+  try {
+    saved = await io.save(id, body);
+  } catch (err) {
+    return { saved: null, error: describeError(err), notice: '' };
+  }
+  try {
+    await io.refresh();
+  } catch {
+    return {
+      saved,
+      error: '',
+      notice: 'Saved. The list could not be refreshed, so reload the page to see it.',
+    };
+  }
+  return { saved, error: '', notice: '' };
+}
+
 const STATUSES = ['new', 'in_progress', 'done', 'spam'] as const;
 
 export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
@@ -95,19 +150,24 @@ export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
   const [piiShown, setPiiShown] = useState(false);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const fetchList = useCallback(async () => {
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+    if (status) params.set('status', status);
+    const data = await adminFetch<ListResponse>(`/api/admin/leads?${params.toString()}`);
+    setRows(data.rows ?? []);
+    setTotal(data.total ?? 0);
+  }, [offset, status]);
 
   const load = useCallback(async () => {
     setError('');
     try {
-      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
-      if (status) params.set('status', status);
-      const data = await adminFetch<ListResponse>(`/api/admin/leads?${params.toString()}`);
-      setRows(data.rows ?? []);
-      setTotal(data.total ?? 0);
+      await fetchList();
     } catch (err) {
       setError(describeError(err));
     }
-  }, [offset, status]);
+  }, [fetchList]);
 
   useEffect(() => {
     void load();
@@ -129,13 +189,17 @@ export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
 
   async function patch(id: string, body: Record<string, unknown>) {
     setError('');
-    try {
-      await adminFetch(`/api/admin/leads/${id}`, { method: 'PATCH', body });
-      await load();
-      if (selected?.id === id) await open(id, piiShown);
-    } catch (err) {
-      setError(describeError(err));
-    }
+    setNotice('');
+    const outcome = await saveLead(id, body, {
+      save: (leadId, values) =>
+        adminFetch<LeadRow>(`/api/admin/leads/${leadId}`, { method: 'PATCH', body: values }),
+      refresh: fetchList,
+    });
+    // The open lead takes the answer without a second reveal (afterSave).
+    const { saved } = outcome;
+    if (saved) setSelected((current) => afterSave(current, id, saved, body));
+    setError(outcome.error);
+    setNotice(outcome.notice);
   }
 
   return (
@@ -173,6 +237,11 @@ export default function LeadsPanel({ canSeePii, canExport }: LeadsPanelProps) {
       {error && (
         <p className="msg" data-kind="error" role="alert">
           {error}
+        </p>
+      )}
+      {notice && (
+        <p className="msg" data-kind="ok" role="status">
+          {notice}
         </p>
       )}
 

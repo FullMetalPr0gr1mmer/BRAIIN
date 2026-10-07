@@ -14,3 +14,13 @@ schemas = ["public", "graphql_public"]
 
 [auth]
 enabled = true
+
+# The Custom Access Token Hook (migration 0010), enabled for the LOCAL stack the way the
+# launch runbook §2 enables it in the dashboard for staging and production. Without it a
+# locally signed-in user's JWT carries no role or tenant claim, every admin sign-in is
+# refused (correctly: resolveAuthContext treats the session as anonymous), and no admin
+# journey can run in CI. The e2e harness (tests/admin, Admin v2 F0) depends on it.
+# pgTAP is unaffected: it injects claims with set_config and never mints a token.
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
