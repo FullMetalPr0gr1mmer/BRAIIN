@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // The public lead path since 0035 (Admin v2 C1b): one RPC with the Worker's own id,
 // blind indexes and signals computed before encryption, nothing in the clear; and the
@@ -13,6 +15,7 @@ const logs: { level: string; message: string }[] = [];
 let rpcError: { code?: string; message?: string } | null = null;
 let insertError: { code?: string } | null = null;
 let country = 'SA';
+let countryFails = false;
 
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
@@ -23,10 +26,13 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (table: string) => {
       const b: Record<string, unknown> = {};
       for (const m of ['select', 'eq']) b[m] = () => b;
-      b['maybeSingle'] = async () => ({
-        data: table === 'site_profile' ? { address_country: country } : null,
-        error: null,
-      });
+      b['maybeSingle'] = async () => {
+        if (countryFails) throw new Error('site_profile unreachable');
+        return {
+          data: table === 'site_profile' ? { address_country: country } : null,
+          error: null,
+        };
+      };
       b['insert'] = async (row: Record<string, unknown>) => {
         inserts.push(row);
         return { error: insertError };
@@ -70,6 +76,36 @@ beforeEach(() => {
   rpcError = null;
   insertError = null;
   country = 'SA';
+  countryFails = false;
+});
+
+/** crm_ingest_lead's allow-list, read from the migration: a key outside it is a 22023. */
+const INGEST_KEYS = (() => {
+  const sql = readFileSync(
+    join(process.cwd(), 'supabase', 'migrations', '0035_crm_ingest.sql'),
+    'utf8',
+  );
+  const list = /\bk not in \(([^)]*)\)/.exec(sql)?.[1] ?? '';
+  return [...list.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
+})();
+
+describe('the payload keeps to the RPC allow-list (0035)', () => {
+  it('every key createLead sends is one crm_ingest_lead accepts', async () => {
+    expect(INGEST_KEYS.length).toBeGreaterThan(10);
+    await createLead(input());
+    const keys = Object.keys(rpcs[0]!.args.p_lead);
+    for (const key of keys) expect(INGEST_KEYS, key).toContain(key);
+    expect(keys).toEqual(expect.arrayContaining(['score_signals', 'email_hmac', 'phone_hmac']));
+  });
+
+  it('when the indexes cannot be computed, the lead still goes, without the signals', async () => {
+    // No signals is how the RPC knows to leave crm_indexed_at null for the daily cron.
+    countryFails = true;
+    expect(await createLead(input())).toEqual({ ok: true });
+    const keys = Object.keys(rpcs[0]!.args.p_lead);
+    for (const key of keys) expect(INGEST_KEYS, key).toContain(key);
+    expect(keys).not.toContain('score_signals');
+  });
 });
 
 describe('a lead arrives through crm_ingest_lead', () => {

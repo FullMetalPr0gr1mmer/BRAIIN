@@ -124,10 +124,13 @@ export const BACKUP_TABLES: readonly { table: string; columns: string }[] = [
 export const FORBIDDEN_BACKUP_TABLES: readonly string[] = [
   'leads',
   'leads_safe',
-  // The CRM (0034): operational data about people, never site content.
+  // The CRM (0034, 0035): operational data about people and its configuration, never site
+  // content (docs/admin-v2/crm.md §0). tests/lib/exportBackup.spec.ts fails on any lead_ or
+  // crm_ table a migration creates that is not listed here.
   'lead_notes',
   'lead_events',
   'lead_stages',
+  'crm_settings',
   'job_applications',
   'applications_safe',
   'cv_deletion_queue',
