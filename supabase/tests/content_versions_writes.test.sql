@@ -47,6 +47,13 @@ create function _forge() returns void language sql as $$
           '{"title":{"en":"forged"}}'::jsonb, '68000000-0000-0000-0000-0000000000ff')
 $$;
 
+-- Created here, as the setup role: `authenticated` cannot create objects in public.
+create function _hist_count() returns int language sql as $$
+  select count(*)::int from public.content_versions
+   where entity_type = 'discipline'
+     and entity_id = (select id from public.disciplines where slug = 'pg-hist-disc')
+$$;
+
 -- ── 1. No API role writes history directly ─────────────────────────────────────
 set local role authenticated;
 select _as('admin', '68000000-0000-0000-0000-0000000000a1');
@@ -96,11 +103,6 @@ select is(
   'the snapshot names the real editor (auth.uid()), which no caller can supply');
 
 -- ── 3. Staff read history; nobody rewrites or deletes it ───────────────────────
-create function _hist_count() returns int language sql as $$
-  select count(*)::int from public.content_versions
-   where entity_type = 'discipline'
-     and entity_id = (select id from public.disciplines where slug = 'pg-hist-disc')
-$$;
 select _as('seo', '68000000-0000-0000-0000-0000000000e1');
 select is(_hist_count(), 1, 'seo reads the snapshot (staff read history)');
 select _as('developer', '68000000-0000-0000-0000-0000000000d1');
