@@ -168,6 +168,18 @@ const initials = session ? initialsOf(shell.displayName, session.email) : '';
       wide.addEventListener('change', (event) => {
         if (event.matches && side?.matches(':popover-open')) side.hidePopover();
       });
+
+      // The sticky topbar's real height, for the scroll padding that keeps a focused
+      // control from sitting under it (admin.css, WCAG 2.4.11). It wraps onto more rows
+      // on a narrow screen, so it is measured, not assumed. Set through the CSSOM, which
+      // style-src allows; a style attribute in the markup would be refused.
+      const bar = document.querySelector<HTMLElement>('.admin-topbar');
+      if (bar) {
+        new ResizeObserver(() => {
+          const height = Math.ceil(bar.getBoundingClientRect().height);
+          document.documentElement.style.setProperty('--ad-top-h', `${height}px`);
+        }).observe(bar);
+      }
     </script>
   </body>
 </html>

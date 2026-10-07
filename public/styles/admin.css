@@ -740,6 +740,15 @@ textarea[lang='ar'],
   border-bottom: 1px solid var(--ad-line);
 }
 
+/* The page's scroll port starts below the sticky bar. A browser leaves a control it
+   focuses where it is when the control is already inside the viewport, even under a
+   sticky bar; with the padding it scrolls the control clear instead (WCAG 2.2 2.4.11,
+   technique C43). The bar wraps onto more rows on a narrow screen, so AdminLayout keeps
+   --ad-top-h at its measured height; --ad-top, one row, stands in until it runs. */
+:root:has(.admin-body[data-layout='app']) {
+  scroll-padding-block-start: calc(var(--ad-top-h, var(--ad-top)) + 8px);
+}
+
 @media (min-width: 900px) {
   .top__menu {
     display: none;

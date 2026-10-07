@@ -83,6 +83,15 @@ describe('admin.css colours', () => {
   });
 });
 
+describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
+  // tests/admin/shell.e2e.ts proves it in a browser; this keeps the two halves together.
+  it('pads the scroll port by the height the layout measures', () => {
+    expect(ADMIN).toMatch(/\.admin-main > \.admin-topbar\s*\{[^}]*position:\s*sticky/);
+    expect(ADMIN).toMatch(/scroll-padding-block-start:\s*calc\(var\(--ad-top-h, var\(--ad-top\)\)/);
+    expect(read('src/layouts/AdminLayout.astro')).toMatch(/setProperty\('--ad-top-h'/);
+  });
+});
+
 describe('admin.css keeps the hooks the markup renders', () => {
   // Classes that are behaviour or test hooks with no style of their own.
   const UNSTYLED_HOOKS = new Set(['account-menu', 'admin-nav']);

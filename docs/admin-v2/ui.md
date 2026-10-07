@@ -248,6 +248,8 @@ These follow §3 Pillar 1 and §7: style-src is nonce-only, React style props ar
 - the bell `<button aria-label="Notifications, N unread">` with its dot;
 - View site `<a href="/" target="_blank" rel="noopener">` with the visually hidden text "(opens in a new tab)".
 
+The topbar sticks, so the page's `scroll-padding-block-start` is its height plus a gap, measured by the layout script because the bar wraps on narrow screens: a control focused under it is scrolled clear (2.4.11, C43).
+
 **Layouts.** `app` | `flush` | `auth` | `bare`.
 - `flush` is for editors: no page head, and the island renders the editor bar with the h1.
 - `auth` is the split sign-in.

@@ -59,6 +59,42 @@ test.describe('the shell from a keyboard', () => {
     await expect(page.locator('main#content')).toBeFocused();
   });
 
+  // WCAG 2.2 2.4.11: the topbar sticks, and a browser does not scroll a control it
+  // focuses when the control is already inside the viewport, even if a sticky bar covers
+  // it. The page's scroll padding (admin.css) is what makes it scroll the control clear.
+  // The phone width is the case the measured bar height exists for: the bar wraps there.
+  for (const viewport of [
+    { width: 1280, height: 720 },
+    { width: 390, height: 844 },
+  ]) {
+    test(`a field focused from the keyboard is not left under the topbar at ${viewport.width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto('/admin/services/new', { waitUntil: 'networkidle' });
+      await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
+      const bar = page.locator('.admin-topbar');
+      const field = page.locator('main input[type="text"]').first();
+      await field.focus();
+      await page.keyboard.press('Tab');
+
+      // Scroll the field up under the bar, then come back to it with Shift+Tab.
+      await field.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top - 4));
+      const covered = await field.boundingBox();
+      const barBox = await bar.boundingBox();
+      expect(covered!.y, 'the field starts under the bar').toBeLessThan(barBox!.y + barBox!.height);
+
+      await page.keyboard.press('Shift+Tab');
+      await expect(field).toBeFocused();
+      await expect
+        .poll(async () => {
+          const [fieldNow, barNow] = [await field.boundingBox(), await bar.boundingBox()];
+          return fieldNow!.y - (barNow!.y + barNow!.height);
+        })
+        .toBeGreaterThanOrEqual(0);
+    });
+  }
+
   test('the sidebar stays in view when a long page scrolls', async ({ page }) => {
     await page.goto('/admin', { waitUntil: 'networkidle' });
     // The WINDOW scrolls. A mouse wheel over the sidebar would scroll the sidebar's own
