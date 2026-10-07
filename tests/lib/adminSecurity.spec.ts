@@ -8,7 +8,7 @@ import {
   SAFE_LEAD_COLUMNS,
   stripSensitive,
 } from '@/lib/admin/leadFields';
-import { ADMIN_NAV, isVisible, visibleNav } from '@/lib/admin/nav';
+import { ADMIN_NAV, isVisible, reachableHrefs, visibleNav } from '@/lib/admin/nav';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
 import { ROLES, type Role } from '@/lib/auth/types';
 import {
@@ -138,22 +138,30 @@ describe('lead field visibility', () => {
 // ── Admin nav is derived, never hand-listed ─────────────────────────────────────
 
 describe('admin navigation gating', () => {
-  it('never shows a link whose capabilities the role lacks', () => {
+  it('never shows a link or tab whose capabilities the role lacks', () => {
     for (const role of ROLES) {
       for (const group of ADMIN_NAV) {
-        for (const link of group.links) {
-          if (!isVisible(role, link)) continue;
-          const allowed = link.access ?? ['full', 'view', 'meta'];
-          const granted = link.caps.some((cap) => allowed.includes(ROLE_CAPS[role][cap]));
-          expect(granted, `${role} sees ${link.href} without a capability`).toBe(true);
+        for (const screen of group.links.flatMap((link) => [link, ...(link.tabs ?? [])])) {
+          if (!isVisible(role, screen)) continue;
+          const allowed = screen.access ?? ['full', 'view', 'meta'];
+          const granted = screen.caps.some((cap) => allowed.includes(ROLE_CAPS[role][cap]));
+          expect(granted, `${role} sees ${screen.href} without a capability`).toBe(true);
         }
+      }
+    }
+  });
+
+  it('a tab is shown only under a link the role also sees', () => {
+    for (const role of ROLES) {
+      for (const link of visibleNav(role).flatMap((g) => g.links)) {
+        for (const tab of link.tabs ?? []) expect(isVisible(role, tab), tab.href).toBe(true);
       }
     }
   });
 
   it('hides leads from Content Creator and SEO', () => {
     for (const role of ['content_creator', 'seo'] as Role[]) {
-      const hrefs = visibleNav(role).flatMap((g) => g.links.map((l) => l.href));
+      const hrefs = reachableHrefs(role);
       expect(hrefs).not.toContain('/admin/leads');
       expect(hrefs).not.toContain('/admin/users');
       expect(hrefs).not.toContain('/admin/audit');
@@ -161,7 +169,7 @@ describe('admin navigation gating', () => {
   });
 
   it('hides content authoring from Developer', () => {
-    const hrefs = visibleNav('developer').flatMap((g) => g.links.map((l) => l.href));
+    const hrefs = reachableHrefs('developer');
     expect(hrefs).not.toContain('/admin/services');
     expect(hrefs).not.toContain('/admin/blog');
     // …but keeps the technical surfaces §5 grants it.

@@ -1,12 +1,23 @@
 ---
-import { visibleNav } from '@/lib/admin/nav';
+import { env } from 'cloudflare:workers';
+import { can } from '@/lib/authz/matrix';
+import { currentLink, currentTab, visibleNav } from '@/lib/admin/nav';
+import { initialsOf, loadShellState, type ShellState } from '@/lib/admin/shell';
 import { getIdentity } from '@/lib/identity';
+import Sidebar from '@/components/admin/ui/Sidebar.astro';
+import Topbar from '@/components/admin/ui/Topbar.astro';
+import PageHead from '@/components/admin/ui/PageHead.astro';
+import AdminChrome from '@/components/admin/islands/AdminChrome';
+import { paletteGroupsFor } from '@/lib/admin/paletteSources';
 
 // Tier C shell (CLAUDE.md §2): on-demand, `private, no-store` (set in middleware),
 // never indexable. Deliberately NOT built on BaseLayout — that one carries <SeoHead>,
 // the consent banner, the RUM beacon and the public stylesheet, none of which belong on
 // a page that must not be indexed, must not be measured as a public route, and has no
 // visitor to ask for consent.
+//
+// Admin v2 (F2): the prototype's shell — a midnight sidebar (a popover below 900px), a
+// white topbar, and a page head with the area's tabs (docs/admin-v2/ui.md §2.2, §3).
 
 interface Props {
   title: string;
@@ -14,38 +25,28 @@ interface Props {
   // `subtitle` from an optional value passes an explicit undefined, which `?:` alone
   // rejects.
   subtitle?: string | undefined;
-  /** `bare` drops the sidebar — used by the login screen, which has no session yet. */
+  /** `bare` drops the shell — used by the login screen, which has no session yet. */
   layout?: 'app' | 'bare' | undefined;
 }
 
 const { title, subtitle, layout = 'app' } = Astro.props;
 const session = Astro.locals.session;
+const supabase = Astro.locals.supabase;
 const nav = session ? visibleNav(session.role) : [];
-const current = Astro.url.pathname;
+const path = Astro.url.pathname;
 const csrfToken = Astro.locals.csrfToken;
 // The CMS names the studio it edits from the same identity row the public site renders.
 const brand = (await getIdentity(Astro.locals)).brandName.en;
 
-function isCurrent(href: string): boolean {
-  if (href === '/admin') return current === '/admin';
-  return current === href || current.startsWith(`${href}/`);
-}
+const app = layout === 'app' && session !== null;
+const section = currentLink(nav, path);
+const tab = section ? currentTab(section, path) : null;
 
-// Breadcrumb: Admin / <section> / <this page>. The section is the longest nav href
-// that prefixes the current path — derived from the ROLE-FILTERED nav, so a page a
-// role reaches through a capability its sidebar does not show (Developer on
-// /admin/pages via maintenance.manage) simply gets a shorter trail, never a link the
-// sidebar would not have offered. The terminal crumb is the page's own title, which
-// also means detail pages ("Edit post") need no extra wiring.
-const sectionLinks = nav.flatMap((group) => group.links).filter((link) => link.href !== '/admin');
-const section =
-  sectionLinks
-    .filter((link) => current === link.href || current.startsWith(`${link.href}/`))
-    .sort((a, b) => b.href.length - a.href.length)[0] ?? null;
-
-// Avatar initials from the email's local part. Nothing profound — "ka" for kareem@ —
-// but it matches what the account menu expands to, and needs no profile fetch.
-const initials = session ? session.email.slice(0, 2) : '';
+const shell: ShellState =
+  app && session && supabase
+    ? await loadShellState(supabase, session, nav, env)
+    : { displayName: null, maintenance: false, counts: {} };
+const initials = session ? initialsOf(shell.displayName, session.email) : '';
 ---
 
 <!doctype html>
@@ -68,85 +69,53 @@ const initials = session ? session.email.slice(0, 2) : '';
     -->
     <meta name="csrf-token" content={csrfToken} />
   </head>
-  <body class="admin-body" data-layout={layout}>
+  <body class="admin-body" data-layout={app ? 'app' : 'bare'}>
     {
-      layout === 'app' && session && (
-        <nav class="admin-sidebar admin-nav" aria-label="Admin sections">
-          <a class="admin-brand" href="/admin">
-            {brand}
-          </a>
-          {nav.map((group) => (
-            <div class="admin-nav-group">
-              <p class="admin-nav-title">{group.title}</p>
-              {group.links.map((link) => (
-                <a href={link.href} aria-current={isCurrent(link.href) ? 'page' : undefined}>
-                  {link.label}
-                </a>
-              ))}
-            </div>
-          ))}
-        </nav>
+      app && (
+        <a class="skip-link" href="#content">
+          Skip to content
+        </a>
+      )
+    }
+    {
+      app && session && (
+        <Sidebar
+          nav={nav}
+          current={section}
+          brand={brand}
+          shell={shell}
+          email={session.email}
+          role={session.role}
+          initials={initials}
+        />
       )
     }
 
-    <main class="admin-main">
+    <main class="admin-main" id="content" tabindex="-1">
       {
-        layout === 'app' && session && (
-          <div class="admin-topbar">
-            <nav class="crumbs" aria-label="Breadcrumb">
-              <ol>
-                <li>
-                  <a href="/admin">Admin</a>
-                </li>
-                {section && current !== section.href && (
-                  <li>
-                    <a href={section.href}>{section.label}</a>
-                  </li>
-                )}
-                <li aria-current="page">{title}</li>
-              </ol>
-            </nav>
-            {/* A plain GET form, not a live combobox: Enter lands on the server-rendered
-                results page, which costs zero client JS and cannot show a result the
-                server did not authorize. */}
-            <form class="topbar-search" role="search" action="/admin/search" method="get">
-              <label class="visually-hidden" for="topbar-q">
-                Search the admin
-              </label>
-              <input
-                id="topbar-q"
-                type="search"
-                name="q"
-                placeholder="Search…"
-                minlength="2"
-                maxlength="64"
-              />
-            </form>
-            <details class="menu account-menu">
-              <summary class="avatar" aria-label={`Account: ${session.email}`}>
-                {initials}
-              </summary>
-              <div class="menu-panel">
-                <p class="menu-id">
-                  {session.email}
-                  <br />
-                  Role: <strong>{session.role.replace('_', ' ')}</strong>
-                </p>
-                <button type="button" data-action="logout">
-                  Sign out
-                </button>
-              </div>
-            </details>
-          </div>
+        app && session && (
+          <Topbar
+            section={section}
+            title={title}
+            current={path}
+            maintenance={shell.maintenance}
+            canManageMaintenance={can(session.role, 'maintenance.manage') === 'full'}
+          />
         )
       }
-      <header class="admin-header">
-        <div>
-          <h1>{title}</h1>
-          {subtitle && <p class="admin-sub">{subtitle}</p>}
-        </div>
-        <slot name="actions" />
-      </header>
+      {
+        app ? (
+          <PageHead
+            title={title}
+            subtitle={subtitle}
+            tabs={section?.tabs}
+            currentTab={tab}
+            area={section?.label}
+          >
+            <slot name="actions" slot="actions" />
+          </PageHead>
+        ) : null
+      }
       <slot />
     </main>
 
@@ -156,6 +125,12 @@ const initials = session ? session.email.slice(0, 2) : '';
       announces nothing. src/lib/admin/toast.ts appends into it.
     -->
     <div id="admin-toasts" class="toasts" aria-live="polite"></div>
+
+    {
+      /* The shell's one island: the command palette (F3). `client:load`, because ⌘K must
+         work the moment the page is usable. Its sources are built here, on the server. */
+      app && session && <AdminChrome client:load palette={paletteGroupsFor(session.role)} />
+    }
 
     <script>
       // Sign-out is a POST, never a GET link: a GET logout can be fired by any <img src>
@@ -185,6 +160,26 @@ const initials = session ? session.email.slice(0, 2) : '';
           menu.querySelector<HTMLElement>('summary')?.focus();
         }
       });
+
+      // The sidebar is a popover only below 900px. A window widened while it is open would
+      // leave it in the top layer over the page, so it is closed at the breakpoint.
+      const side = document.getElementById('admin-side');
+      const wide = window.matchMedia('(min-width: 900px)');
+      wide.addEventListener('change', (event) => {
+        if (event.matches && side?.matches(':popover-open')) side.hidePopover();
+      });
+
+      // The sticky topbar's real height, for the scroll padding that keeps a focused
+      // control from sitting under it (admin.css, WCAG 2.4.11). It wraps onto more rows
+      // on a narrow screen, so it is measured, not assumed. Set through the CSSOM, which
+      // style-src allows; a style attribute in the markup would be refused.
+      const bar = document.querySelector<HTMLElement>('.admin-topbar');
+      if (bar) {
+        new ResizeObserver(() => {
+          const height = Math.ceil(bar.getBoundingClientRect().height);
+          document.documentElement.style.setProperty('--ad-top-h', `${height}px`);
+        }).observe(bar);
+      }
     </script>
   </body>
 </html>

@@ -4,9 +4,10 @@ import { useEffect } from 'react';
 import type { JSONContent } from '@tiptap/core';
 import type { TiptapDoc } from '@schemas/tiptap';
 
-// Tiptap island. The ONLY hydrated React on the admin, which is why the vendor chunk
-// carrying it is quarantined by name in astro.config.mjs — see the `manualChunks` note
-// there for why the public 100 KB budget would otherwise start measuring this.
+// The rich-text editor: Tiptap and ProseMirror, about 100 KB gzipped. FormField loads
+// this module with import(), and astro.config.mjs's `admin-rich` group keeps it and its
+// stack in their own lazy chunk, so only a form with a rich-text field downloads them
+// (scripts/admin-bundle.mjs checks that on every build).
 //
 // ── The editor is not a security boundary ────────────────────────────────────────
 // Nothing here sanitises anything, deliberately. What this component produces is Tiptap
@@ -53,6 +54,12 @@ export default function RichText({ value, onChange, label, locale = 'en' }: Rich
     // Astro renders islands on the server first; Tiptap must not try to measure a DOM
     // that does not exist yet.
     immediatelyRender: false,
+    // No runtime <style>. By default Tiptap appends its ProseMirror base CSS to <head> as
+    // an inline <style>, which style-src (nonce-only, no 'unsafe-inline') refuses: every
+    // editor screen logged a CSP violation and ran WITHOUT ProseMirror's required
+    // `white-space: pre-wrap`. The same rules ship in public/styles/admin.css instead
+    // (the Tiptap section), found by the Admin v2 F0 sweep.
+    injectCSS: false,
     editorProps: {
       attributes: {
         class: 'tiptap',
