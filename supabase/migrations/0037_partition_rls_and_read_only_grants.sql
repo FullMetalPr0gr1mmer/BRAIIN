@@ -16,13 +16,13 @@
 -- B. The read-only tables: analytics_events, web_vitals, rollup_daily_pageviews,
 --    search_queries, consent_log, notification_log, tenants and profiles. 0011 §5d granted
 --    `authenticated` SELECT on them and never revoked Supabase's bootstrap grant of ALL.
---    Production holds it (checked 2026-10-07: analytics_events, web_vitals,
---    rollup_daily_pageviews, search_queries and profiles; consent_log, notification_log and
---    tenants were created the same way and no migration revoked it). So RLS was the only
+--    Production holds it (checked 2026-10-07 on all eight: INSERT, UPDATE, DELETE and
+--    TRUNCATE for authenticated). So RLS was the only
 --    layer in front of a staff write, and TRUNCATE is not subject to RLS.
 --    profiles_admin_write and tenants_admin_write are FOR ALL, so an admin token could
 --    rewrite any profile column (tenant_id, locked_until) past the audited users endpoint,
---    or delete its own tenant row, which cascades to every table. Now anon and PUBLIC hold
+--    or delete its own tenant row, which cascades to every table; nothing in the app writes
+--    tenants, so tenants_admin_write is dropped as well (B3b). Now anon and PUBLIC hold
 --    nothing. authenticated holds SELECT, plus UPDATE on profiles.role, is_active and
 --    display_name: the users screen (PATCH /api/admin/users/[id]) writes those three
 --    through the staff session client, the only staff write the code makes to any of the
@@ -162,6 +162,14 @@ to authenticated;
 -- columns (written by the SECURITY DEFINER login RPCs) and avatar_url (no screen writes it)
 -- stay out of reach of a staff token.
 grant update (role, is_active, display_name) on public.profiles to authenticated;
+
+-- ---- B3b. tenants: no write policy either ------------------------------------------------
+-- 0001's tenants_admin_write (FOR ALL, any Admin of the tenant) let an Admin token update
+-- or DELETE its own tenant row through the API, and every tenant-scoped table cascades from
+-- that row. Nothing in the app writes tenants (rows come from migrations and seeds), so the
+-- policy goes as well as the privilege: RLS refuses the write on its own, not only the
+-- GRANT layer above. tenants_select (members read their own tenant) stays.
+drop policy if exists tenants_admin_write on public.tenants;
 
 -- ---- B4. The service role: the writer of record, stated ---------------------------------
 -- The ingest (analytics_events, web_vitals, search_queries), the notify-lead ledger, the
@@ -314,6 +322,14 @@ begin
           or has_any_column_privilege(g.grantee, c.oid, 'select, insert, update, references'));
   if v_bad is not null then
     raise exception '0037: anon or PUBLIC holds a privilege on a read-only table: %', v_bad;
+  end if;
+
+  -- tenants: no policy lets anyone write it (0001's tenants_admin_write is gone).
+  select string_agg(policyname, ', ') into v_bad
+    from pg_policies
+   where schemaname = 'public' and tablename = 'tenants' and cmd <> 'SELECT';
+  if v_bad is not null then
+    raise exception '0037: a write policy on public.tenants remains: %', v_bad;
   end if;
 
   -- The service role: SELECT, INSERT, UPDATE and DELETE on each.

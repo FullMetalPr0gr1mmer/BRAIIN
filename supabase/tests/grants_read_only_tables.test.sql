@@ -25,7 +25,8 @@
 
 begin;
 -- 5 catalog + 4 roles × (8 reads + 32 refusals) + 4 users screen + 3 service-role writes
-select plan(172);
+-- + 1 tenants RLS-only
+select plan(173);
 
 -- ── helpers (rolled back with the file) ─────────────────────────────────────────
 create function _claims(p_role text, p_tid text, p_sub text default null) returns void
@@ -264,6 +265,21 @@ select lives_ok(
      values ('37000000-0000-0000-0000-000000000001', 'h8', 'ar', 2) $$,
   'the service role still logs searches, drawing the id from the sequence');
 reset role;
+
+-- ── 5. tenants: RLS refuses the write on its own (B3b) ─────────────────────────────
+-- The GRANT is put back inside this rolled-back transaction, so the outcome below can only
+-- come from the policies: with tenants_admin_write gone, an Admin's DELETE matches no row,
+-- and the tenant (and everything that cascades from it) is still there.
+grant delete, update on public.tenants to authenticated;
+set local role authenticated;
+select _claims('admin', '37000000-0000-0000-0000-000000000001', '37000000-0000-0000-0000-0000000000a1');
+select is(
+  _rows($$ delete from public.tenants where id = '37000000-0000-0000-0000-000000000001' $$)
+    + _rows($$ update public.tenants set name = name where id = '37000000-0000-0000-0000-000000000001' $$),
+  0,
+  'with DELETE and UPDATE restored, RLS alone lets no admin delete or rewrite its tenant');
+reset role;
+revoke delete, update on public.tenants from authenticated;
 
 select * from finish();
 rollback;
