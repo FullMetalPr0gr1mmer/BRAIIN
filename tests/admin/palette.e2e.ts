@@ -114,6 +114,17 @@ test.describe('as admin', () => {
     await expect(dialog.getByRole('option', { name: /Logo Design/ }).first()).toBeVisible();
     await expect(status).toBeEmpty();
   });
+
+  test('says when an area could not be searched, not just a shorter list', async ({ page }) => {
+    // searchAdmin reports an entity whose query failed (and logs it); stand that answer in.
+    await page.route(/\/api\/admin\/search\?/, (route) =>
+      route.fulfill({ json: { ok: true, data: { groups: [], failed: ['Team & authors'] } } }),
+    );
+    await page.keyboard.press('Control+k');
+    const dialog = page.getByRole('dialog', { name: 'Search the admin' });
+    await dialog.getByRole('combobox').fill('logo');
+    await expect(dialog.getByRole('status')).toHaveText('Some areas could not be searched.');
+  });
 });
 
 test.describe('as seo', () => {

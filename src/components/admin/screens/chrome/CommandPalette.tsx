@@ -43,6 +43,8 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [remote, setRemote] = useState<PaletteGroup[]>([]);
   const [busy, setBusy] = useState(false);
+  /** What the last server search could not do, said in the status line. */
+  const [note, setNote] = useState('');
   const [active, setActive] = useState(0);
 
   const shown = useMemo(() => {
@@ -52,13 +54,16 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
     return list;
   }, [groups, query, remote]);
   const items = useMemo(() => flatten(shown), [shown]);
-  const status = busy ? 'Searching…' : query.trim() && items.length === 0 ? 'No matches.' : '';
+  const status = busy
+    ? 'Searching…'
+    : note || (query.trim() && items.length === 0 ? 'No matches.' : '');
 
   const open = useCallback(() => {
     const dialog = dialogRef.current;
     if (!dialog || dialog.open) return;
     setQuery('');
     setRemote([]);
+    setNote('');
     setActive(0);
     dialog.showModal();
     inputRef.current?.focus();
@@ -95,6 +100,7 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
     const q = query.trim();
     if (q.length < MIN_REMOTE_QUERY) {
       setRemote([]);
+      setNote('');
       setBusy(false);
       return;
     }
@@ -102,14 +108,21 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
     const timer = window.setTimeout(async () => {
       setBusy(true);
       try {
-        const data = await adminFetch<{ groups?: RemoteGroup[] }>(
+        const data = await adminFetch<{ groups?: RemoteGroup[]; failed?: string[] }>(
           `/api/admin/search?q=${encodeURIComponent(q)}`,
           { signal: controller.signal },
         );
-        if (!controller.signal.aborted) setRemote(remoteGroups(data.groups ?? []));
+        if (!controller.signal.aborted) {
+          setRemote(remoteGroups(data.groups ?? []));
+          // An area the server could not search (it logs why) is missing from the list,
+          // which must not read as "nothing there".
+          setNote((data.failed ?? []).length > 0 ? 'Some areas could not be searched.' : '');
+        }
       } catch {
-        // Aborted by the next keystroke, or the search failed: the local results stand,
-        // and "See all results" still reaches the full page.
+        // Aborted by the next keystroke: nothing to say. A failed search: the local
+        // results stand and "See all results" still reaches the full page, but no record
+        // was searched, so the status line says so.
+        if (!controller.signal.aborted) setNote('Records could not be searched just now.');
       } finally {
         if (!controller.signal.aborted) setBusy(false);
       }

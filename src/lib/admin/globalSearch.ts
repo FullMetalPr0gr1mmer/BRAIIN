@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { ROLE_CAPS, type Access } from '@/lib/authz/matrix';
+import { writeSystemLog } from '@/lib/data/systemLog';
+import { scrubPii } from '@/lib/log/scrub';
 import type { ResourceConfig } from './resource';
 import {
   aiQuestionResource,
@@ -112,13 +114,36 @@ export interface SearchGroup {
 
 export interface SearchOutcome {
   groups: SearchGroup[];
-  /** Groups skipped because their query errored — rendered as a notice, not hidden. */
+  /**
+   * Groups skipped because their query errored: a notice on the results page and in the
+   * palette, and one system_logs row per search (DoD #6), never a silently shorter list.
+   */
   failed: string[];
+}
+
+interface SearchFailure {
+  group: string;
+  table: string;
+  code: string | null;
+  error: string;
 }
 
 function canRead(auth: AuthContext, config: ResourceConfig): boolean {
   const caps = config.readCaps ?? [config.writeCap];
   return caps.some((cap) => NAV_ACCESS.includes(ROLE_CAPS[auth.role][cap]));
+}
+
+/**
+ * A database error as the log may keep it: the search text taken out in every form it was
+ * sent (PostgREST echoes a filter it cannot parse), then any e-mail or phone scrubbed.
+ * What a person types into a search box can be a name or an address.
+ */
+export function logSafeError(message: string, terms: readonly string[]): string {
+  let out = message;
+  for (const term of [...terms].sort((a, b) => b.length - a.length)) {
+    if (term) out = out.split(term).join('[query]');
+  }
+  return scrubPii(out);
 }
 
 /** Escape ilike wildcards so a `%` in the query matches a literal `%`. */
@@ -174,6 +199,7 @@ export async function searchAdmin(
   if (q.length < 2) return { groups, failed };
 
   const pattern = `%${escapeLike(q)}%`;
+  const failures: SearchFailure[] = [];
 
   // Sequential, not Promise.all: each call shares the caller's RLS-bound client, the
   // per-entity limit keeps every query trivial, and one slow entity failing fast-first
@@ -190,6 +216,12 @@ export async function searchAdmin(
 
     if (error) {
       failed.push(target.group);
+      failures.push({
+        group: target.group,
+        table: target.config.table,
+        code: error.code || null,
+        error: logSafeError(error.message, [pattern, escapeLike(q), q]),
+      });
       continue;
     }
     const rows = (data ?? []) as unknown as Record<string, unknown>[];
@@ -202,6 +234,16 @@ export async function searchAdmin(
         label: labelOf(row),
         detail: detailOf(row),
       })),
+    });
+  }
+
+  if (failures.length > 0) {
+    // One row per search, awaited so the Worker does not drop it with the response.
+    await writeSystemLog({
+      level: 'error',
+      source: 'admin:search',
+      message: `Search could not query ${failures.map((f) => f.table).join(', ')}`,
+      detail: { role: auth.role, failures },
     });
   }
 

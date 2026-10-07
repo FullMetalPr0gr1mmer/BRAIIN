@@ -1,6 +1,20 @@
 import { readFileSync, readdirSync } from 'node:fs';
-import { describe, it, expect } from 'vitest';
-import { cleanQuery, escapeLike, MAX_QUERY_LENGTH, SEARCH_TARGETS } from '@/lib/admin/globalSearch';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import type { AuthContext, Role } from '@/lib/auth/types';
+import {
+  cleanQuery,
+  escapeLike,
+  logSafeError,
+  MAX_QUERY_LENGTH,
+  searchAdmin,
+  SEARCH_TARGETS,
+} from '@/lib/admin/globalSearch';
+
+const { systemLog } = vi.hoisted(() => ({
+  systemLog: vi.fn(async (_entry: Record<string, unknown>) => true),
+}));
+vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: systemLog }));
 
 // Search input is an input boundary (CLAUDE.md §9e — search safety is a blocking test
 // class). These pin the two transforms every query passes through before it can reach
@@ -118,5 +132,103 @@ describe('what search never touches', () => {
     for (const table of ['leads', 'job_applications', 'contacts', 'crm_contacts']) {
       expect(tables).not.toContain(table);
     }
+  });
+});
+
+// ── searchAdmin against a stand-in database ─────────────────────────────────────────
+// Every table answers one row, unless `errors` names it; `tables` records what was asked.
+
+type DbError = { message: string; code: string };
+
+function fakeDb(errors: Record<string, DbError> = {}) {
+  const tables: string[] = [];
+  const sb = {
+    from(table: string) {
+      tables.push(table);
+      const builder: Record<string, unknown> = {};
+      for (const method of ['select', 'eq', 'ilike', 'limit']) builder[method] = () => builder;
+      builder['then'] = (resolve: (value: unknown) => unknown) =>
+        resolve(
+          errors[table]
+            ? { data: null, error: errors[table] }
+            : { data: [{ id: `${table}-1`, slug: 'logo', title: { en: 'Logo' } }], error: null },
+        );
+      return builder;
+    },
+  };
+  return { sb: sb as unknown as SupabaseClient, tables };
+}
+
+const as = (role: Role): AuthContext => ({
+  userId: 'u-1',
+  tenantId: 't-1',
+  role,
+  isActive: true,
+  email: 'someone@example.com',
+});
+
+describe('a search that cannot reach an entity (DoD #6)', () => {
+  beforeEach(() => systemLog.mockClear());
+
+  it('reports the group and writes one system_logs row, without what was typed', async () => {
+    const query = 'jane.doe@example.com 50%';
+    const { sb } = fakeDb({
+      team_members: {
+        message: `"failed to parse filter (ilike.%${escapeLike(query)}%)" for ${query}`,
+        code: 'PGRST100',
+      },
+      certifications: { message: 'operator does not exist: jsonb ~~* unknown', code: '42883' },
+    });
+    const outcome = await searchAdmin(sb, as('admin'), query);
+
+    expect(outcome.failed).toEqual(['Team & authors', 'Certifications']);
+    expect(outcome.groups.map((g) => g.group)).not.toContain('Team & authors');
+    expect(systemLog).toHaveBeenCalledTimes(1);
+    const entry = systemLog.mock.calls[0]![0];
+    expect(entry).toMatchObject({ level: 'error', source: 'admin:search' });
+    expect(entry['message']).toBe('Search could not query team_members, certifications');
+    expect(entry['detail']).toEqual({
+      role: 'admin',
+      failures: [
+        {
+          group: 'Team & authors',
+          table: 'team_members',
+          code: 'PGRST100',
+          error: '"failed to parse filter (ilike.[query])" for [query]',
+        },
+        {
+          group: 'Certifications',
+          table: 'certifications',
+          code: '42883',
+          error: 'operator does not exist: jsonb ~~* unknown',
+        },
+      ],
+    });
+    expect(JSON.stringify(entry)).not.toContain('jane');
+  });
+
+  it('writes nothing when every entity answered', async () => {
+    const { sb } = fakeDb();
+    const outcome = await searchAdmin(sb, as('admin'), 'logo');
+    expect(outcome.failed).toEqual([]);
+    expect(systemLog).not.toHaveBeenCalled();
+  });
+});
+
+describe('logSafeError', () => {
+  it('takes out every form of the search text, longest first', () => {
+    // '100%' is sent as '%100\%%': the escaped pattern goes first, or its inner forms
+    // would be cut out of it and leave a fragment of the text behind.
+    const q = '100%';
+    const sent = `%${escapeLike(q)}%`;
+    expect(logSafeError(`bad filter (ilike.${sent}) near ${q}`, [q, escapeLike(q), sent])).toBe(
+      'bad filter (ilike.[query]) near [query]',
+    );
+  });
+
+  it('scrubs an e-mail or phone the database echoed from elsewhere', () => {
+    expect(logSafeError('key (email)=(a@b.co) phone +966 55 123 4567', [])).toBe(
+      'key (email)=([email]) phone [phone]',
+    );
   });
 });
