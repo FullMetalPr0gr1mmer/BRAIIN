@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ROLES } from '@/lib/auth/types';
 import {
   ADMIN_NAV,
+  NAV_AREAS,
   currentLink,
   currentTab,
   reachableHrefs,
@@ -72,6 +73,27 @@ describe('the admin menu', () => {
 
   it('every role has a reachable dashboard or a first screen', () => {
     for (const role of ROLES) expect(reachableHrefs(role).length).toBeGreaterThan(0);
+  });
+});
+
+describe('the area modules (nav/<area>.ts)', () => {
+  it("compose the menu: the prototype's seven groups, each with its own place", () => {
+    // Pinned here, not derived: an area module dropped from NAV_AREAS must fail.
+    expect(ADMIN_NAV.map((group) => group.title)).toEqual([
+      'Overview',
+      'Content',
+      'CRM',
+      'Hiring',
+      'Growth',
+      'Appearance',
+      'Settings',
+    ]);
+    expect(new Set(NAV_AREAS.map((area) => area.order)).size).toBe(NAV_AREAS.length);
+    expect(new Set(NAV_AREAS.map((area) => area.title)).size).toBe(NAV_AREAS.length);
+  });
+
+  it('hand the menu a group of title and links only, never the sort key', () => {
+    for (const group of ADMIN_NAV) expect(Object.keys(group).sort()).toEqual(['links', 'title']);
   });
 });
 
