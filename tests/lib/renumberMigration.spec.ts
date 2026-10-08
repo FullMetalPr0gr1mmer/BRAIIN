@@ -16,18 +16,20 @@ import * as R from '../../scripts/renumber-migration.mjs';
 // scripts/renumber-migration.mjs moves a branch's new migration above the base branch's
 // highest when another branch merged the same number first (check-migrations rule 4). The
 // rename is the easy half; these pin the other half too: a file on the base is never
-// touched, a file only ever moves up, a branch's several new migrations keep their order, and
-// a number the reservation ledger holds for another slice is passed over. The file name is
-// rewritten wherever it appears. A bare number is rewritten only on lines this branch wrote,
-// only while no other migration has that number (the base's own, or a second new one of the
-// branch's, which keeps it), and not on a line whose base side already named it; each line
-// left alone that names the old migration is listed for a reader, with the reason.
+// touched, a file only ever moves up, a branch's several new migrations keep their order, a
+// number the reservation ledger holds for another slice is passed over, and the ledger itself
+// is never rewritten (its lines naming the old migration are listed). The file name is
+// rewritten wherever else it appears. A bare number is rewritten only on lines this branch
+// wrote, only while no other migration has that number (the base's own, or a second new one
+// of the branch's, which keeps it), and not on a line whose base side already named it; each
+// line left alone that names the old migration is listed for a reader, with the reason.
 
 const {
   addedLines,
   bareTargets,
   contestedLines,
   headerLength,
+  ledgerLines,
   parseArgs,
   planRenumber,
   reservations,
@@ -400,6 +402,27 @@ describe('reservations', () => {
       '0042': 'R1',
     });
     expect(reservations('# Notes\n\n| 0038 | C3 |\n').size).toBe(0);
+  });
+});
+
+describe('ledgerLines', () => {
+  const ledger = [
+    '# Migration ledger',
+    '',
+    'Production has applied 0001 to 0037.', // 3: a range that holds 0037
+    '| 0038 | C3 | the leads write API (`0038_leads_write.sql`) | 1 |', // 4
+    '| 0039 | U3 | runs after `0038_leads_write` | 1 |', // 5: the file name alone
+    '| 0040 to 0041 | C10a | the Sales role | 5 |', // 6
+    '| 0042 | R1 | 10038 rows, 0038abc, v1.0038 | 1 |', // 7: 0038 only inside other tokens
+    '| 0043-0045 | R2 | | 2 |', // 8: a range that holds 0044, which it does not spell
+  ].join('\n');
+
+  it('lists the lines naming a migration by file name, by number, or by a range that holds it', () => {
+    expect(ledgerLines(ledger, { from: '0038', oldStem: '0038_leads_write' })).toEqual([4, 5]);
+    expect(ledgerLines(ledger, { from: '0037', oldStem: '0037_h8' })).toEqual([3]);
+    expect(ledgerLines(ledger, { from: '0041', oldStem: '0041_sales' })).toEqual([6]);
+    expect(ledgerLines(ledger, { from: '0044', oldStem: '0044_r2' })).toEqual([8]);
+    expect(ledgerLines(ledger, { from: '0046', oldStem: '0046_none' })).toEqual([]);
   });
 });
 
@@ -829,9 +852,12 @@ describe('renumber-migration when the base has its own 0037', { timeout: 30_000 
 
 // The reservation ledger gives 0002 to C3, 0003 to U3 and 0004 to R1. U3 merges first, so
 // C3's 0002 must move above 0003, and the next number is R1's: C3 passes over it (the
-// ledger's rule 3), so R1 keeps 0004 if it merges before C3.
+// ledger's rule 3), so R1 keeps 0004 if it merges before C3. C3's row names its file, and
+// after merging main the branch plans a second migration there: the ledger is the
+// program's, so neither line is the script's to rewrite.
 
 const LEDGER_PATH = 'docs/admin-v2/migrations.md';
+const C3_ROW = '| 0002 | C3 | the leads write API (`0002_leads_write.sql`) | 1 |';
 const RESERVED = [
   '# Migration ledger',
   '',
@@ -845,17 +871,19 @@ const RESERVED = [
   '',
   '| Number | Slice | What | Wave |',
   '|---|---|---|---|',
-  '| 0002 | C3 | the leads write API | 1 |',
+  C3_ROW,
   '| 0003 | U3 | uploads | 1 |',
   '| 0004 | R1 | the release ledger | 1 |',
   '',
 ].join('\n');
-const C3_ROW = '| 0002 | C3 | the leads write API | 1 |';
 // U3's PR moved its row to Applied before it merged.
 const U3_MERGED = RESERVED.replace('| 0003 | U3 | uploads | 1 |\n', '').replace(
   '| 0001 | `0001_init.sql` | #1 |\n',
   '| 0001 | `0001_init.sql` | #1 |\n| 0003 | `0003_uploads.sql` | #3 |\n',
 );
+// The ledger on C3's branch after the merge: its second migration planned under its first.
+const C3_LATER = '| 0006 | C3 | the leads write API, part 2 (after 0002) | 2 |';
+const C3_LEDGER = U3_MERGED.replace(`${C3_ROW}\n`, `${C3_ROW}\n${C3_LATER}\n`);
 
 describe('renumber-migration and the reservation ledger', { timeout: 30_000 }, () => {
   let t: ReturnType<typeof throwaway>;
@@ -884,6 +912,9 @@ describe('renumber-migration and the reservation ledger', { timeout: 30_000 }, (
 
     t.git('checkout', '-q', 'c3');
     t.git('merge', '-q', '--no-edit', 'main');
+    t.write(LEDGER_PATH, C3_LEDGER);
+    t.git('add', '-A');
+    t.git('commit', '-q', '-m', 'C3 plans part 2');
   }, 60_000);
 
   afterAll(() => t?.cleanup());
@@ -892,7 +923,7 @@ describe('renumber-migration and the reservation ledger', { timeout: 30_000 }, (
     // On the branch, C3 takes 0004 and R1 moves up to 0005.
     t.write(
       LEDGER_PATH,
-      U3_MERGED.replace(C3_ROW, '| 0004 | C3 | the leads write API | 1 |').replace(
+      C3_LEDGER.replace(C3_ROW, C3_ROW.replace('0002 |', '0004 |')).replace(
         '| 0004 | R1 |',
         '| 0005 | R1 |',
       ),
@@ -915,7 +946,7 @@ describe('renumber-migration and the reservation ledger', { timeout: 30_000 }, (
     }
   });
 
-  it('passes over the number reserved for another slice, and lists the ledger row to move', () => {
+  it('passes over the number reserved for another slice, and lists the ledger rows to move', () => {
     const result = t.run(SCRIPT, 'supabase/migrations/0002_leads_write.sql', '--base', 'main');
     expect(result.code, result.out).toBe(0);
     expect(result.out).toContain(
@@ -925,12 +956,17 @@ describe('renumber-migration and the reservation ledger', { timeout: 30_000 }, (
     expect(t.read('supabase/migrations/0005_leads_write.sql')).toBe(
       '-- 0005 — the leads write API (C3).\n\nselect 1;\n',
     );
-    // The ledger is the program's, written on the base: left as it is, its C3 row listed.
-    expect(t.read(LEDGER_PATH)).toBe(U3_MERGED);
+    // The ledger is the program's: left as it is, byte for byte. Not the file name in C3's
+    // row (its Number cell would still say 0002), nor the 0002 the branch wrote on its own
+    // line. Both are listed for a reader.
+    expect(t.read(LEDGER_PATH)).toBe(C3_LEDGER);
     expect(result.out).not.toContain(`update ${LEDGER_PATH}`);
-    const row = U3_MERGED.split('\n').indexOf(C3_ROW) + 1;
+    const row = C3_LEDGER.split('\n').indexOf(C3_ROW) + 1;
+    const byHand = 'the reservation ledger: rows move by hand';
     expect(result.out).toContain(
-      `      ${LEDGER_PATH}:${row}  the reservation ledger: rows move by hand\n`,
+      '  ! not rewritten, still naming 0002 or 0002_leads_write (check by hand):\n' +
+        `      ${LEDGER_PATH}:${row}  ${byHand}\n` +
+        `      ${LEDGER_PATH}:${row + 1}  ${byHand}\n`,
     );
     expect(t.run(CHECK, 'main').code).toBe(0);
   });

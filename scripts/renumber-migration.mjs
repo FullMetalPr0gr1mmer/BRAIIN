@@ -15,18 +15,20 @@
 //      check-migrations already accepts stays where it is, gap or not, because the number
 //      below it may be another slice's. Several new migrations on one branch keep their
 //      order: a move that would jump a later one is refused, naming the one to move first;
-//   3. never edits the ledger: its rows are the program's plan, so the ones that name the
-//      old number are listed for a reader, who moves this slice's row by hand (to take a
-//      number reserved for another slice, re-plan both rows there first);
-//   4. rewrites references in supabase/tests/*.sql, docs/**/*.md, CLAUDE.md and the header
-//      comments of the branch's new migrations (its own, and a sibling's "Depends on").
-//      The file name (with or without `.sql`) names this migration alone, so it is
-//      rewritten wherever it appears. A bare number ("0038") is rewritten only where it
-//      can name nothing else: on lines this branch added (anywhere else it can be the
-//      base's own words), and not on one whose base side already named 0038 (CLAUDE.md
-//      keeps a whole paragraph on one line). None moves at all while another migration
-//      has that number, the base's own 0038 or a second new one of the branch's (which
-//      keeps it): any 0038 the branch wrote may name that one;
+//   3. never edits the ledger, not even a file name in it: its rows are the program's plan,
+//      and a row whose file name moved while its Number cell stayed would disagree with
+//      itself. Every line of it that names the old migration (by file name, by number, or
+//      by a range that holds the number) is listed for a reader, who moves this slice's row
+//      by hand (to take a number reserved for another slice, re-plan both rows there first);
+//   4. rewrites references in supabase/tests/*.sql, docs/**/*.md (the ledger aside),
+//      CLAUDE.md and the header comments of the branch's new migrations (its own, and a
+//      sibling's "Depends on"). The file name (with or without `.sql`) names this migration
+//      alone, so it is rewritten wherever it appears. A bare number ("0038") is rewritten
+//      only where it can name nothing else: on lines this branch added (anywhere else it
+//      can be the base's own words), and not on one whose base side already named 0038
+//      (CLAUDE.md keeps a whole paragraph on one line). None moves at all while another
+//      migration has that number, the base's own 0038 or a second new one of the branch's
+//      (which keeps it): any 0038 the branch wrote may name that one;
 //   5. lists every file it changed with its count of rewrites, and under it each line where
 //      a bare number moved (a file name's rewrite is counted, not listed), then every line
 //      it left alone that still names the old migration (a bare number that may name
@@ -332,6 +334,29 @@ export function reservations(markdown) {
   return reserved;
 }
 
+/** A range of numbers as the ledger writes one: "0041 to 0043", "0041-0043", "0041–0043". */
+const RANGE = /(?<![\w.])(\d{4})\s*(?:to|-|–|—)\s*(\d{4})(?!\w|\.\d)/g;
+
+/**
+ * The reservation ledger's lines that name a migration: by its file name (with or without
+ * `.sql`), by its bare number, or by a range of numbers that holds it ("0040 to 0043" is
+ * also a row for 0041). The ledger is never rewritten, so these are listed for a reader.
+ *
+ * @param {string} markdown
+ * @param {{ from: string, oldStem: string }} migration
+ * @returns {number[]} the lines, 1-based
+ */
+export function ledgerLines(markdown, { from, oldStem }) {
+  const bare = bareNumber(from);
+  const stem = stemName(oldStem);
+  const number = Number(from);
+  const inRange = (/** @type {string} */ line) =>
+    [...line.matchAll(RANGE)].some(([, a, b]) => Number(a) <= number && number <= Number(b));
+  return markdown
+    .split('\n')
+    .flatMap((line, i) => (bare.test(line) || stem.test(line) || inRange(line) ? [i + 1] : []));
+}
+
 /**
  * The files whose references are rewritten: the pgTAP tests, the docs and CLAUDE.md.
  *
@@ -530,6 +555,17 @@ function main(argv) {
   const refFiles = referenceFiles();
   for (const file of refFiles) {
     const text = readFileSync(file, 'utf8');
+    // The ledger's rows are the program's plan, written on the base, so this slice's row
+    // still carries the old number: only a reader can move it (to the new number, or to
+    // "Applied" once production has the migration), and tell it from another slice's. So
+    // nothing in it is rewritten, not even a file name (the row would then name the new
+    // file under the old number), and every line naming the old migration is listed.
+    if (file === LEDGER) {
+      for (const line of ledgerLines(text, refs)) {
+        mentions.push({ at: `${file}:${line}`, why: 'the reservation ledger: rows move by hand' });
+      }
+      continue;
+    }
     if (!text.includes(plan.from)) continue;
     const diff = branchDiff(args.base, file);
     const { rewrite, unsure } = bareTargets(text, {
@@ -545,19 +581,6 @@ function main(argv) {
       listBare(file, result.bare);
     }
     for (const line of unsure) mentions.push({ at: `${file}:${line}`, why: mayNameOther });
-    // The ledger's rows are the program's plan, written on the base, so this slice's row
-    // still carries the old number: only a reader can move it (to the new number, or to
-    // "Applied" once production has the migration), and tell it from another slice's.
-    if (file === LEDGER) {
-      for (const [i, line] of result.text.split('\n').entries()) {
-        if (!unsure.includes(i + 1) && rewriteReferences(line, refs).count > 0) {
-          mentions.push({
-            at: `${file}:${i + 1}`,
-            why: 'the reservation ledger: rows move by hand',
-          });
-        }
-      }
-    }
   }
 
   // Outside what this rewrites, a reader should still look at: the old file name anywhere,
