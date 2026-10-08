@@ -1,4 +1,5 @@
 import { readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CASE_MODULES, CASES } from './cases';
 import { CASE_MANIFEST } from './caseManifest';
@@ -153,6 +154,19 @@ describe('the endpoint cases cover every admin route', () => {
 });
 
 describe('the case registry', () => {
+  it('collects every file under tests/authz/cases, subfolders included', () => {
+    // The glob in cases/index.ts is the only way a module runs, so a file it did not match
+    // (a nested folder it did not reach, a .js module) would sit there unrun.
+    const dir = 'tests/authz/cases';
+    const onDisk = readdirSync(dir, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => relative(dir, join(entry.parentPath, entry.name)).replaceAll('\\', '/'))
+      .filter((file) => file !== 'index.ts')
+      .map((file) => file.replace(/\.ts$/, ''));
+    expect(onDisk.length).toBeGreaterThan(0);
+    expect(new Set(Object.keys(CASE_MODULES))).toEqual(new Set(onDisk));
+  });
+
   it('keeps each case name unique', () => {
     const names = CASES.map((testCase) => testCase.name);
     expect(names.filter((name, i) => names.indexOf(name) !== i)).toEqual([]);
