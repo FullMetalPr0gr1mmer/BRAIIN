@@ -28,7 +28,7 @@ import { leadSignals } from './score';
 
 /**
  * Leads per run, sized for the Workers Free plan (O-16): 50 subrequests and 10 ms of CPU per
- * invocation, shared with the other daily jobs (src/lib/cron/daily.ts has the sum). This
+ * invocation, shared with the other daily jobs (src/lib/cron/jobs.ts has the sum). This
  * step spends one read, one country lookup per tenant and one write per lead, and each lead
  * costs a few decryptions and HMACs of CPU.
  */

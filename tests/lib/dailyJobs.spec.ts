@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CronJob } from '@/lib/cron/jobs';
 
-// The Worker's daily cron, run for real against a stub service client (src/lib/cron/daily.ts):
-// the cheap purges before the lead indexing, the privileged-op ledger cut at 48 hours, a
-// failing step logged without stopping the ones after it, the indexing line written even
-// for a partial run, and the whole run inside the Workers Free plan's 50 subrequests.
+// The Worker's daily cron, run for real against a stub service client (src/lib/cron/daily.ts
+// running the registry in src/lib/cron/jobs.ts): the cheap purges before the lead indexing,
+// the privileged-op ledger cut at 48 hours, a failing step logged without stopping the ones
+// after it, the indexing line written even for a partial run, the whole run inside the
+// Workers Free plan's 50 subrequests, and each job inside the budget it declares.
 
 interface Call {
   table: string;
@@ -12,6 +14,7 @@ interface Call {
 }
 
 const state = vi.hoisted(() => ({
+  configured: true,
   requests: [] as Call[],
   logs: [] as { level: string; source?: string; message: string; detail?: unknown }[],
   leads: [] as Record<string, unknown>[],
@@ -87,7 +90,7 @@ const svc = {
 };
 
 vi.mock('@/lib/supabase/server', () => ({ serviceClient: () => svc }));
-vi.mock('@/lib/supabase/client', () => ({ supabaseConfigured: () => true }));
+vi.mock('@/lib/supabase/client', () => ({ supabaseConfigured: () => state.configured }));
 vi.mock('@/lib/data/systemLog', () => ({
   writeSystemLog: async (entry: { level: string; message: string }) => {
     state.logs.push(entry);
@@ -95,7 +98,8 @@ vi.mock('@/lib/data/systemLog', () => ({
   },
 }));
 
-const { runDailyJobs, PRIVILEGED_OPS_KEEP_MS } = await import('@/lib/cron/daily');
+const { runDailyJobs } = await import('@/lib/cron/daily');
+const { DAILY_JOBS, PRIVILEGED_OPS_KEEP_MS } = await import('@/lib/cron/jobs');
 const { INDEX_BATCH } = await import('@/lib/crm/indexBackfill');
 const { EXPORT_LIMITS, PII_REVEAL_LIMITS } = await import('@/lib/admin/rateLimit');
 const { encryptPII } = await import('@/lib/crypto/pii');
@@ -126,6 +130,7 @@ const indexLine = () => state.logs.find((l) => l.source === 'cron:crm-index');
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
+  state.configured = true;
   state.requests = [];
   state.logs = [];
   state.leads = await leads(INDEX_BATCH);
@@ -214,5 +219,78 @@ describe('runDailyJobs', () => {
     await runDailyJobs();
     expect(tables().filter((t) => t === 'storage:remove')).toHaveLength(2);
     expect(subrequests()).toBeLessThanOrEqual(50);
+  });
+});
+
+describe('the job registry (src/lib/cron/jobs.ts)', () => {
+  it('runs these jobs, in this order: the purges before the lead indexing', () => {
+    expect(DAILY_JOBS.map((job) => job.name)).toEqual(['privileged-ops', 'retention', 'crm-index']);
+  });
+
+  it('logs each job under its own name, in that order', async () => {
+    // At its worst every job writes exactly one line (the purge only when it fails).
+    state.failPurge = true;
+    await runDailyJobs();
+    expect(state.logs.map((l) => l.source)).toEqual(DAILY_JOBS.map((job) => `cron:${job.name}`));
+  });
+
+  it('keeps each job inside the budget it declares, at its worst', async () => {
+    state.failPurge = true;
+    state.worstCaseRetention = true;
+    // A phone on the leads adds the country lookup.
+    const phone_enc = await encryptPII('0501234567', LEAD_PII_ENC_KEY);
+    state.leads = state.leads.map((row) => ({ ...row, phone_enc }));
+    const seen: string[] = [];
+    for (const job of DAILY_JOBS) {
+      state.requests = [];
+      state.logs = [];
+      await runDailyJobs([job]);
+      expect(subrequests(), job.name).toBeLessThanOrEqual(job.budget);
+      seen.push(...tables());
+    }
+    // The worst cases were reached: both CV removals, and the country lookup.
+    expect(seen.filter((t) => t === 'storage:remove')).toHaveLength(2);
+    expect(seen).toContain('site_profile:select');
+  });
+
+  it('declares budgets that fit the Free plan together', () => {
+    expect(DAILY_JOBS.reduce((sum, job) => sum + job.budget, 0)).toBeLessThanOrEqual(50);
+  });
+});
+
+describe('the runner (src/lib/cron/daily.ts)', () => {
+  const job = (name: string, run: () => Promise<void>): CronJob => ({
+    name,
+    label: `the ${name} job`,
+    budget: 0,
+    run,
+  });
+
+  it('logs a job that throws under its name, and still runs the jobs after it', async () => {
+    const ran: string[] = [];
+    await runDailyJobs([
+      job('first', async () => {
+        ran.push('first');
+        throw new Error('boom');
+      }),
+      job('second', async () => {
+        throw 'not an Error';
+      }),
+      job('third', async () => {
+        ran.push('third');
+      }),
+    ]);
+    expect(ran).toEqual(['first', 'third']);
+    expect(state.logs).toEqual([
+      { level: 'error', source: 'cron:first', message: 'boom' },
+      { level: 'error', source: 'cron:second', message: 'the second job failed' },
+    ]);
+  });
+
+  it('runs nothing while Supabase is not configured', async () => {
+    state.configured = false;
+    await runDailyJobs();
+    expect(state.requests).toEqual([]);
+    expect(state.logs).toEqual([]);
   });
 });
