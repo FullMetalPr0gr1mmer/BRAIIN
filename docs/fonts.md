@@ -26,14 +26,14 @@
 > unicode-ranges as below) rather than pyftsubset — re-run pyftsubset only if the brand
 > ever moves off Google-hosted sources. Canonical budgets: `CLAUDE.md` §6.
 
-## Budgets (CI-enforced via size-limit / Lighthouse once active)
+## Budgets (and what enforces each — all block the PR and the deploy)
 
-| Item | Budget |
-|---|---|
-| EN + AR fonts **per route** | ≤ 180 KB woff2 (AR face counts) |
-| Hero face (the one preloaded — per route) | ≤ 35 KB Latin / 45 KB Arabic |
-| `font-display` | `swap` (never blocks render; `optional` rejected — step 2b) |
-| CLS from fonts | 0 — `size-adjust` + `ascent/descent-override`, per weight and per script for Almarai (step 2b), per weight for Archivo, and per platform: Arial, or Liberation Sans + DejaVu Sans on Linux (step 2c) |
+| Item | Budget | Enforced by |
+|---|---|---|
+| EN + AR fonts **per route** | ≤ 180 KB woff2 (AR face counts) | Lighthouse (`lighthouserc*.json`): `resource-summary:font:size` ≤ 184,320 B on every gated route, mobile and desktop |
+| Hero face (the one preloaded — per route) | ≤ 35 KB Latin / 45 KB Arabic | `tests/seo/fonts.spec.ts` (every preloadable face) |
+| `font-display` | `swap` (never blocks render; `optional` rejected — step 2b) | Lighthouse `font-display` (error) |
+| CLS from fonts | 0 — `size-adjust` + `ascent/descent-override`, per weight and per script for Almarai (step 2b), per weight for Archivo, and per platform: Arial, or Liberation Sans + DejaVu Sans on Linux (step 2c) | Lighthouse CLS < 0.1 per route; `tests/e2e/layout-shift.e2e.ts` names any shift ≥ 0.02 and, on Linux, holds every font until the page has painted; `tests/e2e/consent-banner.e2e.ts`; `tests/seo/fontFallbacks.spec.ts` (the faces) |
 
 ## Steps
 
@@ -241,9 +241,10 @@
    and the preload keeps the headline in Almarai on a first visit. `tests/seo/fonts.spec.ts` locks the hrefs and
    each preloadable face's hero budget (every Almarai arabic face is ≈ 25 KB).
 
-4. **Verify:** `npm run a11y:contrast` (already green), then run the staged
-   `perf-seo-a11y` workflow — Lighthouse asserts `font-display`, unsized-images, and the
-   per-route weight budget; axe asserts zero WCAG violations on the themed output.
+4. **Verify:** `npm run a11y:contrast` and `npx vitest run tests/seo/fonts.spec.ts`, then
+   the `perf-seo-a11y` checks CI runs on every PR — Lighthouse asserts `font-display`,
+   unsized-images and the per-route font bytes; axe asserts zero WCAG violations on the
+   themed output.
 
 5. **The admin mirrors these faces.** `public/styles/admin.css` declares the same
    `@font-face` set as `global.css`, byte for byte after whitespace (Admin v2 F1), so a
@@ -256,4 +257,5 @@
   4.5 min; neon accent 12.77:1 on bg). Enforced continuously by `scripts/contrast-audit.mjs`.
 - ✅ `prefers-reduced-motion` honoured globally + per-component (marquee).
 - ⏳ Fonts — this runbook (needs brand woff2).
-- ⏳ axe DOM pass — `tests/a11y/axe.e2e.ts`, runs in the staged `perf-seo-a11y` workflow.
+- ✅ axe DOM pass — `tests/a11y/axe.e2e.ts`, in the required `perf-seo-a11y / E2E + axe +
+  CSP + video bytes` check on every PR, and a `needs` of the deploy.

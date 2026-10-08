@@ -21,19 +21,14 @@ import { extname, join } from 'node:path';
 //   - tests/ — fixtures where a host is the test's own input (request origins, the CSRF
 //     cases) and the assertions that the domain is gone.
 //
-// ONE allowance: ci.yml's build-test placeholder origin, which the CI restructure (branch
-// ci/deploy-waits-for-every-gate) moves to the two-i domain. An allowance must still match
-// its line, so the moment ci.yml is fixed the last test below fails until the entry is
-// deleted — it cannot outlive its reason, and .github/ is then held like everything else.
+// No allowances. There was one — ci.yml's build-test placeholder origin — until the CI
+// restructure moved it to the two-i domain; .github/ is now held like everything else. A
+// future allowance must still match its line (the last test), so none can outlive its
+// reason.
 
 const STALE = /braiinstation\.com/i;
 
-const ALLOWED: readonly { path: string; line: RegExp }[] = [
-  {
-    path: '.github/workflows/ci.yml',
-    line: /^\s+PUBLIC_SITE_URL: https:\/\/www\.braiinstation\.com$/,
-  },
-];
+const ALLOWED: readonly { path: string; line: RegExp }[] = [];
 
 const ROOTS = [
   'src',

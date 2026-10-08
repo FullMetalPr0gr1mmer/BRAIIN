@@ -4,10 +4,15 @@ name: Perf / SEO / A11y / E2E
 # axe WCAG 2.2 AA, CSP, served-markup and video-bytes checks (§9) and every Playwright
 # spec — against the BUILT Worker, served by `wrangler dev`, reading a real database.
 #
-# PROMOTED 2026-09-25 from `workflow_dispatch` to push/PR. It had been "staged until real
-# pages exist" long after they did, so every e2e spec in tests/ — the hero intro, the
-# contact-form security surface, the CSP guard, axe — had never gated a single PR. This
-# is the same failure db-tests.yml records for pgTAP: a staged gate is an untested gate.
+# CALLED BY ci.yml (job `perf-seo-a11y`) on every PR and every push to main — it has no
+# push/PR trigger of its own, so a commit gets one run ("CI"), and on main the deploy waits
+# for both jobs here. Until 2026-10-04 this was a separate workflow that finished ~25 min
+# after the Worker was already live, so a red e2e or Lighthouse result shipped anyway.
+# Both jobs are REQUIRED status checks on `main`, as "perf-seo-a11y / <job name>"
+# (.github/branch-protection.json): renaming a job means updating that file and
+# re-applying protection in the same PR (launch runbook §5b). `workflow_dispatch` keeps a
+# manual run. (Staged on `workflow_dispatch` until 2026-09-25, these suites had never gated
+# a single PR: a staged gate is an untested gate.)
 #
 # WHY A LOCAL SUPABASE, NOT DUMMIES. The previous version built against
 # `https://example.supabase.co`, so every loader returned [] and every page rendered its
@@ -19,22 +24,18 @@ name: Perf / SEO / A11y / E2E
 # with `wrangler dev --env-file` (it does not read the adapter's dist/server/.dev.vars, and
 # CI has no project .env). Only secrets with no local counterpart stay dummies.
 #
-# Make both jobs REQUIRED status checks on `main` (Settings → Branches) once green.
+# No `concurrency` here: ci.yml's run-level group already cancels a superseded PR run, and a
+# group inside the call could cancel or stall a gate the deploy waits for.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: perf-seo-a11y-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   # The preview origin is local by design; the prebuild guard needs the explicit opt-out.
+  # This env stays inside this called workflow: the deploy jobs in ci.yml never see it.
   PUBLIC_SITE_URL: http://localhost:8788
   ALLOW_LOCAL_SITE_URL: '1'
   PREVIEW_URL: http://localhost:8788
@@ -49,6 +50,7 @@ jobs:
   e2e:
     name: E2E + axe + CSP + video bytes
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       # As above, but WITH storage-api: tests/e2e/apply-roundtrip.e2e.ts sends one real Join
       # application, and its CV must reach the private `applications` bucket (migration
@@ -96,7 +98,11 @@ jobs:
           npx wrangler kv key put site:redirects
           '{"/e2e-old":{"to":"/about","status":301},"/e2e-temp":{"to":"/contact?from=e2e","status":302},"/e2e-anchor":{"to":"/services#e2e","status":308},"/api/e2e-old":{"to":"/about","status":301}}'
           --binding SESSION --local --preview
+      # 22-132 s normally. A stalled download once held this step for 94 min (2026-10-07, on
+      # the old pipeline, no job timeout); the cap fails it fast, so the re-run (runbook §5b)
+      # starts long before the job's 30 minutes run out and the merge queue moves again.
       - name: Install Playwright Chromium
+        timeout-minutes: 10
         run: npx playwright install --with-deps chromium
       - name: Start preview (wrangler dev)
         run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env &
@@ -108,19 +114,25 @@ jobs:
       # then opens every screen each role's sidebar offers. Nothing is seeded for it.
       - name: Playwright (e2e, axe WCAG 2.2 AA, CSP, served HTML, video bytes, admin sweep)
         run: npm run test:e2e
+      # Not an assertion, so it never fails the gate (the deploy waits for this job).
       - name: Design capture (public + admin full-page screenshots for the mockup comparison, not assertions)
         if: always()
+        continue-on-error: true
         env:
           CAPTURE_DIR: visual-capture
         run: npx playwright test tests/visual/capture.e2e.ts tests/admin/capture.e2e.ts --retries=0
+      # Nor is its upload: an artifact-service error must not fail the gate either, and
+      # `overwrite` lets a re-run (launch runbook §5b) replace an earlier attempt's artifact.
       - name: Upload design capture
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: design-capture
           path: visual-capture
           retention-days: 7
           if-no-files-found: ignore
+          overwrite: true
       - name: Stop Supabase
         if: always()
         run: supabase stop
@@ -128,6 +140,7 @@ jobs:
   lighthouse:
     name: Lighthouse budgets
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
       - uses: actions/setup-node@v4

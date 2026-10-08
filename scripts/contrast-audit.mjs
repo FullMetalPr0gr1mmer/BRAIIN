@@ -3,8 +3,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 // WCAG 2.2 AA contrast gate (CLAUDE.md DoD #4 — "neon-on-dark passes AA"). Pure Node, no
 // browser: computes the contrast ratio for every foreground/background PAIR actually used
 // in the public UI and fails CI if any is below its AA threshold. This complements the
-// axe DOM checks (which run in the staged perf-seo-a11y workflow) with a fast, always-on
-// token-level guard so a palette tweak can't silently regress contrast.
+// axe DOM checks (perf-seo-a11y.yml, which CI calls on every PR and push) with a fast,
+// always-on token-level guard so a palette tweak can't silently regress contrast.
 //
 // Thresholds (WCAG 2.2): 4.5:1 normal text, 3.0:1 large text (≥18.66px bold / ≥24px) and
 // non-text UI (borders/focus indicators, 1.4.11).

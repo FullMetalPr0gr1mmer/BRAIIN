@@ -60,7 +60,8 @@
     "sharp": "0.35.5",
     "size-limit": "^11.1.0",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "yaml": "2.9.0"
   },
   "overrides": {
     "sharp": "$sharp",
