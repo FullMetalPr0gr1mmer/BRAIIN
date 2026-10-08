@@ -646,8 +646,9 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
 Each slice records where its implementation departs from the design it builds, and why, in
 its own file under [as-built/](as-built/), so the designs stay readable as the reasoning and
 those files stay the truth. A slice's PR adds its file and one line below, under its lane.
-Hotfixes found after this document was written (H5 onward) have no design to depart from;
-their files record what was built and why.
+Most hotfixes found after this document was written (H5 onward) have no design to depart
+from, so their files record what was built and why; H6 pulls part of R1 forward and records
+its departures from it.
 
 **UI**
 - [F0](as-built/F0.md): harness and CI (#34)
