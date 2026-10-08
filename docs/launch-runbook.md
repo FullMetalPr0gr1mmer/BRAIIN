@@ -845,5 +845,23 @@ commitment CLAUDE.md makes that is not yet met, and each should be tracked.
 npx wrangler rollback            # previous Worker version, seconds
 ```
 
-Migrations are forward-only (expand/contract), so a Worker rollback is always safe: an
-older Worker never sees a column it does not know about, only extra ones it ignores.
+Migrations are forward-only (expand/contract), so a Worker rollback is safe across an
+expand: an older Worker never sees a column it does not know about, only extra ones it
+ignores. It is not safe across a contraction, which takes away something older code still
+uses, so every contraction sets a floor.
+
+**Rollback floor: #43, merged as `cc8c6c4`.** 0033 removed staff tokens' read access to the
+gated lead columns (a contraction). Roll the Worker back only to a build at or after the #43
+merge: an older Worker reads those columns with the staff token, which 0033 refuses (42501),
+so every lead save in the leads panel (status and notes), the contact-details reveal and the
+PII export fail; the lead list and the plain lead view keep working. Pick the target in
+`npx wrangler versions list` by when it was deployed: a version deployed before `cc8c6c4`'s
+deploy is below the floor. Below the floor, fix forward instead: migrations are forward-only,
+so a fix is a new migration (and a new build), never a database rollback. A new contraction
+moves the floor, and its migration PR updates this paragraph.
+
+0037 (#51) does not move the floor. It revoked staff write privileges on the eight tables
+staff only read (the telemetry tables, the pageview rollup, the search, consent and
+notification ledgers, `tenants` and `profiles`), but no build since the floor writes them with
+a staff token except the users screen, whose update of `profiles.role`, `is_active` and
+`display_name` 0037 keeps. A Worker rollback across #51 is safe.
