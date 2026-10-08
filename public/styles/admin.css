@@ -14,7 +14,10 @@
    - Element resets are not ported: the prototype's `* { margin: 0; padding: 0 }` would
      restyle every island. Each component sets its own spacing instead.
    A test forbids colour literals outside the token block (tests/lib/adminStyles.spec.ts):
-   a palette change stays a one-block edit. */
+   a palette change stays a one-block edit.
+   What only one screen renders lives in public/styles/admin/<screen>.css, linked after
+   this file through AdminLayout's `styles` prop (Admin v2 W0); the tokens, the fonts, the
+   chrome and every component two screens share stay here. */
 
 /* Border-box everywhere. Without it, `width: 100%` on an input means 100% of the track
    PLUS its own padding and border, and the two halves of every bilingual EN/AR pair
@@ -1498,90 +1501,6 @@ a.data-link:hover {
   font-size: 12px;
 }
 
-/* ---- Bars (insight panels) ----
-   The width is a data-width bucket, never a style attribute: islands render on the
-   server first, and a React style prop becomes a style="" that style-src refuses. */
-
-.bar {
-  display: block;
-  inline-size: 8rem;
-  block-size: 8px;
-  background: var(--ad-bg);
-  border-radius: var(--ad-r-pill);
-  overflow: hidden;
-}
-
-.bar-fill {
-  display: block;
-  block-size: 100%;
-  inline-size: 0;
-  background: var(--ad-primary);
-  border-radius: var(--ad-r-pill);
-}
-.bar-fill[data-width='0'] {
-  inline-size: 0%;
-}
-.bar-fill[data-width='5'] {
-  inline-size: 5%;
-}
-.bar-fill[data-width='10'] {
-  inline-size: 10%;
-}
-.bar-fill[data-width='15'] {
-  inline-size: 15%;
-}
-.bar-fill[data-width='20'] {
-  inline-size: 20%;
-}
-.bar-fill[data-width='25'] {
-  inline-size: 25%;
-}
-.bar-fill[data-width='30'] {
-  inline-size: 30%;
-}
-.bar-fill[data-width='35'] {
-  inline-size: 35%;
-}
-.bar-fill[data-width='40'] {
-  inline-size: 40%;
-}
-.bar-fill[data-width='45'] {
-  inline-size: 45%;
-}
-.bar-fill[data-width='50'] {
-  inline-size: 50%;
-}
-.bar-fill[data-width='55'] {
-  inline-size: 55%;
-}
-.bar-fill[data-width='60'] {
-  inline-size: 60%;
-}
-.bar-fill[data-width='65'] {
-  inline-size: 65%;
-}
-.bar-fill[data-width='70'] {
-  inline-size: 70%;
-}
-.bar-fill[data-width='75'] {
-  inline-size: 75%;
-}
-.bar-fill[data-width='80'] {
-  inline-size: 80%;
-}
-.bar-fill[data-width='85'] {
-  inline-size: 85%;
-}
-.bar-fill[data-width='90'] {
-  inline-size: 90%;
-}
-.bar-fill[data-width='95'] {
-  inline-size: 95%;
-}
-.bar-fill[data-width='100'] {
-  inline-size: 100%;
-}
-
 /* ---- Tabs: server-rendered links, the prototype's segmented look ---- */
 
 .tabs {
@@ -2022,53 +1941,6 @@ img.ProseMirror-separator {
   aspect-ratio: 4 / 3;
 }
 
-/* ---- Global search results ---- */
-
-.search-hits {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.search-hits a {
-  color: var(--ad-primary);
-  font-weight: 600;
-  text-underline-offset: 2px;
-}
-
-.search-hits a:hover {
-  color: var(--ad-primary-hover);
-}
-
-/* ---- Sign in ---- */
-
-.login-card {
-  width: min(400px, 92vw);
-  padding: 32px;
-  background: var(--ad-card);
-  border: 1px solid var(--ad-line);
-  border-radius: 18px;
-  box-shadow: var(--ad-shadow);
-}
-
-.login-card h1 {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.login-card .admin-sub {
-  margin: 6px 0 26px;
-}
-
-.login-card button[type='submit'] {
-  width: 100%;
-  margin-top: 6px;
-}
-
 /* ---- Motion and forced colours ---- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -2096,9 +1968,5 @@ img.ProseMirror-separator {
 
   button[role='switch'] {
     border: 1px solid ButtonText;
-  }
-
-  .bar-fill {
-    background: Highlight;
   }
 }

@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { ADMIN_STYLESHEETS } from '@/lib/admin/stylesheets';
 
 // public/styles/admin.css, the Admin v2 design system (F1). Each rule here keeps a
 // property the port depends on:
@@ -10,6 +11,10 @@ import { describe, expect, it } from 'vitest';
 //     scripts/contrast-audit.mjs, which reads that block, checks every colour that ships;
 //   - every class the admin markup uses is still styled: a restyle that drops a hook an
 //     island renders is a silent regression no type checker sees.
+// The screen stylesheets (public/styles/admin/<name>, Admin v2 W0) hold what one screen
+// alone renders. They use the tokens and define none, so the colour rule covers them with
+// no exemption at all, and a class only a screen sheet styles must render only on the
+// pages that link that sheet.
 
 const ROOT = process.cwd();
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8');
@@ -17,6 +22,15 @@ const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 
 const ADMIN = stripComments(read('public/styles/admin.css'));
 const GLOBAL = stripComments(read('public/styles/global.css'));
+
+/** The screen stylesheets by name, comments stripped. */
+const SCREENS: Record<string, string> = Object.fromEntries(
+  ADMIN_STYLESHEETS.map((name) => [name, stripComments(read(`public/styles/admin/${name}`))]),
+);
+
+/** The class names a stylesheet's selectors mention. */
+const classesOf = (css: string) =>
+  new Set([...css.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1] as string));
 
 function fontFaces(css: string): string[] {
   return [...css.matchAll(/@font-face\s*\{[^}]*\}/g)].map((m) => m[0].replace(/\s+/g, ' ').trim());
@@ -108,6 +122,27 @@ describe('admin.css colours', () => {
   });
 });
 
+describe('the screen stylesheets (public/styles/admin/)', () => {
+  it('are exactly the files the closed list names', () => {
+    const files = readdirSync(join(ROOT, 'public/styles/admin')).filter((f) => f.endsWith('.css'));
+    expect(files.sort()).toEqual([...ADMIN_STYLESHEETS].sort());
+    // Pinned, not derived: a sheet dropped from the list must fail, not go unchecked.
+    expect([...ADMIN_STYLESHEETS].sort()).toEqual(['insights.css', 'login.css', 'search.css']);
+  });
+
+  it.each([...ADMIN_STYLESHEETS])(
+    '%s uses the tokens: no colour literal, token, font face or motion block of its own',
+    (name) => {
+      const css = SCREENS[name] as string;
+      expect(colourLiterals(css)).toEqual([]);
+      expect(css).not.toMatch(/--ad-[\w-]+\s*:/);
+      expect(css).not.toMatch(/:root\s*\{/);
+      expect(css).not.toMatch(/@font-face/);
+      expect(css).not.toMatch(/prefers-reduced-motion/);
+    },
+  );
+});
+
 describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
   // tests/admin/shell.e2e.ts proves it in a browser; this keeps the two halves together.
   it('pads the scroll port by the height the layout measures', () => {
@@ -136,9 +171,9 @@ describe('admin.css keeps the hooks the markup renders', () => {
     'src/layouts/AdminLayout.astro',
   ];
 
-  const used = new Set<string>();
-  for (const file of sources) {
-    const src = read(file);
+  /** The classes one file renders. */
+  function classesIn(src: string): Set<string> {
+    const used = new Set<string>();
     for (const m of src.matchAll(/\bclass(?:Name)?\s*=\s*"([^"]+)"/g)) {
       for (const c of (m[1] ?? '').split(/\s+/)) if (c) used.add(c);
     }
@@ -150,15 +185,92 @@ describe('admin.css keeps the hooks the markup renders', () => {
     for (const m of src.matchAll(/\.className\s*=\s*['"`]([^'"`]+)['"`]/g)) {
       for (const c of (m[1] ?? '').split(/\s+/)) if (c) used.add(c);
     }
+    return used;
   }
+
+  const usedBy = new Map(sources.map((file) => [file, classesIn(read(file))]));
+  const used = new Set([...usedBy.values()].flatMap((classes) => [...classes]));
+
+  // Who imports whom among these files, so a component's classes can be traced to the
+  // pages it renders on (through an island's re-export, a lazy import, the layout).
+  const known = new Set(sources);
+  function resolve(from: string, spec: string): string | null {
+    const base = spec.startsWith('@/')
+      ? `src/${spec.slice(2)}`
+      : spec.startsWith('.')
+        ? posix.join(posix.dirname(from), spec)
+        : null;
+    if (base === null) return null;
+    for (const ext of ['', '.ts', '.tsx', '.astro', '/index.ts']) {
+      if (known.has(base + ext)) return base + ext;
+    }
+    return null;
+  }
+  const importers = new Map<string, string[]>();
+  for (const file of sources) {
+    for (const m of read(file).matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)['"]([^'"]+)['"]/g)) {
+      const target = resolve(file, m[1] as string);
+      if (target) importers.set(target, [...(importers.get(target) ?? []), file]);
+    }
+  }
+  /** The admin pages a file renders on: itself when it is one, else every page above it. */
+  function pagesOf(file: string, seen = new Set<string>()): string[] {
+    if (seen.has(file)) return [];
+    seen.add(file);
+    if (file.startsWith('src/pages/admin/')) return [file];
+    return [...new Set((importers.get(file) ?? []).flatMap((up) => pagesOf(up, seen)))];
+  }
+  const linksSheet = (page: string, sheet: string) =>
+    (read(page).match(/\bstyles=\{\[([^\]]*)\]\}/)?.[1] ?? '').includes(`'${sheet}'`);
 
   it('finds the classes it checks', () => {
     expect(used.size).toBeGreaterThan(40);
   });
 
   it('styles every class an admin page, island or helper renders', () => {
-    const styled = new Set([...ADMIN.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]));
+    const styled = new Set(
+      [ADMIN, ...Object.values(SCREENS)].flatMap((css) => [...classesOf(css)]),
+    );
     const missing = [...used].filter((c) => !styled.has(c) && !UNSTYLED_HOOKS.has(c)).sort();
     expect(missing).toEqual([]);
+  });
+
+  describe('a class only a screen sheet styles renders only where that sheet is linked', () => {
+    const shared = classesOf(ADMIN);
+    /** Per sheet: each file rendering a class only that sheet styles, and those classes. */
+    const renderers: Record<string, { file: string; rendered: string[] }[]> = Object.fromEntries(
+      Object.entries(SCREENS).map(([sheet, css]) => {
+        const own = [...classesOf(css)].filter((c) => !shared.has(c));
+        const files = [...usedBy].flatMap(([file, classes]) => {
+          const rendered = own.filter((c) => classes.has(c));
+          return rendered.length > 0 ? [{ file, rendered }] : [];
+        });
+        return [sheet, files];
+      }),
+    );
+
+    it.each([...ADMIN_STYLESHEETS])('%s: every page that renders its classes links it', (sheet) => {
+      const problems: string[] = [];
+      for (const { file, rendered } of renderers[sheet] ?? []) {
+        const pages = pagesOf(file);
+        if (pages.length === 0) problems.push(`${file}: no admin page renders it`);
+        for (const page of pages) {
+          if (!linksSheet(page, sheet)) problems.push(`${page} renders ${rendered.join(', ')}`);
+        }
+      }
+      expect(problems).toEqual([]);
+    });
+
+    it('traces each sheet to the pages it serves (the walk is not vacuous)', () => {
+      const pagesFor = (sheet: string) =>
+        [...new Set((renderers[sheet] ?? []).flatMap(({ file }) => pagesOf(file)))].sort();
+      expect(pagesFor('insights.css')).toEqual([
+        'src/pages/admin/analytics/index.astro',
+        'src/pages/admin/analytics/search.astro',
+        'src/pages/admin/site-health.astro',
+      ]);
+      expect(pagesFor('login.css')).toEqual(['src/pages/admin/login.astro']);
+      expect(pagesFor('search.css')).toEqual(['src/pages/admin/search.astro']);
+    });
   });
 });

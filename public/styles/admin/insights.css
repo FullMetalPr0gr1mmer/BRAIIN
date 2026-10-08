@@ -1,0 +1,97 @@
+/* Screen stylesheet: the insight panels (website stats, search stats, site health:
+   /admin/analytics, /admin/analytics/search, /admin/site-health). Linked only through
+   AdminLayout's `styles` prop (styles={['insights.css']}), after admin.css, which holds
+   the cards, the tables and everything else these screens share.
+   It uses admin.css's tokens and declares none, and holds no colour literal
+   (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+/* ---- Bars (insight panels) ----
+   The width is a data-width bucket, never a style attribute: islands render on the
+   server first, and a React style prop becomes a style="" that style-src refuses. */
+
+.bar {
+  display: block;
+  inline-size: 8rem;
+  block-size: 8px;
+  background: var(--ad-bg);
+  border-radius: var(--ad-r-pill);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  block-size: 100%;
+  inline-size: 0;
+  background: var(--ad-primary);
+  border-radius: var(--ad-r-pill);
+}
+.bar-fill[data-width='0'] {
+  inline-size: 0%;
+}
+.bar-fill[data-width='5'] {
+  inline-size: 5%;
+}
+.bar-fill[data-width='10'] {
+  inline-size: 10%;
+}
+.bar-fill[data-width='15'] {
+  inline-size: 15%;
+}
+.bar-fill[data-width='20'] {
+  inline-size: 20%;
+}
+.bar-fill[data-width='25'] {
+  inline-size: 25%;
+}
+.bar-fill[data-width='30'] {
+  inline-size: 30%;
+}
+.bar-fill[data-width='35'] {
+  inline-size: 35%;
+}
+.bar-fill[data-width='40'] {
+  inline-size: 40%;
+}
+.bar-fill[data-width='45'] {
+  inline-size: 45%;
+}
+.bar-fill[data-width='50'] {
+  inline-size: 50%;
+}
+.bar-fill[data-width='55'] {
+  inline-size: 55%;
+}
+.bar-fill[data-width='60'] {
+  inline-size: 60%;
+}
+.bar-fill[data-width='65'] {
+  inline-size: 65%;
+}
+.bar-fill[data-width='70'] {
+  inline-size: 70%;
+}
+.bar-fill[data-width='75'] {
+  inline-size: 75%;
+}
+.bar-fill[data-width='80'] {
+  inline-size: 80%;
+}
+.bar-fill[data-width='85'] {
+  inline-size: 85%;
+}
+.bar-fill[data-width='90'] {
+  inline-size: 90%;
+}
+.bar-fill[data-width='95'] {
+  inline-size: 95%;
+}
+.bar-fill[data-width='100'] {
+  inline-size: 100%;
+}
+
+/* Forced colours drop backgrounds: the fill takes a system colour instead. */
+@media (forced-colors: active) {
+  .bar-fill {
+    background: Highlight;
+  }
+}

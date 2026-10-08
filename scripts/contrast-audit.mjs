@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 // WCAG 2.2 AA contrast gate (CLAUDE.md DoD #4 — "neon-on-dark passes AA"). Pure Node, no
 // browser: computes the contrast ratio for every foreground/background PAIR actually used
@@ -253,6 +253,16 @@ const PAIRS = [
 // (`var(--bs-klein, #0024bc)`: the admin does not load the public theme yet, so the
 // fallback is what renders), or `color-mix(in srgb, A p%, B)`.
 const ADMIN_CSS = readFileSync(new URL('../public/styles/admin.css', import.meta.url), 'utf8');
+
+// The screen stylesheets (public/styles/admin/*.css, Admin v2 W0) only USE these tokens:
+// one that declared its own would ship a colour this gate never reads, so it is refused
+// here (tests/lib/adminStyles.spec.ts also keeps colour literals out of them).
+const SCREEN_SHEETS = new URL('../public/styles/admin/', import.meta.url);
+for (const name of readdirSync(SCREEN_SHEETS).filter((f) => f.endsWith('.css'))) {
+  const css = readFileSync(new URL(name, SCREEN_SHEETS), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const token = /--ad-[\w-]+(?=\s*:)/.exec(css);
+  if (token) throw new Error(`admin/${name} declares ${token[0]}: tokens live in admin.css :root`);
+}
 
 function adminTokens(css = ADMIN_CSS) {
   const block = /:root\s*\{([\s\S]*?)\n\}/.exec(css.replace(/\/\*[\s\S]*?\*\//g, ''));
