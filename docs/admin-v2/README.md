@@ -15,6 +15,8 @@
 | [crm.md](crm.md) | Track CRM design: leads v2, contacts, tasks, the Sales role (CRM-1 to CRM-14) |
 | [verification.md](verification.md) | The adversarial review of the three designs, claim by claim |
 | [deviations.md](deviations.md) | The deviations register and the client's TDD checked row by row |
+| [migrations.md](migrations.md) | The migration ledger: what production has applied, the numbers reserved per wave, the rules, and how a migration reaches production |
+| [as-built/](as-built/) | One file per merged slice: where it departs from its design, and why (index under "As built") |
 
 ## Context
 
@@ -155,7 +157,7 @@ The TDD's *product* requirements are the spec. Its *stack* suggestions are mappe
   - no em or en dashes;
   - the brand is never spelled out — it comes from `site_profile` (§1);
   - Arabic content digits are never transformed (round-trip test).
-- **P-13** Migrations take the next free number at branch time (0030 is next). `ALTER TYPE app_role ADD VALUE 'sales'` sits alone in its own file. Prod DB pushes and merges are owner-gated: one branch + PR per slice, CI green, Claude never merges.
+- **P-13** Migrations take the number reserved for them in [migrations.md](migrations.md), per wave in planned merge order. `ALTER TYPE app_role ADD VALUE 'sales'` sits alone in its own file. Prod DB pushes and merges are owner-gated: one branch + PR per slice, CI green, Claude never merges.
 - **P-14 Grants under both Supabase regimes.** From 2026-10-30, Supabase stops auto-granting new tables in existing projects. Every new table and function therefore gets:
   - `revoke all … from public, anon, authenticated` plus exact grants, **including `service_role`**;
   - postconditions that check what must and must not be granted;
@@ -185,7 +187,7 @@ The TDD's *product* requirements are the spec. Its *stack* suggestions are mappe
   - a skip link;
   - a **zero-JS popover sidebar below 900px** (under `@supports selector(:popover-open)`, plus a `matchMedia` → `hidePopover` handler);
   - browser floor Chrome/Edge 117, Firefox 129, Safari 17.5.
-- **IA** (`nav.ts` stays derived from `ROLE_CAPS`; retired routes 302):
+- **IA** (`nav/` stays derived from `ROLE_CAPS`; retired routes 302):
 
   | Group | Items |
   |---|---|
@@ -465,6 +467,32 @@ the bracketed ids in the slice tables above are the design slices each program s
 | CRM-1 to CRM-14 | C1 to C14, same numbers; C15 (CSV import) and C16 (contact files) are new |
 | (none) | U15 (GA4), U16 (help centre), U17 (2FA), E8 to E10, E13, G1, G2: added under A6 or by the verification |
 
+## Wave 0: the shared files, split
+
+Before the three lanes run in parallel, Wave 0 (W0-a to W0-d, each with its file under "As
+built") split the files every slice would otherwise edit, so a later slice mostly adds a file.
+The designs were written before it, so the file lists in [ui.md](ui.md),
+[releases.md](releases.md) and [crm.md](crm.md) name the old places. Wave 0 moved these, and
+where a design names the old place, the new one wins:
+
+| Before Wave 0 | Since Wave 0 |
+|---|---|
+| `src/lib/admin/nav.ts` | `src/lib/admin/nav/<area>.ts`, composed in `nav/index.ts` |
+| `src/lib/admin/resources.ts` | `src/lib/admin/resources/<entity>.ts` |
+| `src/lib/admin/uiSchema.ts` | `src/lib/admin/ui/<entity>.ts` (`uiSchema.ts` is a re-export) |
+| the nine legacy panels in `src/components/admin/` | `src/components/admin/screens/<name>/`, each hydrated through its `islands/Admin*.tsx` entry |
+| the shell's `COUNTERS` (`shell.ts`) | `src/lib/admin/counters/` |
+| a screen's own CSS in `admin.css` | `public/styles/admin/<screen>.css`, listed in `src/lib/admin/stylesheets.ts` |
+| rows in `tests/authz/endpoints.spec.ts` | `tests/authz/cases/<feature>.ts`, each case named in `tests/authz/caseManifest.ts` |
+| steps in `src/lib/cron/daily.ts` | entries in `src/lib/cron/jobs.ts` |
+| a public loader calling `anonClient()` | `contentClient()` (`src/lib/data/source.ts`) |
+
+**Open: the F0 harness extension.** Planned for Wave 0, built by no slice. The per-role sweep
+opens an edit screen on the first row of `GET /api/admin/<segment>`, and
+`tests/lib/adminRoutes.spec.ts` requires that segment to be a resource config. An edit screen
+with no resource config (C4's `/admin/leads/[id]`, the page editor) therefore needs a declared
+way to find a sample id, and the first slice that adds one builds it.
+
 ## Remaining deviations
 
 The register of every place the build deliberately differs from the prototype, with the
@@ -541,7 +569,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
   - **UI tables**: prefs, help, faq, site_appearance, page_visibility, media provider and anon read, template_copy.
   - Grants postconditions hold under both privilege regimes.
 - **Authz**:
-  - `endpoints.spec` rows for every new route (it iterates `ROLES`);
+  - every new route's cases in its feature's module, `tests/authz/cases/<feature>.ts`, each named in `tests/authz/caseManifest.ts` (`endpoints.spec` runs them over `ROLES`; `endpointCoverage.spec` fails on a route without one);
   - `matrix.spec`: 5 roles / 37 caps, also parsing architecture §3.4;
   - `releaseMatrix.spec`;
   - `sqlHelpers.spec`.
@@ -641,13 +669,40 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
 
 ## As built
 
-Each slice PR adds a line here when its implementation departs from the design it builds,
-so the designs stay readable as the reasoning and this list stays the truth.
+Each slice records where its implementation departs from the design it builds, and why, in
+its own file under [as-built/](as-built/), so the designs stay readable as the reasoning and
+those files stay the truth. A slice's PR adds its file and one line below, under its lane,
+and moves any migration it carries to "Applied" in [migrations.md](migrations.md) once
+production has applied it, so nothing is edited after the merge; a new file's header names its
+PR, not the merge commit, which does not exist yet. Most hotfixes found after this document
+was written (H5 onward) have no design to depart from, so their files record what was built
+and why; H6 pulls part of R1 forward and records its departures from it.
 
-| Slice | PR | Departure from the design, and why |
-|---|---|---|
-| F0 | #34 | One `admin-setup` project and one `admin` project with a `describe` per role (`test.use({ storageState })`) instead of a project per role: one spec covers every role and the role shows in each test title. Staff accounts are created inside the setup (`tests/admin/staff.ts`), not by a separate script, and guarded by a **loopback** Supabase URL and preview rather than `app.deployment`, which no API role can read (0016) and which would not exclude staging. The preview's build must also name that same Supabase (astro:env inlines it, so a local preview built from a `.env` naming a hosted project would sign in there), and in CI the setup fails rather than skip. One visit per screen runs the sweep, CSP and axe checks together (`tests/admin/sweep.e2e.ts`) instead of three suites. The admin capture lives in `tests/admin/capture.e2e.ts` because it needs the saved sessions. No axe baseline: the first run found zero violations on every admin screen, so the admin is held to zero like the public routes. That run found two live defects, fixed in F0: Tiptap's runtime `<style>` (refused by the CSP on every editor screen; `injectCSS: false`, its rules moved to admin.css) and the header search failing on Team & authors and Certifications (ilike on a jsonb column). |
-| F1 | #35 | The sidebar stays in the page flow, full height by stretch: fixed or sticky comes with F2's shell (a sticky 100vh sidebar also made full-page captures read as a short sidebar). Grid modifiers (`.grid--2/--3/...` on container queries) move to F4, where the first layout needs them: no CSS ships without markup to check it against. The prototype's card anatomy (`card__h/__b/__f`) is not introduced: a card's first `.card-title` renders as the header band and `.card:has(> .stat)` as the KPI (label above the figure). Badges gain `data-tone`; `data-status` maps the lifecycle (published ok, draft warn, scheduled sky, archived gray), and the three islands that borrowed lifecycle states for alarms now use tones (over budget and locked err, not virus-scanned warn, you klein). Inputs keep an outline focus and the `--ad-control` edge rather than the prototype's shadow ring and 1.36:1 line. The contrast gate parses admin.css's token block instead of a copied palette, and the dormant dark palette is deleted. The prototype has 77 icons, not about 78. Sign-in keeps its layout until F7. |
-| F2 | #37 | Built on today's routes only. A screen the prototype folds into an area (Disciplines, Case studies, Sectors, Categories, Sections, Search analytics, System logs, Maintenance, Redirects, Style-Finder's Styles and Results) is a **tab** in its area's page head and lights the area's link (`match`); the retired-route redirects arrive with the slices that build their replacements, so no link points at a page that does not exist yet. FAQ, Header, Footer, Loading screen, Forms, Notifications and Backups join the menu with their slices; the navigation editor sits under Appearance as "Menus" until E5's Header. No migration: the environment pill (`admin_environment()` over `app.deployment`) waits for the first slice that ships one. The topbar has no bell (F8), help (U16) or ⌘K hint (F3) yet. The account menu (with Sign out) moves to a `<details>` user chip at the sidebar foot until F8's account drawer. Counts: new leads and new applications; Site health's open-issues count waits for a definition. The sidebar column runs the full page height and its inner block sticks, rather than a fixed shell with internal scrolling. The popover sidebar has no `@supports selector(:popover-open)` guard: every browser on the floor (Chrome/Edge 117, Firefox 129, Safari 17.5) ships the popover API, so the guard could never be false. |
-| F3 | #39 | The generic Modal and Drawer and the `[data-confirm]` enhancer for server forms move to F4 with their first screens (no kit without a consumer); the palette is its own native `<dialog>`. `confirm.ts` needed no change (already a native dialog with Cancel first, restyled in F1). The palette search's jsonb fix shipped in F0. Quick actions open the existing create routes (`/admin/services/new`), so no intent parameters were needed. The shortcut hint renders "Ctrl K" and reads "⌘K" on a Mac after hydration. Toasts get the prototype's icon (check or info, from the sprite) in place of F1's dot. The bare "/" shortcut is dropped (WCAG 2.1.4, Level A: a one-character shortcut must be switchable off or remappable); ⌘/Ctrl+K and the trigger remain. |
-| F4a | #40 | F4 is split. **F4a** is the bundle plan: priority-ordered `codeSplitting` groups, the rich-text editor lazy, a per-screen eager-graph gate (`scripts/admin-bundle.mjs`, run by `npm run size`). Measured: every admin screen 225.5 → 103.9 KB gz eager, the sign-in script 168.4 → 2.2 KB, the editor 122.2 KB on demand. Its first run caught Vite's preload helper captured into `admin-ui` and imported by the public RUM script, now a neutral chunk. The size-limit sum stays the tripwire (O-15 decides whether the per-screen measure replaces it). The kit's primitives (Kpi, charts, DataTable, Sortable…) land with their first screens rather than ahead of them, the rule F1 and F3 followed: charts and KPIs with Website stats (U2), DataTable and Sortable with the first list that needs them. The groups keep Rolldown's default `includeDependenciesRecursively: true`, not P-10's `false`: Rolldown's own docs pair `false` with `strictExecutionOrder` and relaxed entry signatures to avoid invalid chunks, and with `false` a dependency no group names (zod, the schemas) would land in an anonymously named chunk that `.size-limit.json` weighs as public. So a group takes its modules' dependencies too, the groups' priority order decides where a shared module lands, and `scripts/admin-bundle.mjs` checks the outcome on every build. |
+**UI**
+- [F0](as-built/F0.md): harness and CI (#34)
+- [F1](as-built/F1.md): the design system (#35, folded into #34)
+- [F2](as-built/F2.md): the shell and the information architecture (#37, folded into #34)
+- [F3](as-built/F3.md): overlays, toasts and the command palette (#39, folded into #34)
+- [F4a](as-built/F4a.md): the admin bundle plan (#40, folded into #34)
+
+**Releases**
+- none yet
+
+**CRM**
+- [C1a-1](as-built/C1a-1.md): lead personal data at the database layer, 0033 (#43)
+- [C1a-2](as-built/C1a-2.md): the pipeline, spam horizon, timeline and notes thread, 0034 (#45)
+- [C1b](as-built/C1b.md): how a lead arrives, 0035 (#46, folded into #45)
+- [C2a](as-built/C2a.md): reading the pipeline, 0036 (#47, folded into #45)
+- [C2b](as-built/C2b.md): one lead: the reveal, the notes thread, the timeline (#48, folded into #45)
+
+**Hotfixes**
+- [H5](as-built/H5.md): the audit chain is serialized, 0031 (#36)
+- [H6](as-built/H6.md): history rows are written by the snapshot trigger only, 0032 (#42)
+- [H7](as-built/H7.md): a singleton's first save is accepted (#50)
+- [H8](as-built/H8.md): RLS on every telemetry partition, SELECT only where staff only read, 0037 (#51)
+
+**Wave 0**
+- [W0-a](as-built/W0-a.md): CLAUDE.md §8 in bullets with one lane per track, the as-built files, the migration ledger, the runbook's rollback floor
+- [W0-b](as-built/W0-b.md): endpoint cases per feature, the route coverage check, the renumber script
+- [W0-c](as-built/W0-c.md): the admin registries, the screen stylesheets, the `Admin*` islands
+- [W0-d](as-built/W0-d.md): the `contentClient()` seam and the cron job registry
