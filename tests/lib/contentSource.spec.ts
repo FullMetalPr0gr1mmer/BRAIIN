@@ -3,7 +3,15 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { contentClient } from '@/lib/data/source';
 import { anonClient } from '@/lib/supabase/client';
-import { chainRoot, lineOf, nodesOf, scanSource, scanTree, type ScannedFile } from './sourceScan';
+import {
+  chainRoot,
+  insideFunction,
+  lineOf,
+  nodesOf,
+  scanSource,
+  scanTree,
+  type ScannedFile,
+} from './sourceScan';
 
 // The content seam (src/lib/data/source.ts): every public content loader gets its Supabase
 // client from contentClient(), so the releases preview (R8, docs/admin-v2/releases.md §6.3)
@@ -119,6 +127,57 @@ const offSeam = (ast: ts.SourceFile): number[] =>
     .filter((q) => !isSeamCall(q.root))
     .map((q) => q.line);
 
+/** Lines where contentClient() runs as its module loads, so one client would be kept. */
+const atModuleLoad = (ast: ts.SourceFile): number[] =>
+  nodesOf(ast)
+    .filter((node) => isSeamCall(node) && !insideFunction(node))
+    .map(lineOf);
+
+/**
+ * Lines where a builder made from contentClient() (directly, or through a variable such as
+ * `let query = contentClient().from(…)`) is handed a callback instead of being awaited.
+ */
+function builderCallbacks(ast: ts.SourceFile): number[] {
+  const nodes = nodesOf(ast);
+  const builders = new Set<string>();
+  const isBuilder = (e: ts.Expression): boolean => {
+    const root = chainRoot(e);
+    return isSeamCall(root) || (ts.isIdentifier(root) && builders.has(root.text));
+  };
+  // Grows until stable: `query = query.eq(…)` keeps a builder a builder.
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const node of nodes) {
+      let name: string | null = null;
+      let value: ts.Expression | undefined;
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+        name = node.name.text;
+        value = node.initializer;
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(node.left)
+      ) {
+        name = node.left.text;
+        value = node.right;
+      }
+      if (name !== null && value && !builders.has(name) && isBuilder(value)) {
+        builders.add(name);
+        grew = true;
+      }
+    }
+  }
+  return nodes
+    .filter(
+      (node) =>
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        ['then', 'catch', 'finally'].includes(node.expression.name.text) &&
+        isBuilder(node.expression.expression),
+    )
+    .map(lineOf);
+}
+
 const parsed = (list: ScannedFile[]) =>
   list.flatMap((f) => (f.ast ? [{ path: f.path, ast: f.ast }] : []));
 const where = (path: string, lines: number[]) => lines.map((line) => `${path}:${line}`);
@@ -162,6 +221,16 @@ describe('the content seam', () => {
       .map((f) => f.path)
       .sort();
     expect(serviceRole).toEqual(Object.keys(SERVICE_ROLE_SINKS).sort());
+  });
+
+  it('is looked up as each query is built: never at module load, never in a builder callback', () => {
+    // The preview's AsyncLocalStorage scope (R8) is not fully carried into a thenable's
+    // then(), and a supabase-js builder is one; source.ts has the whole rule.
+    const breaks = parsed(files.filter((f) => f.names.has('contentClient'))).flatMap((f) => [
+      ...where(f.path, atModuleLoad(f.ast)),
+      ...where(f.path, builderCallbacks(f.ast)),
+    ]);
+    expect(breaks).toEqual([]);
   });
 });
 
@@ -212,19 +281,25 @@ describe('the scan behind these rules (tests/lib/sourceScan.ts)', () => {
     expect(page.names.has('anonClient')).toBe(true);
   });
 
-  it('catches a query built on anything but contentClient()', () => {
+  it('catches a query off the seam, a lookup at module load and a builder callback', () => {
     const { ast } = scan(
       'src/lib/data/fixture.ts',
-      'const kept = [1];',
+      'const kept = contentClient();',
       'export async function load() {',
       '  const sb = contentClient();',
       "  await sb.from('services').select('id');",
       "  await createClient(URL, KEY).from('services').select('id');",
       "  await contentClient().storage.from('media').list();",
-      "  await contentClient().rpc('search_content', {});",
+      "  let query = contentClient().from('team_members').select('id');",
+      "  query = query.eq('status', 'published');",
+      '  await query.then((r) => r);',
+      "  await contentClient().rpc('search_content', {}).then((r) => r);",
+      "  await Promise.resolve(1).then(() => contentClient().from('pages'));",
       '  return Array.from([kept]);',
       '}',
     );
     expect(offSeam(ast!)).toEqual([4, 5]);
+    expect(atModuleLoad(ast!)).toEqual([1]);
+    expect(builderCallbacks(ast!)).toEqual([9, 10]);
   });
 });
