@@ -51,8 +51,8 @@ PR lands and nothing here is edited after a merge.
    W0-b) is the helper. The script leaves the Reserved rows here as they are (they are lines
    from `main`), so the slice moves its own row by hand, and it never takes a number reserved
    here for another slice: it takes the lowest number above `main`'s highest that no other
-   slice holds (the script lists this file's lines that name the old number, and flags a new
-   number reserved here). Once a file is on `main`, its number is fixed.
+   slice holds (the script lists this file's lines that name the old number, and skips any
+   number reserved here for another slice, printing which slice holds it). Once a file is on `main`, its number is fixed.
 4. **`ALTER TYPE app_role ADD VALUE 'sales'` sits alone in its file** (C10a's first
    migration). A new enum value cannot be used in the transaction that adds it (55P04), so
    every use of `sales` goes in a later file.
