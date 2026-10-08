@@ -24,13 +24,14 @@ const HANDLERS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'A
 const NOT_DRIVABLE: Readonly<Record<string, string>> = {
   'POST /api/admin/auth/login':
     'Sign-in is reached without a session (the middleware exempts this one path) and checks ' +
-    'no capability, so the matrix row "anon → 403" cannot hold. Its guards (same-origin and ' +
-    'CSRF, the generic 401, the 423 lockout) run through the real form in ' +
-    'tests/admin/staff.setup.ts (CI).',
+    'no capability, so the matrix row "anon → 403" cannot hold. tests/authz/login.spec.ts ' +
+    'drives its guards instead: the middleware refusing a cross-site or tokenless POST, the ' +
+    'one generic 401 for every failure, and the 423 lockout (fail-closed included) over a ' +
+    'stubbed lockout store. The counting itself is SQL (0009) with no pgTAP test yet.',
   'POST /api/admin/auth/logout':
     'Sign-out needs a session, not a capability: every role may sign out, and the session ' +
-    'gate is src/middleware.ts (401 before the handler, which this suite invokes directly). ' +
-    'There is no role to deny.',
+    'gate is src/middleware.ts (401 before the handler, which this suite invokes directly; ' +
+    'tests/authz/login.spec.ts drives that 401). There is no role to deny.',
 };
 
 /** '/src/pages/api/admin/leads/[id]/notes.ts' → '/api/admin/leads/[id]/notes'. */
