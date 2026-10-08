@@ -98,7 +98,11 @@ jobs:
           npx wrangler kv key put site:redirects
           '{"/e2e-old":{"to":"/about","status":301},"/e2e-temp":{"to":"/contact?from=e2e","status":302},"/e2e-anchor":{"to":"/services#e2e","status":308},"/api/e2e-old":{"to":"/about","status":301}}'
           --binding SESSION --local --preview
+      # 22-132 s normally. A stalled download once held this step for 94 min (2026-10-07, on
+      # the old pipeline, no job timeout); the cap fails it fast, so the re-run (runbook §5b)
+      # starts long before the job's 30 minutes run out and the merge queue moves again.
       - name: Install Playwright Chromium
+        timeout-minutes: 10
         run: npx playwright install --with-deps chromium
       - name: Start preview (wrangler dev)
         run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env &
