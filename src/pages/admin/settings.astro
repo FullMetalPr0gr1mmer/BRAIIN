@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import SingletonForm from '@/components/admin/SingletonForm';
+import AdminSingletonForm from '@/components/admin/islands/AdminSingletonForm';
 
 export const prerender = false;
 ---
@@ -9,6 +9,6 @@ export const prerender = false;
   title="General settings"
   subtitle="Public identity, technical keys and data-retention horizons. Integrations and maintenance have their own screens."
 >
-  <SingletonForm client:load config="profile" />
-  <SingletonForm client:load config="settings" />
+  <AdminSingletonForm client:load config="profile" />
+  <AdminSingletonForm client:load config="settings" />
 </AdminLayout>

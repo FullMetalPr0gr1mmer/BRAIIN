@@ -20,35 +20,57 @@ import {
 // visits what a role should be able to use; these checks make "should" mean what the
 // server enforces, so a sweep that passes cannot be passing on screens the API refuses.
 
-/** Admin URL segment → the resource config its API routes are built from. */
-const RESOURCE_BY_SEGMENT: Record<string, { config: ResourceConfig; exportName: string }> = {
-  'ai-questions': { config: resources.aiQuestionResource, exportName: 'aiQuestionResource' },
-  'ai-styles': { config: resources.aiStyleResource, exportName: 'aiStyleResource' },
-  blog: { config: resources.postResource, exportName: 'postResource' },
-  categories: { config: resources.categoryResource, exportName: 'categoryResource' },
-  certifications: { config: resources.certificationResource, exportName: 'certificationResource' },
-  clients: { config: resources.clientResource, exportName: 'clientResource' },
-  disciplines: { config: resources.disciplineResource, exportName: 'disciplineResource' },
-  media: { config: resources.mediaResource, exportName: 'mediaResource' },
-  navigation: { config: resources.navigationResource, exportName: 'navigationResource' },
-  pages: { config: resources.pageResource, exportName: 'pageResource' },
-  portfolio: { config: resources.portfolioResource, exportName: 'portfolioResource' },
-  redirects: { config: resources.redirectResource, exportName: 'redirectResource' },
-  sections: { config: resources.sectionResource, exportName: 'sectionResource' },
-  sectors: { config: resources.sectorResource, exportName: 'sectorResource' },
-  'service-cases': { config: resources.serviceCaseResource, exportName: 'serviceCaseResource' },
-  services: { config: resources.serviceResource, exportName: 'serviceResource' },
-  statistics: { config: resources.statisticResource, exportName: 'statisticResource' },
-  team: { config: resources.teamResource, exportName: 'teamResource' },
-  testimonials: { config: resources.testimonialResource, exportName: 'testimonialResource' },
-  themes: { config: resources.themeResource, exportName: 'themeResource' },
-};
+/** The name the API routes import a registered config by (`export const xResource`). */
+function exportNameOf(config: ResourceConfig): string {
+  const name = Object.entries(resources).find(
+    ([key, value]) => key !== 'RESOURCES' && value === config,
+  )?.[0];
+  if (!name) throw new Error(`${config.table}: registered, but not exported by name`);
+  return name;
+}
+
+/** Admin URL segment → the resource config its API routes are built from (the registry). */
+const RESOURCE_BY_SEGMENT: Record<string, { config: ResourceConfig; exportName: string }> =
+  Object.fromEntries(
+    Object.entries(resources.RESOURCES).map(([segment, config]) => [
+      segment,
+      { config, exportName: exportNameOf(config) },
+    ]),
+  );
+
+/** Pinned, not derived: a segment dropped from the registry must fail, not go unchecked. */
+const SEGMENTS = [
+  'ai-questions',
+  'ai-styles',
+  'blog',
+  'categories',
+  'certifications',
+  'clients',
+  'disciplines',
+  'media',
+  'navigation',
+  'pages',
+  'portfolio',
+  'redirects',
+  'sections',
+  'sectors',
+  'service-cases',
+  'services',
+  'statistics',
+  'team',
+  'testimonials',
+  'themes',
+];
 
 const segmentOf = (pattern: string) => pattern.split('/')[2] ?? '';
 const holds = (role: Role, cap: Capability, access: readonly string[]) =>
   access.includes(ROLE_CAPS[role][cap]);
 
 describe('the sweep route map', () => {
+  it('maps exactly the pinned resource segments', () => {
+    expect(Object.keys(RESOURCE_BY_SEGMENT).sort()).toEqual(SEGMENTS);
+  });
+
   it('every route resolves to a page file', () => {
     for (const role of ROLES) {
       for (const route of sweepRoutes(role)) {
@@ -187,8 +209,8 @@ describe('the locked screens the refusals e2e opens', () => {
 
 // Each role's sidebar, written out from the CLAUDE.md §5 matrix rather than computed: the
 // sweep holds the sidebar the server renders to expectedSidebar(), so expectedSidebar()
-// needs an oracle that is not nav.ts itself. A capability or menu change that alters what
-// a role sees has to be made here too, on purpose.
+// needs an oracle that is not the menu (src/lib/admin/nav) itself. A capability or menu
+// change that alters what a role sees has to be made here too, on purpose.
 const SIDEBAR: Record<Role, Record<string, string[]>> = {
   admin: {
     Overview: ['Dashboard /admin'],

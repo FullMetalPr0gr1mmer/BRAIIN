@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import ResourceForm from '@/components/admin/ResourceForm';
+import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
 import { uiFor } from '@/lib/admin/uiSchema';
 
 export const prerender = false;
@@ -9,5 +9,5 @@ const ui = uiFor('service-cases');
 ---
 
 <AdminLayout title={`New ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <ResourceForm client:load resource="service-cases" id={null} />
+  <AdminResourceForm client:load resource="service-cases" id={null} />
 </AdminLayout>

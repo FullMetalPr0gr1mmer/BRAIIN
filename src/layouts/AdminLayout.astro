@@ -9,6 +9,7 @@ import Topbar from '@/components/admin/ui/Topbar.astro';
 import PageHead from '@/components/admin/ui/PageHead.astro';
 import AdminChrome from '@/components/admin/islands/AdminChrome';
 import { paletteGroupsFor } from '@/lib/admin/paletteSources';
+import type { AdminStylesheet } from '@/lib/admin/stylesheets';
 
 // Tier C shell (CLAUDE.md §2): on-demand, `private, no-store` (set in middleware),
 // never indexable. Deliberately NOT built on BaseLayout — that one carries <SeoHead>,
@@ -27,9 +28,13 @@ interface Props {
   subtitle?: string | undefined;
   /** `bare` drops the shell — used by the login screen, which has no session yet. */
   layout?: 'app' | 'bare' | undefined;
+  /** Screen stylesheets under /styles/admin/, linked after admin.css: what only this
+      screen renders (src/lib/admin/stylesheets.ts). A known name, never a URL — the sheet
+      is same-origin, so the CSP's `style-src 'self'` covers it with no nonce. */
+  styles?: readonly AdminStylesheet[] | undefined;
 }
 
-const { title, subtitle, layout = 'app' } = Astro.props;
+const { title, subtitle, layout = 'app', styles = [] } = Astro.props;
 const session = Astro.locals.session;
 const supabase = Astro.locals.supabase;
 const nav = session ? visibleNav(session.role) : [];
@@ -62,6 +67,7 @@ const initials = session ? initialsOf(shell.displayName, session.email) : '';
     -->
     <meta name="robots" content="noindex,nofollow,noarchive,nosnippet" />
     <link rel="stylesheet" href="/styles/admin.css" />
+    {styles.map((sheet) => <link rel="stylesheet" href={`/styles/admin/${sheet}`} />)}
     <!--
       The CSRF token reaches the client in a meta tag rather than an inline script:
       `script-src` carries no 'unsafe-inline', so an inline bootstrap would simply be

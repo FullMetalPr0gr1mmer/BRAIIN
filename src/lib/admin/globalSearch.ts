@@ -39,7 +39,7 @@ import {
 //     and audit trail; surfacing lead names in a cross-entity search box would create
 //     a second, less-guarded read path — the exact thing §5's column gates exist to
 //     prevent. The leads page has its own search.
-//   - Per-entity capability gating uses the SAME rule as the sidebar (nav.ts): any of
+//   - Per-entity capability gating uses the SAME rule as the sidebar (nav/): any of
 //     the resource's read caps at full/view/meta. RLS does NOT back it up here: most
 //     searched tables are readable by every staff role (services_read, redirects_read,
 //     custom_themes_read, testimonials_read… allow app.is_staff()), so canRead() alone

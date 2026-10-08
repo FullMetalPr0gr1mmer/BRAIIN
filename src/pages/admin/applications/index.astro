@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import ApplicationsPanel from '@/components/admin/ApplicationsPanel';
+import AdminApplications from '@/components/admin/islands/AdminApplications';
 import { can } from '@/lib/authz/matrix';
 
 export const prerender = false;
@@ -15,5 +15,5 @@ const canSeePii = can(role, 'applications.pii') === 'full';
   title="Job applications"
   subtitle="From the Join page. Contact details are encrypted; revealing them or downloading a CV is logged against your account."
 >
-  <ApplicationsPanel client:load canSeePii={canSeePii} />
+  <AdminApplications client:load canSeePii={canSeePii} />
 </AdminLayout>

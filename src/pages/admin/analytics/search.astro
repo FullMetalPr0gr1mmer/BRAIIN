@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import InsightsPanel from '@/components/admin/InsightsPanel';
+import AdminInsights from '@/components/admin/islands/AdminInsights';
 
 export const prerender = false;
 ---
@@ -9,5 +9,5 @@ export const prerender = false;
   title="Search analytics"
   subtitle="What visitors looked for, and what they failed to find."
 >
-  <InsightsPanel client:load mode="search" />
+  <AdminInsights client:load mode="search" />
 </AdminLayout>
