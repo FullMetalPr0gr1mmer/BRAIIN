@@ -1,5 +1,5 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // Static rules for admin code (Admin v2 F0). They hold for every admin slice that follows,
@@ -20,6 +20,12 @@ import { describe, expect, it } from 'vitest';
 //                                  src/components/admin/islands, F3), or its chunk would be
 //                                  weighed against the public 100 KB budget. The pre-F1
 //                                  islands took that shape in W0; none is listed by name.
+//   a registry folder owns its     `@/lib/admin/nav` resolves to nav.ts before nav/index.ts,
+//   name                           in TypeScript and in Vite alike: a module recreated
+//                                  beside a W0 registry folder would take its imports.
+//   the standard names admin       CLAUDE.md is what a slice reads first, so an admin path
+//   files that exist               it names that a refactor moved (W0's nav.ts) sends the
+//                                  slice to recreate the old file.
 
 const ROOT = process.cwd();
 
@@ -176,5 +182,76 @@ describe('hydrated admin islands are weighed by the admin budget', () => {
       '!dist/client/_astro/Admin*.js',
       '!dist/client/_astro/login.astro_*.js',
     ]);
+  });
+});
+
+describe('a registry folder is not shadowed by a module of its name', () => {
+  // A folder an import names bare resolves to its index.ts only when no `<name>.ts` (or
+  // .tsx, .js…) sits beside it: the file wins, in TypeScript and in Vite. A slice that
+  // recreated a pre-W0 module (src/lib/admin/nav.ts, resources.ts) would compile against
+  // the old file and leave the registry unread.
+  function folders(dir: string): string[] {
+    return readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name);
+      return statSync(path).isDirectory() ? [path, ...folders(path)] : [];
+    });
+  }
+  const registries = ['src/lib/admin', 'src/components/admin']
+    .flatMap((base) => folders(join(ROOT, base)))
+    .filter((dir) => existsSync(join(dir, 'index.ts')) || existsSync(join(dir, 'index.tsx')));
+
+  it('finds the W0 registries', () => {
+    expect(registries.map(rel)).toEqual(
+      expect.arrayContaining([
+        'src/lib/admin/counters',
+        'src/lib/admin/nav',
+        'src/lib/admin/resources',
+        'src/lib/admin/ui',
+      ]),
+    );
+  });
+
+  it('no module beside one has its name', () => {
+    const shadows = registries.flatMap((dir) =>
+      readdirSync(dirname(dir))
+        .filter((file) => file !== basename(dir) && file.replace(/\.[^.]+$/, '') === basename(dir))
+        .map((file) => rel(join(dirname(dir), file))),
+    );
+    expect(shadows).toEqual([]);
+  });
+});
+
+describe('the standard names admin files that exist', () => {
+  // Every code span in CLAUDE.md that names a path in the admin lane. A placeholder or a
+  // glob (`<entity>`, `Admin*`, `**`) is checked up to the folder that holds it.
+  const ADMIN_PATH =
+    /^(?:src\/(?:lib|components|pages|pages\/api)\/admin|src\/layouts\/Admin|public\/styles\/admin|tests\/(?:lib\/admin|admin\/))/;
+  const named = [
+    ...new Set(
+      [...read(join(ROOT, 'CLAUDE.md')).matchAll(/`([^`\s]+)`/g)]
+        .map((m) => m[1] as string)
+        .filter((span) => ADMIN_PATH.test(span)),
+    ),
+  ];
+  /** The part of a named path that must exist: all of it, or the folder before a wildcard. */
+  const concrete = (path: string) => {
+    const wild = path.search(/[<*{[]/);
+    return wild === -1 ? path : path.slice(0, path.lastIndexOf('/', wild) + 1);
+  };
+
+  it('finds the paths it checks', () => {
+    expect(named).toEqual(
+      expect.arrayContaining([
+        'src/lib/admin/nav/',
+        'src/lib/admin/counters/',
+        'src/lib/admin/shell.ts',
+        'src/components/admin/islands/Admin*.tsx',
+      ]),
+    );
+    expect(concrete('src/lib/admin/resources/<entity>.ts')).toBe('src/lib/admin/resources/');
+  });
+
+  it('every one exists', () => {
+    expect(named.filter((path) => !existsSync(join(ROOT, concrete(path))))).toEqual([]);
   });
 });
