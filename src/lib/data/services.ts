@@ -9,10 +9,11 @@ import {
   type ValuePoint,
 } from '@schemas/content';
 import type { VideoClip } from '@schemas/media';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { clipOf, imageRef, type ImageRef } from '@/lib/media/resolve';
 import { parseRow, parseRows, reportLoadError } from './parse';
 import { renderBody } from './portfolio';
+import { contentClient } from './source';
 
 // Runtime data access for the public services (Tier A SSR). Tenant + published
 // filtering are enforced by RLS; we still pass status explicitly. Shape + validation live
@@ -113,7 +114,7 @@ export function toServiceDetail(row: ServiceDetailRow): ServiceDetail {
 export async function loadPublishedServiceRows(): Promise<ServiceRow[] | null> {
   if (!supabaseConfigured()) return null;
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('services')
       .select(SERVICE_COLUMNS)
       .eq('status', 'published')
@@ -137,7 +138,7 @@ export async function getPublishedServices(): Promise<ServiceRow[]> {
 export async function getServiceBySlug(slug: string): Promise<ServiceDetailRow | null> {
   if (!supabaseConfigured()) return null;
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('services')
       .select(SERVICE_DETAIL_COLUMNS)
       .eq('status', 'published')
