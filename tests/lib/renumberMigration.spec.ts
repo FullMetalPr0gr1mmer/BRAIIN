@@ -409,15 +409,16 @@ function throwaway(prefix: string) {
   const repo = mkdtempSync(join(tmpdir(), prefix));
   const config = `${repo}.gitconfig`;
   writeFileSync(config, '');
-  const env: NodeJS.ProcessEnv = {
-    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))),
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const key of Object.keys(env)) if (/^GIT_/i.test(key)) delete env[key];
+  Object.assign(env, {
     GIT_CONFIG_GLOBAL: config,
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_AUTHOR_NAME: 'Test',
     GIT_AUTHOR_EMAIL: 'test@example.test',
     GIT_COMMITTER_NAME: 'Test',
     GIT_COMMITTER_EMAIL: 'test@example.test',
-  };
+  });
   const git = (...args: string[]) =>
     execFileSync('git', args, { cwd: repo, env, encoding: 'utf8' });
   return {
