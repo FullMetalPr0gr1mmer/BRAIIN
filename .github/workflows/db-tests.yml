@@ -4,17 +4,20 @@ name: DB tests (RLS / pgTAP)
 # supabase/migrations, and runs the pgTAP RLS suite in supabase/tests/. Covers the DoD
 # per-role authz requirement (CLAUDE.md §9).
 #
-# PROMOTED 2026-08-01 from `workflow_dispatch` to push/PR. It had been staged "until
-# validated against the provisioned project" — a precondition met when the project was
-# provisioned, but nothing was watching for that, so the suite sat at ZERO runs, ever.
-# That is how a missing `grant usage on schema app to anon` reached production: these
-# tests `set local role anon` and would have failed on it immediately, while the 464
-# Vitest tests that DO run on every push all mock the database and cannot see a GRANT.
-# A staged gate is an untested gate; it is now a real one.
+# CALLED BY ci.yml (job `db-tests`) on every PR and every push to main: a REQUIRED status
+# check on `main` as "db-tests / pgtap" (.github/branch-protection.json) and a `needs` of the
+# deploy, so production never ships a commit whose RLS suite is red or still running (until
+# 2026-10-04 it ran as its own workflow, after the Worker was live). Renaming the job means
+# updating that file and re-applying protection in the same PR (launch runbook §5b).
+# `workflow_dispatch` keeps a manual run; no `concurrency` (ci.yml's run-level group covers it).
+#
+# History: staged on `workflow_dispatch` "until validated against the provisioned project",
+# the suite sat at ZERO runs until 2026-08-01. That is how a missing `grant usage on schema
+# app to anon` reached production: these tests `set local role anon` and would have failed
+# on it immediately, while the 464 Vitest tests that DO run on every push all mock the
+# database and cannot see a GRANT. A staged gate is an untested gate.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -23,6 +26,7 @@ permissions:
 jobs:
   pgtap:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1

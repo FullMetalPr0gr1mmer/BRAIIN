@@ -1,0 +1,27 @@
+{
+  "required_status_checks": {
+    "strict": true,
+    "checks": [
+      { "context": "migrations", "app_id": 15368 },
+      { "context": "build-test", "app_id": 15368 },
+      { "context": "supply-chain", "app_id": 15368 },
+      { "context": "deploy-preflight", "app_id": 15368 },
+      { "context": "db-tests / pgtap", "app_id": 15368 },
+      { "context": "perf-seo-a11y / E2E + axe + CSP + video bytes", "app_id": 15368 },
+      { "context": "perf-seo-a11y / Lighthouse budgets", "app_id": 15368 }
+    ]
+  },
+  "enforce_admins": true,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 0,
+    "dismiss_stale_reviews": false,
+    "require_code_owner_reviews": false,
+    "require_last_push_approval": false
+  },
+  "restrictions": null,
+  "required_linear_history": false,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": false,
+  "lock_branch": false
+}

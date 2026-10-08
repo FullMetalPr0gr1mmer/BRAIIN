@@ -6,15 +6,15 @@ A production, single-platform creative-agency system: a bilingual (EN/AR, RTL) m
 
 ## Stack
 
-| Layer       | Choice                                                             |
-| ----------- | ------------------------------------------------------------------ |
-| Public site | Astro (static-first shell + Server Islands)                        |
-| Admin       | React islands inside Astro                                         |
-| Backend     | Supabase — Postgres, Auth, Edge Functions, Storage                 |
-| Rich text   | Tiptap (sanitised JSON + derived HTML cache)                       |
-| Hosting     | Cloudflare **Workers Builds** (Astro Cloudflare adapter)           |
-| Video       | Cloudflare Stream                                                  |
-| Language    | TypeScript `strict`; Zod as the single content/validation boundary |
+| Layer       | Choice                                                                         |
+| ----------- | ------------------------------------------------------------------------------ |
+| Public site | Astro (static-first shell + Server Islands)                                    |
+| Admin       | React islands inside Astro                                                     |
+| Backend     | Supabase — Postgres, Auth, Edge Functions, Storage                             |
+| Rich text   | Tiptap (sanitised JSON + derived HTML cache)                                   |
+| Hosting     | Cloudflare Workers (Astro Cloudflare adapter), deployed by CI after every gate |
+| Video       | Cloudflare Stream                                                              |
+| Language    | TypeScript `strict`; Zod as the single content/validation boundary             |
 
 ## Documentation (read these first)
 
@@ -49,7 +49,7 @@ tests/
 
 > **New here?** Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) first — it covers team setup and how Claude Code is configured for consistency across developers.
 >
-> **Prerequisite:** Node.js LTS (≥ 20) + a package manager. The scaffold is committed but not yet installed/built in CI.
+> **Prerequisite:** Node.js ≥ 22.12 (Astro 7 refuses older) and npm.
 
 ```bash
 npm ci                  # install pinned deps

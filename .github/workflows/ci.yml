@@ -1,5 +1,14 @@
 name: CI
 
+# The one workflow every commit runs, on pull requests and on main — every gate is a job in
+# this run. db-tests.yml and perf-seo-a11y.yml are reusable workflows called from here, with
+# no push/PR triggers of their own, so the deploy can `needs` them.
+#
+# Required status checks on `main` are .github/branch-protection.json (launch runbook §5b).
+# A job's check is its `name:`, else its id; a called workflow's jobs report as
+# "<caller job id> / <job name>". Renaming a job here or in a called file means updating that
+# file and re-applying protection in the same PR — tests/ci/workflows.spec.ts fails until
+# they agree.
 on:
   push:
     branches: [main]
@@ -8,14 +17,17 @@ on:
 permissions:
   contents: read
 
+# PRs: a newer push cancels the run in flight. main: one group per run, so no merge ever
+# cancels another commit's gates; `deploy` serialises itself (queue: max) and ships only
+# main's current head.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.ref) || format('ci-main-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Pillar-ordered gates (CLAUDE.md §8): typecheck → schema/unit → build → supply-chain.
-  # (perf budgets, a11y, CSP and the browser e2e suites run in perf-seo-a11y.yml, against
-  #  the built Worker and a seeded local database.)
+  # Pillar-ordered gates (CLAUDE.md §8): typecheck → schema/unit → build → supply-chain here;
+  # pgTAP RLS in db-tests.yml; perf budgets, a11y, CSP and the browser e2e suites in
+  # perf-seo-a11y.yml, against the built Worker and a seeded local database.
 
   # Forward-only migrations (CLAUDE.md §8), enforced against the PR's base branch:
   # immutable once on main, unique numbers, and every new file numbered above main's
@@ -23,6 +35,7 @@ jobs:
   migrations:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
         with:
@@ -32,8 +45,11 @@ jobs:
 
   build-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
-      PUBLIC_SITE_URL: https://www.braiinstation.com
+      # A placeholder origin: this build is checked, never deployed (`deploy` builds its own).
+      # The prebuild guard wants https and a non-local host; this is the studio's real domain.
+      PUBLIC_SITE_URL: https://www.braiinstatiion.com
       PUBLIC_SUPABASE_URL: https://example.supabase.co
       PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
       # astro:env validates the server schema too. These are DUMMY, non-functional values
@@ -78,6 +94,7 @@ jobs:
 
   supply-chain:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
       - uses: actions/setup-node@v4
@@ -108,16 +125,30 @@ jobs:
       - name: Audit — full tree incl. dev (blocking, documented allowlist)
         run: npm run audit:all
 
+  # The pgTAP RLS suite (CLAUDE.md §9). Required check "db-tests / pgtap".
+  db-tests:
+    uses: ./.github/workflows/db-tests.yml
+
+  # E2E, axe, CSP, video bytes and Lighthouse against the built Worker. Required checks
+  # "perf-seo-a11y / E2E + axe + CSP + video bytes" and "perf-seo-a11y / Lighthouse budgets".
+  # The called file's env (a localhost origin, ALLOW_LOCAL_SITE_URL=1) stays inside it, and
+  # no `secrets:` are passed: these suites run the PR's code.
+  perf-seo-a11y:
+    uses: ./.github/workflows/perf-seo-a11y.yml
+
   # ── Auto-deploy to the live Worker ─────────────────────────────────────────────
-  # Push to main → every gate above green → build with the PRODUCTION origin → deploy.
-  # This is deliberately a CI job rather than dashboard-connected Workers Builds:
-  # Workers Builds deploys whatever lands on the branch, red or green — this job ships
-  # only after typecheck, tests, seo-ci, contrast and both supply-chain scopes pass
-  # (CLAUDE.md §8 gate order; "failing any budget = blocked" extends to deploys).
+  # Push to main → EVERY gate above green → the guard → build with the PRODUCTION origin →
+  # deploy. A CI job rather than dashboard-connected Workers Builds, which deploys whatever
+  # lands on the branch, red or green; CLAUDE.md §6's "failing any budget = blocked" covers
+  # the deploy. Until 2026-10-04 it waited only for build-test and supply-chain, so e2e,
+  # Lighthouse and pgTAP finished after the Worker was live — three red commits shipped.
   #
-  # Needs two repository secrets (Settings → Secrets and variables → Actions):
+  # Secrets, each scoped to the one step that uses it (none at job level; the guard's before
+  # `npm ci`, so no dependency code has run on this runner while it is in an env):
+  #   SUPABASE_GUARD_DB_URL — the read-only `deploy_guard` role (launch runbook §5a)
   #   CLOUDFLARE_API_TOKEN  — "Edit Cloudflare Workers" template, scoped to this account
   #   CLOUDFLARE_ACCOUNT_ID — the account id (dashboard sidebar / `wrangler whoami`)
+  # A missing one FAILS the job; nothing here skips quietly any more.
   #
   # PUBLIC_* below are REAL values, on purpose: astro:env inlines client vars at build
   # time, and all three ship inside the client bundle by design (the anon key is the
@@ -126,12 +157,19 @@ jobs:
   # secrets live in Cloudflare Worker Secrets and are untouched by deploys.
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build-test, supply-chain]
+    # Every gate that runs on main — never a PR-only job, whose skip would skip the deploy.
+    # tests/ci/workflows.spec.ts fails if a gate is added and left out of this list.
+    needs: [build-test, supply-chain, db-tests, perf-seo-a11y]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     concurrency:
       group: deploy-production
       cancel-in-progress: false
-    env:
+      # Up to 100 deploys wait their turn, in order: none ever replaces another (the default
+      # queue keeps one pending run and cancels the rest). The freshness step drops the stale.
+      queue: max
+    # The PRODUCTION build env; deploy-preflight aliases it, so a PR builds exactly this.
+    env: &production_build_env
       PUBLIC_SITE_URL: https://braiin-station.braiin.workers.dev
       PUBLIC_SUPABASE_URL: https://xkxthzcmmvtnwicerlup.supabase.co
       PUBLIC_SUPABASE_ANON_KEY: sb_publishable_fdVFL7qNbBx64z1pwvDAbg_ReRzjhOr
@@ -140,45 +178,98 @@ jobs:
       LEAD_PII_ENC_KEY: ci-dummy-lead-pii-enc-key
       AUDIT_HMAC_KEY: ci-dummy-audit-hmac-key
       NOTIFY_LEAD_SECRET: ci-dummy-notify-lead-secret
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      SUPABASE_GUARD_DB_URL: ${{ secrets.SUPABASE_GUARD_DB_URL }}
     steps:
-      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      # A re-run keeps its original commit, so re-running an old run — or an older run whose
+      # gates finished last — would roll production back. Only main's current head deploys;
+      # a superseded run fails here (benign: the newer run deploys, and contains this one).
+      - name: Freshness — deploy only main's current head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          head="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)" ||
+            { echo "::error::Cannot read main's head: not deploying."; exit 1; }
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            echo "::error::Not deploying ${GITHUB_SHA}: main is at ${head}. An older commit would roll production back; the newest main run deploys (it contains this one), so re-run THAT run. A deliberate rollback is npx wrangler rollback (launch runbook §10)."
+            exit 1
+          fi
+          echo "✓ ${GITHUB_SHA} is main's head."
+      - &guard_psql
+        name: psql (the deploy guard's client)
+        run: |
+          command -v psql >/dev/null 2>&1 ||
+            { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends postgresql-client; }
+          psql --version
+      # Refuses code whose migrations production has not applied: the loaders fail CLOSED to
+      # empty content, so it would look like missing content, not an error. Fails closed —
+      # a missing secret, an unverifiable TLS connection or the wrong role stops the deploy.
+      - &guard_run
+        name: Deploy guard — production has every migration
+        timeout-minutes: 3
+        env:
+          SUPABASE_GUARD_DB_URL: ${{ secrets.SUPABASE_GUARD_DB_URL }}
+        run: bash scripts/deploy-guard.sh
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Refuse to deploy code whose migrations production has not applied (the loaders
-      # fail CLOSED to empty content, so this would otherwise look like missing content,
-      # not an error). Needs the SUPABASE_GUARD_DB_URL secret — a read-only `deploy_guard`
-      # role, launch runbook §5a. Skips loudly while that secret is absent, like the
-      # deploy step itself, so adding the guard never turns an unrelated push red.
-      - name: Deploy guard — production has every migration
-        if: env.SUPABASE_GUARD_DB_URL != ''
-        run: bash scripts/deploy-guard.sh
-      - name: Deploy guard skipped — secret missing
-        if: env.SUPABASE_GUARD_DB_URL == ''
-        run: echo "::warning::Deploy guard skipped — SUPABASE_GUARD_DB_URL is not set (launch runbook §5a). Nothing checked that production has this commit's migrations."
+      - name: The production build never carries the local-preview opt-out
+        run: test -z "${ALLOW_LOCAL_SITE_URL:-}" || { echo "::error::ALLOW_LOCAL_SITE_URL reached the production build"; exit 1; }
       - name: Build (production origin)
         run: npm run build
-      # Skips (loudly) rather than fails while the two secrets are not configured yet,
-      # so enabling auto-deploy is additive and never turns unrelated pushes red.
-      #
-      # BOTH secrets are required. This used to gate on the token alone, but
-      # `wrangler deploy` also needs the account id: with only the token set, the step
-      # would run and fail on account resolution — turning main red, which is strictly
-      # worse than the clean skip this guard exists to provide. The skip branch names
-      # which secret is actually missing, because "add them under Settings" is not
-      # actionable when one of the two is already there.
       - name: Deploy (wrangler)
-        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        run: npx wrangler@4 deploy
-      - name: Deploy skipped — secrets missing
-        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
+        timeout-minutes: 10
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           missing=""
-          [ -z "$CLOUDFLARE_API_TOKEN" ] && missing="$missing CLOUDFLARE_API_TOKEN"
-          [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && missing="$missing CLOUDFLARE_ACCOUNT_ID"
-          echo "::warning::Deploy skipped — build verified but NOT deployed. Missing repository secret(s):$missing. Add under Settings → Secrets and variables → Actions."
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -z "$missing" ] || { echo "::error::NOT deployed: missing repository secret(s):$missing (Settings → Secrets and variables → Actions)."; exit 1; }
+          npx --no wrangler deploy --tag "${GITHUB_SHA:0:12}" --message "ci ${GITHUB_SHA} run ${GITHUB_RUN_ID}"
+
+  # The PR rehearsal of `deploy`: the same production env, the same build, and wrangler's
+  # dry run (bundles and checks the Worker; no credentials, no upload). REQUIRED — it reads
+  # no secret and no production state, so it is safe on any PR.
+  deploy-preflight:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env: *production_build_env
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: The production build never carries the local-preview opt-out
+        run: test -z "${ALLOW_LOCAL_SITE_URL:-}" || { echo "::error::ALLOW_LOCAL_SITE_URL reached the production build"; exit 1; }
+      - name: Build (production origin)
+        run: npm run build
+      - name: Deploy dry run (wrangler — bundles and checks, uploads nothing)
+        run: npx --no wrangler deploy --dry-run
+
+  # The deploy guard, read-only against PRODUCTION, so a PR whose migration production lacks
+  # shows red BEFORE the merge (the deploy's own guard only stops it after). NOT required.
+  # The owner's own same-repo pushes only — the secret never reaches a fork's or a bot's
+  # code — and no `npm ci`: no dependency code runs here while the secret is in an env.
+  deploy-guard-preview:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - *guard_psql
+      - *guard_run
