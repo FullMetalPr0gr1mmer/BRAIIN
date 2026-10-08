@@ -87,6 +87,9 @@ for (const f of headFiles) {
 if (problems.length) {
   console.error(`  ✘ migration ledger (base ${base}):`);
   for (const p of problems) console.error(`    - ${p}`);
+  console.error(
+    `    a new migration numbered too low: node scripts/renumber-migration.mjs <file> --base ${base}`,
+  );
   process.exit(1);
 }
 const added = headFiles.filter((f) => !baseSet.has(f));
