@@ -94,7 +94,7 @@ export default function InsightsPanel({ mode }: InsightsPanelProps) {
 
 function Bar({ value, max }: { value: number; max: number }) {
   // Snapped to the nearest 5% so it always lands on one of the bucket rules in
-  // public/styles/admin/insights.css. See that file for why this is not an inline width.
+  // admin.css. See that file for why this is not an inline width.
   const raw = max > 0 ? (value / max) * 100 : 0;
   const percent = Math.round(raw / 5) * 5;
   return (

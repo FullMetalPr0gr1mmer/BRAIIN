@@ -82,7 +82,7 @@ describe('every public stylesheet', () => {
   });
 
   it('includes the admin screen sheets, and the build visits every one', () => {
-    expect(files).toContain('admin/insights.css');
+    expect(files).toContain('admin/login.css');
     expect([...cssFiles(dir)].sort()).toEqual([...files].sort());
   });
 

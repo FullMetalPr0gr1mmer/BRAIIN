@@ -127,7 +127,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
     const files = readdirSync(join(ROOT, 'public/styles/admin')).filter((f) => f.endsWith('.css'));
     expect(files.sort()).toEqual([...ADMIN_STYLESHEETS].sort());
     // Pinned, not derived: a sheet dropped from the list must fail, not go unchecked.
-    expect([...ADMIN_STYLESHEETS].sort()).toEqual(['insights.css', 'login.css', 'search.css']);
+    expect([...ADMIN_STYLESHEETS].sort()).toEqual(['login.css', 'search.css']);
   });
 
   it.each([...ADMIN_STYLESHEETS])(
@@ -141,6 +141,50 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       expect(css).not.toMatch(/prefers-reduced-motion/);
     },
   );
+});
+
+describe('admin.css keeps the design system’s hooks', () => {
+  // The hooks docs/admin-v2/ui.md §1.2 keeps for every screen ("JS and the tests depend on
+  // these"). Rendered by one screen today is not the test: a later screen renders them
+  // too (the lead score bar is a `.bar-fill[data-width]`, ui.md §1.6, crm.md), and a hook
+  // moved into one screen's sheet would make it link a sheet named for another screen or
+  // move the rules back, the shared-file edit the screen sheets exist to avoid.
+  const DESIGN_SYSTEM_HOOKS = [
+    'admin-dialog',
+    'badge',
+    'bar',
+    'bar-fill',
+    'btn',
+    'card',
+    'data',
+    'field',
+    'field-group',
+    'field-legend',
+    'msg',
+    'row-2',
+    'tabs',
+    'toast',
+    'toasts',
+    'toolbar',
+    'visually-hidden',
+  ];
+
+  it('styles every one of them', () => {
+    const styled = classesOf(ADMIN);
+    expect(DESIGN_SYSTEM_HOOKS.filter((hook) => !styled.has(hook))).toEqual([]);
+  });
+
+  it('holds the whole bar: the track, every 5% bucket and the forced-colours fill', () => {
+    expect(ADMIN).toMatch(/(?:^|\n)\.bar\s*\{[^}]*inline-size:/);
+    for (let width = 0; width <= 100; width += 5) {
+      expect(ADMIN).toMatch(
+        new RegExp(`\\.bar-fill\\[data-width='${width}'\\]\\s*\\{\\s*inline-size:\\s*${width}%`),
+      );
+    }
+    expect(ADMIN).toMatch(
+      /@media \(forced-colors: active\)\s*\{[\s\S]*\.bar-fill\s*\{\s*background:\s*Highlight/,
+    );
+  });
 });
 
 describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
@@ -264,13 +308,15 @@ describe('admin.css keeps the hooks the markup renders', () => {
     it('traces each sheet to the pages it serves (the walk is not vacuous)', () => {
       const pagesFor = (sheet: string) =>
         [...new Set((renderers[sheet] ?? []).flatMap(({ file }) => pagesOf(file)))].sort();
-      expect(pagesFor('insights.css')).toEqual([
+      expect(pagesFor('login.css')).toEqual(['src/pages/admin/login.astro']);
+      expect(pagesFor('search.css')).toEqual(['src/pages/admin/search.astro']);
+      // Both sheets' classes are rendered by their pages themselves, so the import walk
+      // is proved on a screen's code: through its island entry to every page hydrating it.
+      expect(pagesOf('src/components/admin/screens/insights/InsightsPanel.tsx').sort()).toEqual([
         'src/pages/admin/analytics/index.astro',
         'src/pages/admin/analytics/search.astro',
         'src/pages/admin/site-health.astro',
       ]);
-      expect(pagesFor('login.css')).toEqual(['src/pages/admin/login.astro']);
-      expect(pagesFor('search.css')).toEqual(['src/pages/admin/search.astro']);
     });
   });
 });
