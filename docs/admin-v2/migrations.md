@@ -20,7 +20,7 @@ Production has applied 0001 to 0037, the same files `main` holds.
 | 0034 | `0034_crm_leads_pipeline.sql`: the leads pipeline, spam horizon, timeline and notes thread (C1a-2) | #45 |
 | 0035 | `0035_crm_ingest.sql`: how a lead arrives: the ingest RPC, blind indexes, the score (C1b) | #45 (from #46) |
 | 0036 | `0036_crm_leads_queries.sql`: reading the pipeline: list, board, KPIs, people (C2a) | #45 (from #47) |
-| 0037 | `0037_partition_rls_and_read_only_grants.sql`: RLS on every telemetry partition; staff hold SELECT only on the eight tables they only read (H8) | #51 |
+| 0037 | `0037_partition_rls_and_read_only_grants.sql`: RLS on every telemetry partition; staff hold SELECT only on the eight tables they only read, plus the users screen's UPDATE on `profiles.role`, `is_active` and `display_name` (H8) | #51 |
 
 Each slice's file under [as-built/](as-built/) has the detail.
 
@@ -74,7 +74,9 @@ Process only: the database URL and every credential stay with the operator.
    does not hold, and that migration is then not applied.
 4. **Read back.** `migration list` shows the new version as applied. Then check the
    migration's effect read-only; for 0037: every partition RLS enabled and forced, no staff
-   write privilege on the eight tables, no write policy on `tenants`.
+   table-level write privilege on the eight tables and no column-level one but UPDATE on
+   `profiles.role`, `is_active` and `display_name` (the users screen's, which must stay), no
+   write policy on `tenants`.
 5. **Merge** (for an expand migration; a contraction's code PR has merged and deployed before
    step 1, rule 6). Then move its row from "Reserved" to "Applied", and add the slice's
    as-built file.
