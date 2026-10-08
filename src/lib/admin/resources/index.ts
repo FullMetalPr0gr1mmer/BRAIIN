@@ -26,8 +26,9 @@ import { themeResource } from './themes';
 //
 // Admin v2 (W0): one module per entity (resources/<slug>.ts, helpers in ./shared.ts),
 // registered here. A new entity is its module, its import, its name below and one line in
-// RESOURCES. `@/lib/admin/resources` resolves to this file, so the API routes keep
-// importing each config by name.
+// RESOURCES. An API route imports its own entity's module, so it loads one config and not
+// all of them; this index re-exports every config by name for the header search and the
+// tests, and `@/lib/admin/resources` resolves to it.
 
 export {
   aiQuestionResource,

@@ -2,7 +2,7 @@
 // `defineAdminRoute` (assertCap + Zod + audit + no-store) and `crud.ts` (tenant
 // predicate + optimistic lock). See src/lib/admin/resource.ts.
 import { reorderRoute } from '@/lib/admin/resource';
-import { clientResource } from '@/lib/admin/resources';
+import { clientResource } from '@/lib/admin/resources/clients';
 
 export const prerender = false;
 export const POST = reorderRoute(clientResource);
