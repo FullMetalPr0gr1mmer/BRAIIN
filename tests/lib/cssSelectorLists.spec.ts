@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 
 // `:has()` is NOT a forgiving selector: an engine without it (Firefox < 121, Safari < 15.4,
 // Chromium < 105) treats a selector list that contains it as invalid and drops the WHOLE
@@ -69,7 +69,10 @@ describe('selectorLists', () => {
 });
 
 describe('the served stylesheets', () => {
-  const sheets = readdirSync(DIR).filter((f) => f.endsWith('.css'));
+  // Every sheet under public/styles, the admin's screen sheets (admin/) included.
+  const sheets = readdirSync(DIR, { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('.css'))
+    .map((f) => f.split(sep).join('/'));
 
   it('exist', () => {
     expect(sheets).toContain('services.css');

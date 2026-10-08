@@ -3,34 +3,40 @@ import * as R from '@/lib/admin/resources';
 import { RESOURCE_UI, SINGLETON_UI, columnOf, type FieldDef } from '@/lib/admin/uiSchema';
 import type { ResourceConfig } from '@/lib/admin/resource';
 
-// The admin is data-driven twice over: a UI descriptor (uiSchema.ts) says which fields a
-// form edits, a resource config (resources.ts) says which columns the API returns and
-// which keys reach SQL. Nothing but these tests keeps the two in step — and a drift is
-// silent: a form field whose column the API does not return loads EMPTY, and saving the
-// form writes that emptiness back over the real value.
+// The admin is data-driven twice over: a UI descriptor (src/lib/admin/ui) says which
+// fields a form edits, a resource config (src/lib/admin/resources) says which columns the
+// API returns and which keys reach SQL. Nothing but these tests keeps the two in step —
+// and a drift is silent: a form field whose column the API does not return loads EMPTY,
+// and saving the form writes that emptiness back over the real value.
 
-const CONFIG: Record<string, ResourceConfig> = {
-  services: R.serviceResource,
-  disciplines: R.disciplineResource,
-  'service-cases': R.serviceCaseResource,
-  blog: R.postResource,
-  portfolio: R.portfolioResource,
-  sectors: R.sectorResource,
-  clients: R.clientResource,
-  testimonials: R.testimonialResource,
-  pages: R.pageResource,
-  sections: R.sectionResource,
-  navigation: R.navigationResource,
-  categories: R.categoryResource,
-  team: R.teamResource,
-  certifications: R.certificationResource,
-  statistics: R.statisticResource,
-  redirects: R.redirectResource,
-  media: R.mediaResource,
-  themes: R.themeResource,
-  'ai-questions': R.aiQuestionResource,
-  'ai-styles': R.aiStyleResource,
-};
+/** Slug → resource config: the registry the API routes are built from. */
+const CONFIG: Readonly<Record<string, ResourceConfig>> = R.RESOURCES;
+
+// Pinned, not derived: every check below iterates the registries, so an entity dropped
+// from one must fail here instead of silently going unchecked.
+const SLUGS = [
+  'ai-questions',
+  'ai-styles',
+  'blog',
+  'categories',
+  'certifications',
+  'clients',
+  'disciplines',
+  'media',
+  'navigation',
+  'pages',
+  'portfolio',
+  'redirects',
+  'sections',
+  'sectors',
+  'service-cases',
+  'services',
+  'statistics',
+  'team',
+  'testimonials',
+  'themes',
+];
+const SINGLETONS = ['ai-config', 'integrations', 'profile', 'seo', 'settings'];
 
 /**
  * The top-level keys a PostgREST select returns: plain columns, and each embed under its
@@ -66,6 +72,12 @@ function returnedKeys(config: ResourceConfig): string[] {
 }
 
 describe('every admin resource UI has a resource config', () => {
+  it('the registries hold exactly the pinned entities', () => {
+    expect(Object.keys(CONFIG).sort()).toEqual(SLUGS);
+    expect(Object.keys(RESOURCE_UI).sort()).toEqual(SLUGS);
+    expect(Object.keys(SINGLETON_UI).sort()).toEqual(SINGLETONS);
+  });
+
   it('covers exactly the same slugs', () => {
     expect(new Set(Object.keys(RESOURCE_UI))).toEqual(new Set(Object.keys(CONFIG)));
   });

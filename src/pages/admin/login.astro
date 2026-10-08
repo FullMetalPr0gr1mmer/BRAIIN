@@ -31,7 +31,7 @@ const csrfToken = Astro.locals.csrfToken;
 const brand = (await getIdentity(Astro.locals)).brandName.en;
 ---
 
-<AdminLayout title="Sign in" layout="bare">
+<AdminLayout title="Sign in" layout="bare" styles={['login.css']}>
   <form class="login-card" id="login-form" method="post" action="/api/admin/auth/login">
     <h1>{brand}</h1>
     <p class="admin-sub">Sign in to the content management system.</p>

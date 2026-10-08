@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { singletonFor } from '@/lib/admin/uiSchema';
-import { Field, formToPayload, rowToForm, type Row } from './FormField';
+import { Field, formToPayload, rowToForm, type Row } from '@/components/admin/FormField';
 
 // Editor for the per-tenant config singletons: SEO defaults, general settings,
 // integrations, Style-Finder logic.

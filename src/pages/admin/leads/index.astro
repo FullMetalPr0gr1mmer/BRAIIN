@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import LeadsPanel from '@/components/admin/LeadsPanel';
+import AdminLeads from '@/components/admin/islands/AdminLeads';
 import { can } from '@/lib/authz/matrix';
 
 export const prerender = false;
@@ -18,5 +18,5 @@ const canExport = can(role, 'export.csv') === 'full';
   title="Leads"
   subtitle="Contact details are encrypted at rest. Revealing them is logged against your account."
 >
-  <LeadsPanel client:load canSeePii={canSeePii} canExport={canExport} />
+  <AdminLeads client:load canSeePii={canSeePii} canExport={canExport} />
 </AdminLayout>
