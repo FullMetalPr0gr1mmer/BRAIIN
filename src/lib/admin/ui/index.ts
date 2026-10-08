@@ -50,33 +50,38 @@ export { columnOf, relationParams } from './fields';
 // here simply cannot be edited in the UI — it does not become writable by other means.
 //
 // Admin v2 (W0): one module per editor in this directory (the shapes in ./types.ts, the
-// shared helpers in ./fields.ts), registered below. A new entity is its module and one
-// line in each place it is listed here. Forms, fields and pages import all of it through
-// src/lib/admin/uiSchema.ts.
+// shared helpers in ./fields.ts), registered below. A new entity is its module, its import
+// and one line in the registry it belongs to. Forms, fields and pages import all of it
+// through src/lib/admin/uiSchema.ts.
 
-/** Every collection's editor by its admin slug (/admin/<slug>, /api/admin/<slug>). Sorted. */
-export const RESOURCE_UI: Record<string, ResourceUi> = {
-  'ai-questions': aiQuestionsUi,
-  'ai-styles': aiStylesUi,
-  blog: blogUi,
-  categories: categoriesUi,
-  certifications: certificationsUi,
-  clients: clientsUi,
-  disciplines: disciplinesUi,
-  media: mediaUi,
-  navigation: navigationUi,
-  pages: pagesUi,
-  portfolio: portfolioUi,
-  redirects: redirectsUi,
-  sections: sectionsUi,
-  sectors: sectorsUi,
-  'service-cases': serviceCasesUi,
-  services: servicesUi,
-  statistics: statisticsUi,
-  team: teamUi,
-  testimonials: testimonialsUi,
-  themes: themesUi,
-};
+/**
+ * Every collection's editor, keyed by its own `slug` (/admin/<slug>, /api/admin/<slug>):
+ * the slug is written once, in the editor's module. Sorted.
+ */
+export const RESOURCE_UI: Record<string, ResourceUi> = Object.fromEntries(
+  [
+    aiQuestionsUi,
+    aiStylesUi,
+    blogUi,
+    categoriesUi,
+    certificationsUi,
+    clientsUi,
+    disciplinesUi,
+    mediaUi,
+    navigationUi,
+    pagesUi,
+    portfolioUi,
+    redirectsUi,
+    sectionsUi,
+    sectorsUi,
+    serviceCasesUi,
+    servicesUi,
+    statisticsUi,
+    teamUi,
+    testimonialsUi,
+    themesUi,
+  ].map((ui) => [ui.slug, ui]),
+);
 
 export function uiFor(slug: string): ResourceUi {
   const ui = RESOURCE_UI[slug];
