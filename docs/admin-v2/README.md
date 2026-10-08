@@ -187,7 +187,7 @@ The TDD's *product* requirements are the spec. Its *stack* suggestions are mappe
   - a skip link;
   - a **zero-JS popover sidebar below 900px** (under `@supports selector(:popover-open)`, plus a `matchMedia` → `hidePopover` handler);
   - browser floor Chrome/Edge 117, Firefox 129, Safari 17.5.
-- **IA** (`nav.ts` stays derived from `ROLE_CAPS`; retired routes 302):
+- **IA** (`nav/` stays derived from `ROLE_CAPS`; retired routes 302):
 
   | Group | Items |
   |---|---|
@@ -467,6 +467,32 @@ the bracketed ids in the slice tables above are the design slices each program s
 | CRM-1 to CRM-14 | C1 to C14, same numbers; C15 (CSV import) and C16 (contact files) are new |
 | (none) | U15 (GA4), U16 (help centre), U17 (2FA), E8 to E10, E13, G1, G2: added under A6 or by the verification |
 
+## Wave 0: the shared files, split
+
+Before the three lanes run in parallel, Wave 0 (W0-a to W0-d, each with its file under "As
+built") split the files every slice would otherwise edit, so a later slice mostly adds a file.
+The designs were written before it, so the file lists in [ui.md](ui.md),
+[releases.md](releases.md) and [crm.md](crm.md) name the old places. Wave 0 moved these, and
+where a design names the old place, the new one wins:
+
+| Before Wave 0 | Since Wave 0 |
+|---|---|
+| `src/lib/admin/nav.ts` | `src/lib/admin/nav/<area>.ts`, composed in `nav/index.ts` |
+| `src/lib/admin/resources.ts` | `src/lib/admin/resources/<entity>.ts` |
+| `src/lib/admin/uiSchema.ts` | `src/lib/admin/ui/<entity>.ts` (`uiSchema.ts` is a re-export) |
+| the nine legacy panels in `src/components/admin/` | `src/components/admin/screens/<name>/`, each hydrated through its `islands/Admin*.tsx` entry |
+| the shell's `COUNTERS` (`shell.ts`) | `src/lib/admin/counters/` |
+| a screen's own CSS in `admin.css` | `public/styles/admin/<screen>.css`, listed in `src/lib/admin/stylesheets.ts` |
+| rows in `tests/authz/endpoints.spec.ts` | `tests/authz/cases/<feature>.ts`, each case named in `tests/authz/caseManifest.ts` |
+| steps in `src/lib/cron/daily.ts` | entries in `src/lib/cron/jobs.ts` |
+| a public loader calling `anonClient()` | `contentClient()` (`src/lib/data/source.ts`) |
+
+**Open: the F0 harness extension.** Planned for Wave 0, built by no slice. The per-role sweep
+opens an edit screen on the first row of `GET /api/admin/<segment>`, and
+`tests/lib/adminRoutes.spec.ts` requires that segment to be a resource config. An edit screen
+with no resource config (C4's `/admin/leads/[id]`, the page editor) therefore needs a declared
+way to find a sample id, and the first slice that adds one builds it.
+
 ## Remaining deviations
 
 The register of every place the build deliberately differs from the prototype, with the
@@ -543,7 +569,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
   - **UI tables**: prefs, help, faq, site_appearance, page_visibility, media provider and anon read, template_copy.
   - Grants postconditions hold under both privilege regimes.
 - **Authz**:
-  - `endpoints.spec` rows for every new route (it iterates `ROLES`);
+  - every new route's cases in its feature's module, `tests/authz/cases/<feature>.ts`, each named in `tests/authz/caseManifest.ts` (`endpoints.spec` runs them over `ROLES`; `endpointCoverage.spec` fails on a route without one);
   - `matrix.spec`: 5 roles / 37 caps, also parsing architecture §3.4;
   - `releaseMatrix.spec`;
   - `sqlHelpers.spec`.
