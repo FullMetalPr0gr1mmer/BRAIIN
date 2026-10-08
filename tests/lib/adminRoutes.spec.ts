@@ -209,8 +209,8 @@ describe('the locked screens the refusals e2e opens', () => {
 
 // Each role's sidebar, written out from the CLAUDE.md §5 matrix rather than computed: the
 // sweep holds the sidebar the server renders to expectedSidebar(), so expectedSidebar()
-// needs an oracle that is not nav.ts itself. A capability or menu change that alters what
-// a role sees has to be made here too, on purpose.
+// needs an oracle that is not the menu (src/lib/admin/nav) itself. A capability or menu
+// change that alters what a role sees has to be made here too, on purpose.
 const SIDEBAR: Record<Role, Record<string, string[]>> = {
   admin: {
     Overview: ['Dashboard /admin'],
