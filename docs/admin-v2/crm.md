@@ -823,7 +823,7 @@ alter type public.app_role add value if not exists 'sales';
 | CRM-13 | Attribution |
 | CRM-14 | Contract |
 
-- One branch and PR per slice; CI green; Claude never merges.
+- One branch and PR per slice; CI green; Claude never merges. The contract slice (CRM-14) is the exception: a contraction ships as two PRs (launch runbook §5a).
 - Migrations are applied to production before each deploy (deploy guard).
 - Migration numbers are provisional: other Admin v2 slices also add migrations, so take the next free number at branch time (0030 if CRM-1 is first).
 - The contract slice (CRM-14) waits at least one release after CRM-4 and CRM-10, so old Worker versions in the field never write `status` or `internal_notes` against a dropped column.
@@ -1370,6 +1370,8 @@ Blocked until legal signs off the notice (O4). landing_path is derived on the se
 
 After at least one release with no legacy writers, migration 0041 drops the sync and legacy-notes triggers, revokes UPDATE on status and internal_notes, and drops the status CHECK and column, internal_notes and ip_inet (never written). leads_safe is dropped and re-created inside one transaction with grants and postconditions (security_invoker, safe columns). The legacy GET ?pii=1 alias and GET /api/admin/leads are removed. leadFields.ts, the export and notify-lead are updated. consent_marketing may be renamed to consent_contact through an expand/contract view alias.
 
+**Two PRs** (launch runbook §5a): first the code (the routes removed; leadFields.ts, the export and notify-lead no longer use the dropped columns), merged and deployed; then 0041 alone, applied to production and merged. One PR cannot carry both: the deploy guard needs 0041 applied before that PR deploys, and 0041 applied under the old code breaks the live leads admin.
+
 **Key files:**
 
 - supabase/migrations/0041_crm_leads_contract.sql
@@ -1391,7 +1393,7 @@ After at least one release with no legacy writers, migration 0041 drops the sync
 
 **Risks:**
 
-- Old Worker versions still in the field would write dropped columns; wait one release and check that the deploy guard has run
+- Old Worker versions still in the field would write dropped columns; wait one release. Once 0041 is applied, no Worker rollback past the code PR (launch runbook §10)
 - Dropping and re-creating leads_safe must restate security_invoker or every authenticated role reads all leads (0015 warning)
 
 ## Proposed standard amendments
