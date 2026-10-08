@@ -28,7 +28,7 @@ The 5 disciplines and 28 services (Round 2, 2026-09-27 — the `disciplines` tab
 
 - **Build:** GREENFIELD / fresh. Every `[reuse]`-tagged feature is **built new**. RBAC from scratch.
 - **Stack:** Astro + React admin (islands) + Supabase (Postgres, Auth, Edge Functions, Storage) + Tiptap. **TypeScript strict.** Zod for all content + form input.
-- **Hosting/adapter:** **Cloudflare Workers Builds — not Pages** (the Astro Cloudflare adapter dropped Pages support) via the Astro Cloudflare adapter. Cloudflare WAF, Stream, image transforms/cache, MENA edge. On-demand `/admin`; static-first public shell.
+- **Hosting/adapter:** **Cloudflare Workers — not Pages** (the Astro Cloudflare adapter dropped Pages support) via the Astro Cloudflare adapter, deployed by `ci.yml`'s `deploy` job after every gate — **never** dashboard-connected Workers Builds, which ships whatever lands on the branch (locked as "Workers Builds" on 2026-06-10; see the deploys amendment below). Cloudflare WAF, Stream, image transforms/cache, MENA edge. On-demand `/admin`; static-first public shell.
 - **Tenancy:** **SINGLE-TENANT at launch, TENANT-READY schema.** `tenant_id` + tenant-scoped RLS on **every** table from day 1.
 - **i18n:** path-based `/` (EN) + `/ar/` (AR). hreflang + `x-default`, per-language self-referential canonicals, both languages in sitemap, complete AR metadata/OG.
 - **Analytics canonical source:** **first-party self-hosted analytics is the single source of truth** (PDPL-friendly, consent-gated, no double-write). GA4 secondary, behind consent.
@@ -50,7 +50,7 @@ Static, cacheable shell **+** Server Islands (`server:defer`) **+** on-demand `/
 
 > **Amendment (KAN-31, Astro 7 / adapter 14):** `platformProxy.enabled` was removed from this lock set — the option no longer exists in `@astrojs/cloudflare` v14's `Options` (it is silently ignored). Worker bindings are now reached via `import { env } from 'cloudflare:workers'`; `Astro.locals.runtime.env` was removed in Astro 6 and its getter **throws**. Toolchain floor is now **Node ≥ 22.12** (Astro 7 hard-refuses Node 20). The other three adapter locks are unchanged.
 
-> **Amendment (2026-08-22, deploys):** auto-deploy is the `deploy` job in `.github/workflows/ci.yml` — push to `main` → all CI gates green → build with the production origin → `wrangler deploy`. Chosen over dashboard-connected Workers Builds because Workers Builds ships whatever lands on the branch, red or green; the standard's "failing any budget = blocked PR" extends to deploys. Hosting itself is unchanged (Cloudflare Workers). Requires the `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` repository secrets; the job skips (with a warning) when they are absent.
+> **Amendment (2026-08-22, deploys; amended 2026-10-04):** auto-deploy is the `deploy` job in `.github/workflows/ci.yml` — push to `main` → **every** gate green → the deploy guard → build with the production origin → `wrangler deploy`. Chosen over dashboard-connected Workers Builds because Workers Builds ships whatever lands on the branch, red or green; the standard's "failing any budget = blocked PR" extends to deploys. Hosting itself is unchanged (Cloudflare Workers). The job `needs` every gate that runs on `main` — `build-test` (incl. the size-limit budgets), `supply-chain`, `db-tests / pgtap` and both `perf-seo-a11y` checks, which ci.yml calls as reusable workflows — so a merge is live ~30 min later and never ahead of its gates (until 2026-10-04 e2e, Lighthouse and pgTAP finished after the Worker was live). Only `main`'s current head deploys: a superseded or re-run older run fails its freshness step instead of rolling production back; a deliberate rollback is `wrangler rollback`, never past a contraction production has applied (runbook §10). The guard (`scripts/deploy-guard.sh`) refuses the deploy unless production has applied every migration in the checkout and `app.deployment` is `production`; it connects as the read-only `deploy_guard` role over TLS `verify-full` against Supabase's root CA, committed in `scripts/certs/` (runbook §5a). Each secret (`SUPABASE_GUARD_DB_URL`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) is scoped to the one step that uses it, and a missing one fails the job. `main` is protected — PRs only, up to date with `main`, admins included, the required checks in `.github/branch-protection.json` (runbook §5b) — and a manual `wrangler deploy` is break-glass only (runbook §6). `tests/ci/workflows.spec.ts` holds these rules.
 >
 > **Amendment (Phase 3, Admin/CMS):** three capability splits in §5 cut *through* a row, and **RLS is row-level, not column-level**, so each becomes its own table rather than a column — otherwise the split is enforceable only in application code, i.e. one layer, not two. `settings.integrations` (Admin+SEO) → **`site_integrations`**, separate from `site_settings` (Admin+Developer). `seo.globalDefaults` (Admin+SEO) → **`seo_defaults`**. `seo.entityMeta` (Admin+SEO write, Content Creator view) → **`entity_seo`**, separate from the content tables (Admin+Content Creator). `ai.config` (Admin only) → **`ai_config`**, separate from `ai_questions`/`ai_styles` (`ai.editContent`, Admin+Content Creator). Migration `0009_admin_cms.sql`; pgTAP in `supabase/tests/rls_admin_cms.test.sql`.
 >
@@ -168,7 +168,7 @@ Legend: ✅ full · "view"/"meta only" partial · ❌ none. `anon` and `other_te
 
 ## 6. PERFORMANCE BUDGETS
 
-Public routes only. **Failing any budget = blocked PR.** `/admin` exempt from CWV, gated on bundle size only.
+Public routes only. **Failing any budget = blocked PR and blocked deploy** (every gate is a required check and a `needs` of the deploy — §2, deploys amendment). `/admin` exempt from CWV, gated on bundle size only.
 
 | Metric | Budget | Notes |
 |---|---|---|
@@ -178,12 +178,12 @@ Public routes only. **Failing any budget = blocked PR.** `/admin` exempt from CW
 | TBT (lab proxy) | ≤ 200ms | CI lab cap |
 | Lighthouse Perf / A11y / SEO | ≥ 95 each | incl. an `/ar/` RTL route |
 | Per-route client JS | ≤ 100 KB gzipped | `hls.js` post-LCP, excluded |
-| EN+AR fonts per route | ≤ 180 KB woff2 | AR face counts |
-| Hero face | ≤ 35 KB (Latin) / 45 KB (Arabic) | preload only this face — exactly one per route. EN: Archivo variable. AR: the Almarai weight the route's above-the-fold heading renders in (`heroFace`, `src/lib/seo/fonts.ts`): 800 by default (Home), 700 on `/ar/about` (its 600-weight h1 resolves to the 700 face; preloading 800 there cost CLS 0.14) |
-| Poster image | ≤ 80 KB | Stream thumbnail |
+| EN+AR fonts per route | ≤ 180 KB woff2 | AR face counts. lhci asserts `resource-summary:font:size` ≤ 184,320 B (180 × 1024) on every gated route, mobile and desktop |
+| Hero face | ≤ 35 KB (Latin) / 45 KB (Arabic) | preload only this face — exactly one per route. EN: Archivo variable. AR: the Almarai weight the route's above-the-fold heading renders in (`heroFace`, `src/lib/seo/fonts.ts`): 800 by default (Home), 700 on `/ar/about` (its 600-weight h1 resolves to the 700 face; preloading 800 there cost CLS 0.14). `tests/seo/fonts.spec.ts` asserts every preloadable face against this budget |
+| Poster image | ≤ 80 KB | Stream thumbnail. `tests/e2e/poster-bytes.e2e.ts` asserts the bytes served for the `fetchpriority=high` poster on About, Our Work and a case study (EN + AR, at 2×) by this build's image pipeline; a Stream thumbnail's half is EXC-009's (no Stream yet) |
 | Media CLS contribution | 0 | |
 
-CI gates: A `@lhci/cli` (minScore 0.95, numeric caps, unsized-images/modern-formats/font-display errors, `/ar/` route); B `size-limit`; C `budget.json`.
+CI gates — each a required check on `main` and a `needs` of the deploy: A `@lhci/cli` (minScore 0.95, numeric caps, unsized-images/modern-formats/font-display errors, font bytes per route, `/ar/` routes, mobile and desktop); B `size-limit` (client JS, in `build-test`); C has no `budget.json` — Lighthouse 12 removed budgets and LHCI refuses a budgets file beside assertions, so the resource budget is A's `resource-summary` assertion and the per-file ones are tests (hero face: `tests/seo/fonts.spec.ts`; poster: `tests/e2e/poster-bytes.e2e.ts`).
 
 ---
 
@@ -231,7 +231,7 @@ Every table: `id`, `tenant_id NOT NULL`, timestamps, `created_by`/`updated_by`; 
 Content Layer loaders use the anon key under RLS (`status='published'`, tenant-scoped), reached only through `contentClient()` (`src/lib/data/source.ts`, the seam the releases preview extends), never `anonClient()` directly (`tests/lib/contentSource.spec.ts`). Per-section error isolation mandatory. Both EN and AR built; both in sitemap.
 
 ### i18n / Commit-PR rules
-Path-based `/` + `/ar/`; reciprocal hreflang + `x-default`→EN; AR meta/OG Zod-required. **CI gate order (pillar-priority):** typecheck/lint → schema-validation → authz → unit/integration → perf-budgets → seo-schema → a11y → visual-regression → supply-chain. Migrations forward-only, expand/contract. End commits with `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`; PR bodies with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
+Path-based `/` + `/ar/`; reciprocal hreflang + `x-default`→EN; AR meta/OG Zod-required. **CI gate order (pillar-priority):** typecheck/lint → schema-validation → authz → unit/integration → perf-budgets → seo-schema → a11y → visual-regression → supply-chain. Every gate is a required status check on `main` (`.github/branch-protection.json`), and every gate that runs on `main` is a `needs` of the deploy (§2); visual regression has no gate yet (the e2e job's design capture is screenshots, not assertions). Migrations forward-only, expand/contract, and each is applied to production **before** the PR that carries it merges: the deploy guard (§2) refuses a checkout holding a migration production lacks. A **contraction** (it takes away something the live code still uses: a revoked grant, a dropped column) ships as two PRs, first the code that stops using it (merge → deploy), then the migration alone (apply → merge), and no Worker rollback crosses it (runbook §5a, §10). End commits with `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`; PR bodies with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 
 ---
 
