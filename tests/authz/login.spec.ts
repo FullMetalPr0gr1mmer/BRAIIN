@@ -11,9 +11,10 @@ import { TENANT, UUID } from './harness';
 //   - the middleware in front of it: a cross-site POST, or one without the double-submit
 //     token, is refused before the handler; sign-in alone passes without a session, while
 //     sign-out beside it answers 401 (its guard is the session, not a capability);
-//   - the handler, with the real lockout module: every failure answers the same 401 body,
-//     the fifth failure answers 423, a locked address is refused before its password is
-//     tried, and an unreachable lockout store fails closed.
+//   - the handler, with the real lockout module: a body that is not JSON is a 400 before
+//     anything is looked up; every failed sign-in answers the same 401 body, the fifth
+//     failure answers 423, a locked address is refused before its password is tried, and
+//     an unreachable lockout store fails closed.
 // The counting itself is SQL (0009: login_is_locked, register_failed_login), stubbed below
 // with the same contract; no pgTAP test covers that SQL yet.
 
@@ -180,16 +181,31 @@ function sessionClient() {
 }
 
 async function signIn(client: unknown, body: unknown): Promise<Response> {
+  return signInRaw(client, JSON.stringify(body));
+}
+
+/** A sign-in whose body is `text`, as it is. */
+async function signInRaw(client: unknown, text: string): Promise<Response> {
   const request = new Request(`${ORIGIN}/api/admin/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.7' },
-    body: JSON.stringify(body),
+    body: text,
   });
   const ctx = { request, locals: { supabase: client }, cookies: {} };
   return (await POST(ctx as unknown as Parameters<APIRoute>[0])) as Response;
 }
 
 describe('POST /api/admin/auth/login', () => {
+  it('answers a body that is not JSON with 400, before anything is looked up or counted', async () => {
+    // Not the generic 401: no address was read, so the answer cannot say anything about one.
+    const { client } = sessionClient();
+    const res = await signInRaw(client, `email=${EMAIL}&password=${PASSWORD}`);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'bad-request' });
+    expect(state.rpcs).toEqual([]);
+    expect(client.auth.signInWithPassword).not.toHaveBeenCalled();
+  });
+
   it('answers a wrong password with the generic 401, and counts the failure', async () => {
     const { client } = sessionClient();
     const res = await signIn(client, { email: EMAIL, password: 'wrong password' });
