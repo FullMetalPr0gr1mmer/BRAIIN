@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import ResourceForm from '@/components/admin/ResourceForm';
+import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
 import { uiFor } from '@/lib/admin/uiSchema';
 
 export const prerender = false;
@@ -12,5 +12,5 @@ const id = Astro.params.id ?? null;
 ---
 
 <AdminLayout title={`Edit ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <ResourceForm client:load resource="ai-questions" id={id} />
+  <AdminResourceForm client:load resource="ai-questions" id={id} />
 </AdminLayout>

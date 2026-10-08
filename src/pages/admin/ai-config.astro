@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import SingletonForm from '@/components/admin/SingletonForm';
+import AdminSingletonForm from '@/components/admin/islands/AdminSingletonForm';
 
 export const prerender = false;
 ---
@@ -9,5 +9,5 @@ export const prerender = false;
   title="Style-Finder results & logic"
   subtitle="The cost and rate-limit envelope around the AI proxy. The API key is a Worker secret and is not editable here."
 >
-  <SingletonForm client:load config="ai-config" />
+  <AdminSingletonForm client:load config="ai-config" />
 </AdminLayout>

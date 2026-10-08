@@ -192,7 +192,7 @@ describe('where a lead is read', () => {
   });
 
   it('the panel shows the discipline when no service was picked', async () => {
-    const { interestOf } = await import('@/components/admin/LeadsPanel');
+    const { interestOf } = await import('@/components/admin/screens/leads/LeadsPanel');
     expect(interestOf({ service_of_interest: 'logo', discipline_of_interest: null })).toBe('logo');
     expect(interestOf({ service_of_interest: null, discipline_of_interest: 'events' })).toBe(
       'events (help me choose)',
@@ -201,7 +201,7 @@ describe('where a lead is read', () => {
   });
 
   it('the panel prefers the server’s label over the raw slug (Round 3)', async () => {
-    const { interestOf } = await import('@/components/admin/LeadsPanel');
+    const { interestOf } = await import('@/components/admin/screens/leads/LeadsPanel');
     expect(
       interestOf({
         service_of_interest: 'videography',

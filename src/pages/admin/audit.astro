@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import ReadOnlyPanel from '@/components/admin/ReadOnlyPanel';
+import AdminLogs from '@/components/admin/islands/AdminLogs';
 
 export const prerender = false;
 
@@ -18,5 +18,5 @@ const columns = [
   title="Audit log"
   subtitle="Append-only and hash-chained by the database. There is no edit or delete path, by design."
 >
-  <ReadOnlyPanel client:load endpoint="/api/admin/audit" columns={columns} variant="audit" />
+  <AdminLogs client:load endpoint="/api/admin/audit" columns={columns} variant="audit" />
 </AdminLayout>

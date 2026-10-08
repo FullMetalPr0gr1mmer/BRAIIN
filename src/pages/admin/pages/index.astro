@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import ResourceTable from '@/components/admin/ResourceTable';
+import AdminResourceTable from '@/components/admin/islands/AdminResourceTable';
 import { uiFor } from '@/lib/admin/uiSchema';
 
 export const prerender = false;
@@ -14,5 +14,5 @@ const ui = uiFor('pages');
   to intersection just adds a blank frame. Public routes use visible/idle — /admin is
   exempt from the CWV budgets (CLAUDE.md §6) and is gated on bundle size instead.
 -->
-  <ResourceTable client:load resource="pages" />
+  <AdminResourceTable client:load resource="pages" />
 </AdminLayout>

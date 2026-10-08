@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import ReadOnlyPanel from '@/components/admin/ReadOnlyPanel';
+import AdminLogs from '@/components/admin/islands/AdminLogs';
 import { can } from '@/lib/authz/matrix';
 
 export const prerender = false;
@@ -23,7 +23,7 @@ const columns = [
   title="System logs"
   subtitle="Operational log. Separate from the audit trail, and clearable."
 >
-  <ReadOnlyPanel
+  <AdminLogs
     client:load
     endpoint="/api/admin/logs"
     columns={columns}

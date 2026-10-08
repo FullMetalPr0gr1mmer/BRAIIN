@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import InsightsPanel from '@/components/admin/InsightsPanel';
+import AdminInsights from '@/components/admin/islands/AdminInsights';
 
 export const prerender = false;
 ---
@@ -10,5 +10,5 @@ export const prerender = false;
   subtitle="Field Core Web Vitals — the source of truth the CI lab gate approximates."
   styles={['insights.css']}
 >
-  <InsightsPanel client:load mode="health" />
+  <AdminInsights client:load mode="health" />
 </AdminLayout>

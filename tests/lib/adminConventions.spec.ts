@@ -16,9 +16,10 @@ import { describe, expect, it } from 'vitest';
 //                                  during the server render. Dynamic values use data-*
 //                                  buckets, SVG attributes or the CSSOM after hydration.
 //   islands land in the admin      size-limit splits public from admin by FILE NAME, so a
-//   bundle                         hydrated admin island must be named Admin* (or be one of
-//                                  the islands listed by name in .size-limit.json), or its
-//                                  chunk would be weighed against the public 100 KB budget.
+//   bundle                         hydrated admin island must be an Admin* entry (in
+//                                  src/components/admin/islands, F3), or its chunk would be
+//                                  weighed against the public 100 KB budget. The pre-F1
+//                                  islands took that shape in W0; none is listed by name.
 
 const ROOT = process.cwd();
 
@@ -57,19 +58,6 @@ const ADMIN_MARKUP = [
 const SCRIPT_GRANDFATHERED: Record<string, string> = {
   'src/pages/admin/login.astro': 'F7 (sign-in v2)',
 };
-
-/** Hydrated admin islands that predate the Admin* rule, each listed by name in .size-limit.json. */
-const LEGACY_ISLANDS = [
-  'ApplicationsPanel',
-  'InsightsPanel',
-  'LeadsPanel',
-  'MaintenancePanel',
-  'ReadOnlyPanel',
-  'ResourceForm',
-  'ResourceTable',
-  'SingletonForm',
-  'UsersPanel',
-] as const;
 
 describe('admin pages carry no <script>', () => {
   it('outside the grandfathered pages', () => {
@@ -132,14 +120,21 @@ describe('admin code adds no <style> at runtime', () => {
 });
 
 describe('hydrated admin islands are weighed by the admin budget', () => {
-  // `<Name … client:load`, across line breaks: the tag of every hydrated component.
-  const hydrated = [...ADMIN_PAGES, join(ROOT, 'src/layouts/AdminLayout.astro')].flatMap((path) =>
-    [
-      ...read(path).matchAll(
-        /<([A-Z][\w.]*)\b[^<>]*?\sclient:(?:load|idle|visible|media|only)\b/gs,
-      ),
-    ].map((m) => m[1] as string),
-  );
+  // `<Name … client:load`, across line breaks: the tag of every hydrated component, with
+  // the module its page imports it from.
+  const hydrated = [...ADMIN_PAGES, join(ROOT, 'src/layouts/AdminLayout.astro')].flatMap((path) => {
+    const src = read(path);
+    return [
+      ...src.matchAll(/<([A-Z][\w.]*)\b[^<>]*?\sclient:(?:load|idle|visible|media|only)\b/gs),
+    ].map((m) => {
+      const name = m[1] as string;
+      const from = new RegExp(String.raw`import\s+${name}\s+from\s+'([^']+)'`).exec(src)?.[1];
+      return { name, from, at: rel(path) };
+    });
+  });
+  /** Where island entries live (F3), as a path and as the specifier a page imports. */
+  const ISLANDS_DIR = 'src/components/admin/islands';
+  const ISLANDS_IMPORT = '@/components/admin/islands';
   const sizeLimit = JSON.parse(read(join(ROOT, '.size-limit.json'))) as {
     name: string;
     path: string[];
@@ -151,11 +146,17 @@ describe('hydrated admin islands are weighed by the admin budget', () => {
     expect(hydrated.length).toBeGreaterThan(0);
   });
 
-  it('every island is named Admin* or is a listed legacy island', () => {
-    const unknown = [...new Set(hydrated)].filter(
-      (name) => !name.startsWith('Admin') && !(LEGACY_ISLANDS as readonly string[]).includes(name),
-    );
-    expect(unknown).toEqual([]);
+  it('every island is an Admin* entry in src/components/admin/islands', () => {
+    const offenders = hydrated
+      .filter(({ name, from }) => !name.startsWith('Admin') || from !== `${ISLANDS_IMPORT}/${name}`)
+      .map(({ name, from, at }) => `${at}: ${name} from ${from ?? '(no import)'}`);
+    expect(offenders).toEqual([]);
+  });
+
+  it('every entry in islands/ is hydrated by a page or the layout', () => {
+    const entries = readdirSync(join(ROOT, ISLANDS_DIR)).map((f) => f.replace(/\.tsx$/, ''));
+    const names = new Set(hydrated.map(({ name }) => name));
+    expect(entries.filter((entry) => !names.has(entry))).toEqual([]);
   });
 
   it('Admin*.js is in the admin bundle and out of the public one', () => {
@@ -163,14 +164,17 @@ describe('hydrated admin islands are weighed by the admin budget', () => {
     expect(publicEntry?.path).toContain('!dist/client/_astro/Admin*.js');
   });
 
-  it('each legacy island is in the admin bundle and out of the public one', () => {
-    for (const name of LEGACY_ISLANDS) {
-      expect(adminEntry?.path, name).toContain(`dist/client/_astro/${name}.*.js`);
-      expect(publicEntry?.path, name).toContain(`!dist/client/_astro/${name}.*.js`);
-    }
-  });
-
-  it('the legacy list names only islands still hydrated', () => {
-    for (const name of LEGACY_ISLANDS) expect(hydrated, name).toContain(name);
+  it('the budgets name no island one by one: the Admin* glob covers them all', () => {
+    expect(adminEntry?.path).toEqual([
+      'dist/client/_astro/admin-*.js',
+      'dist/client/_astro/Admin*.js',
+      'dist/client/_astro/login.astro_*.js',
+    ]);
+    expect(publicEntry?.path).toEqual([
+      'dist/client/_astro/*.js',
+      '!dist/client/_astro/admin-*.js',
+      '!dist/client/_astro/Admin*.js',
+      '!dist/client/_astro/login.astro_*.js',
+    ]);
   });
 });
