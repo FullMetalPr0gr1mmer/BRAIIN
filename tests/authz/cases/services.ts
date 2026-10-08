@@ -1,0 +1,162 @@
+import { UUID, VALID_BILINGUAL, type Case } from '../harness';
+
+// Services, disciplines and service cases (§5 "Services — create/edit"; Round 2, 0028).
+
+export const cases: readonly Case[] = [
+  {
+    name: 'services list',
+    load: () => import('@/pages/api/admin/services/index'),
+    method: 'GET',
+    url: '/api/admin/services',
+    // SEO reaches this through `seo.entityMeta` — it must find a service to write meta
+    // for. Developer holds neither capability.
+    allow: ['admin', 'content_creator', 'seo'],
+  },
+  {
+    name: 'services create',
+    load: () => import('@/pages/api/admin/services/index'),
+    method: 'POST',
+    url: '/api/admin/services',
+    body: { slug: 'logo', title: VALID_BILINGUAL, status: 'draft' },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'services read one',
+    load: () => import('@/pages/api/admin/services/[id]'),
+    method: 'GET',
+    url: `/api/admin/services/${UUID}`,
+    // The list's read set: SEO opens a service to write its meta.
+    allow: ['admin', 'content_creator', 'seo'],
+  },
+  {
+    name: 'services publish (status transition)',
+    load: () => import('@/pages/api/admin/services/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/services/${UUID}`,
+    body: { status: 'published', title: VALID_BILINGUAL, version: 1 },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'services archive (Admin-only transition)',
+    load: () => import('@/pages/api/admin/services/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/services/${UUID}`,
+    body: { status: 'archived', version: 1 },
+    allow: ['admin'],
+  },
+  {
+    name: 'services delete',
+    load: () => import('@/pages/api/admin/services/[id]'),
+    method: 'DELETE',
+    url: `/api/admin/services/${UUID}`,
+    allow: ['admin'],
+  },
+  {
+    name: 'services reorder',
+    load: () => import('@/pages/api/admin/services/reorder'),
+    method: 'POST',
+    url: '/api/admin/services/reorder',
+    body: { items: [{ id: UUID, sortOrder: 10 }] },
+    allow: ['admin', 'content_creator'],
+  },
+  // ---- Round 2 (0028): disciplines and service cases — service content (§5 Services) ----
+  {
+    name: 'disciplines list',
+    load: () => import('@/pages/api/admin/disciplines/index'),
+    method: 'GET',
+    url: '/api/admin/disciplines?status.neq=archived',
+    // SEO: the service form's Discipline picker (it reads services for their meta).
+    allow: ['admin', 'content_creator', 'seo'],
+  },
+  {
+    name: 'disciplines create',
+    load: () => import('@/pages/api/admin/disciplines/index'),
+    method: 'POST',
+    url: '/api/admin/disciplines',
+    body: { slug: 'branding', name: VALID_BILINGUAL, status: 'draft' },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'disciplines read one',
+    load: () => import('@/pages/api/admin/disciplines/[id]'),
+    method: 'GET',
+    url: `/api/admin/disciplines/${UUID}`,
+    allow: ['admin', 'content_creator', 'seo'],
+  },
+  {
+    name: 'disciplines publish (status transition)',
+    load: () => import('@/pages/api/admin/disciplines/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/disciplines/${UUID}`,
+    body: { status: 'published', name: VALID_BILINGUAL, version: 1 },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'disciplines archive (Admin-only — hides every service under it)',
+    load: () => import('@/pages/api/admin/disciplines/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/disciplines/${UUID}`,
+    body: { status: 'archived', version: 1 },
+    allow: ['admin'],
+  },
+  {
+    name: 'disciplines delete',
+    load: () => import('@/pages/api/admin/disciplines/[id]'),
+    method: 'DELETE',
+    url: `/api/admin/disciplines/${UUID}`,
+    allow: ['admin'],
+  },
+  {
+    name: 'disciplines reorder',
+    load: () => import('@/pages/api/admin/disciplines/reorder'),
+    method: 'POST',
+    url: '/api/admin/disciplines/reorder',
+    body: { items: [{ id: UUID, sortOrder: 10 }] },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'service cases list',
+    load: () => import('@/pages/api/admin/service-cases/index'),
+    method: 'GET',
+    url: '/api/admin/service-cases',
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'service cases create',
+    load: () => import('@/pages/api/admin/service-cases/index'),
+    method: 'POST',
+    url: '/api/admin/service-cases',
+    body: { serviceId: UUID, portfolioId: UUID, title: VALID_BILINGUAL },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'service cases read one',
+    load: () => import('@/pages/api/admin/service-cases/[id]'),
+    method: 'GET',
+    url: `/api/admin/service-cases/${UUID}`,
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'service cases publish',
+    load: () => import('@/pages/api/admin/service-cases/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/service-cases/${UUID}`,
+    body: { status: 'published', version: 1 },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'service cases archive (Admin-only transition)',
+    load: () => import('@/pages/api/admin/service-cases/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/service-cases/${UUID}`,
+    body: { status: 'archived', version: 1 },
+    allow: ['admin'],
+  },
+  {
+    name: 'service cases delete',
+    load: () => import('@/pages/api/admin/service-cases/[id]'),
+    method: 'DELETE',
+    url: `/api/admin/service-cases/${UUID}`,
+    allow: ['admin'],
+  },
+];
