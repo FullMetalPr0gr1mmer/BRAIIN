@@ -6,9 +6,10 @@ import {
   type SectionType,
 } from '@schemas/sections';
 import { LocalizedTextSchema } from '@schemas/content';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import type { SectionData } from '@/lib/sections/types';
 import { parseRow, parseRows, reportLoadError } from './parse';
+import { contentClient } from './source';
 
 // Public Tier-A read of CMS-authored page compositions (`pages` + `page_sections`,
 // authored at /admin/pages and /admin/sections). This is what makes the section engine
@@ -70,7 +71,7 @@ function toSection(row: z.infer<typeof PageSectionRowSchema>): SectionData | nul
 export async function getPageComposition(pageSlug: string): Promise<PageComposition | null> {
   if (!supabaseConfigured()) return null;
   try {
-    const { data: pageData, error: pageError } = await anonClient()
+    const { data: pageData, error: pageError } = await contentClient()
       .from('pages')
       .select('id,slug,title,updated_at')
       .eq('slug', pageSlug)
@@ -84,7 +85,7 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
     if (!page) return null;
     const pageRef = { id: page.id, slug: page.slug, title: page.title, updatedAt: page.updated_at };
 
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('page_sections')
       .select('type,content,visible,sort_order')
       .eq('page_id', page.id)

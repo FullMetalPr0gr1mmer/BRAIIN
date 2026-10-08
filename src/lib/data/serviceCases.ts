@@ -6,10 +6,11 @@ import {
   type ResultCard,
   type ServiceCaseRow,
 } from '@schemas/content';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { imageRef, type ImageRef } from '@/lib/media/resolve';
 import { parseRow, reportLoadError } from './parse';
 import type { FacetValue } from './portfolio';
+import { contentClient } from './source';
 
 // A service page's case block (0028 service_cases, one per service). Tier A SSR under
 // RLS: a case is public only while it AND its service are published
@@ -79,7 +80,7 @@ export function toServiceCase(row: ServiceCaseRow): ServiceCase {
 export async function getServiceCase(serviceId: string): Promise<ServiceCase | null> {
   if (!supabaseConfigured()) return null;
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('service_cases')
       .select(SERVICE_CASE_COLUMNS)
       .eq('status', 'published')

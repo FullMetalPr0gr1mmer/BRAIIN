@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { INDEX_BATCH, newIndexRun, runLeadIndexBackfill } from '@/lib/crm/indexBackfill';
+import { DAILY_JOBS } from '@/lib/cron/jobs';
 import { blindIndex } from '@/lib/crm/blindIndex';
 import { decryptPII, encryptPII } from '@/lib/crypto/pii';
 
@@ -168,9 +169,11 @@ describe('runLeadIndexBackfill', () => {
     expect(run.indexed).toBe(2);
   });
 
-  it('a batch fits the Free plan beside the other daily jobs (src/lib/cron/daily.ts)', () => {
-    // read + country lookup + one write per lead + its log line; the purge and the Join
-    // retention take at most 1 + 2 and 6 + 2 more. The ceiling is 50 per invocation.
-    expect(2 + INDEX_BATCH + 2 + (1 + 2) + (6 + 2)).toBeLessThanOrEqual(50);
+  it('a batch fits the Free plan beside the other daily jobs (src/lib/cron/jobs.ts)', () => {
+    // The indexing job's budget is the read, a country lookup, one write per lead and its
+    // log line; with every other registered job's, it stays inside the 50 per invocation.
+    const indexing = DAILY_JOBS.find((job) => job.name === 'crm-index');
+    expect(indexing?.budget).toBe(2 + INDEX_BATCH + 2);
+    expect(DAILY_JOBS.reduce((sum, job) => sum + job.budget, 0)).toBeLessThanOrEqual(50);
   });
 });

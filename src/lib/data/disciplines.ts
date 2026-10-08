@@ -6,10 +6,11 @@ import {
   type ServiceRow,
 } from '@schemas/content';
 import type { VideoClip } from '@schemas/media';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { clipOf, imageRef, type ImageRef } from '@/lib/media/resolve';
 import { parseRows, reportLoadError } from './parse';
 import { loadPublishedServiceRows, toServiceSummary, type ServiceSummary } from './services';
+import { contentClient } from './source';
 
 // The five disciplines (0028) with their services, for the home cards, the /services
 // cards and explorer, a service page's "More in {Discipline}", and the grouped service
@@ -77,7 +78,7 @@ export async function getPublishedDisciplines(): Promise<Discipline[]> {
   if (!supabaseConfigured()) return [];
   try {
     const [disciplines, services] = await Promise.all([
-      anonClient()
+      contentClient()
         .from('disciplines')
         .select(DISCIPLINE_COLUMNS)
         .eq('status', 'published')

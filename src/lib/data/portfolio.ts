@@ -10,11 +10,12 @@ import {
   type ResultCard,
 } from '@schemas/content';
 import type { VideoClip } from '@schemas/media';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { renderTiptapToHtml } from '@/lib/content/tiptap';
 import { clipOf, imageRef, type ImageRef } from '@/lib/media/resolve';
 import { describable } from '@/lib/portfolio/caseStudy';
 import { parseRows, reportLoadError } from './parse';
+import { contentClient } from './source';
 
 // Runtime data access for the public portfolio / case studies (Tier A SSR). Tenant +
 // published filtering are enforced by RLS; we still pass status explicitly. Shape lives in
@@ -223,7 +224,7 @@ export async function getPortfolioCards(
 ): Promise<PortfolioCard[]> {
   if (!supabaseConfigured()) return [];
   try {
-    let query = anonClient()
+    let query = contentClient()
       .from('portfolio')
       .select(CARD_COLUMNS)
       .eq('status', 'published')
@@ -264,7 +265,7 @@ export interface CaseStudyEntry {
 export async function getCaseStudyIndex(): Promise<CaseStudyEntry[]> {
   if (!supabaseConfigured()) return [];
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('portfolio')
       .select(CASE_STUDY_COLUMNS)
       .eq('status', 'published')
@@ -288,7 +289,7 @@ export async function getCaseStudyIndex(): Promise<CaseStudyEntry[]> {
 export async function getCaseStudy(slug: string): Promise<CaseStudy | null> {
   if (!supabaseConfigured()) return null;
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('portfolio')
       .select(CASE_STUDY_COLUMNS)
       .eq('status', 'published')
