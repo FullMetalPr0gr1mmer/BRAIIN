@@ -18,7 +18,7 @@ When two requirements conflict, the **higher pillar wins**. CI gate order mirror
 
 ### Definition of Done (DoD) — all 7, every feature
 1. **Server-side authorized** — RLS + Edge/API role guard; UI gating is UX-only.
-2. **Within performance budget** — Gate A (Lighthouse), Gate B (size-limit), Gate C (budget.json).
+2. **Within performance budget** — Gate A (Lighthouse, incl. font bytes per route), Gate B (size-limit), and the budget tests that stand in for Gate C's `budget.json` (CLAUDE.md §6).
 3. **Server-rendered if indexable** — Tier-A HTML, never client-only.
 4. **Accessible** — WCAG 2.2 AA; zero axe violations; neon-on-dark/reduced-motion/captions/RTL checks.
 5. **Tested** — per-role authz matrix `{admin, content_creator, seo, developer, anon, other_tenant}` with `other_tenant=deny` on every row.
@@ -60,7 +60,7 @@ When two requirements conflict, the **higher pillar wins**. CI gate order mirror
 Stand up the production substrate so every later feature is born secure, fast, indexable, tenant-ready. Closes the majority of §11 and bakes the pillars into infrastructure.
 
 ### In scope (highlights)
-- Monorepo; three isolated Supabase projects; **Cloudflare Workers Builds (NOT Pages)**; supply-chain gates.
+- Monorepo; three isolated Supabase projects; **Cloudflare Workers (NOT Pages)**, deployed by CI after every gate — never Workers Builds, which ships whatever lands on the branch (CLAUDE.md §2, deploys amendment); supply-chain gates.
 - Secrets server-only via `astro:env`; stored as **Worker Secrets**.
 - Adapter locked (`imageService:'cloudflare-binding'`, `platformProxy`, KV sessions). Three-tier render model scaffolded: **Tier A = cache-backed SSR** (long-`s-maxage` + purge-on-publish — "prerendered/static" means edge-cached SSR refreshed on publish, not deploy-frozen). **Verify the Astro 6 cache layer / tag-purge→re-render path in staging before launch (launch-blocking).**
 - **Single security middleware:** strict CSP with per-request nonce and **no `'unsafe-inline'`** (`data:`/`blob:` dropped from `img-src` and the sanitizer; RUM beacon + Sentry tunnel same-origin so `connect-src 'self'` covers them); Report-Only then enforce.
