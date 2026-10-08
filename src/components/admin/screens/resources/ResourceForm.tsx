@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { uiFor } from '@/lib/admin/uiSchema';
-import { Field, formToPayload, rowToForm, type Row } from './FormField';
+import { Field, formToPayload, rowToForm, type Row } from '@/components/admin/FormField';
 import { EDGE_NOT_SYNCED } from './ResourceTable';
 
 // The create/edit form for every CRUD resource, driven by RESOURCE_UI.

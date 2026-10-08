@@ -1,0 +1,24 @@
+/* Screen stylesheet: the search results page (/admin/search). Linked only through
+   AdminLayout's `styles` prop (styles={['search.css']}), after admin.css.
+   It uses admin.css's tokens and declares none, and holds no colour literal
+   (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+/* ---- Global search results ---- */
+
+.search-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.search-hits a {
+  color: var(--ad-primary);
+  font-weight: 600;
+  text-underline-offset: 2px;
+}
+
+.search-hits a:hover {
+  color: var(--ad-primary-hover);
+}

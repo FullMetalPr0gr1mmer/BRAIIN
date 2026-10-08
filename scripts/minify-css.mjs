@@ -1,5 +1,6 @@
 // POST-build: strip comments and insignificant whitespace from the served stylesheets
-// (dist/client/styles/*.css — public/styles is copied there verbatim; Vite never sees it).
+// (dist/client/styles/**/*.css — public/styles is copied there verbatim; Vite never sees
+// it).
 //
 // WHY. global.css is the one render-blocking request on every public page, and the web
 // fonts cannot start until it has arrived: their @font-face rules live in it. Shipped as
@@ -147,24 +148,34 @@ export function significantChars(css) {
   return out.replace(/;}/g, '}');
 }
 
-/** Minify every .css file in `dir` in place; returns what it did, per file. */
+/**
+ * Every .css file under `dir`, as a path relative to it. Subdirectories count: the admin's
+ * screen stylesheets are served from styles/admin/ (src/lib/admin/stylesheets.ts).
+ */
+export function cssFiles(dir, prefix = '') {
+  return readdirSync(join(dir, prefix), { withFileTypes: true }).flatMap((entry) => {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) return cssFiles(dir, rel);
+    return entry.name.endsWith('.css') ? [rel] : [];
+  });
+}
+
+/** Minify every .css file under `dir` in place; returns what it did, per file. */
 export function minifyDir(dir) {
   if (!existsSync(dir)) throw new Error(`minify-css: ${dir} not found — run the build first`);
-  return readdirSync(dir)
-    .filter((f) => f.endsWith('.css'))
-    .map((f) => {
-      const path = join(dir, f);
-      const src = readFileSync(path, 'utf8');
-      const min = minifyCss(src);
-      writeFileSync(path, min);
-      return {
-        file: f,
-        before: Buffer.byteLength(src),
-        after: Buffer.byteLength(min),
-        gzBefore: gzipSync(src).length,
-        gzAfter: gzipSync(min).length,
-      };
-    });
+  return cssFiles(dir).map((f) => {
+    const path = join(dir, f);
+    const src = readFileSync(path, 'utf8');
+    const min = minifyCss(src);
+    writeFileSync(path, min);
+    return {
+      file: f,
+      before: Buffer.byteLength(src),
+      after: Buffer.byteLength(min),
+      gzBefore: gzipSync(src).length,
+      gzAfter: gzipSync(min).length,
+    };
+  });
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

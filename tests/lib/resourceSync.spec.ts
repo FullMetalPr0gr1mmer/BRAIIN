@@ -11,7 +11,7 @@ import { RESOURCE_UI } from '@/lib/admin/uiSchema';
 vi.mock('@/components/admin/RichText', () => ({ default: () => null }));
 
 const { default: ResourceTable, EDGE_NOT_SYNCED } =
-  await import('@/components/admin/ResourceTable');
+  await import('@/components/admin/screens/resources/ResourceTable');
 
 const render = (resource: string) =>
   renderToStaticMarkup(createElement(ResourceTable, { resource }));

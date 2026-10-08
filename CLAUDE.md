@@ -250,15 +250,19 @@ Page-only CSS — including a page's own section types (`aboutWho`, `leadership`
 **Admin code (Admin v2 F0, `tests/lib/adminConventions.spec.ts`):**
 - no `<script>` in `src/pages/admin/**` (behaviour lives in islands and `src/lib/admin`, inside the admin chunks; `login.astro` is grandfathered until sign-in v2, F7);
 - no `style=` attribute or `style={…}` prop in admin markup (style-src has no `'unsafe-inline'`; dynamic values use `data-*` buckets, SVG attributes or the CSSOM after hydration);
-- a hydrated admin island is named `Admin*` or is one of the legacy islands listed by name in `.size-limit.json`, so its chunk is weighed by the admin budget, never the public one.
+- a hydrated admin island is an `Admin*` entry in `src/components/admin/islands/`, so its chunk is weighed by the admin budget, never the public one.
 
 **Admin layers (F2):**
 - server primitives in `src/components/admin/ui/` (Astro, zero JS: `Sidebar`, `Topbar`, `PageHead`, `Icon`);
 - the React kit used inside islands in `src/components/admin/kit/`;
 - fields in `src/components/admin/fields/`;
 - hydrated island entries in `src/components/admin/islands/Admin*.tsx` (F3: `AdminChrome`, the command palette, on every admin page) with their private code in `src/components/admin/screens/<name>/`.
-- The shell's menu is `src/lib/admin/nav.ts` (groups, an icon per link, `match` routes that light a link, and an area's `tabs`, still derived from `ROLE_CAPS`); its per-render state (head counts for visible links only, the maintenance flag, the signed-in name) is `src/lib/admin/shell.ts`.
+- The shell's menu is `src/lib/admin/nav/` (one module per area, composed and sorted by `order` in `nav/index.ts`: groups, an icon per link, `match` routes that light a link, and an area's `tabs`, still derived from `ROLE_CAPS`); its per-render state (head counts for visible links only, each a counter registered in `src/lib/admin/counters/`; the maintenance flag; the signed-in name) is `src/lib/admin/shell.ts`.
 - Below 900px the sidebar is a `popover`, zero JS.
+
+**Admin registries (W0):**
+- one module per entity in `src/lib/admin/resources/<entity>.ts` (indexed by `RESOURCES`) and per editor in `src/lib/admin/ui/<entity>.ts` (`RESOURCE_UI`/`SINGLETON_UI`; `uiSchema.ts` re-exports them);
+- a screen's own CSS in `public/styles/admin/<screen>.css`, linked only through AdminLayout's `styles` prop (the closed list in `src/lib/admin/stylesheets.ts`), while the tokens and the design system's hooks stay in `admin.css`.
 
 ### Rendering & data flow
 Content Layer loaders use the anon key under RLS (`status='published'`, tenant-scoped). Per-section error isolation mandatory. Both EN and AR built; both in sitemap.

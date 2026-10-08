@@ -5,16 +5,7 @@
       "dist/client/_astro/*.js",
       "!dist/client/_astro/admin-*.js",
       "!dist/client/_astro/Admin*.js",
-      "!dist/client/_astro/login.astro_*.js",
-      "!dist/client/_astro/ResourceTable.*.js",
-      "!dist/client/_astro/ResourceForm.*.js",
-      "!dist/client/_astro/SingletonForm.*.js",
-      "!dist/client/_astro/LeadsPanel.*.js",
-      "!dist/client/_astro/ApplicationsPanel.*.js",
-      "!dist/client/_astro/UsersPanel.*.js",
-      "!dist/client/_astro/InsightsPanel.*.js",
-      "!dist/client/_astro/ReadOnlyPanel.*.js",
-      "!dist/client/_astro/MaintenancePanel.*.js"
+      "!dist/client/_astro/login.astro_*.js"
     ],
     "limit": "100 KB",
     "gzip": true
@@ -24,16 +15,7 @@
     "path": [
       "dist/client/_astro/admin-*.js",
       "dist/client/_astro/Admin*.js",
-      "dist/client/_astro/login.astro_*.js",
-      "dist/client/_astro/ResourceTable.*.js",
-      "dist/client/_astro/ResourceForm.*.js",
-      "dist/client/_astro/SingletonForm.*.js",
-      "dist/client/_astro/LeadsPanel.*.js",
-      "dist/client/_astro/ApplicationsPanel.*.js",
-      "dist/client/_astro/UsersPanel.*.js",
-      "dist/client/_astro/InsightsPanel.*.js",
-      "dist/client/_astro/ReadOnlyPanel.*.js",
-      "dist/client/_astro/MaintenancePanel.*.js"
+      "dist/client/_astro/login.astro_*.js"
     ],
     "limit": "300 KB",
     "gzip": true

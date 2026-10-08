@@ -66,8 +66,8 @@ export default defineConfig({
           //
           // Why named at all: `.size-limit.json` splits public from admin by FILE NAME,
           // so an admin module in an anonymous chunk would be weighed against the public
-          // 100 KB budget. Every admin chunk is `admin-*` (src/pages entries are `Admin*`
-          // or listed). scripts/admin-bundle.mjs checks the real build (`npm run size`,
+          // 100 KB budget. Every admin chunk is `admin-*` (and every island entry
+          // `Admin*`). scripts/admin-bundle.mjs checks the real build (`npm run size`,
           // after the build in CI): what each chunk holds, that the editor is lazy, and
           // that no public chunk imports one. tests/lib/adminBundle.spec.ts tests that
           // script on fixture chunks; nothing in `npm test` reads a build.

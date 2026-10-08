@@ -175,7 +175,8 @@ describe('erase (DSAR)', () => {
 });
 
 describe('panel helpers', async () => {
-  const { formatBytes, safeLink } = await import('@/components/admin/ApplicationsPanel');
+  const { formatBytes, safeLink } =
+    await import('@/components/admin/screens/applications/ApplicationsPanel');
   it('formats sizes and only links https', () => {
     expect(formatBytes(1.5 * 1024 * 1024)).toBe('1.5 MB');
     expect(formatBytes(900)).toBe('1 KB');
