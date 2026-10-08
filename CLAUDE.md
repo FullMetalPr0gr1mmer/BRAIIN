@@ -282,6 +282,7 @@ The Admin v2 program, its designs and the deviations register: `docs/admin-v2/`.
 #### Releases (`docs/admin-v2/releases.md`)
 - No slice has merged yet; R1 (the ledger schema) adds the first bullet here.
 - History today: the Versioning bullet under Data model & schema (0032, H6).
+- The preview's data seam: `contentClient()` in `src/lib/data/source.ts`, the rule under Rendering & data flow (Wave 0, W0-d); R8 builds on it.
 
 #### CRM (`docs/admin-v2/crm.md`)
 - C1a-1, lead personal data at the database layer (0033): the staff column grant and the role-helper rule under Data model & schema; the live check in §3 Pillar 1 and §7.
