@@ -645,10 +645,12 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
 
 Each slice records where its implementation departs from the design it builds, and why, in
 its own file under [as-built/](as-built/), so the designs stay readable as the reasoning and
-those files stay the truth. A slice's PR adds its file and one line below, under its lane.
-Most hotfixes found after this document was written (H5 onward) have no design to depart
-from, so their files record what was built and why; H6 pulls part of R1 forward and records
-its departures from it.
+those files stay the truth. A slice's PR adds its file and one line below, under its lane,
+and moves any migration it carries to "Applied" in [migrations.md](migrations.md) once
+production has applied it, so nothing is edited after the merge; a new file's header names its
+PR, not the merge commit, which does not exist yet. Most hotfixes found after this document
+was written (H5 onward) have no design to depart from, so their files record what was built
+and why; H6 pulls part of R1 forward and records its departures from it.
 
 **UI**
 - [F0](as-built/F0.md): harness and CI (#34)

@@ -28,7 +28,9 @@ Each slice's file under [as-built/](as-built/) has the detail.
 
 Nothing is reserved beyond 0037 yet: the next free number is **0038**. Before a wave's slices
 branch, each migration the wave plans gets a row here, numbered in the wave's planned merge
-order. A row moves to "Applied" when its PR merges.
+order. The slice's own PR moves its row to "Applied" once production has applied the
+migration, before the PR merges (Pushing to production, step 5), so the row is true when the
+PR lands and nothing here is edited after a merge.
 
 | Number | Slice | What | Wave |
 |---|---|---|---|
@@ -77,6 +79,8 @@ Process only: the database URL and every credential stay with the operator.
    table-level write privilege on the eight tables and no column-level one but UPDATE on
    `profiles.role`, `is_active` and `display_name` (the users screen's, which must stay), no
    write policy on `tenants`.
-5. **Merge** (for an expand migration; a contraction's code PR has merged and deployed before
-   step 1, rule 6). Then move its row from "Reserved" to "Applied", and add the slice's
-   as-built file.
+5. **Record.** On the PR's branch, move its row from "Reserved" to "Applied" and raise the
+   range in the sentence above that table. The PR already carries the slice's as-built file
+   and its line in the README's index, so nothing is left to edit after the merge.
+6. **Merge** (for an expand migration; a contraction's code PR has merged and deployed before
+   step 1, rule 6).
