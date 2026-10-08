@@ -55,7 +55,7 @@ export const REDIRECT_MAP_LIMIT = 5000;
 /**
  * Paths a rule may never claim: the CMS, its API, the health probe the synthetic monitors
  * hit, and the build's own asset routes. A source under any of these is refused at save
- * time (resources.ts) AND dropped while building the map — the map is what the edge
+ * time (resources/redirects.ts) AND dropped while building the map — the map is what the edge
  * reads, so a row that reached the table by another path still cannot lock anyone out.
  */
 export const RESERVED_REDIRECT_PREFIXES: readonly string[] = [

@@ -127,14 +127,19 @@ describe('pickers hide archived rows — and never drop a link', () => {
   });
 
   it('every relation filter names a column its list endpoint filters on (never a silent no-op)', () => {
-    const CONFIG: Record<string, { filterableColumns?: readonly string[] }> = {
-      services: R.serviceResource,
-      disciplines: R.disciplineResource,
-      portfolio: R.portfolioResource,
-      pages: R.pageResource,
-      sectors: R.sectorResource,
-      clients: R.clientResource,
-    };
+    // Every resource a relation may point at, from the registry; the ones the pickers
+    // filter today are pinned, so a registry that lost one fails here.
+    const CONFIG: Readonly<Record<string, { filterableColumns?: readonly string[] }>> = R.RESOURCES;
+    expect(Object.keys(CONFIG)).toEqual(
+      expect.arrayContaining([
+        'services',
+        'disciplines',
+        'portfolio',
+        'pages',
+        'sectors',
+        'clients',
+      ]),
+    );
     for (const [slug, ui] of Object.entries(RESOURCE_UI)) {
       for (const field of ui.fields) {
         const relation = field.relation;
