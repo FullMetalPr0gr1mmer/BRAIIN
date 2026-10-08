@@ -62,6 +62,14 @@ const InstantSchema = z.string().datetime({ offset: true }).nullish();
 
 const VersionSchema = z.number().int().min(1);
 
+/**
+ * A per-tenant singleton row is created on its first save, and until then GET answers
+ * `version: 0` (src/lib/admin/singleton.ts). The editor sends that 0 back, so the
+ * singleton schemas accept it; the kernel turns 0 or 1 into the INSERT and anything
+ * else on a missing row into a 409. `min(1)` here refused every first save with a 422.
+ */
+const SingletonVersionSchema = z.number().int().min(0);
+
 /** `.partial()` + required version — see convention (1) above. */
 function updatable<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
   return schema.partial().extend({ version: VersionSchema });
@@ -626,7 +634,7 @@ export const SeoDefaultsSchema = z.object({
   defaultOgImage: ShareImageUrlSchema.nullish(),
   organization: z.record(z.string(), z.unknown()).optional(),
   robotsDirectives: z.string().trim().max(120).optional(),
-  version: VersionSchema,
+  version: SingletonVersionSchema,
 });
 
 /**
@@ -764,7 +772,7 @@ export const SiteSettingsSchema = z.object({
       spam_days: z.number().int().min(1).max(90).optional(),
     })
     .optional(),
-  version: VersionSchema,
+  version: SingletonVersionSchema,
 });
 
 export const MaintenanceSchema = z.object({
@@ -774,7 +782,7 @@ export const MaintenanceSchema = z.object({
     .array(z.union([z.string().ip({ version: 'v4' }), z.string().ip({ version: 'v6' })]))
     .max(50)
     .default([]),
-  version: VersionSchema,
+  version: SingletonVersionSchema,
 });
 
 export const IntegrationsSchema = z.object({
@@ -782,7 +790,7 @@ export const IntegrationsSchema = z.object({
   searchConsole: z.record(z.string(), z.unknown()).optional(),
   calendly: z.record(z.string(), z.unknown()).optional(),
   recaptcha: z.record(z.string(), z.unknown()).optional(),
-  version: VersionSchema,
+  version: SingletonVersionSchema,
 });
 
 /**
@@ -859,7 +867,7 @@ export const AiConfigSchema = z.object({
   perSessionHourlyLimit: z.number().int().min(1).max(1000).optional(),
   systemPrompt: z.string().max(8000).nullish(),
   scoring: z.record(z.string(), z.unknown()).optional(),
-  version: VersionSchema,
+  version: SingletonVersionSchema,
 });
 
 // ── Analytics / logs queries ────────────────────────────────────────────────────
