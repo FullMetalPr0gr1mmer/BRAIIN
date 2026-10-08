@@ -7,9 +7,9 @@ import { DAILY_JOBS, type CronJob } from './jobs';
 // cheapest first, each within its subrequest budget (that file has the sum).
 //
 // Each job is isolated. One that throws is logged as an error under its own name
-// (`cron:<name>`, the message only, never the data it was working on), so Site Health shows
-// it and the next day's run retries it, and the jobs after it still run. What a job did is
-// its own line: the lead indexing writes one on every run, a partial one included.
+// (`cron:<name>`, with the error's message and nothing else), so Site Health shows it and
+// the next day's run retries it, and the jobs after it still run. What a job did is its own
+// line: the lead indexing writes one on every run, a partial one included.
 export async function runDailyJobs(jobs: readonly CronJob[] = DAILY_JOBS): Promise<void> {
   if (!supabaseConfigured()) return;
   for (const job of jobs) {
