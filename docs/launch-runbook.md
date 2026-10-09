@@ -1051,3 +1051,9 @@ in the version message (`ci <sha> run <id>`), so `git merge-base --is-ancestor c
 must succeed; versions deployed before this pipeline carry no commit, so place them by deploy
 time against `cc8c6c4`'s deploy. A new contraction moves the line: its migration PR updates
 this paragraph.
+
+0037 (#51) does not move the line. It revoked staff write privileges on the eight tables
+staff only read (the telemetry tables, the pageview rollup, the search, consent and
+notification ledgers, `tenants` and `profiles`), but no build since the line writes them with
+a staff token except the users screen, whose update of `profiles.role`, `is_active` and
+`display_name` 0037 keeps. A Worker rollback across #51 is safe.
