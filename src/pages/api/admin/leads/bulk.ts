@@ -1,6 +1,7 @@
 import { LeadBulkSchema } from '@schemas/crm';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { writeAuditMany, type AuditEntry } from '@/lib/admin/audit';
+import { writeSystemLog } from '@/lib/data/systemLog';
 import { BULK_ACTION_FIELD, leadWriteError, parseBulkRows } from '@/lib/crm/leadWrite';
 
 // One change over up to 100 leads (Admin v2 C3): `leads.manage`. Assign, move to a stage,
@@ -16,7 +17,9 @@ import { BULK_ACTION_FIELD, leadWriteError, parseBulkRows } from '@/lib/crm/lead
 //
 // Then one audit row per changed lead and one for the batch, in ONE insert
 // (writeAuditMany): a Worker on the Free plan has 50 subrequests per request, so neither
-// the change nor its audit may cost one call per lead.
+// the change nor its audit may cost one call per lead. The audit comes after the change (it
+// names what changed), so it cannot gate it: a failed insert leaves the change in place,
+// answers `audited: false` and logs what went unrecorded to system_logs.
 
 export const prerender = false;
 
@@ -64,13 +67,31 @@ export const POST = defineAdminRoute({
         skipped: skipped.length,
       },
     });
-    await writeAuditMany(sb, auth, entries);
+    const audited = await writeAuditMany(sb, auth, entries);
+    if (!audited) {
+      // The change is committed and stays; its record is what failed. writeAuditMany has
+      // already logged the failed insert; this line says what went unrecorded (counts and
+      // the action, never ids or values), and the answer says so too, so the screen can
+      // tell the person instead of claiming a clean save.
+      await writeSystemLog({
+        level: 'error',
+        source: 'admin:leads-bulk',
+        message: `bulk lead change applied without its audit rows (${applied.length} leads)`,
+        detail: {
+          action: input.action,
+          requested: input.items.length,
+          applied: applied.length,
+          actorId: auth.userId,
+        },
+      });
+    }
 
     return {
       applied: applied.map((row) => ({ id: row.id, version: row.version })),
       conflicts: conflicts.map((row) => ({ id: row.id, version: row.version })),
       missing: missing.map((row) => row.id),
       skipped: skipped.map((row) => row.id),
+      audited,
     };
   },
 });

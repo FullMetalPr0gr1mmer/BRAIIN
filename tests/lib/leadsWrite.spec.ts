@@ -38,6 +38,7 @@ const auditBatches: { action: string; entityId?: string; detail?: Record<string,
 const claimed: { op: string; limits: unknown }[] = [];
 const updates: { values: Record<string, unknown>; filters: Record<string, unknown> }[] = [];
 const rpcCalls: { owner: string; fn: string; args: Record<string, unknown> }[] = [];
+const systemLogs: Record<string, unknown>[] = [];
 
 vi.mock('@/lib/admin/audit', () => ({
   writeAudit: async (
@@ -63,7 +64,12 @@ vi.mock('@/lib/crypto/pii', () => ({
   encryptPII: async (v: string) => `enc(${v})`,
   decryptPII: async (v: string) => v,
 }));
-vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+vi.mock('@/lib/data/systemLog', () => ({
+  writeSystemLog: async (entry: Record<string, unknown>) => {
+    systemLogs.push(entry);
+    return true;
+  },
+}));
 vi.mock('@/lib/admin/rateLimit', async () => {
   const actual =
     await vi.importActual<typeof import('@/lib/admin/rateLimit')>('@/lib/admin/rateLimit');
@@ -185,6 +191,7 @@ beforeEach(() => {
   claimed.length = 0;
   updates.length = 0;
   rpcCalls.length = 0;
+  systemLogs.length = 0;
 });
 
 const patch = (body: unknown, role = 'admin') =>
@@ -304,6 +311,7 @@ describe('POST /api/admin/leads/bulk', () => {
       conflicts: [{ id: OTHER, version: 9 }],
       missing: [NOTE],
       skipped: [STAGE],
+      audited: true,
     });
     expect(auditBatches).toHaveLength(1);
     expect(auditBatches[0]!.map((e) => `${e.action}:${e.entityId ?? ''}`)).toEqual([
@@ -321,6 +329,36 @@ describe('POST /api/admin/leads/bulk', () => {
     expect(JSON.stringify(auditBatches)).not.toContain('Hot');
     // No audit row per lead as its own request: the Free plan's 50 subrequests.
     expect(audits).toEqual([]);
+  });
+
+  it('an audit insert that fails leaves the change in place, says so, and logs counts only', async () => {
+    auditManyOk = false;
+    callerRpc = {
+      leads_bulk_update: {
+        data: [{ lead_id: LEAD, lead_version: 5, outcome: 'applied' }],
+        error: null,
+      },
+    };
+    const res = await bulk.POST(
+      ctx('/api/admin/leads/bulk', 'POST', {
+        action: 'tagAdd',
+        value: 'Husband of a client',
+        items: [{ id: LEAD, version: 4 }],
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: Record<string, unknown> };
+    expect(body.data['audited']).toBe(false);
+    expect(body.data['applied']).toEqual([{ id: LEAD, version: 5 }]);
+    expect(systemLogs).toHaveLength(1);
+    expect(systemLogs[0]).toMatchObject({
+      level: 'error',
+      source: 'admin:leads-bulk',
+      detail: { action: 'tagAdd', requested: 1, applied: 1, actorId: USER },
+    });
+    // Counts and the action only: no lead id, no tag words.
+    expect(JSON.stringify(systemLogs)).not.toContain(LEAD);
+    expect(JSON.stringify(systemLogs)).not.toContain('Husband');
   });
 
   it('a hundred leads still cost one change call and one audit insert', async () => {
