@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIContext } from 'astro';
+import { replayLeadGrant } from './leadGrantReplay';
 
 // The lead detail route, past assertCap: the contact-details reveal must be audited
 // BEFORE anything is decrypted, and refused when the audit row cannot be written
@@ -18,22 +19,11 @@ const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER = '11111111-1111-4111-8111-111111111111';
 const LEAD = '22222222-2222-4222-8222-222222222222';
 
-/** The columns 0033 grants `authenticated` (tests/lib/leadGrants.spec.ts pins the list). */
-const GRANTED = new Set([
-  'id',
-  'tenant_id',
-  'kind',
-  'locale',
-  'name',
-  'company',
-  'message',
-  'service_of_interest',
-  'discipline_of_interest',
-  'status',
-  'consent_marketing',
-  'created_at',
-  'updated_at',
-]);
+/**
+ * The columns `authenticated` may SELECT on leads, replayed from the migrations (0033 and
+ * every grant since): the stand-in for PostgREST refuses any other column, as it would.
+ */
+const GRANTED = replayLeadGrant('select');
 
 let auditOk = true;
 let liveRole = 'admin';

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 // The public lead path since 0035 (Admin v2 C1b): one RPC with the Worker's own id,
@@ -79,17 +79,26 @@ beforeEach(() => {
   countryFails = false;
 });
 
-/** crm_ingest_lead's allow-list, read from the migration: a key outside it is a 22023. */
+/**
+ * crm_ingest_lead's allow-list, read from its LAST definition (0035, restated by 0041): a
+ * key outside it is a 22023.
+ */
 const INGEST_KEYS = (() => {
-  const sql = readFileSync(
-    join(process.cwd(), 'supabase', 'migrations', '0035_crm_ingest.sql'),
-    'utf8',
-  );
-  const list = /\bk not in \(([^)]*)\)/.exec(sql)?.[1] ?? '';
+  const dir = join(process.cwd(), 'supabase', 'migrations');
+  const definition =
+    /create or replace function public\.crm_ingest_lead\([\s\S]*?\$\$([\s\S]*?)\$\$/;
+  let body = '';
+  for (const file of readdirSync(dir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()) {
+    const found = definition.exec(readFileSync(join(dir, file), 'utf8'))?.[1];
+    if (found) body = found;
+  }
+  const list = /\bk not in \(([^)]*)\)/.exec(body)?.[1] ?? '';
   return [...list.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
 })();
 
-describe('the payload keeps to the RPC allow-list (0035)', () => {
+describe('the payload keeps to the RPC allow-list (0035, 0041)', () => {
   it('every key createLead sends is one crm_ingest_lead accepts', async () => {
     expect(INGEST_KEYS.length).toBeGreaterThan(10);
     await createLead(input());

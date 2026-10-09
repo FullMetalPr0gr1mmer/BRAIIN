@@ -3,9 +3,12 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import {
   GATED_LEAD_COLUMNS,
+  LEAD_WRITE_COLUMNS,
   SAFE_LEAD_COLUMNS,
   SENSITIVE_LEAD_COLUMNS,
 } from '@/lib/admin/leadFields';
+import { leadPatchValues } from '@/lib/crm/leadWrite';
+import { replayLeadGrant } from './leadGrantReplay';
 
 // Migration 0033: staff tokens read leads through a COLUMN grant. Two things must stay
 // true as both sides change:
@@ -15,43 +18,8 @@ import {
 //   2. No gated column is ever granted. Those are read as the service role, by the
 //      audited paths only, and this file names which files those are.
 
-const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
-
-/**
- * The columns `authenticated` may SELECT on public.leads after every migration, replayed
- * in order: a table-level revoke clears them, a column grant adds, and a table-level
- * grant means every column ('*').
- */
-function replayLeadSelectGrant(): Set<string> {
-  let columns = new Set<string>();
-  const files = readdirSync(MIGRATIONS)
-    .filter((f) => f.endsWith('.sql'))
-    .sort();
-  const statement =
-    /\b(grant|revoke)\s+([a-z_, ]+?)(?:\s*\(([^)]*)\))?\s+on\s+(?:table\s+)?public\.leads\s+(?:to|from)\s+([a-z_, ]+)/gi;
-  for (const file of files) {
-    const sql = readFileSync(join(MIGRATIONS, file), 'utf8').replace(/--[^\n]*/g, '');
-    for (const match of sql.matchAll(statement)) {
-      const [, verb, privileges, columnList, roles] = match;
-      const touchesSelect = /\b(select|all)\b/i.test(privileges ?? '');
-      const toStaff = /\bauthenticated\b/i.test(roles ?? '');
-      if (!touchesSelect || !toStaff) continue;
-      if (verb!.toLowerCase() === 'revoke') {
-        // Revoking the table privilege revokes the column privileges too (Postgres).
-        if (!columnList) columns = new Set();
-        else for (const c of columnList.split(',')) columns.delete(c.trim());
-      } else if (!columnList) {
-        columns = new Set(['*']);
-      } else {
-        for (const c of columnList.split(',')) columns.add(c.trim());
-      }
-    }
-  }
-  return columns;
-}
-
 describe('the leads SELECT grant (0033)', () => {
-  const granted = replayLeadSelectGrant();
+  const granted = replayLeadGrant('select');
 
   it('is a column grant, never table-wide', () => {
     expect(granted.has('*')).toBe(false);
@@ -60,6 +28,8 @@ describe('the leads SELECT grant (0033)', () => {
 
   it("covers every column the admin reads through the caller's client", () => {
     for (const column of SAFE_LEAD_COLUMNS.split(',')) expect(granted, column).toContain(column);
+    // What a lead write answers with (Admin v2 C3): the safe and pipeline columns.
+    for (const column of LEAD_WRITE_COLUMNS.split(',')) expect(granted, column).toContain(column);
     // The tenant predicate every admin query adds (crud.ts getRow/listRows, the counts).
     expect(granted).toContain('tenant_id');
   });
@@ -79,6 +49,53 @@ describe('the leads SELECT grant (0033)', () => {
       'crm_indexed_at',
     ];
     for (const column of forbidden) expect(granted, column).not.toContain(column);
+  });
+});
+
+describe('the leads UPDATE grant (0030, 0041)', () => {
+  const granted = replayLeadGrant('update');
+
+  it('is a column grant, never table-wide', () => {
+    expect(granted.has('*')).toBe(false);
+  });
+
+  it('covers every column the PATCH route writes, and nothing the CRM keeps to itself', () => {
+    // Every field a PATCH can send, so leadPatchValues names every column it can write.
+    const written = Object.keys(
+      leadPatchValues(
+        {
+          version: 1,
+          stageId: 'x',
+          isSpam: true,
+          assignedTo: null,
+          valueSar: 1,
+          tags: [],
+          isStarred: true,
+          read: true,
+          logContact: { channel: 'call' },
+          status: 'new',
+          internalNotes: 'x',
+        },
+        new Date(),
+      ),
+    );
+    for (const column of written) expect(granted, column).toContain(column);
+    expect([...granted].sort()).toEqual([...written].sort());
+    for (const column of [
+      ...GATED_LEAD_COLUMNS.split(',').filter((c) => c !== 'internal_notes'),
+      'retention_delete_after',
+      'retention_before_spam',
+      'read_by',
+      'score',
+      'score_signals',
+      'email_hmac',
+      'phone_hmac',
+      'version',
+      'lead_number',
+      'tenant_id',
+    ]) {
+      expect(granted, column).not.toContain(column);
+    }
   });
 });
 
@@ -159,5 +176,33 @@ describe('gated lead columns have a short, named list of readers', () => {
       'src/pages/api/admin/leads/export.ts',
       'src/pages/api/hooks/notify-lead.ts',
     ]);
+  });
+});
+
+// ── The service role's lead doors (0035, 0041) ─────────────────────────────────────────
+// No API role inserts or deletes a lead, or touches the notes thread, so those writes go
+// through service-role RPCs. Each has a short list of callers, every one behind assertCap
+// (or, for ingest, the public form's server-side checks) and, where a person acts, a live
+// recheck and an audit row.
+describe('the service-role lead RPCs have named callers', () => {
+  const callers = (fn: string) =>
+    files
+      .filter((f) => new RegExp(`rpc\\(\\s*['"]${fn}['"]`).test(f.code))
+      .map((f) => f.path)
+      .sort();
+
+  it('crm_ingest_lead: the public form and a lead added by hand, both in data/leads.ts', () => {
+    expect(callers('crm_ingest_lead')).toEqual(['src/lib/data/leads.ts']);
+  });
+  it('crm_erase_lead: the erase route only (crm.erase, live recheck, audited first)', () => {
+    expect(callers('crm_erase_lead')).toEqual(['src/pages/api/admin/leads/[id]/erase.ts']);
+  });
+  it('crm_delete_lead_note: the note route only (crm.erase, live recheck, audited first)', () => {
+    expect(callers('crm_delete_lead_note')).toEqual([
+      'src/pages/api/admin/leads/[id]/notes/[noteId].ts',
+    ]);
+  });
+  it('crm_lead_note_counts: the export only (the §3 lockdown)', () => {
+    expect(callers('crm_lead_note_counts')).toEqual(['src/pages/api/admin/leads/export.ts']);
   });
 });

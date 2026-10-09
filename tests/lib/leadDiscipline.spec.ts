@@ -25,7 +25,7 @@ vi.mock('@/lib/supabase/server', () => ({
     },
     from: (table: string) => {
       const b: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'gte', 'in', 'order', 'limit']) b[m] = () => b;
+      for (const m of ['select', 'eq', 'gte', 'in', 'order', 'limit', 'range']) b[m] = () => b;
       b['insert'] = (row: Record<string, unknown>) => {
         inserts.push({ table, row });
         // Awaited directly (a lead) or chained to read the new id back (the export's
