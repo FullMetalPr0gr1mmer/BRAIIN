@@ -59,6 +59,6 @@
   highest, which can be another slice's reservation, and leaves the ledger row where it was.
   Rule 3 now says the slice moves its own row by hand and takes the lowest number above
   `main` that no other slice holds; W0-b's script lists the ledger lines that name the old
-  number and flags a reserved one.
+  number and skips any number reserved for another slice.
 - **#41 rewrites runbook §10 with the same floor.** Whichever of #41 and this slice merges
   second keeps #41's paragraph and adds this one's 0037 note.

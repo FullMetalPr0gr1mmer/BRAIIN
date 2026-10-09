@@ -23,24 +23,29 @@
   handler no case drives, that each case's URL is served by the route it loads, that the
   route glob and the case glob each see every file on disk, and that every case is pinned by
   name in `tests/authz/caseManifest.ts`, so a module or a row lost in a merge fails by name.
-  81 handlers had no row; each got one, and every role allowed on them gets past the
-  capability check against the stub: 170 cases, 857 matrix tests.
+  80 handlers had no row; 81 rows now drive them (`PATCH /api/admin/leads/[id]` has two: a
+  status, and internal notes, which add `leads.pii`), and every role allowed on them gets past
+  the capability check against the stub: 170 cases, 857 matrix tests.
 - **Sign-in and sign-out**, the two handlers the matrix cannot drive, have their guards driven
   in `tests/authz/login.spec.ts`: the middleware refusing a cross-site or tokenless POST;
   sign-in passing without a session while sign-out answers 401; one byte-identical 401 for
-  every failed sign-in; 423 on the fifth failure, and before a locked address's password is
-  tried; the lockout failing closed; a good sign-in recorded and audited.
+  every failed sign-in, and a 400 for a body that is not JSON, before anything is looked up;
+  423 on the fifth failure, and before a locked address's password is tried; the lockout
+  failing closed; a good sign-in recorded and audited.
 - **`scripts/renumber-migration.mjs`.** When another branch merged a migration of the same
   number first (check-migrations rule 4), `node scripts/renumber-migration.mjs <file>
   [--base origin/main] [--dry-run]` renames the branch's file with `git mv` to the lowest
   number above the base's highest and the branch's earlier new migrations, passing over any
   number the reservation ledger ([migrations.md](../migrations.md), "Reserved") holds for
-  another slice. It rewrites the file name wherever it appears, and a bare number in
-  `supabase/tests`, `docs`, CLAUDE.md and the new migrations' headers only on lines the branch
-  added (`git diff -U0` against the base). It prints every file and line it changed, then
-  every line it left that still names the old migration, for a reader to check. Tested on its
-  pure parts and end to end in throwaway repositories, with every `GIT_*` variable dropped so
-  a run started from a git hook cannot reach the real repository.
+  another slice. It rewrites the file name wherever it appears but the ledger, which it never
+  edits, and a bare number in `supabase/tests`, `docs`, CLAUDE.md and the new migrations'
+  headers only on lines the branch added (`git diff -U0` against the base), and only while
+  no other migration has that number. It prints each file it changed with its count of
+  rewrites, and under it a line for each bare number it moved (a file name's rewrite is
+  counted, not printed), then every line it left that still names the old migration, with
+  the reason, for a reader to check. Tested on its pure parts and end to end in throwaway
+  repositories, with every `GIT_*` variable dropped so a run started from a git hook cannot
+  reach the real repository.
 - **check-migrations' failure** names the script, after merging the base (one line).
 - **CLAUDE.md §9** names where an admin route's cases live (one bullet).
 
@@ -60,16 +65,24 @@
   found the first version moved a file onto the next number even when the ledger held it for
   another slice, and left the slice's own row unmentioned. It now passes over such numbers
   (the ledger's rule 3), so that slice keeps its number if it merges first, and lists the
-  ledger's lines that name the old number: the ledger is the program's plan, and its rows
-  move by hand. Whose a number is comes from the Reserved row of the file's current number,
-  read from the base's ledger too, so a branch that re-planned its own row gets the number it
-  planned. There is no override flag: taking another slice's number is a re-plan of both rows.
+  ledger's lines that name the old migration (by file name, by number, or by a range that
+  holds the number) without rewriting any: the ledger is the program's plan, and its rows
+  move by hand. A second review found a Reserved row's file name rewritten under a Number
+  cell that kept the old number, so the ledger is now skipped whole. Whose a number is comes
+  from the Reserved row of the file's current number, read from the base's ledger too, so a
+  branch that re-planned its own row gets the number it planned. There is no override flag:
+  taking another slice's number is a re-plan of both rows.
 - **Review fixes to the script.**
   - It refuses to run until the base is merged: before that, the diff counts every line the
     base changed since the fork as the branch's.
   - A bare number on an added line is left to a reader when the line's base side already
     named that number (CLAUDE.md keeps a paragraph on one line, so one line can name both
-    migrations) or when the line names the base's migration of that number by its file name.
+    migrations). The first version also left a line naming the base's migration of that
+    number by its file name; a second review found that too narrow, so no bare number moves
+    at all while another migration has it, and each is listed with that migration's name:
+    the base's own (a new header's "Depends on 0037", meaning main's, became 0038), or a
+    second new one of the branch's that keeps it (parting two new 0040s rewrote the header
+    of the one that stays).
   - A file only moves up. One check-migrations accepts stays where it is, instead of closing a
     gap into a number another slice may hold.
 
