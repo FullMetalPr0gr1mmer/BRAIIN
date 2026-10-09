@@ -1,6 +1,7 @@
 import { PostRowSchema } from '@schemas/content';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { parseRow, parseRows } from './parse';
+import { contentClient } from './source';
 
 // Runtime data access for the Creative Knowledge blog (Tier A SSR). RLS enforces tenant +
 // published; we still pass status. Embeds the E-E-A-T author (team_members) + category.
@@ -17,7 +18,7 @@ const COLUMNS =
 export async function getPublishedPosts() {
   if (!supabaseConfigured()) return [];
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('blog_posts')
       .select(COLUMNS)
       .eq('status', 'published')
@@ -32,7 +33,7 @@ export async function getPublishedPosts() {
 export async function getPostBySlug(slug: string) {
   if (!supabaseConfigured()) return null;
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('blog_posts')
       .select(COLUMNS)
       .eq('status', 'published')

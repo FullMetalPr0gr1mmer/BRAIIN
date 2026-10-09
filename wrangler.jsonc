@@ -26,9 +26,11 @@
   "observability": {
     "enabled": true,
   },
-  // The daily jobs (src/worker.ts `scheduled` → src/lib/cron/daily.ts): the Join retention
-  // run — expired CVs out of the private Storage bucket, then their rows — and the public
-  // write limiter's old counters. Cron triggers are free on every Workers plan.
+  // The daily jobs (src/worker.ts `scheduled` → src/lib/cron/daily.ts, which runs the
+  // ordered registry in src/lib/cron/jobs.ts): the privileged-op ledger purge, the Join
+  // retention run — expired CVs out of the private Storage bucket, then their rows — with the
+  // public write limiter's old counters, and the CRM lead index backfill. Cron triggers are
+  // free on every Workers plan.
   "triggers": {
     "crons": ["23 3 * * *"],
   },

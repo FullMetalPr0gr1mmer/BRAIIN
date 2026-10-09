@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { BilingualTextSchema } from '@schemas/primitives';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { parseRows } from './parse';
+import { contentClient } from './source';
 
 // Public read loader for the CMS-authored navigation (Tier A).
 //
@@ -34,7 +35,7 @@ const COLUMNS = 'id,parent_id,label,href,sort_order,is_key';
 export async function getNavigation(location: 'header' | 'footer'): Promise<NavNode[]> {
   if (!supabaseConfigured()) return [];
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('navigation')
       .select(COLUMNS)
       .eq('location', location)

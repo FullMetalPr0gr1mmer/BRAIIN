@@ -187,7 +187,8 @@ function ctx(path: string, role = 'admin', init?: { method: string; body: unknow
 }
 
 const detail = await import('@/pages/api/admin/leads/[id]');
-const { afterSave, saveLead, showNotesEditor } = await import('@/components/admin/LeadsPanel');
+const { afterSave, saveLead, showNotesEditor } =
+  await import('@/components/admin/screens/leads/LeadsPanel');
 const { PII_REVEAL_LIMITS } = await import('@/lib/admin/rateLimit');
 
 beforeEach(() => {

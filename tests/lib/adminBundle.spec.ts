@@ -22,7 +22,7 @@ const GOOD = {
   'admin-rich.X1.js': 'export const editor="ProseMirror";',
   'AdminLayout.astro_astro_type_script_index_0_lang.L1.js': 'import"./admin-client.C1.js";',
   'AdminChrome.A1.js': 'import{u}from"./admin-ui.U1.js";',
-  'ResourceForm.F1.js': 'import{u}from"./admin-ui.U1.js";',
+  'AdminResourceForm.F1.js': 'import{u}from"./admin-ui.U1.js";',
   'login.astro_astro_type_script_index_0_lang.G1.js': 'import{f}from"./admin-client.C1.js";',
   'Hero.astro_astro_type_script_index_0_lang.P1.js': 'import{h}from"./preload-helper.H1.js";',
   'preload-helper.H1.js': 'export const h=1;',
@@ -59,9 +59,11 @@ describe('the checks', () => {
   it('fail when an island reaches the editor statically', () => {
     const dir = build({
       ...GOOD,
-      'ResourceForm.F1.js': 'import"./admin-ui.U1.js";import"./admin-rich.X1.js";',
+      'AdminResourceForm.F1.js': 'import"./admin-ui.U1.js";import"./admin-rich.X1.js";',
     });
-    expect(check(dir).problems.join('\n')).toMatch(/ResourceForm\.F1\.js loads admin-rich eagerly/);
+    expect(check(dir).problems.join('\n')).toMatch(
+      /AdminResourceForm\.F1\.js loads admin-rich eagerly/,
+    );
   });
 
   it('fail when a public chunk imports an admin chunk', () => {
@@ -70,6 +72,15 @@ describe('the checks', () => {
       'Hero.astro_astro_type_script_index_0_lang.P1.js': 'import{s}from"./admin-ui.U1.js";',
     });
     expect(check(dir).problems.join('\n')).toMatch(/public chunk Hero.* imports admin-ui\.U1\.js/);
+  });
+
+  it('count a chunk not named admin-* or Admin* as public, whatever it holds', () => {
+    // No island is exempt by name any more (Admin v2 W0): one hydrated under its old name
+    // would be weighed against the public budget, and this check says so.
+    const dir = build({ ...GOOD, 'LeadsPanel.Q1.js': 'import{u}from"./admin-ui.U1.js";' });
+    expect(check(dir).problems.join('\n')).toMatch(
+      /public chunk LeadsPanel\.Q1\.js imports admin-ui/,
+    );
   });
 
   it('fail when the editor leaks into admin-ui', () => {
@@ -87,7 +98,7 @@ describe('the checks', () => {
     const report = check(build(GOOD)).report as [string, number][];
     const names = report.map(([name]) => name);
     expect(names).toEqual(
-      expect.arrayContaining(['ResourceForm', 'AdminChrome', '/admin/login script']),
+      expect.arrayContaining(['AdminResourceForm', 'AdminChrome', '/admin/login script']),
     );
   });
 });

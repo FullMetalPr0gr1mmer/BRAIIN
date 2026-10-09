@@ -55,8 +55,10 @@ export function closure(entry, read) {
   return seen;
 }
 
-const ADMIN_FILE =
-  /^(admin-|Admin|ResourceTable\.|ResourceForm\.|SingletonForm\.|LeadsPanel\.|ApplicationsPanel\.|UsersPanel\.|InsightsPanel\.|ReadOnlyPanel\.|MaintenancePanel\.|login\.astro_)/;
+// Every admin chunk is `admin-*` (the groups in astro.config.mjs) or an island entry named
+// `Admin*` (src/components/admin/islands), plus the sign-in page's script. A chunk named
+// otherwise is public, whatever it holds.
+const ADMIN_FILE = /^(admin-|Admin|login\.astro_)/;
 
 export function check(dir) {
   const files = readdirSync(dir).filter((f) => f.endsWith('.js'));

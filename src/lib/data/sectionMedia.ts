@@ -1,8 +1,9 @@
 import { PUBLIC_MEDIA_COLUMNS, PublicMediaRowSchema } from '@schemas/content';
 import { UuidSchema } from '@schemas/primitives';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { imageRef, type ImageRef } from '@/lib/media/resolve';
 import { parseRows, reportLoadError } from './parse';
+import { contentClient } from './source';
 
 // Media a page SECTION references by id (`{ mediaId }` inside page_sections.content —
 // Our Work's intro frames, About's "who we are" poster). Tier A SSR read under RLS: anon sees a media row only
@@ -20,7 +21,7 @@ export async function getSectionImages(ids: readonly string[]): Promise<Map<stri
   const wanted = [...new Set(ids)].filter((id) => UuidSchema.safeParse(id).success);
   if (wanted.length === 0 || !supabaseConfigured()) return new Map();
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('media_assets')
       .select(PUBLIC_MEDIA_COLUMNS)
       .in('id', wanted.slice(0, MAX_IDS));

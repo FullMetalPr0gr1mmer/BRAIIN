@@ -1,0 +1,31 @@
+/* Screen stylesheet: the sign-in page (/admin/login, the bare layout). Linked only
+   through AdminLayout's `styles` prop (styles={['login.css']}), after admin.css.
+   It uses admin.css's tokens and declares none, and holds no colour literal
+   (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+/* ---- Sign in ---- */
+
+.login-card {
+  width: min(400px, 92vw);
+  padding: 32px;
+  background: var(--ad-card);
+  border: 1px solid var(--ad-line);
+  border-radius: 18px;
+  box-shadow: var(--ad-shadow);
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.login-card .admin-sub {
+  margin: 6px 0 26px;
+}
+
+.login-card button[type='submit'] {
+  width: 100%;
+  margin-top: 6px;
+}

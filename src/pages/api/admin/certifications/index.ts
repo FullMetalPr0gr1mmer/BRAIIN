@@ -2,7 +2,7 @@
 // `defineAdminRoute` (assertCap + Zod + audit + no-store) and `crud.ts` (tenant
 // predicate + optimistic lock). See src/lib/admin/resource.ts.
 import { collectionRoutes } from '@/lib/admin/resource';
-import { certificationResource } from '@/lib/admin/resources';
+import { certificationResource } from '@/lib/admin/resources/certifications';
 
 export const prerender = false;
 export const { GET, POST } = collectionRoutes(certificationResource);

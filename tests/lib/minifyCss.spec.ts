@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import * as M from '../../scripts/minify-css.mjs';
 
 // scripts/minify-css.mjs strips comments and insignificant whitespace from the SERVED
@@ -8,7 +8,8 @@ import * as M from '../../scripts/minify-css.mjs';
 // global.css (Round 2 S2 perf fix: the /ar home LCP). These tests pin that it removes
 // only what CSS syntax ignores — never a byte the cascade can see.
 
-const { minifyCss, significantChars } = M as unknown as {
+const { cssFiles, minifyCss, significantChars } = M as unknown as {
+  cssFiles: (dir: string) => string[];
   minifyCss: (css: string) => string;
   significantChars: (css: string) => string;
 };
@@ -71,10 +72,18 @@ describe('minifyCss', () => {
 
 describe('every public stylesheet', () => {
   const dir = join(process.cwd(), 'public/styles');
-  const files = readdirSync(dir).filter((f) => f.endsWith('.css'));
+  // Every sheet under public/styles, the admin's screen sheets (admin/) included.
+  const files = readdirSync(dir, { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('.css'))
+    .map((f) => f.split(sep).join('/'));
 
   it('includes global.css', () => {
     expect(files).toContain('global.css');
+  });
+
+  it('includes the admin screen sheets, and the build visits every one', () => {
+    expect(files).toContain('admin/login.css');
+    expect([...cssFiles(dir)].sort()).toEqual([...files].sort());
   });
 
   for (const f of files) {

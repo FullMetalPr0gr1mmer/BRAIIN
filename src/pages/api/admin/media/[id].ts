@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { itemRoutes } from '@/lib/admin/resource';
 import { defineAdminRoute } from '@/lib/admin/route';
-import { mediaResource } from '@/lib/admin/resources';
+import { mediaResource } from '@/lib/admin/resources/media';
 import { deleteRow, getRow } from '@/lib/admin/crud';
 import { InUseError, NotFoundError } from '@/lib/admin/errors';
 import { assertCap } from '@/lib/authz/matrix';

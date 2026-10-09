@@ -4,9 +4,10 @@ import {
   type LocalizedText,
   type TeamMemberRow,
 } from '@schemas/content';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { imageRef, type ImageRef } from '@/lib/media/resolve';
 import { parseRows, reportLoadError } from './parse';
+import { contentClient } from './source';
 
 // Public team members = E-E-A-T authors (CLAUDE.md Pillar 3 — no anonymous authorship)
 // and, filtered by `is_leadership`, the About leadership slider. Tier A SSR reads under RLS
@@ -22,7 +23,7 @@ const COLUMNS =
 async function load(leadershipOnly: boolean): Promise<TeamMemberRow[]> {
   if (!supabaseConfigured()) return [];
   try {
-    let query = anonClient()
+    let query = contentClient()
       .from('team_members')
       .select(COLUMNS)
       .eq('status', 'published')
