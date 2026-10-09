@@ -14,7 +14,7 @@
 -- §8, §9.
 
 begin;
-select plan(94);
+select plan(95);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -287,6 +287,12 @@ select is(_rows($$ update public.leads set tags = '{t1,t2,t3,t4,t5,t6,t7,t8,t9,t
                     where id = '00000000-0000-0000-0000-00000000aa04' $$), 1, 'a lead with ten tags');
 select is(_bulk('tagAdd', '"t11"', jsonb_build_array(_item('00000000-0000-0000-0000-00000000aa04', 2))),
   'aa04:skipped', 'an eleventh tag skips that lead instead of failing the batch');
+-- The leftovers are judged in a second statement, against the lead as it is now: a version
+-- that moved on is a conflict even where the tag guard would also have left the lead alone.
+-- (A race lost DURING the call needs two sessions, which a pgTAP file cannot open; the
+-- second statement's fresh snapshot is what answers it, tests/lib/crmLeadsWriteSql.spec.ts.)
+select is(_bulk('tagAdd', '"t11"', jsonb_build_array(_item('00000000-0000-0000-0000-00000000aa04', 1))),
+  'aa04:conflict', 'a stale version is a conflict, not a skip');
 select is(_bulk('assign', 'null', jsonb_build_array(_item('00000000-0000-0000-0000-00000000aa01', 8))),
   'aa01:applied', 'a bulk unassignment');
 select is((select count(*)::int from public.lead_events

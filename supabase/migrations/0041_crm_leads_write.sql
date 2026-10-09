@@ -496,9 +496,10 @@ grant execute on function public.crm_ingest_lead(uuid, jsonb) to service_role;
 -- {id, version}; the version is required for the versioned actions (assign, stage, spam,
 -- tagAdd, tagRemove) and ignored for read and star. Every item comes back once:
 --   applied   changed (or already so), with its new version
---   conflict  its version moved on: someone else changed it (the current version returned)
+--   conflict  its version moved on: someone else changed it, before this call or during
+--             it (the current version returned)
 --   missing   not a lead this caller can change: none, another tenant's, a stale token's
---   skipped   seen but left alone: a lead already holding ten tags, or a race lost
+--   skipped   seen at the version sent but left alone: a lead already holding ten tags
 -- A refused value (an assignee who is not a live lead worker, another tenant's stage) fails
 -- the whole statement (23514 / 23503): nothing half-applied.
 create or replace function public.leads_bulk_update(
@@ -517,6 +518,7 @@ declare
   v_uuid uuid;
   v_bool boolean;
   v_tag text;
+  v_applied jsonb;
 begin
   -- The action and its value. Each SET below is chosen from this fixed list, never built
   -- from the caller's text; the value travels as a bound parameter.
@@ -593,10 +595,8 @@ begin
     raise exception using errcode = '22023', message = 'leads_bulk_update: each lead once';
   end if;
 
-  -- One statement. `seen` reads the leads as they were when it started (a data-modifying
-  -- CTE's changes are not visible to its siblings), so an item that was not changed is
-  -- told apart: unseen (missing), a version that moved on (conflict), or left alone.
-  return query execute format($sql$
+  -- 1. The change, in one statement: {lead id: new version} for every lead it changed.
+  execute format($sql$
     with items as (
       select (e ->> 'id')::uuid as id, (e ->> 'version')::int as expected
         from jsonb_array_elements($1) e
@@ -609,27 +609,34 @@ begin
          and l.tenant_id = $2
          and l.id = i.id%s%s
       returning l.id, l.version
-    ),
-    seen as (
-      select l.id, l.version
-        from public.leads l
-        join items i on i.id = l.id
-       where l.tenant_id = app.effective_tenant_id()
-         and l.tenant_id = $2
     )
+    select coalesce(jsonb_object_agg(u.id, u.version), '{}'::jsonb) from upd u
+  $sql$, v_set, case when v_versioned then ' and l.version = i.expected' else '' end, v_guard)
+  into v_applied
+  using p_items, p_tenant, v_versioned, v_uuid, v_bool, v_tag;
+
+  -- 2. Every other lead, judged in a SECOND statement. The UPDATE reads each lead as of its
+  --    own start; a lead another session is changing makes it wait and, once that commits
+  --    a new version, re-check the row and leave it (READ COMMITTED). Judged in the same
+  --    statement, that lead still showed the old, matching version and came back "skipped".
+  --    A VOLATILE function's statements each take a fresh snapshot, so this one sees the
+  --    version that won: a conflict, as it should be. Unseen is missing (none, another
+  --    tenant's, a stale token's); seen at the version sent but left alone is skipped.
+  return query
     select i.id,
-           coalesce(u.version, s.version),
-           case when u.id is not null then 'applied'
-                when s.id is null then 'missing'
-                when $3 and s.version <> i.expected then 'conflict'
+           coalesce((v_applied ->> i.id::text)::int, l.version),
+           case when v_applied ? i.id::text then 'applied'
+                when l.id is null then 'missing'
+                when v_versioned and l.version <> i.expected then 'conflict'
                 else 'skipped'
            end
-      from items i
-      left join upd u on u.id = i.id
-      left join seen s on s.id = i.id
-     order by i.id
-  $sql$, v_set, case when v_versioned then ' and l.version = i.expected' else '' end, v_guard)
-  using p_items, p_tenant, v_versioned, v_uuid, v_bool, v_tag;
+      from (select (e ->> 'id')::uuid as id, (e ->> 'version')::int as expected
+              from jsonb_array_elements(p_items) e) i
+      left join public.leads l
+        on l.id = i.id
+       and l.tenant_id = app.effective_tenant_id()
+       and l.tenant_id = p_tenant
+     order by i.id;
 end $$;
 revoke all on function public.leads_bulk_update(uuid, text, jsonb, jsonb)
   from public, anon, authenticated, service_role;

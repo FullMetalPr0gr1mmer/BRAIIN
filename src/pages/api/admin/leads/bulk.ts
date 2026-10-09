@@ -10,9 +10,9 @@ import { BULK_ACTION_FIELD, leadWriteError, parseBulkRows } from '@/lib/crm/lead
 // One statement, public.leads_bulk_update (0041), as the caller: RLS, the live check and
 // the column grant decide which leads change. The versioned actions change a lead only at
 // the version the caller read, so every lead comes back applied, a conflict (someone else
-// changed it; its current version is returned), missing (not one this caller can change)
-// or skipped (left alone: ten tags already, or a race lost). A refused value (an assignee
-// who does not work leads, another pipeline's stage) changes nothing at all.
+// changed it, before or during this call; its current version is returned), missing (not
+// one this caller can change) or skipped (left alone: ten tags already). A refused value (an
+// assignee who does not work leads, another pipeline's stage) changes nothing at all.
 //
 // Then one audit row per changed lead and one for the batch, in ONE insert
 // (writeAuditMany): a Worker on the Free plan has 50 subrequests per request, so neither
