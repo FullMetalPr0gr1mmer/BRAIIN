@@ -26,7 +26,7 @@ Each slice's file under [as-built/](as-built/) has the detail.
 
 ## Reserved
 
-Wave 1's migrations are reserved below; the next free number after them is **0044**. Before a
+Wave 1's migrations are reserved below; the next free number after them is **0046**. Before a
 wave's slices branch, each migration the wave plans gets a row here, numbered in the wave's
 planned merge order. The slice's own PR moves its row to "Applied" once production has applied the
 migration, before the PR merges (Pushing to production, step 5), so the row is true when the
@@ -35,11 +35,13 @@ PR lands and nothing here is edited after a merge.
 | Number | Slice | What | Wave |
 |---|---|---|---|
 | 0038 | R1 | the release ledger schema: ledger tables, the staged-entity registry, the protected flag table, snapshot coverage (expand, inert) | 1 |
-| 0039 | F8 | the personal layer: preferences, the staff directory, notifications, the environment pill | 1 |
-| 0040 | U3 | media uploads: the public media bucket and its policies, the `media_assets` provider widening | 1 |
+| 0039 | (released) | unused: C3 (0041) was ready before F8 and U3 were built, so F8 and U3 moved above the wave (gaps are allowed) | 1 |
+| 0040 | (released) | unused, as 0039 | 1 |
 | 0041 | C3 | the leads write API: the `crm.erase` helper, the pipeline's assignee, value, star, read, tags and logged-contact columns with their staff column grant, and the bulk, erase, note-delete and note-count RPCs (`crm_ingest_lead` restated for manual leads) | 1 |
 | 0042 | U16 | the help centre: `help_articles` | 1 |
 | 0043 | C13 | lead attribution capture (built, held for the privacy notice, O-11) | 1 |
+| 0044 | F8 | the personal layer: preferences, the staff directory, notifications, the environment pill | 1 |
+| 0045 | U3 | media uploads: the public media bucket and its policies, the `media_assets` provider widening | 1 |
 
 ## Rules
 
