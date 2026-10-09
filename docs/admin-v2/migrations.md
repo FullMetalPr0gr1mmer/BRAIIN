@@ -37,7 +37,7 @@ PR lands and nothing here is edited after a merge.
 | 0038 | R1 | the release ledger schema: ledger tables, the staged-entity registry, the protected flag table, snapshot coverage (expand, inert) | 1 |
 | 0039 | F8 | the personal layer: preferences, the staff directory, notifications, the environment pill | 1 |
 | 0040 | U3 | media uploads: the public media bucket and its policies, the `media_assets` provider widening | 1 |
-| 0041 | C3 | the leads write API: the `crm.erase` helper and the write RPCs | 1 |
+| 0041 | C3 | the leads write API: the `crm.erase` helper, the pipeline's assignee, value, star, read, tags and logged-contact columns with their staff column grant, and the bulk, erase, note-delete and note-count RPCs (`crm_ingest_lead` restated for manual leads) | 1 |
 | 0042 | U16 | the help centre: `help_articles` | 1 |
 | 0043 | C13 | lead attribution capture (built, held for the privacy notice, O-11) | 1 |
 
