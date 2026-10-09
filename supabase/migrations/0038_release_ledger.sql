@@ -52,10 +52,27 @@
 -- roles, so it already is that.
 --
 -- Grants are stated for both Supabase grant regimes (Admin v2 P-14): revoke from public,
--- anon, authenticated and service_role, then grant exactly. Postconditions at the end.
+-- anon, authenticated and service_role, then grant exactly, sequences included (the items'
+-- identity sequence: nothing for any API role). Postconditions at the end.
+--
+-- Owner-scoped insert policies. History (content_versions, 0032) and release items are
+-- FORCE RLS, and the definers that write them (the snapshot triggers; R4's capture) insert
+-- as their owner, so each table has an insert policy naming that owner. On Supabase they
+-- are never consulted: the owner, the migration role (postgres), bypasses RLS. A
+-- postcondition requires that, as 0034 does for its definers, because without it 0032's
+-- staff-only policy would refuse history for every write that carries no staff claim. The
+-- policies matter only on a host whose owner lacks BYPASSRLS; they are kept for
+-- portability, not as a security boundary.
 --
 -- CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+-- A busy table fails the push instead of queueing: a statement below that waits more than
+-- five seconds for a lock (content_versions gains a column and a foreign key, nine live
+-- tables a snapshot trigger, custom_themes a policy) raises, and the push is retried later,
+-- rather than holding its place in the lock queue while the site's reads and writes pile up
+-- behind it. Transaction-local: it ends with this migration.
+set local lock_timeout = '5s';
 
 -- ═══ 1. The switch-on flag ════════════════════════════════════════════════════════════════
 -- A tenant has releases on while it has a row here. Written only by the runbook functions
@@ -335,7 +352,7 @@ create trigger content_releases_version before update on public.content_releases
   for each row execute function app.tg_bump_version();
 
 -- CMS staff read their tenant's versions. Nobody writes them through the API: no write
--- policy, and authenticated holds no write privilege (section 8). The service role
+-- policy, and authenticated holds no write privilege (section 9). The service role
 -- (apply_release, the purge and schedule paths) bypasses RLS.
 drop policy if exists content_releases_read on public.content_releases;
 create policy content_releases_read on public.content_releases for select to authenticated
@@ -356,10 +373,11 @@ create table if not exists public.content_drafts (
   -- The changed columns, for display only: at most 200, each a column name (a letter, then
   -- letters, digits or underscores, at most 63 characters: Postgres's own identifier
   -- limit). A CHECK cannot read the elements one by one (no subquery), so it reads the
-  -- array's text form, which is exact for names: a name is never quoted there, and
-  -- anything else (empty, spaces, commas, quotes, braces, another dimension or lower
-  -- bound) is. A null element prints as a bare NULL, hence the array_position test
-  -- (after the pattern, which has already refused a second dimension it cannot search).
+  -- array's text form, which is exact for names: a name is printed bare, and anything else
+  -- is quoted or framed differently (an empty entry, a space, comma, quote or brace in
+  -- one, a second dimension, a lower bound other than 1). A null element prints as a bare
+  -- NULL, hence the array_position test, after the pattern (which has already refused a
+  -- second dimension, one array_position cannot search).
   fields text[] not null default '{}'
     check (cardinality(fields) <= 200
            and fields::text ~ '^\{([A-Za-z][A-Za-z0-9_]{0,62}(,[A-Za-z][A-Za-z0-9_]{0,62})*)?\}$'
@@ -554,7 +572,8 @@ create policy content_release_items_read on public.content_release_items for sel
 -- The capture trigger (R4) is SECURITY DEFINER and inserts as its owner, the role that owns
 -- the snapshot trigger. FORCE RLS subjects that owner to policies unless it bypasses RLS, so
 -- it gets one insert policy, valid only inside a release (the 0032 pattern for
--- content_versions). No insert policy names an API role.
+-- content_versions). No insert policy names an API role. On Supabase the owner bypasses
+-- RLS (a postcondition holds it), so this policy is for portability (see the header).
 do $$
 declare
   v_owner name;
@@ -672,6 +691,9 @@ begin
 end $$;
 
 -- ═══ Postconditions ═══════════════════════════════════════════════════════════════════════
+-- Each block says what it checks. Expressions are read as pg_get_expr prints them (each
+-- operator in parentheses, each AND list in one pair of parentheses; a function's schema
+-- printed only when app is not on the search path, so the patterns allow both).
 do $$
 declare
   v_tables constant text[] := array['app.release_entities', 'app.release_tenants',
@@ -682,12 +704,22 @@ declare
     'site_profile', 'statistic', 'team_member', 'testimonial'];
   -- Registry types kept out of history until the owner decides redaction (O-12, PDPL).
   v_no_history constant text[] := array['team_member'];
-  v_bad text;
+  -- The tenant predicate, alone or as the FIRST conjunct of a top-level AND (CLAUDE.md §8:
+  -- tenant predicate first). An OR at the top, or the predicate inside one, does not match.
+  v_tenant_first constant text :=
+    '^\((\(tenant_id = (app\.)?effective_tenant_id\(\)\) AND .+|tenant_id = (app\.)?effective_tenant_id\(\))\)$';
   v_owner oid;
+  v_owner_name name;
+  v_have text[];
+  v_want text[];
+  v_bad text;
   p text;
   t text;
 begin
-  -- ---- RLS forced on every new table; nothing for anon or PUBLIC ----------------------
+  select proowner into v_owner from pg_proc where oid = 'app.tg_snapshot_version()'::regprocedure;
+  v_owner_name := pg_get_userbyid(v_owner);
+
+  -- ---- RLS forced on every new table; nothing for anon or PUBLIC, table or column -------
   foreach t in array v_tables loop
     if not (select relrowsecurity and relforcerowsecurity from pg_class where oid = t::regclass) then
       raise exception '0038: % is not ENABLE + FORCE row level security', t;
@@ -700,7 +732,7 @@ begin
     end loop;
   end loop;
 
-  -- ---- authenticated and service_role: exactly the stated privileges -------------------
+  -- ---- authenticated and service_role: exactly the stated table privileges ------------
   select string_agg(format('%s %s %s', g.who, g.priv, g.tbl), ', ' order by g.tbl, g.who, g.priv)
     into v_bad
     from (
@@ -727,39 +759,106 @@ begin
     raise exception '0038: wrong table privileges: %', v_bad;
   end if;
 
-  -- ---- Every policy on the new public tables names the tenant; no write policy reaches
-  -- an API role on the two ledgers ----------------------------------------------------
-  select string_agg(format('%s.%s', tablename, policyname), ', ') into v_bad
+  -- ---- No column-level grant on the new tables, nor on content_versions.release_id: the
+  -- table privileges above are then the whole surface (a column grant would widen it) ----
+  select string_agg(format('%s.%s', a.attrelid::regclass, a.attname), ', ') into v_bad
+    from pg_attribute a
+   where a.attnum > 0 and not a.attisdropped and a.attacl is not null
+     and (a.attrelid in (select x::regclass::oid from unnest(v_tables) as x)
+          or (a.attrelid = 'public.content_versions'::regclass and a.attname = 'release_id'));
+  if v_bad is not null then
+    raise exception '0038: column-level grants on: %', v_bad;
+  end if;
+
+  -- ---- Sequences: the new tables own exactly one (the items' identity), and no API role
+  -- holds usage, select or update (setval) on it ---------------------------------------
+  if pg_get_serial_sequence('public.content_release_items', 'id') is null
+     or (select count(distinct s.oid)
+           from pg_class s
+           join pg_depend d on d.classid = 'pg_class'::regclass and d.objid = s.oid
+                           and d.refclassid = 'pg_class'::regclass
+          where s.relkind = 'S'
+            and d.refobjid in (select x::regclass::oid from unnest(v_tables) as x)) <> 1 then
+    raise exception '0038: the new tables must own exactly one sequence, the release items'' identity';
+  end if;
+  select string_agg(format('%s %s', r.who, s.oid::regclass), ', ') into v_bad
+    from pg_class s
+    join pg_depend d on d.classid = 'pg_class'::regclass and d.objid = s.oid
+                    and d.refclassid = 'pg_class'::regclass
+    cross join unnest(array['public', 'anon', 'authenticated', 'service_role']::name[]) as r(who)
+   where s.relkind = 'S'
+     and d.refobjid in (select x::regclass::oid from unnest(v_tables) as x)
+     and has_sequence_privilege(r.who, s.oid, 'usage, select, update');
+  if v_bad is not null then
+    raise exception '0038: API roles hold privileges on a new sequence: %', v_bad;
+  end if;
+
+  -- ---- Policies: exactly these, on the five new tables, for any role -------------------
+  -- Name, command, kind and roles, compared as a set: a policy added, dropped, renamed,
+  -- turned restrictive or widened to another role fails here. app.release_tenants has
+  -- none; content_releases and app.release_entities have their read only; the capture
+  -- insert names the snapshot functions' owner, never an API role.
+  v_want := array[
+    'app.release_entities release_entities_read SELECT PERMISSIVE {authenticated}',
+    'public.content_drafts content_drafts_delete DELETE PERMISSIVE {authenticated}',
+    'public.content_drafts content_drafts_insert INSERT PERMISSIVE {authenticated}',
+    'public.content_drafts content_drafts_read SELECT PERMISSIVE {authenticated}',
+    'public.content_drafts content_drafts_update UPDATE PERMISSIVE {authenticated}',
+    format('public.content_release_items content_release_items_insert_capture INSERT PERMISSIVE %s',
+           array[v_owner_name]::name[]),
+    'public.content_release_items content_release_items_read SELECT PERMISSIVE {authenticated}',
+    'public.content_releases content_releases_read SELECT PERMISSIVE {authenticated}'];
+  select array_agg(w order by w) into v_want from unnest(v_want) as w;
+  select array_agg(format('%s.%s %s %s %s %s', schemaname, tablename, policyname, cmd,
+                          permissive, roles))
+    into v_have
+    from pg_policies
+   where schemaname || '.' || tablename = any (v_tables);
+  select array_agg(h order by h) into v_have from unnest(v_have) as h;
+  if v_have is distinct from v_want then
+    raise exception '0038: the ledger''s policies are %, expected %', v_have, v_want;
+  end if;
+
+  -- ---- The tenant predicate leads every policy on the three public tables, in USING and
+  -- in WITH CHECK, as the exact `tenant_id = app.effective_tenant_id()` ------------------
+  select string_agg(format('%s.%s', tablename, policyname), ', ' order by tablename, policyname)
+    into v_bad
     from pg_policies
    where schemaname = 'public'
      and tablename in ('content_drafts', 'content_releases', 'content_release_items')
-     and coalesce(qual, '') not like '%effective_tenant_id()%'
-     and coalesce(with_check, '') not like '%effective_tenant_id()%';
+     and (coalesce(qual, with_check) is null
+          or qual !~ v_tenant_first
+          or with_check !~ v_tenant_first);
   if v_bad is not null then
-    raise exception '0038: policies without the tenant predicate: %', v_bad;
+    raise exception '0038: policies that do not lead with the tenant predicate: %', v_bad;
   end if;
-  if exists (select 1 from pg_policies
-              where schemaname = 'public' and tablename = 'content_releases' and cmd <> 'SELECT') then
-    raise exception '0038: content_releases has a write policy';
-  end if;
-  if exists (select 1 from pg_policies
-              where schemaname = 'public' and tablename = 'content_release_items'
-                and cmd <> 'SELECT'
-                and (cmd <> 'INSERT'
-                     or roles && array['public', 'anon', 'authenticated', 'service_role']::name[]
-                     or with_check not like '%release_token_valid()%')) then
-    raise exception '0038: content_release_items has a write policy other than the capture insert inside a release';
-  end if;
-  if (select count(*) from pg_policies
-       where schemaname = 'public' and tablename = 'content_drafts'
-         and roles = array['authenticated']::name[]) <> 4 then
-    raise exception '0038: content_drafts must carry exactly its four policies, to authenticated';
-  end if;
+  -- The registry's read: CMS staff only. No tenant predicate, because the registry has no
+  -- tenant column (global configuration; see the header).
   if not exists (select 1 from pg_policies
-                  where schemaname = 'public' and tablename = 'content_drafts'
-                    and policyname = 'content_drafts_update'
-                    and qual like '%release_id IS NULL%' and with_check like '%release_id IS NULL%') then
-    raise exception '0038: a claimed draft must stay out of reach of staff updates';
+                  where schemaname = 'app' and tablename = 'release_entities'
+                    and qual ~ '^(app\.)?is_staff\(\)$' and with_check is null) then
+    raise exception '0038: release_entities_read must read app.is_staff() and nothing else';
+  end if;
+  -- A capture insert is valid only inside a release.
+  if not exists (select 1 from pg_policies
+                  where schemaname = 'public' and tablename = 'content_release_items'
+                    and policyname = 'content_release_items_insert_capture'
+                    and with_check ~ '^\(\(tenant_id = (app\.)?effective_tenant_id\(\)\) AND (app\.)?release_token_valid\(\)\)$') then
+    raise exception '0038: the capture insert must hold the tenant and the release token, nothing else';
+  end if;
+  -- A claimed draft is out of reach of every staff write: `release_id IS NULL` is the last
+  -- top-level conjunct of the insert and update WITH CHECKs and the update and delete USINGs.
+  select string_agg(format('%s %s', policyname, w.side), ', ' order by policyname, w.side) into v_bad
+    from pg_policies
+    cross join lateral (values ('using', qual), ('with check', with_check)) as w(side, expr)
+   where schemaname = 'public' and tablename = 'content_drafts'
+     and format('%s %s', policyname, w.side) in ('content_drafts_insert with check',
+                                                 'content_drafts_update using',
+                                                 'content_drafts_update with check',
+                                                 'content_drafts_delete using')
+     and coalesce(w.expr, '') !~ ' AND \(release_id IS NULL\)\)$';
+  if v_bad is not null then
+    raise exception '0038: a claimed draft must stay out of reach of staff writes: %', v_bad;
   end if;
 
   -- ---- Functions: who may call what --------------------------------------------------
@@ -782,9 +881,7 @@ begin
     end if;
   end loop;
 
-  -- The definers: SECURITY DEFINER with a pinned search_path. The flag reader's owner must
-  -- bypass RLS (app.release_tenants is FORCE RLS with no policy), or every tenant would
-  -- read as off forever; the singleton snapshot has the owner 0032's insert policy names.
+  -- ---- The definers: SECURITY DEFINER with a pinned search_path ------------------------
   foreach p in array array['app.tg_snapshot_version()', 'app.tg_snapshot_singleton()',
                            'app.releases_enabled(uuid)'] loop
     if not exists (select 1 from pg_proc f
@@ -793,24 +890,36 @@ begin
       raise exception '0038: % must be SECURITY DEFINER with a pinned search_path', p;
     end if;
   end loop;
+  -- The flag reader's owner bypasses RLS (app.release_tenants is FORCE RLS with no
+  -- policy), or every tenant would read as off forever.
   if not exists (select 1 from pg_proc f join pg_roles r on r.oid = f.proowner
                   where f.oid = 'app.releases_enabled(uuid)'::regprocedure
                     and (r.rolsuper or r.rolbypassrls)) then
     raise exception '0038: app.releases_enabled() is owned by a role that does not bypass RLS';
   end if;
-  select proowner into v_owner from pg_proc where oid = 'app.tg_snapshot_version()'::regprocedure;
+  -- The two snapshot functions share the owner 0032's insert policy names...
   if (select proowner from pg_proc where oid = 'app.tg_snapshot_singleton()'::regprocedure) <> v_owner then
     raise exception '0038: the two snapshot triggers must have the same owner';
   end if;
   if not exists (select 1 from pg_policies
                   where schemaname = 'public' and tablename = 'content_versions'
                     and policyname = 'content_versions_insert_snapshot'
-                    and roles = array[pg_get_userbyid(v_owner)]::name[]) then
+                    and roles = array[v_owner_name]::name[]) then
     raise exception '0038: content_versions_insert_snapshot (0032) must name the snapshot owner';
+  end if;
+  -- ...and that owner bypasses RLS (Supabase's postgres does, locally and hosted; 0034
+  -- asserts the same of its definers). Without it, a write that carries no staff claim
+  -- (the service role, seeds, the runbook) to a table with history would fail on 0032's
+  -- staff-only insert policy. So the owner-scoped insert policies (0032's, and the capture
+  -- insert above) admit nothing on Supabase: they matter only on a host whose owner lacks
+  -- BYPASSRLS, and are kept for portability.
+  if not exists (select 1 from pg_roles r
+                  where r.oid = v_owner and (r.rolsuper or r.rolbypassrls)) then
+    raise exception '0038: the snapshot functions'' owner (%) does not bypass RLS', v_owner_name;
   end if;
 
   -- ---- The registry: the design's twenty entity types, each a real table with the
-  -- columns it names, RLS forced, and history ----------------------------------------
+  -- columns it names, RLS forced, and history (all but v_no_history) -------------------
   if not (select array_agg(entity_type) @> v_expected and array_agg(entity_type) <@ v_expected
                  and count(*) = cardinality(v_expected)
             from app.release_entities) then
@@ -865,7 +974,7 @@ begin
   end if;
   if not exists (select 1 from pg_policies
                   where schemaname = 'public' and tablename = 'content_versions'
-                    and policyname = 'content_versions_read' and qual like '%is_staff()%') then
+                    and policyname = 'content_versions_read' and qual ~ '(app\.)?is_staff\(\)') then
     raise exception '0038: content_versions_read must stay CMS staff only (app.is_staff())';
   end if;
   if has_table_privilege('authenticated', 'public.content_versions', 'insert')
@@ -878,21 +987,22 @@ begin
                     and conname = 'content_versions_release_fk' and contype = 'f') then
     raise exception '0038: content_versions.release_id is not tenant-fenced to content_releases';
   end if;
+  -- Removing a theme: a RESTRICTIVE gate for every role, the tenant first, then Admin.
   if not exists (select 1 from pg_policies
                   where schemaname = 'public' and tablename = 'custom_themes'
                     and policyname = 'custom_themes_delete_admin' and permissive = 'RESTRICTIVE'
-                    and cmd = 'DELETE'
-                    and qual like '%effective_tenant_id()%' and qual like '%is_admin()%') then
+                    and cmd = 'DELETE' and roles = array['public']::name[]
+                    and qual ~ '^\(\(tenant_id = (app\.)?effective_tenant_id\(\)\) AND (app\.)?is_admin\(\)\)$') then
     raise exception '0038: custom_themes_delete_admin is missing, permissive, or incomplete';
   end if;
   -- The draft lock is the only trigger on content_drafts, BEFORE, FOR EACH ROW, on INSERT,
   -- UPDATE and DELETE (tgtype 1 + 2 + 4 + 8 + 16): a later generic actor or version trigger
   -- would run in name order around it and could undo what it sets.
-  if (select string_agg(format('%s %s.%s %s', t.tgname, n.nspname, f.proname, t.tgtype), ', ')
-        from pg_trigger t
-        join pg_proc f on f.oid = t.tgfoid
+  if (select string_agg(format('%s %s.%s %s', tg.tgname, n.nspname, f.proname, tg.tgtype), ', ')
+        from pg_trigger tg
+        join pg_proc f on f.oid = tg.tgfoid
         join pg_namespace n on n.oid = f.pronamespace
-       where t.tgrelid = 'public.content_drafts'::regclass and not t.tgisinternal)
+       where tg.tgrelid = 'public.content_drafts'::regclass and not tg.tgisinternal)
      is distinct from 'content_drafts_lock app.tg_draft_lock 31' then
     raise exception '0038: content_drafts must carry exactly one trigger, the draft lock';
   end if;
