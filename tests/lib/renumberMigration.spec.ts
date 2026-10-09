@@ -17,15 +17,19 @@ import * as R from '../../scripts/renumber-migration.mjs';
 // highest when another branch merged the same number first (check-migrations rule 4). The
 // rename is the easy half; these pin the other half too: a file on the base is never
 // touched, a file only ever moves up, a branch's several new migrations keep their order, a
-// number the reservation ledger holds for another slice is passed over, and a bare number is
-// rewritten only where this branch wrote it and it cannot mean the base's own one (a line
-// that may name both is listed for a reader instead).
+// number the reservation ledger holds for another slice is passed over, and the ledger itself
+// is never rewritten (its lines naming the old migration are listed). The file name is
+// rewritten wherever else it appears. A bare number is rewritten only on lines this branch
+// wrote, only while no other migration has that number (the base's own, or a second new one
+// of the branch's, which keeps it), and not on a line whose base side already named it; each
+// line left alone that names the old migration is listed for a reader, with the reason.
 
 const {
   addedLines,
   bareTargets,
   contestedLines,
   headerLength,
+  ledgerLines,
   parseArgs,
   planRenumber,
   reservations,
@@ -324,32 +328,40 @@ describe('rewriteReferences', () => {
 
 describe('bareTargets', () => {
   const text = [
-    '0038 is ours', // 1: added, and only ours
+    '0038 is ours', // 1: added
     'the base’s 0038', // 2: not added
     'the base’s 0038; ours, 0038', // 3: added, but its base side named 0038 too
-    'runs after 0038_other (0038)', // 4: added, and names the base's 0038 by file name
-    '0038_leads, by name only', // 5: added, no bare number
+    '0038_leads, by name only', // 4: added, no bare number
   ].join('\n');
 
-  it('rewrites a bare number only on added lines that cannot mean the base’s own', () => {
+  it('rewrites a bare number on the lines this branch added, unless their base side named it', () => {
     const { rewrite, unsure } = bareTargets(text, {
       from: '0038',
-      added: new Set([1, 3, 4, 5]),
+      added: new Set([1, 3, 4]),
       contested: new Set([3]),
-      baseStems: ['0038_other'],
     });
     expect([...rewrite]).toEqual([1]);
-    expect(unsure).toEqual([3, 4]);
+    expect(unsure).toEqual([3]);
   });
 
   it('takes every line as the branch’s when the base has no such file', () => {
-    const { rewrite, unsure } = bareTargets(text, {
-      from: '0038',
-      added: null,
-      baseStems: ['0038_other'],
-    });
+    const { rewrite, unsure } = bareTargets(text, { from: '0038', added: null });
     expect([...rewrite]).toEqual([1, 2, 3]);
-    expect(unsure).toEqual([4]);
+    expect(unsure).toEqual([]);
+  });
+
+  it('rewrites none while another migration has the number, and reports each', () => {
+    // The base's own 0038, or a second new one of the branch's: any 0038 may name it, even
+    // on a line the branch wrote.
+    const added = { from: '0038', added: new Set([1, 3, 4]), contested: new Set([3]) };
+    expect(bareTargets(text, { ...added, shared: true })).toEqual({
+      rewrite: new Set(),
+      unsure: [1, 3],
+    });
+    expect(bareTargets(text, { from: '0038', added: null, shared: true })).toEqual({
+      rewrite: new Set(),
+      unsure: [1, 2, 3],
+    });
   });
 });
 
@@ -390,6 +402,27 @@ describe('reservations', () => {
       '0042': 'R1',
     });
     expect(reservations('# Notes\n\n| 0038 | C3 |\n').size).toBe(0);
+  });
+});
+
+describe('ledgerLines', () => {
+  const ledger = [
+    '# Migration ledger',
+    '',
+    'Production has applied 0001 to 0037.', // 3: a range that holds 0037
+    '| 0038 | C3 | the leads write API (`0038_leads_write.sql`) | 1 |', // 4
+    '| 0039 | U3 | runs after `0038_leads_write` | 1 |', // 5: the file name alone
+    '| 0040 to 0041 | C10a | the Sales role | 5 |', // 6
+    '| 0042 | R1 | 10038 rows, 0038abc, v1.0038 | 1 |', // 7: 0038 only inside other tokens
+    '| 0043-0045 | R2 | | 2 |', // 8: a range that holds 0044, which it does not spell
+  ].join('\n');
+
+  it('lists the lines naming a migration by file name, by number, or by a range that holds it', () => {
+    expect(ledgerLines(ledger, { from: '0038', oldStem: '0038_leads_write' })).toEqual([4, 5]);
+    expect(ledgerLines(ledger, { from: '0037', oldStem: '0037_h8' })).toEqual([3]);
+    expect(ledgerLines(ledger, { from: '0041', oldStem: '0041_sales' })).toEqual([6]);
+    expect(ledgerLines(ledger, { from: '0044', oldStem: '0044_r2' })).toEqual([8]);
+    expect(ledgerLines(ledger, { from: '0046', oldStem: '0046_none' })).toEqual([]);
   });
 });
 
@@ -460,7 +493,9 @@ function throwaway(prefix: string) {
 // main adds 0002_other while a branch adds 0002_feature and 0003_more. The branch merges
 // main, then adds to main's lines as a branch does after a merge (one CLAUDE.md paragraph
 // ends up naming both 0002s, two notes name main's by its file name), and moves both of
-// its migrations up, the later one first.
+// its migrations up, the later one first. 0003 is the branch's alone, so a bare 0003 moves
+// wherever the branch wrote it; 0002 is main's too, so no bare 0002 moves, and each line
+// naming one is listed for a reader instead.
 
 const LEDGER = '# Ledger\n\n## Merged\n\n- 0001 — init\n\n## Reserved\n\n- none yet\n';
 const STANDARD = '# Standard\n\nMigrations are forward-only.\n\n## Lanes\n';
@@ -587,75 +622,102 @@ describe('renumber-migration, end to end', { timeout: 30_000 }, () => {
     expect(t.exists('supabase/migrations/0003_more.sql')).toBe(true);
   });
 
-  it('renames with git mv, rewrites the references, and lists every file and line', () => {
-    const more = t.run(SCRIPT, 'supabase/migrations/0003_more.sql', '--base', 'main');
-    expect(more.code, more.out).toBe(0);
+  it('moves a bare number wherever the branch wrote it while no other migration has it', () => {
+    const result = t.run(SCRIPT, 'supabase/migrations/0003_more.sql', '--base', 'main');
+    expect(result.code, result.out).toBe(0);
+
+    expect(t.git('diff', '--cached', '--name-status')).toMatch(
+      /^R\d*\tsupabase\/migrations\/0003_more\.sql\tsupabase\/migrations\/0004_more\.sql$/m,
+    );
+    // Its own header follows, and the lines the branch wrote in docs/; a file name moves
+    // without a line of its own in the output.
+    expect(t.read('supabase/migrations/0004_more.sql')).toBe(
+      '-- 0004 — more. Depends on 0002_feature (0002).\n\nselect 1;\n',
+    );
+    expect(t.read('docs/as-built/feature.md')).toBe(
+      '# Feature\n\nShips 0002 and 0004.\nRuns after 0002_other (0002).\n',
+    );
+    expect(t.read('supabase/tests/feature.test.sql')).toBe(
+      '-- pgTAP for 0002_feature.sql (0002) and 0004_more.sql\nselect 1;\n',
+    );
+    for (const [file, bareLine] of [
+      ['supabase/migrations/0004_more.sql (header, 1)', 'supabase/migrations/0004_more.sql:1'],
+      ['docs/as-built/feature.md (1)', 'docs/as-built/feature.md:3'],
+      ['docs/ledger.md (1)', 'docs/ledger.md:10'],
+    ]) {
+      expect(result.out).toContain(`update ${file}\n      ${bareLine}  0003 → 0004\n`);
+    }
+    expect(result.out).toContain('update supabase/tests/feature.test.sql (1)\n');
+    expect(result.out).not.toContain('feature.test.sql:');
+    expect(result.out).not.toContain('check by hand');
+  });
+
+  it('moves no bare number the base has a migration of, and lists each line naming one', () => {
     const result = t.run(SCRIPT, 'supabase/migrations/0002_feature.sql', '--base', 'main');
     expect(result.code, result.out).toBe(0);
 
     expect(t.git('diff', '--cached', '--name-status')).toMatch(
       /^R\d*\tsupabase\/migrations\/0002_feature\.sql\tsupabase\/migrations\/0003_feature\.sql$/m,
     );
-    // Its header follows, but not the line naming main's 0002; the SQL under the header is
-    // a value, so it is reported, not rewritten.
-    expect(t.read('supabase/migrations/0003_feature.sql')).toBe(
-      FEATURE_MERGED.replace('-- 0002 — the feature', '-- 0003 — the feature'),
-    );
-    // A sibling's header names it too.
+    // Every 0002 the branch wrote may be main's 0002_other (two of them are), so only the
+    // file name moves: its header keeps its 0002s, and so do the SQL under it and the docs.
+    expect(t.read('supabase/migrations/0003_feature.sql')).toBe(FEATURE_MERGED);
     expect(t.read('supabase/migrations/0004_more.sql')).toBe(
-      '-- 0004 — more. Depends on 0003_feature (0003).\n\nselect 1;\n',
+      '-- 0004 — more. Depends on 0003_feature (0002).\n\nselect 1;\n',
     );
     expect(t.read('supabase/tests/feature.test.sql')).toBe(
-      '-- pgTAP for 0003_feature.sql (0003) and 0004_more.sql\nselect 1;\n',
+      '-- pgTAP for 0003_feature.sql (0002) and 0004_more.sql\nselect 1;\n',
     );
     expect(t.read('supabase/tests/init.test.sql')).toBe(
       '-- 0001 and 0002 belong to main\nselect 1;\n',
     );
-    // The ledger line about main's own 0002 is the base's: untouched.
     expect(t.read('docs/ledger.md')).toBe(
       LEDGER.replace('- 0001 — init\n', '- 0001 — init\n- 0002 — other\n').replace(
         '- none yet',
-        '- 0003 — feature (0003_feature.sql), 0004 — more',
+        '- 0002 — feature (0003_feature.sql), 0004 — more',
       ),
     );
     expect(t.read('docs/as-built/feature.md')).toBe(
-      '# Feature\n\nShips 0003 and 0004.\nRuns after 0002_other (0002).\n',
+      '# Feature\n\nShips 0002 and 0004.\nRuns after 0002_other (0002).\n',
     );
-    // The paragraph that names both 0002s keeps both; the file name is the branch's alone.
     expect(t.read('CLAUDE.md')).toBe(
       STANDARD.replace('forward-only.', 'forward-only; 0002 adds other; 0002 adds the feature.') +
         '- 0003_feature adds the feature table.\n',
     );
+    expect(t.read('src/feature.ts')).toBe('// 0002 belongs to main\n// reads the 0002 table\n');
 
-    for (const [file, bareLine] of [
-      [
-        'supabase/migrations/0003_feature.sql (header, 1)',
-        'supabase/migrations/0003_feature.sql:2',
-      ],
-      ['supabase/migrations/0004_more.sql (header, 2)', 'supabase/migrations/0004_more.sql:1'],
-      ['supabase/tests/feature.test.sql (2)', 'supabase/tests/feature.test.sql:1'],
-      ['docs/ledger.md (2)', 'docs/ledger.md:10'],
-      ['docs/as-built/feature.md (1)', 'docs/as-built/feature.md:3'],
+    for (const file of [
+      'supabase/migrations/0004_more.sql (header, 1)',
+      'CLAUDE.md (1)',
+      'docs/ledger.md (1)',
+      'supabase/tests/feature.test.sql (1)',
     ]) {
-      expect(result.out).toContain(`update ${file}\n      ${bareLine}  0002 → 0003\n`);
+      expect(result.out).toContain(`update ${file}\n`);
     }
-    // CLAUDE.md's one rewrite is the file name, so no bare line follows it.
-    expect(result.out).toContain('update CLAUDE.md (1)\n    ');
+    expect(result.out).not.toContain('0002 → 0003');
+    expect(result.out).not.toContain('update supabase/migrations/0003_feature.sql');
+    expect(result.out).not.toContain('update docs/as-built/feature.md');
     expect(result.out).not.toContain('update supabase/tests/init.test.sql');
-    // Left alone and listed for a reader: the lines that may name main's 0002, the SQL, and
-    // the comment this branch wrote in src/ (not main's line above it).
+    // Left for a reader, with main's file named: every bare 0002 the branch wrote (in the
+    // headers, the docs, the pgTAP note, CLAUDE.md's shared paragraph), the SQL, and the
+    // comment this branch wrote in src/ (not main's line above it).
+    const main = "may name the base's 0002_other too";
     expect(result.out).toContain(
       [
         '  ! not rewritten, still naming 0002 or 0002_feature (check by hand):',
-        "      supabase/migrations/0003_feature.sql:3  may name the base's 0002 too",
+        `      supabase/migrations/0003_feature.sql:2  ${main}`,
+        `      supabase/migrations/0003_feature.sql:3  ${main}`,
         '      supabase/migrations/0003_feature.sql:7',
-        "      CLAUDE.md:3  may name the base's 0002 too",
-        "      docs/as-built/feature.md:4  may name the base's 0002 too",
+        `      supabase/migrations/0004_more.sql:1  ${main}`,
+        `      CLAUDE.md:3  ${main}`,
+        `      docs/as-built/feature.md:3  ${main}`,
+        `      docs/as-built/feature.md:4  ${main}`,
+        `      docs/ledger.md:10  ${main}`,
+        `      supabase/tests/feature.test.sql:1  ${main}`,
         '      src/feature.ts:2',
         '',
       ].join('\n'),
     );
-    expect(t.read('src/feature.ts')).toBe('// 0002 belongs to main\n// reads the 0002 table\n');
 
     expect(t.run(CHECK, 'main').code).toBe(0);
   });
@@ -667,11 +729,135 @@ describe('renumber-migration, end to end', { timeout: 30_000 }, () => {
   });
 });
 
+// A branch adds two migrations that both took 0040, above main's 0038: check-migrations
+// refuses the pair, and renumbering the later one parts them. The earlier one keeps 0040,
+// so a bare 0040 may name either: its own header names itself.
+
+const TWIN_A = '-- 0040 — a: the first half.\n-- 0040_b.sql follows.\n\nselect 1;\n';
+const TWIN_B = '-- 0040 — b: the second half.\n-- Runs after 0040_a (0040).\n\nselect 1;\n';
+const SPLIT = '# Split\n\nShips 0040_a.sql and 0040_b.sql.\nBoth number 0040 for now.\n';
+
+describe('renumber-migration parting two new migrations of one number', { timeout: 30_000 }, () => {
+  let t: ReturnType<typeof throwaway>;
+
+  beforeAll(() => {
+    t = throwaway('renumber-twins-');
+    t.init();
+    t.write('supabase/migrations/0038_x.sql', '-- 0038 — x\n\nselect 1;\n');
+    t.git('add', '-A');
+    t.git('commit', '-q', '-m', 'base');
+
+    t.git('checkout', '-q', '-b', 'split');
+    t.write('supabase/migrations/0040_a.sql', TWIN_A);
+    t.write('supabase/migrations/0040_b.sql', TWIN_B);
+    t.write('docs/as-built/split.md', SPLIT);
+    t.git('add', '-A');
+    t.git('commit', '-q', '-m', 'split');
+  }, 60_000);
+
+  afterAll(() => t?.cleanup());
+
+  it('moves the later one up, and leaves its twin’s header and every bare 0040 to a reader', () => {
+    expect(t.run(CHECK, 'main').out).toMatch(/0040_b\.sql: number 0040 already used by 0040_a/);
+    const result = t.run(SCRIPT, 'supabase/migrations/0040_b.sql', '--base', 'main');
+    expect(result.code, result.out).toBe(0);
+    expect(result.out).toContain('0040_b.sql → 0041_b.sql (the highest on main is 0038)');
+
+    // The twin keeps its number, and so does its header; only its mention of 0040_b by name
+    // moves. The moved file's own 0040s stay too: its second line means the twin.
+    expect(t.read('supabase/migrations/0040_a.sql')).toBe(
+      TWIN_A.replace('0040_b.sql', '0041_b.sql'),
+    );
+    expect(t.read('supabase/migrations/0041_b.sql')).toBe(TWIN_B);
+    expect(t.read('docs/as-built/split.md')).toBe(SPLIT.replace('0040_b.sql', '0041_b.sql'));
+    expect(result.out).toContain('update supabase/migrations/0040_a.sql (header, 1)\n');
+    expect(result.out).toContain('update docs/as-built/split.md (1)\n');
+    expect(result.out).not.toContain('0040 → 0041');
+    const twin = "may name this branch's 0040_a too";
+    expect(result.out).toContain(
+      [
+        '  ! not rewritten, still naming 0040 or 0040_b (check by hand):',
+        '      supabase/migrations/0040_a.sql:1  the header of 0040_a, which keeps 0040',
+        `      supabase/migrations/0041_b.sql:1  ${twin}`,
+        `      supabase/migrations/0041_b.sql:2  ${twin}`,
+        `      docs/as-built/split.md:4  ${twin}`,
+        '',
+      ].join('\n'),
+    );
+
+    expect(t.run(CHECK, 'main').code).toBe(0);
+  });
+});
+
+// main already holds 0037 (a hotfix) when a branch numbers its own new migration 0037 too,
+// and names main's by number alone: in the new file's header, and on a line it adds to
+// CLAUDE.md. Each bare 0037 there may mean either migration, and only a reader can tell.
+
+const LEADS_WRITE =
+  "-- 0037 — the leads write API.\n-- Depends on 0037 (main's partition RLS).\n\nselect 1;\n";
+const AFTER_MAIN = "- The lead write path runs after main's 0037 (partition RLS).\n";
+
+describe('renumber-migration when the base has its own 0037', { timeout: 30_000 }, () => {
+  let t: ReturnType<typeof throwaway>;
+
+  beforeAll(() => {
+    t = throwaway('renumber-namesake-');
+    t.init();
+    t.write('supabase/migrations/0036_init.sql', '-- 0036 — init\n\nselect 1;\n');
+    t.write(
+      'supabase/migrations/0037_partition_rls.sql',
+      '-- 0037 — partition RLS (H8).\n\nselect 1;\n',
+    );
+    t.write('CLAUDE.md', STANDARD);
+    t.git('add', '-A');
+    t.git('commit', '-q', '-m', 'base');
+
+    t.git('checkout', '-q', '-b', 'c3');
+    t.write('supabase/migrations/0037_leads_write.sql', LEADS_WRITE);
+    t.write('CLAUDE.md', `${STANDARD}${AFTER_MAIN}`);
+    t.write('docs/as-built/c3.md', '# C3\n\nShips `0037_leads_write.sql`.\n');
+    t.git('add', '-A');
+    t.git('commit', '-q', '-m', 'C3');
+  }, 60_000);
+
+  afterAll(() => t?.cleanup());
+
+  it('moves the file and its file name, but no bare 0037: each line naming one is listed', () => {
+    const result = t.run(SCRIPT, 'supabase/migrations/0037_leads_write.sql', '--base', 'main');
+    expect(result.code, result.out).toBe(0);
+
+    expect(t.git('diff', '--cached', '--name-status')).toMatch(
+      /^R\d*\tsupabase\/migrations\/0037_leads_write\.sql\tsupabase\/migrations\/0038_leads_write\.sql$/m,
+    );
+    // Its first line means this file, its second and CLAUDE.md's mean main's: none moves.
+    expect(t.read('supabase/migrations/0038_leads_write.sql')).toBe(LEADS_WRITE);
+    expect(t.read('CLAUDE.md')).toBe(`${STANDARD}${AFTER_MAIN}`);
+    expect(t.read('docs/as-built/c3.md')).toBe('# C3\n\nShips `0038_leads_write.sql`.\n');
+    expect(result.out).toContain('update docs/as-built/c3.md (1)\n');
+    expect(result.out).not.toContain('0037 → 0038');
+    const main = "may name the base's 0037_partition_rls too";
+    expect(result.out).toContain(
+      [
+        '  ! not rewritten, still naming 0037 or 0037_leads_write (check by hand):',
+        `      supabase/migrations/0038_leads_write.sql:1  ${main}`,
+        `      supabase/migrations/0038_leads_write.sql:2  ${main}`,
+        `      CLAUDE.md:6  ${main}`,
+        '',
+      ].join('\n'),
+    );
+
+    expect(t.run(CHECK, 'main').code).toBe(0);
+  });
+});
+
 // The reservation ledger gives 0002 to C3, 0003 to U3 and 0004 to R1. U3 merges first, so
 // C3's 0002 must move above 0003, and the next number is R1's: C3 passes over it (the
-// ledger's rule 3), so R1 keeps 0004 if it merges before C3.
+// ledger's rule 3), so R1 keeps 0004 if it merges before C3. C3's row names its file, and
+// after merging main the branch plans a second migration there: the ledger is the
+// program's, so neither line is the script's to rewrite.
 
 const LEDGER_PATH = 'docs/admin-v2/migrations.md';
+const C3_ROW = '| 0002 | C3 | the leads write API (`0002_leads_write.sql`) | 1 |';
 const RESERVED = [
   '# Migration ledger',
   '',
@@ -685,17 +871,19 @@ const RESERVED = [
   '',
   '| Number | Slice | What | Wave |',
   '|---|---|---|---|',
-  '| 0002 | C3 | the leads write API | 1 |',
+  C3_ROW,
   '| 0003 | U3 | uploads | 1 |',
   '| 0004 | R1 | the release ledger | 1 |',
   '',
 ].join('\n');
-const C3_ROW = '| 0002 | C3 | the leads write API | 1 |';
 // U3's PR moved its row to Applied before it merged.
 const U3_MERGED = RESERVED.replace('| 0003 | U3 | uploads | 1 |\n', '').replace(
   '| 0001 | `0001_init.sql` | #1 |\n',
   '| 0001 | `0001_init.sql` | #1 |\n| 0003 | `0003_uploads.sql` | #3 |\n',
 );
+// The ledger on C3's branch after the merge: its second migration planned under its first.
+const C3_LATER = '| 0006 | C3 | the leads write API, part 2 (after 0002) | 2 |';
+const C3_LEDGER = U3_MERGED.replace(`${C3_ROW}\n`, `${C3_ROW}\n${C3_LATER}\n`);
 
 describe('renumber-migration and the reservation ledger', { timeout: 30_000 }, () => {
   let t: ReturnType<typeof throwaway>;
@@ -724,6 +912,9 @@ describe('renumber-migration and the reservation ledger', { timeout: 30_000 }, (
 
     t.git('checkout', '-q', 'c3');
     t.git('merge', '-q', '--no-edit', 'main');
+    t.write(LEDGER_PATH, C3_LEDGER);
+    t.git('add', '-A');
+    t.git('commit', '-q', '-m', 'C3 plans part 2');
   }, 60_000);
 
   afterAll(() => t?.cleanup());
@@ -732,7 +923,7 @@ describe('renumber-migration and the reservation ledger', { timeout: 30_000 }, (
     // On the branch, C3 takes 0004 and R1 moves up to 0005.
     t.write(
       LEDGER_PATH,
-      U3_MERGED.replace(C3_ROW, '| 0004 | C3 | the leads write API | 1 |').replace(
+      C3_LEDGER.replace(C3_ROW, C3_ROW.replace('0002 |', '0004 |')).replace(
         '| 0004 | R1 |',
         '| 0005 | R1 |',
       ),
@@ -755,7 +946,7 @@ describe('renumber-migration and the reservation ledger', { timeout: 30_000 }, (
     }
   });
 
-  it('passes over the number reserved for another slice, and lists the ledger row to move', () => {
+  it('passes over the number reserved for another slice, and lists the ledger rows to move', () => {
     const result = t.run(SCRIPT, 'supabase/migrations/0002_leads_write.sql', '--base', 'main');
     expect(result.code, result.out).toBe(0);
     expect(result.out).toContain(
@@ -765,12 +956,17 @@ describe('renumber-migration and the reservation ledger', { timeout: 30_000 }, (
     expect(t.read('supabase/migrations/0005_leads_write.sql')).toBe(
       '-- 0005 — the leads write API (C3).\n\nselect 1;\n',
     );
-    // The ledger is the program's, written on the base: left as it is, its C3 row listed.
-    expect(t.read(LEDGER_PATH)).toBe(U3_MERGED);
+    // The ledger is the program's: left as it is, byte for byte. Not the file name in C3's
+    // row (its Number cell would still say 0002), nor the 0002 the branch wrote on its own
+    // line. Both are listed for a reader.
+    expect(t.read(LEDGER_PATH)).toBe(C3_LEDGER);
     expect(result.out).not.toContain(`update ${LEDGER_PATH}`);
-    const row = U3_MERGED.split('\n').indexOf(C3_ROW) + 1;
+    const row = C3_LEDGER.split('\n').indexOf(C3_ROW) + 1;
+    const byHand = 'the reservation ledger: rows move by hand';
     expect(result.out).toContain(
-      `      ${LEDGER_PATH}:${row}  the reservation ledger: rows move by hand\n`,
+      '  ! not rewritten, still naming 0002 or 0002_leads_write (check by hand):\n' +
+        `      ${LEDGER_PATH}:${row}  ${byHand}\n` +
+        `      ${LEDGER_PATH}:${row + 1}  ${byHand}\n`,
     );
     expect(t.run(CHECK, 'main').code).toBe(0);
   });
