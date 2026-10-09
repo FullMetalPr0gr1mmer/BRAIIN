@@ -92,7 +92,7 @@ select is(
      from unnest(array['anon', 'authenticated', 'service_role']::name[]) as r
      cross join unnest(array['app.release_token_valid()', 'app.current_release_id()',
                              'app.releases_enabled(uuid)', 'app.tg_snapshot_version()',
-                             'app.tg_snapshot_singleton()', 'app.tg_draft_claim_lock()']) as f
+                             'app.tg_snapshot_singleton()', 'app.tg_draft_lock()']) as f
     where has_function_privilege(r, f, 'execute')),
   '',
   'no API role can call the token, flag or trigger functions');

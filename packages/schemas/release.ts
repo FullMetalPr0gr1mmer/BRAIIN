@@ -85,6 +85,9 @@ export const RELEASE_MAX_ITEMS = 60;
 export const DRAFT_PAYLOAD_MAX_BYTES = 524_288;
 /** The changed-column list a draft carries for display. */
 export const DRAFT_FIELDS_MAX = 200;
+/** One entry of that list: a column name, at most 63 characters (Postgres's identifier
+ *  limit). The content_drafts CHECK uses the same pattern. */
+export const DRAFT_FIELD_NAME = /^[A-Za-z][A-Za-z0-9_]{0,62}$/;
 
 // ---- Inputs ---------------------------------------------------------------------------------
 
@@ -151,7 +154,7 @@ export const ContentDraftRowSchema = z.object({
   entity_id: Uuid,
   op: DraftOpSchema,
   payload: z.record(z.string(), z.unknown()),
-  fields: z.array(z.string()).max(DRAFT_FIELDS_MAX),
+  fields: z.array(z.string().regex(DRAFT_FIELD_NAME)).max(DRAFT_FIELDS_MAX),
   base: z.record(z.string(), z.unknown()),
   base_version: z.number().int().nullable(),
   label: z.record(z.string(), z.unknown()).nullable(),

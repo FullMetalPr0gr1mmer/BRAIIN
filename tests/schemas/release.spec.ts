@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   ContentDraftRowSchema,
   ContentReleaseRowSchema,
+  DRAFT_FIELD_NAME,
+  DRAFT_FIELDS_MAX,
   DRAFT_OPS,
   DRAFT_PAYLOAD_MAX_BYTES,
   DraftPayloadSchema,
@@ -146,6 +148,43 @@ describe('row shapes', () => {
     expect(ContentDraftRowSchema.safeParse({ ...row, op: 'archive' }).success).toBe(false);
   });
 
+  it('a draft lists up to 200 changed columns, each a name of up to 63 characters', () => {
+    const draft = (fields: string[]) => ({
+      id: uuid(1),
+      tenant_id: uuid(2),
+      entity_type: 'page',
+      entity_id: uuid(3),
+      op: 'update',
+      payload: {},
+      fields,
+      base: {},
+      base_version: 1,
+      label: null,
+      origin_kind: null,
+      origin_release_id: null,
+      release_id: null,
+      version: 1,
+      created_at: at,
+      updated_at: at,
+      created_by: null,
+      updated_by: null,
+    });
+    const ok = (fields: string[]) => ContentDraftRowSchema.safeParse(draft(fields)).success;
+    expect(ok(['title', 'sort_order', 'sortOrder', 'a'.repeat(63)])).toBe(true);
+    expect(ok(Array.from({ length: DRAFT_FIELDS_MAX }, () => 'title'))).toBe(true);
+    expect(ok(Array.from({ length: DRAFT_FIELDS_MAX + 1 }, () => 'title'))).toBe(false);
+    for (const bad of [
+      'a'.repeat(64),
+      '',
+      '1title',
+      'a long, free text',
+      'title"',
+      `ti${NUL}tle`,
+    ]) {
+      expect(ok(['title', bad])).toBe(false);
+    }
+  });
+
   it('reads a release row and a release item', () => {
     const release = {
       id: uuid(1),
@@ -219,6 +258,13 @@ describe('the vocabularies equal migration 0038', () => {
   it('the limits the database enforces', () => {
     expect(RELEASE_LEDGER_SQL).toContain('char_length(note) <= 280');
     expect(RELEASE_LEDGER_SQL).toContain(`pg_column_size(payload) <= ${DRAFT_PAYLOAD_MAX_BYTES}`);
-    expect(RELEASE_LEDGER_SQL).toContain('cardinality(fields) <= 200');
+    expect(RELEASE_LEDGER_SQL).toContain(`cardinality(fields) <= ${DRAFT_FIELDS_MAX}`);
+  });
+
+  it('a changed column name: the Zod pattern is the one the CHECK applies to each entry', () => {
+    // The CHECK reads the array's text form: '{' name (',' name)* '}', each name this pattern.
+    const name = DRAFT_FIELD_NAME.source.slice(1, -1); // without ^ and $
+    expect(RELEASE_LEDGER_SQL).toContain(String.raw`fields::text ~ '^\{(${name}(,${name})*)?\}$'`);
+    expect(RELEASE_LEDGER_SQL).toContain('array_position(fields, null::text) is null');
   });
 });

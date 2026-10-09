@@ -19,9 +19,13 @@
 --     role can read or write it (the verification moved the flag off site_settings, which
 --     Admin and Developer can write through PostgREST); app.releases_enabled() reads it.
 --   • public.content_drafts: one shared pending change per entity (payload untrusted, a
---     base for column-level conflicts, its own version), written by the CMS staff who may
---     author that entity type, under RLS. A draft claimed by a scheduled release is
---     read-only to staff (RLS + a claim-lock trigger).
+--     base for column-level conflicts, its own version), to be written by the CMS staff
+--     who may author that entity type, under RLS. Staff READ drafts from 0038 but write
+--     none: authenticated gets no INSERT, UPDATE or DELETE here; R3 grants them with the
+--     kernel that writes drafts (the write policies are in place and pgTAP-proven). One
+--     BEFORE trigger, the draft lock (app.tg_draft_lock): a claimed draft is read-only to
+--     staff (with RLS), and a draft's id, version and author are the database's, so the
+--     {draftId, draftVersion} a publish names (R6) cannot be replayed (no ABA).
 --   • public.content_releases: the site versions, numbered per tenant when they go live.
 --     Staff read them; only the service role writes them.
 --   • public.content_release_items: append-only before/after images of every row a
@@ -345,8 +349,17 @@ create table if not exists public.content_drafts (
   -- Zod schema and toRow (releases.md A3-13).
   payload jsonb not null default '{}'::jsonb
     check (jsonb_typeof(payload) = 'object' and pg_column_size(payload) <= 524288),
-  -- The changed columns, for display only.
-  fields text[] not null default '{}' check (cardinality(fields) <= 200),
+  -- The changed columns, for display only: at most 200, each a column name (a letter, then
+  -- letters, digits or underscores, at most 63 characters: Postgres's own identifier
+  -- limit). A CHECK cannot read the elements one by one (no subquery), so it reads the
+  -- array's text form, which is exact for names: a name is never quoted there, and
+  -- anything else (empty, spaces, commas, quotes, braces, another dimension or lower
+  -- bound) is. A null element prints as a bare NULL, hence the array_position test
+  -- (after the pattern, which has already refused a second dimension it cannot search).
+  fields text[] not null default '{}'
+    check (cardinality(fields) <= 200
+           and fields::text ~ '^\{([A-Za-z][A-Za-z0-9_]{0,62}(,[A-Za-z][A-Za-z0-9_]{0,62})*)?\}$'
+           and array_position(fields, null::text) is null),
   -- The live values of each patched column when it was first patched (three-way check).
   base jsonb not null default '{}'::jsonb
     check (jsonb_typeof(base) = 'object' and pg_column_size(base) <= 524288),
@@ -383,45 +396,88 @@ create index if not exists content_drafts_release_idx
 alter table public.content_drafts enable row level security;
 alter table public.content_drafts force row level security;
 
--- A claim (release_id) is set and cleared only by the service-role schedule path, never by
--- a staff token. RLS already refuses it to authenticated (below); this holds for any other
--- caller that carries a staff claim, e.g. a SECURITY DEFINER function a staff request
--- reaches. Invoker on purpose: it reads current_user. Requests with no role claim (the
--- runbook, seeds, the service role's own key) and the service role itself are allowed.
-create or replace function app.tg_draft_claim_lock() returns trigger
+-- The draft lock: the whole BEFORE phase of content_drafts in one function (one function
+-- per phase, as app.tg_lead_pipeline is for leads), so no trigger order decides anything.
+-- The shared app.tg_set_actor / app.tg_bump_version are not used here: the first keeps a
+-- created_by the caller sends, the second keeps a version the caller sends when it differs
+-- from the stored one, and either would let a writer forge what the publish check (R6)
+-- reads.
+--
+--   1. The claim lock. A claim (release_id) is set and cleared only by the service-role
+--      schedule path, and a claimed draft is read-only until its release fires or is
+--      unscheduled: a bound caller cannot set, change or clear a claim, nor edit or discard
+--      a claimed draft. Bound: anon and authenticated (RLS already refuses them, below), and
+--      any other role that carries a staff claim, e.g. a SECURITY DEFINER function a staff
+--      request reaches. Not bound: the service role (apply_release claims, consumes and
+--      releases drafts as service_role, R4/R11, even while the publisher's claims are set),
+--      and a caller with no role claim (the runbook functions, seeds, the migration role).
+--   2. The draft's version, the lock publishing checks (a publish names {draftId,
+--      draftVersion}, R6). An update always lands on old + 1, whatever the writer sent,
+--      and never changes the id; an insert with a role claim starts at 1 under a fresh id.
+--      So a pair a publisher saw never names other content later: not after an edit that
+--      sent the old version back, and not after a discard and a re-create under that id.
+--   3. The actor and the stamps. With a role claim, created_by/created_at are the
+--      database's on insert; on every update they stay what they were. updated_by is
+--      auth.uid() and updated_at now() on every write.
+-- Invoker on purpose: it reads current_user and the request's claims, nothing private.
+create or replace function app.tg_draft_lock() returns trigger
   language plpgsql set search_path = ''
 as $$
 declare
   v_role text := nullif(pg_catalog.current_setting('request.jwt.claims', true), '')::jsonb
                    #>> '{app_metadata,role}';
+  v_bound constant boolean := current_user::text in ('anon', 'authenticated')
+                              or (v_role is not null and current_user::text <> 'service_role');
 begin
-  if (tg_op = 'INSERT' and new.release_id is not null)
-     or (tg_op = 'UPDATE' and new.release_id is distinct from old.release_id) then
-    if current_user::text in ('anon', 'authenticated')
-       or (v_role is not null and current_user::text <> 'service_role') then
+  -- 1. The claim lock.
+  if v_bound then
+    if tg_op = 'INSERT' then
+      if new.release_id is not null then
+        raise exception 'a pending change is claimed and released only by a scheduled release'
+          using errcode = '42501',
+                hint = 'Schedule or unschedule the release instead.';
+      end if;
+    elsif old.release_id is not null then
+      raise exception 'a pending change claimed by a scheduled release cannot be changed or discarded'
+        using errcode = '42501',
+              hint = 'Unschedule the release first.';
+    elsif tg_op = 'UPDATE' and new.release_id is not null then
       raise exception 'a pending change is claimed and released only by a scheduled release'
         using errcode = '42501',
               hint = 'Schedule or unschedule the release instead.';
     end if;
   end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+
+  -- 2 and 3. The version, the id, the actor and the stamps.
+  if tg_op = 'INSERT' then
+    if v_role is not null then
+      new.id := pg_catalog.gen_random_uuid();
+      new.version := 1;
+      new.created_by := auth.uid();
+      new.created_at := pg_catalog.now();
+    else
+      new.created_by := coalesce(new.created_by, auth.uid());
+    end if;
+  else
+    new.id := old.id;
+    new.version := old.version + 1;
+    new.created_by := old.created_by;
+    new.created_at := old.created_at;
+  end if;
+  new.updated_by := auth.uid();
+  new.updated_at := pg_catalog.now();
   return new;
 end $$;
-revoke all on function app.tg_draft_claim_lock() from public, anon, authenticated, service_role;
+revoke all on function app.tg_draft_lock() from public, anon, authenticated, service_role;
 
--- BEFORE triggers fire in name order: actor, claim_lock, updated_at, version. The claim
--- lock reads only release_id, which none of the others writes.
-drop trigger if exists content_drafts_actor on public.content_drafts;
-create trigger content_drafts_actor before insert or update on public.content_drafts
-  for each row execute function app.tg_set_actor();
-drop trigger if exists content_drafts_claim_lock on public.content_drafts;
-create trigger content_drafts_claim_lock before insert or update on public.content_drafts
-  for each row execute function app.tg_draft_claim_lock();
-drop trigger if exists content_drafts_updated_at on public.content_drafts;
-create trigger content_drafts_updated_at before update on public.content_drafts
-  for each row execute function app.tg_set_updated_at();
-drop trigger if exists content_drafts_version on public.content_drafts;
-create trigger content_drafts_version before update on public.content_drafts
-  for each row execute function app.tg_bump_version();
+-- The only trigger on the table (a postcondition holds it so).
+drop trigger if exists content_drafts_lock on public.content_drafts;
+create trigger content_drafts_lock before insert or update or delete on public.content_drafts
+  for each row execute function app.tg_draft_lock();
 
 -- Read: CMS staff, their tenant (each role's screens filter further; nothing here is more
 -- private than the live tables, which every CMS role already reads: registry contract #1).
@@ -577,8 +633,13 @@ create policy custom_themes_delete_admin on public.custom_themes
   using (tenant_id = app.effective_tenant_id() and app.is_admin());
 
 -- ═══ 9. Grants, stated (Admin v2 P-14: both Supabase grant regimes) ═══════════════════════
+-- Staff READ drafts and write none yet. The write policies above are in place (pgTAP proves
+-- them with the grant restored inside its rolled-back transaction), but authenticated holds
+-- no INSERT, UPDATE or DELETE until R3 grants them with the kernel that writes drafts: no
+-- draft can be planted through PostgREST while nothing shows or checks them, to surface at
+-- switch-on.
 revoke all on public.content_drafts from public, anon, authenticated, service_role;
-grant select, insert, update, delete on public.content_drafts to authenticated;
+grant select on public.content_drafts to authenticated;
 grant select, insert, update, delete on public.content_drafts to service_role;
 
 revoke all on public.content_releases from public, anon, authenticated, service_role;
@@ -589,6 +650,21 @@ grant select, insert, update on public.content_releases to service_role;
 revoke all on public.content_release_items from public, anon, authenticated, service_role;
 grant select on public.content_release_items to authenticated;
 grant select, insert on public.content_release_items to service_role;
+
+-- The items' identity sequence, the one sequence 0038 creates: no API role holds anything
+-- on it (Supabase's default privileges would give them all of it; UPDATE on a sequence is
+-- setval). An identity column draws its next value without any privilege on its sequence,
+-- so the service role's inserts and the capture trigger's (R4) need no USAGE (0037 B5
+-- grants USAGE because those tables have bigserial defaults, which do need it).
+do $$
+declare
+  v_seq text := pg_get_serial_sequence('public.content_release_items', 'id');
+begin
+  if v_seq is null then
+    raise exception '0038: public.content_release_items.id owns no sequence';
+  end if;
+  execute format('revoke all on sequence %s from public, anon, authenticated, service_role', v_seq);
+end $$;
 
 -- ═══ Postconditions ═══════════════════════════════════════════════════════════════════════
 do $$
@@ -625,7 +701,7 @@ begin
              has_table_privilege(x.who::name, x.tbl, pr.priv) as held,
              pr.priv = any (x.allowed) as wanted
         from (values
-          ('authenticated', 'public.content_drafts', array['select', 'insert', 'update', 'delete']),
+          ('authenticated', 'public.content_drafts', array['select']),
           ('authenticated', 'public.content_releases', array['select']),
           ('authenticated', 'public.content_release_items', array['select']),
           ('authenticated', 'app.release_entities', array['select']),
@@ -690,7 +766,7 @@ begin
   end loop;
   foreach p in array array['app.release_token_valid()', 'app.current_release_id()',
                            'app.releases_enabled(uuid)', 'app.tg_snapshot_version()',
-                           'app.tg_snapshot_singleton()', 'app.tg_draft_claim_lock()'] loop
+                           'app.tg_snapshot_singleton()', 'app.tg_draft_lock()'] loop
     if has_function_privilege('anon', p, 'execute')
        or has_function_privilege('authenticated', p, 'execute')
        or has_function_privilege('service_role', p, 'execute')
@@ -792,9 +868,15 @@ begin
                     and qual like '%effective_tenant_id()%' and qual like '%is_admin()%') then
     raise exception '0038: custom_themes_delete_admin is missing, permissive, or incomplete';
   end if;
-  if not exists (select 1 from pg_trigger
-                  where tgrelid = 'public.content_drafts'::regclass
-                    and tgname = 'content_drafts_claim_lock' and not tgisinternal) then
-    raise exception '0038: content_drafts_claim_lock is missing';
+  -- The draft lock is the only trigger on content_drafts, BEFORE, FOR EACH ROW, on INSERT,
+  -- UPDATE and DELETE (tgtype 1 + 2 + 4 + 8 + 16): a later generic actor or version trigger
+  -- would run in name order around it and could undo what it sets.
+  if (select string_agg(format('%s %s.%s %s', t.tgname, n.nspname, f.proname, t.tgtype), ', ')
+        from pg_trigger t
+        join pg_proc f on f.oid = t.tgfoid
+        join pg_namespace n on n.oid = f.pronamespace
+       where t.tgrelid = 'public.content_drafts'::regclass and not t.tgisinternal)
+     is distinct from 'content_drafts_lock app.tg_draft_lock 31' then
+    raise exception '0038: content_drafts must carry exactly one trigger, the draft lock';
   end if;
 end $$;
