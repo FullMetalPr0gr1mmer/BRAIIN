@@ -60,15 +60,57 @@ export async function writeAudit(
   };
 
   try {
-    const { error } = await sb.from('audit_log').insert({
-      tenant_id: ctx.tenantId,
-      actor_id: ctx.userId,
-      actor_role: ctx.role,
-      action: entry.action,
-      entity_type: entry.entityType ?? null,
-      entity_id: entry.entityId ?? null,
-      detail: entry.detail ?? {},
+    const { error } = await sb.from('audit_log').insert(auditRow(ctx, entry));
+    if (error) return await report('insert rejected', { code: error.code, message: error.message });
+    return true;
+  } catch (err) {
+    return await report('threw', { message: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+function auditRow(ctx: AuthContext, entry: AuditEntry): Record<string, unknown> {
+  return {
+    tenant_id: ctx.tenantId,
+    actor_id: ctx.userId,
+    actor_role: ctx.role,
+    action: entry.action,
+    entity_type: entry.entityType ?? null,
+    entity_id: entry.entityId ?? null,
+    detail: entry.detail ?? {},
+  };
+}
+
+/**
+ * Writes several audit rows in ONE insert (Admin v2 C3: a bulk change audits every lead it
+ * changed). One statement, not one per row, because a Worker on the Free plan has 50
+ * subrequests per request and a bulk change touches up to 100 leads.
+ *
+ * The chain still holds row by row: the BEFORE INSERT trigger runs once per row, takes its
+ * id under the tenant's lock, and (being VOLATILE) sees the rows this same statement wrote
+ * before it, so each row links to the one before it (supabase/tests/crm_leads_write.test.sql
+ * proves it). The insert is all-or-nothing: false means no row of the batch was written,
+ * reported to system_logs exactly as writeAudit reports one.
+ */
+export async function writeAuditMany(
+  sb: SupabaseClient,
+  ctx: AuthContext,
+  entries: readonly AuditEntry[],
+): Promise<boolean> {
+  if (entries.length === 0) return true;
+  const report = async (reason: string, detail: Record<string, unknown>): Promise<false> => {
+    await writeSystemLog({
+      level: 'error',
+      source: 'audit',
+      message: `audit_log write failed (${reason}) for ${entries.length} rows, first action "${entries[0]!.action}"`,
+      detail: { actions: [...new Set(entries.map((entry) => entry.action))], ...detail },
     });
+    return false;
+  };
+
+  try {
+    const { error } = await sb
+      .from('audit_log')
+      .insert(entries.map((entry) => auditRow(ctx, entry)));
     if (error) return await report('insert rejected', { code: error.code, message: error.message });
     return true;
   } catch (err) {

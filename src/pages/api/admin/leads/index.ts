@@ -1,5 +1,9 @@
 import { LeadListQuerySchema } from '@schemas/admin';
-import { defineAdminRoute } from '@/lib/admin/route';
+import { LeadManualCreateSchema } from '@schemas/crm';
+import { assertCap } from '@/lib/authz/matrix';
+import { defineAdminRoute, json } from '@/lib/admin/route';
+import { liveRecheck } from '@/lib/admin/liveRecheck';
+import { addManualLead } from '@/lib/crm/manualLead';
 import { listRows } from '@/lib/admin/crud';
 import { SAFE_LEAD_COLUMNS, stripSensitive } from '@/lib/admin/leadFields';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
@@ -38,5 +42,39 @@ export const GET = defineAdminRoute({
       limit: input.limit,
       offset: input.offset,
     };
+  },
+});
+
+// Adding a lead by hand (Admin v2 C3, crm.md §7.2): `leads.manage` AND `leads.pii`, since
+// it writes a person's contact details, then a live recheck, because the lead is written
+// as the service role (no API role inserts leads, 0030). The lead goes through the same
+// door as the public form, public.crm_ingest_lead, with `source` 'manual' and the adding
+// person set here, never by the client. A phone that matches an earlier lead while the
+// e-mail does not is answered with a 409 and the matches (safe fields only), unless the
+// caller sends `createNew`; an e-mail match is added and named in the answer.
+export const POST = defineAdminRoute({
+  cap: 'leads.manage',
+  input: LeadManualCreateSchema,
+  handler: async ({ auth, sb, input, audit }) => {
+    assertCap(auth, 'leads.pii');
+    await liveRecheck(auth);
+
+    const outcome = await addManualLead(auth, sb, input);
+    if (outcome.kind === 'possible-duplicate') {
+      return json({ ok: false, error: 'possible-duplicate', matches: outcome.matches }, 409);
+    }
+
+    // The source and the channel; never the person's details.
+    audit({
+      action: 'lead.create',
+      entityType: 'lead',
+      entityId: outcome.id,
+      detail: {
+        source: 'manual',
+        channel: input.channel,
+        sameEmailAs: outcome.sameEmail.map((lead) => lead.id),
+      },
+    });
+    return { id: outcome.id, sameEmail: outcome.sameEmail };
   },
 });

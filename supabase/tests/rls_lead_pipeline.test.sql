@@ -120,9 +120,11 @@ select throws_ok(
   $$ insert into public.lead_notes (tenant_id, lead_id, body, source)
      values ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000aa01', 'x', 'staff') $$,
   '42501', null, 'admin cannot write the notes thread through the API');
-select throws_ok(
+-- Since 0041 (C3) staff write the pipeline through a column grant; the versioned writes
+-- themselves are supabase/tests/crm_leads_write.test.sql's. A no-op move changes nothing.
+select lives_ok(
   $$ update public.leads set stage_id = stage_id where id = '00000000-0000-0000-0000-00000000aa01' $$,
-  '42501', null, 'admin cannot move a stage directly yet (the versioned write API is C3)');
+  'admin may write the stage directly since 0041 (C3), through the column grant');
 
 select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0000-0000-000000000001');
 select is((select count(*)::int from public.lead_stages), 5, 'developer reads the pipeline');

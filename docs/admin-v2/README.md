@@ -696,6 +696,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [C1b](as-built/C1b.md): how a lead arrives, 0035 (#46, folded into #45)
 - [C2a](as-built/C2a.md): reading the pipeline, 0036 (#47, folded into #45)
 - [C2b](as-built/C2b.md): one lead: the reveal, the notes thread, the timeline (#48, folded into #45)
+- [C3](as-built/C3.md): the leads write API: versioned PATCH, bulk, manual add, erase, export filters, 0041
 
 **Hotfixes**
 - [H5](as-built/H5.md): the audit chain is serialized, 0031 (#36)

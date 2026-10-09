@@ -14,7 +14,7 @@ const callerCalls: { table: string; method: string; args: unknown[] }[] = [];
 
 function recorder(log: typeof serviceCalls, table: string) {
   const b: Record<string, unknown> = {};
-  for (const m of ['select', 'eq', 'gte', 'lte', 'in', 'order', 'limit']) {
+  for (const m of ['select', 'eq', 'gte', 'lte', 'in', 'order', 'limit', 'range']) {
     b[m] = (...args: unknown[]) => {
       log.push({ table, method: m, args });
       return b;

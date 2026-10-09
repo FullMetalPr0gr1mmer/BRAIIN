@@ -50,6 +50,16 @@ export const SAFE_LEAD_COLUMNS =
 export const GATED_LEAD_COLUMNS =
   'email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,internal_notes,ip_inet';
 
+/**
+ * The pipeline's columns (0034 to 0041): readable by every lead worker, none of them
+ * personal data beyond what the safe columns already hold (ids, numbers, flags, stamps).
+ */
+export const PIPELINE_LEAD_COLUMNS =
+  'lead_number,stage_id,is_spam,first_response_at,won_at,version,score,source,channel,assigned_to,value_sar,is_starred,read_at,read_by,tags,last_contact_at,last_contact_channel';
+
+/** What a lead write answers with (Admin v2 C3): the safe columns and the pipeline's. */
+export const LEAD_WRITE_COLUMNS = `${SAFE_LEAD_COLUMNS},${PIPELINE_LEAD_COLUMNS}`;
+
 /** Safe columns plus the gated ones: the PII export's projection, read as the service role. */
 export const FULL_LEAD_COLUMNS = `${SAFE_LEAD_COLUMNS},${GATED_LEAD_COLUMNS}`;
 
