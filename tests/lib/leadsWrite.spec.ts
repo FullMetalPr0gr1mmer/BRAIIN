@@ -171,7 +171,7 @@ const bulk = await import('@/pages/api/admin/leads/bulk');
 const leads = await import('@/pages/api/admin/leads/index');
 const erase = await import('@/pages/api/admin/leads/[id]/erase');
 const noteDelete = await import('@/pages/api/admin/leads/[id]/notes/[noteId]');
-const { CRM_ERASE_LIMITS } = await import('@/lib/admin/rateLimit');
+const { CRM_ERASE_LIMITS, MANUAL_LEAD_LIMITS } = await import('@/lib/admin/rateLimit');
 const { blindIndex } = await import('@/lib/crm/blindIndex');
 const { LEAD_PII_ENC_KEY } = await import('astro:env/server');
 
@@ -470,6 +470,17 @@ describe('POST /api/admin/leads (added by hand)', () => {
     }
     expect(audits.map((a) => a.action)).toEqual(['lead.create']);
     expect(JSON.stringify(audits)).not.toContain('Acme');
+    // The live recheck, then the limit, before any lookup.
+    expect(events.slice(0, 2)).toEqual(['svc:profiles', 'ops:lead-manual-add']);
+    expect(claimed).toEqual([{ op: 'lead-manual-add', limits: MANUAL_LEAD_LIMITS }]);
+    expect(MANUAL_LEAD_LIMITS).toEqual({ perUser: 60, perTenant: 300, windowMinutes: 60 });
+  });
+
+  it('over the limit: 429, nothing looked up or added', async () => {
+    limited = true;
+    expect((await add({ ...base, phone: '0501234567' })).status).toBe(429);
+    expect(rpcCalls).toEqual([]);
+    expect(audits).toEqual([]);
   });
 
   it('the duplicate checks send only blind indexes, as the caller', async () => {
@@ -481,7 +492,7 @@ describe('POST /api/admin/leads (added by hand)', () => {
     expect((lookups[0]!.args['p_filter'] as Record<string, unknown>)['contact_kind']).toBe('email');
   });
 
-  it('a phone that matches an earlier lead, with no e-mail match: 409 with the matches, nothing added', async () => {
+  it('a phone that matches an earlier lead, with no e-mail match: 409 with the matches, audited, nothing added', async () => {
     callerRpc = {
       leads_list: {
         data: { total: 1, rows: [{ id: OTHER, lead_number: 12, name: 'Sara A.' }] },
@@ -496,7 +507,16 @@ describe('POST /api/admin/leads (added by hand)', () => {
       matches: [{ id: OTHER, lead_number: 12, name: 'Sara A.' }],
     });
     expect(rpcCalls.some((c) => c.fn === 'crm_ingest_lead')).toBe(false);
-    expect(audits).toEqual([]);
+    // The lookup was made, so it is on the record: the matched leads' ids, never what was typed.
+    expect(audits).toEqual([
+      {
+        action: 'lead.create.duplicate',
+        entityType: 'lead',
+        detail: { source: 'manual', channel: 'phone', matches: [OTHER] },
+      },
+    ]);
+    expect(JSON.stringify(audits)).not.toContain('0501234567');
+    expect(JSON.stringify(audits)).not.toContain('Sara');
   });
 
   it('createNew says it is someone else: the lead is added', async () => {
@@ -536,6 +556,7 @@ describe('POST /api/admin/leads (added by hand)', () => {
     liveProfile = { role: 'seo', is_active: true, locked_until: null };
     expect((await add({ ...base, phone: '0501234567' })).status).toBe(403);
     expect(rpcCalls).toEqual([]);
+    expect(claimed).toEqual([]);
   });
 
   it('a refusal by the database is a 422, never a retried insert', async () => {
