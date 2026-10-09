@@ -1,7 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
 import type { AuthContext, Role } from '@/lib/auth/types';
-import { visibleNav } from '@/lib/admin/nav';
+import { COUNTERS } from '@/lib/admin/counters';
+import { ADMIN_NAV, visibleNav } from '@/lib/admin/nav';
 import { initialsOf, loadShellState } from '@/lib/admin/shell';
 
 // The admin shell's state (Admin v2 F2): head counts beside sidebar links, the
@@ -108,6 +109,17 @@ describe('loadShellState', () => {
     expect(on.maintenance).toBe(true);
     const broken = await loadShellState(sb, auth('seo'), visibleNav('seo'), kv('not json'));
     expect(broken.maintenance).toBe(false);
+  });
+});
+
+describe('the counters registry (src/lib/admin/counters)', () => {
+  it('holds exactly the counts the menu shows, each shown by a link', () => {
+    // Pinned, not derived: a counter dropped from the registry must fail here.
+    expect(Object.keys(COUNTERS).sort()).toEqual(['applications', 'leads']);
+    const shown = ADMIN_NAV.flatMap((group) =>
+      group.links.flatMap((link) => (link.count ? [link.count] : [])),
+    );
+    expect([...shown].sort()).toEqual(Object.keys(COUNTERS).sort());
   });
 });
 

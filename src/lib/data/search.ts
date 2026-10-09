@@ -1,6 +1,7 @@
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { SearchHitSchema, type SearchHit } from '@schemas/search';
 import type { Locale } from '@schemas/primitives';
+import { contentClient } from './source';
 
 // Runtime data access for unified search. Called only from the /api/search endpoint,
 // never directly in indexable HTML (search results are noindex). RLS enforces tenant +
@@ -10,7 +11,7 @@ import type { Locale } from '@schemas/primitives';
 export async function searchContent(q: string, locale: Locale): Promise<SearchHit[]> {
   if (!supabaseConfigured()) return [];
   try {
-    const { data, error } = await anonClient().rpc('search_content', { query: q, locale });
+    const { data, error } = await contentClient().rpc('search_content', { query: q, locale });
     if (error || !data) return [];
     return (data as unknown[]).flatMap((row) => {
       const parsed = SearchHitSchema.safeParse(row);
@@ -24,7 +25,7 @@ export async function searchContent(q: string, locale: Locale): Promise<SearchHi
 export async function searchSuggest(q: string, locale: Locale): Promise<SearchHit[]> {
   if (!supabaseConfigured()) return [];
   try {
-    const { data, error } = await anonClient().rpc('search_suggest', { query: q, locale });
+    const { data, error } = await contentClient().rpc('search_suggest', { query: q, locale });
     if (error || !data) return [];
     // search_suggest returns {…, similarity}; remap to the SearchHit shape (similarity →
     // rank, no snippet) so the endpoint renders primary hits and suggestions uniformly.

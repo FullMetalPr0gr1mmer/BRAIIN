@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { Locale } from '@schemas/primitives';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { DEFAULT_TITLE_TEMPLATE, applyTitleTemplate } from '@/lib/seo/title';
+import { contentClient } from './source';
 
 // Public read path for CMS-authored SEO: per-entity overrides (`entity_seo`) and the
 // tenant's global defaults (`seo_defaults`).
@@ -60,7 +61,7 @@ export async function getEntitySeo(
 ): Promise<EntitySeo | null> {
   if (!supabaseConfigured()) return null;
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('entity_seo')
       .select('meta_title,meta_description,og_image,canonical_override,robots,schema_type')
       .eq('entity_type', entityType)
@@ -77,7 +78,7 @@ export async function getEntitySeo(
 export async function getSeoDefaults(): Promise<SeoDefaults | null> {
   if (!supabaseConfigured()) return null;
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('seo_defaults')
       .select('title_template,default_title,default_description,default_og_image,robots_directives')
       .maybeSingle();

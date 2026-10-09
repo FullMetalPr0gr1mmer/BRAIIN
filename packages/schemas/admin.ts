@@ -169,7 +169,7 @@ export const ServiceWriteSchema = z.object({
   sortOrder: SortOrderSchema,
   scheduledFor: InstantSchema,
   // Round 2 — the service page (0028)
-  /** Required to publish (resources.ts assertPublishable) — not a DB CHECK (the cut-over renames). */
+  /** Required to publish (resources/services.ts assertPublishable) — not a DB CHECK (the cut-over renames). */
   disciplineId: UuidSchema.nullish(),
   /** The "What it is" heading line. */
   intro: boundedBilingual(300).nullish(),
@@ -213,7 +213,7 @@ export const ServiceCaseWriteSchema = z.object({
   results: z.array(CaseResultSchema).max(MAX_CASE_RESULTS).default([]),
   status: ContentStatusSchema.default('draft'),
   scheduledFor: InstantSchema,
-  /** Design-delivery sample: refused on publish (resources.ts) and by the 0025 guard. */
+  /** Design-delivery sample: refused on publish (resources/shared.ts refusePlaceholder) and by the 0025 guard. */
   isPlaceholder: z.boolean().default(false),
 });
 export const ServiceCaseUpdateSchema = updatable(ServiceCaseWriteSchema);
@@ -380,7 +380,7 @@ function checkSectionContent(
 ): void {
   // An update that changes content without restating `type` (or type without content) is
   // validated against the row it will produce by sectionResource.assertWritable
-  // (src/lib/admin/resources.ts); here we check what the payload alone can prove.
+  // (src/lib/admin/resources/sections.ts); here we check what the payload alone can prove.
   if (v.type === undefined || v.content === undefined) return;
   for (const issue of sectionContentIssues(v.type, v.content)) ctx.addIssue(issue);
 }

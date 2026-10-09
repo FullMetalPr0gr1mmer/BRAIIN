@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { getMaintenanceState } from '@/lib/http/maintenance';
+import { COUNTERS } from './counters';
 import type { NavCount, NavGroup } from './nav';
 
 // What the admin shell shows besides the menu (Admin v2 F2): the head counts beside
@@ -12,31 +13,14 @@ import type { NavCount, NavGroup } from './nav';
 // volume from a badge when the whole leads area is closed to them — and every read goes
 // through the RLS-bound client, so the database applies the same rule a second time.
 // A failed read leaves its item out: the shell is decoration around the page, and a
-// count or a badge is never worth an error screen.
+// count or a badge is never worth an error screen. Each count is one module in
+// ./counters, registered by the key a link's `count` names.
 
 export interface ShellState {
   displayName: string | null;
   maintenance: boolean;
   counts: Partial<Record<NavCount, number>>;
 }
-
-type Counter = (sb: SupabaseClient, tenantId: string) => PromiseLike<{ count: number | null }>;
-
-const COUNTERS: Record<NavCount, Counter> = {
-  // The same queries as the dashboard's cards, so a badge and a card never disagree.
-  leads: (sb, tenantId) =>
-    sb
-      .from('leads')
-      .select('id', { count: 'exact', head: true })
-      .eq('tenant_id', tenantId)
-      .eq('status', 'new'),
-  applications: (sb, tenantId) =>
-    sb
-      .from('job_applications')
-      .select('id', { count: 'exact', head: true })
-      .eq('tenant_id', tenantId)
-      .eq('status', 'new'),
-};
 
 async function settle<T>(work: () => PromiseLike<T>): Promise<T | null> {
   try {

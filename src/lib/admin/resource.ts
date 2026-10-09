@@ -36,7 +36,7 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 // The payload types are intentionally `Record<string, unknown>` rather than the
 // schemas' inferred shapes. `toRow` is a dynamic key→column mapping, so it gains
 // nothing from the precise type, and parameterising the config on it would force every
-// entry in resources.ts to restate two long inferred types — which does not typecheck
+// module in resources/ to restate two long inferred types — which does not typecheck
 // anyway, because a Zod schema with `.default()` has an INPUT type where those fields
 // are optional and an OUTPUT type where they are not. The real safety here is the
 // allowlist in `pick()`: unknown keys never reach SQL regardless of what TypeScript

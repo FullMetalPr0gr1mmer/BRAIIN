@@ -6,9 +6,10 @@ import {
   type LocalizedText,
   type TestimonialPlacement,
 } from '@schemas/content';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { imageRef, type ImageRef } from '@/lib/media/resolve';
 import { parseRows, reportLoadError } from './parse';
+import { contentClient } from './source';
 
 // Sectors, clients and testimonials (0021) for the public pages. Tier A SSR reads under
 // RLS: visible sectors/clients and published testimonials only, tenant-fenced. Resilient:
@@ -25,7 +26,7 @@ export interface Sector {
 export async function getSectors(): Promise<Sector[]> {
   if (!supabaseConfigured()) return [];
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('sectors')
       .select('id,slug,name,sort_order')
       .order('sort_order', { ascending: true });
@@ -57,7 +58,7 @@ export interface MarqueeClient {
 export async function getMarqueeClients(): Promise<MarqueeClient[]> {
   if (!supabaseConfigured()) return [];
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('clients')
       .select(`id,slug,name,website_url,sort_order,logo:logo_media_id${MEDIA}`)
       .eq('show_in_marquee', true)
@@ -105,7 +106,7 @@ export async function getTestimonials(opts: {
   if (!supabaseConfigured()) return [];
   const limit = Math.min(Math.max(opts.limit ?? 8, 1), 8);
   try {
-    let query = anonClient()
+    let query = contentClient()
       .from('testimonials')
       .select(TESTIMONIAL_COLUMNS)
       .eq('status', 'published')

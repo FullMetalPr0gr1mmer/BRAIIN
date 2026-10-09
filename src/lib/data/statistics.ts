@@ -1,6 +1,7 @@
 import { StatisticRowSchema, type StatPlacement, type StatisticRow } from '@schemas/content';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { parseRows, reportLoadError } from './parse';
+import { contentClient } from './source';
 
 // Public stat counters (e.g. "150+ projects"). Tier A SSR reads under RLS
 // (status='published', tenant-scoped). Shape lives in `packages/schemas/content.ts`
@@ -20,7 +21,7 @@ export async function getPublishedStatistics(
 ): Promise<StatisticRow[]> {
   if (!supabaseConfigured()) return [];
   try {
-    let query = anonClient()
+    let query = contentClient()
       .from('statistics')
       .select(COLUMNS)
       .eq('status', 'published')
