@@ -30,6 +30,8 @@ let currentVersion = 3;
 let raceLost = false;
 let liveProfile: Record<string, unknown> = { role: 'admin', is_active: true, locked_until: null };
 let callerRpc: Record<string, { data: unknown; error: unknown }> = {};
+/** What leads_list answers when asked for spam (callerRpc.leads_list answers the pipeline). */
+let spamRows: Record<string, unknown>[] = [];
 let serviceRpc: Record<string, { data: unknown; error: unknown }> = {};
 const events: string[] = [];
 const audits: { action: string; entityId?: string; detail?: Record<string, unknown> }[] = [];
@@ -128,6 +130,9 @@ function rpc(
   return async (fn: string, args: Record<string, unknown>) => {
     rpcCalls.push({ owner, fn, args });
     events.push(`${owner}:rpc:${fn}`);
+    if (fn === 'leads_list' && (args['p_filter'] as { spam?: unknown })?.spam === true) {
+      return { data: { total: spamRows.length, rows: spamRows }, error: null };
+    }
     return answers()[fn] ?? { data: null, error: null };
   };
 }
@@ -184,6 +189,7 @@ beforeEach(() => {
   raceLost = false;
   liveProfile = { role: 'admin', is_active: true, locked_until: null };
   callerRpc = {};
+  spamRows = [];
   serviceRpc = {};
   events.length = 0;
   audits.length = 0;
@@ -486,7 +492,14 @@ describe('POST /api/admin/leads (added by hand)', () => {
   it('the duplicate checks send only blind indexes, as the caller', async () => {
     await add({ ...base, email: 'sara@acme.sa', phone: '0501234567' });
     const lookups = rpcCalls.filter((c) => c.fn === 'leads_list');
-    expect(lookups.map((c) => c.owner)).toEqual(['rls', 'rls']);
+    // Each index in the pipeline and in the spam (leads_list shows one or the other).
+    expect(lookups.map((c) => c.owner)).toEqual(['rls', 'rls', 'rls', 'rls']);
+    expect(
+      lookups.map((c) => {
+        const filter = c.args['p_filter'] as Record<string, unknown>;
+        return `${String(filter['contact_kind'])}:${String(filter['spam'])}`;
+      }),
+    ).toEqual(['email:false', 'email:true', 'phone:false', 'phone:true']);
     expect(JSON.stringify(lookups)).not.toContain('sara@acme.sa');
     expect(JSON.stringify(lookups)).not.toContain('0501234567');
     expect((lookups[0]!.args['p_filter'] as Record<string, unknown>)['contact_kind']).toBe('email');
@@ -504,7 +517,7 @@ describe('POST /api/admin/leads (added by hand)', () => {
     expect(await res.json()).toEqual({
       ok: false,
       error: 'possible-duplicate',
-      matches: [{ id: OTHER, lead_number: 12, name: 'Sara A.' }],
+      matches: [{ id: OTHER, lead_number: 12, name: 'Sara A.', spam: false }],
     });
     expect(rpcCalls.some((c) => c.fn === 'crm_ingest_lead')).toBe(false);
     // The lookup was made, so it is on the record: the matched leads' ids, never what was typed.
@@ -517,6 +530,32 @@ describe('POST /api/admin/leads (added by hand)', () => {
     ]);
     expect(JSON.stringify(audits)).not.toContain('0501234567');
     expect(JSON.stringify(audits)).not.toContain('Sara');
+  });
+
+  it('a lead marked spam is still an earlier lead: a phone match there is a 409 too, flagged spam', async () => {
+    spamRows = [{ id: OTHER, lead_number: 4, name: 'Sara' }];
+    const res = await add({ ...base, phone: '0501234567' });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { matches: unknown[] }).matches).toEqual([
+      { id: OTHER, lead_number: 4, name: 'Sara', spam: true },
+    ]);
+    expect(rpcCalls.some((c) => c.fn === 'crm_ingest_lead')).toBe(false);
+  });
+
+  it('an e-mail seen on a spam lead is named too, after the pipeline matches', async () => {
+    callerRpc = {
+      leads_list: {
+        data: { total: 1, rows: [{ id: LEAD, lead_number: 9, name: 'S' }] },
+        error: null,
+      },
+    };
+    spamRows = [{ id: OTHER, lead_number: 2, name: 'S' }];
+    const res = await add({ ...base, email: 'sara@acme.sa' });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { data: { sameEmail: unknown[] } }).data.sameEmail).toEqual([
+      { id: LEAD, lead_number: 9, name: 'S', spam: false },
+      { id: OTHER, lead_number: 2, name: 'S', spam: true },
+    ]);
   });
 
   it('createNew says it is someone else: the lead is added', async () => {
@@ -541,9 +580,9 @@ describe('POST /api/admin/leads (added by hand)', () => {
     const res = await add({ ...base, email: 'sara@acme.sa', phone: '0501234567' });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: { sameEmail: unknown[] } };
-    expect(body.data.sameEmail).toEqual([{ id: OTHER, lead_number: 3, name: 'Sara' }]);
-    // The phone is not checked once the e-mail matched.
-    expect(rpcCalls.filter((c) => c.fn === 'leads_list')).toHaveLength(1);
+    expect(body.data.sameEmail).toEqual([{ id: OTHER, lead_number: 3, name: 'Sara', spam: false }]);
+    // The phone is not checked once the e-mail matched (the e-mail's two lookups only).
+    expect(rpcCalls.filter((c) => c.fn === 'leads_list')).toHaveLength(2);
   });
 
   it('needs an e-mail or a phone, and takes no source from the client', async () => {

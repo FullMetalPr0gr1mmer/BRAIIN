@@ -20,12 +20,17 @@ import { leadSignals } from './score';
 //   • the same phone with no e-mail match may be someone else (a shared office number), so
 //     the add stops with the matches (a 409) unless the caller says `createNew`.
 // The lookups run as the caller (public.leads_list, SECURITY INVOKER): RLS and the live
-// check decide what they can find, and they return safe columns only.
+// check decide what they can find, and they return safe columns only. leads_list shows the
+// pipeline or the spam, never both, so each index is looked up in both: a person whose
+// earlier lead was marked spam (perhaps wrongly) is still the same person, and the screen
+// says which matches are spam.
 
 export interface EarlierLead {
   id: string;
   lead_number: number | null;
   name: string | null;
+  /** The earlier lead is marked spam. */
+  spam: boolean;
 }
 
 export type ManualLeadOutcome =
@@ -35,16 +40,17 @@ export type ManualLeadOutcome =
 /** How many earlier leads a match reports (enough to recognise someone, no more). */
 const MATCH_LIMIT = 5;
 
-/** Earlier leads of this tenant whose e-mail or phone has this blind index, as the caller. */
-async function earlierLeads(
+/** Earlier leads with this blind index, as the caller: in the pipeline, or marked spam. */
+async function earlierLeadsWhere(
   sb: SupabaseClient,
   tenantId: string,
   kind: 'email' | 'phone',
   hmac: string,
+  spam: boolean,
 ): Promise<EarlierLead[]> {
   const { data, error } = await sb.rpc('leads_list', {
     p_tenant: tenantId,
-    p_filter: { contact_kind: kind, contact_hmac: hmac, limit: MATCH_LIMIT },
+    p_filter: { contact_kind: kind, contact_hmac: hmac, spam, limit: MATCH_LIMIT },
   });
   if (error) throw new Error(`leads_list (duplicate check): ${error.code ?? 'no code'}`);
   const rows = (data as { rows?: unknown } | null)?.rows;
@@ -55,7 +61,25 @@ async function earlierLeads(
       id: row['id'] as string,
       lead_number: typeof row['lead_number'] === 'number' ? row['lead_number'] : null,
       name: typeof row['name'] === 'string' ? row['name'] : null,
+      spam,
     }));
+}
+
+/**
+ * Earlier leads of this tenant whose e-mail or phone has this blind index: the pipeline's
+ * first, then any marked spam, at most MATCH_LIMIT in all. Two lookups in parallel.
+ */
+async function earlierLeads(
+  sb: SupabaseClient,
+  tenantId: string,
+  kind: 'email' | 'phone',
+  hmac: string,
+): Promise<EarlierLead[]> {
+  const [kept, spam] = await Promise.all([
+    earlierLeadsWhere(sb, tenantId, kind, hmac, false),
+    earlierLeadsWhere(sb, tenantId, kind, hmac, true),
+  ]);
+  return [...kept, ...spam].slice(0, MATCH_LIMIT);
 }
 
 export async function addManualLead(
