@@ -1,20 +1,23 @@
 -- pgTAP: Leads v2, part 4 (0041, Admin v2 C3) — writing the pipeline. Run with
 -- `supabase test db`.
 --
--- Covers: the crm.erase helper over every role; who may call each new door; the staff
--- column grant (exactly the pipeline's columns and the legacy pair); versioned writes
--- through it (a stale version changes nothing) and the unversioned marks (star, read,
--- logged contact) that never move the version; the assignee rule (an active lead worker of
--- the lead's tenant); the tag and value rules; the read mark and the logged contact taking
--- the server's time and the session's person; the timeline's new events; bulk over the six
--- principals and a stale token, with every outcome (applied, conflict, missing, skipped)
--- and every refusal; erasure and note deletion as the service role, checking the acting
--- profile live; note counts; a manual lead through ingest; a multi-row audit insert still
--- chained row by row (writeAuditMany); and the assignee key's SET NULL. CLAUDE.md §3, §5,
--- §8, §9.
+-- Covers: the crm.erase helper over every role; who may call each new door; the staff column
+-- grant (exactly the pipeline's columns and the legacy pair); versioned writes through it (a
+-- stale version changes nothing) and the unversioned marks (star, read, logged contact) that
+-- never move the version, a star or a read mark not being an edit (who last changed the lead,
+-- and when, stay); a contact logged on a lead past New answering nothing; the assignee rule
+-- (an active lead worker of the lead's tenant); the tag and value rules; the read mark and the
+-- logged contact taking the server's time and the session's person; the timeline's new events;
+-- bulk over the six principals and a stale token, with every outcome (applied, conflict,
+-- missing, skipped) and every refusal; erasure and note deletion as the service role, checking
+-- the acting profile live (app.crm_eraser_ok: inactive, locked, a lock run out, another
+-- tenant), who the service role writes as, and the note_deleted event; note counts; a manual
+-- lead through ingest and who it names; a multi-row audit insert still chained row by row
+-- (writeAuditMany); and the assignee key's SET NULL and its refusal to let an assigned profile
+-- change tenant. CLAUDE.md §3, §5, §8, §9.
 
 begin;
-select plan(95);
+select plan(109);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -23,6 +26,8 @@ insert into public.tenants (id, name) values
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'admin@example.test'),
   ('00000000-0000-0000-0000-0000000000a2', 'inactive-admin@example.test'),
+  ('00000000-0000-0000-0000-0000000000a3', 'locked-admin@example.test'),
+  ('00000000-0000-0000-0000-0000000000a4', 'unlocked-admin@example.test'),
   ('00000000-0000-0000-0000-0000000000c1', 'creator@example.test'),
   ('00000000-0000-0000-0000-0000000000d1', 'developer@example.test'),
   ('00000000-0000-0000-0000-0000000000d2', 'demoted-developer@example.test'),
@@ -32,6 +37,9 @@ insert into auth.users (id, email) values
 insert into public.profiles (id, tenant_id, role, is_active, locked_until) values
   ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000001', 'admin', true, null),
   ('00000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-000000000001', 'admin', false, null),
+  -- locked out now (five failed sign-ins), and one whose lock has run out
+  ('00000000-0000-0000-0000-0000000000a3', '00000000-0000-0000-0000-000000000001', 'admin', true, now() + interval '15 minutes'),
+  ('00000000-0000-0000-0000-0000000000a4', '00000000-0000-0000-0000-000000000001', 'admin', true, now() - interval '15 minutes'),
   ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-000000000001', 'content_creator', true, null),
   ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-000000000001', 'developer', true, null),
   -- demoted: the token still says developer
@@ -46,6 +54,11 @@ insert into public.leads (id, tenant_id, name, email_enc, message) values
   ('00000000-0000-0000-0000-00000000aa03', '00000000-0000-0000-0000-000000000001', 'To erase', 'x', 'hi'),
   ('00000000-0000-0000-0000-00000000aa04', '00000000-0000-0000-0000-000000000001', 'Tagged', 'x', 'hi'),
   ('00000000-0000-0000-0000-00000000bb01', '00000000-0000-0000-0000-0000000000ff', 'Other', 'x', 'hi');
+-- A lead already past New when it arrived (as the backfill leaves an old one): no first response.
+insert into public.leads (id, tenant_id, name, email_enc, message, stage_id) values
+  ('00000000-0000-0000-0000-00000000aa07', '00000000-0000-0000-0000-000000000001', 'Contacted already', 'x', 'hi',
+   (select id from public.lead_stages
+     where tenant_id = '00000000-0000-0000-0000-000000000001' and key = 'contacted'));
 
 create function _as(p_sub text, p_role text, p_tid text) returns void language sql as $$
   select set_config(
@@ -195,6 +208,33 @@ select ok((select version = 5 and is_starred and read_at = now()
              from public.leads where id = '00000000-0000-0000-0000-00000000aa01'),
   'a star and a read mark move no version; the mark is the server''s time and the session''s person');
 
+-- Nor are they edits: the lead keeps when it was last changed, and by whom. aa06 was last
+-- changed long ago by the developer (inserted under her claims, with an old updated_at).
+reset role;
+select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0000-0000-000000000001');
+insert into public.leads (id, tenant_id, name, email_enc, message, updated_at)
+values ('00000000-0000-0000-0000-00000000aa06', '00000000-0000-0000-0000-000000000001', 'Untouched',
+        'x', 'hi', '2000-01-01T00:00:00Z');
+set local role authenticated;
+select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
+select is(_rows($$ update public.leads set is_starred = true
+                    where id = '00000000-0000-0000-0000-00000000aa06' $$), 1,
+  'admin stars a lead the developer last changed');
+select is(_rows($$ update public.leads set read_at = now()
+                    where id = '00000000-0000-0000-0000-00000000aa06' $$), 1, 'and marks it read');
+select is(_bulk('star', 'false', jsonb_build_array(_item('00000000-0000-0000-0000-00000000aa06'))),
+  'aa06:applied', 'and clears the star in bulk');
+select ok((select updated_at = '2000-01-01T00:00:00Z'
+                  and updated_by = '00000000-0000-0000-0000-0000000000d1'
+                  and read_by = '00000000-0000-0000-0000-0000000000a1' and not is_starred
+             from public.leads where id = '00000000-0000-0000-0000-00000000aa06'),
+  'a star or a read mark is not an edit: updated_at and updated_by stay the developer''s');
+select is(_rows($$ update public.leads set value_sar = 1
+                    where id = '00000000-0000-0000-0000-00000000aa06' $$), 1, 'a value is an edit');
+select ok((select updated_at = now() and updated_by = '00000000-0000-0000-0000-0000000000a1'
+             from public.leads where id = '00000000-0000-0000-0000-00000000aa06'),
+  'so it moves both, to now and the admin');
+
 select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.leads set read_at = now() + interval '1 day'
                     where id = '00000000-0000-0000-0000-00000000aa01' $$), 1,
@@ -225,6 +265,13 @@ select is((select count(*)::int from public.lead_events
             where lead_id = '00000000-0000-0000-0000-00000000aa02' and kind = 'contact_logged'
               and detail ->> 'channel' = 'call'),
   1, 'the timeline records the contact, by channel');
+select is(_rows($$ update public.leads set last_contact_channel = 'email', last_contact_at = now()
+                    where id = '00000000-0000-0000-0000-00000000aa07' $$), 1,
+  'the developer logs an e-mail on a lead already past New');
+select ok((select last_contact_at = now() and first_response_at is null and status = 'in_progress'
+                  and version = 1
+             from public.leads where id = '00000000-0000-0000-0000-00000000aa07'),
+  'it does not answer that lead: when it was first answered is not known, so it stays unknown');
 select throws_ok(
   $$ update public.leads set last_contact_channel = 'pigeon'
       where id = '00000000-0000-0000-0000-00000000aa02' $$,
@@ -382,6 +429,19 @@ select throws_ok(
        '00000000-0000-0000-0000-00000000aa03', '00000000-0000-0000-0000-0000000000a1') $$,
   '42501', null, 'admin cannot call crm_erase_lead through the API (no API role deletes a lead)');
 
+-- The doors' own check, read live: active, not locked out now, in the tenant, holding crm.erase.
+reset role;
+select ok(app.crm_eraser_ok('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1'),
+  'app.crm_eraser_ok: an active, unlocked admin of the tenant may erase');
+select ok(not app.crm_eraser_ok('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a3'),
+  'not an admin locked out right now (locked_until still ahead)');
+select ok(app.crm_eraser_ok('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a4'),
+  'a lock that has run out no longer counts');
+select ok(not app.crm_eraser_ok('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a2'),
+  'not an inactive admin');
+select ok(not app.crm_eraser_ok('00000000-0000-0000-0000-0000000000ff', '00000000-0000-0000-0000-0000000000a1'),
+  'not in a tenant that is not the profile''s');
+
 set local role service_role;
 select _as(null, null, null);
 select throws_ok(
@@ -392,6 +452,10 @@ select throws_ok(
   $$ select public.crm_erase_lead('00000000-0000-0000-0000-000000000001',
        '00000000-0000-0000-0000-00000000aa03', '00000000-0000-0000-0000-0000000000a2') $$,
   '42501', null, 'or a deactivated admin (checked live)');
+select throws_ok(
+  $$ select public.crm_erase_lead('00000000-0000-0000-0000-000000000001',
+       '00000000-0000-0000-0000-00000000aa03', '00000000-0000-0000-0000-0000000000a3') $$,
+  '42501', null, 'or an admin locked out right now');
 select throws_ok(
   $$ select public.crm_erase_lead('00000000-0000-0000-0000-000000000001',
        '00000000-0000-0000-0000-00000000aa03', '00000000-0000-0000-0000-0000000000f1') $$,
