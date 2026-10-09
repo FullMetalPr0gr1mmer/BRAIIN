@@ -27,8 +27,9 @@ const NOT_DRIVABLE: Readonly<Record<string, string>> = {
     'Sign-in is reached without a session (the middleware exempts this one path) and checks ' +
     'no capability, so the matrix row "anon → 403" cannot hold. tests/authz/login.spec.ts ' +
     'drives its guards instead: the middleware refusing a cross-site or tokenless POST, the ' +
-    'one generic 401 for every failure, and the 423 lockout (fail-closed included) over a ' +
-    'stubbed lockout store. The counting itself is SQL (0009) with no pgTAP test yet.',
+    'one generic 401 for every failed sign-in (a body that is not JSON is a 400, before any ' +
+    'lookup), and the 423 lockout (fail-closed included) over a stubbed lockout store. The ' +
+    'counting itself is SQL (0009) with no pgTAP test yet.',
   'POST /api/admin/auth/logout':
     'Sign-out needs a session, not a capability: every role may sign out, and the session ' +
     'gate is src/middleware.ts (401 before the handler, which this suite invokes directly; ' +

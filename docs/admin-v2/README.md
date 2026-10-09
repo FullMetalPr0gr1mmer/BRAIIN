@@ -472,8 +472,10 @@ the bracketed ids in the slice tables above are the design slices each program s
 Before the three lanes run in parallel, Wave 0 (W0-a to W0-d, each with its file under "As
 built") split the files every slice would otherwise edit, so a later slice mostly adds a file.
 The designs were written before it, so the file lists in [ui.md](ui.md),
-[releases.md](releases.md) and [crm.md](crm.md) name the old places. Wave 0 moved these, and
-where a design names the old place, the new one wins:
+[releases.md](releases.md) and [crm.md](crm.md), and some rows of
+[deviations.md](deviations.md), name the old places ([verification.md](verification.md) keeps
+them on purpose: it records file:line evidence as it stood). Wave 0 moved these, and where a
+design or the register names the old place, the new one wins:
 
 | Before Wave 0 | Since Wave 0 |
 |---|---|

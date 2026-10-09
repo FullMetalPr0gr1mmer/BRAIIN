@@ -15,19 +15,25 @@
 //      check-migrations already accepts stays where it is, gap or not, because the number
 //      below it may be another slice's. Several new migrations on one branch keep their
 //      order: a move that would jump a later one is refused, naming the one to move first;
-//   3. never edits the ledger: its rows are the program's plan, so the ones that name the
-//      old number are listed for a reader, who moves this slice's row by hand (to take a
-//      number reserved for another slice, re-plan both rows there first);
-//   4. rewrites references in supabase/tests/*.sql, docs/**/*.md, CLAUDE.md and the header
-//      comments of the branch's new migrations (its own, and a sibling's "Depends on").
-//      The file name (with or without `.sql`) names this migration alone, so it is
-//      rewritten wherever it appears. A bare number ("0038") is rewritten only on lines
-//      this branch added, because anywhere else it can be the base's own 0038; and not even
-//      there when the line may name both: its base side already named 0038 (CLAUDE.md
-//      keeps a whole paragraph on one line), or it names the base's 0038 by its file name;
-//   5. lists every file it changed, with each line where a bare number moved, then every
-//      line it left alone that still names the old migration (the SQL under a header, a
-//      comment in src/, a line that may name both, the ledger's rows) for a reader to check.
+//   3. never edits the ledger, not even a file name in it: its rows are the program's plan,
+//      and a row whose file name moved while its Number cell stayed would disagree with
+//      itself. Every line of it that names the old migration (by file name, by number, or
+//      by a range that holds the number) is listed for a reader, who moves this slice's row
+//      by hand (to take a number reserved for another slice, re-plan both rows there first);
+//   4. rewrites references in supabase/tests/*.sql, docs/**/*.md (the ledger aside),
+//      CLAUDE.md and the header comments of the branch's new migrations (its own, and a
+//      sibling's "Depends on"). The file name (with or without `.sql`) names this migration
+//      alone, so it is rewritten wherever it appears. A bare number ("0038") is rewritten
+//      only where it can name nothing else: on lines this branch added (anywhere else it
+//      can be the base's own words), and not on one whose base side already named 0038
+//      (CLAUDE.md keeps a whole paragraph on one line). None moves at all while another
+//      migration has that number, the base's own 0038 or a second new one of the branch's
+//      (which keeps it): any 0038 the branch wrote may name that one;
+//   5. lists every file it changed with its count of rewrites, and under it each line where
+//      a bare number moved (a file name's rewrite is counted, not listed), then every line
+//      it left alone that still names the old migration (a bare number that may name
+//      another, the SQL under a header, a comment in src/, the ledger's rows), with the
+//      reason, for a reader to check.
 //
 //   node scripts/renumber-migration.mjs supabase/migrations/0038_leads_write.sql
 //   node scripts/renumber-migration.mjs 0038_leads_write.sql --base origin/main --dry-run
@@ -216,17 +222,17 @@ export function contestedLines(diff, number) {
 
 /**
  * Where a bare `from` may be rewritten in one text, and where it may only be reported.
- * `added` are the lines this branch added (null: the whole text is the branch's own),
- * `contested` the added lines whose base side already named `from`, and `baseStems` the
- * base's own migrations of that number (`0038_other`): a line naming one may mean either.
+ * `added` are the lines this branch added (null: the whole text is the branch's own), and
+ * `contested` the added lines whose base side already named `from`. `shared` says another
+ * migration has that number too (the base's own 0038, or a second new one of the branch's):
+ * then any bare 0038 may name it, on whichever line, so none is rewritten.
  *
  * @param {string} text
- * @param {{ from: string, added: Set<number> | null, contested?: Set<number>, baseStems?: string[] }} input
+ * @param {{ from: string, added: Set<number> | null, contested?: Set<number>, shared?: boolean }} input
  * @returns {{ rewrite: Set<number>, unsure: number[] }}
  */
-export function bareTargets(text, { from, added, contested = new Set(), baseStems = [] }) {
+export function bareTargets(text, { from, added, contested = new Set(), shared = false }) {
   const bare = bareNumber(from);
-  const stems = baseStems.map((stem) => stemName(stem));
   /** @type {Set<number>} */
   const rewrite = new Set();
   /** @type {number[]} */
@@ -234,7 +240,7 @@ export function bareTargets(text, { from, added, contested = new Set(), baseStem
   for (const [i, line] of text.split('\n').entries()) {
     const n = i + 1;
     if ((added !== null && !added.has(n)) || !bare.test(line)) continue;
-    if (contested.has(n) || stems.some((stem) => stem.test(line))) unsure.push(n);
+    if (shared || contested.has(n)) unsure.push(n);
     else rewrite.add(n);
   }
   return { rewrite, unsure };
@@ -326,6 +332,29 @@ export function reservations(markdown) {
     for (const number of listed) reserved.set(number, id);
   }
   return reserved;
+}
+
+/** A range of numbers as the ledger writes one: "0041 to 0043", "0041-0043", "0041–0043". */
+const RANGE = /(?<![\w.])(\d{4})\s*(?:to|-|–|—)\s*(\d{4})(?!\w|\.\d)/g;
+
+/**
+ * The reservation ledger's lines that name a migration: by its file name (with or without
+ * `.sql`), by its bare number, or by a range of numbers that holds it ("0040 to 0043" is
+ * also a row for 0041). The ledger is never rewritten, so these are listed for a reader.
+ *
+ * @param {string} markdown
+ * @param {{ from: string, oldStem: string }} migration
+ * @returns {number[]} the lines, 1-based
+ */
+export function ledgerLines(markdown, { from, oldStem }) {
+  const bare = bareNumber(from);
+  const stem = stemName(oldStem);
+  const number = Number(from);
+  const inRange = (/** @type {string} */ line) =>
+    [...line.matchAll(RANGE)].some(([, a, b]) => Number(a) <= number && number <= Number(b));
+  return markdown
+    .split('\n')
+    .flatMap((line, i) => (bare.test(line) || stem.test(line) || inRange(line) ? [i + 1] : []));
 }
 
 /**
@@ -456,12 +485,21 @@ function main(argv) {
     oldStem: plan.oldName.replace(/\.sql$/, ''),
     newStem: plan.newName.replace(/\.sql$/, ''),
   };
-  // The base's own migrations of the old number: a line naming one by its file name may
-  // mean either, so its bare number is left to a reader.
-  const baseStems = baseFiles
-    .filter((f) => NAME.test(f) && numberOf(f) === numberOf(plan.oldName))
-    .map((f) => f.replace(/\.sql$/, ''));
-  const mayNameBoth = `may name the base's ${plan.from} too`;
+  // Every other migration of the old number: the base's own, and a second new one of this
+  // branch's (two new files that share a number are parted by moving the later one, so the
+  // earlier one, its twin, keeps the number). A bare 0038 the branch wrote may name any of
+  // them, so while there is one, none moves: each line naming 0038 is listed with them.
+  const sameNumber = (/** @type {string} */ f) =>
+    NAME.test(f) && numberOf(f) === numberOf(plan.oldName);
+  const twins = headFiles.filter(
+    (f) => !baseFiles.includes(f) && f !== plan.oldName && sameNumber(f),
+  );
+  const namesakes = [
+    ...baseFiles.filter(sameNumber).map((f) => `the base's ${f.replace(/\.sql$/, '')}`),
+    ...twins.map((f) => `this branch's ${f.replace(/\.sql$/, '')}`),
+  ];
+  const shared = namesakes.length > 0;
+  const mayNameOther = `may name ${shared ? namesakes.join(' or ') : `the base's ${plan.from}`} too`;
   console.log(
     `  ✓ ${args.dryRun ? 'dry run: ' : ''}${plan.oldName} → ${plan.newName} ` +
       `(the highest on ${args.base} is ${plan.baseMax})`,
@@ -487,7 +525,8 @@ function main(argv) {
   };
 
   // The headers of the branch's new migrations are the branch's own words: the moved
-  // file's number follows there, and so does a sibling's "Depends on 0038". The SQL below
+  // file's number follows there, and so does a sibling's "Depends on 0038", unless another
+  // migration has that number too (a twin's header names the twin itself). The SQL below
   // a header is left alone (a number in a statement is a value, not a reference), and a
   // mention there is reported instead.
   for (const file of headFiles.filter((f) => !baseFiles.includes(f)).sort()) {
@@ -496,14 +535,17 @@ function main(argv) {
     const lines = sql.split('\n');
     const n = headerLength(sql);
     const header = lines.slice(0, n).join('\n');
-    const { rewrite, unsure } = bareTargets(header, { from: plan.from, added: null, baseStems });
+    const { rewrite, unsure } = bareTargets(header, { from: plan.from, added: null, shared });
     const head = rewriteReferences(header, { ...refs, lines: rewrite });
     if (head.count > 0) {
       if (!args.dryRun) writeFileSync(target, [head.text, ...lines.slice(n)].join('\n'));
       console.log(`    ${would}update ${target} (header, ${head.count})`);
       listBare(target, head.bare);
     }
-    for (const line of unsure) mentions.push({ at: `${target}:${line}`, why: mayNameBoth });
+    const why = twins.includes(file)
+      ? `the header of ${file.replace(/\.sql$/, '')}, which keeps ${plan.from}`
+      : mayNameOther;
+    for (const line of unsure) mentions.push({ at: `${target}:${line}`, why });
     for (const [i, line] of lines.entries()) {
       if (i >= n && rewriteReferences(line, refs).count > 0)
         mentions.push({ at: `${target}:${i + 1}` });
@@ -513,13 +555,24 @@ function main(argv) {
   const refFiles = referenceFiles();
   for (const file of refFiles) {
     const text = readFileSync(file, 'utf8');
+    // The ledger's rows are the program's plan, written on the base, so this slice's row
+    // still carries the old number: only a reader can move it (to the new number, or to
+    // "Applied" once production has the migration), and tell it from another slice's. So
+    // nothing in it is rewritten, not even a file name (the row would then name the new
+    // file under the old number), and every line naming the old migration is listed.
+    if (file === LEDGER) {
+      for (const line of ledgerLines(text, refs)) {
+        mentions.push({ at: `${file}:${line}`, why: 'the reservation ledger: rows move by hand' });
+      }
+      continue;
+    }
     if (!text.includes(plan.from)) continue;
     const diff = branchDiff(args.base, file);
     const { rewrite, unsure } = bareTargets(text, {
       from: plan.from,
       added: diff === null ? null : addedLines(diff),
       contested: diff === null ? new Set() : contestedLines(diff, plan.from),
-      baseStems,
+      shared,
     });
     const result = rewriteReferences(text, { ...refs, lines: rewrite });
     if (result.count > 0) {
@@ -527,20 +580,7 @@ function main(argv) {
       console.log(`    ${would}update ${file} (${result.count})`);
       listBare(file, result.bare);
     }
-    for (const line of unsure) mentions.push({ at: `${file}:${line}`, why: mayNameBoth });
-    // The ledger's rows are the program's plan, written on the base, so this slice's row
-    // still carries the old number: only a reader can move it (to the new number, or to
-    // "Applied" once production has the migration), and tell it from another slice's.
-    if (file === LEDGER) {
-      for (const [i, line] of result.text.split('\n').entries()) {
-        if (!unsure.includes(i + 1) && rewriteReferences(line, refs).count > 0) {
-          mentions.push({
-            at: `${file}:${i + 1}`,
-            why: 'the reservation ledger: rows move by hand',
-          });
-        }
-      }
-    }
+    for (const line of unsure) mentions.push({ at: `${file}:${line}`, why: mayNameOther });
   }
 
   // Outside what this rewrites, a reader should still look at: the old file name anywhere,
