@@ -688,7 +688,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [F4a](as-built/F4a.md): the admin bundle plan (#40, folded into #34)
 
 **Releases**
-- [R1](as-built/R1.md): the release ledger schema, inert, 0038 (PR not opened yet)
+- [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)
 
 **CRM**
 - [C1a-1](as-built/C1a-1.md): lead personal data at the database layer, 0033 (#43)
