@@ -1,7 +1,8 @@
 import { SiteProfileRowSchema } from '@schemas/siteProfile';
-import { anonClient, supabaseConfigured } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/client';
 import { IDENTITY_FALLBACK, type Identity } from '@/lib/identity/fallback';
 import { parseRow, reportLoadError } from './parse';
+import { contentClient } from './source';
 
 // Public identity (brand, contact channels, location, socials) — `public.site_profile`,
 // anon-readable since migration 0019, tenant-fenced by RLS like every public read.
@@ -17,7 +18,7 @@ export const SITE_PROFILE_COLUMNS =
 export async function getSiteProfile(): Promise<Identity> {
   if (!supabaseConfigured()) return IDENTITY_FALLBACK;
   try {
-    const { data, error } = await anonClient()
+    const { data, error } = await contentClient()
       .from('site_profile')
       .select(SITE_PROFILE_COLUMNS)
       .maybeSingle();
