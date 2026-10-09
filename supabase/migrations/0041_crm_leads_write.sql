@@ -88,10 +88,12 @@ alter table public.leads add constraint leads_last_contact_pair
 
 -- The assignee is a profile of the lead's OWN tenant: a composite key, so a direct API write
 -- cannot point a lead at another tenant's person. A profile that goes takes the assignment
--- with it (SET NULL on that column only, PG 15+).
+-- with it (SET NULL on that column only, PG 15+). Moving a profile to another tenant is
+-- refused while it holds leads in its old one (NO ACTION on update): unassign them first.
+-- The key goes before the unique constraint it depends on, so this file runs twice cleanly.
+alter table public.leads drop constraint if exists leads_assignee_fk;
 alter table public.profiles drop constraint if exists profiles_tenant_id_id;
 alter table public.profiles add constraint profiles_tenant_id_id unique (tenant_id, id);
-alter table public.leads drop constraint if exists leads_assignee_fk;
 alter table public.leads add constraint leads_assignee_fk foreign key (tenant_id, assigned_to)
   references public.profiles (tenant_id, id) on delete set null (assigned_to);
 create index if not exists leads_tenant_assignee_idx on public.leads (tenant_id, assigned_to)

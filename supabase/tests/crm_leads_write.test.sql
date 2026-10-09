@@ -14,7 +14,7 @@
 -- §8, §9.
 
 begin;
-select plan(90);
+select plan(91);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -517,6 +517,10 @@ select ok(
 -- ---- The assignee key ------------------------------------------------------------------------
 update public.leads set assigned_to = '00000000-0000-0000-0000-0000000000d1'
  where id = '00000000-0000-0000-0000-00000000aa04';
+select throws_ok(
+  $$ update public.profiles set tenant_id = '00000000-0000-0000-0000-0000000000ff'
+      where id = '00000000-0000-0000-0000-0000000000d1' $$,
+  '23503', null, 'a profile holding leads cannot move to another tenant (unassign them first)');
 delete from public.profiles where id = '00000000-0000-0000-0000-0000000000d1';
 select ok(
   (select assigned_to is null and name = 'Tagged'
