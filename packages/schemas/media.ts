@@ -95,6 +95,120 @@ export const StaticMediaKeySchema = z
   .string()
   .regex(/^stills\/[a-z0-9][a-z0-9/_-]*\.(jpe?g|png|webp|avif)$/, 'not a stills/… key');
 
+// ── Uploaded images (Admin v2 U3, owner decision A5, migration 0045) ────────────
+
+/**
+ * The public Supabase Storage bucket uploads land in. Only the Worker writes to it (the
+ * service role), and only what it re-encoded: one WebP per upload, never the original.
+ */
+export const MEDIA_BUCKET = 'media';
+
+/**
+ * The largest file an editor may upload: the Images binding's `.input()` limit (20 MB),
+ * counted in decimal megabytes so it holds whichever way the limit is meant. Checked
+ * against Content-Length before a byte of the body is read.
+ */
+export const MEDIA_UPLOAD_MAX_BYTES = 20_000_000;
+
+/** The decompression guard, read from the file's own header before it is processed. */
+export const MEDIA_MAX_INPUT_SIDE_PX = 12_000;
+export const MEDIA_MAX_INPUT_PIXELS = 40_000_000;
+
+/**
+ * What is stored: a WebP no longer than this on its long edge (AVIF output stops at
+ * 1,200 px, so WebP is the master; `/_image` makes AVIF derivatives from it).
+ */
+export const MEDIA_LONG_EDGE_PX = 2560;
+
+/** The bucket's own file limit (0045). A re-encoded master is far smaller than this. */
+export const MEDIA_OBJECT_MAX_BYTES = 10_485_760;
+
+/** Where an upload's details travel: one header, `encodeMediaMeta(...)`, never the URL. */
+export const MEDIA_META_HEADER = 'x-media-meta';
+/** Longer than any valid set of details, percent-encoded Arabic included. */
+export const MEDIA_META_MAX_LENGTH = 8192;
+
+const UUID_PART = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+/**
+ * An uploaded image's object key: `<tenant>/<random id>_<width>x<height>.webp`. The size
+ * in the name is what lets the public `/_image` guard bound a transform without a database
+ * read (src/lib/http/imageGuard.ts); the 0045 CHECK holds it equal to the row's columns.
+ */
+const STORAGE_KEY = new RegExp(
+  `^(${UUID_PART})/(${UUID_PART})_([1-9][0-9]{0,3})x([1-9][0-9]{0,3})\\.webp$`,
+);
+
+export interface StorageKey {
+  tenantId: string;
+  objectId: string;
+  width: number;
+  height: number;
+}
+
+/** The parts of an uploaded image's key, or null for anything that is not one. */
+export function parseStorageKey(key: string): StorageKey | null {
+  const m = STORAGE_KEY.exec(key);
+  if (!m) return null;
+  const width = Number(m[3]);
+  const height = Number(m[4]);
+  if (Math.max(width, height) > MEDIA_LONG_EDGE_PX) return null;
+  return { tenantId: m[1]!, objectId: m[2]!, width, height };
+}
+
+/** Alt text an upload must carry: both languages, as for every image (DoD #4). */
+const UploadAltSchema = z.object({
+  en: z.string().trim().min(1).max(300),
+  ar: z.string().trim().min(1).max(300),
+});
+
+/**
+ * The name the library shows for a file: its own name, as the editor's computer had it,
+ * and nothing that could pass for a path. Never part of the object key.
+ */
+export const MediaDisplayNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[^\u0000-\u001f\u007f/\\]+$/, 'a file name, without folders');
+
+/** `POST /api/admin/media/upload`: what describes the file in the body. */
+export const MediaUploadMetaSchema = z
+  .object({
+    alt: UploadAltSchema,
+    displayName: MediaDisplayNameSchema.optional(),
+    tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+    folder: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+export type MediaUploadMeta = z.infer<typeof MediaUploadMetaSchema>;
+
+/** `POST /api/admin/media/[id]/replace`: the version the editor saw, and the new name. */
+export const MediaReplaceMetaSchema = z
+  .object({
+    version: z.number().int().min(1),
+    displayName: MediaDisplayNameSchema.optional(),
+  })
+  .strict();
+export type MediaReplaceMeta = z.infer<typeof MediaReplaceMetaSchema>;
+
+/** The header value for an upload's details: percent-encoded JSON, so Arabic travels. */
+export function encodeMediaMeta(meta: unknown): string {
+  return encodeURIComponent(JSON.stringify(meta));
+}
+
+/** The details back from the header, or undefined when it is missing or unreadable. */
+export function decodeMediaMeta(value: string | null): unknown {
+  if (value === null || value.length === 0 || value.length > MEDIA_META_MAX_LENGTH) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(decodeURIComponent(value)) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 /** A reference to a media_assets row, with an optional per-use alt override. */
 export const MediaRefSchema = z.object({
   mediaId: UuidSchema,
