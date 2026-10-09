@@ -22,6 +22,8 @@
 --     the tags too (a star, a read mark or a logged contact never causes a 409). The AFTER
 --     phase (app.tg_lead_timeline) records assigned / unassigned, value_set and
 --     contact_logged. Both are restated whole: the order of their steps is the contract.
+--     A service-role write has no session, so both name the person it acts for: a manual
+--     lead's creator, or the updated_by the write sets (a note deleter).
 --   • public.leads_bulk_update: up to 100 leads, one action, one statement, as the caller
 --     (SECURITY INVOKER: RLS, the live check and the column grant decide). Versioned
 --     actions apply only where the version still matches; every item comes back applied,
@@ -34,6 +36,7 @@
 --     the Worker calls them as the service role, after assertCap('crm.erase'), a live
 --     recheck and a fail-closed audit row; each also checks the acting profile itself,
 --     live, through app.role_crm_erase, so the database does not take the Worker's word.
+--     A deleted note leaves a note_deleted event (a new timeline kind) naming who removed it.
 --   • public.crm_lead_note_counts: how many notes each exported lead has (the CSV export
 --     drops note bodies for a count, crm.md §9). Service role only, like the thread.
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -98,6 +101,14 @@ alter table public.leads add constraint leads_assignee_fk foreign key (tenant_id
   references public.profiles (tenant_id, id) on delete set null (assigned_to);
 create index if not exists leads_tenant_assignee_idx on public.leads (tenant_id, assigned_to)
   where assigned_to is not null;
+
+-- The timeline learns one kind: a note deleted (crm.erase), recorded by the door that deletes
+-- it with who did it. Widening a CHECK keeps every row valid (expand).
+alter table public.lead_events drop constraint if exists lead_events_kind_check;
+alter table public.lead_events add constraint lead_events_kind_check check (kind in (
+  'created', 'stage_changed', 'assigned', 'unassigned', 'value_set', 'spam_marked',
+  'spam_cleared', 'contact_logged', 'note_added', 'note_deleted', 'contact_linked',
+  'task_created', 'task_done', 'merged', 'legacy_backfill'));
 
 -- ---- 4. The BEFORE phase, restated with the new columns ------------------------------------
 -- 0034's function, step for step; what 0041 adds is marked (0041).
@@ -301,12 +312,18 @@ begin
   --    done here so nothing later in the phase can undo it). A write that is not an edit
   --    (step 0) keeps both: the index cron never makes a lead look freshly edited, or
   --    erases who last moved it.
+  --    (0041) The person is the session's. A service-role write has no session, so it names
+  --    the person it acts for itself: a lead added by hand is its creator's (crm_ingest_lead),
+  --    and a write that sets updated_by names whoever it sets (crm_delete_lead_note). Staff
+  --    cannot set updated_by (no grant), and a service-role write that names no one, no one.
   if tg_op = 'INSERT' then
     new.created_by := coalesce(new.created_by, auth.uid());
-    new.updated_by := auth.uid();
+    new.updated_by := coalesce(auth.uid(), new.created_by);
   elsif v_edited then
     new.updated_at := now();
-    new.updated_by := auth.uid();
+    new.updated_by := coalesce(auth.uid(),
+                               case when new.updated_by is distinct from old.updated_by
+                                    then new.updated_by end);
   else
     new.updated_at := old.updated_at;
     new.updated_by := old.updated_by;
@@ -319,7 +336,11 @@ revoke all on function app.tg_lead_pipeline() from public, anon, authenticated, 
 create or replace function app.tg_lead_timeline() returns trigger
   language plpgsql security definer set search_path = '' as $$
 declare
-  v_actor uuid := auth.uid();
+  -- (0041) Who did it: the session's person, else the one the BEFORE phase recorded (a
+  -- service-role write made for someone: a manual add's creator, a note deleter). Every
+  -- event below follows an edit, so updated_by is this write's own.
+  v_actor uuid := coalesce(auth.uid(),
+                           case when tg_op = 'INSERT' then new.created_by else new.updated_by end);
 begin
   if tg_op = 'INSERT' then
     insert into public.lead_events (tenant_id, lead_id, actor_id, kind)
@@ -688,12 +709,18 @@ begin
     raise exception using errcode = 'P0002', message = 'crm_delete_lead_note: no such note';
   end if;
   if v_source = 'legacy' then
-    update public.leads l set internal_notes = null
+    -- Cleared as the person deleting the note: with no session here, the BEFORE phase takes
+    -- the updated_by this write sets, so the lead is not left edited by no one.
+    update public.leads l set internal_notes = null, updated_by = p_actor
      where l.tenant_id = p_tenant and l.id = p_lead;
   end if;
   -- The thread note itself (and the mirror, should the field's trigger be gone by then).
   delete from public.lead_notes n
    where n.tenant_id = p_tenant and n.lead_id = p_lead and n.id = p_note;
+  -- The timeline says a note went and who removed it: its id and source, never its words.
+  insert into public.lead_events (tenant_id, lead_id, actor_id, kind, detail)
+  values (p_tenant, p_lead, p_actor, 'note_deleted',
+          jsonb_build_object('note_id', p_note, 'source', v_source));
   return v_source;
 end $$;
 revoke all on function public.crm_delete_lead_note(uuid, uuid, uuid, uuid)
@@ -827,6 +854,17 @@ begin
       raise exception '0041: CHECK % is missing on leads', p;
     end if;
   end loop;
+  -- One CHECK on the event kind, and it takes a deleted note (an old, narrower one left under
+  -- another name would still refuse it).
+  if (select count(*) from pg_constraint
+       where conrelid = 'public.lead_events'::regclass and contype = 'c'
+         and pg_get_constraintdef(oid) like '%kind%') <> 1
+     or not exists (select 1 from pg_constraint
+                     where conrelid = 'public.lead_events'::regclass
+                       and conname = 'lead_events_kind_check'
+                       and pg_get_constraintdef(oid) like '%note_deleted%') then
+    raise exception '0041: lead_events must have exactly one kind CHECK, taking note_deleted';
+  end if;
 
   -- Who may call what.
   foreach v_fn in array array['app.role_crm_erase(text)', 'app.tags_ok(text[])'] loop

@@ -14,7 +14,7 @@
 -- §8, §9.
 
 begin;
-select plan(91);
+select plan(94);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -453,6 +453,19 @@ select ok(
   (select internal_notes is null from public.leads where id = '00000000-0000-0000-0000-00000000aa02')
   and not exists (select 1 from public.lead_notes where lead_id = '00000000-0000-0000-0000-00000000aa02'),
   'its words leave the old field as well, so no later save can bring them back');
+-- The field was last saved with no session (updated_by null); the door clears it as the admin.
+select ok(
+  (select updated_by = '00000000-0000-0000-0000-0000000000a1'
+     from public.leads where id = '00000000-0000-0000-0000-00000000aa02'),
+  'the service role clears the field as the admin who deleted the note, not as no one');
+select is(
+  (select string_agg((e.detail ->> 'source') || ':' || (e.detail - 'note_id' - 'source' = '{}'::jsonb)::text,
+                     ',' order by e.id)
+     from public.lead_events e
+    where e.lead_id = '00000000-0000-0000-0000-00000000aa02' and e.kind = 'note_deleted'
+      and e.actor_id = '00000000-0000-0000-0000-0000000000a1'),
+  'staff:true,legacy:true',
+  'each deleted note leaves a note_deleted event naming who removed it: its id and source, no words');
 
 -- ---- Note counts (the CSV export) ------------------------------------------------------------
 set local role service_role;
@@ -483,9 +496,15 @@ select ok(
   (select first_response_at = created_at and read_at = created_at
           and read_by = '00000000-0000-0000-0000-0000000000a1'
           and created_by = '00000000-0000-0000-0000-0000000000a1'
+          and updated_by = '00000000-0000-0000-0000-0000000000a1'
           and source = 'manual' and channel = 'walk_in' and status = 'new'
      from public.leads where id = '00000000-0000-0000-0000-00000000ab01'),
-  'it arrives answered and read by the person who added it, in the initial stage');
+  'it arrives answered and read by the person who added it, in the initial stage, last changed by them');
+select is(
+  (select actor_id from public.lead_events
+    where lead_id = '00000000-0000-0000-0000-00000000ab01' and kind = 'created'),
+  '00000000-0000-0000-0000-0000000000a1'::uuid,
+  'its created event names who added it, though the service role wrote it');
 select ok(
   (select first_response_at is null and read_at is null
      from public.leads where id = '00000000-0000-0000-0000-00000000aa05'),
