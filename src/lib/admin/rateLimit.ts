@@ -44,6 +44,17 @@ export const PII_REVEAL_LIMITS: RateLimitOptions = {
 };
 
 /**
+ * Erasing a lead (Admin v2 C3, owner item O-9): 20 an hour per person and 50 per tenant.
+ * An erase cannot be undone, so the ceiling stops a stolen Admin session from emptying the
+ * pipeline faster than anyone could notice.
+ */
+export const CRM_ERASE_LIMITS: RateLimitOptions = {
+  perUser: 20,
+  perTenant: 50,
+  windowMinutes: 60,
+};
+
+/**
  * Claims one slot for a privileged operation, or refuses with RateLimitError. Call it
  * BEFORE the work, so an operation that dies halfway still consumed its slot.
  *

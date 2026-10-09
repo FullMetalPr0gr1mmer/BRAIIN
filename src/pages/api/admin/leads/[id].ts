@@ -1,11 +1,17 @@
 import { z } from 'zod';
-import { LeadUpdateSchema } from '@schemas/admin';
+import { LeadPatchSchema, VERSIONED_LEAD_FIELDS } from '@schemas/crm';
 import { defineAdminRoute } from '@/lib/admin/route';
-import { NotFoundError } from '@/lib/admin/errors';
+import { NotFoundError, ValidationError } from '@/lib/admin/errors';
 import { AuthorizationError } from '@/lib/authz/errors';
-import { getRow } from '@/lib/admin/crud';
-import { SAFE_LEAD_COLUMNS, canSeeLeadPii, stripSensitive } from '@/lib/admin/leadFields';
+import { getRow, updateRow } from '@/lib/admin/crud';
+import {
+  LEAD_WRITE_COLUMNS,
+  SAFE_LEAD_COLUMNS,
+  canSeeLeadPii,
+  stripSensitive,
+} from '@/lib/admin/leadFields';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
+import { LEAD_CONSTRAINTS, leadPatchValues, leadWriteError } from '@/lib/crm/leadWrite';
 import { PLAIN_GATED_FIELDS, revealLead } from '@/lib/crm/reveal';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 
@@ -56,53 +62,81 @@ export const GET = defineAdminRoute({
   },
 });
 
+// Changing a lead (Admin v2 C3): `leads.manage`. Since 0041 staff write the pipeline
+// through a column grant, as the caller (RLS and the live check decide which lead), so this
+// route adds the Worker's half: Zod, the version, and the audit row.
+//
+//   • stageId, isSpam, assignedTo, valueSar and tags move the lead's version, so they need
+//     the version the caller read: a stale one is a 409 (crud.ts updateRow tells it apart
+//     from a 404), never a silent overwrite of a colleague's change.
+//   • isStarred, read and logContact never move it (a star or a read mark must not turn
+//     every open lead into a conflict); the database stamps the read mark and the contact
+//     with its own clock and the session's person.
+//   • status and internalNotes are the legacy panel's, kept until C4 moves it to the
+//     pipeline and the notes thread. internal_notes is a leads.pii column, so writing it
+//     adds that capability and a live recheck.
 export const PATCH = defineAdminRoute({
   cap: 'leads.manage',
-  input: LeadUpdateSchema,
+  input: LeadPatchSchema,
   handler: async ({ auth, sb, input, params, audit }) => {
     const id = requireId(params);
 
-    const values: Record<string, unknown> = {};
-    if (input.status !== undefined) values['status'] = input.status;
     if (input.internalNotes !== undefined) {
-      // internal_notes is one of the four `leads.pii` columns. `leads.manage` alone
-      // lets you move a lead to "in progress"; it does not let you write the private
-      // commentary attached to a named person.
+      // `leads.manage` alone moves a lead; it does not write the private commentary
+      // attached to a named person.
       await liveRecheck(auth);
       if (!canSeeLeadPii(auth.role)) {
         throw new AuthorizationError('leads.pii', `role '${auth.role}' cannot write notes`);
       }
-      values['internal_notes'] = input.internalNotes;
     }
 
-    if (Object.keys(values).length === 0) {
-      const { ValidationError } = await import('@/lib/admin/errors');
-      throw new ValidationError('no updatable fields supplied');
+    const values = leadPatchValues(input, new Date());
+    const versioned = VERSIONED_LEAD_FIELDS.some((field) => input[field] !== undefined);
+
+    // The row comes back with the safe and pipeline columns only, whoever asks: the
+    // caller's client cannot read the gated ones (0033), and writing notes needs no read.
+    // `as unknown as` below because the select list is a shared constant, and PostgREST's
+    // typings parse that string at the TYPE level: a non-literal degrades to an error type.
+    let row: Record<string, unknown>;
+    if (versioned) {
+      // The schema refuses a versioned change without it; this keeps the types honest.
+      if (input.version === undefined)
+        throw new ValidationError('send the version you read', 'version');
+      row = await updateRow<Record<string, unknown>>(
+        sb,
+        'leads',
+        auth,
+        id,
+        input.version,
+        values,
+        LEAD_WRITE_COLUMNS,
+        { constraints: LEAD_CONSTRAINTS },
+      );
+    } else {
+      const { data, error } = await sb
+        .from('leads')
+        .update(values)
+        .eq('tenant_id', auth.tenantId)
+        .eq('id', id)
+        .select(LEAD_WRITE_COLUMNS)
+        .maybeSingle();
+      if (error) throw leadWriteError(error, 'update lead');
+      if (!data) throw new NotFoundError('lead');
+      row = data as unknown as Record<string, unknown>;
     }
 
-    // The row comes back with the safe columns only, whoever asks: the caller's client
-    // cannot read the gated ones (0033), and writing notes needs no read. The panel
-    // reloads the lead (through the audited reveal) after saving.
-    const { data, error } = await sb
-      .from('leads')
-      .update(values)
-      .eq('tenant_id', auth.tenantId)
-      .eq('id', id)
-      .select(SAFE_LEAD_COLUMNS)
-      .maybeSingle();
-    if (error) throw new Error(`update lead: ${error.message}`);
-    if (!data) throw new NotFoundError('lead');
-
+    // Field names, the legacy status and the stage id: never notes, tags or values.
     audit({
       action: 'lead.update',
       entityType: 'lead',
       entityId: id,
-      detail: { fields: Object.keys(values), status: values['status'] ?? null },
+      detail: {
+        fields: Object.keys(values),
+        status: input.status ?? null,
+        ...(input.stageId !== undefined ? { stage: input.stageId } : {}),
+      },
     });
-    // `as unknown as` because the select list is a shared constant, and PostgREST's
-    // typings parse that string at the TYPE level — a non-literal defeats the parser and
-    // it degrades to an error type rather than a row type.
-    const updated = stripSensitive(data as unknown as Record<string, unknown>);
+    const updated = stripSensitive(row);
     const labels = await resolveLeadInterests(sb, auth.tenantId, [updated]);
     return withInterestLabels(updated, labels);
   },

@@ -150,6 +150,7 @@ From `ROLE_CAPS` in `src/lib/authz/matrix.ts`. **Byte-for-byte identical to arch
 | Leads — view list / manage status / notes | ✅ | ❌ | ❌ | ✅ |
 | Leads — budget/timeline/internal_notes/ip (PII) | ✅ | ❌ | ❌ | ✅ |
 | Leads / analytics — export CSV | ✅ | ❌ | ❌ | ✅ |
+| Leads & contacts — erase a person's data (DSAR) | ✅ | ❌ | ❌ | ❌ |
 | Job applications — view / manage status / notes / erase | ✅ | ❌ | ❌ | ❌ |
 | Job applications — contact details & CV download (PII) | ✅ | ❌ | ❌ | ❌ |
 | Analytics — read dashboards | ✅ | ✅ | ✅ | ✅ |
