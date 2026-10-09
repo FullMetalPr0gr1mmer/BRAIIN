@@ -39,7 +39,8 @@ refactor only: no screen, route, API response or public page changes.
   `src/components/admin/islands/`, each re-exporting its screen from
   `src/components/admin/screens/<name>/`. `.size-limit.json` and
   `scripts/admin-bundle.mjs` go by the `Admin*` name and list no island one by one. Every
-  admin screen's eager graph measured 14 B gz below the build before Wave 0.
+  admin screen's eager graph is 14 to 71 B gz smaller than before Wave 0 (`admin-ui` is 14 B
+  smaller, and the thin `Admin*` entries no longer re-export their screens' helpers).
 - **Tests that pin the registries.** `adminNav.spec` pins the seven areas and their
   places; `adminShell.spec` pins the counters to the counts the menu shows;
   `adminResources.spec` and `adminRoutes.spec` derive their maps from `RESOURCES` and pin

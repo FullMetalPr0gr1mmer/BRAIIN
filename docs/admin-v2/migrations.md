@@ -26,15 +26,20 @@ Each slice's file under [as-built/](as-built/) has the detail.
 
 ## Reserved
 
-Nothing is reserved beyond 0037 yet: the next free number is **0038**. Before a wave's slices
-branch, each migration the wave plans gets a row here, numbered in the wave's planned merge
-order. The slice's own PR moves its row to "Applied" once production has applied the
+Wave 1's migrations are reserved below; the next free number after them is **0044**. Before a
+wave's slices branch, each migration the wave plans gets a row here, numbered in the wave's
+planned merge order. The slice's own PR moves its row to "Applied" once production has applied the
 migration, before the PR merges (Pushing to production, step 5), so the row is true when the
 PR lands and nothing here is edited after a merge.
 
 | Number | Slice | What | Wave |
 |---|---|---|---|
-| (none yet) | | | |
+| 0038 | R1 | the release ledger schema: ledger tables, the staged-entity registry, the protected flag table, snapshot coverage (expand, inert) | 1 |
+| 0039 | F8 | the personal layer: preferences, the staff directory, notifications, the environment pill | 1 |
+| 0040 | U3 | media uploads: the public media bucket and its policies, the `media_assets` provider widening | 1 |
+| 0041 | C3 | the leads write API: the `crm.erase` helper and the write RPCs | 1 |
+| 0042 | U16 | the help centre: `help_articles` | 1 |
+| 0043 | C13 | lead attribution capture (built, held for the privacy notice, O-11) | 1 |
 
 ## Rules
 
@@ -51,8 +56,8 @@ PR lands and nothing here is edited after a merge.
    W0-b) is the helper. The script leaves the Reserved rows here as they are (they are lines
    from `main`), so the slice moves its own row by hand, and it never takes a number reserved
    here for another slice: it takes the lowest number above `main`'s highest that no other
-   slice holds (the script lists this file's lines that name the old number, and flags a new
-   number reserved here). Once a file is on `main`, its number is fixed.
+   slice holds (the script lists this file's lines that name the old number, and skips any
+   number reserved here for another slice, printing which slice holds it). Once a file is on `main`, its number is fixed.
 4. **`ALTER TYPE app_role ADD VALUE 'sales'` sits alone in its file** (C10a's first
    migration). A new enum value cannot be used in the transaction that adds it (55P04), so
    every use of `sales` goes in a later file.
