@@ -72,11 +72,18 @@ export const POST = defineAdminRoute({
     });
     if (!logged) throw new AuthorizationError('crm.erase', 'audit unavailable, erase refused');
 
-    const { data, error } = await serviceClient().rpc('crm_erase_lead', {
-      p_tenant: auth.tenantId,
-      p_lead: id,
-      p_actor: auth.userId,
-    });
+    let data: unknown = null;
+    let error: { code?: string } | null = null;
+    try {
+      ({ data, error } = await serviceClient().rpc('crm_erase_lead', {
+        p_tenant: auth.tenantId,
+        p_lead: id,
+        p_actor: auth.userId,
+      }));
+    } catch {
+      // The door could not be reached: the attempt still gets its outcome.
+      error = {};
+    }
     if (error) {
       await writeAudit(sb, auth, {
         action: 'crm.erase.outcome',

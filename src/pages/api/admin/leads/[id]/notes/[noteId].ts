@@ -12,11 +12,14 @@ import { serviceClient } from '@/lib/supabase/server';
 // have been written down, such as someone's ID number. In order:
 //
 //   live recheck → the caller's own client must see the lead (RLS; a 404 otherwise) → an
-//   audit row WRITTEN (fail-closed: no row, no delete) → public.crm_delete_lead_note as
-//   the service role (the thread is service-role only, 0034), which checks the acting
-//   profile itself, live, through app.role_crm_erase.
+//   attempt audit row WRITTEN (fail-closed: no row, no delete) → public.crm_delete_lead_note
+//   as the service role (the thread is service-role only, 0034), which checks the acting
+//   profile itself, live, through app.role_crm_erase → an outcome audit row.
 //
-// The legacy mirror of the old internal_notes field (the expand window) is deleted by
+// Two rows, as erase has, because the attempt is written before anyone knows whether the
+// note is on that lead: the outcome says what happened (ok, not_found, refused or failed),
+// so a 404 never reads as a deletion in the log. Ids and the note's source only, never its
+// words. The legacy mirror of the old internal_notes field (the expand window) is deleted by
 // clearing that field, so its words cannot come back with the next legacy save.
 
 export const prerender = false;
@@ -24,6 +27,17 @@ export const prerender = false;
 function requireUuid(value: string | undefined, entity: string): string {
   if (!value || !z.string().uuid().safeParse(value).success) throw new NotFoundError(entity);
   return value;
+}
+
+interface DoorError {
+  code?: string;
+}
+
+/** What the outcome row says about a refusal by the door (never its text). */
+function outcomeOf(error: DoorError): 'not_found' | 'refused' | 'failed' {
+  if (error.code === 'P0002') return 'not_found';
+  if (error.code === '42501') return 'refused';
+  return 'failed';
 }
 
 export const DELETE = defineAdminRoute({
@@ -35,26 +49,48 @@ export const DELETE = defineAdminRoute({
     await getRow(sb, 'leads', auth, id, 'id');
 
     const logged = await writeAudit(sb, auth, {
-      action: 'lead.note.delete',
+      action: 'lead.note.delete.attempt',
       entityType: 'lead',
       entityId: id,
       detail: { note: noteId },
     });
     if (!logged) throw new AuthorizationError('crm.erase', 'audit unavailable, delete refused');
 
-    const { data, error } = await serviceClient().rpc('crm_delete_lead_note', {
-      p_tenant: auth.tenantId,
-      p_lead: id,
-      p_note: noteId,
-      p_actor: auth.userId,
-    });
+    let data: unknown = null;
+    let error: DoorError | null = null;
+    try {
+      ({ data, error } = await serviceClient().rpc('crm_delete_lead_note', {
+        p_tenant: auth.tenantId,
+        p_lead: id,
+        p_note: noteId,
+        p_actor: auth.userId,
+      }));
+    } catch {
+      // The door could not be reached: the attempt still gets its outcome.
+      error = {};
+    }
+
     if (error) {
+      await writeAudit(sb, auth, {
+        action: 'lead.note.delete.outcome',
+        entityType: 'lead',
+        entityId: id,
+        detail: { note: noteId, status: outcomeOf(error), code: error.code ?? null },
+      });
       if (error.code === 'P0002') throw new NotFoundError('note');
       if (error.code === '42501') {
         throw new AuthorizationError('crm.erase', 'the database refused this person');
       }
       throw new Error(`crm_delete_lead_note: ${error.code ?? 'no code'}`);
     }
-    return { deleted: true, source: typeof data === 'string' ? data : null };
+
+    const source = typeof data === 'string' ? data : null;
+    await writeAudit(sb, auth, {
+      action: 'lead.note.delete.outcome',
+      entityType: 'lead',
+      entityId: id,
+      detail: { note: noteId, status: 'ok', source },
+    });
+    return { deleted: true, source };
   },
 });

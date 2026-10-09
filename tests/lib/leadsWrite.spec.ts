@@ -594,15 +594,16 @@ describe('DELETE /api/admin/leads/[id]/notes/[noteId]', () => {
       }),
     );
 
-  it('recheck, the RLS read, the audit row WRITTEN, then the door', async () => {
+  it('recheck, the RLS read, the attempt WRITTEN, the door, then the outcome', async () => {
     serviceRpc = { crm_delete_lead_note: { data: 'staff', error: null } };
     const res = await run();
     expect(res.status).toBe(200);
     expect(events).toEqual([
       'svc:profiles',
       'rls:read:leads',
-      'audit:lead.note.delete',
+      'audit:lead.note.delete.attempt',
       'svc:rpc:crm_delete_lead_note',
+      'audit:lead.note.delete.outcome',
     ]);
     expect(rpcCalls[0]!.args).toEqual({
       p_tenant: TENANT,
@@ -610,17 +611,73 @@ describe('DELETE /api/admin/leads/[id]/notes/[noteId]', () => {
       p_note: NOTE,
       p_actor: USER,
     });
+    expect(audits.map((a) => a.detail)).toEqual([
+      { note: NOTE },
+      { note: NOTE, status: 'ok', source: 'staff' },
+    ]);
     expect(await res.json()).toEqual({ ok: true, data: { deleted: true, source: 'staff' } });
   });
 
-  it('no audit row: 403 and nothing deleted', async () => {
+  it('no attempt row: 403 and nothing deleted', async () => {
     auditOk = false;
     expect((await run()).status).toBe(403);
     expect(rpcCalls).toEqual([]);
   });
 
-  it('a note that is not on this lead: 404', async () => {
+  it('a note that is not on this lead: 404, and the log says not found, never a deletion', async () => {
     serviceRpc = { crm_delete_lead_note: { data: null, error: { code: 'P0002' } } };
     expect((await run()).status).toBe(404);
+    expect(audits.map((a) => a.action)).toEqual([
+      'lead.note.delete.attempt',
+      'lead.note.delete.outcome',
+    ]);
+    expect(audits[1]!.detail).toEqual({ note: NOTE, status: 'not_found', code: 'P0002' });
+  });
+
+  it('a refusal by the door is a 403 with a refused outcome', async () => {
+    serviceRpc = { crm_delete_lead_note: { data: null, error: { code: '42501', message: 'x' } } };
+    expect((await run()).status).toBe(403);
+    expect(audits[1]!.detail).toEqual({ note: NOTE, status: 'refused', code: '42501' });
+  });
+});
+
+describe('a door that cannot be reached still gets its outcome row', () => {
+  it('note delete: 500, attempt then a failed outcome', async () => {
+    const original = serviceRpc;
+    serviceRpc = new Proxy(original, {
+      get: () => {
+        throw new Error('network down');
+      },
+    });
+    const res = await noteDelete.DELETE(
+      ctx(`/api/admin/leads/${LEAD}/notes/${NOTE}`, 'DELETE', undefined, {
+        id: LEAD,
+        noteId: NOTE,
+      }),
+    );
+    expect(res.status).toBe(500);
+    expect(audits.map((a) => `${a.action}:${String(a.detail?.['status'] ?? '')}`)).toEqual([
+      'lead.note.delete.attempt:',
+      'lead.note.delete.outcome:failed',
+    ]);
+  });
+
+  it('erase: 500, attempt then a failed outcome', async () => {
+    serviceRpc = new Proxy(
+      {},
+      {
+        get: () => {
+          throw new Error('network down');
+        },
+      },
+    );
+    const res = await erase.POST(
+      ctx(`/api/admin/leads/${LEAD}/erase`, 'POST', { reason: 'decision' }),
+    );
+    expect(res.status).toBe(500);
+    expect(audits.map((a) => `${a.action}:${String(a.detail?.['status'] ?? '')}`)).toEqual([
+      'crm.erase.attempt:',
+      'crm.erase.outcome:failed',
+    ]);
   });
 });
