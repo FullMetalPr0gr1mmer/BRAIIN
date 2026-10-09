@@ -17,7 +17,7 @@ vi.mock('@/lib/data/systemLog', () => ({
   },
 }));
 
-const { writeAudit } = await import('@/lib/admin/audit');
+const { writeAudit, writeAuditMany } = await import('@/lib/admin/audit');
 
 const CTX = {
   tenantId: '00000000-0000-0000-0000-0000000000b1',
@@ -91,5 +91,70 @@ describe('writeAudit', () => {
     expect(detail['action']).toBe('lead.export');
     expect(detail['entityType']).toBe('lead');
     expect(JSON.stringify(logged[0])).not.toContain('someone@example.com');
+  });
+});
+
+describe('writeAuditMany (one insert for a bulk change)', () => {
+  /** Records every insert call and what it was given. */
+  function recording(outcome: { error: { code: string; message: string } | null } | Error) {
+    const inserts: unknown[] = [];
+    const sb = {
+      from: (table: string) => ({
+        insert: async (rows: unknown) => {
+          inserts.push({ table, rows });
+          if (outcome instanceof Error) throw outcome;
+          return outcome;
+        },
+      }),
+    } as unknown as SupabaseClient;
+    return { sb, inserts };
+  }
+
+  it('writes every row in ONE insert, each stamped with the session', async () => {
+    const { sb, inserts } = recording({ error: null });
+    const ok = await writeAuditMany(sb, CTX, [
+      { action: 'lead.update', entityType: 'lead', entityId: 'l1', detail: { fields: ['tags'] } },
+      { action: 'lead.update', entityType: 'lead', entityId: 'l2' },
+      { action: 'lead.bulk', entityType: 'lead', detail: { applied: 2 } },
+    ]);
+    expect(ok).toBe(true);
+    expect(inserts).toHaveLength(1);
+    const { table, rows } = inserts[0] as { table: string; rows: Record<string, unknown>[] };
+    expect(table).toBe('audit_log');
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row['tenant_id']).toBe(CTX.tenantId);
+      expect(row['actor_id']).toBe(CTX.userId);
+      expect(row['actor_role']).toBe('admin');
+      // The chain trigger computes these; a caller never supplies them.
+      expect(row).not.toHaveProperty('hash');
+      expect(row).not.toHaveProperty('prev_hash');
+    }
+    expect(rows.map((row) => row['entity_id'])).toEqual(['l1', 'l2', null]);
+    expect(rows[1]!['detail']).toEqual({});
+  });
+
+  it('writes nothing for nothing', async () => {
+    const { sb, inserts } = recording({ error: null });
+    expect(await writeAuditMany(sb, CTX, [])).toBe(true);
+    expect(inserts).toHaveLength(0);
+  });
+
+  it('a rejected or failed insert is false and reaches system_logs, without the values', async () => {
+    const { sb } = recording({ error: { code: '42501', message: 'denied' } });
+    const ok = await writeAuditMany(sb, CTX, [
+      { action: 'lead.update', detail: { email: 'someone@example.com' } },
+      { action: 'lead.bulk' },
+    ]);
+    expect(ok).toBe(false);
+    expect(logged).toHaveLength(1);
+    expect(logged[0]?.['source']).toBe('audit');
+    expect((logged[0]?.['detail'] as Record<string, unknown>)['actions']).toEqual([
+      'lead.update',
+      'lead.bulk',
+    ]);
+    expect(JSON.stringify(logged[0])).not.toContain('someone@example.com');
+    const thrown = recording(new Error('socket hang up'));
+    await expect(writeAuditMany(thrown.sb, CTX, [{ action: 'x' }])).resolves.toBe(false);
   });
 });
