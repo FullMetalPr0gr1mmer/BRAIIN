@@ -3,9 +3,11 @@
 --
 -- The release registry (app.release_entities) is the list of tables a release may change.
 -- Every one of them must snapshot into content_versions under its entity type (the two
--- singletons keyed by the tenant), every column it holds must be classified (writable,
--- immediate, or system), and a snapshot carries a release_id only while the release token
--- of THIS transaction is valid. Writes run as content_creator, seo and developer; a write
+-- singletons keyed by the tenant), except team_members, which keeps no history until the
+-- owner decides history redaction (owner item O-12, PDPL: a snapshot would keep staff
+-- names and bios after an edit or removal, with no erasure path); every column it holds
+-- must be classified (writable, immediate, or system), and a snapshot carries a release_id
+-- only while the release token of THIS transaction is valid. Writes run as content_creator, seo and developer; a write
 -- by another tenant cannot borrow a release (tenant-fenced key). The per-role access rows
 -- for the ledger itself are rls_releases.test.sql; history's write lockdown is
 -- content_versions_writes.test.sql (0032).
@@ -17,13 +19,14 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
 begin;
-select plan(19);
+select plan(21);
 
 -- ── 1. The catalog ─────────────────────────────────────────────────────────────────
 select is(
   (select coalesce(string_agg(e.entity_type, ', ' order by e.entity_type), '')
      from app.release_entities e
-    where not exists (
+    where e.entity_type <> 'team_member'   -- O-12, below
+      and not exists (
       select 1
         from pg_trigger tg
         join pg_proc f on f.oid = tg.tgfoid
@@ -37,7 +40,16 @@ select is(
          and tg.tgnargs = 1
          and tg.tgargs = convert_to(e.entity_type, 'UTF8') || '\x00'::bytea)),
   '',
-  'every registry table snapshots into content_versions under its entity type (singletons by tenant)');
+  'every registry table but team_members snapshots under its entity type (singletons by tenant)');
+
+select is(
+  (select coalesce(string_agg(tg.tgname, ', ' order by tg.tgname), '')
+     from pg_trigger tg
+     join pg_proc f on f.oid = tg.tgfoid
+    where tg.tgrelid = 'public.team_members'::regclass
+      and f.proname in ('tg_snapshot_version', 'tg_snapshot_singleton')),
+  '',
+  'team_members keeps no history until owner item O-12 (PDPL: no erasure path for staff names and bios)');
 
 select is(
   (select coalesce(string_agg(format('%s.%s', e.table_name, c.col), ', '
@@ -219,9 +231,13 @@ select is(
   (select string_agg(entity_type, ',' order by entity_type) from public.content_versions
     where tenant_id = '38100000-0000-0000-0000-00000000000a'
       and created_by = '38100000-0000-0000-0000-0000000000c1'
-      and entity_type in ('category', 'team_member', 'statistic', 'certification')),
-  'category,certification,statistic,team_member',
-  'categories, team members, statistics and certifications are snapshotted');
+      and entity_type in ('category', 'statistic', 'certification')),
+  'category,certification,statistic',
+  'categories, statistics and certifications are snapshotted');
+select is(
+  (select count(*)::int from public.content_versions
+    where tenant_id = '38100000-0000-0000-0000-00000000000a' and entity_type = 'team_member'),
+  0, 'a team member saved by the content creator leaves no history row (O-12)');
 
 -- ── 6. A snapshot cannot borrow another tenant's release ───────────────────────────
 select throws_ok(

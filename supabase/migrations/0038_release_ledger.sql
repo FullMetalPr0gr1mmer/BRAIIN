@@ -31,9 +31,13 @@
 --   • public.content_release_items: append-only before/after images of every row a
 --     release changes. Staff read them; only the release path writes them (R4).
 --   • content_versions: gains release_id (set only while a release token is valid), and
---     the snapshot covers every registry table: team_members, certifications, statistics,
+--     the snapshot covers every registry table but one: certifications, statistics,
 --     categories, navigation, redirects, entity_seo and custom_themes join, and the two
 --     singletons (site_profile, seo_defaults) snapshot through app.tg_snapshot_singleton.
+--     team_members does NOT get history here (it had none before 0038): a snapshot would
+--     keep staff names and bios after an edit or a removal, with no erasure path until the
+--     owner decides history redaction (owner item O-12, slice R16). It stays in the
+--     registry; the snapshot-coverage postcondition and pgTAP exempt it by name.
 --     0032 (H6) already took INSERT away from the API roles; that stays as it is.
 --   • custom_themes gets the RESTRICTIVE admin-only delete gate the design asks for "when
 --     touching the table" (releases.md §12.7): the Worker already refuses a Developer's
@@ -606,16 +610,17 @@ begin
 end $$;
 revoke all on function app.tg_snapshot_singleton() from public, anon, authenticated, service_role;
 
--- The registry tables that had no history (0009, 0016, 0021 and 0028 cover the rest).
+-- The registry tables that had no history (0009, 0016, 0021 and 0028 cover the rest),
+-- except team_members: PDPL, owner item O-12 (see the header).
 do $$
 declare
   t text;
   entity text;
 begin
   for t, entity in values
-    ('team_members', 'team_member'), ('certifications', 'certification'),
-    ('statistics', 'statistic'), ('categories', 'category'), ('navigation', 'nav_item'),
-    ('redirects', 'redirect'), ('entity_seo', 'entity_seo'), ('custom_themes', 'custom_theme')
+    ('certifications', 'certification'), ('statistics', 'statistic'),
+    ('categories', 'category'), ('navigation', 'nav_item'), ('redirects', 'redirect'),
+    ('entity_seo', 'entity_seo'), ('custom_themes', 'custom_theme')
   loop
     execute format('drop trigger if exists %I on public.%I', t || '_snapshot', t);
     execute format('create trigger %I after insert or update on public.%I for each row execute function app.tg_snapshot_version(%L)', t || '_snapshot', t, entity);
@@ -675,6 +680,8 @@ declare
     'custom_theme', 'discipline', 'entity_seo', 'nav_item', 'page', 'page_section',
     'portfolio', 'redirect', 'sector', 'seo_defaults', 'service', 'service_case',
     'site_profile', 'statistic', 'team_member', 'testimonial'];
+  -- Registry types kept out of history until the owner decides redaction (O-12, PDPL).
+  v_no_history constant text[] := array['team_member'];
   v_bad text;
   v_owner oid;
   p text;
@@ -825,7 +832,7 @@ begin
     from app.release_entities e
     join pg_class c on c.oid = format('public.%I', e.table_name)::regclass
    where not (c.relrowsecurity and c.relforcerowsecurity)
-      or not exists (
+      or (e.entity_type <> all (v_no_history) and not exists (
         select 1 from pg_trigger tg
           join pg_proc f on f.oid = tg.tgfoid
          where tg.tgrelid = c.oid and not tg.tgisinternal
@@ -837,9 +844,19 @@ begin
            and tg.tgtype & 4 = 4 and tg.tgtype & 16 = 16
            -- One argument, the entity type (tgargs holds each one NUL-terminated).
            and tg.tgnargs = 1
-           and tg.tgargs = convert_to(e.entity_type, 'UTF8') || '\x00'::bytea);
+           and tg.tgargs = convert_to(e.entity_type, 'UTF8') || '\x00'::bytea));
   if v_bad is not null then
     raise exception '0038: registry tables without forced RLS or their snapshot trigger: %', v_bad;
+  end if;
+  -- ...and the exempt ones keep no history at all yet.
+  select string_agg(e.entity_type, ', ' order by e.entity_type) into v_bad
+    from app.release_entities e
+    join pg_trigger tg on tg.tgrelid = format('public.%I', e.table_name)::regclass
+    join pg_proc f on f.oid = tg.tgfoid
+   where e.entity_type = any (v_no_history)
+     and f.proname in ('tg_snapshot_version', 'tg_snapshot_singleton');
+  if v_bad is not null then
+    raise exception '0038: % must not snapshot into history before owner item O-12', v_bad;
   end if;
 
   -- ---- Releases are off everywhere, history is still staff-read, the theme gate ------

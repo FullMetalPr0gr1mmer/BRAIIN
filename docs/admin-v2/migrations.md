@@ -34,7 +34,7 @@ PR lands and nothing here is edited after a merge.
 
 | Number | Slice | What | Wave |
 |---|---|---|---|
-| 0038 | R1 | the release ledger schema: ledger tables, the staged-entity registry, the protected flag table, snapshot coverage (expand, inert) | 1 |
+| 0038 | R1 | the release ledger schema: ledger tables, the staged-entity registry, the protected flag table, snapshot coverage (all but `team_members`, which waits on O-12) (expand, inert) | 1 |
 | 0039 | F8 | the personal layer: preferences, the staff directory, notifications, the environment pill | 1 |
 | 0040 | U3 | media uploads: the public media bucket and its policies, the `media_assets` provider widening | 1 |
 | 0041 | C3 | the leads write API: the `crm.erase` helper and the write RPCs | 1 |
