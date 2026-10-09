@@ -26,15 +26,20 @@ Each slice's file under [as-built/](as-built/) has the detail.
 
 ## Reserved
 
-Nothing is reserved beyond 0037 yet: the next free number is **0038**. Before a wave's slices
-branch, each migration the wave plans gets a row here, numbered in the wave's planned merge
-order. The slice's own PR moves its row to "Applied" once production has applied the
+Wave 1's migrations are reserved below; the next free number after them is **0044**. Before a
+wave's slices branch, each migration the wave plans gets a row here, numbered in the wave's
+planned merge order. The slice's own PR moves its row to "Applied" once production has applied the
 migration, before the PR merges (Pushing to production, step 5), so the row is true when the
 PR lands and nothing here is edited after a merge.
 
 | Number | Slice | What | Wave |
 |---|---|---|---|
-| (none yet) | | | |
+| 0038 | R1 | the release ledger schema: ledger tables, the staged-entity registry, the protected flag table, snapshot coverage (expand, inert) | 1 |
+| 0039 | F8 | the personal layer: preferences, the staff directory, notifications, the environment pill | 1 |
+| 0040 | U3 | media uploads: the public media bucket and its policies, the `media_assets` provider widening | 1 |
+| 0041 | C3 | the leads write API: the `crm.erase` helper and the write RPCs | 1 |
+| 0042 | U16 | the help centre: `help_articles` | 1 |
+| 0043 | C13 | lead attribution capture (built, held for the privacy notice, O-11) | 1 |
 
 ## Rules
 
