@@ -13,6 +13,13 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 import { toCsv } from '@/lib/admin/csv';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 import { serviceClient } from '@/lib/supabase/server';
+import {
+  afterFilter,
+  exportsSpam,
+  MAX_EXPORT_ROWS,
+  readPaged,
+  type ExportPage,
+} from '@/lib/crm/exportRead';
 
 // Lead CSV export — the full §3 lockdown, in order:
 //
@@ -33,20 +40,15 @@ import { serviceClient } from '@/lib/supabase/server';
 // leaves no trace — and those are exactly the shapes an exfiltration attempt has.
 //
 // Since Admin v2 C3 the export follows the list's filters a link may carry (stage, spam,
-// a date range; never the search, which would sit in the URL) and carries the pipeline:
-// the lead's number, stage, spam flag, assignee, value, tags, score, source and channel.
-// Note BODIES are not exported, only how many notes a lead has: bulk free text about named
-// people is the riskiest thing a file can hold (crm.md §9). The read is paged in
-// PostgREST's 1,000-row pages, so the cap really is MAX_EXPORT_ROWS: one unpaged read was
-// cut at 1,000 by the API's row limit without a word.
+// a date range; never the search, which would sit in the URL), with the list's defaults (no
+// spam unless asked, `to` exclusive), and carries the pipeline: the lead's number, stage,
+// spam flag, assignee, value, tags, score, source and channel. Note BODIES are not exported,
+// only how many notes a lead has: bulk free text about named people is the riskiest thing a
+// file can hold (crm.md §9). The read is keyset-paged (src/lib/crm/exportRead.ts), so the
+// cap really is the cap: one unpaged read was cut at 1,000 by the API's row limit without a
+// word, and an export that stops short says so (`truncated`).
 
 export const prerender = false;
-
-/** A single request cannot walk the whole table; larger pulls are `export-backup`. */
-const MAX_EXPORT_ROWS = 5000;
-
-/** PostgREST's default row limit per response: the export reads in pages of this size. */
-const PAGE_ROWS = 1000;
 
 /** Beyond this, the export is unusual enough to be worth a warning line. */
 const ABNORMAL_VOLUME = 1000;
@@ -97,36 +99,38 @@ const PII_HEADER = [
   'notes_count',
 ];
 
-/** Every lead matching the filters, newest first, in pages, up to the cap. */
-async function readLeads(
+/**
+ * One page of the leads matching the filters, newest first (src/lib/crm/exportRead.ts pages
+ * through them). `tenantId` is the session's: for a PII export the reader is the service role,
+ * which bypasses RLS, so this filter is the tenant fence (tests/lib/leadExportTenant.spec.ts).
+ */
+function leadPage(
   reader: SupabaseClient,
   tenantId: string,
   columns: string,
   input: LeadExportQuery,
-): Promise<Record<string, unknown>[]> {
-  const rows: Record<string, unknown>[] = [];
-  for (let from = 0; from < MAX_EXPORT_ROWS; from += PAGE_ROWS) {
+): ExportPage {
+  const spam = exportsSpam(input);
+  return async (limit, after) => {
     let query = reader
       .from('leads')
       .select(columns)
       .eq('tenant_id', tenantId)
+      .eq('is_spam', spam)
       .order('created_at', { ascending: false })
       .order('id', { ascending: true })
-      .range(from, Math.min(from + PAGE_ROWS, MAX_EXPORT_ROWS) - 1);
+      .limit(limit);
     if (input.status) query = query.eq('status', input.status);
     if (input.stage) query = query.eq('stage_id', input.stage);
-    if (input.spam) query = query.eq('is_spam', input.spam === 'true');
     if (input.from) query = query.gte('created_at', input.from);
-    if (input.to) query = query.lte('created_at', input.to);
+    if (input.to) query = query.lt('created_at', input.to);
+    if (after) query = query.or(afterFilter(after));
     const { data, error } = await query;
     if (error) throw new Error(`export leads: ${error.code ?? 'no code'}`);
     // See leads/[id].ts: the column list is chosen at runtime, which PostgREST's
     // literal-string typings cannot follow.
-    const page = (data ?? []) as unknown as Record<string, unknown>[];
-    rows.push(...page);
-    if (page.length < PAGE_ROWS) break;
-  }
-  return rows;
+    return (data ?? []) as unknown as Record<string, unknown>[];
+  };
 }
 
 export const GET = defineAdminRoute({
@@ -164,8 +168,12 @@ export const GET = defineAdminRoute({
       const svc = withPii ? serviceClient() : null;
       const reader = svc ?? sb;
       const columns = `${SAFE_LEAD_COLUMNS},${PIPELINE_COLUMNS}${withPii ? `,${PII_COLUMNS}` : ''}`;
-      const rows = await readLeads(reader, auth.tenantId, columns, input);
-      truncated = rows.length >= MAX_EXPORT_ROWS;
+      const read = await readPaged(
+        leadPage(reader, auth.tenantId, columns, input),
+        MAX_EXPORT_ROWS,
+      );
+      const rows = read.rows;
+      truncated = read.truncated;
       records = await toRecords(sb, svc, auth.tenantId, rows);
     } catch (err) {
       await writeAudit(sb, auth, {
