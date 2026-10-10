@@ -1,10 +1,13 @@
 import { z } from 'zod';
+import { parseStorageKey } from '@schemas/media';
 import { itemRoutes } from '@/lib/admin/resource';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { mediaResource } from '@/lib/admin/resources/media';
 import { deleteRow, getRow } from '@/lib/admin/crud';
 import { InUseError, NotFoundError } from '@/lib/admin/errors';
 import { assertCap } from '@/lib/authz/matrix';
+import { removeMediaObjects } from '@/lib/media/storage';
+import { serviceClient } from '@/lib/supabase/server';
 
 // GET + PATCH come from the kernel (assertCap + Zod + audit + no-store, tenant predicate
 // + optimistic lock — src/lib/admin/resource.ts).
@@ -15,6 +18,11 @@ import { assertCap } from '@/lib/authz/matrix';
 // poster, a case-study item, a client logo, a quote's avatar, a portrait, a section
 // image — so the editor is told where it is used instead of breaking a live page. The
 // foreign keys (on delete restrict) are the backstop for the structured references.
+//
+// An uploaded image (`storage`, Admin v2 U3) also has a file in the public bucket: once the
+// row is gone, the file is removed too (the service role; nothing references the asset, so
+// no page can still show it). If that removal fails, the row stays deleted and the daily
+// orphan sweep removes the file; the audit row says which happened.
 
 export const prerender = false;
 
@@ -31,7 +39,14 @@ export const DELETE = defineAdminRoute({
     if (!id || !z.string().uuid().safeParse(id).success) throw new NotFoundError('media_asset');
     // Both: only a role that may manage the library may destroy part of it.
     assertCap(auth, 'media.write', ['full']);
-    await getRow(sb, 'media_assets', auth, id, 'id'); // 404 before anything else
+    // 404 before anything else; the file's key, while the row still names it.
+    const asset = await getRow<Record<string, unknown>>(
+      sb,
+      'media_assets',
+      auth,
+      id,
+      'id,provider,storage_path',
+    );
 
     const { data, error } = await sb.rpc('media_usage', { p_media_id: id });
     if (error) throw new Error(`media_usage: ${error.code ?? 'error'}`);
@@ -46,8 +61,23 @@ export const DELETE = defineAdminRoute({
       );
     }
 
+    // The service role may delete any object, so the key must be this tenant's own (the
+    // 0045 CHECK holds that too; this does not lean on it).
+    const path = String(asset['storage_path'] ?? '');
+    const fileKey =
+      asset['provider'] === 'storage' && parseStorageKey(path)?.tenantId === auth.tenantId
+        ? path
+        : null;
+
     await deleteRow(sb, 'media_assets', auth, id, { constraints: mediaResource.constraintFields });
-    audit({ action: 'media_asset.delete', entityType: 'media_asset', entityId: id });
-    return { deleted: id };
+    const file =
+      fileKey === null ? {} : { fileRemoved: await removeMediaObjects(serviceClient(), [fileKey]) };
+    audit({
+      action: 'media_asset.delete',
+      entityType: 'media_asset',
+      entityId: id,
+      ...(fileKey === null ? {} : { detail: file }),
+    });
+    return { deleted: id, ...file };
   },
 });

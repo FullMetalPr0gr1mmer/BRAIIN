@@ -175,7 +175,10 @@ export async function probeImage(request: Request, length: number): Promise<Imag
   } catch {
     return refusalOf('truncated');
   } finally {
-    await reader.cancel().catch(() => undefined);
+    // Cancelled so the tee stops queueing the rest of the body for this branch, but NOT
+    // awaited: a tee branch's cancel settles only once the other branch is cancelled or
+    // read to the end too, which is the binding's job, later.
+    void reader.cancel().catch(() => undefined);
   }
   return finish(verdict, read, length);
 }

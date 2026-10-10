@@ -11,6 +11,12 @@ import { MEDIA_BUCKET } from '@schemas/media';
 // (upload, insert, compensate) always runs to its end.
 
 /**
+ * The storage the library's meter measures against: the Supabase Free plan's 1 GB, which
+ * this bucket shares with the CV bucket (`applications`). A plan change is an owner item.
+ */
+export const MEDIA_STORAGE_QUOTA_BYTES = 1_073_741_824;
+
+/**
  * `<tenant>/<random id>_<w>x<h>.webp`. Never the uploaded file's name (that is
  * `display_name`, staff-only); a new id on every upload and every replace, so a cached
  * derivative of an old file can never be served for a new one.
