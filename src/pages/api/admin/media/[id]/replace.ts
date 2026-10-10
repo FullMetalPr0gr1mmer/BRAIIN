@@ -21,9 +21,9 @@ import { serviceClient } from '@/lib/supabase/server';
 // and again by the UPDATE (409 if someone saved in between).
 //
 // The new file gets a NEW key, so no cached derivative of the old one is ever served for
-// it. The old object is not deleted here: no row names it any more, so the daily orphan
-// sweep removes it (after its hour of grace), and a page rendered just before the replace
-// still finds its image until then. A still shipped with the site (`static`) or a legacy
+// it. The old object is not deleted here: no row names it any more, so the next daily
+// orphan sweep removes it (src/lib/media/orphans.ts), and a page rendered just before the
+// replace still finds its image until then. A still shipped with the site (`static`) or a legacy
 // row can be replaced too; it becomes an uploaded image.
 
 export const prerender = false;

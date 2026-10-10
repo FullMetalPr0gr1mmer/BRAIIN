@@ -1,6 +1,7 @@
 import { serviceClient } from '@/lib/supabase/server';
 import { writeSystemLog, type SystemLogEntry } from '@/lib/data/systemLog';
 import { runApplicationRetention } from '@/lib/applications/retention';
+import { runMediaOrphanSweep } from '@/lib/media/orphans';
 import {
   INDEX_BATCH,
   newIndexRun,
@@ -17,7 +18,7 @@ import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 // CPU and 50 subrequests per invocation) has still done the purges. Each job declares its
 // `budget`: its worst case in subrequests, its own log lines included (a line costs two, the
 // tenant lookup and the insert). tests/lib/dailyJobs.spec.ts runs every job at its worst
-// against its budget and holds the sum under the 50: 35 today, at 20 leads a batch.
+// against its budget and holds the sum under the 50: 39 today, at 20 leads a batch.
 //
 // Counts only go to system_logs — never an applicant's name, path or address, never a
 // lead's details. A failed job is logged as an error so Site Health shows it; the next
@@ -54,6 +55,15 @@ export const DAILY_JOBS: readonly CronJob[] = [
     run: retainApplications,
   },
   {
+    // After the Join retention, which the law requires (PDPL), so a newer job never delays
+    // it; before the lead indexing, the longest.
+    name: 'media-orphans',
+    label: 'media orphan sweep',
+    // The orphans, their removal (one call), then its line (src/lib/media/orphans.ts).
+    budget: 2 + 2,
+    run: sweepMediaOrphans,
+  },
+  {
     name: 'crm-index',
     label: 'lead indexing',
     // The read, a country lookup (one tenant), one write per lead, then its line.
@@ -81,6 +91,21 @@ async function retainApplications(): Promise<void> {
       run.errors.length > 0
         ? `join retention ran with errors (${run.errors.join(', ')})`
         : 'join retention ran',
+    detail: { ...run },
+  });
+}
+
+// Uploaded images no row names any more (Admin v2 U3): a replaced file, a failed removal,
+// an upload whose row was never written. One line, with the counts.
+async function sweepMediaOrphans(): Promise<void> {
+  const run = await runMediaOrphanSweep(serviceClient());
+  await writeSystemLog({
+    level: run.errors.length > 0 ? 'error' : 'info',
+    source: 'cron:media-orphans',
+    message:
+      run.errors.length > 0
+        ? `media orphan sweep ran with errors (${run.errors.join(', ')})`
+        : 'media orphan sweep ran',
     detail: { ...run },
   });
 }

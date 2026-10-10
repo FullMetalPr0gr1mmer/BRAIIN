@@ -3,7 +3,8 @@ import type { CronJob } from '@/lib/cron/jobs';
 
 // The Worker's daily cron, run for real against a stub service client (src/lib/cron/daily.ts
 // running the registry in src/lib/cron/jobs.ts): the cheap purges before the lead indexing,
-// the privileged-op ledger cut at 48 hours, a failing step logged without stopping the ones
+// the privileged-op ledger cut at 48 hours, the media bucket's orphans removed after their
+// hour of grace (Admin v2 U3), a failing step logged without stopping the ones
 // after it, the indexing line written even for a partial run, the whole run inside the
 // Workers Free plan's 50 subrequests, and each job inside the budget it declares.
 
@@ -22,6 +23,9 @@ const state = vi.hoisted(() => ({
   failLeadSelect: false,
   throwOnIndexWrite: 0,
   worstCaseRetention: false,
+  worstCaseMedia: false,
+  failMediaOrphans: false,
+  removed: [] as { bucket: string; keys: string[] }[],
 }));
 
 /** A PostgREST-ish builder: every awaited query is one subrequest, recorded in order. */
@@ -77,12 +81,24 @@ const svc = {
         data: state.worstCaseRetention ? [{ object_name: 't/old/y.pdf' }] : [],
         error: null,
       };
+    if (fn === 'media_orphan_objects') {
+      if (state.failMediaOrphans) return { data: null, error: { message: 'storage down' } };
+      return {
+        data: state.worstCaseMedia
+          ? Array.from({ length: MEDIA_ORPHAN_BATCH }, (_, i) => ({
+              object_name: `t/${String(i).padStart(4, '0')}_10x10.webp`,
+            }))
+          : [],
+        error: null,
+      };
+    }
     return { data: null, error: null };
   },
   storage: {
-    from: () => ({
-      remove: async () => {
+    from: (bucket: string) => ({
+      remove: async (keys: string[]) => {
         state.requests.push({ table: 'storage', op: 'remove', filters: [] });
+        state.removed.push({ bucket, keys });
         return { error: null };
       },
     }),
@@ -101,6 +117,7 @@ vi.mock('@/lib/data/systemLog', () => ({
 const { runDailyJobs } = await import('@/lib/cron/daily');
 const { DAILY_JOBS, PRIVILEGED_OPS_KEEP_MS } = await import('@/lib/cron/jobs');
 const { INDEX_BATCH } = await import('@/lib/crm/indexBackfill');
+const { MEDIA_ORPHAN_BATCH, MEDIA_ORPHAN_GRACE_MINUTES } = await import('@/lib/media/orphans');
 const { EXPORT_LIMITS, PII_REVEAL_LIMITS } = await import('@/lib/admin/rateLimit');
 const { encryptPII } = await import('@/lib/crypto/pii');
 const { LEAD_PII_ENC_KEY } = await import('astro:env/server');
@@ -138,6 +155,9 @@ beforeEach(async () => {
   state.failLeadSelect = false;
   state.throwOnIndexWrite = 0;
   state.worstCaseRetention = false;
+  state.worstCaseMedia = false;
+  state.failMediaOrphans = false;
+  state.removed = [];
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -165,6 +185,44 @@ describe('runDailyJobs', () => {
     for (const limits of [EXPORT_LIMITS, PII_REVEAL_LIMITS]) {
       expect(PRIVILEGED_OPS_KEEP_MS).toBeGreaterThanOrEqual(limits.windowMinutes * 60_000);
     }
+  });
+
+  it("sweeps the media bucket's orphans after the Join retention, before the lead indexing", async () => {
+    state.worstCaseMedia = true;
+    await runDailyJobs();
+    const order = tables();
+    expect(order.indexOf('media_orphan_objects:rpc')).toBeGreaterThan(
+      order.indexOf('application_orphan_cvs:rpc'),
+    );
+    expect(order.indexOf('media_orphan_objects:rpc')).toBeLessThan(order.indexOf('leads:select'));
+    const media = state.removed.find((r) => r.bucket === 'media');
+    expect(media?.keys).toHaveLength(MEDIA_ORPHAN_BATCH);
+    expect(state.logs.find((l) => l.source === 'cron:media-orphans')).toMatchObject({
+      level: 'info',
+      message: 'media orphan sweep ran',
+      detail: { found: MEDIA_ORPHAN_BATCH, removed: MEDIA_ORPHAN_BATCH, errors: [] },
+    });
+    expect(MEDIA_ORPHAN_GRACE_MINUTES).toBeGreaterThanOrEqual(60);
+  });
+
+  it('a sweep with nothing to remove calls no Storage API, and still says it ran', async () => {
+    await runDailyJobs();
+    expect(state.removed.find((r) => r.bucket === 'media')).toBeUndefined();
+    expect(state.logs.find((l) => l.source === 'cron:media-orphans')).toMatchObject({
+      level: 'info',
+      detail: { found: 0, removed: 0 },
+    });
+  });
+
+  it('a sweep whose lookup fails is logged as an error, and removes nothing', async () => {
+    state.failMediaOrphans = true;
+    await runDailyJobs();
+    expect(state.removed.find((r) => r.bucket === 'media')).toBeUndefined();
+    expect(state.logs.find((l) => l.source === 'cron:media-orphans')).toMatchObject({
+      level: 'error',
+      message: 'media orphan sweep ran with errors (select-orphans)',
+    });
+    expect(indexLine()).toMatchObject({ level: 'info' });
   });
 
   it('a failing step is logged, and the steps after it still run', async () => {
@@ -216,15 +274,21 @@ describe('runDailyJobs', () => {
   it('stays inside the Free plan: 50 subrequests, with every step at its worst', async () => {
     state.failPurge = true;
     state.worstCaseRetention = true;
+    state.worstCaseMedia = true;
     await runDailyJobs();
-    expect(tables().filter((t) => t === 'storage:remove')).toHaveLength(2);
+    expect(tables().filter((t) => t === 'storage:remove')).toHaveLength(3);
     expect(subrequests()).toBeLessThanOrEqual(50);
   });
 });
 
 describe('the job registry (src/lib/cron/jobs.ts)', () => {
   it('runs these jobs, in this order: the purges before the lead indexing', () => {
-    expect(DAILY_JOBS.map((job) => job.name)).toEqual(['privileged-ops', 'retention', 'crm-index']);
+    expect(DAILY_JOBS.map((job) => job.name)).toEqual([
+      'privileged-ops',
+      'retention',
+      'media-orphans',
+      'crm-index',
+    ]);
   });
 
   it('logs each job under its own name, in that order', async () => {
@@ -237,6 +301,7 @@ describe('the job registry (src/lib/cron/jobs.ts)', () => {
   it('keeps each job inside the budget it declares, at its worst', async () => {
     state.failPurge = true;
     state.worstCaseRetention = true;
+    state.worstCaseMedia = true;
     // A phone on the leads adds the country lookup.
     const phone_enc = await encryptPII('0501234567', LEAD_PII_ENC_KEY);
     state.leads = state.leads.map((row) => ({ ...row, phone_enc }));
@@ -248,8 +313,9 @@ describe('the job registry (src/lib/cron/jobs.ts)', () => {
       expect(subrequests(), job.name).toBeLessThanOrEqual(job.budget);
       seen.push(...tables());
     }
-    // The worst cases were reached: both CV removals, and the country lookup.
-    expect(seen.filter((t) => t === 'storage:remove')).toHaveLength(2);
+    // The worst cases were reached: both CV removals, the media removal, and the country
+    // lookup.
+    expect(seen.filter((t) => t === 'storage:remove')).toHaveLength(3);
     expect(seen).toContain('site_profile:select');
   });
 
