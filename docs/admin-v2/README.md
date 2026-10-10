@@ -686,6 +686,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [F2](as-built/F2.md): the shell and the information architecture (#37, folded into #34)
 - [F3](as-built/F3.md): overlays, toasts and the command palette (#39, folded into #34)
 - [F4a](as-built/F4a.md): the admin bundle plan (#40, folded into #34)
+- [F8](as-built/F8.md): the personal layer: preferences, the people directory, the bell, the account, the environment pill, 0044
 
 **Releases**
 - none yet
