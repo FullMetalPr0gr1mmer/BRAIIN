@@ -689,7 +689,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [U3](as-built/U3.md): media uploads (A5): the storage provider, the upload, replace and download routes, delivery through `/_image`, 0045 (PR number at review)
 
 **Releases**
-- none yet
+- [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)
 
 **CRM**
 - [C1a-1](as-built/C1a-1.md): lead personal data at the database layer, 0033 (#43)
