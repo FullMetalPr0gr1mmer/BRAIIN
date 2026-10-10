@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(53);
+select plan(58);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -270,6 +270,30 @@ select ok(not has_function_privilege('authenticated', 'app.tg_testimonial_sample
           and not has_function_privilege('anon', 'app.tg_testimonial_sample_lock()', 'execute')
           and not has_function_privilege('service_role', 'app.tg_testimonial_sample_lock()', 'execute'),
   'the 0028 testimonial sample lock is not callable by any API role');
+
+-- ---- 11. Releases (0038): the registry helpers, the flag, history ------------------
+-- The drafts policies evaluate app.can_author / app.can_stage_delete as the querying staff
+-- member, so authenticated must hold EXECUTE (or every draft save 42501s); anon never
+-- evaluates them (no grant on the drafts). The token and flag readers stay unreachable
+-- (snapshot_coverage.test.sql lists them per role).
+select ok(has_function_privilege('authenticated', 'app.can_author(text)', 'execute')
+          and has_function_privilege('authenticated', 'app.can_stage_delete(text)', 'execute'),
+  'authenticated can execute app.can_author(text) and app.can_stage_delete(text)');
+select ok(not has_function_privilege('anon', 'app.can_author(text)', 'execute')
+          and not has_function_privilege('anon', 'app.can_stage_delete(text)', 'execute')
+          and not has_function_privilege('service_role', 'app.can_author(text)', 'execute'),
+  'anon and the service role cannot execute the release authoring helpers');
+select ok(has_table_privilege('authenticated', 'app.release_entities', 'select')
+          and not has_table_privilege('authenticated', 'app.release_entities', 'insert, update, delete, truncate')
+          and not has_table_privilege('anon', 'app.release_entities', 'select'),
+  'the release registry is readable by staff, writable by no API role, closed to anon');
+select ok(not has_table_privilege('anon', 'app.release_tenants', 'select, insert, update, delete')
+          and not has_table_privilege('authenticated', 'app.release_tenants', 'select, insert, update, delete')
+          and not has_table_privilege('service_role', 'app.release_tenants', 'select, insert, update, delete'),
+  'the releases switch-on flag is unreachable by every API role (read through a definer)');
+select ok(not has_table_privilege('authenticated', 'public.content_versions', 'insert')
+          and not has_table_privilege('anon', 'public.content_versions', 'insert'),
+  'content_versions INSERT stays revoked from the API roles (0032, R1)');
 
 select * from finish();
 rollback;
