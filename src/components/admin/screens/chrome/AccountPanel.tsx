@@ -325,7 +325,8 @@ export default function AccountPanel({
           <span className="li__ico" aria-hidden="true">
             <Icon name="shield" />
           </span>
-          <span className="li__main">
+          {/* A div, not a span: it holds a list. */}
+          <div className="li__main">
             <span className="li__t">What you can do</span>
             <ul className="acct__can">
               {view.can.map((line) => (
@@ -333,7 +334,7 @@ export default function AccountPanel({
               ))}
             </ul>
             <span className="li__s">{view.accessNote}</span>
-          </span>
+          </div>
         </li>
         <li className="li">
           <span className="li__ico" aria-hidden="true">

@@ -163,6 +163,14 @@ describe('the sweep route map', () => {
     }
   });
 
+  it('every role is swept on its own account and bell pages (Admin v2 F8)', () => {
+    for (const role of ROLES) {
+      const paths = new Set(sweepRoutes(role).map((r) => r.path));
+      expect(paths, role).toContain('/admin/account');
+      expect(paths, role).toContain('/admin/notifications');
+    }
+  });
+
   it('each role is swept on exactly the screens its menu reaches, plus the extras', () => {
     for (const role of ROLES) {
       const screens = sweepRoutes(role)
