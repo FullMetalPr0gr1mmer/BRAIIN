@@ -56,6 +56,43 @@ describe('leads_bulk_update judges what it did not change in a second statement'
   });
 });
 
+describe('a service-role lead write names whom it acts for in app.acting_for', () => {
+  // The note door clears a legacy field for the person deleting its mirror. Writing
+  // updated_by could not say who that is: a value equal to the lead's last editor reads as
+  // unchanged, and the deleter usually saved the field last. pgTAP proves the outcome in CI
+  // (crm_leads_write.test.sql); the shape it depends on is pinned here.
+  it('the BEFORE phase takes the session first, then the named person, and nothing written', () => {
+    expect(body('app.tg_lead_pipeline')).toMatch(
+      /elsif v_edited then\s+new\.updated_at := now\(\);\s+new\.updated_by := coalesce\(auth\.uid\(\),\s+nullif\(current_setting\('app\.acting_for', true\), ''\)::uuid\);\s+else/,
+    );
+  });
+
+  it('the AFTER phase takes the person the BEFORE phase recorded', () => {
+    expect(body('app.tg_lead_timeline')).toMatch(
+      /v_actor uuid := coalesce\(auth\.uid\(\),\s+case when tg_op = 'INSERT' then new\.created_by else new\.updated_by end\);/,
+    );
+  });
+
+  it('the door names the deleter for its one write, then puts back what was there', () => {
+    const door = body('public.crm_delete_lead_note');
+    const name = door.indexOf("set_config('app.acting_for', p_actor::text, true)");
+    const write = door.indexOf('update public.leads l set internal_notes = null');
+    const restore = door.indexOf("set_config('app.acting_for', coalesce(v_acting, ''), true)");
+    const remove = door.indexOf('delete from public.lead_notes');
+    expect(name).toBeGreaterThan(0);
+    expect(write).toBeGreaterThan(name);
+    expect(restore).toBeGreaterThan(write);
+    expect(remove).toBeGreaterThan(restore);
+    expect(door.slice(write, restore)).not.toMatch(/updated_by/);
+  });
+
+  it('only ever sets it for the transaction, so a pooled connection never carries it on', () => {
+    const sets = SQL.match(/set_config\('app\.acting_for',[^\n]*/g) ?? [];
+    expect(sets).toHaveLength(2);
+    for (const set of sets) expect(set.trimEnd()).toMatch(/, true\);$/);
+  });
+});
+
 describe('0041 runs twice cleanly', () => {
   it('drops the assignee key before the unique constraint it depends on', () => {
     // Postgres refuses to drop a unique constraint a foreign key still references, so on a

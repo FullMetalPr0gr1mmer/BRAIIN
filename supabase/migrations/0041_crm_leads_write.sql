@@ -23,7 +23,8 @@
 --     phase (app.tg_lead_timeline) records assigned / unassigned, value_set and
 --     contact_logged. Both are restated whole: the order of their steps is the contract.
 --     A service-role write has no session, so both name the person it acts for: a manual
---     lead's creator, or the updated_by the write sets (a note deleter).
+--     lead's creator, or whom a service-role door names in app.acting_for for its own write
+--     (a note deleter).
 --   • public.leads_bulk_update: up to 100 leads, one action, one statement, as the caller
 --     (SECURITY INVOKER: RLS, the live check and the column grant decide). Versioned
 --     actions apply only where the version still matches; every item comes back applied,
@@ -314,16 +315,19 @@ begin
   --    erases who last moved it.
   --    (0041) The person is the session's. A service-role write has no session, so it names
   --    the person it acts for itself: a lead added by hand is its creator's (crm_ingest_lead),
-  --    and a write that sets updated_by names whoever it sets (crm_delete_lead_note). Staff
-  --    cannot set updated_by (no grant), and a service-role write that names no one, no one.
+  --    and an edit made for someone is theirs when the door names them in app.acting_for for
+  --    that write (crm_delete_lead_note). Not by writing updated_by: a value equal to the last
+  --    editor's cannot be told from one left alone, and whoever deletes a legacy mirror note
+  --    usually saved its field last. A session's own person always wins (staff cannot name
+  --    anyone else), nothing but this attribution reads the setting (it grants nothing), and
+  --    a service-role write that names no one is no one's.
   if tg_op = 'INSERT' then
     new.created_by := coalesce(new.created_by, auth.uid());
     new.updated_by := coalesce(auth.uid(), new.created_by);
   elsif v_edited then
     new.updated_at := now();
     new.updated_by := coalesce(auth.uid(),
-                               case when new.updated_by is distinct from old.updated_by
-                                    then new.updated_by end);
+                               nullif(current_setting('app.acting_for', true), '')::uuid);
   else
     new.updated_at := old.updated_at;
     new.updated_by := old.updated_by;
@@ -337,8 +341,9 @@ create or replace function app.tg_lead_timeline() returns trigger
   language plpgsql security definer set search_path = '' as $$
 declare
   -- (0041) Who did it: the session's person, else the one the BEFORE phase recorded (a
-  -- service-role write made for someone: a manual add's creator, a note deleter). Every
-  -- event below follows an edit, so updated_by is this write's own.
+  -- service-role write made for someone: a manual add's creator, or the person a door named
+  -- in app.acting_for, a note deleter). Every event below follows an edit, so updated_by is
+  -- this write's own.
   v_actor uuid := coalesce(auth.uid(),
                            case when tg_op = 'INSERT' then new.created_by else new.updated_by end);
 begin
@@ -702,6 +707,7 @@ create or replace function public.crm_delete_lead_note(p_tenant uuid, p_lead uui
   language plpgsql volatile security invoker set search_path = public, pg_temp as $$
 declare
   v_source text;
+  v_acting text;
 begin
   if p_tenant is null or p_lead is null or p_note is null or p_actor is null then
     raise exception using errcode = '22023', message = 'crm_delete_lead_note: a tenant, a lead, a note and an actor are required';
@@ -716,10 +722,17 @@ begin
     raise exception using errcode = 'P0002', message = 'crm_delete_lead_note: no such note';
   end if;
   if v_source = 'legacy' then
-    -- Cleared as the person deleting the note: with no session here, the BEFORE phase takes
-    -- the updated_by this write sets, so the lead is not left edited by no one.
-    update public.leads l set internal_notes = null, updated_by = p_actor
+    -- Cleared as the person deleting the note, so the lead is not left edited by no one.
+    -- There is no session here, so the door names them in app.acting_for, which the BEFORE
+    -- phase reads (step 6), for this one write: what was there before is put back as soon
+    -- as it is done, so nothing else in the transaction is put down to them. Local to the
+    -- transaction (set_config's third argument), so a pooled connection never carries it
+    -- into another request.
+    v_acting := current_setting('app.acting_for', true);
+    perform set_config('app.acting_for', p_actor::text, true);
+    update public.leads l set internal_notes = null
      where l.tenant_id = p_tenant and l.id = p_lead;
+    perform set_config('app.acting_for', coalesce(v_acting, ''), true);
   end if;
   -- The thread note itself (and the mirror, should the field's trigger be gone by then).
   delete from public.lead_notes n

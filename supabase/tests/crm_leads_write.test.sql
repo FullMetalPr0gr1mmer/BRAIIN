@@ -11,13 +11,14 @@
 -- bulk over the six principals and a stale token, with every outcome (applied, conflict,
 -- missing, skipped) and every refusal; erasure and note deletion as the service role, checking
 -- the acting profile live (app.crm_eraser_ok: inactive, locked, a lock run out, another
--- tenant), who the service role writes as, and the note_deleted event; note counts; a manual
--- lead through ingest and who it names; a multi-row audit insert still chained row by row
--- (writeAuditMany); and the assignee key's SET NULL and its refusal to let an assigned profile
--- change tenant. CLAUDE.md §3, §5, §8, §9.
+-- tenant), who the service role writes as (app.acting_for: also when the deleter last saved the
+-- field herself, and for the door's own write only), and the note_deleted event; note counts;
+-- a manual lead through ingest and who it names; a multi-row audit insert still chained row by
+-- row (writeAuditMany); and the assignee key's SET NULL and its refusal to let an assigned
+-- profile change tenant. CLAUDE.md §3, §5, §8, §9.
 
 begin;
-select plan(109);
+select plan(113);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -536,6 +537,45 @@ select is(
       and e.actor_id = '00000000-0000-0000-0000-0000000000a1'),
   'staff:true,legacy:true',
   'each deleted note leaves a note_deleted event naming who removed it: its id and source, no words');
+
+-- The common case: the admin who deletes a mirror saved its field herself, so she is already
+-- the lead's last editor, and an updated_by the door wrote would read as unchanged. The door
+-- names her in app.acting_for instead, for its own write only.
+set local role authenticated;
+select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
+update public.leads set internal_notes = 'Saved by the admin herself'
+ where id = '00000000-0000-0000-0000-00000000aa07';
+reset role;
+select ok(
+  (select l.updated_by = '00000000-0000-0000-0000-0000000000a1'
+          and n.created_by = '00000000-0000-0000-0000-0000000000a1'
+     from public.leads l
+     join public.lead_notes n on n.lead_id = l.id and n.source = 'legacy'
+    where l.id = '00000000-0000-0000-0000-00000000aa07'),
+  'the admin saved the field: she is the lead''s last editor and the mirror''s author');
+set local role service_role;
+select _as(null, null, null);
+select is(
+  public.crm_delete_lead_note('00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-00000000aa07',
+    (select id from public.lead_notes
+      where lead_id = '00000000-0000-0000-0000-00000000aa07' and source = 'legacy'),
+    '00000000-0000-0000-0000-0000000000a1'),
+  'legacy', 'she deletes that mirror');
+reset role;
+select ok(
+  (select internal_notes is null and updated_by = '00000000-0000-0000-0000-0000000000a1'
+     from public.leads where id = '00000000-0000-0000-0000-00000000aa07'),
+  'the lead is still last changed by her, not by no one');
+-- Whom the door acted for ends with its write: a later service-role edit in the same
+-- transaction, naming no one, is no one's.
+set local role service_role;
+update public.leads set value_sar = 7 where id = '00000000-0000-0000-0000-00000000aa07';
+reset role;
+select ok(
+  (select value_sar = 7 and updated_by is null
+     from public.leads where id = '00000000-0000-0000-0000-00000000aa07'),
+  'the door''s naming does not outlive its write: a later service-role edit is no one''s');
 
 -- ---- Note counts (the CSV export) ------------------------------------------------------------
 set local role service_role;
