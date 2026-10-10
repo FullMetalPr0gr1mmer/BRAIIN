@@ -956,6 +956,52 @@ update public.tenants set primary_domain = 'www.braiinstatiion.com'
    and primary_domain = 'www.braiinstation.com';   -- UPDATE 1 (UPDATE 0: already corrected)
 ```
 
+
+### 6i. Media uploads — the public `media` bucket (migration 0045, Admin v2 U3)
+
+Owner decision A5 and item O-1: editors upload images to a **public** Supabase Storage bucket,
+`media`, which migration 0045 creates (as 0029 created `applications`). The Worker sniffs each
+file (JPEG, PNG or WebP stills; no SVG, GIF, animation, AVIF or HEIC), re-encodes it through the
+`IMAGES` binding to **one WebP master, at most 2,560 px on its long edge, without EXIF or GPS**,
+and stores only that, as the service role, under `<tenant>/<random id>_<w>x<h>.webp`. Pages
+reach it only through same-origin `/_image`. Nothing here needs a new secret or a paid plan:
+the bucket and the binding already exist on the Free plans, and `image.remotePatterns` is
+derived at build time from `PUBLIC_SUPABASE_URL`, which the deploy job already sets.
+
+**What "public" means.** An uploaded image is readable by anyone who has its URL, from the
+moment it is uploaded, published or not. The key is random (a UUID), so it cannot be guessed or
+listed, and the anon API cannot list the bucket; but a link someone was sent keeps working until
+the file is deleted or replaced and the next daily sweep runs. Upload nothing that must stay
+private: drafts of confidential client work belong outside the library until they may be seen.
+
+**When.** Before merging the U3 PR: an expand migration, so apply first, then merge.
+
+| # | Step | What it does | Must see |
+|---|---|---|---|
+| 0 | Preflight (read-only): `select id, public from storage.buckets;` | The starting state. | `applications` (private); no `media` bucket yet. |
+| 1 | `npx supabase db push --linked --dry-run`, then `npx supabase db push --linked --skip-vault` | Migration 0045: the `storage` provider and its shape CHECK, `display_name`, the anon read policy widened to `storage`, `media_storage_stats()` (the library's meter) and `media_orphan_objects()` (service role only), the bucket (public, 10 MB, WebP only) and a RESTRICTIVE belt on `storage.objects`. In-file postconditions refuse a push that left the bucket private or wider, or a function with the wrong caller. | Only 0045 listed by the dry run. A `WARNING: 0045: not permitted to add the storage.objects belt policy` is acceptable, as for 0029 (no policy names the bucket, so anon and authenticated still cannot write); report it. A `WARNING: … media_assets_provider_shape left NOT VALID` means a legacy row violates the shape; report it too. |
+| 2 | Verify (read-only) | `select id, public, file_size_limit, allowed_mime_types from storage.buckets where id = 'media';` · `select policyname, permissive from pg_policies where tablename = 'objects' and policyname like '%bucket%';` | `public = true`, `10485760`, `{image/webp}`; `applications_bucket_service_only` and `media_bucket_service_only`, both RESTRICTIVE (unless step 1 warned). |
+| 3 | Merge → the deploy job → live checks | — | `/admin/media` unchanged (the library screen is U4). `curl -s $BASE/api/admin/media/stats` signed out → `401`; opened in a signed-in Admin's browser → `{"ok":true,"data":{"assets":0,"bytes":0,"quotaBytes":1073741824}}`. |
+| 4 | A first real upload (through the API until U4's library ships) | One small photo with alt text in both languages. | `200` with `provider: "storage"` and a `thumb_url` that loads (`/_image?href=…`); the audit log shows `media_asset.upload` with sizes, never the file's name. Downloading it (`/api/admin/media/<id>/download`) gives a `.webp` without the camera details. |
+| 5 | The next morning | The first `media-orphans` cron run. | `/admin/logs`: a `cron:media-orphans` **info** row, `media orphan sweep ran`, `found` and `removed` equal (usually `0`). An **error** row names the step; the next run retries it. |
+
+**Costs to watch (owner).** Each upload is one Cloudflare Images transformation, and every
+size `/_image` makes of it is another, against the Free plan's 5,000 unique transformations a
+month (past them, new transforms fail with error 9422 — LCP posters included); a day's ceiling
+of 50 uploads per person and 100 per tenant (`MEDIA_UPLOAD_LIMITS`) keeps one afternoon from
+spending the month. Storage counts against the Supabase plan's 1 GB (shared with the CV bucket;
+the library's meter shows it), and every `/_image` fetch of an upload is Supabase egress, since
+nothing caches `/_image` on `*.workers.dev`. The Worker's own CPU per upload is about 1–2 ms
+of JavaScript measured locally; the file itself streams into the binding natively. Confirm it on
+the first production upload in Workers Logs (O-16); if an upload ever exceeds the Free plan's
+10 ms, that is the Workers Paid decision, not a code fix.
+
+**Removing a file.** Admin → delete the asset (Admin only, refused while anything uses it): the
+row goes, then its object. A file whose removal failed, a replaced file's old object, and an
+upload whose row was never written are removed by the next daily sweep (objects older than an
+hour that no row names). To pull an image off the web at once, replace it (a new key) or delete
+it, then remove the object in the Supabase dashboard's Storage browser if it cannot wait a day.
+
 ---
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)
