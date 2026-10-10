@@ -1,3 +1,4 @@
+import type { ImageMetadata } from 'astro';
 import { PUBLIC_SUPABASE_URL } from 'astro:env/client';
 import { MEDIA_BUCKET, parseStorageKey } from '@schemas/media';
 
@@ -24,12 +25,47 @@ export function mediaPublicUrl(key: string, base: string = PUBLIC_SUPABASE_URL):
   return prefix === null ? null : `${prefix}${key}`;
 }
 
+/**
+ * An uploaded image in the shape of a bundled one, for `<Picture>` and `getImage()`
+ * (src/lib/media/resolve.ts). Astro then builds its transform URLs exactly as for a still
+ * shipped with the site: always the same-origin `/_image` (never the bucket's URL in the
+ * page, so img-src needs no new origin), and a call site that passes only a width gets the
+ * height from the stored aspect. The size is the key's, which the 0045 CHECK holds equal to
+ * the row's, and which the `/_image` guard reads too.
+ */
+export function uploadedImage(
+  key: string,
+  base: string = PUBLIC_SUPABASE_URL,
+): ImageMetadata | null {
+  const parsed = parseStorageKey(key);
+  const src = mediaPublicUrl(key, base);
+  if (!parsed || src === null) return null;
+  return { src, width: parsed.width, height: parsed.height, format: 'webp' };
+}
+
+/**
+ * The size of the uploaded image a `/_image` request names, or null when its `href` is not
+ * one of this build's bucket keys (src/lib/http/imageGuard.ts). Read from the key, so the
+ * guard bounds a transform without a database read.
+ */
+export function uploadedImageSize(
+  href: string,
+  base: string = PUBLIC_SUPABASE_URL,
+): { width: number; height: number } | null {
+  const prefix = mediaBucketPrefix(base);
+  if (prefix === null || !href.startsWith(prefix)) return null;
+  const parsed = parseStorageKey(href.slice(prefix.length));
+  return parsed ? { width: parsed.width, height: parsed.height } : null;
+}
+
 /** The admin thumbnail's width: a width `/_image` serves (TRANSFORM_WIDTHS). */
 export const THUMB_WIDTH = 320;
 
 /**
  * A thumbnail of an uploaded image through `/_image`: 320 px wide (or the image's own width
- * when it is narrower), WebP, at the stored aspect, so the `/_image` guard accepts it.
+ * when it is narrower), WebP, at the stored aspect, so the `/_image` guard accepts it. The
+ * four parameters `getImage()` would emit, written here so the media resource (an API
+ * module) needs no `astro:assets`; tests/lib/imageGuard.spec.ts holds it to the guard.
  */
 export function storageThumbUrl(key: string, base: string = PUBLIC_SUPABASE_URL): string | null {
   const parsed = parseStorageKey(key);

@@ -1,0 +1,200 @@
+import { describe, it, expect, vi } from 'vitest';
+import { checkImageRequest, ASPECT_TOLERANCE_PX } from '@/lib/http/imageGuard';
+import {
+  mediaBucketPrefix,
+  storageThumbUrl,
+  uploadedImage,
+  uploadedImageSize,
+} from '@/lib/media/storageUrl';
+import { imageRef } from '@/lib/media/resolve';
+import { PublicMediaRowSchema } from '@schemas/content';
+import { PUBLIC_SUPABASE_URL } from '../stubs/astro-env-client';
+import {
+  mediaRemotePatterns,
+  mediaRemotePatternsIntegration,
+  readBuildEnv,
+} from '../../scripts/media-remote-patterns.mjs';
+
+// How an uploaded image reaches a page (Admin v2 U3): imageRef() turns a public `storage`
+// row into image metadata, so <Picture> renders it through same-origin `/_image` like a
+// still; the `/_image` guard admits this build's bucket keys at the sizes their names state,
+// and nothing else remote; `image.remotePatterns` is exactly that bucket path, from the
+// build environment, and a build without it fails.
+
+const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const KEY = `${TENANT}/33333333-3333-4333-8333-333333333333_1200x800.webp`;
+const PREFIX = `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/`;
+const HREF = `${PREFIX}${KEY}`;
+
+const ok = (params: Record<string, string>) =>
+  checkImageRequest(new URLSearchParams(params), new Map()).ok;
+
+describe('the /_image guard and uploaded images', () => {
+  it("admits a bucket key at a listed width or its own, at its aspect, in Astro's formats", () => {
+    for (const f of ['avif', 'webp', 'png']) {
+      expect(ok({ href: HREF, w: '800', h: '533', f }), f).toBe(true);
+    }
+    expect(ok({ href: HREF, w: '1200', h: '800', f: 'webp' })).toBe(true);
+    expect(ok({ href: HREF, w: '480', h: String(320 + ASPECT_TOLERANCE_PX), f: 'avif' })).toBe(
+      true,
+    );
+  });
+
+  it('bounds it by the size in its name: never wider, never another aspect or width', () => {
+    expect(ok({ href: HREF, w: '1280', h: '853', f: 'webp' })).toBe(false);
+    expect(ok({ href: HREF, w: '800', h: '800', f: 'webp' })).toBe(false);
+    expect(ok({ href: HREF, w: '801', h: '534', f: 'webp' })).toBe(false);
+    expect(ok({ href: HREF, w: '800', h: '533', f: 'webp', q: '40' })).toBe(false);
+  });
+
+  it('refuses anything in the bucket that is not an upload key, and every other remote', () => {
+    const refused = [
+      `${PREFIX}${KEY.replace('.webp', '.png')}`,
+      `${PREFIX}${KEY}?download=1`,
+      `${PREFIX}../applications/${KEY}`,
+      `${PREFIX}${TENANT}/x/33333333-3333-4333-8333-333333333333_1200x800.webp`,
+      `${PREFIX}${KEY.toUpperCase()}`,
+      `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/applications/${KEY}`,
+      `${PUBLIC_SUPABASE_URL}/storage/v1/object/sign/media/${KEY}`,
+      `https://other.supabase.co/storage/v1/object/public/media/${KEY}`,
+      `http://example.supabase.co/storage/v1/object/public/media/${KEY}`,
+      `${PREFIX}${TENANT}/33333333-3333-4333-8333-333333333333_3000x2000.webp`,
+    ];
+    for (const href of refused) {
+      expect(ok({ href, w: '800', h: '533', f: 'webp' }), href).toBe(false);
+      expect(uploadedImageSize(href), href).toBeNull();
+    }
+  });
+
+  it("the admin thumbnail is a URL the guard admits (and so is a narrow image's)", () => {
+    const thumb = new URL(storageThumbUrl(KEY)!, 'https://admin.example.test');
+    expect(thumb.pathname).toBe('/_image');
+    expect(Object.fromEntries(thumb.searchParams)).toEqual({
+      href: HREF,
+      w: '320',
+      h: '213',
+      f: 'webp',
+    });
+    expect(checkImageRequest(thumb.searchParams, new Map()).ok).toBe(true);
+    const narrow = `${TENANT}/44444444-4444-4444-8444-444444444444_200x150.webp`;
+    const small = new URL(storageThumbUrl(narrow)!, 'https://admin.example.test');
+    expect(small.searchParams.get('w')).toBe('200');
+    expect(checkImageRequest(small.searchParams, new Map()).ok).toBe(true);
+    expect(storageThumbUrl('stills/work/p0.jpg')).toBeNull();
+  });
+});
+
+describe('imageRef() and uploaded images', () => {
+  const row = (over: Record<string, unknown> = {}) =>
+    PublicMediaRowSchema.parse({
+      id: '22222222-2222-4222-8222-222222222222',
+      kind: 'image',
+      provider: 'storage',
+      storage_path: KEY,
+      width: 1200,
+      height: 800,
+      alt: { en: ' A rider ', ar: 'راكب' },
+      stream_uid: null,
+      ...over,
+    });
+
+  it('resolves a public storage row to image metadata on the bucket, sized by its key', () => {
+    expect(imageRef(row())).toEqual({
+      id: '22222222-2222-4222-8222-222222222222',
+      src: { src: HREF, width: 1200, height: 800, format: 'webp' },
+      width: 1200,
+      height: 800,
+      alt: { en: 'A rider', ar: 'راكب' },
+    });
+    expect(uploadedImage(KEY)).toEqual({ src: HREF, width: 1200, height: 800, format: 'webp' });
+  });
+
+  it('a storage row whose path is not an upload key renders nothing', () => {
+    expect(imageRef(row({ storage_path: 'https://evil.example/x.webp' }))).toBeNull();
+    expect(imageRef(row({ storage_path: `${TENANT}/x.webp` }))).toBeNull();
+    expect(imageRef(row({ kind: 'video' }))).toBeNull();
+  });
+
+  it('the bucket prefix is the configured project, whatever path the URL carries', () => {
+    expect(mediaBucketPrefix()).toBe(PREFIX);
+    expect(mediaBucketPrefix('https://p.supabase.co/rest/v1/')).toBe(
+      'https://p.supabase.co/storage/v1/object/public/media/',
+    );
+    expect(mediaBucketPrefix('not a url')).toBeNull();
+  });
+});
+
+describe('image.remotePatterns from the build environment', () => {
+  it('pins protocol, host, port and the bucket path', () => {
+    expect(mediaRemotePatterns('https://abc.supabase.co')).toEqual([
+      {
+        protocol: 'https',
+        hostname: 'abc.supabase.co',
+        pathname: '/storage/v1/object/public/media/**',
+      },
+    ]);
+    expect(mediaRemotePatterns('http://127.0.0.1:54321')).toEqual([
+      {
+        protocol: 'http',
+        hostname: '127.0.0.1',
+        port: '54321',
+        pathname: '/storage/v1/object/public/media/**',
+      },
+    ]);
+    for (const bad of [
+      '',
+      'abc.supabase.co',
+      'ftp://abc.supabase.co',
+      'https://u:p@abc.supabase.co',
+    ]) {
+      expect(mediaRemotePatterns(bad), bad).toBeNull();
+    }
+  });
+
+  it('matches the bucket prefix the code builds (the pattern and the guard agree)', () => {
+    const [pattern] = mediaRemotePatterns(PUBLIC_SUPABASE_URL)!;
+    const url = new URL(HREF);
+    expect(url.protocol).toBe(`${pattern!.protocol}:`);
+    expect(url.hostname).toBe(pattern!.hostname);
+    expect(url.pathname.startsWith(pattern!.pathname.slice(0, -2))).toBe(true);
+  });
+
+  it('reads the shell first, then the .env files', () => {
+    expect(
+      readBuildEnv('PUBLIC_SUPABASE_URL', {
+        env: { PUBLIC_SUPABASE_URL: ' https://a.x ' },
+        files: [],
+      }),
+    ).toBe('https://a.x');
+    expect(readBuildEnv('PUBLIC_SUPABASE_URL', { env: {}, files: [] })).toBe('');
+  });
+
+  function setup(command: string, env: Record<string, string>) {
+    const updateConfig = vi.fn();
+    const warn = vi.fn();
+    const hook = mediaRemotePatternsIntegration({ env, files: [] }).hooks['astro:config:setup'] as (
+      o: unknown,
+    ) => void;
+    const run = () => hook({ command, updateConfig, logger: { warn } });
+    return { run, updateConfig, warn };
+  }
+
+  it('sets the pattern for a build, and a build without a usable URL fails', () => {
+    const good = setup('build', { PUBLIC_SUPABASE_URL: 'https://abc.supabase.co' });
+    good.run();
+    expect(good.updateConfig).toHaveBeenCalledWith({
+      image: { remotePatterns: mediaRemotePatterns('https://abc.supabase.co') },
+    });
+    expect(setup('build', {}).run).toThrow(/PUBLIC_SUPABASE_URL is not set/);
+    expect(setup('build', { PUBLIC_SUPABASE_URL: 'nope' }).run).toThrow(/not an absolute/);
+  });
+
+  it('dev, check and sync only warn, with no pattern', () => {
+    for (const command of ['dev', 'sync', 'preview']) {
+      const s = setup(command, {});
+      expect(s.run).not.toThrow();
+      expect(s.updateConfig).not.toHaveBeenCalled();
+      expect(s.warn).toHaveBeenCalledOnce();
+    }
+  });
+});

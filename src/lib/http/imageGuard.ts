@@ -1,4 +1,5 @@
 import type { ImageMetadata } from 'astro';
+import { uploadedImageSize } from '@/lib/media/storageUrl';
 
 // The public image transform endpoint (`/_image`, the adapter's cloudflare-binding
 // service) transforms whatever `w`, `h`, `q`, `f` and `fit` it is given. Each distinct
@@ -12,7 +13,11 @@ import type { ImageMetadata } from 'astro';
 // image service builds every transform URL from exactly four parameters (`href`, `w`,
 // `h`, `f`: node_modules/astro/dist/assets/services/service.js `getURL`), and none of our
 // components sets `quality`, `fit`, `position` or `background`. So:
-//   - href: a bundled image under src/assets. Never remote (`image.domains` is empty).
+//   - href: a bundled image under src/assets, or an image an editor uploaded (Admin v2 U3):
+//           a key in this build's public `media` bucket, whose size is written in the key
+//           (`<tenant>/<id>_<w>x<h>.webp`, held equal to the row by the 0045 CHECK), so it
+//           is bounded like a bundled one without a database read. No other remote URL
+//           (`image.domains` is empty; `image.remotePatterns` names only that bucket path).
 //   - f:    avif | webp | jpg | jpeg | png.
 //   - w:    a width a component asks for (TRANSFORM_WIDTHS) or the asset's own width,
 //           never wider than the asset (Astro never upscales; `getSrcSet` caps at it).
@@ -69,6 +74,7 @@ export type ImageGuardResult = { ok: true } | { ok: false; reason: string };
 export function checkImageRequest(
   params: URLSearchParams,
   assets: ReadonlyMap<string, AssetSize> = BUNDLED_IMAGES,
+  uploaded: (href: string) => AssetSize | null = uploadedImageSize,
 ): ImageGuardResult {
   const seen = new Set<string>();
   for (const key of params.keys()) {
@@ -78,7 +84,7 @@ export function checkImageRequest(
   }
 
   const href = params.get('href');
-  const asset = href === null ? undefined : assets.get(href);
+  const asset = href === null ? undefined : (assets.get(href) ?? uploaded(href));
   if (!asset) return { ok: false, reason: 'href' };
 
   const format = params.get('f');
