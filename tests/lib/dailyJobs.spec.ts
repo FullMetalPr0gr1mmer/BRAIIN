@@ -118,7 +118,8 @@ const { runDailyJobs } = await import('@/lib/cron/daily');
 const { DAILY_JOBS, PRIVILEGED_OPS_KEEP_MS } = await import('@/lib/cron/jobs');
 const { INDEX_BATCH } = await import('@/lib/crm/indexBackfill');
 const { MEDIA_ORPHAN_BATCH, MEDIA_ORPHAN_GRACE_MINUTES } = await import('@/lib/media/orphans');
-const { EXPORT_LIMITS, PII_REVEAL_LIMITS } = await import('@/lib/admin/rateLimit');
+const { EXPORT_LIMITS, MEDIA_UPLOAD_LIMITS, PII_REVEAL_LIMITS } =
+  await import('@/lib/admin/rateLimit');
 const { encryptPII } = await import('@/lib/crypto/pii');
 const { LEAD_PII_ENC_KEY } = await import('astro:env/server');
 
@@ -182,7 +183,7 @@ describe('runDailyJobs', () => {
     expect(purge.filters).toEqual([
       `lt:created_at=${new Date(NOW.getTime() - 48 * 3_600_000).toISOString()}`,
     ]);
-    for (const limits of [EXPORT_LIMITS, PII_REVEAL_LIMITS]) {
+    for (const limits of [EXPORT_LIMITS, PII_REVEAL_LIMITS, MEDIA_UPLOAD_LIMITS]) {
       expect(PRIVILEGED_OPS_KEEP_MS).toBeGreaterThanOrEqual(limits.windowMinutes * 60_000);
     }
   });
