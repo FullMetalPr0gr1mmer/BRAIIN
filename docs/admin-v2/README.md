@@ -686,6 +686,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [F2](as-built/F2.md): the shell and the information architecture (#37, folded into #34)
 - [F3](as-built/F3.md): overlays, toasts and the command palette (#39, folded into #34)
 - [F4a](as-built/F4a.md): the admin bundle plan (#40, folded into #34)
+- [U3](as-built/U3.md): media uploads (A5): the storage provider, the upload, replace and download routes, delivery through `/_image`, 0045 (PR number at review)
 
 **Releases**
 - none yet
