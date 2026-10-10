@@ -30,8 +30,23 @@ export default function ChromeDrawer({
     if (event.target === dialogRef.current) dialogRef.current?.close();
   }
 
+  // The dialog gives focus back to its trigger before `close` fires. Below 900px the account
+  // chip sits in the sidebar popover, which showModal() closed, so focus cannot go back
+  // there and falls to <body>: it goes to the Menu button that opens the sidebar instead.
+  function onClose() {
+    if (!document.activeElement || document.activeElement === document.body) {
+      document.querySelector<HTMLElement>('[popovertarget="admin-side"]')?.focus();
+    }
+  }
+
   return (
-    <dialog ref={dialogRef} className="drw" aria-labelledby={titleId} onClick={onClick}>
+    <dialog
+      ref={dialogRef}
+      className="drw"
+      aria-labelledby={titleId}
+      onClick={onClick}
+      onClose={onClose}
+    >
       <div className="drw__panel">
         <div className="drw__h">
           <h2 id={titleId}>{title}</h2>

@@ -106,6 +106,30 @@ test.describe('renaming yourself', () => {
   });
 });
 
+test.describe('on a phone', () => {
+  test.use({ storageState: authFile('seo'), viewport: { width: 390, height: 844 } });
+
+  test('the account drawer opens from the sidebar popover, and closing it strands no focus', async ({
+    page,
+  }) => {
+    await ready(page);
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await page.locator('.side__user[data-open="account"]').click();
+    const drawer = page.getByRole('dialog', { name: 'Your account' });
+    await expect(drawer).toBeVisible();
+    // Full width under 600px: nothing scrolls sideways with it open.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(2);
+
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+    // Back on the chip if the sidebar is still open, else on the Menu button: never <body>.
+    expect(await page.evaluate(() => document.activeElement?.tagName ?? 'BODY')).not.toBe('BODY');
+  });
+});
+
 test.describe('without JavaScript', () => {
   test.use({ storageState: authFile('content_creator'), javaScriptEnabled: false });
 
