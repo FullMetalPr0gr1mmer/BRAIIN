@@ -198,7 +198,7 @@ describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
 
 describe('admin.css keeps the hooks the markup renders', () => {
   // Classes that are behaviour or test hooks with no style of their own.
-  const UNSTYLED_HOOKS = new Set(['account-menu', 'admin-nav']);
+  const UNSTYLED_HOOKS = new Set(['admin-nav']);
 
   function walk(dir: string): string[] {
     return readdirSync(join(ROOT, dir)).flatMap((name) => {

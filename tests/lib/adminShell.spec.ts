@@ -10,31 +10,57 @@ import { initialsOf, loadShellState } from '@/lib/admin/shell';
 // sees, so a role never learns a number its menu would not show, and a failed read
 // leaves its item out instead of breaking the page.
 
-type Result = { count?: number | null; data?: unknown; error?: unknown };
+type Result = {
+  count?: number | null;
+  data?: unknown;
+  /** What a list query (awaited without maybeSingle) answers. */
+  rows?: unknown[];
+  error?: unknown;
+};
 
-function fakeSupabase(results: Record<string, Result>) {
+interface Query {
+  table: string;
+  /** A HEAD count (`select(…, { head: true })`): no row leaves the database. */
+  head: boolean;
+  filters: [string, unknown][];
+}
+
+function fakeSupabase(results: Record<string, Result>, rpc: Record<string, unknown> = {}) {
   const tables: string[] = [];
-  /** Every `.eq(column, value)` per table, so a dropped tenant or status filter shows. */
-  const filters: Record<string, [string, unknown][]> = {};
+  const queries: Query[] = [];
   const sb = {
     from(table: string) {
       tables.push(table);
+      const query: Query = { table, head: false, filters: [] };
+      queries.push(query);
       const result = results[table] ?? {};
       const builder: Record<string, unknown> = {
-        select: () => builder,
+        select: (_columns?: string, options?: { head?: boolean }) => {
+          query.head = options?.head === true;
+          return builder;
+        },
         eq: (column: string, value: unknown) => {
-          (filters[table] ??= []).push([column, value]);
+          query.filters.push([column, value]);
           return builder;
         },
         maybeSingle: () =>
           Promise.resolve({ data: result.data ?? null, error: result.error ?? null }),
         then: (resolve: (value: unknown) => unknown) =>
-          resolve({ count: result.count ?? null, error: result.error ?? null }),
+          resolve({
+            count: result.count ?? null,
+            data: result.rows ?? null,
+            error: result.error ?? null,
+          }),
       };
+      for (const method of ['neq', 'gte', 'order', 'limit', 'in']) builder[method] = () => builder;
       return builder;
     },
+    rpc: async (fn: string) => ({ data: rpc[fn] ?? null, error: null }),
   };
-  return { sb: sb as unknown as SupabaseClient, tables, filters };
+  /** The filters of the HEAD counts on a table: the sidebar's counters. */
+  const headFilters = (table: string) =>
+    queries.filter((q) => q.table === table && q.head).map((q) => q.filters);
+  return { sb: sb as unknown as SupabaseClient, tables, queries, headFilters };
 }
 
 const auth = (role: Role): AuthContext => ({
@@ -63,15 +89,22 @@ describe('loadShellState', () => {
   });
 
   it("counts only the caller's tenant's NEW leads and applications, as the dashboard does", async () => {
-    const { sb, filters } = fakeSupabase({ leads: { count: 4 }, job_applications: { count: 2 } });
+    const { sb, headFilters, queries } = fakeSupabase({
+      leads: { count: 4 },
+      job_applications: { count: 2 },
+    });
     await loadShellState(sb, auth('admin'), visibleNav('admin'), kv(null));
     for (const table of ['leads', 'job_applications']) {
-      expect(filters[table], table).toEqual([
-        ['tenant_id', 't-1'],
-        ['status', 'new'],
+      expect(headFilters(table), table).toEqual([
+        [
+          ['tenant_id', 't-1'],
+          ['status', 'new'],
+        ],
       ]);
     }
-    expect(filters['profiles']).toEqual([['id', 'u-1']]);
+    expect(queries.filter((q) => q.table === 'profiles').map((q) => q.filters)).toEqual([
+      [['id', 'u-1']],
+    ]);
   });
 
   it('never queries a count a role has no link for', async () => {

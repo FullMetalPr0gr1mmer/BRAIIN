@@ -88,6 +88,10 @@ export function makeStubClient(options: StubOptions = {}) {
     },
     auth: {
       getUser: async () => ({ data: { user: null }, error: null }),
+      // The account's password change (Admin v2 F8) re-authenticates, then sets the new
+      // password: both succeed here, so a non-403 is the authorization signal.
+      signInWithPassword: async () => ({ data: { user: null, session: null }, error: null }),
+      updateUser: async () => ({ data: { user: null }, error: null }),
       signOut: async () => ({ error: null }),
       admin: {
         inviteUserByEmail: async () => ({ data: { user: { id: row['id'] } }, error: null }),

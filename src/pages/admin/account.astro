@@ -1,0 +1,153 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AccountPanel, { type AccountFlash } from '@/components/admin/screens/chrome/AccountPanel';
+import {
+  PASSWORD_REFUSALS,
+  accountViewFor,
+  changeMyPassword,
+  endSession,
+  updateMyDisplayName,
+} from '@/lib/admin/account';
+import { assertCap } from '@/lib/authz/matrix';
+import { AuthorizationError } from '@/lib/authz/errors';
+import { ValidationError } from '@/lib/admin/errors';
+import { writeAudit } from '@/lib/admin/audit';
+import { clientIp } from '@/lib/http/maintenance';
+import { DisplayNameSchema, PasswordChangeSchema } from '@schemas/adminPrefs';
+
+export const prerender = false;
+
+// Your account (Admin v2 F8, docs/admin-v2/ui.md §2.9): the no-JS page for the account
+// drawer's forms, which the sidebar's account chip links to. The same AccountPanel, rendered
+// on the server and never hydrated; its forms post here (the middleware has checked the
+// origin and the double-submit token before this runs), each through the same functions
+// and checks as the JSON routes the drawer calls, and a success redirects (303) so a
+// reload cannot send it twice. Nothing a person typed as a password is ever rendered back.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+let flash: AccountFlash | null = null;
+let submittedName: string | null = null;
+
+if (Astro.request.method === 'POST' && session && sb) {
+  // Any member, as the JSON routes: `analytics.read` is the capability every role holds.
+  assertCap(session, 'analytics.read');
+  const form = await Astro.request.formData();
+  const intent = form.get('intent');
+
+  if (intent === 'signout') {
+    await endSession(sb, session, Astro.cookies);
+    return Astro.redirect('/admin/login', 303);
+  }
+
+  if (intent === 'name') {
+    const parsed = DisplayNameSchema.safeParse({ display_name: form.get('display_name') ?? '' });
+    if (!parsed.success) {
+      submittedName = String(form.get('display_name') ?? '').slice(0, 200);
+      flash = {
+        form: 'name',
+        kind: 'error',
+        field: 'display_name',
+        text: parsed.error.issues[0]?.message ?? 'Check your name.',
+      };
+    } else {
+      try {
+        await updateMyDisplayName(sb, session, parsed.data.display_name);
+        await writeAudit(sb, session, {
+          action: 'profile.update',
+          entityType: 'profile',
+          entityId: session.userId,
+          detail: { fields: ['display_name'] },
+        });
+        return Astro.redirect('/admin/account?saved=name', 303);
+      } catch (err) {
+        submittedName = parsed.data.display_name;
+        flash = {
+          form: 'name',
+          kind: 'error',
+          field: 'display_name',
+          text:
+            err instanceof ValidationError
+              ? err.detail
+              : err instanceof AuthorizationError
+                ? 'Your session can no longer change this. Sign in again.'
+                : 'Your name could not be saved just now. Try again.',
+        };
+      }
+    }
+  }
+
+  if (intent === 'password') {
+    const parsed = PasswordChangeSchema.safeParse({
+      current: form.get('current') ?? '',
+      next: form.get('next') ?? '',
+      confirm: form.get('confirm') ?? '',
+    });
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      flash = {
+        form: 'password',
+        kind: 'error',
+        field: String(issue?.path[0] ?? 'next'),
+        text: issue?.message ?? 'Check the passwords.',
+      };
+    } else {
+      const outcome = await changeMyPassword(sb, session, parsed.data, clientIp(Astro.request));
+      if (outcome.ok) {
+        return Astro.redirect(
+          `/admin/account?saved=${outcome.othersSignedOut ? 'password' : 'password-here'}`,
+          303,
+        );
+      }
+      const refusal = PASSWORD_REFUSALS[outcome.reason];
+      flash = { form: 'password', kind: 'error', field: refusal.field, text: refusal.message };
+      Astro.response.status = outcome.reason === 'locked' ? 423 : 422;
+    }
+  }
+
+  if (flash && Astro.response.status === 200) Astro.response.status = 422;
+}
+
+const saved = Astro.url.searchParams.get('saved');
+if (!flash && saved === 'name') {
+  flash = { form: 'name', kind: 'ok', text: 'Your name is saved.' };
+}
+if (!flash && (saved === 'password' || saved === 'password-here')) {
+  flash = {
+    form: 'password',
+    kind: 'ok',
+    text:
+      saved === 'password'
+        ? 'Your password is changed. You are signed out on your other devices.'
+        : 'Your password is changed. Sign out on your other devices yourself: they could not be signed out just now.',
+  };
+}
+
+// The name as stored (the shell reads it too; one small read).
+let displayName: string | null = null;
+if (session && sb) {
+  const { data } = await sb
+    .from('profiles')
+    .select('display_name')
+    .eq('id', session.userId)
+    .maybeSingle<{ display_name: string | null }>();
+  displayName = data?.display_name?.trim() || null;
+}
+const view = session ? accountViewFor(session, submittedName ?? displayName) : null;
+---
+
+<AdminLayout title="Your account" subtitle="Your name, your password and what you can do here.">
+  {
+    view && (
+      <div class="card acct-page">
+        <AccountPanel
+          view={view}
+          idPrefix="acct-page"
+          mode="page"
+          csrfToken={Astro.locals.csrfToken}
+          flash={flash}
+        />
+      </div>
+    )
+  }
+</AdminLayout>
