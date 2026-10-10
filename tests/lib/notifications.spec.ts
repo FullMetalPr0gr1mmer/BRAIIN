@@ -1,0 +1,399 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
+import { can } from '@/lib/authz/matrix';
+import { NOTIFICATION_KINDS } from '@schemas/adminPrefs';
+import type { MaintenanceState } from '@/lib/http/maintenance';
+import { NOTIFICATION_SOURCES, loadNotifications } from '@/lib/admin/notifications';
+import { MAX_ITEMS, WINDOW_DAYS } from '@/lib/admin/notifications/types';
+
+vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+
+// The bell (Admin v2 F8, docs/admin-v2/ui.md §2.8): a derived feed, filtered by ROLE_CAPS
+// on the server before anything is read. The headline rule (CLAUDE.md §3, AV-05 tests):
+// Content Creator and SEO get no lead or application item, not even a count, so the
+// leads and job_applications tables are never even asked for them; Admin gets applications;
+// a muted kind is dropped; what arrived after the watermark is unread.
+
+const NOW = new Date('2026-10-10T12:00:00.000Z');
+const TENANT = 't-1';
+const USER = 'u-1';
+
+const auth = (role: Role): AuthContext => ({
+  userId: USER,
+  tenantId: TENANT,
+  role,
+  isActive: true,
+  email: 'person@example.test',
+});
+
+interface Query {
+  table: string;
+  select: string;
+  filters: [op: string, column: string, value: unknown][];
+}
+
+type TableAnswer = { rows?: unknown[]; row?: unknown; error?: unknown };
+
+/** A Supabase stand-in that answers each table and records every query it was asked. */
+function fakeDb(tables: Record<string, TableAnswer> = {}) {
+  const queries: Query[] = [];
+  const sb = {
+    from(table: string) {
+      const query: Query = { table, select: '', filters: [] };
+      queries.push(query);
+      const answer = tables[table] ?? {};
+      const builder: Record<string, unknown> = {
+        select: (columns: string) => {
+          query.select = columns;
+          return builder;
+        },
+        order: () => builder,
+        limit: () => builder,
+        maybeSingle: async () => ({ data: answer.row ?? null, error: answer.error ?? null }),
+        then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
+          Promise.resolve({ data: answer.rows ?? [], error: answer.error ?? null }).then(
+            resolve,
+            reject,
+          ),
+      };
+      for (const op of ['eq', 'neq', 'gte', 'in']) {
+        builder[op] = (column: string, value: unknown) => {
+          query.filters.push([op, column, value]);
+          return builder;
+        };
+      }
+      return builder;
+    },
+  };
+  return { sb: sb as unknown as SupabaseClient, queries };
+}
+
+const ago = (minutes: number) => new Date(NOW.getTime() - minutes * 60_000).toISOString();
+
+const LEAD = {
+  id: 'l-1',
+  name: 'Sara',
+  service_of_interest: 'logo',
+  discipline_of_interest: null,
+  created_at: ago(30),
+};
+const APPLICATION = { id: 'a-1', role: 'Motion designer', created_at: ago(60) };
+const SCHEDULED = {
+  entity_type: 'service',
+  id: 's-1',
+  title: { en: 'Logo Design', ar: 'تصميم الشعار' },
+  at: '2026-10-10T15:00:00.000Z',
+};
+
+/** Every source has something to say, so what a role gets is decided by visibility alone. */
+const FULL: Record<string, TableAnswer> = {
+  leads: { rows: [LEAD] },
+  job_applications: { rows: [APPLICATION] },
+  dashboard_attention: { rows: [SCHEDULED] },
+  admin_user_prefs: { row: null },
+};
+
+const maintenanceOn = (changedAt: string | undefined) => async (): Promise<MaintenanceState> => ({
+  active: true,
+  allowlist: ['203.0.113.9'],
+  ...(changedAt ? { changedAt } : {}),
+});
+
+const noMaintenance = async (): Promise<MaintenanceState | null> => ({
+  active: false,
+  allowlist: [],
+});
+
+describe('the bell: who gets what', () => {
+  it('each kind has one source, registered under its own name', () => {
+    expect(Object.keys(NOTIFICATION_SOURCES).sort()).toEqual([...NOTIFICATION_KINDS].sort());
+    for (const kind of NOTIFICATION_KINDS) expect(NOTIFICATION_SOURCES[kind].kind).toBe(kind);
+  });
+
+  it('visibility follows ROLE_CAPS (CLAUDE.md §5), never a list of roles', () => {
+    for (const role of ROLES) {
+      expect(NOTIFICATION_SOURCES.leads.visible(role), role).toBe(
+        can(role, 'leads.manage') === 'full',
+      );
+      expect(NOTIFICATION_SOURCES.applications.visible(role), role).toBe(
+        can(role, 'applications.manage') === 'full',
+      );
+      expect(NOTIFICATION_SOURCES.scheduled.visible(role), role).toBe(
+        can(role, 'services.write') === 'full' || can(role, 'blog.write') === 'full',
+      );
+      expect(NOTIFICATION_SOURCES.maintenance.visible(role), role).toBe(true);
+    }
+  });
+
+  it('Content Creator and SEO: no lead or application item, and those tables are never asked', async () => {
+    for (const role of ['content_creator', 'seo'] as const) {
+      const { sb, queries } = fakeDb(FULL);
+      const feed = await loadNotifications(sb, auth(role), {
+        maintenance: maintenanceOn(ago(5)),
+        labels: true,
+        now: NOW,
+      });
+      const tables = queries.map((q) => q.table);
+      expect(tables, role).not.toContain('leads');
+      expect(tables, role).not.toContain('job_applications');
+      expect(
+        feed.items.filter((item) => item.kind === 'leads' || item.kind === 'applications'),
+        role,
+      ).toEqual([]);
+      // Not even a count: the unread number is made of what the role may see.
+      expect(feed.unread, role).toBe(feed.items.filter((item) => item.unread).length);
+    }
+  });
+
+  it('what each role is shown, kind by kind', async () => {
+    const expected: Record<Role, string[]> = {
+      admin: ['applications', 'leads', 'maintenance', 'scheduled'],
+      content_creator: ['maintenance', 'scheduled'],
+      seo: ['maintenance'],
+      developer: ['leads', 'maintenance'],
+    };
+    for (const role of ROLES) {
+      const { sb } = fakeDb(FULL);
+      const feed = await loadNotifications(sb, auth(role), {
+        maintenance: maintenanceOn(ago(5)),
+        now: NOW,
+      });
+      expect([...new Set(feed.items.map((item) => item.kind))].sort(), role).toEqual(
+        expected[role],
+      );
+    }
+  });
+
+  it('Admin gets the applications; Developer, who works leads, does not', async () => {
+    const admin = await loadNotifications(fakeDb(FULL).sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(admin.items.find((item) => item.kind === 'applications')).toMatchObject({
+      text: 'New application for Motion designer',
+      href: '/admin/applications',
+      detail: null,
+    });
+
+    const { sb, queries } = fakeDb(FULL);
+    const developer = await loadNotifications(sb, auth('developer'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(queries.map((q) => q.table)).not.toContain('job_applications');
+    expect(developer.items.map((item) => item.kind)).toContain('leads');
+  });
+});
+
+describe('the bell: what an item says', () => {
+  it('a lead names the person and the interest the list shows, never contact details or the message', async () => {
+    const { sb, queries } = fakeDb({
+      ...FULL,
+      services: {
+        rows: [
+          { slug: 'logo', title: { en: 'Logo Design', ar: 'تصميم الشعار' }, status: 'published' },
+        ],
+      },
+    });
+    const feed = await loadNotifications(sb, auth('admin'), {
+      maintenance: noMaintenance,
+      labels: true,
+      now: NOW,
+    });
+    expect(feed.items.find((item) => item.kind === 'leads')).toMatchObject({
+      id: 'leads:l-1',
+      text: 'New inquiry from Sara',
+      detail: 'Logo Design',
+      href: '/admin/leads',
+    });
+    // Exactly these columns: no contact detail, budget, timeline, message, IP or note.
+    const leadQuery = queries.find((q) => q.table === 'leads')!;
+    expect(leadQuery.select.split(',').sort()).toEqual([
+      'created_at',
+      'discipline_of_interest',
+      'id',
+      'name',
+      'service_of_interest',
+    ]);
+  });
+
+  it('every row read names the tenant, leaves spam out and stays inside the window', async () => {
+    const { sb, queries } = fakeDb(FULL);
+    await loadNotifications(sb, auth('admin'), { maintenance: noMaintenance, now: NOW });
+    const since = new Date(NOW.getTime() - WINDOW_DAYS * 86_400_000).toISOString();
+    const leads = queries.find((q) => q.table === 'leads')!;
+    expect(leads.filters).toEqual(
+      expect.arrayContaining([
+        ['eq', 'tenant_id', TENANT],
+        ['eq', 'is_spam', false],
+        ['gte', 'created_at', since],
+      ]),
+    );
+    const applications = queries.find((q) => q.table === 'job_applications')!;
+    expect(applications.select).toBe('id,role,created_at');
+    expect(applications.filters).toEqual(
+      expect.arrayContaining([
+        ['eq', 'tenant_id', TENANT],
+        ['neq', 'status', 'spam'],
+        ['gte', 'created_at', since],
+      ]),
+    );
+    const prefs = queries.find((q) => q.table === 'admin_user_prefs')!;
+    expect(prefs.filters).toEqual([
+      ['eq', 'tenant_id', TENANT],
+      ['eq', 'user_id', USER],
+    ]);
+  });
+
+  it('the shell count skips the labels read; the drawer resolves them', async () => {
+    const counted = fakeDb(FULL);
+    await loadNotifications(counted.sb, auth('admin'), { maintenance: noMaintenance, now: NOW });
+    expect(counted.queries.map((q) => q.table)).not.toContain('services');
+
+    const listed = fakeDb(FULL);
+    await loadNotifications(listed.sb, auth('admin'), {
+      maintenance: noMaintenance,
+      labels: true,
+      now: NOW,
+    });
+    expect(listed.queries.map((q) => q.table)).toContain('services');
+  });
+
+  it('a scheduled service links to its editor; an entity with no editor is left out', async () => {
+    const { sb } = fakeDb({
+      ...FULL,
+      dashboard_attention: {
+        rows: [SCHEDULED, { entity_type: 'portfolio', id: 'p-1', title: 'X', at: SCHEDULED.at }],
+      },
+    });
+    const feed = await loadNotifications(sb, auth('content_creator'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    const scheduled = feed.items.filter((item) => item.kind === 'scheduled');
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]).toMatchObject({
+      text: 'Logo Design goes live today',
+      detail: 'At 18:00, Riyadh time',
+      href: '/admin/services/s-1',
+    });
+  });
+
+  it('maintenance: an item for a recent switch, linked only for those who may flip it', async () => {
+    for (const role of ROLES) {
+      const feed = await loadNotifications(fakeDb(FULL).sb, auth(role), {
+        maintenance: maintenanceOn(ago(5)),
+        now: NOW,
+      });
+      const item = feed.items.find((i) => i.kind === 'maintenance');
+      expect(item?.text, role).toBe('Maintenance mode was turned on');
+      expect(item?.href ?? null, role).toBe(
+        can(role, 'maintenance.manage') === 'full' ? '/admin/maintenance' : null,
+      );
+      // The allowlist never reaches the bell.
+      expect(JSON.stringify(feed), role).not.toContain('203.0.113.9');
+    }
+  });
+
+  it('maintenance: nothing for a switch older than the window, or one never stamped', async () => {
+    const old = ago((WINDOW_DAYS + 1) * 24 * 60);
+    for (const changedAt of [old, undefined]) {
+      const feed = await loadNotifications(fakeDb(FULL).sb, auth('admin'), {
+        maintenance: maintenanceOn(changedAt),
+        now: NOW,
+      });
+      expect(feed.items.map((i) => i.kind)).not.toContain('maintenance');
+    }
+  });
+});
+
+describe('the bell: read, muted, failed, capped', () => {
+  it('with no watermark everything is unread; after it, only what arrived later', async () => {
+    const fresh = await loadNotifications(fakeDb(FULL).sb, auth('admin'), {
+      maintenance: maintenanceOn(ago(5)),
+      now: NOW,
+    });
+    expect(fresh.seenAt).toBeNull();
+    expect(fresh.unread).toBe(fresh.items.length);
+
+    // Read 45 minutes ago: the lead (30 min) and the switch (5 min) are new, the
+    // application (60 min) is not. The scheduled item counts from the start of its day.
+    const { sb } = fakeDb({
+      ...FULL,
+      admin_user_prefs: {
+        row: { notifications: {}, notifications_seen_at: ago(45), version: 3 },
+      },
+    });
+    const feed = await loadNotifications(sb, auth('admin'), {
+      maintenance: maintenanceOn(ago(5)),
+      now: NOW,
+    });
+    const unread = Object.fromEntries(feed.items.map((i) => [i.kind, i.unread]));
+    expect(unread).toEqual({
+      leads: true,
+      maintenance: true,
+      applications: false,
+      scheduled: false,
+    });
+    expect(feed.unread).toBe(2);
+    expect(feed.seenAt).toBe(ago(45));
+  });
+
+  it('a muted kind is neither listed nor counted; an unknown muted kind is ignored', async () => {
+    const { sb } = fakeDb({
+      ...FULL,
+      admin_user_prefs: {
+        row: {
+          notifications: { muted: ['leads', 'a-kind-from-a-later-slice'] },
+          notifications_seen_at: null,
+          version: 2,
+        },
+      },
+    });
+    const feed = await loadNotifications(sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(feed.items.map((i) => i.kind)).not.toContain('leads');
+    expect(feed.items.map((i) => i.kind)).toContain('applications');
+    expect(feed.unread).toBe(feed.items.length);
+  });
+
+  it('a source that fails is named and left out; the rest still arrive', async () => {
+    const { sb } = fakeDb({ ...FULL, leads: { error: { message: 'boom' } } });
+    const feed = await loadNotifications(sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(feed.failed).toEqual(['leads']);
+    expect(feed.items.map((i) => i.kind)).toContain('applications');
+  });
+
+  it('a preferences read that fails mutes nothing and marks everything unread', async () => {
+    const { sb } = fakeDb({ ...FULL, admin_user_prefs: { error: { message: 'down' } } });
+    const feed = await loadNotifications(sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(feed.seenAt).toBeNull();
+    expect(feed.unread).toBe(feed.items.length);
+    expect(feed.failed).toEqual([]);
+  });
+
+  it(`lists at most ${MAX_ITEMS}, newest first`, async () => {
+    const leads = Array.from({ length: 40 }, (_, i) => ({
+      ...LEAD,
+      id: `l-${i}`,
+      created_at: ago(i + 1),
+    }));
+    const { sb } = fakeDb({ ...FULL, leads: { rows: leads } });
+    const feed = await loadNotifications(sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(feed.items).toHaveLength(MAX_ITEMS);
+    const times = feed.items.map((i) => Date.parse(i.at));
+    expect([...times].sort((a, b) => b - a)).toEqual(times);
+  });
+});
