@@ -127,7 +127,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
     const files = readdirSync(join(ROOT, 'public/styles/admin')).filter((f) => f.endsWith('.css'));
     expect(files.sort()).toEqual([...ADMIN_STYLESHEETS].sort());
     // Pinned, not derived: a sheet dropped from the list must fail, not go unchecked.
-    expect([...ADMIN_STYLESHEETS].sort()).toEqual(['login.css', 'search.css']);
+    expect([...ADMIN_STYLESHEETS].sort()).toEqual(['login.css', 'personal.css', 'search.css']);
   });
 
   it.each([...ADMIN_STYLESHEETS])(
@@ -310,6 +310,10 @@ describe('admin.css keeps the hooks the markup renders', () => {
         [...new Set((renderers[sheet] ?? []).flatMap(({ file }) => pagesOf(file)))].sort();
       expect(pagesFor('login.css')).toEqual(['src/pages/admin/login.astro']);
       expect(pagesFor('search.css')).toEqual(['src/pages/admin/search.astro']);
+      expect(pagesFor('personal.css')).toEqual([
+        'src/pages/admin/account.astro',
+        'src/pages/admin/notifications.astro',
+      ]);
       // Both sheets' classes are rendered by their pages themselves, so the import walk
       // is proved on a screen's code: through its island entry to every page hydrating it.
       expect(pagesOf('src/components/admin/screens/insights/InsightsPanel.tsx').sort()).toEqual([

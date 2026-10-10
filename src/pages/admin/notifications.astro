@@ -4,7 +4,7 @@ import AdminLayout from '@/layouts/AdminLayout.astro';
 import NotificationList from '@/components/admin/screens/chrome/NotificationList';
 import { loadNotifications, type NotificationFeed } from '@/lib/admin/notifications';
 import { markNotificationsSeen } from '@/lib/admin/prefs';
-import { assertCap } from '@/lib/authz/matrix';
+import { can } from '@/lib/authz/matrix';
 import { getMaintenanceState } from '@/lib/http/maintenance';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
 
@@ -19,8 +19,15 @@ export const prerender = false;
 const session = Astro.locals.session;
 const sb = Astro.locals.supabase;
 
+// Any member (`analytics.read`, which every role holds); a refusal is a 403, not a 500.
+if (
+  Astro.request.method === 'POST' &&
+  (!session || can(session.role, 'analytics.read') !== 'full')
+) {
+  return new Response(null, { status: 403, headers: { 'cache-control': 'no-store' } });
+}
+
 if (Astro.request.method === 'POST' && session && sb) {
-  assertCap(session, 'analytics.read');
   const form = await Astro.request.formData();
   if (form.get('intent') === 'seen') {
     try {
@@ -43,7 +50,11 @@ const failedToMark = Astro.response.status === 503;
 const done = Astro.url.searchParams.get('done') === 'seen';
 ---
 
-<AdminLayout title="Notifications" subtitle="What changed or arrived for you lately.">
+<AdminLayout
+  title="Notifications"
+  subtitle="What changed or arrived for you lately."
+  styles={['personal.css']}
+>
   <div class="card ntf-page">
     {
       failedToMark && (

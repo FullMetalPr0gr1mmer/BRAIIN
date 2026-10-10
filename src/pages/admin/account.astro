@@ -8,7 +8,7 @@ import {
   endSession,
   updateMyDisplayName,
 } from '@/lib/admin/account';
-import { assertCap } from '@/lib/authz/matrix';
+import { can } from '@/lib/authz/matrix';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { ValidationError } from '@/lib/admin/errors';
 import { writeAudit } from '@/lib/admin/audit';
@@ -29,9 +29,16 @@ const sb = Astro.locals.supabase;
 let flash: AccountFlash | null = null;
 let submittedName: string | null = null;
 
+// Any member, as the JSON routes: `analytics.read` is the capability every role holds. A
+// refusal is a 403, never an uncaught throw (a 500).
+if (
+  Astro.request.method === 'POST' &&
+  (!session || can(session.role, 'analytics.read') !== 'full')
+) {
+  return new Response(null, { status: 403, headers: { 'cache-control': 'no-store' } });
+}
+
 if (Astro.request.method === 'POST' && session && sb) {
-  // Any member, as the JSON routes: `analytics.read` is the capability every role holds.
-  assertCap(session, 'analytics.read');
   const form = await Astro.request.formData();
   const intent = form.get('intent');
 
@@ -136,7 +143,11 @@ if (session && sb) {
 const view = session ? accountViewFor(session, submittedName ?? displayName) : null;
 ---
 
-<AdminLayout title="Your account" subtitle="Your name, your password and what you can do here.">
+<AdminLayout
+  title="Your account"
+  subtitle="Your name, your password and what you can do here."
+  styles={['personal.css']}
+>
   {
     view && (
       <div class="card acct-page">

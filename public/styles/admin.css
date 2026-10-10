@@ -2107,17 +2107,6 @@ a.li:hover {
   font-size: 12.5px;
 }
 
-.acct-page,
-.ntf-page {
-  max-inline-size: 44rem;
-}
-
-.ntf-page__actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 14px;
-}
-
 /* ---- Rich text (Tiptap): the prototype's .rich ---- */
 
 /* ProseMirror's base rules, which Tiptap would otherwise inject at runtime as an inline
