@@ -15,8 +15,21 @@ import type { LeadExportQuery } from '@schemas/crm';
 // page comes back short when PostgREST's row limit is lower than the page asked for, so the
 // read carries on until a page comes back EMPTY or the cap is passed.
 
-/** The most leads one export carries; larger pulls are `export-backup`. */
-export const MAX_EXPORT_ROWS = 5000;
+/**
+ * The most leads one export carries, with the contact details decrypted (`pii`) and without
+ * (`safe`); larger pulls are `export-backup`. Set by CPU, not by memory: the Workers Free
+ * plan gives a request 10 ms of CPU, and a Worker that runs out is stopped mid-export (error
+ * 1102), leaving an attempt row with no outcome. `node scripts/bench-lead-export.mjs` measures
+ * a row in workerd: 41 to 74 µs with the four fields decrypted (each AES-GCM decrypt is about
+ * 9 µs of it, the key imported once per request), and 7 to 19 µs without, the high end being
+ * a 5,000-character message. A cap's rows may take 6 ms at the worst rate measured,
+ * leaving 4 ms for the rest of the request (routing, the session, the audit rows, the other
+ * reads' answers), which was not measured: it needs the whole Worker and a database (owner
+ * item O-16 measures it on staging). On Workers Paid (30 s of CPU) both could go back toward
+ * the 5,000 the export once documented, bounded then by the 128 MB of memory: a row with the
+ * longest message is about 10 KB, read as JSON and written again as CSV. C3.md records the run.
+ */
+export const EXPORT_ROW_CAP = { pii: 80, safe: 300 } as const;
 
 /** PostgREST's default row limit: the most one page asks for. */
 export const PAGE_ROWS = 1000;

@@ -16,6 +16,7 @@ const LEAD = '77777777-7777-4777-8777-777777777777';
 const calls: { owner: string; table: string; method: string; args: unknown[]; page: number }[] = [];
 const rpcs: { owner: string; fn: string; args: Record<string, unknown> }[] = [];
 const audits: { action: string; detail?: Record<string, unknown> }[] = [];
+const systemLogs: { level: string; message: string; detail?: Record<string, unknown> }[] = [];
 let pages: Record<string, unknown>[][] = [];
 let leadReads = 0;
 
@@ -57,15 +58,38 @@ vi.mock('@/lib/admin/audit', () => ({
     return true;
   },
 }));
-vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
-vi.mock('@/lib/crypto/pii', () => ({ decryptPII: async (v: string) => v.replace(/^enc:/, '') }));
+vi.mock('@/lib/data/systemLog', () => ({
+  writeSystemLog: async (entry: (typeof systemLogs)[number]) => {
+    systemLogs.push(entry);
+    return true;
+  },
+}));
+// The key the export imports, and every key a decrypt is handed: the export must import it
+// once a request and hand that key to every decrypt (importing costs what a decrypt does).
+const IMPORTED_KEY = { imported: true };
+const keyImports: string[] = [];
+const decryptKeys: unknown[] = [];
+let keyImportFails = false;
+vi.mock('@/lib/crypto/pii', () => ({
+  importPIIKey: async (material: string) => {
+    keyImports.push(material);
+    if (keyImportFails) throw new Error('importKey failed');
+    return IMPORTED_KEY;
+  },
+  decryptPII: async (v: string, key: unknown) => {
+    decryptKeys.push(key);
+    return v.replace(/^enc:/, '');
+  },
+}));
 vi.mock('@/lib/leads/interestLabel', () => ({
   resolveLeadInterests: async () => new Map(),
   withInterestLabels: (r: Record<string, unknown>) => r,
 }));
 
 const { GET } = await import('@/pages/api/admin/leads/export');
-const { MAX_EXPORT_ROWS, MAX_PAGES, PAGE_ROWS } = await import('@/lib/crm/exportRead');
+const { EXPORT_ROW_CAP, MAX_PAGES, PAGE_ROWS } = await import('@/lib/crm/exportRead');
+// Every role holding export.csv holds leads.pii, so every export here is a PII export.
+const CAP = EXPORT_ROW_CAP.pii;
 
 function call(query = '') {
   const url = new URL(`https://admin.example.test/api/admin/leads/export${query}`);
@@ -125,6 +149,10 @@ beforeEach(() => {
   calls.length = 0;
   rpcs.length = 0;
   audits.length = 0;
+  systemLogs.length = 0;
+  keyImports.length = 0;
+  decryptKeys.length = 0;
+  keyImportFails = false;
   leadReads = 0;
   pages = [[ROW]];
 });
@@ -211,40 +239,67 @@ describe('the lead export (C3): columns', () => {
 
 describe('the lead export (C3): keyset paging', () => {
   it('a short page is not the end: it reads on from the last key until a page comes back empty', async () => {
-    // A server whose row limit is 40: every page is cut at 40 whatever was asked.
-    pages = [leads(40), leads(40, 40), leads(21, 80)];
+    // A server whose row limit is a third of the cap: every page is cut there whatever was
+    // asked. One lead fewer than the cap matches.
+    const limit = Math.ceil(CAP / 3);
+    const total = CAP - 1;
+    pages = [leads(limit), leads(limit, limit), leads(total - 2 * limit, 2 * limit)];
     const res = await call();
     expect(res.status).toBe(200);
     expect(leadReads).toBe(4);
     expect(onPage(0, 'or')).toEqual([]);
-    const last = leads(40)[39]!;
+    const last = leads(limit)[limit - 1]!;
     expect(onPage(1, 'or')[0]!.args).toEqual([
       `created_at.lt."${String(last['created_at'])}",and(created_at.eq."${String(last['created_at'])}",id.gt.${String(last['id'])})`,
     ]);
     // Each page asks for what is still wanted, one past the cap at most.
     expect([0, 1, 2, 3].map((p) => onPage(p, 'limit')[0]!.args[0])).toEqual(
-      [0, 40, 80, 101].map((n) => Math.min(PAGE_ROWS, MAX_EXPORT_ROWS + 1 - n)),
+      [0, limit, 2 * limit, total].map((n) => Math.min(PAGE_ROWS, CAP + 1 - n)),
     );
     // No offsets: a lead arriving mid-export cannot shift a page.
     expect(leadCalls().filter((c) => c.method === 'range')).toEqual([]);
     const lines = (await res.text()).trim().split(/\r?\n/);
-    expect(lines).toHaveLength(1 + 101);
-    expect(outcome()).toMatchObject({ status: 'ok', rows: 101, truncated: false });
+    expect(lines).toHaveLength(1 + total);
+    expect(outcome()).toMatchObject({ status: 'ok', rows: total, truncated: false });
+    expect(res.headers.get('x-export-truncated')).toBe('false');
   });
 
   it('one row past the cap: the export carries the cap and says it is truncated', async () => {
-    pages = [leads(MAX_EXPORT_ROWS + 1)];
+    pages = [leads(CAP + 1)];
     const res = await call();
     expect(res.status).toBe(200);
     expect(leadReads).toBe(1);
-    expect((await res.text()).trim().split(/\r?\n/)).toHaveLength(1 + MAX_EXPORT_ROWS);
-    expect(outcome()).toMatchObject({ status: 'ok', rows: MAX_EXPORT_ROWS, truncated: true });
+    expect((await res.text()).trim().split(/\r?\n/)).toHaveLength(1 + CAP);
+    expect(outcome()).toMatchObject({ status: 'ok', rows: CAP, truncated: true, cap: CAP });
+    // Said where a screen can read it, and in the name a plain download link shows.
+    expect(res.headers.get('x-export-truncated')).toBe('true');
+    expect(res.headers.get('x-export-rows')).toBe(String(CAP));
+    expect(res.headers.get('content-disposition')).toMatch(
+      new RegExp(`filename="leads-\\d{4}-\\d{2}-\\d{2}-first-${CAP}\\.csv"`),
+    );
+    // Reaching the cap is the abnormal-volume signal (§3), a warning line with counts only.
+    expect(systemLogs).toEqual([
+      expect.objectContaining({
+        level: 'warn',
+        detail: { actorId: USER, role: 'admin', rows: CAP, cap: CAP, truncated: true },
+      }),
+    ]);
   });
 
   it('exactly the cap is not truncated', async () => {
-    pages = [leads(MAX_EXPORT_ROWS)];
+    pages = [leads(CAP)];
+    const res = await call();
+    expect(outcome()).toMatchObject({ rows: CAP, truncated: false });
+    expect(res.headers.get('x-export-truncated')).toBe('false');
+    expect(res.headers.get('content-disposition')).toMatch(
+      /filename="leads-\d{4}-\d{2}-\d{2}\.csv"/,
+    );
+  });
+
+  it('an export under the cap writes no warning line', async () => {
+    pages = [leads(3)];
     await call();
-    expect(outcome()).toMatchObject({ rows: MAX_EXPORT_ROWS, truncated: false });
+    expect(systemLogs).toEqual([]);
   });
 
   it('stops at the page bound, and then cannot say it has everything', async () => {
@@ -258,5 +313,47 @@ describe('the lead export (C3): keyset paging', () => {
     pages = [[{ ...ROW, id: 'not-a-uuid' }]];
     expect((await call()).status).toBe(500);
     expect(outcome()).toMatchObject({ status: 'failed' });
+  });
+});
+
+describe('the lead export (C3 review): CPU', () => {
+  it('imports the key once for the request and hands it to every decrypt', async () => {
+    pages = [
+      leads(30).map((row) => ({
+        ...row,
+        phone_enc: 'enc:+966500000000',
+        budget_enc: 'enc:gt_200k',
+        timeline_text_enc: 'enc:Before Ramadan',
+      })),
+    ];
+    const res = await call();
+    expect(res.status).toBe(200);
+    expect(keyImports).toEqual(['test-dummy-lead-pii-enc-key']);
+    expect(decryptKeys).toHaveLength(30 * 4);
+    expect(new Set(decryptKeys)).toEqual(new Set([IMPORTED_KEY]));
+  });
+
+  it('an export with no rows imports no key', async () => {
+    pages = [];
+    expect((await call()).status).toBe(200);
+    expect(keyImports).toEqual([]);
+  });
+
+  it('a key that cannot be imported fails the export after the attempt, with a failed outcome', async () => {
+    keyImportFails = true;
+    expect((await call()).status).toBe(500);
+    expect(audits.map((a) => a.action)).toEqual(['export.csv.attempt', 'export.csv.outcome']);
+    expect(outcome()).toMatchObject({ status: 'failed', rows: 0 });
+  });
+
+  it('the caps stay within what the measurement fits (C3.md): raise them only with a new run', () => {
+    // scripts/bench-lead-export.mjs measured at worst 74 µs a row with the contact details
+    // decrypted and 19 without, against 10 ms of CPU a request on the Workers Free plan; a
+    // cap's rows get 6 ms of it. The review's ceiling for the PII cap was 1,000.
+    expect(EXPORT_ROW_CAP.pii).toBeLessThanOrEqual(1000);
+    expect(EXPORT_ROW_CAP.pii * 74).toBeLessThanOrEqual(6000);
+    expect(EXPORT_ROW_CAP.safe * 19).toBeLessThanOrEqual(6000);
+    // The page bound is reached before the cap only when the server's row limit is tiny.
+    expect(MAX_PAGES).toBeLessThan(EXPORT_ROW_CAP.pii);
   });
 });

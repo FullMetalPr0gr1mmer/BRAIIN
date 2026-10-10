@@ -7,7 +7,7 @@ import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { claimPrivilegedOp } from '@/lib/admin/rateLimit';
 import { canSeeLeadPii, GATED_LEAD_COLUMNS, SAFE_LEAD_COLUMNS } from '@/lib/admin/leadFields';
 import { AuthorizationError } from '@/lib/authz/errors';
-import { decryptPII } from '@/lib/crypto/pii';
+import { decryptPII, importPIIKey } from '@/lib/crypto/pii';
 import { budgetBandLabel } from '@schemas/lead';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { toCsv } from '@/lib/admin/csv';
@@ -15,8 +15,8 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 import { serviceClient } from '@/lib/supabase/server';
 import {
   afterFilter,
+  EXPORT_ROW_CAP,
   exportsSpam,
-  MAX_EXPORT_ROWS,
   readPaged,
   type ExportPage,
 } from '@/lib/crm/exportRead';
@@ -32,8 +32,9 @@ import {
 //   5. the dump itself                  tenant-scoped, capped; with PII it reads as the
 //                                       service role, because staff tokens cannot read
 //                                       the gated columns at all (0033)
-//   6. audit entry #2 — OUTCOME         with the row count
-//   7. abnormal-volume alert
+//   6. audit entry #2 — OUTCOME         with the row count, once the file is built; a
+//                                       handled failure after step 4 writes a failed one
+//   7. abnormal-volume alert            an export that reaches its cap
 //
 // Step 4 is the one that is easy to get backwards. Writing a single audit row after a
 // successful export means a dump that crashed, timed out, or was cancelled mid-stream
@@ -46,12 +47,12 @@ import {
 // only how many notes a lead has: bulk free text about named people is the riskiest thing a
 // file can hold (crm.md §9). The read is keyset-paged (src/lib/crm/exportRead.ts), so the
 // cap really is the cap: one unpaged read was cut at 1,000 by the API's row limit without a
-// word, and an export that stops short says so (`truncated`).
+// word, and an export that stops short says so (`truncated`): in its outcome row, in the
+// `x-export-truncated` header a screen can read, and in the file's name, which a plain
+// download link shows. The cap is set by CPU (EXPORT_ROW_CAP, measured): a PII export decrypts
+// four fields a row, so it imports the key once for the request, not once per field.
 
 export const prerender = false;
-
-/** Beyond this, the export is unusual enough to be worth a warning line. */
-const ABNORMAL_VOLUME = 1000;
 
 /** The pipeline's columns the export carries (all readable by staff since 0034 to 0041). */
 const PIPELINE_COLUMNS =
@@ -158,7 +159,9 @@ export const GET = defineAdminRoute({
       throw new AuthorizationError('export.csv', 'audit unavailable, export refused');
     }
 
-    let records: Record<string, unknown>[];
+    const cap = withPii ? EXPORT_ROW_CAP.pii : EXPORT_ROW_CAP.safe;
+    let csv: string;
+    let rows: number;
     let truncated: boolean;
     try {
       // The gated columns are refused to the caller's own client (0033), so a PII export
@@ -168,13 +171,12 @@ export const GET = defineAdminRoute({
       const svc = withPii ? serviceClient() : null;
       const reader = svc ?? sb;
       const columns = `${SAFE_LEAD_COLUMNS},${PIPELINE_COLUMNS}${withPii ? `,${PII_COLUMNS}` : ''}`;
-      const read = await readPaged(
-        leadPage(reader, auth.tenantId, columns, input),
-        MAX_EXPORT_ROWS,
-      );
-      const rows = read.rows;
+      const read = await readPaged(leadPage(reader, auth.tenantId, columns, input), cap);
+      const records = await toRecords(sb, svc, auth.tenantId, read.rows);
+      // Built before the outcome row, so an `ok` outcome means the file exists.
+      csv = toCsv(withPii ? PII_HEADER : SAFE_HEADER, records);
+      rows = records.length;
       truncated = read.truncated;
-      records = await toRecords(sb, svc, auth.tenantId, rows);
     } catch (err) {
       await writeAudit(sb, auth, {
         action: 'export.csv.outcome',
@@ -187,25 +189,29 @@ export const GET = defineAdminRoute({
     await writeAudit(sb, auth, {
       action: 'export.csv.outcome',
       entityType: 'lead',
-      detail: { status: 'ok', rows: records.length, withPii, truncated },
+      detail: { status: 'ok', rows, withPii, truncated, cap },
     });
 
-    if (records.length >= ABNORMAL_VOLUME) {
+    // An export that reaches its cap pulled the most one file carries: worth a warning line.
+    if (rows >= cap) {
       void writeSystemLog({
         level: 'warn',
         source: 'admin:export-csv',
-        message: `abnormal lead export volume: ${records.length} rows`,
-        detail: { actorId: auth.userId, role: auth.role, rows: records.length },
+        message: `lead export reached its cap: ${rows} rows${truncated ? ', more matched' : ''}`,
+        detail: { actorId: auth.userId, role: auth.role, rows, cap, truncated },
       });
     }
 
-    const filename = `leads-${new Date().toISOString().slice(0, 10)}.csv`;
-    return new Response(toCsv(withPii ? PII_HEADER : SAFE_HEADER, records), {
+    const day = new Date().toISOString().slice(0, 10);
+    const filename = truncated ? `leads-${day}-first-${rows}.csv` : `leads-${day}.csv`;
+    return new Response(csv, {
       status: 200,
       headers: {
         'content-type': 'text/csv; charset=utf-8',
         'content-disposition': `attachment; filename="${filename}"`,
         'cache-control': 'private, no-store, max-age=0, must-revalidate',
+        'x-export-rows': String(rows),
+        'x-export-truncated': String(truncated),
       },
     });
   },
@@ -214,7 +220,9 @@ export const GET = defineAdminRoute({
 /**
  * The rows as CSV records: stage labels and assignee names resolved once for the batch
  * (the caller's own client: lead workers read both), interest labels likewise, and, for a
- * PII export (`svc` set), the decrypted fields and each lead's note count.
+ * PII export (`svc` set), the decrypted fields and each lead's note count. The key is
+ * imported once here, for every field of every row: importing it costs about what a decrypt
+ * does, and a PII row decrypts four.
  */
 async function toRecords(
   sb: SupabaseClient,
@@ -264,6 +272,7 @@ async function toRecords(
   // `budget` is exported as its human label (BUDGET_BAND_LABELS — the same map the form
   // and the admin panel read), and `timeline` is the decrypted free-text deadline (0017),
   // with the legacy select value alongside for rows that came through the old form.
+  const key = svc && rows.length > 0 ? await importPIIKey(LEAD_PII_ENC_KEY) : null;
   const records: Record<string, unknown>[] = [];
   for (const row of rows) {
     const labelled = withInterestLabels(row, labels);
@@ -293,12 +302,12 @@ async function toRecords(
       source: row['source'],
       channel: row['channel'],
     };
-    if (svc) {
-      record['email'] = await safeDecrypt(row['email_enc']);
-      record['phone'] = await safeDecrypt(row['phone_enc']);
-      const budget = await safeDecrypt(row['budget_enc']);
+    if (key) {
+      record['email'] = await safeDecrypt(row['email_enc'], key);
+      record['phone'] = await safeDecrypt(row['phone_enc'], key);
+      const budget = await safeDecrypt(row['budget_enc'], key);
       record['budget'] = budget ? budgetBandLabel(budget) : budget;
-      record['timeline'] = await safeDecrypt(row['timeline_text_enc']);
+      record['timeline'] = await safeDecrypt(row['timeline_text_enc'], key);
       record['timeline_band'] = row['timeline_band'];
       const count = noteCounts[String(row['id'])];
       record['notes_count'] = typeof count === 'number' ? count : 0;
@@ -308,10 +317,10 @@ async function toRecords(
   return records;
 }
 
-async function safeDecrypt(ciphertext: unknown): Promise<string> {
+async function safeDecrypt(ciphertext: unknown, key: CryptoKey): Promise<string> {
   if (typeof ciphertext !== 'string' || ciphertext.length === 0) return '';
   try {
-    return await decryptPII(ciphertext, LEAD_PII_ENC_KEY);
+    return await decryptPII(ciphertext, key);
   } catch {
     return '';
   }

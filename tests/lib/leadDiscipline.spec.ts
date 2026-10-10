@@ -60,6 +60,7 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('@/lib/data/tenant', () => ({ resolveLaunchTenantId: async () => TENANT }));
 vi.mock('@/lib/crypto/pii', () => ({
   encryptPII: async (v: string) => `enc(${v})`,
+  importPIIKey: async () => ({}),
   decryptPII: async (v: string) => v.replace(/^enc\((.*)\)$/, '$1'),
 }));
 vi.mock('@/lib/admin/audit', () => ({ writeAudit: async () => true }));
