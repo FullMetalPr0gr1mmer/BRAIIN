@@ -142,8 +142,8 @@ const SUB = 'Short guides, written for people, not developers.';
             </button>
           </form>
           {results !== null ? (
-            <section aria-labelledby="help-results-h">
-              <h2 id="help-results-h" class="hc__h">
+            <section aria-labelledby="help-page-results-h">
+              <h2 id="help-page-results-h" class="hc__h">
                 Results
               </h2>
               <p class="hc__sub" role="status">
@@ -151,23 +151,25 @@ const SUB = 'Short guides, written for people, not developers.';
                   ? 'No guide matches that. Try other words.'
                   : `${results.length} ${results.length === 1 ? 'guide matches' : 'guides match'}.`}
               </p>
-              {results.length > 0 && <HelpGuideList guides={results} labelledBy="help-results-h" />}
+              {results.length > 0 && (
+                <HelpGuideList guides={results} labelledBy="help-page-results-h" />
+              )}
             </section>
           ) : (
             <>
               {onScreen.length > 0 && (
-                <section aria-labelledby="help-screen-h">
-                  <h2 id="help-screen-h" class="hc__h">
+                <section aria-labelledby="help-page-screen-h">
+                  <h2 id="help-page-screen-h" class="hc__h">
                     On this screen
                   </h2>
-                  <HelpGuideList guides={onScreen} labelledBy="help-screen-h" />
+                  <HelpGuideList guides={onScreen} labelledBy="help-page-screen-h" />
                 </section>
               )}
-              <section aria-labelledby="help-all-h">
-                <h2 id="help-all-h" class="hc__h">
+              <section aria-labelledby="help-page-all-h">
+                <h2 id="help-page-all-h" class="hc__h">
                   All guides
                 </h2>
-                <HelpGuideList guides={index.guides} labelledBy="help-all-h" />
+                <HelpGuideList guides={index.guides} labelledBy="help-page-all-h" />
               </section>
             </>
           )}
