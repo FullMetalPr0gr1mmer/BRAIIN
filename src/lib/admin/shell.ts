@@ -66,10 +66,6 @@ export async function loadShellState(
   return state;
 }
 
-/** Two letters for the avatar: from the name when there is one, else the e-mail. */
-export function initialsOf(displayName: string | null, email: string): string {
-  const words = (displayName ?? '').split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return `${words[0]![0]}${words[words.length - 1]![0]}`.toUpperCase();
-  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
-  return email.slice(0, 2).toUpperCase();
-}
+/** Two letters for the avatar. Lives in ./avatar (F4b) beside the tone hash, where the
+    islands can import it without this server module; re-exported for the layout. */
+export { initialsOf } from './avatar';

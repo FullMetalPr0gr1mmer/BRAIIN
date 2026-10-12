@@ -2028,6 +2028,1239 @@ img.ProseMirror-separator {
   aspect-ratio: 4 / 3;
 }
 
+/* ---- Component kit (Admin v2 F4b, docs/admin-v2/ui.md §2.4, §2.5, AV-07) ----
+   The prototype's widgets, ported for the server primitives (src/components/admin/ui/)
+   and the React kit (src/components/admin/kit/) alike: both render these classes, so a
+   KPI, a badge or a table looks the same whether a page or an island drew it. States are
+   ARIA or data attributes (aria-pressed, aria-current, aria-selected, data-tone), never
+   a style attribute; every colour is a token. */
+
+/* Fixed column counts that still give way as the space shrinks: N columns while each can
+   have 14rem, then fewer (a column is the larger of 14rem and an Nth of the row). Sized
+   by the space, as .grid is, rather than by a container query: a query container on the
+   main column would make it the containing block of every fixed-position box inside it
+   (layout containment), the trap a fixed savebar would fall into. */
+.grid--2 {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, max(14rem, calc((100% - 18px) / 2))), 1fr)
+  );
+}
+
+.grid--3 {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, max(14rem, calc((100% - 2 * 18px) / 3))), 1fr)
+  );
+}
+
+.grid--4 {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, max(14rem, calc((100% - 3 * 18px) / 4))), 1fr)
+  );
+}
+
+/* Two unequal columns (2:1, 1:2, 3:2) that stack when the narrow one would drop under
+   14rem: flex items whose bases and growth share the ratio. */
+.grid--2-1,
+.grid--1-2,
+.grid--3-2 {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.grid--2-1 > :first-child,
+.grid--1-2 > :last-child {
+  flex: 2 1 28rem;
+}
+
+.grid--2-1 > :last-child,
+.grid--1-2 > :first-child {
+  flex: 1 1 14rem;
+}
+
+.grid--3-2 > :first-child {
+  flex: 3 1 21rem;
+}
+
+.grid--3-2 > :last-child {
+  flex: 2 1 14rem;
+}
+
+/* KPI (Kpi.astro): F1's look (.card:has(> .stat), the label above the figure), plus the
+   prototype's delta pill and spark. The arrow and the words carry the trend; the tone
+   says whether it is good. */
+.stat-unit {
+  margin-inline-start: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ad-dim);
+}
+
+.kpi__d {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 3px 8px;
+  border-radius: var(--ad-r-pill);
+  background: var(--ad-bg);
+  color: var(--ad-dim);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi__d[data-tone='ok'] {
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok-text);
+}
+
+.kpi__d[data-tone='err'] {
+  background: var(--ad-err-soft);
+  color: var(--ad-err-text);
+}
+
+.kpi__spark {
+  display: block;
+  inline-size: 100%;
+  block-size: 36px;
+  overflow: visible;
+}
+
+/* Avatar tones: a stable hash of the person's id picks one (src/lib/admin/avatar.ts);
+   white initials clear 4.5:1 on each (scripts/contrast-audit.mjs). */
+.avatar[data-tone='0'] {
+  background: var(--ad-tone-0);
+}
+.avatar[data-tone='1'] {
+  background: var(--ad-tone-1);
+}
+.avatar[data-tone='2'] {
+  background: var(--ad-tone-2);
+}
+.avatar[data-tone='3'] {
+  background: var(--ad-tone-3);
+}
+.avatar[data-tone='4'] {
+  background: var(--ad-tone-4);
+}
+.avatar[data-tone='5'] {
+  background: var(--ad-tone-5);
+}
+.avatar[data-tone='6'] {
+  background: var(--ad-tone-6);
+}
+.avatar[data-tone='7'] {
+  background: var(--ad-tone-7);
+}
+
+.avatar[data-size='sm'] {
+  inline-size: 26px;
+  block-size: 26px;
+  font-size: 10px;
+}
+
+.avatar[data-size='lg'] {
+  inline-size: 52px;
+  block-size: 52px;
+  font-size: 16px;
+}
+
+/* Note: the prototype's .note. Info is the brand tint; each tone also has its icon, so
+   the colour is never the only cue. */
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+  font-size: 13px;
+}
+
+.note > .ic {
+  margin-top: 2px;
+}
+
+.note__b {
+  flex: 1;
+  min-width: 0;
+}
+
+.note__b > * {
+  margin: 0;
+}
+
+.note__b > * + * {
+  margin-top: 6px;
+}
+
+.note a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.note[data-tone='warn'] {
+  background: var(--ad-warn-soft);
+  color: var(--ad-note-warn-text);
+}
+
+.note[data-tone='ok'] {
+  background: var(--ad-ok-soft);
+  color: var(--ad-note-ok-text);
+}
+
+.note[data-tone='err'] {
+  background: var(--ad-err-soft);
+  color: var(--ad-err-text);
+}
+
+/* Empty state: icon tile, title, a line, an action. */
+.empty {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--ad-dim);
+}
+
+.empty__ico {
+  display: grid;
+  place-items: center;
+  inline-size: 52px;
+  block-size: 52px;
+  margin: 0 auto 14px;
+  border-radius: 16px;
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+}
+
+.empty__t {
+  margin: 0 0 4px;
+  color: var(--ad-ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.empty__x {
+  margin: 0;
+}
+
+.empty__a {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+/* Timeline (an <ol>): a rule down the inline start and a ring per entry, both logical,
+   so the line sits on the right in a right-to-left block. */
+.tl {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  padding-inline-start: 22px;
+  list-style: none;
+}
+
+.tl::before {
+  content: '';
+  position: absolute;
+  inset-block: 6px;
+  inset-inline-start: 7px;
+  inline-size: 2px;
+  background: var(--ad-line);
+}
+
+.tl__i {
+  position: relative;
+  padding-bottom: 16px;
+}
+
+.tl__i:last-child {
+  padding-bottom: 0;
+}
+
+.tl__i::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-start: -19px;
+  inline-size: 10px;
+  block-size: 10px;
+  border: 2px solid var(--ad-primary);
+  border-radius: 50%;
+  background: var(--ad-card);
+}
+
+.tl__t {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tl__s {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+.tl__m {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ad-dim2);
+}
+
+/* Stat rows (a <dl>): a label and its figure on one line, hairlines between. */
+.stat-rows {
+  margin: 0;
+}
+
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--ad-line);
+  font-size: 13.5px;
+}
+
+.stat-row:last-child {
+  border-bottom: 0;
+}
+
+.stat-row dt {
+  min-width: 0;
+}
+
+.stat-row dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/* List rows (the prototype's .list/.li): a card-like row with an optional handle, icon,
+   title (a link stretched over the row), line, badges and actions. */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--ad-line);
+  border-radius: 12px;
+  background: var(--ad-card);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.li:hover {
+  border-color: var(--ad-line-2);
+  box-shadow: var(--ad-shadow-sm);
+}
+
+.li[aria-current] {
+  border-color: var(--ad-primary);
+  box-shadow: 0 0 0 2px var(--ad-primary-soft);
+}
+
+/* A hidden item: dimmed by colour and a dashed edge, and labelled "Hidden" in the row,
+   never by opacity (the prototype's .55 took its text under 4.5:1). */
+.li[data-hidden] {
+  border-style: dashed;
+  background: var(--ad-surface-2);
+  color: var(--ad-dim);
+}
+
+.li__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.li__t {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+a.li__t {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.li__t:hover {
+  text-decoration: underline;
+}
+
+/* The title link covers the whole row; the row's own controls sit above it. */
+a.li__t::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.li__s {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+.li__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 36px;
+  block-size: 36px;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-bg);
+  color: var(--ad-primary);
+}
+
+.li__acts,
+.li__move,
+.li > .badge,
+.li > .drag {
+  position: relative;
+  z-index: 1;
+}
+
+.li__acts,
+.li__move {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Row actions show on hover and whenever focus is inside the row (WCAG 2.4.7), and
+   always where nothing can hover. */
+@media (hover: hover) {
+  .li__acts {
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .li:hover .li__acts,
+  .li:focus-within .li__acts,
+  .li[aria-current] .li__acts {
+    opacity: 1;
+  }
+}
+
+/* Small icon buttons in a row: 28px, over the 24px minimum (WCAG 2.5.8). */
+.icon-btn {
+  inline-size: 28px;
+  block-size: 28px;
+  padding: 0;
+  border-color: transparent;
+  border-radius: var(--ad-r-xs);
+  background: transparent;
+  color: var(--ad-dim);
+}
+
+.icon-btn:hover {
+  border-color: transparent;
+  background: var(--ad-bg);
+  color: var(--ad-ink);
+}
+
+.icon-btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Sortable (src/lib/admin/client/sortable.ts): the 44px handle, the lifted item, the
+   item under the pointer. Its translate is set through the CSSOM while it moves. */
+.drag {
+  inline-size: 44px;
+  block-size: 44px;
+  flex: none;
+  margin-block: -10px;
+  margin-inline-start: -8px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ad-dim2);
+  cursor: grab;
+  touch-action: none;
+}
+
+.drag:hover {
+  border-color: transparent;
+  background: var(--ad-bg);
+  color: var(--ad-ink);
+}
+
+[data-sortable-lifted] {
+  z-index: 2;
+  border-color: var(--ad-primary);
+  box-shadow: var(--ad-shadow);
+}
+
+[data-sortable-dragging] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+[data-sortable-dragging] .drag {
+  cursor: grabbing;
+}
+
+/* Chips: toggle buttons (aria-pressed) or filter links (aria-current); the count is part
+   of the name, shown smaller. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--ad-line-2);
+  border-radius: var(--ad-r-pill);
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.chip:hover {
+  border-color: var(--ad-ink);
+}
+
+.chip[aria-pressed='true'],
+.chip[aria-current] {
+  border-color: var(--ad-primary);
+  background: var(--ad-primary);
+  color: var(--ad-on-primary);
+}
+
+.chip__n {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Segmented control (Segmented.tsx): native radios in a fieldset, so the arrow keys,
+   the group's name and the checked state are the browser's. The radio covers its label
+   and is transparent; the label shows the state. Tabs (Tabs.tsx) wear the same look. */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 3px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-bg);
+}
+
+.seg__o {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--ad-r-xs);
+  color: var(--ad-dim);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.seg__o > input {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.seg__o:has(> input:checked) {
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  box-shadow: var(--ad-shadow-sm);
+}
+
+.seg__o:has(> input:focus-visible) {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: 2px;
+}
+
+.seg[role='tablist'] {
+  margin-block-end: 16px;
+}
+
+.seg [role='tab'] {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--ad-r-xs);
+  background: transparent;
+  color: var(--ad-dim);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.seg [role='tab']:hover {
+  color: var(--ad-ink);
+}
+
+.seg [role='tab'][aria-selected='true'] {
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  box-shadow: var(--ad-shadow-sm);
+}
+
+/* Tables built by the kit (DataTable, ServerTable): flush in a card, the footer with the
+   range and the pager under the scrolling table, row actions on hover and focus. */
+.card.dt {
+  padding: 0;
+}
+
+.dt > .card-title {
+  margin: 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ad-line);
+}
+
+table.data .num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data .data-sel {
+  inline-size: 44px;
+}
+
+.dt tbody tr {
+  position: relative;
+}
+
+.dt tbody tr[data-selected] {
+  background: var(--ad-primary-soft);
+}
+
+/* The title link covers its row (no `tr onclick`); the checkbox and actions sit above. */
+.dt a.data-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.dt .data-sel input,
+.row-acts {
+  position: relative;
+  z-index: 1;
+}
+
+.row-acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+@media (hover: hover) {
+  .dt .row-acts {
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .dt tbody tr:hover .row-acts,
+  .dt tbody tr:focus-within .row-acts,
+  .dt tbody tr[data-selected] .row-acts {
+    opacity: 1;
+  }
+}
+
+.dt .empty {
+  padding-block: 36px;
+}
+
+.tbl__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--ad-line);
+  color: var(--ad-dim);
+  font-size: 12.5px;
+}
+
+.tbl__range {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pager ul {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pager a,
+.pager button,
+.pager span[aria-disabled] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 30px;
+  block-size: 30px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--ad-r-xs);
+  background: transparent;
+  color: var(--ad-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.pager a:hover,
+.pager button:hover {
+  border-color: transparent;
+  background: var(--ad-bg);
+}
+
+.pager [aria-current='page'],
+.pager [aria-current='page']:hover {
+  border-color: var(--ad-midnight);
+  background: var(--ad-midnight);
+  color: var(--ad-on-dark);
+}
+
+.pager span[aria-disabled] {
+  color: var(--ad-dim2);
+}
+
+.pager__gap {
+  padding: 0 4px;
+  color: var(--ad-dim2);
+}
+
+/* The bulk bar: midnight, under the table, sticking to the bottom of the screen while
+   rows are chosen. */
+.bulkbar {
+  position: sticky;
+  inset-block-end: 16px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  padding-inline-start: 18px;
+  border-radius: var(--ad-r);
+  background: var(--ad-midnight);
+  color: var(--ad-on-dark);
+  box-shadow: var(--ad-shadow);
+}
+
+.bulkbar__n {
+  margin: 0;
+  margin-inline-end: auto;
+  font-weight: 700;
+}
+
+.bulkbar :focus-visible {
+  outline-color: var(--ad-focus-dark);
+}
+
+.bulkbar button[data-variant='ghost'] {
+  color: var(--ad-on-dark);
+}
+
+.bulkbar button[data-variant='ghost']:hover {
+  background: var(--ad-side-hover);
+  color: var(--ad-on-dark);
+}
+
+/* Bars in a list (BarList.astro): the label and its number, the bar under both. The bar
+   is the shared .bar/.bar-fill[data-width] hook, full width here. */
+.barlist {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prog {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
+  font-size: 13px;
+}
+
+.prog__v {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.prog > .bar {
+  grid-column: 1 / -1;
+  inline-size: auto;
+}
+
+/* Charts (src/components/admin/ui/charts/): SVG drawn from src/lib/admin/charts.ts. A
+   series is a class that sets --ch from the audited series tokens; the second series is
+   dashed and the third dotted, so colour is never the only cue (WCAG 1.4.1). */
+.ch-s1 {
+  --ch: var(--ad-series-1);
+}
+.ch-s2 {
+  --ch: var(--ad-series-2);
+}
+.ch-s3 {
+  --ch: var(--ad-series-3);
+}
+.ch-s4 {
+  --ch: var(--ad-series-4);
+}
+.ch-s5 {
+  --ch: var(--ad-series-5);
+}
+.ch-s6 {
+  --ch: var(--ad-series-6);
+}
+.ch-s7 {
+  --ch: var(--ad-series-7);
+}
+
+.bar-fill:is(.ch-s1, .ch-s2, .ch-s3, .ch-s4, .ch-s5, .ch-s6, .ch-s7) {
+  background: var(--ch);
+}
+
+.chart-fig {
+  margin: 0;
+}
+
+.chart-fig > figcaption {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.chart {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  overflow: visible;
+}
+
+.ch-grid {
+  stroke: var(--ad-line);
+  stroke-width: 1;
+}
+
+.ch-axis {
+  fill: var(--ad-dim2);
+  font-family: var(--ad-font);
+  font-size: 11px;
+}
+
+.ch-line {
+  fill: none;
+  stroke: var(--ch);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.ch-line.ch-s2 {
+  stroke-dasharray: 6 4;
+}
+
+.ch-line.ch-s3 {
+  stroke-dasharray: 2 4;
+}
+
+.ch-area {
+  fill: var(--ch);
+  fill-opacity: 0.07;
+  stroke: none;
+}
+
+.ch-dot,
+.ch-bar,
+.ch-swatch {
+  fill: var(--ch);
+}
+
+.ch-val {
+  fill: var(--ad-ink);
+  font-family: var(--ad-font);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ch-track {
+  fill: none;
+  stroke: var(--ad-bg);
+}
+
+.ch-seg {
+  fill: none;
+  stroke: var(--ch);
+}
+
+.ch-center {
+  fill: var(--ad-ink);
+  font-family: var(--ad-font);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.chart-empty {
+  margin: 0;
+  padding: 28px 0;
+  color: var(--ad-dim);
+  text-align: center;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ad-dim);
+  font-size: 12.5px;
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend svg {
+  flex: none;
+}
+
+/* The donut beside its legend; the legend lists every share with its percentage. */
+.donut {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+}
+
+.donut > svg {
+  flex: none;
+}
+
+.donut .legend {
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.donut .legend li {
+  justify-content: space-between;
+  color: var(--ad-ink);
+}
+
+.donut .legend b {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The score ring (Ring.astro): the number in the middle, the arc's tone from the score. */
+.ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 96px;
+  block-size: 96px;
+}
+
+.ring > svg {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.ring__v {
+  position: relative;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ring__arc {
+  fill: none;
+  stroke: var(--ad-primary);
+  stroke-linecap: round;
+}
+
+.ring[data-tone='ok'] .ring__arc {
+  stroke: var(--ad-ok-text);
+}
+
+.ring[data-tone='warn'] .ring__arc {
+  stroke: var(--ad-warn-text);
+}
+
+.ring[data-tone='err'] .ring__arc {
+  stroke: var(--ad-err-text);
+}
+
+/* "View as table": the chart's numbers, from the same data as the drawing. */
+.chart-table {
+  margin-top: 10px;
+}
+
+.chart-table > summary {
+  cursor: pointer;
+  color: var(--ad-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.chart-table > .table-wrap {
+  margin-top: 8px;
+}
+
+/* Save status (SaveStatus.tsx): words for every state, a spinner while saving that
+   reduced motion stops (the words stay). */
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--ad-dim);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.save-status[data-state='dirty'] {
+  color: var(--ad-warn-text);
+}
+
+.save-status[data-state='saved'] {
+  color: var(--ad-note-ok-text);
+}
+
+.save-status[data-state='error'] {
+  color: var(--ad-err-text);
+}
+
+.spin {
+  animation: ad-spin 1s linear infinite;
+}
+
+@keyframes ad-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error summary (ErrorSummary.tsx): focused when it appears, each error a link to its
+   field. */
+.error-summary {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--ad-err-text);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-err-soft);
+  color: var(--ad-err-text);
+}
+
+.error-summary:focus {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: 2px;
+}
+
+.error-summary h2 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.error-summary ul {
+  margin: 0;
+  padding-inline-start: 18px;
+}
+
+.error-summary a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* Modal and drawer (Modal.tsx, Drawer.tsx): the native modal <dialog> of confirm.ts
+   (focus trap, Escape, top layer, focus return) with the prototype's anatomy. The
+   drawer opens from the inline end. */
+dialog.mdl,
+dialog.drw {
+  padding: 0;
+}
+
+dialog.mdl[open],
+dialog.drw[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+dialog.mdl[open] {
+  animation: ad-mdl-in 0.3s var(--ad-ease);
+}
+
+dialog.mdl[data-size='lg'] {
+  inline-size: min(960px, calc(100vw - 40px));
+}
+
+.mdl__h,
+.drw__h {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.mdl__h {
+  padding: 18px 22px 0;
+}
+
+.mdl__h h2,
+.drw__h h2 {
+  flex: 1;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.mdl__h h2 {
+  font-size: 18px;
+}
+
+.mdl__sub {
+  margin: 4px 0 0;
+  color: var(--ad-dim);
+}
+
+.mdl__b {
+  padding: 18px 22px;
+  overflow-y: auto;
+}
+
+.mdl__f,
+.drw__f {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.mdl__f {
+  padding: 0 22px 20px;
+}
+
+dialog.drw {
+  inline-size: min(560px, 100vw);
+  max-inline-size: 100vw;
+  block-size: 100%;
+  max-block-size: 100%;
+  margin: 0;
+  margin-inline-start: auto;
+  border-radius: 0;
+}
+
+dialog.drw[data-size='wide'] {
+  inline-size: min(820px, 100vw);
+}
+
+dialog.drw[open] {
+  animation: ad-drw-in 0.4s var(--ad-ease);
+}
+
+[dir='rtl'] dialog.drw[open] {
+  animation-name: ad-drw-in-rtl;
+}
+
+.drw__h {
+  align-items: center;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--ad-line);
+}
+
+.drw__h h2 {
+  font-size: 17px;
+}
+
+.drw__b {
+  flex: 1;
+  padding: 22px;
+  overflow-y: auto;
+}
+
+.drw__f {
+  padding: 14px 22px;
+  border-top: 1px solid var(--ad-line);
+}
+
+@keyframes ad-mdl-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+}
+
+@keyframes ad-drw-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes ad-drw-in-rtl {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
 /* ---- Motion and forced colours ---- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -2049,7 +3282,21 @@ img.ProseMirror-separator {
   .tabs a[aria-current],
   .editor-toolbar button[aria-pressed='true'],
   .media-pick[aria-pressed='true'],
-  .cmd__i[aria-selected='true'] {
+  .cmd__i[aria-selected='true'],
+  .note,
+  .kpi__d,
+  .chip[aria-pressed='true'],
+  .chip[aria-current],
+  .seg [role='tab'][aria-selected='true'],
+  .pager [aria-current='page'],
+  .dt tbody tr[data-selected],
+  .bulkbar {
+    border: 1px solid CanvasText;
+  }
+
+  /* Its own rule: a list mixing :has() with plain selectors is dropped whole by an
+     engine without :has() (tests/lib/cssSelectorLists.spec.ts). */
+  .seg__o:has(> input:checked) {
     border: 1px solid CanvasText;
   }
 
@@ -2059,5 +3306,19 @@ img.ProseMirror-separator {
 
   .bar-fill {
     background: Highlight;
+  }
+
+  /* Chart paint in one system colour, whatever the browser does to SVG; the series
+     stay apart by their dashes, the values by the table. */
+  .ch-line,
+  .ch-seg,
+  .ring__arc {
+    stroke: CanvasText;
+  }
+
+  .ch-bar,
+  .ch-dot,
+  .ch-swatch {
+    fill: CanvasText;
   }
 }

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 
 // Path aliases mirror tsconfig.json so tests resolve @/ , @schemas/ , @consent/.
@@ -37,8 +37,22 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'node',
-    include: ['tests/**/*.spec.ts'],
+    // Two projects. `unit` is every spec, as before. `astro` renders the admin's server
+    // primitives (.astro, Admin v2 F4b) through Astro's container API, which needs Astro's
+    // own Vite plugins: vitest.astro.config.ts. Its specs live in tests/astro/ and nowhere
+    // else, so the unit project leaves that folder alone.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          environment: 'node',
+          include: ['tests/**/*.spec.ts'],
+          exclude: [...configDefaults.exclude, 'tests/astro/**'],
+        },
+      },
+      './vitest.astro.config.ts',
+    ],
     coverage: {
       // Headline (CLAUDE.md §9): 100% branch on authz + schema modules.
       thresholds: { lines: 80, functions: 80, branches: 75 },
