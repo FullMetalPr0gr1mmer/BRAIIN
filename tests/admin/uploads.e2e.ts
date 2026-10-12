@@ -93,6 +93,7 @@ test.describe('as admin', () => {
   }) => {
     const thumb = String(asset['thumb_url']);
     expect(thumb).toMatch(/^\/_image\?/);
+    expect(new URL(thumb, 'http://localhost').searchParams.get('w')).toBe('320');
     const res = await page.request.get(thumb);
     expect(res.status()).toBe(200);
     expect(res.headers()['content-type']).toContain('image/webp');
@@ -121,11 +122,17 @@ test.describe('as admin', () => {
       return {
         loaded,
         naturalWidth: img.naturalWidth,
+        naturalHeight: img.naturalHeight,
         csp: (window as unknown as { __csp: string[] }).__csp,
       };
     }, thumb);
     expect(rendered.loaded, 'the thumbnail loads').toBe(true);
+    // Exactly the width asked for, at the master's aspect. The endpoint transforms an upload
+    // by its width alone: given w=320&h=213 as a box, the binding fitted this 2560x1707
+    // master inside it and served 319 (213.375 rounded down made the height the limit).
     expect(rendered.naturalWidth).toBe(320);
+    const exactHeight = (320 * Number(asset['height'])) / Number(asset['width']);
+    expect(Math.abs(rendered.naturalHeight - exactHeight)).toBeLessThanOrEqual(0.5);
     expect(rendered.csp, 'CSP violations').toEqual([]);
   });
 

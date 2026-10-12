@@ -23,6 +23,8 @@ import { checkImageRequest, imageGuardResponse } from './imageGuard';
 //      (MEDIA_OBJECT_CACHE_SECONDS), not for a year: a deleted or replaced file, an erasure
 //      included, leaves the web within about two hours (runbook §6i), where the adapter's
 //      `immutable` year kept it in browsers and in this zone's cache for a year.
+//   5. An upload is transformed by its width alone (uploadTransform), so the derivative is
+//      exactly as wide as the markup asked, never a pixel narrower.
 
 export const prerender = false;
 
@@ -38,10 +40,35 @@ const OUTPUT_TYPES = {
   jpg: 'image/jpeg',
 } as const;
 
+/** What the Images binding is asked to do with an upload (worker-configuration.d.ts `ImageTransform`). */
+export interface UploadTransform {
+  width: number;
+  fit: 'scale-down';
+}
+
+/**
+ * The transform for an upload the guard admitted: its width alone, scaled down (never
+ * enlarged; the guard already refuses a width past the source's).
+ *
+ * The URL carries `h` too, because Astro's markup emits it and the guard checks it (within
+ * half a pixel of the exact aspect at `w`). But `h` is a rounded number, and given a width and
+ * a height the binding fits the image inside that box, keeping its aspect (Cloudflare's
+ * "maximum width" and "maximum height"; wrangler dev's local binding treats no `fit` as
+ * scale-down). Wherever the rounding went down, the height was the tighter side and the
+ * derivative came back a pixel narrower than asked: a 2560x1707 master at `w=320&h=213`
+ * (exact 213.375) was 319 px wide, because 213/1707 < 320/2560. Driven by the width alone,
+ * the binding keeps the aspect itself, so the derivative is exactly `w` wide and its height is
+ * the exact one rounded, the `h` the guard admitted; the two URLs of a half-pixel tie are one
+ * transformation, not two. `fit` is stated, not left to a default.
+ */
+export function uploadTransform(params: URLSearchParams): UploadTransform {
+  return { width: Number(params.get('w')), fit: 'scale-down' };
+}
+
 /** The part of the Images binding this calls (worker-configuration.d.ts `ImagesBinding`). */
 interface ImagesTransformer {
   input(stream: ReadableStream<Uint8Array>): {
-    transform(transform: { width: number; height: number }): {
+    transform(transform: UploadTransform): {
       output(options: {
         format: (typeof OUTPUT_TYPES)[keyof typeof OUTPUT_TYPES];
         quality: number;
@@ -105,7 +132,7 @@ async function transformUpload(
     transformed = (
       await images
         .input(upstream.body)
-        .transform({ width: Number(params.get('w')), height: Number(params.get('h')) })
+        .transform(uploadTransform(params))
         .output({ format, quality: QUALITY })
     ).response();
   } catch {
