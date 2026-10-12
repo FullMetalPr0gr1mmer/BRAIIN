@@ -1,0 +1,89 @@
+---
+import { Picture } from 'astro:assets';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import logo from '@/assets/braiin-logo-white.png';
+import rider from '@/assets/media/stills/services/rider.jpg';
+import { getIdentity } from '@/lib/identity';
+import type { AdminStylesheet } from '@/lib/admin/stylesheets';
+
+// The sign-in screens' shell (Admin v2 F7, docs/admin-v2/ui.md "Login, forgot and reset"):
+// the prototype's split layout, an art panel (the rider still under a midnight gradient,
+// and the quote) beside a light panel holding the form. Tier C like every admin page
+// (`private, no-store`, set in the middleware), and never indexable.
+//
+// ZERO JavaScript, on purpose: these are the only admin pages a visitor without a session
+// reaches, and their forms post as plain HTML (src/lib/auth/body.ts), so they need none.
+// No <script> here or in the pages (tests/lib/adminConventions.spec.ts). That is also why
+// this is not AdminLayout: its one script (sign-out, menus, the sidebar popover) serves
+// the signed-in shell and would load here for nothing.
+//
+// The brand comes from site_profile (the logo's alt, the title); the host in the quote
+// from PUBLIC_SITE_URL, the one origin the site renders.
+
+interface Props {
+  title: string;
+  /** Screen stylesheets under /styles/admin/ (src/lib/admin/stylesheets.ts), as AdminLayout. */
+  styles?: readonly AdminStylesheet[] | undefined;
+}
+
+const { title, styles = [] } = Astro.props;
+const brand = (await getIdentity(Astro.locals)).brandName.en;
+const host = new URL(PUBLIC_SITE_URL).host.replace(/^www\./, '');
+---
+
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{`${title} · ${brand} Admin`}</title>
+    <meta name="robots" content="noindex,nofollow,noarchive,nosnippet" />
+    <link rel="stylesheet" href="/styles/admin.css" />
+    {styles.map((sheet) => <link rel="stylesheet" href={`/styles/admin/${sheet}`} />)}
+  </head>
+  <body class="admin-body" data-layout="auth">
+    <div class="login">
+      <aside class="login__art">
+        {
+          /* Hidden below 900px, and lazy, so a phone never downloads it. Every width is on
+             the /_image allow-list (src/lib/http/imageGuard.ts); 1600 is the still's own. */
+        }
+        <Picture
+          src={rider}
+          alt=""
+          formats={['avif', 'webp']}
+          widths={[640, 960, 1280, 1600]}
+          sizes="(min-width: 900px) 53vw, 100vw"
+          loading="lazy"
+          decoding="async"
+        />
+        <p class="login__quote">
+          <b>From the brain to the real world.</b>
+          <span>
+            Everything on {host} is edited from here: pages, services, leads, and the look of the site.
+          </span>
+        </p>
+      </aside>
+      <main class="login__panel" id="content">
+        <div class="login__box">
+          {
+            /* The sidebar's logo transforms (104 and 264 wide, both allow-listed), drawn at
+               140 CSS px and inverted onto the light panel, as the prototype does. */
+          }
+          <Picture
+            class="login__logo"
+            src={logo}
+            alt={brand}
+            formats={['avif', 'webp']}
+            width={104}
+            widths={[104, 264]}
+            sizes="140px"
+            loading="eager"
+            decoding="async"
+          />
+          <slot />
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

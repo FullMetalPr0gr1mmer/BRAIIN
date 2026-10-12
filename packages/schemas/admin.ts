@@ -95,14 +95,45 @@ export const ShareImageUrlSchema = UrlFieldSchema.refine(
 
 // ── Auth ────────────────────────────────────────────────────────────────────────
 
+const AccountEmailSchema = z.string().trim().toLowerCase().email().max(254);
+
 export const LoginSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
+  email: AccountEmailSchema,
   // Only a floor + ceiling: the real policy lives in GoTrue. The ceiling matters
   // because bcrypt-family hashing is CPU-bound in the password length, which makes an
   // unbounded field a cheap denial-of-service against the auth server.
   password: z.string().min(8).max(256),
+  // "Keep me signed in" (Admin v2 F7): a 7-day cookie when true, a session cookie when
+  // false (src/lib/auth/session.ts). On unless a caller says otherwise (owner item O-14).
+  remember: z.boolean().default(true),
 });
 export type LoginInput = z.infer<typeof LoginSchema>;
+
+/** "Forgot password?" (Admin v2 F7). */
+export const ForgotPasswordSchema = z.object({ email: AccountEmailSchema });
+
+/**
+ * A new password set through a reset link. OWASP ASVS 4.0.3 V2.1.1 and V2.1.2: at least
+ * 12 characters, at most 128. Stricter than sign-in's floor of 8, which still has to
+ * accept the passwords accounts already hold. GoTrue's own policy applies on top.
+ */
+export const NEW_PASSWORD_MIN = 12;
+export const NEW_PASSWORD_MAX = 128;
+
+/**
+ * GoTrue's recovery token hash, as the reset e-mail's link carries it (`token_hash`):
+ * opaque here, so only its alphabet and length are checked before GoTrue verifies it.
+ */
+export const RECOVERY_TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
+
+export const ResetPasswordSchema = z
+  .object({
+    token: z.string().regex(RECOVERY_TOKEN_PATTERN),
+    password: z.string().min(NEW_PASSWORD_MIN).max(NEW_PASSWORD_MAX),
+    confirm: z.string().max(NEW_PASSWORD_MAX),
+  })
+  .refine((v) => v.password === v.confirm, { path: ['confirm'], message: 'mismatch' });
+export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
 
 // ── Services · disciplines · service cases (0028) ───────────────────────────────
 

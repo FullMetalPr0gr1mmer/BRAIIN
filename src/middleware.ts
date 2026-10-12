@@ -46,12 +46,20 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const REDIRECTABLE_METHODS = new Set(['GET', 'HEAD']);
 
 /**
- * The only two private paths reachable without a session — the login form and the
- * endpoint it posts to. Both still get the CSRF check and `no-store`; what they skip is
- * the authentication gate, which they obviously cannot satisfy.
+ * The only private paths reachable without a session: the three sign-in screens (sign
+ * in, forgot password, reset password: Admin v2 F7) and the endpoints their forms post
+ * to. All six still get the CSRF check and `no-store`; what they skip is the
+ * authentication gate, which they obviously cannot satisfy.
  */
 const LOGIN_PATH = '/admin/login';
-const LOGIN_API_PATH = '/api/admin/auth/login';
+const PRE_AUTH_PATHS: ReadonlySet<string> = new Set([
+  LOGIN_PATH,
+  '/admin/forgot',
+  '/admin/reset',
+  '/api/admin/auth/login',
+  '/api/admin/auth/forgot',
+  '/api/admin/auth/reset',
+]);
 
 function jsonError(status: number, error: string): Response {
   return new Response(JSON.stringify({ ok: false, error }), {
@@ -193,7 +201,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
     // Authentication gate. Authorization (which capability, which role) is the API
     // kernel's job — this only answers "is there a verified session at all".
-    if (!ctx && url.pathname !== LOGIN_PATH && url.pathname !== LOGIN_API_PATH) {
+    if (!ctx && !PRE_AUTH_PATHS.has(url.pathname)) {
       if (isAdminApi) return secured(jsonError(401, 'unauthenticated'));
       const next = `${url.pathname}${url.search}`;
       return secured(context.redirect(`${LOGIN_PATH}?next=${encodeURIComponent(next)}`, 302));

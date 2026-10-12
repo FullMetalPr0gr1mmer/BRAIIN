@@ -319,6 +319,7 @@ const ADMIN_PAIRS = [
   ['on-primary', 'primary', 4.5, 'primary button label, the current sidebar item'],
   ['on-primary', 'primary-hover', 4.5, 'primary button label on hover'],
   ['primary', 'card', 4.5, 'links (a.data-link, search hits) on a card'],
+  ['primary', 'bg', 4.5, 'links on the ground (the sign-in screens, Admin v2 F7)'],
   ['primary', 'surface-2', 4.5, 'a link in a hovered table row'],
   ['primary', 'primary-soft', 4.5, '.msg, soft button, klein badge, pressed toolbar button'],
   ['primary', 'primary-soft-2', 4.5, 'soft button on hover'],

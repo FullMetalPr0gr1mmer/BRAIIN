@@ -1,0 +1,58 @@
+---
+import AuthLayout from '@/layouts/AuthLayout.astro';
+import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
+import { authEmailReady } from '@/lib/auth/recovery';
+import { FORGOT_MESSAGES, FORGOT_NOT_SET_UP, messageFor } from '@/lib/auth/messages';
+
+export const prerender = false;
+
+// "Forgot password?" (Admin v2 F7). A plain form, no script: it posts to
+// /api/admin/auth/forgot, which answers every address the same way and comes back here
+// with a `status` code. While Supabase cannot send e-mail (owner item O-2,
+// AUTH_EMAIL_READY), the screen says "Not set up" and offers no form: a form that sends
+// nothing would be pretending.
+
+const ready = authEmailReady();
+const message = ready ? messageFor(FORGOT_MESSAGES, Astro.url.searchParams.get('status')) : null;
+const csrfToken = Astro.locals.csrfToken;
+---
+
+<AuthLayout title="Forgot password" styles={['login.css']}>
+  <h1>Forgot your password?</h1>
+
+  {
+    ready ? (
+      <>
+        <p class="login__lead">
+          Enter the email you sign in with, and we will send you a link to choose a new password.
+        </p>
+        {message && (
+          <p
+            class="msg"
+            data-kind={message.kind}
+            role={message.kind === 'error' ? 'alert' : 'status'}
+          >
+            {message.text}
+          </p>
+        )}
+        <form class="login__form" method="post" action="/api/admin/auth/forgot">
+          <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+          <label class="field">
+            <span>Email</span>
+            <input type="email" name="email" autocomplete="username" required maxlength="254" />
+          </label>
+          <button type="submit" data-variant="primary">
+            Send reset link
+          </button>
+        </form>
+      </>
+    ) : (
+      <div class="msg login__notice" role="status">
+        <strong>{FORGOT_NOT_SET_UP.title}</strong>
+        <span>{FORGOT_NOT_SET_UP.text}</span>
+      </div>
+    )
+  }
+
+  <p class="login__back"><a class="login__link" href="/admin/login">Back to sign in</a></p>
+</AuthLayout>
