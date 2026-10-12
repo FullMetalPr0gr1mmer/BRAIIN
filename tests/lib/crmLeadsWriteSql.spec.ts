@@ -102,6 +102,62 @@ describe('0041 never queues behind a busy table', () => {
   });
 });
 
+describe('the postconditions check every grant the doors stand on', () => {
+  // The DO block that ends 0041 fails the push when a grant is wrong. A gap here would fail
+  // closed (a door answering 42501), but at the first erasure or export rather than at the
+  // push, so the final review's list is pinned. A check preceded by `not` names a privilege
+  // the role must hold; any other names one it must not.
+  const block = SQL.slice(SQL.lastIndexOf('do $$'));
+  const checks = [
+    ...block.matchAll(
+      /(not\s+)?has_(table|any_column|schema|function)_privilege\(\s*'([^']+)',\s*'([^']+)',\s*'([^']+)'\s*\)/g,
+    ),
+  ].flatMap(([, not, kind, role, object, privileges]) =>
+    privileges!
+      .split(',')
+      .map((p) => `${not ? 'holds' : 'lacks'} ${kind} ${role} ${object} ${p.trim()}`),
+  );
+  const TABLE = ['select', 'insert', 'update', 'delete', 'truncate', 'references', 'trigger'];
+  const COLUMN = ['select', 'insert', 'update', 'references'];
+
+  it('anon and PUBLIC hold nothing on leads or leads_safe, table-wide or on a column', () => {
+    for (const role of ['anon', 'public']) {
+      for (const object of ['public.leads', 'public.leads_safe']) {
+        for (const p of TABLE) expect(checks).toContain(`lacks table ${role} ${object} ${p}`);
+        for (const p of COLUMN) expect(checks).toContain(`lacks any_column ${role} ${object} ${p}`);
+      }
+    }
+  });
+
+  it('staff still read leads_safe, write nothing through it, and insert no lead column', () => {
+    expect(checks).toContain('holds table authenticated public.leads_safe select');
+    for (const p of TABLE.filter((p) => p !== 'select')) {
+      expect(checks).toContain(`lacks table authenticated public.leads_safe ${p}`);
+    }
+    for (const p of ['insert', 'update', 'references']) {
+      expect(checks).toContain(`lacks any_column authenticated public.leads_safe ${p}`);
+    }
+    for (const p of ['insert', 'references']) {
+      expect(checks).toContain(`lacks any_column authenticated public.leads ${p}`);
+    }
+  });
+
+  it('the service role holds what its doors run on, and may not rewrite a thread note', () => {
+    for (const held of [
+      'schema service_role app usage',
+      'table service_role public.lead_notes select',
+      'table service_role public.lead_notes delete',
+      'table service_role public.lead_events select',
+      'table service_role public.lead_events insert',
+      'table service_role public.crm_settings select',
+      'function service_role app.lead_score(text[], jsonb) execute',
+    ]) {
+      expect(checks).toContain(`holds ${held}`);
+    }
+    expect(checks).toContain('lacks table service_role public.lead_notes update');
+  });
+});
+
 describe('0041 runs twice cleanly', () => {
   it('drops the assignee key before the unique constraint it depends on', () => {
     // Postgres refuses to drop a unique constraint a foreign key still references, so on a

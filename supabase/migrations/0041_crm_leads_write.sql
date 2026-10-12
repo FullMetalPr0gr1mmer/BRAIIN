@@ -836,14 +836,25 @@ begin
   if not (v_cols @> v_write and v_cols <@ v_write) then
     raise exception '0041: authenticated may update leads columns % (expected exactly %)', v_cols, v_write;
   end if;
-  foreach p in array array['insert', 'update', 'delete', 'truncate'] loop
+  foreach p in array array['insert', 'update', 'delete', 'truncate', 'references', 'trigger'] loop
     if has_table_privilege('authenticated', 'public.leads', p) then
       raise exception '0041: authenticated holds table-wide % on leads', p;
     end if;
   end loop;
-  if has_any_column_privilege('anon', 'public.leads', 'select')
-     or has_any_column_privilege('anon', 'public.leads', 'update') then
-    raise exception '0041: anon can reach leads';
+  -- Nor on a column: a column INSERT grant would let a staff token add a lead naming only those
+  -- columns, through PostgREST, past the Worker's checks and its audit.
+  if has_any_column_privilege('authenticated', 'public.leads', 'insert, references') then
+    raise exception '0041: authenticated holds a column INSERT or REFERENCES on leads';
+  end if;
+  -- anon and PUBLIC hold nothing on leads, table-wide or on a column. (A list of privileges is
+  -- true when ANY of them is held; PUBLIC is named 'public'.)
+  if has_table_privilege('anon', 'public.leads',
+                         'select, insert, update, delete, truncate, references, trigger')
+     or has_any_column_privilege('anon', 'public.leads', 'select, insert, update, references')
+     or has_table_privilege('public', 'public.leads',
+                            'select, insert, update, delete, truncate, references, trigger')
+     or has_any_column_privilege('public', 'public.leads', 'select, insert, update, references') then
+    raise exception '0041: anon or PUBLIC holds a privilege on leads';
   end if;
   foreach p in array array['select', 'insert', 'update', 'delete'] loop
     if not has_table_privilege('service_role', 'public.leads', p) then
@@ -871,9 +882,19 @@ begin
                              'tags', 'last_contact_at', 'last_contact_channel')) <> 8 then
     raise exception '0041: leads_safe lacks a new pipeline column';
   end if;
-  if has_table_privilege('anon', 'public.leads_safe', 'select')
-     or has_table_privilege('authenticated', 'public.leads_safe', 'update') then
-    raise exception '0041: leads_safe grants are wrong';
+  -- Staff still SELECT it after the revoke-then-grant above, and do nothing else with it (a
+  -- simple view over one table is updatable); anon and PUBLIC hold nothing on it.
+  if not has_table_privilege('authenticated', 'public.leads_safe', 'select')
+     or has_table_privilege('authenticated', 'public.leads_safe',
+                            'insert, update, delete, truncate, references, trigger')
+     or has_any_column_privilege('authenticated', 'public.leads_safe', 'insert, update, references')
+     or has_table_privilege('anon', 'public.leads_safe',
+                            'select, insert, update, delete, truncate, references, trigger')
+     or has_any_column_privilege('anon', 'public.leads_safe', 'select, insert, update, references')
+     or has_table_privilege('public', 'public.leads_safe',
+                            'select, insert, update, delete, truncate, references, trigger')
+     or has_any_column_privilege('public', 'public.leads_safe', 'select, insert, update, references') then
+    raise exception '0041: leads_safe must be SELECT only for staff, and nothing for anon or PUBLIC';
   end if;
 
   -- The keys and the constraints.
@@ -935,6 +956,28 @@ begin
       raise exception '0041: % must be SECURITY INVOKER', v_fn;
     end if;
   end loop;
+
+  -- What the service role's doors run on. They are SECURITY INVOKER, so a grant missing here
+  -- would show only as a 42501 at the first erasure, note deletion, export or manual add, not
+  -- at the push. crm_erase_lead locks and deletes the lead (leads, above) and counts its notes
+  -- and events; crm_delete_lead_note reads and deletes a note, clears the legacy field (leads,
+  -- above) and writes the note_deleted event; crm_lead_note_counts reads notes;
+  -- crm_ingest_lead reads the tenant's scoring and scores the lead (0035). The doors reach
+  -- schema app too: the eraser check, the score and the tags CHECK.
+  if not has_schema_privilege('service_role', 'app', 'usage')
+     or not has_table_privilege('service_role', 'public.lead_notes', 'select')
+     or not has_table_privilege('service_role', 'public.lead_notes', 'delete')
+     or not has_table_privilege('service_role', 'public.lead_events', 'select')
+     or not has_table_privilege('service_role', 'public.lead_events', 'insert')
+     or not has_table_privilege('service_role', 'public.crm_settings', 'select')
+     or not has_function_privilege('service_role', 'app.lead_score(text[], jsonb)', 'execute') then
+    raise exception '0041: the service role lacks a privilege one of its lead doors runs on';
+  end if;
+  -- A thread note stays append-only for the service role as well (0034): only the definer
+  -- mirror rewrites a note, and only the legacy one.
+  if has_table_privilege('service_role', 'public.lead_notes', 'update') then
+    raise exception '0041: the service role may update lead_notes (a thread note is append-only)';
+  end if;
 
   -- Still one BEFORE trigger on leads, and its definers' owner still bypasses RLS (they
   -- write FORCE RLS tables with no policy for them).

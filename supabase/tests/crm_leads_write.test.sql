@@ -1,9 +1,12 @@
 -- pgTAP: Leads v2, part 4 (0041, Admin v2 C3) — writing the pipeline. Run with
 -- `supabase test db`.
 --
--- Covers: the crm.erase helper over every role; who may call each new door; the staff column
--- grant (exactly the pipeline's columns and the legacy pair); versioned writes through it (a
--- stale version changes nothing) and the unversioned marks (star, read, logged contact) that
+-- Covers: the crm.erase helper over every role; who may call each new door; the grants the
+-- doors stand on (anon and PUBLIC hold nothing on leads or leads_safe, staff only read
+-- leads_safe and insert no lead column, the service role holds what its doors run on and
+-- cannot rewrite a thread note); the staff column grant (exactly the pipeline's columns and
+-- the legacy pair); versioned writes through it (a stale version changes nothing) and the
+-- unversioned marks (star, read, logged contact) that
 -- never move the version, a star or a read mark not being an edit (who last changed the lead,
 -- and when, stay); a contact logged on a lead past New answering nothing; the assignee rule
 -- (an active lead worker of the lead's tenant); the tag and value rules; the read mark and the
@@ -18,7 +21,7 @@
 -- profile change tenant. CLAUDE.md §3, §5, §8, §9.
 
 begin;
-select plan(115);
+select plan(118);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -136,6 +139,36 @@ select ok(
       and column_name in ('assigned_to', 'value_sar', 'is_starred', 'read_at', 'read_by', 'tags',
                           'last_contact_at', 'last_contact_channel')),
   'leads_safe carries the new pipeline columns');
+-- The grants the doors stand on, as 0041's postconditions require them, held after every
+-- later migration too. (A list of privileges is true when any of them is held; PUBLIC is
+-- named 'public'.)
+select ok(
+  not has_table_privilege('anon', 'public.leads', 'select, insert, update, delete, truncate, references, trigger')
+  and not has_any_column_privilege('anon', 'public.leads', 'select, insert, update, references')
+  and not has_table_privilege('public', 'public.leads', 'select, insert, update, delete, truncate, references, trigger')
+  and not has_any_column_privilege('public', 'public.leads', 'select, insert, update, references')
+  and not has_table_privilege('anon', 'public.leads_safe', 'select, insert, update, delete, truncate, references, trigger')
+  and not has_any_column_privilege('anon', 'public.leads_safe', 'select, insert, update, references')
+  and not has_table_privilege('public', 'public.leads_safe', 'select, insert, update, delete, truncate, references, trigger')
+  and not has_any_column_privilege('public', 'public.leads_safe', 'select, insert, update, references'),
+  'anon and PUBLIC hold no privilege on leads or leads_safe, table-wide or on a column');
+select ok(
+  has_table_privilege('authenticated', 'public.leads_safe', 'select')
+  and not has_table_privilege('authenticated', 'public.leads_safe', 'insert, update, delete, truncate, references, trigger')
+  and not has_any_column_privilege('authenticated', 'public.leads_safe', 'insert, update, references')
+  and not has_table_privilege('authenticated', 'public.leads', 'insert, delete, truncate, references, trigger')
+  and not has_any_column_privilege('authenticated', 'public.leads', 'insert, references'),
+  'staff read leads_safe and write nothing through it, and insert no lead, not even by column');
+select ok(
+  has_schema_privilege('service_role', 'app', 'usage')
+  and has_table_privilege('service_role', 'public.lead_notes', 'select')
+  and has_table_privilege('service_role', 'public.lead_notes', 'delete')
+  and not has_table_privilege('service_role', 'public.lead_notes', 'update')
+  and has_table_privilege('service_role', 'public.lead_events', 'select')
+  and has_table_privilege('service_role', 'public.lead_events', 'insert')
+  and has_table_privilege('service_role', 'public.crm_settings', 'select')
+  and has_function_privilege('service_role', 'app.lead_score(text[], jsonb)', 'execute'),
+  'the service role holds what its lead doors run on, and may not rewrite a thread note');
 
 -- ---- Versioned writes through the column grant ----------------------------------------------
 set local role authenticated;
