@@ -46,6 +46,16 @@
 -- person's uuid). CLAUDE.md §3 (Pillar 1), §5, §8.
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- A busy table fails the push instead of queueing (as in 0038 and 0041). The preferences'
+-- foreign keys take SHARE ROW EXCLUSIVE locks on public.profiles and public.tenants, which
+-- block their writers. Every admin request reads profiles, the access-token hook reads it at
+-- every sign-in and the sign-in's lockout RPCs write it, so a lock request queued behind a
+-- long transaction (an export, a dump, an idle session) would hold those writes up for the
+-- whole wait. A statement below that waits more than five seconds for a lock raises
+-- instead, the whole migration rolls back, and the push is retried later.
+-- Transaction-local: it ends with this migration.
+set local lock_timeout = '5s';
+
 -- ---- 1. Preferences ---------------------------------------------------------------------
 create table if not exists public.admin_user_prefs (
   user_id uuid primary key references public.profiles (id) on delete cascade,
