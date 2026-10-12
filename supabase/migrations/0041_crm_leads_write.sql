@@ -61,11 +61,16 @@ revoke all on function app.role_crm_erase(text) from public, anon, authenticated
 grant execute on function app.role_crm_erase(text) to authenticated, service_role;
 
 -- ---- 2. Tags (used in a CHECK, so every writer needs EXECUTE) -----------------------------
--- At most 10, each 1 to 32 characters with no surrounding spaces and no control
--- characters, no repeats. Named for the CRM, not for leads: contacts take the same rule.
+-- A list: one dimension (an empty array has none, so array_ndims is null). At most 10, each
+-- 1 to 32 characters with no surrounding spaces and no control characters, no repeats. Named
+-- for the CRM, not for leads: contacts take the same rule. The dimension check matters
+-- because cardinality() and unnest() flatten a 2-D array: '{{a},{b}}' would pass every other
+-- test here, and a lead holding it would then fail every bulk tag action that includes it
+-- (|| and array_remove refuse a multi-dimensional array).
 create or replace function app.tags_ok(p text[]) returns boolean
   language sql immutable as $$
   select p is not null
+     and (array_ndims(p) is null or array_ndims(p) = 1)
      and cardinality(p) <= 10
      and not exists (select 1 from unnest(p) t
                       where t is null

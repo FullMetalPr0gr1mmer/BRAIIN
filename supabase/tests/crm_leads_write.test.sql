@@ -18,7 +18,7 @@
 -- profile change tenant. CLAUDE.md §3, §5, §8, §9.
 
 begin;
-select plan(113);
+select plan(115);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -198,6 +198,14 @@ select throws_ok(
 select throws_ok(
   $$ update public.leads set tags = array[' padded'] where id = '00000000-0000-0000-0000-00000000aa01' $$,
   '23514', null, 'a tag with surrounding spaces is refused');
+-- A 2-D array passes the count and the per-tag checks (cardinality and unnest flatten it), and
+-- a lead holding one would fail every bulk tag action that includes it.
+select throws_ok(
+  $$ update public.leads set tags = '{{a},{b}}' where id = '00000000-0000-0000-0000-00000000aa01' $$,
+  '23514', 'new row for relation "leads" violates check constraint "leads_tags_ok"',
+  'a two-dimensional tag array is refused, through the staff column grant');
+select ok(not app.tags_ok('{{a}}') and app.tags_ok('{}') and app.tags_ok('{a}'),
+  'app.tags_ok: a list of one dimension, or none at all for no tags');
 
 -- ---- The unversioned marks ------------------------------------------------------------------
 select is(_rows($$ update public.leads set is_starred = true
