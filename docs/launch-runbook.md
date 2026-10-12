@@ -963,10 +963,12 @@ Owner decision A5 and item O-1: editors upload images to a **public** Supabase S
 `media`, which migration 0045 creates (as 0029 created `applications`). The Worker sniffs each
 file (JPEG, PNG or WebP stills; no SVG, GIF, animation, AVIF or HEIC), re-encodes it through the
 `IMAGES` binding to **one WebP master, at most 2,560 px on its long edge, without EXIF or GPS**,
-and stores only that, as the service role, under `<tenant>/<random id>_<w>x<h>.webp`. Pages
-reach it only through same-origin `/_image`. Nothing here needs a new secret or a paid plan:
-the bucket and the binding already exist on the Free plans, and `image.remotePatterns` is
-derived at build time from `PUBLIC_SUPABASE_URL`, which the deploy job already sets.
+and stores only that, as the service role, under `<tenant>/<random id>_<w>x<h>.webp`. An image
+more than 100 times as long as it is wide, either way, is refused (422): the site could not
+show it at its listed widths. Pages reach it only through same-origin `/_image`. Nothing here
+needs a new secret or a paid plan: the bucket and the binding already exist on the Free plans,
+and `image.remotePatterns` is derived at build time from `PUBLIC_SUPABASE_URL`, which the
+deploy job already sets.
 
 **What "public" means.** An uploaded image is readable by anyone who has its URL, from the
 moment it is uploaded, published or not. The key is random (a UUID), so it cannot be guessed or
@@ -993,14 +995,15 @@ month (past them, new transforms fail with error 9422 — LCP posters included);
 of 50 uploads per person and 100 per tenant (`MEDIA_UPLOAD_LIMITS`) keeps one afternoon from
 spending the month. **The budget per published image:** the pages ask about 10 sizes of one
 (three `<Picture>` widths in AVIF and WebP, its own width, the 1,200 px share JPEG, a 1,600 px
-lightbox WebP, the 320 px admin thumbnail); `/_image` admits at most 57 (the 18 listed widths
-below its own plus its own, each at one height, in AVIF, WebP or JPEG), so 5,000 a month holds
-about 87 published uploads even against someone requesting every admissible size, and about 500
-as the pages use them; the bundled stills share the same quota. A key that names no object is a
-404 before any transformation (`src/lib/http/imageEndpoint.ts`), but still one Worker request
-and one Supabase request. Storage counts against the Supabase plan's 1 GB (shared with the CV
-bucket; the library's meter shows it), and every `/_image` miss for an upload is Supabase
-egress: a derivative is cached for an hour, and only where the Cache API persists (a custom
+lightbox WebP, the 320 px admin thumbnail); `/_image` admits at most 69 (the 18 listed widths
+below its own plus its own, each at one height, or two where the exact height falls on a half
+pixel, in AVIF, WebP or JPEG: 69 at worst, a 1632x51 master; a 2,560 px photo admits 57 at
+4:3 and 66 at 16:9), so 5,000 a month holds about 72 published uploads even against someone
+requesting every admissible size, and about 500 as the pages use them; the bundled stills share
+the same quota. A key that names no object is a 404 before any transformation
+(`src/lib/http/imageEndpoint.ts`), but still one Worker request and one Supabase request.
+Storage counts against the Supabase plan's 1 GB (shared with the CV bucket; the library's meter
+shows it), and every `/_image` miss for an upload is Supabase egress: a derivative is cached for an hour, and only where the Cache API persists (a custom
 domain, not `*.workers.dev`). The Worker's own CPU per upload is about 1–2 ms
 of JavaScript measured locally; the file itself streams into the binding natively. Confirm it on
 the first production upload in Workers Logs (O-16); if an upload ever exceeds the Free plan's
