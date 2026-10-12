@@ -66,12 +66,27 @@ const session = (role: Role = 'seo', isActive = true): AuthContext => ({
   email: EMAIL,
 });
 
+interface AuthError {
+  code?: string;
+  status?: number;
+  message: string;
+}
+
 interface AuthOptions {
+  /** What signInWithPassword answers whatever the password: the auth server failing. */
+  signInError?: AuthError;
   /** The error updateUser answers with, or none. */
-  updateError?: { code?: string; status?: number; message: string };
+  updateError?: AuthError;
   /** signOut({ scope: 'others' }) fails. */
   othersFail?: boolean;
 }
+
+/** GoTrue's answer to a wrong password. */
+const WRONG_PASSWORD: AuthError = {
+  code: 'invalid_credentials',
+  status: 400,
+  message: 'Invalid login credentials',
+};
 
 /** The session client's auth half: the current password is CURRENT. */
 function fakeClient(options: AuthOptions = {}) {
@@ -83,12 +98,12 @@ function fakeClient(options: AuthOptions = {}) {
       signInWithPassword: async (credentials: { email: string; password: string }) => {
         calls.push('signIn');
         signIns.push(credentials);
+        if (options.signInError) {
+          return { data: { user: null, session: null }, error: options.signInError };
+        }
         return credentials.password === CURRENT
           ? { data: { user: {}, session: {} }, error: null }
-          : {
-              data: { user: null, session: null },
-              error: { message: 'Invalid login credentials', status: 400 },
-            };
+          : { data: { user: null, session: null }, error: WRONG_PASSWORD };
       },
       updateUser: async (attributes: unknown) => {
         calls.push('update');
@@ -208,6 +223,46 @@ describe('changeMyPassword', () => {
     expect(outcome).toEqual({ ok: false, reason: 'locked' });
   });
 
+  it('only a refused password counts: a rate limit, an outage or a captcha refusal counts nothing', async () => {
+    const failures: AuthError[] = [
+      { code: 'over_request_rate_limit', status: 429, message: 'rate limited' },
+      { status: 503, message: 'upstream' },
+      { status: 0, message: 'fetch failed' },
+      { code: 'captcha_failed', status: 400, message: 'captcha required' },
+    ];
+    for (const signInError of failures) {
+      const { sb, calls } = fakeClient({ signInError });
+      // The right password: the person did nothing wrong, the server could not check it.
+      const outcome = await changeMyPassword(sb, session(), { current: CURRENT, next: NEXT }, null);
+      const label = JSON.stringify(signInError);
+      expect(outcome, label).toEqual({ ok: false, reason: 'failed' });
+      expect(calls, label).toEqual(['signIn']);
+    }
+    expect(state.rpcs).not.toContain('register_failed_login');
+    expect(state.failures.get(EMAIL)).toBeUndefined();
+    expect(state.audits).toEqual([]);
+    expect(state.logs.map((log) => log['detail'])).toEqual([
+      { status: 429, code: 'over_request_rate_limit' },
+      { status: 503, code: null },
+      { status: 0, code: null },
+      { status: 400, code: 'captcha_failed' },
+    ]);
+    expectNoPasswordRecorded();
+  });
+
+  it('a wrong password from an auth server without error codes (a bare 400) still counts', async () => {
+    const legacy = { status: 400, message: 'Invalid login credentials' };
+    const { sb } = fakeClient({ signInError: legacy });
+    const outcome = await changeMyPassword(
+      sb,
+      session(),
+      { current: 'wrong-password-99', next: NEXT },
+      null,
+    );
+    expect(outcome).toEqual({ ok: false, reason: 'wrong-current' });
+    expect(state.failures.get(EMAIL)).toBe(1);
+  });
+
   it('fails closed: an unreachable lockout store refuses before the password is tried', async () => {
     state.storeUp = false;
     const { sb, calls } = fakeClient();
@@ -235,7 +290,11 @@ describe('changeMyPassword', () => {
     expect(outcome).toEqual({ ok: false, reason: 'failed' });
     expect(calls).toEqual(['signIn', 'update']);
     expect(state.logs).toEqual([
-      expect.objectContaining({ level: 'error', source: 'admin:account', detail: { status: 500 } }),
+      expect.objectContaining({
+        level: 'error',
+        source: 'admin:account',
+        detail: { status: 500, code: null },
+      }),
     ]);
     expectNoPasswordRecorded();
   });
@@ -309,6 +368,16 @@ describe('POST /api/admin/me/password', () => {
       error: 'locked',
       retryAfterMinutes: LOCKOUT_DURATION_MINUTES,
     });
+  });
+
+  it('an auth server that cannot check the password answers 502, never "wrong password"', async () => {
+    const unavailable = fakeClient({
+      signInError: { code: 'over_request_rate_limit', status: 429, message: 'rate limited' },
+    });
+    const res = await post(valid, unavailable.sb);
+    expect(res.status).toBe(502);
+    expect(res.body).toMatchObject({ error: 'server' });
+    expect(state.failures.get(EMAIL)).toBeUndefined();
   });
 
   it('never echoes a password', async () => {

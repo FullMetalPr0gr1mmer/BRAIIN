@@ -90,6 +90,35 @@ export const PASSWORD_REFUSALS: Readonly<
   failed: { field: 'next', message: 'Your password could not be changed just now. Try again.' },
 };
 
+/** What an auth-js error carries: GoTrue's error code, and the HTTP status (0 offline). */
+interface AuthErrorLike {
+  code?: unknown;
+  status?: unknown;
+}
+
+/**
+ * True only when GoTrue refused the password itself: `invalid_credentials`, or a 400 with
+ * no code (an auth server that predates error codes answers a wrong password that way).
+ * A rate limit, an outage, a network error or a captcha refusal is not the person's
+ * mistake, so it must not count toward their lockout.
+ */
+function isWrongPassword(error: AuthErrorLike): boolean {
+  return error.code === 'invalid_credentials' || (error.code == null && error.status === 400);
+}
+
+/** A failure at the auth server, logged with its status and code only, never a password. */
+function logAuthFailure(step: 're-authentication' | 'update', error: AuthErrorLike): void {
+  void writeSystemLog({
+    level: 'error',
+    source: 'admin:account',
+    message: `password change failed at the auth server (${step})`,
+    detail: {
+      status: typeof error.status === 'number' ? error.status : null,
+      code: typeof error.code === 'string' ? error.code : null,
+    },
+  });
+}
+
 /**
  * Changes the caller's password (CLAUDE.md §3, Pillar 1):
  *   1. A locked account is refused before anything is tried.
@@ -126,21 +155,23 @@ export async function changeMyPassword(
     password: input.current,
   });
   if (authError) {
+    // Only a refused password is the person's wrong try. Anything else (a 429, a 5xx, the
+    // network, a captcha the auth server asks for) is a failure to check, not a failed
+    // check: it counts nothing, and the person is told to try again.
+    if (!isWrongPassword(authError)) {
+      logAuthFailure('re-authentication', authError);
+      return { ok: false, reason: 'failed' };
+    }
     const nowLocked = await registerFailure(auth.email, ip);
     return refuse(nowLocked ? 'locked' : 'wrong-current');
   }
 
   const { error: updateError } = await sb.auth.updateUser({ password: input.next });
   if (updateError) {
-    const code = (updateError as { code?: unknown }).code;
+    const code = (updateError as AuthErrorLike).code;
     if (code === 'same_password') return { ok: false, reason: 'same' };
     if (code === 'weak_password') return { ok: false, reason: 'weak' };
-    void writeSystemLog({
-      level: 'error',
-      source: 'admin:account',
-      message: 'password change failed at the auth server',
-      detail: { status: (updateError as { status?: unknown }).status ?? null },
-    });
+    logAuthFailure('update', updateError);
     return { ok: false, reason: 'failed' };
   }
 
