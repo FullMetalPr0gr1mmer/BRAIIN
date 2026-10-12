@@ -4,6 +4,7 @@ import AdminLayout from '@/layouts/AdminLayout.astro';
 import NotificationList from '@/components/admin/screens/chrome/NotificationList';
 import { loadNotifications, type NotificationFeed } from '@/lib/admin/notifications';
 import { markNotificationsSeen, seenUpTo } from '@/lib/admin/prefs';
+import type { ShellPreload } from '@/lib/admin/shell';
 import { can } from '@/lib/authz/matrix';
 import { getMaintenanceState } from '@/lib/http/maintenance';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
@@ -44,19 +45,27 @@ if (Astro.request.method === 'POST' && session && sb) {
   }
 }
 
-let feed: NotificationFeed = {
+// One read of the feed (with labels) and of the maintenance snapshot, shared with the
+// shell's unread count and badge (AdminLayout's `preload`), so the page does not run the
+// bell's loader twice.
+let preload: ShellPreload | undefined;
+if (session && sb) {
+  const maintenance = await getMaintenanceState(env);
+  preload = {
+    maintenance,
+    feed: await loadNotifications(sb, session, {
+      maintenance: async () => maintenance,
+      labels: true,
+    }),
+  };
+}
+const feed: NotificationFeed = preload?.feed ?? {
   items: [],
   unread: 0,
   seenAt: null,
   failed: [],
   asOf: new Date().toISOString(),
 };
-if (session && sb) {
-  feed = await loadNotifications(sb, session, {
-    maintenance: () => getMaintenanceState(env),
-    labels: true,
-  });
-}
 const failedToMark = Astro.response.status === 503;
 const done = Astro.url.searchParams.get('done') === 'seen';
 ---
@@ -65,6 +74,7 @@ const done = Astro.url.searchParams.get('done') === 'seen';
   title="Notifications"
   subtitle="What changed or arrived for you lately."
   styles={['personal.css']}
+  preload={preload}
 >
   <div class="card ntf-page">
     {

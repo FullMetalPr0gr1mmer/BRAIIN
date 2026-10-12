@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
+import AccountDrawer from '@/components/admin/screens/chrome/AccountDrawer';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
 import { CAPABILITIES, ROLE_CAPS } from '@/lib/authz/matrix';
@@ -288,13 +291,34 @@ describe('the environment pill', () => {
     expect(rpc).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps "no answer" only a minute, so a newly marked database shows soon', async () => {
-    const { sb, rpc } = envDb({ data: null });
-    await adminEnvironment(sb, TENANT, 0);
-    await adminEnvironment(sb, TENANT, 30_000);
-    expect(rpc).toHaveBeenCalledTimes(1);
-    await adminEnvironment(sb, TENANT, 60_001);
-    expect(rpc).toHaveBeenCalledTimes(2);
+  it('never keeps "no answer": it can be the caller\'s, not the database\'s', async () => {
+    // admin_environment answers NULL to a caller who is not live: a token locked a moment
+    // ago (a fifth wrong password) must not hide the pill from everyone on the isolate.
+    const locked = envDb({ data: null });
+    await adminEnvironment(locked.sb, TENANT, 0);
+    expect(await adminEnvironment(envDb({ data: 'production' }).sb, TENANT, 1_000)).toBe(
+      'production',
+    );
+
+    resetEnvironmentCache();
+    const failing = envDb('throw');
+    await adminEnvironment(failing.sb, TENANT, 0);
+    await adminEnvironment(failing.sb, TENANT, 1_000);
+    expect(failing.rpc).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── The chrome drawers, rendered on the server on every admin page ─────────────────
+
+describe('the account drawer on the server', () => {
+  it('is an empty dialog until it is opened: no forms, no capability lines', () => {
+    const html = renderToStaticMarkup(
+      createElement(AccountDrawer, { view: accountViewFor(auth('admin'), 'Sam Example') }),
+    );
+    expect(html).toContain('Your account');
+    expect(html).not.toContain('Change password');
+    expect(html).not.toContain('acct__can');
+    for (const line of capLinesFor('admin')) expect(html).not.toContain(line);
   });
 });
 

@@ -2,7 +2,7 @@
 import { env } from 'cloudflare:workers';
 import { can } from '@/lib/authz/matrix';
 import { currentLink, currentTab, visibleNav } from '@/lib/admin/nav';
-import { initialsOf, loadShellState, type ShellState } from '@/lib/admin/shell';
+import { initialsOf, loadShellState, type ShellPreload, type ShellState } from '@/lib/admin/shell';
 import { accountViewFor } from '@/lib/admin/account';
 import { ROLE_LABELS } from '@/lib/authz/capLabels';
 import { getIdentity } from '@/lib/identity';
@@ -36,9 +36,12 @@ interface Props {
       screen renders (src/lib/admin/stylesheets.ts). A known name, never a URL — the sheet
       is same-origin, so the CSP's `style-src 'self'` covers it with no nonce. */
   styles?: readonly AdminStylesheet[] | undefined;
+  /** What the page already read that the shell shows too (the notifications page's feed
+      and maintenance snapshot), so the shell does not read it again. */
+  preload?: ShellPreload | undefined;
 }
 
-const { title, subtitle, layout = 'app', styles = [] } = Astro.props;
+const { title, subtitle, layout = 'app', styles = [], preload } = Astro.props;
 const session = Astro.locals.session;
 const supabase = Astro.locals.supabase;
 const nav = session ? visibleNav(session.role) : [];
@@ -53,7 +56,7 @@ const tab = section ? currentTab(section, path) : null;
 
 const shell: ShellState =
   app && session && supabase
-    ? await loadShellState(supabase, session, nav, env)
+    ? await loadShellState(supabase, session, nav, env, preload)
     : { displayName: null, maintenance: false, counts: {}, environment: null, unread: 0 };
 const initials = session ? initialsOf(shell.displayName, session.email) : '';
 const account = session ? accountViewFor(session, shell.displayName) : null;

@@ -137,6 +137,33 @@ describe('loadShellState', () => {
     expect(state.counts).toEqual({ applications: 3 });
   });
 
+  it('takes the feed and the snapshot a page already read, and reads neither again', async () => {
+    // /admin/notifications loads the whole feed for its list; the shell's dot and badge
+    // come from that one read instead of a second run of the bell's loader.
+    const { sb, tables } = fakeSupabase({ leads: { count: 4 }, job_applications: { count: 2 } });
+    let kvReads = 0;
+    const env = {
+      SESSION: {
+        get: async () => {
+          kvReads += 1;
+          return null;
+        },
+      } as unknown as KVNamespace,
+    };
+    const state = await loadShellState(sb, auth('admin'), visibleNav('admin'), env, {
+      feed: { items: [], unread: 3, seenAt: null, failed: [], asOf: '2026-10-10T12:00:00.000Z' },
+      maintenance: { active: true, allowlist: [] },
+    });
+    expect(state.unread).toBe(3);
+    expect(state.maintenance).toBe(true);
+    expect(kvReads).toBe(0);
+    // The bell's own reads (the person's watermark, the scheduled posts) never ran.
+    expect(tables).not.toContain('admin_user_prefs');
+    expect(tables).not.toContain('blog_posts');
+    // The menu's counts are the shell's own, and still read.
+    expect(state.counts).toEqual({ leads: 4, applications: 2 });
+  });
+
   it('reads the maintenance flag, and treats a broken value as off', async () => {
     const { sb } = fakeSupabase({});
     const on = await loadShellState(sb, auth('seo'), visibleNav('seo'), kv('{"active":true}'));

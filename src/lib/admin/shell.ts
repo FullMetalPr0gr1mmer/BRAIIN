@@ -4,7 +4,7 @@ import { getMaintenanceState, type MaintenanceState } from '@/lib/http/maintenan
 import { COUNTERS } from './counters';
 import { adminEnvironment, type AdminEnvironment } from './environment';
 import type { NavCount, NavGroup } from './nav';
-import { loadNotifications } from './notifications';
+import { loadNotifications, type NotificationFeed } from './notifications';
 
 export { initialsOf } from './initials';
 
@@ -41,11 +41,22 @@ async function settle<T>(work: () => PromiseLike<T>): Promise<T | null> {
   }
 }
 
+/**
+ * What a page already read for itself, so the shell does not read it a second time:
+ * /admin/notifications loads the bell's whole feed (with labels) and the maintenance
+ * snapshot it was built from, and the shell's unread count and badge come from those.
+ */
+export interface ShellPreload {
+  feed: NotificationFeed;
+  maintenance: MaintenanceState | null;
+}
+
 export async function loadShellState(
   sb: SupabaseClient,
   auth: AuthContext,
   nav: readonly NavGroup[],
   env: { SESSION?: KVNamespace },
+  preload?: ShellPreload,
 ): Promise<ShellState> {
   const wanted = [
     ...new Set(
@@ -53,8 +64,11 @@ export async function loadShellState(
     ),
   ];
 
-  // One KV read, for the badge and the bell's maintenance item alike.
-  const maintenanceRead: Promise<MaintenanceState | null> = settle(() => getMaintenanceState(env));
+  // One KV read, for the badge and the bell's maintenance item alike (none at all when the
+  // page read it already).
+  const maintenanceRead: Promise<MaintenanceState | null> = preload
+    ? Promise.resolve(preload.maintenance)
+    : settle(() => getMaintenanceState(env));
 
   const [profile, maintenance, environment, feed, ...counts] = await Promise.all([
     settle(() =>
@@ -66,7 +80,9 @@ export async function loadShellState(
     ),
     maintenanceRead,
     settle(() => adminEnvironment(sb, auth.tenantId)),
-    settle(() => loadNotifications(sb, auth, { maintenance: () => maintenanceRead })),
+    preload
+      ? Promise.resolve(preload.feed)
+      : settle(() => loadNotifications(sb, auth, { maintenance: () => maintenanceRead })),
     ...wanted.map((key) => settle(() => COUNTERS[key](sb, auth.tenantId))),
   ]);
 

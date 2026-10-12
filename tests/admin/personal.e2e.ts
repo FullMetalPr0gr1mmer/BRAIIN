@@ -242,8 +242,8 @@ test.describe('without JavaScript', () => {
   });
 
   test('the account page renames without any script, and says so', async ({ page }) => {
-    // The page's own form, in main: the drawer's copy is server-rendered too, in a closed
-    // dialog outside it.
+    // The page's own form, in main (the drawer's panel renders only once the drawer opens,
+    // which needs JS, so the closed dialog outside main is empty).
     const main = page.locator('main#content');
     await page.goto('/admin/account');
     const original = (await main.getByLabel('Display name').inputValue()).trim();
