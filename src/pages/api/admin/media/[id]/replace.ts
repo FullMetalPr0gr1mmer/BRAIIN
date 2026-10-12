@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MediaReplaceMetaSchema } from '@schemas/media';
+import { MediaReplaceMetaSchema, parseStorageKey } from '@schemas/media';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { getRow, updateRow } from '@/lib/admin/crud';
 import { NotFoundError, OptimisticLockError, ValidationError } from '@/lib/admin/errors';
@@ -11,7 +11,13 @@ import {
   STORAGE_FAILED,
 } from '@/lib/admin/mediaUpload';
 import { isRefusal } from '@/lib/media/upload';
-import { mediaObjectKey, removeMediaObjects, uploadMediaObject } from '@/lib/media/storage';
+import {
+  mediaObjectKey,
+  removeMediaObjects,
+  removeObjectIfUnnamed,
+  uploadMediaObject,
+  type ObjectRemoval,
+} from '@/lib/media/storage';
 import { serviceClient } from '@/lib/supabase/server';
 
 // POST /api/admin/media/[id]/replace — a new file for an existing image (Admin v2 U3). The
@@ -21,10 +27,13 @@ import { serviceClient } from '@/lib/supabase/server';
 // and again by the UPDATE (409 if someone saved in between).
 //
 // The new file gets a NEW key, so no cached derivative of the old one is ever served for
-// it. The old object is not deleted here: no row names it any more, so the next daily
-// orphan sweep removes it (src/lib/media/orphans.ts), and a page rendered just before the
-// replace still finds its image until then. A still shipped with the site (`static`) or a legacy
-// row can be replaced too; it becomes an uploaded image.
+// it. By default the old object is not deleted here: no row names it any more, so the next
+// daily orphan sweep removes it (src/lib/media/orphans.ts), and a page rendered just before
+// the replace still finds its image until then. `removePrevious: true` in the details deletes
+// it at once instead, for an image that must come off the web now (a portrait whose subject
+// asked); the audit row records which object went, and the response how it went. A still
+// shipped with the site (`static`) or a legacy row can be replaced too; it becomes an
+// uploaded image (and has no object to remove).
 
 export const prerender = false;
 
@@ -37,7 +46,13 @@ export const POST = defineAdminRoute({
     if (!id || !z.string().uuid().safeParse(id).success) throw new NotFoundError('media_asset');
     const meta = MediaReplaceMetaSchema.parse(readMediaMeta(request));
 
-    const current = await getRow<Row>(sb, 'media_assets', auth, id, 'id,kind,provider,version');
+    const current = await getRow<Row>(
+      sb,
+      'media_assets',
+      auth,
+      id,
+      'id,kind,provider,storage_path,version',
+    );
     if (current['kind'] !== 'image') {
       throw new ValidationError('only an image can be replaced with an uploaded image', 'kind');
     }
@@ -77,6 +92,19 @@ export const POST = defineAdminRoute({
       throw err;
     }
 
+    // The previous file, when the editor asked for it to go now: only an uploaded image's
+    // object under this tenant's own prefix (the service role may delete any object).
+    const previousPath = String(current['storage_path'] ?? '');
+    const previousKey =
+      current['provider'] === 'storage' && parseStorageKey(previousPath)?.tenantId === auth.tenantId
+        ? previousPath
+        : null;
+    const previous: ObjectRemoval | 'none' | null = !meta.removePrevious
+      ? null
+      : previousKey === null
+        ? 'none'
+        : await removeObjectIfUnnamed(svc, previousKey);
+
     audit({
       action: 'media_asset.replace',
       entityType: 'media_asset',
@@ -89,8 +117,12 @@ export const POST = defineAdminRoute({
         width: image.width,
         height: image.height,
         version: meta.version,
+        ...(previous === null
+          ? {}
+          : { previousFile: previous, ...(previousKey ? { previousKey } : {}) }),
       },
     });
-    return mediaResource.fromRow ? mediaResource.fromRow(row) : row;
+    const out = mediaResource.fromRow ? mediaResource.fromRow(row) : row;
+    return previous === null ? out : { ...out, previous_file: previous };
   },
 });

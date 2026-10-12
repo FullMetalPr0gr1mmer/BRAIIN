@@ -6,7 +6,7 @@ import { mediaResource } from '@/lib/admin/resources/media';
 import { deleteRow, getRow } from '@/lib/admin/crud';
 import { InUseError, NotFoundError } from '@/lib/admin/errors';
 import { assertCap } from '@/lib/authz/matrix';
-import { removeMediaObjects } from '@/lib/media/storage';
+import { removeObjectIfUnnamed } from '@/lib/media/storage';
 import { serviceClient } from '@/lib/supabase/server';
 
 // GET + PATCH come from the kernel (assertCap + Zod + audit + no-store, tenant predicate
@@ -21,8 +21,10 @@ import { serviceClient } from '@/lib/supabase/server';
 //
 // An uploaded image (`storage`, Admin v2 U3) also has a file in the public bucket: once the
 // row is gone, the file is removed too (the service role; nothing references the asset, so
-// no page can still show it). If that removal fails, the row stays deleted and the daily
-// orphan sweep removes the file; the audit row says which happened.
+// no page can still show it), unless another row still names that file (0045's unique index
+// makes that a legacy or hand-edited row, never a second upload row): then it stays, as the
+// sweep would keep it. If the removal fails, the row stays deleted and the daily orphan
+// sweep removes the file; the audit row says which happened.
 
 export const prerender = false;
 
@@ -70,8 +72,16 @@ export const DELETE = defineAdminRoute({
         : null;
 
     await deleteRow(sb, 'media_assets', auth, id, { constraints: mediaResource.constraintFields });
+    const outcome = fileKey === null ? null : await removeObjectIfUnnamed(serviceClient(), fileKey);
     const file =
-      fileKey === null ? {} : { fileRemoved: await removeMediaObjects(serviceClient(), [fileKey]) };
+      outcome === null
+        ? {}
+        : {
+            fileRemoved: outcome === 'removed',
+            ...(outcome === 'still-named' || outcome === 'lookup-failed'
+              ? { fileKept: outcome }
+              : {}),
+          };
     audit({
       action: 'media_asset.delete',
       entityType: 'media_asset',

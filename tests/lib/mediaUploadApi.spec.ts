@@ -32,8 +32,11 @@ const state = vi.hoisted(() => ({
   insertError: null as null | { code: string; message: string },
   stored: null as Record<string, unknown> | null,
   events: [] as string[],
-  uploads: [] as { key: string; bytes: Uint8Array }[],
+  uploads: [] as { key: string; bytes: Uint8Array; options: Record<string, unknown> }[],
   removed: [] as string[][],
+  lookups: [] as string[],
+  namedBy: 0,
+  lookupError: false,
   inserts: [] as Record<string, unknown>[],
   updates: [] as Record<string, unknown>[],
   audits: [] as { action: string; detail?: Record<string, unknown> }[],
@@ -115,12 +118,28 @@ vi.mock('@/lib/admin/rateLimit', async () => {
 });
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
+    // "Does any row still name this file?" (removeObjectIfUnnamed), as the service role.
+    from: (table: string) => ({
+      select: (_cols: string, opts: { count?: string; head?: boolean }) => ({
+        eq: async (column: string, value: string) => {
+          expect([table, column, opts]).toEqual([
+            'media_assets',
+            'storage_path',
+            { count: 'exact', head: true },
+          ]);
+          state.lookups.push(value);
+          return state.lookupError
+            ? { count: null, error: { code: '57014', message: 'timeout' } }
+            : { count: state.namedBy, error: null };
+        },
+      }),
+    }),
     storage: {
       from: (bucket: string) => ({
-        upload: async (key: string, bytes: Uint8Array) => {
+        upload: async (key: string, bytes: Uint8Array, options: Record<string, unknown>) => {
           expect(bucket).toBe('media');
           state.events.push('object');
-          state.uploads.push({ key, bytes });
+          state.uploads.push({ key, bytes, options });
           return { error: null };
         },
         remove: async (keys: string[]) => {
@@ -239,6 +258,9 @@ beforeEach(() => {
   state.events = [];
   state.uploads = [];
   state.removed = [];
+  state.lookups = [];
+  state.namedBy = 0;
+  state.lookupError = false;
   state.inserts = [];
   state.updates = [];
   state.audits = [];
@@ -289,6 +311,15 @@ describe('POST /api/admin/media/upload', () => {
       height: 1920,
     });
     expect(JSON.stringify(state.audits)).not.toContain('IMG_0001');
+  });
+
+  it('stores the object with a one-hour cache lifetime, so a deleted file leaves the CDN', async () => {
+    await call(UPLOAD, uploadRequest(await photo(40, 30)));
+    expect(state.uploads[0]!.options).toEqual({
+      contentType: 'image/webp',
+      upsert: false,
+      cacheControl: '3600',
+    });
   });
 
   it('a small image keeps its size (never upscaled)', async () => {
@@ -468,6 +499,56 @@ describe('POST /api/admin/media/[id]/replace', () => {
     expect(update['storage_path']).toBe(state.uploads[0]!.key);
     expect(state.removed).toEqual([]);
     expect(state.audits[0]).toMatchObject({ action: 'media_asset.replace' });
+    expect(state.audits[0]?.detail).not.toHaveProperty('previousFile');
+  });
+
+  const removingRequest = (file: Uint8Array) =>
+    ctx('POST', `/api/admin/media/${ASSET}/replace`, file, {
+      'content-length': String(file.length),
+      [MEDIA_META_HEADER]: encodeMediaMeta({ version: 1, removePrevious: true }),
+    });
+
+  it('removePrevious takes the old file off the web at once, after the row moved on', async () => {
+    state.stored = {
+      id: ASSET,
+      kind: 'image',
+      provider: 'storage',
+      storage_path: OLD_KEY,
+      version: 1,
+    };
+    const { status, body } = await call(REPLACE, removingRequest(await photo(64, 48)));
+    expect(status).toBe(200);
+    expect(state.events.slice(-3)).toEqual(['row', 'remove', 'audit:media_asset.replace']);
+    expect(state.lookups).toEqual([OLD_KEY]);
+    expect(state.removed).toEqual([[OLD_KEY]]);
+    expect(state.audits[0]?.detail).toMatchObject({
+      previousFile: 'removed',
+      previousKey: OLD_KEY,
+    });
+    expect(body?.['data']).toMatchObject({ id: ASSET, previous_file: 'removed' });
+  });
+
+  it('removePrevious never removes a file another row names, nor one outside the tenant', async () => {
+    state.stored = {
+      id: ASSET,
+      kind: 'image',
+      provider: 'storage',
+      storage_path: OLD_KEY,
+      version: 1,
+    };
+    state.namedBy = 1;
+    const named = await call(REPLACE, removingRequest(await photo(64, 48)));
+    expect(named.body?.['data']).toMatchObject({ previous_file: 'still-named' });
+    expect(state.removed).toEqual([]);
+
+    state.namedBy = 0;
+    state.stored = {
+      ...state.stored,
+      storage_path: `${OTHER}/33333333-3333-4333-8333-333333333333_100x100.webp`,
+    };
+    const foreign = await call(REPLACE, removingRequest(await photo(64, 48)));
+    expect(foreign.body?.['data']).toMatchObject({ previous_file: 'none' });
+    expect(state.removed).toEqual([]);
   });
 });
 
@@ -477,8 +558,28 @@ describe('DELETE /api/admin/media/[id] (an uploaded image)', () => {
     state.stored = { id: ASSET, provider: 'storage', storage_path: key };
     const { status, body } = await call(DELETE, ctx('DELETE', `/api/admin/media/${ASSET}`));
     expect(status).toBe(200);
+    expect(state.lookups).toEqual([key]);
     expect(state.removed).toEqual([[key]]);
     expect(body?.['data']).toEqual({ deleted: ASSET, fileRemoved: true });
+  });
+
+  it('keeps the object when another row still names it, or the lookup fails', async () => {
+    const key = `${TENANT}/44444444-4444-4444-8444-444444444444_10x10.webp`;
+    state.stored = { id: ASSET, provider: 'storage', storage_path: key };
+    state.namedBy = 1;
+    const named = await call(DELETE, ctx('DELETE', `/api/admin/media/${ASSET}`));
+    expect(named.body?.['data']).toEqual({
+      deleted: ASSET,
+      fileRemoved: false,
+      fileKept: 'still-named',
+    });
+    expect(state.audits[0]?.detail).toEqual({ fileRemoved: false, fileKept: 'still-named' });
+
+    state.namedBy = 0;
+    state.lookupError = true;
+    const unsure = await call(DELETE, ctx('DELETE', `/api/admin/media/${ASSET}`));
+    expect(unsure.body?.['data']).toMatchObject({ fileRemoved: false, fileKept: 'lookup-failed' });
+    expect(state.removed).toEqual([]);
   });
 
   it("never removes an object outside the tenant's own prefix", async () => {
