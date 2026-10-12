@@ -10,12 +10,18 @@
 --     of the lead's own tenant; an active lead worker, checked when it changes),
 --     value_sar (0 to 10,000,000), is_starred, read_at / read_by ("someone on the team has
 --     looked": the first look stands, and who looked is the session, never the client),
---     tags (at most 10, 1 to 32 characters each, app.tags_ok) and last_contact_at /
---     last_contact_channel ("Log contact": the time is the server's).
+--     tags (a one-dimensional list of at most 10, 1 to 32 characters each, app.tags_ok) and
+--     last_contact_at / last_contact_channel ("Log contact": the time is the server's).
 --   • Staff UPDATE on leads grows from 0030's two legacy columns to the pipeline: stage,
 --     spam flag, assignee, value, star, read mark, tags and the logged contact. Still a
---     COLUMN grant (D3): no ciphertext, retention date, score or index is writable, and
---     there is still no INSERT and no DELETE for any API role (0030).
+--     COLUMN grant (D3): no ciphertext, retention date, score or index is writable, and a
+--     staff token still holds no INSERT and no DELETE (0030).
+--   • Staff SELECT on leads grows by the eight columns above (read_by readable, never
+--     writable), and leads_safe appends them. This is a new read path: a lead worker's token
+--     now reads, under RLS and the live check like every other lead column, whom a lead is
+--     assigned to, its value, its star, when it was first looked at and by whom, its tags,
+--     and when and how the last contact was logged. Nothing gated joins it: no ciphertext,
+--     retention date, blind index or score reason.
 --   • The BEFORE phase (app.tg_lead_pipeline) learns the new columns: the assignee check,
 --     the read mark, the logged contact, a first response stamped by a contact logged
 --     while the lead is still new, and the version moving with the assignee, the value and
@@ -25,15 +31,15 @@
 --     A service-role write has no session, so both name the person it acts for: a manual
 --     lead's creator, or whom a service-role door names in app.acting_for for its own write
 --     (a note deleter).
---   • public.leads_bulk_update: up to 100 leads, one action, one statement, as the caller
---     (SECURITY INVOKER: RLS, the live check and the column grant decide). Versioned
---     actions apply only where the version still matches; every item comes back applied,
---     conflict, missing or skipped. One round trip, because a Worker on the Free plan has
---     50 subrequests per request.
+--   • public.leads_bulk_update: up to 100 leads, one action, one UPDATE, then a second
+--     statement that judges the rest, as the caller (SECURITY INVOKER: RLS, the live check
+--     and the column grant decide). Versioned actions apply only where the version still
+--     matches; every item comes back applied, conflict, missing or skipped. One round trip,
+--     because a Worker on the Free plan has 50 subrequests per request.
 --   • public.crm_ingest_lead (0035) restated: a lead added by hand (source 'manual') names
 --     who added it, counts as answered and as read when it arrives.
 --   • public.crm_erase_lead and public.crm_delete_lead_note: the service role's doors for
---     erasure (§8.2) and for deleting one note. No API role may delete a lead (0030), so
+--     erasure (§8.2) and for deleting one note. No staff token may delete a lead (0030), so
 --     the Worker calls them as the service role, after assertCap('crm.erase'), a live
 --     recheck and a fail-closed audit row; each also checks the acting profile itself,
 --     live, through app.role_crm_erase, so the database does not take the Worker's word.

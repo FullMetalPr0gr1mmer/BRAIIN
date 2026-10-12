@@ -469,7 +469,7 @@ select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-
 select throws_ok(
   $$ select public.crm_erase_lead('00000000-0000-0000-0000-000000000001',
        '00000000-0000-0000-0000-00000000aa03', '00000000-0000-0000-0000-0000000000a1') $$,
-  '42501', null, 'admin cannot call crm_erase_lead through the API (no API role deletes a lead)');
+  '42501', null, 'admin cannot call crm_erase_lead through the API (no staff token deletes a lead)');
 
 -- The doors' own check, read live: active, not locked out now, in the tenant, holding crm.erase.
 reset role;

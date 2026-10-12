@@ -19,7 +19,7 @@ import { serviceClient } from '@/lib/supabase/server';
 //   4. RLS read                   the caller's own client must see the lead; an unseen
 //                                 lead is a 404 before anything is written
 //   5. attempt audit, WRITTEN     fail-closed: no row, no erase
-//   6. public.crm_erase_lead      as the service role (no API role may delete a lead,
+//   6. public.crm_erase_lead      as the service role (no staff token may delete a lead,
 //                                 0030): the lead and, by cascade, its notes and timeline,
 //                                 in one transaction. The database checks the acting
 //                                 profile itself, live, through app.role_crm_erase

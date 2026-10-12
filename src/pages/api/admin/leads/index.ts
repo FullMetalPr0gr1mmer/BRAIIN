@@ -48,7 +48,7 @@ export const GET = defineAdminRoute({
 
 // Adding a lead by hand (Admin v2 C3, crm.md §7.2): `leads.manage` AND `leads.pii`, since
 // it writes a person's contact details, then a live recheck, because the lead is written
-// as the service role (no API role inserts leads, 0030), then a limit of 60 an hour per
+// as the service role (no staff token inserts leads, 0030), then a limit of 60 an hour per
 // person and 300 per tenant (MANUAL_LEAD_LIMITS, fail-closed), claimed before any lookup.
 // The lead goes through the same door as the public form, public.crm_ingest_lead, with
 // `source` 'manual' and the adding person set here, never by the client. A phone that matches an earlier lead while the

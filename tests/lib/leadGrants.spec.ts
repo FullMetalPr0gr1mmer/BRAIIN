@@ -180,7 +180,7 @@ describe('gated lead columns have a short, named list of readers', () => {
 });
 
 // ── The service role's lead doors (0035, 0041) ─────────────────────────────────────────
-// No API role inserts or deletes a lead, or touches the notes thread, so those writes go
+// No staff token inserts or deletes a lead, or touches the notes thread, so those writes go
 // through service-role RPCs. Each has a short list of callers, every one behind assertCap
 // (or, for ingest, the public form's server-side checks) and, where a person acts, a live
 // recheck and an audit row.
