@@ -52,7 +52,8 @@ function fakeSupabase(results: Record<string, Result>, rpc: Record<string, unkno
             error: result.error ?? null,
           }),
       };
-      for (const method of ['neq', 'gte', 'order', 'limit', 'in']) builder[method] = () => builder;
+      for (const method of ['neq', 'gte', 'lt', 'order', 'limit', 'in'])
+        builder[method] = () => builder;
       return builder;
     },
     rpc: async (fn: string) => ({ data: rpc[fn] ?? null, error: null }),

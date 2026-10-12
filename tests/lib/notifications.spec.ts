@@ -6,6 +6,7 @@ import { NOTIFICATION_KINDS } from '@schemas/adminPrefs';
 import type { MaintenanceState } from '@/lib/http/maintenance';
 import { NOTIFICATION_SOURCES, loadNotifications } from '@/lib/admin/notifications';
 import { MAX_ITEMS, WINDOW_DAYS } from '@/lib/admin/notifications/types';
+import { riyadhDay } from '@/lib/admin/notifications/scheduled';
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 
@@ -57,7 +58,7 @@ function fakeDb(tables: Record<string, TableAnswer> = {}) {
             reject,
           ),
       };
-      for (const op of ['eq', 'neq', 'gte', 'in']) {
+      for (const op of ['eq', 'neq', 'gte', 'lt', 'in']) {
         builder[op] = (column: string, value: unknown) => {
           query.filters.push([op, column, value]);
           return builder;
@@ -79,18 +80,21 @@ const LEAD = {
   created_at: ago(30),
 };
 const APPLICATION = { id: 'a-1', role: 'Motion designer', created_at: ago(60) };
+// Goes live at 18:00 Riyadh time today; scheduled yesterday, so it is no news after a
+// look at the bell this morning.
 const SCHEDULED = {
-  entity_type: 'service',
   id: 's-1',
   title: { en: 'Logo Design', ar: 'تصميم الشعار' },
-  at: '2026-10-10T15:00:00.000Z',
+  scheduled_for: '2026-10-10T15:00:00.000Z',
+  updated_at: '2026-10-09T08:00:00.000Z',
 };
 
 /** Every source has something to say, so what a role gets is decided by visibility alone. */
 const FULL: Record<string, TableAnswer> = {
   leads: { rows: [LEAD] },
   job_applications: { rows: [APPLICATION] },
-  dashboard_attention: { rows: [SCHEDULED] },
+  services: { rows: [SCHEDULED] },
+  blog_posts: { rows: [] },
   admin_user_prefs: { row: null },
 };
 
@@ -247,9 +251,14 @@ describe('the bell: what an item says', () => {
   });
 
   it('the shell count skips the labels read; the drawer resolves them', async () => {
+    // The labels read is the lead interests' slug lookup (the scheduled source reads the
+    // services table too, for what goes live today, so the table alone does not tell).
+    const labelReads = (queries: Query[]) =>
+      queries.filter((q) => q.filters.some(([op, column]) => op === 'in' && column === 'slug'));
+
     const counted = fakeDb(FULL);
     await loadNotifications(counted.sb, auth('admin'), { maintenance: noMaintenance, now: NOW });
-    expect(counted.queries.map((q) => q.table)).not.toContain('services');
+    expect(labelReads(counted.queries)).toEqual([]);
 
     const listed = fakeDb(FULL);
     await loadNotifications(listed.sb, auth('admin'), {
@@ -257,26 +266,85 @@ describe('the bell: what an item says', () => {
       labels: true,
       now: NOW,
     });
-    expect(listed.queries.map((q) => q.table)).toContain('services');
+    expect(labelReads(listed.queries).map((q) => q.table)).toContain('services');
   });
 
-  it('a scheduled service links to its editor; an entity with no editor is left out', async () => {
+  it('a scheduled service or post links to its editor, at its Riyadh time', async () => {
+    const post = {
+      id: 'b-1',
+      title: { en: 'Brand week', ar: 'أسبوع العلامة' },
+      scheduled_for: '2026-10-10T09:30:00.000Z',
+      updated_at: '2026-10-08T10:00:00.000Z',
+    };
+    const { sb } = fakeDb({ ...FULL, blog_posts: { rows: [post] } });
+    const feed = await loadNotifications(sb, auth('content_creator'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(feed.items.filter((item) => item.kind === 'scheduled')).toEqual([
+      expect.objectContaining({
+        id: 'scheduled:service:s-1',
+        text: 'Logo Design goes live today',
+        detail: 'At 18:00, Riyadh time',
+        href: '/admin/services/s-1',
+      }),
+      expect.objectContaining({
+        id: 'scheduled:blog_post:b-1',
+        text: 'Brand week goes live today',
+        detail: 'At 12:30, Riyadh time',
+        href: '/admin/blog/b-1',
+      }),
+    ]);
+  });
+
+  it("'today' is the Riyadh day: both tables are read between its two midnights", async () => {
+    // 12:00 UTC is 15:00 in Riyadh: the day runs from 21:00 UTC the evening before.
+    const { sb, queries } = fakeDb(FULL);
+    await loadNotifications(sb, auth('admin'), { maintenance: noMaintenance, now: NOW });
+    for (const table of ['services', 'blog_posts']) {
+      const read = queries.find((q) => q.table === table && q.select.includes('scheduled_for'));
+      expect(read?.filters, table).toEqual([
+        ['eq', 'tenant_id', TENANT],
+        ['eq', 'status', 'scheduled'],
+        ['gte', 'scheduled_for', '2026-10-09T21:00:00.000Z'],
+        ['lt', 'scheduled_for', '2026-10-10T21:00:00.000Z'],
+      ]);
+    }
+    // At 22:30 UTC it is already 01:30 tomorrow in Riyadh: the UTC date would still say
+    // the 10th and call its last hours "today".
+    expect(riyadhDay(new Date('2026-10-10T22:30:00.000Z'))).toEqual({
+      start: '2026-10-10T21:00:00.000Z',
+      end: '2026-10-11T21:00:00.000Z',
+    });
+    expect(riyadhDay(new Date('2026-10-10T20:59:59.999Z')).start).toBe('2026-10-09T21:00:00.000Z');
+  });
+
+  it('a post scheduled after the bell was read lights it again; an older one does not', async () => {
+    // Read at 11:15 UTC. One post was moved to today at 11:50, after that; the service was
+    // scheduled yesterday, so it counts from the day's start, before the read.
+    const moved = {
+      id: 'b-2',
+      title: 'Launch notes',
+      scheduled_for: '2026-10-10T16:00:00.000Z',
+      updated_at: ago(10),
+    };
     const { sb } = fakeDb({
       ...FULL,
-      dashboard_attention: {
-        rows: [SCHEDULED, { entity_type: 'portfolio', id: 'p-1', title: 'X', at: SCHEDULED.at }],
+      blog_posts: { rows: [moved] },
+      admin_user_prefs: {
+        row: { notifications: {}, notifications_seen_at: ago(45), version: 3 },
       },
     });
     const feed = await loadNotifications(sb, auth('content_creator'), {
       maintenance: noMaintenance,
       now: NOW,
     });
-    const scheduled = feed.items.filter((item) => item.kind === 'scheduled');
-    expect(scheduled).toHaveLength(1);
-    expect(scheduled[0]).toMatchObject({
-      text: 'Logo Design goes live today',
-      detail: 'At 18:00, Riyadh time',
-      href: '/admin/services/s-1',
+    const unread = Object.fromEntries(
+      feed.items.filter((i) => i.kind === 'scheduled').map((i) => [i.id, i.unread]),
+    );
+    expect(unread).toEqual({
+      'scheduled:service:s-1': false,
+      'scheduled:blog_post:b-2': true,
     });
   });
 
@@ -318,7 +386,8 @@ describe('the bell: read, muted, failed, capped', () => {
     expect(fresh.unread).toBe(fresh.items.length);
 
     // Read 45 minutes ago: the lead (30 min) and the switch (5 min) are new, the
-    // application (60 min) is not. The scheduled item counts from the start of its day.
+    // application (60 min) is not. The scheduled item, scheduled yesterday, counts from the
+    // start of its Riyadh day.
     const { sb } = fakeDb({
       ...FULL,
       admin_user_prefs: {
