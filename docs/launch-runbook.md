@@ -102,6 +102,30 @@ Local stacks (`supabase start`, and the CI jobs) enable the same hook in
 admin e2e harness (`tests/admin`) depends on it. Hosted projects are governed by the
 dashboard setting above, so this step stays a blocker for staging and production.
 
+### 2a. Password changes need the current password (Admin v2 F8, owner item O-24)
+
+Due before F8's code is deployed. The admin's own password change (`/admin/account`, the
+account drawer) re-authenticates with the current password, counts a wrong one toward the
+§3 lockout and is audited. Supabase Auth's `PUT /auth/v1/user` is public, and by default it
+changes a password with a session's access token alone. Three settings on each hosted
+project (staging, then production) make the auth server hold the same line:
+
+1. **Require the current password.** Management API, with the owner's personal access
+   token: `PATCH https://api.supabase.com/v1/projects/<ref>/config/auth` with the body
+   `{"security_update_password_require_current_password": true}`. The admin sends the
+   current password with every change, so it keeps working.
+2. **Minimum password length 10**, the admin's own floor: Dashboard → **Authentication →
+   Sign In / Providers → Email** → minimum password length (API field
+   `password_min_length`).
+3. **Secure password change on**, in the same Email settings (API field
+   `security_update_password_require_reauthentication`). A session older than 24 hours then
+   needs an e-mailed code to change its password at the auth server. The admin's route never
+   does (its re-authentication starts a fresh session), so this needs no SMTP (O-2).
+
+Verify: `GET https://api.supabase.com/v1/projects/<ref>/config/auth` shows the three values
+(`true`, `10`, `true`). Local stacks set 2 and 3 in `supabase/config.toml`; 1 has no CLI
+key. Until all three are on, the gap stays open as `docs/admin-v2/deviations.md` records it.
+
 ## 3. Create and promote the first admin  ⛔ blocker
 
 `users.manage` is Admin-only, so there is no in-product path to the first admin.

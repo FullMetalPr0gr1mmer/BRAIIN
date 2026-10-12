@@ -14,6 +14,21 @@ schemas = ["public", "graphql_public"]
 
 [auth]
 enabled = true
+# Admin v2 F8: the auth server's own floor for a new password, equal to the admin's
+# (PASSWORD_MIN, packages/schemas/adminPrefs.ts), so a password set at Supabase Auth
+# directly (PUT /auth/v1/user with a session token) is held to the same length as one set
+# through the admin. Staging and production set it in the dashboard (launch runbook §2a,
+# owner item O-24). tests/lib/accountPassword.spec.ts holds the two numbers equal.
+minimum_password_length = 10
+
+# Admin v2 F8: "Secure password change". At the auth server, a session older than 24 hours
+# cannot change its password without a reauthentication code sent by e-mail. The admin's
+# own route never needs one: it re-authenticates with the current password first, which
+# starts a fresh session (src/lib/admin/account.ts), so a password change asks nothing of
+# SMTP (O-2). Requiring the current password itself has no key in this file (CLI 2.118);
+# the hosted projects set it (runbook §2a), and docs/admin-v2/deviations.md records the gap.
+[auth.email]
+secure_password_change = true
 
 # The Custom Access Token Hook (migration 0010), enabled for the LOCAL stack the way the
 # launch runbook §2 enables it in the dashboard for staging and production. Without it a

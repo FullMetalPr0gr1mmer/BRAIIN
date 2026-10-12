@@ -120,16 +120,31 @@ function logAuthFailure(step: 're-authentication' | 'update', error: AuthErrorLi
 }
 
 /**
- * Changes the caller's password (CLAUDE.md §3, Pillar 1):
+ * Changes the caller's password through the admin (CLAUDE.md §3, Pillar 1):
  *   1. A locked account is refused before anything is tried.
  *   2. The current password re-authenticates the person. A wrong one counts toward the
- *      sign-in lockout (5 in 15 minutes), so an unattended session is no way around it;
- *      the fifth locks the account, and the next request ends this session too
- *      (resolveAuthContext refuses a locked profile). A refusal is audited.
+ *      sign-in lockout (5 in 15 minutes), so an unattended session cannot change the
+ *      password through this route; the fifth locks the account, and the next request
+ *      ends this session too (resolveAuthContext refuses a locked profile). A refusal
+ *      at this step is audited; an auth server that cannot check the password counts
+ *      nothing (see isWrongPassword).
  *   3. The new password is set on the fresh session the re-authentication returned (the
- *      session client writes it into the `__Host-` cookie), and every OTHER session is
- *      signed out, so a password changed because it leaked takes the leaker's sessions
- *      with it. Audited.
+ *      session client writes it into the `__Host-` cookie), with the current password
+ *      sent again as `current_password`, and every OTHER session is signed out, so a
+ *      password changed because it leaked takes the leaker's sessions with it. Audited.
+ *
+ * WHAT THIS DOES NOT COVER. These checks are the Worker's. Supabase Auth's own
+ * `PUT /auth/v1/user` is public (the project URL and the anon key ship to browsers), and
+ * with the session's access token alone it changes the password with no lockout count
+ * and no audit row, and with no current password unless the project requires one
+ * (GoTrue's `security_update_password_require_current_password`, which the local stack
+ * cannot set). That residual and the owner's action that closes it (O-24: require the
+ * current password, a minimum length of 10, Secure password change) are recorded in
+ * docs/admin-v2/deviations.md and the launch runbook §2a. Sending `current_password`
+ * here is what keeps this route working once the setting is on: the fresh session makes
+ * Secure password change ask for no e-mailed code, and the current password satisfies
+ * the requirement, so neither depends on SMTP (O-2).
+ *
  * The password never leaves this function: not in the audit row, a log or a response.
  */
 export async function changeMyPassword(
@@ -166,11 +181,20 @@ export async function changeMyPassword(
     return refuse(nowLocked ? 'locked' : 'wrong-current');
   }
 
-  const { error: updateError } = await sb.auth.updateUser({ password: input.next });
+  const { error: updateError } = await sb.auth.updateUser({
+    password: input.next,
+    current_password: input.current,
+  });
   if (updateError) {
     const code = (updateError as AuthErrorLike).code;
     if (code === 'same_password') return { ok: false, reason: 'same' };
     if (code === 'weak_password') return { ok: false, reason: 'weak' };
+    // The auth server's own current-password check (O-24) refused it: the password changed
+    // since the re-authentication a moment ago. The person's wrong try, so it counts.
+    if (code === 'current_password_invalid') {
+      const nowLocked = await registerFailure(auth.email, ip);
+      return refuse(nowLocked ? 'locked' : 'wrong-current');
+    }
     logAuthFailure('update', updateError);
     return { ok: false, reason: 'failed' };
   }

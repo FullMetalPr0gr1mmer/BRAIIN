@@ -1,14 +1,21 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext, Role } from '@/lib/auth/types';
+import { PASSWORD_MIN } from '@schemas/adminPrefs';
 
-// Changing your own password (Admin v2 F8, CLAUDE.md §3 Pillar 1, AV-05 tests): the
-// current password re-authenticates first and a wrong one counts toward the sign-in
-// lockout (5 in 15 minutes), so an unattended session is no way around it; a locked
-// account is refused before anything is tried, and an unreachable lockout store fails
-// closed; the new password is set and every OTHER session is signed out; both outcomes
-// are audited, and no password reaches an audit row, a log line or a response.
+// Changing your own password through the admin (Admin v2 F8, CLAUDE.md §3 Pillar 1, AV-05
+// tests): the current password re-authenticates first and a wrong one counts toward the
+// sign-in lockout (5 in 15 minutes), so an unattended session cannot change it through
+// this route; only a refused password counts, never an auth server that could not check
+// it; a locked account is refused before anything is tried, and an unreachable lockout
+// store fails closed; the new password is set and every OTHER session is signed out; a
+// refused current password and the change are audited, and no password reaches an audit
+// row, a log line or a response. Supabase Auth's own endpoint is outside this route: the
+// local stack's half of what closes it is pinned at the end (supabase/config.toml), the
+// hosted half is owner item O-24 (docs/admin-v2/deviations.md).
 //
 // The lockout's counting is SQL (0009), stubbed here with its contract, as in
 // tests/authz/login.spec.ts.
@@ -144,7 +151,9 @@ describe('changeMyPassword', () => {
     expect(outcome).toEqual({ ok: true, othersSignedOut: true });
     expect(calls).toEqual(['signIn', 'update', 'signOut:others']);
     expect(signIns).toEqual([{ email: EMAIL, password: CURRENT }]);
-    expect(updates).toEqual([{ password: NEXT }]);
+    // The current password goes with the update too, so the route keeps working once the
+    // auth server requires it (O-24).
+    expect(updates).toEqual([{ password: NEXT, current_password: CURRENT }]);
     expect(state.rpcs).toEqual(['login_is_locked']);
     expect(state.audits).toEqual([
       {
@@ -284,6 +293,36 @@ describe('changeMyPassword', () => {
     expect(state.audits.map((a) => a.action)).not.toContain('auth.password_change');
   });
 
+  it("the auth server's own current-password check (O-24) counts a refusal as a wrong try", async () => {
+    const { sb, calls } = fakeClient({
+      updateError: {
+        code: 'current_password_invalid',
+        status: 400,
+        message: 'Current password required when setting new password.',
+      },
+    });
+    const outcome = await changeMyPassword(sb, session(), { current: CURRENT, next: NEXT }, null);
+    expect(outcome).toEqual({ ok: false, reason: 'wrong-current' });
+    expect(calls).toEqual(['signIn', 'update']);
+    expect(state.failures.get(EMAIL)).toBe(1);
+    expect(state.audits).toEqual([
+      expect.objectContaining({
+        action: 'auth.password_change_refused',
+        detail: { reason: 'wrong-current' },
+      }),
+    ]);
+
+    // Asked for a current password it was not sent: a fault of ours, never the person's.
+    const missing = fakeClient({
+      updateError: { code: 'current_password_required', status: 400, message: 'required' },
+    });
+    expect(
+      await changeMyPassword(missing.sb, session(), { current: CURRENT, next: NEXT }, null),
+    ).toEqual({ ok: false, reason: 'failed' });
+    expect(state.failures.get(EMAIL)).toBe(1);
+    expectNoPasswordRecorded();
+  });
+
   it('an auth server failure is logged without the password, and nothing is signed out', async () => {
     const { sb, calls } = fakeClient({ updateError: { status: 500, message: 'upstream' } });
     const outcome = await changeMyPassword(sb, session(), { current: CURRENT, next: NEXT }, null);
@@ -389,5 +428,30 @@ describe('POST /api/admin/me/password', () => {
     const text = JSON.stringify(responses);
     for (const secret of [CURRENT, NEXT, 'wrong-password-99']) expect(text).not.toContain(secret);
     expect(responses[2]!.status).toBe(502);
+  });
+});
+
+describe('the auth server holds the same line (supabase/config.toml, Admin v2 F8)', () => {
+  // One TOML table's own lines, comments dropped: from its header to the next one.
+  function tomlTable(name: string): string {
+    const lines = readFileSync(join(process.cwd(), 'supabase/config.toml'), 'utf8').split(/\r?\n/);
+    const start = lines.findIndex((line) => line.trim() === `[${name}]`);
+    if (start < 0) return '';
+    const next = lines.findIndex((line, i) => i > start && /^\s*\[/.test(line));
+    return lines
+      .slice(start + 1, next < 0 ? undefined : next)
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n');
+  }
+
+  it("refuses a new password shorter than the admin's at the auth server itself", () => {
+    expect(tomlTable('auth')).toMatch(
+      new RegExp(`^minimum_password_length *= *${PASSWORD_MIN} *$`, 'm'),
+    );
+  });
+
+  it('asks a session older than a day for more than its token (Secure password change)', () => {
+    // Never SMTP for the admin's route: it re-authenticates, so its session is minutes old.
+    expect(tomlTable('auth.email')).toMatch(/^secure_password_change\s*=\s*true\s*$/m);
   });
 });
