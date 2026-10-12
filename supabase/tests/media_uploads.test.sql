@@ -15,9 +15,12 @@
 --   4. visitors read an uploaded image only while published content shows it, and never
 --      its display_name;
 --   5. media_storage_stats(): the caller's own tenant only;
---   6. media_orphan_objects(): the service role only, and never an object a row names.
+--   6. media_orphan_objects(): the service role only, and never an object a row names;
+--   7. the grants on media_assets, stated: no API role holds TRUNCATE, REFERENCES, TRIGGER
+--      or MAINTAIN; staff SELECT, INSERT, UPDATE, DELETE (display_name included); the
+--      service role SELECT; anon the 0024 columns; PUBLIC nothing.
 begin;
-select plan(59);
+select plan(65);
 
 insert into public.tenants (id, name) values ('45000000-0000-0000-0000-000000000002', 'MediaUploadsT2');
 
@@ -78,6 +81,14 @@ exception
 end $f$;
 create function _can(p_role text, p_privilege text) returns boolean language sql as $f$
   select has_table_privilege(p_role, 'storage.objects', p_privilege) $f$;
+-- A role's table privileges on media_assets, every one there is: MAINTAIN only from
+-- PostgreSQL 17 (CI runs 15, which does not know the word).
+create function _privs(p_role text) returns text language sql as $f$
+  select coalesce(string_agg(p.priv, ',' order by p.priv), '')
+    from unnest(array['select', 'insert', 'update', 'delete', 'truncate', 'references', 'trigger']
+                || case when current_setting('server_version_num')::int >= 170000
+                        then array['maintain'] else array[]::text[] end) as p(priv)
+   where has_table_privilege(p_role, 'public.media_assets', p.priv) $f$;
 
 -- The belt (0045 §5), proven rather than assumed. Without it nothing names the bucket, so
 -- the inserts in section 1 fail either way; here a permissive policy opens EVERY bucket to
@@ -426,6 +437,33 @@ select is(
   (select count(*)::int from public.media_orphan_objects(60, 1000)
     where object_name = _key(app.default_tenant_id(), '45000000-0000-4000-8000-000000000001', 1200, 800)),
   0, 'the sweep never offers an object that a media row names');
+
+-- ── 7. the grants on media_assets, stated (0045 §5) ────────────────────────────────────────
+reset role;
+select is(_privs('authenticated'), 'delete,insert,select,update',
+  'staff tokens hold SELECT, INSERT, UPDATE and DELETE on media_assets, and no TRUNCATE (RLS does not govern it), REFERENCES, TRIGGER or MAINTAIN');
+select is(_privs('service_role'), 'select',
+  'the service role holds SELECT on media_assets and nothing else (the sweep and the removal''s lookup read it; nothing writes as it)');
+select is(_privs('anon') || '|' || _privs('public'), '|',
+  'anon and PUBLIC hold no table privilege on media_assets');
+select is(
+  (select string_agg(a.attname::text, ',' order by a.attname)
+     from pg_attribute a
+    where a.attrelid = 'public.media_assets'::regclass and a.attnum > 0 and not a.attisdropped
+      and has_column_privilege('anon', 'public.media_assets', a.attname::text, 'select')),
+  'alt,height,id,kind,mime_type,provider,storage_path,stream_uid,tenant_id,updated_at,width',
+  'anon reads exactly the 0024 columns, never display_name');
+select ok(
+  not has_any_column_privilege('anon', 'public.media_assets', 'insert, update, references')
+  and not has_any_column_privilege('public', 'public.media_assets', 'select, insert, update, references')
+  and not has_any_column_privilege('authenticated', 'public.media_assets', 'references')
+  and not has_any_column_privilege('service_role', 'public.media_assets', 'insert, update, references'),
+  'no column grant widens a table grant: no column write for anon, PUBLIC or the service role, and no REFERENCES');
+select ok(
+  has_column_privilege('authenticated', 'public.media_assets', 'display_name', 'select')
+  and has_column_privilege('authenticated', 'public.media_assets', 'display_name', 'insert')
+  and has_column_privilege('authenticated', 'public.media_assets', 'display_name', 'update'),
+  'staff tokens read and write display_name (the upload and replace routes write it as the caller)');
 
 select * from finish();
 rollback;

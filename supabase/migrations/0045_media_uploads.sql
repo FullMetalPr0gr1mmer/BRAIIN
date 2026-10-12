@@ -24,22 +24,28 @@
 --   4. public.media_orphan_objects(): objects in the bucket no row names (a replaced file, a
 --      Worker stopped between the upload and the insert). Service role only; the Worker's
 --      daily job deletes them through the Storage API.
---   5. The bucket: PUBLIC, 10 MB, `image/webp` only. No storage policy admits anon or
+--   5. The grants on media_assets, stated: anon the 0024 column SELECT only; authenticated
+--      SELECT, INSERT, UPDATE, DELETE; the service role SELECT; PUBLIC nothing. No API role
+--      keeps Supabase's starter TRUNCATE, REFERENCES, TRIGGER or (PostgreSQL 17) MAINTAIN.
+--   6. The bucket: PUBLIC, 10 MB, `image/webp` only. No storage policy admits anon or
 --      authenticated, and a RESTRICTIVE belt refuses them outright: only the service role
 --      writes, as for 0029's `applications`. A public bucket means an uploaded image is
 --      reachable by its unguessable URL before anything publishes it (runbook §6i).
 --
 -- Grants are stated, never inherited (P-14): each new function is revoked from public,
--- anon, authenticated and service_role, then granted to exactly the role that calls it;
--- the postconditions below hold under both Supabase grant regimes. No table, sequence or
--- capability is added: §5 "Media — upload / edit metadata" already decides who uploads
--- (media_write: Admin, Content Creator, Developer; SEO meta only, via update_media_meta()).
+-- anon, authenticated and service_role, then granted to exactly the role that calls it, and
+-- media_assets' grants are stated in full (5); the postconditions check what each role must
+-- and must not hold, under both Supabase grant regimes and on PostgreSQL 15 (CI) and 17
+-- (production). No table, sequence or capability is added: §5 "Media — upload / edit
+-- metadata" already decides who uploads (media_write: Admin, Content Creator, Developer; SEO
+-- meta only, via update_media_meta()).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- A busy table fails the push instead of queueing: a statement below that waits more than
--- five seconds for a lock (media_assets gains a column, three constraints, an index and a
--- policy; storage.objects a policy) raises, and the push is retried later, rather than
--- holding its place in the lock queue while the site's reads and writes pile up behind it.
+-- five seconds for a lock (media_assets gains a column, three constraints, an index, a
+-- policy and its stated grants; storage.objects a policy) raises, and the push is retried
+-- later, rather than holding its place in the lock queue while the site's reads and writes
+-- pile up behind it.
 -- Transaction-local: it ends with this migration.
 set local lock_timeout = '5s';
 
@@ -195,11 +201,40 @@ $$;
 revoke all on function public.media_orphan_objects(int, int) from public, anon, authenticated, service_role;
 grant execute on function public.media_orphan_objects(int, int) to service_role;
 
--- The sweep's caller reads media_assets. Supabase grants the service role every table
--- today; stated here so the sweep does not depend on that default (P-14).
+-- ---- 5. Who holds what on media_assets, stated ------------------------------------------
+-- Stated, never inherited (P-14), so the table's grants are the same with Supabase's
+-- starter grants (ALL to anon, authenticated and service_role: 0011 granted staff four
+-- commands and never revoked the rest, so they still held TRUNCATE, REFERENCES, TRIGGER
+-- and, on PostgreSQL 17, MAINTAIN) and without them:
+--   • PUBLIC: nothing.
+--   • anon: the 0024 column SELECT and nothing else. Only what anon must not hold is
+--     revoked, never SELECT: revoking a table privilege takes it off every column as well,
+--     and the 0024 grant with it.
+--   • authenticated: SELECT, INSERT, UPDATE and DELETE; RLS decides the rows (0001, 0007),
+--     and the upload and replace routes write `display_name` through the caller's token.
+--     Not TRUNCATE, which RLS does not govern, nor REFERENCES, TRIGGER or MAINTAIN, which
+--     no staff path uses (the API cannot run them either; this is the grant layer saying
+--     so).
+--   • service_role: SELECT. The orphan sweep (as the caller of media_orphan_objects) and
+--     the delete and replace routes' "does a row still name this file?" read the table as
+--     the service role; nothing writes it so (every write is the caller's, under RLS).
+revoke all on public.media_assets from public;
+revoke insert, update, delete, truncate, references, trigger on public.media_assets from anon;
+revoke all on public.media_assets from authenticated;
+grant select, insert, update, delete on public.media_assets to authenticated;
+revoke all on public.media_assets from service_role;
 grant select on public.media_assets to service_role;
+-- MAINTAIN exists from PostgreSQL 17 (production runs 17.6; CI runs 15, which does not know
+-- the word, hence EXECUTE behind the version test). REVOKE ALL above already took it from
+-- the other three.
+do $$
+begin
+  if current_setting('server_version_num')::int >= 170000 then
+    execute 'revoke maintain on public.media_assets from anon';
+  end if;
+end $$;
 
--- ---- 5. The bucket ------------------------------------------------------------------------
+-- ---- 6. The bucket ------------------------------------------------------------------------
 -- Guarded like 0029's: bare Postgres has no `storage` schema. On Supabase it always exists,
 -- so this branch always runs there, and the postcondition below refuses a push that left
 -- the bucket missing, private, or wider than WebP and 10 MB.
@@ -235,22 +270,99 @@ begin
   end;
 end $$;
 
--- ---- 6. Postconditions --------------------------------------------------------------------
+-- ---- 7. Postconditions --------------------------------------------------------------------
 do $$
 declare
-  c text;
+  -- Every table privilege there is. MAINTAIN exists from PostgreSQL 17 (production); on 15
+  -- (CI) has_table_privilege() does not know the word, so it is listed only where it does.
+  v_privs constant text[] := array['select', 'insert', 'update', 'delete', 'truncate',
+                                   'references', 'trigger']
+    || case when current_setting('server_version_num')::int >= 170000
+            then array['maintain'] else array[]::text[] end;
+  -- The 0024 column grant: what a public <img>/<Picture> needs (PUBLIC_MEDIA_COLUMNS).
+  v_anon_cols constant text[] := array['id', 'tenant_id', 'kind', 'provider', 'storage_path',
+    'width', 'height', 'alt', 'stream_uid', 'mime_type', 'updated_at'];
+  -- The tenant predicate, alone or as the FIRST conjunct of a top-level AND (as 0038).
+  v_tenant_first constant text :=
+    '^\((\(tenant_id = (app\.)?effective_tenant_id\(\)\) AND .+|tenant_id = (app\.)?effective_tenant_id\(\))\)$';
+  v_have text[];
+  v_want text[];
+  v_bad text;
 begin
-  -- What visitors may read is unchanged: the 0024 column grant, and never display_name.
-  foreach c in array array['display_name', 'folder', 'tags', 'ref_count', 'provider_ref',
-                           'size_bytes', 'created_by', 'updated_by'] loop
-    if has_column_privilege('anon', 'public.media_assets', c, 'select') then
-      raise exception '0045: anon can read media_assets.%', c;
-    end if;
-  end loop;
-  if has_table_privilege('anon', 'public.media_assets', 'insert')
-     or has_table_privilege('anon', 'public.media_assets', 'update')
-     or has_table_privilege('anon', 'public.media_assets', 'delete') then
-    raise exception '0045: anon holds a write privilege on media_assets';
+  -- ---- media_assets, table-wide: each API role holds exactly its stated privileges -----
+  select string_agg(format('%s %s %s', x.who,
+                           case when has_table_privilege(x.who::name, 'public.media_assets', p.priv)
+                                then 'holds' else 'lacks' end,
+                           p.priv), ', ' order by x.who, p.priv)
+    into v_bad
+    from (values ('public', array[]::text[]),
+                 ('anon', array[]::text[]),
+                 ('authenticated', array['select', 'insert', 'update', 'delete']),
+                 ('service_role', array['select'])) as x(who, allowed)
+    cross join unnest(v_privs) as p(priv)
+   where has_table_privilege(x.who::name, 'public.media_assets', p.priv)
+         is distinct from (p.priv = any (x.allowed));
+  if v_bad is not null then
+    raise exception '0045: wrong table privileges on media_assets: %', v_bad;
+  end if;
+
+  -- ---- ...and per column: no column grant widens what the table grant says (a column
+  -- grant is visible to has_any_column_privilege, not to has_table_privilege) -------------
+  select string_agg(format('%s %s %s', x.who, case when x.held then 'lacks' else 'holds' end,
+                           x.priv), ', ' order by x.who, x.priv)
+    into v_bad
+    from (values ('public', 'select', false), ('public', 'insert', false),
+                 ('public', 'update', false), ('public', 'references', false),
+                 ('anon', 'select', true), ('anon', 'insert', false),
+                 ('anon', 'update', false), ('anon', 'references', false),
+                 ('authenticated', 'select', true), ('authenticated', 'insert', true),
+                 ('authenticated', 'update', true), ('authenticated', 'references', false),
+                 ('service_role', 'select', true), ('service_role', 'insert', false),
+                 ('service_role', 'update', false), ('service_role', 'references', false))
+         as x(who, priv, held)
+   where has_any_column_privilege(x.who::name, 'public.media_assets', x.priv) is distinct from x.held;
+  if v_bad is not null then
+    raise exception '0045: wrong column privileges on media_assets: %', v_bad;
+  end if;
+  -- Visitors read exactly the 0024 columns: never display_name (the uploaded file's name).
+  select coalesce(array_agg(a.attname::text), '{}')
+    into v_have
+    from pg_attribute a
+   where a.attrelid = 'public.media_assets'::regclass and a.attnum > 0 and not a.attisdropped
+     and has_column_privilege('anon', 'public.media_assets', a.attname::text, 'select');
+  if not (v_have @> v_anon_cols and v_have <@ v_anon_cols) then
+    raise exception '0045: anon reads media_assets columns % (expected exactly %)', v_have, v_anon_cols;
+  end if;
+  -- Staff read and write display_name: the upload and replace routes write it as the caller.
+  if not (has_column_privilege('authenticated', 'public.media_assets', 'display_name', 'select')
+          and has_column_privilege('authenticated', 'public.media_assets', 'display_name', 'insert')
+          and has_column_privilege('authenticated', 'public.media_assets', 'display_name', 'update')) then
+    raise exception '0045: authenticated cannot read and write media_assets.display_name';
+  end if;
+
+  -- ---- media_assets' policies: exactly these, for any role (name, command, kind, roles),
+  -- each leading with the tenant predicate in USING and in WITH CHECK -------------------
+  v_want := array[
+    'media_assets_public_read SELECT PERMISSIVE {public}',
+    'media_delete_admin DELETE RESTRICTIVE {public}',
+    'media_read SELECT PERMISSIVE {public}',
+    'media_write ALL PERMISSIVE {public}'];
+  select coalesce(array_agg(format('%s %s %s %s', policyname, cmd, permissive, roles)
+                            order by policyname), '{}')
+    into v_have
+    from pg_policies
+   where schemaname = 'public' and tablename = 'media_assets';
+  if v_have is distinct from v_want then
+    raise exception '0045: media_assets'' policies are %, expected %', v_have, v_want;
+  end if;
+  select string_agg(policyname, ', ' order by policyname)
+    into v_bad
+    from pg_policies
+   where schemaname = 'public' and tablename = 'media_assets'
+     and (qual is null or qual !~ v_tenant_first
+          or (with_check is not null and with_check !~ v_tenant_first));
+  if v_bad is not null then
+    raise exception '0045: media_assets policies that do not lead with the tenant predicate: %', v_bad;
   end if;
 
   if not exists (
@@ -287,7 +399,7 @@ begin
     raise exception '0045: media_assets_public_read is missing, or does not admit storage';
   end if;
 
-  -- The functions: invoker, a fixed search_path, and exactly one caller role each.
+  -- ---- The functions: invoker, a fixed search_path, and exactly one caller role each ----
   if exists (
     select 1 from pg_proc
      where oid in ('public.media_storage_stats(uuid)'::regprocedure,
@@ -298,18 +410,18 @@ begin
   ) then
     raise exception '0045: a media function is SECURITY DEFINER or has no fixed search_path';
   end if;
-  if has_function_privilege('anon', 'public.media_storage_stats(uuid)', 'execute')
-     or has_function_privilege('service_role', 'public.media_storage_stats(uuid)', 'execute')
-     or not has_function_privilege('authenticated', 'public.media_storage_stats(uuid)', 'execute') then
-    raise exception '0045: media_storage_stats must be executable by authenticated only';
-  end if;
-  if has_function_privilege('anon', 'public.media_orphan_objects(int, int)', 'execute')
-     or has_function_privilege('authenticated', 'public.media_orphan_objects(int, int)', 'execute')
-     or not has_function_privilege('service_role', 'public.media_orphan_objects(int, int)', 'execute') then
-    raise exception '0045: media_orphan_objects must be executable by the service role only';
-  end if;
-  if not has_table_privilege('service_role', 'public.media_assets', 'select') then
-    raise exception '0045: the service role cannot read media_assets (the orphan sweep would see no rows)';
+  select string_agg(format('%s %s %s', x.who,
+                           case when x.held then 'cannot execute' else 'may execute' end, x.fn),
+                    ', ' order by x.fn, x.who)
+    into v_bad
+    from (select r.who, f.fn, r.who = f.caller as held
+            from (values ('public.media_storage_stats(uuid)', 'authenticated'),
+                         ('public.media_orphan_objects(int, int)', 'service_role')) as f(fn, caller)
+            cross join (values ('public'), ('anon'), ('authenticated'), ('service_role')) as r(who)
+         ) as x
+   where has_function_privilege(x.who::name, x.fn, 'execute') is distinct from x.held;
+  if v_bad is not null then
+    raise exception '0045: wrong callers: %', v_bad;
   end if;
   -- The sweep's safety rests on the service role bypassing RLS (the function also checks).
   if exists (select 1 from pg_roles where rolname = 'service_role' and not rolbypassrls) then
@@ -327,5 +439,6 @@ begin
     if not has_table_privilege('service_role', 'storage.objects', 'select') then
       raise warning '0045: the service role cannot read storage.objects; the daily orphan sweep will fail (and log it)';
     end if;
+
   end if;
 end $$;
