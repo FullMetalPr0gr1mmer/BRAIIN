@@ -83,6 +83,13 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   // bell, each the drawer's twin. Every member has an account and a bell.
   { href: '/admin/account', label: 'Your account', caps: [] },
   { href: '/admin/notifications', label: 'Notifications', caps: [] },
+  // The help centre (Admin v2 U16): the no-JS twin of the "?" drawer, every member's. Its
+  // four views: a screen's guides first, a search, a guide, and a guide's Arabic text (RTL).
+  // The guide is one every role may read (supabase/migrations/0046_help_centre.sql).
+  { href: '/admin/help?screen=/admin', label: 'Help centre', caps: [] },
+  { href: '/admin/help?q=password', label: 'Help search', caps: [] },
+  { href: '/admin/help?guide=finding-your-way', label: 'A help guide', caps: [] },
+  { href: '/admin/help?guide=finding-your-way&lang=ar', label: 'A help guide in Arabic', caps: [] },
 ];
 
 /** Every screen of the menu: sidebar links, then their tabs, each once. */

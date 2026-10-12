@@ -2111,6 +2111,125 @@ a.li:hover {
   font-size: 12.5px;
 }
 
+/* ---- The help centre (U16): the "?" drawer and /admin/help ----
+   Ported from the prototype's help rules (screens_setup.js: .hc-q, .hc-art, .su-tip). The
+   drawer renders on every page, so its content is here; only the page's frame is in
+   admin/help.css. A guide's rows are the kit's .list and .li. */
+
+/* Spaced by margins, not a grid gap: the status line is a live region that stays in the
+   page while it is empty (a region that appears is not announced), and an empty grid item
+   would still take a gap. */
+.hc > * {
+  margin: 0;
+}
+
+.hc > * + * {
+  margin-top: 16px;
+}
+
+.hc > .drw__status {
+  margin-top: 10px;
+}
+
+.hc > .drw__status:empty {
+  margin-top: 0;
+}
+
+.hc__sub {
+  margin: 0;
+  color: var(--ad-dim);
+}
+
+.hc__search input {
+  inline-size: 100%;
+}
+
+/* "On this screen", "All guides", "Results", "Related". */
+.hc__h {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ad-dim2);
+}
+
+.hc__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.hc-view {
+  display: grid;
+  gap: 12px;
+}
+
+.hc-view__bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+
+.hc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.hc-art p,
+.hc-art ol {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+}
+
+.hc-art p {
+  line-height: 1.6;
+  color: var(--ad-dim);
+}
+
+.hc-art ol {
+  display: grid;
+  gap: 8px;
+  padding-inline-start: 20px;
+  line-height: 1.55;
+}
+
+.hc-art h2,
+.hc-art h4 {
+  margin: 16px 0 6px;
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.hc-art > :first-child {
+  margin-top: 0;
+}
+
+.hc-art .hc-tip {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-warn-soft);
+  color: var(--ad-note-warn-text);
+  font-size: 13px;
+}
+
+.hc-tip .ic {
+  flex: none;
+  margin-top: 2px;
+}
+
+.hc-related {
+  margin-top: 6px;
+}
+
 /* ---- Rich text (Tiptap): the prototype's .rich ---- */
 
 /* ProseMirror's base rules, which Tiptap would otherwise inject at runtime as an inline
@@ -2341,7 +2460,8 @@ img.ProseMirror-separator {
   .tabs a[aria-current],
   .editor-toolbar button[aria-pressed='true'],
   .media-pick[aria-pressed='true'],
-  .cmd__i[aria-selected='true'] {
+  .cmd__i[aria-selected='true'],
+  .hc-tip {
     border: 1px solid CanvasText;
   }
 

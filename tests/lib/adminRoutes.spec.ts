@@ -171,6 +171,20 @@ describe('the sweep route map', () => {
     }
   });
 
+  it('every role is swept on the help centre: a screen, a search, a guide in each language (U16)', () => {
+    for (const role of ROLES) {
+      const paths = new Set(sweepRoutes(role).map((r) => r.path));
+      for (const path of [
+        '/admin/help?screen=/admin',
+        '/admin/help?q=password',
+        '/admin/help?guide=finding-your-way',
+        '/admin/help?guide=finding-your-way&lang=ar',
+      ]) {
+        expect(paths, `${role} ${path}`).toContain(path);
+      }
+    }
+  });
+
   it('each role is swept on exactly the screens its menu reaches, plus the extras', () => {
     for (const role of ROLES) {
       const screens = sweepRoutes(role)
