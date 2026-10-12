@@ -15,12 +15,13 @@
 --   4. visitors read an uploaded image only while published content shows it, and never
 --      its display_name;
 --   5. media_storage_stats(): the caller's own tenant only;
---   6. media_orphan_objects(): the service role only, and never an object a row names;
+--   6. media_orphan_objects(): the service role only, never an object a row names, and only
+--      the Worker's own objects: a key it writes, created since 0045 ran (its floor);
 --   7. the grants on media_assets, stated: no API role holds TRUNCATE, REFERENCES, TRIGGER
 --      or MAINTAIN; staff SELECT, INSERT, UPDATE, DELETE (display_name included); the
 --      service role SELECT; anon the 0024 columns; PUBLIC nothing.
 begin;
-select plan(65);
+select plan(69);
 
 insert into public.tenants (id, name) values ('45000000-0000-0000-0000-000000000002', 'MediaUploadsT2');
 
@@ -89,6 +90,10 @@ create function _privs(p_role text) returns text language sql as $f$
                 || case when current_setting('server_version_num')::int >= 170000
                         then array['maintain'] else array[]::text[] end) as p(priv)
    where has_table_privilege(p_role, 'public.media_assets', p.priv) $f$;
+-- How many of the named objects one sweep offers.
+create function _offered(p_grace int, p_names text[]) returns int language sql as $f$
+  select count(*)::int from public.media_orphan_objects(p_grace, 1000)
+   where object_name = any (p_names) $f$;
 
 -- The belt (0045 §5), proven rather than assumed. Without it nothing names the bucket, so
 -- the inserts in section 1 fail either way; here a permissive policy opens EVERY bucket to
@@ -418,25 +423,50 @@ select throws_ok($$ select * from public.media_orphan_objects(60, 10) $$,
 
 -- ── 6. the orphan sweep (the Worker's daily job, as the service role) ──────────────────────
 reset role;
+select ok(
+  has_function_privilege('service_role', 'app.media_sweep_floor()', 'execute')
+  and not has_function_privilege('authenticated', 'app.media_sweep_floor()', 'execute')
+  and not has_function_privilege('anon', 'app.media_sweep_floor()', 'execute')
+  and app.media_sweep_floor() < now(),
+  'the sweep''s floor is a moment before this run (0045''s), and only the service role reads it');
 set local role service_role;
 select throws_ok($$ select * from public.media_orphan_objects(60, 0) $$,
   '22023', null, 'the sweep refuses an out-of-range batch');
--- Two objects written straight into storage.objects, as the Storage API writes them (the
--- service role). Not wrapped: if this stack refused the write, the run should say so, not
--- turn the sweep's two assertions into skips.
+-- Objects written straight into storage.objects, as the Storage API writes them (the
+-- service role), dated at the floor: this run cannot wait out the hour's grace, so the
+-- sweep is asked with a grace of 0 (an object dated at the floor is older than now), and
+-- once with a grace longer than the time since 0045 ran. Not wrapped: if this stack
+-- refused the write, the run should say so, not turn the sweep's assertions into skips.
 insert into storage.objects (bucket_id, name, created_at) values
+  -- the Worker's key, and no row names it: an orphan
   ('media', _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000f0', 10, 10),
-   now() - interval '2 hours'),
+   app.media_sweep_floor()),
+  -- the file row a1 names
   ('media', _key(app.default_tenant_id(), '45000000-0000-4000-8000-000000000001', 1200, 800),
-   now() - interval '2 hours');
+   app.media_sweep_floor()),
+  -- the Worker's key, but in the bucket before 0045 ran (an adopted bucket's earlier file)
+  ('media', _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000f1', 10, 10),
+   app.media_sweep_floor() - interval '1 second'),
+  -- names the Worker never writes: a file put in by hand, and a key without its size
+  ('media', 'hand/team photo.webp', app.media_sweep_floor()),
+  ('media', app.default_tenant_id()::text || '/45000000-0000-4000-8000-0000000000f2.webp',
+   app.media_sweep_floor());
 select is(
-  (select count(*)::int from public.media_orphan_objects(60, 1000)
-    where object_name = _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000f0', 10, 10)),
-  1, 'the sweep finds an object no row names, once it is older than the grace period');
+  _offered(0, array[_key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000f0', 10, 10)]),
+  1, 'the sweep finds an object the Worker wrote that no row names, once it is older than the grace period');
 select is(
-  (select count(*)::int from public.media_orphan_objects(60, 1000)
-    where object_name = _key(app.default_tenant_id(), '45000000-0000-4000-8000-000000000001', 1200, 800)),
+  _offered(1000000, array[_key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000f0', 10, 10)]),
+  0, 'an object younger than the grace period is not offered (its row may still be on its way)');
+select is(
+  _offered(0, array[_key(app.default_tenant_id(), '45000000-0000-4000-8000-000000000001', 1200, 800)]),
   0, 'the sweep never offers an object that a media row names');
+select is(
+  _offered(0, array[_key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000f1', 10, 10)]),
+  0, 'nor one that was in the bucket before 0045 ran (an adopted bucket''s earlier files stay)');
+select is(
+  _offered(0, array['hand/team photo.webp',
+                    app.default_tenant_id()::text || '/45000000-0000-4000-8000-0000000000f2.webp']),
+  0, 'nor one whose name is not a key the Worker writes (a file put in by hand stays)');
 
 -- ── 7. the grants on media_assets, stated (0045 §5) ────────────────────────────────────────
 reset role;

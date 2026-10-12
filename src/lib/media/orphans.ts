@@ -13,8 +13,11 @@ import { removeMediaObjects } from './storage';
 //
 // `public.media_orphan_objects()` (0045) finds them, as the service role only, and only
 // objects older than the grace period, so an upload whose row is still being written is
-// never one. The Storage API removes them: a SQL delete on storage.objects would leave the
-// file. A batch a day; the rest wait for the next run.
+// never one. It offers only the Worker's own objects (a key in the shape
+// `mediaObjectKey()` writes, created since 0045 ran), so a file put in the bucket by hand,
+// or one already in it before 0045, is never removed here. The Storage API removes them: a
+// SQL delete on storage.objects would leave the file. A batch a day; the rest wait for the
+// next run.
 
 /** How many objects one run removes at most. */
 export const MEDIA_ORPHAN_BATCH = 100;

@@ -23,14 +23,19 @@
 --      SECURITY INVOKER: RLS decides the rows, and a tenant other than the token's gets 0.
 --   4. public.media_orphan_objects(): objects in the bucket no row names (a replaced file, a
 --      Worker stopped between the upload and the insert). Service role only; the Worker's
---      daily job deletes them through the Storage API.
+--      daily job deletes them through the Storage API. It offers only the Worker's own
+--      objects: a name in the Worker's key shape, created at or after the moment this
+--      migration ran (app.media_sweep_floor()). A file put in the bucket by hand, or one
+--      already in it before 0045, is never offered, so never deleted.
 --   5. The grants on media_assets, stated: anon the 0024 column SELECT only; authenticated
 --      SELECT, INSERT, UPDATE, DELETE; the service role SELECT; PUBLIC nothing. No API role
 --      keeps Supabase's starter TRUNCATE, REFERENCES, TRIGGER or (PostgreSQL 17) MAINTAIN.
 --   6. The bucket: PUBLIC, 10 MB, `image/webp` only. No storage policy admits anon or
 --      authenticated, and a RESTRICTIVE belt refuses them outright: only the service role
 --      writes, as for 0029's `applications`. A public bucket means an uploaded image is
---      reachable by its unguessable URL before anything publishes it (runbook §6i).
+--      reachable by its unguessable URL before anything publishes it (runbook §6i). A
+--      `media` bucket that already exists is adopted only if it already is exactly this one;
+--      any other is refused, never switched public with its files in it.
 --
 -- Grants are stated, never inherited (P-14): each new function is revoked from public,
 -- anon, authenticated and service_role, then granted to exactly the role that calls it, and
@@ -172,6 +177,35 @@ grant execute on function public.media_storage_stats(uuid) to authenticated;
 -- RLS. It refuses any caller that does not, because under RLS `not exists` would see no
 -- rows and call EVERY object an orphan. PL/pgSQL: `storage` is resolved when it runs, not
 -- when it is created (bare Postgres has no storage schema).
+--
+-- What it deletes is what it offers, so it offers only objects the Worker made. An object
+-- qualifies only when BOTH hold:
+--   • its name is a key the Worker writes, `<tenant uuid>/<uuid>_<w>x<h>.webp` (the shape
+--     CHECK's own pattern, §1): a file someone put in the bucket by hand (the dashboard's
+--     Storage browser keeps the file's own name) is never offered;
+--   • it was created at or after the moment this migration ran, app.media_sweep_floor():
+--     a `media` bucket that already existed is adopted only when it already is exactly this
+--     one (§6), and whatever it held before 0045 is never offered either.
+-- Such a file stays until someone removes it by hand (runbook §6i).
+--
+-- The floor is this migration's transaction time, written into the function as a literal
+-- (ISO 8601 in UTC, so it reads back the same under any DateStyle or TimeZone; a
+-- postcondition holds it equal to now()). Service role only: the sweep calls it as its
+-- caller, and nothing else needs it. In `app`, so the API does not expose it as an RPC.
+do $$
+begin
+  execute format(
+    $f$create or replace function app.media_sweep_floor()
+         returns timestamptz
+         language sql
+         immutable
+         set search_path = ''
+         as $b$ select %L::timestamptz $b$ $f$,
+    to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'));
+end $$;
+revoke all on function app.media_sweep_floor() from public, anon, authenticated, service_role;
+grant execute on function app.media_sweep_floor() to service_role;
+
 create or replace function public.media_orphan_objects(p_older_than_minutes int, p_limit int)
 returns table (object_name text)
 language plpgsql
@@ -192,6 +226,8 @@ begin
     select o.name
       from storage.objects o
      where o.bucket_id = 'media'
+       and o.name ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[1-9][0-9]{0,3}x[1-9][0-9]{0,3}\.webp$'
+       and o.created_at >= app.media_sweep_floor()
        and o.created_at < now() - make_interval(mins => p_older_than_minutes)
        and not exists (select 1 from public.media_assets m where m.storage_path = o.name)
      order by o.created_at
@@ -245,12 +281,29 @@ begin
     return;
   end if;
 
-  insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-  values ('media', 'media', true, 10485760, array['image/webp'])
-  on conflict (id) do update
-    set public = true,
-        file_size_limit = excluded.file_size_limit,
-        allowed_mime_types = excluded.allowed_mime_types;
+  -- A `media` bucket made before this migration (owner item O-1 once asked for one by hand,
+  -- and the dashboard makes a new bucket private) is adopted only when it already is
+  -- exactly this one: public, 10 MB, `image/webp` only. Any other is refused, never
+  -- updated: switching a private bucket public would publish every file in it, and the
+  -- daily sweep would then be pointed at files no row names. An adopted bucket's earlier
+  -- files are never swept (§4). A bucket under another id that is NAMED `media` is refused
+  -- too (the names are unique, so the insert would fail on it anyway).
+  if exists (select 1 from storage.buckets where id = 'media' or name = 'media') then
+    if not exists (select 1 from storage.buckets b
+                    where b.id = 'media' and b.name = 'media' and b.public
+                      and b.file_size_limit = 10485760
+                      and b.allowed_mime_types = array['image/webp']::text[]) then
+      raise exception using
+        errcode = 'object_not_in_prerequisite_state',
+        message = '0045: a `media` bucket already exists and is not the one this migration '
+                  || 'creates (public, 10 MB, image/webp only); it is never switched public '
+                  || 'with its files in it',
+        hint = 'Move its files out and delete that bucket, then push again (runbook 6i, step 0).';
+    end if;
+  else
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    values ('media', 'media', true, 10485760, array['image/webp']);
+  end if;
 
   -- The belt: no permissive storage policy added later (for some other bucket) can let
   -- anon or a staff token write, list or delete here. Visitors read through the public URL,
@@ -403,7 +456,8 @@ begin
   if exists (
     select 1 from pg_proc
      where oid in ('public.media_storage_stats(uuid)'::regprocedure,
-                   'public.media_orphan_objects(int, int)'::regprocedure)
+                   'public.media_orphan_objects(int, int)'::regprocedure,
+                   'app.media_sweep_floor()'::regprocedure)
        and (prosecdef
             or not exists (select 1 from unnest(coalesce(proconfig, '{}'::text[])) as s(setting)
                             where s.setting like 'search_path=%'))
@@ -416,12 +470,22 @@ begin
     into v_bad
     from (select r.who, f.fn, r.who = f.caller as held
             from (values ('public.media_storage_stats(uuid)', 'authenticated'),
-                         ('public.media_orphan_objects(int, int)', 'service_role')) as f(fn, caller)
+                         ('public.media_orphan_objects(int, int)', 'service_role'),
+                         ('app.media_sweep_floor()', 'service_role')) as f(fn, caller)
             cross join (values ('public'), ('anon'), ('authenticated'), ('service_role')) as r(who)
          ) as x
    where has_function_privilege(x.who::name, x.fn, 'execute') is distinct from x.held;
   if v_bad is not null then
     raise exception '0045: wrong callers: %', v_bad;
+  end if;
+  -- The sweep's floor is this migration's own time, read back exactly.
+  if app.media_sweep_floor() is distinct from now() then
+    raise exception '0045: app.media_sweep_floor() is %, not this migration''s time %',
+      app.media_sweep_floor(), now();
+  end if;
+  -- The sweep's caller reaches the floor (schema app, 0011) and reads media_assets (above).
+  if not has_schema_privilege('service_role', 'app', 'usage') then
+    raise exception '0045: the service role cannot reach schema app (the sweep calls app.media_sweep_floor())';
   end if;
   -- The sweep's safety rests on the service role bypassing RLS (the function also checks).
   if exists (select 1 from pg_roles where rolname = 'service_role' and not rolbypassrls) then
@@ -431,7 +495,7 @@ begin
   if to_regclass('storage.buckets') is not null then
     if not exists (
       select 1 from storage.buckets
-       where id = 'media' and public = true and file_size_limit = 10485760
+       where id = 'media' and name = 'media' and public = true and file_size_limit = 10485760
          and allowed_mime_types = array['image/webp']::text[]
     ) then
       raise exception '0045: the media bucket is missing, private, or not limited to WebP and 10 MB';
