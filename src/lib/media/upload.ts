@@ -1,4 +1,9 @@
-import { MEDIA_LONG_EDGE_PX, MEDIA_OBJECT_MAX_BYTES, MEDIA_UPLOAD_MAX_BYTES } from '@schemas/media';
+import {
+  MEDIA_LONG_EDGE_PX,
+  MEDIA_OBJECT_MAX_BYTES,
+  MEDIA_UPLOAD_MAX_BYTES,
+  withinMediaAspect,
+} from '@schemas/media';
 import { finish, sniffImage, PROBE_MAX_BYTES, type ImageRefusal, type ImageSniff } from './sniff';
 import { readWebp, stripWebpMetadata } from './webp';
 
@@ -14,7 +19,8 @@ import { readWebp, stripWebpMetadata } from './webp';
 //                 edge, written as one WebP frame. Only this output is stored, so EXIF and
 //                 GPS, a second frame or bytes appended after the image never reach the
 //                 bucket. The output is read back: its own size, one frame, no metadata
-//                 chunk (stripWebpMetadata drops any), no larger than the bucket allows.
+//                 chunk (stripWebpMetadata drops any), no larger than the bucket allows,
+//                 and still within MEDIA_MAX_ASPECT once scaled (the key must parse).
 //
 // The image work runs in the Images service, not in the Worker, which is what fits it into
 // the Workers Free plan's 10 ms of CPU: the Worker parses a header, reads chunk headers of
@@ -112,6 +118,12 @@ const REFUSALS: Record<ImageRefusal, UploadRefusal> = {
     error: 'image-too-large',
     detail:
       'This image is too big to process: at most 12,000 pixels on a side and 40 megapixels. Please resize it and try again.',
+  },
+  aspect: {
+    status: 422,
+    error: 'image-too-thin',
+    detail:
+      'This image is too long and thin to show on the site: one side can be at most 100 times the other. Please crop it and try again.',
   },
 };
 
@@ -225,6 +237,11 @@ export async function reencode(
   const info = readWebp(bytes);
   if (!info || info.animated) return processingFailed();
   if (Math.max(info.width, info.height) > MEDIA_LONG_EDGE_PX) return processingFailed();
+  // The sniffer checked the file's proportions, but scaling down rounds the short side, and
+  // a binding that rounds it down tips a file at the limit past it (12,000x120 is
+  // 2,560x25.6). The master is what the key names and the site renders, so it is held to
+  // the same rule.
+  if (!withinMediaAspect(info.width, info.height)) return refusalFor('aspect');
   const clean = info.metadata > 0 ? stripWebpMetadata(bytes) : bytes;
   if (clean.length > MEDIA_OBJECT_MAX_BYTES) {
     return {

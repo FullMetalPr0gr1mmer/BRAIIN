@@ -3,6 +3,7 @@ import type { APIContext, APIRoute } from 'astro';
 import sharp from 'sharp';
 import { encodeMediaMeta, MEDIA_META_HEADER, parseStorageKey } from '@schemas/media';
 import { readWebp } from '@/lib/media/webp';
+import { reencode, type ImagesLike } from '@/lib/media/upload';
 
 // The upload pipeline end to end (Admin v2 U3), over a stubbed database and a stand-in for
 // the Images binding that does what the binding does (sharp: EXIF rotation, scale-down to
@@ -358,6 +359,63 @@ describe('POST /api/admin/media/upload', () => {
     expect(status).toBe(422);
     expect(body).toMatchObject({ error: 'image-too-large', reason: 'dimensions' });
     expect(state.events).not.toContain('binding');
+  });
+
+  it('a file too long and thin to show is refused before the binding (422), either way round', async () => {
+    // MEDIA_MAX_ASPECT: past 100 to 1 a listed width rounds the height to 0, and no /_image
+    // URL for the image would be admitted (the admin thumbnail included).
+    for (const [w, h] of [
+      [2_020, 20],
+      [20, 2_020],
+    ] as const) {
+      state.events = [];
+      const { status, body } = await call(UPLOAD, uploadRequest(await photo(w, h)));
+      expect(status, `${w}x${h}`).toBe(422);
+      expect(body).toMatchObject({ ok: false, error: 'image-too-thin', reason: 'aspect' });
+      expect(state.events).toEqual(['live']);
+    }
+    expect(state.uploads).toEqual([]);
+    // At the bound it is stored, and its thumbnail is a URL.
+    state.events = [];
+    const { status, body } = await call(UPLOAD, uploadRequest(await photo(2_000, 20)));
+    expect(status).toBe(200);
+    expect(parseStorageKey(state.uploads[0]!.key)).toMatchObject({ width: 2_000, height: 20 });
+    expect(String(body?.['data']?.['thumb_url'])).toMatch(/^\/_image\?href=.*&w=320&h=3&f=webp$/);
+  });
+
+  it('a master the scaling tipped past 100 to 1 is refused too, before anything is stored', async () => {
+    // A binding that rounds the short side down returns 12,000x120 (exactly 100 to 1) as
+    // 2,560x25: the key could not name it, so the master is held to the sniffer's rule.
+    const master = async (width: number, height: number) =>
+      new Uint8Array(
+        await sharp({ create: { width, height, channels: 3, background: '#123456' } })
+          .webp()
+          .toBuffer(),
+      );
+    const returning = (out: Uint8Array<ArrayBuffer>): ImagesLike => ({
+      input: () => ({
+        transform: () => ({
+          output: async () => ({
+            image: () => new Response(out).body!,
+            contentType: () => 'image/webp',
+          }),
+        }),
+      }),
+    });
+    const body = () => new Response(new Uint8Array(8)).body!;
+    expect(await reencode(returning(await master(2_560, 25)), body())).toMatchObject({
+      status: 422,
+      error: 'image-too-thin',
+      reason: 'aspect',
+    });
+    expect(await reencode(returning(await master(25, 2_560)), body())).toMatchObject({
+      status: 422,
+      reason: 'aspect',
+    });
+    expect(await reencode(returning(await master(2_560, 26)), body())).toMatchObject({
+      width: 2_560,
+      height: 26,
+    });
   });
 
   it('no Content-Length: 411, and the body is never read', async () => {

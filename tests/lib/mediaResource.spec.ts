@@ -9,6 +9,7 @@ import {
   MediaDisplayNameSchema,
   MediaReplaceMetaSchema,
   MediaUploadMetaSchema,
+  MEDIA_MAX_ASPECT,
   parseStorageKey,
 } from '@schemas/media';
 import { mediaResource } from '@/lib/admin/resources/media';
@@ -187,9 +188,29 @@ describe('the upload details header and the object key', () => {
       `${TENANT}/../33333333-3333-4333-8333-333333333333_640x480.webp`,
       `x/${TENANT}/33333333-3333-4333-8333-333333333333_640x480.webp`,
       `${TENANT.toUpperCase()}/33333333-3333-4333-8333-333333333333_640x480.webp`,
+      // Thinner than MEDIA_MAX_ASPECT, either way round: no listed width renders it.
+      `${TENANT}/33333333-3333-4333-8333-333333333333_2000x2.webp`,
+      `${TENANT}/33333333-3333-4333-8333-333333333333_2000x19.webp`,
+      `${TENANT}/33333333-3333-4333-8333-333333333333_19x2000.webp`,
+      `${TENANT}/33333333-3333-4333-8333-333333333333_101x1.webp`,
     ]) {
       expect(parseStorageKey(bad), bad).toBeNull();
     }
+    for (const [w, h] of [
+      [2000, 20],
+      [20, 2000],
+      [100, 1],
+      [2560, 26],
+    ]) {
+      const key = `${TENANT}/33333333-3333-4333-8333-333333333333_${w}x${h}.webp`;
+      expect(parseStorageKey(key), key).toMatchObject({ width: w, height: h });
+    }
+  });
+
+  it("0045's CHECK bounds the aspect where the parser does", () => {
+    const sql = readFileSync('supabase/migrations/0045_media_uploads.sql', 'utf8');
+    const bound = /greatest\(width, height\) <= least\(width, height\) \* (\d+)/.exec(sql)?.[1];
+    expect(Number(bound)).toBe(MEDIA_MAX_ASPECT);
   });
 });
 

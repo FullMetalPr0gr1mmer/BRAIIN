@@ -1,4 +1,4 @@
-import { MEDIA_MAX_INPUT_PIXELS, MEDIA_MAX_INPUT_SIDE_PX } from '@schemas/media';
+import { MEDIA_MAX_INPUT_PIXELS, MEDIA_MAX_INPUT_SIDE_PX, withinMediaAspect } from '@schemas/media';
 
 // What an uploaded file must be before anything processes it (Admin v2 U3, A5): a still
 // JPEG, PNG or WebP, decided by its own bytes. The browser's Content-Type and the file name
@@ -7,7 +7,8 @@ import { MEDIA_MAX_INPUT_PIXELS, MEDIA_MAX_INPUT_SIDE_PX } from '@schemas/media'
 // Built for the Workers FREE plan (10 ms CPU per request): it reads only the file's HEAD,
 // as far as the header that states the image's size, so its cost does not grow with the
 // file. The size it finds is the decompression guard (≤ 12,000 px a side, ≤ 40 MP), checked
-// before the Images binding decodes a pixel.
+// before the Images binding decodes a pixel, and the proportions an image the site can show
+// must have (neither side over 100 times the other, MEDIA_MAX_ASPECT).
 //
 // Refused, by what the bytes are:
 //   • SVG and anything else that is markup (it is a document, not a picture);
@@ -32,7 +33,8 @@ export type ImageRefusal =
   | 'structure'
   | 'truncated'
   | 'too_complex'
-  | 'dimensions';
+  | 'dimensions'
+  | 'aspect';
 
 export type ImageSniff =
   | { ok: true; format: ImageFormat; width: number; height: number }
@@ -100,6 +102,7 @@ export function sniffImage(head: Uint8Array, size: number): ImageSniff | null {
   ) {
     return { ok: false, reason: 'dimensions' };
   }
+  if (!withinMediaAspect(width, height)) return { ok: false, reason: 'aspect' };
   return { ok: true, format, width, height };
 }
 

@@ -5,7 +5,8 @@
 --      RESTRICTIVE belt exists and still shuts anon and staff tokens out when a permissive
 --      policy opens every bucket to them;
 --   2. the `storage` provider's shape: the key's tenant is the row's, its size is the row's,
---      WebP, ≤ 2,560 px, a size and a MIME type (a NULL never slips through the CHECK); the
+--      WebP, ≤ 2,560 px, neither side over 100 times the other (MEDIA_MAX_ASPECT, at the
+--      bound admitted), a size and a MIME type (a NULL never slips through the CHECK); the
 --      display name refuses exactly what MediaDisplayNameSchema refuses;
 --   3. §5 "Media — upload / edit metadata": Admin, Content Creator and Developer write a
 --      storage row, and no row names another row's file; SEO reads the library and edits
@@ -16,7 +17,7 @@
 --   5. media_storage_stats(): the caller's own tenant only;
 --   6. media_orphan_objects(): the service role only, and never an object a row names.
 begin;
-select plan(56);
+select plan(59);
 
 insert into public.tenants (id, name) values ('45000000-0000-0000-0000-000000000002', 'MediaUploadsT2');
 
@@ -64,6 +65,16 @@ begin
   return n;
 exception when insufficient_privilege then
   return -1;
+end $f$;
+-- Whether the CHECK admits an insert, keeping no row: the probe row goes with the
+-- subtransaction the exception block rolls back, so later counts are untouched.
+create function _admitted(p_sql text) returns boolean language plpgsql as $f$
+begin
+  execute p_sql;
+  raise exception using errcode = 'P0001', message = 'roll the probe row back';
+exception
+  when check_violation then return false;
+  when raise_exception then return true;
 end $f$;
 create function _can(p_role text, p_privilege text) returns boolean language sql as $f$
   select has_table_privilege(p_role, 'storage.objects', p_privilege) $f$;
@@ -224,6 +235,24 @@ select throws_ok(
             values (app.default_tenant_id(), 'image', 'storage', %L, 3000, 2000, 'image/webp', 100) $$,
          _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000e7', 3000, 2000)),
   '23514', null, 'a master longer than 2,560 px is refused');
+-- MEDIA_MAX_ASPECT (packages/schemas/media.ts): thinner than 100 to 1, a listed width rounds
+-- the height to 0 and `/_image` admits no URL for it; both ways, as the upload refuses.
+select throws_ok(
+  format($$ insert into public.media_assets (tenant_id, kind, provider, storage_path, width, height, mime_type, size_bytes)
+            values (app.default_tenant_id(), 'image', 'storage', %L, 2000, 19, 'image/webp', 100) $$,
+         _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000e8', 2000, 19)),
+  '23514', null, 'a master more than 100 times as wide as it is high is refused');
+select throws_ok(
+  format($$ insert into public.media_assets (tenant_id, kind, provider, storage_path, width, height, mime_type, size_bytes)
+            values (app.default_tenant_id(), 'image', 'storage', %L, 19, 2000, 'image/webp', 100) $$,
+         _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000e9', 19, 2000)),
+  '23514', null, 'a master more than 100 times as high as it is wide is refused');
+select ok(
+  _admitted(format(
+    $$ insert into public.media_assets (tenant_id, kind, provider, storage_path, width, height, mime_type, size_bytes)
+       values (app.default_tenant_id(), 'image', 'storage', %L, 2000, 20, 'image/webp', 100) $$,
+    _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000ea', 2000, 20))),
+  'a master exactly 100 times as wide as it is high is admitted (the bound is the schema''s)');
 select throws_ok(
   $$ insert into public.media_assets (tenant_id, kind, provider, storage_path)
      values (app.default_tenant_id(), 'image', 'r2', 'x.webp') $$,

@@ -5,6 +5,7 @@ import workerdService from '@astrojs/cloudflare/image-service-workerd';
 import {
   checkImageRequest,
   ASPECT_TOLERANCE_PX,
+  TRANSFORM_WIDTHS,
   UPLOAD_ASPECT_TOLERANCE_PX,
 } from '@/lib/http/imageGuard';
 import {
@@ -16,6 +17,7 @@ import {
 } from '@/lib/media/storageUrl';
 import { imageRef } from '@/lib/media/resolve';
 import { PublicMediaRowSchema } from '@schemas/content';
+import { MEDIA_MAX_ASPECT } from '@schemas/media';
 import { PUBLIC_SUPABASE_URL } from '../stubs/astro-env-client';
 import {
   mediaRemotePatterns,
@@ -51,7 +53,7 @@ describe('the /_image guard and uploaded images', () => {
     expect(ok({ href: HREF, w: '1200', h: '800', f: 'webp' })).toBe(true);
   });
 
-  it("one height per width: Astro's rounding of the exact aspect, not a still's two pixels", () => {
+  it("one height per width (two on a half pixel): Astro's rounding, not a still's two pixels", () => {
     // 1200x800: 800 px wide is 533.33 px high; a still would admit 532 to 535.
     expect(ok({ href: HREF, w: '800', h: '533', f: 'webp' })).toBe(true);
     for (const h of ['532', '534', String(533 + ASPECT_TOLERANCE_PX)]) {
@@ -112,6 +114,38 @@ describe('the /_image guard and uploaded images', () => {
     expect(checkImageRequest(small.searchParams, new Map()).ok).toBe(true);
     expect(storageThumbUrl('stills/work/p0.jpg')).toBeNull();
   });
+
+  it('a master too thin to render has no key, so no thumbnail the guard would refuse', () => {
+    // 2000x2 at 320 px is 0.32 px high: a thumbnail floored up to 1 px is refused by the
+    // guard's half pixel, and every listed width rounds the height to 0 (Astro then drops
+    // `h`). Past MEDIA_MAX_ASPECT the key does not parse, so nothing asks for one at all.
+    for (const size of ['2000x2', '2560x3', '2000x19', '19x2000']) {
+      const thin = `${TENANT}/66666666-6666-4666-8666-666666666666_${size}.webp`;
+      expect(storageThumbUrl(thin), size).toBeNull();
+      expect(uploadedImage(thin), size).toBeNull();
+      expect(uploadedImageSize(`${PREFIX}${thin}`), size).toBeNull();
+      expect(ok({ href: `${PREFIX}${thin}`, w: '320', h: '1', f: 'webp' }), size).toBe(false);
+    }
+  });
+
+  it('the worst case per upload is 69 transformations: 23 sizes in three formats', () => {
+    // Found by scanning every size a key may name (both sides 1 to 2,560, within 100 to 1):
+    // a 1632x51 master admits the 18 listed widths below its own and its own, four of them
+    // at two heights (the exact height a half pixel). Runbook §6i budgets with this number.
+    const worst = `${PREFIX}${TENANT}/77777777-7777-4777-8777-777777777777_1632x51.webp`;
+    let sizes = 0;
+    for (let w = 1; w <= 1632; w += 1) {
+      const exact = (w * 51) / 1632;
+      for (let h = Math.max(1, Math.floor(exact) - 1); h <= Math.ceil(exact) + 1; h += 1) {
+        if (ok({ href: worst, w: String(w), h: String(h), f: 'webp' })) sizes += 1;
+      }
+    }
+    expect(sizes).toBe(23);
+    const formats = ['avif', 'webp', 'jpg', 'jpeg', 'png', 'gif'].filter((f) =>
+      ok({ href: worst, w: '1632', h: '51', f }),
+    );
+    expect(sizes * formats.length).toBe(69);
+  });
 });
 
 describe('every /_image URL a page emits for an upload is one the guard admits', () => {
@@ -171,6 +205,38 @@ describe('every /_image URL a page emits for an upload is one the guard admits',
     for (const params of urls) {
       expect(checkImageRequest(params, new Map()), params.toString()).toEqual({ ok: true });
       expect(params.get('f')).not.toBe('png');
+    }
+  });
+
+  it('every key the parser admits renders at every listed width, and its thumbnail is admitted', async () => {
+    // MEDIA_MAX_ASPECT is what makes this true: at 100 to 1 the narrowest listed width
+    // (100 px) is still a whole pixel high, so Astro never rounds a height to 0.
+    expect(Math.min(...TRANSFORM_WIDTHS)).toBeGreaterThanOrEqual(MEDIA_MAX_ASPECT);
+    const sizes = [
+      [2000, 20],
+      [20, 2000],
+      [2560, 26],
+      [26, 2560],
+      [100, 1],
+      [1, 100],
+      [1632, 51],
+      [1200, 798],
+    ] as const;
+    for (const [w, h] of sizes) {
+      const key = `${TENANT}/88888888-8888-4888-8888-888888888888_${w}x${h}.webp`;
+      const src = uploadedImage(key);
+      expect(src, key).not.toBeNull();
+      // MediaImage: the listed widths no wider than the image, else its own.
+      const usable = [...TRANSFORM_WIDTHS].filter((x) => x <= w);
+      const widths = usable.length > 0 ? usable : [w];
+      const urls: URLSearchParams[] = [];
+      for (const format of ['avif', 'webp']) urls.push(...(await transforms(src!, format, widths)));
+      urls.push(...(await transforms(src!, 'jpg', [])).slice(0, 1));
+      urls.push(new URL(storageThumbUrl(key)!, 'https://admin.example.test').searchParams);
+      for (const params of urls) {
+        expect(Number(params.get('h')), `${key} ${params}`).toBeGreaterThanOrEqual(1);
+        expect(checkImageRequest(params, new Map()), `${key} ${params}`).toEqual({ ok: true });
+      }
     }
   });
 

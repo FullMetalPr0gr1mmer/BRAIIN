@@ -30,7 +30,10 @@ import { uploadedImageSize } from '@/lib/media/storageUrl';
 //           dimensions; Hero and SiteHeader pass a width only). An upload reaches only
 //           MediaImage (its real size) and getImage() with a width alone, so Astro rounds
 //           the exact aspect once: its height is within half a pixel of it
-//           (UPLOAD_ASPECT_TOLERANCE_PX), one height per width, not five.
+//           (UPLOAD_ASPECT_TOLERANCE_PX), one height per width, not five (two where the
+//           exact height falls on a half pixel, so a float that rounds either way is still
+//           served). No upload is thinner than MEDIA_MAX_ASPECT (its key would not parse),
+//           so that height is never below one pixel at any listed width.
 //   - nothing else.
 // tests/lib/imageGuard.spec.ts holds the widths in components to this list, so adding a
 // new width without adding it here fails CI instead of breaking an image in production.

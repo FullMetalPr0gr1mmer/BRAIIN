@@ -12,8 +12,10 @@
 --   1. media_assets: a fifth provider, `storage`, shape-checked — the object key is
 --      `<tenant>/<random id>_<w>x<h>.webp`, its tenant segment is the row's tenant, its
 --      size in the name equals the row's width/height (the `/_image` guard bounds a
---      transform by the name, with no database read), WebP, at most 2,560 px, a size the
---      bucket can hold — one row per object (a unique index on the key), plus
+--      transform by the name, with no database read), WebP, at most 2,560 px, neither side
+--      more than 100 times the other (MEDIA_MAX_ASPECT: thinner, a listed width rounds its
+--      height to 0 and no `/_image` URL for it is admitted), a size the bucket can hold —
+--      one row per object (a unique index on the key), plus
 --      `display_name` (the uploaded file's own name; staff only).
 --   2. media_assets_public_read: 0028's policy, unchanged, with `storage` added to the
 --      hosted providers visitors may read (only while published content shows the asset).
@@ -79,6 +81,7 @@ alter table public.media_assets add constraint media_assets_provider_shape check
       and split_part(storage_path, '/', 1) = tenant_id::text
       and split_part(storage_path, '_', 2) = width::text || 'x' || height::text || '.webp'
       and greatest(width, height) <= 2560
+      and greatest(width, height) <= least(width, height) * 100
       and mime_type = 'image/webp'
       and size_bytes between 1 and 10485760
       and provider_ref is null

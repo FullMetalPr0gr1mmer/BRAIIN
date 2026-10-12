@@ -120,6 +120,24 @@ export const MEDIA_MAX_INPUT_PIXELS = 40_000_000;
  */
 export const MEDIA_LONG_EDGE_PX = 2560;
 
+/**
+ * How long and thin an upload may be: neither side more than this many times the other.
+ * Below it, every width the site renders an upload at (the `/_image` guard's
+ * TRANSFORM_WIDTHS, the narrowest 100 px, or the image's own) keeps it at least one pixel
+ * high, so the height Astro writes (and the admin thumbnail's) is never 0 and always within
+ * the guard's half pixel. A 2000x2 master would round to 0 at every listed width: Astro then
+ * drops `h` and `/_image` refuses the URL. Both ways round, because the sniffer reads the
+ * file before the Images binding applies its EXIF rotation, which can turn a tall file wide.
+ * The upload refuses past it (sniffed, then on the master), the key parser admits no key past
+ * it, and 0045's CHECK refuses the same; tests/lib/mediaDelivery.spec.ts holds it to the guard.
+ */
+export const MEDIA_MAX_ASPECT = 100;
+
+/** Is this size within MEDIA_MAX_ASPECT (neither side over 100 times the other)? */
+export function withinMediaAspect(width: number, height: number): boolean {
+  return Math.max(width, height) <= Math.min(width, height) * MEDIA_MAX_ASPECT;
+}
+
 /** The bucket's own file limit (0045). A re-encoded master is far smaller than this. */
 export const MEDIA_OBJECT_MAX_BYTES = 10_485_760;
 
@@ -168,7 +186,9 @@ export function parseStorageKey(key: string): StorageKey | null {
   if (!m) return null;
   const width = Number(m[3]);
   const height = Number(m[4]);
-  if (Math.max(width, height) > MEDIA_LONG_EDGE_PX) return null;
+  if (Math.max(width, height) > MEDIA_LONG_EDGE_PX || !withinMediaAspect(width, height)) {
+    return null;
+  }
   return { tenantId: m[1]!, objectId: m[2]!, width, height };
 }
 

@@ -183,6 +183,16 @@ describe('sniffImage: what is refused', () => {
     expect(sniff(pngHeader(12_000, 3_000))).toMatchObject({ ok: true, width: 12_000 });
   });
 
+  it('an image too long and thin to show: one side over 100 times the other, either way', () => {
+    // MEDIA_MAX_ASPECT. Either way, because the binding's EXIF rotation can turn a tall file
+    // wide after this has read it.
+    expect(sniff(pngHeader(2_001, 20))).toEqual({ ok: false, reason: 'aspect' });
+    expect(sniff(pngHeader(20, 2_001))).toEqual({ ok: false, reason: 'aspect' });
+    expect(sniff(pngHeader(2_000, 2))).toEqual({ ok: false, reason: 'aspect' });
+    expect(sniff(pngHeader(2_000, 20))).toMatchObject({ ok: true, width: 2_000, height: 20 });
+    expect(sniff(pngHeader(20, 2_000))).toMatchObject({ ok: true, width: 20, height: 2_000 });
+  });
+
   it('a malformed header: a PNG whose IHDR checksum is wrong, a JPEG without a frame', async () => {
     const png = pngHeader(20, 20);
     png[29] = (png[29] ?? 0) ^ 0xff;
