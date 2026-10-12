@@ -164,7 +164,7 @@ The TDD's *product* requirements are the spec. Its *stack* suggestions are mappe
   - `pg_trgm` schema-qualified (`extensions.`);
   - trigger names ordered on purpose (BEFORE triggers fire alphabetically);
   - a tenant predicate in every policy, RESTRICTIVE ones included.
-- **P-15 Workers Free-plan limits.** 10 ms CPU and 50 subrequests per request, 100k requests a day. Publish validation, preview SSR, `/_image` and `theme.css` are measured on staging before R14 (owner O-16). Releases are capped at about 60 items (the dialog splits larger ones).
+- **P-15 Workers Free-plan limits.** 10 ms CPU and 50 subrequests per request, 100k requests a day. Publish validation, preview SSR, `/_image` and `theme.css` are measured on staging before R14 (owner O-16), and so is the lead CSV export at its cap (80 leads with contact details, C3). Releases are capped at about 60 items (the dialog splits larger ones).
 
 ## Track UI — design system, shell, screens (docs/admin-v2/ui.md)
 
@@ -646,7 +646,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
   - **O-15** Admin bundle budget: the eager graph per admin route ≤ 300 KB gz (recommended), or keep the 300 KB sum, or raise the number.
   - **O-22** Invites expire in ≤ 24 h (Supabase limit), with Resend, instead of 7 days until L6.
 - **Ops checks**
-  - **O-16** Workers plan: measure CPU and subrequests for publish/validate, preview SSR, `/_image` and `theme.css` on staging. The Free plan allows 10 ms/request. Workers Paid ($5/mo) may be needed.
+  - **O-16** Workers plan: measure CPU and subrequests for publish/validate, preview SSR, `/_image`, `theme.css` and the lead CSV export at its cap (`GET /api/admin/leads/export` carrying 80 leads with contact details, `EXPORT_ROW_CAP.pii`: its rows were measured at up to 6 ms, the rest of the request was not, [C3](as-built/C3.md)) on staging. The Free plan allows 10 ms/request. Workers Paid ($5/mo) may be needed.
   - **O-23** Production checks: Postgres major ≥ 15, leads grants (H2), and whether the pg_cron role bypasses RLS (retention).
 
 ## Risks
@@ -697,6 +697,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [C1b](as-built/C1b.md): how a lead arrives, 0035 (#46, folded into #45)
 - [C2a](as-built/C2a.md): reading the pipeline, 0036 (#47, folded into #45)
 - [C2b](as-built/C2b.md): one lead: the reveal, the notes thread, the timeline (#48, folded into #45)
+- [C3](as-built/C3.md): the leads write API: versioned PATCH, bulk, manual add, erase, export filters, 0041
 
 **Hotfixes**
 - [H5](as-built/H5.md): the audit chain is serialized, 0031 (#36)

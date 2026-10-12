@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { BudgetBandSchema } from './lead';
+import { SlugSchema } from './primitives';
 
 // The CRM's closed vocabularies (Admin v2, docs/admin-v2/crm.md §4 and §6.3). The SQL
 // CHECKs in supabase/migrations/0035_crm_ingest.sql carry the same lists; a test parses
@@ -116,3 +118,205 @@ export const LeadEventsQuerySchema = z
     message: 'before and beforeId go together',
     path: ['beforeId'],
   });
+
+// ---- Writing the pipeline (Admin v2 C3) ---------------------------------------------------
+// The shapes the write routes accept. The database checks the same rules again (migration
+// 0041: the column CHECKs, app.tags_ok, the assignee rule in app.tg_lead_pipeline and the
+// bulk door's own validation): two layers, and a 22023 or 23514 for anything outside them.
+
+/** How a contact was made, for "Log contact" (leads.last_contact_channel). */
+export const LEAD_CONTACT_CHANNELS = ['call', 'email', 'whatsapp', 'meeting', 'other'] as const;
+export type LeadContactChannel = (typeof LEAD_CONTACT_CHANNELS)[number];
+
+/** Control characters, which no tag may hold (app.tags_ok refuses them too). */
+const CONTROL = /[\u0000-\u001f\u007f]/;
+
+/** A tag: 1 to 32 characters, trimmed, no control characters (app.tags_ok). */
+export const LeadTagSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(32)
+  .refine((tag) => !CONTROL.test(tag), 'a tag has no control characters');
+
+/** At most 10 tags, each once. */
+export const LeadTagsSchema = z
+  .array(LeadTagSchema)
+  .max(10)
+  .refine((tags) => new Set(tags).size === tags.length, 'each tag once');
+
+/** The most a lead may be worth, in SAR (leads_value_sar_range). */
+export const MAX_LEAD_VALUE_SAR = 10_000_000;
+
+const LeadVersionSchema = z.number().int().min(1);
+
+/** The legacy panel's status, accepted until C4 moves it to the pipeline (C14 drops it). */
+const LegacyLeadStatusSchema = z.enum(['new', 'in_progress', 'done', 'spam']);
+
+/** The PATCH fields that move a lead's version, so they need the version the caller read. */
+export const VERSIONED_LEAD_FIELDS = [
+  'stageId',
+  'isSpam',
+  'assignedTo',
+  'valueSar',
+  'tags',
+] as const;
+
+/**
+ * PATCH /api/admin/leads/[id]. The pipeline fields need the `version` the caller read (a
+ * 409 when it moved on); a star, a read mark and a logged contact do not, because they
+ * never move it. `status` and `internalNotes` are the legacy panel's (the expand window:
+ * C4 moves the panel to the pipeline and the notes thread), and a legacy status cannot be
+ * sent with a stage or a spam flag, which it would contradict.
+ */
+export const LeadPatchSchema = z
+  .object({
+    version: LeadVersionSchema.optional(),
+    stageId: z.string().uuid().optional(),
+    isSpam: z.boolean().optional(),
+    assignedTo: z.string().uuid().nullable().optional(),
+    valueSar: z.number().int().min(0).max(MAX_LEAD_VALUE_SAR).nullable().optional(),
+    tags: LeadTagsSchema.optional(),
+    isStarred: z.boolean().optional(),
+    read: z.boolean().optional(),
+    logContact: z
+      .object({ channel: z.enum(LEAD_CONTACT_CHANNELS) })
+      .strict()
+      .optional(),
+    status: LegacyLeadStatusSchema.optional(),
+    internalNotes: z.string().max(5000).nullish(),
+  })
+  .strict()
+  .refine(
+    (patch) =>
+      Object.entries(patch).some(([field, value]) => field !== 'version' && value !== undefined),
+    { message: 'nothing to change' },
+  )
+  .refine(
+    (patch) =>
+      patch.version !== undefined ||
+      VERSIONED_LEAD_FIELDS.every((field) => patch[field] === undefined),
+    {
+      message: 'send the version you read with a stage, spam, assignee, value or tags change',
+      path: ['version'],
+    },
+  )
+  .refine(
+    (patch) =>
+      patch.status === undefined || (patch.stageId === undefined && patch.isSpam === undefined),
+    { message: 'a legacy status cannot be sent with a stage or a spam flag', path: ['status'] },
+  );
+export type LeadPatch = z.infer<typeof LeadPatchSchema>;
+
+/** One lead in a bulk change: its id, and the version read (versioned actions need it). */
+const LeadBulkItemSchema = z
+  .object({ id: z.string().uuid(), version: LeadVersionSchema.optional() })
+  .strict();
+
+const BulkItemsSchema = z
+  .array(LeadBulkItemSchema)
+  .min(1)
+  .max(100)
+  .refine((items) => new Set(items.map((item) => item.id.toLowerCase())).size === items.length, {
+    message: 'each lead once',
+  });
+const VersionedBulkItemsSchema = BulkItemsSchema.refine(
+  (items) => items.every((item) => item.version !== undefined),
+  { message: 'this action needs the version of each lead' },
+);
+
+/**
+ * POST /api/admin/leads/bulk: one action over up to 100 leads (public.leads_bulk_update).
+ * There is no bulk delete: a lead leaves through spam (its retention) or an Admin's erase,
+ * one lead at a time.
+ */
+export const LeadBulkSchema = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('assign'),
+      value: z.string().uuid().nullable(),
+      items: VersionedBulkItemsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('stage'),
+      value: z.string().uuid(),
+      items: VersionedBulkItemsSchema,
+    })
+    .strict(),
+  z
+    .object({ action: z.literal('spam'), value: z.boolean(), items: VersionedBulkItemsSchema })
+    .strict(),
+  z
+    .object({ action: z.literal('tagAdd'), value: LeadTagSchema, items: VersionedBulkItemsSchema })
+    .strict(),
+  z
+    .object({
+      action: z.literal('tagRemove'),
+      value: LeadTagSchema,
+      items: VersionedBulkItemsSchema,
+    })
+    .strict(),
+  z.object({ action: z.literal('read'), value: z.boolean(), items: BulkItemsSchema }).strict(),
+  z.object({ action: z.literal('star'), value: z.boolean(), items: BulkItemsSchema }).strict(),
+]);
+export type LeadBulk = z.infer<typeof LeadBulkSchema>;
+export type LeadBulkAction = LeadBulk['action'];
+
+/** How someone reached us, for a lead staff add by hand ('unknown' reads as "Other"). */
+export const MANUAL_LEAD_CHANNELS = [
+  'phone',
+  'walk_in',
+  'whatsapp',
+  'email',
+  'event',
+  'referral',
+  'unknown',
+] as const satisfies readonly LeadChannel[];
+
+/**
+ * POST /api/admin/leads: a lead added by hand (crm.md §7.2). A name, a message, and an
+ * e-mail or a phone (at least one). The source is the server's ('manual'), never the
+ * client's. A phone that matches an earlier lead while the e-mail does not is a possible
+ * duplicate (409) unless `createNew` says this is someone else.
+ */
+export const LeadManualCreateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    company: z.string().trim().min(1).max(120).optional(),
+    email: z.string().trim().email().max(254).optional(),
+    phone: z.string().trim().min(3).max(32).optional(),
+    serviceOfInterest: SlugSchema.optional(),
+    // The bands the form offers today; a lead added by hand never needs a legacy one.
+    budgetBand: BudgetBandSchema.optional(),
+    timeline: z.string().trim().min(1).max(120).optional(),
+    message: z.string().trim().min(1).max(5000),
+    locale: z.enum(['en', 'ar']).default('en'),
+    channel: z.enum(MANUAL_LEAD_CHANNELS),
+    createNew: z.boolean().optional(),
+  })
+  .strict()
+  .refine((lead) => lead.email !== undefined || lead.phone !== undefined, {
+    message: 'add an e-mail address or a phone number',
+    path: ['email'],
+  });
+export type LeadManualCreate = z.infer<typeof LeadManualCreateSchema>;
+
+/** POST /api/admin/leads/[id]/erase: why (their request under PDPL, or our own decision). */
+export const LeadEraseSchema = z.object({ reason: z.enum(['dsar', 'decision']) }).strict();
+
+/**
+ * GET /api/admin/leads/export: the list's filters a link may carry. Never `q`: a search
+ * term in a URL lands in history and logs (verification D10).
+ */
+export const LeadExportQuerySchema = z
+  .object({
+    from: Instant.optional(),
+    to: Instant.optional(),
+    status: LegacyLeadStatusSchema.optional(),
+    stage: z.string().uuid().optional(),
+    spam: z.enum(['true', 'false']).optional(),
+  })
+  .strict();
+export type LeadExportQuery = z.infer<typeof LeadExportQuerySchema>;

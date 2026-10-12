@@ -1,4 +1,5 @@
 import { TIMELINE_BAND_LABELS, type LeadInput } from '@schemas/lead';
+import type { LeadManualCreate, ScoreSignal } from '@schemas/crm';
 import { resolveLaunchTenantId } from './tenant';
 import { serviceClient } from '@/lib/supabase/server';
 import { supabaseConfigured } from '@/lib/supabase/client';
@@ -112,6 +113,64 @@ export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
     detail: { code: error.code ?? null },
   });
   return fallbackInsert(sb, tenantId, id, lead);
+}
+
+/** What the Worker worked out about a lead before encrypting it (blind indexes, signals). */
+export interface LeadIndexes {
+  email_hmac: string | null;
+  phone_hmac: string | null;
+  score_signals: readonly ScoreSignal[];
+}
+
+export type ManualIngestResult = { ok: true; id: string } | { ok: false; code: string | null };
+
+/**
+ * A lead staff add by hand (Admin v2 C3, crm.md §7.2), through the same service-role door
+ * as the public form: encrypted here, indexed by the caller (src/lib/crm/manualLead.ts),
+ * `source` 'manual' and the adding person set on the server, never by the client. The
+ * database stamps it answered and read by that person (0041). No fallback insert: this is
+ * not the public form, and a refusal is reported (codes only, never the lead).
+ */
+export async function ingestManualLead(
+  tenantId: string,
+  actorId: string,
+  input: LeadManualCreate,
+  indexes: LeadIndexes,
+): Promise<ManualIngestResult> {
+  const [email_enc, phone_enc, budget_enc, timeline_text_enc] = await Promise.all([
+    input.email ? encryptPII(input.email, LEAD_PII_ENC_KEY) : Promise.resolve(null),
+    input.phone ? encryptPII(input.phone, LEAD_PII_ENC_KEY) : Promise.resolve(null),
+    input.budgetBand ? encryptPII(input.budgetBand, LEAD_PII_ENC_KEY) : Promise.resolve(null),
+    input.timeline ? encryptPII(input.timeline, LEAD_PII_ENC_KEY) : Promise.resolve(null),
+  ]);
+  const id = crypto.randomUUID();
+  const lead: Record<string, unknown> = {
+    id,
+    kind: 'contact',
+    locale: input.locale,
+    name: input.name,
+    company: input.company ?? null,
+    email_enc,
+    phone_enc,
+    budget_enc,
+    timeline_text_enc,
+    message: input.message,
+    service_of_interest: input.serviceOfInterest
+      ? canonicalServiceSlug(input.serviceOfInterest)
+      : null,
+    source: 'manual',
+    channel: input.channel,
+    created_by: actorId,
+    email_hmac: indexes.email_hmac,
+    phone_hmac: indexes.phone_hmac,
+    score_signals: [...indexes.score_signals],
+  };
+  const { error } = await serviceClient().rpc('crm_ingest_lead', {
+    p_tenant: tenantId,
+    p_lead: lead,
+  });
+  if (error) return { ok: false, code: error.code ?? null };
+  return { ok: true, id };
 }
 
 /** Blind indexes and score signals for a new lead. Never throws: a lead outranks its index. */

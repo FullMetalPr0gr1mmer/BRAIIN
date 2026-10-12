@@ -274,7 +274,7 @@ select ok(
   and has_column_privilege('authenticated', 'public.leads', 'status', 'update')
   and has_column_privilege('authenticated', 'public.leads', 'internal_notes', 'update')
   and not has_column_privilege('authenticated', 'public.leads', 'internal_notes', 'select'),
-  'authenticated: column SELECT, UPDATE on status and notes only, no insert/delete/truncate (0030, 0033)');
+  'authenticated: column SELECT and column UPDATE (status, notes and, since 0041, the pipeline), no insert/delete/truncate (0030, 0033, 0041)');
 
 select ok(
   exists (select 1 from pg_policies

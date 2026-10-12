@@ -4,31 +4,40 @@
 // is prepended to the ciphertext. (KMS-backed envelope wrapping is a hardening
 // follow-up; this is the at-rest gate of record for Phase 1.)
 
+// One of each for the module: making them costs CPU on every call, and they hold no state.
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
 function b64encode(bytes: Uint8Array): string {
   let bin = '';
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin);
 }
 
-function b64decode(s: string): Uint8Array {
+function b64decode(s: string): Uint8Array<ArrayBuffer> {
   const bin = atob(s);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
   return out;
 }
 
-async function importKey(keyMaterial: string): Promise<CryptoKey> {
-  // Derive a stable 256-bit key from the provided material so any key string works.
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(keyMaterial));
+/**
+ * The AES-GCM key derived from the key material: a SHA-256 of it, so any key string works.
+ * Deriving and importing it costs as much CPU as a decrypt does, so a caller decrypting many
+ * values (the CSV export) imports it once per request and passes the CryptoKey; a caller
+ * decrypting a few passes the material and each call imports it.
+ */
+export async function importPIIKey(keyMaterial: string): Promise<CryptoKey> {
+  const hash = await crypto.subtle.digest('SHA-256', encoder.encode(keyMaterial));
   return crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
 /** Returns base64(iv ‖ ciphertext+tag). */
 export async function encryptPII(plaintext: string, keyMaterial: string): Promise<string> {
-  const key = await importKey(keyMaterial);
+  const key = await importPIIKey(keyMaterial);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext)),
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(plaintext)),
   );
   const out = new Uint8Array(iv.length + ct.length);
   out.set(iv);
@@ -36,11 +45,15 @@ export async function encryptPII(plaintext: string, keyMaterial: string): Promis
   return b64encode(out);
 }
 
-export async function decryptPII(payload: string, keyMaterial: string): Promise<string> {
-  const key = await importKey(keyMaterial);
+/** Decrypts with the key material, or with a key importPIIKey already made from it. */
+export async function decryptPII(payload: string, key: string | CryptoKey): Promise<string> {
+  const cryptoKey = typeof key === 'string' ? await importPIIKey(key) : key;
+  // Views, not copies: b64decode's array is this call's own.
   const data = b64decode(payload);
-  const iv = data.slice(0, 12);
-  const ct = data.slice(12);
-  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
-  return new TextDecoder().decode(pt);
+  const pt = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: data.subarray(0, 12) },
+    cryptoKey,
+    data.subarray(12),
+  );
+  return decoder.decode(pt);
 }

@@ -132,8 +132,9 @@ set local role service_role;
 select lives_ok(
   $$ select public.crm_ingest_lead('00000000-0000-0000-0000-000000000001',
        (_lead('00000000-0000-0000-0000-00000000ee06', null, '[]') - 'email_enc')
-         || '{"phone_enc": "ciphertext", "source": "manual"}') $$,
-  'a phone-only lead is accepted (manual adds, C3)');
+         || '{"phone_enc": "ciphertext", "source": "manual",
+              "created_by": "00000000-0000-0000-0000-0000000000a1"}') $$,
+  'a phone-only lead is accepted (manual adds name who added them, 0041)');
 -- createLead could not compute the indexes (it sends no signals then): the lead still
 -- arrives, unindexed, for the daily cron.
 select is(
