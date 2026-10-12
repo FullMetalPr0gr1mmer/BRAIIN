@@ -222,7 +222,11 @@ test.describe('on a phone', () => {
 
     await page.keyboard.press('Escape');
     await expect(drawer).toBeHidden();
-    // Back on the chip if the sidebar is still open, else on the Menu button: never <body>.
+    // showModal() closed the sidebar popover (a modal dialog closes every popover it is not
+    // inside), so the chip the dialog would give focus back to is not rendered: focus goes
+    // to the Menu button that reopens the sidebar. Never <body>, and never a hidden control
+    // (the closed dialog's Close button holds it until the drawer's `close` handler runs).
+    await expect(page.getByRole('button', { name: 'Menu' })).toBeFocused();
     expect(await page.evaluate(() => document.activeElement?.tagName ?? 'BODY')).not.toBe('BODY');
   });
 });
