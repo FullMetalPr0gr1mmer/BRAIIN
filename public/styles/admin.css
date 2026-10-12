@@ -420,7 +420,8 @@
   color: var(--ad-on-primary);
 }
 
-/* The sign-in screen: one centred card, no shell. */
+/* A page without the shell (AdminLayout's `bare`): one centred column. The sign-in screens
+   have their own shell since F7 (public/styles/admin/login.css). */
 .admin-body[data-layout='bare'] {
   display: flex;
   align-items: center;

@@ -26,7 +26,9 @@ interface Props {
   // `subtitle` from an optional value passes an explicit undefined, which `?:` alone
   // rejects.
   subtitle?: string | undefined;
-  /** `bare` drops the shell — used by the login screen, which has no session yet. */
+  /** `bare` drops the shell. No page asks for it since sign-in v2 (F7) gave the sign-in
+      screens their own shell, src/layouts/AuthLayout.astro; it is also what a page gets
+      when it renders without a session. */
   layout?: 'app' | 'bare' | undefined;
   /** Screen stylesheets under /styles/admin/, linked after admin.css: what only this
       screen renders (src/lib/admin/stylesheets.ts). A known name, never a URL — the sheet

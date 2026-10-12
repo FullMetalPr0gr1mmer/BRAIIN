@@ -102,6 +102,37 @@ Local stacks (`supabase start`, and the CI jobs) enable the same hook in
 admin e2e harness (`tests/admin`) depends on it. Hosted projects are governed by the
 dashboard setting above, so this step stays a blocker for staging and production.
 
+### 2a. Password reset e-mail (Admin v2 F7, owner item O-2)
+
+"Forgot password?" ships switched off: until the steps below are done, the screen says **Not
+set up** and sends nothing (`AUTH_EMAIL_READY`, default `false`). Supabase sends the e-mail;
+the Worker never sees it. Do all four, on staging first, then production:
+
+1. **SMTP.** Dashboard → **Authentication → Emails → SMTP Settings** → a real provider, with
+   SPF and DKIM on the sender domain. The built-in sender only reaches the project's own
+   team and is rate-limited to a handful an hour.
+2. **Site URL and redirect.** Dashboard → **Authentication → URL Configuration**: Site URL =
+   the site's origin (`PUBLIC_SITE_URL`); add `<origin>/admin/reset` to the Redirect URLs.
+3. **The recovery template.** Dashboard → **Authentication → Emails → Templates → Reset
+   Password**: the link must carry the token hash to our page, which verifies it on the
+   server (the default `{{ .ConfirmationURL }}` puts a session in the URL's `#` fragment,
+   which no server can read, and the page would call the link "not valid"):
+
+   ```html
+   <a href="{{ .SiteURL }}/admin/reset?token_hash={{ .TokenHash }}&type=recovery">Choose a new password</a>
+   ```
+
+4. **Switch it on.** Add `"AUTH_EMAIL_READY": "true"` to `vars` in `wrangler.jsonc` (a reviewed
+   PR; the deploy carries it).
+
+**Check it.** Request a reset for your own staff address and one that does not exist: the
+screen must say the same thing for both, and only yours gets an e-mail. The answer hides a
+delivery failure by design (it must not depend on the address), so look for one where it is
+recorded: `select created_at, detail from system_logs where source = 'auth.forgot' order by
+id desc limit 20;` (a status code, never the address). Each accepted request also leaves an
+`auth.password_reset_requested` row in `audit_log`, and each completed reset an
+`auth.password_reset` row against the account.
+
 ## 3. Create and promote the first admin  ⛔ blocker
 
 `users.manage` is Admin-only, so there is no in-product path to the first admin.
@@ -968,6 +999,7 @@ Not code; nothing enforces these until they are created.
 | `/api/ai/style-finder` | rate-limit **60/hr/IP** → block (not 10/60s) |
 | `/api/hooks/notify-lead` | rate-limit; the endpoint is bearer-authenticated but unbounded by retry |
 | `/api/analytics`, `/api/rum` | rate-limit per IP — unauthenticated paths to a service-role write |
+| `/api/admin/auth/forgot`, `/api/admin/auth/reset` | rate-limit per IP — reached without a session; the Worker's own limits (Admin v2 F7) are the inner ring |
 | Training crawlers | block `GPTBot`, `ClaudeBot`, `Google-Extended`, `CCBot`, `Applebot-Extended`, `Meta-ExternalAgent` |
 | Retrieval crawlers | **allow** `OAI-SearchBot`, `Claude-SearchBot`, `PerplexityBot`, `Bingbot` |
 
