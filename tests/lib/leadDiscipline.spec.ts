@@ -25,7 +25,9 @@ vi.mock('@/lib/supabase/server', () => ({
     },
     from: (table: string) => {
       const b: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'gte', 'in', 'order', 'limit']) b[m] = () => b;
+      for (const m of ['select', 'eq', 'gte', 'lt', 'or', 'in', 'order', 'limit', 'range']) {
+        b[m] = () => b;
+      }
       b['insert'] = (row: Record<string, unknown>) => {
         inserts.push({ table, row });
         // Awaited directly (a lead) or chained to read the new id back (the export's
@@ -42,7 +44,8 @@ vi.mock('@/lib/supabase/server', () => ({
       });
       b['then'] = (ok: (v: unknown) => unknown) =>
         Promise.resolve({
-          data: table === 'leads' ? leadRows : [],
+          // The export pages until a page comes back empty: the rows are served once.
+          data: table === 'leads' ? leadRows.splice(0, leadRows.length) : [],
           error: null,
           count: 0,
         }).then(ok);
@@ -57,6 +60,7 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('@/lib/data/tenant', () => ({ resolveLaunchTenantId: async () => TENANT }));
 vi.mock('@/lib/crypto/pii', () => ({
   encryptPII: async (v: string) => `enc(${v})`,
+  importPIIKey: async () => ({}),
   decryptPII: async (v: string) => v.replace(/^enc\((.*)\)$/, '$1'),
 }));
 vi.mock('@/lib/admin/audit', () => ({ writeAudit: async () => true }));
@@ -117,7 +121,7 @@ describe('where a lead is read', () => {
   it('the CSV export has a column for it', async () => {
     leadRows = [
       {
-        id: 'l1',
+        id: '22222222-2222-4222-8222-222222222222',
         created_at: '2026-09-27T00:00:00Z',
         status: 'new',
         name: 'Sam',

@@ -26,7 +26,7 @@ Each slice's file under [as-built/](as-built/) has the detail.
 
 ## Reserved
 
-Wave 1's migrations are reserved below; the next free number after them is **0045**. Before a
+Wave 1's migrations are reserved below; the next free number after them is **0046**. Before a
 wave's slices branch, each migration the wave plans gets a row here, numbered in the wave's
 planned merge order. The slice's own PR moves its row to "Applied" once production has applied the
 migration, before the PR merges (Pushing to production, step 5), so the row is true when the
@@ -35,11 +35,13 @@ PR lands and nothing here is edited after a merge.
 | Number | Slice | What | Wave |
 |---|---|---|---|
 | 0038 | R1 | the release ledger schema: ledger tables, the staged-entity registry, the protected flag table, snapshot coverage (all but `team_members`, which waits on O-12) (expand, inert) | 1 |
-| 0040 | U3 | media uploads: the public media bucket and its policies, the `media_assets` provider widening | 1 |
-| 0041 | C3 | the leads write API: the `crm.erase` helper and the write RPCs | 1 |
+| 0039 | (released) | unused: C3 (0041) was ready before F8 and U3 were built, so F8 and U3 moved above the wave (gaps are allowed) | 1 |
+| 0040 | (released) | unused, as 0039 | 1 |
+| 0041 | C3 | the leads write API: the `crm.erase` helper, the pipeline's assignee, value, star, read, tags and logged-contact columns with their staff column grant, and the bulk, erase, note-delete and note-count RPCs (`crm_ingest_lead` restated for manual leads) | 1 |
 | 0042 | U16 | the help centre: `help_articles` | 1 |
 | 0043 | C13 | lead attribution capture (built, held for the privacy notice, O-11) | 1 |
 | 0044 | F8 | `0044_personal_layer.sql`: the personal layer: preferences (`admin_user_prefs`, keyed to its profile by `(tenant_id, user_id)`), the people directory (`app.staff_directory()`, `public.staff_directory`, `crm_people` over it), the display-name rule for every writer (`app.display_name_ok`, the `profiles_display_name_rule` trigger), renaming yourself (`update_my_profile`), the environment pill (`admin_environment`). Renumbered from 0039 by the Wave 1 plan. Applies after 0041: its key rests on 0041's `profiles_tenant_id_id` (0044 adds the same constraint only where it is absent), which 0041 drops and re-adds | 1 |
+| 0045 | U3 | media uploads: the public media bucket and its policies, the `media_assets` provider widening | 1 |
 
 ## Rules
 
