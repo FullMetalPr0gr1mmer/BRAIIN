@@ -65,8 +65,9 @@ for (const role of ['admin', 'seo'] as const) {
       await expect(drawer).toBeVisible();
       await expect(drawer.locator('.acct__who .badge')).toHaveText(ROLE_LABELS[role]);
       await expect(drawer.locator('.acct__can li').first()).toBeVisible();
-      // E-mail changes need delivery, which is not set up: said, not hidden.
-      await expect(drawer.getByText('Not set up')).toBeVisible();
+      // E-mail changes need delivery, which is not set up: said, not hidden. Exact: the
+      // row's own line also says "not set up yet", and a substring match finds both.
+      await expect(drawer.getByText('Not set up', { exact: true })).toBeVisible();
       await expectNoAxeViolations(page, `${role}: the account drawer`);
 
       await drawer.getByRole('button', { name: 'Close' }).click();
