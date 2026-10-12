@@ -28,6 +28,15 @@ export interface AccountView {
   accessNote: string;
 }
 
+/** The outcome of a form just posted on /admin/account, shown beside that form. */
+export interface AccountFlash {
+  form: 'name' | 'password';
+  kind: 'ok' | 'error';
+  text: string;
+  /** The field an error belongs to. */
+  field?: string | undefined;
+}
+
 export function accountViewFor(auth: AuthContext, displayName: string | null): AccountView {
   return {
     displayName,

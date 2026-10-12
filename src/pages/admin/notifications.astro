@@ -3,12 +3,10 @@ import { env } from 'cloudflare:workers';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import NotificationList from '@/components/admin/screens/chrome/NotificationList';
 import { loadNotifications, type NotificationFeed } from '@/lib/admin/notifications';
-import { markNotificationsSeen, seenUpTo } from '@/lib/admin/prefs';
+import { mayPostPersonalForm, notificationsFormPost } from '@/lib/admin/personalForms';
 import type { ShellPreload } from '@/lib/admin/shell';
-import { can } from '@/lib/authz/matrix';
 import { getMaintenanceState } from '@/lib/http/maintenance';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
-import { NotificationsSeenSchema } from '@schemas/adminPrefs';
 
 export const prerender = false;
 
@@ -16,33 +14,26 @@ export const prerender = false;
 // rendered on the server for a browser without JS (the bell is a link here). The same
 // loader as the drawer and the unread count, so the three never disagree; "Mark all as
 // read" is a form that posts here (the middleware has checked the origin and the
-// double-submit token) and redirects back.
+// double-submit token) and redirects back. What the post does is notificationsFormPost()
+// (src/lib/admin/personalForms.ts).
 
 const session = Astro.locals.session;
 const sb = Astro.locals.supabase;
+let markFailed = false;
 
-// Any member (`analytics.read`, which every role holds); a refusal is a 403, not a 500.
-if (
-  Astro.request.method === 'POST' &&
-  (!session || can(session.role, 'analytics.read') !== 'full')
-) {
-  return new Response(null, { status: 403, headers: { 'cache-control': 'no-store' } });
-}
-
-if (Astro.request.method === 'POST' && session && sb) {
-  const form = await Astro.request.formData();
-  // Up to when the list this form was rendered with was read, never the time of the click.
-  const seen = NotificationsSeenSchema.safeParse({ asOf: form.get('as_of') });
-  if (form.get('intent') === 'seen' && seen.success) {
-    try {
-      await markNotificationsSeen(sb, session, seenUpTo(seen.data.asOf));
-      return Astro.redirect('/admin/notifications?done=seen', 303);
-    } catch {
-      Astro.response.status = 503;
-    }
-  } else {
-    Astro.response.status = 503;
+if (Astro.request.method === 'POST') {
+  // Any active member (`analytics.read`, which every role holds); a refusal is a 403.
+  if (!mayPostPersonalForm(session) || !sb) {
+    return new Response(null, { status: 403, headers: { 'cache-control': 'no-store' } });
   }
+  const result = await notificationsFormPost({
+    sb,
+    session,
+    form: await Astro.request.formData(),
+  });
+  if (result.kind === 'redirect') return Astro.redirect(result.location, 303);
+  Astro.response.status = result.status;
+  markFailed = true;
 }
 
 // One read of the feed (with labels) and of the maintenance snapshot, shared with the
@@ -66,7 +57,7 @@ const feed: NotificationFeed = preload?.feed ?? {
   failed: [],
   asOf: new Date().toISOString(),
 };
-const failedToMark = Astro.response.status === 503;
+const failedToMark = markFailed;
 const done = Astro.url.searchParams.get('done') === 'seen';
 ---
 

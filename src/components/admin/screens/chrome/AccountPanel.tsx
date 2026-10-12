@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { AdminApiError, adminFetch } from '@/lib/admin/client';
-import type { AccountView } from '@/lib/admin/account';
+import type { AccountFlash, AccountView } from '@/lib/admin/account';
 import { initialsOf } from '@/lib/admin/initials';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
 import { DISPLAY_NAME_MAX, PASSWORD_MIN } from '@schemas/adminPrefs';
@@ -17,14 +17,6 @@ import Icon from '@/components/admin/kit/Icon';
 // when both are on one page.
 //
 // No capability map reaches the browser: "What you can do" arrives as plain lines.
-
-export interface AccountFlash {
-  form: 'name' | 'password';
-  kind: 'ok' | 'error';
-  text: string;
-  /** The field an error belongs to. */
-  field?: string | undefined;
-}
 
 export interface AccountPanelProps {
   view: AccountView;
