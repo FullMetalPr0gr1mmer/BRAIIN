@@ -8,7 +8,10 @@
 --     else's, an admin included; another tenant reads none of T1's; a stale token reads
 --     and writes nothing, not even its own row. Staff may not touch the version, the key
 --     or delete a row. The version moves with a preference, never with the watermark; the
---     watermark only moves forward and never past now().
+--     watermark only moves forward and never past now(). A row's tenant is its person's for
+--     every writer, the service role included (the composite key to the profile): a row
+--     cannot be filed under, or moved to, another tenant, nor handed to another person; a
+--     profile that moves takes its row along (its bell afresh), and one that goes takes it.
 --   • staff_directory: every active member of the caller's tenant (locked people too),
 --     names and roles only, never an e-mail; nothing for a stale token or for a tenant the
 --     caller does not belong to. crm_people, restated over it, answers what 0036 did.
@@ -18,7 +21,7 @@
 --   • admin_environment names the marker's environment to live members, NULL otherwise.
 
 begin;
-select plan(97);
+select plan(103);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -110,6 +113,20 @@ select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000
   '42501', null, 'anon cannot call update_my_profile');
 select throws_ok($$ select public.admin_environment('44000000-0000-0000-0000-000000000001') $$,
   '42501', null, 'anon cannot call admin_environment');
+
+-- ---- preferences: a row's tenant is its person's, whoever writes it -------------------------
+-- The service role bypasses RLS; the composite key to the profile holds it all the same.
+set local role service_role;
+select _as(null, null, null);
+select throws_ok($$ insert into public.admin_user_prefs (tenant_id, user_id)
+                    values ('44000000-0000-0000-0000-0000000000ff', '44000000-0000-0000-0000-0000000000c1') $$,
+  '23503', null, 'the service role cannot file a T1 person''s preferences under T2');
+select throws_ok($$ update public.admin_user_prefs set tenant_id = '44000000-0000-0000-0000-0000000000ff'
+                    where user_id = '44000000-0000-0000-0000-0000000000a1' $$,
+  '23503', null, 'nor move a row to a tenant its person is not in');
+select throws_ok($$ update public.admin_user_prefs set user_id = '44000000-0000-0000-0000-0000000000c1'
+                    where user_id = '44000000-0000-0000-0000-0000000000a1' $$,
+  '23514', null, 'nor hand a row to another person');
 
 -- ---- preferences: content_creator --------------------------------------------------------
 set local role authenticated;
@@ -374,6 +391,26 @@ select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), null
   'a locked token gets nothing');
 select throws_ok($$ select env from app.deployment $$,
   '42501', null, 'and no staff token reads the marker itself');
+
+-- ---- a profile that moves takes its row along; one that goes takes it with it --------------
+-- Moving a person between tenants is an operator's change (no API role may write
+-- profiles.tenant_id). Their row follows (ON UPDATE CASCADE) with its bell afresh, so they
+-- have preferences in the new tenant rather than a row stranded in the old one.
+reset role;
+update public.profiles set tenant_id = '44000000-0000-0000-0000-0000000000ff'
+ where id = '44000000-0000-0000-0000-0000000000e1';
+select is((select tenant_id::text || '/' || coalesce(notifications_seen_at::text, 'unread') || '/' || version::text
+             from public.admin_user_prefs where user_id = '44000000-0000-0000-0000-0000000000e1'),
+  '44000000-0000-0000-0000-0000000000ff/unread/1',
+  'a profile moved to another tenant takes its preferences along, the bell afresh, the version kept');
+set local role authenticated;
+select _as('44000000-0000-0000-0000-0000000000e1', 'seo', '44000000-0000-0000-0000-0000000000ff');
+select is(_seen(), 1, 'and the person reads their row in the new tenant');
+reset role;
+delete from public.profiles where id = '44000000-0000-0000-0000-0000000000d3';
+select is((select count(*)::int from public.admin_user_prefs
+            where user_id = '44000000-0000-0000-0000-0000000000d3'), 0,
+  'a profile that goes takes its preferences with it');
 
 -- ---- grants (P-14: what must and must not be held) -------------------------------------------
 -- MAINTAIN exists from PostgreSQL 17 (production; CI runs 15), so it joins the lists there.

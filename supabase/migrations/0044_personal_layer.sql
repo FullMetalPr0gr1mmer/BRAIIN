@@ -17,7 +17,10 @@
 --     to themselves by RLS) and update only the preference columns; a BEFORE trigger owns
 --     the version (it moves only when a preference does, so marking the bell read never
 --     causes a 409), the timestamps, and the watermark, which only moves forward and never
---     past now().
+--     past now(). The row's tenant is its person's in the database itself, not only in RLS:
+--     the key to the profile is composite, (tenant_id, user_id) to profiles (tenant_id, id),
+--     so no writer, the service role included, can file a row under another tenant, and a
+--     profile moved to another tenant takes its row along.
 --   • app.staff_directory(): the one people directory (README P-7). A live CMS staff member
 --     gets every active member of the token's tenant: id, display name, role, and whether
 --     the person can take work now (not locked). No e-mail. Executable by no API role; the
@@ -49,9 +52,11 @@
 -- person's uuid). CLAUDE.md §3 (Pillar 1), §5, §8.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- A busy table fails the push instead of queueing (as in 0038 and 0041). The preferences'
--- foreign keys take SHARE ROW EXCLUSIVE locks on public.profiles and public.tenants, which
--- block their writers. Every admin request reads profiles, the access-token hook reads it at
+-- A busy table fails the push instead of queueing (as in 0038 and 0041). 0044 locks
+-- public.profiles: the unique key the preferences reference, where 0041 has not added it
+-- already (ACCESS EXCLUSIVE while its index builds), and the preferences' foreign key
+-- (SHARE ROW EXCLUSIVE, which blocks writers); and public.tenants for the tenant key (SHARE
+-- ROW EXCLUSIVE). Every admin request reads profiles, the access-token hook reads it at
 -- every sign-in and the sign-in's lockout RPCs write it, so a lock request queued behind a
 -- long transaction (an export, a dump, an idle session) would hold those writes up for the
 -- whole wait. A statement below that waits more than five seconds for a lock raises
@@ -60,8 +65,24 @@
 set local lock_timeout = '5s';
 
 -- ---- 1. Preferences ---------------------------------------------------------------------
+-- The key a preferences row references: a profile, in its own tenant. 0041 (C3) adds this
+-- exact constraint, profiles_tenant_id_id, for the leads' assignee, and applies before 0044
+-- in production (docs/admin-v2/migrations.md); on a database without it (this branch's CI
+-- until C3 merges) 0044 adds the same one, so whichever file runs first creates it and the
+-- other finds it. admin_user_prefs_profile_fk depends on it from here on: a later file that
+-- drops and re-adds it must drop that key first.
+do $$
+begin
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.profiles'::regclass
+                    and conname = 'profiles_tenant_id_id') then
+    alter table public.profiles add constraint profiles_tenant_id_id unique (tenant_id, id);
+  end if;
+end $$;
+
 create table if not exists public.admin_user_prefs (
-  user_id uuid primary key references public.profiles (id) on delete cascade,
+  -- The person. With tenant_id, the composite key to their profile (below).
+  user_id uuid primary key,
   tenant_id uuid not null references public.tenants (id) on delete cascade,
   -- The dashboard's layout (U1): {top, left, right, hidden}. Zod drops unknown widget ids on
   -- read; a preference never grants access to anything.
@@ -81,15 +102,23 @@ create table if not exists public.admin_user_prefs (
   constraint admin_user_prefs_quick_actions_shape check (
     jsonb_typeof(quick_actions) = 'array' and octet_length(quick_actions::text) <= 16384),
   constraint admin_user_prefs_notifications_shape check (
-    jsonb_typeof(notifications) = 'object' and octet_length(notifications::text) <= 4096)
+    jsonb_typeof(notifications) = 'object' and octet_length(notifications::text) <= 4096),
+  -- The person, in their own tenant. RLS also holds a staff row to the token's tenant; this
+  -- holds every row to its person's, whoever writes it. The row goes with its profile (ON
+  -- DELETE), and moves with it (ON UPDATE): a profile moved to another tenant keeps its
+  -- preferences there, instead of leaving a row behind in the old tenant that would hold
+  -- the person's key and refuse them a row in the new one.
+  constraint admin_user_prefs_profile_fk foreign key (tenant_id, user_id)
+    references public.profiles (tenant_id, id) on delete cascade on update cascade
 );
 create index if not exists admin_user_prefs_tenant_idx on public.admin_user_prefs (tenant_id);
 
 alter table public.admin_user_prefs enable row level security;
 alter table public.admin_user_prefs force row level security;
 
--- The version, the stamps, the key and the watermark belong to the database. INVOKER (a
--- trigger needs no privilege of its own); search_path '' with qualified names.
+-- The version, the stamps and the watermark belong to the database, and a row belongs to
+-- its person for good. INVOKER (a trigger needs no privilege of its own); search_path ''
+-- with qualified names.
 create or replace function app.tg_admin_user_prefs() returns trigger
   language plpgsql set search_path = '' as $$
 begin
@@ -103,15 +132,24 @@ begin
     return new;
   end if;
 
-  -- A preferences row belongs to one person in one tenant, for good.
-  new.user_id := old.user_id;
-  new.tenant_id := old.tenant_id;
+  -- A preferences row belongs to one person for good: refused, not silently kept, so the
+  -- composite key can never be left naming a pair that no profile has. (A profile's id is
+  -- its auth user's and never changes; staff hold no UPDATE on the key at all.)
+  if new.user_id is distinct from old.user_id then
+    raise exception using errcode = '23514',
+      message = 'admin_user_prefs: a preferences row belongs to one person for good';
+  end if;
   new.created_at := old.created_at;
   new.updated_at := now();
 
-  -- The watermark only moves forward, and never past now(): a clock ahead of the
+  -- The row's tenant is its person's: the composite key refuses any other, and carries it
+  -- along when the profile moves (ON UPDATE CASCADE). The watermark is a point in one
+  -- tenant's feed, so a move starts the person's bell afresh in the new tenant. Otherwise
+  -- the watermark only moves forward, and never past now(): a clock ahead of the
   -- database's cannot hide what arrives in between, and it cannot be cleared.
-  if new.notifications_seen_at is null then
+  if new.tenant_id is distinct from old.tenant_id then
+    new.notifications_seen_at := null;
+  elsif new.notifications_seen_at is null then
     new.notifications_seen_at := old.notifications_seen_at;
   elsif old.notifications_seen_at is not null then
     new.notifications_seen_at := greatest(old.notifications_seen_at,
@@ -356,6 +394,7 @@ begin
              and a.grantee <> c.relowner) s;
   v_want := array['authenticated select', 'service_role delete', 'service_role insert',
                   'service_role select', 'service_role update'];
+  select array_agg(w order by w) into v_want from unnest(v_want) as w;
   if v_have is distinct from v_want then
     raise exception '0044: admin_user_prefs is granted %, expected %', v_have, v_want;
   end if;
@@ -416,6 +455,7 @@ begin
                   'admin_user_prefs_self_insert INSERT PERMISSIVE {authenticated}',
                   'admin_user_prefs_self_read SELECT PERMISSIVE {authenticated}',
                   'admin_user_prefs_self_update UPDATE PERMISSIVE {authenticated}'];
+  select array_agg(w order by w) into v_want from unnest(v_want) as w;
   if v_have is distinct from v_want then
     raise exception '0044: admin_user_prefs policies are %, expected %', v_have, v_want;
   end if;
@@ -443,6 +483,33 @@ begin
       or (x.pattern is not null and coalesce(e.expr, '') !~ x.pattern);
   if v_bad is not null then
     raise exception '0044: admin_user_prefs policy expressions are not as stated: %', v_bad;
+  end if;
+
+  -- ---- Keys: a row's tenant is its person's. Exactly two foreign keys, the tenant and the
+  -- composite key to the profile (cascading on delete and on update), and the latter rests
+  -- on profiles_tenant_id_id, unique on exactly (tenant_id, id) (0041's, or the same one
+  -- added above).
+  if (select count(*) from pg_constraint
+       where conrelid = 'public.admin_user_prefs'::regclass and contype = 'f') <> 2
+     or not exists (
+       select 1 from pg_constraint
+        where conrelid = 'public.admin_user_prefs'::regclass and contype = 'f'
+          and conname = 'admin_user_prefs_profile_fk'
+          and pg_get_constraintdef(oid) ~ '^FOREIGN KEY \(tenant_id, user_id\) REFERENCES (public\.)?profiles\(tenant_id, id\) ON UPDATE CASCADE ON DELETE CASCADE$')
+     or not exists (
+       select 1 from pg_constraint
+        where conrelid = 'public.admin_user_prefs'::regclass and contype = 'f'
+          and pg_get_constraintdef(oid) ~ '^FOREIGN KEY \(tenant_id\) REFERENCES (public\.)?tenants\(id\) ON DELETE CASCADE$') then
+    raise exception '0044: admin_user_prefs must have exactly its tenant key and the composite key to its profile';
+  end if;
+  if not exists (
+       select 1 from pg_constraint k
+         join pg_constraint f on f.conname = 'admin_user_prefs_profile_fk'
+                             and f.conrelid = 'public.admin_user_prefs'::regclass
+        where k.conrelid = 'public.profiles'::regclass and k.conname = 'profiles_tenant_id_id'
+          and k.contype = 'u' and pg_get_constraintdef(k.oid) = 'UNIQUE (tenant_id, id)'
+          and f.conindid = k.conindid) then
+    raise exception '0044: admin_user_prefs_profile_fk must rest on profiles_tenant_id_id, UNIQUE (tenant_id, id)';
   end if;
 
   -- The functions: definers with an empty search path, callable by staff tokens and by
