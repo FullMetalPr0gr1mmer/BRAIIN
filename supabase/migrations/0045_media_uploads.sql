@@ -308,8 +308,10 @@ begin
   -- The belt: no permissive storage policy added later (for some other bucket) can let
   -- anon or a staff token write, list or delete here. Visitors read through the public URL,
   -- which Supabase Storage serves without RLS. Creating a policy on storage.objects needs
-  -- its owner's rights; if this project's migration role lacks them, the bucket is still
-  -- closed to both roles (no policy names it): say so, do not fail the push.
+  -- its owner's rights. If this project's migration role lacks them, the push goes on only
+  -- if the postconditions below find that no permissive storage.objects policy admits anon
+  -- or authenticated at all, so neither can reach the bucket without the belt; otherwise
+  -- they refuse it.
   begin
     execute 'drop policy if exists media_bucket_service_only on storage.objects';
     execute $p$
@@ -319,7 +321,7 @@ begin
         with check (bucket_id <> 'media')
     $p$;
   exception when insufficient_privilege then
-    raise warning '0045: not permitted to add the storage.objects belt policy; no policy names the media bucket, so anon and authenticated still cannot write to it';
+    null;  -- checked, not assumed: the postconditions below
   end;
 end $$;
 
@@ -341,6 +343,7 @@ declare
   v_have text[];
   v_want text[];
   v_bad text;
+  v_belt text;
 begin
   -- ---- media_assets, table-wide: each API role holds exactly its stated privileges -----
   select string_agg(format('%s %s %s', x.who,
@@ -504,5 +507,49 @@ begin
       raise warning '0045: the service role cannot read storage.objects; the daily orphan sweep will fail (and log it)';
     end if;
 
+    -- ---- Neither anon nor authenticated can list, write or delete in the bucket. Checked,
+    -- not assumed: neither role bypasses RLS, RLS is on for storage.objects (or neither role
+    -- holds a privilege on it), and either the belt is exactly what §6 creates, or there is
+    -- no belt and no permissive policy on storage.objects names PUBLIC, either role, or any
+    -- role either is a member of (MEMBER, not USAGE: a NOINHERIT member can still SET ROLE),
+    -- so no row of any bucket is theirs ----
+    if exists (select 1 from pg_roles
+                where rolname in ('anon', 'authenticated') and (rolsuper or rolbypassrls)) then
+      raise exception '0045: anon or authenticated bypasses RLS; no storage policy can keep it out of the media bucket';
+    end if;
+    if not (select relrowsecurity from pg_class where oid = 'storage.objects'::regclass)
+       and (has_table_privilege('anon', 'storage.objects', 'select, insert, update, delete')
+            or has_table_privilege('authenticated', 'storage.objects', 'select, insert, update, delete')) then
+      raise exception '0045: row level security is off on storage.objects, and anon or authenticated holds a privilege on it';
+    end if;
+    select format('%s %s %s %s %s', permissive, cmd, roles, qual, with_check)
+      into v_belt
+      from pg_policies
+     where schemaname = 'storage' and tablename = 'objects'
+       and policyname = 'media_bucket_service_only';
+    if v_belt is not null then
+      if v_belt is distinct from
+         'RESTRICTIVE ALL {anon,authenticated} (bucket_id <> ''media''::text) (bucket_id <> ''media''::text)' then
+        raise exception '0045: media_bucket_service_only is not the belt this migration creates: %', v_belt;
+      end if;
+    else
+      select string_agg(pl.polname, ', ' order by pl.polname)
+        into v_bad
+        from pg_policy pl
+       where pl.polrelid = 'storage.objects'::regclass and pl.polpermissive
+         and exists (select 1 from unnest(pl.polroles) as r(role_oid)
+                      where r.role_oid = 0
+                         or pg_has_role('anon', r.role_oid, 'member')
+                         or pg_has_role('authenticated', r.role_oid, 'member'));
+      if v_bad is not null then
+        raise exception using
+          errcode = 'insufficient_privilege',
+          message = format('0045: the belt could not be added (this role may not create a policy '
+                           || 'on storage.objects), and permissive storage.objects policies admit '
+                           || 'anon or authenticated: %s; either could reach the media bucket', v_bad),
+          hint = 'Push as the owner of storage.objects, or narrow those policies, then push again (runbook 6i, step 1).';
+      end if;
+      raise warning '0045: no belt on storage.objects (this role may not create a policy there); checked: no permissive storage.objects policy admits anon or authenticated, so neither can list, write or delete in the media bucket. A permissive policy added later would open it: report this warning (runbook 6i)';
+    end if;
   end if;
 end $$;
