@@ -2,7 +2,8 @@
 -- 0044 — The personal layer (Admin v2 F8, docs/admin-v2/ui.md AV-05). Forward-only,
 -- expand only. Depends on 0001 (tenants, profiles), 0002 (audit_log), 0011 (the app
 -- schema's grants), 0016 (app.deployment), 0031 (the audit chain's trigger), 0033
--- (app.live_role, app.role_works_leads), 0036 (crm_people) and 0037 (profiles' column grant).
+-- (app.live_role, app.role_works_leads), 0036 (crm_people), 0037 (profiles' column grant)
+-- and 0041 (profiles_tenant_id_id, the key the preferences reference).
 --
 -- What every signed-in member owns or sees about themselves, and the two facts the shell
 -- shows everyone:
@@ -57,34 +58,17 @@
 -- person's uuid). CLAUDE.md §3 (Pillar 1), §5, §8.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- A busy table fails the push instead of queueing (as in 0038 and 0041). 0044 locks
--- public.profiles: the unique key the preferences reference, where 0041 has not added it
--- already (ACCESS EXCLUSIVE while its index builds), the preferences' foreign key and the
--- display-name trigger (SHARE ROW EXCLUSIVE, which blocks writers); and public.tenants for
--- the tenant key (SHARE ROW EXCLUSIVE). Every admin request reads profiles, the access-token hook reads it at
--- every sign-in and the sign-in's lockout RPCs write it, so a lock request queued behind a
--- long transaction (an export, a dump, an idle session) would hold those writes up for the
--- whole wait. A statement below that waits more than five seconds for a lock raises
--- instead, the whole migration rolls back, and the push is retried later.
--- Transaction-local: it ends with this migration.
+-- A busy table fails the push instead of queueing (as in 0038 and 0041). The preferences'
+-- foreign keys take SHARE ROW EXCLUSIVE locks on public.profiles and public.tenants, and the
+-- display-name trigger one on public.profiles, which block their writers. Every admin
+-- request reads profiles, the access-token hook reads it at every sign-in and the sign-in's
+-- lockout RPCs write it, so a lock request queued behind a long transaction (an export, a
+-- dump, an idle session) would hold those writes up for the whole wait. A statement below
+-- that waits more than five seconds for a lock raises instead, the whole migration rolls
+-- back, and the push is retried later. Transaction-local: it ends with this migration.
 set local lock_timeout = '5s';
 
 -- ---- 1. Preferences ---------------------------------------------------------------------
--- The key a preferences row references: a profile, in its own tenant. 0041 (C3) adds this
--- exact constraint, profiles_tenant_id_id, for the leads' assignee, and applies before 0044
--- in production (docs/admin-v2/migrations.md); on a database without it (this branch's CI
--- until C3 merges) 0044 adds the same one, so whichever file runs first creates it and the
--- other finds it. admin_user_prefs_profile_fk depends on it from here on: a later file that
--- drops and re-adds it must drop that key first.
-do $$
-begin
-  if not exists (select 1 from pg_constraint
-                  where conrelid = 'public.profiles'::regclass
-                    and conname = 'profiles_tenant_id_id') then
-    alter table public.profiles add constraint profiles_tenant_id_id unique (tenant_id, id);
-  end if;
-end $$;
-
 create table if not exists public.admin_user_prefs (
   -- The person. With tenant_id, the composite key to their profile (below).
   user_id uuid primary key,
@@ -112,7 +96,9 @@ create table if not exists public.admin_user_prefs (
   -- holds every row to its person's, whoever writes it. The row goes with its profile (ON
   -- DELETE), and moves with it (ON UPDATE): a profile moved to another tenant keeps its
   -- preferences there, instead of leaving a row behind in the old tenant that would hold
-  -- the person's key and refuse them a row in the new one.
+  -- the person's key and refuse them a row in the new one. It references
+  -- profiles_tenant_id_id, UNIQUE (tenant_id, id), which 0041 added for the leads'
+  -- assignee; a later file that drops and re-adds that constraint must drop this key first.
   constraint admin_user_prefs_profile_fk foreign key (tenant_id, user_id)
     references public.profiles (tenant_id, id) on delete cascade on update cascade
 );
@@ -537,8 +523,7 @@ begin
 
   -- ---- Keys: a row's tenant is its person's. Exactly two foreign keys, the tenant and the
   -- composite key to the profile (cascading on delete and on update), and the latter rests
-  -- on profiles_tenant_id_id, unique on exactly (tenant_id, id) (0041's, or the same one
-  -- added above).
+  -- on 0041's profiles_tenant_id_id, unique on exactly (tenant_id, id).
   if (select count(*) from pg_constraint
        where conrelid = 'public.admin_user_prefs'::regclass and contype = 'f') <> 2
      or not exists (
