@@ -13,7 +13,8 @@
 --      `<tenant>/<random id>_<w>x<h>.webp`, its tenant segment is the row's tenant, its
 --      size in the name equals the row's width/height (the `/_image` guard bounds a
 --      transform by the name, with no database read), WebP, at most 2,560 px, a size the
---      bucket can hold — plus `display_name` (the uploaded file's own name; staff only).
+--      bucket can hold — one row per object (a unique index on the key), plus
+--      `display_name` (the uploaded file's own name; staff only).
 --   2. media_assets_public_read: 0028's policy, unchanged, with `storage` added to the
 --      hosted providers visitors may read (only while published content shows the asset).
 --   3. public.media_storage_stats(p_tenant): "storage used" for the library's meter.
@@ -33,14 +34,26 @@
 -- (media_write: Admin, Content Creator, Developer; SEO meta only, via update_media_meta()).
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- A busy table fails the push instead of queueing: a statement below that waits more than
+-- five seconds for a lock (media_assets gains a column, three constraints, an index and a
+-- policy; storage.objects a policy) raises, and the push is retried later, rather than
+-- holding its place in the lock queue while the site's reads and writes pile up behind it.
+-- Transaction-local: it ends with this migration.
+set local lock_timeout = '5s';
+
 -- ---- 1. The provider, its shape, the display name ---------------------------------------
 alter table public.media_assets
   add column if not exists display_name text;
 
+-- The characters refused are named, not a locale's [[:cntrl:]] (which, in a UTF-8 database,
+-- follows LC_CTYPE and may also take C1 controls or U+2028/U+2029), so the database refuses
+-- exactly what MediaDisplayNameSchema refuses (packages/schemas/media.ts): C0 and C1
+-- controls, DEL, the line and paragraph separators, and both slashes.
 alter table public.media_assets drop constraint if exists media_assets_display_name;
 alter table public.media_assets add constraint media_assets_display_name check (
   display_name is null
-  or (char_length(display_name) between 1 and 200 and display_name !~ '[[:cntrl:]/\\]')
+  or (char_length(display_name) between 1 and 200
+      and display_name !~ '[\u0001-\u001f\u007f-\u009f\u2028\u2029/\\]')
 );
 
 alter table public.media_assets drop constraint if exists media_assets_provider_known;
@@ -83,6 +96,13 @@ begin
 exception when check_violation then
   raise warning '0045: media_assets_provider_shape left NOT VALID — legacy media rows violate it (still enforced on every new or edited row)';
 end $$;
+
+-- One row per uploaded file. The Worker writes a fresh random key on every upload and
+-- replace, but a staff token holds INSERT and UPDATE on media_assets (0011), so without this
+-- a direct API write could name another row's object; deleting that duplicate would then
+-- remove a file a live page still shows. No `storage` row exists before this migration.
+create unique index if not exists media_assets_storage_object_key
+  on public.media_assets (storage_path) where provider = 'storage';
 
 -- ---- 2. Visitors read an uploaded image that published content shows -------------------
 -- 0028's policy, word for word, with `storage` among the hosted providers. Each branch
@@ -245,6 +265,15 @@ begin
        and pg_get_constraintdef(oid) like '%''storage''%'
   ) then
     raise exception '0045: media_assets_provider_shape has no storage branch';
+  end if;
+  if not exists (
+    select 1 from pg_index i
+     where i.indexrelid = to_regclass('public.media_assets_storage_object_key')
+       and i.indrelid = 'public.media_assets'::regclass
+       and i.indisunique and i.indisvalid
+       and pg_get_expr(i.indpred, i.indrelid) like '%''storage''%'
+  ) then
+    raise exception '0045: media_assets_storage_object_key is missing, not unique, or not limited to storage rows';
   end if;
   if not exists (
     select 1 from pg_policies

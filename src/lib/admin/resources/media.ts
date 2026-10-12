@@ -49,6 +49,19 @@ export const mediaResource: ResourceConfig = {
   filterableColumns: ['kind', 'folder'],
   createSchema: MediaWriteSchema,
   updateSchema: MediaUpdateSchema,
+  // 0045. The display-name CHECK refuses what MediaDisplayNameSchema refuses, so it fires
+  // only for a writer that skipped the schema; the index refuses a second row naming one
+  // uploaded file (a direct API write; the routes always write a fresh key).
+  constraintFields: {
+    media_assets_display_name: {
+      field: 'displayName',
+      message: 'a file name of up to 200 characters, without folders or control characters',
+    },
+    media_assets_storage_object_key: {
+      field: 'storagePath',
+      message: 'another image already uses this file',
+    },
+  },
   toRow: (input) =>
     pick(input as Input, {
       kind: 'kind',

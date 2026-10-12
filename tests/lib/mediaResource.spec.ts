@@ -1,13 +1,19 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { MediaUpdateSchema, MediaWriteSchema } from '@schemas/admin';
 import {
   decodeMediaMeta,
   encodeMediaMeta,
+  MEDIA_META_LIMITS,
+  MEDIA_META_MAX_LENGTH,
+  MediaDisplayNameSchema,
   MediaReplaceMetaSchema,
   MediaUploadMetaSchema,
   parseStorageKey,
 } from '@schemas/media';
 import { mediaResource } from '@/lib/admin/resources/media';
+import { translateWriteError } from '@/lib/admin/crud';
+import { readMediaMeta } from '@/lib/admin/mediaUpload';
 import type { AuthContext } from '@/lib/auth/types';
 
 // Admin v2 U3: an uploaded image's row is written by the upload and replace routes only.
@@ -115,6 +121,58 @@ describe('the upload details header and the object key', () => {
     expect(MediaReplaceMetaSchema.safeParse({ version: 2, alt: {} }).success).toBe(false);
   });
 
+  it('every valid set of details fits the header, in the costliest script, and reads back', () => {
+    // A BMP character past U+07FF is three bytes of UTF-8, the most any accepted UTF-16 unit
+    // costs (Arabic takes two; a quote is escaped into two). Each field at the schema's maximum.
+    for (const ch of ['中', 'ش', '"']) {
+      const fill = (n: number) => ch.repeat(n);
+      const meta = {
+        alt: { en: fill(MEDIA_META_LIMITS.alt), ar: fill(MEDIA_META_LIMITS.alt) },
+        displayName: fill(MEDIA_META_LIMITS.displayName),
+        tags: Array.from({ length: MEDIA_META_LIMITS.tags }, () => fill(MEDIA_META_LIMITS.tag)),
+        folder: fill(MEDIA_META_LIMITS.folder),
+      };
+      expect(MediaUploadMetaSchema.safeParse(meta).success, ch).toBe(true);
+      const header = encodeMediaMeta(meta);
+      expect(header.length, ch).toBeLessThanOrEqual(MEDIA_META_MAX_LENGTH);
+      expect(header).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(decodeMediaMeta(header), ch).toEqual(meta);
+      // ...and those maxima are the schema's: one unit more is refused, field by field.
+      const over = (patch: Record<string, unknown>) =>
+        MediaUploadMetaSchema.safeParse({ ...meta, ...patch }).success;
+      expect(over({ alt: { ...meta.alt, en: fill(MEDIA_META_LIMITS.alt + 1) } })).toBe(false);
+      expect(over({ displayName: fill(MEDIA_META_LIMITS.displayName + 1) })).toBe(false);
+      expect(over({ tags: [...meta.tags, 'x'] })).toBe(false);
+      expect(over({ tags: [fill(MEDIA_META_LIMITS.tag + 1)] })).toBe(false);
+      expect(over({ folder: fill(MEDIA_META_LIMITS.folder + 1) })).toBe(false);
+    }
+  });
+
+  it('details hold no control character or lone surrogate (what bounds the header)', () => {
+    const base = { alt: { en: 'x', ar: 'س' } };
+    for (const bad of ['\u0001', '\u0085', '\u2028', '\ud800', '\n']) {
+      const label = JSON.stringify(bad);
+      expect(MediaUploadMetaSchema.safeParse({ ...base, tags: [`a${bad}b`] }).success, label).toBe(
+        false,
+      );
+      expect(MediaUploadMetaSchema.safeParse({ ...base, folder: `a${bad}b` }).success, label).toBe(
+        false,
+      );
+      expect(MediaUploadMetaSchema.safeParse({ alt: { en: `a${bad}b`, ar: 'س' } }).success).toBe(
+        false,
+      );
+    }
+    // An emoji (a surrogate PAIR) is fine.
+    expect(MediaUploadMetaSchema.safeParse({ ...base, tags: ['🎬 reel'] }).success).toBe(true);
+  });
+
+  it('a header past the ceiling is refused as too long, not as unreadable', () => {
+    const request = (value: string) =>
+      new Request('https://admin.example.test/', { headers: { 'x-media-meta': value } });
+    expect(() => readMediaMeta(request('A'.repeat(MEDIA_META_MAX_LENGTH + 1)))).toThrow(/too long/);
+    expect(() => readMediaMeta(request('%%%'))).toThrow(/could not be read/);
+  });
+
   it('parses exactly the keys the upload writes', () => {
     expect(parseStorageKey(KEY)).toEqual({
       tenantId: TENANT,
@@ -132,5 +190,68 @@ describe('the upload details header and the object key', () => {
     ]) {
       expect(parseStorageKey(bad), bad).toBeNull();
     }
+  });
+});
+
+describe('the display name: the schema and 0045 refuse the same characters', () => {
+  // The CHECK names its characters instead of a locale's [[:cntrl:]] (which, in a UTF-8
+  // database, may also take C1 controls or U+2028/U+2029). Its bracket expression is read
+  // from the migration and run here as the same class, so the two rules cannot drift apart.
+  const sql = readFileSync('supabase/migrations/0045_media_uploads.sql', 'utf8');
+  const cls = /display_name !~ '(\[[^']+\])'/.exec(sql)?.[1];
+  const refusedByDb = new RegExp(cls ?? '(?!)', 'u');
+
+  it('the migration names its characters', () => {
+    expect(cls).toBe(String.raw`[\u0001-\u001f\u007f-\u009f\u2028\u2029/\\]`);
+  });
+
+  it('a name the schema admits, the database admits; what it refuses, the database refuses', () => {
+    const probes = [
+      '\u0001',
+      '\u0009',
+      '\u001f',
+      '\u007f',
+      '\u0085',
+      '\u009f',
+      '\u00a0',
+      '\u200f',
+      '\u2028',
+      '\u2029',
+      '/',
+      '\\',
+      'ش',
+      ' ',
+      '.',
+    ];
+    for (const probe of probes) {
+      const name = `a${probe}b.jpg`;
+      expect(MediaDisplayNameSchema.safeParse(name).success, JSON.stringify(probe)).toBe(
+        !refusedByDb.test(name),
+      );
+    }
+  });
+
+  it('a refusal by either 0045 constraint names the field at fault', () => {
+    const check = translateWriteError(
+      {
+        code: '23514',
+        message:
+          'new row for relation "media_assets" violates check constraint "media_assets_display_name"',
+      },
+      'media_assets',
+      'write',
+      mediaResource.constraintFields,
+    );
+    expect(check).toMatchObject({ status: 422, field: 'displayName' });
+    const twice = translateWriteError(
+      {
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "media_assets_storage_object_key"',
+      },
+      'media_assets',
+      'write',
+      mediaResource.constraintFields,
+    );
+    expect(twice).toMatchObject({ status: 422, field: 'storagePath' });
   });
 });

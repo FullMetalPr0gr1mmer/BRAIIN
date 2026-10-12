@@ -1,18 +1,22 @@
 -- pgTAP: media uploads (0045, Admin v2 U3). Runs where Supabase Storage's schema exists
 -- (CI's `supabase start`).
 --
---   1. the public `media` bucket: WebP only, 10 MB, and no API role writes to it;
+--   1. the public `media` bucket: WebP only, 10 MB, and no API role writes to it; the
+--      RESTRICTIVE belt exists and still shuts anon and staff tokens out when a permissive
+--      policy opens every bucket to them;
 --   2. the `storage` provider's shape: the key's tenant is the row's, its size is the row's,
---      WebP, ≤ 2,560 px, a size and a MIME type (a NULL never slips through the CHECK);
+--      WebP, ≤ 2,560 px, a size and a MIME type (a NULL never slips through the CHECK); the
+--      display name refuses exactly what MediaDisplayNameSchema refuses;
 --   3. §5 "Media — upload / edit metadata": Admin, Content Creator and Developer write a
---      storage row; SEO reads the library and edits metadata through update_media_meta()
---      only; other_tenant writes and reads nothing; hard delete is Admin's;
+--      storage row, and no row names another row's file; SEO reads the library and edits
+--      metadata through update_media_meta() only; other_tenant writes and reads nothing;
+--      hard delete is Admin's;
 --   4. visitors read an uploaded image only while published content shows it, and never
 --      its display_name;
 --   5. media_storage_stats(): the caller's own tenant only;
 --   6. media_orphan_objects(): the service role only, and never an object a row names.
 begin;
-select plan(42);
+select plan(56);
 
 insert into public.tenants (id, name) values ('45000000-0000-0000-0000-000000000002', 'MediaUploadsT2');
 
@@ -44,25 +48,103 @@ begin
   get diagnostics n = row_count;
   return n;
 end $$;
--- The orphan probe writes two objects straight into storage.objects. Where this stack's
--- storage schema does not allow that, its two assertions are skipped, saying why.
-create function _orphan_probe(p_orphan text, p_named text) returns setof text
-  language plpgsql as $f$
+-- What the current role sees and can change in a bucket; -1 when it holds no privilege on
+-- storage.objects at all (Supabase's grants, not ours, decide that).
+create function _objects(p_bucket text) returns int language plpgsql as $f$
+begin
+  return (select count(*)::int from storage.objects where bucket_id = p_bucket);
+exception when insufficient_privilege then
+  return -1;
+end $f$;
+create function _touch(p_bucket text) returns int language plpgsql as $f$
+declare n int;
+begin
+  update storage.objects set metadata = coalesce(metadata, '{}'::jsonb) where bucket_id = p_bucket;
+  get diagnostics n = row_count;
+  return n;
+exception when insufficient_privilege then
+  return -1;
+end $f$;
+create function _can(p_role text, p_privilege text) returns boolean language sql as $f$
+  select has_table_privilege(p_role, 'storage.objects', p_privilege) $f$;
+
+-- The belt (0045 §5), proven rather than assumed. Without it nothing names the bucket, so
+-- the inserts in section 1 fail either way; here a permissive policy opens EVERY bucket to
+-- anon and authenticated (as a later migration for some other bucket might), and the media
+-- bucket must stay shut while the other bucket opens. Adding a policy on storage.objects
+-- needs its owner's rights, the same rights 0045 needed for the belt: where this role holds
+-- them the belt must exist; where it does not, 0045 warned and these are skipped, saying so.
+create function _belt_probe() returns setof text language plpgsql as $f$
+declare
+  v_open boolean := true;
 begin
   begin
-    insert into storage.objects (bucket_id, name, created_at)
-    values ('media', p_orphan, now() - interval '2 hours'),
-           ('media', p_named, now() - interval '2 hours');
-  exception when others then
-    return next skip('storage.objects is not writable from SQL here: ' || sqlerrm, 2);
-    return;
+    create policy _pgtap_open_all on storage.objects as permissive
+      for all to anon, authenticated using (true) with check (true);
+  exception when insufficient_privilege then
+    v_open := false;
   end;
-  return next is(
-    (select count(*)::int from public.media_orphan_objects(60, 1000) where object_name = p_orphan),
-    1, 'the sweep finds an object no row names, once it is older than the grace period');
-  return next is(
-    (select count(*)::int from public.media_orphan_objects(60, 1000) where object_name = p_named),
-    0, 'the sweep never offers an object that a media row names');
+
+  if v_open or exists (select 1 from pg_policies where schemaname = 'storage'
+                         and tablename = 'objects' and policyname = 'media_bucket_service_only') then
+    return next is(
+      (select permissive || '|' || cmd || '|'
+              || array_to_string(array(select r::text from unnest(roles) as r order by 1), ',')
+              || '|' || qual || '|' || with_check
+         from pg_policies
+        where schemaname = 'storage' and tablename = 'objects'
+          and policyname = 'media_bucket_service_only'),
+      'RESTRICTIVE|ALL|anon,authenticated|(bucket_id <> ''media''::text)|(bucket_id <> ''media''::text)',
+      'the belt exists: RESTRICTIVE, every command, anon and authenticated, never the media bucket');
+  else
+    return next skip('this role may not add a storage.objects policy, and 0045 could not add the belt either (it warned)', 1);
+  end if;
+  if not v_open then
+    return next skip('this role may not add a storage.objects policy, so the belt cannot be opened against here', 8);
+    return;
+  end if;
+
+  -- A bucket no belt names, and one object in each (the service role writes, as the Worker).
+  insert into storage.buckets (id, name, public) values ('pgtap-open', 'pgtap-open', false);
+  set local role service_role;
+  insert into storage.objects (bucket_id, name) values
+    ('media', _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000d1', 1, 1)),
+    ('pgtap-open', 'pgtap/open.txt');
+  reset role;
+
+  set local role authenticated;
+  perform _claims('admin', app.default_tenant_id()::text);
+  return next is(_objects('pgtap-open'),
+    case when _can('authenticated', 'select') then 1 else -1 end,
+    'control: the open policy lets a staff token read the other bucket');
+  return next is(_objects('media'),
+    case when _can('authenticated', 'select') then 0 else -1 end,
+    'the belt hides every media object from a staff token, whatever else is permitted');
+  return next is(_touch('media'),
+    case when _can('authenticated', 'select') and _can('authenticated', 'update') then 0 else -1 end,
+    'the belt leaves a staff token no media object to change (or delete: the same USING)');
+  return next throws_ok(
+    $$ insert into storage.objects (bucket_id, name) values ('media', 'x/belt_1x1.webp') $$,
+    '42501', null, 'the belt refuses a staff token''s write into the media bucket, even opened');
+  reset role;
+
+  set local role anon;
+  perform _claims(null, null);
+  return next is(_objects('pgtap-open'),
+    case when _can('anon', 'select') then 1 else -1 end,
+    'control: the open policy lets anon read the other bucket');
+  return next is(_objects('media'),
+    case when _can('anon', 'select') then 0 else -1 end,
+    'the belt hides every media object from anon (visitors read the public URL, not the table)');
+  return next is(_touch('media'),
+    case when _can('anon', 'select') and _can('anon', 'update') then 0 else -1 end,
+    'the belt leaves anon no media object to change');
+  return next throws_ok(
+    $$ insert into storage.objects (bucket_id, name) values ('media', 'x/belt_1x1.webp') $$,
+    '42501', null, 'the belt refuses anon''s write into the media bucket, even opened');
+  reset role;
+
+  drop policy _pgtap_open_all on storage.objects;
 end $f$;
 
 -- ── fixtures (the launch tenant, which anon is fenced to, and another tenant) ──────────────
@@ -102,6 +184,9 @@ select throws_ok(
   $$ insert into storage.objects (bucket_id, name) values ('media', 'x/y_1x1.webp') $$,
   '42501', null, 'anon cannot write into the media bucket');
 reset role;
+
+-- The belt, with every bucket opened to both API roles (nine assertions, or nine skips).
+select * from _belt_probe();
 
 -- ── 2. the storage provider's shape ───────────────────────────────────────────────────────
 select throws_ok(
@@ -152,6 +237,23 @@ select throws_ok(
             values (app.default_tenant_id(), 'image', 'static', 'stills/work/p0.jpg', %L) $$,
          repeat('x', 201)),
   '23514', null, 'a display name over 200 characters is refused');
+-- The CHECK names its characters, so it refuses what MediaDisplayNameSchema refuses and
+-- nothing else, whatever the database's locale calls a control character.
+select throws_ok(
+  format($$ insert into public.media_assets (tenant_id, kind, provider, storage_path, display_name)
+            values (app.default_tenant_id(), 'image', 'static', 'stills/work/p0.jpg', %L) $$,
+         'scan' || chr(133) || '1.jpg'),
+  '23514', null, 'a display name with a C1 control character is refused (as the schema refuses it)');
+select throws_ok(
+  format($$ insert into public.media_assets (tenant_id, kind, provider, storage_path, display_name)
+            values (app.default_tenant_id(), 'image', 'static', 'stills/work/p0.jpg', %L) $$,
+         'scan' || chr(8232) || '1.jpg'),
+  '23514', null, 'a display name with a line separator is refused (as the schema refuses it)');
+select lives_ok(
+  format($$ insert into public.media_assets (tenant_id, kind, provider, storage_path, display_name)
+            values (app.default_tenant_id(), 'image', 'static', 'stills/work/p0.jpg', %L) $$,
+         'صورة' || chr(160) || 'الفريق.jpg'),
+  'an Arabic display name with a no-break space is admitted (as the schema admits it)');
 select lives_ok(
   $$ insert into public.media_assets (tenant_id, kind, provider, storage_path, display_name)
      values (app.default_tenant_id(), 'image', 'static', 'stills/work/p0.jpg', 'reel frame.jpg') $$,
@@ -171,6 +273,18 @@ select lives_ok(
             values ('45000000-0000-0000-0000-0000000000b2', app.default_tenant_id(), 'image', 'storage', %L, 20, 10, 'image/webp', 2500) $$,
          _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000b2', 20, 10)),
   'content_creator records an uploaded image');
+-- One row per uploaded file, at the database too: a staff token on the API cannot make a
+-- second row name a live poster's file (deleting that row would remove the poster's file).
+select throws_ok(
+  format($$ insert into public.media_assets (tenant_id, kind, provider, storage_path, width, height, mime_type, size_bytes)
+            values (app.default_tenant_id(), 'image', 'storage', %L, 1200, 800, 'image/webp', 100) $$,
+         _key(app.default_tenant_id(), '45000000-0000-4000-8000-000000000001', 1200, 800)),
+  '23505', null, 'a staff token cannot add a second row naming a file another row names');
+select throws_ok(
+  format($$ update public.media_assets set storage_path = %L, width = 1200, height = 800
+             where id = '45000000-0000-0000-0000-0000000000b2' $$,
+         _key(app.default_tenant_id(), '45000000-0000-4000-8000-000000000001', 1200, 800)),
+  '23505', null, 'nor repoint a row at another row''s file');
 select _claims('developer', app.default_tenant_id()::text);
 select lives_ok(
   format($$ insert into public.media_assets (id, tenant_id, kind, provider, storage_path, width, height, mime_type, size_bytes)
@@ -267,9 +381,22 @@ reset role;
 set local role service_role;
 select throws_ok($$ select * from public.media_orphan_objects(60, 0) $$,
   '22023', null, 'the sweep refuses an out-of-range batch');
-select * from _orphan_probe(
-  _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000f0', 10, 10),
-  _key(app.default_tenant_id(), '45000000-0000-4000-8000-000000000001', 1200, 800));
+-- Two objects written straight into storage.objects, as the Storage API writes them (the
+-- service role). Not wrapped: if this stack refused the write, the run should say so, not
+-- turn the sweep's two assertions into skips.
+insert into storage.objects (bucket_id, name, created_at) values
+  ('media', _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000f0', 10, 10),
+   now() - interval '2 hours'),
+  ('media', _key(app.default_tenant_id(), '45000000-0000-4000-8000-000000000001', 1200, 800),
+   now() - interval '2 hours');
+select is(
+  (select count(*)::int from public.media_orphan_objects(60, 1000)
+    where object_name = _key(app.default_tenant_id(), '45000000-0000-4000-8000-0000000000f0', 10, 10)),
+  1, 'the sweep finds an object no row names, once it is older than the grace period');
+select is(
+  (select count(*)::int from public.media_orphan_objects(60, 1000)
+    where object_name = _key(app.default_tenant_id(), '45000000-0000-4000-8000-000000000001', 1200, 800)),
+  0, 'the sweep never offers an object that a media row names');
 
 select * from finish();
 rollback;

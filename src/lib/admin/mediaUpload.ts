@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { decodeMediaMeta, MEDIA_META_HEADER } from '@schemas/media';
+import { decodeMediaMeta, MEDIA_META_HEADER, MEDIA_META_MAX_LENGTH } from '@schemas/media';
 import type { AuthContext } from '@/lib/auth/types';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import {
@@ -31,8 +31,9 @@ import { json } from './route';
 //
 // The wire contract (the library's upload dialog, U4, sends it): the file is the request
 // BODY, sent as it is (any Content-Type: the bytes decide), with `x-csrf-token` and the
-// details in `x-media-meta` as `encodeMediaMeta({...})` (packages/schemas/media.ts). A
-// raw body is what lets the Worker stream a 20 MB file to the binding instead of holding it.
+// details in `x-media-meta` as `encodeMediaMeta({...})` (the JSON in base64url,
+// packages/schemas/media.ts). A raw body is what lets the Worker stream a 20 MB file to the
+// binding instead of holding it.
 
 /** The Images binding, when this Worker has one. */
 export function imagesBinding(): ImagesLike | undefined {
@@ -40,9 +41,15 @@ export function imagesBinding(): ImagesLike | undefined {
   return images && typeof images.input === 'function' ? images : undefined;
 }
 
-/** An upload's details from its header, before Zod: missing or unreadable is a 422. */
+/** An upload's details from its header, before Zod: missing, too long or unreadable is a 422. */
 export function readMediaMeta(request: Request): unknown {
-  const meta = decodeMediaMeta(request.headers.get(MEDIA_META_HEADER));
+  const header = request.headers.get(MEDIA_META_HEADER);
+  // Every valid set of details fits (MEDIA_META_MAX_LENGTH), so a longer header is details
+  // past the schema's limits, said as such rather than as "could not be read".
+  if (header !== null && header.length > MEDIA_META_MAX_LENGTH) {
+    throw new ValidationError('the file details are too long', 'meta');
+  }
+  const meta = decodeMediaMeta(header);
   if (meta === undefined) {
     throw new ValidationError('the file details are missing or could not be read', 'meta');
   }
