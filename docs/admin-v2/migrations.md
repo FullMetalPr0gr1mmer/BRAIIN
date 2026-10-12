@@ -39,7 +39,7 @@ PR lands and nothing here is edited after a merge.
 | 0041 | C3 | the leads write API: the `crm.erase` helper and the write RPCs | 1 |
 | 0042 | U16 | the help centre: `help_articles` | 1 |
 | 0043 | C13 | lead attribution capture (built, held for the privacy notice, O-11) | 1 |
-| 0044 | F8 | `0044_personal_layer.sql`: the personal layer: preferences (`admin_user_prefs`), the people directory (`app.staff_directory()`, `public.staff_directory`, `crm_people` over it), renaming yourself (`update_my_profile`), the environment pill (`admin_environment`). Renumbered from 0039 by the Wave 1 plan | 1 |
+| 0044 | F8 | `0044_personal_layer.sql`: the personal layer: preferences (`admin_user_prefs`, keyed to its profile by `(tenant_id, user_id)`), the people directory (`app.staff_directory()`, `public.staff_directory`, `crm_people` over it), the display-name rule for every writer (`app.display_name_ok`, the `profiles_display_name_rule` trigger), renaming yourself (`update_my_profile`), the environment pill (`admin_environment`). Renumbered from 0039 by the Wave 1 plan. Applies after 0041: its key rests on 0041's `profiles_tenant_id_id` (0044 adds the same constraint only where it is absent), which 0041 drops and re-adds | 1 |
 
 ## Rules
 
