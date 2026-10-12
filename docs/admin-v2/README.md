@@ -648,7 +648,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
 - **Ops checks**
   - **O-16** Workers plan: measure CPU and subrequests for publish/validate, preview SSR, `/_image` and `theme.css` on staging. The Free plan allows 10 ms/request. Workers Paid ($5/mo) may be needed.
   - **O-23** Production checks: Postgres major ≥ 15, leads grants (H2), and whether the pg_cron role bypasses RLS (retention).
-  - **O-24** Supabase Auth on staging and production (launch runbook §2a, F8): require the current password to change one, minimum password length 10, Secure password change on. Until then a session token alone changes its owner's password at the auth server ([deviations.md](deviations.md), residual risks).
+  - **O-24** Supabase Auth on staging and production (launch runbook §2a, F8): require the current password to change one, minimum password length 10, Secure password change on; and accept what remains (GoTrue audits no direct call and counts no lockout for it). Until then a session token alone changes its owner's password at the auth server ([deviations.md](deviations.md), residual risks).
 
 ## Risks
 

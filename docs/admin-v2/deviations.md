@@ -96,10 +96,11 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     Worker's path only.
   - *What closes it* (launch runbook §2a, staging and production): require the current
     password (`security_update_password_require_current_password`), minimum length 10,
-    Secure password change on. A direct call then needs the current password too; GoTrue
-    still writes no audit row and counts no lockout for it (its own per-IP rate limits
-    apply), which stays accepted. Without the first setting, a token from a session younger
-    than 24 hours still changes the password.
+    Secure password change on. A direct call then needs the current password too. What
+    remains is GoTrue's to own: it writes no audit row for a direct call and counts no
+    lockout, so a stolen token can still be used to guess the current password there, outside
+    the Worker's lockout; O-24 asks the owner to accept that remainder. Without the first
+    setting, a token from a session younger than 24 hours still changes the password.
   - *Owner:* Kareem (O-24). *Expiry:* F8's production push, at the latest 2026-11-30.
     *Closes when* the Management API's auth config on both projects reads
     `security_update_password_require_current_password: true`, `password_min_length: 10`
