@@ -688,6 +688,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [F3](as-built/F3.md): overlays, toasts and the command palette (#39, folded into #34)
 - [F4a](as-built/F4a.md): the admin bundle plan (#40, folded into #34)
 - [F8](as-built/F8.md): the personal layer: preferences, the people directory, the bell, the account, the environment pill, 0044
+- [U16](as-built/U16.md): the help centre: guides as typed blocks in the database, the "?" drawer with search and this screen's guides, `/admin/help`, 0046
 
 **Releases**
 - [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)
