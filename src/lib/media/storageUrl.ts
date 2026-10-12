@@ -58,6 +58,17 @@ export function uploadedImageSize(
   return parsed ? { width: parsed.width, height: parsed.height } : null;
 }
 
+/**
+ * The format `<Picture>` falls back to (its `<img src>` and `srcset`) for this image: WebP for
+ * an upload. Left to itself Astro gives every format but gif, svg and jpeg a PNG fallback
+ * (components/Picture.astro `defaultFallbackFormat`), which for an upload meant a full-size
+ * PNG encode of a WebP master, and a set of transformations nothing needs. A still keeps
+ * Astro's rule (undefined here), so its markup is unchanged.
+ */
+export function uploadFallbackFormat(src: ImageMetadata): 'webp' | undefined {
+  return uploadedImageSize(src.src) === null ? undefined : 'webp';
+}
+
 /** The admin thumbnail's width: a width `/_image` serves (TRANSFORM_WIDTHS). */
 export const THUMB_WIDTH = 320;
 
@@ -65,7 +76,7 @@ export const THUMB_WIDTH = 320;
  * A thumbnail of an uploaded image through `/_image`: 320 px wide (or the image's own width
  * when it is narrower), WebP, at the stored aspect, so the `/_image` guard accepts it. The
  * four parameters `getImage()` would emit, written here so the media resource (an API
- * module) needs no `astro:assets`; tests/lib/imageGuard.spec.ts holds it to the guard.
+ * module) needs no `astro:assets`; tests/lib/mediaDelivery.spec.ts holds it to the guard.
  */
 export function storageThumbUrl(key: string, base: string = PUBLIC_SUPABASE_URL): string | null {
   const parsed = parseStorageKey(key);

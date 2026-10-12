@@ -2,6 +2,7 @@
 import { Picture } from 'astro:assets';
 import type { Locale } from '@schemas/primitives';
 import { altFor, type ImageRef } from '@/lib/media/resolve';
+import { uploadFallbackFormat } from '@/lib/media/storageUrl';
 
 // The one way a CMS media asset becomes an <img> on a public page: <Picture> (AVIF/WebP
 // via the IMAGES binding) with the file's real width/height, so it never shifts layout
@@ -40,12 +41,16 @@ const {
 // Never ask for a derivative wider than the source.
 const usable = widths.filter((w) => w <= image.width);
 const renderWidths = usable.length > 0 ? usable : [image.width];
+// An upload falls back to WebP, not Astro's PNG; a still keeps Astro's rule (and its markup).
+const fallback = uploadFallbackFormat(image.src);
+const fallbackProps = fallback ? { fallbackFormat: fallback } : {};
 ---
 
 <Picture
   src={image.src}
   alt={decorative ? '' : altFor(image, locale, altOverride)}
   formats={['avif', 'webp']}
+  {...fallbackProps}
   widths={renderWidths}
   sizes={sizes}
   width={image.width}

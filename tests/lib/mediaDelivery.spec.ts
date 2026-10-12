@@ -1,8 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import type { ImageMetadata } from 'astro';
+import workerdService from '@astrojs/cloudflare/image-service-workerd';
 import { checkImageRequest, ASPECT_TOLERANCE_PX } from '@/lib/http/imageGuard';
 import {
   mediaBucketPrefix,
   storageThumbUrl,
+  uploadFallbackFormat,
   uploadedImage,
   uploadedImageSize,
 } from '@/lib/media/storageUrl';
@@ -87,6 +91,73 @@ describe('the /_image guard and uploaded images', () => {
     expect(small.searchParams.get('w')).toBe('200');
     expect(checkImageRequest(small.searchParams, new Map()).ok).toBe(true);
     expect(storageThumbUrl('stills/work/p0.jpg')).toBeNull();
+  });
+});
+
+describe('every /_image URL a page emits for an upload is one the guard admits', () => {
+  // <Picture> cannot be rendered under vitest, so this follows what it does, with Astro's own
+  // image service (the workerd one this build uses) computing every transform: one per
+  // format in `formats`, plus the fallback for <img src>/srcset, each at the image's width
+  // and at every srcset width. The fallback rule is Picture.astro's, and the test reads
+  // Picture.astro and MediaImage.astro so neither can move without failing it.
+  const picture = readFileSync('node_modules/astro/components/Picture.astro', 'utf8');
+  const mediaImage = readFileSync('src/components/media/MediaImage.astro', 'utf8');
+  const SPECIAL = ['gif', 'svg', 'jpg', 'jpeg'];
+
+  /** components/Picture.astro: `fallbackFormat ?? (special ESM format ? itself : 'png')`. */
+  function pictureFallback(src: ImageMetadata, fallbackFormat: string | undefined): string {
+    return fallbackFormat ?? (SPECIAL.includes(src.format) ? src.format : 'png');
+  }
+
+  /** The `/_image` parameters Astro's service emits for one format (`getURL`: href, w, h, f). */
+  async function transforms(src: ImageMetadata, format: string, widths: number[]) {
+    const base = await workerdService.validateOptions!(
+      { src, width: src.width, height: src.height, widths, format } as never,
+      {} as never,
+      {} as never,
+    );
+    const srcset = await workerdService.getSrcSet!(base, {} as never, {} as never);
+    return [base, ...srcset.map((s) => s.transform)].map(
+      (t) =>
+        new URLSearchParams({
+          href: src.src,
+          w: String(t.width),
+          h: String(t.height),
+          f: String(t.format),
+        }),
+    );
+  }
+
+  it('Picture.astro still falls back to png, and MediaImage passes an upload webp', () => {
+    expect(picture).toContain("const defaultFallbackFormat = 'png' as const;");
+    expect(picture).toContain("const specialFormatsFallback = ['gif', 'svg', 'jpg', 'jpeg']");
+    expect(mediaImage).toContain("formats={['avif', 'webp']}");
+    expect(mediaImage).toContain('const fallback = uploadFallbackFormat(image.src);');
+    expect(mediaImage).toMatch(/\{\.\.\.fallbackProps\}/);
+  });
+
+  it('an upload: avif, webp and its webp fallback, at every width, all admitted; no png', async () => {
+    const src = uploadedImage(KEY)!;
+    const fallback = pictureFallback(src, uploadFallbackFormat(src));
+    expect(fallback).toBe('webp');
+    const urls: URLSearchParams[] = [];
+    for (const widths of [[480, 800, 1200], [320, 640], [1200]]) {
+      for (const format of ['avif', 'webp', fallback]) {
+        urls.push(...(await transforms(src, format, widths)));
+      }
+    }
+    // The share image (CaseStudyPage, ServicePage) and the breakdown/gallery stills.
+    urls.push(...(await transforms(src, 'jpg', [])).slice(0, 1));
+    for (const params of urls) {
+      expect(checkImageRequest(params, new Map()), params.toString()).toEqual({ ok: true });
+      expect(params.get('f')).not.toBe('png');
+    }
+  });
+
+  it("a still keeps Astro's own fallback (its markup is unchanged)", () => {
+    const still = { src: '/_astro/rider.B1x2y3.jpg', width: 1920, height: 1080, format: 'jpg' };
+    expect(uploadFallbackFormat(still as ImageMetadata)).toBeUndefined();
+    expect(pictureFallback(still as ImageMetadata, undefined)).toBe('jpg');
   });
 });
 
