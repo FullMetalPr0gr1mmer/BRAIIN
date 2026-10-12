@@ -231,7 +231,7 @@ describe('the display name: the schema and 0045 refuse the same characters', () 
     }
   });
 
-  it('a refusal by either 0045 constraint names the field at fault', () => {
+  it('a refusal by either 0045 constraint says what is at fault, not "a constraint"', () => {
     const check = translateWriteError(
       {
         code: '23514',
@@ -242,7 +242,10 @@ describe('the display name: the schema and 0045 refuse the same characters', () 
       'write',
       mediaResource.constraintFields,
     );
-    expect(check).toMatchObject({ status: 422, field: 'displayName' });
+    // The generic form has no file-name field (the upload dialog sends it), so the message
+    // names it (tests/lib/adminResources.spec.ts holds mapped fields to the form's).
+    expect(check).toMatchObject({ status: 422, field: undefined });
+    expect((check as { detail: string }).detail).toMatch(/file's name/);
     const twice = translateWriteError(
       {
         code: '23505',

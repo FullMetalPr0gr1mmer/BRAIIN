@@ -51,11 +51,12 @@ export const mediaResource: ResourceConfig = {
   updateSchema: MediaUpdateSchema,
   // 0045. The display-name CHECK refuses what MediaDisplayNameSchema refuses, so it fires
   // only for a writer that skipped the schema; the index refuses a second row naming one
-  // uploaded file (a direct API write; the routes always write a fresh key).
+  // uploaded file (a direct API write; the routes always write a fresh key). The file name
+  // has no field on the generic form (the upload dialog sends it), so its message names it.
   constraintFields: {
     media_assets_display_name: {
-      field: 'displayName',
-      message: 'a file name of up to 200 characters, without folders or control characters',
+      message:
+        "the file's name must be up to 200 characters, without folders or control characters",
     },
     media_assets_storage_object_key: {
       field: 'storagePath',
