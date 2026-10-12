@@ -125,6 +125,54 @@ test.describe('what visitors typed', () => {
   });
 });
 
+test.describe('mark all as read', () => {
+  test.use({ storageState: authFile('seo') });
+
+  test('marks up to when the list was read, not the moment of the click', async ({ page }) => {
+    // The list says when the server read it; the drawer must send that back, so whatever
+    // arrived while the drawer was open stays new. Both answers are the server's shapes.
+    const asOf = '2026-10-10T11:58:30.000Z';
+    await page.route('**/api/admin/notifications', (route) =>
+      route.fulfill({
+        json: {
+          ok: true,
+          data: {
+            items: [
+              {
+                id: 'maintenance:e2e',
+                kind: 'maintenance',
+                icon: 'warn',
+                text: 'Maintenance mode was turned on',
+                detail: 'Visitors see the maintenance page.',
+                at: asOf,
+                href: null,
+                unread: true,
+              },
+            ],
+            unread: 1,
+            seenAt: null,
+            failed: [],
+            asOf,
+          },
+        },
+      }),
+    );
+    const sent: unknown[] = [];
+    await page.route('**/api/admin/notifications/seen', (route) => {
+      sent.push(route.request().postDataJSON());
+      return route.fulfill({ json: { ok: true, data: { seenAt: asOf } } });
+    });
+    await ready(page);
+    await page.locator('.admin-topbar [data-open="notifications"]').click();
+    const drawer = page.getByRole('dialog', { name: 'Notifications' });
+    await expect(drawer.locator('.li[data-unread]')).toHaveCount(1);
+    await drawer.getByRole('button', { name: 'Mark all as read' }).click();
+    await expect(drawer.getByRole('status')).toHaveText('All caught up.');
+    expect(sent).toEqual([{ asOf }]);
+    await expect(drawer.locator('.li[data-unread]')).toHaveCount(0);
+  });
+});
+
 test.describe('renaming yourself', () => {
   test.use({ storageState: authFile('developer') });
 

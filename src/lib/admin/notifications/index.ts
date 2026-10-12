@@ -36,6 +36,12 @@ export interface NotificationFeed {
   seenAt: string | null;
   /** The kinds that could not be read this time. */
   failed: NotificationKind[];
+  /**
+   * The moment this list was read (ISO): what "Mark all as read" sends back, so it marks
+   * what the person was shown and nothing that arrived after. The loader's now, or the
+   * newest item's `since` when a clock (the database's, which stamps most of them) ran ahead.
+   */
+  asOf: string;
 }
 
 export interface LoadOptions {
@@ -80,7 +86,7 @@ export async function loadNotifications(
   const seen = seenAt ? Date.parse(seenAt) : Number.NEGATIVE_INFINITY;
   const failed: NotificationKind[] = [];
 
-  const items = sources
+  const listed = sources
     .flatMap((source, index) => {
       const list = lists[index];
       if (!list) {
@@ -89,9 +95,20 @@ export async function loadNotifications(
       }
       return muted.has(source.kind) ? [] : list;
     })
-    .map(({ since, ...item }) => ({ ...item, unread: Date.parse(since) > seen }))
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || a.id.localeCompare(b.id))
     .slice(0, MAX_ITEMS);
 
-  return { items, unread: items.filter((item) => item.unread).length, seenAt, failed };
+  const newest = Math.max(
+    now.getTime(),
+    ...listed.map((item) => Date.parse(item.since)).filter(Number.isFinite),
+  );
+  const items = listed.map(({ since, ...item }) => ({ ...item, unread: Date.parse(since) > seen }));
+
+  return {
+    items,
+    unread: items.filter((item) => item.unread).length,
+    seenAt,
+    failed,
+    asOf: new Date(newest).toISOString(),
+  };
 }

@@ -10,14 +10,17 @@ import NotificationList from './NotificationList';
 // renders, which is fresh enough for a bell, and the Workers Free plan counts requests.
 //
 // Clicking a row marks only that row read here (a mockup bug made it clear the dot for
-// every row); "Mark all as read" moves the person's watermark on the server and clears the
-// dot. The bell in the topbar is updated through its attributes: text and `hidden`, never
-// a style.
+// every row); "Mark all as read" moves the person's watermark on the server to the moment
+// this list was read (`asOf`), so whatever arrived while the drawer was open stays new, and
+// clears the dot. The bell in the topbar is updated through its attributes: text and
+// `hidden`, never a style.
 
 interface Feed {
   items: NotificationItem[];
   unread: number;
   failed: string[];
+  /** When the server read this list: what "Mark all as read" marks up to. */
+  asOf: string;
 }
 
 /** Brings the topbar bell's label and dot in line with an unread count. */
@@ -62,9 +65,13 @@ export default function NotificationsDrawer() {
   useOpenOn('notifications', open);
 
   async function markAllRead() {
+    if (!feed) return;
     setBusy(true);
     try {
-      await adminFetch('/api/admin/notifications/seen', { method: 'POST' });
+      await adminFetch('/api/admin/notifications/seen', {
+        method: 'POST',
+        body: { asOf: feed.asOf },
+      });
       setFeed((current) =>
         current
           ? {

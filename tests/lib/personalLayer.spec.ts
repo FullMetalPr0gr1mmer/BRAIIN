@@ -16,7 +16,12 @@ import {
   readNotificationPrefs,
 } from '@schemas/adminPrefs';
 import { OptimisticLockError, ValidationError } from '@/lib/admin/errors';
-import { markNotificationsSeen, readMyPrefs, saveMyNotificationPrefs } from '@/lib/admin/prefs';
+import {
+  markNotificationsSeen,
+  readMyPrefs,
+  saveMyNotificationPrefs,
+  seenUpTo,
+} from '@/lib/admin/prefs';
 import {
   ENVIRONMENT_LABELS,
   adminEnvironment,
@@ -175,21 +180,74 @@ describe('preferences', () => {
   });
 
   it('marking read with no row creates it; a row made meanwhile is updated instead', async () => {
+    const at = new Date('2026-10-10T12:00:00.000Z');
     const created = prefsDb([
       { data: null },
       { data: { notifications_seen_at: '2026-10-10T12:00:00.000Z' } },
     ]);
-    await markNotificationsSeen(created.sb, auth());
+    await markNotificationsSeen(created.sb, auth(), at);
     expect(created.calls.map((c) => c.op)).toEqual(['update', 'insert']);
-    expect(created.calls[1]!.payload).toMatchObject({ tenant_id: TENANT, user_id: USER });
+    expect(created.calls[1]!.payload).toMatchObject({
+      tenant_id: TENANT,
+      user_id: USER,
+      notifications_seen_at: at.toISOString(),
+    });
 
     const raced = prefsDb([
       { data: null },
       { error: { code: '23505', message: 'duplicate key' } },
       { data: { notifications_seen_at: '2026-10-10T12:00:00.000Z' } },
     ]);
-    expect(await markNotificationsSeen(raced.sb, auth())).toBe('2026-10-10T12:00:00.000Z');
+    expect(await markNotificationsSeen(raced.sb, auth(), at)).toBe('2026-10-10T12:00:00.000Z');
     expect(raced.calls.map((c) => c.op)).toEqual(['update', 'insert', 'update']);
+  });
+
+  it('marks up to when the list was read, held to now: never the time of the click', () => {
+    const now = Date.parse('2026-10-10T12:00:00.000Z');
+    expect(seenUpTo('2026-10-10T11:58:30.000Z', now).toISOString()).toBe(
+      '2026-10-10T11:58:30.000Z',
+    );
+    // A list "read" in the future (a clock ahead, or a forged value) marks no further than now.
+    expect(seenUpTo('2026-10-11T00:00:00.000Z', now).toISOString()).toBe(
+      '2026-10-10T12:00:00.000Z',
+    );
+  });
+
+  it('POST /api/admin/notifications/seen stores the list time it is sent, and needs one', async () => {
+    const { POST } = (await import('@/pages/api/admin/notifications/seen')) as {
+      POST: APIRoute;
+    };
+    async function post(body: unknown) {
+      const { sb, calls } = prefsDb([
+        { data: { notifications_seen_at: '2026-10-10T11:58:30.000Z' } },
+      ]);
+      const request = new Request('https://admin.example.test/api/admin/notifications/seen', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const res = await POST({
+        locals: { session: auth('content_creator'), supabase: sb },
+        request,
+        url: new URL(request.url),
+        params: {},
+      } as unknown as Parameters<APIRoute>[0]);
+      return { status: res.status, calls };
+    }
+
+    // The drawer loaded its list at 11:58:30; a lead arriving at 11:59 was never shown.
+    const marked = await post({ asOf: '2026-10-10T11:58:30.000Z' });
+    expect(marked.status).toBe(200);
+    expect(marked.calls[0]).toMatchObject({
+      op: 'update',
+      payload: { notifications_seen_at: '2026-10-10T11:58:30.000Z' },
+    });
+
+    for (const body of [{}, { asOf: 'yesterday' }, { asOf: '2026-10-10T11:58:30Z', x: 1 }]) {
+      const refused = await post(body);
+      expect(refused.status, JSON.stringify(body)).toBe(422);
+      expect(refused.calls, JSON.stringify(body)).toEqual([]);
+    }
   });
 });
 

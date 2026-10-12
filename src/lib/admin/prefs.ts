@@ -84,14 +84,25 @@ export async function saveMyNotificationPrefs(
 }
 
 /**
- * "Mark all as read": moves the watermark to now. Not versioned (the database moves the
- * version only when a preference changes, so this never makes a save in between a 409),
- * and the database keeps the watermark moving forward only and never past its own clock.
+ * Where "Mark all as read" puts the watermark: the moment the person's list was read (the
+ * feed's `asOf`, sent back by the drawer or the no-JS form), held to this Worker's now, so
+ * a clock ahead cannot mark the future read. The database holds it to its own now again.
+ */
+export function seenUpTo(asOf: string, now: number = Date.now()): Date {
+  return new Date(Math.min(Date.parse(asOf), now));
+}
+
+/**
+ * "Mark all as read": moves the watermark to `at`, the moment the list the person was
+ * shown was read (seenUpTo), never the time of the click: what arrived in between stays
+ * unread. Not versioned (the database moves the version only when a preference changes, so
+ * this never makes a save in between a 409), and the database keeps the watermark moving
+ * forward only and never past its own clock.
  */
 export async function markNotificationsSeen(
   sb: SupabaseClient,
   auth: AuthContext,
-  at: Date = new Date(),
+  at: Date,
 ): Promise<string> {
   const seen = at.toISOString();
   const update = () =>

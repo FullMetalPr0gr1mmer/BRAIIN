@@ -55,6 +55,17 @@ export const AdminPrefsPutSchema = z
   .strict();
 export type AdminPrefsPut = z.infer<typeof AdminPrefsPutSchema>;
 
+/**
+ * POST /api/admin/notifications/seen (and the no-JS page's form): "Mark all as read" up to
+ * `asOf`, the moment the list the person was shown was read (the feed's own `asOf`), never
+ * the server's clock at the click: an item that arrived in between was not shown, so it
+ * stays unread. The server holds it to its own now, and the database to its own.
+ */
+export const NotificationsSeenSchema = z
+  .object({ asOf: z.string().datetime({ offset: true }) })
+  .strict();
+export type NotificationsSeenInput = z.infer<typeof NotificationsSeenSchema>;
+
 // ── The account ──────────────────────────────────────────────────────────────────────
 
 export const DISPLAY_NAME_MAX = 80;

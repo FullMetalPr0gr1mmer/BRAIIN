@@ -17,6 +17,8 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/notifications/seen'),
     method: 'POST',
     url: '/api/admin/notifications/seen',
+    // Up to when the list the person was shown was read (the feed's `asOf`).
+    body: { asOf: '2026-10-10T12:00:00.000Z' },
     allow: ['admin', 'content_creator', 'seo', 'developer'],
   },
 ];

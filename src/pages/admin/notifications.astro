@@ -3,10 +3,11 @@ import { env } from 'cloudflare:workers';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import NotificationList from '@/components/admin/screens/chrome/NotificationList';
 import { loadNotifications, type NotificationFeed } from '@/lib/admin/notifications';
-import { markNotificationsSeen } from '@/lib/admin/prefs';
+import { markNotificationsSeen, seenUpTo } from '@/lib/admin/prefs';
 import { can } from '@/lib/authz/matrix';
 import { getMaintenanceState } from '@/lib/http/maintenance';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
+import { NotificationsSeenSchema } from '@schemas/adminPrefs';
 
 export const prerender = false;
 
@@ -29,17 +30,27 @@ if (
 
 if (Astro.request.method === 'POST' && session && sb) {
   const form = await Astro.request.formData();
-  if (form.get('intent') === 'seen') {
+  // Up to when the list this form was rendered with was read, never the time of the click.
+  const seen = NotificationsSeenSchema.safeParse({ asOf: form.get('as_of') });
+  if (form.get('intent') === 'seen' && seen.success) {
     try {
-      await markNotificationsSeen(sb, session);
+      await markNotificationsSeen(sb, session, seenUpTo(seen.data.asOf));
       return Astro.redirect('/admin/notifications?done=seen', 303);
     } catch {
       Astro.response.status = 503;
     }
+  } else {
+    Astro.response.status = 503;
   }
 }
 
-let feed: NotificationFeed = { items: [], unread: 0, seenAt: null, failed: [] };
+let feed: NotificationFeed = {
+  items: [],
+  unread: 0,
+  seenAt: null,
+  failed: [],
+  asOf: new Date().toISOString(),
+};
 if (session && sb) {
   feed = await loadNotifications(sb, session, {
     maintenance: () => getMaintenanceState(env),
@@ -83,6 +94,7 @@ const done = Astro.url.searchParams.get('done') === 'seen';
         <form method="post" action="/admin/notifications" class="ntf-page__actions">
           <input type="hidden" name={CSRF_FIELD_NAME} value={Astro.locals.csrfToken} />
           <input type="hidden" name="intent" value="seen" />
+          <input type="hidden" name="as_of" value={feed.asOf} />
           <button type="submit" data-variant="ghost">
             Mark all as read
           </button>

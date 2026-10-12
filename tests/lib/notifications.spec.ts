@@ -340,6 +340,24 @@ describe('the bell: read, muted, failed, capped', () => {
     expect(feed.seenAt).toBe(ago(45));
   });
 
+  it('says when the list was read, so "Mark all as read" marks only what it showed', async () => {
+    const feed = await loadNotifications(fakeDb(FULL).sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(feed.asOf).toBe(NOW.toISOString());
+
+    // The database stamps most items; a clock ahead of the Worker's still has its item
+    // covered by the list it was shown in.
+    const ahead = new Date(NOW.getTime() + 2_000).toISOString();
+    const skewed = await loadNotifications(
+      fakeDb({ ...FULL, leads: { rows: [{ ...LEAD, created_at: ahead }] } }).sb,
+      auth('admin'),
+      { maintenance: noMaintenance, now: NOW },
+    );
+    expect(skewed.asOf).toBe(ahead);
+  });
+
   it('a muted kind is neither listed nor counted; an unknown muted kind is ignored', async () => {
     const { sb } = fakeDb({
       ...FULL,
