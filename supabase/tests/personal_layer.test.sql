@@ -105,6 +105,13 @@ create function _people(p_tenant uuid) returns text language sql as $$
     from public.crm_people(p_tenant)
 $$;
 
+-- A privilege list for the grant checks at the end, MAINTAIN added where it exists
+-- (PostgreSQL 17, production; CI runs 15).
+create function _never(p_list text) returns text language sql stable as $$
+  select p_list || case when current_setting('server_version_num')::int >= 170000
+                        then ', maintain' else '' end
+$$;
+
 -- ---- anon: nothing --------------------------------------------------------------------
 set local role anon;
 select _as(null, null, null);
@@ -466,12 +473,7 @@ select is((select count(*)::int from public.admin_user_prefs
   'a profile that goes takes its preferences with it');
 
 -- ---- grants (P-14: what must and must not be held) -------------------------------------------
--- MAINTAIN exists from PostgreSQL 17 (production; CI runs 15), so it joins the lists there.
 reset role;
-create function _never(p_list text) returns text language sql stable as $$
-  select p_list || case when current_setting('server_version_num')::int >= 170000
-                        then ', maintain' else '' end
-$$;
 select ok(not has_table_privilege('anon', 'public.admin_user_prefs',
                 _never('select, insert, update, delete, truncate, references, trigger'))
           and not has_table_privilege('public', 'public.admin_user_prefs',
