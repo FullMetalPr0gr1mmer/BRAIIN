@@ -42,6 +42,17 @@
 --     drops note bodies for a count, crm.md §9). Service role only, like the thread.
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- A busy table fails the push instead of queueing (as in 0038). 0041 takes ACCESS EXCLUSIVE
+-- locks on leads (new columns, CHECKs and the assignee key), on profiles (the unique key that
+-- key references, which builds an index) and on lead_events (the widened kind CHECK). Every
+-- admin request reads profiles (the live check, the session), the access-token hook reads it
+-- at every sign-in, and every contact form writes leads, so a lock request waiting behind a
+-- long reader (an export, a dump, an idle transaction) would make sign-ins, the admin and the
+-- contact form queue behind it for the whole wait. A statement below that waits more than
+-- five seconds for a lock raises instead, the whole migration rolls back, and the push is
+-- retried later. Transaction-local: it ends with this migration.
+set local lock_timeout = '5s';
+
 -- ---- 1. The capability helper ------------------------------------------------------------
 create or replace function app.role_crm_erase(r text) returns boolean
   language sql immutable

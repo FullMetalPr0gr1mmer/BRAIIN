@@ -93,6 +93,15 @@ describe('a service-role lead write names whom it acts for in app.acting_for', (
   });
 });
 
+describe('0041 never queues behind a busy table', () => {
+  it('sets a five-second lock timeout for the migration before any other statement', () => {
+    // It locks leads, profiles and lead_events ACCESS EXCLUSIVE; a wait behind a long reader
+    // would stall sign-ins, the admin and the contact form. `set local`: transaction-local.
+    expect(SQL.trimStart()).toMatch(/^set local lock_timeout = '5s';/);
+    expect(SQL.match(/lock_timeout/g)).toHaveLength(1);
+  });
+});
+
 describe('0041 runs twice cleanly', () => {
   it('drops the assignee key before the unique constraint it depends on', () => {
     // Postgres refuses to drop a unique constraint a foreign key still references, so on a
