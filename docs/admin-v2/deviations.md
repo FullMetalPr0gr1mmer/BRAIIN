@@ -33,6 +33,7 @@
   - no SVG/GIF, no animations, and no AVIF or HEIC input (the Images binding reads AVIF only on an Enterprise plan; U3);
   - originals are re-encoded: one WebP master at most 2,560 px on its long edge, EXIF and GPS dropped (AVIF output stops at 1,200 px, so `/_image` makes the AVIF derivatives from the master; B7 item 2, U3);
   - uploads are at most 20 MB, the Images binding's input limit, not 25 MB (B7 item 2, U3);
+  - a deleted or replaced upload stays reachable for up to about two hours after its file is removed, not "at once": Supabase's CDN copy and the `/_image` derivative live an hour each, the Free plan cannot purge the first, and purging the second needs the zone's purge token; pages cached before the change keep the old image URL until purged (owner: O-3 for the purge token, the Supabase plan for Smart CDN; runbook §6i; U3 review);
   - no local blob previews (CSP).
 - **Theme**:
   - no Google/Adobe font links or raw font uploads; the curated self-hosted catalogue replaces them (CSP, PDPL, font budget);

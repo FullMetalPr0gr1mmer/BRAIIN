@@ -971,15 +971,17 @@ derived at build time from `PUBLIC_SUPABASE_URL`, which the deploy job already s
 **What "public" means.** An uploaded image is readable by anyone who has its URL, from the
 moment it is uploaded, published or not. The key is random (a UUID), so it cannot be guessed or
 listed, and the anon API cannot list the bucket; but a link someone was sent keeps working until
-the file is deleted or replaced and the next daily sweep runs. Upload nothing that must stay
-private: drafts of confidential client work belong outside the library until they may be seen.
+the object is removed (at once on delete, or on a replace that asks for it; otherwise at the next
+daily sweep), and for up to about two hours after that (below, "Removing a file"). Upload nothing
+that must stay private: drafts of confidential client work belong outside the library until they
+may be seen.
 
 **When.** Before merging the U3 PR: an expand migration, so apply first, then merge.
 
 | # | Step | What it does | Must see |
 |---|---|---|---|
 | 0 | Preflight (read-only): `select id, public from storage.buckets;` | The starting state. | `applications` (private); no `media` bucket yet. |
-| 1 | `npx supabase db push --linked --dry-run`, then `npx supabase db push --linked --skip-vault` | Migration 0045: the `storage` provider and its shape CHECK, `display_name`, the anon read policy widened to `storage`, `media_storage_stats()` (the library's meter) and `media_orphan_objects()` (service role only), the bucket (public, 10 MB, WebP only) and a RESTRICTIVE belt on `storage.objects`. In-file postconditions refuse a push that left the bucket private or wider, or a function with the wrong caller. | Only 0045 listed by the dry run. A `WARNING: 0045: not permitted to add the storage.objects belt policy` is acceptable, as for 0029 (no policy names the bucket, so anon and authenticated still cannot write); report it. A `WARNING: … media_assets_provider_shape left NOT VALID` means a legacy row violates the shape; report it too. |
+| 1 | `npx supabase db push --linked --dry-run`, then `npx supabase db push --linked --skip-vault` | Migration 0045: the `storage` provider and its shape CHECK, one row per uploaded file (a unique index on the key), `display_name`, the anon read policy widened to `storage`, `media_storage_stats()` (the library's meter) and `media_orphan_objects()` (service role only), the bucket (public, 10 MB, WebP only) and a RESTRICTIVE belt on `storage.objects`. In-file postconditions refuse a push that left the bucket private or wider, the key index missing, or a function with the wrong caller. The migration waits at most 5 s for a table lock (`lock_timeout`). | Only 0045 listed by the dry run. An `ERROR: canceling statement due to lock timeout` means a busy table (the nightly dump, a long query): nothing was applied (one transaction); run the push again a few minutes later. A `WARNING: 0045: not permitted to add the storage.objects belt policy` is acceptable, as for 0029 (no policy names the bucket, so anon and authenticated still cannot write); report it. A `WARNING: … media_assets_provider_shape left NOT VALID` means a legacy row violates the shape; report it too. |
 | 2 | Verify (read-only) | `select id, public, file_size_limit, allowed_mime_types from storage.buckets where id = 'media';` · `select policyname, permissive from pg_policies where tablename = 'objects' and policyname like '%bucket%';` | `public = true`, `10485760`, `{image/webp}`; `applications_bucket_service_only` and `media_bucket_service_only`, both RESTRICTIVE (unless step 1 warned). |
 | 3 | Merge → the deploy job → live checks | — | `/admin/media` unchanged (the library screen is U4). `curl -s $BASE/api/admin/media/stats` signed out → `401`; opened in a signed-in Admin's browser → `{"ok":true,"data":{"assets":0,"bytes":0,"quotaBytes":1073741824}}`. |
 | 4 | A first real upload (through the API until U4's library ships) | One small photo with alt text in both languages. | `200` with `provider: "storage"` and a `thumb_url` that loads (`/_image?href=…`); the audit log shows `media_asset.upload` with sizes, never the file's name. Downloading it (`/api/admin/media/<id>/download`) gives a `.webp` without the camera details. |
@@ -989,18 +991,40 @@ private: drafts of confidential client work belong outside the library until the
 size `/_image` makes of it is another, against the Free plan's 5,000 unique transformations a
 month (past them, new transforms fail with error 9422 — LCP posters included); a day's ceiling
 of 50 uploads per person and 100 per tenant (`MEDIA_UPLOAD_LIMITS`) keeps one afternoon from
-spending the month. Storage counts against the Supabase plan's 1 GB (shared with the CV bucket;
-the library's meter shows it), and every `/_image` fetch of an upload is Supabase egress, since
-nothing caches `/_image` on `*.workers.dev`. The Worker's own CPU per upload is about 1–2 ms
+spending the month. **The budget per published image:** the pages ask about 10 sizes of one
+(three `<Picture>` widths in AVIF and WebP, its own width, the 1,200 px share JPEG, a 1,600 px
+lightbox WebP, the 320 px admin thumbnail); `/_image` admits at most 57 (the 18 listed widths
+below its own plus its own, each at one height, in AVIF, WebP or JPEG), so 5,000 a month holds
+about 87 published uploads even against someone requesting every admissible size, and about 500
+as the pages use them; the bundled stills share the same quota. A key that names no object is a
+404 before any transformation (`src/lib/http/imageEndpoint.ts`), but still one Worker request
+and one Supabase request. Storage counts against the Supabase plan's 1 GB (shared with the CV
+bucket; the library's meter shows it), and every `/_image` miss for an upload is Supabase
+egress: a derivative is cached for an hour, and only where the Cache API persists (a custom
+domain, not `*.workers.dev`). The Worker's own CPU per upload is about 1–2 ms
 of JavaScript measured locally; the file itself streams into the binding natively. Confirm it on
 the first production upload in Workers Logs (O-16); if an upload ever exceeds the Free plan's
 10 ms, that is the Workers Paid decision, not a code fix.
 
 **Removing a file.** Admin → delete the asset (Admin only, refused while anything uses it): the
-row goes, then its object. A file whose removal failed, a replaced file's old object, and an
-upload whose row was never written are removed by the next daily sweep (objects older than an
-hour that no row names). To pull an image off the web at once, replace it (a new key) or delete
-it, then remove the object in the Supabase dashboard's Storage browser if it cannot wait a day.
+row goes, then its object, unless another row still names that file (it stays, and the response
+says `fileKept`). A replace leaves the old object for the next daily sweep (objects older than
+an hour that no row names), unless it is sent with `removePrevious: true` in its details (the
+API today; U4's library dialog will offer it), which deletes the old object at once. A file
+whose removal failed and an upload whose row was never written also go at the sweep.
+
+**How long a removed file stays on the web (the real window, PDPL erasure included).** Removing
+the object is not the end: Supabase's CDN keeps its copy for up to an hour (each object is
+stored with `cacheControl: 3600`; on the Free plan a delete does not purge it), and a derivative
+`/_image` made of it is cached for up to an hour (in this zone's cache and in any browser that
+fetched it). So a deleted or replaced upload is gone from the web within **about two hours** of
+its object's removal, and a page cached before the change shows a broken image there until it
+is purged (owner item O-3, the purge token). For an erasure request: delete the asset (or replace
+it with `removePrevious: true` where a page uses it), note the time, and answer that the image
+was removed and stops being served within two hours. Shortening that needs Supabase's Smart CDN
+(Pro plan) and a purge of the `/_image` URLs (O-3); it is recorded in the Admin v2 deviations
+register. The Supabase dashboard's Storage browser removes an object by hand, with the same
+window.
 
 ---
 
