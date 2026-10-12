@@ -1,6 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 0044 — The personal layer (Admin v2 F8, docs/admin-v2/ui.md AV-05). Forward-only,
--- expand only. Depends on 0001, 0011, 0016, 0033, 0036.
+-- expand only. Depends on 0001 (tenants, profiles), 0002 (audit_log), 0011 (the app
+-- schema's grants), 0016 (app.deployment), 0031 (the audit chain's trigger), 0033
+-- (app.live_role, app.role_works_leads), 0036 (crm_people) and 0037 (profiles' column grant).
 --
 -- What every signed-in member owns or sees about themselves, and the two facts the shell
 -- shows everyone:
@@ -11,10 +13,11 @@
 --     (the caller's own row, in the token's tenant), behind a RESTRICTIVE live check, so a
 --     demoted, deactivated or locked token reads and writes nothing. It names no role:
 --     P-6 keeps app.is_staff() to the four CMS roles, and the Sales role (C10a) gets its
---     own preferences too (ui.md §3.2). Staff write only the preference columns; a BEFORE
---     trigger owns the version (it moves only when a preference does, so marking the bell
---     read never causes a 409), the timestamps, and the watermark, which only moves
---     forward and never past now().
+--     own preferences too (ui.md §3.2). Staff insert their own row (the key columns, held
+--     to themselves by RLS) and update only the preference columns; a BEFORE trigger owns
+--     the version (it moves only when a preference does, so marking the bell read never
+--     causes a 409), the timestamps, and the watermark, which only moves forward and never
+--     past now().
 --   • app.staff_directory(): the one people directory (README P-7). A live CMS staff member
 --     gets every active member of the token's tenant: id, display name, role, and whether
 --     the person can take work now (not locked). No e-mail. Executable by no API role; the
