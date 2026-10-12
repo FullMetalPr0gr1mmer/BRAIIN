@@ -32,13 +32,18 @@
 --         answer as before: the assignable lead workers, for a live lead worker only. When
 --         the Sales role arrives, its row is a branch of app.staff_directory() (P-7: Sales
 --         sees only assignable lead workers), not a second directory.
+--   • app.display_name_ok(name) and the trigger profiles_display_name_rule: the
+--     display-name rule (at most 80 characters, no control or format character) for every
+--     writer of profiles.display_name, the users screen's Admin path and the service role
+--     included, tested whenever a name is written and changes. A name stored before 0044 is
+--     left as it is until its next change (a trigger, not a CHECK: see section 3).
 --   • public.update_my_profile(p_tenant, p_display_name): a person renames themselves.
 --     profiles is Admin-write only (profiles_admin_write, 0037's column grant), so this is
 --     a SECURITY DEFINER that writes exactly one column of exactly the caller's row, after
 --     its own live check; it cannot change a role, is_active, a lock or a tenant. It
---     applies the Worker's name rules itself (trim, length, no control or format
---     character) and writes the audit row in the same transaction, so a call that skips
---     the Worker is held to the same rules and audited just the same.
+--     applies the Worker's name rules itself (trim, then the rule above) and writes the
+--     audit row in the same transaction, so a call that skips the Worker is held to the
+--     same rules and audited just the same.
 --   • public.admin_environment(p_tenant): which environment the shell's pill names, from
 --     app.deployment (0016): production → 'production', staging → 'staging', development →
 --     'local'. NULL when the database is unmarked, so the pill never names an environment
@@ -54,9 +59,9 @@
 
 -- A busy table fails the push instead of queueing (as in 0038 and 0041). 0044 locks
 -- public.profiles: the unique key the preferences reference, where 0041 has not added it
--- already (ACCESS EXCLUSIVE while its index builds), and the preferences' foreign key
--- (SHARE ROW EXCLUSIVE, which blocks writers); and public.tenants for the tenant key (SHARE
--- ROW EXCLUSIVE). Every admin request reads profiles, the access-token hook reads it at
+-- already (ACCESS EXCLUSIVE while its index builds), the preferences' foreign key and the
+-- display-name trigger (SHARE ROW EXCLUSIVE, which blocks writers); and public.tenants for
+-- the tenant key (SHARE ROW EXCLUSIVE). Every admin request reads profiles, the access-token hook reads it at
 -- every sign-in and the sign-in's lockout RPCs write it, so a lock request queued behind a
 -- long transaction (an export, a dump, an idle session) would hold those writes up for the
 -- whole wait. A statement below that waits more than five seconds for a lock raises
@@ -240,21 +245,67 @@ create or replace function public.crm_people(p_tenant uuid)
    order by d.display_name nulls last, d.id
 $$;
 
--- ---- 3. Renaming yourself -----------------------------------------------------------------
--- One column of one row: the caller's display name, under the rules the Worker's schema
--- applies (DisplayNameSchema, packages/schemas/adminPrefs.ts), so a call that skips the
--- Worker meets the same ones:
---   • trimmed of exactly what JavaScript's String.prototype.trim() removes (tab, LF, VT,
---     FF, CR, space, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F,
---     U+3000, U+FEFF); empty clears it (the shell then shows the e-mail);
+-- ---- 3. Display names: one rule for every writer, and renaming yourself ------------------
+-- A name is shown beside every edit and in every people list, so a bidi override (U+202E),
+-- an isolate (U+2066) or a zero-width character (U+200B) must not reorder or hide the text
+-- around it. The rule is DisplayNameSchema's (packages/schemas/adminPrefs.ts), the one the
+-- users screen's schemas share:
 --   • at most 80 characters (counted in code points, so never stricter than the schema's
 --     UTF-16 count);
 --   • no Unicode control or format character (general categories Cc and Cf, as Unicode 15
---     to 17 list them; NUL cannot reach a text value). A name is shown beside every edit
---     and in every people list, so a bidi override (U+202E), an isolate (U+2066) or a
---     zero-width character (U+200B) must not reorder or hide the text around it.
--- tests/lib/personalLayer.spec.ts holds the trim set and the refused class equal to the
--- schema's `.trim()` and /[\p{Cc}\p{Cf}]/u, code point by code point.
+--     to 17 list them; NUL cannot reach a text value).
+-- NULL (no name: the shell shows the e-mail) passes. tests/lib/personalLayer.spec.ts holds
+-- the refused class equal to the schema's /[\p{Cc}\p{Cf}]/u, code point by code point, and
+-- the 80 equal to DISPLAY_NAME_MAX. Invoker; EXECUTE for the two API roles that write
+-- profiles, because the trigger below runs as the writer.
+create or replace function app.display_name_ok(p_name text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select p_name is null
+      or (pg_catalog.char_length(p_name) <= 80
+          and p_name !~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]')
+$$;
+revoke all on function app.display_name_ok(text) from public, anon, authenticated, service_role;
+grant execute on function app.display_name_ok(text) to authenticated, service_role;
+
+-- Every writer of profiles.display_name is held to the rule, not only the self-rename door
+-- below: the users screen (an Admin's session through PostgREST under 0037's column grant,
+-- or an Admin token calling the API directly), the service role (the invite), seeds and
+-- operators. The trigger tests a name when it is written AND differs from the stored one,
+-- so a name stored before 0044 that breaks the rule does not block a write that leaves it
+-- as it is: the sign-in's lockout RPCs (0009) and a role change on the users screen go on
+-- working for that person, and their next rename must meet the rule. That is why this is
+-- a trigger and not a CHECK: a CHECK, even one added NOT VALID, is tested on every UPDATE
+-- of the row, so a single such name would make every sign-in of its owner fail. The
+-- postconditions count the names that break it (a number, never a name). 23514, as the
+-- CHECK it stands in for would raise. Invoker: it reads only the row being written.
+create or replace function app.tg_profiles_display_name() returns trigger
+  language plpgsql set search_path = '' as $$
+begin
+  if tg_op = 'UPDATE' then
+    if new.display_name is not distinct from old.display_name then
+      return new;
+    end if;
+  end if;
+  if not app.display_name_ok(new.display_name) then
+    raise exception using errcode = '23514',
+      message = 'profiles: a display name is at most 80 characters, with no control or format characters';
+  end if;
+  return new;
+end $$;
+revoke all on function app.tg_profiles_display_name() from public, anon, authenticated, service_role;
+
+drop trigger if exists profiles_display_name_rule on public.profiles;
+create trigger profiles_display_name_rule before insert or update of display_name on public.profiles
+  for each row execute function app.tg_profiles_display_name();
+
+-- Renaming yourself: one column of one row, the caller's display name, under the rule above
+-- and the schema's trim, so a call that skips the Worker meets the same ones:
+--   • trimmed of exactly what JavaScript's String.prototype.trim() removes (tab, LF, VT,
+--     FF, CR, space, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F,
+--     U+3000, U+FEFF); empty clears it (the shell then shows the e-mail);
+--   • then app.display_name_ok (refused here as 22023, before the trigger would see it).
+-- tests/lib/personalLayer.spec.ts holds the trim set equal to the schema's `.trim()`, code
+-- point by code point.
 -- The rename is audited HERE, in the same transaction (profile.update, the field's name
 -- only, never the name), so every path that reaches this function is audited and a rename
 -- whose audit row cannot be written does not happen. 42501 for a caller who is not live in
@@ -276,9 +327,7 @@ begin
   v_name := nullif(btrim(coalesce(p_display_name, ''),
     E'\u0009\u000A\u000B\u000C\u000D\u0020\u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF'),
     '');
-  if v_name is not null and (
-       char_length(v_name) > 80
-       or v_name ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]') then
+  if not app.display_name_ok(v_name) then
     raise exception using errcode = '22023',
       message = 'update_my_profile: a display name is at most 80 characters, with no control or format characters';
   end if;
@@ -355,6 +404,7 @@ declare
   v_have text[];
   v_want text[];
   v_bad text;
+  v_n int;
   p text;
 begin
   -- RLS on, and forced.
@@ -528,11 +578,31 @@ begin
       raise exception '0044: PUBLIC may execute %', p;
     end if;
   end loop;
-  foreach p in array array['app.staff_directory()', 'app.tg_admin_user_prefs()'] loop
+  foreach p in array array['app.staff_directory()', 'app.tg_admin_user_prefs()',
+                           'app.tg_profiles_display_name()'] loop
     if has_function_privilege('anon', p, 'execute')
        or has_function_privilege('authenticated', p, 'execute')
-       or has_function_privilege('service_role', p, 'execute') then
+       or has_function_privilege('service_role', p, 'execute')
+       or has_function_privilege('public', p, 'execute') then
       raise exception '0044: % is executable by an API role', p;
+    end if;
+  end loop;
+  -- The rule runs as the writer (from the trigger), so the two API roles that write
+  -- profiles may call it; anon and PUBLIC may not.
+  if not has_function_privilege('authenticated', 'app.display_name_ok(text)', 'execute')
+     or not has_function_privilege('service_role', 'app.display_name_ok(text)', 'execute')
+     or has_function_privilege('anon', 'app.display_name_ok(text)', 'execute')
+     or has_function_privilege('public', 'app.display_name_ok(text)', 'execute') then
+    raise exception '0044: app.display_name_ok must be executable by authenticated and service_role only';
+  end if;
+  -- The invokers: no definer rights, an empty search path.
+  foreach p in array array['app.display_name_ok(text)', 'app.tg_admin_user_prefs()',
+                           'app.tg_profiles_display_name()'] loop
+    if not exists (select 1 from pg_proc
+                    where oid = p::regprocedure and not prosecdef
+                      and exists (select 1 from unnest(coalesce(proconfig, '{}'::text[])) c
+                                   where c in ('search_path=""', 'search_path='))) then
+      raise exception '0044: % must be SECURITY INVOKER with an empty search_path', p;
     end if;
   end loop;
   foreach p in array array['app.staff_directory()', 'public.staff_directory(uuid)',
@@ -560,6 +630,35 @@ begin
      or has_table_privilege('anon', 'app.deployment', 'select')
      or has_table_privilege('service_role', 'app.deployment', 'select') then
     raise exception '0044: app.deployment is readable by an API role';
+  end if;
+
+  -- ---- The display-name rule, for every writer: the trigger on profiles is in place,
+  -- enabled, and fires on an insert or on a write of display_name; the rule says what the
+  -- schema says (NULL and 80 characters pass; 81, a control character, a bidi override or
+  -- isolate and a zero-width space do not).
+  if not exists (select 1 from pg_trigger tg
+                  where tg.tgrelid = 'public.profiles'::regclass and not tg.tgisinternal
+                    and tg.tgname = 'profiles_display_name_rule' and tg.tgenabled = 'O'
+                    and pg_get_triggerdef(tg.oid) ~
+                        ('^CREATE TRIGGER profiles_display_name_rule BEFORE INSERT OR UPDATE OF display_name '
+                         'ON (public\.)?profiles FOR EACH ROW '
+                         'EXECUTE FUNCTION (app\.)?tg_profiles_display_name\(\)$')) then
+    raise exception '0044: profiles_display_name_rule is missing, disabled or not as stated';
+  end if;
+  if not (app.display_name_ok(null) and app.display_name_ok('Amal')
+          and app.display_name_ok(repeat('x', 80))
+          and not app.display_name_ok(repeat('x', 81))
+          and not app.display_name_ok(E'a\tb')
+          and not app.display_name_ok(E'nimda\u202Etxt')
+          and not app.display_name_ok(E'a\u2066b')
+          and not app.display_name_ok(E'Am\u200Bal')) then
+    raise exception '0044: app.display_name_ok does not apply the display-name rule';
+  end if;
+  -- Names stored before 0044 are not rewritten (and not refused: see section 3). How many
+  -- break the rule, as a number, never a name: each must meet it at its next change.
+  select count(*)::int into v_n from public.profiles where not app.display_name_ok(display_name);
+  if v_n > 0 then
+    raise notice '0044: % stored display name(s) break the display-name rule; each must meet it at its next change', v_n;
   end if;
 
   -- The trigger is the only BEFORE trigger on the table.

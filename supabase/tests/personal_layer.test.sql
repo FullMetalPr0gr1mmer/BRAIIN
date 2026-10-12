@@ -18,10 +18,14 @@
 --   • update_my_profile changes the caller's display name and nothing else, under the
 --     Worker's rules (control and format characters refused, JavaScript's trim), and
 --     writes its own audit row: a call that skips the Worker is held and audited the same.
+--   • the display-name rule holds for every writer, not only that door: an Admin on the
+--     users screen (0037's column grant) and the service role (an invite) cannot store a
+--     name over 80 characters or with a control or format character; a name stored before
+--     the rule does not block the sign-in's writes or a save that sends it back unchanged.
 --   • admin_environment names the marker's environment to live members, NULL otherwise.
 
 begin;
-select plan(103);
+select plan(113);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -36,7 +40,9 @@ insert into auth.users (id, email) values
   ('44000000-0000-0000-0000-0000000000f1', 'other-admin@example.test'),
   ('44000000-0000-0000-0000-0000000000d2', 'demoted@example.test'),
   ('44000000-0000-0000-0000-0000000000d3', 'inactive@example.test'),
-  ('44000000-0000-0000-0000-0000000000d4', 'locked@example.test');
+  ('44000000-0000-0000-0000-0000000000d4', 'locked@example.test'),
+  -- Invited, no profile yet: the service role's insert below is refused.
+  ('44000000-0000-0000-0000-0000000000b1', 'invited@example.test');
 insert into public.profiles (id, tenant_id, role, is_active, locked_until, display_name) values
   ('44000000-0000-0000-0000-0000000000a1', '44000000-0000-0000-0000-000000000001', 'admin', true, null, 'Amal'),
   ('44000000-0000-0000-0000-0000000000c1', '44000000-0000-0000-0000-000000000001', 'content_creator', true, null, 'Cyrus'),
@@ -391,6 +397,53 @@ select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), null
   'a locked token gets nothing');
 select throws_ok($$ select env from app.deployment $$,
   '42501', null, 'and no staff token reads the marker itself');
+
+-- ---- the display-name rule holds for every writer, not only the rename door ---------------
+-- The users screen writes profiles.display_name as an Admin's session (0037's column grant,
+-- profiles_admin_write); the invite writes it as the service role. The trigger holds both.
+select _as('44000000-0000-0000-0000-0000000000a1', 'admin', '44000000-0000-0000-0000-000000000001');
+select throws_ok($$ update public.profiles set display_name = E'Cy\u202Erus'
+                    where id = '44000000-0000-0000-0000-0000000000c1' $$,
+  '23514', null, 'an Admin renaming a colleague cannot store a bidi override');
+select throws_ok($$ update public.profiles set display_name = E'Cy\u200Brus'
+                    where id = '44000000-0000-0000-0000-0000000000c1' $$,
+  '23514', null, 'nor a zero-width space');
+select throws_ok($$ update public.profiles set display_name = repeat('x', 81)
+                    where id = '44000000-0000-0000-0000-0000000000c1' $$,
+  '23514', null, 'nor a name over 80 characters');
+select lives_ok($$ update public.profiles set display_name = repeat('x', 80)
+                   where id = '44000000-0000-0000-0000-0000000000c1' $$,
+  'but stores a name of 80 characters');
+select is((select char_length(display_name) from public.profiles
+            where id = '44000000-0000-0000-0000-0000000000c1'), 80, 'which is kept as written');
+
+set local role service_role;
+select _as(null, null, null);
+select throws_ok($$ insert into public.profiles (id, tenant_id, role, display_name)
+                    values ('44000000-0000-0000-0000-0000000000b1', '44000000-0000-0000-0000-000000000001',
+                            'seo', E'In\u2066vited') $$,
+  '23514', null, 'the service role cannot store one either, on an invite');
+select throws_ok($$ update public.profiles set display_name = repeat('x', 81)
+                    where id = '44000000-0000-0000-0000-0000000000d1' $$,
+  '23514', null, 'nor on a rename');
+
+-- A name stored before 0044 was never tested: written here with the trigger off, as it was.
+reset role;
+alter table public.profiles disable trigger profiles_display_name_rule;
+update public.profiles set display_name = repeat('z', 100) where id = '44000000-0000-0000-0000-0000000000d1';
+alter table public.profiles enable trigger profiles_display_name_rule;
+set local role service_role;
+select lives_ok($$ update public.profiles set failed_login_count = 0, locked_until = null, last_login_at = now()
+                   where id = '44000000-0000-0000-0000-0000000000d1' $$,
+  'a name stored before the rule does not block the sign-in''s writes to that profile');
+set local role authenticated;
+select _as('44000000-0000-0000-0000-0000000000a1', 'admin', '44000000-0000-0000-0000-000000000001');
+select lives_ok($$ update public.profiles set role = 'developer', display_name = repeat('z', 100)
+                   where id = '44000000-0000-0000-0000-0000000000d1' $$,
+  'nor a users-screen save that sends the same name back');
+select throws_ok($$ update public.profiles set display_name = repeat('z', 101)
+                    where id = '44000000-0000-0000-0000-0000000000d1' $$,
+  '23514', null, 'but a new name must meet the rule');
 
 -- ---- a profile that moves takes its row along; one that goes takes it with it --------------
 -- Moving a person between tenants is an operator's change (no API role may write

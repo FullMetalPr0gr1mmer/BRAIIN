@@ -75,24 +75,26 @@ export const DISPLAY_NAME_MAX = 80;
 export const DISPLAY_NAME_REFUSED = /[\p{Cc}\p{Cf}]/u;
 
 /**
- * PATCH /api/admin/me: the caller's display name. Trimmed; empty clears it (the shell
- * then shows the e-mail). update_my_profile (0044) applies the same rules again for any
- * caller: it trims what `.trim()` trims and refuses what DISPLAY_NAME_REFUSED refuses
- * (tests/lib/personalLayer.spec.ts compares the two code point by code point), and it
- * counts the 80 in code points, so it never refuses a name this schema accepts.
+ * A display name, as every writer stores it: trimmed, at most 80 characters, no control or
+ * format character. Renaming yourself (DisplayNameSchema) and the users screen
+ * (UserInviteSchema, UserUpdateSchema, PATCH /api/admin/users/[id]) share it, and the
+ * database holds every writer to the same rule (app.display_name_ok and the
+ * profiles_display_name_rule trigger, 0044): it refuses what DISPLAY_NAME_REFUSED refuses
+ * (tests/lib/personalLayer.spec.ts compares the two code point by code point) and counts
+ * the 80 in code points, so it never refuses a name this schema accepts.
  */
-export const DisplayNameSchema = z
-  .object({
-    display_name: z
-      .string()
-      .trim()
-      .max(DISPLAY_NAME_MAX, `Use ${DISPLAY_NAME_MAX} characters or fewer.`)
-      .refine(
-        (value) => !DISPLAY_NAME_REFUSED.test(value),
-        'Use letters, numbers and spaces only.',
-      ),
-  })
-  .strict();
+export const DisplayNameValueSchema = z
+  .string()
+  .trim()
+  .max(DISPLAY_NAME_MAX, `Use ${DISPLAY_NAME_MAX} characters or fewer.`)
+  .refine((value) => !DISPLAY_NAME_REFUSED.test(value), 'Use letters, numbers and spaces only.');
+
+/**
+ * PATCH /api/admin/me: the caller's display name; empty clears it (the shell then shows
+ * the e-mail). update_my_profile (0044) applies the rules again for any caller, trimming
+ * what `.trim()` trims first.
+ */
+export const DisplayNameSchema = z.object({ display_name: DisplayNameValueSchema }).strict();
 export type DisplayNameInput = z.infer<typeof DisplayNameSchema>;
 
 /** The shortest new password the admin accepts. GoTrue's own policy may ask for more. */

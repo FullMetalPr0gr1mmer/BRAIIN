@@ -10,10 +10,13 @@ import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
 import { CAPABILITIES, ROLE_CAPS } from '@/lib/authz/matrix';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { CAP_LABELS, ROLE_LABELS, capLinesFor } from '@/lib/authz/capLabels';
+import { UserInviteSchema, UserUpdateSchema } from '@schemas/admin';
 import {
   AdminPrefsPutSchema,
+  DISPLAY_NAME_MAX,
   DISPLAY_NAME_REFUSED,
   DisplayNameSchema,
+  DisplayNameValueSchema,
   NotificationPrefsSchema,
   PasswordChangeSchema,
   readNotificationPrefs,
@@ -390,6 +393,43 @@ describe('the account schemas', () => {
     expect(DisplayNameSchema.safeParse({ display_name: 'Sam', role: 'admin' }).success).toBe(false);
   });
 
+  it("the users screen's schemas hold a colleague's name to the same rule", () => {
+    const userId = '00000000-0000-4000-8000-000000000001';
+    for (const bad of ['x'.repeat(81), 'evil\u202Etxt', 'Am\u200Bal', 'a\u2066b']) {
+      const label = JSON.stringify(bad);
+      expect(DisplayNameValueSchema.safeParse(bad).success, label).toBe(false);
+      expect(
+        UserInviteSchema.safeParse({ email: 'new@example.test', role: 'seo', displayName: bad })
+          .success,
+        label,
+      ).toBe(false);
+      expect(UserUpdateSchema.safeParse({ userId, displayName: bad }).success, label).toBe(false);
+    }
+    expect(UserUpdateSchema.parse({ userId, displayName: '  Sam  ' }).displayName).toBe('Sam');
+    expect(DisplayNameValueSchema.parse('x'.repeat(DISPLAY_NAME_MAX))).toHaveLength(80);
+  });
+
+  it('PATCH /api/admin/users/[id] refuses a bidi override before it reaches the database', async () => {
+    const { PATCH } = (await import('@/pages/api/admin/users/[id]')) as { PATCH: APIRoute };
+    const id = '00000000-0000-4000-8000-000000000002';
+    const request = new Request(`https://admin.example.test/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ displayName: 'nimda\u202Etxt' }),
+    });
+    const from = vi.fn(() => {
+      throw new Error('the database must not be reached');
+    });
+    const res = await PATCH({
+      locals: { session: auth('admin'), supabase: { from } as unknown as SupabaseClient },
+      request,
+      url: new URL(request.url),
+      params: { id },
+    } as unknown as Parameters<APIRoute>[0]);
+    expect(res.status).toBe(422);
+    expect(from).not.toHaveBeenCalled();
+  });
+
   it('a new password is at least 10 characters and at most 72 bytes, typed twice, and new', () => {
     const ok = { current: 'old-password', next: 'long-enough-1', confirm: 'long-enough-1' };
     expect(PasswordChangeSchema.safeParse(ok).success).toBe(true);
@@ -479,10 +519,23 @@ describe('renaming yourself', () => {
 
 // ── The database's name rules are the schema's ───────────────────────────────────
 
-describe("update_my_profile applies the schema's name rules (0044)", () => {
+describe("the database's name rule is the schema's, for every writer (0044)", () => {
   const sql = readFileSync(
     join(process.cwd(), 'supabase/migrations/0044_personal_layer.sql'),
     'utf8',
+  );
+  const at = (marker: string) => {
+    const index = sql.indexOf(marker);
+    expect(index, marker).toBeGreaterThanOrEqual(0);
+    return index;
+  };
+  const rule = sql.slice(
+    at('create or replace function app.display_name_ok'),
+    at('create or replace function app.tg_profiles_display_name'),
+  );
+  const trigger = sql.slice(
+    at('create or replace function app.tg_profiles_display_name'),
+    at('create or replace function public.update_my_profile'),
   );
   const definition = sql.slice(
     sql.lastIndexOf('create or replace function public.update_my_profile'),
@@ -523,8 +576,8 @@ describe("update_my_profile applies the schema's name rules (0044)", () => {
   });
 
   it('refuses exactly the control and format characters the schema refuses', () => {
-    const source = /v_name ~ '\[([^'\]]*)\]'/.exec(definition)?.[1];
-    expect(source, 'the refused class in update_my_profile').toBeTruthy();
+    const source = /p_name !~ '\[([^'\]]*)\]'/.exec(rule)?.[1];
+    expect(source, 'the refused class in app.display_name_ok').toBeTruthy();
     const refused = codePointRanges(source!);
     const mismatches: string[] = [];
     // From 1: NUL cannot reach a text value (Postgres refuses it), so the class omits it.
@@ -535,6 +588,29 @@ describe("update_my_profile applies the schema's name rules (0044)", () => {
     }
     // A new Unicode version that adds a format character fails here: add it to the class.
     expect(mismatches).toEqual([]);
+  });
+
+  it('allows exactly DISPLAY_NAME_MAX characters, and no name at all', () => {
+    expect(/char_length\(p_name\) <= (\d+)/.exec(rule)?.[1]).toBe(String(DISPLAY_NAME_MAX));
+    expect(rule).toMatch(/select p_name is null\s+or \(/);
+  });
+
+  it('holds the rename and every other writer of profiles.display_name to it', () => {
+    // The rename refuses before it writes (22023); the trigger holds every other writer,
+    // the users screen's Admin session and the service role included (23514), when a name
+    // is written and changes.
+    expect(definition).toMatch(
+      /if not app\.display_name_ok\(v_name\) then\s+raise exception using errcode = '22023'/,
+    );
+    expect(trigger).toMatch(
+      /if new\.display_name is not distinct from old\.display_name then\s+return new;/,
+    );
+    expect(trigger).toMatch(
+      /if not app\.display_name_ok\(new\.display_name\) then\s+raise exception using errcode = '23514'/,
+    );
+    expect(sql).toMatch(
+      /create trigger profiles_display_name_rule before insert or update of display_name on public\.profiles\s+for each row execute function app\.tg_profiles_display_name\(\);/,
+    );
   });
 
   it('writes its own audit row, with the field name and never the name', () => {
