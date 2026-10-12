@@ -46,6 +46,8 @@ const CLIENT_FACTORIES: Record<string, string> = {
   'src/lib/supabase/client.ts': 'the anon client, reached through the seam',
   'src/lib/supabase/server.ts': 'the service client (the service-role key, past RLS)',
   'src/lib/auth/session.ts': "the staff session client: the anon key with a signed-in user's JWT",
+  'src/lib/auth/recovery.ts':
+    'the recovery client (Admin v2 F7): the anon key, one per forgot or reset request, no cookie',
 };
 const FACTORY_NAMES = [
   'createClient',

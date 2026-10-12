@@ -113,27 +113,44 @@ export function createSessionClient(cookies: AstroCookies): SupabaseClient {
         }
         return out;
       },
-      setAll(toSet: { name: string; value: string; options: CookieOptions }[]) {
-        const sessionOnly = isSessionOnly(cookies);
-        for (const { name, value, options } of toSet) {
-          // Our attributes WIN over the library's, and `domain` is never forwarded at
-          // all. A `__Host-` cookie carrying a Domain attribute is rejected outright by
-          // the browser, so a future default in @supabase/ssr that set one would not
-          // weaken the session — it would silently log everyone out, which is a much
-          // harder bug to read than this explicit mapping. Max-Age is ours as well (see
-          // the header): the library's own is 400 days.
-          const maxAge = sessionCookieMaxAge(options.maxAge, sessionOnly);
-          cookies.set(name, value, {
-            path: HOST_COOKIE_BASE.path,
-            secure: HOST_COOKIE_BASE.secure,
-            sameSite: HOST_COOKIE_BASE.sameSite,
-            httpOnly: true,
-            ...(maxAge === undefined ? {} : { maxAge }),
-          });
-        }
+      setAll(toSet: SessionCookieWrite[]) {
+        writeSessionCookies(cookies, toSet);
       },
     },
   });
+}
+
+/** One cookie @supabase/ssr asks to write: a token chunk, or a removal (Max-Age 0). */
+export interface SessionCookieWrite {
+  name: string;
+  value: string;
+  options: CookieOptions;
+}
+
+/**
+ * The session client's `setAll`: writes what @supabase/ssr asks for with OUR attributes.
+ *
+ * Ours WIN over the library's, and `domain` is never forwarded at all. A `__Host-` cookie
+ * carrying a Domain attribute is rejected outright by the browser, so a future default in
+ * @supabase/ssr that set one would not weaken the session — it would silently log
+ * everyone out, which is a much harder bug to read than this explicit mapping. Max-Age is
+ * ours as well (see the header): the library's own is 400 days.
+ */
+export function writeSessionCookies(
+  cookies: AstroCookies,
+  toSet: readonly SessionCookieWrite[],
+): void {
+  const sessionOnly = isSessionOnly(cookies);
+  for (const { name, value, options } of toSet) {
+    const maxAge = sessionCookieMaxAge(options.maxAge, sessionOnly);
+    cookies.set(name, value, {
+      path: HOST_COOKIE_BASE.path,
+      secure: HOST_COOKIE_BASE.secure,
+      sameSite: HOST_COOKIE_BASE.sameSite,
+      httpOnly: true,
+      ...(maxAge === undefined ? {} : { maxAge }),
+    });
+  }
 }
 
 /**

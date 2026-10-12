@@ -36,6 +36,9 @@ const ROUTES = [
   '/services/logo',
   '/ar/services/logo',
   '/admin/login',
+  // Sign-in v2 (Admin v2 F7): the other two screens a visitor without a session reaches
+  '/admin/forgot',
+  '/admin/reset?token_hash=a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4&type=recovery',
   '/about',
   '/ar/about',
   // Join — the application form and its dropzone are module scripts
@@ -99,23 +102,25 @@ for (const route of [
   });
 }
 
-test('admin pages carry no inline style attributes', async ({ page }) => {
-  // `style-src` has no 'unsafe-inline', so a `style="…"` attribute is dead markup: it is
-  // silently ignored and the element renders unstyled. React's `style={{…}}` prop emits
-  // exactly that during Astro's server render, which is why the admin uses `data-*`
-  // buckets and utility classes instead. This is the check that keeps it that way.
-  //
-  // It reads the SERVER HTML (parsed, never run), not the live DOM: a style a script sets
-  // through the CSSOM after hydration is allowed by the policy, and blaming it would push
-  // a screen towards the markup styles that are not.
-  const html = await (await page.request.get('/admin/login')).text();
-  const inlineStyled = await page.evaluate(
-    (markup) =>
-      new DOMParser().parseFromString(markup, 'text/html').querySelectorAll('[style]').length,
-    html,
-  );
-  expect(inlineStyled, 'elements carrying a blocked inline style attribute').toBe(0);
-});
+for (const route of ['/admin/login', '/admin/forgot', '/admin/reset']) {
+  test(`${route} carries no inline style attributes`, async ({ page }) => {
+    // `style-src` has no 'unsafe-inline', so a `style="…"` attribute is dead markup: it is
+    // silently ignored and the element renders unstyled. React's `style={{…}}` prop emits
+    // exactly that during Astro's server render, which is why the admin uses `data-*`
+    // buckets and utility classes instead. This is the check that keeps it that way.
+    //
+    // It reads the SERVER HTML (parsed, never run), not the live DOM: a style a script sets
+    // through the CSSOM after hydration is allowed by the policy, and blaming it would push
+    // a screen towards the markup styles that are not.
+    const html = await (await page.request.get(route)).text();
+    const inlineStyled = await page.evaluate(
+      (markup) =>
+        new DOMParser().parseFromString(markup, 'text/html').querySelectorAll('[style]').length,
+      html,
+    );
+    expect(inlineStyled, 'elements carrying a blocked inline style attribute').toBe(0);
+  });
+}
 
 test('admin is non-indexable and never cached', async ({ page }) => {
   const response = await page.goto('/admin/login');

@@ -121,6 +121,34 @@ export function staffEnv(
 export const SKIP_REASON =
   'needs the e2e job: a LOCAL seeded Supabase, its service key, and a loopback preview built against it';
 
+/** The service-role client of the local stack (never a hosted one: see staffEnv). */
+function adminClient(env: StaffEnv) {
+  return createClient(env.url, env.serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+/** One staff account the harness creates on the local stack. */
+export interface StaffAccount {
+  id: string;
+  email: string;
+  role: Role;
+  /** The profile's name; a role account is "E2E <role>". */
+  displayName?: string;
+}
+
+/**
+ * The account the sign-in spec (tests/admin/signin.e2e.ts, Admin v2 F7) signs in, fails to
+ * sign in, and resets the password of. Its own, so a reset that signs it out everywhere
+ * never touches the per-role sessions every other admin spec runs on.
+ */
+export const SIGN_IN_ACCOUNT: StaffAccount = {
+  id: 'e2e00000-0000-4000-8000-0000000000f7',
+  email: 'e2e-signin@example.com',
+  role: 'seo',
+  displayName: 'E2E sign-in',
+};
+
 /**
  * Creates (or resets) the role's account and profile, and returns credentials valid for
  * this run only. The profile row is what the access-token hook stamps into the JWT, and
@@ -131,11 +159,31 @@ export async function ensureStaff(
   env: StaffEnv,
   role: Role,
 ): Promise<{ email: string; password: string }> {
-  const svc = createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
+  return ensureAccount(env, { id: STAFF_IDS[role], email: staffEmail(role), role });
+}
+
+/**
+ * A one-time recovery token for an account, as the reset e-mail's link would carry it
+ * (`token_hash`). From GoTrue's admin API, which sends no e-mail: the local stack has no
+ * SMTP to speak of, and the spec needs the token, not the message.
+ */
+export async function recoveryToken(env: StaffEnv, email: string): Promise<string> {
+  const { data, error } = await adminClient(env).auth.admin.generateLink({
+    type: 'recovery',
+    email,
   });
-  const id = STAFF_IDS[role];
-  const email = staffEmail(role);
+  const token = data?.properties?.hashed_token;
+  if (error || !token) throw new Error(`recovery link for ${email}: ${error?.message ?? 'none'}`);
+  return token;
+}
+
+/** ensureStaff for any account: its user, its profile, a fresh password, no failures. */
+export async function ensureAccount(
+  env: StaffEnv,
+  account: StaffAccount,
+): Promise<{ email: string; password: string }> {
+  const svc = adminClient(env);
+  const { id, email, role } = account;
   const password = randomBytes(24).toString('base64url');
   const attributes = {
     email,
@@ -148,7 +196,7 @@ export async function ensureStaff(
   const { error: userError } = existing.data.user
     ? await svc.auth.admin.updateUserById(id, attributes)
     : await svc.auth.admin.createUser({ id, ...attributes });
-  if (userError) throw new Error(`staff ${role}: ${userError.message}`);
+  if (userError) throw new Error(`staff ${email}: ${userError.message}`);
 
   const { error: profileError } = await svc.from('profiles').upsert({
     id,
@@ -156,9 +204,9 @@ export async function ensureStaff(
     role,
     is_active: true,
     locked_until: null,
-    display_name: `E2E ${role.replace('_', ' ')}`,
+    display_name: account.displayName ?? `E2E ${role.replace('_', ' ')}`,
   });
-  if (profileError) throw new Error(`staff ${role} profile: ${profileError.message}`);
+  if (profileError) throw new Error(`staff ${email} profile: ${profileError.message}`);
 
   // A local re-run after failed sign-ins would otherwise meet the lockout (5 failures in
   // 15 minutes answer 423). Best-effort: a fresh CI database has no attempts at all.
