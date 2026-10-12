@@ -30,9 +30,15 @@ const ok = (params: Record<string, string>) =>
   checkImageRequest(new URLSearchParams(params), new Map()).ok;
 
 describe('the /_image guard and uploaded images', () => {
-  it("admits a bucket key at a listed width or its own, at its aspect, in Astro's formats", () => {
-    for (const f of ['avif', 'webp', 'png']) {
+  it('admits a bucket key at a listed width or its own, at its aspect, in the formats asked of it', () => {
+    // <Picture>'s avif and webp (its fallback is webp for an upload) and a share image's jpg.
+    for (const f of ['avif', 'webp', 'jpg']) {
       expect(ok({ href: HREF, w: '800', h: '533', f }), f).toBe(true);
+    }
+    // Formats a still may take but nothing asks of an upload: each would be one more unique
+    // transformation per size (U3 review).
+    for (const f of ['png', 'jpeg', 'gif']) {
+      expect(ok({ href: HREF, w: '800', h: '533', f }), f).toBe(false);
     }
     expect(ok({ href: HREF, w: '1200', h: '800', f: 'webp' })).toBe(true);
     expect(ok({ href: HREF, w: '480', h: String(320 + ASPECT_TOLERANCE_PX), f: 'avif' })).toBe(

@@ -96,6 +96,9 @@ test.describe('as admin', () => {
     const res = await page.request.get(thumb);
     expect(res.status()).toBe(200);
     expect(res.headers()['content-type']).toContain('image/webp');
+    // An upload's derivative lives an hour, as its object does (not the adapter's
+    // immutable year), so a deleted file leaves the web (runbook §6i).
+    expect(res.headers()['cache-control']).toBe('public, max-age=3600');
 
     await page.addInitScript(() => {
       const w = window as unknown as { __csp: string[] };
@@ -129,8 +132,31 @@ test.describe('as admin', () => {
   test('a transform the markup never asks for is refused by the guard', async ({ page }) => {
     const url = new URL(String(asset['thumb_url']), 'http://localhost');
     url.searchParams.set('w', '333');
-    const res = await page.request.get(`${url.pathname}${url.search}`);
-    expect(res.status()).toBe(400);
+    // Every spelling Astro routes to the endpoint (U3 review: the guard was keyed on one).
+    for (const path of ['/_image', '/_image/', '/%5Fimage', '/_imag%65/']) {
+      const res = await page.request.get(`${path}${url.search}`);
+      expect(res.status(), path).toBe(400);
+    }
+    // A format a still may take but nothing asks of an upload.
+    const png = new URL(String(asset['thumb_url']), 'http://localhost');
+    png.searchParams.set('f', 'png');
+    expect((await page.request.get(`/_image${png.search}`)).status()).toBe(400);
+  });
+
+  test('a well-formed key that names no object is a 404, never a transformation', async ({
+    page,
+  }) => {
+    const url = new URL(String(asset['thumb_url']), 'http://localhost');
+    const href = String(url.searchParams.get('href'));
+    // Same tenant, same size, a random object id the bucket has never held.
+    url.searchParams.set(
+      'href',
+      href.replace(/\/[0-9a-f-]{36}_(\d+x\d+\.webp)$/, '/00000000-0000-4000-8000-000000000000_$1'),
+    );
+    expect(url.searchParams.get('href')).not.toBe(href);
+    const res = await page.request.get(`/_image${url.search}`);
+    expect(res.status()).toBe(404);
+    expect(res.headers()['cache-control']).toContain('no-store');
   });
 
   test('the stored file downloads as an attachment, WebP, without the EXIF note', async ({

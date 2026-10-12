@@ -18,7 +18,11 @@ import { uploadedImageSize } from '@/lib/media/storageUrl';
 //           (`<tenant>/<id>_<w>x<h>.webp`, held equal to the row by the 0045 CHECK), so it
 //           is bounded like a bundled one without a database read. No other remote URL
 //           (`image.domains` is empty; `image.remotePatterns` names only that bucket path).
-//   - f:    avif | webp | jpg | jpeg | png.
+//           Whether such a key names a real object is the endpoint's question
+//           (src/lib/http/imageEndpoint.ts), asked before any transformation.
+//   - f:    avif | webp | jpg | jpeg | png for a bundled image; for an upload only what the
+//           markup asks of one (UPLOAD_TRANSFORM_FORMATS): avif and webp from <Picture>
+//           (its fallback is webp too, MediaImage), jpg from the share images.
 //   - w:    a width a component asks for (TRANSFORM_WIDTHS) or the asset's own width,
 //           never wider than the asset (Astro never upscales; `getSrcSet` caps at it).
 //   - h:    the asset's aspect at that width, within rounding (ASPECT_TOLERANCE_PX):
@@ -63,8 +67,45 @@ export const TRANSFORM_FORMATS: ReadonlySet<string> = new Set([
   'png',
 ]);
 
+/**
+ * The formats an uploaded image is asked for: <Picture>'s avif and webp (MediaImage gives an
+ * upload a webp fallback, not Astro's default png) and the 1,200 px jpg of a share image
+ * (CaseStudyPage, ServicePage). Every other format is a unique transformation nothing shows.
+ */
+export const UPLOAD_TRANSFORM_FORMATS: ReadonlySet<string> = new Set(['avif', 'webp', 'jpg']);
+
 /** Astro derives `h` from rounded target dimensions, so it can drift a pixel or two. */
 export const ASPECT_TOLERANCE_PX = 2;
+
+/** The route Astro serves image transforms on (`image.endpoint.route`, the default). */
+export const IMAGE_ENDPOINT_ROUTE = '/_image';
+
+/**
+ * Is this request for the image endpoint? By the route Astro matched, which is what decides
+ * the handler: Astro matches routes on the DECODED path with the trailing slash ignored
+ * (`trailingSlash: 'ignore'`), so `/_image/`, `/%5Fimage` and `/_imag%65/` all reach the
+ * same endpoint, and a guard keyed on the spelling `/_image` let each of them through. The
+ * path is checked too, decoded and normalised the way Astro's router does it, for a caller
+ * that has no route (a test, a future handler in front of Astro).
+ */
+export function isImageEndpoint(routePattern: string | undefined, pathname: string): boolean {
+  if (routePattern === IMAGE_ENDPOINT_ROUTE) return true;
+  let path = pathname;
+  // Astro decodes repeatedly (core/util/pathname.ts validateAndDecodePathname, ten times at
+  // most); so does this.
+  for (let i = 0; i < 10; i += 1) {
+    let decoded: string;
+    try {
+      decoded = decodeURI(path);
+    } catch {
+      break;
+    }
+    if (decoded === path) break;
+    path = decoded;
+  }
+  path = path.replace(/\/{2,}/g, '/').replace(/\/$/, '');
+  return path === IMAGE_ENDPOINT_ROUTE;
+}
 
 const ALLOWED_PARAMS = new Set(['href', 'w', 'h', 'f']);
 const INT = /^[1-9]\d{0,4}$/;
@@ -84,11 +125,14 @@ export function checkImageRequest(
   }
 
   const href = params.get('href');
-  const asset = href === null ? undefined : (assets.get(href) ?? uploaded(href));
+  const bundled = href === null ? undefined : assets.get(href);
+  const upload = href === null || bundled ? null : uploaded(href);
+  const asset = bundled ?? upload;
   if (!asset) return { ok: false, reason: 'href' };
 
   const format = params.get('f');
-  if (format === null || !TRANSFORM_FORMATS.has(format)) return { ok: false, reason: 'format' };
+  const formats = upload ? UPLOAD_TRANSFORM_FORMATS : TRANSFORM_FORMATS;
+  if (format === null || !formats.has(format)) return { ok: false, reason: 'format' };
 
   const w = params.get('w');
   const h = params.get('h');

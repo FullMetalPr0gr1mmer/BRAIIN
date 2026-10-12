@@ -9,6 +9,9 @@ import react from '@astrojs/react';
 // Admin v2 U3: `image.remotePatterns` = this build's public `media` bucket, derived from
 // PUBLIC_SUPABASE_URL (the build fails without it). See the script's header.
 import { mediaRemotePatternsIntegration } from './scripts/media-remote-patterns.mjs';
+// The `/_image` endpoint: the guard on the route itself, uploads checked before they are
+// transformed and cached for an hour, stills handed to the adapter (the script's header).
+import { imageEndpointIntegration } from './scripts/image-endpoint.mjs';
 
 /**
  * Braiin Station — render model (see CLAUDE.md §2 "Render tiers"):
@@ -131,7 +134,7 @@ export default defineConfig({
     },
   },
 
-  integrations: [react(), mediaRemotePatternsIntegration()],
+  integrations: [react(), mediaRemotePatternsIntegration(), imageEndpointIntegration()],
 
   // Astro's Markdown pipeline is NOT a render path in this project — there is not one
   // .md/.mdx file in src/, and blog bodies are Tiptap JSON rendered by
