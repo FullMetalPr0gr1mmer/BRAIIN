@@ -376,21 +376,37 @@ select throws_ok($$ select env from app.deployment $$,
   '42501', null, 'and no staff token reads the marker itself');
 
 -- ---- grants (P-14: what must and must not be held) -------------------------------------------
+-- MAINTAIN exists from PostgreSQL 17 (production; CI runs 15), so it joins the lists there.
 reset role;
-select ok(not has_table_privilege('anon', 'public.admin_user_prefs', 'select')
-          and not has_any_column_privilege('anon', 'public.admin_user_prefs', 'select'),
-  'anon holds nothing on admin_user_prefs');
-select ok(not has_table_privilege('authenticated', 'public.admin_user_prefs', 'delete')
-          and not has_table_privilege('authenticated', 'public.admin_user_prefs', 'truncate'),
-  'staff can neither delete nor truncate preferences');
+create function _never(p_list text) returns text language sql stable as $$
+  select p_list || case when current_setting('server_version_num')::int >= 170000
+                        then ', maintain' else '' end
+$$;
+select ok(not has_table_privilege('anon', 'public.admin_user_prefs',
+                _never('select, insert, update, delete, truncate, references, trigger'))
+          and not has_table_privilege('public', 'public.admin_user_prefs',
+                _never('select, insert, update, delete, truncate, references, trigger'))
+          and not has_any_column_privilege('anon', 'public.admin_user_prefs', 'select, insert, update, references')
+          and not has_any_column_privilege('public', 'public.admin_user_prefs', 'select, insert, update, references'),
+  'anon and PUBLIC hold nothing on admin_user_prefs, table-wide or by column');
+select ok(has_table_privilege('authenticated', 'public.admin_user_prefs', 'select')
+          and not has_table_privilege('authenticated', 'public.admin_user_prefs',
+                _never('insert, update, delete, truncate, references, trigger'))
+          and not has_any_column_privilege('authenticated', 'public.admin_user_prefs', 'references'),
+  'staff read their row, and can neither delete, truncate nor write it table-wide');
 select ok(not has_column_privilege('authenticated', 'public.admin_user_prefs', 'version', 'update')
           and not has_column_privilege('authenticated', 'public.admin_user_prefs', 'tenant_id', 'update')
           and not has_column_privilege('authenticated', 'public.admin_user_prefs', 'user_id', 'update')
           and has_column_privilege('authenticated', 'public.admin_user_prefs', 'notifications_seen_at', 'update'),
   'staff update the preference columns only');
 select ok(has_table_privilege('service_role', 'public.admin_user_prefs', 'select')
-          and has_table_privilege('service_role', 'public.admin_user_prefs', 'delete'),
-  'the service role''s grants are stated');
+          and has_table_privilege('service_role', 'public.admin_user_prefs', 'insert')
+          and has_table_privilege('service_role', 'public.admin_user_prefs', 'update')
+          and has_table_privilege('service_role', 'public.admin_user_prefs', 'delete')
+          and not has_table_privilege('service_role', 'public.admin_user_prefs',
+                _never('truncate, references, trigger'))
+          and not has_any_column_privilege('service_role', 'public.admin_user_prefs', 'references'),
+  'the service role''s grants are stated: read and write, never truncate, references, trigger or maintain');
 select ok(not has_function_privilege('authenticated', 'app.staff_directory()', 'execute')
           and not has_function_privilege('anon', 'app.staff_directory()', 'execute')
           and not has_function_privilege('service_role', 'app.staff_directory()', 'execute'),

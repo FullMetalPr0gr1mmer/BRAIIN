@@ -291,13 +291,32 @@ grant execute on function public.update_my_profile(uuid, text) to authenticated;
 grant execute on function public.admin_environment(uuid) to authenticated;
 
 -- ---- Postconditions ---------------------------------------------------------------------
+-- Each block says what it checks. Expressions are read as pg_get_expr prints them, the same
+-- on PostgreSQL 15 and 17 (each operator in parentheses, each AND list in one pair; a
+-- function's schema printed only when app is not on the search path, so the patterns allow
+-- both).
 do $$
 declare
+  -- Every table privilege the server knows. MAINTAIN exists from PostgreSQL 17 (production
+  -- runs 17.6, CI 15), and the privilege functions refuse the word on an older server.
+  v_privs constant text[] := array['select', 'insert', 'update', 'delete', 'truncate',
+                                   'references', 'trigger']
+    || case when current_setting('server_version_num')::int >= 170000
+            then array['maintain'] else array[]::text[] end;
   v_insert constant text[] := array['dashboard', 'notifications', 'notifications_seen_at',
     'quick_actions', 'tenant_id', 'user_id'];
   v_update constant text[] := array['dashboard', 'notifications', 'notifications_seen_at',
     'quick_actions'];
+  -- The tenant predicate first, then the caller's own row (the three permissive policies);
+  -- the tenant predicate first, then the live check (the restrictive one).
+  v_self constant text :=
+    '^\(\(tenant_id = (app\.)?effective_tenant_id\(\)\) AND \(user_id = \( SELECT auth\.uid\(\) AS uid\)\)\)$';
+  v_live constant text :=
+    '^\(\(tenant_id = (app\.)?effective_tenant_id\(\)\) AND \(\( SELECT (app\.)?live_role\(\) AS live_role\) IS NOT NULL\)\)$';
   v_cols text[];
+  v_have text[];
+  v_want text[];
+  v_bad text;
   p text;
 begin
   -- RLS on, and forced.
@@ -306,31 +325,69 @@ begin
     raise exception '0044: admin_user_prefs is not ENABLE + FORCE row level security';
   end if;
 
-  -- anon and PUBLIC: nothing at all, table-wide or by column.
-  foreach p in array array['select', 'insert', 'update', 'delete', 'truncate', 'references', 'trigger'] loop
-    if has_table_privilege('anon', 'public.admin_user_prefs', p) then
-      raise exception '0044: anon holds % on admin_user_prefs', p;
-    end if;
-  end loop;
-  if has_any_column_privilege('anon', 'public.admin_user_prefs', 'select')
-     or has_any_column_privilege('anon', 'public.admin_user_prefs', 'insert')
-     or has_any_column_privilege('anon', 'public.admin_user_prefs', 'update') then
-    raise exception '0044: anon holds a column privilege on admin_user_prefs';
-  end if;
-  if exists (select 1 from information_schema.role_table_grants
-              where table_schema = 'public' and table_name = 'admin_user_prefs'
-                and grantee = 'PUBLIC') then
-    raise exception '0044: PUBLIC holds a privilege on admin_user_prefs';
+  -- ---- Table privileges, as each API role holds them (directly or through a role it is a
+  -- member of): exactly these, and nothing else of v_privs. PUBLIC and anon nothing;
+  -- authenticated SELECT (its INSERT and UPDATE are column grants, below); service_role
+  -- SELECT, INSERT, UPDATE and DELETE, never TRUNCATE, REFERENCES, TRIGGER or MAINTAIN.
+  select string_agg(format('%s %s', g.who, g.priv), ', ' order by g.who, g.priv) into v_bad
+    from (select x.who, pr.priv,
+                 has_table_privilege(x.who::name, 'public.admin_user_prefs', pr.priv) as held,
+                 pr.priv = any (x.allowed) as wanted
+            from (values ('public', array[]::text[]),
+                         ('anon', array[]::text[]),
+                         ('authenticated', array['select']),
+                         ('service_role', array['select', 'insert', 'update', 'delete']))
+                   as x(who, allowed)
+            cross join unnest(v_privs) as pr(priv)) g
+   where g.held is distinct from g.wanted;
+  if v_bad is not null then
+    raise exception '0044: wrong table privileges on admin_user_prefs (role privilege): %', v_bad;
   end if;
 
-  -- authenticated: SELECT; INSERT and UPDATE on exactly the preference columns; never
-  -- DELETE or TRUNCATE, never the version, the stamps or (for UPDATE) the key.
-  if not has_table_privilege('authenticated', 'public.admin_user_prefs', 'select') then
-    raise exception '0044: authenticated cannot read its preferences';
+  -- ---- The table's own ACL, grantee by grantee: the owner's, plus exactly the grants
+  -- above. A grant to any other role (a later custom role, supabase_auth_admin) fails here.
+  select coalesce(array_agg(e order by e), '{}') into v_have
+    from (select format('%s %s',
+                        case when a.grantee = 0 then 'PUBLIC' else pg_get_userbyid(a.grantee)::text end,
+                        lower(a.privilege_type)) as e
+            from pg_class c
+            cross join lateral aclexplode(c.relacl) a
+           where c.oid = 'public.admin_user_prefs'::regclass
+             and a.grantee <> c.relowner) s;
+  v_want := array['authenticated select', 'service_role delete', 'service_role insert',
+                  'service_role select', 'service_role update'];
+  if v_have is distinct from v_want then
+    raise exception '0044: admin_user_prefs is granted %, expected %', v_have, v_want;
   end if;
-  foreach p in array array['insert', 'update', 'delete', 'truncate', 'references', 'trigger'] loop
-    if has_table_privilege('authenticated', 'public.admin_user_prefs', p) then
-      raise exception '0044: authenticated holds table-wide % on admin_user_prefs', p;
+
+  -- ---- Column grants: exactly authenticated's INSERT on the key and the preference
+  -- columns and UPDATE on the preference columns, and no other column grant to anyone.
+  select coalesce(array_agg(e order by e), '{}') into v_have
+    from (select format('%s %s %s', att.attname,
+                        case when a.grantee = 0 then 'PUBLIC' else pg_get_userbyid(a.grantee)::text end,
+                        lower(a.privilege_type)) as e
+            from pg_attribute att
+            cross join lateral aclexplode(att.attacl) a
+           where att.attrelid = 'public.admin_user_prefs'::regclass
+             and att.attnum > 0 and not att.attisdropped) s;
+  select array_agg(e order by e) into v_want
+    from (select format('%s authenticated insert', c) as e from unnest(v_insert) c
+          union all
+          select format('%s authenticated update', c) from unnest(v_update) c) s;
+  if v_have is distinct from v_want then
+    raise exception '0044: admin_user_prefs column grants are %, expected %', v_have, v_want;
+  end if;
+
+  -- ---- Column privileges as held: PUBLIC and anon none on any column; authenticated
+  -- INSERT exactly v_insert and UPDATE exactly v_update; no one REFERENCES any column.
+  foreach p in array array['public', 'anon'] loop
+    if has_any_column_privilege(p::name, 'public.admin_user_prefs', 'select, insert, update, references') then
+      raise exception '0044: % holds a column privilege on admin_user_prefs', p;
+    end if;
+  end loop;
+  foreach p in array array['authenticated', 'service_role'] loop
+    if has_any_column_privilege(p::name, 'public.admin_user_prefs', 'references') then
+      raise exception '0044: % holds REFERENCES on a column of admin_user_prefs', p;
     end if;
   end loop;
   select coalesce(array_agg(a.attname::text order by a.attname), '{}') into v_cols
@@ -348,36 +405,44 @@ begin
     raise exception '0044: authenticated updates columns % (expected exactly %)', v_cols, v_update;
   end if;
 
-  -- service_role: stated, not inherited.
-  foreach p in array array['select', 'insert', 'update', 'delete'] loop
-    if not has_table_privilege('service_role', 'public.admin_user_prefs', p) then
-      raise exception '0044: service_role lacks % on admin_user_prefs', p;
-    end if;
-  end loop;
+  -- ---- Policies: exactly these, for any role. Name, command, kind and roles compared as a
+  -- set, so a policy added (a permissive one over the whole tenant, say), dropped, renamed,
+  -- turned permissive or widened to another role fails here. No policy lets anyone delete.
+  select coalesce(array_agg(e order by e), '{}') into v_have
+    from (select format('%s %s %s %s', policyname, cmd, permissive, roles) as e
+            from pg_policies
+           where schemaname = 'public' and tablename = 'admin_user_prefs') s;
+  v_want := array['admin_user_prefs_live ALL RESTRICTIVE {authenticated}',
+                  'admin_user_prefs_self_insert INSERT PERMISSIVE {authenticated}',
+                  'admin_user_prefs_self_read SELECT PERMISSIVE {authenticated}',
+                  'admin_user_prefs_self_update UPDATE PERMISSIVE {authenticated}'];
+  if v_have is distinct from v_want then
+    raise exception '0044: admin_user_prefs policies are %, expected %', v_have, v_want;
+  end if;
 
-  -- Every policy carries the tenant predicate; the live check is RESTRICTIVE; no policy
-  -- lets anyone delete.
-  if exists (select 1 from pg_policies
-              where schemaname = 'public' and tablename = 'admin_user_prefs'
-                and coalesce(qual, '') || coalesce(with_check, '') not like '%effective_tenant_id%') then
-    raise exception '0044: an admin_user_prefs policy lacks the tenant predicate';
-  end if;
-  if not exists (select 1 from pg_policies
-                  where schemaname = 'public' and tablename = 'admin_user_prefs'
-                    and policyname = 'admin_user_prefs_live' and permissive = 'RESTRICTIVE'
-                    and cmd = 'ALL' and qual like '%live_role%') then
-    raise exception '0044: admin_user_prefs_live is missing, permissive, or lacks the live check';
-  end if;
-  if exists (select 1 from pg_policies
-              where schemaname = 'public' and tablename = 'admin_user_prefs'
-                and permissive = 'PERMISSIVE' and cmd in ('DELETE', 'ALL')) then
-    raise exception '0044: a permissive admin_user_prefs policy allows DELETE';
-  end if;
-  if (select count(*) from pg_policies
-       where schemaname = 'public' and tablename = 'admin_user_prefs'
-         and permissive = 'PERMISSIVE'
-         and coalesce(qual, '') || coalesce(with_check, '') like '%auth.uid()%') <> 3 then
-    raise exception '0044: the three permissive admin_user_prefs policies must each be self only';
+  -- ---- Each side of each policy, read separately: the three permissive ones are the
+  -- tenant and the caller's own row in USING and in WITH CHECK alike (an UPDATE whose
+  -- WITH CHECK dropped auth.uid() fails), and the restrictive one is the tenant and the
+  -- live check on both sides. A side a command does not have must be absent.
+  select string_agg(format('%s %s', x.policy, x.side), ', ' order by x.policy, x.side) into v_bad
+    from (values ('admin_user_prefs_self_read', 'using', v_self),
+                 ('admin_user_prefs_self_read', 'with check', null),
+                 ('admin_user_prefs_self_insert', 'using', null),
+                 ('admin_user_prefs_self_insert', 'with check', v_self),
+                 ('admin_user_prefs_self_update', 'using', v_self),
+                 ('admin_user_prefs_self_update', 'with check', v_self),
+                 ('admin_user_prefs_live', 'using', v_live),
+                 ('admin_user_prefs_live', 'with check', v_live)) as x(policy, side, pattern)
+    left join pg_policies pol
+      on pol.schemaname = 'public' and pol.tablename = 'admin_user_prefs'
+     and pol.policyname = x.policy
+    cross join lateral (select case x.side when 'using' then pol.qual
+                                           else pol.with_check end as expr) e
+   where pol.policyname is null
+      or (x.pattern is null and e.expr is not null)
+      or (x.pattern is not null and coalesce(e.expr, '') !~ x.pattern);
+  if v_bad is not null then
+    raise exception '0044: admin_user_prefs policy expressions are not as stated: %', v_bad;
   end if;
 
   -- The functions: definers with an empty search path, callable by staff tokens and by
