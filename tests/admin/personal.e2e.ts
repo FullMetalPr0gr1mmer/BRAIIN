@@ -6,7 +6,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
 // The personal layer (Admin v2 F8) in a real browser, signed in: the bell and the account
 // chip open their drawers with JS and are plain links without it; axe finds nothing with
 // either drawer open (AV-05); Escape closes a drawer and focus returns to its trigger; a
-// rename shows in the sidebar chip at once, from the drawer and from the no-JS page alike.
+// rename shows in the sidebar chip at once, from the drawer and from the no-JS page alike;
+// a bell row carrying a visitor's long unbroken name wraps instead of widening the drawer.
 // The pages themselves are in the per-role sweep (routes.ts EXTRA_LINKS).
 //
 // Not here, on purpose: Sign out and the password change. Each role's session is shared by
@@ -76,6 +77,53 @@ for (const role of ['admin', 'seo'] as const) {
     });
   });
 }
+
+test.describe('what visitors typed', () => {
+  test.use({ storageState: authFile('admin') });
+
+  test('a long unbroken name in a bell row wraps: the drawer never scrolls sideways', async ({
+    page,
+  }) => {
+    // A lead's name and an applicant's role come from public forms, up to 120 characters,
+    // and nothing stops one from being a single word. The list is the server's answer,
+    // replaced here so the row does not depend on what the local database holds.
+    const word = 'W'.repeat(120);
+    const at = new Date().toISOString();
+    await page.route('**/api/admin/notifications', (route) =>
+      route.fulfill({
+        json: {
+          ok: true,
+          data: {
+            items: [
+              {
+                id: 'leads:e2e-long-name',
+                kind: 'leads',
+                icon: 'inbox',
+                text: `New inquiry from ${word}`,
+                detail: word,
+                at,
+                href: null,
+                unread: true,
+              },
+            ],
+            unread: 1,
+            seenAt: null,
+            failed: [],
+            asOf: at,
+          },
+        },
+      }),
+    );
+    await ready(page);
+    await page.locator('.admin-topbar [data-open="notifications"]').click();
+    const drawer = page.getByRole('dialog', { name: 'Notifications' });
+    await expect(drawer.locator('.li__t')).toContainText(word);
+    const sideways = await drawer
+      .locator('.drw__b')
+      .evaluate((body) => body.scrollWidth - body.clientWidth);
+    expect(sideways).toBeLessThanOrEqual(1);
+  });
+});
 
 test.describe('renaming yourself', () => {
   test.use({ storageState: authFile('developer') });

@@ -1958,15 +1958,19 @@ a.li:hover {
   display: grid;
 }
 
+/* A row's text can be a visitor's (a lead's name, the role an applicant typed), and one
+   long word would set the grid track's width and push the drawer sideways: it wraps. */
 .li__t {
   font-size: 13.5px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .li__s {
   margin-top: 2px;
   font-size: 12px;
   color: var(--ad-dim);
+  overflow-wrap: anywhere;
 }
 
 /* The bell: a read row is lighter. "New" on an unread one says it in words. */

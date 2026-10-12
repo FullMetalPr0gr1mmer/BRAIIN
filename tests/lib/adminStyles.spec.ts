@@ -187,6 +187,19 @@ describe('admin.css keeps the design system’s hooks', () => {
   });
 });
 
+describe('admin.css: a list row wraps text it does not control (Admin v2 F8)', () => {
+  // The bell's rows carry what visitors typed: a lead's name and an applicant's role, up
+  // to 120 characters each, possibly one unbroken word. tests/admin/personal.e2e.ts proves
+  // the drawer then has no sideways scroll; this keeps the rule that makes it so.
+  it('lets the title and the second line break anywhere', () => {
+    for (const hook of ['li__t', 'li__s']) {
+      expect(ADMIN, hook).toMatch(
+        new RegExp(`(?:^|\\n)\\.${hook}\\s*\\{[^}]*overflow-wrap:\\s*anywhere`),
+      );
+    }
+  });
+});
+
 describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
   // tests/admin/shell.e2e.ts proves it in a browser; this keeps the two halves together.
   it('pads the scroll port by the height the layout measures', () => {
