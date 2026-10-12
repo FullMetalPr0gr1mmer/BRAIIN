@@ -29,7 +29,10 @@
 --   • public.update_my_profile(p_tenant, p_display_name): a person renames themselves.
 --     profiles is Admin-write only (profiles_admin_write, 0037's column grant), so this is
 --     a SECURITY DEFINER that writes exactly one column of exactly the caller's row, after
---     its own live check; it cannot change a role, is_active, a lock or a tenant.
+--     its own live check; it cannot change a role, is_active, a lock or a tenant. It
+--     applies the Worker's name rules itself (trim, length, no control or format
+--     character) and writes the audit row in the same transaction, so a call that skips
+--     the Worker is held to the same rules and audited just the same.
 --   • public.admin_environment(p_tenant): which environment the shell's pill names, from
 --     app.deployment (0016): production → 'production', staging → 'staging', development →
 --     'local'. NULL when the database is unmarked, so the pill never names an environment
@@ -187,25 +190,46 @@ create or replace function public.crm_people(p_tenant uuid)
 $$;
 
 -- ---- 3. Renaming yourself -----------------------------------------------------------------
--- One column of one row: the caller's display name. Trimmed; empty clears it (the shell
--- then shows the e-mail); at most 80 characters, no control characters. 42501 for a
--- caller who is not live in the tenant they name, 22023 for a name it refuses.
+-- One column of one row: the caller's display name, under the rules the Worker's schema
+-- applies (DisplayNameSchema, packages/schemas/adminPrefs.ts), so a call that skips the
+-- Worker meets the same ones:
+--   • trimmed of exactly what JavaScript's String.prototype.trim() removes (tab, LF, VT,
+--     FF, CR, space, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F,
+--     U+3000, U+FEFF); empty clears it (the shell then shows the e-mail);
+--   • at most 80 characters (counted in code points, so never stricter than the schema's
+--     UTF-16 count);
+--   • no Unicode control or format character (general categories Cc and Cf, as Unicode 15
+--     to 17 list them; NUL cannot reach a text value). A name is shown beside every edit
+--     and in every people list, so a bidi override (U+202E), an isolate (U+2066) or a
+--     zero-width character (U+200B) must not reorder or hide the text around it.
+-- tests/lib/personalLayer.spec.ts holds the trim set and the refused class equal to the
+-- schema's `.trim()` and /[\p{Cc}\p{Cf}]/u, code point by code point.
+-- The rename is audited HERE, in the same transaction (profile.update, the field's name
+-- only, never the name), so every path that reaches this function is audited and a rename
+-- whose audit row cannot be written does not happen. 42501 for a caller who is not live in
+-- the tenant they name, 22023 for a name it refuses.
 create or replace function public.update_my_profile(p_tenant uuid, p_display_name text)
   returns text
   language plpgsql volatile security definer set search_path = '' as $$
 declare
   v_uid uuid := auth.uid();
-  v_name text := nullif(btrim(coalesce(p_display_name, '')), '');
+  v_role text := app.live_role();
+  v_name text;
 begin
   if v_uid is null
-     or (select app.live_role()) is null
+     or v_role is null
      or p_tenant is distinct from app.effective_tenant_id() then
     raise exception using errcode = '42501',
       message = 'update_my_profile: the caller is not a live member of this tenant';
   end if;
-  if v_name is not null and (char_length(v_name) > 80 or v_name ~ '[[:cntrl:]]') then
+  v_name := nullif(btrim(coalesce(p_display_name, ''),
+    E'\u0009\u000A\u000B\u000C\u000D\u0020\u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF'),
+    '');
+  if v_name is not null and (
+       char_length(v_name) > 80
+       or v_name ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]') then
     raise exception using errcode = '22023',
-      message = 'update_my_profile: a display name is at most 80 characters, with no control characters';
+      message = 'update_my_profile: a display name is at most 80 characters, with no control or format characters';
   end if;
   update public.profiles p
      set display_name = v_name
@@ -213,6 +237,10 @@ begin
   if not found then
     raise exception using errcode = '42501', message = 'update_my_profile: no profile to update';
   end if;
+  -- Hash-chained by audit_log's own trigger (0031), as every insert is.
+  insert into public.audit_log (tenant_id, actor_id, actor_role, action, entity_type, entity_id, detail)
+  values (p_tenant, v_uid, v_role, 'profile.update', 'profile', v_uid::text,
+          jsonb_build_object('fields', jsonb_build_array('display_name')));
   return v_name;
 end $$;
 

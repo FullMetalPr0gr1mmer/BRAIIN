@@ -47,7 +47,9 @@ export function accountViewFor(auth: AuthContext, displayName: string | null): A
 /**
  * Renames the caller through `update_my_profile()` (0044): a definer that writes one
  * column of the caller's own row after its own live check, because `profiles` is Admin
- * write only. Returns the stored name (null when cleared). The caller audits.
+ * write only. It applies the schema's name rules again and writes the `profile.update`
+ * audit row in the same transaction, so no caller audits a rename itself. Returns the
+ * stored name (null when cleared).
  */
 export async function updateMyDisplayName(
   sb: SupabaseClient,

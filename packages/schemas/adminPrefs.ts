@@ -61,11 +61,14 @@ export const DISPLAY_NAME_MAX = 80;
 
 // Any Unicode control or format character (bidi overrides included): a name is shown
 // beside every edit in the activity log, so it must not reorder or hide the text around it.
-const CONTROL = /[\p{Cc}\p{Cf}]/u;
+export const DISPLAY_NAME_REFUSED = /[\p{Cc}\p{Cf}]/u;
 
 /**
  * PATCH /api/admin/me: the caller's display name. Trimmed; empty clears it (the shell
- * then shows the e-mail). The database checks the same rules (update_my_profile, 0044).
+ * then shows the e-mail). update_my_profile (0044) applies the same rules again for any
+ * caller: it trims what `.trim()` trims and refuses what DISPLAY_NAME_REFUSED refuses
+ * (tests/lib/personalLayer.spec.ts compares the two code point by code point), and it
+ * counts the 80 in code points, so it never refuses a name this schema accepts.
  */
 export const DisplayNameSchema = z
   .object({
@@ -73,7 +76,10 @@ export const DisplayNameSchema = z
       .string()
       .trim()
       .max(DISPLAY_NAME_MAX, `Use ${DISPLAY_NAME_MAX} characters or fewer.`)
-      .refine((value) => !CONTROL.test(value), 'Use letters, numbers and spaces only.'),
+      .refine(
+        (value) => !DISPLAY_NAME_REFUSED.test(value),
+        'Use letters, numbers and spaces only.',
+      ),
   })
   .strict();
 export type DisplayNameInput = z.infer<typeof DisplayNameSchema>;

@@ -11,7 +11,6 @@ import {
 import { can } from '@/lib/authz/matrix';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { ValidationError } from '@/lib/admin/errors';
-import { writeAudit } from '@/lib/admin/audit';
 import { clientIp } from '@/lib/http/maintenance';
 import { DisplayNameSchema, PasswordChangeSchema } from '@schemas/adminPrefs';
 
@@ -59,13 +58,8 @@ if (Astro.request.method === 'POST' && session && sb) {
       };
     } else {
       try {
+        // Audited by update_my_profile() itself, in the same transaction (0044).
         await updateMyDisplayName(sb, session, parsed.data.display_name);
-        await writeAudit(sb, session, {
-          action: 'profile.update',
-          entityType: 'profile',
-          entityId: session.userId,
-          detail: { fields: ['display_name'] },
-        });
         return Astro.redirect('/admin/account?saved=name', 303);
       } catch (err) {
         submittedName = parsed.data.display_name;

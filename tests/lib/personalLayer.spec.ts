@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -7,6 +9,7 @@ import { AuthorizationError } from '@/lib/authz/errors';
 import { CAP_LABELS, ROLE_LABELS, capLinesFor } from '@/lib/authz/capLabels';
 import {
   AdminPrefsPutSchema,
+  DISPLAY_NAME_REFUSED,
   DisplayNameSchema,
   NotificationPrefsSchema,
   PasswordChangeSchema,
@@ -297,7 +300,7 @@ describe('the account schemas', () => {
   });
 
   it('a display name cannot carry a control or bidi formatting character', () => {
-    for (const bad of ['a\tb', 'a\u0000b', 'evil‮txt', 'a‏b']) {
+    for (const bad of ['a\tb', 'a\u0000b', 'evil\u202Etxt', 'a\u200Fb']) {
       expect(DisplayNameSchema.safeParse({ display_name: bad }).success, JSON.stringify(bad)).toBe(
         false,
       );
@@ -369,30 +372,93 @@ describe('renaming yourself', () => {
     ).rejects.toBeInstanceOf(AuthorizationError);
   });
 
-  it('PATCH /api/admin/me audits which field changed, never the name itself', async () => {
+  it('PATCH /api/admin/me leaves the audit row to the database: it writes no second one', async () => {
     const { PATCH } = (await import('@/pages/api/admin/me/index')) as { PATCH: APIRoute };
     const request = new Request('https://admin.example.test/api/admin/me', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ display_name: 'Secret Agent Name' }),
     });
+    const { sb, rpc } = rpcDb({ data: 'Secret Agent Name' });
     const res = await PATCH({
-      locals: { session: auth('developer'), supabase: rpcDb({ data: 'Secret Agent Name' }).sb },
+      locals: { session: auth('developer'), supabase: sb },
       request,
       url: new URL(request.url),
       params: {},
     } as unknown as Parameters<APIRoute>[0]);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, data: { display_name: 'Secret Agent Name' } });
-    expect(audits).toEqual([
-      {
-        action: 'profile.update',
-        entityType: 'profile',
-        entityId: USER,
-        detail: { fields: ['display_name'] },
-      },
-    ]);
-    expect(JSON.stringify(audits)).not.toContain('Secret Agent');
+    // update_my_profile writes `profile.update` (the field's name only) in its own
+    // transaction (0044, pgTAP personal_layer.test.sql); the route adds nothing.
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(audits).toEqual([]);
+  });
+});
+
+// ── The database's name rules are the schema's ───────────────────────────────────
+
+describe("update_my_profile applies the schema's name rules (0044)", () => {
+  const sql = readFileSync(
+    join(process.cwd(), 'supabase/migrations/0044_personal_layer.sql'),
+    'utf8',
+  );
+  const definition = sql.slice(
+    sql.lastIndexOf('create or replace function public.update_my_profile'),
+  );
+  const hex = (cp: number) => cp.toString(16).toUpperCase().padStart(4, '0');
+  const isSurrogate = (cp: number) => cp >= 0xd800 && cp <= 0xdfff;
+
+  /** `\uXXXX` / `\UXXXXXXXX` escapes and ranges between them, every character accounted for. */
+  function codePointRanges(source: string): [number, number][] {
+    const escape = String.raw`\\u([0-9A-F]{4})|\\U([0-9A-F]{8})`;
+    const item = new RegExp(`(?:${escape})(?:-(?:${escape}))?`, 'gy');
+    const ranges: [number, number][] = [];
+    let consumed = 0;
+    for (const m of source.matchAll(item)) {
+      const from = parseInt(m[1] ?? m[2] ?? '', 16);
+      const end = m[3] ?? m[4];
+      const to = end ? parseInt(end, 16) : from;
+      ranges.push([from, to]);
+      consumed += m[0].length;
+    }
+    expect(consumed, 'every character of the SQL set is an escape or a range').toBe(source.length);
+    return ranges;
+  }
+  const within = (ranges: [number, number][], cp: number) =>
+    ranges.some(([from, to]) => cp >= from && cp <= to);
+
+  it('trims exactly what JavaScript trim() trims', () => {
+    const source = /btrim\(coalesce\(p_display_name, ''\),\s*E'([^']*)'\)/.exec(definition)?.[1];
+    expect(source, 'the trim set in update_my_profile').toBeTruthy();
+    const trimmed = codePointRanges(source!);
+    const mismatches: string[] = [];
+    for (let cp = 0; cp <= 0x10ffff; cp += 1) {
+      if (isSurrogate(cp)) continue;
+      const js = String.fromCodePoint(cp).trim() === '';
+      if (js !== within(trimmed, cp)) mismatches.push(hex(cp));
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it('refuses exactly the control and format characters the schema refuses', () => {
+    const source = /v_name ~ '\[([^'\]]*)\]'/.exec(definition)?.[1];
+    expect(source, 'the refused class in update_my_profile').toBeTruthy();
+    const refused = codePointRanges(source!);
+    const mismatches: string[] = [];
+    // From 1: NUL cannot reach a text value (Postgres refuses it), so the class omits it.
+    for (let cp = 1; cp <= 0x10ffff; cp += 1) {
+      if (isSurrogate(cp)) continue;
+      const js = DISPLAY_NAME_REFUSED.test(String.fromCodePoint(cp));
+      if (js !== within(refused, cp)) mismatches.push(hex(cp));
+    }
+    // A new Unicode version that adds a format character fails here: add it to the class.
+    expect(mismatches).toEqual([]);
+  });
+
+  it('writes its own audit row, with the field name and never the name', () => {
+    expect(definition).toMatch(
+      /insert into public\.audit_log \(tenant_id, actor_id, actor_role, action, entity_type, entity_id, detail\)\s*values \(p_tenant, v_uid, v_role, 'profile\.update', 'profile', v_uid::text,\s*jsonb_build_object\('fields', jsonb_build_array\('display_name'\)\)\);/,
+    );
   });
 });
 

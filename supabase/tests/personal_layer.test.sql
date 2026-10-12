@@ -12,11 +12,13 @@
 --   • staff_directory: every active member of the caller's tenant (locked people too),
 --     names and roles only, never an e-mail; nothing for a stale token or for a tenant the
 --     caller does not belong to. crm_people, restated over it, answers what 0036 did.
---   • update_my_profile changes the caller's display name and nothing else.
+--   • update_my_profile changes the caller's display name and nothing else, under the
+--     Worker's rules (control and format characters refused, JavaScript's trim), and
+--     writes its own audit row: a call that skips the Worker is held and audited the same.
 --   • admin_environment names the marker's environment to live members, NULL otherwise.
 
 begin;
-select plan(90);
+select plan(97);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -263,6 +265,20 @@ select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000
   '22023', null, 'a name over 80 characters is refused');
 select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', E'a\tb') $$,
   '22023', null, 'a name with a control character is refused');
+-- Format characters (Cf), which [[:cntrl:]] never matched: the Worker's schema refuses them,
+-- and so does a direct call now.
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', E'nimda\u202Etxt') $$,
+  '22023', null, 'a bidi override (U+202E) is refused');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', E'Am\u200Bal') $$,
+  '22023', null, 'a zero-width space (U+200B) is refused');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', E'a\u2066b\u2069') $$,
+  '22023', null, 'a bidi isolate (U+2066) is refused');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', E'a\U000E0041b') $$,
+  '22023', null, 'a tag character beyond the BMP (U+E0041) is refused');
+-- Trimmed of what JavaScript's trim() removes, not only spaces: an ideographic space, a
+-- no-break space, a line separator and a byte-order mark at the ends.
+select is(public.update_my_profile('44000000-0000-0000-0000-000000000001', E'\u3000\u00A0Cyrus Q\u2028\uFEFF'),
+  'Cyrus Q', 'trimmed of what the Worker trims');
 select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-0000000000ff', 'x') $$,
   '42501', null, 'naming another tenant is refused');
 select is(public.update_my_profile('44000000-0000-0000-0000-000000000001', '   '), null::text,
@@ -273,6 +289,17 @@ select is((select string_agg(display_name, ',' order by display_name) from publi
             where id in ('44000000-0000-0000-0000-0000000000a1', '44000000-0000-0000-0000-0000000000e1',
                          '44000000-0000-0000-0000-0000000000d1', '44000000-0000-0000-0000-0000000000f1')),
   'Amal,Dana,Eli,Faris', 'nobody else''s name changed');
+-- The rename audits itself: one row per rename that happened (three: 'Cyrus Q', the trim,
+-- the clear), none for the refused ones, the field's name only, as the caller.
+select is((select count(*)::int from public.audit_log
+            where actor_id = '44000000-0000-0000-0000-0000000000c1' and action = 'profile.update'),
+  3, 'each rename that happened wrote one audit row; a refused one wrote none');
+select is((select entity_type || '/' || entity_id || '/' || actor_role || '/' || tenant_id::text || '/' || detail::text
+             from public.audit_log
+            where actor_id = '44000000-0000-0000-0000-0000000000c1' and action = 'profile.update'
+            order by id desc limit 1),
+  'profile/44000000-0000-0000-0000-0000000000c1/content_creator/44000000-0000-0000-0000-000000000001/{"fields": ["display_name"]}',
+  'the row is the caller''s, about their own profile, in their tenant, naming the field and never the name');
 set local role authenticated;
 
 select _as('44000000-0000-0000-0000-0000000000e1', 'seo', '44000000-0000-0000-0000-000000000001');
