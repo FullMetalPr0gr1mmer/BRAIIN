@@ -26,7 +26,7 @@ Each slice's file under [as-built/](as-built/) has the detail.
 
 ## Reserved
 
-Wave 1's migrations are reserved below; the next free number after them is **0044**. Before a
+Wave 1's migrations are reserved below; the next free number after them is **0045**. Before a
 wave's slices branch, each migration the wave plans gets a row here, numbered in the wave's
 planned merge order. The slice's own PR moves its row to "Applied" once production has applied the
 migration, before the PR merges (Pushing to production, step 5), so the row is true when the
