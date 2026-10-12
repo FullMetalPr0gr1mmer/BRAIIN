@@ -39,6 +39,7 @@ export const CAPABILITIES = [
   'leads.manage',
   'leads.pii',
   'export.csv',
+  'crm.erase',
   'applications.manage',
   'applications.pii',
   'analytics.read',
@@ -81,6 +82,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': F,
     'leads.pii': F,
     'export.csv': F,
+    'crm.erase': F,
     'applications.manage': F,
     'applications.pii': F,
     'analytics.read': F,
@@ -117,6 +119,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': N,
     'leads.pii': N,
     'export.csv': N,
+    'crm.erase': N,
     'applications.manage': N,
     'applications.pii': N,
     'analytics.read': F,
@@ -153,6 +156,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': N,
     'leads.pii': N,
     'export.csv': N,
+    'crm.erase': N,
     'applications.manage': N,
     'applications.pii': N,
     'analytics.read': F,
@@ -168,7 +172,8 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
   // Developer — technical role: settings/identity/maintenance/theme, logs/audit/
   // site-health, leads management + PII + backup export. NO content authoring, NO
   // publish/schedule, NO archive/delete — and NO job applications (Join, owner decision
-  // J6: applicants' CVs and contact details are Admin-only, unlike leads).
+  // J6: applicants' CVs and contact details are Admin-only, unlike leads), and NO erasing
+  // a lead or a person's data (crm.erase is Admin's, Admin v2 C3).
   developer: {
     'users.manage': N,
     'settings.general': F,
@@ -191,6 +196,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': F,
     'leads.pii': F,
     'export.csv': F,
+    'crm.erase': N,
     'applications.manage': N,
     'applications.pii': N,
     'analytics.read': F,
