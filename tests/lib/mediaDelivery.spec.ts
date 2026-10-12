@@ -2,7 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { ImageMetadata } from 'astro';
 import workerdService from '@astrojs/cloudflare/image-service-workerd';
-import { checkImageRequest, ASPECT_TOLERANCE_PX } from '@/lib/http/imageGuard';
+import {
+  checkImageRequest,
+  ASPECT_TOLERANCE_PX,
+  UPLOAD_ASPECT_TOLERANCE_PX,
+} from '@/lib/http/imageGuard';
 import {
   mediaBucketPrefix,
   storageThumbUrl,
@@ -45,9 +49,25 @@ describe('the /_image guard and uploaded images', () => {
       expect(ok({ href: HREF, w: '800', h: '533', f }), f).toBe(false);
     }
     expect(ok({ href: HREF, w: '1200', h: '800', f: 'webp' })).toBe(true);
-    expect(ok({ href: HREF, w: '480', h: String(320 + ASPECT_TOLERANCE_PX), f: 'avif' })).toBe(
-      true,
-    );
+  });
+
+  it("one height per width: Astro's rounding of the exact aspect, not a still's two pixels", () => {
+    // 1200x800: 800 px wide is 533.33 px high; a still would admit 532 to 535.
+    expect(ok({ href: HREF, w: '800', h: '533', f: 'webp' })).toBe(true);
+    for (const h of ['532', '534', String(533 + ASPECT_TOLERANCE_PX)]) {
+      expect(ok({ href: HREF, w: '800', h, f: 'webp' }), h).toBe(false);
+    }
+    // 640x427 at 480 px: 320.25, so 320 only.
+    const quarter = `${PREFIX}${TENANT}/44444444-4444-4444-8444-444444444444_640x427.webp`;
+    expect(ok({ href: quarter, w: '480', h: '320', f: 'avif' })).toBe(true);
+    expect(ok({ href: quarter, w: '480', h: '321', f: 'avif' })).toBe(false);
+    // 1200x798 at 100 px: exactly 66.5. Astro writes 67 (Math.round); 66 is the only other
+    // height within half a pixel, so a float that rounded the other way is still served.
+    const half = `${PREFIX}${TENANT}/55555555-5555-4555-8555-555555555555_1200x798.webp`;
+    expect(ok({ href: half, w: '100', h: '67', f: 'webp' })).toBe(true);
+    expect(ok({ href: half, w: '100', h: '66', f: 'webp' })).toBe(true);
+    expect(ok({ href: half, w: '100', h: '68', f: 'webp' })).toBe(false);
+    expect(UPLOAD_ASPECT_TOLERANCE_PX).toBe(0.5);
   });
 
   it('bounds it by the size in its name: never wider, never another aspect or width', () => {

@@ -27,7 +27,10 @@ import { uploadedImageSize } from '@/lib/media/storageUrl';
 //           never wider than the asset (Astro never upscales; `getSrcSet` caps at it).
 //   - h:    the asset's aspect at that width, within rounding (ASPECT_TOLERANCE_PX):
 //           every <Picture> uses the asset's own aspect (MediaImage passes the real
-//           dimensions; Hero and SiteHeader pass a width only).
+//           dimensions; Hero and SiteHeader pass a width only). An upload reaches only
+//           MediaImage (its real size) and getImage() with a width alone, so Astro rounds
+//           the exact aspect once: its height is within half a pixel of it
+//           (UPLOAD_ASPECT_TOLERANCE_PX), one height per width, not five.
 //   - nothing else.
 // tests/lib/imageGuard.spec.ts holds the widths in components to this list, so adding a
 // new width without adding it here fails CI instead of breaking an image in production.
@@ -76,6 +79,13 @@ export const UPLOAD_TRANSFORM_FORMATS: ReadonlySet<string> = new Set(['avif', 'w
 
 /** Astro derives `h` from rounded target dimensions, so it can drift a pixel or two. */
 export const ASPECT_TOLERANCE_PX = 2;
+
+/**
+ * An upload's `h` is `Math.round(w / (W / H))` on every path that can render one (MediaImage,
+ * and getImage() with a width alone), so it is within half a pixel of the exact aspect. Two
+ * pixels either side would admit five heights at every width, five times the transformations.
+ */
+export const UPLOAD_ASPECT_TOLERANCE_PX = 0.5;
 
 /** The route Astro serves image transforms on (`image.endpoint.route`, the default). */
 export const IMAGE_ENDPOINT_ROUTE = '/_image';
@@ -145,7 +155,8 @@ export function checkImageRequest(
   if (width !== asset.width && !TRANSFORM_WIDTHS.has(width)) return { ok: false, reason: 'width' };
 
   const expected = (width * asset.height) / asset.width;
-  if (Math.abs(height - expected) > ASPECT_TOLERANCE_PX) return { ok: false, reason: 'aspect' };
+  const tolerance = upload ? UPLOAD_ASPECT_TOLERANCE_PX : ASPECT_TOLERANCE_PX;
+  if (Math.abs(height - expected) > tolerance) return { ok: false, reason: 'aspect' };
 
   return { ok: true };
 }
