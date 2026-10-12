@@ -15,7 +15,8 @@ import { PASSWORD_MIN } from '@schemas/adminPrefs';
 // refused current password and the change are audited, and no password reaches an audit
 // row, a log line or a response. Supabase Auth's own endpoint is outside this route: the
 // local stack's half of what closes it is pinned at the end (supabase/config.toml), the
-// hosted half is owner item O-24 (docs/admin-v2/deviations.md).
+// hosted half is owner item O-24 (docs/admin-v2/deviations.md), and the last block holds
+// every record of that residual to what the auth server itself does.
 //
 // The lockout's counting is SQL (0009), stubbed here with its contract, as in
 // tests/authz/login.spec.ts.
@@ -454,4 +455,59 @@ describe('the auth server holds the same line (supabase/config.toml, Admin v2 F8
     // Never SMTP for the admin's route: it re-authenticates, so its session is minutes old.
     expect(tomlTable('auth.email')).toMatch(/^secure_password_change\s*=\s*true\s*$/m);
   });
+});
+
+describe('the O-24 residual is recorded as GoTrue behaves (Admin v2 F8, CLAUDE.md §11)', () => {
+  // A direct `PUT /auth/v1/user` (supabase/auth internal/api/user.go, UserUpdate) calls
+  // user.UpdatePassword, which signs out every other session of the user
+  // (LogoutAllExceptMe), and writes `user_updated_password` to GoTrue's own audit log. The
+  // gap is the app's hash-chained audit_log, not auditing as such, and a takeover signs the
+  // owner's other devices out. Every place the residual is stated says exactly that, so the
+  // remainder the owner is asked to accept (O-24) rests on what the auth server does.
+  const read = (file: string): string => readFileSync(join(process.cwd(), file), 'utf8');
+  // One passage, whitespace and a doc comment's leading `*` folded, so wrapping is moot.
+  function passage(file: string, from: string, to: string): string {
+    const text = read(file);
+    const start = text.indexOf(from);
+    if (start < 0) return '';
+    const end = text.indexOf(to, start + from.length);
+    return text
+      .slice(start, end < 0 ? undefined : end)
+      .replace(/\n\s*\*(?!\*)/g, '\n')
+      .replace(/\s+/g, ' ');
+  }
+  const records: [string, string][] = [
+    ['CLAUDE.md §3', passage('CLAUDE.md', '- [ ] Login lockout:', '\n')],
+    ['README O-24', passage('docs/admin-v2/README.md', '- **O-24**', '\n')],
+    [
+      'deviations.md',
+      passage(
+        'docs/admin-v2/deviations.md',
+        '- **A password changed at Supabase Auth itself**',
+        '*Owner:* Kareem (O-24)',
+      ),
+    ],
+    [
+      'as-built F8',
+      passage('docs/admin-v2/as-built/F8.md', '## Residual risk: a password changed', '\n## '),
+    ],
+    ['launch runbook §2a', passage('docs/launch-runbook.md', '### 2a.', '\n## ')],
+    ['account.ts', passage('src/lib/admin/account.ts', 'WHAT THIS DOES NOT COVER', '*/')],
+  ];
+
+  it.each(records)('%s names what GoTrue itself does on a direct change', (_where, text) => {
+    expect(text).not.toBe('');
+    expect(text).toContain('user_updated_password');
+    expect(text).toMatch(/hash-chained `(public\.)?audit_log`/);
+    expect(text).toMatch(/GoTrue (then )?signs out every other session of that user/);
+  });
+
+  it.each(records)(
+    '%s never says the direct change is unaudited or spares other sessions',
+    (_where, text) => {
+      expect(text).not.toMatch(
+        /no audit row|unaudited|audits no direct call|no other session signed out/i,
+      );
+    },
+  );
 });

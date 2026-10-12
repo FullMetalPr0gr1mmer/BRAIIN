@@ -83,8 +83,11 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     key ship to every browser), and with a session's access token alone (read from an
     unlocked machine's devtools, or a copied `__Host-braiin-auth` cookie) it sets a new
     password: no current password (GoTrue's default), no lockout count, GoTrue's own minimum
-    length, no audit row, no other session signed out. The real owner is then locked out of
-    their account. It predates F8, which built the checked route and recorded this.
+    length, and no row in the app's hash-chained `public.audit_log` (GoTrue records the
+    change only in its own auth audit log, as `user_updated_password`). GoTrue then signs out
+    every other session of that user, so the real owner's other devices are signed out too:
+    only the session that made the change stays signed in, and the real owner is locked out
+    of their account. It predates F8, which built the checked route and recorded this.
   - *What the code does.* The route sends `current_password` with the update and counts
     GoTrue's `current_password_invalid` as a wrong try, so it keeps working when the setting
     below is on. The local stack (`supabase/config.toml`, pinned by
@@ -97,10 +100,20 @@ owner, an expiry and a close condition (CLAUDE.md §11).
   - *What closes it* (launch runbook §2a, staging and production): require the current
     password (`security_update_password_require_current_password`), minimum length 10,
     Secure password change on. A direct call then needs the current password too. What
-    remains is GoTrue's to own: it writes no audit row for a direct call and counts no
-    lockout, so a stolen token can still be used to guess the current password there, outside
-    the Worker's lockout; O-24 asks the owner to accept that remainder. Without the first
+    remains is GoTrue's to own: a direct call counts no lockout, and a direct change is
+    audited only in GoTrue's own log (`user_updated_password`), never in `public.audit_log`,
+    so a stolen token can still be used to guess the current password there, outside the
+    Worker's lockout; O-24 asks the owner to accept that remainder. Without the first
     setting, a token from a session younger than 24 hours still changes the password.
+  - *A compensating control (not built; the owner's choice).* Every change, the admin's
+    included, reaches GoTrue, so every change writes `user_updated_password` to GoTrue's own
+    log (the project's Auth logs, and `auth.audit_log_entries` unless the project has turned
+    off writing auth audit logs to the database). A change through the admin also writes
+    `auth.password_change` to `public.audit_log` for the same user a moment later. A
+    `user_updated_password` with no matching `auth.password_change` is a change made outside
+    the admin, and an alert on it shows the takeover above. A recovery or invite link, once
+    set up (O-2, O-22), also sets a password at the auth server, so such an alert must
+    allow for those.
   - *Owner:* Kareem (O-24). *Expiry:* F8's production push, at the latest 2026-11-30.
     *Closes when* the Management API's auth config on both projects reads
     `security_update_password_require_current_password: true`, `password_min_length: 10`

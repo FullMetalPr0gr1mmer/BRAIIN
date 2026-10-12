@@ -126,6 +126,16 @@ Verify: `GET https://api.supabase.com/v1/projects/<ref>/config/auth` shows the t
 (`true`, `10`, `true`). Local stacks set 2 and 3 in `supabase/config.toml`; 1 has no CLI
 key. Until all three are on, the gap stays open as `docs/admin-v2/deviations.md` records it.
 
+What stays open after them (O-24 asks the owner to accept it): a direct call counts no
+lockout, and a direct change is audited only in GoTrue's own log, as
+`user_updated_password` (the project's Auth logs, and `auth.audit_log_entries` unless the
+project stops writing auth audit logs to the database), never in the app's hash-chained
+`audit_log`. GoTrue signs out every other session of that user on a change, so a takeover
+signs the owner's own devices out. Optional, not built: alert on a `user_updated_password`
+with no `auth.password_change` row in `public.audit_log` for the same user a moment later
+(every change through the admin writes both); a recovery or invite link, once set up (O-2,
+O-22), is the expected exception.
+
 ## 3. Create and promote the first admin  ⛔ blocker
 
 `users.manage` is Admin-only, so there is no in-product path to the first admin.

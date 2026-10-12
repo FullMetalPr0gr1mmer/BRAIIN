@@ -146,10 +146,12 @@ function logAuthFailure(step: 're-authentication' | 'update', error: AuthErrorLi
  *
  * WHAT THIS DOES NOT COVER. These checks are the Worker's. Supabase Auth's own
  * `PUT /auth/v1/user` is public (the project URL and the anon key ship to browsers), and
- * with the session's access token alone it changes the password with no lockout count
- * and no audit row, and with no current password unless the project requires one
- * (GoTrue's `security_update_password_require_current_password`, which the local stack
- * cannot set). That residual and the owner's action that closes it (O-24: require the
+ * with the session's access token alone it changes the password with no lockout count,
+ * no row in the app's hash-chained `audit_log` (GoTrue records the change only in its own
+ * auth audit log, as `user_updated_password`), and no current password unless the project
+ * requires one (GoTrue's `security_update_password_require_current_password`, which the
+ * local stack cannot set). GoTrue then signs out every other session of that user, so a
+ * stolen token keeps the account and the owner's own devices are signed out. That residual and the owner's action that closes it (O-24: require the
  * current password, a minimum length of 10, Secure password change) are recorded in
  * docs/admin-v2/deviations.md and the launch runbook §2a. Sending `current_password`
  * here is what keeps this route working once the setting is on: the fresh session makes
