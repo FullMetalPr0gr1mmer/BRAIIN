@@ -3,14 +3,19 @@ import type { Locale } from '@schemas/primitives';
 import type { PublicMediaRow } from '@schemas/content';
 import { VideoClipSchema, type VideoClip } from '@schemas/media';
 import { staticImage } from './static';
+import { uploadedImage } from './storageUrl';
 
 // Public media rows (packages/schemas/content.ts PublicMediaRowSchema) → what a component
 // renders. One place decides which providers can reach a page:
 //   static     the build-time registry (src/lib/media/static.ts) — dimensions come from
 //              the file itself, never from the row
-//   cf_images  UI v2 PR5 (editor uploads) adds it, with image.remotePatterns pinned to our
-//              account hash; until then it resolves to null
-//   anything else (a legacy external URL, a Stream row used as an image) → null
+//   storage    an image an editor uploaded (Admin v2 U3, 0045): the WebP master in this
+//              build's public `media` bucket, as image metadata (storageUrl.ts
+//              `uploadedImage`), so <Picture> renders it through same-origin `/_image`
+//              like a still; `image.remotePatterns` names exactly that bucket path
+//              (scripts/media-remote-patterns.mjs), and the `/_image` guard its keys
+//   anything else (a legacy external URL, a Stream row used as an image, `cf_images`,
+//   which nothing writes) → null
 // A null image is not rendered, so a bad row degrades to a missing picture, never to an
 // arbitrary URL on the page.
 
@@ -25,8 +30,10 @@ export interface ImageRef {
 
 export function imageRef(row: PublicMediaRow | null | undefined): ImageRef | null {
   if (!row || row.kind !== 'image') return null;
-  if (row.provider !== 'static') return null;
-  const src = staticImage(row.storage_path);
+  let src: ImageMetadata | null;
+  if (row.provider === 'static') src = staticImage(row.storage_path);
+  else if (row.provider === 'storage') src = uploadedImage(row.storage_path);
+  else return null;
   if (!src) return null;
   return {
     id: row.id,

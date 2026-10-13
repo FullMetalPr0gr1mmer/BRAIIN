@@ -56,7 +56,8 @@ export const PUBLIC_MEDIA_COLUMNS = 'id,kind,provider,storage_path,width,height,
 export const PublicMediaRowSchema = z.object({
   id: z.string().uuid(),
   kind: z.string(),
-  provider: z.enum(['external', 'static', 'cf_images', 'stream']),
+  // `storage` (0045): an uploaded image, rendered through `/_image` (src/lib/media/resolve.ts).
+  provider: z.enum(['external', 'static', 'cf_images', 'stream', 'storage']),
   storage_path: z.string(),
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),

@@ -10,7 +10,7 @@ import {
 } from '@/lib/http/securityHeaders';
 import { getMaintenanceState, clientIp, maintenanceResponse } from '@/lib/http/maintenance';
 import { getRedirectMap, lookupRedirect, redirectResponse } from '@/lib/http/redirects';
-import { checkImageRequest, imageGuardResponse } from '@/lib/http/imageGuard';
+import { checkImageRequest, imageGuardResponse, isImageEndpoint } from '@/lib/http/imageGuard';
 import {
   isSameOrigin,
   csrfTokenMatches,
@@ -100,6 +100,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // it every 60s; if it 503s the moment maintenance is switched on, planned maintenance
   // pages the on-call — training everyone to ignore the alert that matters.
   const isHealth = url.pathname === '/healthz';
+  // By the route Astro matched, not by spelling: `/_image/`, `/%5Fimage` and `/_imag%65/`
+  // reach the same endpoint (src/lib/http/imageGuard.ts `isImageEndpoint`).
+  const isImage = isImageEndpoint(context.routePattern, url.pathname);
   const isPrivate = isAdmin || isAdminApi;
 
   // The nonce is minted FIRST, before any early return. Previously it was generated
@@ -142,9 +145,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return out;
   };
 
-  // 1) Maintenance pre-cache check (before edge-cache lookup). /admin, /api and
-  //    /healthz exempt.
-  if (!isAdmin && !isApi && !isHealth) {
+  // 1) Maintenance pre-cache check (before edge-cache lookup). /admin, /api, /healthz and
+  //    the image endpoint exempt. `/_image` is not a page: it answers only the transforms
+  //    the guard below admits, and its stills are as public as the `/_astro/*` files the
+  //    asset layer serves without the Worker during maintenance. Gating it 503'd the admin's
+  //    own thumbnails of uploads for every editor off the allowlist.
+  if (!isAdmin && !isApi && !isHealth && !isImage) {
     const m = await getMaintenanceState(env);
     if (m.active) {
       const ip = clientIp(request);
@@ -158,8 +164,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // 1b) Image transforms answer only the URLs our own markup emits. Every other
   //     combination of width, height and format would be a new "unique transformation"
-  //     against the Images free-plan quota (src/lib/http/imageGuard.ts).
-  if (url.pathname === '/_image' && !checkImageRequest(url.searchParams).ok) {
+  //     against the Images free-plan quota (src/lib/http/imageGuard.ts). The endpoint runs
+  //     the same check itself (src/lib/http/imageEndpoint.ts); this one answers first.
+  if (isImage && !checkImageRequest(url.searchParams).ok) {
     return secured(imageGuardResponse());
   }
 
