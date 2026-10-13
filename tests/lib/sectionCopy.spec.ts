@@ -33,7 +33,8 @@ function bearsText(s: Zod): boolean {
   const u = unwrap(s);
   if (u === TEXT) return true;
   if (u instanceof z.ZodArray) return bearsText(u.element as Zod);
-  if (u instanceof z.ZodObject) return Object.values(u.shape as Record<string, Zod>).some(bearsText);
+  if (u instanceof z.ZodObject)
+    return Object.values(u.shape as Record<string, Zod>).some(bearsText);
   return false;
 }
 
