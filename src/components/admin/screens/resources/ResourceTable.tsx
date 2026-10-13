@@ -1,11 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
+import Chips from '@/components/admin/kit/Chips';
+import DataTable, { type DataColumn } from '@/components/admin/kit/DataTable';
+import Icon from '@/components/admin/kit/Icon';
+import StatusBadge from '@/components/admin/kit/StatusBadge';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
+import { PAGE_SIZE } from '@/lib/admin/pager';
+import { formatDate } from '@/lib/admin/relTime';
 import { toast } from '@/lib/admin/toast';
 import { uiFor, type ColumnDef, type SyncActionDef } from '@/lib/admin/uiSchema';
 
 // The list view for every CRUD resource. Reads its shape from RESOURCE_UI, so adding an
 // entity is a config entry rather than a component.
+//
+// Since Admin v2 F4b it is drawn by the kit's DataTable (ui.md AV-07), its props, state and
+// requests unchanged: the first column's text is a real link to the edit screen, stretched
+// over the row; Move up, Move down and Delete are the row's actions (shown on hover and
+// whenever focus is in the row); the status filter is chips; the range and the numbered
+// pages sit under the table. Dates are the studio's (Asia/Riyadh), so the server's HTML and
+// the hydrated render print the same day.
 //
 // Note what the delete button does NOT do: it never checks the caller's role to decide
 // whether to render. The server answers `content.archiveDelete` (Admin-only), and a
@@ -31,7 +44,16 @@ export interface ResourceTableProps {
   filter?: string;
 }
 
-const PAGE_SIZE = 25;
+/** The status filter's chips: every lifecycle state, and "All" (no filter). */
+const STATUS_CHIPS = [
+  { value: 'all', label: 'All' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'published', label: 'Published' },
+  { value: 'archived', label: 'Archived' },
+] as const;
+
+type StatusChip = (typeof STATUS_CHIPS)[number]['value'];
 
 export default function ResourceTable({ resource, filter = '' }: ResourceTableProps) {
   const ui = uiFor(resource);
@@ -118,133 +140,121 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
     }
   }
 
+  const [first, ...rest] = ui.columns;
+  const rowName = (row: Row) => (first ? nameOf(row[first.key], first, ui.singular) : row.id);
+  const columns: DataColumn<Row>[] = [
+    ...(first
+      ? [
+          {
+            key: first.key,
+            label: first.label,
+            // The link says the row's name; a bilingual title's Arabic follows it.
+            render: (row: Row) => secondLine(row[first.key], first),
+          },
+        ]
+      : []),
+    ...rest.map((column) => ({
+      key: column.key,
+      label: column.label,
+      render: (row: Row) => renderCell(row[column.key], column),
+    })),
+  ];
+
   return (
     <div>
-      <div className="toolbar">
-        <a className="btn" data-variant="primary" href={`/admin/${ui.slug}/new`}>
-          New {ui.singular.toLowerCase()}
-        </a>
-        <label className="visually-hidden" htmlFor={`${ui.slug}-search`}>
-          Search {ui.title}
-        </label>
-        <input
-          id={`${ui.slug}-search`}
-          type="text"
-          placeholder="Search…"
-          value={query}
-          onChange={(event) => {
-            setOffset(0);
-            setQuery(event.target.value);
-          }}
-        />
-        {ui.hasStatus && (
-          <>
-            <label className="visually-hidden" htmlFor={`${ui.slug}-status`}>
-              Filter by status
-            </label>
-            <select
-              id={`${ui.slug}-status`}
-              value={status}
-              onChange={(event) => {
-                setOffset(0);
-                setStatus(event.target.value);
-              }}
-            >
-              <option value="">All statuses</option>
-              <option value="draft">Draft</option>
-              <option value="scheduled">Scheduled</option>
-              <option value="published">Published</option>
-              <option value="archived">Archived</option>
-            </select>
-          </>
-        )}
-      </div>
-
-      {error && (
-        <p className="msg" data-kind="error" role="alert">
-          {error}
-        </p>
-      )}
-
       {ui.syncAction && <SyncStatus action={ui.syncAction} epoch={syncEpoch} />}
 
-      <div className="card table-wrap">
-        <table className="data">
-          <caption className="visually-hidden">{ui.title}</caption>
-          <thead>
-            <tr>
-              {ui.columns.map((column) => (
-                <th key={column.key} scope="col">
-                  {column.label}
-                </th>
-              ))}
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={row.id}>
-                {ui.columns.map((column) => (
-                  <td key={column.key}>{renderCell(row[column.key], column)}</td>
-                ))}
-                <td>
-                  <a className="btn" href={`/admin/${ui.slug}/${row.id}`}>
-                    Edit
-                  </a>{' '}
-                  {ui.reorder && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void move(index, -1)}
-                        disabled={index === 0}
-                        aria-label="Move up"
-                      >
-                        ↑
-                      </button>{' '}
-                      <button
-                        type="button"
-                        onClick={() => void move(index, 1)}
-                        disabled={index === rows.length - 1}
-                        aria-label="Move down"
-                      >
-                        ↓
-                      </button>{' '}
-                    </>
-                  )}
-                  <button type="button" data-variant="danger" onClick={() => void remove(row)}>
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && !busy && (
-              <tr>
-                <td colSpan={ui.columns.length + 1}>No {ui.title.toLowerCase()} yet.</td>
-              </tr>
+      <DataTable<Row>
+        caption={ui.title}
+        columns={columns}
+        rows={rows}
+        rowName={rowName}
+        rowHref={(row) => `/admin/${ui.slug}/${row.id}`}
+        total={total}
+        offset={offset}
+        limit={PAGE_SIZE}
+        onPage={setOffset}
+        busy={busy}
+        error={error || undefined}
+        actionsLabel="Actions"
+        rowActions={(row, index) => (
+          <>
+            {ui.reorder && (
+              <>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => void move(index, -1)}
+                  disabled={index === 0}
+                  aria-label={`Move ${rowName(row)} up`}
+                >
+                  <Icon name="chevd" size={15} className="ic--flip" />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => void move(index, 1)}
+                  disabled={index === rows.length - 1}
+                  aria-label={`Move ${rowName(row)} down`}
+                >
+                  <Icon name="chevd" size={15} />
+                </button>
+              </>
             )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="toolbar form-actions">
-        <button
-          type="button"
-          onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-          disabled={offset === 0}
-        >
-          Previous
-        </button>
-        <span aria-live="polite">
-          {total === 0 ? '0' : `${offset + 1}–${Math.min(offset + PAGE_SIZE, total)}`} of {total}
-        </span>
-        <button
-          type="button"
-          onClick={() => setOffset(offset + PAGE_SIZE)}
-          disabled={offset + PAGE_SIZE >= total}
-        >
-          Next
-        </button>
-      </div>
+            <button
+              type="button"
+              className="icon-btn"
+              data-variant="danger"
+              onClick={() => void remove(row)}
+              aria-label={`Delete ${rowName(row)}`}
+            >
+              <Icon name="trash" size={15} />
+            </button>
+          </>
+        )}
+        toolbar={
+          <>
+            <a className="btn" data-variant="primary" href={`/admin/${ui.slug}/new`}>
+              <Icon name="plus" size={16} />
+              New {ui.singular.toLowerCase()}
+            </a>
+            <label className="visually-hidden" htmlFor={`${ui.slug}-search`}>
+              Search {ui.title}
+            </label>
+            <input
+              id={`${ui.slug}-search`}
+              type="search"
+              placeholder="Search…"
+              value={query}
+              onChange={(event) => {
+                setOffset(0);
+                setQuery(event.target.value);
+              }}
+            />
+            {ui.hasStatus && (
+              <Chips<StatusChip>
+                label="Filter by status"
+                chips={STATUS_CHIPS}
+                selected={[(status || 'all') as StatusChip]}
+                onChange={([next]) => {
+                  setOffset(0);
+                  setStatus(!next || next === 'all' ? '' : next);
+                }}
+              />
+            )}
+          </>
+        }
+        empty={{
+          title:
+            query || status
+              ? `No ${ui.title.toLowerCase()} match`
+              : `No ${ui.title.toLowerCase()} yet`,
+          text:
+            query || status
+              ? 'Try another search or filter.'
+              : `Add the first one with “New ${ui.singular.toLowerCase()}”.`,
+        }}
+      />
     </div>
   );
 }
@@ -337,29 +347,63 @@ function SyncStatus({ action, epoch }: SyncStatusProps) {
   );
 }
 
-function renderCell(value: unknown, column: ColumnDef) {
+/** A bilingual value's two sides, '' where one is missing or not text. */
+function sides(value: unknown): { en: string; ar: string } {
+  const record = (value ?? {}) as Record<string, unknown>;
+  return {
+    en: typeof record['en'] === 'string' ? record['en'] : '',
+    ar: typeof record['ar'] === 'string' ? record['ar'] : '',
+  };
+}
+
+/**
+ * The row's name, for its link and the labels of its actions ("Delete Logo design"): the
+ * first column's text (a bilingual one's English, else its Arabic), never empty.
+ */
+export function nameOf(value: unknown, column: ColumnDef, singular: string): string {
+  if (column.kind === 'bilingual') {
+    const { en, ar } = sides(value);
+    return en.trim() || ar.trim() || `Untitled ${singular.toLowerCase()}`;
+  }
+  const text = value === null || value === undefined ? '' : String(value).trim();
+  return text || `Untitled ${singular.toLowerCase()}`;
+}
+
+/** Under the link: a bilingual title's Arabic (or the cue that it has none). */
+function secondLine(value: unknown, column: ColumnDef) {
+  if (column.kind !== 'bilingual') return null;
+  const { en, ar } = sides(value);
+  return (
+    <>
+      {!en && (
+        <div className="cell-secondary">
+          <em>no English</em>
+        </div>
+      )}
+      {/* dir="rtl" on the Arabic line only — a mixed table where the Arabic renders LTR
+          shows correct characters with the punctuation in the wrong place, which
+          reviewers reliably miss. */}
+      <div dir="rtl" lang="ar" className="cell-secondary">
+        {ar || <em>no Arabic</em>}
+      </div>
+    </>
+  );
+}
+
+export function renderCell(value: unknown, column: ColumnDef) {
   if (value === null || value === undefined) return '—';
   switch (column.kind) {
     case 'status':
-      return (
-        <span className="badge" data-status={String(value)}>
-          {String(value)}
-        </span>
-      );
+      return <StatusBadge status={String(value)} />;
     case 'date':
-      return new Date(String(value)).toLocaleDateString();
+      return formatDate(String(value)) || '—';
     case 'boolean':
       return value ? 'Yes' : 'No';
     case 'bilingual': {
-      const record = value as Record<string, unknown>;
-      const en = typeof record['en'] === 'string' ? record['en'] : '';
-      const ar = typeof record['ar'] === 'string' ? record['ar'] : '';
+      const { en, ar } = sides(value);
       return (
         <>
-          <div>{en || <em>no English</em>}</div>
-          {/* dir="rtl" on the Arabic cell only — a mixed table where the Arabic column
-              renders LTR shows correct characters with the punctuation in the wrong
-              place, which reviewers reliably miss. */}
+          <div dir="auto">{en || <em>no English</em>}</div>
           <div dir="rtl" lang="ar" className="cell-secondary">
             {ar || <em>no Arabic</em>}
           </div>
@@ -367,6 +411,6 @@ function renderCell(value: unknown, column: ColumnDef) {
       );
     }
     default:
-      return String(value);
+      return <span dir="auto">{String(value)}</span>;
   }
 }

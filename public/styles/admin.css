@@ -2574,6 +2574,12 @@ img.ProseMirror-separator {
   font-weight: 700;
 }
 
+/* The line under the title: a readable measure, centred. */
+.empty .empty__x {
+  max-inline-size: 30rem;
+  margin-inline: auto;
+}
+
 .empty__a {
   display: flex;
   flex-wrap: wrap;
@@ -2760,6 +2766,18 @@ a.li__t::after {
   border-color: transparent;
   background: var(--ad-bg);
   color: var(--ad-ink);
+}
+
+/* A destructive one (Delete): quiet until pointed at, then the error tint. */
+.icon-btn[data-variant='danger'] {
+  border-color: transparent;
+  color: var(--ad-dim);
+}
+
+.icon-btn[data-variant='danger']:hover {
+  border-color: transparent;
+  background: var(--ad-err-soft);
+  color: var(--ad-err-text);
 }
 
 .icon-btn[aria-disabled='true'] {
