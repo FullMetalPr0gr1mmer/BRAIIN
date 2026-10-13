@@ -97,15 +97,11 @@ describe('server primitives and their React twins render the same markup', () =>
 
   it('Note', async () => {
     expect(await astro(NoteAstro, { tone: 'warn', role: 'status' }, { default: '<p>Hi</p>' })).toBe(
-      canonical(
-        renderToStaticMarkup(
-          createElement(
-            NoteReact,
-            { tone: 'warn', role: 'status' },
-            createElement('p', null, 'Hi'),
-          ),
-        ),
-      ),
+      react(NoteReact, {
+        tone: 'warn',
+        role: 'status',
+        children: createElement('p', null, 'Hi'),
+      }),
     );
   });
 
