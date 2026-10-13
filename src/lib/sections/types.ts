@@ -3,6 +3,7 @@
 // default compositions below so the site looks real before content is authored.
 
 import type { HeroText } from '@/lib/text/heroLinks';
+import { HERO_COPY, HERO_LABELS } from './copy/hero';
 
 export interface SectionData {
   type: string;
@@ -149,66 +150,31 @@ export interface HeroPresetData {
 
 /**
  * Per-page hero presets (a CODE-only argument, never stored — lead contract). `content` is
- * the page's built-in copy, verbatim from the design; `data` is its layout.
+ * the page's built-in copy, verbatim from the design (src/lib/sections/copy/hero.ts, where
+ * the page editor finds it too); `data` is its layout.
  */
 export const HERO_PRESETS = {
   contact: {
-    content: {
-      headline: { en: "Let's make it happen", ar: 'خلّنا نحقّقها' },
-      accentFromEn: 3,
-      accentFromAr: 1,
-      sub: {
-        en: "Strategy, creative, and production under one roof. Tell us where you want to go, and we'll take it from there.",
-        ar: 'استراتيجية وإبداع وإنتاج تحت سقف واحد. قل لنا وين تبي توصل، والباقي علينا.',
-      },
-      ctaLabel: { en: 'Start your project', ar: 'ابدأ مشروعك' },
-    },
+    content: HERO_COPY.contact,
     // The design's contact loop: 6.2–7.9 s of the showreel, "so this page doesn't replay
     // the homepage opening".
     data: { banner: true, ctaHref: '#inquiry', clip: { start: 6.2, end: 7.9 } },
   },
-  // Round 2: /services — services.html `s.h1` / `s.sub` / `s.cta` / `s.alt`, verbatim.
-  // "Ideas, made <em>real</em>" / "أفكار، صارت <em>حقيقة</em>": the accent is the third word.
   services: {
-    content: {
-      headline: { en: 'Ideas, made real', ar: 'أفكار، صارت حقيقة' },
-      accentFromEn: 2,
-      accentFromAr: 2,
-      sub: {
-        en: 'Branding, production, marketing, websites, and events. One team takes your idea from the first sketch to the day it goes live.',
-        ar: 'هوية، وإنتاج، وتسويق، ومواقع، وفعاليات. فريق واحد ياخذ فكرتك من أول رسمة إلى يوم إطلاقها.',
-      },
-      ctaLabel: { en: 'Explore our services', ar: 'استكشف خدماتنا' },
-    },
+    content: HERO_COPY.services,
     // The design's services loop (HERO_SEG): 13.4–15.9 s. The CTA opens the discipline
-    // cards; the alt link skips to the page's own "Say hello" form. The route re-points
-    // both when the band they name is not on the page (servicesPageLinks).
+    // cards; the alt link (services.html `s.alt`) skips to the page's own "Say hello" form.
+    // The route re-points both when the band they name is not on the page
+    // (servicesPageLinks).
     data: {
       banner: true,
       ctaHref: '#categories',
       clip: { start: 13.4, end: 15.9 },
-      altLink: {
-        label: {
-          en: 'Know what you need? <b>Skip to the inquiry</b>',
-          ar: 'عارف وش تحتاج؟ <b>انتقل للطلب مباشرة</b>',
-        },
-        href: '#inquiry',
-      },
+      altLink: { label: HERO_LABELS.servicesAltLink, href: '#inquiry' },
     },
   },
-  // Join (/join): join.html `j.h1` / `j.sub` / `j.cta`, verbatim. "Join the <em>station</em>"
-  // / "انضم إلى <em>المحطة</em>": the accent is the third word in both.
   join: {
-    content: {
-      headline: { en: 'Join the station', ar: 'انضم إلى المحطة' },
-      accentFromEn: 2,
-      accentFromAr: 2,
-      sub: {
-        en: 'For people who can take an idea out of their head and make it real.',
-        ar: 'للناس اللي يقدرون يطلّعون الفكرة من راسهم ويخلّونها حقيقة.',
-      },
-      ctaLabel: { en: 'Apply now', ar: 'قدّم الآن' },
-    },
+    content: HERO_COPY.join,
     // The design's join loop (START/END): 17.4–18.3 s, "holds on the glowing-orb shot". The
     // CTA opens the application band, which ensureJoinApply keeps on the page.
     data: { banner: true, ctaHref: '#apply', clip: { start: 17.4, end: 18.3 } },

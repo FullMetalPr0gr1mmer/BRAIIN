@@ -5,6 +5,7 @@ import type { WorkIntroSectionContent } from '@schemas/sections';
 import { localizedHref, pickLocale } from '@/lib/i18n';
 import { getSectionImages } from '@/lib/data/sectionMedia';
 import MediaFrame from '@/components/media/MediaFrame.astro';
+import { WORK_INTRO_COPY } from '@/lib/sections/copy/workIntro';
 
 // Our Work's intro statement (UI v2, the `workIntro` section; the mockup's `.iw`): one
 // sentence set between two staggered frames, each a still that loops a short window of
@@ -33,17 +34,6 @@ const { locale, text, linkLabel, media = [], data } = Astro.props;
 const target = data?.linkHref === undefined ? '#projects' : data.linkHref;
 const linkHref = target === null ? null : localizedHref(target, locale);
 
-const STR = {
-  en: {
-    text: "Every project here started as a sketch in a notebook and ended somewhere people could see it, hold it, or hear it. This is a selection of the work we're proudest of.",
-    link: 'See the projects',
-  },
-  ar: {
-    text: 'كل مشروع هنا بدأ كرسمة في دفتر، وانتهى في مكان يقدر الناس يشوفونه أو يلمسونه أو يسمعونه. هذه مختارات من الشغل اللي نفتخر فيه أكثر.',
-    link: 'شوف المشاريع',
-  },
-}[locale];
-
 const images = await getSectionImages(media.map((m) => m.mediaId));
 const frames = media.flatMap((m) => {
   const image = images.get(m.mediaId);
@@ -70,11 +60,11 @@ const [a, b] = frames;
       )
     }
     <div class="work-intro__txt rv">
-      <p>{text ? pickLocale(text, locale) : STR.text}</p>
+      <p>{text ? pickLocale(text, locale) : WORK_INTRO_COPY.text[locale]}</p>
       {
         linkHref && (
           <a class="work-intro__link" href={linkHref}>
-            {linkLabel ? pickLocale(linkLabel, locale) : STR.link}
+            {linkLabel ? pickLocale(linkLabel, locale) : WORK_INTRO_COPY.linkLabel[locale]}
           </a>
         )
       }

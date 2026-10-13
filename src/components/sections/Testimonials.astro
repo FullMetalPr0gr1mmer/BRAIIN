@@ -7,6 +7,8 @@ import { pickLocale } from '@/lib/i18n';
 import { initials } from '@/lib/text/initials';
 import MediaImage from '@/components/media/MediaImage.astro';
 import AccentText from '@/components/ui/AccentText.astro';
+import { TESTIMONIALS_COPY, TESTIMONIALS_LABELS as LABELS } from '@/lib/sections/copy/testimonials';
+import { fillTokens } from '@/lib/sections/copy/text';
 
 // Client quotes as a carousel (UI v2): the home Klein band (`klein`) and the quotes under
 // Our Work's numbers (`light`, rendered inside that section — `bare`).
@@ -33,36 +35,24 @@ interface Props {
 
 const { locale, items, variant, id, bare = false, intervalMs } = Astro.props;
 
+// Built-in copy and the carousel's labels: src/lib/sections/copy/testimonials.ts.
 const STR = {
-  en: {
-    tag: 'Testimonials',
-    heading: 'In their words',
-    prev: 'Previous testimonial',
-    next: 'Next testimonial',
-    pause: 'Pause the testimonials',
-    play: 'Play the testimonials',
-    slide: (i: number, n: number) => `${i} of ${n}`,
-    carousel: 'carousel',
-    slideRole: 'slide',
-  },
-  ar: {
-    tag: 'آراء العملاء',
-    heading: 'بكلماتهم هم',
-    prev: 'الرأي السابق',
-    next: 'الرأي التالي',
-    pause: 'إيقاف تبديل الآراء',
-    play: 'تشغيل تبديل الآراء',
-    slide: (i: number, n: number) => `${i} من ${n}`,
-    carousel: 'عرض دوّار',
-    slideRole: 'شريحة',
-  },
-}[locale];
+  prev: LABELS.prev[locale],
+  next: LABELS.next[locale],
+  pause: LABELS.pause[locale],
+  play: LABELS.play[locale],
+  slide: (i: number, n: number) => fillTokens(LABELS.slide[locale], { i: String(i), n: String(n) }),
+  carousel: LABELS.carousel[locale],
+  slideRole: LABELS.slideRole[locale],
+};
 
-const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : STR.tag;
-const heading = Astro.props.heading ? pickLocale(Astro.props.heading, locale) : STR.heading;
+const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : TESTIMONIALS_COPY.tag[locale];
+const heading = Astro.props.heading
+  ? pickLocale(Astro.props.heading, locale)
+  : TESTIMONIALS_COPY.heading[locale];
 const accent = Astro.props.heading
   ? Astro.props.accent
-  : (Astro.props.accent ?? { en: { from: 2 }, ar: { from: 1 } });
+  : (Astro.props.accent ?? TESTIMONIALS_COPY.accent);
 
 const quotes = items.map((q) => {
   const name = pickLocale(q.authorName, locale);

@@ -16,10 +16,10 @@ import {
 } from '@schemas/sections';
 import { tierATags } from '@/lib/http/cacheTags';
 import { PAGE_META } from '@/lib/seo/pageMeta';
-import { SERVICES_PROOF_COPY } from '@/lib/services/proof';
+import { STATISTICS_COPY } from '@/lib/sections/copy/statistics';
+import { SERVICE_EXPLORER_COPY } from '@/lib/sections/copy/serviceExplorer';
 import { PUBLIC_SITE_URL as SITE } from '../stubs/astro-env-client';
 import {
-  EXPLORER_COPY,
   fallbackExplorerPanels,
   startLabelFor,
   toExplorerPanels,
@@ -242,9 +242,9 @@ describe('the statistics section, `services` variant', () => {
   });
 
   it('the built-in statement accents "Zero handoffs." / "بدون تسليم لأحد."', () => {
-    const { en, ar, accent } = SERVICES_PROOF_COPY;
-    expect(accented(en.line, accent, 'en')).toBe('Zero handoffs.');
-    expect(accented(ar.line, accent, 'ar')).toBe('بدون تسليم لأحد.');
+    const { line, lineAccent } = STATISTICS_COPY.services;
+    expect(accented(line.en, lineAccent, 'en')).toBe('Zero handoffs.');
+    expect(accented(line.ar, lineAccent, 'ar')).toBe('بدون تسليم لأحد.');
   });
 });
 
@@ -344,8 +344,8 @@ describe('toExplorerPanels', () => {
     );
     expect(toExplorerPanels(DISCIPLINES, 'ar')[1]!.startLabel).toBe('ابدأ مشروع ع-production');
     expect(startLabelFor('Branding', 'en', `Let's do {discipline}`)).toBe("Let's do Branding");
-    expect(EXPLORER_COPY.en.inquire).toBe('Inquire');
-    expect(EXPLORER_COPY.ar.inquire).toBe('اطلب');
+    expect(SERVICE_EXPLORER_COPY.inquireLabel.en).toBe('Inquire');
+    expect(SERVICE_EXPLORER_COPY.inquireLabel.ar).toBe('اطلب');
     const custom = toExplorerPanels(DISCIPLINES, 'en', { inquire: 'Ask' });
     expect(custom[0]!.services[0]!.inquireLabel).toBe('Ask: logo');
   });

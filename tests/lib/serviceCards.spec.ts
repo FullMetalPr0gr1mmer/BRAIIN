@@ -6,7 +6,6 @@ import {
   sectionContentIssues,
 } from '@schemas/sections';
 import {
-  DISCIPLINE_BAND_COPY,
   FALLBACK_DISCIPLINES,
   disciplineHref,
   disciplineSectionId,
@@ -15,7 +14,10 @@ import {
   toDisciplineCards,
   type DisciplineCardInput,
 } from '@/lib/services/cards';
-import { HELLO_COPY, SERVICE_HELLO_LEAD, serviceHelloHeading } from '@/lib/sections/hello';
+import { serviceHelloHeading } from '@/lib/sections/hello';
+import { HELLO_COPY } from '@/lib/sections/copy/hello';
+import { SERVICES_OVERVIEW_COPY } from '@/lib/sections/copy/servicesOverview';
+import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
 import { heroText, splitBold } from '@/lib/text/heroLinks';
 import { accentRange, splitAccent } from '@/lib/text/accent';
 import { loadBlocks } from '../../scripts/gen-seeds.mjs';
@@ -120,14 +122,14 @@ describe('discipline cards', () => {
   });
 
   it('the built-in headings accent the mockup’s words', () => {
-    const { home, page } = DISCIPLINE_BAND_COPY;
-    expect(accented(home.en.heading, home.accent, 'en')).toBe('one studio');
-    expect(accented(home.ar.heading, home.accent, 'ar')).toBe('استوديو واحد');
-    expect(accented(page.en.heading, page.accent, 'en')).toBe('needs');
-    expect(accented(page.ar.heading, page.accent, 'ar')).toBe('علامتك');
+    const { home, page } = SERVICES_OVERVIEW_COPY;
+    expect(accented(home.heading.en, home.accent, 'en')).toBe('one studio');
+    expect(accented(home.heading.ar, home.accent, 'ar')).toBe('استوديو واحد');
+    expect(accented(page.heading.en, page.accent, 'en')).toBe('needs');
+    expect(accented(page.heading.ar, page.accent, 'ar')).toBe('علامتك');
     // Only home closes with the "All services" button.
-    expect(home.en.allLabel).toBe('All services');
-    expect(page.en.allLabel).toBeNull();
+    expect(home.allLabel.en).toBe('All services');
+    expect('allLabel' in page).toBe(false);
   });
 });
 
@@ -168,10 +170,10 @@ describe('"Say hello"', () => {
   });
 
   it('the built-in heading accents "hello" / "هلا", with three points in each language', () => {
-    expect(accented(HELLO_COPY.en.heading, HELLO_COPY.accent, 'en')).toBe('hello');
-    expect(accented(HELLO_COPY.ar.heading, HELLO_COPY.accent, 'ar')).toBe('هلا');
-    expect(HELLO_COPY.en.points).toHaveLength(3);
-    expect(HELLO_COPY.ar.points).toHaveLength(3);
+    expect(accented(HELLO_COPY.heading.en, HELLO_COPY.accent, 'en')).toBe('hello');
+    expect(accented(HELLO_COPY.heading.ar, HELLO_COPY.accent, 'ar')).toBe('هلا');
+    expect(HELLO_COPY.points).toHaveLength(3);
+    for (const p of HELLO_COPY.points) expect(p.text.ar.trim()).not.toBe('');
   });
 
   it('a service page talks about its service — the accent is the service name', () => {
@@ -181,7 +183,7 @@ describe('"Say hello"', () => {
     const ar = serviceHelloHeading('تصميم الشعار', 'ar');
     expect(ar.text).toBe('خلّنا نتكلم عن تصميم الشعار');
     expect(accented(ar.text, ar.accent, 'ar')).toBe('تصميم الشعار');
-    expect(SERVICE_HELLO_LEAD.en).toMatch(/^Tell us what you need/);
+    expect(SERVICE_PAGE_COPY.en.helloLead).toMatch(/^Tell us what you need/);
   });
 });
 

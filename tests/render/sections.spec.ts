@@ -1,7 +1,4 @@
-import { experimental_AstroContainer as AstroContainer } from 'astro/container';
-import { beforeAll, describe, expect, test, vi } from 'vitest';
-import type { Locale } from '@schemas/primitives';
-import SectionRenderer from '@/components/SectionRenderer.astro';
+import { describe, expect, test } from 'vitest';
 import Hello from '@/components/sections/Hello.astro';
 import {
   DEFAULT_ABOUT_SECTIONS,
@@ -20,18 +17,11 @@ import {
 import { withLeaders } from '@/lib/sections/about';
 import { withContactData } from '@/lib/sections/contact';
 import { composeJoinPage } from '@/lib/sections/join';
-import { SERVICE_HELLO_LEAD, serviceHelloHeading } from '@/lib/sections/hello';
+import { serviceHelloHeading } from '@/lib/sections/hello';
+import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
 import { composeServicesPage } from '@/lib/services/servicesPage';
-import {
-  CARDS,
-  CERTIFICATIONS,
-  DISCIPLINES,
-  IDENTITY,
-  LEADERS,
-  STATS,
-  TEAM,
-  TESTIMONIALS,
-} from './fixtures';
+import { CARDS, CERTIFICATIONS, DISCIPLINES, LEADERS, STATS, TEAM, TESTIMONIALS } from './fixtures';
+import { LOCALES, renderComponent, renderSections } from './harness';
 
 // The public sections, rendered to the byte (Admin v2 F6). Every case renders through
 // SectionRenderer — the path a page takes — in both languages, and the output is held to a
@@ -43,95 +33,7 @@ import {
 // The cases are the pages' default compositions as their routes compose them (the
 // built-in copy), then one case per section type with every content field authored (the
 // override path), then the variants and route data the pages do not reach. Data the
-// sections load themselves comes from tests/render/fixtures.ts.
-
-vi.mock('@/lib/data/disciplines', async (importOriginal) => {
-  const f = await import('./fixtures');
-  return {
-    ...(await importOriginal<object>()),
-    getPublishedDisciplines: async () => f.DISCIPLINES,
-  };
-});
-vi.mock('@/lib/data/portfolio', async (importOriginal) => {
-  const f = await import('./fixtures');
-  return {
-    ...(await importOriginal<object>()),
-    getPortfolioCards: async (opts: { featuredOnly?: boolean } = {}) =>
-      opts.featuredOnly ? f.CARDS.filter((c) => c.isFeatured) : f.CARDS,
-  };
-});
-vi.mock('@/lib/data/taxonomy', async (importOriginal) => {
-  const f = await import('./fixtures');
-  return {
-    ...(await importOriginal<object>()),
-    getMarqueeClients: async () => f.CLIENTS,
-    getTestimonials: async (opts: { limit?: number } = {}) =>
-      f.TESTIMONIALS.slice(0, opts.limit ?? 8),
-  };
-});
-vi.mock('@/lib/data/statistics', async (importOriginal) => {
-  const f = await import('./fixtures');
-  return {
-    ...(await importOriginal<object>()),
-    getPublishedStatistics: async () => f.STATS,
-  };
-});
-vi.mock('@/lib/data/team', async (importOriginal) => {
-  const f = await import('./fixtures');
-  return {
-    ...(await importOriginal<object>()),
-    getPublishedTeam: async () => f.TEAM,
-    getLeadership: async () => f.LEADERS,
-  };
-});
-vi.mock('@/lib/data/certifications', async (importOriginal) => {
-  const f = await import('./fixtures');
-  return {
-    ...(await importOriginal<object>()),
-    getPublishedCertifications: async () => f.CERTIFICATIONS,
-  };
-});
-vi.mock('@/lib/data/sectionMedia', async (importOriginal) => {
-  const f = await import('./fixtures');
-  return {
-    ...(await importOriginal<object>()),
-    getSectionImage: async (id: string | undefined) => (id === f.POSTER.id ? f.POSTER : null),
-    getSectionImages: async (ids: readonly string[]) =>
-      new Map(ids.filter((id) => id === f.POSTER.id).map((id) => [id, f.POSTER])),
-  };
-});
-
-const LOCALES: readonly Locale[] = ['en', 'ar'];
-
-let container: AstroContainer;
-beforeAll(async () => {
-  container = await AstroContainer.create();
-});
-
-// The checkout's own path reaches the output through dev-mode URLs: image sources
-// (`/@fs/<root>/…`, URL-encoded inside `/_image?href=`) and component scripts. It is the one
-// thing that differs between machines, and between Windows (`/@fs/C:/…`) and Linux
-// (`/@fs/home/…`), so it is replaced before the comparison.
-const ROOT = process.cwd().replace(/\\/g, '/').replace(/\/$/, '');
-const FS = `/@fs/${ROOT.replace(/^\//, '')}`;
-const SWAPS: readonly (readonly [string, string])[] = [
-  [encodeURIComponent(FS), `${encodeURIComponent('/@fs/')}<root>`],
-  [FS, '/@fs/<root>'],
-  [ROOT, '<root>'],
-];
-const normalise = (html: string): string =>
-  SWAPS.reduce((out, [from, to]) => out.split(from).join(to), html);
-
-const renderSections = async (sections: SectionData[], locale: Locale): Promise<string> => {
-  const html = await container.renderToString(SectionRenderer, {
-    props: { locale, sections },
-    locals: { identity: Promise.resolve(IDENTITY) } as App.Locals,
-  });
-  // SectionBoundary swallows a failing section into an empty placeholder: a snapshot of
-  // that would hold a broken render as the truth.
-  expect(html).not.toContain('section-error');
-  return normalise(html);
-};
+// sections load themselves comes from tests/render/fixtures.ts (tests/render/setup.ts).
 
 const t = (en: string, ar: string) => ({ en, ar });
 const featured = CARDS.filter((c) => c.isFeatured);
@@ -622,20 +524,17 @@ describe('variants, modes and route data', () => {
 describe('Hello rendered directly, as a service page does', () => {
   for (const locale of LOCALES) {
     test(`service page (${locale})`, async () => {
-      const html = await container.renderToString(Hello, {
-        props: {
+      const html = await renderComponent(Hello, {
+        locale,
+        groups: DISCIPLINES,
+        selected: 'logo',
+        headingOverride: serviceHelloHeading(
+          locale === 'ar' ? 'تصميم الشعار' : 'Logo Design',
           locale,
-          groups: DISCIPLINES,
-          selected: 'logo',
-          headingOverride: serviceHelloHeading(
-            locale === 'ar' ? 'تصميم الشعار' : 'Logo Design',
-            locale,
-          ),
-          leadOverride: SERVICE_HELLO_LEAD[locale],
-        },
-        locals: { identity: Promise.resolve(IDENTITY) } as App.Locals,
+        ),
+        leadOverride: SERVICE_PAGE_COPY[locale].helloLead,
       });
-      expect(normalise(html)).toMatchSnapshot();
+      expect(html).toMatchSnapshot();
     });
   }
 });

@@ -29,6 +29,8 @@ const astroVite = getViteConfig(
       name: 'render',
       environment: 'node',
       include: ['tests/render/**/*.spec.ts'],
+      // The loaders a section calls on its own return fixtures (tests/render/setup.ts).
+      setupFiles: ['tests/render/setup.ts'],
     },
   } as UserConfig,
   { logLevel: 'error' },
