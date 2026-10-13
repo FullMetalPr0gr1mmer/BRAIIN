@@ -26,7 +26,7 @@ Each slice's file under [as-built/](as-built/) has the detail.
 
 ## Reserved
 
-Wave 1's migrations are reserved below; the next free number after them is **0047**. Before a
+Wave 1's migrations are reserved below; the next free number after them is **0048**. Before a
 wave's slices branch, each migration the wave plans gets a row here, numbered in the wave's
 planned merge order. The slice's own PR moves its row to "Applied" once production has applied the
 migration, before the PR merges (Pushing to production, step 5), so the row is true when the
@@ -38,11 +38,12 @@ PR lands and nothing here is edited after a merge.
 | 0039 | (released) | unused: C3 (0041) was ready before F8 and U3 were built, so F8 and U3 moved above the wave (gaps are allowed) | 1 |
 | 0040 | (released) | unused, as 0039 | 1 |
 | 0041 | C3 | the leads write API: the `crm.erase` helper, the pipeline's assignee, value, star, read, tags and logged-contact columns with their staff column grant, and the bulk, erase, note-delete and note-count RPCs (`crm_ingest_lead` restated for manual leads) | 1 |
-| 0042 | (released) | unused: U16 was built after F8 (0044) and U3 (0045), which merge first, so it took 0046 | 1 |
-| 0043 | C13 | lead attribution capture (built, held for the privacy notice, O-11). Below `main`'s highest once F8 (0044) merges: when it is built it takes the lowest free number above `main`'s highest (0047 or above, rule 3) | 1 |
+| 0042 | (released) | unused: F8 (0044) and U3 (0045) merged first, so U16 moved to 0046 | 1 |
+| 0043 | (released) | unused, as 0042: C13 moved to 0047 | 1 |
 | 0044 | F8 | `0044_personal_layer.sql`: the personal layer: preferences (`admin_user_prefs`, keyed to its profile by `(tenant_id, user_id)`), the people directory (`app.staff_directory()`, `public.staff_directory`, `crm_people` over it), the display-name rule for every writer (`app.display_name_ok`, the `profiles_display_name_rule` trigger), renaming yourself (`update_my_profile`), the environment pill (`admin_environment`). Renumbered from 0039 by the Wave 1 plan. Applies after 0041: the preferences key rests on 0041's `profiles_tenant_id_id` | 1 |
 | 0045 | U3 | media uploads: the public media bucket and its policies, the `media_assets` provider widening | 1 |
 | 0046 | U16 | `0046_help_centre.sql`: the help centre: `help_articles` (typed blocks, never HTML; staff read their tenant's guides, nothing writes but the migrations and the service role), `help_search` (Arabic folded like §8), the guides (`app.help_article_set()`) and their seed into every tenant and, by a trigger on `tenants`, each new one. Renumbered from 0042 | 1 |
+| 0047 | C13 | lead attribution capture (built, held for the privacy notice, O-11) | 1 |
 
 ## Rules
 
