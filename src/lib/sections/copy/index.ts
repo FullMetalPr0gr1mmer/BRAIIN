@@ -40,10 +40,13 @@ import { WORK_INTRO_COPY } from './workIntro';
 // stored.
 //
 // `content` holds, per look, the built-in values in the shape of the type's CMS content
-// (packages/schemas/sections.ts), field for field: each parses as that type's content
-// (tests/lib/sectionCopy.spec.ts). A type with one look has `default`; the others are keyed
-// by what picks the look (builtInContent below). `labels` is the text a type renders that
-// no content field holds (accessible names, controls, patterns around data).
+// (packages/schemas/sections.ts), field for field: each parses as that type's content, and
+// every text field of the type has a built-in or a stated reason not to
+// (tests/lib/sectionCopy.spec.ts). Stored as the section's content, a look renders exactly
+// what the section renders with none (tests/render/sectionCopy.spec.ts), except the fields
+// in `notVerbatim`. A type with one look has `default`; the others are keyed by what picks
+// the look (builtInContent below). `labels` is the text a type renders that no content
+// field holds (accessible names, controls, patterns around data).
 
 /** One section type's built-in copy. */
 export interface SectionCopy {
@@ -51,28 +54,38 @@ export interface SectionCopy {
   readonly content: Readonly<Record<string, object>>;
   /** Text the type renders that no content field overrides. */
   readonly labels: Readonly<Record<string, LocalizedText>>;
+  /**
+   * Content fields whose built-in value the type does not render the same way when it is
+   * authored: the built-in names the studio through `%brand%` or bolds a `<b>` run, and
+   * the type renders an authored value as plain text. Stored as written, such a value
+   * would read "%brand%" or show the tags, so the page editor must show it without storing
+   * it (AV-25). The public behaviour is unchanged by F6.
+   */
+  readonly notVerbatim: readonly string[];
 }
 
-const one = (content: object, labels: Readonly<Record<string, LocalizedText>> = {}) => ({
-  content: { default: content },
-  labels,
-});
+const one = (
+  content: object,
+  labels: Readonly<Record<string, LocalizedText>> = {},
+  notVerbatim: readonly string[] = [],
+): SectionCopy => ({ content: { default: content }, labels, notVerbatim });
 
 export const SECTION_COPY: Readonly<Record<RenderedSectionType, SectionCopy>> = {
   // By page: the hero on contact, services and join takes that page's preset.
-  hero: { content: HERO_COPY, labels: HERO_LABELS },
+  hero: { content: HERO_COPY, labels: HERO_LABELS, notVerbatim: [] },
   // By the route's mode: `page` on /services, `home` anywhere else.
-  servicesOverview: { content: SERVICES_OVERVIEW_COPY, labels: {} },
+  servicesOverview: { content: SERVICES_OVERVIEW_COPY, labels: {}, notVerbatim: [] },
   cta: one(CTA_COPY),
   // By the section's `variant`.
-  social: { content: SOCIAL_COPY, labels: {} },
+  social: { content: SOCIAL_COPY, labels: {}, notVerbatim: [] },
   aboutStory: one(ABOUT_STORY_COPY),
   // By the section's `variant` (`cards` when it has none).
-  statistics: { content: STATISTICS_COPY, labels: {} },
+  statistics: { content: STATISTICS_COPY, labels: {}, notVerbatim: [] },
   team: one({}, TEAM_LABELS),
   certifications: one({}, CERTIFICATIONS_LABELS),
   clientsMarquee: one(CLIENTS_MARQUEE_COPY, CLIENTS_MARQUEE_LABELS),
-  aboutIntro: one(ABOUT_INTRO_COPY),
+  // "Why %brand%" and the heading's <b> run: an authored tag and heading are plain text.
+  aboutIntro: one(ABOUT_INTRO_COPY, {}, ['tag', 'heading']),
   slogan: one(SLOGAN_COPY),
   contact: one(CONTACT_COPY),
   contactInquiry: one(CONTACT_INQUIRY_COPY),
