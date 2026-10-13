@@ -40,16 +40,16 @@ const { title, sub, href, icon, hidden = false, current = false } = Astro.props;
           {title}
         </a>
       ) : (
-        <p class="li__t" dir="auto">
+        <span class="li__t" dir="auto">
           {title}
-        </p>
+        </span>
       )
     }
     {
       sub && (
-        <p class="li__s" dir="auto">
+        <span class="li__s" dir="auto">
           {sub}
-        </p>
+        </span>
       )
     }
   </div>

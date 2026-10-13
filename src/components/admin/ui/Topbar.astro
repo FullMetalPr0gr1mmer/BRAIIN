@@ -3,13 +3,18 @@ import type { NavLink } from '@/lib/admin/nav';
 import Icon from './Icon.astro';
 
 // The white topbar (Admin v2 F2, the prototype's .top): the menu button on narrow screens,
-// the breadcrumb, search, the maintenance badge and View site.
+// the breadcrumb, search, the maintenance badge, the bell (F8) and View site.
 //
 // Search is a link to the server-rendered results page, which works with no JS and
 // cannot show a result the server did not authorize. With JS the same link opens the
 // command palette (data-open="palette", F3). The maintenance badge is a read of the KV
 // flag (a boolean, never the allowlist); it links to the switch only for roles that may
 // flip it.
+//
+// The bell is a link to /admin/notifications, the list without JS; with JS the chrome
+// island opens it as the drawer (data-open="notifications"). Its unread count arrives with
+// the page (shell state), in its name and as the dot; the dot is always in the markup and
+// `hidden` when there is nothing unread, so the drawer can show or clear it by attribute.
 
 interface Props {
   section: NavLink | null;
@@ -17,9 +22,10 @@ interface Props {
   current: string;
   maintenance: boolean;
   canManageMaintenance: boolean;
+  unread: number;
 }
 
-const { section, title, current, maintenance, canManageMaintenance } = Astro.props;
+const { section, title, current, maintenance, canManageMaintenance, unread } = Astro.props;
 const showSection = section && section.href !== '/admin' && current !== section.href;
 ---
 
@@ -68,6 +74,16 @@ const showSection = section && section.href !== '/admin' && current !== section.
         </span>
       ))
   }
+
+  <a
+    class="top__btn"
+    href="/admin/notifications"
+    data-open="notifications"
+    aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+  >
+    <Icon name="bell" size={18} />
+    <span class="dot" hidden={unread === 0}></span>
+  </a>
 
   <a class="btn top__view" data-variant="dark" href="/" target="_blank" rel="noopener">
     <Icon name="ext" size={14} />

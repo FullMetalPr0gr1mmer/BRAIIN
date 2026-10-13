@@ -327,6 +327,7 @@
   --ad-on-dark: #ffffff;
   --ad-count: #2d2f35;
   --ad-count-current: rgba(255, 255, 255, 0.22);
+  --ad-side-pill-line: rgba(255, 255, 255, 0.14); /* the environment pill's edge: decorative */
 
   /* Focus: cobalt on light grounds, sky on midnight (cobalt there is only 3.22:1) */
   --ad-focus: #024cff;
@@ -375,6 +376,7 @@
   --ad-r-pill: 999px;
   --ad-shadow: 0 10px 40px rgba(11, 13, 20, 0.08);
   --ad-shadow-sm: 0 2px 10px rgba(11, 13, 20, 0.06);
+  --ad-shadow-drawer: -20px 0 60px rgba(11, 13, 20, 0.15);
   --ad-ease: cubic-bezier(0.16, 1, 0.3, 1);
   --ad-scrim: rgba(11, 13, 20, 0.45);
 
@@ -582,6 +584,28 @@ textarea[lang='ar'],
   block-size: auto;
 }
 
+/* The logo and, beside it, the environment pill (F8): "Live", "Staging" or "Local". The
+   word carries the environment; nothing is told by colour. */
+.side__logo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.side__env {
+  margin-inline-end: 10px;
+  padding: 4px 8px;
+  border: 1px solid var(--ad-side-pill-line);
+  border-radius: var(--ad-r-pill);
+  color: var(--ad-side-label);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .side__nav {
   flex: 1;
 }
@@ -666,6 +690,12 @@ textarea[lang='ar'],
   padding: 8px 10px;
   border-radius: var(--ad-r-sm);
   color: var(--ad-on-dark);
+  text-decoration: none;
+}
+
+/* The account chip (F8) is a link to /admin/account, opened as the account drawer with JS. */
+.side__user > .ic {
+  color: var(--ad-side-label);
 }
 
 .side__user:hover {
@@ -688,19 +718,6 @@ textarea[lang='ar'],
 .side__who span {
   font-size: 11.5px;
   color: var(--ad-side-label);
-  text-transform: capitalize;
-}
-
-/* The account menu opens upward from the foot of the sidebar, on a light panel. */
-.side__foot .menu-panel {
-  inset-block-start: auto;
-  inset-block-end: calc(100% + 8px);
-  inset-inline: 0;
-  color: var(--ad-ink);
-}
-
-.side__foot .menu-panel :focus-visible {
-  outline-color: var(--ad-focus);
 }
 
 /* ---- Main column ---- */
@@ -836,45 +853,34 @@ kbd {
   font-weight: 700;
 }
 
-details.menu {
+/* The bell (F8): a link to /admin/notifications, the drawer with JS. Its name carries the
+   unread count; the dot is decoration beside it, and `hidden` when there is none. */
+.top__btn {
   position: relative;
-}
-
-details.menu > summary {
-  list-style: none;
-  cursor: pointer;
-}
-
-details.menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.menu-panel {
-  position: absolute;
-  inset-inline-end: 0;
-  inset-block-start: calc(100% + 8px);
-  min-inline-size: 15rem;
-  background: var(--ad-card);
-  border: 1px solid var(--ad-line);
-  border-radius: var(--ad-r);
-  box-shadow: var(--ad-shadow);
-  padding: 14px;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.menu-id {
-  margin: 0;
-  font-size: 12.5px;
+  display: grid;
+  place-items: center;
+  inline-size: 38px;
+  block-size: 38px;
+  border: 1px solid transparent;
+  border-radius: var(--ad-r-sm);
   color: var(--ad-dim);
-  overflow-wrap: anywhere;
 }
 
-.menu-id strong {
+.top__btn:hover {
+  background: var(--ad-bg);
   color: var(--ad-ink);
+}
+
+.top__btn .dot {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+  display: block;
+  inline-size: 8px;
+  block-size: 8px;
+  border: 2px solid var(--ad-card);
+  border-radius: 50%;
+  background: var(--ad-err-text);
 }
 
 .avatar {
@@ -1141,7 +1147,8 @@ a.badge:hover {
   text-decoration: underline;
 }
 
-.badge[data-tone='klein'] {
+.badge[data-tone='klein'],
+.badge[data-status='pending'] {
   background: var(--ad-primary-soft);
   color: var(--ad-primary);
 }
@@ -1819,6 +1826,292 @@ dialog.cmd::backdrop {
   padding: 0;
 }
 
+/* ---- Drawers (F8): the prototype's .drw, on a native modal <dialog> ----
+   From the inline end, full height, full width on a phone. The panel fills the dialog, so
+   a click on the dialog itself is a click on the scrim (the drawer closes). */
+
+dialog.drw {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+  inline-size: min(560px, 100vw);
+  max-inline-size: 100vw;
+  block-size: 100%;
+  max-block-size: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  box-shadow: var(--ad-shadow-drawer);
+}
+
+dialog.drw[open] {
+  display: flex;
+  animation: drw-in 0.4s var(--ad-ease);
+}
+
+dialog.drw::backdrop {
+  background: var(--ad-scrim);
+}
+
+@keyframes drw-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+.drw__panel {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.drw__h {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--ad-line);
+}
+
+.drw__h h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.drw__b {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px;
+}
+
+.drw__f {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--ad-line);
+  background: var(--ad-card);
+}
+
+/* "Loading", or what could not be read: a live region, so it stays in the page. */
+.drw__status {
+  margin: 0 0 12px;
+  color: var(--ad-dim);
+}
+
+.drw__status:empty {
+  margin: 0;
+}
+
+/* ---- Lists of rows (the prototype's .list and .li) and the empty state ---- */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--ad-line);
+  border-radius: 12px;
+  background: var(--ad-card);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+a.li:hover {
+  border-color: var(--ad-line-2);
+  box-shadow: var(--ad-shadow-sm);
+}
+
+.li__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 36px;
+  block-size: 36px;
+  border-radius: 10px;
+  background: var(--ad-bg);
+  color: var(--ad-primary);
+}
+
+.li__main {
+  flex: 1;
+  min-inline-size: 0;
+  display: grid;
+}
+
+/* A row's text can be a visitor's (a lead's name, the role an applicant typed), and one
+   long word would set the grid track's width and push the drawer sideways: it wraps. */
+.li__t {
+  font-size: 13.5px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.li__s {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ad-dim);
+  overflow-wrap: anywhere;
+}
+
+/* The bell: a read row is lighter. "New" on an unread one says it in words. */
+.ntf .li:not([data-unread]) .li__t {
+  font-weight: 500;
+}
+
+.ntf .li:not([data-unread]) .li__ico {
+  color: var(--ad-dim2);
+}
+
+.empty {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--ad-dim);
+}
+
+.empty__ico {
+  display: grid;
+  place-items: center;
+  inline-size: 52px;
+  block-size: 52px;
+  margin: 0 auto 14px;
+  border-radius: 16px;
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+}
+
+.empty b {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 15px;
+  color: var(--ad-ink);
+}
+
+.empty p {
+  margin: 0;
+}
+
+/* ---- The account (F8): the drawer and /admin/account ---- */
+
+.acct {
+  display: grid;
+  gap: 18px;
+}
+
+.acct__id {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.acct__avatar {
+  inline-size: 52px;
+  block-size: 52px;
+  font-size: 16px;
+}
+
+.acct__who {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.acct__who b {
+  font-size: 16px;
+}
+
+.acct__who > span:not(.badge) {
+  font-size: 12.5px;
+  color: var(--ad-dim);
+}
+
+.acct__who > .badge {
+  justify-self: start;
+  margin-top: 6px;
+}
+
+.acct__sec {
+  padding: 14px 16px;
+  border: 1px solid var(--ad-line);
+  border-radius: 12px;
+}
+
+.acct__sec h2,
+.acct__sec h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.acct__sec h2 .ic,
+.acct__sec h3 .ic {
+  color: var(--ad-primary);
+}
+
+.acct .field > label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.acct .field-error {
+  margin: 6px 0 0;
+}
+
+.acct__hint {
+  margin: 6px 0 14px;
+  font-size: 12px;
+  color: var(--ad-dim2);
+}
+
+/* A form's outcome: a live region, kept in the page so a screen reader hears it change. */
+.acct__note {
+  margin: 10px 0 0;
+  color: var(--ad-note-ok-text);
+  font-weight: 600;
+}
+
+.acct__note:empty {
+  margin: 0;
+}
+
+.acct__rows .li {
+  align-items: flex-start;
+}
+
+.acct__can {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0;
+  padding-inline-start: 18px;
+  font-size: 12.5px;
+}
+
 /* ---- Rich text (Tiptap): the prototype's .rich ---- */
 
 /* ProseMirror's base rules, which Tiptap would otherwise inject at runtime as an inline
@@ -2272,33 +2565,13 @@ img.ProseMirror-separator {
   color: var(--ad-err-text);
 }
 
-/* Empty state: icon tile, title, a line, an action. */
-.empty {
-  padding: 48px 20px;
-  text-align: center;
-  color: var(--ad-dim);
-}
-
-.empty__ico {
-  display: grid;
-  place-items: center;
-  inline-size: 52px;
-  block-size: 52px;
-  margin: 0 auto 14px;
-  border-radius: 16px;
-  background: var(--ad-primary-soft);
-  color: var(--ad-primary);
-}
-
-.empty__t {
-  margin: 0 0 4px;
+/* Empty state: F8's .empty and .empty__ico (above), with the kit's title, line and
+   action slot (EmptyState.astro, kit/EmptyState.tsx). */
+.empty .empty__t {
+  margin-bottom: 4px;
   color: var(--ad-ink);
   font-size: 15px;
   font-weight: 700;
-}
-
-.empty__x {
-  margin: 0;
 }
 
 .empty__a {
@@ -2398,32 +2671,15 @@ img.ProseMirror-separator {
   text-align: end;
 }
 
-/* List rows (the prototype's .list/.li): a card-like row with an optional handle, icon,
-   title (a link stretched over the row), line, badges and actions. */
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
+/* List rows: F8's .list and .li (above), where a whole row is one link, plus the kit's
+   rows (ListRow.astro, kit/ListRow.tsx): a title link stretched over the row, so the row
+   can also hold a handle, Move buttons and actions of its own (a link may not contain a
+   button), the row the page is about, and a hidden item. */
 .li {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--ad-line);
-  border-radius: 12px;
-  background: var(--ad-card);
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
 }
 
-.li:hover {
+.li:has(a.li__t:hover) {
   border-color: var(--ad-line-2);
   box-shadow: var(--ad-shadow-sm);
 }
@@ -2441,18 +2697,6 @@ img.ProseMirror-separator {
   color: var(--ad-dim);
 }
 
-.li__main {
-  flex: 1;
-  min-width: 0;
-}
-
-.li__t {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
 a.li__t {
   color: inherit;
   text-decoration: none;
@@ -2468,23 +2712,6 @@ a.li__t::after {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-}
-
-.li__s {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: var(--ad-dim);
-}
-
-.li__ico {
-  display: grid;
-  place-items: center;
-  flex: none;
-  inline-size: 36px;
-  block-size: 36px;
-  border-radius: var(--ad-r-sm);
-  background: var(--ad-bg);
-  color: var(--ad-primary);
 }
 
 .li__acts,
@@ -2517,10 +2744,11 @@ a.li__t::after {
   }
 }
 
-/* Small icon buttons in a row: 28px, over the 24px minimum (WCAG 2.5.8). */
+/* Small icon buttons in a row (the prototype's .icon-btn): 30px, over the 24px minimum
+   (WCAG 2.5.8). */
 .icon-btn {
-  inline-size: 28px;
-  block-size: 28px;
+  inline-size: 30px;
+  block-size: 30px;
   padding: 0;
   border-color: transparent;
   border-radius: var(--ad-r-xs);
@@ -3177,21 +3405,17 @@ table.data .data-sel {
   text-decoration: underline;
 }
 
-/* Modal and drawer (Modal.tsx, Drawer.tsx): the native modal <dialog> of confirm.ts
-   (focus trap, Escape, top layer, focus return) with the prototype's anatomy. The
-   drawer opens from the inline end. */
-dialog.mdl,
-dialog.drw {
+/* Modal (Modal.tsx): the native modal <dialog> of confirm.ts (.admin-dialog: focus trap,
+   Escape, top layer, focus return) with the prototype's .mdl anatomy, a header, a
+   scrolling body and a footer. The drawer (Drawer.tsx) is F8's .drw above, plus a wide
+   size and the right-to-left entrance. */
+dialog.mdl {
   padding: 0;
 }
 
-dialog.mdl[open],
-dialog.drw[open] {
+dialog.mdl[open] {
   display: flex;
   flex-direction: column;
-}
-
-dialog.mdl[open] {
   animation: ad-mdl-in 0.3s var(--ad-ease);
 }
 
@@ -3199,27 +3423,19 @@ dialog.mdl[data-size='lg'] {
   inline-size: min(960px, calc(100vw - 40px));
 }
 
-.mdl__h,
-.drw__h {
+.mdl__h {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-}
-
-.mdl__h {
   padding: 18px 22px 0;
 }
 
-.mdl__h h2,
-.drw__h h2 {
+.mdl__h h2 {
   flex: 1;
   margin: 0;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.02em;
-}
-
-.mdl__h h2 {
-  font-size: 18px;
 }
 
 .mdl__sub {
@@ -3232,59 +3448,12 @@ dialog.mdl[data-size='lg'] {
   overflow-y: auto;
 }
 
-.mdl__f,
-.drw__f {
+.mdl__f {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
-}
-
-.mdl__f {
   padding: 0 22px 20px;
-}
-
-dialog.drw {
-  inline-size: min(560px, 100vw);
-  max-inline-size: 100vw;
-  block-size: 100%;
-  max-block-size: 100%;
-  margin: 0;
-  margin-inline-start: auto;
-  border-radius: 0;
-}
-
-dialog.drw[data-size='wide'] {
-  inline-size: min(820px, 100vw);
-}
-
-dialog.drw[open] {
-  animation: ad-drw-in 0.4s var(--ad-ease);
-}
-
-[dir='rtl'] dialog.drw[open] {
-  animation-name: ad-drw-in-rtl;
-}
-
-.drw__h {
-  align-items: center;
-  padding: 18px 22px;
-  border-bottom: 1px solid var(--ad-line);
-}
-
-.drw__h h2 {
-  font-size: 17px;
-}
-
-.drw__b {
-  flex: 1;
-  padding: 22px;
-  overflow-y: auto;
-}
-
-.drw__f {
-  padding: 14px 22px;
-  border-top: 1px solid var(--ad-line);
 }
 
 @keyframes ad-mdl-in {
@@ -3294,13 +3463,15 @@ dialog.drw[open] {
   }
 }
 
-@keyframes ad-drw-in {
-  from {
-    transform: translateX(100%);
-  }
+dialog.drw[data-size='wide'] {
+  inline-size: min(820px, 100vw);
 }
 
-@keyframes ad-drw-in-rtl {
+[dir='rtl'] dialog.drw[open] {
+  animation-name: drw-in-rtl;
+}
+
+@keyframes drw-in-rtl {
   from {
     transform: translateX(-100%);
   }

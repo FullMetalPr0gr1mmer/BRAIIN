@@ -1,9 +1,9 @@
 ---
 import { Picture } from 'astro:assets';
 import logo from '@/assets/braiin-logo-white.png';
+import { ENVIRONMENT_LABELS } from '@/lib/admin/environment';
 import type { NavGroup, NavLink } from '@/lib/admin/nav';
 import type { ShellState } from '@/lib/admin/shell';
-import Avatar from './Avatar.astro';
 import Icon from './Icon.astro';
 
 // The midnight sidebar (Admin v2 F2, the prototype's .side). Server-rendered, zero JS.
@@ -12,8 +12,10 @@ import Icon from './Icon.astro';
 // light dismiss, Escape and the top layer for free (WCAG 1.4.10: the menu is never lost
 // at 320px or 400% zoom). From 900px admin.css shows it in the page grid instead.
 //
-// The account chip at its foot is a <details> menu, as the topbar one was: name, role
-// and Sign out without any client code (the layout's script only adds light dismiss).
+// Beside the logo, the environment pill (F8): "Live", "Staging" or "Local", from the
+// deployment marker, and nothing when the database is unmarked. At its foot, the account
+// chip (F8): a link to /admin/account, which the chrome island opens as the account
+// drawer instead; the name and initials carry data hooks so a rename shows at once.
 
 interface Props {
   nav: readonly NavGroup[];
@@ -21,29 +23,38 @@ interface Props {
   brand: string;
   shell: ShellState;
   email: string;
-  role: string;
+  roleLabel: string;
   initials: string;
 }
 
-const { nav, current, brand, shell, email, role, initials } = Astro.props;
-const roleLabel = role.replace('_', ' ');
+const { nav, current, brand, shell, email, roleLabel, initials } = Astro.props;
 ---
 
 <nav id="admin-side" class="admin-sidebar admin-nav" popover="auto" aria-label="Admin sections">
   <div class="side__inner">
-    <a class="admin-brand" href="/admin">
-      {/* 104 CSS px; 264 is the 2x candidate (both on the /_image width allow-list). */}
-      <Picture
-        src={logo}
-        alt={brand}
-        formats={['avif', 'webp']}
-        width={104}
-        widths={[104, 264]}
-        sizes="104px"
-        decoding="async"
-        loading="eager"
-      />
-    </a>
+    <div class="side__logo">
+      <a class="admin-brand" href="/admin">
+        {/* 104 CSS px; 264 is the 2x candidate (both on the /_image width allow-list). */}
+        <Picture
+          src={logo}
+          alt={brand}
+          formats={['avif', 'webp']}
+          width={104}
+          widths={[104, 264]}
+          sizes="104px"
+          decoding="async"
+          loading="eager"
+        />
+      </a>
+      {
+        shell.environment && (
+          <span class="side__env" data-env={shell.environment}>
+            <span class="visually-hidden">Environment: </span>
+            {ENVIRONMENT_LABELS[shell.environment]}
+          </span>
+        )
+      }
+    </div>
 
     <div class="side__nav">
       {
@@ -77,27 +88,15 @@ const roleLabel = role.replace('_', ' ');
     </div>
 
     <div class="side__foot">
-      <details class="menu account-menu">
-        <summary class="side__user">
-          <Avatar initials={initials} />
-          <span class="side__who">
-            <b>{shell.displayName ?? email}</b>
-            <span>{roleLabel}</span>
-          </span>
-          <Icon name="chevd" size={16} />
-        </summary>
-        <div class="menu-panel">
-          <p class="menu-id">
-            {email}
-            <br />
-            Role: <strong>{roleLabel}</strong>
-          </p>
-          <button type="button" data-action="logout">
-            <Icon name="logout" size={16} />
-            Sign out
-          </button>
-        </div>
-      </details>
+      <a class="side__user" href="/admin/account" data-open="account">
+        <span class="avatar" aria-hidden="true" data-account-initials>{initials}</span>
+        <span class="side__who">
+          <span class="visually-hidden">Your account: </span>
+          <b data-account-name>{shell.displayName ?? email}</b>
+          <span data-role>{roleLabel}</span>
+        </span>
+        <Icon name="chevron" size={16} />
+      </a>
     </div>
   </div>
 </nav>

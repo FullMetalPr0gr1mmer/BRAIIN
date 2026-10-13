@@ -1,4 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react';
+import { focusReturnTarget, isRendered } from '@/lib/admin/focusReturn';
 
 // The behaviour Modal and Drawer share (Admin v2 F4b, ui.md §2.3): a native modal
 // <dialog> opened with showModal(), which brings the focus trap, Escape, the top layer and
@@ -8,6 +9,12 @@ import { useEffect, useRef, type RefObject } from 'react';
 //
 // Initial focus (ui.md §2.3): an element marked `data-autofocus` (Cancel, for a
 // destructive dialog), else the first field in the body, else the Close button.
+//
+// Focus return: the browser's own, checked by F8's rule (src/lib/admin/focusReturn.ts).
+// When the opener is no longer on screen (it sat in the phone sidebar's popover, which
+// showModal() closed, or the row it was in is gone), focus goes to the Menu button that
+// reopens the sidebar instead of dropping to <body>. The shell's two drawers (F8's
+// ChromeDrawer) apply the same rule, so the kit's Drawer can replace them unchanged.
 
 const FOCUSABLE =
   'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
@@ -26,6 +33,7 @@ export function useDialog(
   bodySelector: string,
 ): RefObject<HTMLDialogElement | null> {
   const ref = useRef<HTMLDialogElement | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const close = useRef(onClose);
   close.current = onClose;
 
@@ -33,6 +41,8 @@ export function useDialog(
     const dialog = ref.current;
     if (!dialog) return;
     if (open && !dialog.open) {
+      const active = dialog.ownerDocument.activeElement;
+      opener.current = active instanceof HTMLElement ? active : null;
       dialog.showModal();
       initialFocus(dialog, bodySelector)?.focus();
     } else if (!open && dialog.open) {
@@ -43,7 +53,19 @@ export function useDialog(
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    const onDialogClose = () => close.current();
+    const onDialogClose = () => {
+      const doc = dialog.ownerDocument;
+      focusReturnTarget<Element, HTMLElement>({
+        active: doc.activeElement,
+        body: doc.body,
+        dialog,
+        opener: opener.current,
+        fallback: doc.querySelector<HTMLElement>('[popovertarget="admin-side"]'),
+        contains: (container, element) => container.contains(element),
+        shown: isRendered,
+      })?.focus();
+      close.current();
+    };
     dialog.addEventListener('close', onDialogClose);
     return () => dialog.removeEventListener('close', onDialogClose);
   }, []);

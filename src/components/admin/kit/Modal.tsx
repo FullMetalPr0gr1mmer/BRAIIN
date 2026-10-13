@@ -52,12 +52,13 @@ export default function Modal({
         </div>
         <button
           type="button"
-          className="icon-btn"
+          className="btn--icon"
+          data-variant="ghost"
           data-dialog-close=""
           aria-label="Close"
           onClick={() => ref.current?.close()}
         >
-          <Icon name="x" size={16} />
+          <Icon name="x" />
         </button>
       </div>
       <div className="mdl__b">{children}</div>

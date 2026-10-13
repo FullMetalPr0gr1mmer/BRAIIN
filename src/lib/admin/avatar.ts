@@ -23,18 +23,5 @@ export function avatarTone(key: string): number {
   return hash % AVATAR_TONES;
 }
 
-/**
- * Two letters for the avatar: the first letters of the first and last words of the name,
- * the first two letters of a one-word name, else the first two characters of the e-mail.
- * Letters are whole characters (code points), so an Arabic or astral first letter is never
- * cut in half; Arabic has no case and is left as it is.
- */
-export function initialsOf(displayName: string | null, email: string): string {
-  const words = (displayName ?? '').split(/\s+/).filter(Boolean);
-  const first = (word: string, n: number) => Array.from(word).slice(0, n).join('');
-  if (words.length >= 2) {
-    return `${first(words[0]!, 1)}${first(words[words.length - 1]!, 1)}`.toUpperCase();
-  }
-  if (words.length === 1) return first(words[0]!, 2).toUpperCase();
-  return first(email, 2).toUpperCase();
-}
+/** Two letters for the avatar: ./initials (F8's home for it), re-exported beside the tone. */
+export { initialsOf } from './initials';

@@ -1,16 +1,21 @@
 import { useEffect } from 'react';
+import type { AccountView } from '@/lib/admin/account';
 import type { PaletteGroup } from '@/lib/admin/palette';
+import AccountDrawer from '@/components/admin/screens/chrome/AccountDrawer';
 import CommandPalette from '@/components/admin/screens/chrome/CommandPalette';
+import NotificationsDrawer from '@/components/admin/screens/chrome/NotificationsDrawer';
 
-// The shell's one interactive island (Admin v2 F3), hydrated on every admin page: the
-// command palette now, the notifications drawer and the account drawer later (F8).
-// Everything else in the shell is server-rendered and works without it.
+// The shell's one interactive island, hydrated on every admin page: the command palette
+// (F3), the notifications drawer and the account drawer (F8). Everything else in the shell
+// is server-rendered and works without it: the search trigger, the bell and the account
+// chip are links to pages that do the same job.
 
 export interface AdminChromeProps {
   palette: PaletteGroup[];
+  account: AccountView;
 }
 
-export default function AdminChrome({ palette }: AdminChromeProps) {
+export default function AdminChrome({ palette, account }: AdminChromeProps) {
   // The topbar's shortcut hint is rendered for Windows and Linux; a Mac reads ⌘ instead.
   // A text change after hydration: nothing is styled, so nothing touches style-src.
   useEffect(() => {
@@ -21,5 +26,11 @@ export default function AdminChrome({ palette }: AdminChromeProps) {
     }
   }, []);
 
-  return <CommandPalette groups={palette} />;
+  return (
+    <>
+      <CommandPalette groups={palette} />
+      <NotificationsDrawer />
+      <AccountDrawer view={account} />
+    </>
+  );
 }

@@ -56,14 +56,14 @@ export default function ListRow({
             {title}
           </a>
         ) : (
-          <p className="li__t" dir="auto">
+          <span className="li__t" dir="auto">
             {title}
-          </p>
+          </span>
         )}
         {sub && (
-          <p className="li__s" dir="auto">
+          <span className="li__s" dir="auto">
             {sub}
-          </p>
+          </span>
         )}
       </div>
       {hidden && (

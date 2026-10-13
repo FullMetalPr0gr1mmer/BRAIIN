@@ -127,7 +127,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
     const files = readdirSync(join(ROOT, 'public/styles/admin')).filter((f) => f.endsWith('.css'));
     expect(files.sort()).toEqual([...ADMIN_STYLESHEETS].sort());
     // Pinned, not derived: a sheet dropped from the list must fail, not go unchecked.
-    expect([...ADMIN_STYLESHEETS].sort()).toEqual(['login.css', 'search.css']);
+    expect([...ADMIN_STYLESHEETS].sort()).toEqual(['login.css', 'personal.css', 'search.css']);
   });
 
   it.each([...ADMIN_STYLESHEETS])(
@@ -187,6 +187,19 @@ describe('admin.css keeps the design system’s hooks', () => {
   });
 });
 
+describe('admin.css: a list row wraps text it does not control (Admin v2 F8)', () => {
+  // The bell's rows carry what visitors typed: a lead's name and an applicant's role, up
+  // to 120 characters each, possibly one unbroken word. tests/admin/personal.e2e.ts proves
+  // the drawer then has no sideways scroll; this keeps the rule that makes it so.
+  it('lets the title and the second line break anywhere', () => {
+    for (const hook of ['li__t', 'li__s']) {
+      expect(ADMIN, hook).toMatch(
+        new RegExp(`(?:^|\\n)\\.${hook}\\s*\\{[^}]*overflow-wrap:\\s*anywhere`),
+      );
+    }
+  });
+});
+
 describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
   // tests/admin/shell.e2e.ts proves it in a browser; this keeps the two halves together.
   it('pads the scroll port by the height the layout measures', () => {
@@ -198,7 +211,7 @@ describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
 
 describe('admin.css keeps the hooks the markup renders', () => {
   // Classes that are behaviour or test hooks with no style of their own.
-  const UNSTYLED_HOOKS = new Set(['account-menu', 'admin-nav']);
+  const UNSTYLED_HOOKS = new Set(['admin-nav']);
 
   function walk(dir: string): string[] {
     return readdirSync(join(ROOT, dir)).flatMap((name) => {
@@ -310,6 +323,10 @@ describe('admin.css keeps the hooks the markup renders', () => {
         [...new Set((renderers[sheet] ?? []).flatMap(({ file }) => pagesOf(file)))].sort();
       expect(pagesFor('login.css')).toEqual(['src/pages/admin/login.astro']);
       expect(pagesFor('search.css')).toEqual(['src/pages/admin/search.astro']);
+      expect(pagesFor('personal.css')).toEqual([
+        'src/pages/admin/account.astro',
+        'src/pages/admin/notifications.astro',
+      ]);
       // Both sheets' classes are rendered by their pages themselves, so the import walk
       // is proved on a screen's code: through its island entry to every page hydrating it.
       expect(pagesOf('src/components/admin/screens/insights/InsightsPanel.tsx').sort()).toEqual([

@@ -1,0 +1,75 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AccountPanel from '@/components/admin/screens/chrome/AccountPanel';
+import { accountViewFor, type AccountFlash } from '@/lib/admin/account';
+import { accountFormPost, mayPostPersonalForm, savedAccountFlash } from '@/lib/admin/personalForms';
+import { clientIp } from '@/lib/http/maintenance';
+
+export const prerender = false;
+
+// Your account (Admin v2 F8, docs/admin-v2/ui.md §2.9): the no-JS page for the account
+// drawer's forms, which the sidebar's account chip links to. The same AccountPanel, rendered
+// on the server and never hydrated; its forms post here (the middleware has checked the
+// origin and the double-submit token before this runs). What a post does is
+// accountFormPost() (src/lib/admin/personalForms.ts): the same functions and checks as the
+// JSON routes the drawer calls, answering the same statuses; a success redirects (303) so a
+// reload cannot send it twice. Nothing a person typed as a password is ever rendered back.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+let flash: AccountFlash | null = null;
+let submittedName: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  // Any active member, as the JSON routes (`analytics.read`); a refusal is a 403, never an
+  // uncaught throw (a 500).
+  if (!mayPostPersonalForm(session) || !sb) {
+    return new Response(null, { status: 403, headers: { 'cache-control': 'no-store' } });
+  }
+  const result = await accountFormPost({
+    sb,
+    session,
+    form: await Astro.request.formData(),
+    cookies: Astro.cookies,
+    ip: clientIp(Astro.request),
+  });
+  if (result.kind === 'redirect') return Astro.redirect(result.location, 303);
+  Astro.response.status = result.status;
+  flash = result.flash;
+  if ('submittedName' in result) submittedName = result.submittedName;
+}
+
+flash ??= savedAccountFlash(Astro.url.searchParams.get('saved'));
+
+// The name as stored (the shell reads it too; one small read).
+let displayName: string | null = null;
+if (session && sb) {
+  const { data } = await sb
+    .from('profiles')
+    .select('display_name')
+    .eq('id', session.userId)
+    .maybeSingle<{ display_name: string | null }>();
+  displayName = data?.display_name?.trim() || null;
+}
+const view = session ? accountViewFor(session, submittedName ?? displayName) : null;
+---
+
+<AdminLayout
+  title="Your account"
+  subtitle="Your name, your password and what you can do here."
+  styles={['personal.css']}
+>
+  {
+    view && (
+      <div class="card acct-page">
+        <AccountPanel
+          view={view}
+          idPrefix="acct-page"
+          mode="page"
+          csrfToken={Astro.locals.csrfToken}
+          flash={flash}
+        />
+      </div>
+    )
+  }
+</AdminLayout>

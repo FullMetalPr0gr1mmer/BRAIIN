@@ -5,6 +5,10 @@
 // commit; one line per case, in sorted order, so parallel changes rarely meet.
 
 export const CASE_MANIFEST: readonly string[] = [
+  'account: my name',
+  'account: my password',
+  'account: my preferences read',
+  'account: my preferences save',
   'analytics: analytics dashboards',
   'analytics: search analytics',
   'appearance: navigation create',
@@ -99,6 +103,8 @@ export const CASE_MANIFEST: readonly string[] = [
   'media: media register (external asset)',
   'media: media update (full row)',
   'media: media usage',
+  'notifications: mark all read',
+  'notifications: the bell list',
   'pages: page visibility toggle',
   'pages: pages create',
   'pages: pages delete',

@@ -70,6 +70,55 @@
   - "nothing is saved until you publish" → "nothing goes live until you publish";
   - Health's "No CSP header".
 
+## Residual risks waiting on the owner
+
+Gaps the build cannot close in code, recorded with the owner action that closes them, an
+owner, an expiry and a close condition (CLAUDE.md §11).
+
+- **A password changed at Supabase Auth itself** (Admin v2 F8; owner item **O-24**).
+  - *The gap.* The admin's own `POST /api/admin/me/password` re-authenticates with the
+    current password, counts a refused one toward the 5-in-15-minutes lockout, holds the new
+    one to 10 characters, signs out every other session and is audited. All of that is the
+    Worker's. Supabase Auth's `PUT /auth/v1/user` is public (the project URL and the anon
+    key ship to every browser), and with a session's access token alone (read from an
+    unlocked machine's devtools, or a copied `__Host-braiin-auth` cookie) it sets a new
+    password: no current password (GoTrue's default), no lockout count, GoTrue's own minimum
+    length, and no row in the app's hash-chained `public.audit_log` (GoTrue records the
+    change only in its own auth audit log, as `user_updated_password`). GoTrue then signs out
+    every other session of that user, so the real owner's other devices are signed out too:
+    only the session that made the change stays signed in, and the real owner is locked out
+    of their account. It predates F8, which built the checked route and recorded this.
+  - *What the code does.* The route sends `current_password` with the update and counts
+    GoTrue's `current_password_invalid` as a wrong try, so it keeps working when the setting
+    below is on. The local stack (`supabase/config.toml`, pinned by
+    `tests/lib/accountPassword.spec.ts`) sets the minimum length to 10 and turns on Secure
+    password change: a session older than 24 hours needs an e-mailed code to change its
+    password at the auth server. The admin's route never needs that code, because its
+    re-authentication starts a fresh session, so no password change depends on SMTP (O-2).
+    Requiring the current password has no key in `config.toml` (CLI 2.118), so CI proves the
+    Worker's path only.
+  - *What closes it* (launch runbook §2a, staging and production): require the current
+    password (`security_update_password_require_current_password`), minimum length 10,
+    Secure password change on. A direct call then needs the current password too. What
+    remains is GoTrue's to own: a direct call counts no lockout, and a direct change is
+    audited only in GoTrue's own log (`user_updated_password`), never in `public.audit_log`,
+    so a stolen token can still be used to guess the current password there, outside the
+    Worker's lockout; O-24 asks the owner to accept that remainder. Without the first
+    setting, a token from a session younger than 24 hours still changes the password.
+  - *A compensating control (not built; the owner's choice).* Every change, the admin's
+    included, reaches GoTrue, so every change writes `user_updated_password` to GoTrue's own
+    log (the project's Auth logs, and `auth.audit_log_entries` unless the project has turned
+    off writing auth audit logs to the database). A change through the admin also writes
+    `auth.password_change` to `public.audit_log` for the same user a moment later. A
+    `user_updated_password` with no matching `auth.password_change` is a change made outside
+    the admin, and an alert on it shows the takeover above. A recovery or invite link, once
+    set up (O-2, O-22), also sets a password at the auth server, so such an alert must
+    allow for those.
+  - *Owner:* Kareem (O-24). *Expiry:* F8's production push, at the latest 2026-11-30.
+    *Closes when* the Management API's auth config on both projects reads
+    `security_update_password_require_current_password: true`, `password_min_length: 10`
+    and `security_update_password_require_reauthentication: true`.
+
 ## The client's TDD, row by row
 
 Checked by the coverage reviewer against the three designs on 2026-10-03
@@ -150,7 +199,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §6.4/§15 backups | Daily automatic (keep 30), manual, downloadable, restorable | deviated-challenge | built under A6 | AV-24/R13 export-backup; DR runbook (§10) | No leads in admin backups (§7) is standard; scheduled content snapshots are not barred. |
 | §7 | Every endpoint declares its permission; 403 server-side | covered | covered | defineAdminRoute/assertCap + RLS; endpoints.spec over all roles incl. sales, other_tenant |  |
 | §7 | An owner cannot be downgraded by an admin | missing | added as a slice | src/pages/api/admin/users/[id].ts refuses only self-demotion | Any Admin can demote the principal Admin. An owner marker needs no new role. |
-| §7 | Email + password, session cookie, login rate limiting | covered | covered | existing lockout (5/15 min -> 423), AV-06 |  |
+| §7 | Email + password, session cookie, login rate limiting | covered | covered | existing lockout (5/15 min -> 423), AV-06 | The lockout is the Worker's, the password change's re-authentication included (F8); Supabase Auth's own endpoints are the residual risk above (O-24). |
 | §7 | Sales = leads + stats | deviated-challenge | built under A6 | CRM-10 (no analytics.read) | §5 gives analytics.read to every current role; aggregates carry no PII. |
 | §8.1 | Three-column editor; drag reorder, eye, rename, remove, add section | covered | covered | AV-25 | Remove is Admin-only (§5 archive/delete). |
 | §8.1 | SECTION_LIBRARY generic blocks (text, gallery, video, CTA, custom HTML) | deviated-challenge | built under A6 | AV-25 typed types; AV-33 textBlock | Refusing Custom HTML (Pillar 1) is right; Gallery/Video/Text are ordinary typed types. |
