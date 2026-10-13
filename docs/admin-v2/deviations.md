@@ -30,8 +30,11 @@
   - archive/delete is Admin only.
 - **Media**:
   - images only (video via Stream later, EXC-009);
-  - no SVG/GIF;
-  - originals are re-encoded;
+  - no SVG/GIF, no animations, and no AVIF or HEIC input (the Images binding reads AVIF only on an Enterprise plan; U3);
+  - originals are re-encoded: one WebP master at most 2,560 px on its long edge, EXIF and GPS dropped (AVIF output stops at 1,200 px, so `/_image` makes the AVIF derivatives from the master; B7 item 2, U3);
+  - uploads are at most 20 MB, the Images binding's input limit, not 25 MB (B7 item 2, U3);
+  - no upload more than 100 times as long as it is wide, either way (`MEDIA_MAX_ASPECT`): thinner, every width the site renders it at rounds its height to 0 and `/_image` admits no URL for it (U3 review);
+  - a deleted or replaced upload stays reachable for up to about two hours after its file is removed, not "at once": Supabase's CDN copy and the `/_image` derivative live an hour each, the Free plan cannot purge the first, and purging the second needs the zone's purge token; pages cached before the change keep the old image URL until purged (owner: O-3 for the purge token, the Supabase plan for Smart CDN; runbook §6i; U3 review);
   - no local blob previews (CSP).
 - **Theme**:
   - no Google/Adobe font links or raw font uploads; the curated self-hosted catalogue replaces them (CSP, PDPL, font budget);
@@ -182,8 +185,8 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §6.2 collections | Taxonomies, testimonials, clients, team, FAQ, joinWhy/joinSteps | covered | covered | AV-15, AV-16 (faq_items), AV-25 (join items) | Client 'visible' is the disclosure permission (§8). |
 | §6.2 media | Image library: upload, search, tags, where-used | covered | covered | AV-11, AV-12, R5 (media_usage v4 incl. drafts) |  |
 | §6.2/§8.6 media | Video uploads up to 500 MB with poster frames | deferred | later phase (A1) or legal gate | A5 | Video later with Stream. |
-| §8.6 | Signed direct uploads, 25 MB images, variants generated on upload | deviated-ok | deviation (standard or owner decision) | AV-11 | Worker-mediated upload sniffs bytes before storing (Pillar 1); variants via /_image. The 10 MB cap itself has no standard basis (challenged). |
-| §17 | Image re-encoding on upload | missing | added as a slice | none (AV-11 stores originals) | EXIF/GPS stay public at the original bucket URL. |
+| §8.6 | Signed direct uploads, 25 MB images, variants generated on upload | deviated-ok | deviation (standard or owner decision) | AV-11 | Worker-mediated upload sniffs bytes before storing (Pillar 1); variants via /_image from one WebP master. Capped at 20 MB, the Images binding's input limit (B7 item 2; built in U3), not 25 MB. |
+| §17 | Image re-encoding on upload | missing | added as a slice | none (AV-11 stores originals) | Built in U3: the IMAGES binding writes one WebP master at a 2,560 px long edge and only it is stored, so EXIF/GPS never reach the public bucket (a WebP metadata strip is the belt). |
 | §6.3 leads | Lead record with assigned, value, score, starred, read, notes, timeline, contactId | covered | covered | CRM-1-CRM-4 |  |
 | §6.3 leads | page, utm, device, country, city captured on each lead | deviated-ok | deviation (standard or owner decision) | CRM-13 (legal + consent gated) | PDPL + hasConsent basis; landing_path server-derived; city never stored (minimisation, O4). |
 | §6.3 crm.contacts | Contacts with stage, tags, owner, custom fields, star, last activity | covered | covered | CRM-5-CRM-7, CRM-9 | Contact stages fixed: the prototype says 'Fixed', so the TDD's 'editable' loses. |
@@ -256,7 +259,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §16 | Workers: rollups, backups, health checks, link crawl, senders, sheets sync | covered | covered | existing pg_cron rollups + AV-10 rollup_vitals; R7/R11 minute cron; §10 DR | Senders/sheets are A1; health from the external monitor; a crawl does not fit the free plan's 10 ms cron CPU. |
 | §17 | Phases 1-3: foundation, CMS live, leads | covered | covered | R0-R16, AV-01-AV-31, CRM-1-CRM-14 | Phase-3 notifications/auto reply/inbox threads (A1) and import (O12) excluded. |
 | §17 | Phases 4-7: email, WhatsApp, automations, growth | deferred | later phase (A1) or legal gate | A1 (4-6); phase 7 partly outside A1 | GA4, Search Console, beacon enrichment, health worker and editable help need owner confirmation. |
-| §17 | Security basics (HTTPS, HttpOnly, CSRF, permission checks, rate limits, upload validation, masked secrets, audit, off-site backups, consent log, export audit, deletion on request) | covered | covered | existing standard + AV-11, CRM-3/CRM-5 | Image re-encoding missing; the marketing consent log is deferred (A1). |
+| §17 | Security basics (HTTPS, HttpOnly, CSRF, permission checks, rate limits, upload validation, masked secrets, audit, off-site backups, consent log, export audit, deletion on request) | covered | covered | existing standard + AV-11, CRM-3/CRM-5 | Image re-encoding built in U3; the marketing consent log is deferred (A1). |
 | §17 | Admin English; content EN+AR; Almarai + dir=rtl on AR editors | covered | covered | AV-02, AV-08, UI §1.5 |  |
 | §17 | Eastern Arabic digits in content are never transformed | missing | added as a slice | none | No design states it and no test guards it. |
 | §19 | Prototype shortcuts replaced (secrets, uploads, role checks, stats, login, placeholders) | covered | covered | AV-06, AV-11, AV-20, RLS + assertCap, rollups, 0025/0027/0028 guards | Placeholders: the replace-and-clear flow; production refuses live samples unless the owner override (runbook §6c). |
