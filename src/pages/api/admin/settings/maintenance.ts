@@ -34,14 +34,31 @@ export const PATCH = defineAdminRoute({
   cap: 'maintenance.manage',
   input: MaintenanceSchema,
   handler: async ({ auth, sb, input, audit, request }) => {
-    const state = { active: input.active, allowlist: input.allowlist };
-
     const { data: existing, error: readError } = await sb
       .from('site_settings')
-      .select('version')
+      .select('version,maintenance')
       .eq('tenant_id', auth.tenantId)
-      .maybeSingle<{ version: number }>();
+      .maybeSingle<{ version: number; maintenance: unknown }>();
     if (readError) throw new Error(`read settings: ${readError.message}`);
+
+    // When the switch last flipped, for the bell (Admin v2 F8): stamped now when `active`
+    // changes (no row yet reads as off, the default), kept while only the allowlist does,
+    // and left unknown when it never was recorded rather than invented.
+    const previous = (existing?.maintenance ?? null) as {
+      active?: unknown;
+      changedAt?: unknown;
+    } | null;
+    const flipped = (previous?.active === true) !== input.active;
+    const changedAt = flipped
+      ? new Date().toISOString()
+      : typeof previous?.changedAt === 'string'
+        ? previous.changedAt
+        : null;
+    const state = {
+      active: input.active,
+      allowlist: input.allowlist,
+      ...(changedAt ? { changedAt } : {}),
+    };
 
     if (!existing) {
       if (input.version !== 0 && input.version !== 1)

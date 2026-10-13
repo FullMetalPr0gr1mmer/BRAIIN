@@ -1,0 +1,106 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import NotificationList from '@/components/admin/screens/chrome/NotificationList';
+import { loadNotifications, type NotificationFeed } from '@/lib/admin/notifications';
+import { mayPostPersonalForm, notificationsFormPost } from '@/lib/admin/personalForms';
+import type { ShellPreload } from '@/lib/admin/shell';
+import { getMaintenanceState } from '@/lib/http/maintenance';
+import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
+
+export const prerender = false;
+
+// Notifications (Admin v2 F8, docs/admin-v2/ui.md §2.8): the list the bell's drawer shows,
+// rendered on the server for a browser without JS (the bell is a link here). The same
+// loader as the drawer and the unread count, so the three never disagree; "Mark all as
+// read" is a form that posts here (the middleware has checked the origin and the
+// double-submit token) and redirects back. What the post does is notificationsFormPost()
+// (src/lib/admin/personalForms.ts).
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+let markFailed = false;
+
+if (Astro.request.method === 'POST') {
+  // Any active member (`analytics.read`, which every role holds); a refusal is a 403.
+  if (!mayPostPersonalForm(session) || !sb) {
+    return new Response(null, { status: 403, headers: { 'cache-control': 'no-store' } });
+  }
+  const result = await notificationsFormPost({
+    sb,
+    session,
+    form: await Astro.request.formData(),
+  });
+  if (result.kind === 'redirect') return Astro.redirect(result.location, 303);
+  Astro.response.status = result.status;
+  markFailed = true;
+}
+
+// One read of the feed (with labels) and of the maintenance snapshot, shared with the
+// shell's unread count and badge (AdminLayout's `preload`), so the page does not run the
+// bell's loader twice.
+let preload: ShellPreload | undefined;
+if (session && sb) {
+  const maintenance = await getMaintenanceState(env);
+  preload = {
+    maintenance,
+    feed: await loadNotifications(sb, session, {
+      maintenance: async () => maintenance,
+      labels: true,
+    }),
+  };
+}
+const feed: NotificationFeed = preload?.feed ?? {
+  items: [],
+  unread: 0,
+  seenAt: null,
+  failed: [],
+  asOf: new Date().toISOString(),
+};
+const failedToMark = markFailed;
+const done = Astro.url.searchParams.get('done') === 'seen';
+---
+
+<AdminLayout
+  title="Notifications"
+  subtitle="What changed or arrived for you lately."
+  styles={['personal.css']}
+  preload={preload}
+>
+  <div class="card ntf-page">
+    {
+      failedToMark && (
+        <p class="msg" data-kind="error" role="alert">
+          That did not work. Try again.
+        </p>
+      )
+    }
+    {
+      feed.failed.length > 0 && (
+        <p class="msg" data-kind="error" role="alert">
+          Some notifications could not be loaded just now.
+        </p>
+      )
+    }
+    {
+      done && !failedToMark && (
+        <p class="acct__note" role="status">
+          All caught up.
+        </p>
+      )
+    }
+    <NotificationList items={feed.items} now={Date.now()} />
+    {
+      feed.unread > 0 && (
+        <form method="post" action="/admin/notifications" class="ntf-page__actions">
+          <input type="hidden" name={CSRF_FIELD_NAME} value={Astro.locals.csrfToken} />
+          <input type="hidden" name="intent" value="seen" />
+          <input type="hidden" name="as_of" value={feed.asOf} />
+          <button type="submit" data-variant="ghost">
+            Mark all as read
+          </button>
+        </form>
+      )
+    }
+  </div>
+</AdminLayout>
