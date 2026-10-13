@@ -109,9 +109,11 @@ test.describe('as content_creator', () => {
       results.getByRole('link', { name: /Saving, publishing and scheduling/ }),
     ).toBeVisible();
 
-    // Leads and their personal data are not Content Creator's: their guides never show.
+    // Leads and their personal data are not Content Creator's: their guides never show. The
+    // roles guide says "no leads" and is every member's, so its row shows once this search
+    // has answered (the previous search's list does not hold it).
     await search.fill('leads');
-    await expect(drawer.getByRole('status')).not.toHaveText('');
+    await expect(results.getByRole('link', { name: /Roles: who can do what/ })).toBeVisible();
     await expect(drawer.getByRole('link', { name: /Working with leads/ })).toHaveCount(0);
     await expect(drawer.getByRole('link', { name: /Personal data/ })).toHaveCount(0);
 
