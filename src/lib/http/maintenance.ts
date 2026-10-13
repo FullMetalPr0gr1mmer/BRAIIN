@@ -8,6 +8,19 @@ import { IDENTITY_FALLBACK } from '@/lib/identity/fallback';
 export interface MaintenanceState {
   active: boolean;
   allowlist: readonly string[];
+  /**
+   * When `active` last flipped, as an ISO timestamp (Admin v2 F8: the bell's "Maintenance
+   * mode was turned on/off"). Absent on a value written before it existed. Never read by
+   * the pre-cache check, which needs only `active` and the allowlist.
+   */
+  changedAt?: string;
+}
+
+/** An ISO timestamp the snapshot may carry, or nothing. */
+function changedAtOf(value: unknown): { changedAt: string } | Record<string, never> {
+  return typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value))
+    ? { changedAt: value }
+    : {};
 }
 
 export const MAINTENANCE_KV_KEY = 'site:maintenance';
@@ -36,7 +49,11 @@ export async function putMaintenanceState(
     if (!env.SESSION) return false;
     await env.SESSION.put(
       MAINTENANCE_KV_KEY,
-      JSON.stringify({ active: state.active, allowlist: [...state.allowlist] }),
+      JSON.stringify({
+        active: state.active,
+        allowlist: [...state.allowlist],
+        ...changedAtOf(state.changedAt),
+      }),
     );
     return true;
   } catch {
@@ -50,10 +67,11 @@ export async function getMaintenanceState(env: {
   try {
     const raw = await env.SESSION?.get(MAINTENANCE_KV_KEY);
     if (!raw) return { active: false, allowlist: [] };
-    const parsed = JSON.parse(raw) as Partial<MaintenanceState>;
+    const parsed = JSON.parse(raw) as Partial<Record<keyof MaintenanceState, unknown>>;
     return {
       active: parsed.active === true,
-      allowlist: Array.isArray(parsed.allowlist) ? parsed.allowlist : [],
+      allowlist: Array.isArray(parsed.allowlist) ? (parsed.allowlist as string[]) : [],
+      ...changedAtOf(parsed.changedAt),
     };
   } catch {
     // Fail OPEN for maintenance (never lock the whole site out on a KV blip).

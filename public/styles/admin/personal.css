@@ -1,0 +1,18 @@
+/* Screen stylesheet: the personal pages, /admin/account and /admin/notifications (Admin v2
+   F8): the no-JS twins of the account and notifications drawers. Linked only through
+   AdminLayout's `styles` prop (styles={['personal.css']}), after admin.css. The drawers'
+   own content (.acct, .list, .li, .empty) is shell, rendered on every page, so it stays in
+   admin.css; only the pages' frames are here. It uses admin.css's tokens and declares
+   none, and holds no colour literal (tests/lib/adminStyles.spec.ts,
+   scripts/contrast-audit.mjs). */
+
+.acct-page,
+.ntf-page {
+  max-inline-size: 44rem;
+}
+
+.ntf-page__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
