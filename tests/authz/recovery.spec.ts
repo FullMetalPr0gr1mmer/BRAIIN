@@ -41,8 +41,9 @@ const state = vi.hoisted(() => ({
   known: new Set<string>(),
   sendGate: null as Promise<void> | null,
   sent: [] as { email: string; redirectTo: string | undefined }[],
-  verify: { ok: true },
-  update: { error: null as null | { message: string; code?: string } },
+  verify: { ok: true, status: 403 },
+  update: { error: null as null | { message: string; code?: string; status?: number } },
+  updateThrows: false,
   signOutGlobalError: null as null | { message: string },
   calls: [] as string[],
 }));
@@ -104,10 +105,14 @@ vi.mock('@supabase/supabase-js', () => ({
           state.calls.push(`verify:${params.type}`);
           return state.verify.ok
             ? { data: { session: { access_token: 'a' }, user: { id: UUID } }, error: null }
-            : { data: { session: null, user: null }, error: { message: 'expired', status: 403 } };
+            : {
+                data: { session: null, user: null },
+                error: { message: 'refused', status: state.verify.status },
+              };
         },
         updateUser: async (attrs: { password: string }) => {
           state.calls.push(`update:${attrs.password.length}`);
+          if (state.updateThrows) throw new Error('network');
           return { data: {}, error: state.update.error };
         },
         signOut: async (opts: { scope: string }) => {
@@ -144,7 +149,8 @@ beforeEach(() => {
   state.known = new Set(['staff@example.test']);
   state.sendGate = null;
   state.sent.length = 0;
-  state.verify = { ok: true };
+  state.verify = { ok: true, status: 403 };
+  state.updateThrows = false;
   state.update = { error: null };
   state.signOutGlobalError = null;
   state.calls.length = 0;
@@ -448,7 +454,7 @@ describe('POST /api/admin/auth/reset: checks before the token is spent', () => {
   });
 
   it(`limits attempts to ${RECOVERY_LIMITS.resetPerIp.max} an hour per address, before verifying`, async () => {
-    state.verify = { ok: false };
+    state.verify = { ok: false, status: 403 };
     for (let i = 0; i < RECOVERY_LIMITS.resetPerIp.max; i++) {
       await reset({ token_hash: TOKEN, password: NEW_PASSWORD, confirm: NEW_PASSWORD });
     }
@@ -532,7 +538,7 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
   });
 
   it('a token GoTrue refuses is an invalid link: nothing set, and the form drops the token', async () => {
-    state.verify = { ok: false };
+    state.verify = { ok: false, status: 403 };
     const { res } = await reset({
       token_hash: TOKEN,
       password: NEW_PASSWORD,
@@ -549,7 +555,7 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
   });
 
   it('a password GoTrue refuses ends the recovery session; the link is spent', async () => {
-    state.update = { error: { message: 'weak', code: 'weak_password' } };
+    state.update = { error: { message: 'weak', code: 'weak_password', status: 422 } };
     const { res } = await reset({
       token_hash: TOKEN,
       password: NEW_PASSWORD,

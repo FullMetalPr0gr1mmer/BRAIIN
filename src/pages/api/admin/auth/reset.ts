@@ -47,7 +47,14 @@ export const prerender = false;
 
 const RESET_PAGE = '/admin/reset';
 
-type Failure = 'invalid-link' | 'length' | 'mismatch' | 'limited' | 'unavailable' | 'refused';
+type Failure =
+  | 'invalid-link'
+  | 'length'
+  | 'mismatch'
+  | 'limited'
+  | 'unavailable'
+  | 'refused'
+  | 'interrupted';
 
 const FAILURE_STATUS: Record<Failure, number> = {
   'invalid-link': 400,
@@ -56,6 +63,7 @@ const FAILURE_STATUS: Record<Failure, number> = {
   limited: 429,
   unavailable: 503,
   refused: 422,
+  interrupted: 503,
 };
 
 /** The page codes. A failure before the token is spent keeps it in the URL. */
@@ -66,6 +74,7 @@ const PAGE_CODE: Record<Failure, string> = {
   limited: 'limited',
   unavailable: 'unavailable',
   refused: 'refused',
+  interrupted: 'interrupted',
 };
 const TOKEN_KEPT: ReadonlySet<Failure> = new Set(['length', 'mismatch', 'limited', 'unavailable']);
 
@@ -117,6 +126,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       type: 'recovery',
       token_hash: parsed.data.token,
     });
+    // GoTrue's own throttle or outage leaves the token unspent: say so, and keep it.
+    if (error?.status === 429) return fail('limited');
+    if (error && (error.status ?? 0) >= 500) return fail('unavailable');
     if (error || !data.session || !data.user) return fail('invalid-link');
     userId = data.user.id;
   } catch {
@@ -127,13 +139,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const { error } = await client.auth.updateUser({ password: parsed.data.password });
     if (error) {
       // The token is spent: end the recovery session it opened, so nothing outlives the
-      // request, and say plainly that a new link is needed.
+      // request, and say plainly that a new link is needed. A 4xx is GoTrue refusing the
+      // password (its policy, or the same as before); anything else broke on the way.
       await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
-      return fail('refused');
+      const status = error.status ?? 0;
+      return fail(status >= 400 && status < 500 && status !== 429 ? 'refused' : 'interrupted');
     }
   } catch {
     await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
-    return fail('unavailable');
+    return fail('interrupted');
   }
 
   // Everywhere: every session of the account, on every device, the recovery one included.

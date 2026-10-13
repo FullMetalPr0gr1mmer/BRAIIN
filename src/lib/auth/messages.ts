@@ -52,16 +52,21 @@ export const RESET_MESSAGES = {
   expired: msg('error', 'This reset link is not valid, has been used, or has expired.'),
   length: msg('error', `Use ${NEW_PASSWORD_MIN} to ${NEW_PASSWORD_MAX} characters.`),
   mismatch: msg('error', 'The two passwords do not match.'),
-  limited: msg('error', 'Too many attempts. Try again in an hour.'),
+  // Our own limit (an hour's window) or Supabase's (shorter): the link is still good.
+  limited: msg('error', 'Too many attempts. Try again later; this link still works until it expires.'),
   unavailable: msg('error', 'Something went wrong on our side. Try again in a few minutes.'),
   refused: msg(
     'error',
     'That password was not accepted. It may be too common, or the same as your last one. The link is now used up, so ask for a new one.',
   ),
+  interrupted: msg(
+    'error',
+    'Something went wrong on our side, and the link is now used up. Ask for a new one.',
+  ),
 } as const;
 
 /** The reset codes that leave the person without a usable link (the page drops the form). */
-export const RESET_LINK_SPENT: ReadonlySet<string> = new Set(['expired', 'refused']);
+export const RESET_LINK_SPENT: ReadonlySet<string> = new Set(['expired', 'refused', 'interrupted']);
 
 /** A code from the query string → its message, or null for anything not on the list. */
 export function messageFor<T extends Record<string, PageMessage>>(
