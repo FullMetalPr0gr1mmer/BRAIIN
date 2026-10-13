@@ -24,7 +24,7 @@ import {
   ValuePointSchema,
 } from './content';
 import { LocalizedDocSchema } from './tiptap';
-import { DisplayNameValueSchema } from './adminPrefs';
+import { DisplayNameValueSchema, PASSWORD_MAX_BYTES, PASSWORD_MIN, utf8Bytes } from './adminPrefs';
 import { SectionTypeSchema, sectionContentIssues, type SectionType } from './sections';
 import { StaticMediaKeySchema, VideoClipSchema } from './media';
 
@@ -114,12 +114,20 @@ export type LoginInput = z.infer<typeof LoginSchema>;
 export const ForgotPasswordSchema = z.object({ email: AccountEmailSchema });
 
 /**
- * A new password set through a reset link. OWASP ASVS 4.0.3 V2.1.1 and V2.1.2: at least
- * 12 characters, at most 128. Stricter than sign-in's floor of 8, which still has to
- * accept the passwords accounts already hold. GoTrue's own policy applies on top.
+ * A new password set through a reset link follows the admin's one rule for a new password,
+ * the account screen's (Admin v2 F8, packages/schemas/adminPrefs.ts): at least
+ * PASSWORD_MIN characters, the auth server's own minimum too (owner item O-24), and at
+ * most PASSWORD_MAX_BYTES bytes, all bcrypt reads. Sign-in's floor stays 8, which still
+ * has to accept the passwords accounts already hold. GoTrue's own policy applies on top.
+ * Checked before the reset spends its link, so a password the auth server would refuse
+ * for its length never costs the person the link.
  */
-export const NEW_PASSWORD_MIN = 12;
-export const NEW_PASSWORD_MAX = 128;
+export function newPasswordProblem(value: string): 'short' | 'long' | null {
+  if (value.length < PASSWORD_MIN) return 'short';
+  // A UTF-16 unit is at least one byte, so a longer string is over before it is encoded.
+  if (value.length > PASSWORD_MAX_BYTES || utf8Bytes(value) > PASSWORD_MAX_BYTES) return 'long';
+  return null;
+}
 
 /**
  * GoTrue's recovery token hash, as the reset e-mail's link carries it (`token_hash`):
@@ -130,8 +138,8 @@ export const RECOVERY_TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 export const ResetPasswordSchema = z
   .object({
     token: z.string().regex(RECOVERY_TOKEN_PATTERN),
-    password: z.string().min(NEW_PASSWORD_MIN).max(NEW_PASSWORD_MAX),
-    confirm: z.string().max(NEW_PASSWORD_MAX),
+    password: z.string().refine((value) => newPasswordProblem(value) === null),
+    confirm: z.string().max(PASSWORD_MAX_BYTES),
   })
   .refine((v) => v.password === v.confirm, { path: ['confirm'], message: 'mismatch' });
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;

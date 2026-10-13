@@ -1,11 +1,11 @@
 import { LOCKOUT_DURATION_MINUTES } from './lockout';
-import { NEW_PASSWORD_MAX, NEW_PASSWORD_MIN } from '@schemas/admin';
+import { PASSWORD_MIN } from '@schemas/adminPrefs';
 
 // What the sign-in screens say about an outcome (Admin v2 F7). The endpoints answer a form
 // post with a 303 carrying a CODE (src/pages/api/admin/auth/*.ts); the page looks the code
 // up here and renders fixed copy. So nothing typed, and nothing an attacker writes into a
 // link, is ever echoed: an unknown code renders nothing. Admin copy rules (P-12): plain,
-// warm, no em or en dashes (tests/lib/authMessages.spec.ts).
+// warm, no em or en dashes (tests/lib/authScreens.spec.ts).
 
 export type MessageKind = 'error' | 'ok' | 'info';
 
@@ -50,10 +50,15 @@ export const FORGOT_NOT_SET_UP = {
 /** /admin/reset?error=… */
 export const RESET_MESSAGES = {
   expired: msg('error', 'This reset link is not valid, has been used, or has expired.'),
-  length: msg('error', `Use ${NEW_PASSWORD_MIN} to ${NEW_PASSWORD_MAX} characters.`),
+  // The account screen's words for the same rule (F8, packages/schemas/adminPrefs.ts).
+  short: msg('error', `Use at least ${PASSWORD_MIN} characters.`),
+  long: msg('error', 'That password is too long. Try a shorter one.'),
   mismatch: msg('error', 'The two passwords do not match.'),
   // Our own limit (an hour's window) or Supabase's (shorter): the link is still good.
-  limited: msg('error', 'Too many attempts. Try again later; this link still works until it expires.'),
+  limited: msg(
+    'error',
+    'Too many attempts. Try again later; this link still works until it expires.',
+  ),
   unavailable: msg('error', 'Something went wrong on our side. Try again in a few minutes.'),
   refused: msg(
     'error',

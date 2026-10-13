@@ -17,11 +17,13 @@ import { TENANT, UUID } from './harness';
 //   - limits per IP address, per e-mail (an HMAC) and per tenant, failing closed;
 //   - one audit row per accepted request, with no actor and nothing about the requester.
 // Reset:
-//   - the token's shape and the password (12 to 128 characters, typed twice) are checked
-//     before anything is counted or spent, and the form keeps the token for a retry;
+//   - the token's shape and the password (the account screen's rule: at least 10
+//     characters, at most 72 bytes; typed twice) are checked before anything is counted or
+//     spent, and the form keeps the token for a retry;
 //   - a per-IP limit, failing closed;
 //   - verify, set, sign out everywhere, in that order, on a client made for the request;
-//   - a refused password ends the recovery session and the link;
+//   - a throttled or unanswered verify keeps the link; a refused or broken set ends the
+//     recovery session and the link, and says why in system_logs (never the password);
 //   - the browser's own session cookies are cleared; the account's audit row.
 
 const state = vi.hoisted(() => ({
@@ -418,19 +420,31 @@ describe('POST /api/admin/auth/reset: checks before the token is spent', () => {
     expect(res.headers.get('location')).toBe('/admin/reset?error=expired');
   });
 
-  it('refuses a password under 12 or over 128 characters, keeping the token for a retry', async () => {
-    for (const password of ['elevenchars', 'x'.repeat(129)]) {
+  it('refuses a password under 10 characters or over 72 bytes, keeping the token for a retry', async () => {
+    for (const [password, error] of [
+      ['ninechars', 'short'],
+      ['x'.repeat(73), 'long'],
+      // 37 Arabic letters: 74 bytes, which bcrypt would cut short.
+      ['ب'.repeat(37), 'long'],
+    ] as const) {
       const { res } = await reset({ token_hash: TOKEN, password, confirm: password });
-      expect(res.status).toBe(422);
-      expect(await res.json()).toEqual({ ok: false, error: 'length' });
+      expect(res.status, password).toBe(422);
+      expect(await res.json()).toEqual({ ok: false, error });
     }
-    const { res } = await reset(
-      { token_hash: TOKEN, password: 'short', confirm: 'short' },
-      { form: true },
-    );
-    expect(res.headers.get('location')).toBe(
-      `/admin/reset?token_hash=${TOKEN}&type=recovery&error=length`,
-    );
+    const { res: missing } = await reset({ token_hash: TOKEN });
+    expect(await missing.json()).toEqual({ ok: false, error: 'short' });
+    for (const [password, code] of [
+      ['short', 'short'],
+      ['x'.repeat(73), 'long'],
+    ] as const) {
+      const { res } = await reset(
+        { token_hash: TOKEN, password, confirm: password },
+        { form: true },
+      );
+      expect(res.headers.get('location')).toBe(
+        `/admin/reset?token_hash=${TOKEN}&type=recovery&error=${code}`,
+      );
+    }
     expect(state.rpcs).toEqual([]);
     expect(state.calls).toEqual([]);
   });
@@ -554,6 +568,47 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
     expect(state.inserts).toEqual([]);
   });
 
+  it('a verify GoTrue throttles keeps the link: 429, and the form keeps the token', async () => {
+    state.verify = { ok: false, status: 429 };
+    const { res } = await reset({
+      token_hash: TOKEN,
+      password: NEW_PASSWORD,
+      confirm: NEW_PASSWORD,
+    });
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({ ok: false, error: 'limited' });
+    const { res: page } = await reset(
+      { token_hash: TOKEN, password: NEW_PASSWORD, confirm: NEW_PASSWORD },
+      { form: true },
+    );
+    expect(page.headers.get('location')).toBe(
+      `/admin/reset?token_hash=${TOKEN}&type=recovery&error=limited`,
+    );
+    expect(state.calls).toEqual(['verify:recovery', 'verify:recovery']);
+  });
+
+  it('a verify GoTrue cannot answer (5xx, or the network: status 0) keeps the link: 503', async () => {
+    for (const status of [503, 0]) {
+      state.verify = { ok: false, status };
+      const { res } = await reset({
+        token_hash: TOKEN,
+        password: NEW_PASSWORD,
+        confirm: NEW_PASSWORD,
+      });
+      expect(res.status, String(status)).toBe(503);
+      expect(await res.json()).toEqual({ ok: false, error: 'unavailable' });
+      const { res: page } = await reset(
+        { token_hash: TOKEN, password: NEW_PASSWORD, confirm: NEW_PASSWORD },
+        { form: true },
+      );
+      expect(page.headers.get('location')).toBe(
+        `/admin/reset?token_hash=${TOKEN}&type=recovery&error=unavailable`,
+      );
+    }
+    expect(state.calls.every((c) => c === 'verify:recovery')).toBe(true);
+    expect(state.inserts).toEqual([]);
+  });
+
   it('a password GoTrue refuses ends the recovery session; the link is spent', async () => {
     state.update = { error: { message: 'weak', code: 'weak_password', status: 422 } };
     const { res } = await reset({
@@ -574,6 +629,56 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
       { form: true },
     );
     expect(page.headers.get('location')).toBe('/admin/reset?error=refused');
+    // An operator can see why, without the password.
+    expect(state.logs).toEqual([
+      expect.objectContaining({
+        level: 'warn',
+        source: 'auth.reset',
+        detail: { failure: 'refused', status: 422, code: 'weak_password' },
+      }),
+      expect.objectContaining({ source: 'auth.reset' }),
+    ]);
+    expect(JSON.stringify(state.logs)).not.toContain(NEW_PASSWORD);
+  });
+
+  it('a set that breaks on the way (5xx, a throttle, a throw) is spent too, and says so', async () => {
+    const cases: [() => void, number][] = [
+      [() => (state.update = { error: { message: 'down', status: 500 } }), 503],
+      [() => (state.update = { error: { message: 'slow down', status: 429 } }), 503],
+      [() => (state.updateThrows = true), 503],
+    ];
+    for (const [arrange, status] of cases) {
+      state.calls.length = 0;
+      state.logs.length = 0;
+      arrange();
+      const { res } = await reset({
+        token_hash: TOKEN,
+        password: NEW_PASSWORD,
+        confirm: NEW_PASSWORD,
+      });
+      expect(res.status).toBe(status);
+      expect(await res.json()).toEqual({ ok: false, error: 'interrupted' });
+      expect(state.calls).toEqual([
+        'verify:recovery',
+        `update:${NEW_PASSWORD.length}`,
+        'sign-out:local',
+      ]);
+      expect(state.logs).toEqual([
+        expect.objectContaining({
+          source: 'auth.reset',
+          detail: expect.objectContaining({ failure: 'interrupted' }),
+        }),
+      ]);
+      state.update = { error: null };
+      state.updateThrows = false;
+    }
+    state.updateThrows = true;
+    const { res: page } = await reset(
+      { token_hash: TOKEN, password: NEW_PASSWORD, confirm: NEW_PASSWORD },
+      { form: true },
+    );
+    expect(page.headers.get('location')).toBe('/admin/reset?error=interrupted');
+    expect(state.inserts).toEqual([]);
   });
 
   it('a failed global sign-out is still a changed password, logged and audited as such', async () => {

@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   ForgotPasswordSchema,
   LoginSchema,
-  NEW_PASSWORD_MAX,
-  NEW_PASSWORD_MIN,
   RECOVERY_TOKEN_PATTERN,
   ResetPasswordSchema,
+  newPasswordProblem,
 } from '@schemas/admin';
+import { PASSWORD_MAX_BYTES, PASSWORD_MIN, PasswordChangeSchema } from '@schemas/adminPrefs';
 
 // The sign-in schemas (Admin v2 F7). CLAUDE.md §9: 100% branch on schema modules.
 
@@ -49,23 +49,23 @@ describe('ForgotPasswordSchema', () => {
 describe('ResetPasswordSchema', () => {
   const good = {
     token: TOKEN,
-    password: 'x'.repeat(NEW_PASSWORD_MIN),
-    confirm: 'x'.repeat(NEW_PASSWORD_MIN),
+    password: 'x'.repeat(PASSWORD_MIN),
+    confirm: 'x'.repeat(PASSWORD_MIN),
   };
 
-  it('takes a token of the right shape and a password typed twice, 12 to 128 characters', () => {
-    expect(NEW_PASSWORD_MIN).toBe(12);
-    expect(NEW_PASSWORD_MAX).toBe(128);
+  it('takes a token of the right shape and a password typed twice, 10 characters to 72 bytes', () => {
+    expect(PASSWORD_MIN).toBe(10);
+    expect(PASSWORD_MAX_BYTES).toBe(72);
     expect(ResetPasswordSchema.safeParse(good).success).toBe(true);
-    const longest = 'y'.repeat(NEW_PASSWORD_MAX);
+    const longest = 'y'.repeat(PASSWORD_MAX_BYTES);
     expect(
       ResetPasswordSchema.safeParse({ ...good, password: longest, confirm: longest }).success,
     ).toBe(true);
   });
 
   it('refuses a short or long password, a mismatch, or a token of another shape', () => {
-    const short = 'x'.repeat(NEW_PASSWORD_MIN - 1);
-    const long = 'x'.repeat(NEW_PASSWORD_MAX + 1);
+    const short = 'x'.repeat(PASSWORD_MIN - 1);
+    const long = 'x'.repeat(PASSWORD_MAX_BYTES + 1);
     for (const input of [
       { ...good, password: short, confirm: short },
       { ...good, password: long, confirm: long },
@@ -79,6 +79,31 @@ describe('ResetPasswordSchema', () => {
     const mismatch = ResetPasswordSchema.safeParse({ ...good, confirm: 'different!!!!' });
     expect(mismatch.success).toBe(false);
     expect(mismatch.error?.issues[0]?.path).toEqual(['confirm']);
+  });
+
+  it('newPasswordProblem counts bytes as bcrypt does: 36 Arabic letters fit, 37 do not', () => {
+    expect(newPasswordProblem('x'.repeat(PASSWORD_MIN - 1))).toBe('short');
+    expect(newPasswordProblem('x'.repeat(PASSWORD_MIN))).toBeNull();
+    // Two bytes a letter in UTF-8: the characters fit under 72, the bytes may not.
+    expect(newPasswordProblem('ب'.repeat(36))).toBeNull();
+    expect(newPasswordProblem('ب'.repeat(37))).toBe('long');
+    expect(newPasswordProblem('x'.repeat(10_000))).toBe('long');
+  });
+
+  it("is the account screen's rule (F8): one password policy for a change and a reset", () => {
+    for (const value of [
+      'x'.repeat(PASSWORD_MIN - 1),
+      'x'.repeat(PASSWORD_MIN),
+      'ب'.repeat(36),
+      'ب'.repeat(37),
+    ]) {
+      const change = PasswordChangeSchema.safeParse({
+        current: 'old',
+        next: value,
+        confirm: value,
+      });
+      expect(newPasswordProblem(value) === null, value).toBe(change.success);
+    }
   });
 
   it('the token pattern accepts GoTrue’s hex hash and its pkce_ form, nothing with markup', () => {

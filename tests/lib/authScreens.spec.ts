@@ -17,6 +17,7 @@ import {
   resetLimitRules,
   resetPageUrl,
 } from '@/lib/auth/recovery';
+import { PASSWORD_MIN } from '@schemas/adminPrefs';
 import { PUBLIC_SITE_URL } from '../stubs/astro-env-client';
 
 // The pieces the sign-in screens (Admin v2 F7) are built from: where a sign-in may send the
@@ -122,11 +123,30 @@ describe('the outcome codes the pages render', () => {
   });
 
   it('every reset code the endpoint sends has copy, and the spent ones drop the form', () => {
-    // The page codes reset.ts redirects with (its PAGE_CODE table).
-    for (const code of ['expired', 'length', 'mismatch', 'limited', 'unavailable', 'refused']) {
-      expect(messageFor(RESET_MESSAGES, code), code).not.toBeNull();
-    }
-    expect([...RESET_LINK_SPENT].sort()).toEqual(['expired', 'refused']);
+    // The page codes reset.ts redirects with (its PAGE_CODE table), read from the source so
+    // a code added there without copy here fails.
+    const source = readFileSync('src/pages/api/admin/auth/reset.ts', 'utf8');
+    const table = /const PAGE_CODE[^{]*\{([^}]*)\}/.exec(source)?.[1] ?? '';
+    const codes = [...table.matchAll(/:\s*'([a-z-]+)'/g)].map((m) => m[1]!).sort();
+    expect(codes).toEqual([
+      'expired',
+      'interrupted',
+      'limited',
+      'long',
+      'mismatch',
+      'refused',
+      'short',
+      'unavailable',
+    ]);
+    for (const code of codes) expect(messageFor(RESET_MESSAGES, code), code).not.toBeNull();
+    expect(Object.keys(RESET_MESSAGES).sort()).toEqual(codes);
+    // The link is gone after these: the page offers a new one instead of the form.
+    expect([...RESET_LINK_SPENT].sort()).toEqual(['expired', 'interrupted', 'refused']);
+  });
+
+  it("the reset copy states the account screen's rule (F8), in its words", () => {
+    expect(RESET_MESSAGES.short.text).toBe(`Use at least ${PASSWORD_MIN} characters.`);
+    expect(RESET_MESSAGES.long.text).toBe('That password is too long. Try a shorter one.');
   });
 
   it('follow the admin copy rules (P-12): no em or en dash anywhere', () => {

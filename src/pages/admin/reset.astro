@@ -1,7 +1,8 @@
 ---
 import AuthLayout from '@/layouts/AuthLayout.astro';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
-import { NEW_PASSWORD_MAX, NEW_PASSWORD_MIN, RECOVERY_TOKEN_PATTERN } from '@schemas/admin';
+import { RECOVERY_TOKEN_PATTERN } from '@schemas/admin';
+import { PASSWORD_MAX_BYTES, PASSWORD_MIN } from '@schemas/adminPrefs';
 import { RESET_LINK_SPENT, RESET_MESSAGES, messageFor } from '@/lib/auth/messages';
 
 export const prerender = false;
@@ -49,7 +50,7 @@ const csrfToken = Astro.locals.csrfToken;
     ) : (
       <>
         <p class="login__lead">
-          Use at least {NEW_PASSWORD_MIN} characters. A short sentence you will remember works well.
+          Use at least {PASSWORD_MIN} characters. A short sentence you will remember works well.
           Saving it signs you out on every device.
         </p>
         <form class="login__form" method="post" action="/api/admin/auth/reset">
@@ -62,8 +63,8 @@ const csrfToken = Astro.locals.csrfToken;
               name="password"
               autocomplete="new-password"
               required
-              minlength={NEW_PASSWORD_MIN}
-              maxlength={NEW_PASSWORD_MAX}
+              minlength={PASSWORD_MIN}
+              maxlength={PASSWORD_MAX_BYTES}
             />
           </label>
           <label class="field">
@@ -73,8 +74,8 @@ const csrfToken = Astro.locals.csrfToken;
               name="confirm"
               autocomplete="new-password"
               required
-              minlength={NEW_PASSWORD_MIN}
-              maxlength={NEW_PASSWORD_MAX}
+              minlength={PASSWORD_MIN}
+              maxlength={PASSWORD_MAX_BYTES}
             />
           </label>
           <button type="submit" data-variant="primary">
