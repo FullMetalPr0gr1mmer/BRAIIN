@@ -44,6 +44,20 @@ export const PII_REVEAL_LIMITS: RateLimitOptions = {
 };
 
 /**
+ * Uploading or replacing an image (Admin v2 U3): every upload is one Images binding
+ * transformation and its derivatives are more, against the free plan's 5,000 unique
+ * transformations a month (past them every new transform, LCP posters included, fails with
+ * error 9422). A day's ceiling keeps one account, or several, from spending the month in an
+ * afternoon; real library work stays well inside it. The ledger keeps 48 hours, so the
+ * 24-hour window is always complete.
+ */
+export const MEDIA_UPLOAD_LIMITS: RateLimitOptions = {
+  perUser: 50,
+  perTenant: 100,
+  windowMinutes: 24 * 60,
+};
+
+/**
  * Adding a lead by hand (Admin v2 C3): the reveal's numbers, 60 an hour per person and 300
  * per tenant. Each add writes a person's contact details through the service role and looks
  * up earlier leads by blind index, so the ceiling bounds both: a stolen session cannot fill

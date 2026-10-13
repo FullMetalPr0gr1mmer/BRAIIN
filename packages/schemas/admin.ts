@@ -26,7 +26,7 @@ import {
 import { LocalizedDocSchema } from './tiptap';
 import { DisplayNameValueSchema } from './adminPrefs';
 import { SectionTypeSchema, sectionContentIssues, type SectionType } from './sections';
-import { StaticMediaKeySchema, VideoClipSchema } from './media';
+import { MediaDisplayNameSchema, StaticMediaKeySchema, VideoClipSchema } from './media';
 
 // Every admin write goes through a schema in this file. CLAUDE.md §8: "Zod is the
 // single content boundary."
@@ -669,17 +669,20 @@ export const RedirectUpdateSchema = updatable(RedirectWriteSchema);
 
 // ── Media ───────────────────────────────────────────────────────────────────────
 
-export const MEDIA_PROVIDERS = ['external', 'static', 'cf_images', 'stream'] as const;
+export const MEDIA_PROVIDERS = ['external', 'static', 'cf_images', 'stream', 'storage'] as const;
 
 const MediaWriteBase = z.object({
   kind: z.enum(['image', 'video', 'audio', 'pdf']),
   /**
    * Where the bytes live (0020): `static` = a still shipped with the site (storagePath is
    * a registry key, checked against src/lib/media/static.ts by the media resource);
-   * `cf_images` = uploaded through the admin (PR5); `stream` = a Stream video.
+   * `cf_images` = Cloudflare Images (unused); `stream` = a Stream video; `storage` = an
+   * image uploaded through POST /api/admin/media/upload (0045), never typed in here.
    */
   provider: z.enum(MEDIA_PROVIDERS).default('external'),
   storagePath: z.string().trim().min(1).max(1024),
+  /** The name the library shows (an upload's own file name). Never part of the path. */
+  displayName: MediaDisplayNameSchema.nullish(),
   folder: z.string().trim().max(200).nullish(),
   /** Alt text is bilingual and REQUIRED for images — WCAG 2.2 AA is a DoD gate. */
   alt: BilingualTextSchema.nullish(),
@@ -725,6 +728,15 @@ function checkProvider(
       code: z.ZodIssueCode.custom,
       path: ['provider'],
       message: 'Cloudflare Images assets are created by uploading, not by hand',
+    });
+  }
+  if (v.provider === 'storage') {
+    // An uploaded image's row is written by the upload and replace routes (Admin v2 U3),
+    // which sniff, re-encode and store the file first.
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['provider'],
+      message: 'uploaded images are added by uploading a file, not by hand',
     });
   }
 }
