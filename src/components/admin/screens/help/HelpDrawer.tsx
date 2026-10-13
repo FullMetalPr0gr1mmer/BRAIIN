@@ -76,7 +76,7 @@ export default function HelpDrawer() {
     searchRef.current?.focus();
     if (!index) void loadIndex();
   }, [index, loadIndex]);
-  useOpenOn('help', open);
+  const openerRef = useOpenOn('help', open);
 
   /** Searches for an already cleaned query of at least MIN_QUERY characters. */
   const search = useCallback(async (q: string) => {
@@ -172,7 +172,12 @@ export default function HelpDrawer() {
   const ar = lang === 'ar';
 
   return (
-    <ChromeDrawer dialogRef={dialogRef} titleId="help-title" title="Help centre">
+    <ChromeDrawer
+      dialogRef={dialogRef}
+      openerRef={openerRef}
+      titleId="help-title"
+      title="Help centre"
+    >
       <div className="hc" ref={bodyRef}>
         <p className="hc__sub">Short guides, written for people, not developers.</p>
         <form role="search" className="hc__search" onSubmit={submit}>
