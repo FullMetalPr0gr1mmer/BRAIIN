@@ -200,7 +200,7 @@ describe('Segmented and Chips', () => {
       ],
     });
     expect(out).toMatch(/<div class="chips" role="group" aria-label="Filter by status">/);
-    expect(out).toMatch(/aria-pressed="false">All<span class="chip__n">1,200<\/span>/);
+    expect(out).toMatch(/aria-pressed="false">All <span class="chip__n">1,200<\/span>/);
     expect(out).toMatch(/aria-pressed="true">Draft</);
   });
 

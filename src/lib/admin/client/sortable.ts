@@ -14,7 +14,7 @@ import { arrowStep } from '../roving';
 //                 clicks on the Move buttons, a live region for the announcements, and an
 //                 `apply` that puts the items in order (moving the elements by default; an
 //                 island passes its own, which re-renders). Driven in a browser by
-//                 tests/a11y/admin-kit.e2e.ts.
+//                 tests/admin/kit.e2e.ts.
 //
 // Accessibility (WCAG 2.2):
 //   - keyboard: Space or Enter lifts and drops, the arrows move, Escape cancels; each step
@@ -465,6 +465,11 @@ export function createSortable(root: HTMLElement, options: SortableOptions): Sor
     const item = handle?.closest<HTMLElement>('[data-sortable-id]');
     if (!handle || !item || !root.contains(item)) return;
     handle.setPointerCapture(event.pointerId);
+    // The rest of the drag is heard on the document, not the root: reordering moves the
+    // dragged item's element (React's insertBefore, or appendChild here), and moving an
+    // element out of the tree releases its pointer capture, after which the pointer may
+    // leave the root before it is let go.
+    for (const [type, fn] of dragListeners) doc.addEventListener(type, fn as EventListener);
     drag = {
       id: item.dataset['sortableId'] ?? '',
       pointerId: event.pointerId,
@@ -519,6 +524,7 @@ export function createSortable(root: HTMLElement, options: SortableOptions): Sor
     if (!drag || event.pointerId !== drag.pointerId) return;
     const { id, started, handle } = drag;
     drag = null;
+    for (const [type, fn] of dragListeners) doc.removeEventListener(type, fn as EventListener);
     if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
     const el = itemEl(id);
     if (el) {
@@ -565,6 +571,9 @@ export function createSortable(root: HTMLElement, options: SortableOptions): Sor
     ['focusout', onFocusOut],
     ['click', onClick],
     ['pointerdown', onPointerDown],
+  ];
+  // Added on the document while a press on a handle lasts (onPointerDown, endDrag).
+  const dragListeners: [string, (event: never) => void][] = [
     ['pointermove', onPointerMove],
     ['pointerup', onPointerUp],
     ['pointercancel', onPointerCancel],
@@ -575,6 +584,8 @@ export function createSortable(root: HTMLElement, options: SortableOptions): Sor
   return {
     destroy() {
       for (const [type, fn] of listeners) root.removeEventListener(type, fn as EventListener);
+      for (const [type, fn] of dragListeners) doc.removeEventListener(type, fn as EventListener);
+      drag = null;
       if (!provided) live.remove();
     },
   };

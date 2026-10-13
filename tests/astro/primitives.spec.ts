@@ -244,7 +244,8 @@ describe('LinkTabs, LinkChips and Pager', () => {
       ],
     });
     expect(html).toMatch(/<nav aria-label="Filter by status">/);
-    expect(html).toContain('<span class="chip__n">1,200</span>');
+    // A space before the count, so the chip's name is "All 1,200", not "All1,200".
+    expect(html).toMatch(/>\s*All\s+<span class="chip__n">1,200<\/span>/);
     expect(html).toMatch(/href="\/x\?s=draft" aria-current="page"/);
   });
 

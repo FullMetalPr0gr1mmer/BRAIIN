@@ -12,7 +12,7 @@ import {
 
 // The Sortable core's state machine (Admin v2 F4b, AV-07 "sortable.spec: keyboard state
 // machine, cancel, announcements"). The DOM binder that drives it is exercised in a
-// browser by tests/a11y/admin-kit.e2e.ts.
+// browser by tests/admin/kit.e2e.ts.
 
 const LABELS: Record<string, string> = { hero: 'Hero', intro: 'Intro', work: 'Work', faq: 'FAQ' };
 const one: SortContext = { order: ['list'], label: (id) => LABELS[id] ?? id };

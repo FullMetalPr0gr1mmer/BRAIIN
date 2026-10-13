@@ -53,8 +53,7 @@ export function useSortable<E extends HTMLElement = HTMLElement>(
     if (!root) return;
     const sortable = createSortable(root, {
       orientation,
-      apply: (lists) =>
-        flushSync(() => setPreview(sameOrder(lists, saved.current) ? null : lists)),
+      apply: (lists) => flushSync(() => setPreview(sameOrder(lists, saved.current) ? null : lists)),
       onCommit: (lists, change) => {
         setPreview(null);
         commit.current(lists, change);

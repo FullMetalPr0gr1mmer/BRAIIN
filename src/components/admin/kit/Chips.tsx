@@ -54,6 +54,9 @@ export default function Chips<T extends string>({
             }}
           >
             {chip.label}
+            {/* A space, so the count is its own word in the chip's name ("Draft 12"); the
+                flex gap draws the space, the text node draws nothing. */}
+            {chip.count !== undefined && ' '}
             {chip.count !== undefined && (
               <span className="chip__n">{formatNumber(chip.count)}</span>
             )}

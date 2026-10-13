@@ -34,6 +34,8 @@ const { chips, current = null, label } = Astro.props;
             aria-current={chip.href === current ? 'page' : undefined}
           >
             {chip.label}
+            {/* A space, so the count is its own word in the link's name ("Draft 12"). */}
+            {chip.count !== undefined && ' '}
             {chip.count !== undefined && <span class="chip__n">{formatNumber(chip.count)}</span>}
           </a>
         </li>
