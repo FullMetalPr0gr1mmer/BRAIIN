@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AuthContext, Role } from '@/lib/auth/types';
-import { CAPABILITIES, ROLE_CAPS, type Access, type Capability } from '@/lib/authz/matrix';
+import type { AuthContext } from '@/lib/auth/types';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import {
   HelpArticleSchema,
@@ -9,6 +8,7 @@ import {
   type HelpEntryRow,
 } from '@schemas/help';
 import { logSafeError } from '../globalSearch';
+import { mayRead } from './access';
 import {
   MIN_QUERY,
   cleanHelpQuery,
@@ -19,34 +19,22 @@ import {
 } from './model';
 
 export * from './model';
+export { mayRead } from './access';
+export { PAGE_GUIDES, pageGuideFor, type PageGuide } from './pageGuides';
 
 // The help centre, server side (Admin v2 U16): the guides of `help_articles` (migration
 // 0046) a signed-in staff member may read, the ones for the screen they are on, a search,
 // and one guide to read. Every read goes through the caller's RLS-bound client, scoped to
 // the caller's tenant; RLS gives every staff member of the tenant every guide.
 //
-// Which guides a ROLE is shown is decided here, from ROLE_CAPS: a guide names the
-// capabilities whose holders it is for (`caps`), and a role sees it when it holds any of
-// them at full, view or meta (the menu's rule, src/lib/admin/nav), every role when it
-// names none. A capability this build does not know counts for nobody, so a guide naming
-// only those is shown to no one (fail closed). This is a relevance filter, not a secret
-// (the guides are in the public repository): it keeps anyone from being sent to a screen
-// they cannot open, and RLS does not repeat it (0046's header says why).
-
-const SEE: readonly Access[] = ['full', 'view', 'meta'];
-const KNOWN = new Set<string>(CAPABILITIES);
+// Which guides a ROLE is shown is decided here, from ROLE_CAPS (`mayRead`, ./access.ts):
+// every list, search and guide below is filtered by it before it leaves the server.
 
 /** At most this many guides are read for a list (the set holds a dozen). */
 export const MAX_GUIDES = 100;
 
 const INDEX_COLUMNS = 'slug,title,title_ar,minutes,tags,screens,caps,sort_order';
 const ARTICLE_COLUMNS = `${INDEX_COLUMNS},body`;
-
-/** May this role read a guide meant for these capabilities? */
-export function mayRead(role: Role, caps: readonly string[]): boolean {
-  if (caps.length === 0) return true;
-  return caps.some((cap) => KNOWN.has(cap) && SEE.includes(ROLE_CAPS[role][cap as Capability]));
-}
 
 function toGuide(row: HelpEntryRow): HelpGuide {
   return { slug: row.slug, title: row.title, minutes: row.minutes, tags: row.tags };

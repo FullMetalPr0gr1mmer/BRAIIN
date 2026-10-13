@@ -11,6 +11,7 @@ import {
   type HelpIndex,
   type HelpLang,
 } from '@/lib/admin/help/model';
+import { HELP_SLUG } from '@schemas/help';
 import ChromeDrawer, { useOpenOn } from '../chrome/ChromeDrawer';
 import HelpArticleBody from './HelpArticleBody';
 import HelpGuideList from './HelpGuideList';
@@ -25,6 +26,9 @@ import HelpGuideList from './HelpGuideList';
 // ROLE_CAPS on the server (src/lib/admin/help), so nothing here decides who sees what. The
 // list is asked for the first time the drawer opens, never on a timer (P-15); a search
 // waits for a pause in typing, and a newer one cancels an older one still in flight.
+//
+// Opened from a page head's "Guide", it starts on that guide instead (the same view a row
+// opens), with "All guides" a click away.
 //
 // Focus: the search box when the drawer opens, a guide's title when it opens (so a screen
 // reader starts there), and back to the row it came from on "All guides". The status line
@@ -52,30 +56,68 @@ export default function HelpDrawer() {
   // Moves focus once the view it targets has rendered.
   const [focusTo, setFocusTo] = useState<'title' | 'back' | null>(null);
 
-  const loadIndex = useCallback(async () => {
-    setStatus('Loading…');
+  // `quiet` while a guide is open: the status line is the guide's then, and a list that
+  // could not be read is asked for again on "All guides".
+  const loadIndex = useCallback(async (quiet = false) => {
+    if (!quiet) setStatus('Loading…');
     const screen = screenOf(window.location.pathname) ?? '/admin';
     try {
       setIndex(await adminFetch<HelpIndex>(`/api/admin/help?screen=${encodeURIComponent(screen)}`));
-      setStatus('');
+      if (!quiet) setStatus('');
     } catch {
-      setStatus('The guides could not be loaded just now.');
+      if (!quiet) setStatus('The guides could not be loaded just now.');
     }
   }, []);
 
-  const open = useCallback(() => {
-    const dialog = dialogRef.current;
-    if (!dialog || dialog.open) return;
-    inFlight.current?.abort();
-    setQuery('');
-    setResults(null);
-    setArticle(null);
-    setStatus('');
-    setMatches('');
-    dialog.showModal();
-    searchRef.current?.focus();
-    if (!index) void loadIndex();
-  }, [index, loadIndex]);
+  const openGuide = useCallback(async (slug: string) => {
+    cameFrom.current = slug;
+    const cached = articles.current.get(slug);
+    if (cached) {
+      setArticle(cached);
+      setLang('en');
+      setFocusTo('title');
+      return;
+    }
+    setStatus('Loading…');
+    try {
+      const data = await adminFetch<{ article: HelpArticle }>(
+        `/api/admin/help/article?slug=${encodeURIComponent(slug)}`,
+      );
+      articles.current.set(slug, data.article);
+      setArticle(data.article);
+      setLang('en');
+      setStatus('');
+      setFocusTo('title');
+    } catch (err) {
+      setStatus(
+        err instanceof AdminApiError && err.info.status === 404
+          ? 'That guide is not available.'
+          : 'That guide could not be loaded just now.',
+      );
+    }
+  }, []);
+
+  // The topbar's "?" opens on the lists; a page head's "Guide" (data-help-guide) opens on its
+  // guide.
+  const open = useCallback(
+    (trigger: HTMLElement) => {
+      const dialog = dialogRef.current;
+      if (!dialog || dialog.open) return;
+      inFlight.current?.abort();
+      setQuery('');
+      setResults(null);
+      setArticle(null);
+      setStatus('');
+      setMatches('');
+      dialog.showModal();
+      const guide = trigger.dataset['helpGuide'];
+      const atGuide = guide !== undefined && HELP_SLUG.test(guide);
+      if (atGuide) void openGuide(guide);
+      else searchRef.current?.focus();
+      if (!index) void loadIndex(atGuide);
+    },
+    [index, loadIndex, openGuide],
+  );
   const openerRef = useOpenOn('help', open);
 
   /** Searches for an already cleaned query of at least MIN_QUERY characters. */
@@ -121,37 +163,10 @@ export default function HelpDrawer() {
     if (q.length >= MIN_QUERY) void search(q);
   }
 
-  const openGuide = useCallback(async (slug: string) => {
-    cameFrom.current = slug;
-    const cached = articles.current.get(slug);
-    if (cached) {
-      setArticle(cached);
-      setLang('en');
-      setFocusTo('title');
-      return;
-    }
-    setStatus('Loading…');
-    try {
-      const data = await adminFetch<{ article: HelpArticle }>(
-        `/api/admin/help/article?slug=${encodeURIComponent(slug)}`,
-      );
-      articles.current.set(slug, data.article);
-      setArticle(data.article);
-      setLang('en');
-      setStatus('');
-      setFocusTo('title');
-    } catch (err) {
-      setStatus(
-        err instanceof AdminApiError && err.info.status === 404
-          ? 'That guide is not available.'
-          : 'That guide could not be loaded just now.',
-      );
-    }
-  }, []);
-
   function back() {
     setArticle(null);
     setFocusTo('back');
+    if (!index) void loadIndex();
   }
 
   useEffect(() => {

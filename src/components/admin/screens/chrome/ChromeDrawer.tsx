@@ -85,10 +85,14 @@ export default function ChromeDrawer({
  * Opens a drawer from its trigger: any `[data-open="<name>"]` in the page. The trigger is
  * a real link (the bell to /admin/notifications, the account chip to /admin/account), so
  * without JS it still goes somewhere; with JS a plain click opens the drawer instead, and a
- * click with a modifier (a new tab) is left to the browser. Returns the trigger last used,
- * for ChromeDrawer's focus return.
+ * click with a modifier (a new tab) is left to the browser. `open` is handed the trigger
+ * (the help drawer reads which guide a page head's "Guide" names, U16). Returns the trigger
+ * last used, for ChromeDrawer's focus return.
  */
-export function useOpenOn(name: string, open: () => void): RefObject<HTMLElement | null> {
+export function useOpenOn(
+  name: string,
+  open: (trigger: HTMLElement) => void,
+): RefObject<HTMLElement | null> {
   const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const onClick = (event: globalThis.MouseEvent) => {
@@ -100,7 +104,7 @@ export function useOpenOn(name: string, open: () => void): RefObject<HTMLElement
       }
       event.preventDefault();
       opener.current = trigger;
-      open();
+      open(trigger);
     };
     document.addEventListener('click', onClick);
     return () => document.removeEventListener('click', onClick);

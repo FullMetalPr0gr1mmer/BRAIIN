@@ -8,8 +8,10 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
 // never one the role may not read; a guide opens in place with its heading focused, reads in
 // Arabic (RTL) on request, and "All guides" goes back to the row it came from; axe finds
 // nothing with the drawer open, in English and in Arabic; Escape closes it and focus returns
-// to the "?". The page itself, in its four views, is in the per-role sweep (routes.ts
-// EXTRA_LINKS). The guides are the ones migration 0046 seeds into every tenant.
+// to the "?". A page head's "Guide" opens the drawer on that screen's guide, and is a link
+// to it without JS; a role that may not read the guide gets no "Guide". The page itself,
+// in its four views, is in the per-role sweep (routes.ts EXTRA_LINKS). The guides are the
+// ones migration 0046 seeds into every tenant.
 
 test.skip(!staffEnv(), SKIP_REASON);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
@@ -30,6 +32,7 @@ async function expectNoAxeViolations(page: Page, label: string) {
 }
 
 const helpButton = (page: Page) => page.locator('.admin-topbar [data-open="help"]');
+const guideButton = (page: Page) => page.locator('.admin-header [data-open="help"]');
 
 test.describe('as developer', () => {
   test.use({ storageState: authFile('developer') });
@@ -83,6 +86,34 @@ test.describe('as developer', () => {
     await expect(drawer).toBeHidden();
     await expect(trigger).toBeFocused();
   });
+
+  test('the page head’s "Guide" opens the drawer on this screen’s guide', async ({ page }) => {
+    await ready(page, '/admin/leads');
+    const guide = guideButton(page);
+    await expect(guide).toHaveAttribute('href', '/admin/help?guide=working-with-leads');
+    await expect(guide).toHaveAccessibleName('Guide to this screen');
+    await guide.click();
+
+    const drawer = page.getByRole('dialog', { name: 'Help centre' });
+    await expect(drawer).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/leads$/);
+    await expect(
+      drawer.getByRole('heading', { level: 3, name: 'Working with leads' }),
+    ).toBeFocused();
+    await expectNoAxeViolations(page, 'developer: the drawer opened on a guide');
+
+    // "All guides" leads to the lists, which load behind the guide.
+    await drawer.getByRole('button', { name: /^all guides$/i }).click();
+    await expect(
+      drawer.getByRole('list', { name: /^on this screen$/i }).getByRole('link', {
+        name: /Working with leads/,
+      }),
+    ).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+    await expect(guide).toBeFocused();
+  });
 });
 
 test.describe('as content_creator', () => {
@@ -122,6 +153,17 @@ test.describe('as content_creator', () => {
     await expectNoAxeViolations(page, 'content_creator: a search with no result');
   });
 
+  test('Pages offers the content guide in its head to a role that writes content', async ({
+    page,
+  }) => {
+    // SEO opens Pages too, without it (the no-JS test below).
+    await ready(page, '/admin/pages');
+    await expect(guideButton(page)).toHaveAttribute(
+      'href',
+      '/admin/help?guide=saving-and-publishing',
+    );
+  });
+
   test('a guide the role may not read is the same 404 as no guide, on the page and the API', async ({
     page,
   }) => {
@@ -151,5 +193,21 @@ test.describe('without JS', () => {
     ).toBeVisible();
     await page.getByRole('link', { name: 'اقرأ بالعربية' }).click();
     await expect(page.locator('.hc-art')).toHaveAttribute('lang', 'ar');
+  });
+
+  test('the page head’s "Guide" is a link to the guide; SEO gets none on Pages', async ({
+    page,
+  }) => {
+    await page.goto('/admin/redirects');
+    await guideButton(page).click();
+    await expect(page).toHaveURL(/\/admin\/help\?guide=seo-and-redirects$/);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'SEO defaults and redirects' }),
+    ).toBeVisible();
+
+    // The content guide is for the roles that write content; SEO opens Pages for SEO only.
+    await page.goto('/admin/pages');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(guideButton(page)).toHaveCount(0);
   });
 });

@@ -928,6 +928,11 @@ kbd {
   color: var(--ad-dim);
 }
 
+/* The page head's "Guide" (U16): first of the actions, on the inline end. */
+.admin-header__guide {
+  margin-inline-start: auto;
+}
+
 /* ---- Cards and grids ---- */
 
 .card {

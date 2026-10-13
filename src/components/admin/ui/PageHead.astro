@@ -1,10 +1,16 @@
 ---
 import type { NavTab } from '@/lib/admin/nav';
+import { guideHref } from '@/lib/admin/help/model';
+import Icon from './Icon.astro';
 
 // The page head (Admin v2 F2, the prototype's .ph): the h1, its plain-language sub-line,
 // a wrapping actions slot, and the area's tabs. Tabs are the screens the prototype folds
 // into one area (Services · Disciplines · Case studies…): server-rendered links, the
 // current one marked aria-current, shown only when the role can open two or more.
+//
+// `guide` (U16, the prototype's ROUTE_GUIDE button) is the slug of this screen's guide for
+// the role, decided by the layout (src/lib/admin/help/pageGuides.ts): "Guide", first of the
+// actions, a link to the guide's page without JS, opened in the help drawer with it.
 
 interface Props {
   title: string;
@@ -12,9 +18,10 @@ interface Props {
   tabs?: readonly NavTab[] | undefined;
   currentTab?: NavTab | null | undefined;
   area?: string | undefined;
+  guide?: string | null | undefined;
 }
 
-const { title, subtitle, tabs = [], currentTab = null, area = title } = Astro.props;
+const { title, subtitle, tabs = [], currentTab = null, area = title, guide } = Astro.props;
 ---
 
 <header class="admin-header">
@@ -22,6 +29,20 @@ const { title, subtitle, tabs = [], currentTab = null, area = title } = Astro.pr
     <h1>{title}</h1>
     {subtitle && <p class="admin-sub">{subtitle}</p>}
   </div>
+  {
+    guide && (
+      <a
+        class="btn admin-header__guide"
+        data-variant="ghost"
+        href={guideHref(guide)}
+        data-open="help"
+        data-help-guide={guide}
+      >
+        <Icon name="info" size={16} />
+        Guide<span class="visually-hidden"> to this screen</span>
+      </a>
+    )
+  }
   <slot name="actions" />
 </header>
 {

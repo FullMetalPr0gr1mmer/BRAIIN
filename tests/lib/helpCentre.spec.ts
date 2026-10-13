@@ -23,6 +23,8 @@ import {
   loadHelpArticle,
   loadHelpIndex,
   mayRead,
+  PAGE_GUIDES,
+  pageGuideFor,
   relatedTo,
   screenOf,
   searchHelp,
@@ -221,6 +223,70 @@ describe('the schema and the migration state the same rules', () => {
     ]) {
       expect(HelpBodySchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
     }
+  });
+});
+
+// ── 1b. The page heads' "Guide" (a copy of the set, held to it here) ─────────────────────
+
+describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the set', () => {
+  const bySlug = new Map(SET.map((a) => [a.slug, a]));
+
+  it('every page guide is a guide of the set, with the set’s capabilities', () => {
+    for (const entry of PAGE_GUIDES) {
+      const article = bySlug.get(entry.slug);
+      expect(article, entry.slug).toBeDefined();
+      expect([...entry.caps], entry.slug).toEqual(article?.caps);
+    }
+    expect(new Set(PAGE_GUIDES.map((g) => g.slug)).size).toBe(PAGE_GUIDES.length);
+  });
+
+  it('a page guide is offered only on screens its guide names, each screen once', () => {
+    const seen = new Set<string>();
+    for (const entry of PAGE_GUIDES) {
+      for (const screen of entry.screens) {
+        expect(bySlug.get(entry.slug)?.screens, `${entry.slug}: ${screen}`).toContain(screen);
+        expect(seen.has(screen), screen).toBe(false);
+        seen.add(screen);
+      }
+    }
+  });
+
+  it('every screen a guide names has a page guide, but the help page itself', () => {
+    const offered = new Set(PAGE_GUIDES.flatMap((g) => g.screens));
+    for (const article of SET) {
+      for (const screen of article.screens) {
+        if (screen === '/admin/help') continue;
+        expect(offered.has(screen), `${article.slug}: ${screen}`).toBe(true);
+      }
+    }
+  });
+
+  it('a role is offered a screen’s guide only when it may read it', () => {
+    for (const role of ROLES) {
+      for (const entry of PAGE_GUIDES) {
+        for (const screen of entry.screens) {
+          expect(pageGuideFor(screen, role), `${role} ${screen}`).toBe(
+            mayRead(role, entry.caps) ? entry.slug : null,
+          );
+        }
+      }
+    }
+  });
+
+  it('pages below a screen share its guide; the dashboard’s covers only itself', () => {
+    expect(pageGuideFor('/admin/services/1234', 'content_creator')).toBe('saving-and-publishing');
+    expect(pageGuideFor('/admin/pages/new', 'admin')).toBe('saving-and-publishing');
+    expect(pageGuideFor('/admin/analytics/search', 'seo')).toBe('website-stats');
+    expect(pageGuideFor('/admin/redirects/9', 'seo')).toBe('seo-and-redirects');
+    expect(pageGuideFor('/admin', 'developer')).toBe('finding-your-way');
+    expect(pageGuideFor('/admin/themes', 'admin')).toBeNull();
+    expect(pageGuideFor('/admin/help', 'admin')).toBeNull();
+  });
+
+  it('SEO opens Pages and Posts without the content guide, which is for the writers', () => {
+    expect(pageGuideFor('/admin/pages', 'seo')).toBeNull();
+    expect(pageGuideFor('/admin/blog/1', 'seo')).toBeNull();
+    expect(pageGuideFor('/admin/pages', 'content_creator')).toBe('saving-and-publishing');
   });
 });
 
@@ -544,5 +610,15 @@ describe('the shell', () => {
   it('the drawer is mounted in the shell’s one island', () => {
     const chrome = readFileSync('src/components/admin/islands/AdminChrome.tsx', 'utf8');
     expect(chrome).toContain('<HelpDrawer />');
+  });
+
+  it('the page head offers the screen’s guide, decided by the layout from the role', () => {
+    const layout = readFileSync('src/layouts/AdminLayout.astro', 'utf8');
+    expect(layout).toContain('pageGuideFor(path, session.role)');
+    expect(layout).toContain('guide={guide}');
+    const head = readFileSync('src/components/admin/ui/PageHead.astro', 'utf8');
+    expect(head).toMatch(
+      /href=\{guideHref\(guide\)\}\s+data-open="help"\s+data-help-guide=\{guide\}/,
+    );
   });
 });
