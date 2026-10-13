@@ -66,7 +66,6 @@
 - **Help** (U16):
   - guides only for features that are built (nine of the prototype's fifteen described later-phase screens; "roles" promised per-person exceptions §5 does not have);
   - no editing yet: the migrations write the guides until an editor and its capability exist (§5, TDD phase 7);
-  - no Guide button in page heads: the "?" opens on this screen's guides (P-15);
   - no "Get connected" or "Ask us" in the drawer (A1 later phase; no support channel exists).
 - **Copy corrected** where untrue:
   - maintenance "…after you publish";
@@ -241,7 +240,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §12.2 (prototype) | Contact Files card | deviated-challenge | built under A6 | none (CRM deviation 15) | The private-bucket + audited-download pattern already exists (applications). |
 | §12.3-§12.7 | Templates, campaigns, automations, global rules, reports, exports, audiences, consent log | deferred | later phase (A1) or legal gate | A1 |  |
 | §13 | Get connected list, wizards, banners, dashboard setup note | deferred | later phase (A1) or legal gate | A1 |  |
-| §13 | Help centre: ? button, search, guides, per-screen Guide, articles editable in the DB | missing | built (U16), editing deferred | U16, migration 0046 | See §2.7. The "?" opens on this screen's guides instead of a Guide button in each page head (no per-render read, P-15); editing waits for phase 7. |
+| §13 | Help centre: ? button, search, guides, per-screen Guide, articles editable in the DB | missing | built (U16), editing deferred | U16, migration 0046 | See §2.7. The per-screen Guide is a code map held to the seeded set by a test, so a render reads nothing (P-15); editing waits for phase 7. |
 | §14 | First-party beacon with no cookies | deviated-ok | deviation (standard or owner decision) | /api/analytics (hasConsent) | §2/§7 consent-gated; the 'no cookie banner' copy is corrected. |
 | §14 | Events, funnel, goals, realtime, sessions | deviated-challenge | built under A6 | AV-10 (later) | Feasible on consented data; realtime needs a 1-minute rollup (Pillar 4). |
 | §14 | Sources, countries, devices, browsers, unique visitors, cities | deviated-ok | deviation (standard or owner decision) | AV-10 (later) | Consent-gated capture + notice change (PDPL, O4); a persistent visitor id needs legal; cities never. |
