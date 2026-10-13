@@ -31,11 +31,11 @@ Each slice's file under [as-built/](as-built/) has the detail.
 
 ## Reserved
 
-Wave 1's migrations are reserved below; the next free number after them is **0048**. Before a
-wave's slices branch, each migration the wave plans gets a row here, numbered in the wave's
-planned merge order. The slice's own PR moves its row to "Applied" once production has applied the
-migration, before the PR merges (Pushing to production, step 5), so the row is true when the
-PR lands and nothing here is edited after a merge.
+Wave 1's migrations and hotfix H9's are reserved below; the next free number after them is
+**0049**. Before a wave's slices branch, each migration the wave plans gets a row here,
+numbered in the wave's planned merge order. The slice's own PR moves its row to "Applied" once
+production has applied the migration, before the PR merges (Pushing to production, step 5), so
+the row is true when the PR lands and nothing here is edited after a merge.
 
 | Number | Slice | What | Wave |
 |---|---|---|---|
@@ -45,6 +45,7 @@ PR lands and nothing here is edited after a merge.
 | 0043 | (released) | unused, as 0042: C13 moved to 0047 | 1 |
 | 0046 | U16 | the help centre: `help_articles` | 1 |
 | 0047 | C13 | lead attribution capture (built, held for the privacy notice, O-11) | 1 |
+| 0048 | H9 | the lead-notification trigger restored and hardened: `app.tg_notify_lead()` re-created SECURITY DEFINER with an empty search_path, https only, never failing an insert; `leads_notify` created wherever pg_net is installed (0010 created it only where pg_net already was, and production's was not) (`0048_lead_notify_trigger.sql`) | hotfix |
 
 ## Rules
 

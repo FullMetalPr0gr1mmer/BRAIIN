@@ -167,7 +167,7 @@ Never in `.env`, never in `wrangler.jsonc`.
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler secret put LEAD_PII_ENC_KEY        # openssl rand -hex 32
 npx wrangler secret put AUDIT_HMAC_KEY          # unused by the Worker; see note
-npx wrangler secret put NOTIFY_LEAD_SECRET      # openssl rand -hex 32
+npx wrangler secret put NOTIFY_LEAD_SECRET      # openssl rand -hex 32; Vault gets the same value (§5)
 npx wrangler secret put ANTHROPIC_API_KEY       # optional — Style-Finder is a 501 stub
 ```
 
@@ -202,23 +202,46 @@ select cron.schedule('telemetry-partitions', '0 2 25 * *',   $$ select app.ensur
 select jobname, schedule from cron.job;
 ```
 
-`pg_net` enables the lead-notification trigger. It is created by 0010 only when the
-extension exists, so after enabling it:
+**Lead notifications.** `pg_net` carries the lead-notification trigger, `leads_notify`
+(CLAUDE.md §10). 0010 created it only if pg_net was already installed when 0010 ran; where it
+was not (production), the trigger never existed and no lead was announced. **0048 restores
+it**: it creates the trigger wherever pg_net is installed. Only on a database where pg_net is
+enabled after 0048 has run, create it by hand:
 
 ```sql
+drop trigger if exists leads_notify on public.leads;
 create trigger leads_notify after insert on public.leads
   for each row execute function app.tg_notify_lead();
+```
 
--- Where the trigger posts — the DEPLOYED origin (workers.dev until the DNS cutover, then
--- https://www.braiinstatiion.com) — and the shared secret it presents:
+The trigger sends nothing until **all three** of these exist:
+
+1. **The Vault secret `notify_lead_secret`**: the bearer the trigger presents.
+2. **The Worker secret `NOTIFY_LEAD_SECRET`** (§4), with **the same value**: what the Worker
+   compares the bearer with. Two different values mean a 401 for every lead.
+3. **The URL `site_settings.identity.notify_lead_url`**: the deployed origin's
+   `/api/hooks/notify-lead`, **https only**. The trigger skips any other URL, so the bearer
+   never travels in plaintext.
+
+```sql
+-- 1. The bearer: the value given to NOTIFY_LEAD_SECRET in §4, never committed anywhere.
+select vault.create_secret('<the NOTIFY_LEAD_SECRET value>', 'notify_lead_secret',
+  'Bearer token the leads_notify trigger presents to the Worker');
+
+-- 3. Where the trigger posts: the DEPLOYED origin (workers.dev until the DNS cutover, then
+-- the production domain), over https.
 update public.site_settings
    set identity = identity || jsonb_build_object(
-         'notify_lead_url', 'https://braiin-station.braiin.workers.dev/api/hooks/notify-lead')
+         'notify_lead_url', 'https://<deployed origin>/api/hooks/notify-lead')
  where tenant_id = (select id from public.tenants order by created_at limit 1);
-
-select vault.create_secret('<same value as NOTIFY_LEAD_SECRET>', 'notify_lead_secret',
-  'Bearer token the leads_notify trigger presents to the Worker');
 ```
+
+Nothing the trigger does can fail a lead's insert. With no URL it does nothing; a non-https
+URL, a missing Vault secret or a pg_net error is a WARNING in the Postgres log (an SQLSTATE at
+most, never the URL or the secret); either way the lead is saved. So check it once all three are
+in place: submit one test inquiry through the contact form, confirm `notification_log` has a row
+for it (the Worker writes it; none means the call never arrived, or was refused), then erase the
+test lead in the admin.
 
 **Cron runs on the direct `:5432` connection, never the Supavisor pooler** — pg_cron
 holds a session, which transaction-mode pooling cannot provide.
