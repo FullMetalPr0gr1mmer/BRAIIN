@@ -1,0 +1,513 @@
+-- pgTAP: the personal layer (0044, Admin v2 F8) — preferences, the people directory,
+-- renaming yourself and the environment pill. Run with `supabase test db`.
+--
+-- Every object has a row for admin, content_creator, seo, developer, anon and another
+-- tenant's admin, plus the stale tokens the live check exists for: a demoted developer
+-- (its profile now says seo), a deactivated one and a locked one (CLAUDE.md §9).
+--   • admin_user_prefs is self only: each role reads and writes its own row and no one
+--     else's, an admin included; another tenant reads none of T1's; a stale token reads
+--     and writes nothing, not even its own row. Staff may not touch the version, the key
+--     or delete a row. The version moves with a preference, never with the watermark; the
+--     watermark only moves forward and never past now(). A row's tenant is its person's for
+--     every writer, the service role included (the composite key to the profile): a row
+--     cannot be filed under, or moved to, another tenant, nor handed to another person; a
+--     profile that moves takes its row along (its bell afresh), and one that goes takes it.
+--   • staff_directory: every active member of the caller's tenant (locked people too),
+--     names and roles only, never an e-mail; nothing for a stale token or for a tenant the
+--     caller does not belong to. crm_people, restated over it, answers what 0036 did.
+--   • update_my_profile changes the caller's display name and nothing else, under the
+--     Worker's rules (control and format characters refused, JavaScript's trim), and
+--     writes its own audit row: a call that skips the Worker is held and audited the same.
+--   • the display-name rule holds for every writer, not only that door: an Admin on the
+--     users screen (0037's column grant) and the service role (an invite) cannot store a
+--     name over 80 characters or with a control or format character; a name stored before
+--     the rule does not block the sign-in's writes or a save that sends it back unchanged.
+--   • admin_environment names the marker's environment to live members, NULL otherwise.
+
+begin;
+select plan(113);
+
+-- ── fixtures (as the migration role) ─────────────────────────────────────────
+insert into public.tenants (id, name) values
+  ('44000000-0000-0000-0000-000000000001', 'T1'),
+  ('44000000-0000-0000-0000-0000000000ff', 'T2');
+
+insert into auth.users (id, email) values
+  ('44000000-0000-0000-0000-0000000000a1', 'admin@example.test'),
+  ('44000000-0000-0000-0000-0000000000c1', 'creator@example.test'),
+  ('44000000-0000-0000-0000-0000000000e1', 'seo@example.test'),
+  ('44000000-0000-0000-0000-0000000000d1', 'developer@example.test'),
+  ('44000000-0000-0000-0000-0000000000f1', 'other-admin@example.test'),
+  ('44000000-0000-0000-0000-0000000000d2', 'demoted@example.test'),
+  ('44000000-0000-0000-0000-0000000000d3', 'inactive@example.test'),
+  ('44000000-0000-0000-0000-0000000000d4', 'locked@example.test'),
+  -- Invited, no profile yet: the service role's insert below is refused.
+  ('44000000-0000-0000-0000-0000000000b1', 'invited@example.test');
+insert into public.profiles (id, tenant_id, role, is_active, locked_until, display_name) values
+  ('44000000-0000-0000-0000-0000000000a1', '44000000-0000-0000-0000-000000000001', 'admin', true, null, 'Amal'),
+  ('44000000-0000-0000-0000-0000000000c1', '44000000-0000-0000-0000-000000000001', 'content_creator', true, null, 'Cyrus'),
+  ('44000000-0000-0000-0000-0000000000e1', '44000000-0000-0000-0000-000000000001', 'seo', true, null, 'Eli'),
+  ('44000000-0000-0000-0000-0000000000d1', '44000000-0000-0000-0000-000000000001', 'developer', true, null, 'Dana'),
+  ('44000000-0000-0000-0000-0000000000f1', '44000000-0000-0000-0000-0000000000ff', 'admin', true, null, 'Faris'),
+  -- Demoted: the profile says seo, the token below still says developer.
+  ('44000000-0000-0000-0000-0000000000d2', '44000000-0000-0000-0000-000000000001', 'seo', true, null, 'Demoted'),
+  ('44000000-0000-0000-0000-0000000000d3', '44000000-0000-0000-0000-000000000001', 'developer', false, null, 'Gone'),
+  ('44000000-0000-0000-0000-0000000000d4', '44000000-0000-0000-0000-000000000001', 'developer', true,
+   now() + interval '10 minutes', 'Locked');
+
+-- Rows that exist before anyone signs in: an admin's, another tenant's, and the stale
+-- tokens' own (so "reads nothing" is not trivially true).
+insert into public.admin_user_prefs (tenant_id, user_id) values
+  ('44000000-0000-0000-0000-000000000001', '44000000-0000-0000-0000-0000000000a1'),
+  ('44000000-0000-0000-0000-0000000000ff', '44000000-0000-0000-0000-0000000000f1'),
+  ('44000000-0000-0000-0000-000000000001', '44000000-0000-0000-0000-0000000000d2'),
+  ('44000000-0000-0000-0000-000000000001', '44000000-0000-0000-0000-0000000000d3'),
+  ('44000000-0000-0000-0000-000000000001', '44000000-0000-0000-0000-0000000000d4');
+
+-- Unmarked to start with, whatever this database says (rolled back at the end).
+delete from app.deployment;
+
+create function _as(p_sub text, p_role text, p_tid text) returns void language sql as $$
+  select set_config(
+    'request.jwt.claims',
+    case when p_role is null then ''
+         else jsonb_strip_nulls(jsonb_build_object(
+                'sub', p_sub,
+                'app_metadata', jsonb_build_object('role', p_role, 'tenant_id', p_tid)))::text end,
+    true
+  )
+$$;
+
+-- An UPDATE of someone's preferences as the CURRENT role; how many rows it changed.
+create function _upd(p_user uuid) returns int language plpgsql as $$
+declare
+  n int;
+begin
+  update public.admin_user_prefs set notifications = '{"muted": ["leads"]}'::jsonb
+   where user_id = p_user;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+-- The preferences rows the CURRENT role can see.
+create function _seen() returns int language sql as $$
+  select count(*)::int from public.admin_user_prefs
+$$;
+
+-- The directory as the CURRENT role, names in order.
+create function _names(p_tenant uuid) returns text language sql as $$
+  select coalesce(string_agg(display_name, ',' order by display_name), '')
+    from public.staff_directory(p_tenant)
+$$;
+
+create function _people(p_tenant uuid) returns text language sql as $$
+  select coalesce(string_agg(display_name, ',' order by display_name), '')
+    from public.crm_people(p_tenant)
+$$;
+
+-- A privilege list for the grant checks at the end, MAINTAIN added where it exists
+-- (PostgreSQL 17, production; CI runs 15).
+create function _never(p_list text) returns text language sql stable as $$
+  select p_list || case when current_setting('server_version_num')::int >= 170000
+                        then ', maintain' else '' end
+$$;
+
+-- ---- anon: nothing --------------------------------------------------------------------
+set local role anon;
+select _as(null, null, null);
+select throws_ok($$ select * from public.admin_user_prefs $$,
+  '42501', null, 'anon cannot read preferences');
+select throws_ok($$ insert into public.admin_user_prefs (tenant_id, user_id)
+                    values ('44000000-0000-0000-0000-000000000001', '44000000-0000-0000-0000-0000000000c1') $$,
+  '42501', null, 'anon cannot write preferences');
+select throws_ok($$ select * from public.staff_directory('44000000-0000-0000-0000-000000000001') $$,
+  '42501', null, 'anon cannot call staff_directory');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', 'x') $$,
+  '42501', null, 'anon cannot call update_my_profile');
+select throws_ok($$ select public.admin_environment('44000000-0000-0000-0000-000000000001') $$,
+  '42501', null, 'anon cannot call admin_environment');
+
+-- ---- preferences: a row's tenant is its person's, whoever writes it -------------------------
+-- The service role bypasses RLS; the composite key to the profile holds it all the same.
+set local role service_role;
+select _as(null, null, null);
+select throws_ok($$ insert into public.admin_user_prefs (tenant_id, user_id)
+                    values ('44000000-0000-0000-0000-0000000000ff', '44000000-0000-0000-0000-0000000000c1') $$,
+  '23503', null, 'the service role cannot file a T1 person''s preferences under T2');
+select throws_ok($$ update public.admin_user_prefs set tenant_id = '44000000-0000-0000-0000-0000000000ff'
+                    where user_id = '44000000-0000-0000-0000-0000000000a1' $$,
+  '23503', null, 'nor move a row to a tenant its person is not in');
+select throws_ok($$ update public.admin_user_prefs set user_id = '44000000-0000-0000-0000-0000000000c1'
+                    where user_id = '44000000-0000-0000-0000-0000000000a1' $$,
+  '23514', null, 'nor hand a row to another person');
+
+-- ---- preferences: content_creator --------------------------------------------------------
+set local role authenticated;
+select _as('44000000-0000-0000-0000-0000000000c1', 'content_creator', '44000000-0000-0000-0000-000000000001');
+select lives_ok($$ insert into public.admin_user_prefs (tenant_id, user_id, notifications)
+                   values ('44000000-0000-0000-0000-000000000001', '44000000-0000-0000-0000-0000000000c1',
+                           '{"muted": ["scheduled"]}') $$,
+  'content_creator creates its own preferences');
+select is(_seen(), 1, 'and sees exactly one row: its own (not the admin''s)');
+select is((select version from public.admin_user_prefs where user_id = '44000000-0000-0000-0000-0000000000c1'),
+  1, 'a new row starts at version 1');
+select throws_ok($$ insert into public.admin_user_prefs (tenant_id, user_id)
+                    values ('44000000-0000-0000-0000-000000000001', '44000000-0000-0000-0000-0000000000d1') $$,
+  '42501', null, 'content_creator cannot create a row for someone else');
+select is(_upd('44000000-0000-0000-0000-0000000000a1'), 0, 'nor change the admin''s preferences');
+select throws_ok($$ update public.admin_user_prefs set version = 99
+                    where user_id = '44000000-0000-0000-0000-0000000000c1' $$,
+  '42501', null, 'staff cannot set the version');
+select throws_ok($$ update public.admin_user_prefs set user_id = '44000000-0000-0000-0000-0000000000d1'
+                    where user_id = '44000000-0000-0000-0000-0000000000c1' $$,
+  '42501', null, 'nor move the row to another person');
+select throws_ok($$ delete from public.admin_user_prefs
+                    where user_id = '44000000-0000-0000-0000-0000000000c1' $$,
+  '42501', null, 'nor delete it');
+select is(_upd('44000000-0000-0000-0000-0000000000c1'), 1, 'content_creator changes its own preferences');
+select is((select version from public.admin_user_prefs where user_id = '44000000-0000-0000-0000-0000000000c1'),
+  2, 'a preference change moves the version');
+select lives_ok($$ update public.admin_user_prefs set notifications_seen_at = now() + interval '1 day'
+                   where user_id = '44000000-0000-0000-0000-0000000000c1' $$,
+  'marking the bell read');
+select is((select notifications_seen_at from public.admin_user_prefs
+            where user_id = '44000000-0000-0000-0000-0000000000c1'),
+  now(), 'the watermark never passes now()');
+select is((select version from public.admin_user_prefs where user_id = '44000000-0000-0000-0000-0000000000c1'),
+  2, 'and moving it leaves the version alone (no 409 for a save in between)');
+select lives_ok($$ update public.admin_user_prefs set notifications_seen_at = now() - interval '1 day'
+                   where user_id = '44000000-0000-0000-0000-0000000000c1' $$,
+  'an older watermark is accepted');
+select is((select notifications_seen_at from public.admin_user_prefs
+            where user_id = '44000000-0000-0000-0000-0000000000c1'),
+  now(), 'but the watermark only moves forward');
+select lives_ok($$ update public.admin_user_prefs set notifications_seen_at = null
+                   where user_id = '44000000-0000-0000-0000-0000000000c1' $$,
+  'clearing the watermark is accepted');
+select is((select notifications_seen_at from public.admin_user_prefs
+            where user_id = '44000000-0000-0000-0000-0000000000c1'),
+  now(), 'but it cannot be cleared');
+select throws_ok($$ update public.admin_user_prefs set notifications = '[]'::jsonb
+                    where user_id = '44000000-0000-0000-0000-0000000000c1' $$,
+  '23514', null, 'the notification preferences must be an object');
+
+-- ---- preferences: seo, developer, admin --------------------------------------------------
+select _as('44000000-0000-0000-0000-0000000000e1', 'seo', '44000000-0000-0000-0000-000000000001');
+select lives_ok($$ insert into public.admin_user_prefs (tenant_id, user_id, notifications_seen_at)
+                   values ('44000000-0000-0000-0000-000000000001', '44000000-0000-0000-0000-0000000000e1',
+                           now() + interval '1 hour') $$,
+  'seo creates its own preferences');
+select is((select notifications_seen_at from public.admin_user_prefs
+            where user_id = '44000000-0000-0000-0000-0000000000e1'),
+  now(), 'a new watermark is held to now() too');
+select is(_seen(), 1, 'seo sees only its own row');
+
+select _as('44000000-0000-0000-0000-0000000000d1', 'developer', '44000000-0000-0000-0000-000000000001');
+select lives_ok($$ insert into public.admin_user_prefs (tenant_id, user_id)
+                   values ('44000000-0000-0000-0000-000000000001', '44000000-0000-0000-0000-0000000000d1') $$,
+  'developer creates its own preferences');
+select is(_seen(), 1, 'developer sees only its own row');
+
+select _as('44000000-0000-0000-0000-0000000000a1', 'admin', '44000000-0000-0000-0000-000000000001');
+select is(_seen(), 1, 'admin sees only its own row, not its colleagues''');
+select is(_upd('44000000-0000-0000-0000-0000000000c1'), 0,
+  'and cannot change anyone else''s preferences either');
+
+-- ---- preferences: another tenant's admin ---------------------------------------------------
+select _as('44000000-0000-0000-0000-0000000000f1', 'admin', '44000000-0000-0000-0000-0000000000ff');
+select is((select count(*)::int from public.admin_user_prefs
+            where tenant_id = '44000000-0000-0000-0000-000000000001'), 0,
+  'another tenant''s admin reads none of T1''s preferences');
+select is(_seen(), 1, 'only its own');
+select throws_ok($$ insert into public.admin_user_prefs (tenant_id, user_id)
+                    values ('44000000-0000-0000-0000-000000000001', '44000000-0000-0000-0000-0000000000f1') $$,
+  '42501', null, 'and cannot write a row into T1');
+
+-- ---- preferences: stale tokens -----------------------------------------------------------
+select _as('44000000-0000-0000-0000-0000000000d2', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(_seen(), 0, 'a demoted token reads nothing, not even its own row');
+select is(_upd('44000000-0000-0000-0000-0000000000d2'), 0, 'and changes nothing');
+select _as('44000000-0000-0000-0000-0000000000d3', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(_seen(), 0, 'a deactivated token reads nothing');
+select _as('44000000-0000-0000-0000-0000000000d4', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(_seen(), 0, 'a locked token reads nothing');
+
+-- ---- the people directory ----------------------------------------------------------------
+select _as('44000000-0000-0000-0000-0000000000c1', 'content_creator', '44000000-0000-0000-0000-000000000001');
+select is(_names('44000000-0000-0000-0000-000000000001'), 'Amal,Cyrus,Dana,Demoted,Eli,Locked',
+  'content_creator sees every active member of its tenant (locked people too, never the inactive)');
+select is(pg_get_function_result('public.staff_directory(uuid)'::regprocedure),
+  'TABLE(id uuid, display_name text, role text)', 'names and roles only: no e-mail');
+select is(_names('44000000-0000-0000-0000-0000000000ff'), '',
+  'naming another tenant finds nobody');
+select throws_ok($$ select * from app.staff_directory() $$,
+  '42501', null, 'the directory itself is callable by no API role');
+
+select _as('44000000-0000-0000-0000-0000000000e1', 'seo', '44000000-0000-0000-0000-000000000001');
+select is((select count(*)::int from public.staff_directory('44000000-0000-0000-0000-000000000001')), 6,
+  'seo sees the same six');
+select _as('44000000-0000-0000-0000-0000000000d1', 'developer', '44000000-0000-0000-0000-000000000001');
+select is((select count(*)::int from public.staff_directory('44000000-0000-0000-0000-000000000001')), 6,
+  'developer sees the same six');
+select _as('44000000-0000-0000-0000-0000000000a1', 'admin', '44000000-0000-0000-0000-000000000001');
+select is((select role from public.staff_directory('44000000-0000-0000-0000-000000000001')
+            where display_name = 'Demoted'), 'seo',
+  'admin sees each person''s role as the profile says it');
+
+select _as('44000000-0000-0000-0000-0000000000f1', 'admin', '44000000-0000-0000-0000-0000000000ff');
+select is(_names('44000000-0000-0000-0000-0000000000ff'), 'Faris', 'another tenant sees its own people');
+select is(_names('44000000-0000-0000-0000-000000000001'), '', 'and none of T1''s');
+
+select _as('44000000-0000-0000-0000-0000000000d2', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(_names('44000000-0000-0000-0000-000000000001'), '', 'a demoted token sees nobody');
+select _as('44000000-0000-0000-0000-0000000000d3', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(_names('44000000-0000-0000-0000-000000000001'), '', 'a deactivated token sees nobody');
+select _as('44000000-0000-0000-0000-0000000000d4', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(_names('44000000-0000-0000-0000-000000000001'), '', 'a locked token sees nobody');
+
+-- ---- crm_people, restated over the directory: the same answer as 0036 ----------------------
+select _as('44000000-0000-0000-0000-0000000000d1', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(_people('44000000-0000-0000-0000-000000000001'), 'Amal,Dana',
+  'crm_people: the assignable lead workers (not the locked developer, not the demoted one)');
+select _as('44000000-0000-0000-0000-0000000000a1', 'admin', '44000000-0000-0000-0000-000000000001');
+select is(_people('44000000-0000-0000-0000-000000000001'), 'Amal,Dana', 'the same for admin');
+select _as('44000000-0000-0000-0000-0000000000c1', 'content_creator', '44000000-0000-0000-0000-000000000001');
+select is(_people('44000000-0000-0000-0000-000000000001'), '', 'crm_people is empty for a content creator');
+select _as('44000000-0000-0000-0000-0000000000e1', 'seo', '44000000-0000-0000-0000-000000000001');
+select is(_people('44000000-0000-0000-0000-000000000001'), '', 'and for seo');
+select _as('44000000-0000-0000-0000-0000000000f1', 'admin', '44000000-0000-0000-0000-0000000000ff');
+select is(_people('44000000-0000-0000-0000-0000000000ff') || '/' || _people('44000000-0000-0000-0000-000000000001'),
+  'Faris/', 'another tenant: its own people, none of T1''s');
+select _as('44000000-0000-0000-0000-0000000000d2', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(_people('44000000-0000-0000-0000-000000000001'), '', 'a demoted token lists nobody');
+select _as('44000000-0000-0000-0000-0000000000d4', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(_people('44000000-0000-0000-0000-000000000001'), '', 'a locked token lists nobody');
+
+-- ---- renaming yourself -------------------------------------------------------------------
+select _as('44000000-0000-0000-0000-0000000000c1', 'content_creator', '44000000-0000-0000-0000-000000000001');
+select is(public.update_my_profile('44000000-0000-0000-0000-000000000001', '  Cyrus Q  '), 'Cyrus Q',
+  'content_creator renames itself (trimmed)');
+select is((select display_name || '/' || role::text || '/' || is_active::text || '/' || tenant_id::text
+             from public.profiles where id = '44000000-0000-0000-0000-0000000000c1'),
+  'Cyrus Q/content_creator/true/44000000-0000-0000-0000-000000000001',
+  'only the name changed: not the role, the active flag or the tenant');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', repeat('x', 81)) $$,
+  '22023', null, 'a name over 80 characters is refused');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', E'a\tb') $$,
+  '22023', null, 'a name with a control character is refused');
+-- Format characters (Cf), which [[:cntrl:]] never matched: the Worker's schema refuses them,
+-- and so does a direct call now.
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', E'nimda\u202Etxt') $$,
+  '22023', null, 'a bidi override (U+202E) is refused');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', E'Am\u200Bal') $$,
+  '22023', null, 'a zero-width space (U+200B) is refused');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', E'a\u2066b\u2069') $$,
+  '22023', null, 'a bidi isolate (U+2066) is refused');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', E'a\U000E0041b') $$,
+  '22023', null, 'a tag character beyond the BMP (U+E0041) is refused');
+-- Trimmed of what JavaScript's trim() removes, not only spaces: an ideographic space, a
+-- no-break space, a line separator and a byte-order mark at the ends.
+select is(public.update_my_profile('44000000-0000-0000-0000-000000000001', E'\u3000\u00A0Cyrus Q\u2028\uFEFF'),
+  'Cyrus Q', 'trimmed of what the Worker trims');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-0000000000ff', 'x') $$,
+  '42501', null, 'naming another tenant is refused');
+select is(public.update_my_profile('44000000-0000-0000-0000-000000000001', '   '), null::text,
+  'a blank name clears it (the shell then shows the e-mail)');
+
+reset role;
+select is((select string_agg(display_name, ',' order by display_name) from public.profiles
+            where id in ('44000000-0000-0000-0000-0000000000a1', '44000000-0000-0000-0000-0000000000e1',
+                         '44000000-0000-0000-0000-0000000000d1', '44000000-0000-0000-0000-0000000000f1')),
+  'Amal,Dana,Eli,Faris', 'nobody else''s name changed');
+-- The rename audits itself: one row per rename that happened (three: 'Cyrus Q', the trim,
+-- the clear), none for the refused ones, the field's name only, as the caller.
+select is((select count(*)::int from public.audit_log
+            where actor_id = '44000000-0000-0000-0000-0000000000c1' and action = 'profile.update'),
+  3, 'each rename that happened wrote one audit row; a refused one wrote none');
+select is((select entity_type || '/' || entity_id || '/' || actor_role || '/' || tenant_id::text || '/' || detail::text
+             from public.audit_log
+            where actor_id = '44000000-0000-0000-0000-0000000000c1' and action = 'profile.update'
+            order by id desc limit 1),
+  'profile/44000000-0000-0000-0000-0000000000c1/content_creator/44000000-0000-0000-0000-000000000001/{"fields": ["display_name"]}',
+  'the row is the caller''s, about their own profile, in their tenant, naming the field and never the name');
+set local role authenticated;
+
+select _as('44000000-0000-0000-0000-0000000000e1', 'seo', '44000000-0000-0000-0000-000000000001');
+select is(public.update_my_profile('44000000-0000-0000-0000-000000000001', 'Eli S'), 'Eli S', 'seo renames itself');
+select _as('44000000-0000-0000-0000-0000000000d1', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(public.update_my_profile('44000000-0000-0000-0000-000000000001', 'Dana D'), 'Dana D',
+  'developer renames itself');
+select _as('44000000-0000-0000-0000-0000000000a1', 'admin', '44000000-0000-0000-0000-000000000001');
+select is(public.update_my_profile('44000000-0000-0000-0000-000000000001', 'Amal A'), 'Amal A',
+  'admin renames itself');
+select _as('44000000-0000-0000-0000-0000000000f1', 'admin', '44000000-0000-0000-0000-0000000000ff');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', 'x') $$,
+  '42501', null, 'another tenant''s admin cannot rename itself into T1');
+select is(public.update_my_profile('44000000-0000-0000-0000-0000000000ff', 'Faris B'), 'Faris B',
+  'but renames itself in its own tenant');
+select _as('44000000-0000-0000-0000-0000000000d2', 'developer', '44000000-0000-0000-0000-000000000001');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', 'x') $$,
+  '42501', null, 'a demoted token cannot rename itself');
+select _as('44000000-0000-0000-0000-0000000000d3', 'developer', '44000000-0000-0000-0000-000000000001');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', 'x') $$,
+  '42501', null, 'a deactivated token cannot');
+select _as('44000000-0000-0000-0000-0000000000d4', 'developer', '44000000-0000-0000-0000-000000000001');
+select throws_ok($$ select public.update_my_profile('44000000-0000-0000-0000-000000000001', 'x') $$,
+  '42501', null, 'a locked token cannot');
+
+-- ---- the environment pill ------------------------------------------------------------------
+select _as('44000000-0000-0000-0000-0000000000c1', 'content_creator', '44000000-0000-0000-0000-000000000001');
+select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), null::text,
+  'an unmarked database names no environment (the pill is hidden, never guessed)');
+
+reset role;
+insert into app.deployment (env) values ('staging');
+set local role authenticated;
+
+select _as('44000000-0000-0000-0000-0000000000c1', 'content_creator', '44000000-0000-0000-0000-000000000001');
+select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), 'staging', 'content_creator: staging');
+select _as('44000000-0000-0000-0000-0000000000e1', 'seo', '44000000-0000-0000-0000-000000000001');
+select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), 'staging', 'seo: staging');
+select _as('44000000-0000-0000-0000-0000000000d1', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), 'staging', 'developer: staging');
+select _as('44000000-0000-0000-0000-0000000000a1', 'admin', '44000000-0000-0000-0000-000000000001');
+select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), 'staging', 'admin: staging');
+
+reset role;
+update app.deployment set env = 'production';
+set local role authenticated;
+select _as('44000000-0000-0000-0000-0000000000a1', 'admin', '44000000-0000-0000-0000-000000000001');
+select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), 'production',
+  'production reads as production');
+
+reset role;
+update app.deployment set env = 'development';
+set local role authenticated;
+select _as('44000000-0000-0000-0000-0000000000a1', 'admin', '44000000-0000-0000-0000-000000000001');
+select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), 'local',
+  'a development database reads as local');
+
+select _as('44000000-0000-0000-0000-0000000000f1', 'admin', '44000000-0000-0000-0000-0000000000ff');
+select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), null::text,
+  'another tenant''s admin naming T1 gets nothing');
+select is(public.admin_environment('44000000-0000-0000-0000-0000000000ff'), 'local',
+  'naming its own tenant, it reads the database''s environment');
+
+select _as('44000000-0000-0000-0000-0000000000d2', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), null::text,
+  'a demoted token gets nothing');
+select _as('44000000-0000-0000-0000-0000000000d3', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), null::text,
+  'a deactivated token gets nothing');
+select _as('44000000-0000-0000-0000-0000000000d4', 'developer', '44000000-0000-0000-0000-000000000001');
+select is(public.admin_environment('44000000-0000-0000-0000-000000000001'), null::text,
+  'a locked token gets nothing');
+select throws_ok($$ select env from app.deployment $$,
+  '42501', null, 'and no staff token reads the marker itself');
+
+-- ---- the display-name rule holds for every writer, not only the rename door ---------------
+-- The users screen writes profiles.display_name as an Admin's session (0037's column grant,
+-- profiles_admin_write); the invite writes it as the service role. The trigger holds both.
+select _as('44000000-0000-0000-0000-0000000000a1', 'admin', '44000000-0000-0000-0000-000000000001');
+select throws_ok($$ update public.profiles set display_name = E'Cy\u202Erus'
+                    where id = '44000000-0000-0000-0000-0000000000c1' $$,
+  '23514', null, 'an Admin renaming a colleague cannot store a bidi override');
+select throws_ok($$ update public.profiles set display_name = E'Cy\u200Brus'
+                    where id = '44000000-0000-0000-0000-0000000000c1' $$,
+  '23514', null, 'nor a zero-width space');
+select throws_ok($$ update public.profiles set display_name = repeat('x', 81)
+                    where id = '44000000-0000-0000-0000-0000000000c1' $$,
+  '23514', null, 'nor a name over 80 characters');
+select lives_ok($$ update public.profiles set display_name = repeat('x', 80)
+                   where id = '44000000-0000-0000-0000-0000000000c1' $$,
+  'but stores a name of 80 characters');
+select is((select char_length(display_name) from public.profiles
+            where id = '44000000-0000-0000-0000-0000000000c1'), 80, 'which is kept as written');
+
+set local role service_role;
+select _as(null, null, null);
+select throws_ok($$ insert into public.profiles (id, tenant_id, role, display_name)
+                    values ('44000000-0000-0000-0000-0000000000b1', '44000000-0000-0000-0000-000000000001',
+                            'seo', E'In\u2066vited') $$,
+  '23514', null, 'the service role cannot store one either, on an invite');
+select throws_ok($$ update public.profiles set display_name = repeat('x', 81)
+                    where id = '44000000-0000-0000-0000-0000000000d1' $$,
+  '23514', null, 'nor on a rename');
+
+-- A name stored before 0044 was never tested: written here with the trigger off, as it was.
+reset role;
+alter table public.profiles disable trigger profiles_display_name_rule;
+update public.profiles set display_name = repeat('z', 100) where id = '44000000-0000-0000-0000-0000000000d1';
+alter table public.profiles enable trigger profiles_display_name_rule;
+set local role service_role;
+select lives_ok($$ update public.profiles set failed_login_count = 0, locked_until = null, last_login_at = now()
+                   where id = '44000000-0000-0000-0000-0000000000d1' $$,
+  'a name stored before the rule does not block the sign-in''s writes to that profile');
+set local role authenticated;
+select _as('44000000-0000-0000-0000-0000000000a1', 'admin', '44000000-0000-0000-0000-000000000001');
+select lives_ok($$ update public.profiles set role = 'developer', display_name = repeat('z', 100)
+                   where id = '44000000-0000-0000-0000-0000000000d1' $$,
+  'nor a users-screen save that sends the same name back');
+select throws_ok($$ update public.profiles set display_name = repeat('z', 101)
+                    where id = '44000000-0000-0000-0000-0000000000d1' $$,
+  '23514', null, 'but a new name must meet the rule');
+
+-- ---- a profile that moves takes its row along; one that goes takes it with it --------------
+-- Moving a person between tenants is an operator's change (no API role may write
+-- profiles.tenant_id). Their row follows (ON UPDATE CASCADE) with its bell afresh, so they
+-- have preferences in the new tenant rather than a row stranded in the old one.
+reset role;
+update public.profiles set tenant_id = '44000000-0000-0000-0000-0000000000ff'
+ where id = '44000000-0000-0000-0000-0000000000e1';
+select is((select tenant_id::text || '/' || coalesce(notifications_seen_at::text, 'unread') || '/' || version::text
+             from public.admin_user_prefs where user_id = '44000000-0000-0000-0000-0000000000e1'),
+  '44000000-0000-0000-0000-0000000000ff/unread/1',
+  'a profile moved to another tenant takes its preferences along, the bell afresh, the version kept');
+set local role authenticated;
+select _as('44000000-0000-0000-0000-0000000000e1', 'seo', '44000000-0000-0000-0000-0000000000ff');
+select is(_seen(), 1, 'and the person reads their row in the new tenant');
+reset role;
+delete from public.profiles where id = '44000000-0000-0000-0000-0000000000d3';
+select is((select count(*)::int from public.admin_user_prefs
+            where user_id = '44000000-0000-0000-0000-0000000000d3'), 0,
+  'a profile that goes takes its preferences with it');
+
+-- ---- grants (P-14: what must and must not be held) -------------------------------------------
+reset role;
+select ok(not has_table_privilege('anon', 'public.admin_user_prefs',
+                _never('select, insert, update, delete, truncate, references, trigger'))
+          and not has_table_privilege('public', 'public.admin_user_prefs',
+                _never('select, insert, update, delete, truncate, references, trigger'))
+          and not has_any_column_privilege('anon', 'public.admin_user_prefs', 'select, insert, update, references')
+          and not has_any_column_privilege('public', 'public.admin_user_prefs', 'select, insert, update, references'),
+  'anon and PUBLIC hold nothing on admin_user_prefs, table-wide or by column');
+select ok(has_table_privilege('authenticated', 'public.admin_user_prefs', 'select')
+          and not has_table_privilege('authenticated', 'public.admin_user_prefs',
+                _never('insert, update, delete, truncate, references, trigger'))
+          and not has_any_column_privilege('authenticated', 'public.admin_user_prefs', 'references'),
+  'staff read their row, and can neither delete, truncate nor write it table-wide');
+select ok(not has_column_privilege('authenticated', 'public.admin_user_prefs', 'version', 'update')
+          and not has_column_privilege('authenticated', 'public.admin_user_prefs', 'tenant_id', 'update')
+          and not has_column_privilege('authenticated', 'public.admin_user_prefs', 'user_id', 'update')
+          and has_column_privilege('authenticated', 'public.admin_user_prefs', 'notifications_seen_at', 'update'),
+  'staff update the preference columns only');
+select ok(has_table_privilege('service_role', 'public.admin_user_prefs', 'select')
+          and has_table_privilege('service_role', 'public.admin_user_prefs', 'insert')
+          and has_table_privilege('service_role', 'public.admin_user_prefs', 'update')
+          and has_table_privilege('service_role', 'public.admin_user_prefs', 'delete')
+          and not has_table_privilege('service_role', 'public.admin_user_prefs',
+                _never('truncate, references, trigger'))
+          and not has_any_column_privilege('service_role', 'public.admin_user_prefs', 'references'),
+  'the service role''s grants are stated: read and write, never truncate, references, trigger or maintain');
+select ok(not has_function_privilege('authenticated', 'app.staff_directory()', 'execute')
+          and not has_function_privilege('anon', 'app.staff_directory()', 'execute')
+          and not has_function_privilege('service_role', 'app.staff_directory()', 'execute'),
+  'app.staff_directory() is executable by no API role');
+select ok(has_function_privilege('authenticated', 'public.update_my_profile(uuid, text)', 'execute')
+          and has_function_privilege('authenticated', 'public.admin_environment(uuid)', 'execute')
+          and has_function_privilege('authenticated', 'public.staff_directory(uuid)', 'execute')
+          and not has_function_privilege('anon', 'public.crm_people(uuid)', 'execute'),
+  'the four public functions are for staff tokens only');
+
+select * from finish();
+rollback;

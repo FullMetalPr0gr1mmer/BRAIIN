@@ -25,7 +25,7 @@ import {
 //
 // ── E-mail delivery is an owner item (O-2) ──────────────────────────────────────
 // Supabase sends the e-mail. Until SMTP and the recovery template are set up in its
-// dashboard (docs/launch-runbook.md §2a), AUTH_EMAIL_READY stays false and the forgot
+// dashboard (docs/launch-runbook.md §2b), AUTH_EMAIL_READY stays false and the forgot
 // screen says "Not set up" instead of pretending; the reset side works either way, since
 // its token can come only from a real e-mail (or, in the e2e harness, the admin API).
 

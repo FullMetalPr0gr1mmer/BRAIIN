@@ -648,6 +648,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
 - **Ops checks**
   - **O-16** Workers plan: measure CPU and subrequests for publish/validate, preview SSR, `/_image`, `theme.css` and the lead CSV export at its cap (`GET /api/admin/leads/export` carrying 80 leads with contact details, `EXPORT_ROW_CAP.pii`: its rows were measured at up to 6 ms, the rest of the request was not, [C3](as-built/C3.md)) on staging. The Free plan allows 10 ms/request. Workers Paid ($5/mo) may be needed.
   - **O-23** Production checks: Postgres major ≥ 15, leads grants (H2), and whether the pg_cron role bypasses RLS (retention).
+  - **O-24** Supabase Auth on staging and production (launch runbook §2a, F8): require the current password to change one, minimum password length 10, Secure password change on; and accept what remains (a direct call at the auth server counts no lockout, and a direct change is audited only in GoTrue's own log, as `user_updated_password`, never in the app's hash-chained `audit_log`). Until then a session token alone changes its owner's password at the auth server, and GoTrue signs out every other session of that user, the owner's own devices included ([deviations.md](deviations.md), residual risks, which also names a compensating alert the owner may choose).
 
 ## Risks
 
@@ -687,6 +688,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [F3](as-built/F3.md): overlays, toasts and the command palette (#39, folded into #34)
 - [F4a](as-built/F4a.md): the admin bundle plan (#40, folded into #34)
 - [F7](as-built/F7.md): sign-in v2, keep me signed in, forgot and reset password
+- [F8](as-built/F8.md): the personal layer: preferences, the people directory, the bell, the account, the environment pill, 0044
 
 **Releases**
 - [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)

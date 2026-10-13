@@ -8,7 +8,7 @@ export const prerender = false;
 
 // Choose a new password (Admin v2 F7). Opened from the reset e-mail's link,
 // `/admin/reset?token_hash=…&type=recovery` (the recovery template the runbook sets,
-// docs/launch-runbook.md §2a). This page does NOT verify the token: mail scanners fetch
+// docs/launch-runbook.md §2b). This page does NOT verify the token: mail scanners fetch
 // links, and a GET that spent it would leave the person with a dead link. It only checks
 // the token's shape and carries it, in a hidden field, to /api/admin/auth/reset, which
 // verifies it, sets the password and signs the account out everywhere, all on the server
