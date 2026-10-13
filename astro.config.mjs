@@ -7,6 +7,15 @@ import cloudflare from '@astrojs/cloudflare';
 // `admin-vendor-*.js` so the public 100 KB budget keeps measuring only public JS.
 import react from '@astrojs/react';
 
+// What the shared admin-ui chunk does not claim by its path (Admin v2 F4b): the component
+// kit (src/components/admin/kit/, the Sortable core in src/lib/admin/client/) and its
+// reference screen (/admin/kit: the AdminKit island and screens/kit/). A group also takes
+// its modules' dependencies, so a kit piece still lands in admin-ui the moment a screen
+// there imports it; a piece only the reference screen shows stays in that screen's own
+// `AdminKit` chunk instead of riding along on every admin screen.
+const ADMIN_UI_UNCLAIMED =
+  /[\\/]src[\\/](components[\\/]admin[\\/](kit[\\/]|screens[\\/]kit[\\/]|islands[\\/]AdminKit\.tsx$)|lib[\\/]admin[\\/]client[\\/])/;
+
 /**
  * Braiin Station — render model (see CLAUDE.md §2 "Render tiers"):
  *   Tier A  Static, indexable shell  → SSR + long `s-maxage`, purge-by-tag on publish
@@ -103,9 +112,12 @@ export default defineConfig({
                 priority: 30,
               },
               {
-                // Our own admin-only modules, and what they need (zod, the schemas).
+                // Our own admin-only modules, and what they need (zod, the schemas),
+                // except what ADMIN_UI_UNCLAIMED names (the component kit, F4b).
                 name: 'admin-ui',
-                test: /[\\/]src[\\/](components|lib)[\\/]admin[\\/]/,
+                test: (id) =>
+                  /[\\/]src[\\/](components|lib)[\\/]admin[\\/]/.test(id) &&
+                  !ADMIN_UI_UNCLAIMED.test(id),
                 priority: 20,
               },
               {
