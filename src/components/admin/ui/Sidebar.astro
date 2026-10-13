@@ -3,6 +3,7 @@ import { Picture } from 'astro:assets';
 import logo from '@/assets/braiin-logo-white.png';
 import type { NavGroup, NavLink } from '@/lib/admin/nav';
 import type { ShellState } from '@/lib/admin/shell';
+import Avatar from './Avatar.astro';
 import Icon from './Icon.astro';
 
 // The midnight sidebar (Admin v2 F2, the prototype's .side). Server-rendered, zero JS.
@@ -78,7 +79,7 @@ const roleLabel = role.replace('_', ' ');
     <div class="side__foot">
       <details class="menu account-menu">
         <summary class="side__user">
-          <span class="avatar" aria-hidden="true">{initials}</span>
+          <Avatar initials={initials} />
           <span class="side__who">
             <b>{shell.displayName ?? email}</b>
             <span>{roleLabel}</span>

@@ -1,0 +1,51 @@
+---
+import Spark from './charts/Spark.astro';
+import { formatNumber } from '@/lib/admin/charts';
+import { deltaView } from '@/lib/admin/kpi';
+
+// A KPI card (Admin v2 F4b, the prototype's .kpi on F1's `.card:has(> .stat)` look): the
+// label, the figure (tabular), the change against the previous period, and a spark.
+//   - The delta pill shows "▲ 12%"; a screen reader hears "Up 12% vs the previous 7
+//     days" instead (the glyph and the figure are hidden from it, the sentence is not
+//     shown). `good: 'down'` for a KPI where fewer is better. A null delta (not enough
+//     history, see percentChange) draws no pill: no trend is better than a made-up one.
+//   - The spark is decoration (aria-hidden): its numbers belong in a chart's table.
+//   - A string value is printed as it is (Arabic digits are never transformed); a number
+//     is grouped in en-GB.
+
+interface Props {
+  label: string;
+  value: string | number;
+  unit?: string | undefined;
+  delta?: number | null | undefined;
+  good?: 'up' | 'down';
+  /** Said after the change: "the previous 7 days". */
+  period?: string | undefined;
+  spark?: readonly number[] | undefined;
+  /** The spark's series, 0-based (ch-s1 by default). */
+  series?: number;
+}
+
+const { label, value, unit, delta, good = 'up', period, spark, series = 0 } = Astro.props;
+const view = deltaView(delta, good);
+const shown = typeof value === 'number' ? formatNumber(value) : value;
+const spoken = view
+  ? `${view.spoken[0]?.toUpperCase()}${view.spoken.slice(1)}${period ? ` vs ${period}` : ''}`
+  : '';
+---
+
+<div class="card">
+  <p class="stat-label">{label}</p>
+  <p class="stat">{shown}{unit && <span class="stat-unit">{unit}</span>}</p>
+  {
+    view && (
+      <p class="kpi__d" data-tone={view.tone}>
+        <span aria-hidden="true">
+          {view.glyph} {view.text}
+        </span>
+        <span class="visually-hidden">{spoken}</span>
+      </p>
+    )
+  }
+  {spark && <Spark data={spark} series={series} />}
+</div>

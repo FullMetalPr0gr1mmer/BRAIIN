@@ -1,0 +1,33 @@
+---
+import { seriesClass, sparkGeometry } from '@/lib/admin/charts';
+
+// A spark (Admin v2 F4b, the prototype's chart.spark): a KPI's trend at a glance, a line
+// and a soft area in a 200×36 box stretched to its card. Decoration only (aria-hidden):
+// the figure beside it says the number, and a chart's table says the rest. Nothing is
+// drawn for no data.
+
+interface Props {
+  data: readonly number[];
+  /** The series, 0-based (ch-s1 by default). */
+  series?: number;
+}
+
+const { data, series = 0 } = Astro.props;
+const g = sparkGeometry(data);
+const tone = seriesClass(series);
+---
+
+{
+  g && (
+    <svg
+      class="kpi__spark"
+      viewBox={`0 0 ${g.width} ${g.height}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path class:list={['ch-area', tone]} d={g.area} />
+      <path class:list={['ch-line', tone]} d={g.line} />
+    </svg>
+  )
+}

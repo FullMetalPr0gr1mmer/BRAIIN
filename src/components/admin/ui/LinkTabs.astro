@@ -1,0 +1,26 @@
+---
+// Tabs as links (Admin v2 F4b; F2's area tabs): server-rendered, zero JS, the current one
+// marked aria-current="page". For screens that switch by URL (an area's sections, a
+// stats range). Tabs that switch panels in place are kit/Tabs.tsx. PageHead renders an
+// area's tabs through this.
+
+interface Props {
+  tabs: readonly { label: string; href: string }[];
+  /** The href of the current tab. */
+  current?: string | null | undefined;
+  /** The navigation's name ("Services sections"). */
+  label: string;
+}
+
+const { tabs, current = null, label } = Astro.props;
+---
+
+<nav class="tabs" aria-label={label}>
+  {
+    tabs.map((tab) => (
+      <a href={tab.href} aria-current={tab.href === current ? 'page' : undefined}>
+        {tab.label}
+      </a>
+    ))
+  }
+</nav>

@@ -1,10 +1,12 @@
 ---
+import LinkTabs from './LinkTabs.astro';
 import type { NavTab } from '@/lib/admin/nav';
 
 // The page head (Admin v2 F2, the prototype's .ph): the h1, its plain-language sub-line,
 // a wrapping actions slot, and the area's tabs. Tabs are the screens the prototype folds
 // into one area (Services · Disciplines · Case studies…): server-rendered links, the
-// current one marked aria-current, shown only when the role can open two or more.
+// current one marked aria-current, shown only when the role can open two or more
+// (LinkTabs, the kit's tabs as links, F4b).
 
 interface Props {
   title: string;
@@ -24,14 +26,4 @@ const { title, subtitle, tabs = [], currentTab = null, area = title } = Astro.pr
   </div>
   <slot name="actions" />
 </header>
-{
-  tabs.length > 1 && (
-    <nav class="tabs" aria-label={`${area} sections`}>
-      {tabs.map((tab) => (
-        <a href={tab.href} aria-current={tab === currentTab ? 'page' : undefined}>
-          {tab.label}
-        </a>
-      ))}
-    </nav>
-  )
-}
+{tabs.length > 1 && <LinkTabs tabs={tabs} current={currentTab?.href} label={`${area} sections`} />}

@@ -1,0 +1,24 @@
+---
+import { formatNumber } from '@/lib/admin/charts';
+
+// Stat rows (Admin v2 F4b, the prototype's .stat-row): label and figure pairs as a
+// description list, so each figure is announced with its label. A number is grouped in
+// en-GB; a string is printed as it is.
+
+interface Props {
+  rows: readonly { label: string; value: string | number }[];
+}
+
+const { rows } = Astro.props;
+---
+
+<dl class="stat-rows">
+  {
+    rows.map((row) => (
+      <div class="stat-row">
+        <dt>{row.label}</dt>
+        <dd>{typeof row.value === 'number' ? formatNumber(row.value) : row.value}</dd>
+      </div>
+    ))
+  }
+</dl>

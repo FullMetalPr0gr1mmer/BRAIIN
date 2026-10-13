@@ -1,0 +1,71 @@
+---
+import Icon from './Icon.astro';
+import type { IconName } from '@/lib/admin/icons';
+
+// A list row (Admin v2 F4b, the prototype's .li): one <li> for a `<ul class="list">`.
+// The title is a real link stretched over the row when the row goes somewhere (no click
+// handler on the row); a handle, badges and actions sit above that link. A hidden item is
+// dimmed AND labelled "Hidden" (ui.md §2.4), never dimmed alone. Titles and lines are
+// often people's words, so they read in their own direction (dir="auto").
+//
+// Slots: `lead` (a drag handle or a thumbnail, before the icon), `meta` (badges, after
+// the text), `actions` (buttons, shown on hover and focus where the device can hover).
+
+interface Props {
+  title: string;
+  sub?: string | undefined;
+  href?: string | undefined;
+  icon?: IconName | undefined;
+  hidden?: boolean;
+  /** The row the page is about (the section being edited): marked aria-current. */
+  current?: boolean;
+}
+
+const { title, sub, href, icon, hidden = false, current = false } = Astro.props;
+---
+
+<li class="li" data-hidden={hidden ? '' : undefined} aria-current={current ? 'true' : undefined}>
+  <slot name="lead" />
+  {
+    icon && (
+      <span class="li__ico">
+        <Icon name={icon} size={17} />
+      </span>
+    )
+  }
+  <div class="li__main">
+    {
+      href ? (
+        <a class="li__t" href={href} dir="auto">
+          {title}
+        </a>
+      ) : (
+        <p class="li__t" dir="auto">
+          {title}
+        </p>
+      )
+    }
+    {
+      sub && (
+        <p class="li__s" dir="auto">
+          {sub}
+        </p>
+      )
+    }
+  </div>
+  {
+    hidden && (
+      <span class="badge" data-tone="gray">
+        Hidden
+      </span>
+    )
+  }
+  <slot name="meta" />
+  {
+    Astro.slots.has('actions') && (
+      <div class="li__acts">
+        <slot name="actions" />
+      </div>
+    )
+  }
+</li>
