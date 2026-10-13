@@ -135,6 +135,7 @@ signs the owner's own devices out. Optional, not built: alert on a `user_updated
 with no `auth.password_change` row in `public.audit_log` for the same user a moment later
 (every change through the admin writes both); a recovery or invite link, once set up (O-2,
 O-22), is the expected exception.
+
 ### 2b. Password reset e-mail (Admin v2 F7, owner item O-2)
 
 "Forgot password?" ships switched off: until the steps below are done, the screen says **Not
@@ -156,7 +157,9 @@ the Worker never sees it. Do all four, on staging first, then production:
    ```
 
 4. **Switch it on.** Add `"AUTH_EMAIL_READY": "true"` to `vars` in `wrangler.jsonc` (a reviewed
-   PR; the deploy carries it).
+   PR). It is read when the Worker is built (`astro:env` inlines a public server variable,
+   and the build reads `wrangler.jsonc`'s `vars`), so the deploy that carries the PR turns it
+   on; a dashboard variable alone would not.
 
 **Check it.** Request a reset for your own staff address and one that does not exist: the
 screen must say the same thing for both, and only yours gets an e-mail. The answer hides a
@@ -165,6 +168,15 @@ recorded: `select created_at, detail from system_logs where source = 'auth.forgo
 id desc limit 20;` (a status code, never the address). Each accepted request also leaves an
 `auth.password_reset_requested` row in `audit_log`, and each completed reset an
 `auth.password_reset` row against the account.
+
+Then **complete one reset** with your own account, after §2a's three settings are on: open the
+link, set a new password, and sign in with it. The reset sets the password on the recovery
+session the link opens, without the current password (the person no longer has it). If the
+auth server refuses that, the page says the password was not accepted, the link is spent,
+and `select created_at, detail from system_logs where source = 'auth.reset' order by id desc
+limit 5;` names the status and code (never the password); report it before switching
+`AUTH_EMAIL_READY` on in production. A completed reset is GoTrue's `user_updated_password`
+too: an alert built on §2a's suggestion matches it to the `auth.password_reset` row.
 
 ## 3. Create and promote the first admin  ⛔ blocker
 
