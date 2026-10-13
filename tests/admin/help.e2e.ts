@@ -100,9 +100,15 @@ test.describe('as developer', () => {
     await expect(
       drawer.getByRole('heading', { level: 3, name: 'Working with leads' }),
     ).toBeFocused();
+    // The lists load behind the guide: once they have, its related guides show (from the
+    // role's own list), and "All guides" leads back to them.
+    await expect(
+      drawer.getByRole('list', { name: /^related$/i }).getByRole('link', {
+        name: /Personal data and the PDPL/,
+      }),
+    ).toBeVisible();
     await expectNoAxeViolations(page, 'developer: the drawer opened on a guide');
 
-    // "All guides" leads to the lists, which load behind the guide.
     await drawer.getByRole('button', { name: /^all guides$/i }).click();
     await expect(
       drawer.getByRole('list', { name: /^on this screen$/i }).getByRole('link', {
