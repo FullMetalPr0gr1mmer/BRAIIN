@@ -686,6 +686,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [F2](as-built/F2.md): the shell and the information architecture (#37, folded into #34)
 - [F3](as-built/F3.md): overlays, toasts and the command palette (#39, folded into #34)
 - [F4a](as-built/F4a.md): the admin bundle plan (#40, folded into #34)
+- [F6](as-built/F6.md): built-in section copy as shared data, the public HTML byte-identical
 
 **Releases**
 - [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)
