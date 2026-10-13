@@ -1,9 +1,10 @@
-import { useEffect, type ReactNode, type RefObject, type MouseEvent } from 'react';
+import { useEffect, useRef, type ReactNode, type RefObject, type MouseEvent } from 'react';
 import Icon from '@/components/admin/kit/Icon';
+import { focusReturnTarget, isRendered } from '@/lib/admin/focusReturn';
 
 // The shell's side drawers (Admin v2 F8): the prototype's .drw, on a native modal <dialog>
 // (ui.md §2.3), which brings the focus trap, Escape, the top layer and focus return to
-// the trigger with no code of ours. It opens from the inline end, full width on a phone.
+// the trigger. It opens from the inline end, full width on a phone.
 //
 // The general Drawer of the component kit is F4b's, built in parallel; this one is private
 // to the shell's two drawers (bell and account) and uses the same class names, so the
@@ -11,6 +12,8 @@ import Icon from '@/components/admin/kit/Icon';
 
 export interface ChromeDrawerProps {
   dialogRef: RefObject<HTMLDialogElement | null>;
+  /** The trigger that opened the drawer (useOpenOn's), for focus return. */
+  openerRef: RefObject<HTMLElement | null>;
   /** The id of the drawer's heading, which names the dialog. */
   titleId: string;
   title: string;
@@ -20,6 +23,7 @@ export interface ChromeDrawerProps {
 
 export default function ChromeDrawer({
   dialogRef,
+  openerRef,
   titleId,
   title,
   children,
@@ -30,13 +34,23 @@ export default function ChromeDrawer({
     if (event.target === dialogRef.current) dialogRef.current?.close();
   }
 
-  // The dialog gives focus back to its trigger before `close` fires. Below 900px the account
-  // chip sits in the sidebar popover, which showModal() closed, so focus cannot go back
-  // there and falls to <body>: it goes to the Menu button that opens the sidebar instead.
+  // The dialog gives focus back to its trigger itself, except where the trigger is gone:
+  // below 900px the account chip sits in the sidebar popover, which showModal() closed, so
+  // focus is stranded on the closed dialog (and drops to <body> a task after `close`).
+  // Focus then goes to the trigger if it is on screen, else to the Menu button that opens
+  // the sidebar (src/lib/admin/focusReturn.ts).
   function onClose() {
-    if (!document.activeElement || document.activeElement === document.body) {
-      document.querySelector<HTMLElement>('[popovertarget="admin-side"]')?.focus();
-    }
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    focusReturnTarget<Element, HTMLElement>({
+      active: document.activeElement,
+      body: document.body,
+      dialog,
+      opener: openerRef.current,
+      fallback: document.querySelector<HTMLElement>('[popovertarget="admin-side"]'),
+      contains: (container, element) => container.contains(element),
+      shown: isRendered,
+    })?.focus();
   }
 
   return (
@@ -71,19 +85,25 @@ export default function ChromeDrawer({
  * Opens a drawer from its trigger: any `[data-open="<name>"]` in the page. The trigger is
  * a real link (the bell to /admin/notifications, the account chip to /admin/account), so
  * without JS it still goes somewhere; with JS a plain click opens the drawer instead, and a
- * click with a modifier (a new tab) is left to the browser.
+ * click with a modifier (a new tab) is left to the browser. Returns the trigger last used,
+ * for ChromeDrawer's focus return.
  */
-export function useOpenOn(name: string, open: () => void): void {
+export function useOpenOn(name: string, open: () => void): RefObject<HTMLElement | null> {
+  const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const onClick = (event: globalThis.MouseEvent) => {
-      const trigger = (event.target as Element | null)?.closest(`[data-open="${name}"]`);
+      const trigger = (event.target as Element | null)?.closest<HTMLElement>(
+        `[data-open="${name}"]`,
+      );
       if (!trigger || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) {
         return;
       }
       event.preventDefault();
+      opener.current = trigger;
       open();
     };
     document.addEventListener('click', onClick);
     return () => document.removeEventListener('click', onClick);
   }, [name, open]);
+  return opener;
 }

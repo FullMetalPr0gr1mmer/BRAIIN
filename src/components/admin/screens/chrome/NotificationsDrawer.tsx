@@ -62,7 +62,7 @@ export default function NotificationsDrawer() {
     dialog.showModal();
     void load();
   }, [load]);
-  useOpenOn('notifications', open);
+  const openerRef = useOpenOn('notifications', open);
 
   async function markAllRead() {
     if (!feed) return;
@@ -97,6 +97,7 @@ export default function NotificationsDrawer() {
   return (
     <ChromeDrawer
       dialogRef={dialogRef}
+      openerRef={openerRef}
       titleId="ntf-title"
       title="Notifications"
       footer={

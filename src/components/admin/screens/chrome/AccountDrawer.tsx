@@ -25,10 +25,15 @@ export default function AccountDrawer({ view }: AccountDrawerProps) {
     setOpened(true);
     dialog.showModal();
   }, []);
-  useOpenOn('account', open);
+  const openerRef = useOpenOn('account', open);
 
   return (
-    <ChromeDrawer dialogRef={dialogRef} titleId="acct-drw-title" title="Your account">
+    <ChromeDrawer
+      dialogRef={dialogRef}
+      openerRef={openerRef}
+      titleId="acct-drw-title"
+      title="Your account"
+    >
       {opened && <AccountPanel view={view} idPrefix="acct-drw" mode="drawer" />}
     </ChromeDrawer>
   );
