@@ -178,15 +178,16 @@ describe('the outcome codes the pages render', () => {
 });
 
 describe('the recovery limits and link', () => {
-  it('the e-mail is counted only when there is one', () => {
-    expect(forgotLimitRules('203.0.113.7', 'a@b.test').map((r) => r.scope)).toEqual([
-      'auth.forgot:ip',
-      'auth.forgot:email',
-      'auth.forgot:tenant',
-    ]);
-    expect(forgotLimitRules(null, null).map((r) => [r.scope, r.value])).toEqual([
+  it("the e-mail is counted only when there is one; the tenant's window apart", () => {
+    const { caller, tenant } = forgotLimitRules('203.0.113.7', 'a@b.test');
+    expect(caller.map((r) => r.scope)).toEqual(['auth.forgot:ip', 'auth.forgot:email']);
+    expect(tenant).toEqual({
+      scope: 'auth.forgot:tenant',
+      value: 'all',
+      ...RECOVERY_LIMITS.forgotPerTenant,
+    });
+    expect(forgotLimitRules(null, null).caller.map((r) => [r.scope, r.value])).toEqual([
       ['auth.forgot:ip', 'unknown'],
-      ['auth.forgot:tenant', 'all'],
     ]);
     expect(resetLimitRules('2001:db8:1:2:3:4:5:6')).toEqual([
       { scope: 'auth.reset:ip', value: '2001:db8:1:2::/64', ...RECOVERY_LIMITS.resetPerIp },

@@ -14,7 +14,8 @@ import { TENANT, UUID } from './harness';
 //     nothing is counted, sent or audited;
 //   - set up, a known address, an unknown one and a malformed one get the same status, the
 //     same body and the same page, and the answer does not wait for the e-mail (waitUntil);
-//   - limits per IP address, per e-mail (an HMAC) and per tenant, failing closed;
+//   - limits per IP address, per e-mail (an HMAC) and per tenant, failing closed; the
+//     tenant's window counts only what the first two let through;
 //   - one audit row per accepted request, with no actor and nothing about the requester.
 // Reset:
 //   - the token's shape and the password (the account screen's rule: at least 10
@@ -377,6 +378,31 @@ describe('POST /api/admin/auth/forgot: the limits (fail closed)', () => {
     }
     const { res } = await forgot({ email: 'staff@example.test' }, { ip: '192.0.2.200' });
     expect(res.status).toBe(429);
+  });
+
+  it("one address cannot spend the tenant's window: what its own limit refused is not counted there", async () => {
+    // One machine, a full window's worth of requests: 5 accepted, the rest refused by the
+    // per-address rule. Counted against the tenant too, those 50 closed "Forgot password?"
+    // for every staff member for the hour (F7 review).
+    for (let i = 0; i < RECOVERY_LIMITS.forgotPerTenant.max; i++) {
+      const { res } = await forgot({ email: `p${i}@example.test` }, { ip: '198.51.100.66' });
+      expect(res.status, `request ${i + 1}`).toBe(i < RECOVERY_LIMITS.forgotPerIp.max ? 200 : 429);
+    }
+    expect(scopes().filter((s) => s === 'auth.forgot:tenant')).toHaveLength(
+      RECOVERY_LIMITS.forgotPerIp.max,
+    );
+    // Someone else, from another address, is still answered.
+    const { res } = await forgot({ email: 'staff@example.test' }, { ip: '192.0.2.201' });
+    expect(res.status).toBe(200);
+  });
+
+  it("a request one e-mail's limit refused is not counted against the tenant either", async () => {
+    for (let i = 0; i < RECOVERY_LIMITS.forgotPerEmail.max + 2; i++) {
+      await forgot({ email: 'staff@example.test' }, { ip: `198.51.100.${10 + i}` });
+    }
+    expect(scopes().filter((s) => s === 'auth.forgot:tenant')).toHaveLength(
+      RECOVERY_LIMITS.forgotPerEmail.max,
+    );
   });
 
   it('fails closed: with the limiter down it sends and audits nothing (503)', async () => {

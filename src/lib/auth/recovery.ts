@@ -46,15 +46,24 @@ export const RECOVERY_LIMITS = {
   resetPerIp: { max: 10, windowSeconds: 3600 },
 } as const;
 
-/** The forgot rules for one request: per address, per e-mail (when it is one), per tenant. */
-export function forgotLimitRules(ip: string | null, email: string | null): PublicLimitRule[] {
-  return [
-    { scope: 'auth.forgot:ip', value: ipLimitValue(ip), ...RECOVERY_LIMITS.forgotPerIp },
-    ...(email
-      ? [{ scope: 'auth.forgot:email', value: email, ...RECOVERY_LIMITS.forgotPerEmail }]
-      : []),
-    { scope: 'auth.forgot:tenant', value: 'all', ...RECOVERY_LIMITS.forgotPerTenant },
-  ];
+/**
+ * The forgot rules for one request, in two groups: the caller's own (per address, and per
+ * e-mail when it is one) and the tenant's (one window everyone shares). checkForgotLimits
+ * counts the second only for a request the first let through.
+ */
+export function forgotLimitRules(
+  ip: string | null,
+  email: string | null,
+): { caller: PublicLimitRule[]; tenant: PublicLimitRule } {
+  return {
+    caller: [
+      { scope: 'auth.forgot:ip', value: ipLimitValue(ip), ...RECOVERY_LIMITS.forgotPerIp },
+      ...(email
+        ? [{ scope: 'auth.forgot:email', value: email, ...RECOVERY_LIMITS.forgotPerEmail }]
+        : []),
+    ],
+    tenant: { scope: 'auth.forgot:tenant', value: 'all', ...RECOVERY_LIMITS.forgotPerTenant },
+  };
 }
 
 export function resetLimitRules(ip: string | null): PublicLimitRule[] {
@@ -67,6 +76,31 @@ export function checkRecoveryLimits(
   rules: readonly PublicLimitRule[],
 ): Promise<LimitOutcome> {
   return checkPublicLimits(serviceClient(), tenantId, LEAD_PII_ENC_KEY, rules);
+}
+
+/**
+ * The forgot limits for one request. The caller's own windows first, every one of them
+ * counted (checkPublicLimits: an address rotating through IPs still fills the per-e-mail
+ * window). The tenant's window only when those let the request through: a request one
+ * address's limit has already refused costs nothing (no GoTrue call, no e-mail, no audit
+ * row), so it must not spend the cap everyone shares. Counted with the rest, it did: one
+ * machine sending 50 requests an hour (5 accepted, 45 refused) closed "Forgot password?"
+ * for every staff member until the window turned (F7 review).
+ *
+ * What remains, by design: many addresses (each IPv6 /64 is one) can still spend the
+ * tenant's cap, which is the cap's job (it bounds the e-mails and audit rows a crowd can
+ * cause); and anyone can spend one address's per-e-mail window with 3 requests, which
+ * holds back that person's resets for the hour, never their sign-in.
+ */
+export async function checkForgotLimits(
+  tenantId: string,
+  ip: string | null,
+  email: string | null,
+): Promise<LimitOutcome> {
+  const { caller, tenant } = forgotLimitRules(ip, email);
+  const own = await checkRecoveryLimits(tenantId, caller);
+  if (own !== 'ok') return own;
+  return checkRecoveryLimits(tenantId, [tenant]);
 }
 
 /**

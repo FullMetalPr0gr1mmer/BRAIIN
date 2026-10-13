@@ -4,8 +4,7 @@ import { readAuthBody, seeOther } from '@/lib/auth/body';
 import {
   afterResponse,
   authEmailReady,
-  checkRecoveryLimits,
-  forgotLimitRules,
+  checkForgotLimits,
   sendResetEmail,
   writeAuthAudit,
 } from '@/lib/auth/recovery';
@@ -23,7 +22,8 @@ import { json } from '@/lib/admin/route';
 // Supabase, which takes longer when it really sends an e-mail, runs after the answer
 // (waitUntil). So the endpoint says nothing about which accounts exist. The answers that
 // do differ depend on something other than the address: 429 when a limit is reached (per
-// IP address, per e-mail as an HMAC, per tenant: src/lib/auth/recovery.ts), 503 when
+// IP address, per e-mail as an HMAC, and per tenant for a request the first two let
+// through: src/lib/auth/recovery.ts, checkForgotLimits), 503 when
 // e-mail is not set up (owner item O-2) or the limiter cannot answer (fail closed).
 //
 // Audited: one row per accepted request, written by the service role with no actor and
@@ -64,7 +64,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const tenantId = await resolveLaunchTenantId();
   if (!tenantId) return answer('unavailable');
 
-  const limited = await checkRecoveryLimits(tenantId, forgotLimitRules(clientIp(request), email));
+  const limited = await checkForgotLimits(tenantId, clientIp(request), email);
   if (limited !== 'ok') return answer(limited === 'limited' ? 'limited' : 'unavailable');
 
   // An address Supabase does not know is sent nothing, by Supabase; one that is not an
