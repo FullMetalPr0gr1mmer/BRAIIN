@@ -79,6 +79,10 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   // The header search's results page. The page has no capability gate (each entity is
   // gated inside searchAdmin()), so every role may open it.
   { href: '/admin/search?q=logo', label: 'Search', caps: [] },
+  // The personal layer (Admin v2 F8): the no-JS pages behind the account chip and the
+  // bell, each the drawer's twin. Every member has an account and a bell.
+  { href: '/admin/account', label: 'Your account', caps: [] },
+  { href: '/admin/notifications', label: 'Notifications', caps: [] },
 ];
 
 /** Every screen of the menu: sidebar links, then their tabs, each once. */

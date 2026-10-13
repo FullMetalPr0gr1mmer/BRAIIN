@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RoleSchema } from '@schemas/admin';
+import { DisplayNameValueSchema } from '@schemas/adminPrefs';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { NotFoundError, ValidationError } from '@/lib/admin/errors';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
@@ -26,7 +27,8 @@ export const prerender = false;
 const PatchSchema = z.object({
   role: RoleSchema.optional(),
   isActive: z.boolean().optional(),
-  displayName: z.string().trim().max(120).nullish(),
+  // The one display-name rule; the database's trigger (0044) holds this path to it too.
+  displayName: DisplayNameValueSchema.nullish(),
 });
 
 export const PATCH = defineAdminRoute({

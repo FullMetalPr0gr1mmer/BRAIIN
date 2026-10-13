@@ -24,6 +24,7 @@ import {
   ValuePointSchema,
 } from './content';
 import { LocalizedDocSchema } from './tiptap';
+import { DisplayNameValueSchema } from './adminPrefs';
 import { SectionTypeSchema, sectionContentIssues, type SectionType } from './sections';
 import { MediaDisplayNameSchema, StaticMediaKeySchema, VideoClipSchema } from './media';
 
@@ -828,17 +829,19 @@ export const ThemeUpdateSchema = updatable(ThemeWriteSchema);
 
 export const RoleSchema = z.enum(['admin', 'content_creator', 'seo', 'developer']);
 
+// A colleague's name follows the one display-name rule (DisplayNameValueSchema), which the
+// database applies to every writer of profiles.display_name (0044).
 export const UserInviteSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   role: RoleSchema,
-  displayName: z.string().trim().max(120).optional(),
+  displayName: DisplayNameValueSchema.optional(),
 });
 
 export const UserUpdateSchema = z.object({
   userId: UuidSchema,
   role: RoleSchema.optional(),
   isActive: z.boolean().optional(),
-  displayName: z.string().trim().max(120).nullish(),
+  displayName: DisplayNameValueSchema.nullish(),
 });
 
 // ── AI Style-Finder authoring ───────────────────────────────────────────────────

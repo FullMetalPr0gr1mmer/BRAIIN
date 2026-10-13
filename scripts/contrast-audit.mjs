@@ -332,6 +332,7 @@ const ADMIN_PAIRS = [
   ['note-warn-text', 'warn-soft', 4.5, '.pii labels'],
   ['ink', 'warn-soft', 4.5, '.pii values'],
   ['err-text', 'card', 4.5, 'danger button, .field-error'],
+  ['note-ok-text', 'card', 4.5, "a form's outcome (.acct__note, F8)"],
   // The midnight sidebar, toasts and dark badges
   ['side-text', 'midnight', 4.5, 'sidebar links'],
   ['side-label', 'midnight', 4.5, 'sidebar group titles'],
@@ -352,6 +353,8 @@ const ADMIN_PAIRS = [
   ['primary', 'card', 3.0, 'switch on, checkbox and radio fill'],
   ['focus-dark', 'midnight', 3.0, 'focus ring in the sidebar'],
   ['warn-text', 'card', 3.0, '.pii border'],
+  ['err-text', 'card', 3.0, "the bell's unread dot (F8)"],
+  ['primary', 'bg', 3.0, 'a list row icon on its ground (.li__ico, F8)'],
   ...[1, 2, 3, 4, 5, 6, 7].flatMap((i) => [
     [`series-${i}`, 'card', 3.0, `chart series ${i} on a card`],
     [`series-${i}`, 'bg', 3.0, `chart series ${i} on the ground`],
