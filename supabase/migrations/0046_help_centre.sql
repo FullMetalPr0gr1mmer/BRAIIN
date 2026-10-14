@@ -719,7 +719,7 @@ create or replace function app.help_article_set() returns jsonb
       "en": [
         {
           "t": "p",
-          "x": "SEO defaults are the titles, descriptions and organisation details search engines see wherever a page has none of its own. Set them once, in both languages."
+          "x": "SEO defaults are the titles, descriptions and link-preview image that search engines and social sites see wherever a page has none of its own. Set them once, the text in both languages."
         },
         {
           "t": "h",
@@ -746,7 +746,7 @@ create or replace function app.help_article_set() returns jsonb
       "ar": [
         {
           "t": "p",
-          "x": "إعدادات SEO الافتراضية هي العناوين والأوصاف وبيانات المؤسسة التي تراها محركات البحث حيثما لا تملك الصفحة عناوينها الخاصة. اضبطها مرة واحدة، باللغتين."
+          "x": "إعدادات SEO الافتراضية هي العناوين والأوصاف وصورة معاينة الروابط التي تراها محركات البحث ومواقع التواصل حيثما لا تملك الصفحة ما يخصها. اضبطها مرة واحدة، والنصوص باللغتين."
         },
         {
           "t": "h",

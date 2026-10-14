@@ -284,6 +284,12 @@ describe('the guides say only what the admin does', () => {
     expect(panel).toContain('Shown at the bottom of the menu and, to Admins, in Users & roles.');
   });
 
+  it('SEO defaults are not said to hold organisation details, which the site no longer reads', () => {
+    expect(source('src/lib/admin/ui/seo.ts')).toMatch(/name: 'organization',[\s\S]*?Deprecated/);
+    expect(everything('en')).not.toMatch(/organi[sz]ation/i);
+    expect(everything('ar')).not.toContain('المؤسسة');
+  });
+
   // @@guide-claims
 });
 
