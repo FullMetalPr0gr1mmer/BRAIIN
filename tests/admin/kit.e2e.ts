@@ -299,13 +299,18 @@ test.describe('as admin', () => {
     const card = page.getByRole('region', { name: 'A data table' });
     const table = card.getByRole('table', { name: 'Sample entries, with selection' });
     const preview = table.getByRole('button', { name: 'Preview Sample entry 1', exact: true });
+    // The table sits far below the first screen: bring the row into view, then measure,
+    // so the presses below land on it and not outside the viewport.
+    await preview.scrollIntoViewIfNeeded();
+    await page.mouse.move(1, 1);
     const spot = (await preview.boundingBox())!;
     const x = spot.x + spot.width / 2;
     const y = spot.y + spot.height / 2;
+    expect(y).toBeGreaterThan(0);
+    expect(y).toBeLessThan(page.viewportSize()!.height);
 
     // From outside the row, a press at once (as a tap is): it goes to the row's link (the
     // sample rows link to #kit-<n>), never to the button nobody could see yet.
-    await page.mouse.move(1, 1);
     await page.mouse.click(x, y);
     await expect(page).toHaveURL(/#kit-1$/);
     await expect(card.getByRole('status')).toHaveText('');
@@ -445,7 +450,10 @@ test.describe('as admin', () => {
 
     await drawer.getByRole('button', { name: 'Reorder Pinned pages' }).focus();
     await page.keyboard.press('Space');
-    await expect(live).toHaveText('Pinned pages lifted, position 1 of 3.');
+    // The lift also says how to go on (the core's HOW_TO sentence).
+    await expect(live).toHaveText(
+      'Pinned pages lifted, position 1 of 3. Use the arrow keys to move it, Space to drop it, or Escape to cancel.',
+    );
     await page.keyboard.press('ArrowDown');
     await expect(live).toHaveText('Pinned pages, position 2 of 3.');
     await page.keyboard.press('Space');
