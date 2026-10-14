@@ -99,6 +99,18 @@ export const RESET_REOPEN = msg(
   'To try again, open the link in your email once more, or ask for a new one.',
 );
 
+/**
+ * A reset form over the body limit, sent back unread (src/lib/auth/expiredForm.ts). It always
+ * comes back without the link: nothing of the post is read, and the page dropped its cookie
+ * when it put the link in that form. The link is not spent (the endpoint never ran), so this
+ * says why the try failed and how to try again (third review: the page showed RESET_REOPEN
+ * alone, true but silent on why).
+ */
+export const RESET_TOO_LARGE = msg(
+  'error',
+  'That form was too large to send. To try again, open the link in your email once more, or ask for a new one.',
+);
+
 /** The reset codes that leave the person without a usable link (the page drops the form). */
 export const RESET_LINK_SPENT: ReadonlySet<string> = new Set(['expired', 'refused', 'interrupted']);
 

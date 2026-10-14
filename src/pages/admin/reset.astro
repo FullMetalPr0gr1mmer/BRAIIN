@@ -2,7 +2,14 @@
 import AuthLayout from '@/layouts/AuthLayout.astro';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
 import { PASSWORD_MAX_BYTES, PASSWORD_MIN } from '@schemas/adminPrefs';
-import { RESET_LINK_SPENT, RESET_MESSAGES, RESET_REOPEN, messageFor } from '@/lib/auth/messages';
+import {
+  RESET_LINK_SPENT,
+  RESET_MESSAGES,
+  RESET_REOPEN,
+  RESET_TOO_LARGE,
+  messageFor,
+} from '@/lib/auth/messages';
+import { FORM_TOO_LARGE } from '@/lib/auth/expiredForm';
 import { RESET_TOKEN_COOKIE, dropResetTokenOptions, resetTokenFrom } from '@/lib/auth/resetToken';
 
 export const prerender = false;
@@ -33,9 +40,11 @@ const message = messageFor(RESET_MESSAGES, code);
 // No usable link: none in the URL or the cookie, or the endpoint said it is spent or refused.
 const spent = token === null || (code !== null && RESET_LINK_SPENT.has(code));
 // A failure that kept the link, with the link no longer here: it is not spent, only gone
-// from this page (a reload, or the cookie's 15 minutes): say to open it again.
+// from this page (a reload, or the cookie's 15 minutes): say to open it again. A form too
+// large to read always arrives so (the middleware sends it back unread), and says why too.
 const reopen = token === null && message !== null && code !== null && !RESET_LINK_SPENT.has(code);
-const shown = reopen ? RESET_REOPEN : (message ?? (spent ? RESET_MESSAGES.expired : null));
+const reopenWith = code === FORM_TOO_LARGE ? RESET_TOO_LARGE : RESET_REOPEN;
+const shown = reopen ? reopenWith : (message ?? (spent ? RESET_MESSAGES.expired : null));
 const csrfToken = Astro.locals.csrfToken;
 ---
 

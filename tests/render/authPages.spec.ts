@@ -5,9 +5,11 @@ import {
   FORGOT_MESSAGES,
   FORGOT_NOT_SET_UP,
   LOGIN_MESSAGES,
+  RESET_MESSAGES,
   RESET_REOPEN,
+  RESET_TOO_LARGE,
 } from '@/lib/auth/messages';
-import { EXPIRED_FORM } from '@/lib/auth/expiredForm';
+import { EXPIRED_FORM, expiredSignInForm, tooLargeSignInForm } from '@/lib/auth/expiredForm';
 import { IDENTITY } from './fixtures';
 import { normalise } from './harness';
 
@@ -22,7 +24,9 @@ import { normalise } from './harness';
 //     rendering nothing;
 //   - not set up: no form at all, and the notice.
 // And a form the middleware sent back because its CSRF token no longer matched
-// (src/lib/auth/expiredForm.ts): each page says so, and the reset page keeps its form.
+// (src/lib/auth/expiredForm.ts): each page says so, and the reset page keeps its form; or
+// because it was over the body limit: the reset page, which cannot have the link back, says
+// so and to open the link again (both followed from the middleware's own 303).
 // The endpoint behind the form (a form post's 303 with each code) is tests/authz/recovery.spec.ts.
 
 const state = vi.hoisted(() => ({ ready: true }));
@@ -238,14 +242,58 @@ describe('a form the body limit sent back (src/lib/auth/bodyLimit.ts)', () => {
     expect(html).toContain(`action="/api/admin/auth/${page}"`);
   });
 
-  it('/admin/reset keeps the form when a try left the link in its cookie', async () => {
-    const html = await render(
-      'reset',
-      '?error=too-large',
-      `__Secure-braiin-reset=${'a1b2c3d4'.repeat(7)}`,
+  it('/admin/reset says so, and to open the link again: the link cannot come back', async () => {
+    // Nothing of the post is read, and the page dropped its cookie when it put the link in
+    // the form that was sent (second review). The link is not spent: the endpoint never ran.
+    const html = await render('reset', '?error=too-large');
+    expect(messages(html)).toEqual([{ role: 'alert', text: RESET_TOO_LARGE.text }]);
+    expect(html).toContain('Ask for a new link');
+    expect(html).not.toContain('name="token_hash"');
+    expectNoScriptOrInlineStyle(html);
+  });
+});
+
+describe('the reset page after the middleware sent its form back, followed (third review)', () => {
+  // The middleware's own answers (src/lib/auth/expiredForm.ts), followed as a browser does:
+  // to their Location, carrying whatever cookie the 303 set for the page.
+  const LINK = 'a1b2c3d4'.repeat(7);
+  const resetPost = (fields: Record<string, string>) =>
+    new Request(`${ORIGIN}/api/admin/auth/reset`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(fields),
+    });
+
+  /** The page a 303 sends the browser to, with the cookie the 303 set, if any. */
+  async function follow(res: Response | null): Promise<string> {
+    expect(res?.status).toBe(303);
+    const location = new URL(res?.headers.get('location') ?? '', ORIGIN);
+    expect(location.pathname).toBe('/admin/reset');
+    const cookie = (res?.headers.getSetCookie() ?? []).map((c) => c.split(';')[0]).join('; ');
+    return render('reset', location.search, cookie === '' ? undefined : cookie);
+  }
+
+  it('over the body limit: no link, and the page says why and how to try again', async () => {
+    const res = tooLargeSignInForm(
+      resetPost({ token_hash: LINK, password: 'p', confirm: 'p' }),
+      '/api/admin/auth/reset',
     );
-    expect(html).toContain('action="/api/admin/auth/reset"');
-    expect(messages(html)[0]?.text).toBe('That form was too large to send. Please try again.');
+    expect(res?.headers.getSetCookie()).toEqual([]);
+    const html = await follow(res);
+    expect(messages(html)).toEqual([{ role: 'alert', text: RESET_TOO_LARGE.text }]);
+    expect(html).not.toContain('name="token_hash"');
+    expect(html).toContain('Ask for a new link');
+  });
+
+  it('a stale token: the link comes back in its cookie, and the form with it', async () => {
+    const res = await expiredSignInForm(
+      resetPost({ _csrf: 'stale', token_hash: LINK, password: 'p', confirm: 'p' }),
+      '/api/admin/auth/reset',
+    );
+    const html = await follow(res);
+    expect(messages(html)).toEqual([{ role: 'alert', text: RESET_MESSAGES[EXPIRED_FORM].text }]);
+    expect(html).toContain(`<input type="hidden" name="token_hash" value="${LINK}">`);
+    expect(html).not.toContain('Ask for a new link');
   });
 });
 

@@ -9,6 +9,7 @@ import {
   LOGIN_MESSAGES,
   RESET_DONE,
   RESET_REOPEN,
+  RESET_TOO_LARGE,
   RESET_LINK_SPENT,
   RESET_MESSAGES,
   messageFor,
@@ -405,6 +406,7 @@ describe('the outcome codes the pages render', () => {
       ...Object.values(RESET_MESSAGES).map((m) => m.text),
       RESET_DONE.text,
       RESET_REOPEN.text,
+      RESET_TOO_LARGE.text,
       FORGOT_NOT_SET_UP.title,
       FORGOT_NOT_SET_UP.text,
     ];

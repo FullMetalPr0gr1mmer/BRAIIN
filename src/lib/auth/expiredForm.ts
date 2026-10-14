@@ -25,8 +25,11 @@ import { keepResetToken } from './resetToken';
 //
 // A form whose body is over the pre-auth limit (src/lib/auth/bodyLimit.ts) goes back the
 // same way, with `too-large`, before anything reads it: so nothing of it travels back, not
-// even `next` or the reset link (which stays in the reset page's cookie if a try left it
-// there). A script's post gets a JSON 413.
+// even `next` or the reset link. Nor is the link in the reset page's cookie by then: the page
+// drops that cookie in the response that puts the link in its form, the form this post came
+// from. So the reset page comes back without the link, says the form was too large and to
+// open the link again (`RESET_TOO_LARGE`, src/lib/auth/messages.ts), which is true: the
+// endpoint never ran, so the link is not spent. A script's post gets a JSON 413.
 
 export const EXPIRED_FORM = 'expired-form';
 export const FORM_TOO_LARGE = 'too-large';
