@@ -1,0 +1,25 @@
+---
+import { statusLabel, type BadgeTone } from '@/lib/admin/tones';
+
+// A badge (Admin v2 F4b, the prototype's pill with a dot): a tone (`data-tone`) or a
+// content status (`data-status`, which admin.css maps to its tone), and always a word, so
+// the state is never only a colour. With no text in the slot, a status badge says its
+// status ("Draft"). kit/StatusBadge.tsx renders the same markup inside islands.
+
+interface Props {
+  tone?: BadgeTone | undefined;
+  status?: string | undefined;
+  /** No dot: for a count or a label that is not a state. */
+  plain?: boolean;
+  class?: string | undefined;
+}
+
+const { tone, status, plain = false, class: className } = Astro.props;
+---
+
+<span
+  class:list={['badge', className]}
+  data-tone={tone}
+  data-status={status}
+  data-plain={plain ? '' : undefined}><slot>{status ? statusLabel(status) : ''}</slot></span
+>

@@ -1,0 +1,49 @@
+---
+import { formatNumber, ringGeometry } from '@/lib/admin/charts';
+
+// A score ring (Admin v2 F4b, the prototype's Site health ring): an arc for the share of
+// `max`, the figure in the middle. One value, so no table: the ring is an image named in
+// words ("Site health score: 87 out of 100"). The arc's tone follows the score (90 and up
+// ok, 50 and up warn, else err, Lighthouse's bands) unless the caller names one; the
+// figure says the score either way.
+
+interface Props {
+  value: number;
+  max?: number;
+  /** What the score is: "Site health score". */
+  label: string;
+  tone?: 'ok' | 'warn' | 'err' | 'klein' | undefined;
+  /** The figure as shown, when not the plain number. */
+  display?: string | undefined;
+}
+
+const { value, max = 100, label, tone, display } = Astro.props;
+const g = ringGeometry(value, max);
+const shown = display ?? formatNumber(value);
+const band = tone ?? (g.fraction >= 0.9 ? 'ok' : g.fraction >= 0.5 ? 'warn' : 'err');
+---
+
+<div
+  class="ring"
+  data-tone={band}
+  role="img"
+  aria-label={`${label}: ${shown} out of ${formatNumber(max)}`}
+>
+  <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+    <circle class="ch-track" cx="50" cy="50" r={g.radius} stroke-width="10"></circle>
+    {
+      g.fraction > 0 && (
+        <circle
+          class="ring__arc"
+          cx="50"
+          cy="50"
+          r={g.radius}
+          stroke-width="10"
+          stroke-dasharray={g.dasharray}
+          transform="rotate(-90 50 50)"
+        />
+      )
+    }
+  </svg>
+  <span class="ring__v" aria-hidden="true">{shown}</span>
+</div>

@@ -38,19 +38,22 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    // Two projects. `unit` is everything that needs no Astro compiler. `render`
-    // (vitest.render.config.ts, Admin v2 F6) renders .astro components through Astro's
-    // container API, so a refactor of a public component is held to its served bytes; it
-    // runs on Astro's own Vite config, which this file cannot be.
+    // Three projects. `unit` is everything that needs no Astro compiler. Two run on Astro's
+    // own Vite plugins, which this file cannot be, and render .astro files through Astro's
+    // container API: `astro` (vitest.astro.config.ts, Admin v2 F4b) the admin's server
+    // primitives, in tests/astro/; `render` (vitest.render.config.ts, Admin v2 F6) the
+    // public components, held to their served bytes, in tests/render/. The unit project
+    // leaves both folders alone.
     projects: [
       {
         extends: true,
         test: {
           name: 'unit',
           include: ['tests/**/*.spec.ts'],
-          exclude: [...configDefaults.exclude, 'tests/render/**'],
+          exclude: [...configDefaults.exclude, 'tests/astro/**', 'tests/render/**'],
         },
       },
+      './vitest.astro.config.ts',
       './vitest.render.config.ts',
     ],
     coverage: {

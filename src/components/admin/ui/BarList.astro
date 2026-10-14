@@ -1,0 +1,46 @@
+---
+import { barBucket, clean, formatNumber, seriesClass } from '@/lib/admin/charts';
+
+// Bars in a list (Admin v2 F4b, the prototype's horizontal chart.bars): each item's label
+// and its number as text, the bar under them as decoration. The bar's length is a 5%
+// bucket of the largest item (`.bar-fill[data-width]`, admin.css; a style attribute would
+// be refused), its colour a series class. Because every number is written out, the list
+// IS its own text alternative: no table needed.
+
+export interface BarItem {
+  label: string;
+  value: number;
+  /** The figure as shown ("12 leads · 40,000 SAR"); defaults to the value, grouped. */
+  display?: string | undefined;
+  /** This bar's series, 0-based (a pipeline stage's own colour). */
+  series?: number | undefined;
+}
+
+interface Props {
+  items: readonly BarItem[];
+  /** The list's name, when no heading right above it names it. */
+  label?: string | undefined;
+  /** The series for every bar without its own, 0-based. */
+  series?: number;
+}
+
+const { items, label, series = 0 } = Astro.props;
+const max = Math.max(0, ...items.map((item) => clean(item.value)));
+---
+
+<ul class="barlist" aria-label={label}>
+  {
+    items.map((item) => (
+      <li class="prog">
+        <span dir="auto">{item.label}</span>
+        <span class="prog__v">{item.display ?? formatNumber(clean(item.value))}</span>
+        <span class="bar" aria-hidden="true">
+          <span
+            class:list={['bar-fill', seriesClass(item.series ?? series)]}
+            data-width={barBucket(item.value, max)}
+          />
+        </span>
+      </li>
+    ))
+  }
+</ul>
