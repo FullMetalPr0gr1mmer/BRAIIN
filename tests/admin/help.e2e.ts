@@ -291,6 +291,34 @@ test.describe('as content_creator', () => {
     await expect(all.getByRole('link', { name: /Your account, password and bell/ })).toBeVisible();
   });
 
+  test('Enter in the search box with a guide open shows the results, not a count over the guide', async ({
+    page,
+  }) => {
+    await ready(page, '/admin');
+    await helpButton(page).click();
+    const drawer = page.getByRole('dialog', { name: 'Help centre' });
+    const search = drawer.getByRole('searchbox', { name: 'Search the guides' });
+    await search.fill('draft');
+    const results = drawer.getByRole('list', { name: /^results$/i });
+    await results.getByRole('link', { name: /Saving, publishing and scheduling/ }).click();
+    const heading = drawer.getByRole('heading', {
+      level: 3,
+      name: 'Saving, publishing and scheduling',
+    });
+    await expect(heading).toBeFocused();
+
+    // The words are still in the box: Enter there runs them again, and leaves the guide.
+    await search.focus();
+    await page.keyboard.press('Enter');
+    await expect(heading).toHaveCount(0);
+    await expect(
+      results.getByRole('link', { name: /Saving, publishing and scheduling/ }),
+    ).toBeVisible();
+    await expect(drawer.getByRole('status')).toHaveText(/guides? match/);
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue('draft');
+  });
+
   test('Pages offers the content guide in its head to a role that writes content', async ({
     page,
   }) => {

@@ -194,10 +194,16 @@ export default function HelpDrawer() {
     return () => window.clearTimeout(timer);
   }, [query, search]);
 
+  // With a guide open (or loading), the words in the box were typed before it: Enter leaves
+  // the guide for their results, as typing does, so the count it announces describes the
+  // list on screen.
   function submit(event: SyntheticEvent) {
     event.preventDefault();
     const q = cleanHelpQuery(query);
-    if (q.length >= MIN_QUERY) void search(q);
+    if (q.length < MIN_QUERY) return;
+    cancelGuide();
+    setArticle(null);
+    void search(q);
   }
 
   function back() {
