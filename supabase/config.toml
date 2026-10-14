@@ -29,6 +29,11 @@ minimum_password_length = 10
 # the hosted projects set it (runbook §2a), and docs/admin-v2/deviations.md records the gap.
 [auth.email]
 secure_password_change = true
+# Admin v2 F7: a reset link lasts one hour, as the forgot screen says ("The link works for one
+# hour", src/lib/auth/messages.ts; tests/lib/authScreens.spec.ts holds the two together).
+# The CLI's default too, pinned so a change is a choice. Hosted projects: Email OTP
+# Expiration, launch runbook §2b step 4.
+otp_expiry = 3600
 
 # The Custom Access Token Hook (migration 0010), enabled for the LOCAL stack the way the
 # launch runbook §2 enables it in the dashboard for staging and production. Without it a

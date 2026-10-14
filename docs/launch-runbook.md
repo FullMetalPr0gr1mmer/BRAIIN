@@ -140,7 +140,10 @@ O-22), is the expected exception.
 
 "Forgot password?" ships switched off: until the steps below are done, the screen says **Not
 set up** and sends nothing (`AUTH_EMAIL_READY`, default `false`). Supabase sends the e-mail;
-the Worker never sees it. Do all four, on staging first, then production:
+the Worker never sees it. Steps 1 to 4 are Supabase settings: do them on staging first, then
+production. Step 5 is code, and there is no staging Worker: it reaches only the production
+deploy of `main`, so staging is checked from a local build first (**Check it on staging**,
+below).
 
 1. **SMTP.** Dashboard → **Authentication → Emails → SMTP Settings** → a real provider, with
    SPF and DKIM on the sender domain. The built-in sender only reaches the project's own
@@ -156,16 +159,43 @@ the Worker never sees it. Do all four, on staging first, then production:
    <a href="{{ .SiteURL }}/admin/reset?token_hash={{ .TokenHash }}&type=recovery">Choose a new password</a>
    ```
 
-4. **Switch it on.** Add `"AUTH_EMAIL_READY": "true"` to `vars` in `wrangler.jsonc` (a reviewed
-   PR). It is read when the Worker is built (`astro:env` inlines a public server variable,
-   and the build reads `wrangler.jsonc`'s `vars`), so the deploy that carries the PR turns it
-   on; a dashboard variable alone would not.
+4. **The link lasts one hour.** Dashboard → **Authentication → Sign In / Providers → Email**
+   → **Email OTP Expiration = 3600** seconds (API field `mailer_otp_exp`). The forgot screen
+   tells people "The link works for one hour", and this setting is what makes it true: check
+   it reads 3600, and set it if not. Local stacks pin the same number (`otp_expiry` in
+   `supabase/config.toml`; `tests/lib/authScreens.spec.ts` holds the copy to it).
+5. **Switch it on, in production.** Add `"AUTH_EMAIL_READY": "true"` to `vars` in
+   `wrangler.jsonc` (a reviewed PR), after the staging check. It is read when the Worker is
+   built (`astro:env` inlines a public server variable, and the build reads
+   `wrangler.jsonc`'s `vars`, which win over the build environment), so the deploy that
+   carries the PR turns it on; a dashboard variable alone would not. The CI builds read the
+   same file, so from that PR on the e2e preview shows the set-up screen too, and
+   `tests/e2e/admin-sign-in.e2e.ts` posts its form (it empties the local stack's forgot
+   limiter first).
 
-**Check it.** Request a reset for your own staff address and one that does not exist: the
-screen must say the same thing for both, and only yours gets an e-mail. The answer hides a
-delivery failure by design (it must not depend on the address), so look for one where it is
-recorded: `select created_at, detail from system_logs where source = 'auth.forgot' order by
-id desc limit 20;` (a status code, never the address). Each accepted request also leaves an
+**Check it on staging** (after steps 1 to 4 there, before step 5). Build and serve the Worker
+locally against `braiin-staging`, with the switch on in the build environment (it is not in
+`vars` yet, so the environment decides). Use a fresh clone with **no `.env` and no
+`.dev.vars`**: a local build reads them, and they may name another project. Export
+`PUBLIC_SITE_URL=http://localhost:8788`, `ALLOW_LOCAL_SITE_URL=1`, `AUTH_EMAIL_READY=true`,
+staging's `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and
+`SUPABASE_DB_POOL_URL`, and placeholder values for the other server secrets (as the CI
+preview does), then:
+
+```bash
+npm run build && node scripts/local-preview-config.mjs \
+  && npx wrangler dev --port 8788 --env-file dist/server/.preview.env
+```
+
+Open `http://localhost:8788/admin/forgot`. The e-mail's link points at staging's Site URL:
+open it with that origin replaced by `http://localhost:8788` (keep `token_hash` and `type`).
+
+**What to check** (on staging this way, and on production after step 5's deploy). Request a
+reset for your own staff address and one that does not exist: the screen must say the same
+thing for both, and only yours gets an e-mail. The answer hides a delivery failure by design
+(it must not depend on the address), so look for one where it is recorded: `select
+created_at, detail from system_logs where source = 'auth.forgot' order by id desc limit 20;`
+(a status code, never the address). Each accepted request also leaves an
 `auth.password_reset_requested` row in `audit_log`, and each completed reset an
 `auth.password_reset` row against the account.
 
@@ -174,9 +204,9 @@ link, set a new password, and sign in with it. The reset sets the password on th
 session the link opens, without the current password (the person no longer has it). If the
 auth server refuses that, the page says the password was not accepted, the link is spent,
 and `select created_at, detail from system_logs where source = 'auth.reset' order by id desc
-limit 5;` names the status and code (never the password); report it before switching
-`AUTH_EMAIL_READY` on in production. A completed reset is GoTrue's `user_updated_password`
-too: an alert built on §2a's suggestion matches it to the `auth.password_reset` row.
+limit 5;` names the status and code (never the password); report it before step 5. A
+completed reset is GoTrue's `user_updated_password` too: an alert built on §2a's suggestion
+matches it to the `auth.password_reset` row.
 
 ### 2c. Session limits (Admin v2 F7, owner item O-24)
 

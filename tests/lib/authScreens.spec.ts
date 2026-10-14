@@ -206,6 +206,18 @@ describe('the outcome codes the pages render', () => {
     }
   });
 
+  it('"The link works for one hour" is what the local stack sets, and the runbook pins (F7 review)', () => {
+    // The copy promises a lifetime that is a Supabase setting, so the number is held here:
+    // supabase/config.toml's [auth.email] otp_expiry, and launch runbook §2b's step for the
+    // hosted projects' Email OTP Expiration.
+    expect(FORGOT_MESSAGES.sent.text).toContain('The link works for one hour.');
+    const config = readFileSync('supabase/config.toml', 'utf8');
+    const email = /^\[auth\.email\]\s*$([\s\S]*?)(?=^\[)/m.exec(config)?.[1] ?? '';
+    expect(/^otp_expiry\s*=\s*(\d+)\s*$/m.exec(email)?.[1]).toBe('3600');
+    const runbook = readFileSync('docs/launch-runbook.md', 'utf8');
+    expect(runbook).toContain('**Email OTP Expiration = 3600** seconds');
+  });
+
   it('"Not set up" is said in those words (the program\'s status for a missing account)', () => {
     expect(FORGOT_NOT_SET_UP.title).toBe('Not set up');
   });
