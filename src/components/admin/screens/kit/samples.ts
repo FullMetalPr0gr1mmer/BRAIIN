@@ -28,6 +28,13 @@ export const KIT_COLUMNS = {
   ],
 } as const;
 
+/** The list inside the sample drawer (a list reordered in a modal dialog is still heard). */
+export const KIT_DRAWER_ITEMS = [
+  { id: 'pinned', label: 'Pinned pages' },
+  { id: 'activity', label: 'Recent activity' },
+  { id: 'shortcuts', label: 'Shortcuts' },
+] as const;
+
 export interface KitRow {
   id: string;
   title: string;

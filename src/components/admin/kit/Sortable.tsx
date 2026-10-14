@@ -8,7 +8,10 @@ import Icon from './Icon';
 //   MoveButtons  Move up / Move down (and, across several lists, to the previous or
 //                next one): always shown, one click each, so nothing needs a drag (WCAG
 //                2.5.7). The core marks the ones that would go nowhere aria-disabled.
-//   SortHint     the instructions, hidden, read as the handles' description.
+//   SortHint     the instructions, hidden, read as the handles' description, and the
+//                live region that says each step (useSortable hands it to the core).
+//                Render it beside the list, in the same container: in a Modal or Drawer,
+//                only what is inside the dialog is heard.
 // A server-rendered list renders the same attributes and calls createSortable itself.
 
 export const SORT_HINT =
@@ -71,10 +74,22 @@ export function MoveButtons({ label, lists = false }: { label: string; lists?: b
   );
 }
 
+/** The id of the live region SortHint renders for the hint `id`. */
+export const sortLiveId = (hintId: string) => `${hintId}-live`;
+
 export function SortHint({ id }: { id: string }) {
   return (
-    <p id={id} hidden>
-      {SORT_HINT}
-    </p>
+    <>
+      <p id={id} hidden>
+        {SORT_HINT}
+      </p>
+      <p
+        id={sortLiveId(id)}
+        className="visually-hidden"
+        aria-live="assertive"
+        aria-atomic="true"
+        data-sortable-live=""
+      />
+    </>
   );
 }

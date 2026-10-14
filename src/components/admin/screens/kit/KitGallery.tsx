@@ -16,6 +16,7 @@ import type { SortLists } from '@/lib/admin/client/sortable';
 import { PAGE_SIZE } from '@/lib/admin/pager';
 import {
   KIT_COLUMNS,
+  KIT_DRAWER_ITEMS,
   KIT_ROWS,
   KIT_SECTIONS,
   KIT_TAB_PARAM,
@@ -34,7 +35,10 @@ export interface KitGalleryProps {
 }
 
 const LABEL: Record<string, string> = Object.fromEntries(
-  [...KIT_SECTIONS, ...KIT_COLUMNS.left, ...KIT_COLUMNS.right].map((item) => [item.id, item.label]),
+  [...KIT_SECTIONS, ...KIT_COLUMNS.left, ...KIT_COLUMNS.right, ...KIT_DRAWER_ITEMS].map((item) => [
+    item.id,
+    item.label,
+  ]),
 );
 const nameOf = (id: string) => LABEL[id] ?? id;
 
@@ -162,10 +166,10 @@ function TableDemo() {
   );
 }
 
+const FIRST_SECTIONS: SortLists = { list: KIT_SECTIONS.map((section) => section.id) };
+
 function SortableDemo() {
-  const [order, setOrder] = useState<SortLists>(() => ({
-    list: KIT_SECTIONS.map((section) => section.id),
-  }));
+  const [order, setOrder] = useState<SortLists>(FIRST_SECTIONS);
   const { ref, lists, hintId } = useSortable<HTMLUListElement>({
     lists: order,
     onCommit: (next) => setOrder(next),
@@ -189,6 +193,13 @@ function SortableDemo() {
       <SortHint id={hintId} />
       <p className="kit__done" data-kit-order="">
         Saved order: {(order['list'] ?? []).map(nameOf).join(', ')}
+      </p>
+      {/* The owner changing the order itself (a revert after a failed save, a refresh):
+          the Move buttons' edges must follow it (tests/admin/kit.e2e.ts). */}
+      <p className="kit__line">
+        <button type="button" onClick={() => setOrder(FIRST_SECTIONS)}>
+          Reset the order
+        </button>
       </p>
     </section>
   );
@@ -291,9 +302,37 @@ function TabsDemo({ tab }: { tab: KitTab }) {
   );
 }
 
+/** A sortable list inside a Drawer: its live region is inside the dialog, so it is heard. */
+function DrawerList() {
+  const [order, setOrder] = useState<SortLists>(() => ({
+    list: KIT_DRAWER_ITEMS.map((item) => item.id),
+  }));
+  const { ref, lists, hintId } = useSortable<HTMLUListElement>({
+    lists: order,
+    onCommit: (next) => setOrder(next),
+  });
+  return (
+    <>
+      <ul className="list" ref={ref} aria-label="Shortcuts on the sample dashboard">
+        {(lists['list'] ?? []).map((id) => (
+          <ListRow
+            key={id}
+            title={nameOf(id)}
+            sortId={id}
+            lead={<SortHandle label={nameOf(id)} describedBy={hintId} />}
+            meta={<MoveButtons label={nameOf(id)} />}
+          />
+        ))}
+      </ul>
+      <SortHint id={hintId} />
+    </>
+  );
+}
+
 function DialogsDemo() {
   const [modal, setModal] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const [arrange, setArrange] = useState(false);
   return (
     <section className="card" aria-labelledby="kit-dialogs-h">
       <h3 id="kit-dialogs-h" className="card-title">
@@ -305,6 +344,9 @@ function DialogsDemo() {
         </button>
         <button type="button" onClick={() => setDrawer(true)}>
           Open the sample drawer
+        </button>
+        <button type="button" onClick={() => setArrange(true)}>
+          Arrange the sample shortcuts
         </button>
       </p>
       <Modal
@@ -340,6 +382,18 @@ function DialogsDemo() {
         }
       >
         <p>A drawer opens from the inline end and keeps the page behind it.</p>
+      </Drawer>
+      <Drawer
+        open={arrange}
+        onClose={() => setArrange(false)}
+        title="Arrange the shortcuts"
+        footer={
+          <button type="button" onClick={() => setArrange(false)}>
+            Done
+          </button>
+        }
+      >
+        <DrawerList />
       </Drawer>
     </section>
   );

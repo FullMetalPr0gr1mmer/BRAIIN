@@ -126,6 +126,41 @@ test.describe('as admin', () => {
       );
     });
 
+    test('the Move buttons follow an order their owner changes, not only their own', async ({
+      page,
+    }) => {
+      await page.getByRole('button', { name: 'Move Say hello up' }).click();
+      await expect(saved(page)).toHaveText(
+        'Saved order: Hero, Services, Selected work, Say hello, Clients',
+      );
+      await expect(page.getByRole('button', { name: 'Move Clients down' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+
+      // The owner puts the first order back (a revert after a failed save, a refresh):
+      // React moves the items, not the binder, and the edges must still be right.
+      await page.getByRole('button', { name: 'Reset the order' }).click();
+      await expect(saved(page)).toHaveText(
+        'Saved order: Hero, Services, Selected work, Clients, Say hello',
+      );
+      expect(await order(page)).toEqual([
+        'Hero',
+        'Services',
+        'Selected work',
+        'Clients',
+        'Say hello',
+      ]);
+      await expect(page.getByRole('button', { name: 'Move Say hello down' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      await expect(page.getByRole('button', { name: 'Move Clients down' })).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+
     test('a pointer drag from the handle drops where the pointer is let go', async ({ page }) => {
       const handle = page.getByRole('button', { name: 'Reorder Hero' });
       const target = page
@@ -375,6 +410,29 @@ test.describe('as admin', () => {
 
     await page.mouse.click(scrim.x, scrim.y);
     await expect(drawer).toBeHidden();
+  });
+
+  test('a list in a drawer is heard: its live region is inside the dialog', async ({ page }) => {
+    await open(page);
+    await page.getByRole('button', { name: 'Arrange the sample shortcuts' }).click();
+    const drawer = page.getByRole('dialog', { name: 'Arrange the shortcuts' });
+    await expect(drawer).toBeVisible();
+    // showModal() makes everything outside the dialog inert, so a region on the body
+    // would say each step to no one. The list's region is inside the drawer.
+    const live = drawer.locator('p[aria-live="assertive"]');
+    await expect(live).toHaveCount(1);
+
+    await drawer.getByRole('button', { name: 'Reorder Pinned pages' }).focus();
+    await page.keyboard.press('Space');
+    await expect(live).toHaveText('Pinned pages lifted, position 1 of 3.');
+    await page.keyboard.press('ArrowDown');
+    await expect(live).toHaveText('Pinned pages, position 2 of 3.');
+    await page.keyboard.press('Space');
+    await expect(live).toHaveText('Pinned pages dropped, position 2 of 3.');
+    await expect(
+      drawer.getByRole('list', { name: 'Shortcuts on the sample dashboard' }).locator('.li__t'),
+    ).toHaveText(['Recent activity', 'Pinned pages', 'Shortcuts']);
+    await expect(drawer).toBeVisible();
   });
 
   test('the error summary takes focus and each link reaches its field', async ({ page }) => {

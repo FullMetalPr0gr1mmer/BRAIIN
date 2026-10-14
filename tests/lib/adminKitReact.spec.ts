@@ -15,7 +15,13 @@ import Modal from '@/components/admin/kit/Modal';
 import Pager from '@/components/admin/kit/Pager';
 import SaveStatus, { saveStatusText } from '@/components/admin/kit/SaveStatus';
 import Segmented from '@/components/admin/kit/Segmented';
-import { MoveButtons, SORT_HINT, SortHandle, SortHint } from '@/components/admin/kit/Sortable';
+import {
+  MoveButtons,
+  SORT_HINT,
+  SortHandle,
+  SortHint,
+  sortLiveId,
+} from '@/components/admin/kit/Sortable';
 import StatusBadge from '@/components/admin/kit/StatusBadge';
 import Tabs from '@/components/admin/kit/Tabs';
 import { backdropDismiss } from '@/components/admin/kit/useDialog';
@@ -386,8 +392,14 @@ describe('the Sortable controls (WCAG 2.5.7: a pointer drag is never the only wa
     expect(many).toContain('aria-label="Move Hero to the next list"');
   });
 
-  it('the instructions are told, not shown', () => {
-    expect(html(SortHint, { id: 'hint' })).toBe(`<p id="hint" hidden="">${SORT_HINT}</p>`);
+  it('the instructions are told, not shown, beside the region that says each step', () => {
+    // The live region is SortHint's, rendered beside the list: inside a Modal or Drawer
+    // when the list is, so it is heard (f4b review: one on the body is inert there).
+    expect(html(SortHint, { id: 'hint' })).toBe(
+      `<p id="hint" hidden="">${SORT_HINT}</p>` +
+        `<p id="${sortLiveId('hint')}" class="visually-hidden" aria-live="assertive" aria-atomic="true" data-sortable-live=""></p>`,
+    );
+    expect(sortLiveId('hint')).toBe('hint-live');
   });
 
   it('a sortable row carries its id and the name the announcements use', () => {
@@ -480,6 +492,9 @@ describe('the kit screen’s island', () => {
       expect(out).toContain(`aria-label="Reorder ${section.label}"`);
     expect(out).toContain('data-sortable-list="left"');
     expect(out).toContain('aria-label="Move Visits to the next list"');
-    expect(out.match(/<dialog/g)).toHaveLength(2);
+    expect(out.match(/<dialog/g)).toHaveLength(3);
+    // Every sortable list's live region sits beside it, the drawer's inside its dialog.
+    expect(out.match(/data-sortable-live=""/g)).toHaveLength(3);
+    expect(out).toMatch(/<dialog[^>]*>(?:(?!<\/dialog>)[\s\S])*data-sortable-live=""/);
   });
 });

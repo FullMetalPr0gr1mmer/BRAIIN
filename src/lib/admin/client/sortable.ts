@@ -243,6 +243,12 @@ export interface SortableOptions {
   apply?: (lists: SortLists) => void;
   /** Items run down each list (the default) or across it. */
   orientation?: 'vertical' | 'horizontal';
+  /**
+   * The live region that says each step. Render it beside the list, in the same container
+   * (kit/Sortable.tsx's SortHint does, and useSortable passes it): inside a modal dialog
+   * when the list is, where it is heard.
+   */
+  live?: HTMLElement | null;
 }
 
 export interface Sortable {
@@ -268,17 +274,20 @@ export function createSortable(root: HTMLElement, options: SortableOptions): Sor
   const doc = root.ownerDocument;
   const win = doc.defaultView ?? window;
 
-  // The live region. Markup may provide one (`[data-sortable-live]`, as the React hook
-  // does); otherwise one is added to the body, never inside the root, where a <p> in a
-  // <ul> would break the list. Either way it exists before the first announcement: a
-  // region added together with its first message announces nothing.
-  const provided = root.querySelector<HTMLElement>('[data-sortable-live]');
+  // The live region: the one passed in (`options.live`, which useSortable takes from
+  // SortHint), else one in the markup (`[data-sortable-live]` inside the root), else one
+  // added here: never inside the root, where a <p> in a <ul> would break the list, but in
+  // the root's <dialog> when it sits in one (showModal() makes everything outside the
+  // dialog inert, so a region on the body would be silent while a Modal or Drawer is
+  // open), else on the body. Either way it exists before the first announcement: a region
+  // added together with its first message announces nothing.
+  const provided = options.live ?? root.querySelector<HTMLElement>('[data-sortable-live]');
   const live = provided ?? doc.createElement('p');
   if (!provided) {
     live.className = 'visually-hidden';
     live.setAttribute('aria-live', 'assertive');
     live.setAttribute('aria-atomic', 'true');
-    doc.body.appendChild(live);
+    (root.closest('dialog') ?? doc.body).appendChild(live);
   }
 
   const listEls = (): HTMLElement[] => {
@@ -581,8 +590,18 @@ export function createSortable(root: HTMLElement, options: SortableOptions): Sor
   for (const [type, fn] of listeners) root.addEventListener(type, fn as EventListener);
   syncButtons();
 
+  // The Move buttons' aria-disabled follows the order whoever changes it. The binder's own
+  // moves sync in run(); this catches the rest: the list's owner adding or removing an
+  // item, putting an order back after a failed save, a refresh. It watches children
+  // added, removed or moved under the root; syncButtons only sets attributes, so it never
+  // wakes the observer itself.
+  const watcher =
+    typeof win.MutationObserver === 'function' ? new win.MutationObserver(syncButtons) : null;
+  watcher?.observe(root, { childList: true, subtree: true });
+
   return {
     destroy() {
+      watcher?.disconnect();
       for (const [type, fn] of listeners) root.removeEventListener(type, fn as EventListener);
       for (const [type, fn] of dragListeners) doc.removeEventListener(type, fn as EventListener);
       drag = null;
