@@ -19,15 +19,14 @@
 --      that raises (site_settings' column renamed inside this transaction), both leave the
 --      lead saved.
 --
--- Where pg_net is not installed, 0048 creates no trigger: (2) checks that none calls the
--- function and (3)-(4) are skipped, saying so. Requests are counted from this transaction's
--- own statistics (pg_stat_xact_user_tables, n_tup_ins on net.http_request_queue), which need
--- no privilege on pg_net's table; what a request holds is read from the table itself, and
--- skipped where this role may not read it. The Vault secret is created inside the
--- transaction and rolled back with it. CLAUDE.md §3 (Pillar 1), §9, §10.
+-- Nothing is skipped: 0048 creates pg_net where it is missing, so a database without it,
+-- or a queue this role cannot read, fails here rather than passing as skips. Requests are
+-- counted from this transaction's own statistics (pg_stat_xact_user_tables, n_tup_ins on
+-- net.http_request_queue) and read from the queue itself. The Vault secret is created
+-- inside the transaction and rolled back with it. CLAUDE.md §3 (Pillar 1), §9, §10.
 
 begin;
-select plan(27);
+select plan(29);
 
 insert into public.tenants (id, name) values
   ('48000000-0000-4000-8000-00000000000a', 'NotifyA'),
@@ -107,14 +106,11 @@ select ok(not has_function_privilege('public', 'app.tg_notify_lead()', 'execute'
 -- ---- 2. The trigger ---------------------------------------------------------------------------
 create function _shape() returns setof text language plpgsql as $f$
 begin
-  if not exists (select 1 from pg_extension where extname = 'pg_net') then
-    return next ok(
-      not exists (select 1 from pg_trigger
-                   where tgfoid = 'app.tg_notify_lead()'::regprocedure),
-      'without pg_net, no trigger calls app.tg_notify_lead()');
-    return next skip('pg_net is not installed here, so 0048 created no trigger', 1);
-    return;
-  end if;
+  return next ok(
+    exists (select 1 from pg_extension where extname = 'pg_net')
+    and to_regclass('net.http_request_queue') is not null
+    and to_regprocedure('net.http_post(text, jsonb, jsonb, jsonb, integer)') is not null,
+    'pg_net is installed (0048 creates it), its queue and http_post in schema net');
   -- tgtype 5: ROW (1) + INSERT (4), BEFORE (2) clear.
   return next is(
     (select t.tgname || '|' || t.tgenabled::text || '|' || t.tgtype || '|'
@@ -144,14 +140,9 @@ declare
   b_url constant text := 'https://notify-b.pgtap.invalid/api/hooks/notify-lead';
   v_secret text := (select decrypted_secret from vault.decrypted_secrets
                      where name = 'notify_lead_secret');
-  v_read boolean;
   v_n bigint;
 begin
-  if not exists (select 1 from pg_extension where extname = 'pg_net') then
-    return next skip('pg_net is not installed here, so nothing is ever queued', 19);
-    return;
-  end if;
-  v_read := _readable();
+  return next ok(_readable(), 'this role reads pg_net''s queue (unreadable is a failure, not a skip)');
 
   -- No URL: notifications are off for the tenant.
   v_n := _queued();
@@ -178,8 +169,7 @@ begin
        ('48000000-0000-4000-8000-0000000000a3', '48000000-0000-4000-8000-00000000000a', 'Three', 'x', 'hi') $$,
     'an https:// URL: the lead is saved');
   return next is(_queued() - v_n, 1::bigint, 'an https:// URL: exactly one request is queued');
-  if v_read then
-    return next is(
+  return next is(
       (select r.body from _requests('48000000-0000-4000-8000-0000000000a3') r),
       jsonb_build_object('lead_id', '48000000-0000-4000-8000-0000000000a3'::uuid, 'tenant_id', a),
       'the body is exactly {lead_id, tenant_id}: nothing the lead says');
@@ -191,9 +181,6 @@ begin
       (select r.method || ' ' || r.url from _requests('48000000-0000-4000-8000-0000000000a3') r),
       'POST ' || a_url,
       'it is a POST to the tenant''s own URL');
-  else
-    return next skip('this role may not read net.http_request_queue', 3);
-  end if;
 
   -- other_tenant: tenant B's lead goes to tenant B's URL, never tenant A's.
   perform _url(b, b_url);
@@ -203,14 +190,10 @@ begin
        ('48000000-0000-4000-8000-0000000000b1', '48000000-0000-4000-8000-00000000000b', 'Other', 'x', 'hi') $$,
     'tenant B: the lead is saved');
   return next is(_queued() - v_n, 1::bigint, 'tenant B: exactly one request is queued');
-  if v_read then
-    return next is(
-      (select string_agg(r.url, ', ') from _requests('48000000-0000-4000-8000-0000000000b1') r),
-      b_url,
-      'tenant B''s lead goes to tenant B''s URL only, never tenant A''s');
-  else
-    return next skip('this role may not read net.http_request_queue', 1);
-  end if;
+  return next is(
+    (select string_agg(r.url, ', ') from _requests('48000000-0000-4000-8000-0000000000b1') r),
+    b_url,
+    'tenant B''s lead goes to tenant B''s URL only, never tenant A''s');
 
   -- The contact form's door: crm_ingest_lead as the service role. Announced once; its
   -- retry (the same id, a lost answer) inserts nothing, so it is not announced again.

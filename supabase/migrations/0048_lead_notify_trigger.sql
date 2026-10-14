@@ -9,8 +9,9 @@
 -- constant time and re-reads the row itself. 0010 created that trigger only if pg_net was
 -- already installed when it ran. Where it was not, the function exists and nothing calls
 -- it, so no lead has ever been announced (notification_log stays empty) and nothing says
--- so. pg_net is installed on those databases now, so this migration creates the trigger,
--- and re-creates the function first, hardened:
+-- so. This migration makes pg_net a requirement instead of an option: it creates the
+-- extension where it is missing (section 0), re-creates the function hardened (section 1)
+-- and creates the trigger on every database (section 3):
 --
 --   • SECURITY DEFINER with an empty search_path: every name it reaches is qualified
 --     (public.site_settings, vault.decrypted_secrets, net.http_post, pg_catalog's
@@ -57,6 +58,14 @@
 -- below that waits more than five seconds for a lock raises instead, the whole migration
 -- rolls back, and the push is retried later. Transaction-local: it ends with this migration.
 set local lock_timeout = '5s';
+
+-- ---- 0. pg_net -----------------------------------------------------------------------------
+-- A requirement now, not an option: a database without it would save leads that nobody is
+-- told about, which is how production ran unannounced. Production has it (in schema
+-- `extensions`, preloaded), so this is a no-op there; the CI stack (Supabase local) ships
+-- it available but not created, so its pgTAP run exercises the real thing. Whichever
+-- schema the extension is recorded in, its objects live in `net` (section 4 checks).
+create extension if not exists pg_net with schema extensions;
 
 -- ---- 1. The function ---------------------------------------------------------------------
 -- CREATE OR REPLACE keeps 0010's owner and ACL; section 2 states the ACL again.
@@ -114,10 +123,9 @@ end $$;
 revoke all on function app.tg_notify_lead() from public, anon, authenticated, service_role;
 
 -- ---- 3. The trigger ------------------------------------------------------------------------
--- Dropped first on every database, so the end state is the same wherever this runs: the
--- trigger exists exactly when pg_net does. Where 0010 created it, it is re-created as it
--- was; where pg_net is missing, nothing is left that would call a net.http_post that does not
--- exist.
+-- Dropped first, so the end state is the same wherever this runs: where 0010 created it
+-- (pg_net was there first) it is re-created as it was; where 0010 skipped it (production,
+-- CI), it is created.
 --
 -- Order against leads_timeline (0034, AFTER INSERT OR UPDATE): AFTER row triggers on the same
 -- event fire in name order, so leads_notify fires first. The order does not matter: this
@@ -127,15 +135,8 @@ revoke all on function app.tg_notify_lead() from public, anon, authenticated, se
 -- the statement rolls back with the queued request in it, so no lead that was not saved is
 -- ever announced.
 drop trigger if exists leads_notify on public.leads;
-do $$
-begin
-  if exists (select 1 from pg_extension where extname = 'pg_net') then
-    create trigger leads_notify after insert on public.leads
-      for each row execute function app.tg_notify_lead();
-  else
-    raise notice '0048: pg_net is not installed, so leads_notify is not created (leads still save; launch runbook §5)';
-  end if;
-end $$;
+create trigger leads_notify after insert on public.leads
+  for each row execute function app.tg_notify_lead();
 
 -- ---- 4. Postconditions ----------------------------------------------------------------------
 do $$
@@ -167,39 +168,41 @@ begin
     end if;
   end loop;
 
-  if exists (select 1 from pg_extension where extname = 'pg_net') then
-    -- The trigger: enabled, AFTER INSERT FOR EACH ROW (tgtype 5: ROW 1 + INSERT 4, BEFORE 2
-    -- clear), no WHEN clause, no arguments, calling the function.
-    if not exists (select 1 from pg_trigger t
-                    where t.tgrelid = 'public.leads'::regclass and not t.tgisinternal
-                      and t.tgname = 'leads_notify' and t.tgenabled::text = 'O'
-                      and t.tgtype = 5 and t.tgqual is null and t.tgnargs = 0
-                      and t.tgfoid = v_fn) then
-      raise exception '0048: leads_notify is missing, disabled or not AFTER INSERT FOR EACH ROW calling app.tg_notify_lead()';
-    end if;
-    -- One announcement per lead: nothing else calls the function, and no other trigger on
-    -- leads makes an HTTP call (a dashboard webhook would also send the whole row).
-    if (select count(*) from pg_trigger t where t.tgfoid = v_fn) <> 1 then
-      raise exception '0048: app.tg_notify_lead() must be called by leads_notify alone';
-    end if;
-    if exists (select 1 from pg_trigger t join pg_proc f on f.oid = t.tgfoid
-                where t.tgrelid = 'public.leads'::regclass and not t.tgisinternal
-                  and f.oid <> v_fn and f.prosrc ~* 'http_(post|get|delete|request)') then
-      raise exception '0048: another trigger on public.leads makes an HTTP call';
-    end if;
-    -- The call above passes named parameters; check pg_net still has them.
-    v_post := to_regprocedure('net.http_post(text, jsonb, jsonb, jsonb, integer)');
-    if v_post is null or not exists (
-         select 1 from pg_proc f
-          where f.oid = v_post
-            and f.proargnames @> array['url', 'body', 'headers', 'timeout_milliseconds']) then
-      raise exception '0048: net.http_post(url, body, params, headers, timeout_milliseconds) not found';
-    end if;
-    if not (has_schema_privilege(v_owner, 'net', 'usage')
-            and has_function_privilege(v_owner, v_post, 'execute')) then
-      raise exception '0048: % (the function''s owner) may not call net.http_post', v_owner;
-    end if;
-  elsif exists (select 1 from pg_trigger t where t.tgfoid = v_fn) then
-    raise exception '0048: without pg_net, no trigger may call app.tg_notify_lead()';
+  -- pg_net: installed, its queue and http_post in schema net.
+  if not exists (select 1 from pg_extension where extname = 'pg_net')
+     or to_regclass('net.http_request_queue') is null then
+    raise exception '0048: pg_net is not installed, or its queue is not net.http_request_queue';
+  end if;
+
+  -- The trigger: enabled, AFTER INSERT FOR EACH ROW (tgtype 5: ROW 1 + INSERT 4, BEFORE 2
+  -- clear), no WHEN clause, no arguments, calling the function.
+  if not exists (select 1 from pg_trigger t
+                  where t.tgrelid = 'public.leads'::regclass and not t.tgisinternal
+                    and t.tgname = 'leads_notify' and t.tgenabled::text = 'O'
+                    and t.tgtype = 5 and t.tgqual is null and t.tgnargs = 0
+                    and t.tgfoid = v_fn) then
+    raise exception '0048: leads_notify is missing, disabled or not AFTER INSERT FOR EACH ROW calling app.tg_notify_lead()';
+  end if;
+  -- One announcement per lead: nothing else calls the function, and no other trigger on
+  -- leads makes an HTTP call (a dashboard webhook would also send the whole row).
+  if (select count(*) from pg_trigger t where t.tgfoid = v_fn) <> 1 then
+    raise exception '0048: app.tg_notify_lead() must be called by leads_notify alone';
+  end if;
+  if exists (select 1 from pg_trigger t join pg_proc f on f.oid = t.tgfoid
+              where t.tgrelid = 'public.leads'::regclass and not t.tgisinternal
+                and f.oid <> v_fn and f.prosrc ~* 'http_(post|get|delete|request)') then
+    raise exception '0048: another trigger on public.leads makes an HTTP call';
+  end if;
+  -- The call above passes named parameters; check pg_net still has them.
+  v_post := to_regprocedure('net.http_post(text, jsonb, jsonb, jsonb, integer)');
+  if v_post is null or not exists (
+       select 1 from pg_proc f
+        where f.oid = v_post
+          and f.proargnames @> array['url', 'body', 'headers', 'timeout_milliseconds']) then
+    raise exception '0048: net.http_post(url, body, params, headers, timeout_milliseconds) not found';
+  end if;
+  if not (has_schema_privilege(v_owner, 'net', 'usage')
+          and has_function_privilege(v_owner, v_post, 'execute')) then
+    raise exception '0048: % (the function''s owner) may not call net.http_post', v_owner;
   end if;
 end $$;
