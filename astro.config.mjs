@@ -13,14 +13,18 @@ import { mediaRemotePatternsIntegration } from './scripts/media-remote-patterns.
 // transformed and cached for an hour, stills handed to the adapter (the script's header).
 import { imageEndpointIntegration } from './scripts/image-endpoint.mjs';
 
-// What the shared admin-ui chunk does not claim by its path (Admin v2 F4b): the component
-// kit (src/components/admin/kit/, the Sortable core in src/lib/admin/client/) and its
-// reference screen (/admin/kit: the AdminKit island and screens/kit/). A group also takes
-// its modules' dependencies, so a kit piece still lands in admin-ui the moment a screen
-// there imports it; a piece only the reference screen shows stays in that screen's own
-// `AdminKit` chunk instead of riding along on every admin screen.
-const ADMIN_UI_UNCLAIMED =
-  /[\\/]src[\\/](components[\\/]admin[\\/](kit[\\/]|screens[\\/]kit[\\/]|islands[\\/]AdminKit\.tsx$)|lib[\\/]admin[\\/]client[\\/])/;
+// The component kit's own modules (Admin v2 F4b): its React pieces
+// (src/components/admin/kit/) and the vanilla client code (src/lib/admin/client/: the
+// Sortable core, and the enhancers AdminLayout's script will lazy-load).
+const ADMIN_KIT = /[\\/]src[\\/](components[\\/]admin[\\/]kit[\\/]|lib[\\/]admin[\\/]client[\\/])/;
+// The kit's reference screen (/admin/kit): its island and that island's own code, which
+// stay in the island's `AdminKit` entry chunk.
+const ADMIN_KIT_SCREEN =
+  /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]kit[\\/]|islands[\\/]AdminKit\.tsx$)/;
+// The shared admin-ui chunk claims neither by path. A group also takes its modules' static
+// dependencies, so a kit piece still lands in admin-ui the moment a screen there imports
+// it; the rest of the kit goes to the lowest admin group, `admin-kit`, instead of riding
+// along on every admin screen.
 
 /**
  * Braiin Station — render model (see CLAUDE.md §2 "Render tiers"):
@@ -77,7 +81,8 @@ export default defineConfig({
           // modules its `test` matches PLUS their dependencies (Rolldown's default, the
           // behaviour `manualChunks` had), but a module a higher group already claimed
           // stays there. So the order is the design: React first, then the admin's small
-          // shared helpers, then the rich-text editor, then everything else admin.
+          // shared helpers, then the rich-text editor, then everything else admin, and
+          // last the component kit's modules none of those took (F4b).
           //
           // Why named at all: `.size-limit.json` splits public from admin by FILE NAME,
           // so an admin module in an anonymous chunk would be weighed against the public
@@ -119,12 +124,25 @@ export default defineConfig({
               },
               {
                 // Our own admin-only modules, and what they need (zod, the schemas),
-                // except what ADMIN_UI_UNCLAIMED names (the component kit, F4b).
+                // except the component kit and its reference screen (F4b).
                 name: 'admin-ui',
                 test: (id) =>
                   /[\\/]src[\\/](components|lib)[\\/]admin[\\/]/.test(id) &&
-                  !ADMIN_UI_UNCLAIMED.test(id),
+                  !ADMIN_KIT.test(id) &&
+                  !ADMIN_KIT_SCREEN.test(id),
                 priority: 20,
+              },
+              {
+                // The lowest admin group (Admin v2 F4b review): the kit modules admin-ui
+                // leaves still land in an admin-* file. A group captures
+                // static dependencies only, so a module reached only through import() (an
+                // enhancer in lib/admin/client/ that AdminLayout's script lazy-loads, a kit
+                // piece a screen opens on demand) would otherwise become a module-named
+                // chunk, which size-limit weighs as PUBLIC JavaScript and
+                // scripts/admin-bundle.mjs fails as a public chunk importing admin code.
+                name: 'admin-kit',
+                test: ADMIN_KIT,
+                priority: 5,
               },
               {
                 // The two video helpers, as ONE chunk. Each is shared (lazyVideo by the
