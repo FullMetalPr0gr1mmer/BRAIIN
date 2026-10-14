@@ -78,8 +78,10 @@ const REPO = fileURLToPath(new URL('../..', import.meta.url));
 
 /**
  * git in `cwd`, never pointed elsewhere by the caller's environment: git exports GIT_DIR,
- * GIT_WORK_TREE and GIT_INDEX_FILE to its hooks, so a run started from one would otherwise
- * list another repository's index (or a commit's temporary one).
+ * GIT_WORK_TREE and GIT_INDEX_FILE to its hooks (and GIT_OBJECT_DIRECTORY, GIT_COMMON_DIR
+ * and the rest can do the same), so a run started from one would otherwise list another
+ * repository's index, or a commit's temporary one. Every GIT_* variable is dropped; `extra`
+ * (a test's own config isolation) is added back after.
  */
 function git(
   cwd: string,
@@ -88,7 +90,7 @@ function git(
 ): string {
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const key of Object.keys(env)) {
-    if (/^GIT_(DIR|WORK_TREE|INDEX_FILE)$/i.test(key)) delete env[key];
+    if (/^GIT_/i.test(key)) delete env[key];
   }
   return execFileSync('git', args, {
     cwd,
@@ -207,6 +209,28 @@ describe('the one-i domain', { timeout: 30_000 }, () => {
       expect(staleLines(repo, files)).toEqual([
         "src/lib/legal.ts:1: export const MAILBOX = 'privacy@braiinstation.com';",
       ]);
+
+      // A caller whose environment points git at the throwaway repository (as a hook's
+      // does) still gets this repository's listing.
+      const own = trackedUnder(REPO, ['supabase/seeds']);
+      const planted = {
+        GIT_DIR: join(repo, '.git'),
+        GIT_WORK_TREE: repo,
+        GIT_INDEX_FILE: join(base, 'no-such-index'),
+        GIT_OBJECT_DIRECTORY: join(repo, '.git', 'objects'),
+        GIT_COMMON_DIR: join(repo, '.git'),
+      };
+      const saved = Object.fromEntries(Object.keys(planted).map((k) => [k, process.env[k]]));
+      try {
+        Object.assign(process.env, planted);
+        expect(trackedUnder(REPO, ['supabase/seeds'])).toEqual(own);
+      } finally {
+        for (const [k, v] of Object.entries(saved)) {
+          if (v === undefined) delete process.env[k];
+          else process.env[k] = v;
+        }
+      }
+      expect(own.length).toBeGreaterThan(0);
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
