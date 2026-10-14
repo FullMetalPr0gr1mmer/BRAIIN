@@ -16,7 +16,7 @@
 // Content-Length, up to 20 MB, src/lib/media/upload.ts).
 //
 // 16 KB, not the 8 the review suggested: the largest form the schemas accept is about 9.3 KB
-// (the sign-in form with a 2,048-character `next` of slashes, each `%2F` once form-encoded,
+// (the sign-in form with a 2,048-character `next` of characters each `%XX` once form-encoded,
 // a 256-character password of 3-byte characters, a 254-character e-mail of characters the
 // encoding triples, and the CSRF token), and a cap must never refuse a form a person can
 // send. tests/lib/bodyLimit.spec.ts builds that form and holds it under the cap.

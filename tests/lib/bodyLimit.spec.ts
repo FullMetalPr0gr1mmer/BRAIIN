@@ -53,9 +53,11 @@ describe('bodyWithinLimit', () => {
 
   it('never refuses a form a person can send: the largest the schemas accept fits', async () => {
     // The sign-in form at every field's longest, in the characters form-encoding expands
-    // most: a 2,048-character `next` of slashes (each `%2F`), a 256-character password of
-    // 3-byte characters (each `%XX%XX%XX`), a 254-character e-mail of `+` (each `%2B`).
-    const next = safeNext(`/admin${'/'.repeat(2042)}`);
+    // most: a 2,048-character `next` of characters it triples (each `!` a `%21`; a run of
+    // slashes, each `%2F`, was the case until safeNext refused a doubled slash), a
+    // 256-character password of 3-byte characters (each `%XX%XX%XX`), a 254-character e-mail
+    // of `+` (each `%2B`).
+    const next = safeNext(`/admin/${'!'.repeat(2041)}`);
     expect(next.length).toBe(2048);
     const body = new URLSearchParams({
       _csrf: 'a'.repeat(64),

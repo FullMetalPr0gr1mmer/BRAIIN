@@ -19,12 +19,24 @@
 // percent-encodes the rest): a raw `/admin/日` in a Location header threw ("Cannot convert
 // argument to a ByteString") and turned a successful sign-in into a 500.
 //
-// And to the path ASTRO will route (second review): the browser resolves only `%2e` as a
-// dot, but Astro decodes a path up to ten times before it routes and resolves the dots it
-// then finds (astro/dist/core/util/normalized-url.js), so `/admin/%252e%252e/old-page`,
-// unchanged by the browser, reached the middleware as `/old-page`, and a 404 there is
-// answered by the authored redirects. The path is decoded the same way and must still be
-// under /admin; one Astro could not decode is refused.
+// And to the path ASTRO will route (second and third reviews). The browser resolves only
+// `%2e` as a dot, but Astro 7.3.5 decodes a path up to ten times before anything reads it
+// (validateAndDecodePathname, astro/dist/core/util/pathname.js); for the URL the middleware
+// reads it then collapses doubled slashes, hands the result to the URL pathname setter,
+// which resolves dot segments, reads `\` as `/` and drops tabs and newlines, and collapses
+// again (FetchState's constructor, astro/dist/core/fetch/fetch-state.js), while its router
+// matches the decoded path with none of those steps (core/routing/match-request.js). So
+// `/admin/%252e%252e/old-page`, unchanged by the browser, reached the middleware as
+// `/old-page`, and a 404 there is answered by the authored redirects. Imitating those steps
+// failed once already, in the wrong order: `/admin//%252e%252e/old-page` resolved here to
+// `/admin/old-page`, while Astro collapses first and its `..` pops /admin. So nothing is
+// imitated. The path is decoded as Astro decodes it, and kept only when none of Astro's
+// later steps could move it: no dot segment, no doubled slash, no backslash, no control
+// character, and no `%` left once decoded (a `%2F`, say, which decodeURI leaves as it is).
+// One that cannot be decoded, or not within Astro's ten decodings, is refused too. What is
+// left is the path the router matches and, but for the percent-encoding the setter adds,
+// the one the middleware reads, and it must be under /admin (tests/lib/authScreens.spec.ts
+// holds every accepted value to both with Astro's own helpers).
 
 export const DEFAULT_NEXT = '/admin';
 
@@ -42,10 +54,20 @@ const ASTRO_DECODES = 10;
 const isAdminPath = (pathname: string): boolean =>
   pathname === DEFAULT_NEXT || pathname.startsWith(`${DEFAULT_NEXT}/`);
 
+/** What a step after Astro's decoding could change: a backslash, a control character, a `%`. */
+const AMBIGUOUS = /[\\%\u0000-\u001f\u007f]/;
+
+/** True when no step Astro takes after decoding (above) could move `decoded`. */
+function isUnambiguous(decoded: string): boolean {
+  if (AMBIGUOUS.test(decoded) || decoded.includes('//')) return false;
+  return decoded.split('/').every((segment) => segment !== '.' && segment !== '..');
+}
+
 /**
- * The path Astro routes for `pathname`: decodeURI until it stops changing (at most ten
- * times, as Astro), then dot segments resolved and doubled slashes collapsed. Null when it
- * cannot be decoded, or takes more decodings than Astro allows.
+ * The path Astro routes for `pathname`: decodeURI until it stops changing, as
+ * validateAndDecodePathname does (at most ten decodings that change it), when nothing Astro
+ * does next could move it. Null when it cannot be decoded, takes more decodings than Astro
+ * allows, or is ambiguous.
  */
 function routedPath(pathname: string): string | null {
   let current = pathname;
@@ -56,13 +78,7 @@ function routedPath(pathname: string): string | null {
     } catch {
       return null;
     }
-    if (decoded === current) {
-      try {
-        return new URL(decoded, BASE).pathname.replace(/\/{2,}/g, '/');
-      } catch {
-        return null;
-      }
-    }
+    if (decoded === current) return isUnambiguous(decoded) ? decoded : null;
     current = decoded;
   }
   return null;

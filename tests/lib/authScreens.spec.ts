@@ -27,6 +27,18 @@ import {
   resetTokenFrom,
 } from '@/lib/auth/resetToken';
 import { PASSWORD_MIN } from '@schemas/adminPrefs';
+// Astro's own path steps (the installed release), to hold safeNext to the path Astro routes.
+// Not in astro's package exports, so they are reached by path (as tests/lib/session.spec.ts
+// reaches its cookie jar).
+import {
+  MultiLevelEncodingError,
+  validateAndDecodePathname,
+} from '../../node_modules/astro/dist/core/util/pathname.js';
+import {
+  createNormalizedUrl,
+  setPathname,
+} from '../../node_modules/astro/dist/core/util/normalized-url.js';
+import { collapseDuplicateSlashes } from '../../node_modules/astro/dist/core/path.js';
 import { PUBLIC_SITE_URL } from '../stubs/astro-env-client';
 
 // The pieces the sign-in screens (Admin v2 F7) are built from: where a sign-in may send the
@@ -92,8 +104,9 @@ describe('safeNext: where a sign-in may send the browser', () => {
     // Dot segments that stay inside /admin are kept, resolved.
     expect(safeNext('/admin/./leads')).toBe('/admin/leads');
     expect(safeNext('/admin/leads/../users?x=1#y')).toBe('/admin/users?x=1#y');
-    // A doubled slash after /admin is a path on this origin, not a host.
-    expect(safeNext('/admin//evil.example')).toBe('/admin//evil.example');
+    // A doubled slash is not a host here, but Astro collapses it before it resolves a `..`
+    // after it, so it is refused with the rest of what Astro would move (below).
+    expect(safeNext('/admin//evil.example')).toBe(DEFAULT_NEXT);
     // Encoded characters that stay inside /admin once decoded are kept as they are.
     expect(safeNext('/admin/leads?q=100%25')).toBe('/admin/leads?q=100%25');
     expect(safeNext('/admin/%2541')).toBe('/admin/%2541');
@@ -141,7 +154,118 @@ describe('safeNext: where a sign-in may send the browser', () => {
       expect(again.host, input).toBe('site.example');
     }
   });
+
+  it('refuses a path any step after Astro decodes it could move (third review)', () => {
+    for (const next of [
+      // The review's: here the empty segment between the slashes took the `..`; Astro
+      // collapses the slashes first, and the `..` pops /admin (the middleware reads
+      // `/old-page`, a 404 the authored redirects answer).
+      '/admin//%252e%252e/old-page',
+      '/admin/x//%252e%252e/%252e%252e/old-page',
+      '/admin///%252e%252e/%252e%252e/old-page',
+      // The same, encoded once more, or with the slashes encoded too.
+      '/admin//%25252e%25252e/old-page',
+      '/admin/%2F%252e%252e/old-page',
+      '/admin/x%252F%252F%252e%252e%252F%252e%252e%252Fold-page',
+      // A backslash the URL setter reads as a slash; a tab or newline it drops.
+      '/admin/x%5C..%5C..%5Cold-page',
+      '/admin/x%255C%252e%252e%255C%252e%252e%255Cold-page',
+      '/admin/.%09./old-page',
+      '/admin/x/.%250A./.%250A./old-page',
+      // And any dot segment, doubled slash or `%` left once decoded, even inside /admin.
+      '/admin/x/%252e%252e/leads',
+      '/admin/%252e/leads',
+      '/admin/x%2Fy',
+      '/admin/x%252F%252Fy',
+    ]) {
+      expect(safeNext(next), next).toBe(DEFAULT_NEXT);
+    }
+  });
+
+  it("every value it keeps routes under /admin, by Astro's own steps (third review)", () => {
+    // Over a corpus of dot, slash, backslash and control-character segments at every depth
+    // of encoding Astro decodes, and the review's inputs: whatever safeNext keeps, the router
+    // matches, and the middleware reads, under /admin; never the 400 for a path encoded
+    // deeper than Astro decodes. Astro's helpers are the installed ones, so a release that
+    // would route a kept value elsewhere fails here. (The safeNext before this review kept
+    // 537 of these paths that Astro routes outside /admin.)
+    const SEGMENTS = [
+      '',
+      '.',
+      '..',
+      '%2e',
+      '%2E%2e',
+      '%252e',
+      '%252e%252e',
+      '%25252e%25252e',
+      '.%252e',
+      '%5C',
+      'x%5C..',
+      'x%255C%252e%252e',
+      '%2F',
+      '%252F',
+      '%09',
+      '.%09.',
+      '.%2509.',
+      '%25',
+      '%2541',
+      'x',
+      'evil.example',
+      'a%20b',
+      '日',
+    ];
+    const TAILS = ['', 'old-page', '%252e%252e/old-page', '%252e%252e/%252e%252e/old-page'];
+    const inputs = [
+      '/admin//%252e%252e/old-page',
+      '/admin/x//%252e%252e/%252e%252e/old-page',
+      '/admin///%252e%252e/%252e%252e/old-page',
+    ];
+    for (const head of ['/admin', '/admin/', '/admin//']) {
+      for (const a of SEGMENTS) {
+        for (const b of SEGMENTS) {
+          for (const tail of TAILS) inputs.push(`${head}${a}/${b}/${tail}`);
+        }
+      }
+    }
+    let kept = 0;
+    for (const input of inputs) {
+      const next = safeNext(input);
+      if (next !== DEFAULT_NEXT) kept += 1;
+      const routed = astroRoutes(next);
+      expect(routed, `${input} -> ${next}`).not.toBeNull();
+      for (const path of routed ?? []) {
+        expect(
+          path === '/admin' || path.startsWith('/admin/'),
+          `${input} -> ${next} -> ${path}`,
+        ).toBe(true);
+      }
+    }
+    // Not a vacuous sweep: a good share is kept, and judged.
+    expect(kept).toBeGreaterThan(200);
+  });
 });
+
+/**
+ * Where Astro takes a request for `next`, once a browser has followed it, read with Astro's
+ * own helpers: the path its router matches (core/routing/match-request.js: decoded, and
+ * nothing else), the path the middleware reads (FetchState's constructor: decoded, slashes
+ * collapsed, through the URL setter, collapsed again) and the path after a rewrite
+ * (createNormalizedUrl). Null for the 400 Astro answers a path encoded deeper than it decodes.
+ */
+function astroRoutes(next: string): string[] | null {
+  const request = new URL(next, 'https://site.example');
+  const raw = request.pathname;
+  let decoded = raw;
+  try {
+    decoded = validateAndDecodePathname(raw);
+  } catch (error) {
+    if (error instanceof MultiLevelEncodingError) return null;
+  }
+  const url = new URL(request.href);
+  setPathname(url, collapseDuplicateSlashes(decoded));
+  setPathname(url, collapseDuplicateSlashes(url.pathname));
+  return [decoded, url.pathname, createNormalizedUrl(request.href).pathname];
+}
 
 describe('readAuthBody: the two kinds of post', () => {
   const post = (body: BodyInit, type?: string) =>
