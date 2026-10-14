@@ -32,7 +32,7 @@ Each slice's file under [as-built/](as-built/) has the detail.
 ## Reserved
 
 Wave 1's migrations and hotfix H9's are reserved below; the next free number after them is
-**0049**. Before a wave's slices branch, each migration the wave plans gets a row here,
+**0050**. Before a wave's slices branch, each migration the wave plans gets a row here,
 numbered in the wave's planned merge order. The slice's own PR moves its row to "Applied" once
 production has applied the migration, before the PR merges (Pushing to production, step 5), so
 the row is true when the PR lands and nothing here is edited after a merge.
@@ -44,8 +44,9 @@ the row is true when the PR lands and nothing here is edited after a merge.
 | 0042 | (released) | unused: F8 (0044) and U3 (0045) merged first, so U16 moved to 0046 | 1 |
 | 0043 | (released) | unused, as 0042: C13 moved to 0047 | 1 |
 | 0046 | U16 | the help centre: `help_articles` | 1 |
-| 0047 | C13 | lead attribution capture (built, held for the privacy notice, O-11) | 1 |
-| 0048 | H9 | the lead-notification trigger restored and hardened: `app.tg_notify_lead()` re-created SECURITY DEFINER with an empty search_path, https only, never failing an insert; `leads_notify` created wherever pg_net is installed (0010 created it only where pg_net already was, and production's was not) (`0048_lead_notify_trigger.sql`) | hotfix |
+| 0047 | (released) | unused: U16 (0046) and then H9 (0048) merge before C13, and once 0048 is on `main` a 0047 would sort below its highest, so C13 moved to 0049 | 1 |
+| 0048 | H9 | the lead-notification trigger restored and hardened: pg_net created where missing; `app.tg_notify_lead()` re-created SECURITY DEFINER with an empty search_path, posting to the https URL in Vault (`notify_lead_url`, no longer `site_settings`) with a timestamp and an HMAC signature instead of the secret, and no catchable error failing an insert (a lead it cannot announce is a WARNING and a `system_logs` row); `leads_notify` created on every database (0010 created it only where pg_net already was, and production's was not); `public.lead_notify_misses()` for the daily cron (`0048_lead_notify_trigger.sql`) | hotfix |
+| 0049 | C13 | lead attribution capture (built, held for the privacy notice, O-11); moved from 0047 | 1 |
 
 ## Rules
 
