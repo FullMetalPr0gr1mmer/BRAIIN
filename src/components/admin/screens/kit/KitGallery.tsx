@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Chips from '@/components/admin/kit/Chips';
 import DataTable, { type DataColumn } from '@/components/admin/kit/DataTable';
 import Drawer from '@/components/admin/kit/Drawer';
@@ -63,21 +63,42 @@ export default function KitGallery({ tab }: KitGalleryProps) {
   );
 }
 
+/** How long the sample's pretend list API takes to answer. */
+const SAMPLE_LATENCY_MS = 150;
+
+interface SamplePage {
+  rows: readonly KitRow[];
+  total: number;
+}
+
+/** The sample's pretend list API: one page of the entries a filter matches. */
+function samplePage(entries: readonly KitRow[], filter: StatusFilter, offset: number): SamplePage {
+  const matching = entries.filter((row) => filter === 'all' || row.status === filter);
+  return { rows: matching.slice(offset, offset + PAGE_SIZE), total: matching.length };
+}
+
 function TableDemo() {
   // The sample's rows live in state so "Remove" can take some away (nothing is saved: a
-  // reload brings them back), which is how the table's step back from an emptied last
-  // page is checked in a browser.
+  // reload brings them back), and each page is answered a moment later, as a list API
+  // answers ResourceTable: the old rows stay while it loads. So the table is seen as on a
+  // real screen, stepping back from an emptied last page included.
   const [entries, setEntries] = useState<readonly KitRow[]>(KIT_ROWS);
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [shown, setShown] = useState<SamplePage>(() => samplePage(KIT_ROWS, 'all', 0));
+  const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [done, setDone] = useState('');
-  const matching = useMemo(
-    () => entries.filter((row) => filter === 'all' || row.status === filter),
-    [entries, filter],
-  );
+  useEffect(() => {
+    setBusy(true);
+    const answer = setTimeout(() => {
+      setShown(samplePage(entries, filter, offset));
+      setBusy(false);
+    }, SAMPLE_LATENCY_MS);
+    return () => clearTimeout(answer);
+  }, [entries, filter, offset]);
   const entriesWord = (n: number) => `${n} sample ${n === 1 ? 'entry' : 'entries'}`;
-  const rows = matching.slice(offset, offset + PAGE_SIZE);
+  const rows = shown.rows;
   const columns: DataColumn<KitRow>[] = [
     { key: 'title', label: 'Title' },
     { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
@@ -95,9 +116,10 @@ function TableDemo() {
         rows={rows}
         rowName={(row) => row.title}
         rowHref={(row) => `#${row.id}`}
-        total={matching.length}
+        total={shown.total}
         offset={offset}
         onPage={setOffset}
+        busy={busy}
         rowActions={(row) => (
           <button
             type="button"

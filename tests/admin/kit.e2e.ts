@@ -369,7 +369,24 @@ test.describe('as admin', () => {
     const card = page.getByRole('region', { name: 'A data table' });
     const table = card.getByRole('table', { name: 'Sample entries, with selection' });
     await card.getByRole('button', { name: 'Page 3', exact: true }).click();
+    // The sample answers a moment later, as a list API does: wait for page 3's rows.
+    await expect(table.getByRole('link', { name: 'Sample entry 51', exact: true })).toBeVisible();
     await expect(card.locator('.tbl__range')).toHaveText('51 to 60 of 60');
+
+    // Every node the table adds from here on. Between the step back and page 2's rows the
+    // table must say it is loading, never draw its empty state ("Nothing here yet") over
+    // a range of rows that are not there.
+    await card.evaluate((el) => {
+      const seen: string[] = [];
+      (window as unknown as { kitAdded: string[] }).kitAdded = seen;
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (node.textContent?.includes('Nothing here yet')) seen.push(node.textContent);
+          }
+        }
+      }).observe(el, { childList: true, subtree: true });
+    });
 
     await table.getByRole('checkbox', { name: 'Select all on this page' }).check();
     await page
@@ -387,6 +404,9 @@ test.describe('as admin', () => {
       'page',
     );
     await expect(card.getByRole('button', { name: 'Page 3', exact: true })).toHaveCount(0);
+    expect(
+      await page.evaluate(() => (window as unknown as { kitAdded: string[] }).kitAdded),
+    ).toEqual([]);
   });
 
   test.describe('at phone width nothing scrolls sideways (WCAG 1.4.10)', () => {

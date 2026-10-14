@@ -6,6 +6,7 @@ import Chips, { nextSelection } from '@/components/admin/kit/Chips';
 import DataTable, {
   pageSelection,
   settleOffset,
+  stillStepping,
   type DataTableProps,
 } from '@/components/admin/kit/DataTable';
 import Drawer from '@/components/admin/kit/Drawer';
@@ -187,6 +188,23 @@ describe('DataTable', () => {
     expect(settleOffset(3, 28, 25)).toBeNull();
     expect(settleOffset(0, 0, 25)).toBeNull();
     expect(settleOffset(0, 30, 25)).toBeNull();
+  });
+
+  it('keeps loading from the step back until the rows of that page are in', () => {
+    const step = { offset: 0, sawBusy: false };
+    // The parent took the new offset but its load has not started: still loading, not
+    // "No services yet" over "1 to 25 of 25" (f4b pre-merge review).
+    expect(stillStepping(step, { rows: 0, total: 25, busy: false })).toBe(true);
+    expect(stillStepping({ ...step, sawBusy: true }, { rows: 0, total: 25, busy: true })).toBe(
+      true,
+    );
+    // Done: the rows are in, the list is empty, or the load ended with no rows.
+    expect(stillStepping(step, { rows: 25, total: 25, busy: false })).toBe(false);
+    expect(stillStepping(step, { rows: 0, total: 0, busy: false })).toBe(false);
+    expect(stillStepping({ ...step, sawBusy: true }, { rows: 0, total: 25, busy: false })).toBe(
+      false,
+    );
+    expect(stillStepping(null, { rows: 0, total: 25, busy: false })).toBe(false);
   });
 });
 

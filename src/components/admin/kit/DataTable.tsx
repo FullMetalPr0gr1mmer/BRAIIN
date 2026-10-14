@@ -90,6 +90,27 @@ export function settleOffset(
   return last === offset ? null : last;
 }
 
+/** A step back DataTable has asked for: the offset, and whether its load has started. */
+export interface PageStep {
+  offset: number;
+  sawBusy: boolean;
+}
+
+/**
+ * Whether a step back is still on its way: no rows yet while rows remain, and the
+ * parent's load of that page has not ended. Between the parent taking the new offset and
+ * its load starting there is a render with no rows and nothing loading; without this it
+ * drew the empty state over "1 to 25 of 25" and the range region said its words twice.
+ * A load that ends with no rows ends the step too, so a list that really is empty there
+ * says so rather than loading for ever.
+ */
+export function stillStepping(
+  step: PageStep | null,
+  view: { rows: number; total: number; busy: boolean },
+): boolean {
+  return step !== null && view.rows === 0 && view.total > 0 && !(step.sawBusy && !view.busy);
+}
+
 /**
  * The ticked rows of this page, in its order: what the bulk bar counts and hands to its
  * actions. An id in the set that is not on screen (another page, filtered out, deleted)
@@ -126,15 +147,29 @@ export default function DataTable<Row extends { id: string }>({
   empty = { title: 'Nothing here yet' },
 }: DataTableProps<Row>) {
   const info = pageInfo(total, offset, limit);
-  // A page past the end steps back (the parent's onPage loads it); until it has, the table
-  // says it is loading, not that nothing exists.
+  // A page past the end steps back (the parent's onPage loads it); until its rows are in,
+  // the table says it is loading, not that nothing exists (stillStepping).
+  const step = useRef<PageStep | null>(null);
   const settle = busy ? null : settleOffset(rows.length, total, offset, limit);
-  const loading = busy || settle !== null;
+  const loading =
+    busy || settle !== null || stillStepping(step.current, { rows: rows.length, total, busy });
   const page = useRef(onPage);
   page.current = onPage;
   useEffect(() => {
-    if (settle !== null) page.current(settle);
+    if (settle === null) return;
+    step.current = { offset: settle, sawBusy: false };
+    page.current(settle);
   }, [settle]);
+  // Follows the step: its load starting (busy at the new offset), and its end (rows, an
+  // empty list, or the load over).
+  useEffect(() => {
+    const current = step.current;
+    if (!current) return;
+    if (busy && offset === current.offset) current.sawBusy = true;
+    if (!stillStepping(current, { rows: rows.length, total, busy }) && settle === null) {
+      step.current = null;
+    }
+  });
   const linkColumn = titleColumn ?? columns[0]?.key;
   const span = columns.length + (selection ? 1 : 0) + (rowActions ? 1 : 0);
   const chosen = selection ? pageSelection(selection.selected, rows) : [];
