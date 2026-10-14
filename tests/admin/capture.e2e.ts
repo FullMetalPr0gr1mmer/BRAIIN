@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from '@playwright/test';
 import { STAFF_ROLES, authFile, staffEnv } from './staff';
-import { sweepRoutes } from './routes';
+import { CAPTURE_VIEWPORTS, captureName, captureRoutes } from './routes';
 
 // Admin design capture (Admin v2 F0), not an assertion suite: full-page screenshots of
 // every admin screen, for the side-by-side comparison with the client's prototype that
@@ -12,26 +12,20 @@ import { sweepRoutes } from './routes';
 // Admin sees every screen, so Admin is captured on all of them, at a laptop width and a
 // phone width (where F2's shell puts the sidebar in a popover and wraps the topbar). The
 // other roles are captured on the dashboard only, for their sidebars.
+//
+// The routes, viewports and names are tests/admin/routes.ts's (captureRoutes,
+// CAPTURE_VIEWPORTS, captureName), where tests/lib/adminRoutes.spec.ts holds every name
+// unique: a repeated title fails there, not when Playwright collects the e2e job.
 const DIR = process.env.CAPTURE_DIR;
-
-const VIEWPORTS = [
-  { tag: 'd', width: 1440, height: 900 },
-  { tag: 'm', width: 390, height: 844 },
-] as const;
-
-function slug(path: string): string {
-  return path.replace(/[/?=[\]]+/g, '_').replace(/^_|_$/g, '') || 'admin';
-}
 
 test.describe('admin design capture', () => {
   test.skip(!DIR || !staffEnv(), 'CAPTURE_DIR not set, or no local staff harness');
   test.describe.configure({ mode: 'parallel' });
 
   for (const role of STAFF_ROLES) {
-    const routes = role === 'admin' ? sweepRoutes(role) : sweepRoutes(role).slice(0, 1);
-    for (const vp of VIEWPORTS) {
-      for (const route of routes) {
-        const name = `admin-${role}-${vp.tag}-${slug(route.pattern)}`;
+    for (const vp of CAPTURE_VIEWPORTS) {
+      for (const route of captureRoutes(role)) {
+        const name = captureName(role, vp.tag, route);
         test(name, async ({ browser }) => {
           const context = await browser.newContext({
             storageState: authFile(role),

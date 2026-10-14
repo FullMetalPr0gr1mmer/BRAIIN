@@ -1,0 +1,21 @@
+/* Screen stylesheet: /admin/help (Admin v2 U16), the help centre without JS: the drawer's
+   twin. Linked only through AdminLayout's `styles` prop (styles={['help.css']}), after
+   admin.css. The guides' own content (.hc, .hc-art, .list, .li) renders in the drawer on
+   every page, so it stays in admin.css; only the page's frame and its search form are
+   here. It uses admin.css's tokens and declares none, and holds no colour literal
+   (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+.hc-page {
+  max-inline-size: 44rem;
+}
+
+.hc-page__search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hc-page__search input {
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+}
