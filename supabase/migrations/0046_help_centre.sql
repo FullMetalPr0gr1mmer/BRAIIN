@@ -1086,7 +1086,7 @@ create or replace function app.help_article_set() returns jsonb
           "t": "ol",
           "x": [
             "Each measure has a budget. Over budget means visitors wait longer than they should, which is worth raising with whoever looks after the site's code.",
-            "Errors lists problems the site ran into. An Admin can clear entries older than 30 days.",
+            "Errors lists problems the site ran into. Every night, entries older than 30 days are deleted by themselves; an Admin's Clear logs older than 30 days removes any still left before then, and the clearing itself is recorded in the activity log.",
             "The activity log records saves, publishes, reveals of contact details and exports, each against the account that made it, with the time. The screen lists the time, the role, the action and what it touched. Nobody can edit or delete it, not even an Admin."
           ]
         },
@@ -1104,7 +1104,7 @@ create or replace function app.help_article_set() returns jsonb
           "t": "ol",
           "x": [
             "لكل مقياس حد مستهدف، وتجاوزه يعني أن الزوار ينتظرون أكثر مما ينبغي، ويستحق ذلك إبلاغ المسؤول عن برمجة الموقع.",
-            "يعرض Errors المشكلات التي واجهها الموقع، ويستطيع المسؤول (Admin) مسح الإدخالات الأقدم من 30 يومًا.",
+            "يعرض Errors المشكلات التي واجهها الموقع. تُحذف كل ليلة الإدخالات الأقدم من 30 يومًا تلقائيًا، ويزيل زر Clear logs older than 30 days لدى المسؤول (Admin) ما تبقى منها قبل ذلك، ويُسجَّل المسح نفسه في سجل النشاط.",
             "يسجّل سجل النشاط الحفظ والنشر وكشف بيانات التواصل والتصدير، كلًّا على الحساب الذي قام به مع وقته. وتعرض الشاشة الوقت والدور والإجراء وما تناوله. ولا يستطيع أحد تعديله أو حذفه، ولا حتى المسؤول (Admin)."
           ]
         },

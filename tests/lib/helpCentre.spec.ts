@@ -366,6 +366,18 @@ describe('the guides say only what the admin does', () => {
     );
   });
 
+  it('clearing the error log is described beside the nightly purge it runs alongside', () => {
+    expect(source('supabase/migrations/0008_retention_jobs.sql')).toContain(
+      "'system_logs_days')::int, 30)",
+    );
+    expect(source('src/components/admin/screens/logs/ReadOnlyPanel.tsx')).toContain(
+      'Clear logs older than 30 days',
+    );
+    const en = guide('site-health-and-logs', 'en');
+    expect(en).toContain('Every night, entries older than 30 days are deleted by themselves');
+    expect(en).toContain('Clear logs older than 30 days removes any still left');
+  });
+
   // @@guide-claims
 });
 
