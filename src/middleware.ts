@@ -21,7 +21,8 @@ import {
 } from '@/lib/http/csrf';
 import { createSessionClient, clearSessionCookies, HOST_COOKIE_BASE } from '@/lib/auth/session';
 import { resolveAuthContext } from '@/lib/auth/context';
-import { expiredSignInForm } from '@/lib/auth/expiredForm';
+import { expiredSignInForm, tooLargeSignInForm } from '@/lib/auth/expiredForm';
+import { bodyWithinLimit } from '@/lib/auth/bodyLimit';
 
 // The PRIMARY enforcement point for: maintenance pre-cache check → per-request CSP nonce →
 // strict security headers → admin session + CSRF → render → authored redirects on a 404.
@@ -200,6 +201,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (!SAFE_METHODS.has(request.method)) {
       if (!isSameOrigin(request.headers.get('origin'), request.headers.get('host'))) {
         return secured(jsonError(403, 'bad-origin'));
+      }
+      // Anyone can post to a pre-auth path, and its body is read several times below (the
+      // token check's clone, a refused form's clone, the handler): bound it first, before
+      // any of them (src/lib/auth/bodyLimit.ts). A sign-in form goes back to its page.
+      if (PRE_AUTH_PATHS.has(url.pathname) && !(await bodyWithinLimit(request))) {
+        return secured(tooLargeSignInForm(request, url.pathname) ?? jsonError(413, 'too-large'));
       }
       const cookieToken = cookies.get(CSRF_COOKIE_NAME)?.value ?? null;
       if (!csrfTokenMatches(cookieToken, await submittedCsrf(request))) {

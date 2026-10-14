@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import type { AuthContext } from '@/lib/auth/types';
 import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from '@/lib/http/csrf';
+import { PRE_AUTH_BODY_LIMIT } from '@/lib/auth/bodyLimit';
 import { TENANT, UUID } from './harness';
 
 // Sign-in is the one admin API the endpoint matrix cannot drive: it is reached without a
@@ -318,6 +319,139 @@ describe('a sign-in form post that fails the token check goes back to its page (
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ ok: false, error: 'bad-origin' });
     expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('the pre-auth body limit, before anything reads a body (F7 final review)', () => {
+  /** A POST to `path` with `body`, its Content-Length declared (or not, for a stream). */
+  function sized(
+    path: string,
+    body: BodyInit,
+    headers: Record<string, string>,
+    declare: number | null,
+  ) {
+    const ctx = post(path, {});
+    ctx.request = new Request(ctx.url, {
+      method: 'POST',
+      headers: {
+        host: ctx.url.host,
+        origin: ORIGIN,
+        ...(declare === null ? {} : { 'content-length': String(declare) }),
+        ...headers,
+      },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+    return ctx;
+  }
+  const FORM = { 'content-type': 'application/x-www-form-urlencoded' };
+  const JSON_TYPE = { 'content-type': 'application/json' };
+  const OVER = PRE_AUTH_BODY_LIMIT + 1;
+
+  it.each([
+    ['/api/admin/auth/login', '/admin/login?error=too-large'],
+    ['/api/admin/auth/forgot', '/admin/forgot?status=too-large'],
+    ['/api/admin/auth/reset', '/admin/reset?error=too-large'],
+  ])('a form over the limit to %s goes back to %s, unread', async (path, location) => {
+    // The token is right: the size is refused first, so nothing of the body is read, not even
+    // to find it (or `next`, or the reset link).
+    const fields = new URLSearchParams({ _csrf: TOKEN, next: '/admin/users', pad: 'x' });
+    const next = handler();
+    const res = await middleware(sized(path, fields, FORM, OVER), next);
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(location);
+    expect(res.headers.get('cache-control')).toContain('no-store');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('a script gets a JSON 413, a page path too', async () => {
+    for (const path of [
+      '/api/admin/auth/login',
+      '/api/admin/auth/forgot',
+      '/api/admin/auth/reset',
+      '/admin/login',
+    ]) {
+      const next = handler();
+      const res = await middleware(
+        sized(path, '{}', { ...JSON_TYPE, [CSRF_HEADER_NAME]: TOKEN }, OVER),
+        next,
+      );
+      expect(res.status, path).toBe(413);
+      expect(await res.json()).toEqual({ ok: false, error: 'too-large' });
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a body with no Content-Length is measured, and refused past the limit', async () => {
+    const stream = (bytes: number) =>
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (let sent = 0; sent < bytes; sent += 1024) {
+            controller.enqueue(new Uint8Array(Math.min(1024, bytes - sent)).fill(0x61));
+          }
+          controller.close();
+        },
+      });
+    const over = handler();
+    const res = await middleware(
+      sized(
+        '/api/admin/auth/login',
+        stream(OVER),
+        { ...JSON_TYPE, [CSRF_HEADER_NAME]: TOKEN },
+        null,
+      ),
+      over,
+    );
+    expect(res.status).toBe(413);
+    expect(over).not.toHaveBeenCalled();
+
+    const within = handler();
+    const ok = await middleware(
+      sized(
+        '/api/admin/auth/login',
+        stream(PRE_AUTH_BODY_LIMIT),
+        { ...JSON_TYPE, [CSRF_HEADER_NAME]: TOKEN },
+        null,
+      ),
+      within,
+    );
+    expect(within).toHaveBeenCalledOnce();
+    expect(ok.status).toBe(200);
+  });
+
+  it('a body at the limit reaches the handler, with its token checked as before', async () => {
+    const next = handler();
+    const res = await middleware(
+      sized(
+        '/api/admin/auth/login',
+        '{}',
+        { ...JSON_TYPE, [CSRF_HEADER_NAME]: TOKEN },
+        PRE_AUTH_BODY_LIMIT,
+      ),
+      next,
+    );
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+  });
+
+  it('applies to the pre-auth paths only: another admin path is not its business', async () => {
+    const next = handler();
+    const res = await middleware(
+      sized('/api/admin/auth/logout', '{}', { ...JSON_TYPE, [CSRF_HEADER_NAME]: TOKEN }, OVER),
+      next,
+    );
+    // No session: sign-out's own guard answers, not the size.
+    expect(res.status).toBe(401);
+  });
+
+  it('a cross-site post is still the origin refusal, before the size', async () => {
+    const next = handler();
+    const res = await middleware(
+      sized('/api/admin/auth/login', 'x', { ...FORM, origin: 'https://evil.example' }, OVER),
+      next,
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ ok: false, error: 'bad-origin' });
   });
 });
 

@@ -204,3 +204,28 @@ test('the sign-in endpoints refuse a post without the CSRF token', async ({ page
     expect(await json.json(), path).toEqual({ ok: false, error: 'csrf' });
   }
 });
+
+test('the sign-in endpoints refuse an oversized body before reading it', async ({ page }) => {
+  // Over the pre-auth limit (16 KB, src/lib/auth/bodyLimit.ts), with the right CSRF token:
+  // the size is refused first. A form goes back to its page; a script gets a JSON 413.
+  await page.goto('/admin/login');
+  const origin = new URL(page.url()).origin;
+  const csrf = (await page.context().cookies()).find((c) => c.name === '__Host-csrf')?.value;
+  expect(csrf).toBeTruthy();
+  const pad = 'x'.repeat(17 * 1024);
+  const form = await page.request.post('/api/admin/auth/login', {
+    form: { _csrf: csrf ?? '', email: 'nobody-f7@example.com', password: 'not it', pad },
+    headers: { origin },
+    maxRedirects: 0,
+  });
+  expect(form.status()).toBe(303);
+  const location = new URL(form.headers()['location'] ?? '', origin);
+  expect(`${location.pathname}${location.search}`).toBe('/admin/login?error=too-large');
+  const json = await page.request.post('/api/admin/auth/forgot', {
+    data: { email: 'nobody-f7@example.com', pad },
+    headers: { origin, 'x-csrf-token': csrf ?? '' },
+    maxRedirects: 0,
+  });
+  expect(json.status()).toBe(413);
+  expect(await json.json()).toEqual({ ok: false, error: 'too-large' });
+});

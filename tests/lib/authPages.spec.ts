@@ -200,3 +200,26 @@ describe("the reset page's URL stays out of its own requests' Referer (F7 review
     }
   });
 });
+
+describe('a form the body limit sent back (src/lib/auth/bodyLimit.ts)', () => {
+  it.each([
+    ['login', '?error=too-large'],
+    ['forgot', '?status=too-large'],
+  ] as const)('/admin/%s says so, as an alert, with the form', async (page, search) => {
+    const html = await render(page, search);
+    expect(messages(html)).toEqual([
+      { role: 'alert', text: 'That form was too large to send. Please try again.' },
+    ]);
+    expect(html).toContain(`action="/api/admin/auth/${page}"`);
+  });
+
+  it('/admin/reset keeps the form when a try left the link in its cookie', async () => {
+    const html = await render(
+      'reset',
+      '?error=too-large',
+      `__Secure-braiin-reset=${'a1b2c3d4'.repeat(7)}`,
+    );
+    expect(html).toContain('action="/api/admin/auth/reset"');
+    expect(messages(html)[0]?.text).toBe('That form was too large to send. Please try again.');
+  });
+});

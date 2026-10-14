@@ -22,8 +22,14 @@ import { keepResetToken } from './resetToken';
 //
 // Only the token check: a cross-site form post never gets this far (Astro's checkOrigin
 // answers it first), and a mismatched Origin stays the middleware's JSON 403.
+//
+// A form whose body is over the pre-auth limit (src/lib/auth/bodyLimit.ts) goes back the
+// same way, with `too-large`, before anything reads it: so nothing of it travels back, not
+// even `next` or the reset link (which stays in the reset page's cookie if a try left it
+// there). A script's post gets a JSON 413.
 
 export const EXPIRED_FORM = 'expired-form';
+export const FORM_TOO_LARGE = 'too-large';
 
 /** Each sign-in endpoint, the page its form is on, and the query key that page reads. */
 const SIGN_IN_FORMS: ReadonlyMap<string, { page: string; key: 'error' | 'status' }> = new Map([
@@ -53,6 +59,26 @@ function postedResetToken(endpoint: string, fields: URLSearchParams): string | n
 }
 
 /**
+ * True for a sign-in screen's own form post: one of the three endpoints, urlencoded, and no
+ * token header (a script sends one; a form cannot). Reads nothing of the body.
+ */
+function isSignInFormPost(request: Request, pathname: string): boolean {
+  if (!SIGN_IN_FORMS.has(pathname) || request.headers.has(CSRF_HEADER_NAME)) return false;
+  const type = (request.headers.get('content-type') ?? '').toLowerCase();
+  return type.includes('application/x-www-form-urlencoded');
+}
+
+/**
+ * The 303 for a sign-in screen's form post whose body is over the pre-auth limit, or null
+ * when the request is anything else. Reads nothing of the body.
+ */
+export function tooLargeSignInForm(request: Request, pathname: string): Response | null {
+  const form = SIGN_IN_FORMS.get(pathname);
+  if (!form || !isSignInFormPost(request, pathname)) return null;
+  return seeOther(`${form.page}?${new URLSearchParams({ [form.key]: FORM_TOO_LARGE })}`);
+}
+
+/**
  * The 303 for a sign-in screen's form post that failed the CSRF check, or null when the
  * request is anything else (another path, JSON, a script sending the token header).
  */
@@ -60,9 +86,7 @@ export async function expiredSignInForm(
   request: Request,
   pathname: string,
 ): Promise<Response | null> {
-  if (!SIGN_IN_FORMS.has(pathname) || request.headers.has(CSRF_HEADER_NAME)) return null;
-  const type = (request.headers.get('content-type') ?? '').toLowerCase();
-  if (!type.includes('application/x-www-form-urlencoded')) return null;
+  if (!isSignInFormPost(request, pathname)) return null;
   let fields: URLSearchParams;
   try {
     fields = new URLSearchParams(await request.clone().text());

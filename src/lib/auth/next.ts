@@ -26,8 +26,11 @@ const UNSAFE = /[\\\u0000-\u001f\u007f]/;
 /** A placeholder origin to resolve against; `.invalid` never resolves (RFC 2606). */
 const BASE = 'https://next.invalid';
 
+/** The longest `next` kept, before and after resolving. */
+const MAX_NEXT = 2048;
+
 export function safeNext(value: unknown): string {
-  if (typeof value !== 'string' || value.length > 2048) return DEFAULT_NEXT;
+  if (typeof value !== 'string' || value.length > MAX_NEXT) return DEFAULT_NEXT;
   if (!value.startsWith('/') || value.startsWith('//') || UNSAFE.test(value)) {
     return DEFAULT_NEXT;
   }
@@ -43,7 +46,11 @@ export function safeNext(value: unknown): string {
   }
   const resolved = `${url.pathname}${url.search}${url.hash}`;
   // Belt and braces: what goes into a Location header is ASCII, printable, and still a
-  // single-slash path (a resolved `//` would be protocol-relative).
-  if (!/^\/(?!\/)[\x21-\x7e]*$/.test(resolved)) return DEFAULT_NEXT;
+  // single-slash path (a resolved `//` would be protocol-relative); and no longer than what
+  // was accepted, since percent-encoding can make it up to nine times longer (the sign-in
+  // form carries it, under the pre-auth body limit, src/lib/auth/bodyLimit.ts).
+  if (resolved.length > MAX_NEXT || !/^\/(?!\/)[\x21-\x7e]*$/.test(resolved)) {
+    return DEFAULT_NEXT;
+  }
   return resolved;
 }

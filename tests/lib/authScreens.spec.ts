@@ -18,7 +18,7 @@ import {
   resetLimitRules,
   resetPageUrl,
 } from '@/lib/auth/recovery';
-import { EXPIRED_FORM, expiredFormLocation } from '@/lib/auth/expiredForm';
+import { EXPIRED_FORM, FORM_TOO_LARGE, expiredFormLocation } from '@/lib/auth/expiredForm';
 import {
   RESET_TOKEN_COOKIE,
   dropResetToken,
@@ -89,6 +89,10 @@ describe('safeNext: where a sign-in may send the browser', () => {
 
   it('percent-encodes what is not ASCII, so a Location header can carry it', () => {
     expect(safeNext('/admin/日')).toBe('/admin/%E6%97%A5');
+    // Up to nine times longer once encoded: past 2,048 characters it is not kept (the sign-in
+    // form carries it, under the pre-auth body limit).
+    expect(safeNext(`/admin/${'日'.repeat(226)}`).length).toBe(7 + 226 * 9);
+    expect(safeNext(`/admin/${'日'.repeat(227)}`)).toBe(DEFAULT_NEXT);
     expect(safeNext('/admin/x?q=日 a"<>#frag 日')).toBe(
       '/admin/x?q=%E6%97%A5%20a%22%3C%3E#frag%20%E6%97%A5',
     );
@@ -218,8 +222,11 @@ describe('the outcome codes the pages render', () => {
       'unavailable',
     ]);
     for (const code of codes) expect(messageFor(RESET_MESSAGES, code), code).not.toBeNull();
-    // Plus the middleware's, for a form post that failed the token check (expiredForm.ts).
-    expect(Object.keys(RESET_MESSAGES).sort()).toEqual([...codes, EXPIRED_FORM].sort());
+    // Plus the middleware's, for a form post that failed the token check or was over the
+    // pre-auth body limit (expiredForm.ts).
+    expect(Object.keys(RESET_MESSAGES).sort()).toEqual(
+      [...codes, EXPIRED_FORM, FORM_TOO_LARGE].sort(),
+    );
     // The link is gone after these: the page offers a new one instead of the form.
     expect([...RESET_LINK_SPENT].sort()).toEqual(['expired', 'interrupted', 'refused']);
   });
@@ -260,6 +267,12 @@ describe('the outcome codes the pages render', () => {
       });
     }
     expect(RESET_LINK_SPENT.has(EXPIRED_FORM)).toBe(false);
+    for (const table of [LOGIN_MESSAGES, FORGOT_MESSAGES, RESET_MESSAGES]) {
+      expect(messageFor(table, FORM_TOO_LARGE)).toEqual({
+        kind: 'error',
+        text: 'That form was too large to send. Please try again.',
+      });
+    }
     // Each page reads the code under its own key (forgot's outcomes are a `status`).
     for (const [endpoint, page] of [
       ['/api/admin/auth/login', '/admin/login?error='],
