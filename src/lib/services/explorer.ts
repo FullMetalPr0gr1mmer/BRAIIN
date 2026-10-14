@@ -3,6 +3,7 @@ import type { VideoClip } from '@schemas/media';
 import { EXPLORER_DISCIPLINE_TOKEN } from '@schemas/sections';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import type { ImageRef } from '@/lib/media/resolve';
+import { SERVICE_EXPLORER_COPY } from '@/lib/sections/copy/serviceExplorer';
 import { FALLBACK_DISCIPLINES, serviceCount } from './cards';
 
 // The /services explorer (Round 2, section type `serviceExplorer`) as the component renders
@@ -12,6 +13,7 @@ import { FALLBACK_DISCIPLINES, serviceCount } from './cards';
 //
 // A panel's id IS the discipline's slug: `/services#events` is the contract the home cards
 // (S2 `disciplineHref`), the service pages' crumb and the retired-slug 301s all link to.
+// Its copy is src/lib/sections/copy/serviceExplorer.ts.
 
 /** What the explorer reads — getPublishedDisciplines()'s `Discipline` satisfies it. */
 export interface ExplorerDisciplineInput {
@@ -27,39 +29,6 @@ export interface ExplorerDisciplineInput {
     clip: VideoClip | null;
   }[];
 }
-
-/** The design's copy (services.html `x.*`), and the labels the design never showed. */
-export const EXPLORER_COPY: Record<
-  Locale,
-  {
-    inquire: string;
-    start: string;
-    /** The tablist's name — the pills are the only thing that names the set. */
-    tabs: string;
-    /** The explorer region's name (it has no visible heading of its own). */
-    region: string;
-    /** Screen-reader prefixes for the prev/next links, whose visible text is just a name. */
-    prev: string;
-    next: string;
-  }
-> = {
-  en: {
-    inquire: 'Inquire',
-    start: `Start your ${EXPLORER_DISCIPLINE_TOKEN} project`,
-    tabs: 'Disciplines',
-    region: 'Services by discipline',
-    prev: 'Previous discipline: ',
-    next: 'Next discipline: ',
-  },
-  ar: {
-    inquire: 'اطلب',
-    start: `ابدأ مشروع ${EXPLORER_DISCIPLINE_TOKEN}`,
-    tabs: 'التخصصات',
-    region: 'الخدمات حسب التخصص',
-    prev: 'التخصص السابق: ',
-    next: 'التخصص التالي: ',
-  },
-};
 
 export interface ExplorerService {
   /** "01"… its place in the discipline. */
@@ -105,7 +74,9 @@ export function wrapIndex(i: number, step: number, count: number): number {
 
 /** A label override or the design's, with the discipline's name in place of the token. */
 export function startLabelFor(name: string, locale: Locale, override?: string): string {
-  return (override || EXPLORER_COPY[locale].start).split(EXPLORER_DISCIPLINE_TOKEN).join(name);
+  return (override || SERVICE_EXPLORER_COPY.startLabel[locale])
+    .split(EXPLORER_DISCIPLINE_TOKEN)
+    .join(name);
 }
 
 export function toExplorerPanels(
@@ -113,7 +84,7 @@ export function toExplorerPanels(
   locale: Locale,
   labels: { inquire?: string | undefined; start?: string | undefined } = {},
 ): ExplorerPanel[] {
-  const inquire = labels.inquire || EXPLORER_COPY[locale].inquire;
+  const inquire = labels.inquire || SERVICE_EXPLORER_COPY.inquireLabel[locale];
   const names = disciplines.map((d) => pickLocale(d.name, locale, d.slug));
   const total = String(disciplines.length).padStart(2, '0');
   return disciplines.map((d, i) => {

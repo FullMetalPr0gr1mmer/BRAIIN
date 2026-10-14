@@ -3,6 +3,7 @@ import type { Locale } from '@schemas/primitives';
 import type { Accent } from '@schemas/media';
 import type { LocalizedText, StatisticRow } from '@schemas/content';
 import { pickLocale } from '@/lib/i18n';
+import { STATISTICS_COPY } from '@/lib/sections/copy/statistics';
 import AccentText from '@/components/ui/AccentText.astro';
 
 // Statistics as the UI v2 bands (the mockup's `.nums`, `.reach` and `.proof .stats`):
@@ -48,55 +49,22 @@ const {
   bare = false,
 } = Astro.props;
 
-// Built-in copy, verbatim from the design (overridable per field from the CMS).
-const DEFAULTS: Record<
-  Variant,
-  Record<Locale, { tag: string; heading?: string; text?: string }>
-> = {
-  band: {
-    en: {
-      tag: 'In numbers',
-      heading: 'The work, counted',
-      text: 'Every number here is a brief someone trusted us with, and a result they could measure.',
-    },
-    ar: {
-      tag: 'بالأرقام',
-      heading: 'الشغل بالأرقام',
-      text: 'كل رقم هنا بريف أحد وثق فينا فيه، ونتيجة قدر يقيسها.',
-    },
-  },
-  reach: {
-    en: {
-      tag: 'Our reach',
-      heading: 'Campaigns that run end to end',
-      text: 'We started with minds built to plan, make, and run integrated campaigns. From brand strategy and production to media and live events, we build communication that feels new, for clients who expect it to deliver.',
-    },
-    ar: {
-      tag: 'نطاق تأثيرنا',
-      heading: 'حملات متكاملة من البداية للنهاية',
-      text: 'انطلقنا بعقول مبنية للتخطيط والتنفيذ وإدارة الحملات المتكاملة. من استراتيجية العلامة والإنتاج إلى الإعلام والفعاليات الحيّة، نبني تواصلاً يبدو جديداً، لعملاء يتوقعون منه نتائج.',
-    },
-  },
-  proof: {
-    en: { tag: 'In numbers' },
-    ar: { tag: 'بالأرقام' },
-  },
-};
-const DEFAULT_ACCENT: Record<Variant, Accent | undefined> = {
-  band: { en: { from: 2 }, ar: { from: 1 } },
-  reach: { en: { from: 3 }, ar: { from: 2 } },
-  proof: undefined,
-};
-
-const d = DEFAULTS[variant][locale];
-const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : d.tag;
-const heading = Astro.props.heading ? pickLocale(Astro.props.heading, locale) : d.heading;
+// Built-in copy, verbatim from the design (src/lib/sections/copy/statistics.ts), overridable
+// per field from the CMS. `proof` has a tag only.
+const copy: {
+  tag: LocalizedText;
+  heading?: LocalizedText;
+  accent?: Accent;
+  text?: LocalizedText;
+} = STATISTICS_COPY[variant];
+const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : copy.tag[locale];
+const heading = Astro.props.heading
+  ? pickLocale(Astro.props.heading, locale)
+  : copy.heading?.[locale];
 // An authored heading keeps only an authored accent (the default's word range would land
 // on the wrong words).
-const accent = Astro.props.heading
-  ? Astro.props.accent
-  : (Astro.props.accent ?? DEFAULT_ACCENT[variant]);
-const text = Astro.props.text ? pickLocale(Astro.props.text, locale) : d.text;
+const accent = Astro.props.heading ? Astro.props.accent : (Astro.props.accent ?? copy.accent);
+const text = Astro.props.text ? pickLocale(Astro.props.text, locale) : copy.text?.[locale];
 
 const cells = items.map((s) => {
   const n = s.value_numeric;

@@ -37,21 +37,24 @@ export default defineConfig({
     },
   },
   test: {
-    // Two projects. `unit` is every spec, as before. `astro` renders the admin's server
-    // primitives (.astro, Admin v2 F4b) through Astro's container API, which needs Astro's
-    // own Vite plugins: vitest.astro.config.ts. Its specs live in tests/astro/ and nowhere
-    // else, so the unit project leaves that folder alone.
+    environment: 'node',
+    // Three projects. `unit` is everything that needs no Astro compiler. Two run on Astro's
+    // own Vite plugins, which this file cannot be, and render .astro files through Astro's
+    // container API: `astro` (vitest.astro.config.ts, Admin v2 F4b) the admin's server
+    // primitives, in tests/astro/; `render` (vitest.render.config.ts, Admin v2 F6) the
+    // public components, held to their served bytes, in tests/render/. The unit project
+    // leaves both folders alone.
     projects: [
       {
         extends: true,
         test: {
           name: 'unit',
-          environment: 'node',
           include: ['tests/**/*.spec.ts'],
-          exclude: [...configDefaults.exclude, 'tests/astro/**'],
+          exclude: [...configDefaults.exclude, 'tests/astro/**', 'tests/render/**'],
         },
       },
       './vitest.astro.config.ts',
+      './vitest.render.config.ts',
     ],
     coverage: {
       // Headline (CLAUDE.md §9): 100% branch on authz + schema modules.

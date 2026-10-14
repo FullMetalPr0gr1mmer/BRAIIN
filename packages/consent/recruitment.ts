@@ -60,8 +60,11 @@ export const RECRUITMENT_CONSENT: Record<'en' | 'ar', RecruitmentConsentCopy> = 
   },
 };
 
-/** The consent copy for a locale with the brand (or legal name) filled in. */
+/**
+ * The consent copy for a locale with the brand (or legal name) filled in, as written: a
+ * function replacement, so a name is never read as a `$&`-style replacement pattern.
+ */
 export function recruitmentConsent(locale: 'en' | 'ar', brand: string): RecruitmentConsentCopy {
   const c = RECRUITMENT_CONSENT[locale];
-  return { ...c, application: c.application.replaceAll('{brand}', brand) };
+  return { ...c, application: c.application.replaceAll('{brand}', () => brand) };
 }
