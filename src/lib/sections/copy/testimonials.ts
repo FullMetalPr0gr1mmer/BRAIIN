@@ -2,7 +2,7 @@ import type { TestimonialsSectionContent } from '@schemas/sections';
 import type { BuiltIn } from './text';
 
 // The client quotes carousel (Testimonials.astro: the `testimonials` type, and the quotes
-// inside Our Work's `proof` band), the design's copy: "In <em>their words</em>" /
+// inside Our Work's `proof` band), the design's copy: "In their <em>words</em>" /
 // "بكلماتهم <em>هم</em>". Both layouts share it. The quotes are the testimonials table's.
 
 export const TESTIMONIALS_COPY: BuiltIn<TestimonialsSectionContent, 'tag' | 'heading' | 'accent'> =
