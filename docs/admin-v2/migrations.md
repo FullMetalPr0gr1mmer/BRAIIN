@@ -43,7 +43,7 @@ the row is true when the PR lands and nothing here is edited after a merge.
 | 0040 | (released) | unused, as 0039 | 1 |
 | 0042 | (released) | unused: F8 (0044) and U3 (0045) merged first, so U16 moved to 0046 | 1 |
 | 0043 | (released) | unused, as 0042: C13 moved to 0047 | 1 |
-| 0046 | U16 | the help centre: `help_articles` | 1 |
+| 0046 | U16 | `0046_help_centre.sql`: the help centre: `help_articles` (typed blocks, never HTML; staff read their tenant's guides, nothing writes but the migrations and the service role), `help_search` (a contains search, Arabic folded with `app.normalize_ar_q` as §8's contains searches are; up to 100 guides, filtered by role in the Worker), the guides (`app.help_article_set()`) and their seed into every tenant and, by a trigger on `tenants`, each new one. Renumbered from 0042 | 1 |
 | 0047 | (released) | unused: U16 (0046) and then H9 (0048) merge before C13, and once 0048 is on `main` a 0047 would sort below its highest, so C13 moved to 0049 | 1 |
 | 0048 | H9 | the lead-notification trigger restored and hardened: pg_net created where missing; `app.tg_notify_lead()` re-created SECURITY DEFINER with an empty search_path, posting to the https URL in Vault (`notify_lead_url`, no longer `site_settings`) with a timestamp and an HMAC signature instead of the secret, and no catchable error failing an insert (a lead it cannot announce is a WARNING and a `system_logs` row); `leads_notify` created on every database (0010 created it only where pg_net already was, and production's was not); `public.lead_notify_misses()` for the daily cron (`0048_lead_notify_trigger.sql`) | hotfix |
 | 0049 | C13 | lead attribution capture (built, held for the privacy notice, O-11); moved from 0047 | 1 |

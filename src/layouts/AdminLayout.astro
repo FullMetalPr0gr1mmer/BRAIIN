@@ -11,6 +11,7 @@ import Topbar from '@/components/admin/ui/Topbar.astro';
 import PageHead from '@/components/admin/ui/PageHead.astro';
 import AdminChrome from '@/components/admin/islands/AdminChrome';
 import { paletteGroupsFor } from '@/lib/admin/paletteSources';
+import { pageGuideFor } from '@/lib/admin/help/pageGuides';
 import type { AdminStylesheet } from '@/lib/admin/stylesheets';
 
 // Tier C shell (CLAUDE.md §2): on-demand, `private, no-store` (set in middleware),
@@ -22,7 +23,8 @@ import type { AdminStylesheet } from '@/lib/admin/stylesheets';
 // Admin v2 (F2): the prototype's shell — a midnight sidebar (a popover below 900px), a
 // white topbar, and a page head with the area's tabs (docs/admin-v2/ui.md §2.2, §3).
 // F8 adds the personal layer: the environment pill, the bell and the account chip, whose
-// drawers the chrome island opens (each a link to its no-JS page as well).
+// drawers the chrome island opens (each a link to its no-JS page as well). U16 adds the
+// help centre: the topbar's "?" and, where the screen has one, the page head's "Guide".
 
 interface Props {
   title: string;
@@ -53,6 +55,8 @@ const brand = (await getIdentity(Astro.locals)).brandName.en;
 const app = layout === 'app' && session !== null;
 const section = currentLink(nav, path);
 const tab = section ? currentTab(section, path) : null;
+// This screen's guide for the role (U16): known in code, so it costs no read.
+const guide = app && session ? pageGuideFor(path, session.role) : null;
 
 const shell: ShellState =
   app && session && supabase
@@ -126,6 +130,7 @@ const account = session ? accountViewFor(session, shell.displayName) : null;
             tabs={section?.tabs}
             currentTab={tab}
             area={section?.label}
+            guide={guide}
           >
             <slot name="actions" slot="actions" />
           </PageHead>
@@ -142,9 +147,10 @@ const account = session ? accountViewFor(session, shell.displayName) : null;
     <div id="admin-toasts" class="toasts" aria-live="polite"></div>
 
     {
-      /* The shell's one island: the command palette (F3) and the bell and account drawers
-         (F8). `client:load`, because ⌘K must work the moment the page is usable. Its data
-         is built here, on the server: no capability map ships to the browser. */
+      /* The shell's one island: the command palette (F3), the bell and account drawers
+         (F8) and the help drawer (U16). `client:load`, because ⌘K must work the moment
+         the page is usable. Its data is built here, on the server: no capability map
+         ships to the browser. */
       app && session && account && (
         <AdminChrome client:load palette={paletteGroupsFor(session.role)} account={account} />
       )

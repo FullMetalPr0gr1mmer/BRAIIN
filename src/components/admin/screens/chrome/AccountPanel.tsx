@@ -213,7 +213,7 @@ export default function AccountPanel({
               aria-invalid={errors.display_name ? 'true' : undefined}
               aria-describedby={describedBy('display_name', true)}
             />,
-            'Shown in the sidebar and beside your changes. Leave it empty to show your email.',
+            'Shown at the bottom of the menu and, to Admins, in Users & roles. Leave it empty to show your email.',
           )}
           <button type="submit" data-variant="primary" disabled={busy === 'name'}>
             Save name

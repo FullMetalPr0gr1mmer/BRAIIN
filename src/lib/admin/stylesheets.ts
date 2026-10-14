@@ -8,6 +8,6 @@
 // fonts, the chrome, the design system's hooks (docs/admin-v2/ui.md §1.2, the bars among
 // them) and anything two screens share stay in admin.css.
 
-export const ADMIN_STYLESHEETS = ['login.css', 'personal.css', 'search.css'] as const;
+export const ADMIN_STYLESHEETS = ['help.css', 'login.css', 'personal.css', 'search.css'] as const;
 
 export type AdminStylesheet = (typeof ADMIN_STYLESHEETS)[number];

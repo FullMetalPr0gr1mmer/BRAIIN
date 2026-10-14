@@ -83,6 +83,13 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   // bell, each the drawer's twin. Every member has an account and a bell.
   { href: '/admin/account', label: 'Your account', caps: [] },
   { href: '/admin/notifications', label: 'Notifications', caps: [] },
+  // The help centre (Admin v2 U16): the no-JS twin of the "?" drawer, every member's. Its
+  // four views: a screen's guides first, a search, a guide, and a guide's Arabic text (RTL).
+  // The guide is one every role may read (supabase/migrations/0046_help_centre.sql).
+  { href: '/admin/help?screen=/admin', label: 'Help centre', caps: [] },
+  { href: '/admin/help?q=password', label: 'Help search', caps: [] },
+  { href: '/admin/help?guide=finding-your-way', label: 'A help guide', caps: [] },
+  { href: '/admin/help?guide=finding-your-way&lang=ar', label: 'A help guide in Arabic', caps: [] },
 ];
 
 /** Every screen of the menu: sidebar links, then their tabs, each once. */
@@ -138,6 +145,38 @@ export function sweepRoutes(role: Role, exists: Exists = existsSync): SweepRoute
     }
   }
   return routes;
+}
+
+/**
+ * What names a swept route in a test title: the URL visited, except an edit screen, whose
+ * URL holds `[id]` until run time (its pattern then). Never the pattern alone: the help
+ * page's four views share one pattern, and Playwright refuses a repeated title when it
+ * collects the suites, which aborts the whole e2e job before any test runs.
+ */
+export function routeKey(route: SweepRoute): string {
+  return route.kind === 'edit' ? route.pattern : route.path;
+}
+
+/** The design capture's viewports (tests/admin/capture.e2e.ts): a laptop and a phone. */
+export const CAPTURE_VIEWPORTS = [
+  { tag: 'd', width: 1440, height: 900 },
+  { tag: 'm', width: 390, height: 844 },
+] as const;
+
+/** What the capture takes for a role: Admin every screen, the others their dashboard. */
+export function captureRoutes(role: Role, exists: Exists = existsSync): SweepRoute[] {
+  const routes = sweepRoutes(role, exists);
+  return role === 'admin' ? routes : routes.slice(0, 1);
+}
+
+/** A route key as a file name: every run of `/ ? = & [ ]` is one underscore. */
+export function captureSlug(key: string): string {
+  return key.replace(/[/?=&[\]]+/g, '_').replace(/^_|_$/g, '') || 'admin';
+}
+
+/** A capture's test title, and its picture's file name. */
+export function captureName(role: Role, viewport: string, route: SweepRoute): string {
+  return `admin-${role}-${viewport}-${captureSlug(routeKey(route))}`;
 }
 
 /** The sidebar the role should see, as the server renders it: group titles and links. */

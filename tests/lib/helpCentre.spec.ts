@@ -1,0 +1,933 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+import type { APIRoute } from 'astro';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
+import { CAPABILITIES, ROLE_CAPS } from '@/lib/authz/matrix';
+import { reachableHrefs } from '@/lib/admin/nav';
+import {
+  HELP_CAP,
+  HELP_LIMITS,
+  HELP_SCREEN,
+  HELP_SLUG,
+  HELP_TAG,
+  HelpArticleSeedSchema,
+  HelpBodySchema,
+  type HelpArticleRow,
+} from '@schemas/help';
+import {
+  cleanHelpQuery,
+  guideHref,
+  helpHrefFor,
+  isOnScreen,
+  loadHelpArticle,
+  loadHelpIndex,
+  MAX_GUIDES,
+  MAX_RESULTS,
+  mayRead,
+  PAGE_GUIDES,
+  pageGuideFor,
+  relatedTo,
+  screenOf,
+  searchHelp,
+  type HelpGuide,
+} from '@/lib/admin/help';
+import HelpArticleBody from '@/components/admin/screens/help/HelpArticleBody';
+import HelpGuideList from '@/components/admin/screens/help/HelpGuideList';
+import { EXTRA_LINKS, pageFileFor } from '../admin/routes';
+
+const { logs } = vi.hoisted(() => ({ logs: [] as unknown[] }));
+vi.mock('@/lib/data/systemLog', () => ({
+  writeSystemLog: async (entry: unknown) => {
+    logs.push(entry);
+    return true;
+  },
+}));
+
+// The help centre (Admin v2 U16). Three things are held here:
+//   1. The guides the migrations seed (app.help_article_set(), parsed out of the LAST
+//      migration that defines it) keep the rules no CHECK can see: the schema the Worker
+//      reads with, every capability one ROLE_CAPS names, every screen an admin page, each
+//      reader of a guide able to open one of its screens, Arabic block for block with the
+//      English, no dash the copy rules forbid (P-12), no brand spelled (CLAUDE.md §1).
+//   2. Which guides each role is shown (the server's filter, from ROLE_CAPS), pinned role by
+//      role, and the pure rules the drawer shares (the screen match, related, the query).
+//   3. The loaders and routes: tenant-scoped, the role's guides only, a refused row logged.
+// RLS and the CHECKs themselves are proven in supabase/tests/help_centre.test.sql.
+
+// ── 1. The set ──────────────────────────────────────────────────────────────────────────
+
+const MIGRATIONS = 'supabase/migrations';
+
+function articleSet(): { file: string; set: unknown[] } {
+  let found: { file: string; set: unknown[] } | null = null;
+  for (const file of readdirSync(MIGRATIONS)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()) {
+    const sql = readFileSync(`${MIGRATIONS}/${file}`, 'utf8');
+    if (!/create or replace function app\.help_article_set\(\)/.test(sql)) continue;
+    const literal = /\$help\$([\s\S]*?)\$help\$/.exec(sql)?.[1];
+    if (literal === undefined)
+      throw new Error(`${file}: app.help_article_set() has no $help$ literal`);
+    found = { file, set: JSON.parse(literal) as unknown[] };
+  }
+  if (!found) throw new Error('no migration defines app.help_article_set()');
+  return found;
+}
+
+const { file: SET_FILE, set: RAW_SET } = articleSet();
+const SET: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
+
+/** Every text of a guide, in one language or both. */
+function textsOf(article: HelpArticleRow, lang?: 'en' | 'ar'): string[] {
+  const langs = lang ? [lang] : (['en', 'ar'] as const);
+  return [
+    ...(lang === 'ar' ? [] : [article.title]),
+    ...(lang === 'en' ? [] : [article.title_ar]),
+    ...langs.flatMap((l) =>
+      article.body[l].flatMap((block) => (Array.isArray(block.x) ? block.x : [block.x])),
+    ),
+  ];
+}
+
+/** The screens every member reaches outside the menu: the sweep's extras and the help page. */
+const MEMBER_SCREENS = new Set([
+  ...EXTRA_LINKS.map((link) => link.href.split('?')[0] ?? link.href),
+  '/admin/help',
+]);
+const reaches = (role: Role, screen: string) =>
+  MEMBER_SCREENS.has(screen) || reachableHrefs(role).includes(screen);
+
+describe(`the guides the migrations seed (${SET_FILE})`, () => {
+  it('is read from the migration that defines the set last', () => {
+    expect(SET_FILE).toMatch(/^\d{4}_[a-z0-9_]+\.sql$/);
+    expect(SET.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('the set stays under the read cap, so the role filter always sees every guide', () => {
+    // The list and the search read at most MAX_GUIDES rows and filter them by role after;
+    // a set past the cap would let other roles' guides push a role's own out of the read.
+    expect(SET.length).toBeLessThanOrEqual(MAX_GUIDES);
+  });
+
+  it('every guide keeps the schema the Worker reads with (strict: no unknown key)', () => {
+    for (const raw of RAW_SET) expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
+  });
+
+  it('slugs and places in the list are unique', () => {
+    expect(new Set(SET.map((a) => a.slug)).size).toBe(SET.length);
+    expect(new Set(SET.map((a) => a.sort_order)).size).toBe(SET.length);
+  });
+
+  it('every capability a guide names is one ROLE_CAPS knows', () => {
+    const known = new Set<string>(CAPABILITIES);
+    for (const article of SET) {
+      for (const cap of article.caps) expect(known.has(cap), `${article.slug}: ${cap}`).toBe(true);
+    }
+  });
+
+  it('every screen a guide names is an admin page', () => {
+    for (const article of SET) {
+      for (const screen of article.screens) {
+        expect(() => pageFileFor(screen), `${article.slug}: ${screen}`).not.toThrow();
+      }
+    }
+  });
+
+  it('nobody is sent to a screen they cannot open: each reader reaches one of its screens', () => {
+    for (const article of SET) {
+      for (const role of ROLES.filter((r) => mayRead(r, article.caps))) {
+        expect(
+          article.screens.some((screen) => reaches(role, screen)),
+          `${role} reads ${article.slug} but opens none of ${article.screens.join(', ')}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('every guide is read by some role, and Admin reads them all', () => {
+    for (const article of SET) {
+      expect(
+        ROLES.some((role) => mayRead(role, article.caps)),
+        article.slug,
+      ).toBe(true);
+      expect(mayRead('admin', article.caps), article.slug).toBe(true);
+    }
+  });
+
+  it('the Arabic follows the English block for block (§8: both languages, first class)', () => {
+    for (const article of SET) {
+      const kinds = (lang: 'en' | 'ar') =>
+        article.body[lang].map((b) => (b.t === 'ol' ? `ol${b.x.length}` : b.t)).join(',');
+      expect(kinds('ar'), article.slug).toBe(kinds('en'));
+      expect(
+        textsOf(article, 'ar').every((t) => /[؀-ۿ]/.test(t)),
+        article.slug,
+      ).toBe(true);
+    }
+  });
+
+  it('the copy keeps the client’s rules: no em or en dash, no brand spelled (P-12, §1)', () => {
+    for (const article of SET) {
+      for (const text of textsOf(article)) {
+        expect(text, article.slug).not.toMatch(/[–—]/);
+        expect(text.toLowerCase(), article.slug).not.toMatch(/braii?n|statii?on/);
+      }
+    }
+  });
+
+  it('no text holds markup or a control character (the CHECK refuses it too)', () => {
+    for (const article of SET) {
+      for (const text of textsOf(article))
+        expect(text, article.slug).not.toMatch(/[<>\u0000-\u001f]/);
+    }
+  });
+
+  it('the roles guide promises no instant sign-out: an issued sign-in lasts up to an hour', () => {
+    // CLAUDE.md §2 (session invalidation): the admin turns a changed or switched-off
+    // person away at their next request, but an access token already issued keeps its
+    // role for RLS until it expires (an hour); only the tables with a live check (leads
+    // and the CRM through app.live_role(), job applications through app.is_live_admin())
+    // close at once. The guide an Admin reads before removing someone says exactly that.
+    const roles = SET.find((a) => a.slug === 'roles-and-access')!;
+    const en = textsOf(roles, 'en').join('\n');
+    const ar = textsOf(roles, 'ar').join('\n');
+    for (const text of textsOf(roles, 'en')) {
+      expect(text).not.toMatch(
+        /\bsign\w*\b[^.]*\bout\b[^.]*\b(at once|immediately|straight away)\b/i,
+      );
+    }
+    expect(ar).not.toContain('يسجّل خروجه فورًا');
+    expect(en).toContain('a sign-in already handed out lasts up to an hour');
+    expect(en).toContain('Leads and job applications check the person');
+    expect(ar).toContain('تبقى صالحة حتى ساعة');
+    expect(ar).toContain('العملاء المحتملون وطلبات التوظيف');
+  });
+
+  it('the dollar-quote cannot end early: no text holds the literal’s tag', () => {
+    for (const article of SET) {
+      for (const text of textsOf(article)) expect(text.includes('$help$')).toBe(false);
+    }
+  });
+});
+
+// ── 1c. The guides say only what the admin does ──────────────────────────────────────────
+// Each claim a guide makes about the admin is held to the code that makes it true (U16's
+// pre-merge review), so a change to that code fails here until the guide is rewritten.
+
+describe('the guides say only what the admin does', () => {
+  const guide = (slug: string, lang: 'en' | 'ar') => {
+    const article = SET.find((a) => a.slug === slug);
+    if (!article) throw new Error(`no guide ${slug}`);
+    return textsOf(article, lang).join('\n');
+  };
+  const everything = (lang: 'en' | 'ar') => SET.map((a) => textsOf(a, lang).join('\n')).join('\n');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  /** Every .ts, .tsx and .astro file below a directory, as paths from the repository root. */
+  const codeIn = (dir: string) =>
+    (readdirSync(dir, { recursive: true, encoding: 'utf8' }) as string[])
+      .map((f) => f.replaceAll('\\', '/'))
+      .filter((f) => /\.(ts|tsx|astro)$/.test(f))
+      .map((f) => `${dir}/${f}`);
+
+  it('the activity log shows when, the role and the action, never who: no guide says who', () => {
+    // The screen's columns (src/pages/admin/audit.astro): the acting account is stored with
+    // each row, never shown.
+    const audit = source('src/pages/admin/audit.astro');
+    expect(audit).toContain("{ key: 'actor_role', label: 'Role' }");
+    expect(audit).not.toMatch(/actor_id|display_name|actor_name/);
+    expect(everything('en')).not.toMatch(/\bwho (looked|did|changed)\b|with your name/i);
+    for (const phrase of ['من اطلع', 'من فعل', 'من غيّر', 'باسمك']) {
+      expect(everything('ar')).not.toContain(phrase);
+    }
+    expect(guide('site-health-and-logs', 'en')).toContain('each against the account that made it');
+    expect(guide('personal-data', 'en')).toContain('recorded against your account, with the time');
+  });
+
+  it('SEO is not told it edits media details: the media editor needs media.write at full', () => {
+    expect(ROLE_CAPS.seo['media.write']).toBe('meta');
+    expect(source('src/lib/admin/resources/media.ts')).toContain("writeCap: 'media.write'");
+    // The meta-only route (/api/admin/media/meta/[id]) has no screen calling it yet.
+    for (const file of [...codeIn('src/components'), ...codeIn('src/lib/admin')]) {
+      expect(source(file), file).not.toMatch(/media\/meta/);
+    }
+    expect(everything('en')).not.toMatch(/edit media details|SEO role can change an asset/i);
+    expect(everything('ar')).not.toContain('وتعديل بيانات الوسائط');
+    expect(everything('ar')).not.toContain('يستطيع دور SEO تغيير بيانات الملف');
+  });
+
+  it('the help button is drawn as an i in a circle, and the guides call it that', () => {
+    expect(source('src/components/admin/ui/Topbar.astro')).toMatch(
+      /data-open="help" aria-label="Help centre">\s*<Icon name="info"/,
+    );
+    expect(everything('en')).not.toMatch(/question mark/i);
+    expect(everything('ar')).not.toContain('علامة الاستفهام');
+    expect(guide('finding-your-way', 'en')).toContain(
+      'The Help centre button at the top, an i in a circle',
+    );
+  });
+
+  it('a display name is said to show where it shows: the menu, and Users & roles', () => {
+    // The sidebar's account chip and the users list render it; nothing shows it beside a
+    // person's work yet.
+    expect(source('src/components/admin/ui/Sidebar.astro')).toContain('shell.displayName');
+    expect(source('src/components/admin/screens/users/UsersPanel.tsx')).toContain(
+      'row.display_name',
+    );
+    expect(everything('en')).not.toMatch(/beside your work/i);
+    expect(everything('ar')).not.toContain('بجانب عملك');
+    expect(guide('your-account', 'en')).toContain('to Admins, in Users & roles');
+    const panel = source('src/components/admin/screens/chrome/AccountPanel.tsx');
+    expect(panel).not.toContain('beside your changes');
+    expect(panel).toContain('Shown at the bottom of the menu and, to Admins, in Users & roles.');
+  });
+
+  it('SEO defaults are not said to hold organisation details, which the site no longer reads', () => {
+    expect(source('src/lib/admin/ui/seo.ts')).toMatch(/name: 'organization',[\s\S]*?Deprecated/);
+    expect(everything('en')).not.toMatch(/organi[sz]ation/i);
+    expect(everything('ar')).not.toContain('المؤسسة');
+  });
+
+  it('maintenance takes effect within about a minute: the flag is read from KV', () => {
+    // KV is eventually consistent: a write reaches every location within about a minute.
+    expect(source('src/lib/http/maintenance.ts')).toContain(
+      "MAINTENANCE_KV_KEY = 'site:maintenance'",
+    );
+    const en = guide('maintenance-mode', 'en');
+    expect(en).toContain('within about a minute');
+    expect(en).not.toMatch(/at once/);
+    expect(guide('maintenance-mode', 'ar')).toContain('خلال دقيقة تقريبًا');
+  });
+
+  it('scheduling is described as the editors and the job do it', () => {
+    // The job runs every five minutes (0010) over app.publish_scheduled()'s tables, which are
+    // exactly the editors with a Scheduled for field.
+    expect(source('supabase/migrations/0010_launch_readiness.sql')).toMatch(
+      /cron\.schedule\('publish-scheduled', '\*\/5 \* \* \* \*'/,
+    );
+    // The editors that offer the status with no Scheduled for field: the guide names them.
+    const LABELS: Record<string, string | null> = {
+      team: 'Team',
+      statistics: 'Statistics',
+      certifications: 'Certifications',
+      aiQuestions: null, // the Style-Finder's editors: not this guide's screens
+      aiStyles: null,
+    };
+    const dir = 'src/lib/admin/ui';
+    const noTime = readdirSync(dir)
+      .filter((f) => f.endsWith('.ts') && f !== 'fields.ts')
+      .filter((f) => {
+        const ui = source(`${dir}/${f}`);
+        return ui.includes('STATUS_FIELD') && !ui.includes('SCHEDULED_FIELD');
+      })
+      .map((f) => f.replace(/\.ts$/, ''))
+      .sort();
+    expect(noTime).toEqual(Object.keys(LABELS).sort());
+    const en = guide('saving-and-publishing', 'en');
+    expect(en).toContain('within five minutes of its Scheduled for time');
+    for (const label of Object.values(LABELS)) if (label) expect(en).toContain(label);
+    expect(guide('saving-and-publishing', 'ar')).toContain('خلال خمس دقائق');
+  });
+
+  it('the placeholder tip names both boxes and the owner’s allowance', () => {
+    expect(source('src/lib/admin/ui/fields.ts')).toContain("label: 'Placeholder (design sample)'");
+    expect(source('src/lib/admin/ui/sections.ts')).toContain("label: 'Design placeholder'");
+    // 0027: the owner's audited allowance that lets flagged rows of a table go live.
+    const override = readdirSync(MIGRATIONS).find((f) => f.startsWith('0027_'));
+    expect(source(`${MIGRATIONS}/${override}`)).toContain('placeholder_live_override');
+    const en = guide('saving-and-publishing', 'en');
+    expect(en).toContain('Placeholder (design sample), or Design placeholder on a page section');
+    expect(en).toContain("unless the site's owner has allowed design samples");
+  });
+
+  it('the bell is described per role, as its sources decide', () => {
+    expect(source('src/lib/admin/notifications/scheduled.ts')).toContain(
+      "visible: (role) => can(role, 'services.write') === 'full' || can(role, 'blog.write') === 'full'",
+    );
+    expect(source('src/lib/admin/notifications/maintenance.ts')).toContain('visible: () => true');
+    const types = source('src/lib/admin/notifications/types.ts');
+    expect(types).toContain('WINDOW_DAYS = 14');
+    expect(types).toContain('MAX_ITEMS = 30');
+    const en = guide('your-account', 'en');
+    expect(en).toContain('up to 30 items from the last 14 days');
+    expect(en).toContain('going live today for the roles that write them');
+    expect(en).toContain('maintenance switched on or off for everyone');
+  });
+
+  it('the theme editor is not said to change the site: no public code reads a saved theme', () => {
+    // Applying a theme to the site is E4's; until then only the admin reads custom_themes.
+    for (const file of codeIn('src').filter((f) => !/\/admin(\/|$)/.test(f))) {
+      expect(source(file), file).not.toContain('custom_themes');
+    }
+    expect(guide('roles-and-access', 'en')).toContain(
+      'the theme editor (saved themes do not change the site yet)',
+    );
+  });
+
+  it('clearing the error log is described beside the nightly purge it runs alongside', () => {
+    expect(source('supabase/migrations/0008_retention_jobs.sql')).toContain(
+      "'system_logs_days')::int, 30)",
+    );
+    expect(source('src/components/admin/screens/logs/ReadOnlyPanel.tsx')).toContain(
+      'Clear logs older than 30 days',
+    );
+    const en = guide('site-health-and-logs', 'en');
+    expect(en).toContain('Every night, entries older than 30 days are deleted by themselves');
+    expect(en).toContain('Clear logs older than 30 days removes any still left');
+  });
+
+  it('the Arabic says what it means', () => {
+    expect(everything('ar')).not.toContain('شوركت');
+    expect(guide('seo-and-redirects', 'ar')).toContain('الروابط التي تمت مشاركتها');
+    expect(guide('personal-data', 'ar')).toContain('تُعرض بيانات شخص واحد');
+  });
+});
+
+describe('the schema and the migration state the same rules', () => {
+  const sql = readFileSync(`${MIGRATIONS}/0046_help_centre.sql`, 'utf8');
+  // PostgreSQL's regex has no `(?:` and needs no escaped `/`; otherwise the same text.
+  const asSql = (re: RegExp) => re.source.replaceAll('(?:', '(').replaceAll('\\/', '/');
+
+  it.each([
+    ['slug', HELP_SLUG],
+    ['tag', HELP_TAG],
+    ['screen', HELP_SCREEN],
+    ['capability', HELP_CAP],
+  ])('the %s pattern', (_name, re) => {
+    expect(sql).toContain(`'${asSql(re)}'`);
+  });
+
+  it('the limits', () => {
+    expect(sql).toContain(`app.help_text_ok(title, ${HELP_LIMITS.title})`);
+    expect(sql).toContain(
+      `case when v_kind = 'h' then ${HELP_LIMITS.title} else ${HELP_LIMITS.text} end`,
+    );
+    expect(sql).toContain(`app.help_text_ok(v_item #>> '{}', ${HELP_LIMITS.item})`);
+    expect(sql).toContain(`not between 1 and ${HELP_LIMITS.blocks}`);
+    expect(sql).toContain(`not between 1 and ${HELP_LIMITS.items}`);
+    expect(sql).toContain(`'^[a-z][a-z0-9-]{0,23}$', ${HELP_LIMITS.tags})`);
+    expect(sql).toContain(`'^/admin(/[a-z0-9-]+)*$', ${HELP_LIMITS.screens})`);
+    expect(sql).toContain(`'^[a-z][a-zA-Z]*\\.[a-z][a-zA-Z]*$', ${HELP_LIMITS.caps})`);
+    expect(sql).toContain(`minutes between 1 and ${HELP_LIMITS.minutes}`);
+    expect(sql).toContain(`char_length(p_q) > ${HELP_LIMITS.query}`);
+    // The search answers the list's cap, never the drawer's 20: the role filter comes first.
+    expect(sql).toContain(`limit ${MAX_GUIDES};`);
+    expect(sql).not.toContain(`limit ${MAX_RESULTS};`);
+  });
+
+  it('the standard describes the search’s fold as the migration does it', () => {
+    // help_search folds with app.normalize_ar_q only (a contains search strips no article);
+    // CLAUDE.md's U16 bullet must not claim the FTS rule (app.ar_fts_text) for it.
+    const search = /function public\.help_search\([\s\S]*?\nend \$\$;/.exec(sql)?.[0] ?? '';
+    expect(search).toContain('app.normalize_ar_q(');
+    expect(search).not.toContain('ar_fts_text');
+    const bullet =
+      readFileSync('CLAUDE.md', 'utf8')
+        .split('\n')
+        .find((line) => line.startsWith('- U16, the help centre (0046)')) ?? '';
+    expect(bullet).toContain('with `app.normalize_ar_q` on both sides');
+    expect(bullet).not.toMatch(/as the Arabic FTS rule above folds/);
+  });
+
+  it('the body schema refuses what the CHECK refuses', () => {
+    const ok = { en: [{ t: 'p', x: 'a' }], ar: [{ t: 'p', x: 'ب' }] };
+    expect(HelpBodySchema.safeParse(ok).success).toBe(true);
+    for (const bad of [
+      { en: [{ t: 'p', x: 'a' }] },
+      { en: [{ t: 'html', x: 'a' }], ar: [{ t: 'p', x: 'ب' }] },
+      { en: [{ t: 'p', x: 'a', y: 1 }], ar: [{ t: 'p', x: 'ب' }] },
+      { en: [{ t: 'p', x: '<script>' }], ar: [{ t: 'p', x: 'ب' }] },
+      { en: [{ t: 'p', x: '   ' }], ar: [{ t: 'p', x: 'ب' }] },
+      { en: [{ t: 'ol', x: [] }], ar: [{ t: 'p', x: 'ب' }] },
+      { en: [], ar: [{ t: 'p', x: 'ب' }] },
+    ]) {
+      expect(HelpBodySchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+  });
+});
+
+// ── 1b. The page heads' "Guide" (a copy of the set, held to it here) ─────────────────────
+
+describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the set', () => {
+  const bySlug = new Map(SET.map((a) => [a.slug, a]));
+
+  it('every page guide is a guide of the set, with the set’s capabilities', () => {
+    for (const entry of PAGE_GUIDES) {
+      const article = bySlug.get(entry.slug);
+      expect(article, entry.slug).toBeDefined();
+      expect([...entry.caps], entry.slug).toEqual(article?.caps);
+    }
+    expect(new Set(PAGE_GUIDES.map((g) => g.slug)).size).toBe(PAGE_GUIDES.length);
+  });
+
+  it('a page guide is offered only on screens its guide names, each screen once', () => {
+    const seen = new Set<string>();
+    for (const entry of PAGE_GUIDES) {
+      for (const screen of entry.screens) {
+        expect(bySlug.get(entry.slug)?.screens, `${entry.slug}: ${screen}`).toContain(screen);
+        expect(seen.has(screen), screen).toBe(false);
+        seen.add(screen);
+      }
+    }
+  });
+
+  it('every screen a guide names has a page guide, but the help page itself', () => {
+    const offered = new Set(PAGE_GUIDES.flatMap((g) => g.screens));
+    for (const article of SET) {
+      for (const screen of article.screens) {
+        if (screen === '/admin/help') continue;
+        expect(offered.has(screen), `${article.slug}: ${screen}`).toBe(true);
+      }
+    }
+  });
+
+  it('a role is offered a screen’s guide only when it may read it', () => {
+    for (const role of ROLES) {
+      for (const entry of PAGE_GUIDES) {
+        for (const screen of entry.screens) {
+          expect(pageGuideFor(screen, role), `${role} ${screen}`).toBe(
+            mayRead(role, entry.caps) ? entry.slug : null,
+          );
+        }
+      }
+    }
+  });
+
+  it('pages below a screen share its guide; the dashboard’s covers only itself', () => {
+    expect(pageGuideFor('/admin/services/1234', 'content_creator')).toBe('saving-and-publishing');
+    expect(pageGuideFor('/admin/pages/new', 'admin')).toBe('saving-and-publishing');
+    expect(pageGuideFor('/admin/analytics/search', 'seo')).toBe('website-stats');
+    expect(pageGuideFor('/admin/redirects/9', 'seo')).toBe('seo-and-redirects');
+    expect(pageGuideFor('/admin', 'developer')).toBe('finding-your-way');
+    expect(pageGuideFor('/admin/themes', 'admin')).toBeNull();
+    expect(pageGuideFor('/admin/help', 'admin')).toBeNull();
+  });
+
+  it('SEO opens Pages and Posts without the content guide, which is for the writers', () => {
+    expect(pageGuideFor('/admin/pages', 'seo')).toBeNull();
+    expect(pageGuideFor('/admin/blog/1', 'seo')).toBeNull();
+    expect(pageGuideFor('/admin/pages', 'content_creator')).toBe('saving-and-publishing');
+  });
+});
+
+// ── 2. Who is shown what, and the shared rules ────────────────────────────────────────────
+
+describe('which guides each role is shown (the server’s filter, from ROLE_CAPS)', () => {
+  const shown = (role: Role) =>
+    SET.filter((a) => mayRead(role, a.caps))
+      .map((a) => a.slug)
+      .sort();
+
+  it('Admin: every guide', () => {
+    expect(shown('admin')).toEqual(SET.map((a) => a.slug).sort());
+  });
+
+  it('Content Creator: the basics, content, media and stats; no leads, PII, hiring, settings or SEO', () => {
+    expect(shown('content_creator')).toEqual([
+      'finding-your-way',
+      'media-library',
+      'roles-and-access',
+      'saving-and-publishing',
+      'website-stats',
+      'your-account',
+    ]);
+  });
+
+  it('SEO: the basics, the media library (it opens it), SEO and redirects, and stats', () => {
+    expect(shown('seo')).toEqual([
+      'finding-your-way',
+      'media-library',
+      'roles-and-access',
+      'seo-and-redirects',
+      'website-stats',
+      'your-account',
+    ]);
+  });
+
+  it('Developer: the basics, media, leads and their personal data, maintenance, stats and site health; no hiring', () => {
+    expect(shown('developer')).toEqual([
+      'finding-your-way',
+      'maintenance-mode',
+      'media-library',
+      'personal-data',
+      'roles-and-access',
+      'site-health-and-logs',
+      'website-stats',
+      'working-with-leads',
+      'your-account',
+    ]);
+  });
+
+  it('a guide naming no capability is every member’s; one naming only unknown ones is no one’s', () => {
+    for (const role of ROLES) {
+      expect(mayRead(role, [])).toBe(true);
+      expect(mayRead(role, ['help.edit', 'nothing.here'])).toBe(false);
+    }
+    expect(mayRead('content_creator', ['nothing.here', 'blog.write'])).toBe(true);
+  });
+
+  it('a partial access counts: view (Content Creator, entity SEO) and meta (SEO, media)', () => {
+    expect(mayRead('content_creator', ['seo.entityMeta'])).toBe(true);
+    expect(mayRead('seo', ['media.write'])).toBe(true);
+  });
+});
+
+describe('the shared rules', () => {
+  it('a screen covers its own pages, never a sibling; the dashboard covers only itself', () => {
+    expect(isOnScreen(['/admin/services'], '/admin/services')).toBe(true);
+    expect(isOnScreen(['/admin/services'], '/admin/services/1234')).toBe(true);
+    expect(isOnScreen(['/admin/services'], '/admin/service-cases')).toBe(false);
+    expect(isOnScreen(['/admin'], '/admin')).toBe(true);
+    expect(isOnScreen(['/admin'], '/admin/leads')).toBe(false);
+  });
+
+  it('a screen is an admin path or nothing', () => {
+    expect(screenOf('/admin/leads')).toBe('/admin/leads');
+    expect(screenOf('/admin/leads/')).toBe('/admin/leads');
+    expect(screenOf('/admin')).toBe('/admin');
+    expect(screenOf('/about')).toBeNull();
+    expect(screenOf('/admin/../x')).toBeNull();
+    expect(screenOf('https://example.test/admin')).toBeNull();
+    expect(screenOf('/admin/x?y=1')).toBeNull();
+    expect(screenOf(`/admin/${'a'.repeat(200)}`)).toBeNull();
+    expect(screenOf(null)).toBeNull();
+  });
+
+  it('links carry the slug and the screen encoded', () => {
+    expect(guideHref('your-account')).toBe('/admin/help?guide=your-account');
+    expect(guideHref('your-account', null)).toBe('/admin/help?guide=your-account');
+    expect(guideHref('your-account', '/admin/leads')).toBe(
+      '/admin/help?guide=your-account&screen=%2Fadmin%2Fleads',
+    );
+    expect(helpHrefFor('/admin/leads')).toBe('/admin/help?screen=%2Fadmin%2Fleads');
+  });
+
+  it('a guide link keeps the screen the help was opened on (rows and related guides)', () => {
+    const guide: HelpGuide = { slug: 'your-account', title: 'Your account', minutes: 2, tags: [] };
+    const withScreen = '/admin/help?guide=your-account&amp;screen=%2Fadmin%2Fleads';
+    const rows = renderToStaticMarkup(
+      createElement(HelpGuideList, { guides: [guide], labelledBy: 'h', screen: '/admin/leads' }),
+    );
+    expect(rows).toContain(`href="${withScreen}"`);
+    const article = SET.find((a) => a.slug === 'roles-and-access')!;
+    const body = renderToStaticMarkup(
+      createElement(HelpArticleBody, {
+        article: { ...article, titleAr: article.title_ar },
+        lang: 'en',
+        level: 2,
+        related: [guide],
+        screen: '/admin/leads',
+      }),
+    );
+    expect(body).toContain(`href="${withScreen}"`);
+    // No screen known, no screen sent.
+    const bare = renderToStaticMarkup(
+      createElement(HelpGuideList, { guides: [guide], labelledBy: 'h' }),
+    );
+    expect(bare).toContain('href="/admin/help?guide=your-account"');
+  });
+
+  it('the help page keeps the screen on every link it builds', () => {
+    const page = readFileSync('src/pages/admin/help.astro', 'utf8');
+    // Every list and the related guides are given the screen; the language switch builds on
+    // guideHref with it; the search form carries it as a hidden field.
+    expect(page.match(/<HelpGuideList\b/g)?.length).toBe(3);
+    expect(page.match(/<HelpGuideList\b[^>]*\bscreen=\{screen\}/g)?.length).toBe(3);
+    expect(page).toMatch(/<HelpArticleBody\b[^>]*\bscreen=\{screen\}/);
+    expect(page).not.toMatch(/guideHref\(article\.slug\)/);
+    expect(page).toContain('guideHref(article.slug, screen)');
+    expect(page).toContain('<input type="hidden" name="screen" value={screen} />');
+  });
+
+  it('related: other guides sharing a tag, from the given list only, at most three', () => {
+    const g = (slug: string, tags: string[]): HelpGuide => ({
+      slug,
+      title: slug,
+      minutes: 1,
+      tags,
+    });
+    const list = [
+      g('a', ['x']),
+      g('b', ['x', 'y']),
+      g('c', ['z']),
+      g('d', ['y']),
+      g('e', ['x']),
+      g('f', ['x']),
+    ];
+    expect(relatedTo({ slug: 'a', tags: ['x'] }, list).map((r) => r.slug)).toEqual(['b', 'e', 'f']);
+    expect(relatedTo({ slug: 'c', tags: ['z'] }, list)).toEqual([]);
+  });
+
+  it('a query is cleaned as the header search cleans one', () => {
+    expect(cleanHelpQuery('  pass\u0000word\n ')).toBe('password');
+    expect(cleanHelpQuery('x'.repeat(100))).toHaveLength(HELP_LIMITS.query);
+  });
+
+  it('a query cut inside a surrogate pair stays well formed (cut by code points)', () => {
+    const emoji = '\u{1F600}';
+    // 63 letters and an emoji are 64 characters: the emoji stays whole.
+    expect(cleanHelpQuery(`${'x'.repeat(63)}${emoji}`)).toBe(`${'x'.repeat(63)}${emoji}`);
+    // One more letter and the emoji is past the cut: none of it is kept.
+    expect(cleanHelpQuery(`${'x'.repeat(64)}${emoji}`)).toBe('x'.repeat(64));
+    // 64 characters, as PostgreSQL's char_length counts them.
+    expect(Array.from(cleanHelpQuery(emoji.repeat(70)))).toHaveLength(HELP_LIMITS.query);
+    // Half a pair anywhere is dropped.
+    expect(cleanHelpQuery('pass\ud83dword\ude00')).toBe('password');
+    for (const raw of [`${'x'.repeat(63)}${emoji}`, emoji.repeat(70), 'a\ud800b', '\udfffab']) {
+      const q = cleanHelpQuery(raw);
+      expect(() => encodeURIComponent(q), JSON.stringify(raw)).not.toThrow();
+    }
+  });
+});
+
+// ── 3. The loaders and the routes ───────────────────────────────────────────────────────
+
+const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const auth = (role: Role): AuthContext => ({
+  userId: '11111111-1111-4111-8111-111111111111',
+  tenantId: TENANT,
+  role,
+  isActive: true,
+  email: 'person@example.test',
+});
+
+const rowOf = (a: HelpArticleRow) => ({ ...a, id: `id-${a.slug}`, search_text: 'x' });
+
+interface Calls {
+  filters: [string, unknown][];
+  rpc: { fn: string; args: Record<string, unknown> }[];
+}
+
+/** A Supabase stand-in: the table answers `rows` (or `row` for a single read), the RPC `rpc`. */
+function fakeDb(answer: { rows?: unknown[]; row?: unknown; rpc?: unknown[]; error?: string }) {
+  const calls: Calls = { filters: [], rpc: [] };
+  const error = answer.error ? { message: answer.error, code: 'XX000' } : null;
+  const builder: Record<string, unknown> = {};
+  for (const op of ['select', 'order', 'limit']) builder[op] = () => builder;
+  builder['eq'] = (column: string, value: unknown) => {
+    calls.filters.push([column, value]);
+    return builder;
+  };
+  builder['maybeSingle'] = async () => ({ data: error ? null : (answer.row ?? null), error });
+  builder['then'] = (resolve: (v: unknown) => unknown) =>
+    Promise.resolve(resolve({ data: error ? null : (answer.rows ?? []), error }));
+  const sb = {
+    from: () => builder,
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      calls.rpc.push({ fn, args });
+      return { data: error ? null : (answer.rpc ?? []), error };
+    },
+  };
+  return { sb: sb as unknown as SupabaseClient, calls };
+}
+
+describe('the loaders', () => {
+  const ALL = SET.map(rowOf);
+
+  it('the list is the role’s guides, read from the caller’s tenant, with the screen’s first', async () => {
+    const { sb, calls } = fakeDb({ rows: ALL });
+    const index = await loadHelpIndex(sb, auth('content_creator'), '/admin/services/123');
+    expect(calls.filters).toEqual([['tenant_id', TENANT]]);
+    expect(index.guides.map((g) => g.slug)).toEqual(
+      SET.filter((a) => mayRead('content_creator', a.caps)).map((a) => a.slug),
+    );
+    expect(index.onScreen).toEqual(['saving-and-publishing']);
+    // Nothing but what a list shows leaves the server.
+    expect(Object.keys(index.guides[0] ?? {}).sort()).toEqual(['minutes', 'slug', 'tags', 'title']);
+  });
+
+  it('no screen, nothing on it', async () => {
+    const { sb } = fakeDb({ rows: ALL });
+    expect((await loadHelpIndex(sb, auth('admin'), null)).onScreen).toEqual([]);
+  });
+
+  it('a row the schema refuses is left out and logged by its slug', async () => {
+    logs.length = 0;
+    const broken = { ...rowOf(SET[0]!), slug: 'broken-row', body: '<p>html</p>' };
+    const { sb } = fakeDb({
+      rows: [broken, { ...rowOf(SET[0]!), title: '<b>x</b>', slug: 'bad-title' }],
+    });
+    // The list does not read bodies, so only the title breaks the list's schema.
+    const index = await loadHelpIndex(sb, auth('admin'), null);
+    expect(index.guides.map((g) => g.slug)).toEqual(['broken-row']);
+    expect(JSON.stringify(logs)).toContain('bad-title');
+  });
+
+  it('a refused read is logged and thrown (the route answers 500)', async () => {
+    logs.length = 0;
+    const { sb } = fakeDb({ error: 'permission denied for table help_articles' });
+    await expect(loadHelpIndex(sb, auth('admin'), null)).rejects.toThrow();
+    expect(JSON.stringify(logs)).toContain('admin:help');
+  });
+
+  it('search: under two characters asks nothing; else the RPC with the caller’s tenant', async () => {
+    const short = fakeDb({ rpc: ALL });
+    expect(await searchHelp(short.sb, auth('admin'), ' a ')).toEqual([]);
+    expect(short.calls.rpc).toEqual([]);
+
+    const { sb, calls } = fakeDb({ rpc: ALL });
+    const results = await searchHelp(sb, auth('seo'), '  redirect\u0007 ');
+    expect(calls.rpc).toEqual([{ fn: 'help_search', args: { p_tenant: TENANT, p_q: 'redirect' } }]);
+    // The RPC answered every guide; the role's filter still applies.
+    expect(results.map((r) => r.slug)).toEqual(
+      SET.filter((a) => mayRead('seo', a.caps)).map((a) => a.slug),
+    );
+  });
+
+  it('search: the role filter runs before the cut to 20, so no readable guide is lost', async () => {
+    // Thirty guides for hiring rank above twenty-five every member reads: a cut before the
+    // filter would leave Content Creator nothing.
+    const base = rowOf(SET[0]!);
+    const hiring = Array.from({ length: 30 }, (_, i) => ({
+      ...base,
+      slug: `hiring-${i}`,
+      caps: ['applications.manage'],
+    }));
+    const open = Array.from({ length: 25 }, (_, i) => ({ ...base, slug: `open-${i}`, caps: [] }));
+    const { sb } = fakeDb({ rpc: [...hiring, ...open] });
+    const results = await searchHelp(sb, auth('content_creator'), 'guide');
+    expect(results.map((r) => r.slug)).toEqual(open.slice(0, MAX_RESULTS).map((r) => r.slug));
+    // Admin reads them all: still the first 20, in the RPC's order.
+    const admin = await searchHelp(
+      fakeDb({ rpc: [...hiring, ...open] }).sb,
+      auth('admin'),
+      'guide',
+    );
+    expect(admin.map((r) => r.slug)).toEqual(hiring.slice(0, MAX_RESULTS).map((r) => r.slug));
+  });
+
+  it('search: a crafted query cut through an emoji reaches the RPC well formed', async () => {
+    const { sb, calls } = fakeDb({ rpc: [] });
+    await searchHelp(sb, auth('admin'), `${'x'.repeat(63)}\u{1F600}tail`);
+    const sent = String(calls.rpc[0]?.args['p_q']);
+    expect(sent).toBe(`${'x'.repeat(63)}\u{1F600}`);
+    expect(() => encodeURIComponent(sent)).not.toThrow();
+  });
+
+  it('a guide the role may not read is the same as no guide', async () => {
+    const leads = SET.find((a) => a.slug === 'working-with-leads')!;
+    const { sb, calls } = fakeDb({ row: rowOf(leads) });
+    expect(await loadHelpArticle(sb, auth('content_creator'), leads.slug)).toBeNull();
+    expect(calls.filters).toEqual([
+      ['tenant_id', TENANT],
+      ['slug', leads.slug],
+    ]);
+    const dev = fakeDb({ row: rowOf(leads) });
+    const article = await loadHelpArticle(dev.sb, auth('developer'), leads.slug);
+    expect(article?.titleAr).toBe(leads.title_ar);
+    expect(article?.body).toEqual(leads.body);
+    expect(await loadHelpArticle(fakeDb({}).sb, auth('admin'), 'nope')).toBeNull();
+  });
+
+  it('a guide whose body the schema refuses is not shown, and is logged', async () => {
+    logs.length = 0;
+    const { sb } = fakeDb({
+      row: { ...rowOf(SET[0]!), body: { en: [{ t: 'html', x: 'a' }], ar: [] } },
+    });
+    expect(await loadHelpArticle(sb, auth('admin'), SET[0]!.slug)).toBeNull();
+    expect(JSON.stringify(logs)).toContain(SET[0]!.slug);
+  });
+});
+
+describe('the routes answer what the loaders decide', () => {
+  async function call(
+    route: () => Promise<Record<string, unknown>>,
+    url: string,
+    role: Role,
+    sb: SupabaseClient,
+  ) {
+    const { GET } = (await route()) as { GET: APIRoute };
+    const full = new URL(url, 'https://admin.example.test');
+    const res = (await GET({
+      request: new Request(full),
+      url: full,
+      params: {},
+      locals: { session: auth(role), supabase: sb, csrfToken: 't', cspNonce: 't' },
+    } as unknown as Parameters<APIRoute>[0])) as Response;
+    return { status: res.status, body: (await res.json()) as { data?: unknown } };
+  }
+
+  it('GET /api/admin/help: the role’s guides and the screen’s', async () => {
+    const { sb } = fakeDb({ rows: SET.map(rowOf) });
+    const { status, body } = await call(
+      () => import('@/pages/api/admin/help/index'),
+      '/api/admin/help?screen=%2Fadmin%2Fleads',
+      'developer',
+      sb,
+    );
+    expect(status).toBe(200);
+    const data = body.data as { guides: HelpGuide[]; onScreen: string[] };
+    expect(data.onScreen).toEqual(['working-with-leads', 'personal-data']);
+    expect(data.guides.some((g) => g.slug === 'job-applications')).toBe(false);
+  });
+
+  it('GET /api/admin/help/article: 404 for a guide the role may not read', async () => {
+    const hiring = SET.find((a) => a.slug === 'job-applications')!;
+    const asDev = await call(
+      () => import('@/pages/api/admin/help/article'),
+      '/api/admin/help/article?slug=job-applications',
+      'developer',
+      fakeDb({ row: rowOf(hiring) }).sb,
+    );
+    expect(asDev.status).toBe(404);
+    const asAdmin = await call(
+      () => import('@/pages/api/admin/help/article'),
+      '/api/admin/help/article?slug=job-applications',
+      'admin',
+      fakeDb({ row: rowOf(hiring) }).sb,
+    );
+    expect(asAdmin.status).toBe(200);
+  });
+
+  it('GET /api/admin/help/article: a slug outside the pattern is a 422, never a read', async () => {
+    const { sb, calls } = fakeDb({});
+    const { status } = await call(
+      () => import('@/pages/api/admin/help/article'),
+      "/api/admin/help/article?slug=x'%20or%201=1",
+      'admin',
+      sb,
+    );
+    expect(status).toBe(422);
+    expect(calls.filters).toEqual([]);
+  });
+
+  it('GET /api/admin/help/search: the role’s matches', async () => {
+    const { sb } = fakeDb({ rpc: SET.map(rowOf) });
+    const { status, body } = await call(
+      () => import('@/pages/api/admin/help/search'),
+      '/api/admin/help/search?q=lead',
+      'content_creator',
+      sb,
+    );
+    expect(status).toBe(200);
+    const slugs = (body.data as { results: HelpGuide[] }).results.map((r) => r.slug);
+    expect(slugs).not.toContain('working-with-leads');
+    expect(slugs).not.toContain('personal-data');
+  });
+});
+
+describe('the shell', () => {
+  it('the topbar’s "?" is a link to the help page for this screen, before the bell', () => {
+    const topbar = readFileSync('src/components/admin/ui/Topbar.astro', 'utf8');
+    const help = topbar.indexOf('href={helpHrefFor(current)} data-open="help"');
+    expect(help).toBeGreaterThan(-1);
+    expect(help).toBeLessThan(topbar.indexOf('href="/admin/notifications"'));
+  });
+
+  it('the drawer is mounted in the shell’s one island', () => {
+    const chrome = readFileSync('src/components/admin/islands/AdminChrome.tsx', 'utf8');
+    expect(chrome).toContain('<HelpDrawer />');
+  });
+
+  it('the page head offers the screen’s guide, decided by the layout from the role', () => {
+    const layout = readFileSync('src/layouts/AdminLayout.astro', 'utf8');
+    expect(layout).toContain('pageGuideFor(path, session.role)');
+    expect(layout).toContain('guide={guide}');
+    const head = readFileSync('src/components/admin/ui/PageHead.astro', 'utf8');
+    expect(head).toMatch(
+      /href=\{guideHref\(guide, screen\)\}\s+data-open="help"\s+data-help-guide=\{guide\}/,
+    );
+  });
+});

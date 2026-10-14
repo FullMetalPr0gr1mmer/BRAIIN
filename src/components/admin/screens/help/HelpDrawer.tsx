@@ -1,0 +1,352 @@
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react';
+import Icon from '@/components/admin/kit/Icon';
+import { AdminApiError, adminFetch } from '@/lib/admin/client';
+import {
+  MIN_QUERY,
+  cleanHelpQuery,
+  relatedTo,
+  screenOf,
+  type HelpArticle,
+  type HelpGuide,
+  type HelpIndex,
+  type HelpLang,
+} from '@/lib/admin/help/model';
+import { HELP_SLUG } from '@schemas/help';
+import ChromeDrawer, { useOpenOn } from '../chrome/ChromeDrawer';
+import HelpArticleBody from './HelpArticleBody';
+import HelpGuideList from './HelpGuideList';
+
+// The help centre's drawer (Admin v2 U16), the prototype's helpCentre(): opened from the
+// topbar's "?" (a link to /admin/help without JS) on every admin page. A search box, the
+// guides for the screen it was opened on, then every guide the role may read; a guide opens
+// in place with "All guides" to go back, its Arabic text a click away, and related guides
+// below it. "All guides" means what it says, as in the prototype (showList('')) and on the
+// no-JS page: it clears a search the guide was opened from and shows the lists.
+//
+// Only the latest request is ever shown: a newer search cancels an older one, and a guide
+// still loading is cancelled when another is asked for, when the person goes back or types
+// a search, and when the drawer opens again; one that lands anyway is dropped unless it is
+// still the latest and the drawer is open, so a slow answer never replaces the view the
+// person moved on to or pulls focus away from them.
+//
+// What the server sends is already the role's: the list and the search are filtered from
+// ROLE_CAPS on the server (src/lib/admin/help), so nothing here decides who sees what. The
+// list is asked for the first time the drawer opens, never on a timer (P-15); a search
+// waits for a pause in typing, and a newer one cancels an older one still in flight.
+//
+// Opened from a page head's "Guide", it starts on that guide instead (the same view a row
+// opens), with "All guides" a click away.
+//
+// Focus: the search box when the drawer opens, a guide's title when it opens (so a screen
+// reader starts there), and back to the row it came from on "All guides". The status line
+// is a live region: loading, how many guides match, what could not be read.
+
+const DEBOUNCE_MS = 250;
+
+export default function HelpDrawer() {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const inFlight = useRef<AbortController | null>(null);
+  // The guide being fetched, if any (see the header: only the latest is shown).
+  const guideFlight = useRef<AbortController | null>(null);
+  const articles = useRef(new Map<string, HelpArticle>());
+  const cameFrom = useRef<string | null>(null);
+
+  const [index, setIndex] = useState<HelpIndex | null>(null);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<HelpGuide[] | null>(null);
+  const [article, setArticle] = useState<HelpArticle | null>(null);
+  const [lang, setLang] = useState<HelpLang>('en');
+  // The page the drawer was opened on: kept on the rows' links (a new tab), as the page does.
+  const [screen, setScreen] = useState<string | null>(null);
+  // The live line: what is loading or could not be read, else how many guides match.
+  const [status, setStatus] = useState('');
+  const [matches, setMatches] = useState('');
+  // Moves focus once the view it targets has rendered.
+  const [focusTo, setFocusTo] = useState<'title' | 'back' | null>(null);
+
+  // `quiet` while a guide is open: the status line is the guide's then, and a list that
+  // could not be read is asked for again on "All guides".
+  const loadIndex = useCallback(async (quiet = false) => {
+    if (!quiet) setStatus('Loading…');
+    const screen = screenOf(window.location.pathname) ?? '/admin';
+    try {
+      setIndex(await adminFetch<HelpIndex>(`/api/admin/help?screen=${encodeURIComponent(screen)}`));
+      if (!quiet) setStatus('');
+    } catch {
+      if (!quiet) setStatus('The guides could not be loaded just now.');
+    }
+  }, []);
+
+  /** Cancels a guide still loading, and its "Loading…", once the person has moved on. */
+  const cancelGuide = useCallback(() => {
+    if (!guideFlight.current) return;
+    guideFlight.current.abort();
+    guideFlight.current = null;
+    setStatus('');
+  }, []);
+
+  const openGuide = useCallback(async (slug: string) => {
+    guideFlight.current?.abort();
+    guideFlight.current = null;
+    cameFrom.current = slug;
+    const cached = articles.current.get(slug);
+    if (cached) {
+      setArticle(cached);
+      setLang('en');
+      setStatus('');
+      setFocusTo('title');
+      return;
+    }
+    const controller = new AbortController();
+    guideFlight.current = controller;
+    // Still the latest guide asked for, with the drawer open to show it.
+    const current = () =>
+      !controller.signal.aborted &&
+      guideFlight.current === controller &&
+      dialogRef.current?.open === true;
+    setStatus('Loading…');
+    try {
+      const data = await adminFetch<{ article: HelpArticle }>(
+        `/api/admin/help/article?slug=${encodeURIComponent(slug)}`,
+        { signal: controller.signal },
+      );
+      articles.current.set(slug, data.article);
+      if (!current()) return;
+      guideFlight.current = null;
+      setArticle(data.article);
+      setLang('en');
+      setStatus('');
+      setFocusTo('title');
+    } catch (err) {
+      if (!current()) return;
+      guideFlight.current = null;
+      setStatus(
+        err instanceof AdminApiError && err.info.status === 404
+          ? 'That guide is not available.'
+          : 'That guide could not be loaded just now.',
+      );
+    }
+  }, []);
+
+  // The topbar's "?" opens on the lists; a page head's "Guide" (data-help-guide) opens on its
+  // guide.
+  const open = useCallback(
+    (trigger: HTMLElement) => {
+      const dialog = dialogRef.current;
+      if (!dialog || dialog.open) return;
+      inFlight.current?.abort();
+      guideFlight.current?.abort();
+      guideFlight.current = null;
+      setQuery('');
+      setResults(null);
+      setArticle(null);
+      setStatus('');
+      setMatches('');
+      setScreen(screenOf(window.location.pathname));
+      dialog.showModal();
+      const guide = trigger.dataset['helpGuide'];
+      const atGuide = guide !== undefined && HELP_SLUG.test(guide);
+      if (atGuide) void openGuide(guide);
+      else searchRef.current?.focus();
+      if (!index) void loadIndex(atGuide);
+    },
+    [index, loadIndex, openGuide],
+  );
+  const openerRef = useOpenOn('help', open);
+
+  /** Searches for an already cleaned query of at least MIN_QUERY characters. */
+  const search = useCallback(async (q: string) => {
+    inFlight.current?.abort();
+    const controller = new AbortController();
+    inFlight.current = controller;
+    try {
+      const data = await adminFetch<{ results: HelpGuide[] }>(
+        `/api/admin/help/search?q=${encodeURIComponent(q)}`,
+        { signal: controller.signal },
+      );
+      if (controller.signal.aborted) return;
+      setResults(data.results);
+      setStatus('');
+      setMatches(
+        data.results.length === 0
+          ? 'No guide matches that. Try other words.'
+          : `${data.results.length} ${data.results.length === 1 ? 'guide matches' : 'guides match'}.`,
+      );
+    } catch {
+      if (!controller.signal.aborted) setStatus('The guides could not be searched just now.');
+    }
+  }, []);
+
+  // A search runs once typing pauses; Enter runs it at once (`submit`). Fewer than two
+  // characters search nothing: the lists come back.
+  useEffect(() => {
+    const q = cleanHelpQuery(query);
+    if (q.length < MIN_QUERY) {
+      inFlight.current?.abort();
+      setResults(null);
+      setMatches('');
+      return;
+    }
+    const timer = window.setTimeout(() => void search(q), DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [query, search]);
+
+  // With a guide open (or loading), the words in the box were typed before it: Enter leaves
+  // the guide for their results, as typing does, so the count it announces describes the
+  // list on screen.
+  function submit(event: SyntheticEvent) {
+    event.preventDefault();
+    const q = cleanHelpQuery(query);
+    if (q.length < MIN_QUERY) return;
+    cancelGuide();
+    setArticle(null);
+    void search(q);
+  }
+
+  function back() {
+    cancelGuide();
+    inFlight.current?.abort();
+    setQuery('');
+    setResults(null);
+    setMatches('');
+    setArticle(null);
+    setFocusTo('back');
+    if (!index) void loadIndex();
+  }
+
+  useEffect(() => {
+    if (focusTo === 'title') {
+      titleRef.current?.focus();
+      bodyRef.current?.closest('.drw__b')?.scrollTo({ top: 0 });
+    } else if (focusTo === 'back') {
+      const row = cameFrom.current
+        ? bodyRef.current?.querySelector<HTMLElement>(`[data-guide="${cameFrom.current}"]`)
+        : null;
+      (row ?? searchRef.current)?.focus();
+    }
+    if (focusTo) setFocusTo(null);
+  }, [focusTo]);
+
+  const guides = index?.guides ?? [];
+  const onScreen = guides.filter((guide) => index?.onScreen.includes(guide.slug));
+  const ar = lang === 'ar';
+
+  return (
+    <ChromeDrawer
+      dialogRef={dialogRef}
+      openerRef={openerRef}
+      titleId="help-title"
+      title="Help centre"
+    >
+      <div className="hc" ref={bodyRef}>
+        <p className="hc__sub">Short guides, written for people, not developers.</p>
+        <form role="search" className="hc__search" onSubmit={submit}>
+          <label htmlFor="help-q" className="visually-hidden">
+            Search the guides
+          </label>
+          <input
+            ref={searchRef}
+            id="help-q"
+            type="search"
+            value={query}
+            placeholder="Search the guides…"
+            autoComplete="off"
+            maxLength={64}
+            onChange={(event) => {
+              cancelGuide();
+              setQuery(event.target.value);
+              if (article) setArticle(null);
+            }}
+          />
+        </form>
+        <p className="drw__status" role="status">
+          {status || matches}
+        </p>
+
+        {article ? (
+          <article className="hc-view" aria-labelledby="help-article-title">
+            <p className="hc-view__bar">
+              <button type="button" data-variant="ghost" data-size="sm" onClick={back}>
+                <Icon name="back" size={14} />
+                All guides
+              </button>
+              <button
+                type="button"
+                data-variant="soft"
+                data-size="sm"
+                lang={ar ? 'en' : 'ar'}
+                onClick={() => setLang(ar ? 'en' : 'ar')}
+              >
+                {ar ? 'Read in English' : 'اقرأ بالعربية'}
+              </button>
+            </p>
+            <h3
+              id="help-article-title"
+              ref={titleRef}
+              tabIndex={-1}
+              className="hc__title"
+              lang={lang}
+              dir={ar ? 'rtl' : 'ltr'}
+            >
+              {ar ? article.titleAr : article.title}
+            </h3>
+            <HelpArticleBody
+              article={article}
+              lang={lang}
+              level={4}
+              related={relatedTo(article, guides)}
+              onPick={(slug) => void openGuide(slug)}
+              screen={screen}
+            />
+          </article>
+        ) : results !== null ? (
+          results.length > 0 && (
+            <section aria-labelledby="help-results-h">
+              <h3 id="help-results-h" className="hc__h">
+                Results
+              </h3>
+              <HelpGuideList
+                guides={results}
+                labelledBy="help-results-h"
+                onPick={(slug) => void openGuide(slug)}
+                screen={screen}
+              />
+            </section>
+          )
+        ) : (
+          index && (
+            <>
+              {onScreen.length > 0 && (
+                <section aria-labelledby="help-screen-h">
+                  <h3 id="help-screen-h" className="hc__h">
+                    On this screen
+                  </h3>
+                  <HelpGuideList
+                    guides={onScreen}
+                    labelledBy="help-screen-h"
+                    onPick={(slug) => void openGuide(slug)}
+                    screen={screen}
+                  />
+                </section>
+              )}
+              <section aria-labelledby="help-all-h">
+                <h3 id="help-all-h" className="hc__h">
+                  All guides
+                </h3>
+                <HelpGuideList
+                  guides={guides}
+                  labelledBy="help-all-h"
+                  onPick={(slug) => void openGuide(slug)}
+                  screen={screen}
+                />
+              </section>
+            </>
+          )
+        )}
+      </div>
+    </ChromeDrawer>
+  );
+}

@@ -1,9 +1,11 @@
 ---
 import type { NavLink } from '@/lib/admin/nav';
+import { helpHrefFor } from '@/lib/admin/help/model';
 import Icon from './Icon.astro';
 
 // The white topbar (Admin v2 F2, the prototype's .top): the menu button on narrow screens,
-// the breadcrumb, search, the maintenance badge, the bell (F8) and View site.
+// the breadcrumb, search, the maintenance badge, the help "?" (U16), the bell (F8) and
+// View site.
 //
 // Search is a link to the server-rendered results page, which works with no JS and
 // cannot show a result the server did not authorize. With JS the same link opens the
@@ -15,6 +17,10 @@ import Icon from './Icon.astro';
 // island opens it as the drawer (data-open="notifications"). Its unread count arrives with
 // the page (shell state), in its name and as the dot; the dot is always in the markup and
 // `hidden` when there is nothing unread, so the drawer can show or clear it by attribute.
+//
+// The "?" is a link to /admin/help for this screen (its guides first), the help centre
+// without JS; with JS the chrome island opens it as the drawer (data-open="help"), which
+// reads the screen from the page's own address. Before the bell, as in the prototype.
 
 interface Props {
   section: NavLink | null;
@@ -74,6 +80,10 @@ const showSection = section && section.href !== '/admin' && current !== section.
         </span>
       ))
   }
+
+  <a class="top__btn" href={helpHrefFor(current)} data-open="help" aria-label="Help centre">
+    <Icon name="info" size={18} />
+  </a>
 
   <a
     class="top__btn"
