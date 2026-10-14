@@ -1,4 +1,3 @@
-import { transform } from '@astrojs/compiler-rs';
 import type { Plugin } from 'vitest/config';
 
 // Lets a unit test import an `.astro` component and render it with Astro's container API
@@ -18,16 +17,22 @@ import type { Plugin } from 'vitest/config';
 // What a test renders is the component and whatever it imports. Anything that needs the
 // real build (astro:assets, a database) is the test's to mock: the sign-in screens' layout
 // is stubbed by tests/stubs/AuthLayout.astro.
+//
+// The compiler is loaded the first time an `.astro` file is transformed, never when the
+// config loads: it is astro's dependency, not one of ours, so only a spec that renders a
+// component depends on it, and a run without one never resolves it
+// (tests/lib/astroComponentsPlugin.spec.ts).
 export function astroComponents(): Plugin {
   return {
     name: 'braiin:astro-components-for-tests',
     enforce: 'pre',
-    transform(code, id) {
+    async transform(code, id) {
       const file = id.split('?')[0] ?? id;
       if (!file.endsWith('.astro')) return null;
       if (/<style[\s>]/i.test(code)) {
         throw new Error(`${file}: <style> blocks are not compiled for unit renders`);
       }
+      const { transform } = await import('@astrojs/compiler-rs');
       const result = transform(code, {
         filename: file,
         internalURL: 'astro/compiler-runtime',
