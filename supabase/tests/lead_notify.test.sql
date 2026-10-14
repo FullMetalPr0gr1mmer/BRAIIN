@@ -17,7 +17,13 @@
 --      with that tenant's id; a lead arriving through crm_ingest_lead (the service role,
 --      the contact form's door) is announced once, and its retry is not announced again;
 --   4. nothing it does fails an insert: a URL pg_net refuses leaves the lead saved and
---      nothing queued.
+--      nothing queued, and a system_logs row that cannot be written fails nothing either;
+--   5. not silent: configured but not announced (http://, no secret, an error) writes one
+--      system_logs row (warn, source leads_notify, a fixed message, detail {} or
+--      {sqlstate}); not configured, and announced, write none;
+--   6. the daily check, public.lead_notify_misses(): a definer for the service role alone;
+--      null while not configured; once configured, the leads 15 minutes to 24 hours old
+--      with no notification_log row.
 --
 -- Nothing is skipped: 0048 creates pg_net where it is missing, so a database without it,
 -- or a queue this role cannot read, fails here rather than passing as skips. Requests are
@@ -26,7 +32,7 @@
 -- the transaction and rolled back with it. CLAUDE.md §3 (Pillar 1), §9, §10.
 
 begin;
-select plan(34);
+select plan(52);
 
 insert into public.tenants (id, name) values
   ('48000000-0000-4000-8000-00000000000a', 'NotifyA'),
@@ -79,6 +85,17 @@ begin
      where convert_from(q.body, 'UTF8') like '%' || p_lead::text || '%';
 end $$;
 
+-- This tenant's leads_notify rows in system_logs, and the latest as level|message|detail.
+create function _logs(p_tenant uuid) returns bigint language sql as $$
+  select count(*) from public.system_logs where tenant_id = p_tenant and source = 'leads_notify'
+$$;
+create function _last_log(p_tenant uuid) returns text language sql as $$
+  select l.level || '|' || l.message || '|' || l.detail::text
+    from public.system_logs l
+   where l.tenant_id = p_tenant and l.source = 'leads_notify'
+   order by l.id desc limit 1
+$$;
+
 -- What the Worker recomputes: v1=<hex HMAC-SHA-256(secret, '<ts>.<lead>.<tenant>')>.
 create function _sig(p_ts text, p_lead uuid, p_tenant uuid, p_secret text) returns text
 language sql as $$
@@ -104,6 +121,24 @@ select ok(not has_function_privilege('service_role', 'app.tg_notify_lead()', 'ex
   'service_role cannot execute app.tg_notify_lead()');
 select ok(not has_function_privilege('public', 'app.tg_notify_lead()', 'execute'),
   'PUBLIC cannot execute app.tg_notify_lead()');
+
+-- The daily check's function: the service role's alone (other_tenant has no path to it:
+-- no staff token executes it at all).
+select ok(
+  (select prosecdef and proconfig = array['search_path=""']
+     from pg_proc where oid = 'public.lead_notify_misses()'::regprocedure),
+  'public.lead_notify_misses() is SECURITY DEFINER with an empty search_path');
+select ok(has_function_privilege('service_role', 'public.lead_notify_misses()', 'execute'),
+  'service_role executes public.lead_notify_misses()');
+select ok(
+  not has_function_privilege('anon', 'public.lead_notify_misses()', 'execute')
+  and not has_function_privilege('authenticated', 'public.lead_notify_misses()', 'execute')
+  and not has_function_privilege('public', 'public.lead_notify_misses()', 'execute'),
+  'anon, authenticated and PUBLIC cannot execute public.lead_notify_misses()');
+set local role authenticated;
+select throws_ok($$ select public.lead_notify_misses() $$, '42501', null,
+  'a staff token calling public.lead_notify_misses() is refused');
+reset role;
 
 -- ---- 2. pg_net and the trigger ------------------------------------------------------------------
 select ok(
@@ -147,44 +182,61 @@ declare
   v_url constant text := 'https://notify.pgtap.invalid/api/hooks/notify-lead';
   v_secret constant text := 'pgtap-notify-' || gen_random_uuid();
   v_n bigint;
+  v_l bigint;
+  v_m integer;
   r record;
 begin
   -- No Vault URL: notifications are off.
   v_n := _queued();
+  v_l := _logs(a);
   return next lives_ok(
     $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
        ('48000000-0000-4000-8000-0000000000a1', '48000000-0000-4000-8000-00000000000a', 'One', 'x', 'hi') $$,
     'no Vault notify_lead_url: the lead is saved');
   return next is(_queued() - v_n, 0::bigint, 'no Vault notify_lead_url: no request is queued');
+  return next is(_logs(a) - v_l, 0::bigint,
+    'no Vault notify_lead_url: nothing is logged per lead (the daily check reports it)');
 
   -- http://, with the secret: the call would travel in plaintext, so nothing is sent.
   perform _vault('notify_lead_url', 'http://notify.pgtap.invalid/api/hooks/notify-lead');
   perform _vault('notify_lead_secret', v_secret);
   v_n := _queued();
+  v_l := _logs(a);
   return next lives_ok(
     $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
        ('48000000-0000-4000-8000-0000000000a2', '48000000-0000-4000-8000-00000000000a', 'Two', 'x', 'hi') $$,
     'an http:// URL: the lead is saved');
   return next is(_queued() - v_n, 0::bigint, 'an http:// URL: no request is queued');
+  return next is(_logs(a) - v_l, 1::bigint, 'an http:// URL: one system_logs row, in the lead''s tenant');
+  return next is(_last_log(a),
+    'warn|lead notification skipped: the Vault notify_lead_url is not an https URL|{}',
+    '... a warning with a fixed message, naming no value');
 
   -- https://, no secret: nothing to sign with, so nothing is sent.
   perform _vault('notify_lead_url', v_url);
   perform _vault('notify_lead_secret', null);
   v_n := _queued();
+  v_l := _logs(a);
   return next lives_ok(
     $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
        ('48000000-0000-4000-8000-0000000000a7', '48000000-0000-4000-8000-00000000000a', 'Seven', 'x', 'hi') $$,
     'an https:// URL without the Vault secret: the lead is saved');
   return next is(_queued() - v_n, 0::bigint, 'an https:// URL without the Vault secret: no request is queued');
+  return next is(_logs(a) - v_l, 1::bigint, 'an https:// URL without the Vault secret: one system_logs row');
+  return next is(_last_log(a),
+    'warn|lead notification skipped: the Vault secret notify_lead_secret is missing|{}',
+    '... a warning with a fixed message, naming no value');
 
   -- https:// and the secret: one request, the ids only, signed.
   perform _vault('notify_lead_secret', v_secret);
   v_n := _queued();
+  v_l := _logs(a);
   return next lives_ok(
     $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
        ('48000000-0000-4000-8000-0000000000a3', '48000000-0000-4000-8000-00000000000a', 'Three', 'x', 'hi') $$,
     'configured: the lead is saved');
   return next is(_queued() - v_n, 1::bigint, 'configured: exactly one request is queued');
+  return next is(_logs(a) - v_l, 0::bigint, 'configured and announced: nothing is logged');
   select * into r from _requests('48000000-0000-4000-8000-0000000000a3');
   return next is(
     r.body,
@@ -249,6 +301,7 @@ begin
   -- host): the error is caught inside the trigger, and the lead is saved.
   perform _vault('notify_lead_url', 'https://notify a.pgtap.invalid/api/hooks/notify-lead');
   v_n := _queued();
+  v_l := _logs(a);
   return next lives_ok(
     $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
        ('48000000-0000-4000-8000-0000000000a5', '48000000-0000-4000-8000-00000000000a', 'Five', 'x', 'hi') $$,
@@ -257,6 +310,59 @@ begin
   return next ok(
     exists (select 1 from public.leads where id = '48000000-0000-4000-8000-0000000000a5'),
     '... and the lead is there');
+  return next is(_logs(a) - v_l, 1::bigint, '... and one system_logs row says so');
+  return next ok(
+    (select l.level = 'warn' and l.message = 'lead notification not queued'
+            and (select array_agg(k) from jsonb_object_keys(l.detail) k) = array['sqlstate']
+            and l.detail ->> 'sqlstate' ~ '^[0-9A-Z]{5}$'
+       from public.system_logs l
+      where l.tenant_id = a and l.source = 'leads_notify'
+      order by l.id desc limit 1),
+    '... carrying the SQLSTATE and nothing else');
+
+  -- A system_logs row that cannot be written (the column renamed, inside this transaction
+  -- only) fails nothing: the lead is saved.
+  perform _vault('notify_lead_url', 'http://notify.pgtap.invalid/api/hooks/notify-lead');
+  execute 'alter table public.system_logs rename column message to message_pgtap_off';
+  return next lives_ok(
+    $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
+       ('48000000-0000-4000-8000-0000000000a6', '48000000-0000-4000-8000-00000000000a', 'Six', 'x', 'hi') $$,
+    'a log row that cannot be written does not fail the insert');
+  execute 'alter table public.system_logs rename column message_pgtap_off to message';
+  return next ok(
+    exists (select 1 from public.leads where id = '48000000-0000-4000-8000-0000000000a6'),
+    '... and the lead is there');
+
+  -- The daily check, as the cron calls it (the service role).
+  perform _vault('notify_lead_url', null);
+  set local role service_role;
+  v_m := public.lead_notify_misses();
+  reset role;
+  return next is(v_m, null::integer, 'the daily check: null while notifications are not configured');
+
+  perform _vault('notify_lead_url', v_url);
+  set local role service_role;
+  v_m := public.lead_notify_misses();
+  reset role;
+  insert into public.leads (id, tenant_id, name, email_enc, message, created_at) values
+    ('48000000-0000-4000-8000-0000000000c1', a, 'An hour ago', 'x', 'hi', now() - interval '1 hour');
+  set local role service_role;
+  return next is(public.lead_notify_misses(), v_m + 1,
+    'the daily check: a configured lead an hour old with no notification_log row is a miss');
+  reset role;
+  insert into public.leads (id, tenant_id, name, email_enc, message, created_at) values
+    ('48000000-0000-4000-8000-0000000000c2', b, 'Just now', 'x', 'hi', now() - interval '5 minutes'),
+    ('48000000-0000-4000-8000-0000000000c3', b, 'Yesterday', 'x', 'hi', now() - interval '25 hours');
+  set local role service_role;
+  return next is(public.lead_notify_misses(), v_m + 1,
+    'the daily check: a lead under 15 minutes old or over a day old is not counted');
+  reset role;
+  insert into public.notification_log (tenant_id, lead_id, channel, status)
+    values (a, '48000000-0000-4000-8000-0000000000c1', 'inbox', 'queued');
+  set local role service_role;
+  return next is(public.lead_notify_misses(), v_m,
+    'the daily check: a lead with its notification_log row is not a miss');
+  reset role;
 end $f$;
 select * from _cases();
 
