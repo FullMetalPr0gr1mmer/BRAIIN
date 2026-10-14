@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { createElement, type ComponentType } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import Chips, { nextSelection } from '@/components/admin/kit/Chips';
-import DataTable, { settleOffset, type DataTableProps } from '@/components/admin/kit/DataTable';
+import DataTable, {
+  pageSelection,
+  settleOffset,
+  type DataTableProps,
+} from '@/components/admin/kit/DataTable';
 import Drawer from '@/components/admin/kit/Drawer';
 import ErrorSummary, { errorSummaryTitle } from '@/components/admin/kit/ErrorSummary';
 import ListRow from '@/components/admin/kit/ListRow';
@@ -96,6 +100,36 @@ describe('DataTable', () => {
     expect(out).toContain('>Clear selection<');
     // The count is announced by a region that exists before the bar does.
     expect(out).toMatch(/<p class="visually-hidden" aria-live="polite">1 selected<\/p>/);
+  });
+
+  it('counts and acts on the ticked rows on this page only, never one off screen', () => {
+    // 'z' was ticked on another page (or before a filter hid it): the bar must not say
+    // "2 selected" for one visible tick, nor hand 'z' to a bulk action (f4b review).
+    const given: string[][] = [];
+    const out = table({
+      selection: {
+        selected: new Set(['z', 'a']),
+        onChange: () => {},
+        actions: (ids) => {
+          given.push(ids);
+          return createElement('button', { type: 'button' }, `Delete ${ids.length}`);
+        },
+      },
+    });
+    expect(out).toContain('<p class="bulkbar__n">1 selected</p>');
+    expect(out).toMatch(/<p class="visually-hidden" aria-live="polite">1 selected<\/p>/);
+    expect(out).toContain('>Delete 1<');
+    expect(given).toEqual([['a']]);
+
+    // Only off-page ticks: no bar at all, and "Select all on this page" is unticked.
+    const none = table({
+      selection: { selected: new Set(['z']), onChange: () => {}, actions: () => null },
+    });
+    expect(none).not.toContain('bulkbar');
+    expect(none).not.toMatch(/aria-label="Select all on this page" checked=""/);
+
+    expect(pageSelection(new Set(['b', 'z', 'a']), ROWS)).toEqual(['a', 'b']);
+    expect(pageSelection(new Set(), ROWS)).toEqual([]);
   });
 
   it('keeps the live region and drops the bar when nothing is chosen', () => {

@@ -228,6 +228,35 @@ test.describe('as admin', () => {
     await expect(card.locator('.tbl__range')).toHaveText('1 to 15 of 15');
   });
 
+  test('the data table: a selection is the page’s, so no action reaches a row off screen', async ({
+    page,
+  }) => {
+    await open(page);
+    const card = page.getByRole('region', { name: 'A data table' });
+    const table = card.getByRole('table', { name: 'Sample entries, with selection' });
+    const bar = page.getByRole('region', { name: 'Bulk actions' });
+    const first = table.getByRole('checkbox', { name: 'Select Sample entry 1', exact: true });
+
+    // Another page clears the ticks: the bar goes, and coming back finds none.
+    await first.check();
+    await expect(bar).toContainText('1 selected');
+    await card.getByRole('button', { name: 'Page 2', exact: true }).click();
+    await expect(card.locator('.tbl__range')).toHaveText('26 to 50 of 60');
+    await expect(bar).toHaveCount(0);
+    await card.getByRole('button', { name: 'Page 1', exact: true }).click();
+    await expect(card.locator('.tbl__range')).toHaveText('1 to 25 of 60');
+    await expect(first).not.toBeChecked();
+
+    // A filter that hides a ticked row drops it: Sample entry 1 is published, not a draft.
+    await first.check();
+    await expect(bar).toContainText('1 selected');
+    await card.getByRole('button', { name: /^Draft/ }).click();
+    await expect(card.locator('.tbl__range')).toHaveText('1 to 15 of 15');
+    await expect(bar).toHaveCount(0);
+    await card.getByRole('button', { name: /^All/ }).click();
+    await expect(first).not.toBeChecked();
+  });
+
   test('the data table: emptying the last page steps back to the page before', async ({ page }) => {
     await open(page);
     const card = page.getByRole('region', { name: 'A data table' });

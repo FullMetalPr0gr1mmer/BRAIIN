@@ -16,6 +16,9 @@ import { pageInfo, rangeText, PAGE_SIZE } from '@/lib/admin/pager';
 //     always on a device that cannot hover.
 //   - Selection (opt-in): a "Select <name>" checkbox per row, a tri-state "Select all on
 //     this page", the count announced, and a midnight bulk bar with the caller's actions.
+//     A selection is the page's: the bar counts and acts on the ticked rows on screen
+//     only, and a new page clears it (a new filter or search keeps only the ticked rows
+//     still shown), so a bulk action never reaches a row the person cannot see.
 //   - Numbers: a `num` column is tabular and end-aligned.
 //   - States: a loading row, an empty state that says what to do, an inline error (never
 //     a toast, ui.md §2.3).
@@ -36,7 +39,7 @@ export interface DataColumn<Row> {
 export interface DataSelection {
   selected: ReadonlySet<string>;
   onChange: (next: Set<string>) => void;
-  /** The bulk bar's actions for the chosen rows. */
+  /** The bulk bar's actions, given the ticked rows on this page (never rows off screen). */
   actions: (ids: string[]) => ReactNode;
 }
 
@@ -82,6 +85,15 @@ export function settleOffset(
   return last === offset ? null : last;
 }
 
+/**
+ * The ticked rows of this page, in its order: what the bulk bar counts and hands to its
+ * actions. An id in the set that is not on screen (another page, filtered out, deleted)
+ * is never counted or acted on.
+ */
+export function pageSelection(selected: ReadonlySet<string>, rows: readonly { id: string }[]) {
+  return rows.filter((row) => selected.has(row.id)).map((row) => row.id);
+}
+
 /** A cell's value as text, when the column has no renderer. */
 function plain(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -119,9 +131,26 @@ export default function DataTable<Row extends { id: string }>({
   }, [settle]);
   const linkColumn = titleColumn ?? columns[0]?.key;
   const span = columns.length + (selection ? 1 : 0) + (rowActions ? 1 : 0);
-  const chosen = selection ? rows.filter((row) => selection.selected.has(row.id)) : [];
+  const chosen = selection ? pageSelection(selection.selected, rows) : [];
   const all = rows.length > 0 && chosen.length === rows.length;
   const some = chosen.length > 0 && !all;
+
+  // The selection follows the page: moving to another page clears it, and new rows (a
+  // filter, a search, a delete) keep only the ticked ones still shown. Going back to a
+  // page never finds old ticks, and the parent's set never holds an id off screen.
+  const select = useRef(selection);
+  select.current = selection;
+  const shownOffset = useRef(offset);
+  // The rows are compared by their ids: a new array holding the same rows is the same page.
+  const rowKey = rows.map((row) => row.id).join(' ');
+  useEffect(() => {
+    const moved = shownOffset.current !== offset;
+    shownOffset.current = offset;
+    const current = select.current;
+    if (!current || current.selected.size === 0) return;
+    const kept = moved ? [] : pageSelection(current.selected, rows);
+    if (kept.length !== current.selected.size) current.onChange(new Set(kept));
+  }, [offset, rowKey]);
 
   // "Select all on this page" is tri-state: `indeterminate` is a DOM property with no
   // attribute, so it is set after render (the server's HTML shows the box unticked).
@@ -132,7 +161,7 @@ export default function DataTable<Row extends { id: string }>({
 
   function toggle(id: string, on: boolean) {
     if (!selection) return;
-    const next = new Set(selection.selected);
+    const next = new Set(chosen);
     if (on) next.add(id);
     else next.delete(id);
     selection.onChange(next);
@@ -140,15 +169,10 @@ export default function DataTable<Row extends { id: string }>({
 
   function toggleAll(on: boolean) {
     if (!selection) return;
-    const next = new Set(selection.selected);
-    for (const row of rows) {
-      if (on) next.add(row.id);
-      else next.delete(row.id);
-    }
-    selection.onChange(next);
+    selection.onChange(new Set(on ? rows.map((row) => row.id) : []));
   }
 
-  const count = selection?.selected.size ?? 0;
+  const count = chosen.length;
 
   return (
     <>
@@ -261,7 +285,7 @@ export default function DataTable<Row extends { id: string }>({
           </p>
           {count > 0 && (
             <BulkBar count={count} onClear={() => selection.onChange(new Set())}>
-              {selection.actions([...selection.selected])}
+              {selection.actions(chosen)}
             </BulkBar>
           )}
         </>
