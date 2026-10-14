@@ -60,14 +60,19 @@ export default function KitGallery({ tab }: KitGalleryProps) {
 }
 
 function TableDemo() {
+  // The sample's rows live in state so "Remove" can take some away (nothing is saved: a
+  // reload brings them back), which is how the table's step back from an emptied last
+  // page is checked in a browser.
+  const [entries, setEntries] = useState<readonly KitRow[]>(KIT_ROWS);
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [done, setDone] = useState('');
   const matching = useMemo(
-    () => KIT_ROWS.filter((row) => filter === 'all' || row.status === filter),
-    [filter],
+    () => entries.filter((row) => filter === 'all' || row.status === filter),
+    [entries, filter],
   );
+  const entriesWord = (n: number) => `${n} sample ${n === 1 ? 'entry' : 'entries'}`;
   const rows = matching.slice(offset, offset + PAGE_SIZE);
   const columns: DataColumn<KitRow>[] = [
     { key: 'title', label: 'Title' },
@@ -101,25 +106,38 @@ function TableDemo() {
             setDone('');
           },
           actions: (ids) => (
-            <button
-              type="button"
-              data-variant="primary"
-              onClick={() => {
-                setDone(
-                  `${ids.length} sample ${ids.length === 1 ? 'entry' : 'entries'} marked as reviewed.`,
-                );
-                setSelected(new Set());
-              }}
-            >
-              Mark as reviewed
-            </button>
+            <>
+              <button
+                type="button"
+                data-variant="primary"
+                onClick={() => {
+                  setDone(`${entriesWord(ids.length)} marked as reviewed.`);
+                  setSelected(new Set());
+                }}
+              >
+                Mark as reviewed
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const gone = new Set(ids);
+                  setEntries((current) => current.filter((row) => !gone.has(row.id)));
+                  setDone(
+                    `${ids.length} ${ids.length === 1 ? 'entry' : 'entries'} removed from the sample.`,
+                  );
+                  setSelected(new Set());
+                }}
+              >
+                Remove from the sample
+              </button>
+            </>
           ),
         }}
         toolbar={
           <Chips<StatusFilter>
             label="Filter the sample by status"
             chips={[
-              { value: 'all', label: 'All', count: KIT_ROWS.length },
+              { value: 'all', label: 'All', count: entries.length },
               { value: 'published', label: 'Published' },
               { value: 'draft', label: 'Draft' },
               { value: 'scheduled', label: 'Scheduled' },

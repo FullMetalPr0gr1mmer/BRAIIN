@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createElement, type ComponentType } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import Chips, { nextSelection } from '@/components/admin/kit/Chips';
-import DataTable, { type DataTableProps } from '@/components/admin/kit/DataTable';
+import DataTable, { settleOffset, type DataTableProps } from '@/components/admin/kit/DataTable';
 import Drawer from '@/components/admin/kit/Drawer';
 import ErrorSummary, { errorSummaryTitle } from '@/components/admin/kit/ErrorSummary';
 import ListRow from '@/components/admin/kit/ListRow';
@@ -122,6 +122,24 @@ describe('DataTable', () => {
     expect(table({ error: 'The server refused.' })).toContain(
       '<p class="msg" data-kind="error" role="alert">The server refused.</p>',
     );
+  });
+
+  it('steps back from a page past the end, never calling the list empty', () => {
+    // The one row on page 2 was deleted: the page came back empty and 25 rows remain. The
+    // table must not say "No services yet" over "1 to 25 of 25" with no pager (f4b review).
+    const out = table({ rows: [], total: 25, offset: 25, empty: { title: 'No services yet' } });
+    expect(out).not.toContain('No services yet');
+    expect(out).not.toContain('1 to 25 of 25');
+    expect(out).toContain('Loading…');
+    expect(out).toContain('aria-busy="true"');
+    // Where it goes: the last page that has rows.
+    expect(settleOffset(0, 25, 25)).toBe(0);
+    expect(settleOffset(0, 50, 50)).toBe(25);
+    expect(settleOffset(0, 26, 75)).toBe(25);
+    // Nowhere when the page shows rows, the list is empty, or it is already the last page.
+    expect(settleOffset(3, 28, 25)).toBeNull();
+    expect(settleOffset(0, 0, 25)).toBeNull();
+    expect(settleOffset(0, 30, 25)).toBeNull();
   });
 });
 

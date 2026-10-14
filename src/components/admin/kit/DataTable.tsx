@@ -19,6 +19,9 @@ import { pageInfo, rangeText, PAGE_SIZE } from '@/lib/admin/pager';
 //   - Numbers: a `num` column is tabular and end-aligned.
 //   - States: a loading row, an empty state that says what to do, an inline error (never
 //     a toast, ui.md §2.3).
+//   - A page that comes back empty while rows remain (its last row was deleted, here or by
+//     someone else) steps back to the last page that has rows (`settleOffset`); the empty
+//     state is for a list with no rows at all, never for a page past the end.
 // The toolbar (search, chips, a segmented control) is the caller's, passed as `toolbar`.
 
 export interface DataColumn<Row> {
@@ -62,6 +65,23 @@ export interface DataTableProps<Row extends { id: string }> {
   empty?: { title: string; text?: string; icon?: IconName; action?: ReactNode } | undefined;
 }
 
+/**
+ * Where a list goes when its page came back empty but rows remain: the last page that has
+ * rows. Null when the page is fine (it shows rows, or the list is empty, or it is already
+ * the last page). Without it, deleting the one row on the last page left an empty table
+ * that read "No services yet" over "1 to 25 of 25", with no pager to step back.
+ */
+export function settleOffset(
+  shown: number,
+  total: number,
+  offset: number,
+  limit = PAGE_SIZE,
+): number | null {
+  if (shown > 0 || total <= 0) return null;
+  const last = pageInfo(total, offset, limit).offset;
+  return last === offset ? null : last;
+}
+
 /** A cell's value as text, when the column has no renderer. */
 function plain(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -88,6 +108,15 @@ export default function DataTable<Row extends { id: string }>({
   empty = { title: 'Nothing here yet' },
 }: DataTableProps<Row>) {
   const info = pageInfo(total, offset, limit);
+  // A page past the end steps back (the parent's onPage loads it); until it has, the table
+  // says it is loading, not that nothing exists.
+  const settle = busy ? null : settleOffset(rows.length, total, offset, limit);
+  const loading = busy || settle !== null;
+  const page = useRef(onPage);
+  page.current = onPage;
+  useEffect(() => {
+    if (settle !== null) page.current(settle);
+  }, [settle]);
   const linkColumn = titleColumn ?? columns[0]?.key;
   const span = columns.length + (selection ? 1 : 0) + (rowActions ? 1 : 0);
   const chosen = selection ? rows.filter((row) => selection.selected.has(row.id)) : [];
@@ -131,7 +160,7 @@ export default function DataTable<Row extends { id: string }>({
       )}
       <div className="card card--flush dt">
         <div className="table-wrap">
-          <table className="data" aria-busy={busy || undefined}>
+          <table className="data" aria-busy={loading || undefined}>
             <caption className="visually-hidden">{caption}</caption>
             <thead>
               <tr>
@@ -201,7 +230,7 @@ export default function DataTable<Row extends { id: string }>({
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={span}>
-                    {busy ? (
+                    {loading ? (
                       <p className="empty__x">Loading…</p>
                     ) : (
                       <EmptyState
@@ -220,7 +249,7 @@ export default function DataTable<Row extends { id: string }>({
         </div>
         <div className="tbl__foot">
           <p className="tbl__range" aria-live="polite">
-            {busy && rows.length === 0 ? '' : rangeText(info)}
+            {loading && rows.length === 0 ? '' : rangeText(info)}
           </p>
           <Pager info={info} onPage={onPage} />
         </div>

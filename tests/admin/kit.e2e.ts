@@ -228,6 +228,31 @@ test.describe('as admin', () => {
     await expect(card.locator('.tbl__range')).toHaveText('1 to 15 of 15');
   });
 
+  test('the data table: emptying the last page steps back to the page before', async ({ page }) => {
+    await open(page);
+    const card = page.getByRole('region', { name: 'A data table' });
+    const table = card.getByRole('table', { name: 'Sample entries, with selection' });
+    await card.getByRole('button', { name: 'Page 3', exact: true }).click();
+    await expect(card.locator('.tbl__range')).toHaveText('51 to 60 of 60');
+
+    await table.getByRole('checkbox', { name: 'Select all on this page' }).check();
+    await page
+      .getByRole('region', { name: 'Bulk actions' })
+      .getByRole('button', { name: 'Remove from the sample' })
+      .click();
+    await expect(card.getByRole('status')).toHaveText('10 entries removed from the sample.');
+
+    // Page 3 no longer exists: the table shows page 2's rows, not an empty page with no
+    // pager that reads as if every entry were gone.
+    await expect(table.getByRole('link', { name: 'Sample entry 50', exact: true })).toBeVisible();
+    await expect(card.locator('.tbl__range')).toHaveText('26 to 50 of 50');
+    await expect(card.getByRole('button', { name: 'Page 2', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(card.getByRole('button', { name: 'Page 3', exact: true })).toHaveCount(0);
+  });
+
   test('the modal: focus in its first field, Escape closes, focus goes back', async ({ page }) => {
     await open(page);
     const opener = page.getByRole('button', { name: 'Rename the sample' });
