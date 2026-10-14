@@ -660,11 +660,13 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
       expect.objectContaining({
         level: 'warn',
         source: 'auth.reset',
-        detail: { failure: 'refused', status: 422, code: 'weak_password' },
+        // Whose account (the verify's user), so an operator can help: never the token.
+        detail: { failure: 'refused', userId: UUID, status: 422, code: 'weak_password' },
       }),
       expect.objectContaining({ source: 'auth.reset' }),
     ]);
     expect(JSON.stringify(state.logs)).not.toContain(NEW_PASSWORD);
+    expect(JSON.stringify(state.logs)).not.toContain(TOKEN);
   });
 
   it('a set that breaks on the way (5xx, a throttle, a throw) is spent too, and says so', async () => {
@@ -692,9 +694,11 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
       expect(state.logs).toEqual([
         expect.objectContaining({
           source: 'auth.reset',
-          detail: expect.objectContaining({ failure: 'interrupted' }),
+          detail: expect.objectContaining({ failure: 'interrupted', userId: UUID }),
         }),
       ]);
+      expect(JSON.stringify(state.logs)).not.toContain(TOKEN);
+      expect(JSON.stringify(state.logs)).not.toContain(NEW_PASSWORD);
       state.update = { error: null };
       state.updateThrows = false;
     }

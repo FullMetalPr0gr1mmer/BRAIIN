@@ -86,17 +86,22 @@ const TOKEN_KEPT: ReadonlySet<Failure> = new Set([
 ]);
 
 /**
- * A spent link that set no password, for an operator: the auth server's status and code,
- * never the password or the address. A refusal the person cannot fix by choosing another
- * password (a setting such as O-24's current-password rule, docs/launch-runbook.md §2b)
- * shows here first.
+ * A spent link that set no password, for an operator: whose account (its id, which the
+ * verify returned), the auth server's status and code, never the token, the password or the
+ * address. A refusal the person cannot fix by choosing another password (a setting such as
+ * O-24's current-password rule, docs/launch-runbook.md §2b) shows here first, and the id
+ * lets an operator help that person (F7 review).
  */
-async function logSetFailure(failure: 'refused' | 'interrupted', detail: Record<string, unknown>) {
+async function logSetFailure(
+  failure: 'refused' | 'interrupted',
+  userId: string,
+  detail: Record<string, unknown>,
+) {
   await writeSystemLog({
     level: 'warn',
     source: 'auth.reset',
     message: 'A reset link was spent but no new password was set',
-    detail: { failure, ...detail },
+    detail: { failure, userId, ...detail },
   });
 }
 
@@ -167,12 +172,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
       const status = error.status ?? 0;
       const failure = status >= 400 && status < 500 && status !== 429 ? 'refused' : 'interrupted';
-      await logSetFailure(failure, { status, code: error.code ?? null });
+      await logSetFailure(failure, userId, { status, code: error.code ?? null });
       return fail(failure);
     }
   } catch (err) {
     await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
-    await logSetFailure('interrupted', { thrown: err instanceof Error ? err.name : 'unknown' });
+    await logSetFailure('interrupted', userId, {
+      thrown: err instanceof Error ? err.name : 'unknown',
+    });
     return fail('interrupted');
   }
 
