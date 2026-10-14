@@ -10,7 +10,7 @@
 //   2. no public chunk imports an admin chunk, statically or lazily (the public budget
 //      excludes admin-* by name, so such an import would hide admin weight from it);
 //   3. each admin screen's eager graph stays within ROUTE_BUDGET, and the sign-in
-//      page's script within LOGIN_BUDGET;
+//      screens' scripts within LOGIN_BUDGET (since F7 they have none: 0 B, reported so);
 //   4. the chunks hold what their names say (admin-ui carries no ProseMirror).
 // Sizes are gzip bytes; KB means 1,000 B.
 
@@ -55,10 +55,15 @@ export function closure(entry, read) {
   return seen;
 }
 
+// The sign-in screens (Admin v2 F7): login, forgot and reset, and their shell AuthLayout.
+// Zero-JS since F7 (tests/lib/adminConventions.spec.ts), so no such chunk is built; one
+// that appears is weighed against LOGIN_BUDGET.
+const SIGN_IN_FILE = /^(?:login|forgot|reset|AuthLayout)\.astro_/;
+
 // Every admin chunk is `admin-*` (the groups in astro.config.mjs) or an island entry named
-// `Admin*` (src/components/admin/islands), plus the sign-in page's script. A chunk named
+// `Admin*` (src/components/admin/islands), plus a sign-in screen's script. A chunk named
 // otherwise is public, whatever it holds.
-const ADMIN_FILE = /^(admin-|Admin|login\.astro_)/;
+const ADMIN_FILE = /^(?:admin-|Admin|(?:login|forgot|reset|AuthLayout)\.astro_)/;
 
 export function check(dir) {
   const files = readdirSync(dir).filter((f) => f.endsWith('.js'));
@@ -106,7 +111,7 @@ export function check(dir) {
     (f) =>
       ADMIN_FILE.test(f) &&
       !/^admin-/.test(f) &&
-      !f.startsWith('login.astro_') &&
+      !SIGN_IN_FILE.test(f) &&
       !f.startsWith('AdminLayout'),
   );
   for (const island of islands) {
@@ -116,13 +121,15 @@ export function check(dir) {
     report.push([island.replace(/\.[\w-]+\.js$/, ''), bytes]);
     if (bytes > ROUTE_BUDGET) problems.push(`${island}: ${bytes} B gz eager, over ${ROUTE_BUDGET}`);
   }
-  const login = find('login.astro_');
-  if (login) {
-    const bytes = sum(closure(login, read));
-    report.push(['/admin/login script', bytes]);
-    if (bytes > LOGIN_BUDGET)
-      problems.push(`the sign-in script loads ${bytes} B gz, over ${LOGIN_BUDGET}`);
-  }
+  // Every sign-in screen's script with what it imports, each file counted once: 0 B when,
+  // as since F7, there is none. Reported either way, so the size line says what they load.
+  const signIn = new Set(
+    files.filter((f) => SIGN_IN_FILE.test(f)).flatMap((f) => [...closure(f, read)]),
+  );
+  const signInBytes = sum(signIn);
+  report.push(['sign-in screens script (login, forgot, reset)', signInBytes]);
+  if (signInBytes > LOGIN_BUDGET)
+    problems.push(`the sign-in script loads ${signInBytes} B gz, over ${LOGIN_BUDGET}`);
   if (rich) report.push(['admin-rich (lazy)', gz(rich)]);
   return { problems, report };
 }

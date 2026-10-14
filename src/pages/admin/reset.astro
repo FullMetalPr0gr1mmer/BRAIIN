@@ -1,0 +1,109 @@
+---
+import AuthLayout from '@/layouts/AuthLayout.astro';
+import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
+import { PASSWORD_MAX_BYTES, PASSWORD_MIN } from '@schemas/adminPrefs';
+import {
+  RESET_LINK_SPENT,
+  RESET_MESSAGES,
+  RESET_REOPEN,
+  RESET_TOO_LARGE,
+  messageFor,
+} from '@/lib/auth/messages';
+import { FORM_TOO_LARGE } from '@/lib/auth/expiredForm';
+import { RESET_TOKEN_COOKIE, dropResetTokenOptions, resetTokenFrom } from '@/lib/auth/resetToken';
+
+export const prerender = false;
+
+// Choose a new password (Admin v2 F7). Opened from the reset e-mail's link,
+// `/admin/reset?token_hash=…&type=recovery` (the recovery template the runbook sets,
+// docs/launch-runbook.md §2b). This page does NOT verify the token: mail scanners fetch
+// links, and a GET that spent it would leave the person with a dead link. It only checks
+// the token's shape and carries it, in a hidden field, to /api/admin/auth/reset, which
+// verifies it, sets the password and signs the account out everywhere, all on the server
+// (src/lib/auth/recovery.ts). A plain form, no script.
+//
+// After a form post that left the link unspent, the endpoint comes back here with only an
+// `error` code in the URL and the token in a cookie scoped to this page, so the token is
+// not written into one more logged request URL (src/lib/auth/resetToken.ts). And the page's
+// own requests (its form post, its links) send the origin alone as their Referer, never
+// this URL with the e-mail's token in it.
+
+const params = Astro.url.searchParams;
+const kept = Astro.cookies.get(RESET_TOKEN_COOKIE)?.value;
+const token = resetTokenFrom(params, kept);
+// The cookie has done its job once its token is in the form below: dropped with this very
+// response, so the link is not offered again to whoever uses this browser next. A reload
+// then finds no link here, and says to open it again (second review).
+if (kept !== undefined) Astro.cookies.delete(RESET_TOKEN_COOKIE, dropResetTokenOptions());
+const code = params.get('error');
+const message = messageFor(RESET_MESSAGES, code);
+// No usable link: none in the URL or the cookie, or the endpoint said it is spent or refused.
+const spent = token === null || (code !== null && RESET_LINK_SPENT.has(code));
+// A failure that kept the link, with the link no longer here: it is not spent, only gone
+// from this page (a reload, or the cookie's 15 minutes): say to open it again. A form too
+// large to read always arrives so (the middleware sends it back unread), and says why too.
+const reopen = token === null && message !== null && code !== null && !RESET_LINK_SPENT.has(code);
+const reopenWith = code === FORM_TOO_LARGE ? RESET_TOO_LARGE : RESET_REOPEN;
+const shown = reopen ? reopenWith : (message ?? (spent ? RESET_MESSAGES.expired : null));
+const csrfToken = Astro.locals.csrfToken;
+---
+
+<AuthLayout title="Choose a new password" styles={['login.css']} referrer="strict-origin">
+  <h1>Choose a new password</h1>
+
+  {
+    shown && (
+      <p class="msg" data-kind={shown.kind} role="alert">
+        {shown.text}
+      </p>
+    )
+  }
+
+  {
+    spent ? (
+      <p class="login__lead">
+        <a class="login__link" href="/admin/forgot">
+          Ask for a new link
+        </a>
+      </p>
+    ) : (
+      <>
+        <p class="login__lead">
+          Use at least {PASSWORD_MIN} characters. A short sentence you will remember works well.
+          Saving it signs you out on every device.
+        </p>
+        <form class="login__form" method="post" action="/api/admin/auth/reset">
+          <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+          <input type="hidden" name="token_hash" value={token} />
+          <label class="field">
+            <span>New password</span>
+            <input
+              type="password"
+              name="password"
+              autocomplete="new-password"
+              required
+              minlength={PASSWORD_MIN}
+              maxlength={PASSWORD_MAX_BYTES}
+            />
+          </label>
+          <label class="field">
+            <span>Confirm new password</span>
+            <input
+              type="password"
+              name="confirm"
+              autocomplete="new-password"
+              required
+              minlength={PASSWORD_MIN}
+              maxlength={PASSWORD_MAX_BYTES}
+            />
+          </label>
+          <button type="submit" data-variant="primary">
+            Save new password
+          </button>
+        </form>
+      </>
+    )
+  }
+
+  <p class="login__back"><a class="login__link" href="/admin/login">Back to sign in</a></p>
+</AuthLayout>

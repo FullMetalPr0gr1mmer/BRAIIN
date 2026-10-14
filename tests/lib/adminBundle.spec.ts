@@ -94,11 +94,40 @@ describe('the checks', () => {
     expect(check(dir).problems.join('\n')).toMatch(/sign-in script loads/);
   });
 
+  it('weighs every sign-in screen and their shell, not only login (Admin v2 F7)', () => {
+    const big = Array.from({ length: 4000 }, (_, i) => `const v${i}=${Math.sin(i)};`).join('');
+    for (const name of [
+      'forgot.astro_astro_type_script_index_0_lang.Z1.js',
+      'reset.astro_astro_type_script_index_0_lang.Z1.js',
+      'AuthLayout.astro_astro_type_script_index_0_lang.Z1.js',
+    ]) {
+      const result = check(build({ ...GOOD, [name]: big }));
+      expect(result.problems.join('\n'), name).toMatch(/sign-in script loads/);
+      // A sign-in chunk is admin code, not a public chunk importing one.
+      const imports = check(build({ ...GOOD, [name]: 'import"./admin-client.C1.js";' }));
+      expect(imports.problems, name).toEqual([]);
+    }
+  });
+
+  it('reports a zero-JS sign-in as 0 B (F7: the screens are plain forms)', () => {
+    const { 'login.astro_astro_type_script_index_0_lang.G1.js': _login, ...noScript } = GOOD;
+    const { problems, report } = check(build(noScript)) as {
+      problems: string[];
+      report: [string, number][];
+    };
+    expect(problems).toEqual([]);
+    expect(report).toContainEqual(['sign-in screens script (login, forgot, reset)', 0]);
+  });
+
   it('reports each admin entry with its eager size', () => {
     const report = check(build(GOOD)).report as [string, number][];
     const names = report.map(([name]) => name);
     expect(names).toEqual(
-      expect.arrayContaining(['AdminResourceForm', 'AdminChrome', '/admin/login script']),
+      expect.arrayContaining([
+        'AdminResourceForm',
+        'AdminChrome',
+        'sign-in screens script (login, forgot, reset)',
+      ]),
     );
   });
 

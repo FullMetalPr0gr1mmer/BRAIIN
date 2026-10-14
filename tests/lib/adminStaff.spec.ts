@@ -4,6 +4,7 @@ import { isAbsolute, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ROLES } from '@/lib/auth/types';
 import {
+  SIGN_IN_ACCOUNT,
   STAFF_ROLES,
   authFile,
   builtSupabaseUrls,
@@ -139,6 +140,16 @@ describe('the staff accounts', () => {
       const sql = readFileSync(file, 'utf8');
       expect(sql, file).not.toContain('e2e00000-');
       for (const role of STAFF_ROLES) expect(sql, file).not.toContain(staffEmail(role));
+      expect(sql, file).not.toContain(SIGN_IN_ACCOUNT.email);
     }
+  });
+
+  it('the sign-in spec has an account of its own (F7), on the same reserved domain', () => {
+    // Its password is reset and its sessions signed out everywhere, so it must not be one
+    // of the role accounts whose saved sessions every other admin spec runs on.
+    const roleEmails = STAFF_ROLES.map(staffEmail);
+    expect(roleEmails).not.toContain(SIGN_IN_ACCOUNT.email);
+    expect(SIGN_IN_ACCOUNT.email).toMatch(/^e2e-[a-z-]+@example\.com$/);
+    expect(SIGN_IN_ACCOUNT.id).toMatch(/^e2e00000-/);
   });
 });

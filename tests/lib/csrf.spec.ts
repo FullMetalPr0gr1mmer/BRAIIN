@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSameOrigin } from '@/lib/http/csrf';
+import { CSRF_HEADER_NAME, csrfHeaderToken, isSameOrigin } from '@/lib/http/csrf';
 
 describe('isSameOrigin (same-origin CSRF check)', () => {
   it('allows a matching origin/host', () => {
@@ -19,5 +19,20 @@ describe('isSameOrigin (same-origin CSRF check)', () => {
 
   it('rejects a malformed Origin', () => {
     expect(isSameOrigin('not a url', 'braiinstation.com')).toBe(false);
+  });
+});
+
+describe('csrfHeaderToken: whether a request carries a token header (F7 review)', () => {
+  const request = (headers: Record<string, string>) =>
+    new Request('https://braiinstation.com/api/admin/leads', { method: 'POST', headers });
+
+  it('is the header when it holds a token', () => {
+    expect(csrfHeaderToken(request({ [CSRF_HEADER_NAME]: 'abc' }))).toBe('abc');
+  });
+
+  it('is null with no header, an empty one, or one of spaces (Headers trims them)', () => {
+    expect(csrfHeaderToken(request({}))).toBeNull();
+    expect(csrfHeaderToken(request({ [CSRF_HEADER_NAME]: '' }))).toBeNull();
+    expect(csrfHeaderToken(request({ [CSRF_HEADER_NAME]: '   ' }))).toBeNull();
   });
 });

@@ -246,6 +246,10 @@ export default defineConfig({
 
       // ---- Server, non-secret config ----
       AI_DAILY_USD_CAP: envField.number({ context: 'server', access: 'public', default: 5 }),
+      // Admin v2 F7: true once Supabase Auth can send e-mail (owner item O-2: SMTP in the
+      // dashboard, and the recovery template linking to /admin/reset, runbook §2b). Off,
+      // "Forgot password?" says "Not set up" instead of pretending to send.
+      AUTH_EMAIL_READY: envField.boolean({ context: 'server', access: 'public', default: false }),
 
       // ---- Server SECRETS (never client-bundled) ----
       SUPABASE_DB_POOL_URL: envField.string({ context: 'server', access: 'secret' }), // Supavisor :6543, pgbouncer=true

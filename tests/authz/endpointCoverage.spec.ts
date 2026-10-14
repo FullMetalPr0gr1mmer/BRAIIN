@@ -27,9 +27,21 @@ const NOT_DRIVABLE: Readonly<Record<string, string>> = {
     'Sign-in is reached without a session (the middleware exempts this one path) and checks ' +
     'no capability, so the matrix row "anon → 403" cannot hold. tests/authz/login.spec.ts ' +
     'drives its guards instead: the middleware refusing a cross-site or tokenless POST, the ' +
-    'one generic 401 for every failed sign-in (a body that is not JSON is a 400, before any ' +
-    'lookup), and the 423 lockout (fail-closed included) over a stubbed lockout store. The ' +
-    'counting itself is SQL (0009) with no pgTAP test yet.',
+    'one generic 401 for every failed sign-in (a body that is neither JSON nor a form post is ' +
+    'a 400, before any lookup), the 423 lockout (fail-closed included) over a stubbed lockout ' +
+    'store, the no-JS form answers and "Keep me signed in". The counting itself is SQL (0009) ' +
+    'with no pgTAP test yet.',
+  'POST /api/admin/auth/forgot':
+    'Forgot password (Admin v2 F7) is reached without a session and checks no capability: it ' +
+    'answers anyone, the same way for every address. tests/authz/recovery.spec.ts drives its ' +
+    'guards: the middleware letting it through only same-origin with the token, "Not set up" ' +
+    'while e-mail is off, the one answer for known and unknown addresses, the limits (fail ' +
+    'closed) and the audit row.',
+  'POST /api/admin/auth/reset':
+    'Reset password (Admin v2 F7) is reached without a session; its authority is the one-time ' +
+    'recovery token, not a role. tests/authz/recovery.spec.ts drives it: the middleware, the ' +
+    'token and password checks before anything is spent, the limit (fail closed), verify, set, ' +
+    'sign out everywhere, the cleared cookies and the audit row.',
   'POST /api/admin/auth/logout':
     'Sign-out needs a session, not a capability: every role may sign out, and the session ' +
     'gate is src/middleware.ts (401 before the handler, which this suite invokes directly; ' +
