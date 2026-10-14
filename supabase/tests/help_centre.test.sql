@@ -9,9 +9,10 @@
 --     with another: CLAUDE.md §5 gives help no capability); anon reads nothing. Which guides a
 --     role is SHOWN is the Worker's filter (tests/lib/helpCentre.spec.ts), not RLS.
 --   • help_search: staff find their own tenant's guides, folded the way §8 folds Arabic
---     (ta marbuta, alef forms, tashkeel) and in any case; `%` and `_` are characters, not
---     patterns; an over-long or control-character query is a 22023; a tenant other than
---     the token's gets nothing; at most 100 guides; anon may not call it.
+--     for a contains search (app.normalize_ar_q: ta marbuta, alef forms, tashkeel) and in
+--     any case; `%` and `_` are characters, not patterns; an over-long or control-character
+--     query is a 22023; a tenant other than the token's gets nothing; at most 100 guides;
+--     anon may not call it.
 --   • the rules the CHECKs hold for every writer, the service role included: a body is typed
 --     blocks with no markup, both languages, known kinds and keys only; titles and keys are
 --     plain; a guide keeps its tenant and slug, and its version moves only when it changes.

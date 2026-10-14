@@ -27,9 +27,11 @@
 --     filter by capability would hide nothing and add a second matrix to keep in step.
 --   • public.help_search(p_tenant, p_q): the drawer's search, SECURITY INVOKER (RLS decides
 --     the rows). "Contains" over `search_text`, a generated column holding both titles, the
---     tag keys and every text of both bodies, folded the way CLAUDE.md §8 folds Arabic
---     (app.normalize_ar_q: tashkeel, alef forms, ة→ه, kashida) and lower-cased; the query is
---     folded by the same function, and `%`, `_` and `\` in it are characters, not patterns.
+--     tag keys and every text of both bodies, folded the way CLAUDE.md §8 folds Arabic for a
+--     contains search (app.normalize_ar_q: tashkeel, alef forms, ة→ه, kashida; no article
+--     stripping, which only the FTS index needs, app.ar_fts_text) and lower-cased; the query
+--     is folded by the same function, and `%`, `_` and `\` in it are characters, not
+--     patterns.
 --     A query is at most 64 printable characters (22023 otherwise), under two characters
 --     finds nothing, and the answer is at most 100 guides under a 500 ms statement timeout:
 --     the list's own cap, so the role's filter, which the Worker applies, comes before the

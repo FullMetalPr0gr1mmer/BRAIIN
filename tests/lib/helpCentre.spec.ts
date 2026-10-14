@@ -245,6 +245,20 @@ describe('the schema and the migration state the same rules', () => {
     expect(sql).not.toContain(`limit ${MAX_RESULTS};`);
   });
 
+  it('the standard describes the search’s fold as the migration does it', () => {
+    // help_search folds with app.normalize_ar_q only (a contains search strips no article);
+    // CLAUDE.md's U16 bullet must not claim the FTS rule (app.ar_fts_text) for it.
+    const search = /function public\.help_search\([\s\S]*?\nend \$\$;/.exec(sql)?.[0] ?? '';
+    expect(search).toContain('app.normalize_ar_q(');
+    expect(search).not.toContain('ar_fts_text');
+    const bullet =
+      readFileSync('CLAUDE.md', 'utf8')
+        .split('\n')
+        .find((line) => line.startsWith('- U16, the help centre (0046)')) ?? '';
+    expect(bullet).toContain('with `app.normalize_ar_q` on both sides');
+    expect(bullet).not.toMatch(/as the Arabic FTS rule above folds/);
+  });
+
   it('the body schema refuses what the CHECK refuses', () => {
     const ok = { en: [{ t: 'p', x: 'a' }], ar: [{ t: 'p', x: 'ب' }] };
     expect(HelpBodySchema.safeParse(ok).success).toBe(true);

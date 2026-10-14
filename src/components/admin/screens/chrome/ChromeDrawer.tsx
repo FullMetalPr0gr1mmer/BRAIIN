@@ -7,8 +7,8 @@ import { focusReturnTarget, isRendered } from '@/lib/admin/focusReturn';
 // the trigger. It opens from the inline end, full width on a phone.
 //
 // The general Drawer of the component kit is F4b's, built in parallel; this one is private
-// to the shell's two drawers (bell and account) and uses the same class names, so the
-// kit's can replace it without touching admin.css.
+// to the shell's drawers (the bell, the account and, since U16, the help centre) and uses
+// the same class names, so the kit's can replace it without touching admin.css.
 
 export interface ChromeDrawerProps {
   dialogRef: RefObject<HTMLDialogElement | null>;
