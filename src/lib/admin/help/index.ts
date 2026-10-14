@@ -30,8 +30,16 @@ export { PAGE_GUIDES, pageGuideFor, type PageGuide } from './pageGuides';
 // Which guides a ROLE is shown is decided here, from ROLE_CAPS (`mayRead`, ./access.ts):
 // every list, search and guide below is filtered by it before it leaves the server.
 
-/** At most this many guides are read for a list (the set holds a dozen). */
+/**
+ * At most this many guides are read for a list or a search (the set holds a dozen; the spec
+ * keeps the set under it). The role's filter runs on what is read, so a cut that counted
+ * other roles' guides would hide ones the role may read: the cap is the whole set's, never
+ * a page of it.
+ */
 export const MAX_GUIDES = 100;
+
+/** A search shows at most this many guides: the first ones the role may read. */
+export const MAX_RESULTS = 20;
 
 const INDEX_COLUMNS = 'slug,title,title_ar,minutes,tags,screens,caps,sort_order';
 const ARTICLE_COLUMNS = `${INDEX_COLUMNS},body`;
@@ -111,8 +119,10 @@ export async function loadHelpIndex(
 
 /**
  * The guides matching a search the caller may read, best first (public.help_search: a
- * title match first, then the set's order; at most 20). The query is cleaned as the
- * header search cleans one; under two characters searches nothing.
+ * title match first, then the set's order). The RPC answers up to MAX_GUIDES; the role's
+ * filter runs on all of them and only then are the first MAX_RESULTS kept, so a role never
+ * loses a guide it may read to guides of other roles ranked above it. The query is cleaned
+ * as the header search cleans one; under two characters searches nothing.
  */
 export async function searchHelp(
   sb: SupabaseClient,
@@ -126,6 +136,7 @@ export async function searchHelp(
   const rows = Array.isArray(data) ? (data as unknown[]) : [];
   return (await parseRows(rows, 'search'))
     .filter((row) => mayRead(auth.role, row.caps))
+    .slice(0, MAX_RESULTS)
     .map(toGuide);
 }
 

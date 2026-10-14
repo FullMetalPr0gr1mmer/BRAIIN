@@ -31,8 +31,11 @@
 --     (app.normalize_ar_q: tashkeel, alef forms, ة→ه, kashida) and lower-cased; the query is
 --     folded by the same function, and `%`, `_` and `\` in it are characters, not patterns.
 --     A query is at most 64 printable characters (22023 otherwise), under two characters
---     finds nothing, and the answer is at most 20 guides under a 500 ms statement timeout.
---     Like crm_people, the Worker names the tenant and gets nothing unless it is the token's.
+--     finds nothing, and the answer is at most 100 guides under a 500 ms statement timeout:
+--     the list's own cap, so the role's filter, which the Worker applies, comes before the
+--     cut to the 20 the drawer shows (a cut here would count other roles' guides, and a
+--     role would lose ones it may read). Like crm_people, the Worker names the tenant and
+--     gets nothing unless it is the token's.
 --   • app.help_article_set(): the guides themselves, one JSON array, written for the
 --     features that are built (the client's prototype articles rewritten; nothing describes
 --     a screen that does not exist). app.seed_help_articles(p_tenant) upserts the set into a
@@ -234,7 +237,8 @@ create trigger help_articles_guard before insert or update on public.help_articl
 -- The drawer's search. INVOKER: the caller's RLS decides the rows (staff of the tenant). The
 -- Worker names the tenant, as for crm_people, and gets nothing unless it is the token's. A
 -- query the Worker would never send (over 64 characters, a control character) is a 22023,
--- never quietly searched; one under two characters finds nothing.
+-- never quietly searched; one under two characters finds nothing. At most 100 guides, the
+-- Worker's MAX_GUIDES (src/lib/admin/help): it filters them by role, THEN keeps 20.
 create or replace function public.help_search(p_tenant uuid, p_q text)
   returns table (id uuid, slug text, title text, title_ar text, minutes smallint, tags text[],
                  screens text[], caps text[], sort_order int)
@@ -262,7 +266,7 @@ begin
      order by (lower(app.normalize_ar_q(h.title || ' ' || h.title_ar))
                  like '%' || v_needle || '%' escape '\') desc,
               h.sort_order, h.slug
-     limit 20;
+     limit 100;
 end $$;
 
 -- ---- 4. The guides --------------------------------------------------------------------------

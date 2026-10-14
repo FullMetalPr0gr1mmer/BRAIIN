@@ -22,6 +22,8 @@ import {
   isOnScreen,
   loadHelpArticle,
   loadHelpIndex,
+  MAX_GUIDES,
+  MAX_RESULTS,
   mayRead,
   PAGE_GUIDES,
   pageGuideFor,
@@ -98,6 +100,12 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
   it('is read from the migration that defines the set last', () => {
     expect(SET_FILE).toMatch(/^\d{4}_[a-z0-9_]+\.sql$/);
     expect(SET.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('the set stays under the read cap, so the role filter always sees every guide', () => {
+    // The list and the search read at most MAX_GUIDES rows and filter them by role after;
+    // a set past the cap would let other roles' guides push a role's own out of the read.
+    expect(SET.length).toBeLessThanOrEqual(MAX_GUIDES);
   });
 
   it('every guide keeps the schema the Worker reads with (strict: no unknown key)', () => {
@@ -228,6 +236,9 @@ describe('the schema and the migration state the same rules', () => {
     expect(sql).toContain(`'^[a-z][a-zA-Z]*\\.[a-z][a-zA-Z]*$', ${HELP_LIMITS.caps})`);
     expect(sql).toContain(`minutes between 1 and ${HELP_LIMITS.minutes}`);
     expect(sql).toContain(`char_length(p_q) > ${HELP_LIMITS.query}`);
+    // The search answers the list's cap, never the drawer's 20: the role filter comes first.
+    expect(sql).toContain(`limit ${MAX_GUIDES};`);
+    expect(sql).not.toContain(`limit ${MAX_RESULTS};`);
   });
 
   it('the body schema refuses what the CHECK refuses', () => {
@@ -532,6 +543,28 @@ describe('the loaders', () => {
     expect(results.map((r) => r.slug)).toEqual(
       SET.filter((a) => mayRead('seo', a.caps)).map((a) => a.slug),
     );
+  });
+
+  it('search: the role filter runs before the cut to 20, so no readable guide is lost', async () => {
+    // Thirty guides for hiring rank above twenty-five every member reads: a cut before the
+    // filter would leave Content Creator nothing.
+    const base = rowOf(SET[0]!);
+    const hiring = Array.from({ length: 30 }, (_, i) => ({
+      ...base,
+      slug: `hiring-${i}`,
+      caps: ['applications.manage'],
+    }));
+    const open = Array.from({ length: 25 }, (_, i) => ({ ...base, slug: `open-${i}`, caps: [] }));
+    const { sb } = fakeDb({ rpc: [...hiring, ...open] });
+    const results = await searchHelp(sb, auth('content_creator'), 'guide');
+    expect(results.map((r) => r.slug)).toEqual(open.slice(0, MAX_RESULTS).map((r) => r.slug));
+    // Admin reads them all: still the first 20, in the RPC's order.
+    const admin = await searchHelp(
+      fakeDb({ rpc: [...hiring, ...open] }).sb,
+      auth('admin'),
+      'guide',
+    );
+    expect(admin.map((r) => r.slug)).toEqual(hiring.slice(0, MAX_RESULTS).map((r) => r.slug));
   });
 
   it('search: a crafted query cut through an emoji reaches the RPC well formed', async () => {

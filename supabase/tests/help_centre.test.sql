@@ -11,7 +11,7 @@
 --   • help_search: staff find their own tenant's guides, folded the way §8 folds Arabic
 --     (ta marbuta, alef forms, tashkeel) and in any case; `%` and `_` are characters, not
 --     patterns; an over-long or control-character query is a 22023; a tenant other than
---     the token's gets nothing; anon may not call it.
+--     the token's gets nothing; at most 100 guides; anon may not call it.
 --   • the rules the CHECKs hold for every writer, the service role included: a body is typed
 --     blocks with no markup, both languages, known kinds and keys only; titles and keys are
 --     plain; a guide keeps its tenant and slug, and its version moves only when it changes.
@@ -263,16 +263,18 @@ select is((select version from public.help_articles
             where tenant_id = '46000000-0000-0000-0000-000000000001' and slug = 'operator-note'), 2,
   'changing a guide moves its version');
 
--- The search's cap: more guides match than it answers. Added here (staff write none), read
--- as T1's admin, then removed so the counts below are the set's.
+-- The search's cap: more guides match than it answers. It is the list's cap (MAX_GUIDES in
+-- src/lib/admin/help), not the drawer's 20: the Worker filters by role first, then keeps
+-- 20. Added here (staff write none), read as T1's admin, then removed so the counts below
+-- are the set's.
 insert into public.help_articles (tenant_id, slug, title, title_ar, minutes, screens, sort_order, body)
 select '46000000-0000-0000-0000-000000000001', 'bulk-' || n, 'Bulk guide ' || n, 'دليل', 1,
        '{/admin}', 1000 + n, _body('Quokka facts.')
-  from generate_series(1, 25) n;
+  from generate_series(1, 105) n;
 set local role authenticated;
 select _as('admin', '46000000-0000-0000-0000-000000000001');
-select is(_hits('46000000-0000-0000-0000-000000000001', 'quokka'), 20,
-  'a search answers at most 20 guides (25 match)');
+select is(_hits('46000000-0000-0000-0000-000000000001', 'quokka'), 100,
+  'a search answers at most 100 guides, the list''s cap (105 match)');
 set local role service_role;
 select _as(null, null);
 delete from public.help_articles
