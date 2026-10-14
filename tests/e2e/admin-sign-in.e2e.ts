@@ -159,6 +159,19 @@ test.describe('without JavaScript', () => {
     // the links' Referer, and, unlike `no-referrer`, still sends the Origin the post needs.
     await page.goto(`/admin/reset?token_hash=${TOKEN}&type=recovery`);
     await expect(page.locator('meta[name="referrer"]')).toHaveAttribute('content', 'strict-origin');
+    // What the meta is for: the form post itself. Two passwords that differ are refused
+    // before the link is checked, so no auth server is needed to see the headers it sent.
+    const origin = new URL(page.url()).origin;
+    const posted = page.waitForRequest(
+      (r) => r.method() === 'POST' && new URL(r.url()).pathname === '/api/admin/auth/reset',
+    );
+    await page.getByLabel('New password', { exact: true }).fill('a sturdy passphrase 1');
+    await page.getByLabel('Confirm new password', { exact: true }).fill('a sturdy passphrase 2');
+    await page.getByRole('button', { name: 'Save new password' }).click();
+    const headers = await (await posted).allHeaders();
+    expect(headers['referer']).toBe(`${origin}/`);
+    expect(headers['origin']).toBe(origin);
+    await page.waitForURL((url) => url.searchParams.get('error') === 'mismatch');
     await page.goto('/admin/login');
     await expect(page.locator('meta[name="referrer"]')).toHaveCount(0);
   });
