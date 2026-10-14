@@ -243,6 +243,21 @@ describe('admin.css: a row’s hidden actions take no presses (Admin v2 F4b revi
   });
 });
 
+describe('admin.css: a table never widens the page (WCAG 1.4.10, F4b pre-merge review)', () => {
+  // tests/admin/kit.e2e.ts measures it at 320 and 390px; this keeps the rules that make it
+  // so. A visually hidden cell text is position: absolute: without a positioned scroll
+  // container its containing block is outside the clip and it widens the page.
+  it('the scroll container is the containing block of what is positioned inside it', () => {
+    expect(ADMIN).toMatch(/\n\.table-wrap\s*\{[^}]*position:\s*relative;[^}]*overflow-x:\s*auto/);
+  });
+
+  it('the kit page stack lets a wide card shrink to the page', () => {
+    expect(SCREENS['kit.css']).toMatch(
+      /\.kit__stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
+  });
+});
+
 describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
   // tests/admin/shell.e2e.ts proves it in a browser; this keeps the two halves together.
   it('pads the scroll port by the height the layout measures', () => {
