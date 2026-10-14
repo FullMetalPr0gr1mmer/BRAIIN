@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { SKIP_REASON, STAFF_ROLES, authFile, staffEnv } from './staff';
-import { UNSEEDED_LISTS, expectedSidebar, sweepRoutes, type SweepRoute } from './routes';
+import { UNSEEDED_LISTS, expectedSidebar, routeKey, sweepRoutes, type SweepRoute } from './routes';
 
 /*
  * The per-role admin sweep (Admin v2 F0): the client's adfull.mjs acceptance run on the
@@ -61,7 +61,7 @@ for (const role of STAFF_ROLES) {
     test.use({ storageState: authFile(role) });
 
     for (const route of sweepRoutes(role)) {
-      test(route.kind === 'edit' ? route.pattern : route.path, async ({ page }) => {
+      test(routeKey(route), async ({ page }) => {
         const path = await resolvePath(page, route);
         if (path === null) {
           test.skip(

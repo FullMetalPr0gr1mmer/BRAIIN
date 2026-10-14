@@ -1,0 +1,189 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
+import HelpArticleBody from '@/components/admin/screens/help/HelpArticleBody';
+import HelpGuideList from '@/components/admin/screens/help/HelpGuideList';
+import { can } from '@/lib/authz/matrix';
+import {
+  MIN_QUERY,
+  cleanHelpQuery,
+  guideHref,
+  helpHrefFor,
+  loadHelpArticle,
+  loadHelpIndex,
+  readingTime,
+  relatedTo,
+  screenOf,
+  searchHelp,
+  type HelpArticle,
+  type HelpGuide,
+  type HelpIndex,
+  type HelpLang,
+} from '@/lib/admin/help';
+import { HELP_LIMITS, HELP_SLUG } from '@schemas/help';
+
+export const prerender = false;
+
+// The help centre without JS (Admin v2 U16): the topbar's "?" is a link here, and every
+// guide row links to its guide here, so the drawer's every view has a server-rendered twin.
+//   ?screen=/admin/leads   the guides for that screen first, then every guide
+//   ?q=password            a search (the same function as the drawer's)
+//   ?guide=<slug>[&lang=ar] one guide, in English or Arabic
+// A `screen` rides along on every link the page builds (rows, related guides, the language
+// switch, the search form), so "All guides" always lists that screen's guides first.
+// Every member (the API's `analytics.read`, which every role holds); which guides a role
+// sees is decided by the same server functions as the drawer's (src/lib/admin/help).
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+if (!session || !sb || can(session.role, 'analytics.read') !== 'full') {
+  return new Response(null, { status: 403, headers: { 'cache-control': 'no-store' } });
+}
+
+const params = Astro.url.searchParams;
+const screen = screenOf(params.get('screen'));
+const rawSlug = params.get('guide');
+const slug =
+  rawSlug !== null && rawSlug.length <= HELP_LIMITS.slug && HELP_SLUG.test(rawSlug)
+    ? rawSlug
+    : null;
+const lang: HelpLang = params.get('lang') === 'ar' ? 'ar' : 'en';
+const q = cleanHelpQuery(params.get('q') ?? '');
+
+let index: HelpIndex = { guides: [], onScreen: [] };
+let article: HelpArticle | null = null;
+let results: HelpGuide[] | null = null;
+let failed = false;
+try {
+  index = await loadHelpIndex(sb, session, screen);
+  if (rawSlug !== null) {
+    article = slug ? await loadHelpArticle(sb, session, slug) : null;
+  } else if (q.length >= MIN_QUERY) {
+    results = await searchHelp(sb, session, q);
+  }
+} catch {
+  // Logged by the loader (system_logs); the page says so instead of failing.
+  failed = true;
+}
+// A guide that is not there, or not the role's, is the same 404.
+const missing = rawSlug !== null && article === null && !failed;
+if (missing) Astro.response.status = 404;
+
+const onScreen = index.guides.filter((guide) => index.onScreen.includes(guide.slug));
+const ar = lang === 'ar';
+const backHref = screen ? helpHrefFor(screen) : '/admin/help';
+const SUB = 'Short guides, written for people, not developers.';
+---
+
+<AdminLayout
+  title={article ? article.title : 'Help centre'}
+  subtitle={article ? readingTime(article.minutes) : SUB}
+  styles={['help.css']}
+>
+  <div class="card hc-page">
+    {
+      failed && (
+        <p class="msg" data-kind="error" role="alert">
+          The guides could not be loaded just now.
+        </p>
+      )
+    }
+    {
+      article ? (
+        <article class="hc-view" aria-label={article.title}>
+          <p class="hc-view__bar">
+            <a class="btn" data-variant="ghost" data-size="sm" href={backHref}>
+              <Icon name="back" size={14} />
+              All guides
+            </a>
+            <a
+              class="btn"
+              data-variant="soft"
+              data-size="sm"
+              href={
+                ar ? guideHref(article.slug, screen) : `${guideHref(article.slug, screen)}&lang=ar`
+              }
+              lang={ar ? 'en' : 'ar'}
+            >
+              {ar ? 'Read in English' : 'اقرأ بالعربية'}
+            </a>
+          </p>
+          {ar && (
+            <p class="hc__title" lang="ar" dir="rtl">
+              {article.titleAr}
+            </p>
+          )}
+          <HelpArticleBody
+            article={article}
+            lang={lang}
+            level={2}
+            related={relatedTo(article, index.guides)}
+            screen={screen}
+          />
+        </article>
+      ) : (
+        <div class="hc">
+          {missing && (
+            <p class="msg" data-kind="error" role="alert">
+              That guide is not available.
+            </p>
+          )}
+          <form class="hc-page__search" role="search" action="/admin/help" method="get">
+            <label class="visually-hidden" for="help-page-q">
+              Search the guides
+            </label>
+            <input
+              id="help-page-q"
+              type="search"
+              name="q"
+              value={q}
+              placeholder="Search the guides…"
+              maxlength={HELP_LIMITS.query}
+            />
+            {screen && <input type="hidden" name="screen" value={screen} />}
+            <button type="submit" data-variant="primary">
+              <Icon name="search" size={16} />
+              Search
+            </button>
+          </form>
+          {results !== null ? (
+            <section aria-labelledby="help-page-results-h">
+              <h2 id="help-page-results-h" class="hc__h">
+                Results
+              </h2>
+              <p class="hc__sub" role="status">
+                {results.length === 0
+                  ? 'No guide matches that. Try other words.'
+                  : `${results.length} ${results.length === 1 ? 'guide matches' : 'guides match'}.`}
+              </p>
+              {results.length > 0 && (
+                <HelpGuideList guides={results} labelledBy="help-page-results-h" screen={screen} />
+              )}
+            </section>
+          ) : (
+            <>
+              {onScreen.length > 0 && (
+                <section aria-labelledby="help-page-screen-h">
+                  <h2 id="help-page-screen-h" class="hc__h">
+                    On this screen
+                  </h2>
+                  <HelpGuideList
+                    guides={onScreen}
+                    labelledBy="help-page-screen-h"
+                    screen={screen}
+                  />
+                </section>
+              )}
+              <section aria-labelledby="help-page-all-h">
+                <h2 id="help-page-all-h" class="hc__h">
+                  All guides
+                </h2>
+                <HelpGuideList guides={index.guides} labelledBy="help-page-all-h" screen={screen} />
+              </section>
+            </>
+          )}
+        </div>
+      )
+    }
+  </div>
+</AdminLayout>

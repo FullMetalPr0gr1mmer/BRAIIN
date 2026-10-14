@@ -8,7 +8,7 @@ the program applies it. No URL, credential or project reference belongs here.
 
 ## Applied
 
-Production has applied 0001 to 0038, 0041, 0044 and 0045, the same files `main` holds
+Production has applied 0001 to 0038, 0041, 0044, 0045 and 0046, the same files `main` holds
 (0039, 0040, 0042 and 0043 were released unused; gaps are allowed).
 
 | Migration | What | PR |
@@ -26,6 +26,7 @@ Production has applied 0001 to 0038, 0041, 0044 and 0045, the same files `main` 
 | 0041 | `0041_crm_leads_write.sql`: the leads write API: the `crm.erase` helper, the pipeline's assignee, value, star, read, tags and logged-contact columns with their staff column grant, and the bulk, erase, note-delete and note-count RPCs (`crm_ingest_lead` restated for manual leads) (C3) | #57 |
 | 0044 | `0044_personal_layer.sql`: the personal layer: preferences (`admin_user_prefs`, keyed to its profile by `(tenant_id, user_id)`), the people directory (`app.staff_directory()`, `public.staff_directory`, `crm_people` over it), the display-name rule for every writer (`app.display_name_ok`, the `profiles_display_name_rule` trigger), renaming yourself (`update_my_profile`), the environment pill (`admin_environment`). Renumbered from 0039 by the Wave 1 plan. Applies after 0041: the preferences key rests on 0041's `profiles_tenant_id_id` (F8) | #58 |
 | 0045 | media uploads: the public media bucket (refused if a different `media` bucket exists) and its policies, the `media_assets` provider widening and shape check, one row per uploaded file (a unique key index), `display_name`, `media_assets`' grants stated, the storage meter and the orphan lookup with its floor (`0045_media_uploads.sql`) (U3) | #59 |
+| 0046 | `0046_help_centre.sql`: the help centre: `help_articles` (typed blocks, never HTML; staff read their tenant's guides, nothing writes but the migrations and the service role), `help_search` (a contains search, Arabic folded with `app.normalize_ar_q` as §8's contains searches are; up to 100 guides, filtered by role in the Worker), the guides (`app.help_article_set()`) and their seed into every tenant and, by a trigger on `tenants`, each new one. Renumbered from 0042 (U16) | #62 |
 
 Each slice's file under [as-built/](as-built/) has the detail.
 
@@ -43,7 +44,6 @@ PR lands and nothing here is edited after a merge.
 | 0040 | (released) | unused, as 0039 | 1 |
 | 0042 | (released) | unused: F8 (0044) and U3 (0045) merged first, so U16 moved to 0046 | 1 |
 | 0043 | (released) | unused, as 0042: C13 moved to 0047 | 1 |
-| 0046 | U16 | the help centre: `help_articles` | 1 |
 | 0047 | C13 | lead attribution capture (built, held for the privacy notice, O-11) | 1 |
 
 ## Rules

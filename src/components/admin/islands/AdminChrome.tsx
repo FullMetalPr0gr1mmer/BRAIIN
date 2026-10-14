@@ -3,12 +3,14 @@ import type { AccountView } from '@/lib/admin/account';
 import type { PaletteGroup } from '@/lib/admin/palette';
 import AccountDrawer from '@/components/admin/screens/chrome/AccountDrawer';
 import CommandPalette from '@/components/admin/screens/chrome/CommandPalette';
+import HelpDrawer from '@/components/admin/screens/help/HelpDrawer';
 import NotificationsDrawer from '@/components/admin/screens/chrome/NotificationsDrawer';
 
 // The shell's one interactive island, hydrated on every admin page: the command palette
-// (F3), the notifications drawer and the account drawer (F8). Everything else in the shell
-// is server-rendered and works without it: the search trigger, the bell and the account
-// chip are links to pages that do the same job.
+// (F3), the notifications drawer and the account drawer (F8), and the help centre (U16).
+// Everything else in the shell is server-rendered and works without it: the search
+// trigger, the help "?", the bell and the account chip are links to pages that do the
+// same job.
 
 export interface AdminChromeProps {
   palette: PaletteGroup[];
@@ -29,6 +31,7 @@ export default function AdminChrome({ palette, account }: AdminChromeProps) {
   return (
     <>
       <CommandPalette groups={palette} />
+      <HelpDrawer />
       <NotificationsDrawer />
       <AccountDrawer view={account} />
     </>
