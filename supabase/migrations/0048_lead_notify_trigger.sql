@@ -23,6 +23,13 @@
 --     means notifications are off for that tenant, and the trigger does nothing, silently.
 --   • Only an https:// URL is called: the bearer secret never travels in plaintext. Any
 --     other URL is skipped with a WARNING that names no value, as is a URL with no secret.
+--   • Who chooses where it goes: site_settings is written by Admin and Developer (§5,
+--     General settings), so either can point notify_lead_url, and with it the bearer, at any
+--     https host. That is 0010's trust, kept on purpose: both roles already read lead PII,
+--     and the bearer buys only the hook, which re-reads a lead server-side and answers a
+--     recipient count (a forged call adds a notification_log row, nothing more). A bearer
+--     sent somewhere it should not go is replaced in both places: vault.update_secret and
+--     the Worker secret NOTIFY_LEAD_SECRET.
 --   • Nothing it does can fail an insert. Any error while reading the configuration or
 --     queueing the request is caught and becomes a WARNING carrying only the SQLSTATE
 --     (never the URL, the secret or a lead value: an error message can quote any of them),
