@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_NEXT, safeNext } from '@/lib/auth/next';
 import { LOCKOUT_DURATION_MINUTES } from '@/lib/auth/lockout';
 import { readAuthBody, seeOther, ticked } from '@/lib/auth/body';
@@ -95,7 +95,8 @@ describe('safeNext: where a sign-in may send the browser', () => {
       '/admin/%252e%252e/services',
       '/admin/%25252e%25252e/x',
       '/admin/x/%252E%252e/%252e%252e/old-page',
-      // A path Astro cannot decode, or not within its ten decodings.
+      // A path that cannot be decoded: a lone `%E6`, or a run of `%` once decoded (this one
+      // fails at its second decoding, well inside Astro's ten: the limit is tested below).
       '/admin/%E6',
       `/admin/${'%25'.repeat(11)}2e`,
     ]) {
@@ -152,6 +153,31 @@ describe('safeNext: where a sign-in may send the browser', () => {
       const again = new URL(next, 'https://site.example');
       expect(`${again.pathname}${again.search}${again.hash}`, input).toBe(next);
       expect(again.host, input).toBe('site.example');
+    }
+  });
+
+  it("refuses a path that needs more decodings than Astro's ten, by that limit (third review)", () => {
+    // `%25` decodes to `%`, so each `25` is one decoding more: `/admin/%41` takes one to
+    // reach `/admin/A`, and this takes `n`, every one of them succeeding.
+    const encoded = (n: number) => `/admin/%${'25'.repeat(n - 1)}41`;
+    // Ten, Astro routes `/admin/A`, and the value is kept; eleven, Astro answers 400.
+    expect(validateAndDecodePathname(encoded(10))).toBe('/admin/A');
+    expect(safeNext(encoded(10))).toBe(encoded(10));
+    expect(() => validateAndDecodePathname(encoded(11))).toThrow(MultiLevelEncodingError);
+    // Refused by the limit itself: safeNext decodes eleven times, each decoding succeeds and
+    // changes the path (so neither a failed decoding nor an ambiguous result refused it), and
+    // it stops there, the one way out of its loop that is left.
+    const decode = vi.spyOn(globalThis, 'decodeURI');
+    try {
+      expect(safeNext(encoded(11))).toBe(DEFAULT_NEXT);
+      expect(decode).toHaveBeenCalledTimes(11);
+      decode.mock.calls.forEach(([input], i) => {
+        const result = decode.mock.results[i];
+        expect(result?.type, `decoding ${i + 1}`).toBe('return');
+        expect(result?.value, `decoding ${i + 1}`).not.toBe(input);
+      });
+    } finally {
+      decode.mockRestore();
     }
   });
 
