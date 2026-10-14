@@ -16,6 +16,7 @@ import { localizedHref, localizedPath, pickLocale } from '@/lib/i18n';
 import FilterBar from '@/components/portfolio/FilterBar.astro';
 import ProjectCard from '@/components/portfolio/ProjectCard.astro';
 import Cta from '@/components/ui/Cta.astro';
+import { PROJECT_GRID_COPY } from '@/lib/sections/copy/projectGrid';
 
 // Our Work's featured grid (UI v2, the `projectGrid` section; the mockup's `.work`):
 // the featured projects, latest first, under the filter bar, then "See all projects" into
@@ -39,10 +40,6 @@ interface Props {
 
 const { locale, tag, heading } = Astro.props;
 const S = FILTER_STR[locale];
-const STR = {
-  en: { tag: 'Featured work', heading: 'Projects' },
-  ar: { tag: 'أعمال مختارة', heading: 'المشاريع' },
-}[locale];
 
 const BASE = '/portfolio';
 const FRAGMENT = '#projects';
@@ -76,10 +73,10 @@ const index = JSON.stringify(all.map(facetValues));
         <div>
           <p class="tag tag--sky rv">
             <span class="dot" />
-            {tag ? pickLocale(tag, locale) : STR.tag}
+            {tag ? pickLocale(tag, locale) : PROJECT_GRID_COPY.tag[locale]}
           </p>
           <h2 class="rv" id="projects-heading">
-            {heading ? pickLocale(heading, locale) : STR.heading}
+            {heading ? pickLocale(heading, locale) : PROJECT_GRID_COPY.heading[locale]}
           </h2>
         </div>
         <span class="pgrid__count rv" data-count tabindex="-1" aria-live="polite">

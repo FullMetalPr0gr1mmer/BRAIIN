@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 
 // Path aliases mirror tsconfig.json so tests resolve @/ , @schemas/ , @consent/.
@@ -38,7 +38,21 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['tests/**/*.spec.ts'],
+    // Two projects. `unit` is everything that needs no Astro compiler. `render`
+    // (vitest.render.config.ts, Admin v2 F6) renders .astro components through Astro's
+    // container API, so a refactor of a public component is held to its served bytes; it
+    // runs on Astro's own Vite config, which this file cannot be.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['tests/**/*.spec.ts'],
+          exclude: [...configDefaults.exclude, 'tests/render/**'],
+        },
+      },
+      './vitest.render.config.ts',
+    ],
     coverage: {
       // Headline (CLAUDE.md §9): 100% branch on authz + schema modules.
       thresholds: { lines: 80, functions: 80, branches: 75 },

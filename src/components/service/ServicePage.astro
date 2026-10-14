@@ -9,7 +9,7 @@ import Hello from '@/components/sections/Hello.astro';
 import { buildBreadcrumbSchema, buildServiceSchema, orgRef } from '@/lib/seo/jsonld';
 import { ogImageCandidates } from '@/lib/seo/ogImage';
 import { localizedPath, pickLocale } from '@/lib/i18n';
-import { serviceHelloHeading, SERVICE_HELLO_LEAD } from '@/lib/sections/hello';
+import { serviceHelloHeading } from '@/lib/sections/hello';
 import { serviceDescription, serviceHeroSub, type ServicePage } from '@/lib/services/page';
 import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
 import ServiceWhat from './ServiceWhat.astro';
@@ -162,7 +162,7 @@ const jsonLd = [
         groups={disciplines}
         selected={service.slug}
         headingOverride={serviceHelloHeading(name, locale)}
-        leadOverride={SERVICE_HELLO_LEAD[locale]}
+        leadOverride={copy.helloLead}
       />
     </SectionBoundary>
     {

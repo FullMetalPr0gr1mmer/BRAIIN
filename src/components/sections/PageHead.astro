@@ -5,12 +5,14 @@ import type { LocalizedText } from '@schemas/content';
 import { pickLocale, localizedHref } from '@/lib/i18n';
 import { projectCount } from '@/lib/portfolio/filterText';
 import AccentText from '@/components/ui/AccentText.astro';
+import { PAGE_HEAD_COPY as COPY } from '@/lib/sections/copy/pageHead';
 
 // A page head on black (UI v2, the `pageHead` section; All projects' `.ap-head`): a back
 // link, the page's h1 with its accented words, a lead line and — when the route supplies
 // one — the live project count ("12 projects" / "12 مشروعًا", Arabic plural forms), which
 // the catalogue enhancement keeps current as filters change (`#catalog-count`, polite).
-// Built-in copy is All projects' own, verbatim from the design. The h1 carries no scroll
+// Built-in copy is All projects' own, verbatim from the design
+// (src/lib/sections/copy/pageHead.ts). The h1 carries no scroll
 // reveal (the mockup's `.rv`): it is the page's likely LCP element, and an element held at
 // opacity 0 is not an LCP candidate until it fades in.
 
@@ -27,27 +29,16 @@ interface Props {
 
 const { locale } = Astro.props;
 
-const STR = {
-  en: {
-    heading: 'All projects',
-    lead: "Every project we've made. Filter by service, sector, client or year, or tap any tag on a project.",
-    back: 'Our Work',
-  },
-  ar: {
-    heading: 'كل المشاريع',
-    lead: 'كل المشاريع اللي صنعناها. فلتر حسب الخدمة أو القطاع أو العميل أو السنة، أو اضغط على أي وسم في المشروع.',
-    back: 'أعمالنا',
-  },
-}[locale];
-
-const heading = Astro.props.heading ? pickLocale(Astro.props.heading, locale) : STR.heading;
+const heading = Astro.props.heading
+  ? pickLocale(Astro.props.heading, locale)
+  : COPY.heading[locale];
 // An authored heading keeps only an authored accent (the default range would land on the
 // wrong words).
-const accent = Astro.props.heading
-  ? Astro.props.accent
-  : (Astro.props.accent ?? { en: { from: 1 }, ar: { from: 1 } });
-const lead = Astro.props.lead ? pickLocale(Astro.props.lead, locale) : STR.lead;
-const back = Astro.props.backLabel ? pickLocale(Astro.props.backLabel, locale) : STR.back;
+const accent = Astro.props.heading ? Astro.props.accent : (Astro.props.accent ?? COPY.accent);
+const lead = Astro.props.lead ? pickLocale(Astro.props.lead, locale) : COPY.lead[locale];
+const back = Astro.props.backLabel
+  ? pickLocale(Astro.props.backLabel, locale)
+  : COPY.backLabel[locale];
 const backHref = localizedHref(Astro.props.backHref ?? '/portfolio', locale);
 const count = Astro.props.data?.count;
 ---

@@ -8,6 +8,10 @@ import type { Accent } from '@schemas/media';
 //
 // `crumb`/`home` are the site's own nav words (the mockup's `nav.services` / `nav.home`);
 // `confidential` is FacetTags' wording, so a hidden client reads the same everywhere.
+//
+// The template's whole shared text is here, the "Say hello" lines it hands Hello included,
+// so the template editor finds it in one place (Admin v2 E3 makes it editable, with these
+// values as its defaults). The sections' own built-in copy is src/lib/sections/copy/.
 
 export interface ServicePageCopy {
   home: string;
@@ -33,6 +37,10 @@ export interface ServicePageCopy {
   all: string;
   fab: string;
   confidential: string;
+  /** v.helloH "Let's talk <em>{s}</em>": the words before the service's name (serviceHelloHeading). */
+  helloLeadIn: string;
+  /** v.helloP — the "Say hello" block's lead line on a service page. */
+  helloLead: string;
 }
 
 export const SERVICE_PAGE_COPY: Record<Locale, ServicePageCopy> = {
@@ -56,6 +64,9 @@ export const SERVICE_PAGE_COPY: Record<Locale, ServicePageCopy> = {
     all: 'All services',
     fab: 'Skip to inquiry',
     confidential: 'Confidential client',
+    helloLeadIn: "Let's talk",
+    helloLead:
+      "Tell us what you need and where it has to show up. You'll hear back within one business day with our questions and a rough range.",
   },
   ar: {
     home: 'الرئيسية',
@@ -77,6 +88,9 @@ export const SERVICE_PAGE_COPY: Record<Locale, ServicePageCopy> = {
     all: 'كل الخدمات',
     fab: 'انتقل للطلب',
     confidential: 'عميل غير مُعلَن',
+    helloLeadIn: 'خلّنا نتكلم عن',
+    helloLead:
+      'قل لنا وش تحتاج ووين لازم يظهر. يوصلك رد خلال يوم عمل واحد فيه أسئلتنا ونطاق سعري مبدئي.',
   },
 };
 

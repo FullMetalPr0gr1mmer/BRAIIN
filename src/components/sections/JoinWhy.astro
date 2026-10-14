@@ -1,14 +1,17 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import type { LocalizedText } from '@schemas/content';
 import type { JoinWhySectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
 import { brandName, getIdentity } from '@/lib/identity';
-import { JOIN_WHY_COPY, withBrand } from '@/lib/sections/join';
+import { withBrand } from '@/lib/sections/join';
+import { JOIN_WHY_COPY as COPY } from '@/lib/sections/copy/joinWhy';
 import AccentText from '@/components/ui/AccentText.astro';
 
 // "Why {brand}" (Join): the paper band under the hero — tag, heading, lead and four
-// numbered reasons (the mockup's .why). Copy is the design's (JOIN_WHY_COPY), every key
-// overridable from the CMS (JoinWhySectionContentSchema); the studio is named through
+// numbered reasons (the mockup's .why). Copy is the design's
+// (src/lib/sections/copy/joinWhy.ts), every key overridable from the CMS
+// (JoinWhySectionContentSchema); the studio is named through
 // `%brand%`, in defaults and authored copy alike. Styled in public/styles/join.css.
 
 interface Props extends JoinWhySectionContent {
@@ -17,34 +20,34 @@ interface Props extends JoinWhySectionContent {
 
 const { locale, tag, heading, accent, lead, items } = Astro.props;
 
-const STR = JOIN_WHY_COPY[locale];
 const brand = brandName(await getIdentity(Astro.locals), locale);
-const text = (authored: { en: string; ar: string } | undefined, fallback: string) =>
-  withBrand(authored ? pickLocale(authored, locale) : fallback, brand);
+const fill = (s: string) => withBrand(s, brand);
+const text = (authored: LocalizedText | undefined, builtIn: LocalizedText) =>
+  fill(authored ? pickLocale(authored, locale) : builtIn[locale]);
 
 // An authored heading takes only an authored accent: the built-in range counts the words
 // of the built-in heading.
 const title = heading
-  ? { text: text(heading, ''), accent }
-  : { text: text(undefined, STR.heading), accent: JOIN_WHY_COPY.accent };
+  ? { text: fill(pickLocale(heading, locale)), accent }
+  : { text: fill(COPY.heading[locale]), accent: COPY.accent };
 const reasons =
   items && items.length > 0
-    ? items.map((i) => ({ heading: text(i.heading, ''), text: text(i.text, '') }))
-    : STR.items.map((i) => ({
-        heading: withBrand(i.heading, brand),
-        text: withBrand(i.text, brand),
-      }));
+    ? items.map((i) => ({
+        heading: fill(pickLocale(i.heading, locale)),
+        text: fill(pickLocale(i.text, locale)),
+      }))
+    : COPY.items.map((i) => ({ heading: fill(i.heading[locale]), text: fill(i.text[locale]) }));
 const pad = (n: number) => String(n).padStart(2, '0');
 ---
 
 <section class="join-why" aria-labelledby="join-why-heading">
   <div class="section-wrap">
-    <div class="tag rv"><span class="dot"></span><span>{text(tag, STR.tag)}</span></div>
+    <div class="tag rv"><span class="dot"></span><span>{text(tag, COPY.tag)}</span></div>
     <div class="sec-head">
       <h2 class="rv" id="join-why-heading">
         <AccentText text={title.text} locale={locale} accent={title.accent} />
       </h2>
-      <p class="rv">{text(lead, STR.lead)}</p>
+      <p class="rv">{text(lead, COPY.lead)}</p>
     </div>
     <div class="join-why__grid">
       {

@@ -9,10 +9,7 @@ import {
   type SectionData,
 } from '@/lib/sections/types';
 import {
-  JOIN_APPLY_COPY,
   JOIN_CACHE_ENTITIES,
-  JOIN_STEPS_COPY,
-  JOIN_WHY_COPY,
   composeJoinPage,
   firstVisibleType,
   joinAnswer,
@@ -20,6 +17,9 @@ import {
   withBrand,
   withJoinData,
 } from '@/lib/sections/join';
+import { JOIN_APPLY_COPY } from '@/lib/sections/copy/joinApply';
+import { JOIN_STEPS_COPY } from '@/lib/sections/copy/joinSteps';
+import { JOIN_WHY_COPY } from '@/lib/sections/copy/joinWhy';
 import { tierATags } from '@/lib/http/cacheTags';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { splitAccent } from '@/lib/text/accent';
@@ -293,22 +293,22 @@ describe('the built-in copy', () => {
         .filter((r) => r.accent)
         .map((r) => r.text)
         .join('');
-    expect(accented(JOIN_WHY_COPY.en.heading, JOIN_WHY_COPY, 'en')).toBe('leaves the building');
-    expect(accented(JOIN_WHY_COPY.ar.heading, JOIN_WHY_COPY, 'ar')).toBe('يطلع للعالم');
-    expect(accented(JOIN_STEPS_COPY.en.heading, JOIN_STEPS_COPY, 'en')).toBe('first brief');
-    expect(accented(JOIN_STEPS_COPY.ar.heading, JOIN_STEPS_COPY, 'ar')).toBe('أول بريف');
-    expect(accented(JOIN_APPLY_COPY.en.heading, JOIN_APPLY_COPY, 'en')).toBe('make');
-    expect(accented(JOIN_APPLY_COPY.ar.heading, JOIN_APPLY_COPY, 'ar')).toBe('تصنع');
+    expect(accented(JOIN_WHY_COPY.heading.en, JOIN_WHY_COPY, 'en')).toBe('leaves the building');
+    expect(accented(JOIN_WHY_COPY.heading.ar, JOIN_WHY_COPY, 'ar')).toBe('يطلع للعالم');
+    expect(accented(JOIN_STEPS_COPY.heading.en, JOIN_STEPS_COPY, 'en')).toBe('first brief');
+    expect(accented(JOIN_STEPS_COPY.heading.ar, JOIN_STEPS_COPY, 'ar')).toBe('أول بريف');
+    expect(accented(JOIN_APPLY_COPY.heading.en, JOIN_APPLY_COPY, 'en')).toBe('make');
+    expect(accented(JOIN_APPLY_COPY.heading.ar, JOIN_APPLY_COPY, 'ar')).toBe('تصنع');
   });
 
   it('has the design’s four reasons and four steps in both languages', () => {
+    expect(JOIN_WHY_COPY.items).toHaveLength(4);
+    expect(JOIN_STEPS_COPY.items).toHaveLength(4);
     for (const locale of ['en', 'ar'] as const) {
-      expect(JOIN_WHY_COPY[locale].items).toHaveLength(4);
-      expect(JOIN_STEPS_COPY[locale].items).toHaveLength(4);
-      for (const step of JOIN_STEPS_COPY[locale].items) expect(step.time.trim()).not.toBe('');
+      for (const step of JOIN_STEPS_COPY.items) expect(step.time[locale].trim()).not.toBe('');
     }
-    expect(JOIN_STEPS_COPY.ar.items[2]!.time).toBe('حوالي ٤٥ دقيقة');
-    expect(JOIN_WHY_COPY.ar.items[1]!.text).toBe(
+    expect(JOIN_STEPS_COPY.items[2]!.time.ar).toBe('حوالي ٤٥ دقيقة');
+    expect(JOIN_WHY_COPY.items[1]!.text.ar).toBe(
       'بدون شهور من المراقبة. تشتغل على مشاريع تطلع فعلاً، مع ناس طلّعوا كثير.',
     );
   });
@@ -316,16 +316,21 @@ describe('the built-in copy', () => {
   it('says five disciplines, never the stale "fourteen crafts" (J-6)', () => {
     const all = JSON.stringify(COPIES);
     expect(all).not.toMatch(/fourteen|أربع عشرة/i);
-    expect(JOIN_WHY_COPY.en.items[0]!.heading).toBe('Five disciplines, one room');
-    expect(JOIN_WHY_COPY.ar.items[0]!.heading).toBe('خمسة تخصصات، غرفة واحدة');
-    expect(JOIN_WHY_COPY.en.lead).toMatch(/^Five disciplines and 28 services sit in the same room/);
+    expect(JOIN_WHY_COPY.items[0]!.heading.en).toBe('Five disciplines, one room');
+    expect(JOIN_WHY_COPY.items[0]!.heading.ar).toBe('خمسة تخصصات، غرفة واحدة');
+    expect(JOIN_WHY_COPY.lead.en).toMatch(/^Five disciplines and 28 services sit in the same room/);
   });
 
   it('names the studio only through %brand% (the brand is data)', () => {
     expect(JSON.stringify(COPIES)).not.toMatch(/Braiin|بريّن/);
-    expect(JOIN_WHY_COPY.en.tag).toBe('Why %brand%');
-    expect(withBrand(JOIN_WHY_COPY.ar.tag, 'بريّن ستيشن')).toBe('ليش بريّن ستيشن');
+    expect(JOIN_WHY_COPY.tag.en).toBe('Why %brand%');
+    expect(withBrand(JOIN_WHY_COPY.tag.ar, 'بريّن ستيشن')).toBe('ليش بريّن ستيشن');
     expect(withBrand('%brand% and %brand%', 'X')).toBe('X and X');
+  });
+
+  it('copies the brand as written, never as a replacement pattern', () => {
+    expect(withBrand('Why %brand%', "A$'B")).toBe("Why A$'B");
+    expect(withBrand('%brand%!', 'A$&B $` $$')).toBe('A$&B $` $$!');
   });
 });
 
