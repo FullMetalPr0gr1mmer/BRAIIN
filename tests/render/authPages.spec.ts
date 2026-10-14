@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
-import { FORGOT_MESSAGES, FORGOT_NOT_SET_UP, LOGIN_MESSAGES } from '@/lib/auth/messages';
+import {
+  FORGOT_MESSAGES,
+  FORGOT_NOT_SET_UP,
+  LOGIN_MESSAGES,
+  RESET_REOPEN,
+} from '@/lib/auth/messages';
 import { EXPIRED_FORM } from '@/lib/auth/expiredForm';
 import { IDENTITY } from './fixtures';
 import { normalise } from './harness';
@@ -47,17 +52,23 @@ async function render(
   search = '',
   cookie?: string,
 ): Promise<string> {
+  return normalise(await (await renderResponse(page, search, cookie)).text());
+}
+
+/** The page's whole response: its markup and the cookies it sets. */
+async function renderResponse(
+  page: 'login' | 'forgot' | 'reset',
+  search = '',
+  cookie?: string,
+): Promise<Response> {
   const { default: Page } = await import(`@/pages/admin/${page}.astro`);
   container ??= AstroContainer.create();
-  const html = await (
-    await container
-  ).renderToString(Page, {
+  return (await container).renderToResponse(Page, {
     request: new Request(`${ORIGIN}/admin/${page}${search}`, {
       headers: cookie === undefined ? {} : { cookie },
     }),
     locals: LOCALS,
   });
-  return normalise(html);
 }
 
 /** The parts of a rendered page every sign-in screen must keep (CLAUDE.md §3 CSP). */
@@ -235,5 +246,43 @@ describe('a form the body limit sent back (src/lib/auth/bodyLimit.ts)', () => {
     );
     expect(html).toContain('action="/api/admin/auth/reset"');
     expect(messages(html)[0]?.text).toBe('That form was too large to send. Please try again.');
+  });
+});
+
+describe('the reset page drops the kept link once it is in the form (second review)', () => {
+  const LINK = 'a1b2c3d4'.repeat(7);
+  // The container hands back the page's cookie jar on the response, under the symbol Astro's
+  // own server reads to write the Set-Cookie headers (astro/dist/core/cookies/response.js).
+  const resetCookies = (res: Response): string[] => {
+    const jar = Reflect.get(res, Symbol.for('astro.cookies')) as
+      { consume(): Iterable<string> } | undefined;
+    return [...(jar?.consume() ?? []), ...res.headers.getSetCookie()].filter((c) =>
+      c.startsWith('__Secure-braiin-reset='),
+    );
+  };
+
+  it('in the same response that puts the token in the form', async () => {
+    const res = await renderResponse('reset', '?error=mismatch', `__Secure-braiin-reset=${LINK}`);
+    expect(await res.text()).toContain(`<input type="hidden" name="token_hash" value="${LINK}">`);
+    const [drop, ...rest] = resetCookies(res);
+    expect(rest).toEqual([]);
+    expect(drop).toMatch(/Expires=Thu, 01 Jan 1970 00:00:00 GMT/);
+    expect(drop).toMatch(/; Path=\/admin\/reset(;|$)/);
+    expect(drop).toMatch(/; Secure(;|$)/);
+    expect(drop).toMatch(/; HttpOnly(;|$)/);
+    expect(drop).toMatch(/; SameSite=Strict(;|$)/i);
+  });
+
+  it('a reload then finds no link here, and says to open it again', async () => {
+    const html = await render('reset', '?error=mismatch');
+    expect(messages(html)).toEqual([{ role: 'alert', text: RESET_REOPEN.text }]);
+    expect(html).toContain('Ask for a new link');
+    expect(html).not.toContain('name="token_hash"');
+  });
+
+  it('a spent link still says it is spent, and a link from the e-mail sets no cookie', async () => {
+    expect(messages(await render('reset', '?error=refused'))[0]?.text).toContain('used up');
+    const fresh = await renderResponse('reset', `?token_hash=${LINK}&type=recovery`);
+    expect(resetCookies(fresh)).toEqual([]);
   });
 });

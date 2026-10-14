@@ -90,6 +90,15 @@ export const RESET_MESSAGES = {
   'too-large': TOO_LARGE_MESSAGE,
 } as const;
 
+/**
+ * A failure that kept the link, shown again without it (the page reloaded, after its cookie
+ * was dropped, src/lib/auth/resetToken.ts): the link still works from the e-mail.
+ */
+export const RESET_REOPEN = msg(
+  'error',
+  'To try again, open the link in your email once more, or ask for a new one.',
+);
+
 /** The reset codes that leave the person without a usable link (the page drops the form). */
 export const RESET_LINK_SPENT: ReadonlySet<string> = new Set(['expired', 'refused', 'interrupted']);
 

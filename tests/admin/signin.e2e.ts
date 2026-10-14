@@ -116,12 +116,12 @@ test('a reset link sets a new password and signs the account out everywhere', as
   await page.getByRole('button', { name: 'Save new password' }).click();
   await page.waitForURL((url) => url.searchParams.get('error') === 'mismatch');
   await expect(page.getByRole('alert')).toHaveText('The two passwords do not match.');
-  // The link is kept for the retry in the page's own cookie, not in the URL: request URLs
-  // are logged (src/lib/auth/resetToken.ts). The form carries it again.
+  // The link came back for the retry in the page's own cookie, not in the URL: request URLs
+  // are logged (src/lib/auth/resetToken.ts). The form carries it again, and the page has
+  // already dropped the cookie, so the browser does not offer the link to anyone else.
   expect(page.url()).not.toContain(token);
   await expect(page.locator('input[type="hidden"][name="token_hash"]')).toHaveValue(token);
-  const kept = (await context.cookies()).find((c) => c.name === '__Secure-braiin-reset');
-  expect(kept).toMatchObject({ value: token, path: '/admin/reset', httpOnly: true, secure: true });
+  expect((await context.cookies()).map((c) => c.name)).not.toContain('__Secure-braiin-reset');
 
   await page.getByLabel('New password', { exact: true }).fill(fresh);
   await page.getByLabel('Confirm new password', { exact: true }).fill(fresh);

@@ -15,7 +15,14 @@ import { RECOVERY_TOKEN_PATTERN } from '@schemas/admin';
 // Strict, Path=/admin/reset so no other request carries it (a `__Host-` cookie would need
 // Path=/ and go with every request), and 15 minutes long (the link itself lasts an hour; the
 // person can open it again). The page's hidden field still posts it, so the form is as
-// zero-JS as before. Every outcome that spends the link, or sets the password, clears it.
+// zero-JS as before. The page drops it as soon as the token is in its form (second review),
+// and every outcome that spends the link, or sets the password, clears it too, so the next
+// person on the browser is not offered the link.
+//
+// Unlike `__Host-`, a `__Secure-` cookie may carry a Domain attribute, so a sibling
+// subdomain could plant one here. Harmless: the page takes only a value of the token's
+// shape, and the auth server verifies it, so a planted value is at worst a link that is not
+// valid. (`__Host-` would rule that out, at the price of Path=/.)
 
 export const RESET_TOKEN_COOKIE = '__Secure-braiin-reset';
 export const RESET_PAGE = '/admin/reset';
@@ -32,6 +39,11 @@ export function keepResetToken(token: string): string {
 /** The Set-Cookie value that drops it (same Path, or the browser keeps the cookie). */
 export function dropResetToken(): string {
   return `${RESET_TOKEN_COOKIE}=; Max-Age=0; ${ATTRIBUTES}`;
+}
+
+/** The same deletion through Astro's cookie jar (the page's own response). */
+export function dropResetTokenOptions() {
+  return { path: RESET_PAGE, secure: true, httpOnly: true, sameSite: 'strict' } as const;
 }
 
 /**

@@ -2,8 +2,8 @@
 import AuthLayout from '@/layouts/AuthLayout.astro';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
 import { PASSWORD_MAX_BYTES, PASSWORD_MIN } from '@schemas/adminPrefs';
-import { RESET_LINK_SPENT, RESET_MESSAGES, messageFor } from '@/lib/auth/messages';
-import { RESET_TOKEN_COOKIE, resetTokenFrom } from '@/lib/auth/resetToken';
+import { RESET_LINK_SPENT, RESET_MESSAGES, RESET_REOPEN, messageFor } from '@/lib/auth/messages';
+import { RESET_TOKEN_COOKIE, dropResetTokenOptions, resetTokenFrom } from '@/lib/auth/resetToken';
 
 export const prerender = false;
 
@@ -22,12 +22,20 @@ export const prerender = false;
 // this URL with the e-mail's token in it.
 
 const params = Astro.url.searchParams;
-const token = resetTokenFrom(params, Astro.cookies.get(RESET_TOKEN_COOKIE)?.value);
+const kept = Astro.cookies.get(RESET_TOKEN_COOKIE)?.value;
+const token = resetTokenFrom(params, kept);
+// The cookie has done its job once its token is in the form below: dropped with this very
+// response, so the link is not offered again to whoever uses this browser next. A reload
+// then finds no link here, and says to open it again (second review).
+if (kept !== undefined) Astro.cookies.delete(RESET_TOKEN_COOKIE, dropResetTokenOptions());
 const code = params.get('error');
 const message = messageFor(RESET_MESSAGES, code);
 // No usable link: none in the URL or the cookie, or the endpoint said it is spent or refused.
 const spent = token === null || (code !== null && RESET_LINK_SPENT.has(code));
-const shown = message ?? (spent ? RESET_MESSAGES.expired : null);
+// A failure that kept the link, with the link no longer here: it is not spent, only gone
+// from this page (a reload, or the cookie's 15 minutes): say to open it again.
+const reopen = token === null && message !== null && code !== null && !RESET_LINK_SPENT.has(code);
+const shown = reopen ? RESET_REOPEN : (message ?? (spent ? RESET_MESSAGES.expired : null));
 const csrfToken = Astro.locals.csrfToken;
 ---
 

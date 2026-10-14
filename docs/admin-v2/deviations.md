@@ -134,7 +134,7 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     post that keeps the link (a mismatch, a short password, a limit, an outage, a page left
     open too long) goes back to `/admin/reset?error=<code>` with the token in
     `__Secure-braiin-reset`, a 15-minute HttpOnly, SameSite Strict cookie scoped to
-    `/admin/reset` (`src/lib/auth/resetToken.ts`); and the page sends its Referer as
+    `/admin/reset` (`src/lib/auth/resetToken.ts`), which the page drops as soon as the token is in its form, so the browser does not offer the link to whoever uses it next; and the page sends its Referer as
     `strict-origin`, so its own form post and links carry the origin alone.
   - *What closes it* (the owner's choice): accept it as above; or turn Workers Logs'
     invocation logs off, or sample them (`observability.logs` in `wrangler.jsonc`: the
