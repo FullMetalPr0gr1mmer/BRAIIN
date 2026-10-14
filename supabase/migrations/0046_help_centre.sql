@@ -595,7 +595,7 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "tip",
-          "x": "An item marked Placeholder (design sample) came with the design delivery. It cannot be published or shown until you replace its content and untick the box."
+          "x": "An item marked Placeholder (design sample), or Design placeholder on a page section, came with the design delivery. On the live site it cannot be published or shown until you replace its content and untick the box, unless the site's owner has allowed design samples for that kind of item."
         }
       ],
       "ar": [
@@ -638,7 +638,7 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "tip",
-          "x": "العنصر المعلَّم بـ Placeholder (design sample) جاء مع تسليم التصميم، ولا يمكن نشره أو عرضه حتى تستبدل محتواه وتزيل العلامة."
+          "x": "العنصر المعلَّم بـ Placeholder (design sample)، أو بـ Design placeholder في أقسام الصفحات، جاء مع تسليم التصميم. ولا يمكن نشره أو عرضه على الموقع المباشر حتى تستبدل محتواه وتزيل العلامة، إلا إذا سمح مالك الموقع بعرض عينات التصميم لهذا النوع من العناصر."
         }
       ]
     }

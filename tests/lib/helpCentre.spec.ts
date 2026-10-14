@@ -331,6 +331,17 @@ describe('the guides say only what the admin does', () => {
     expect(guide('saving-and-publishing', 'ar')).toContain('خلال خمس دقائق');
   });
 
+  it('the placeholder tip names both boxes and the owner’s allowance', () => {
+    expect(source('src/lib/admin/ui/fields.ts')).toContain("label: 'Placeholder (design sample)'");
+    expect(source('src/lib/admin/ui/sections.ts')).toContain("label: 'Design placeholder'");
+    // 0027: the owner's audited allowance that lets flagged rows of a table go live.
+    const override = readdirSync(MIGRATIONS).find((f) => f.startsWith('0027_'));
+    expect(source(`${MIGRATIONS}/${override}`)).toContain('placeholder_live_override');
+    const en = guide('saving-and-publishing', 'en');
+    expect(en).toContain('Placeholder (design sample), or Design placeholder on a page section');
+    expect(en).toContain("unless the site's owner has allowed design samples");
+  });
+
   // @@guide-claims
 });
 
