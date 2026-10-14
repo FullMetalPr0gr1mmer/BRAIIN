@@ -1,4 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -32,6 +34,8 @@ import {
   searchHelp,
   type HelpGuide,
 } from '@/lib/admin/help';
+import HelpArticleBody from '@/components/admin/screens/help/HelpArticleBody';
+import HelpGuideList from '@/components/admin/screens/help/HelpGuideList';
 import { EXTRA_LINKS, pageFileFor } from '../admin/routes';
 
 const { logs } = vi.hoisted(() => ({ logs: [] as unknown[] }));
@@ -407,7 +411,48 @@ describe('the shared rules', () => {
 
   it('links carry the slug and the screen encoded', () => {
     expect(guideHref('your-account')).toBe('/admin/help?guide=your-account');
+    expect(guideHref('your-account', null)).toBe('/admin/help?guide=your-account');
+    expect(guideHref('your-account', '/admin/leads')).toBe(
+      '/admin/help?guide=your-account&screen=%2Fadmin%2Fleads',
+    );
     expect(helpHrefFor('/admin/leads')).toBe('/admin/help?screen=%2Fadmin%2Fleads');
+  });
+
+  it('a guide link keeps the screen the help was opened on (rows and related guides)', () => {
+    const guide: HelpGuide = { slug: 'your-account', title: 'Your account', minutes: 2, tags: [] };
+    const withScreen = '/admin/help?guide=your-account&amp;screen=%2Fadmin%2Fleads';
+    const rows = renderToStaticMarkup(
+      createElement(HelpGuideList, { guides: [guide], labelledBy: 'h', screen: '/admin/leads' }),
+    );
+    expect(rows).toContain(`href="${withScreen}"`);
+    const article = SET.find((a) => a.slug === 'roles-and-access')!;
+    const body = renderToStaticMarkup(
+      createElement(HelpArticleBody, {
+        article: { ...article, titleAr: article.title_ar },
+        lang: 'en',
+        level: 2,
+        related: [guide],
+        screen: '/admin/leads',
+      }),
+    );
+    expect(body).toContain(`href="${withScreen}"`);
+    // No screen known, no screen sent.
+    const bare = renderToStaticMarkup(
+      createElement(HelpGuideList, { guides: [guide], labelledBy: 'h' }),
+    );
+    expect(bare).toContain('href="/admin/help?guide=your-account"');
+  });
+
+  it('the help page keeps the screen on every link it builds', () => {
+    const page = readFileSync('src/pages/admin/help.astro', 'utf8');
+    // Every list and the related guides are given the screen; the language switch builds on
+    // guideHref with it; the search form carries it as a hidden field.
+    expect(page.match(/<HelpGuideList\b/g)?.length).toBe(3);
+    expect(page.match(/<HelpGuideList\b[^>]*\bscreen=\{screen\}/g)?.length).toBe(3);
+    expect(page).toMatch(/<HelpArticleBody\b[^>]*\bscreen=\{screen\}/);
+    expect(page).not.toMatch(/guideHref\(article\.slug\)/);
+    expect(page).toContain('guideHref(article.slug, screen)');
+    expect(page).toContain('<input type="hidden" name="screen" value={screen} />');
   });
 
   it('related: other guides sharing a tag, from the given list only, at most three', () => {
@@ -696,7 +741,7 @@ describe('the shell', () => {
     expect(layout).toContain('guide={guide}');
     const head = readFileSync('src/components/admin/ui/PageHead.astro', 'utf8');
     expect(head).toMatch(
-      /href=\{guideHref\(guide\)\}\s+data-open="help"\s+data-help-guide=\{guide\}/,
+      /href=\{guideHref\(guide, screen\)\}\s+data-open="help"\s+data-help-guide=\{guide\}/,
     );
   });
 });

@@ -29,6 +29,8 @@ export const prerender = false;
 //   ?screen=/admin/leads   the guides for that screen first, then every guide
 //   ?q=password            a search (the same function as the drawer's)
 //   ?guide=<slug>[&lang=ar] one guide, in English or Arabic
+// A `screen` rides along on every link the page builds (rows, related guides, the language
+// switch, the search form), so "All guides" always lists that screen's guides first.
 // Every member (the API's `analytics.read`, which every role holds); which guides a role
 // sees is decided by the same server functions as the drawer's (src/lib/admin/help).
 
@@ -98,7 +100,9 @@ const SUB = 'Short guides, written for people, not developers.';
               class="btn"
               data-variant="soft"
               data-size="sm"
-              href={ar ? guideHref(article.slug) : `${guideHref(article.slug)}&lang=ar`}
+              href={
+                ar ? guideHref(article.slug, screen) : `${guideHref(article.slug, screen)}&lang=ar`
+              }
               lang={ar ? 'en' : 'ar'}
             >
               {ar ? 'Read in English' : 'اقرأ بالعربية'}
@@ -114,6 +118,7 @@ const SUB = 'Short guides, written for people, not developers.';
             lang={lang}
             level={2}
             related={relatedTo(article, index.guides)}
+            screen={screen}
           />
         </article>
       ) : (
@@ -152,7 +157,7 @@ const SUB = 'Short guides, written for people, not developers.';
                   : `${results.length} ${results.length === 1 ? 'guide matches' : 'guides match'}.`}
               </p>
               {results.length > 0 && (
-                <HelpGuideList guides={results} labelledBy="help-page-results-h" />
+                <HelpGuideList guides={results} labelledBy="help-page-results-h" screen={screen} />
               )}
             </section>
           ) : (
@@ -162,14 +167,18 @@ const SUB = 'Short guides, written for people, not developers.';
                   <h2 id="help-page-screen-h" class="hc__h">
                     On this screen
                   </h2>
-                  <HelpGuideList guides={onScreen} labelledBy="help-page-screen-h" />
+                  <HelpGuideList
+                    guides={onScreen}
+                    labelledBy="help-page-screen-h"
+                    screen={screen}
+                  />
                 </section>
               )}
               <section aria-labelledby="help-page-all-h">
                 <h2 id="help-page-all-h" class="hc__h">
                   All guides
                 </h2>
-                <HelpGuideList guides={index.guides} labelledBy="help-page-all-h" />
+                <HelpGuideList guides={index.guides} labelledBy="help-page-all-h" screen={screen} />
               </section>
             </>
           )}

@@ -59,6 +59,8 @@ export default function HelpDrawer() {
   const [results, setResults] = useState<HelpGuide[] | null>(null);
   const [article, setArticle] = useState<HelpArticle | null>(null);
   const [lang, setLang] = useState<HelpLang>('en');
+  // The page the drawer was opened on: kept on the rows' links (a new tab), as the page does.
+  const [screen, setScreen] = useState<string | null>(null);
   // The live line: what is loading or could not be read, else how many guides match.
   const [status, setStatus] = useState('');
   const [matches, setMatches] = useState('');
@@ -143,6 +145,7 @@ export default function HelpDrawer() {
       setArticle(null);
       setStatus('');
       setMatches('');
+      setScreen(screenOf(window.location.pathname));
       dialog.showModal();
       const guide = trigger.dataset['helpGuide'];
       const atGuide = guide !== undefined && HELP_SLUG.test(guide);
@@ -290,6 +293,7 @@ export default function HelpDrawer() {
               level={4}
               related={relatedTo(article, guides)}
               onPick={(slug) => void openGuide(slug)}
+              screen={screen}
             />
           </article>
         ) : results !== null ? (
@@ -302,6 +306,7 @@ export default function HelpDrawer() {
                 guides={results}
                 labelledBy="help-results-h"
                 onPick={(slug) => void openGuide(slug)}
+                screen={screen}
               />
             </section>
           )
@@ -317,6 +322,7 @@ export default function HelpDrawer() {
                     guides={onScreen}
                     labelledBy="help-screen-h"
                     onPick={(slug) => void openGuide(slug)}
+                    screen={screen}
                   />
                 </section>
               )}
@@ -328,6 +334,7 @@ export default function HelpDrawer() {
                   guides={guides}
                   labelledBy="help-all-h"
                   onPick={(slug) => void openGuide(slug)}
+                  screen={screen}
                 />
               </section>
             </>

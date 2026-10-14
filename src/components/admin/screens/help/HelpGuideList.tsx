@@ -13,9 +13,16 @@ export interface HelpGuideListProps {
   labelledBy: string;
   /** The drawer: open a guide in place instead of following the link. */
   onPick?: ((slug: string) => void) | undefined;
+  /** The screen the help was opened on, kept on every link (guideHref). */
+  screen?: string | null | undefined;
 }
 
-export default function HelpGuideList({ guides, labelledBy, onPick }: HelpGuideListProps) {
+export default function HelpGuideList({
+  guides,
+  labelledBy,
+  onPick,
+  screen = null,
+}: HelpGuideListProps) {
   function click(event: MouseEvent<HTMLAnchorElement>, slug: string) {
     if (!onPick || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
     event.preventDefault();
@@ -28,7 +35,7 @@ export default function HelpGuideList({ guides, labelledBy, onPick }: HelpGuideL
         <li key={guide.slug}>
           <a
             className="li"
-            href={guideHref(guide.slug)}
+            href={guideHref(guide.slug, screen)}
             data-guide={guide.slug}
             onClick={(event) => click(event, guide.slug)}
           >

@@ -28,9 +28,14 @@ export interface HelpIndex {
 
 export type HelpLang = 'en' | 'ar';
 
-/** Where a guide is read without JS (and where a row links, so a new tab works too). */
-export function guideHref(slug: string): string {
-  return `/admin/help?guide=${encodeURIComponent(slug)}`;
+/**
+ * Where a guide is read without JS (and where a row links, so a new tab works too). The
+ * screen it was reached from rides along, so the page's "All guides" lists that screen's
+ * guides first and its language switch keeps it.
+ */
+export function guideHref(slug: string, screen?: string | null): string {
+  const href = `/admin/help?guide=${encodeURIComponent(slug)}`;
+  return screen ? `${href}&screen=${encodeURIComponent(screen)}` : href;
 }
 
 /** The help page for a screen: the topbar's "?" without JS. */

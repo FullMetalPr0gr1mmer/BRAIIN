@@ -25,6 +25,8 @@ export interface HelpArticleBodyProps {
   /** Other guides to read next, already filtered to the ones the role may read. */
   related: readonly HelpGuide[];
   onPick?: ((slug: string) => void) | undefined;
+  /** The screen the help was opened on, kept on the related guides' links. */
+  screen?: string | null | undefined;
 }
 
 const TIP: Record<HelpLang, string> = { en: 'Tip: ', ar: 'نصيحة: ' };
@@ -77,6 +79,7 @@ export default function HelpArticleBody({
   level,
   related,
   onPick,
+  screen = null,
 }: HelpArticleBodyProps) {
   const RelatedHeading = level === 2 ? 'h2' : 'h4';
   const relatedId = `help-related-${level}`;
@@ -100,7 +103,7 @@ export default function HelpArticleBody({
           <RelatedHeading id={relatedId} className="hc__h">
             Related
           </RelatedHeading>
-          <HelpGuideList guides={related} labelledBy={relatedId} onPick={onPick} />
+          <HelpGuideList guides={related} labelledBy={relatedId} onPick={onPick} screen={screen} />
         </section>
       )}
     </>

@@ -125,7 +125,10 @@ test.describe('as developer', () => {
   test('the page head’s "Guide" opens the drawer on this screen’s guide', async ({ page }) => {
     await ready(page, '/admin/leads');
     const guide = guideButton(page);
-    await expect(guide).toHaveAttribute('href', '/admin/help?guide=working-with-leads');
+    await expect(guide).toHaveAttribute(
+      'href',
+      '/admin/help?guide=working-with-leads&screen=%2Fadmin%2Fleads',
+    );
     await expect(guide).toHaveAccessibleName('Guide to this screen');
     await guide.click();
 
@@ -295,7 +298,7 @@ test.describe('as content_creator', () => {
     await ready(page, '/admin/pages');
     await expect(guideButton(page)).toHaveAttribute(
       'href',
-      '/admin/help?guide=saving-and-publishing',
+      '/admin/help?guide=saving-and-publishing&screen=%2Fadmin%2Fpages',
     );
   });
 
@@ -322,12 +325,27 @@ test.describe('without JS', () => {
     await expect(page).toHaveURL(/\/admin\/help\?screen=%2Fadmin%2Fredirects$/);
     const onScreen = page.getByRole('list', { name: /^on this screen$/i });
     await onScreen.getByRole('link', { name: /SEO defaults and redirects/ }).click();
-    await expect(page).toHaveURL(/\/admin\/help\?guide=seo-and-redirects$/);
+    // The screen rides along on every link the page builds.
+    await expect(page).toHaveURL(
+      /\/admin\/help\?guide=seo-and-redirects&screen=%2Fadmin%2Fredirects$/,
+    );
     await expect(
       page.getByRole('heading', { level: 1, name: 'SEO defaults and redirects' }),
     ).toBeVisible();
     await page.getByRole('link', { name: 'اقرأ بالعربية' }).click();
+    await expect(page).toHaveURL(
+      /\/admin\/help\?guide=seo-and-redirects&screen=%2Fadmin%2Fredirects&lang=ar$/,
+    );
     await expect(page.locator('.hc-art')).toHaveAttribute('lang', 'ar');
+
+    // So "All guides", after the language switch, still lists this screen's guides first.
+    await page.getByRole('link', { name: /^all guides$/i }).click();
+    await expect(page).toHaveURL(/\/admin\/help\?screen=%2Fadmin%2Fredirects$/);
+    await expect(
+      page
+        .getByRole('list', { name: /^on this screen$/i })
+        .getByRole('link', { name: /SEO defaults and redirects/ }),
+    ).toBeVisible();
   });
 
   test('the page head’s "Guide" is a link to the guide; SEO gets none on Pages', async ({
@@ -335,7 +353,9 @@ test.describe('without JS', () => {
   }) => {
     await page.goto('/admin/redirects');
     await guideButton(page).click();
-    await expect(page).toHaveURL(/\/admin\/help\?guide=seo-and-redirects$/);
+    await expect(page).toHaveURL(
+      /\/admin\/help\?guide=seo-and-redirects&screen=%2Fadmin%2Fredirects$/,
+    );
     await expect(
       page.getByRole('heading', { level: 1, name: 'SEO defaults and redirects' }),
     ).toBeVisible();
