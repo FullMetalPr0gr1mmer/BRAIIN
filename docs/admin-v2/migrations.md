@@ -43,7 +43,7 @@ PR lands and nothing here is edited after a merge.
 | 0040 | (released) | unused, as 0039 | 1 |
 | 0042 | (released) | unused: F8 (0044) and U3 (0045) merged first, so U16 moved to 0046 | 1 |
 | 0043 | (released) | unused, as 0042: C13 moved to 0047 | 1 |
-| 0046 | U16 | `0046_help_centre.sql`: the help centre: `help_articles` (typed blocks, never HTML; staff read their tenant's guides, nothing writes but the migrations and the service role), `help_search` (Arabic folded like §8), the guides (`app.help_article_set()`) and their seed into every tenant and, by a trigger on `tenants`, each new one. Renumbered from 0042 | 1 |
+| 0046 | U16 | `0046_help_centre.sql`: the help centre: `help_articles` (typed blocks, never HTML; staff read their tenant's guides, nothing writes but the migrations and the service role), `help_search` (a contains search, Arabic folded with `app.normalize_ar_q` as §8's contains searches are; up to 100 guides, filtered by role in the Worker), the guides (`app.help_article_set()`) and their seed into every tenant and, by a trigger on `tenants`, each new one. Renumbered from 0042 | 1 |
 | 0047 | C13 | lead attribution capture (built, held for the privacy notice, O-11) | 1 |
 
 ## Rules
