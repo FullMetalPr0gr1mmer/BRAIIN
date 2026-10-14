@@ -249,10 +249,11 @@ select vault.update_secret(id, '<the new value>') from vault.secrets where name 
 No error the trigger can catch fails a lead's insert (a cancelled statement is the one thing
 PL/pgSQL cannot catch, and it ends the insert as it would without the trigger). With no Vault
 URL it does nothing, and the Worker's daily cron logs "lead notifications are off" once a day.
-Configured but unable to announce a lead (a non-https URL, no Vault secret, a pg_net error),
-it writes a WARNING to the Postgres log and a `system_logs` row (source `leads_notify`, a fixed
-message, at most an SQLSTATE: never the URL, the secret or a lead value); the lead is saved
-either way. The daily cron (`cron:lead-notify`) also warns with a count when leads from the
+Configured but unable to announce a lead (a non-https URL, no Vault secret, a trigger attached
+to pg_net's queue, a pg_net error), it writes a WARNING to the Postgres log and a `system_logs`
+row (source `leads_notify`, a fixed message, at most an SQLSTATE: never the URL, the secret or
+a lead value); the lead is saved either way. A trigger on the queue is never ours: find out who
+attached it before anything else (EXC-012). The daily cron (`cron:lead-notify`) also warns with a count when leads from the
 last day reached no notification at all (a call queued and then lost or refused); the first
 run after switching notifications on may count leads from the day before, once. So check it
 once all three are in place: submit one test inquiry through the contact form, confirm
