@@ -77,6 +77,14 @@ describe('safeNext: where a sign-in may send the browser', () => {
       '/admin/..//evil.example',
       '/admin/x/../../services?next=/admin',
       '/admin/./../..//evil.example/admin',
+      // Encoded again: the browser leaves `%252e` alone, Astro decodes it to a dot and
+      // routes `/services` (second review).
+      '/admin/%252e%252e/services',
+      '/admin/%25252e%25252e/x',
+      '/admin/x/%252E%252e/%252e%252e/old-page',
+      // A path Astro cannot decode, or not within its ten decodings.
+      '/admin/%E6',
+      `/admin/${'%25'.repeat(11)}2e`,
     ]) {
       expect(safeNext(next), next).toBe(DEFAULT_NEXT);
     }
@@ -85,6 +93,9 @@ describe('safeNext: where a sign-in may send the browser', () => {
     expect(safeNext('/admin/leads/../users?x=1#y')).toBe('/admin/users?x=1#y');
     // A doubled slash after /admin is a path on this origin, not a host.
     expect(safeNext('/admin//evil.example')).toBe('/admin//evil.example');
+    // Encoded characters that stay inside /admin once decoded are kept as they are.
+    expect(safeNext('/admin/leads?q=100%25')).toBe('/admin/leads?q=100%25');
+    expect(safeNext('/admin/%2541')).toBe('/admin/%2541');
   });
 
   it('percent-encodes what is not ASCII, so a Location header can carry it', () => {
