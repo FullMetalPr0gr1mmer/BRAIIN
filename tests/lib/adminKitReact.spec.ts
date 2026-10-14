@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { createElement, type ComponentType } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -20,7 +21,11 @@ import Tabs from '@/components/admin/kit/Tabs';
 import { backdropDismiss } from '@/components/admin/kit/useDialog';
 import KitGallery from '@/components/admin/screens/kit/KitGallery';
 import { KIT_ROWS, KIT_SECTIONS } from '@/components/admin/screens/kit/samples';
-import { nameOf, renderCell } from '@/components/admin/screens/resources/ResourceTable';
+import {
+  deleteMessage,
+  nameOf,
+  renderCell,
+} from '@/components/admin/screens/resources/ResourceTable';
 import { pageInfo } from '@/lib/admin/pager';
 import { formatDate } from '@/lib/admin/relTime';
 
@@ -397,6 +402,18 @@ describe('ResourceTable on the kit', () => {
     expect(nameOf({ en: ' ', ar: 'شعار' }, bilingual, 'Service')).toBe('شعار');
     expect(nameOf(null, bilingual, 'Service')).toBe('Untitled service');
     expect(nameOf('/old', { key: 'from', label: 'From' }, 'Redirect')).toBe('/old');
+  });
+
+  it('names the row in the delete confirmation, isolated from the sentence', () => {
+    // The trigger is an icon revealed on hover: the dialog is where a wrong row is caught.
+    expect(deleteMessage('Service', 'Logo design')).toBe(
+      'Delete the service “\u2068Logo design\u2069”? This cannot be undone.',
+    );
+    expect(deleteMessage('Service', 'شعار')).toContain('“\u2068شعار\u2069”');
+    const source = readFileSync('src/components/admin/screens/resources/ResourceTable.tsx', 'utf8');
+    expect(source).toMatch(
+      /confirmDialog\(\{\s*message: deleteMessage\(ui\.singular, rowName\(row\)\)/,
+    );
   });
 
   it('says a status in words and a date in the studio’s calendar', () => {

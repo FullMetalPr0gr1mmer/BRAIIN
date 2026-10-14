@@ -97,7 +97,7 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
     // confirms wholesale, at which point destructive actions silently resolve one way
     // or the other. confirmDialog puts initial focus on Cancel.
     const confirmed = await confirmDialog({
-      message: `Delete this ${ui.singular.toLowerCase()}? This cannot be undone.`,
+      message: deleteMessage(ui.singular, rowName(row)),
       confirmLabel: 'Delete',
     });
     if (!confirmed) return;
@@ -257,6 +257,16 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
       />
     </div>
   );
+}
+
+/**
+ * The delete confirmation names the row: its trigger is an icon tied to the row only by
+ * hover and its accessible name, so the dialog is where a press on the wrong row is
+ * caught. The name is a bidi isolate (FSI…PDI), so an Arabic name cannot reorder the
+ * English sentence around it.
+ */
+export function deleteMessage(singular: string, name: string): string {
+  return `Delete the ${singular.toLowerCase()} “\u2068${name}\u2069”? This cannot be undone.`;
 }
 
 /**
