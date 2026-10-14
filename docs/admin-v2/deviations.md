@@ -145,6 +145,25 @@ owner, an expiry and a close condition (CLAUDE.md §11).
   - *Owner:* Kareem (O-2). *Expiry:* the production deploy that turns `AUTH_EMAIL_READY` on,
     at the latest 2026-12-31. *Closes when* one of the three is chosen and recorded here.
 
+- **A copied session cookie outlives the 7 days** (Admin v2 F7; owner item **O-24**).
+  - *The gap.* "Keep me signed in" bounds the session cookie: Max-Age 7 days, rewritten at
+    each token refresh, or a browser-session cookie when unticked. The refresh token inside
+    it is Supabase Auth's, and no environment sets Auth's own session limits, so the session
+    has no end of its own until a sign-out or a password reset revokes it. A cookie value
+    copied off a machine (devtools on an unlocked screen, a backup, malware) keeps working
+    after the browser has dropped its own copy; so does a session-only cookie a browser
+    restores after a restart. CLAUDE.md §3 states exactly this.
+  - *What the code does.* Every lifetime the Worker writes is its own (not @supabase/ssr's
+    400 days, `src/lib/auth/session.ts`); a sign-out revokes the session at the auth server;
+    a reset signs the account out everywhere; `tests/lib/session.spec.ts` holds §3's sentence
+    to the cookie's number and this residual.
+  - *What closes it* (launch runbook §2c, staging and production): the auth server's
+    inactivity timeout at 168 hours (the cookie's 7 days), and optionally a time-box, a
+    paid-plan setting. Local stacks set neither, so CI cannot prove it.
+  - *Owner:* Kareem (O-24). *Expiry:* 2026-12-31, or the move to a plan that offers the
+    setting, whichever is first. *Closes when* both projects' Authentication session settings
+    show the inactivity timeout (and the time-box, if chosen).
+
 
 ## The client's TDD, row by row
 

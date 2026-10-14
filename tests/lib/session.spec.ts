@@ -242,4 +242,14 @@ describe('what the standard says these lifetimes bound (F7 review)', () => {
     const runbook = readFileSync('docs/launch-runbook.md', 'utf8');
     expect(runbook).toMatch(/^### 2c\. Session limits/m);
   });
+
+  it('the residual waits on the owner in the deviations register, with an owner and an expiry', () => {
+    const register = readFileSync('docs/admin-v2/deviations.md', 'utf8');
+    const residuals = register.split(/^## /m).find((s) => s.startsWith('Residual risks'));
+    const entry = residuals?.split(/^- /m).find((s) => s.includes('copied session cookie'));
+    expect(entry, 'the copied-session-cookie residual').toBeDefined();
+    expect(entry).toMatch(/\*Owner:\* Kareem \(O-24\)/);
+    expect(entry).toMatch(/\*Expiry:\* [^\n]*\d{4}-\d{2}-\d{2}/);
+    expect(entry).toContain('runbook §2c');
+  });
 });
