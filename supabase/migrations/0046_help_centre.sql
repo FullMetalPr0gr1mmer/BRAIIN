@@ -470,7 +470,11 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "p",
-          "x": "Only an Admin can, in Settings › Users & roles. Changing a person's role, or switching their account off, signs them out at once, so their next sign-in carries the change."
+          "x": "Only an Admin can, in Settings › Users & roles. The admin checks a person's role and account again on every request, so a role taken away stops working at their next click, and someone whose account is switched off is signed out at that click. A role given reaches every save once their sign-in renews, within the hour, or at once if they sign out and in again."
+        },
+        {
+          "t": "p",
+          "x": "One limit to know: a sign-in already handed out lasts up to an hour. Until it runs out, it can still reach the database directly, outside the admin, with the role it was issued with. Leads and job applications check the person's account on every read, so those close at once."
         },
         {
           "t": "tip",
@@ -497,7 +501,11 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "p",
-          "x": "يستطيع ذلك المسؤول (Admin) فقط، من Settings › Users & roles. تغيير دور الشخص أو إيقاف حسابه يسجّل خروجه فورًا، فيحمل تسجيل دخوله التالي التغيير."
+          "x": "يستطيع ذلك المسؤول (Admin) فقط، من Settings › Users & roles. تتحقق لوحة الإدارة من دور الشخص وحسابه من جديد عند كل طلب، فالدور الذي يُسحب يتوقف عن العمل عند نقرته التالية، ومن أُوقف حسابه يُسجَّل خروجه عند تلك النقرة. أما الدور الجديد فيشمل كل حفظ بعد تجديد جلسة دخوله، خلال ساعة، أو فورًا إن سجّل خروجه ثم دخل من جديد."
+        },
+        {
+          "t": "p",
+          "x": "وهناك حدّ ينبغي معرفته: جلسة الدخول التي صدرت بالفعل تبقى صالحة حتى ساعة. وإلى أن تنتهي، يمكن استخدامها للوصول إلى قاعدة البيانات مباشرة، خارج لوحة الإدارة، بالدور الذي صدرت به. أما العملاء المحتملون وطلبات التوظيف فتتحقق من حساب الشخص عند كل قراءة، فيُغلق الوصول إليها فورًا."
         },
         {
           "t": "tip",

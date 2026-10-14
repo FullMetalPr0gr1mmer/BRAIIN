@@ -173,6 +173,27 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
     }
   });
 
+  it('the roles guide promises no instant sign-out: an issued sign-in lasts up to an hour', () => {
+    // CLAUDE.md §2 (session invalidation): the admin turns a changed or switched-off
+    // person away at their next request, but an access token already issued keeps its
+    // role for RLS until it expires (an hour); only the tables with a live check (leads
+    // and the CRM through app.live_role(), job applications through app.is_live_admin())
+    // close at once. The guide an Admin reads before removing someone says exactly that.
+    const roles = SET.find((a) => a.slug === 'roles-and-access')!;
+    const en = textsOf(roles, 'en').join('\n');
+    const ar = textsOf(roles, 'ar').join('\n');
+    for (const text of textsOf(roles, 'en')) {
+      expect(text).not.toMatch(
+        /\bsign\w*\b[^.]*\bout\b[^.]*\b(at once|immediately|straight away)\b/i,
+      );
+    }
+    expect(ar).not.toContain('يسجّل خروجه فورًا');
+    expect(en).toContain('a sign-in already handed out lasts up to an hour');
+    expect(en).toContain('Leads and job applications check the person');
+    expect(ar).toContain('تبقى صالحة حتى ساعة');
+    expect(ar).toContain('العملاء المحتملون وطلبات التوظيف');
+  });
+
   it('the dollar-quote cannot end early: no text holds the literal’s tag', () => {
     for (const article of SET) {
       for (const text of textsOf(article)) expect(text.includes('$help$')).toBe(false);
