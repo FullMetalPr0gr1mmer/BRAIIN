@@ -58,6 +58,67 @@ describe('safeNext: where a sign-in may send the browser', () => {
       expect(safeNext(next), String(next)).toBe(DEFAULT_NEXT);
     }
   });
+
+  it('judges the path the browser resolves, not the string (F7 review)', () => {
+    // Each starts with `/admin/` and resolves outside it: dot segments, encoded dots, and a
+    // `..` that leaves a protocol-relative `//evil.example` behind.
+    for (const next of [
+      '/admin/../services',
+      '/admin/..',
+      '/admin/%2e%2e/x',
+      '/admin/%2E%2e/services',
+      '/admin/.%2e/x',
+      '/admin/..//evil.example',
+      '/admin/x/../../services?next=/admin',
+      '/admin/./../..//evil.example/admin',
+    ]) {
+      expect(safeNext(next), next).toBe(DEFAULT_NEXT);
+    }
+    // Dot segments that stay inside /admin are kept, resolved.
+    expect(safeNext('/admin/./leads')).toBe('/admin/leads');
+    expect(safeNext('/admin/leads/../users?x=1#y')).toBe('/admin/users?x=1#y');
+    // A doubled slash after /admin is a path on this origin, not a host.
+    expect(safeNext('/admin//evil.example')).toBe('/admin//evil.example');
+  });
+
+  it('percent-encodes what is not ASCII, so a Location header can carry it', () => {
+    expect(safeNext('/admin/日')).toBe('/admin/%E6%97%A5');
+    expect(safeNext('/admin/x?q=日 a"<>#frag 日')).toBe(
+      '/admin/x?q=%E6%97%A5%20a%22%3C%3E#frag%20%E6%97%A5',
+    );
+  });
+
+  it('whatever it returns is a valid header value (a ByteString), under /admin', () => {
+    const inputs = [
+      '/admin',
+      '/admin/leads?stage=new',
+      '/admin/日本語/ü?ä=ö#ß',
+      '/admin/\u{1F600}',
+      '/admin/x?y=ÿĀ',
+      '/admin/a b',
+      '/admin/"quoted"',
+      '/admin/<tag>',
+      '/admin/`tick`{brace}',
+      '/admin/%zz',
+      '/admin/../services',
+      '/admin/..//evil.example',
+      '/services',
+      'https://evil.example',
+    ];
+    // Plus every printable ASCII and a sweep of Latin-1 and beyond, one at a time.
+    for (let code = 0x20; code < 0x300; code += 1) {
+      inputs.push(`/admin/${String.fromCharCode(code)}x`, `/admin?${String.fromCharCode(code)}`);
+    }
+    for (const input of inputs) {
+      const next = safeNext(input);
+      expect(() => new Headers({ location: next }), input).not.toThrow();
+      expect(next, input).toMatch(/^\/admin(?:[/?#][\x21-\x7e]*)?$/);
+      // And the browser lands where it says: resolving it again changes nothing.
+      const again = new URL(next, 'https://site.example');
+      expect(`${again.pathname}${again.search}${again.hash}`, input).toBe(next);
+      expect(again.host, input).toBe('site.example');
+    }
+  });
 });
 
 describe('readAuthBody: the two kinds of post', () => {

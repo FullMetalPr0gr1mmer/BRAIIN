@@ -642,6 +642,23 @@ describe('the zero-JS sign-in form (Admin v2 F7)', () => {
     }
   });
 
+  it('holds the path the browser resolves, and never 500s on a non-ASCII `next` (F7 review)', async () => {
+    state.auth = { ctx: DEVELOPER, revoke: false };
+    const { client } = sessionClient();
+    for (const [next, location] of [
+      ['/admin/../services', '/admin'],
+      ['/admin/%2e%2e/x', '/admin'],
+      ['/admin/..//evil.example', '/admin'],
+      // Raw, this threw "Cannot convert argument to a ByteString" after a good sign-in.
+      ['/admin/日', '/admin/%E6%97%A5'],
+      ['/admin/leads?q=ü', '/admin/leads?q=%C3%BC'],
+    ] as const) {
+      const res = await signInForm(client, { email: EMAIL, password: PASSWORD, next });
+      expect(res.status, next).toBe(303);
+      expect(res.headers.get('location'), next).toBe(location);
+    }
+  });
+
   it('every failure comes back to the same page, with one code and never the address', async () => {
     const { client } = sessionClient();
     const locations: (string | null)[] = [];
