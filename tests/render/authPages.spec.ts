@@ -3,9 +3,12 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
 import { FORGOT_MESSAGES, FORGOT_NOT_SET_UP, LOGIN_MESSAGES } from '@/lib/auth/messages';
 import { EXPIRED_FORM } from '@/lib/auth/expiredForm';
+import { IDENTITY } from './fixtures';
+import { normalise } from './harness';
 
-// The sign-in screens' server markup (Admin v2 F7), rendered by Astro's container API
-// (tests/stubs/astro-components.ts) in states the browser suites cannot reach. The CI
+// The sign-in screens' server markup (Admin v2 F7), whole pages with their real shell
+// (src/layouts/AuthLayout.astro), rendered by Astro's container API in the render project
+// (vitest.render.config.ts), in states the browser suites cannot reach. The CI
 // preview is built with AUTH_EMAIL_READY off (owner item O-2), so tests/e2e only ever sees
 // "Forgot password?" saying "Not set up"; the screen people get once e-mail is set up was
 // never rendered by any test (F7 review). Here, both:
@@ -19,9 +22,6 @@ import { EXPIRED_FORM } from '@/lib/auth/expiredForm';
 
 const state = vi.hoisted(() => ({ ready: true }));
 vi.mock('@/lib/auth/recovery', () => ({ authEmailReady: () => state.ready }));
-// The shell's stand-in, named by a template so tsc does not look for an `.astro` module's
-// types (it has none; astro check reads the components themselves).
-vi.mock('@/layouts/AuthLayout.astro', () => import(`../stubs/${'AuthLayout'}.astro`));
 
 const ORIGIN = 'https://admin.example.test';
 const TOKEN = 'csrf-token-from-the-middleware';
@@ -30,8 +30,17 @@ beforeEach(() => {
   state.ready = true;
 });
 
-/** What the middleware leaves for a page reached without a session (src/middleware.ts). */
-const LOCALS = { csrfToken: TOKEN, session: null } as Partial<App.Locals> as App.Locals;
+/**
+ * What the middleware leaves for a page reached without a session (src/middleware.ts), and
+ * the site profile the shell's brand comes from (the render project's fixture).
+ */
+const LOCALS = {
+  csrfToken: TOKEN,
+  session: null,
+  identity: Promise.resolve(IDENTITY),
+} as Partial<App.Locals> as App.Locals;
+
+let container: Promise<AstroContainer> | undefined;
 
 async function render(
   page: 'login' | 'forgot' | 'reset',
@@ -39,13 +48,16 @@ async function render(
   cookie?: string,
 ): Promise<string> {
   const { default: Page } = await import(`@/pages/admin/${page}.astro`);
-  const container = await AstroContainer.create();
-  return container.renderToString(Page, {
+  container ??= AstroContainer.create();
+  const html = await (
+    await container
+  ).renderToString(Page, {
     request: new Request(`${ORIGIN}/admin/${page}${search}`, {
       headers: cookie === undefined ? {} : { cookie },
     }),
     locals: LOCALS,
   });
+  return normalise(html);
 }
 
 /** The parts of a rendered page every sign-in screen must keep (CLAUDE.md §3 CSP). */
@@ -194,9 +206,11 @@ describe('/admin/reset finds the link in its URL or, after a 303, in its cookie 
 describe("the reset page's URL stays out of its own requests' Referer (F7 review)", () => {
   it('only /admin/reset asks for strict-origin (never no-referrer: that sends Origin: null)', async () => {
     const reset = await render('reset', `?token_hash=${'a1b2c3d4'.repeat(7)}&type=recovery`);
-    expect(reset).toContain('data-referrer="strict-origin"');
+    expect(reset).toMatch(
+      /<head>[\s\S]*<meta name="referrer" content="strict-origin">[\s\S]*<\/head>/,
+    );
     for (const page of ['login', 'forgot'] as const) {
-      expect(await render(page), page).not.toContain('data-referrer');
+      expect(await render(page), page).not.toContain('name="referrer"');
     }
   });
 });

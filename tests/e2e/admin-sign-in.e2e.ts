@@ -14,7 +14,7 @@ import { staffEnv } from '../admin/staff';
 //     a known and an unknown address alike, through the no-JS form; its API, the same. The
 //     CI preview is built with e-mail off until O-2 turns it on (AUTH_EMAIL_READY in
 //     wrangler.jsonc, which the CI build reads too); the set-up screen's markup is rendered
-//     by tests/lib/authPages.spec.ts meanwhile;
+//     by tests/render/authPages.spec.ts meanwhile;
 //   - a reset link without a usable token offers a new one instead of a form;
 //   - a sign-in form post the CSRF check refuses goes back to its page with a message (a
 //     tab restored after a browser restart has lost its token), never to a JSON page.
