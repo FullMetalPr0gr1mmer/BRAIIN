@@ -356,6 +356,16 @@ describe('the guides say only what the admin does', () => {
     expect(en).toContain('maintenance switched on or off for everyone');
   });
 
+  it('the theme editor is not said to change the site: no public code reads a saved theme', () => {
+    // Applying a theme to the site is E4's; until then only the admin reads custom_themes.
+    for (const file of codeIn('src').filter((f) => !/\/admin(\/|$)/.test(f))) {
+      expect(source(file), file).not.toContain('custom_themes');
+    }
+    expect(guide('roles-and-access', 'en')).toContain(
+      'the theme editor (saved themes do not change the site yet)',
+    );
+  });
+
   // @@guide-claims
 });
 
