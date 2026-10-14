@@ -55,7 +55,7 @@ chat or commit them** — they live in Cloudflare Worker Secrets / Supabase Vaul
    wrangler secret put SUPABASE_DB_POOL_URL
    wrangler secret put LEAD_PII_ENC_KEY        # 32-byte base64
    wrangler secret put AUDIT_HMAC_KEY          # same value as the Vault secret
-   wrangler secret put NOTIFY_LEAD_SECRET
+   wrangler secret put NOTIFY_LEAD_SECRET      # same value as the Vault secret notify_lead_secret (launch runbook §5)
    wrangler secret put ANTHROPIC_API_KEY       # optional until Phase 4
    ```
    **Public** values (`PUBLIC_SITE_URL`, `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`) are client-safe and inlined at **build** time, so they belong in the build environment only — the `deploy` job's `env:` in `ci.yml` (and `.env` locally) — **never** in `wrangler.jsonc` `vars` or dashboard vars, which override the build (see the note in `wrangler.jsonc`).
@@ -89,7 +89,7 @@ chat or commit them** — they live in Cloudflare Worker Secrets / Supabase Vaul
 | `SUPABASE_DB_POOL_URL` | Worker Secret | **Yes** |
 | `LEAD_PII_ENC_KEY` | Worker Secret | **Yes** |
 | `AUDIT_HMAC_KEY` | Worker Secret **+** Supabase Vault | **Yes** |
-| `NOTIFY_LEAD_SECRET` | Worker Secret | **Yes** |
+| `NOTIFY_LEAD_SECRET` | Worker Secret **+** Supabase Vault (`notify_lead_secret`, the key the trigger signs each call with, 0048) | **Yes** |
 | `ANTHROPIC_API_KEY` | Worker Secret (Phase 4) | **Yes** |
 | `CLOUDFLARE_API_TOKEN` | GitHub Actions secret — the `deploy` job's wrangler step only ("Edit Cloudflare Workers" template, this account) | **Yes** |
 | `CLOUDFLARE_ACCOUNT_ID` | GitHub Actions secret — the same step | No (an identifier) |
