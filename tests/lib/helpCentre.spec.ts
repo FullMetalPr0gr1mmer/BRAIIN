@@ -378,7 +378,11 @@ describe('the guides say only what the admin does', () => {
     expect(en).toContain('Clear logs older than 30 days removes any still left');
   });
 
-  // @@guide-claims
+  it('the Arabic says what it means', () => {
+    expect(everything('ar')).not.toContain('شوركت');
+    expect(guide('seo-and-redirects', 'ar')).toContain('الروابط التي تمت مشاركتها');
+    expect(guide('personal-data', 'ar')).toContain('تُعرض بيانات شخص واحد');
+  });
 });
 
 describe('the schema and the migration state the same rules', () => {
