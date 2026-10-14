@@ -219,6 +219,8 @@ declare
   v_owner name;
   v_role text;
   v_post regprocedure;
+  v_name text;
+  v_seq oid;
 begin
   -- The function: a definer with an empty search_path, owned by the migration's role, and
   -- that role bypasses RLS (as 0034's and 0041's trigger owners do: a definer reaching a
@@ -302,5 +304,59 @@ begin
   if not (has_schema_privilege(v_owner, 'net', 'usage')
           and has_function_privilege(v_owner, v_post, 'execute')) then
     raise exception '0048: % (the function''s owner) may not call net.http_post', v_owner;
+  end if;
+
+  -- What the call needs from the owner beyond that. Since pg_net 0.10, net.http_post runs
+  -- with its CALLER's rights (SECURITY INVOKER), and its caller here is the trigger
+  -- function's owner: so the owner must be able to run every net function it calls (the
+  -- URL encoders, net.wake()) and insert into every net table it writes (the queue, and
+  -- the sequence behind its id). Read from http_post's own body, so a pg_net that calls
+  -- something new is covered too. A failure here would otherwise surface only as every
+  -- lead's WARNING (42501) and system_logs row, after the push.
+  if not (select f.prosecdef from pg_proc f where f.oid = v_post) then
+    for v_name in
+      select distinct m[1]
+        from pg_proc f
+        cross join lateral regexp_matches(f.prosrc, 'net\.([a-z_][a-z0-9_]*)\s*\(', 'gi') m
+       where f.oid = v_post
+    loop
+      if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                  where n.nspname = 'net' and p.proname = v_name)
+         and not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                          where n.nspname = 'net' and p.proname = v_name
+                            and has_function_privilege(v_owner, p.oid, 'execute')) then
+        raise exception '0048: % may not execute net.%(), which net.http_post calls', v_owner, v_name;
+      end if;
+    end loop;
+    for v_name in
+      select distinct m[1]
+        from pg_proc f
+        cross join lateral regexp_matches(f.prosrc, 'insert\s+into\s+net\.([a-z_][a-z0-9_]*)', 'gi') m
+       where f.oid = v_post
+    loop
+      if to_regclass('net.' || v_name) is null
+         or not has_table_privilege(v_owner, ('net.' || v_name)::regclass, 'insert') then
+        raise exception '0048: % may not insert into net.%, which net.http_post writes', v_owner, v_name;
+      end if;
+      for v_seq in
+        select s.oid from pg_depend d join pg_class s on s.oid = d.objid and s.relkind = 'S'
+         where d.classid = 'pg_class'::regclass and d.refclassid = 'pg_class'::regclass
+           and d.refobjid = ('net.' || v_name)::regclass
+      loop
+        if not has_sequence_privilege(v_owner, v_seq, 'usage') then
+          raise exception '0048: % may not use the sequence %, behind net.%', v_owner, v_seq::regclass, v_name;
+        end if;
+      end loop;
+    end loop;
+  end if;
+
+  -- The configuration and the signature: the owner reads Vault and runs pgcrypto's hmac.
+  if not (has_schema_privilege(v_owner, 'vault', 'usage')
+          and has_table_privilege(v_owner, 'vault.decrypted_secrets', 'select')) then
+    raise exception '0048: % (the function''s owner) may not read vault.decrypted_secrets', v_owner;
+  end if;
+  if not (has_schema_privilege(v_owner, 'extensions', 'usage')
+          and has_function_privilege(v_owner, 'extensions.hmac(text, text, text)', 'execute')) then
+    raise exception '0048: % (the function''s owner) may not run extensions.hmac', v_owner;
   end if;
 end $$;
