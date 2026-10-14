@@ -53,7 +53,9 @@ begin
   select id into v_id from vault.secrets where name = p_name;
   if p_value is null then
     if v_id is not null then
-      perform vault.update_secret(v_id, new_name := p_name || '-pgtap-off-' || gen_random_uuid());
+      -- Positional, as Vault's documentation calls it: (id, new_secret, new_name); a null
+      -- new_secret keeps the value.
+      perform vault.update_secret(v_id, null, p_name || '-pgtap-off-' || gen_random_uuid());
     end if;
   elsif v_id is null then
     perform vault.create_secret(p_value, p_name, 'pgTAP lead_notify (rolled back)');
