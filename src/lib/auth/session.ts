@@ -32,10 +32,10 @@ import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from 'astro:env/client'
 // a token refresh could not tell which kind of cookie to write.
 //
 // These are the COOKIE's lifetimes, what an honest browser keeps. The session behind it,
-// Supabase's refresh token, is bounded only by Supabase Auth's own session settings (an
-// inactivity timeout and a time-box: config.toml [auth.sessions] for the local stack, the
-// dashboard for the hosted projects, docs/launch-runbook.md §2b), so a copied cookie value
-// works until those end it or a sign-out revokes it.
+// Supabase's refresh token, is bounded only by a sign-out or a reset (which revoke it) and
+// by Supabase Auth's own session limits, an inactivity timeout and a time-box: a hosted
+// project's setting (docs/launch-runbook.md §2c, owner item O-24), none on the local stack.
+// So a copied cookie value works past the 7 days until one of those ends it (CLAUDE.md §3).
 //
 // Before F7 the cookie was meant to last 7 days and lasted 400: @supabase/ssr writes every
 // session cookie with ITS default Max-Age (400 days, DEFAULT_COOKIE_OPTIONS), overriding
@@ -53,7 +53,7 @@ export const HOST_COOKIE_BASE = {
   sameSite: 'lax',
 } as const;
 
-/** 7 days: the longest a kept session lasts after its last use. */
+/** 7 days: how long the browser keeps a kept session's cookie after its last refresh. */
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 /** @supabase/ssr chunks a large token into `<name>.0`, `<name>.1`, …; 8 ≈ 32 KB. */

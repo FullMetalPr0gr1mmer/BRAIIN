@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { AstroCookies as AstroCookiesType } from 'astro';
 // Astro's own cookie jar, the one every request gets: its Set-Cookie headers are what the
@@ -216,5 +217,29 @@ describe('clearSessionCookies', () => {
       hostPrefixed(line);
       expect(line, name).toMatch(/Expires=Thu, 01 Jan 1970/);
     }
+  });
+});
+
+describe('what the standard says these lifetimes bound (F7 review)', () => {
+  // CLAUDE.md §3 said sessions last "at most 7 days from their last use", but only the
+  // cookie's Max-Age enforces the 7 days: the refresh token inside it stays valid at
+  // Supabase Auth until it is revoked or Auth's own session limits end it (a hosted-project
+  // setting, launch runbook §2c). The sentence must say which is which.
+  const standard = readFileSync('CLAUDE.md', 'utf8');
+  const sessions = standard.split(/\r?\n/).find((line) => line.includes('Sessions in `httpOnly;'));
+
+  it("§3 names the cookie's number and the residual behind it", () => {
+    expect(sessions, 'the §3 session sentence').toBeDefined();
+    expect(sessions).toContain(`Max-Age ${SESSION_MAX_AGE_SECONDS / 86_400} days`);
+    expect(sessions).toContain('That bounds the cookie, not the session');
+    expect(sessions).toContain('refresh token');
+    expect(sessions).toContain('launch runbook §2c');
+  });
+
+  it('and nothing in it claims the session itself ends after 7 days', () => {
+    expect(standard).not.toMatch(/at most 7 days from their last use/);
+    expect(standard).not.toMatch(/a session ends 7 days after its last use/);
+    const runbook = readFileSync('docs/launch-runbook.md', 'utf8');
+    expect(runbook).toMatch(/^### 2c\. Session limits/m);
   });
 });

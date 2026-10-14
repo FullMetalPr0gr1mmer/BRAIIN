@@ -178,6 +178,27 @@ limit 5;` names the status and code (never the password); report it before switc
 `AUTH_EMAIL_READY` on in production. A completed reset is GoTrue's `user_updated_password`
 too: an alert built on §2a's suggestion matches it to the `auth.password_reset` row.
 
+### 2c. Session limits (Admin v2 F7, owner item O-24)
+
+Not a blocker: what is open until it is done is stated in CLAUDE.md §3. "Keep me signed in"
+sets the admin's session **cookie** to expire 7 days after its last token refresh (unticked,
+when the browser closes). That is all the Worker can bound. The refresh token inside the
+cookie is Supabase Auth's, and by default the session it belongs to has no end of its own:
+it goes on, refresh after refresh, until a sign-out or a password reset revokes it. So a
+cookie value copied off a machine keeps working after the browser has dropped its own copy. To bound the session itself, on each
+hosted project (staging, then production), in the dashboard's **Authentication** settings
+for user sessions:
+
+1. **Inactivity timeout: 168 hours** (7 days, the cookie's own). A session not refreshed for
+   that long is refused at the auth server too.
+2. **Time-box (optional):** the longest a session lasts however active, for example 30 days.
+   Everyone then signs in again at least that often.
+
+These are paid-plan settings (Pro and above); on the Free plan the residual stays as §3
+states it. Local stacks set neither (`supabase/config.toml` has no `[auth.sessions]`), so
+the e2e harness's saved sessions are not cut short. Check: sign in, then confirm the
+dashboard shows both values; a session idle past the timeout lands on the sign-in page.
+
 ## 3. Create and promote the first admin  ⛔ blocker
 
 `users.manage` is Admin-only, so there is no in-product path to the first admin.
