@@ -6,13 +6,18 @@ import { reachableHrefs } from '@/lib/admin/nav';
 import * as resources from '@/lib/admin/resources';
 import type { ResourceConfig } from '@/lib/admin/resource';
 import {
+  CAPTURE_VIEWPORTS,
   EXTRA_LINKS,
   LOCKED_SCREENS,
   UNSEEDED_LISTS,
+  captureName,
+  captureRoutes,
+  captureSlug,
   expectedSidebar,
   menuScreens,
   pageFileFor,
   refusedRoles,
+  routeKey,
   sweepRoutes,
 } from '../admin/routes';
 
@@ -311,5 +316,41 @@ describe("the sweep's expected sidebar", () => {
     expect(expectedSidebar(role)).toEqual(
       Object.entries(SIDEBAR[role]).map(([title, links]) => ({ title, links })),
     );
+  });
+});
+
+// Playwright refuses a repeated test title when it collects the suites, and the whole e2e
+// job then aborts before a single test runs (the sweep, axe and the CSP checks included).
+// Every title the admin suites build from the route map is checked here instead.
+describe('the e2e titles built from the route map are unique', () => {
+  const repeated = (names: readonly string[]) => names.filter((n, i) => names.indexOf(n) !== i);
+
+  it('the design capture: one name per role, viewport and route', () => {
+    const names = ROLES.flatMap((role) =>
+      CAPTURE_VIEWPORTS.flatMap((vp) =>
+        captureRoutes(role).map((route) => captureName(role, vp.tag, route)),
+      ),
+    );
+    expect(repeated(names)).toEqual([]);
+  });
+
+  it('the sweep: one title per route within each role', () => {
+    for (const role of ROLES) {
+      expect(repeated(sweepRoutes(role).map(routeKey)), role).toEqual([]);
+    }
+  });
+
+  it('the help page’s four views are four captures, named by their query', () => {
+    const help = captureRoutes('admin')
+      .filter((route) => route.pattern === '/admin/help')
+      .map((route) => captureName('admin', 'd', route));
+    expect(help).toEqual([
+      'admin-admin-d-admin_help_screen_admin',
+      'admin-admin-d-admin_help_q_password',
+      'admin-admin-d-admin_help_guide_finding-your-way',
+      'admin-admin-d-admin_help_guide_finding-your-way_lang_ar',
+    ]);
+    expect(captureSlug('/admin/services/[id]')).toBe('admin_services_id');
+    expect(captureSlug('/admin')).toBe('admin');
   });
 });
