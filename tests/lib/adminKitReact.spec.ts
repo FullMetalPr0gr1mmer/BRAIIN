@@ -496,6 +496,9 @@ describe('ResourceTable on the kit', () => {
     expect(renderCell('2026-09-03T22:30:00Z', { key: 'd', label: 'D', kind: 'date' })).toBe(
       formatDate('2026-09-03T22:30:00Z'),
     );
+    // An unreadable date is an empty cell, never a dash (P-12, as in ServerTable).
+    expect(renderCell('not a date', { key: 'd', label: 'D', kind: 'date' })).toBe('');
+    // A missing value keeps the cell marker ResourceTable had before F4b.
     expect(renderCell(undefined, { key: 'x', label: 'X' })).toBe('—');
   });
 });

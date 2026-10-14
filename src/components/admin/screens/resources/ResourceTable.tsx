@@ -437,7 +437,8 @@ export function renderCell(value: unknown, column: ColumnDef) {
     case 'status':
       return <StatusBadge status={String(value)} />;
     case 'date':
-      return formatDate(String(value)) || '—';
+      // An unreadable date is an empty cell, as in ServerTable: no dash (P-12).
+      return formatDate(String(value));
     case 'boolean':
       return value ? 'Yes' : 'No';
     case 'bilingual': {
