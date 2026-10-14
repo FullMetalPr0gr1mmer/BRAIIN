@@ -27,6 +27,9 @@
 
 .kit__stack {
   display: grid;
+  /* minmax(0, 1fr), not the implicit auto track: a card holding a wide table would set
+     the track to the table's width and push the page sideways at phone width. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 

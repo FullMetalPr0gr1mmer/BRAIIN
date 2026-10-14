@@ -17,8 +17,8 @@ test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
-async function open(page: Page, query = '') {
-  await page.goto(`/admin/kit${query}`, { waitUntil: 'networkidle' });
+async function open(page: Page, query = '', path = '/admin/kit') {
+  await page.goto(`${path}${query}`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
 }
 
@@ -349,6 +349,27 @@ test.describe('as admin', () => {
       'page',
     );
     await expect(card.getByRole('button', { name: 'Page 3', exact: true })).toHaveCount(0);
+  });
+
+  test.describe('at phone width nothing scrolls sideways (WCAG 1.4.10)', () => {
+    // The per-role sweep runs at 1280. A table wider than a phone scrolls inside its
+    // .table-wrap; nothing in it may widen the page (the "Actions" heading's visually
+    // hidden text once did, from every list screen). /admin/services is a ResourceTable
+    // list, measured once its rows are in.
+    for (const width of [320, 390]) {
+      for (const path of ['/admin/services', '/admin/kit']) {
+        test(`${path} at ${width}px`, async ({ page }) => {
+          await page.setViewportSize({ width, height: 800 });
+          await open(page, '', path);
+          await expect(page.locator('table.data a.data-link').first()).toBeVisible();
+          const overflow = await page.evaluate(() => {
+            const root = document.scrollingElement ?? document.documentElement;
+            return root.scrollWidth - root.clientWidth;
+          });
+          expect(overflow).toBeLessThanOrEqual(2);
+        });
+      }
+    }
   });
 
   test('the modal: focus in its first field, Escape closes, focus goes back', async ({ page }) => {

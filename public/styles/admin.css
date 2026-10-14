@@ -1442,7 +1442,12 @@ button[role='switch'][aria-checked='true']::before {
 
 /* ---- Tables (table.data takes the prototype's .tbl look) ---- */
 
+/* The containing block of everything positioned inside a table: a cell's visually hidden
+   text (DataTable's "Actions" heading) is position: absolute, and with no positioned box
+   between it and the page it escaped the scroll container's clip and widened the page at
+   phone width (WCAG 1.4.10; tests/admin/kit.e2e.ts measures it at 320 and 390). */
 .table-wrap {
+  position: relative;
   overflow-x: auto;
 }
 
