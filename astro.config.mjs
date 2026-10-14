@@ -13,6 +13,24 @@ import { mediaRemotePatternsIntegration } from './scripts/media-remote-patterns.
 // transformed and cached for an hour, stills handed to the adapter (the script's header).
 import { imageEndpointIntegration } from './scripts/image-endpoint.mjs';
 
+// The component kit's own modules (Admin v2 F4b): its React pieces
+// (src/components/admin/kit/), the vanilla client code (src/lib/admin/client/: the
+// Sortable core, and the enhancers AdminLayout's script will lazy-load), and the two
+// models in src/lib/admin/ that only kit code reaches in the browser (roving.ts: Tabs and
+// the Sortable core's arrow keys; avatar.ts: the Avatar's tone). Claimed by admin-ui's
+// path rule they rode on every screen; here they join admin-ui only when a screen there
+// imports them, like any kit piece.
+const ADMIN_KIT =
+  /[\\/]src[\\/](components[\\/]admin[\\/]kit[\\/]|lib[\\/]admin[\\/](client[\\/]|(roving|avatar)\.ts$))/;
+// The kit's reference screen (/admin/kit): its island and that island's own code, which
+// stay in the island's `AdminKit` entry chunk.
+const ADMIN_KIT_SCREEN =
+  /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]kit[\\/]|islands[\\/]AdminKit\.tsx$)/;
+// The shared admin-ui chunk claims neither by path. A group also takes its modules' static
+// dependencies, so a kit piece still lands in admin-ui the moment a screen there imports
+// it; the rest of the kit goes to the lowest admin group, `admin-kit`, instead of riding
+// along on every admin screen.
+
 /**
  * Braiin Station — render model (see CLAUDE.md §2 "Render tiers"):
  *   Tier A  Static, indexable shell  → SSR + long `s-maxage`, purge-by-tag on publish
@@ -68,7 +86,8 @@ export default defineConfig({
           // modules its `test` matches PLUS their dependencies (Rolldown's default, the
           // behaviour `manualChunks` had), but a module a higher group already claimed
           // stays there. So the order is the design: React first, then the admin's small
-          // shared helpers, then the rich-text editor, then everything else admin.
+          // shared helpers, then the rich-text editor, then everything else admin, and
+          // last the component kit's modules none of those took (F4b).
           //
           // Why named at all: `.size-limit.json` splits public from admin by FILE NAME,
           // so an admin module in an anonymous chunk would be weighed against the public
@@ -109,10 +128,26 @@ export default defineConfig({
                 priority: 30,
               },
               {
-                // Our own admin-only modules, and what they need (zod, the schemas).
+                // Our own admin-only modules, and what they need (zod, the schemas),
+                // except the component kit and its reference screen (F4b).
                 name: 'admin-ui',
-                test: /[\\/]src[\\/](components|lib)[\\/]admin[\\/]/,
+                test: (id) =>
+                  /[\\/]src[\\/](components|lib)[\\/]admin[\\/]/.test(id) &&
+                  !ADMIN_KIT.test(id) &&
+                  !ADMIN_KIT_SCREEN.test(id),
                 priority: 20,
+              },
+              {
+                // The lowest admin group (Admin v2 F4b review): the kit modules admin-ui
+                // leaves still land in an admin-* file. A group captures
+                // static dependencies only, so a module reached only through import() (an
+                // enhancer in lib/admin/client/ that AdminLayout's script lazy-loads, a kit
+                // piece a screen opens on demand) would otherwise become a module-named
+                // chunk, which size-limit weighs as PUBLIC JavaScript and
+                // scripts/admin-bundle.mjs fails as a public chunk importing admin code.
+                name: 'admin-kit',
+                test: ADMIN_KIT,
+                priority: 5,
               },
               {
                 // The two video helpers, as ONE chunk. Each is shared (lazyVideo by the

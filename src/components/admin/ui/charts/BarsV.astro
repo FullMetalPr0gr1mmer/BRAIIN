@@ -1,0 +1,89 @@
+---
+import ChartFigure from './ChartFigure.astro';
+import {
+  barsGeometry,
+  datumSummary,
+  datumTable,
+  formatNumber,
+  n,
+  seriesClass,
+  type Datum,
+} from '@/lib/admin/charts';
+
+// Vertical bars (Admin v2 F4b, the prototype's chart.bars): one bar per item, its value
+// written above it and its label below (at most eight labels; the table has them all).
+// For bars with long labels, BarList (horizontal) reads better. The figure's summary and
+// table come from the same data.
+
+interface Props {
+  id: string;
+  caption: string;
+  captionVisible?: boolean;
+  data: readonly Datum[];
+  height?: number;
+  summary?: string | undefined;
+  labelHeading?: string;
+  valueHeading?: string;
+  /** The bars' series, 0-based. */
+  series?: number;
+}
+
+const {
+  id,
+  caption,
+  captionVisible = true,
+  data,
+  height = 200,
+  summary,
+  labelHeading = 'Item',
+  valueHeading = 'Value',
+  series = 0,
+} = Astro.props;
+const g = barsGeometry(data, { height });
+const tone = seriesClass(series);
+---
+
+<ChartFigure
+  id={id}
+  caption={caption}
+  captionVisible={captionVisible}
+  summary={summary ?? datumSummary(data)}
+  table={datumTable(data, { labelHeading, valueHeading })}
+  empty={g === null}
+>
+  {
+    g && (
+      <svg
+        class="chart"
+        viewBox={`0 0 ${g.width} ${g.height}`}
+        role="img"
+        aria-labelledby={`${id}-cap ${id}-sum`}
+        focusable="false"
+      >
+        <line class="ch-grid" x1="0" x2={g.width} y1={g.baseline} y2={g.baseline} />
+        {g.bars.map((bar) => (
+          <>
+            {bar.height > 0 && (
+              <rect
+                class:list={['ch-bar', tone]}
+                x={n(bar.x)}
+                y={n(bar.y)}
+                width={n(bar.width)}
+                height={n(bar.height)}
+                rx={bar.height >= 8 ? 4 : 0}
+              />
+            )}
+            <text class="ch-val" x={n(bar.cx)} y={n(bar.y - 5)} text-anchor="middle">
+              {formatNumber(bar.value)}
+            </text>
+            {bar.labelled && (
+              <text class="ch-axis" x={n(bar.cx)} y={g.height - 8} text-anchor="middle">
+                {bar.label}
+              </text>
+            )}
+          </>
+        ))}
+      </svg>
+    )
+  }
+</ChartFigure>

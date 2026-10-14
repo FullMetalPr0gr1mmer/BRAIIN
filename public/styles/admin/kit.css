@@ -1,0 +1,61 @@
+/* Screen stylesheet: the component kit, /admin/kit (Admin v2 F4b). Linked only through
+   AdminLayout's `styles` prop (styles={['kit.css']}), after admin.css. The kit's own
+   pieces are admin.css's component layer, rendered on real screens; only this reference
+   page's frame is here: its section headings, the gaps between its rows, and the two
+   columns of the "move between lists" sample. It uses admin.css's tokens and declares
+   none, and holds no colour literal (tests/lib/adminStyles.spec.ts,
+   scripts/contrast-audit.mjs). */
+
+.kit__h {
+  margin: 30px 0 14px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.kit__row {
+  margin-top: 18px;
+}
+
+.kit__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.kit__stack {
+  display: grid;
+  /* minmax(0, 1fr), not the implicit auto track: a card holding a wide table would set
+     the track to the table's width and push the page sideways at phone width. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.kit__done {
+  margin: 12px 0 0;
+  color: var(--ad-dim);
+  font-size: 12.5px;
+}
+
+.kit__done:empty {
+  margin: 0;
+}
+
+.kit__board {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+}
+
+.kit__col {
+  min-width: 0;
+}
+
+.kit__colh {
+  margin: 0 0 8px;
+  color: var(--ad-dim);
+  font-size: 12.5px;
+  font-weight: 700;
+}

@@ -1,0 +1,141 @@
+---
+import Badge from './Badge.astro';
+import EmptyState from './EmptyState.astro';
+import Pager from './Pager.astro';
+import { formatNumber } from '@/lib/admin/charts';
+import { offsetOf, pageInfo, pageParam, rangeText, PAGE_SIZE } from '@/lib/admin/pager';
+import type { IconName } from '@/lib/admin/icons';
+import { formatDate, formatDateTime, isoOf, relTime, toDate } from '@/lib/admin/relTime';
+
+// A server-rendered table (Admin v2 F4b, the prototype's .tbl): the DataTable's look with
+// zero JS, for screens without client state (the activity log, release history, the forms
+// overview). The rows are one page the server already read; paging is links (Pager), the
+// range "26 to 50 of 112" sits under the table.
+//
+// A page past the end is the screen's to handle: ServerTable clamps its range and pager to
+// the last page (pageInfo), but it cannot read rows. A screen reads the page the URL
+// names clamped the same way, `pageInfo(total, offsetOf(pageParam(value))).offset` (or
+// redirects to that page when it learns the total from the read itself); otherwise
+// `?page=99` shows an empty table under "51 to 60 of 60" (kit.astro does the former).
+//
+// Cells are typed, not free markup: text, a number (tabular, end-aligned), a status
+// badge, a date, a date and time, or "3 h ago" as a <time>. The `title` column links to
+// `rowHref(row)` (no click handler on the row) and its link covers the row.
+
+export interface ServerColumn {
+  key: string;
+  label: string;
+  kind?: 'text' | 'number' | 'status' | 'date' | 'datetime' | 'ago';
+  /** This column's cell links to the row's page. */
+  title?: boolean;
+}
+
+interface Props {
+  /** The table's name, for assistive technology (a visually hidden <caption>). */
+  caption: string;
+  columns: readonly ServerColumn[];
+  rows: readonly Record<string, unknown>[];
+  rowHref?: ((row: Record<string, unknown>) => string | null) | undefined;
+  /** With `url`, the rows are one page of `total`: the range and the pager show. */
+  total?: number | undefined;
+  url?: URL | undefined;
+  param?: string;
+  limit?: number;
+  empty?: { title: string; text?: string; icon?: IconName } | undefined;
+  now?: Date | number | string | undefined;
+}
+
+const {
+  caption,
+  columns,
+  rows,
+  rowHref,
+  total,
+  url,
+  param = 'page',
+  limit = PAGE_SIZE,
+  empty = { title: 'Nothing here yet' },
+  now = Date.now(),
+} = Astro.props;
+
+const paged = total !== undefined && url !== undefined;
+const info = paged
+  ? pageInfo(total, offsetOf(pageParam(url.searchParams.get(param)), limit), limit)
+  : null;
+const numeric = (column: ServerColumn) => column.kind === 'number';
+const text = (value: unknown) =>
+  value === null || value === undefined ? '' : typeof value === 'string' ? value : String(value);
+---
+
+<div class="card card--flush dt">
+  <div class="table-wrap">
+    <table class="data">
+      <caption class="visually-hidden">{caption}</caption>
+      <thead>
+        <tr>
+          {
+            columns.map((column) => (
+              <th scope="col" class={numeric(column) ? 'num' : undefined}>
+                {column.label}
+              </th>
+            ))
+          }
+        </tr>
+      </thead>
+      <tbody>
+        {
+          rows.length === 0 ? (
+            <tr>
+              <td colspan={columns.length}>
+                <EmptyState title={empty.title} text={empty.text} icon={empty.icon ?? 'inbox'} />
+              </td>
+            </tr>
+          ) : (
+            rows.map((row) => (
+              <tr>
+                {columns.map((column) => {
+                  const value = row[column.key];
+                  const href = column.title && rowHref ? rowHref(row) : null;
+                  return (
+                    <td class={numeric(column) ? 'num' : undefined}>
+                      {href ? (
+                        <a class="data-link" href={href} dir="auto">
+                          {text(value) || 'Untitled'}
+                        </a>
+                      ) : column.kind === 'status' && text(value) ? (
+                        <Badge status={text(value)} />
+                      ) : column.kind === 'number' && typeof value === 'number' ? (
+                        formatNumber(value)
+                      ) : column.kind === 'date' && toDate(value as string) ? (
+                        formatDate(value as string, { now })
+                      ) : column.kind === 'datetime' && toDate(value as string) ? (
+                        formatDateTime(value as string)
+                      ) : column.kind === 'ago' && toDate(value as string) ? (
+                        <time
+                          datetime={isoOf(value as string)}
+                          title={formatDateTime(value as string)}
+                        >
+                          {relTime(value as string, now)}
+                        </time>
+                      ) : (
+                        <span dir="auto">{text(value)}</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))
+          )
+        }
+      </tbody>
+    </table>
+  </div>
+  {
+    info && url && (
+      <div class="tbl__foot">
+        <p class="tbl__range">{rangeText(info)}</p>
+        <Pager total={info.total} url={url} param={param} limit={limit} />
+      </div>
+    )
+  }
+</div>

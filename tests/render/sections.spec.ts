@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'vitest';
+import { z } from 'zod';
+import { SECTION_CONTENT_SCHEMAS } from '@schemas/sections';
 import Hello from '@/components/sections/Hello.astro';
 import {
   DEFAULT_ABOUT_SECTIONS,
@@ -15,12 +17,22 @@ import {
   type SectionData,
 } from '@/lib/sections/types';
 import { withLeaders } from '@/lib/sections/about';
+import { RENDERED_SECTION_TYPES } from '@/lib/sections/registry';
 import { withContactData } from '@/lib/sections/contact';
 import { composeJoinPage } from '@/lib/sections/join';
 import { serviceHelloHeading } from '@/lib/sections/hello';
 import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
 import { composeServicesPage } from '@/lib/services/servicesPage';
-import { CARDS, CERTIFICATIONS, DISCIPLINES, LEADERS, STATS, TEAM, TESTIMONIALS } from './fixtures';
+import {
+  CARDS,
+  CERTIFICATIONS,
+  DISCIPLINES,
+  LEADERS,
+  POSTER,
+  STATS,
+  TEAM,
+  TESTIMONIALS,
+} from './fixtures';
 import { LOCALES, renderComponent, renderSections } from './harness';
 
 // The public sections, rendered to the byte (Admin v2 F6). Every case renders through
@@ -88,6 +100,11 @@ const AUTHORED: Record<string, SectionData[]> = {
         ctaLabel: t('Authored CTA', 'زر مكتوب'),
       },
     },
+  ],
+  // Added after F6 (its own snapshot keys): the Stream loop's UID (no static source then)
+  // and the intro plate.
+  'hero, a Stream loop and the intro plate': [
+    { type: 'hero', props: { videoUid: '0123456789abcdef0123456789abcdef', intro: true } },
   ],
   servicesOverview: [
     {
@@ -251,6 +268,14 @@ const AUTHORED: Record<string, SectionData[]> = {
       data: { cards: featured },
     },
   ],
+  // Added after F6: the two cards chosen, in the order given.
+  'selectedWork, chosen cards': [
+    {
+      type: 'selectedWork',
+      props: { cardSlugs: ['third-light', 'quiet-mark'] },
+      data: { cards: featured },
+    },
+  ],
   testimonials: [
     {
       type: 'testimonials',
@@ -277,6 +302,14 @@ const AUTHORED: Record<string, SectionData[]> = {
       },
     },
   ],
+  // Added after F6: About's production branch, the poster (the page's LCP image) in its
+  // media frame, with a window of the reel.
+  'aboutWho, a poster and a clip': [
+    {
+      type: 'aboutWho',
+      props: { mediaId: POSTER.id, clip: { path: '/media/showreel.mp4', startS: 2, endS: 5 } },
+    },
+  ],
   leadership: [
     {
       type: 'leadership',
@@ -290,6 +323,15 @@ const AUTHORED: Record<string, SectionData[]> = {
     },
   ],
   workHero: [{ type: 'workHero', props: { tag: t('Authored tag', 'وسم مكتوب') } }],
+  // Added after F6: a pinned project, not the latest (every card given a poster, so the
+  // pin is what picks it).
+  'workHero, a pinned project': [
+    {
+      type: 'workHero',
+      props: { projectSlug: 'third-light' },
+      data: { cards: CARDS.map((c) => ({ ...c, poster: POSTER })) },
+    },
+  ],
   proof: [
     {
       type: 'proof',
@@ -537,4 +579,35 @@ describe('Hello rendered directly, as a service page does', () => {
       expect(html).toMatchSnapshot();
     });
   }
+});
+
+describe('the cases author every content field', () => {
+  // CLAUDE.md §9 says the snapshot holds every section type with all its content authored.
+  // A field of a type's content schema that no case authors is a branch of its component
+  // the snapshot never sees, as About's poster and clip and the hero's Stream loop were.
+  const unwrap = (s: z.ZodTypeAny): z.ZodTypeAny =>
+    s instanceof z.ZodOptional || s instanceof z.ZodNullable
+      ? unwrap(s.unwrap() as z.ZodTypeAny)
+      : s instanceof z.ZodEffects
+        ? unwrap(s.innerType() as z.ZodTypeAny)
+        : s;
+
+  test('every field of every content schema is authored by a case of its type', () => {
+    const authored = new Map<string, Set<string>>();
+    for (const s of [...Object.values(AUTHORED), ...Object.values(VARIANTS)].flat()) {
+      const keys = authored.get(s.type) ?? new Set<string>();
+      for (const k of Object.keys(s.props ?? {})) keys.add(k);
+      authored.set(s.type, keys);
+    }
+    const missing: string[] = [];
+    for (const type of RENDERED_SECTION_TYPES) {
+      const schema = SECTION_CONTENT_SCHEMAS[type];
+      const shape = schema ? unwrap(schema) : null;
+      if (!(shape instanceof z.ZodObject)) continue;
+      for (const field of Object.keys(shape.shape as object)) {
+        if (!authored.get(type)?.has(field)) missing.push(`${type}.${field}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
 });

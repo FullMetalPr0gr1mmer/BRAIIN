@@ -1,0 +1,31 @@
+---
+import { avatarTone, initialsOf } from '@/lib/admin/avatar';
+
+// An avatar (Admin v2 F4b): two white letters on one of eight audited tones, the tone a
+// stable hash of `toneKey` (the person's id, which does not change when they rename
+// themselves). Without a key it keeps the brand colour, as the sidebar's user chip does.
+// Decorative beside a name (aria-hidden); give `label` when the avatar stands alone.
+// kit/Avatar.tsx renders the same markup inside islands.
+
+interface Props {
+  name?: string | null | undefined;
+  email?: string | undefined;
+  /** Two letters to show as they are, when the caller already has them. */
+  initials?: string | undefined;
+  toneKey?: string | undefined;
+  size?: 'sm' | 'lg' | undefined;
+  label?: string | undefined;
+}
+
+const { name = null, email = '', initials, toneKey, size, label } = Astro.props;
+const text = initials ?? initialsOf(name, email);
+---
+
+<span
+  class="avatar"
+  data-tone={toneKey === undefined ? undefined : avatarTone(toneKey)}
+  data-size={size}
+  role={label ? 'img' : undefined}
+  aria-label={label}
+  aria-hidden={label ? undefined : 'true'}>{text}</span
+>

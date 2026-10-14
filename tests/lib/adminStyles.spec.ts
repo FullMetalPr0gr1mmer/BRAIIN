@@ -129,6 +129,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
     // Pinned, not derived: a sheet dropped from the list must fail, not go unchecked.
     expect([...ADMIN_STYLESHEETS].sort()).toEqual([
       'help.css',
+      'kit.css',
       'login.css',
       'personal.css',
       'search.css',
@@ -202,6 +203,73 @@ describe('admin.css: a list row wraps text it does not control (Admin v2 F8)', (
         new RegExp(`(?:^|\\n)\\.${hook}\\s*\\{[^}]*overflow-wrap:\\s*anywhere`),
       );
     }
+  });
+});
+
+describe('admin.css: a row’s hidden actions take no presses (Admin v2 F4b review)', () => {
+  // DataTable's row actions sit above the row's stretched link. Hidden by opacity alone
+  // they still took presses, so a tap at a row's end pressed an unseen Move (which posts
+  // at once). tests/admin/kit.e2e.ts proves it in a browser; this keeps the rules.
+
+  /** The declarations of the rule whose selector is exactly `selector`, indented two. */
+  const body = (selector: string) => {
+    const start = ADMIN.indexOf(`\n  ${selector} {`);
+    if (start === -1) return '';
+    const open = ADMIN.indexOf('{', start);
+    return ADMIN.slice(open + 1, ADMIN.indexOf('}', open));
+  };
+
+  it('hidden: click-through, armed by hover only after the fade', () => {
+    const hidden = body('.dt .row-acts');
+    expect(hidden).toMatch(/opacity:\s*0;/);
+    expect(hidden).toMatch(/pointer-events:\s*none;/);
+    expect(hidden).toMatch(/pointer-events 0s 0\.2s allow-discrete/);
+    // visibility: hidden would also take them out of the tab order; focus must reach them.
+    expect(hidden).not.toMatch(/visibility/);
+  });
+
+  it('shown on hover, focus or a tick; focus and a tick arm them at once', () => {
+    expect(ADMIN).toMatch(
+      /\.dt tbody tr:hover \.row-acts,\s*\.dt tbody tr:focus-within \.row-acts,\s*\.dt tbody tr\[data-selected\] \.row-acts\s*\{\s*opacity:\s*1;\s*pointer-events:\s*auto;/,
+    );
+    expect(ADMIN).toMatch(
+      /\n {2}\.dt tbody tr:focus-within \.row-acts,\s*\.dt tbody tr\[data-selected\] \.row-acts\s*\{\s*transition-delay:\s*0s;/,
+    );
+  });
+
+  it('a list row’s actions follow the same rules (ListRow over its stretched title link)', () => {
+    const hidden = body('.li__acts');
+    expect(hidden).toMatch(/opacity:\s*0;/);
+    expect(hidden).toMatch(/pointer-events:\s*none;/);
+    expect(hidden).toMatch(/pointer-events 0s 0\.2s allow-discrete/);
+    expect(hidden).not.toMatch(/visibility/);
+    expect(ADMIN).toMatch(
+      /\.li:hover \.li__acts,\s*\.li:focus-within \.li__acts,\s*\.li\[aria-current\] \.li__acts\s*\{\s*opacity:\s*1;\s*pointer-events:\s*auto;/,
+    );
+    expect(ADMIN).toMatch(
+      /\n {2}\.li:focus-within \.li__acts,\s*\.li\[aria-current\] \.li__acts\s*\{\s*transition-delay:\s*0s;/,
+    );
+  });
+
+  it('reduced motion keeps the arming delay for both: it is not motion', () => {
+    expect(ADMIN).toMatch(
+      /\.admin-body \.dt \.row-acts,\s*\.admin-body \.li__acts\s*\{\s*transition:\s*pointer-events 0s 0\.2s allow-discrete !important;/,
+    );
+  });
+});
+
+describe('admin.css: a table never widens the page (WCAG 1.4.10, F4b pre-merge review)', () => {
+  // tests/admin/kit.e2e.ts measures it at 320 and 390px; this keeps the rules that make it
+  // so. A visually hidden cell text is position: absolute: without a positioned scroll
+  // container its containing block is outside the clip and it widens the page.
+  it('the scroll container is the containing block of what is positioned inside it', () => {
+    expect(ADMIN).toMatch(/\n\.table-wrap\s*\{[^}]*position:\s*relative;[^}]*overflow-x:\s*auto/);
+  });
+
+  it('the kit page stack lets a wide card shrink to the page', () => {
+    expect(SCREENS['kit.css']).toMatch(
+      /\.kit__stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
   });
 });
 
@@ -328,6 +396,7 @@ describe('admin.css keeps the hooks the markup renders', () => {
       const pagesFor = (sheet: string) =>
         [...new Set((renderers[sheet] ?? []).flatMap(({ file }) => pagesOf(file)))].sort();
       expect(pagesFor('help.css')).toEqual(['src/pages/admin/help.astro']);
+      expect(pagesFor('kit.css')).toEqual(['src/pages/admin/kit.astro']);
       // The sign-in screens (F7) render login.css's classes in their pages and in the shell
       // they share, src/layouts/AuthLayout.astro, which the walk traces to all three.
       expect(pagesFor('login.css')).toEqual([

@@ -11,7 +11,7 @@ import {
 } from '@schemas/sections';
 import { RENDERED_SECTION_TYPES, type RenderedSectionType } from '@/lib/sections/registry';
 import { SECTION_COPY, builtInContent, builtInLook } from '@/lib/sections/copy';
-import { HERO_PRESETS } from '@/lib/sections/types';
+import { HERO_PRESETS, withHeroPreset } from '@/lib/sections/types';
 
 // The built-in section copy as data (Admin v2 F6, ui.md AV-23): one module per type in
 // src/lib/sections/copy/, which the components render and the page editor will prefill its
@@ -194,6 +194,25 @@ describe('builtInLook / builtInContent', () => {
     expect(builtInLook('hero')).toBe('default');
   });
 
+  it('only the first hero takes the preset, as withHeroPreset applies it', () => {
+    for (const page of ['contact', 'services', 'join'] as const) {
+      const [first, later, hidden] = withHeroPreset(
+        [{ type: 'hero' }, { type: 'hero' }, { type: 'hero', visible: false }],
+        page,
+      );
+      expect(builtInLook('hero', { page, firstOfType: true })).toBe(page);
+      expect(first?.props).toEqual(builtInContent('hero', { page, firstOfType: true }));
+      for (const s of [later, hidden]) {
+        // A later hero gets no preset copy, so it renders the home hero's built-in.
+        expect(s?.props).toBeUndefined();
+        expect(builtInLook('hero', { page, firstOfType: false })).toBe('default');
+        expect(builtInContent('hero', { page, firstOfType: false })).toBe(
+          SECTION_COPY.hero.content.default,
+        );
+      }
+    }
+  });
+
   it('the discipline cards take the page layout only on /services', () => {
     expect(builtInLook('servicesOverview', { page: 'services' })).toBe('page');
     expect(builtInLook('servicesOverview', { page: 'home' })).toBe('home');
@@ -218,6 +237,7 @@ describe('builtInLook / builtInContent', () => {
         { page: 'contact' },
         { page: 'services' },
         { page: 'join' },
+        { page: 'contact', firstOfType: false },
         ...STAT_BAND_VARIANTS.map((variant) => ({ variant })),
         { variant: 'klein' },
       ];

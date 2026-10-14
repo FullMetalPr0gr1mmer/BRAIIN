@@ -1,0 +1,22 @@
+---
+import Icon from './Icon.astro';
+import { NOTE_ICON, type NoteTone } from '@/lib/admin/tones';
+
+// A note (Admin v2 F4b, the prototype's .note): a tinted line of guidance with its icon.
+// Info, warn, ok or err; the icon and the words carry the tone, the tint repeats it.
+// A note that appears after something happens (a failed check) passes `role`: "alert"
+// for an error, "status" otherwise. Errors are never toasts (ui.md §2.3).
+
+interface Props {
+  tone?: NoteTone;
+  role?: 'status' | 'alert' | undefined;
+  class?: string | undefined;
+}
+
+const { tone = 'info', role, class: className } = Astro.props;
+---
+
+<div class:list={['note', className]} data-tone={tone} role={role}>
+  <Icon name={NOTE_ICON[tone]} size={16} />
+  <div class="note__b"><slot /></div>
+</div>
