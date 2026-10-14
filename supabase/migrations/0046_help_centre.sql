@@ -396,7 +396,7 @@ create or replace function app.help_article_set() returns jsonb
         {
           "t": "ol",
           "x": [
-            "It shows up to 30 items from the last 14 days: new inquiries and job applications for the roles that handle them, services and posts going live today, and maintenance switched on or off.",
+            "It shows up to 30 items from the last 14 days: new inquiries and job applications for the roles that handle them, services and posts going live today for the roles that write them, and maintenance switched on or off for everyone.",
             "Mark all as read marks what you were shown. Anything that arrives while the list is open stays new."
           ]
         }
@@ -433,7 +433,7 @@ create or replace function app.help_article_set() returns jsonb
         {
           "t": "ol",
           "x": [
-            "يعرض حتى 30 عنصرًا من آخر 14 يومًا: الاستفسارات الجديدة وطلبات التوظيف للأدوار التي تتولاها، والخدمات والمقالات التي تُنشر اليوم، وتشغيل وضع الصيانة أو إيقافه.",
+            "يعرض حتى 30 عنصرًا من آخر 14 يومًا: الاستفسارات الجديدة وطلبات التوظيف للأدوار التي تتولاها، والخدمات والمقالات التي تُنشر اليوم للأدوار التي تكتبها، وتشغيل وضع الصيانة أو إيقافه للجميع.",
             "يحدّد Mark all as read ما عُرض عليك كمقروء، وما يصل أثناء فتح القائمة يبقى جديدًا."
           ]
         }

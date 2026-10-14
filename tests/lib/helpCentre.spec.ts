@@ -342,6 +342,20 @@ describe('the guides say only what the admin does', () => {
     expect(en).toContain("unless the site's owner has allowed design samples");
   });
 
+  it('the bell is described per role, as its sources decide', () => {
+    expect(source('src/lib/admin/notifications/scheduled.ts')).toContain(
+      "visible: (role) => can(role, 'services.write') === 'full' || can(role, 'blog.write') === 'full'",
+    );
+    expect(source('src/lib/admin/notifications/maintenance.ts')).toContain('visible: () => true');
+    const types = source('src/lib/admin/notifications/types.ts');
+    expect(types).toContain('WINDOW_DAYS = 14');
+    expect(types).toContain('MAX_ITEMS = 30');
+    const en = guide('your-account', 'en');
+    expect(en).toContain('up to 30 items from the last 14 days');
+    expect(en).toContain('going live today for the roles that write them');
+    expect(en).toContain('maintenance switched on or off for everyone');
+  });
+
   // @@guide-claims
 });
 
