@@ -72,6 +72,27 @@ function routeKey(pathname: string): string {
   return pathname.length > 1 ? pathname.replace(/\/+$/, '') || '/' : pathname;
 }
 
+const isAdminPath = (path: string): boolean => path === '/admin' || path.startsWith('/admin/');
+const isApiPath = (path: string): boolean => path.startsWith('/api/');
+const isAdminApiPath = (path: string): boolean => path.startsWith('/api/admin/');
+
+// What a request is (admin, API, private, pre-auth) is read from the path the middleware
+// sees AND from the route Astro matched (F7, third review), because the two can differ.
+// Astro 7.3.5's router matches the decoded path as it is (core/routing/match-request.js,
+// called by the adapter before the render; when that finds nothing, FetchState matches it
+// again with doubled slashes collapsed), while `url.pathname` has also been through the
+// URL setter (core/fetch/fetch-state.js), which resolves dot segments and reads `\` as `/`.
+// A dynamic segment takes `..\auth\login` whole, so `/api/admin/leads/..%5Cauth%5Clogin`
+// runs the lead endpoint while `url.pathname` reads `/api/admin/auth/login`, a pre-auth path;
+// `/api/admin/leads/..%5C..%5C..` reads `/`, not private at all; and
+// `/admin/blog/..%5C..%5C..%5Cx` renders an editor's shell under `/x`. Nothing leaked (the
+// API kernel refuses a request with no session client, and the pages load their data through
+// it), but the session gate, the CSRF check and `no-store` were the kernel's to supply. So a
+// request is private when either says so, and pre-auth only when both do; the route needs no
+// slash rule (it is `/admin/login` with or without one). `routePattern` is set on every
+// request Astro renders (the 404 page's own, `/404`, when nothing matched); a context without
+// one (a test's) is read by its path alone, and is never pre-auth.
+
 /**
  * A form post the CSRF check reads for its token: urlencoded, no token header. The one test
  * for both the bound on that read (below) and the read itself (`submittedCsrf`), so an empty
@@ -112,9 +133,11 @@ async function submittedCsrf(request: Request): Promise<string | null> {
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url, locals, cookies } = context;
 
-  const isAdmin = url.pathname === '/admin' || url.pathname.startsWith('/admin/');
-  const isApi = url.pathname.startsWith('/api/');
-  const isAdminApi = url.pathname.startsWith('/api/admin/');
+  // The route Astro matched, beside the path (see "What a request is" above).
+  const matched: string = context.routePattern ?? '';
+  const isAdmin = isAdminPath(url.pathname) || isAdminPath(matched);
+  const isApi = isApiPath(url.pathname) || isApiPath(matched);
+  const isAdminApi = isAdminApiPath(url.pathname) || isAdminApiPath(matched);
   // /healthz must answer during maintenance. §10 has external synthetic monitors hitting
   // it every 60s; if it 503s the moment maintenance is switched on, planned maintenance
   // pages the on-call — training everyone to ignore the alert that matters.
@@ -218,7 +241,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Authentication gate. Authorization (which capability, which role) is the API
     // kernel's job — this only answers "is there a verified session at all".
     const route = routeKey(url.pathname);
-    const preAuth = PRE_AUTH_PATHS.has(route);
+    // Both the path and the route Astro matched must be one of the six: a path that reads as
+    // the sign-in endpoint but routes to a lead's is not pre-auth (see "What a request is").
+    const preAuth = PRE_AUTH_PATHS.has(route) && PRE_AUTH_PATHS.has(matched);
     const unauthenticated = (): Response => {
       if (isAdminApi) return jsonError(401, 'unauthenticated');
       const next = `${url.pathname}${url.search}`;

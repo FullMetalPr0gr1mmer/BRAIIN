@@ -93,6 +93,13 @@ beforeEach(() => {
 const ORIGIN = 'https://admin.example.test';
 const TOKEN = 'a'.repeat(64);
 
+/**
+ * The route Astro matches for the static pages and endpoints these tests reach: the path
+ * without a trailing slash. The middleware reads it beside the path (`context.routePattern`).
+ */
+const staticRoute = (pathname: string): string =>
+  pathname.length > 1 ? pathname.replace(/\/+$/, '') || '/' : pathname;
+
 /** A POST to an admin API path with no session, carrying the double-submit cookie. */
 function post(path: string, headers: Record<string, string>) {
   const url = new URL(path, ORIGIN);
@@ -103,6 +110,7 @@ function post(path: string, headers: Record<string, string>) {
       body: '{}',
     }),
     url,
+    routePattern: staticRoute(url.pathname),
     locals: {},
     cookies: {
       get: (name: string) => (name === CSRF_COOKIE_NAME ? { value: TOKEN } : undefined),
@@ -683,6 +691,66 @@ describe('a body is never read before the session gate has answered (F7 review)'
   });
 });
 
+describe('a path that reads public but routes private is private (F7 final review)', () => {
+  // Astro's router matches the decoded path as it is, while `url.pathname` has been through
+  // the URL setter, which resolves dot segments and reads `\` as `/`. So
+  // `/api/admin/leads/..%5Cauth%5Clogin` runs the lead endpoint while its pathname reads as
+  // the sign-in endpoint, and `/api/admin/leads/..%5C..%5C..` reads as `/`. Modelled here
+  // by the two values the middleware sees: the pathname and the route Astro matched.
+  const routed = <T extends { routePattern: string }>(ctx: T, routePattern: string): T => ({
+    ...ctx,
+    routePattern,
+  });
+
+  it('a post that reads as the sign-in endpoint but routes to a lead is not pre-auth', async () => {
+    const next = handler();
+    const res = await middleware(
+      routed(
+        post('/api/admin/auth/login', { origin: ORIGIN, [CSRF_HEADER_NAME]: TOKEN }),
+        '/api/admin/leads/[id]',
+      ),
+      next,
+    );
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ ok: false, error: 'unauthenticated' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('a request that reads as / but routes to an admin API is private: 401, never cached', async () => {
+    const next = handler();
+    const ctx = post('/', { origin: ORIGIN, [CSRF_HEADER_NAME]: TOKEN });
+    const res = await middleware(routed(ctx, '/api/admin/leads/[id]'), next);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('cache-control') ?? '').toMatch(/no-store/);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('a page that reads as /x but routes to an admin editor sends the visitor to sign in', async () => {
+    const next = handler();
+    const ctx = post('/x', {});
+    const res = await middleware(
+      routed(
+        { ...ctx, request: new Request(ctx.url, { headers: { host: ctx.url.host } }) },
+        '/admin/blog/[id]',
+      ),
+      next,
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location') ?? '').toMatch(/^\/admin\/login\?next=/);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('the real sign-in endpoint, by path and by route, still reaches its handler', async () => {
+    const next = handler();
+    const res = await middleware(
+      post('/api/admin/auth/login', { origin: ORIGIN, [CSRF_HEADER_NAME]: TOKEN }),
+      next,
+    );
+    expect(res.status).toBe(200);
+    expect(next).toHaveBeenCalledOnce();
+  });
+});
+
 describe('what the middleware lets through without a session (Admin v2 F7)', () => {
   /** A GET with no session and no cookie at all. */
   function get(path: string) {
@@ -690,6 +758,7 @@ describe('what the middleware lets through without a session (Admin v2 F7)', () 
     return {
       request: new Request(url, { headers: { host: url.host } }),
       url,
+      routePattern: staticRoute(url.pathname),
       locals: {},
       cookies: { get: () => undefined, set: () => undefined, delete: () => undefined },
       redirect: (to: string, status = 302) =>
