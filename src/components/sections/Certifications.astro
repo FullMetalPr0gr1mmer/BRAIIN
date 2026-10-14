@@ -2,6 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import { pickLocale } from '@/lib/i18n';
 import { getPublishedCertifications, type CertificationRow } from '@/lib/data/certifications';
+import { CERTIFICATIONS_LABELS } from '@/lib/sections/copy/certifications';
 
 interface Props {
   locale: Locale;
@@ -9,11 +10,6 @@ interface Props {
 }
 
 const { locale } = Astro.props;
-
-const STR = {
-  en: { heading: 'Certifications & partnerships' },
-  ar: { heading: 'الشهادات والشراكات' },
-}[locale];
 
 // Self-contained: uses injected data if present, else fetches.
 const items = Astro.props.items ?? (await getPublishedCertifications());
@@ -23,7 +19,7 @@ const items = Astro.props.items ?? (await getPublishedCertifications());
   items.length > 0 && (
     <section class="certifications">
       <div class="container">
-        <h2>{STR.heading}</h2>
+        <h2>{CERTIFICATIONS_LABELS.heading[locale]}</h2>
         <ul class="cert-list">
           {items.map((c) => {
             const name = pickLocale(c.name, locale, c.slug);

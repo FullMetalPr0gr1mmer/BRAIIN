@@ -5,12 +5,15 @@ import type { ServiceExplorerSectionContent } from '@schemas/sections';
 import { localizedHref, pickLocale } from '@/lib/i18n';
 import { getPublishedDisciplines } from '@/lib/data/disciplines';
 import {
-  EXPLORER_COPY,
   fallbackExplorerPanels,
   toExplorerPanels,
   type ExplorerDisciplineInput,
 } from '@/lib/services/explorer';
 import type { ImageRef } from '@/lib/media/resolve';
+import {
+  SERVICE_EXPLORER_COPY,
+  SERVICE_EXPLORER_LABELS,
+} from '@/lib/sections/copy/serviceExplorer';
 import Cta from '@/components/ui/Cta.astro';
 import MediaFrame from '@/components/media/MediaFrame.astro';
 
@@ -33,7 +36,8 @@ import MediaFrame from '@/components/media/MediaFrame.astro';
 // first panel. Tabs are `<a href="#slug">` that the script upgrades to APG tabs
 // (src/lib/client/tabs.ts). Styled in public/styles/services.css.
 //
-//   content  ServiceExplorerSectionContentSchema — { inquireLabel, startLabel } overrides
+//   content  ServiceExplorerSectionContentSchema — { inquireLabel, startLabel } overrides of
+//            the design's (src/lib/sections/copy/serviceExplorer.ts)
 //   data     { disciplines?, inquiryHref?, standalone? } — ROUTE data: the published
 //            disciplines with their services (else it loads them itself); where "Start
 //            your…" points (default #inquiry; the route sends it to /contact#inquiry when
@@ -52,7 +56,12 @@ interface Props extends ServiceExplorerSectionContent {
 }
 
 const { locale, inquireLabel, startLabel, data } = Astro.props;
-const COPY = EXPLORER_COPY[locale];
+const LABELS = {
+  tabs: SERVICE_EXPLORER_LABELS.tabs[locale],
+  region: SERVICE_EXPLORER_LABELS.region[locale],
+  prev: SERVICE_EXPLORER_LABELS.prev[locale],
+  next: SERVICE_EXPLORER_LABELS.next[locale],
+};
 const labels = {
   inquire: inquireLabel ? pickLocale(inquireLabel, locale) : undefined,
   start: startLabel ? pickLocale(startLabel, locale) : undefined,
@@ -90,11 +99,11 @@ const rows = await Promise.all(
 
 <section
   class:list={['svc-xp', { 'svc-xp--standalone': data?.standalone === true }]}
-  aria-label={COPY.region}
+  aria-label={LABELS.region}
   data-xp
 >
   <div class="svc-xp__pad">
-    <div class="svc-xp__tabs" data-xp-tabs data-xp-label={COPY.tabs}>
+    <div class="svc-xp__tabs" data-xp-tabs data-xp-label={LABELS.tabs}>
       {
         panels.map((p) => (
           <a class="svc-tab" id={p.tabId} href={`#${p.slug}`} data-xp-tab={p.slug}>
@@ -164,7 +173,9 @@ const rows = await Promise.all(
                           <span class="svc-row__t">{s.name}</span>
                         </a>
                         <a class="svc-row__q" href={s.inquireHref} aria-label={s.inquireLabel}>
-                          <span>{labels.inquire ?? COPY.inquire}</span>
+                          <span>
+                            {labels.inquire ?? SERVICE_EXPLORER_COPY.inquireLabel[locale]}
+                          </span>
                           <svg viewBox="0 0 16 16" aria-hidden="true">
                             <path
                               d="M2 8h12M9 3l5 5-5 5"
@@ -199,7 +210,7 @@ const rows = await Promise.all(
                           />
                         </svg>
                         <span>
-                          <span class="sr-only">{COPY.prev}</span>
+                          <span class="sr-only">{LABELS.prev}</span>
                           {p.prev.name}
                         </span>
                       </a>
@@ -209,7 +220,7 @@ const rows = await Promise.all(
                         data-xp-go={p.next.slug}
                       >
                         <span>
-                          <span class="sr-only">{COPY.next}</span>
+                          <span class="sr-only">{LABELS.next}</span>
                           {p.next.name}
                         </span>
                         <svg viewBox="0 0 16 16" aria-hidden="true">

@@ -6,6 +6,7 @@ import { pickLocale, localizedHref } from '@/lib/i18n';
 import { getIdentity } from '@/lib/identity';
 import AccentText from '@/components/ui/AccentText.astro';
 import Cta from '@/components/ui/Cta.astro';
+import { CTA_COPY } from '@/lib/sections/copy/cta';
 
 // The closing call to action of Our Work, All projects and the case study (UI v2): a Klein
 // band with the outlined accent, a line of copy, the inquiry button and the studio email
@@ -27,28 +28,16 @@ interface Props {
 
 const { locale, showEmail = true } = Astro.props;
 
-const STR = {
-  en: {
-    tag: 'Start a project',
-    heading: 'Your idea could be next',
-    text: "Tell us what you're making. You'll hear back within one business day with our questions, a rough range, and a time to talk.",
-    button: 'Start an inquiry',
-  },
-  ar: {
-    tag: 'ابدأ مشروعك',
-    heading: 'فكرتك ممكن تكون التالية',
-    text: 'قل لنا وش تصنع. يوصلك رد خلال يوم عمل واحد فيه أسئلتنا، ونطاق سعري مبدئي، وموعد للمكالمة.',
-    button: 'ابدأ طلبك',
-  },
-}[locale];
-
-const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : STR.tag;
-const heading = Astro.props.heading ? pickLocale(Astro.props.heading, locale) : STR.heading;
-const accent = Astro.props.heading
-  ? Astro.props.accent
-  : (Astro.props.accent ?? { en: { from: 4 }, ar: { from: 3 } });
-const text = Astro.props.text ? pickLocale(Astro.props.text, locale) : STR.text;
-const button = Astro.props.buttonLabel ? pickLocale(Astro.props.buttonLabel, locale) : STR.button;
+// Built-in copy: src/lib/sections/copy/cta.ts.
+const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : CTA_COPY.tag[locale];
+const heading = Astro.props.heading
+  ? pickLocale(Astro.props.heading, locale)
+  : CTA_COPY.heading[locale];
+const accent = Astro.props.heading ? Astro.props.accent : (Astro.props.accent ?? CTA_COPY.accent);
+const text = Astro.props.text ? pickLocale(Astro.props.text, locale) : CTA_COPY.text[locale];
+const button = Astro.props.buttonLabel
+  ? pickLocale(Astro.props.buttonLabel, locale)
+  : CTA_COPY.buttonLabel[locale];
 const href = localizedHref(Astro.props.buttonHref ?? '/contact#inquiry', locale);
 const email = showEmail ? (await getIdentity(Astro.locals)).contactEmail : null;
 ---

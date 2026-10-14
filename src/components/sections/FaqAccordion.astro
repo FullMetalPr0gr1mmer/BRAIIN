@@ -1,10 +1,10 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import type { FaqSectionContent } from '@schemas/sections';
-import type { Accent } from '@schemas/media';
 import { pickLocale } from '@/lib/i18n';
 import AccentText from '@/components/ui/AccentText.astro';
 import { CONTACT_FAQ } from '@/lib/content/contactFaq';
+import { FAQ_COPY } from '@/lib/sections/copy/faq';
 
 // FAQ (UI v2 PR9: the design's DARK band), as native <details>/<summary> — no JavaScript.
 //
@@ -20,7 +20,8 @@ import { CONTACT_FAQ } from '@/lib/content/contactFaq';
 // panel HEIGHT (layout); here the panel opens at once and its answer fades/slides in —
 // compositor-only, and off under reduced motion.
 //
-// Only the heading is CMS content (FaqSectionContentSchema); the Q&As stay code-owned.
+// Only the heading is CMS content (FaqSectionContentSchema, over the design's in
+// src/lib/sections/copy/faq.ts); the Q&As stay code-owned.
 
 interface Props extends FaqSectionContent {
   locale: Locale;
@@ -28,23 +29,15 @@ interface Props extends FaqSectionContent {
 
 const { locale, tag, heading, accent } = Astro.props;
 
-// The design's copy, verbatim (c.faqTag / c.faqH): "Questions we get <em>every week</em>" /
-// "أسئلة توصلنا <em>كل أسبوع</em>".
-const STR = {
-  en: { tag: 'FAQ', heading: 'Questions we get every week' },
-  ar: { tag: 'الأسئلة الشائعة', heading: 'أسئلة توصلنا كل أسبوع' },
-}[locale];
-const BUILT_IN_ACCENT: Accent = { en: { from: 3 }, ar: { from: 2 } };
-
-const headingText = heading ? pickLocale(heading, locale) : STR.heading;
-const accentRange = heading ? accent : (accent ?? BUILT_IN_ACCENT);
+const headingText = heading ? pickLocale(heading, locale) : FAQ_COPY.heading[locale];
+const accentRange = heading ? accent : (accent ?? FAQ_COPY.accent);
 const items = CONTACT_FAQ[locale];
 ---
 
 <section class="faq-section" id="faq" aria-labelledby="faq-heading">
   <div class="section-wrap">
     <div class="tag tag--sky rv">
-      <span class="dot"></span><span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+      <span class="dot"></span><span>{tag ? pickLocale(tag, locale) : FAQ_COPY.tag[locale]}</span>
     </div>
     <div class="sec-head">
       <h2 class="rv" id="faq-heading">

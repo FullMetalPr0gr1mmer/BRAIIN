@@ -5,6 +5,7 @@ import { getPortfolioCards, type PortfolioCard } from '@/lib/data/portfolio';
 import { bannerCard } from '@/lib/portfolio/catalog';
 import { pickLocale, localizedHref } from '@/lib/i18n';
 import MediaBanner from '@/components/media/MediaBanner.astro';
+import { WORK_HERO_COPY, WORK_HERO_LABELS } from '@/lib/sections/copy/workHero';
 
 // Our Work's opening banner (UI v2, the `workHero` section): the latest project full
 // bleed — its poster (the page's LCP) and its preview loop — under a small glass caption
@@ -29,11 +30,6 @@ interface Props {
 
 const { locale, tag, projectSlug } = Astro.props;
 
-const STR = {
-  en: { tag: 'Latest project', confidential: 'Confidential client' },
-  ar: { tag: 'أحدث مشروع', confidential: 'عميل غير مُعلَن' },
-}[locale];
-
 const cards = Astro.props.data?.cards ?? (await getPortfolioCards());
 const card = bannerCard(cards, projectSlug);
 
@@ -43,7 +39,7 @@ const blurb = card?.blurb ? pickLocale(card.blurb, locale) : '';
 const client = card?.client
   ? pickLocale(card.client.name, locale)
   : card?.confidentialClient
-    ? STR.confidential
+    ? WORK_HERO_LABELS.confidential[locale]
     : null;
 ---
 
@@ -53,7 +49,7 @@ const client = card?.client
       <a class="work-cap" href={localizedHref(`/portfolio/${card.slug}`, locale)}>
         <span class="work-cap__tag">
           <span class="work-cap__live" aria-hidden="true" />
-          <span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+          <span>{tag ? pickLocale(tag, locale) : WORK_HERO_COPY.tag[locale]}</span>
         </span>
         <span class="work-cap__t">{type ? `${title} | ${type}` : title}</span>
         {blurb && <span class="work-cap__d">{blurb}</span>}

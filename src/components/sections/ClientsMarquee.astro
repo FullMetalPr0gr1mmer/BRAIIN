@@ -4,6 +4,8 @@ import type { ClientsMarqueeSectionContent } from '@schemas/sections';
 import { arabicIndic, pickLocale } from '@/lib/i18n';
 import { getIdentity } from '@/lib/identity';
 import { getMarqueeClients } from '@/lib/data/taxonomy';
+import { CLIENTS_MARQUEE_COPY, CLIENTS_MARQUEE_LABELS } from '@/lib/sections/copy/clientsMarquee';
+import { fillTokens } from '@/lib/sections/copy/text';
 
 // "Selected clients" — two counter-scrolling wordmark marquees on black. CSS-only,
 // compositor-only transform animation, paused on hover, static + de-duplicated under
@@ -21,31 +23,18 @@ interface Props extends ClientsMarqueeSectionContent {
 
 const { locale, tag, heading, note } = Astro.props;
 
-const STR = {
-  en: {
-    tag: 'Selected clients',
-    h2: "Trusted by the minds behind the region's biggest moments.",
-    since: (year: number) => `Since ${year}`,
-  },
-  ar: {
-    tag: 'عملاء مختارون',
-    h2: 'بثقة العقول خلف أكبر لحظات المنطقة.',
-    // The design writes this year in Arabic-Indic digits ("منذ ٢٠١٩").
-    since: (year: number) => `منذ ${arabicIndic(year)}`,
-  },
-}[locale];
-
 const clients = await getMarqueeClients();
 const items = clients.map((c) => ({ slug: c.slug, name: pickLocale(c.name, locale) }));
 
 // "Since 2019" is the studio's founding year from the public identity; no year, no note.
 const { foundedYear } = await getIdentity(Astro.locals);
-const noteText = note
-  ? pickLocale(note, locale)
-  : foundedYear !== null
-    ? STR.since(foundedYear)
-    : null;
-const tagText = tag ? pickLocale(tag, locale) : STR.tag;
+// The design writes the Arabic year in Arabic-Indic digits ("منذ ٢٠١٩").
+const since = (year: number) =>
+  fillTokens(CLIENTS_MARQUEE_LABELS.since[locale], {
+    year: locale === 'ar' ? arabicIndic(year) : String(year),
+  });
+const noteText = note ? pickLocale(note, locale) : foundedYear !== null ? since(foundedYear) : null;
+const tagText = tag ? pickLocale(tag, locale) : CLIENTS_MARQUEE_COPY.tag[locale];
 
 // Each track is its set duplicated 2× so the CSS transform loops seamlessly (-50%);
 // the second row runs reversed and slower, and is aria-hidden as a whole (pure décor).
@@ -62,7 +51,9 @@ const rowB = [...reversed, ...reversed];
         <span>{tagText}</span>
       </div>
       <div class="clients__head">
-        <h2 class="rv">{heading ? pickLocale(heading, locale) : STR.h2}</h2>
+        <h2 class="rv">
+          {heading ? pickLocale(heading, locale) : CLIENTS_MARQUEE_COPY.heading[locale]}
+        </h2>
         {noteText && <span class="rv">{noteText}</span>}
       </div>
       <div class="marquee">

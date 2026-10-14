@@ -1,17 +1,18 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import type { ContactChannelsSectionContent } from '@schemas/sections';
-import type { Accent } from '@schemas/media';
 import { pickLocale } from '@/lib/i18n';
 import SocialStrip from '@/components/sections/SocialStrip.astro';
 import AccentText from '@/components/ui/AccentText.astro';
 import { getIdentity } from '@/lib/identity';
 import { whatsappChannel } from '@/lib/identity/channels';
+import { CONTACT_CHANNELS_COPY as COPY } from '@/lib/sections/copy/contactChannels';
 
 // "Talk to us" (UI v2 PR9) — the direct channels, on paper, with the social strip joined
 // onto the same block (SocialStrip renders its own <section>; `joined` makes the two read
 // as one light band with a single rule between them). Copy is CMS-overridable
-// (ContactChannelsSectionContentSchema); the address and number never are.
+// (ContactChannelsSectionContentSchema) over the design's
+// (src/lib/sections/copy/contactChannels.ts); the address and number never are.
 
 interface Props extends ContactChannelsSectionContent {
   locale: Locale;
@@ -28,44 +29,20 @@ const EMAIL = identity.contactEmail;
 // live contact page is a dead link on the one page whose whole job is being reachable.
 const WHATSAPP = whatsappChannel(identity);
 
-// The design's copy, verbatim (c.touchTag / c.touchH / c.touchP and the card copy).
-const STR = {
-  en: {
-    tag: 'Stay in touch',
-    heading: 'Talk to us',
-    lead: "No form, no gatekeeping. Write to us directly and you'll get a person, not a ticket number.",
-    emailLabel: 'Email',
-    emailNote: 'Best for briefs, scopes, and anything with attachments.',
-    waLabel: 'WhatsApp',
-    waNote: 'Fastest for quick questions and timing checks.',
-  },
-  ar: {
-    tag: 'ابقَ على تواصل',
-    heading: 'كلّمنا مباشرة',
-    lead: 'بدون نماذج ولا وسطاء. اكتب لنا مباشرة ويردّ عليك إنسان، مو رقم تذكرة.',
-    emailLabel: 'البريد الإلكتروني',
-    emailNote: 'الأنسب للبريفات والنطاقات وأي شيء فيه مرفقات.',
-    waLabel: 'واتساب',
-    waNote: 'الأسرع للأسئلة القصيرة والاستفسار عن المواعيد.',
-  },
-}[locale];
-// "Talk to <em>us</em>" / "كلّمنا <em>مباشرة</em>"
-const BUILT_IN_ACCENT: Accent = { en: { from: 2 }, ar: { from: 1 } };
-
-const t = (v: { en: string; ar: string } | undefined, fallback: string) =>
-  v ? pickLocale(v, locale) : fallback;
-const headingText = t(heading, STR.heading);
-const accentRange = heading ? accent : (accent ?? BUILT_IN_ACCENT);
+const t = (v: { en: string; ar: string } | undefined, builtIn: { en: string; ar: string }) =>
+  v ? pickLocale(v, locale) : builtIn[locale];
+const headingText = t(heading, COPY.heading);
+const accentRange = heading ? accent : (accent ?? COPY.accent);
 ---
 
 <section class="contact-touch" aria-labelledby="touch-heading">
   <div class="section-wrap">
-    <div class="tag rv"><span class="dot"></span><span>{t(tag, STR.tag)}</span></div>
+    <div class="tag rv"><span class="dot"></span><span>{t(tag, COPY.tag)}</span></div>
     <div class="sec-head">
       <h2 class="rv" id="touch-heading">
         <AccentText text={headingText} locale={locale} accent={accentRange} />
       </h2>
-      <p class="rv">{t(lead, STR.lead)}</p>
+      <p class="rv">{t(lead, COPY.lead)}</p>
     </div>
 
     <div class="contact-touch__grid">
@@ -76,10 +53,10 @@ const accentRange = heading ? accent : (accent ?? BUILT_IN_ACCENT);
           ></path>
         </svg>
         <span>
-          <span class="touch-card__label">{t(emailLabel, STR.emailLabel)}</span>
+          <span class="touch-card__label">{t(emailLabel, COPY.emailLabel)}</span>
           {/* dir=ltr + isolation so the address does not re-order inside RTL text */}
           <span class="touch-card__val" dir="ltr">{EMAIL}</span>
-          <span class="touch-card__note">{t(emailNote, STR.emailNote)}</span>
+          <span class="touch-card__note">{t(emailNote, COPY.emailNote)}</span>
         </span>
       </a>
 
@@ -90,11 +67,11 @@ const accentRange = heading ? accent : (accent ?? BUILT_IN_ACCENT);
               <path d="M12.04 2c-5.5 0-9.96 4.46-9.96 9.96 0 1.76.46 3.48 1.34 5L2 22l5.18-1.36a9.93 9.93 0 0 0 4.86 1.24h.01c5.5 0 9.96-4.46 9.96-9.96 0-2.66-1.04-5.16-2.92-7.04A9.88 9.88 0 0 0 12.04 2Zm0 1.84c2.17 0 4.2.85 5.74 2.38a8.07 8.07 0 0 1 2.38 5.74c0 4.48-3.64 8.12-8.12 8.12a8.1 8.1 0 0 1-4.13-1.13l-.3-.18-3.07.8.82-3-.19-.31a8.07 8.07 0 0 1-1.24-4.3c0-4.48 3.64-8.12 8.11-8.12Zm-3.1 4.3c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.68 2.68 4.14 3.66.58.24 1.03.38 1.38.5.58.18 1.11.16 1.53.1.47-.07 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.46-.28-.24-.12-1.44-.71-1.66-.79-.22-.08-.38-.12-.54.12-.16.24-.62.79-.76.95-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.95-1.2-.72-.64-1.2-1.44-1.35-1.68-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.53-1.32-.73-1.8-.19-.47-.39-.4-.53-.41h-.46Z" />
             </svg>
             <span>
-              <span class="touch-card__label">{t(whatsappLabel, STR.waLabel)}</span>
+              <span class="touch-card__label">{t(whatsappLabel, COPY.whatsappLabel)}</span>
               <span class="touch-card__val" dir="ltr">
                 {WHATSAPP.display}
               </span>
-              <span class="touch-card__note">{t(whatsappNote, STR.waNote)}</span>
+              <span class="touch-card__note">{t(whatsappNote, COPY.whatsappNote)}</span>
             </span>
           </a>
         ) : null
