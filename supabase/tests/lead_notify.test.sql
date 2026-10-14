@@ -4,58 +4,54 @@
 -- not, and no lead was ever announced, with nothing anywhere to say so. These assertions are
 -- about what reaches pg_net's queue, not about the insert merely succeeding:
 --
---   1. the function: SECURITY DEFINER, an empty search_path, an owner that bypasses RLS
---      (site_settings is FORCE RLS), and no API role (anon, authenticated, service_role,
---      PUBLIC) may execute it;
---   2. the trigger: enabled, AFTER INSERT FOR EACH ROW, no WHEN, calling the function; the
---      only caller of it, and the only trigger on leads that makes an HTTP call;
---   3. what it queues: nothing without a URL; nothing for an http:// URL (the bearer never
---      travels in plaintext); for an https:// URL and the Vault secret, exactly one POST to
---      that URL whose body is exactly {lead_id, tenant_id} and whose headers are exactly
---      the JSON content type and `Bearer <the secret>`; a lead in another tenant goes to
---      that tenant's URL only; a lead arriving through crm_ingest_lead (the service role,
+--   1. the function: SECURITY DEFINER, an empty search_path, an owner that bypasses RLS,
+--      and no API role (anon, authenticated, service_role, PUBLIC) may execute it;
+--   2. pg_net is there (0048 creates it) and the trigger is enabled, AFTER INSERT FOR EACH
+--      ROW, no WHEN, calling the function; the only caller of it, and the only trigger on
+--      leads that makes an HTTP call;
+--   3. what it queues: nothing without the Vault URL; nothing for an http:// URL; nothing
+--      for an https:// URL without the Vault secret; with both, exactly one POST to that URL
+--      whose body is exactly {lead_id, tenant_id} and whose headers are exactly the JSON
+--      content type, a timestamp and `v1=<HMAC-SHA-256 of '<ts>.<lead_id>.<tenant_id>'>`
+--      under the secret, which the queue never holds; a lead in another tenant is signed
+--      with that tenant's id; a lead arriving through crm_ingest_lead (the service role,
 --      the contact form's door) is announced once, and its retry is not announced again;
---   4. nothing it does fails an insert: a URL pg_net may refuse, and a configuration read
---      that raises (site_settings' column renamed inside this transaction), both leave the
---      lead saved.
+--   4. nothing it does fails an insert: a URL pg_net refuses leaves the lead saved and
+--      nothing queued.
 --
 -- Nothing is skipped: 0048 creates pg_net where it is missing, so a database without it,
 -- or a queue this role cannot read, fails here rather than passing as skips. Requests are
 -- counted from this transaction's own statistics (pg_stat_xact_user_tables, n_tup_ins on
--- net.http_request_queue) and read from the queue itself. The Vault secret is created
--- inside the transaction and rolled back with it. CLAUDE.md §3 (Pillar 1), §9, §10.
+-- net.http_request_queue) and read from the queue itself. The Vault secrets are set inside
+-- the transaction and rolled back with it. CLAUDE.md §3 (Pillar 1), §9, §10.
 
 begin;
-select plan(29);
+select plan(34);
 
 insert into public.tenants (id, name) values
   ('48000000-0000-4000-8000-00000000000a', 'NotifyA'),
   ('48000000-0000-4000-8000-00000000000b', 'NotifyB');
-insert into public.site_settings (tenant_id) values
-  ('48000000-0000-4000-8000-00000000000a'),
-  ('48000000-0000-4000-8000-00000000000b')
-on conflict (tenant_id) do nothing;
 
--- The bearer this test expects, in Vault under the name the trigger reads.
-do $$
+-- A Vault secret by name: set (created if missing), or taken away (renamed aside), inside
+-- this transaction.
+create function _vault(p_name text, p_value text) returns void language plpgsql as $$
 declare
   v_id uuid;
-  v_secret text := 'pgtap-notify-' || gen_random_uuid();
 begin
-  select id into v_id from vault.secrets where name = 'notify_lead_secret';
-  if v_id is null then
-    perform vault.create_secret(v_secret, 'notify_lead_secret', 'pgTAP lead_notify (rolled back)');
+  select id into v_id from vault.secrets where name = p_name;
+  if p_value is null then
+    if v_id is not null then
+      perform vault.update_secret(v_id, new_name := p_name || '-pgtap-off-' || gen_random_uuid());
+    end if;
+  elsif v_id is null then
+    perform vault.create_secret(p_value, p_name, 'pgTAP lead_notify (rolled back)');
   else
-    perform vault.update_secret(v_id, v_secret);
+    perform vault.update_secret(v_id, p_value);
   end if;
 end $$;
 
-create function _url(p_tenant uuid, p_url text) returns void language sql as $$
-  update public.site_settings
-     set identity = case when p_url is null then identity - 'notify_lead_url'
-                         else identity || jsonb_build_object('notify_lead_url', p_url) end
-   where tenant_id = p_tenant
-$$;
+-- Whatever this database holds, the suite starts with notifications off.
+do $$ begin perform _vault('notify_lead_url', null); perform _vault('notify_lead_secret', null); end $$;
 
 -- Requests this transaction has queued so far (its own inserts into pg_net's queue).
 create function _queued() returns bigint language sql as $$
@@ -66,8 +62,7 @@ $$;
 -- Whether this role may read pg_net's queue.
 create function _readable() returns boolean language plpgsql as $$
 begin
-  if not exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
-                  where n.nspname = 'net' and c.relname = 'http_request_queue') then
+  if to_regclass('net.http_request_queue') is null then
     return false;
   end if;
   return has_schema_privilege('net', 'usage')
@@ -84,6 +79,13 @@ begin
      where convert_from(q.body, 'UTF8') like '%' || p_lead::text || '%';
 end $$;
 
+-- What the Worker recomputes: v1=<hex HMAC-SHA-256(secret, '<ts>.<lead>.<tenant>')>.
+create function _sig(p_ts text, p_lead uuid, p_tenant uuid, p_secret text) returns text
+language sql as $$
+  select 'v1=' || encode(extensions.hmac(p_ts || '.' || p_lead::text || '.' || p_tenant::text,
+                                         p_secret, 'sha256'), 'hex')
+$$;
+
 -- ---- 1. The function --------------------------------------------------------------------------
 select ok(
   (select prosecdef and proconfig = array['search_path=""']
@@ -93,7 +95,7 @@ select ok(
   (select r.rolsuper or r.rolbypassrls
      from pg_proc f join pg_roles r on r.oid = f.proowner
     where f.oid = 'app.tg_notify_lead()'::regprocedure),
-  'its owner bypasses RLS, so it reads the URL past site_settings'' staff-only policy');
+  'its owner bypasses RLS');
 select ok(not has_function_privilege('anon', 'app.tg_notify_lead()', 'execute'),
   'anon cannot execute app.tg_notify_lead()');
 select ok(not has_function_privilege('authenticated', 'app.tg_notify_lead()', 'execute'),
@@ -103,57 +105,61 @@ select ok(not has_function_privilege('service_role', 'app.tg_notify_lead()', 'ex
 select ok(not has_function_privilege('public', 'app.tg_notify_lead()', 'execute'),
   'PUBLIC cannot execute app.tg_notify_lead()');
 
--- ---- 2. The trigger ---------------------------------------------------------------------------
-create function _shape() returns setof text language plpgsql as $f$
-begin
-  return next ok(
-    exists (select 1 from pg_extension where extname = 'pg_net')
-    and to_regclass('net.http_request_queue') is not null
-    and to_regprocedure('net.http_post(text, jsonb, jsonb, jsonb, integer)') is not null,
-    'pg_net is installed (0048 creates it), its queue and http_post in schema net');
-  -- tgtype 5: ROW (1) + INSERT (4), BEFORE (2) clear.
-  return next is(
-    (select t.tgname || '|' || t.tgenabled::text || '|' || t.tgtype || '|'
-            || (t.tgqual is null) || '|' || t.tgnargs || '|'
-            || (t.tgfoid = 'app.tg_notify_lead()'::regprocedure)
-       from pg_trigger t
-      where t.tgrelid = 'public.leads'::regclass and t.tgname = 'leads_notify'),
-    'leads_notify|O|5|true|0|true',
-    'leads_notify: enabled, AFTER INSERT FOR EACH ROW, no WHEN, calls app.tg_notify_lead()');
-  return next ok(
-    (select count(*) = 1 from pg_trigger
-      where tgfoid = 'app.tg_notify_lead()'::regprocedure)
-    and not exists (
-      select 1 from pg_trigger t join pg_proc f on f.oid = t.tgfoid
-       where t.tgrelid = 'public.leads'::regclass and not t.tgisinternal
-         and t.tgname <> 'leads_notify' and f.prosrc ~* 'http_(post|get|delete|request)'),
-    'one announcement per lead: leads_notify alone calls the function, and no other trigger on leads makes an HTTP call');
-end $f$;
-select * from _shape();
+-- ---- 2. pg_net and the trigger ------------------------------------------------------------------
+select ok(
+  exists (select 1 from pg_extension where extname = 'pg_net')
+  and to_regclass('net.http_request_queue') is not null
+  and to_regprocedure('net.http_post(text, jsonb, jsonb, jsonb, integer)') is not null,
+  'pg_net is installed (0048 creates it), its queue and http_post in schema net');
+-- tgtype 5: ROW (1) + INSERT (4), BEFORE (2) clear.
+select is(
+  (select t.tgname || '|' || t.tgenabled::text || '|' || t.tgtype || '|'
+          || (t.tgqual is null) || '|' || t.tgnargs || '|'
+          || (t.tgfoid = 'app.tg_notify_lead()'::regprocedure)
+     from pg_trigger t
+    where t.tgrelid = 'public.leads'::regclass and t.tgname = 'leads_notify'),
+  'leads_notify|O|5|true|0|true',
+  'leads_notify: enabled, AFTER INSERT FOR EACH ROW, no WHEN, calls app.tg_notify_lead()');
+select ok(
+  (select count(*) = 1 from pg_trigger
+    where tgfoid = 'app.tg_notify_lead()'::regprocedure)
+  and not exists (
+    select 1 from pg_trigger t join pg_proc f on f.oid = t.tgfoid
+     where t.tgrelid = 'public.leads'::regclass and not t.tgisinternal
+       and t.tgname <> 'leads_notify' and f.prosrc ~* 'http_(post|get|delete|request)'),
+  'one announcement per lead: leads_notify alone calls the function, and no other trigger on leads makes an HTTP call');
+select ok(_readable(), 'this role reads pg_net''s queue (unreadable is a failure, not a skip)');
 
 -- ---- 3 and 4. What reaches the queue --------------------------------------------------------
+-- The signing scheme on a fixed vector, the one tests/api/notifyLead.spec.ts checks the
+-- Worker's verifier against, so the two sides cannot drift apart (the key is that test's
+-- dummy secret).
+select is(
+  _sig('1760000000', '11111111-1111-4111-8111-111111111111',
+       'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'test-dummy-notify-lead-secret'),
+  'v1=b0d61ac408b980012f8d511b395bf660f9c27e29836763a570d8c2138c7eea22',
+  'the signature of a fixed vector matches the Worker''s (tests/api/notifyLead.spec.ts)');
+
 create function _cases() returns setof text language plpgsql as $f$
 declare
   a constant uuid := '48000000-0000-4000-8000-00000000000a';
   b constant uuid := '48000000-0000-4000-8000-00000000000b';
-  a_url constant text := 'https://notify-a.pgtap.invalid/api/hooks/notify-lead';
-  b_url constant text := 'https://notify-b.pgtap.invalid/api/hooks/notify-lead';
-  v_secret text := (select decrypted_secret from vault.decrypted_secrets
-                     where name = 'notify_lead_secret');
+  v_url constant text := 'https://notify.pgtap.invalid/api/hooks/notify-lead';
+  v_secret constant text := 'pgtap-notify-' || gen_random_uuid();
   v_n bigint;
+  r record;
 begin
-  return next ok(_readable(), 'this role reads pg_net''s queue (unreadable is a failure, not a skip)');
-
-  -- No URL: notifications are off for the tenant.
+  -- No Vault URL: notifications are off.
   v_n := _queued();
   return next lives_ok(
     $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
        ('48000000-0000-4000-8000-0000000000a1', '48000000-0000-4000-8000-00000000000a', 'One', 'x', 'hi') $$,
-    'no notify_lead_url: the lead is saved');
-  return next is(_queued() - v_n, 0::bigint, 'no notify_lead_url: no request is queued');
+    'no Vault notify_lead_url: the lead is saved');
+  return next is(_queued() - v_n, 0::bigint, 'no Vault notify_lead_url: no request is queued');
 
-  -- http://: the bearer would travel in plaintext, so nothing is sent.
-  perform _url(a, 'http://notify-a.pgtap.invalid/api/hooks/notify-lead');
+  -- http://, with the secret: the call would travel in plaintext, so nothing is sent.
+  perform _vault('notify_lead_url', 'http://notify.pgtap.invalid/api/hooks/notify-lead');
+  perform _vault('notify_lead_secret', v_secret);
   v_n := _queued();
   return next lives_ok(
     $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
@@ -161,39 +167,64 @@ begin
     'an http:// URL: the lead is saved');
   return next is(_queued() - v_n, 0::bigint, 'an http:// URL: no request is queued');
 
-  -- https:// and the Vault secret: one request, the id and tenant only.
-  perform _url(a, a_url);
+  -- https://, no secret: nothing to sign with, so nothing is sent.
+  perform _vault('notify_lead_url', v_url);
+  perform _vault('notify_lead_secret', null);
+  v_n := _queued();
+  return next lives_ok(
+    $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
+       ('48000000-0000-4000-8000-0000000000a7', '48000000-0000-4000-8000-00000000000a', 'Seven', 'x', 'hi') $$,
+    'an https:// URL without the Vault secret: the lead is saved');
+  return next is(_queued() - v_n, 0::bigint, 'an https:// URL without the Vault secret: no request is queued');
+
+  -- https:// and the secret: one request, the ids only, signed.
+  perform _vault('notify_lead_secret', v_secret);
   v_n := _queued();
   return next lives_ok(
     $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
        ('48000000-0000-4000-8000-0000000000a3', '48000000-0000-4000-8000-00000000000a', 'Three', 'x', 'hi') $$,
-    'an https:// URL: the lead is saved');
-  return next is(_queued() - v_n, 1::bigint, 'an https:// URL: exactly one request is queued');
+    'configured: the lead is saved');
+  return next is(_queued() - v_n, 1::bigint, 'configured: exactly one request is queued');
+  select * into r from _requests('48000000-0000-4000-8000-0000000000a3');
   return next is(
-      (select r.body from _requests('48000000-0000-4000-8000-0000000000a3') r),
-      jsonb_build_object('lead_id', '48000000-0000-4000-8000-0000000000a3'::uuid, 'tenant_id', a),
-      'the body is exactly {lead_id, tenant_id}: nothing the lead says');
-    return next is(
-      (select r.headers from _requests('48000000-0000-4000-8000-0000000000a3') r),
-      jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_secret),
-      'the headers are exactly the JSON content type and Authorization: Bearer <the Vault secret>');
-    return next is(
-      (select r.method || ' ' || r.url from _requests('48000000-0000-4000-8000-0000000000a3') r),
-      'POST ' || a_url,
-      'it is a POST to the tenant''s own URL');
+    r.body,
+    jsonb_build_object('lead_id', '48000000-0000-4000-8000-0000000000a3'::uuid, 'tenant_id', a),
+    'the body is exactly {lead_id, tenant_id}: nothing the lead says');
+  return next is(
+    (select string_agg(k, ',' order by k) from jsonb_object_keys(r.headers) k)
+      || '|' || (r.headers ->> 'Content-Type'),
+    'Content-Type,X-Braiin-Signature,X-Braiin-Timestamp|application/json',
+    'the headers are exactly the JSON content type, the timestamp and the signature');
+  return next is(
+    r.headers ->> 'X-Braiin-Signature',
+    _sig(r.headers ->> 'X-Braiin-Timestamp', '48000000-0000-4000-8000-0000000000a3', a, v_secret),
+    'the signature is v1=HMAC-SHA-256(the Vault secret, ''<ts>.<lead_id>.<tenant_id>'')');
+  return next ok(
+    (r.headers ->> 'X-Braiin-Timestamp') ~ '^[0-9]{1,12}$'
+    and abs((r.headers ->> 'X-Braiin-Timestamp')::bigint
+            - floor(extract(epoch from clock_timestamp()))::bigint) <= 300,
+    'the timestamp is unix seconds, within the Worker''s 300 s of the clock');
+  return next ok(
+    position(v_secret in r.headers::text) = 0 and position(v_secret in r.body::text) = 0
+    and position(v_secret in r.url) = 0 and not (r.headers ? 'Authorization'),
+    'the queue never holds the secret, and there is no bearer');
+  return next is(r.method || ' ' || r.url, 'POST ' || v_url, 'it is a POST to the Vault URL');
 
-  -- other_tenant: tenant B's lead goes to tenant B's URL, never tenant A's.
-  perform _url(b, b_url);
+  -- other_tenant: tenant B's lead is signed with tenant B's id, and A's id does not verify.
   v_n := _queued();
   return next lives_ok(
     $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
        ('48000000-0000-4000-8000-0000000000b1', '48000000-0000-4000-8000-00000000000b', 'Other', 'x', 'hi') $$,
     'tenant B: the lead is saved');
   return next is(_queued() - v_n, 1::bigint, 'tenant B: exactly one request is queued');
-  return next is(
-    (select string_agg(r.url, ', ') from _requests('48000000-0000-4000-8000-0000000000b1') r),
-    b_url,
-    'tenant B''s lead goes to tenant B''s URL only, never tenant A''s');
+  select * into r from _requests('48000000-0000-4000-8000-0000000000b1');
+  return next ok(
+    r.body ->> 'tenant_id' = b::text
+    and r.headers ->> 'X-Braiin-Signature'
+        = _sig(r.headers ->> 'X-Braiin-Timestamp', '48000000-0000-4000-8000-0000000000b1', b, v_secret)
+    and r.headers ->> 'X-Braiin-Signature'
+        <> _sig(r.headers ->> 'X-Braiin-Timestamp', '48000000-0000-4000-8000-0000000000b1', a, v_secret),
+    'the signature binds the tenant: B''s lead is signed with B''s id, and A''s id does not verify');
 
   -- The contact form's door: crm_ingest_lead as the service role. Announced once; its
   -- retry (the same id, a lost answer) inserts nothing, so it is not announced again.
@@ -214,26 +245,17 @@ begin
   reset role;
   return next is(_queued() - v_n, 0::bigint, 'a retried crm_ingest_lead is not announced again');
 
-  -- An https URL pg_net may refuse when it queues (curl rejects a space): the lead is saved.
-  perform _url(a, 'https://notify a.pgtap.invalid/api/hooks/notify-lead');
-  return next lives_ok(
-    $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
-       ('48000000-0000-4000-8000-0000000000a5', '48000000-0000-4000-8000-00000000000a', 'Five', 'x', 'hi') $$,
-    'a URL pg_net may refuse: the lead is saved');
-
-  -- A configuration read that raises (42703: the column is gone, inside this transaction
-  -- only), with a URL that would otherwise be called: caught, and the lead is saved.
-  perform _url(a, a_url);
-  execute 'alter table public.site_settings rename column identity to identity_pgtap_off';
+  -- An https URL pg_net refuses when it queues (curl's URL parser rejects a space in the
+  -- host): the error is caught inside the trigger, and the lead is saved.
+  perform _vault('notify_lead_url', 'https://notify a.pgtap.invalid/api/hooks/notify-lead');
   v_n := _queued();
   return next lives_ok(
     $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
-       ('48000000-0000-4000-8000-0000000000a6', '48000000-0000-4000-8000-00000000000a', 'Six', 'x', 'hi') $$,
-    'a configuration read that raises inside the trigger does not fail the insert');
-  return next is(_queued() - v_n, 0::bigint, '... and queues nothing');
-  execute 'alter table public.site_settings rename column identity_pgtap_off to identity';
+       ('48000000-0000-4000-8000-0000000000a5', '48000000-0000-4000-8000-00000000000a', 'Five', 'x', 'hi') $$,
+    'a URL pg_net refuses: the insert does not fail');
+  return next is(_queued() - v_n, 0::bigint, '... and nothing is queued');
   return next ok(
-    exists (select 1 from public.leads where id = '48000000-0000-4000-8000-0000000000a6'),
+    exists (select 1 from public.leads where id = '48000000-0000-4000-8000-0000000000a5'),
     '... and the lead is there');
 end $f$;
 select * from _cases();

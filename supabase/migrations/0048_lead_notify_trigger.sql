@@ -1,36 +1,40 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 0048 — The lead-notification trigger, restored and hardened (hotfix H9). Forward-only,
--- expand only. Depends on 0001 (site_settings), 0002 (leads), 0010 (app.tg_notify_lead,
--- the first leads_notify), 0011 (its revoke) and 0034 (leads_pipeline, leads_timeline).
+-- expand only. Depends on 0002 (leads), 0010 (app.tg_notify_lead, the first
+-- leads_notify), 0011 (its revoke), 0012 (pgcrypto in schema extensions) and 0034
+-- (leads_pipeline, leads_timeline).
 --
 -- CLAUDE.md §10: a new lead is announced by an AFTER INSERT trigger that asks pg_net to POST
--- {lead_id, tenant_id} to the Worker's /api/hooks/notify-lead, with
--- `Authorization: Bearer <notify_lead_secret from Vault>`; the Worker checks the bearer in
--- constant time and re-reads the row itself. 0010 created that trigger only if pg_net was
--- already installed when it ran. Where it was not, the function exists and nothing calls
--- it, so no lead has ever been announced (notification_log stays empty) and nothing says
--- so. This migration makes pg_net a requirement instead of an option: it creates the
--- extension where it is missing (section 0), re-creates the function hardened (section 1)
--- and creates the trigger on every database (section 3):
+-- {lead_id, tenant_id} to the Worker's /api/hooks/notify-lead; the Worker checks the call is
+-- signed and re-reads the row itself. 0010 created that trigger only if pg_net was already
+-- installed when it ran. Where it was not, the function exists and nothing calls it, so no
+-- lead has ever been announced (notification_log stays empty) and nothing says so. This
+-- migration makes pg_net a requirement instead of an option: it creates the extension where
+-- it is missing (section 0), re-creates the function hardened (section 1) and creates the
+-- trigger on every database (section 3):
 --
 --   • SECURITY DEFINER with an empty search_path: every name it reaches is qualified
---     (public.site_settings, vault.decrypted_secrets, net.http_post, pg_catalog's
---     functions) and its variables are pg_catalog.text, so nothing on a caller's path,
---     pg_temp included, can stand in for any of them. 0010's path was
---     `public, app, extensions, net, pg_temp`.
---   • The contract is 0010's: the body is exactly {lead_id, tenant_id}, nothing from the
---     lead's content; the URL is site_settings.identity ->> 'notify_lead_url' of the row's
---     own tenant, never another's; the bearer is the Vault secret notify_lead_secret. No URL
---     means notifications are off for that tenant, and the trigger does nothing, silently.
---   • Only an https:// URL is called: the bearer secret never travels in plaintext. Any
---     other URL is skipped with a WARNING that names no value, as is a URL with no secret.
---   • Who chooses where it goes: site_settings is written by Admin and Developer (§5,
---     General settings), so either can point notify_lead_url, and with it the bearer, at any
---     https host. That is 0010's trust, kept on purpose: both roles already read lead PII,
---     and the bearer buys only the hook, which re-reads a lead server-side and answers a
---     recipient count (a forged call adds a notification_log row, nothing more). A bearer
---     sent somewhere it should not go is replaced in both places: vault.update_secret and
---     the Worker secret NOTIFY_LEAD_SECRET.
+--     (vault.decrypted_secrets, extensions.hmac, net.http_post, pg_catalog's functions) and
+--     its variables are pg_catalog.text, so nothing on a caller's path, pg_temp included,
+--     can stand in for any of them. 0010's path was `public, app, extensions, net, pg_temp`.
+--   • The body is 0010's: exactly {lead_id, tenant_id}, nothing from the lead's content.
+--   • Where it goes is the Vault secret `notify_lead_url`: one URL for the deployment, set
+--     by whoever holds the database owner (the dashboard's Vault, or SQL as postgres), like
+--     the secret beside it. site_settings.identity ->> 'notify_lead_url', 0010's source, is
+--     no longer read: Admin and Developer write site_settings (§5), and neither should
+--     choose where a signed call about a lead goes. No URL means notifications are off, and
+--     the trigger does nothing.
+--   • Only an https:// URL is called. Any other URL is skipped with a WARNING that names no
+--     value, as is a URL with no secret.
+--   • Signed, never carrying the secret. pg_net keeps a queued request in
+--     net.http_request_queue until its worker sends it, and on Supabase PUBLIC may read that
+--     table (EXC-012), so a bearer token in the headers would be readable by every login
+--     role. The request carries `X-Braiin-Timestamp: <unix seconds>` and
+--     `X-Braiin-Signature: v1=<hex HMAC-SHA-256 under the Vault secret notify_lead_secret of
+--     '<timestamp>.<lead_id>.<tenant_id>'>` instead. The canonical string is signed, not the
+--     JSON bytes, so no serializer can break it; the Worker recomputes it over the body's
+--     ids and refuses a timestamp more than 300 s from its clock. What the queue holds is
+--     then good for one lead, for five minutes, and a replay only re-announces that lead.
 --   • Nothing it does can fail an insert. Any error while reading the configuration or
 --     queueing the request is caught and becomes a WARNING carrying only the SQLSTATE
 --     (never the URL, the secret or a lead value: an error message can quote any of them),
@@ -46,10 +50,10 @@
 -- background worker sends it after commit. A lead whose insert rolls back is never
 -- announced, and the Worker always finds the row it is told about.
 --
--- Turning notifications on stays an owner step (launch runbook §5): the Vault secret
--- notify_lead_secret, the Worker secret NOTIFY_LEAD_SECRET with the same value, and the
--- https URL in site_settings.identity.notify_lead_url. Until all three exist this trigger
--- queues nothing. CLAUDE.md §3 (Pillar 1), §10.
+-- Turning notifications on stays an owner step (launch runbook §5): the Vault secrets
+-- notify_lead_url (https) and notify_lead_secret, and the Worker secret NOTIFY_LEAD_SECRET
+-- with the same value as the Vault one. Until both Vault secrets exist this trigger queues
+-- nothing. CLAUDE.md §3 (Pillar 1), §10.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- A busy table fails the push instead of queueing (as in 0038 to 0045): creating the
@@ -77,21 +81,22 @@ as $$
 declare
   v_url pg_catalog.text;
   v_secret pg_catalog.text;
+  v_ts pg_catalog.text;
 begin
   -- One block, one handler: whatever raises below (a missing schema, a Vault that cannot
   -- decrypt, a URL pg_net refuses, a changed signature) is rolled back to here and the
   -- insert goes on. SQLSTATE only: SQLERRM can quote the URL or the secret.
   begin
-    select s.identity ->> 'notify_lead_url' into v_url
-      from public.site_settings s
-     where s.tenant_id = new.tenant_id;
-    -- Not configured: notifications are off for this tenant. A choice, not a fault.
+    select d.decrypted_secret into v_url
+      from vault.decrypted_secrets d
+     where d.name = 'notify_lead_url';
+    -- Not configured: notifications are off. A choice, not a fault.
     if v_url is null or v_url = '' then
       return null;
     end if;
 
     if pg_catalog.lower(pg_catalog.left(v_url, 8)) <> 'https://' then
-      raise warning 'leads_notify: notify_lead_url is not an https:// URL; lead notification skipped';
+      raise warning 'leads_notify: the Vault notify_lead_url is not an https:// URL; lead notification skipped';
       return null;
     end if;
 
@@ -103,12 +108,20 @@ begin
       return null;
     end if;
 
+    -- Signed when the lead is saved (the clock, not the transaction's start), sent after
+    -- commit; the Worker allows 300 s either way.
+    v_ts := pg_catalog.floor(pg_catalog.date_part('epoch', pg_catalog.clock_timestamp()))
+              ::pg_catalog.int8::pg_catalog.text;
     perform net.http_post(
       url := v_url,
       body := pg_catalog.jsonb_build_object('lead_id', new.id, 'tenant_id', new.tenant_id),
       headers := pg_catalog.jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || v_secret
+        'X-Braiin-Timestamp', v_ts,
+        'X-Braiin-Signature', 'v1=' || pg_catalog.encode(
+          extensions.hmac(v_ts || '.' || new.id::pg_catalog.text || '.' || new.tenant_id::pg_catalog.text,
+                          v_secret, 'sha256'),
+          'hex')
       ),
       timeout_milliseconds := 5000
     );
@@ -129,8 +142,7 @@ revoke all on function app.tg_notify_lead() from public, anon, authenticated, se
 --
 -- Order against leads_timeline (0034, AFTER INSERT OR UPDATE): AFTER row triggers on the same
 -- event fire in name order, so leads_notify fires first. The order does not matter: this
--- trigger reads only the new row's id and tenant, site_settings and Vault, and writes only
--- pg_net's queue; leads_timeline reads none of that and writes only lead_events and the notes
+-- trigger reads only the new row's id and tenant and Vault, and writes only pg_net's queue; leads_timeline reads none of that and writes only lead_events and the notes
 -- mirror. The request is sent after commit, when both have run, and if leads_timeline raises,
 -- the statement rolls back with the queued request in it, so no lead that was not saved is
 -- ever announced.
@@ -147,8 +159,8 @@ declare
   v_post regprocedure;
 begin
   -- The function: a definer with an empty search_path, owned by the migration's role, and
-  -- that role bypasses RLS (site_settings is FORCE RLS, readable only by staff tokens, so an
-  -- owner held to its policy would read no URL and announce nothing).
+  -- that role bypasses RLS (as 0034's and 0041's trigger owners do: a definer reaching a
+  -- FORCE RLS table must not be held to staff policies).
   if not exists (select 1 from pg_proc f
                   where f.oid = v_fn and f.prosecdef
                     and f.proconfig = array['search_path=""']) then
@@ -192,6 +204,10 @@ begin
               where t.tgrelid = 'public.leads'::regclass and not t.tgisinternal
                 and f.oid <> v_fn and f.prosrc ~* 'http_(post|get|delete|request)') then
     raise exception '0048: another trigger on public.leads makes an HTTP call';
+  end if;
+  -- The signature: pgcrypto's hmac where the function names it.
+  if to_regprocedure('extensions.hmac(text, text, text)') is null then
+    raise exception '0048: extensions.hmac(text, text, text) (pgcrypto) not found';
   end if;
   -- The call above passes named parameters; check pg_net still has them.
   v_post := to_regprocedure('net.http_post(text, jsonb, jsonb, jsonb, integer)');
