@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import type { AuthContext } from '@/lib/auth/types';
 import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from '@/lib/http/csrf';
-import { PRE_AUTH_BODY_LIMIT } from '@/lib/auth/bodyLimit';
+import { PRE_AUTH_BODY_LIMIT, PRIVATE_FORM_BODY_LIMIT } from '@/lib/auth/bodyLimit';
 import { TENANT, UUID } from './harness';
 
 // Sign-in is the one admin API the endpoint matrix cannot drive: it is reached without a
@@ -297,6 +297,8 @@ describe('a sign-in form post that fails the token check goes back to its page (
   });
 
   it('and only the sign-in forms: any other admin form post keeps the JSON 403', async () => {
+    // Signed in (signed out, another path is the session gate's: below).
+    state.auth = { ctx: DEVELOPER, revoke: false };
     for (const path of ['/api/admin/auth/logout', '/api/admin/leads', '/admin/login']) {
       const next = handler();
       const res = await middleware(formPost(path, { email: 'a@b.test' }), next);
@@ -304,6 +306,12 @@ describe('a sign-in form post that fails the token check goes back to its page (
       expect(await res.json()).toEqual({ ok: false, error: 'csrf' });
       expect(next).not.toHaveBeenCalled();
     }
+    // Signed out, the sign-in page itself (a pre-auth path, but not a form endpoint).
+    state.auth = { ctx: null, revoke: false };
+    const next = handler();
+    const res = await middleware(formPost('/admin/login', { email: 'a@b.test' }), next);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ ok: false, error: 'csrf' });
   });
 
   it('a cross-site post is still the JSON 403 (the origin check comes first)', async () => {
@@ -452,6 +460,146 @@ describe('the pre-auth body limit, before anything reads a body (F7 final review
     );
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ ok: false, error: 'bad-origin' });
+  });
+});
+
+describe('a body is never read before the session gate has answered (F7 review)', () => {
+  // Before: a signed-out POST to any admin path that needs a session had its urlencoded body
+  // cloned by the CSRF check, with no bound, before the 401 (one copy for the clone, one
+  // buffered behind it for the unread original), enough to take down the isolate.
+
+  /** An endless body that counts each time anything asks it for bytes. None, unread. */
+  function endless(pulls: { count: number }) {
+    return new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          pulls.count += 1;
+          controller.enqueue(new Uint8Array(1024 * 1024).fill(0x61));
+        },
+      },
+      new CountQueuingStrategy({ highWaterMark: 0 }),
+    );
+  }
+
+  /** A same-origin POST to `path` with `body` and `headers`. */
+  function postBody(path: string, body: BodyInit, headers: Record<string, string>) {
+    const ctx = post(path, {});
+    ctx.request = new Request(ctx.url, {
+      method: 'POST',
+      headers: { host: ctx.url.host, origin: ORIGIN, ...headers },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+    return ctx;
+  }
+  const FORM = { 'content-type': 'application/x-www-form-urlencoded' };
+
+  it('signed out, an admin API answers 401 and reads nothing of the body', async () => {
+    for (const declared of [{}, { 'content-length': String(100 * 1024 * 1024) }]) {
+      const pulls = { count: 0 };
+      const next = handler();
+      const res = await middleware(
+        postBody('/api/admin/leads', endless(pulls), { ...FORM, ...declared }),
+        next,
+      );
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ ok: false, error: 'unauthenticated' });
+      expect(pulls.count, JSON.stringify(declared)).toBe(0);
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
+
+  it('signed out, an admin page sends the post to sign in, the body unread', async () => {
+    const pulls = { count: 0 };
+    const res = await middleware(postBody('/admin/users', endless(pulls), FORM), handler());
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(
+      `/admin/login?next=${encodeURIComponent('/admin/users')}`,
+    );
+    expect(pulls.count).toBe(0);
+  });
+
+  it('signed out, a JSON post with a token header is the same 401', async () => {
+    const res = await middleware(
+      postBody('/api/admin/leads', '{}', {
+        'content-type': 'application/json',
+        [CSRF_HEADER_NAME]: TOKEN,
+      }),
+      handler(),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('the sign-in paths with a trailing slash are sign-in paths: capped, and let through', async () => {
+    // trailingSlash 'ignore': `/api/admin/auth/login/` IS the sign-in endpoint.
+    const over = String(PRE_AUTH_BODY_LIMIT + 1);
+    const form = await middleware(
+      postBody('/api/admin/auth/login/', 'pad=x', { ...FORM, 'content-length': over }),
+      handler(),
+    );
+    expect(form.status).toBe(303);
+    expect(form.headers.get('location')).toBe('/admin/login?error=too-large');
+    for (const path of ['/admin/login/', '/api/admin/auth/forgot/', '/api/admin/auth/reset//']) {
+      const pulls = { count: 0 };
+      const res = await middleware(
+        postBody(path, endless(pulls), {
+          'content-type': 'application/json',
+          [CSRF_HEADER_NAME]: TOKEN,
+        }),
+        handler(),
+      );
+      expect(res.status, path).toBe(413);
+      // An endless body is read up to the limit and no further.
+      expect(pulls.count, path).toBeLessThanOrEqual(2);
+    }
+    const next = handler();
+    const ok = await middleware(
+      postBody('/api/admin/auth/login/', '{}', {
+        'content-type': 'application/json',
+        [CSRF_HEADER_NAME]: TOKEN,
+      }),
+      next,
+    );
+    expect(next).toHaveBeenCalledOnce();
+    expect(ok.status).toBe(200);
+  });
+
+  it('signed in, the form body the middleware reads for its token is bounded too', async () => {
+    state.auth = { ctx: DEVELOPER, revoke: false };
+    const pulls = { count: 0 };
+    const big = await middleware(
+      postBody('/admin/account', endless(pulls), {
+        ...FORM,
+        'content-length': String(PRIVATE_FORM_BODY_LIMIT + 1),
+      }),
+      handler(),
+    );
+    expect(big.status).toBe(413);
+    expect(await big.json()).toEqual({ ok: false, error: 'too-large' });
+    expect(pulls.count).toBe(0);
+    // A form of an honest size goes on to the token check, and with its token, through.
+    const next = handler();
+    const ok = await middleware(
+      postBody('/admin/account', new URLSearchParams({ _csrf: TOKEN, intent: 'name' }), FORM),
+      next,
+    );
+    expect(next).toHaveBeenCalledOnce();
+    expect(ok.status).toBe(200);
+  });
+
+  it("signed in, a JSON save is not the middleware's to bound: it never reads it", async () => {
+    state.auth = { ctx: DEVELOPER, revoke: false };
+    const pulls = { count: 0 };
+    const next = handler();
+    await middleware(
+      postBody('/api/admin/leads', endless(pulls), {
+        'content-type': 'application/json',
+        [CSRF_HEADER_NAME]: TOKEN,
+      }),
+      next,
+    );
+    expect(next).toHaveBeenCalledOnce();
+    expect(pulls.count).toBe(0);
   });
 });
 

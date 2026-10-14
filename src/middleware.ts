@@ -22,7 +22,7 @@ import {
 import { createSessionClient, clearSessionCookies, HOST_COOKIE_BASE } from '@/lib/auth/session';
 import { resolveAuthContext } from '@/lib/auth/context';
 import { expiredSignInForm, tooLargeSignInForm } from '@/lib/auth/expiredForm';
-import { bodyWithinLimit } from '@/lib/auth/bodyLimit';
+import { PRIVATE_FORM_BODY_LIMIT, bodyWithinLimit } from '@/lib/auth/bodyLimit';
 
 // The PRIMARY enforcement point for: maintenance pre-cache check → per-request CSP nonce →
 // strict security headers → admin session + CSRF → render → authored redirects on a 404.
@@ -62,6 +62,21 @@ const PRE_AUTH_PATHS: ReadonlySet<string> = new Set([
   '/api/admin/auth/forgot',
   '/api/admin/auth/reset',
 ]);
+
+/**
+ * The path the pre-auth list is read with. `trailingSlash: 'ignore'` (astro.config.mjs)
+ * routes `/api/admin/auth/login/` to the sign-in endpoint too, so the list, and the body
+ * limit it brings, must not depend on the slash.
+ */
+function routeKey(pathname: string): string {
+  return pathname.length > 1 ? pathname.replace(/\/+$/, '') || '/' : pathname;
+}
+
+/** A form post the CSRF check would read for its token: urlencoded, no token header. */
+function tokenInBody(request: Request): boolean {
+  if (request.headers.has(CSRF_HEADER_NAME)) return false;
+  return (request.headers.get('content-type') ?? '').includes('application/x-www-form-urlencoded');
+}
 
 function jsonError(status: number, error: string): Response {
   return new Response(JSON.stringify({ ok: false, error }), {
@@ -198,33 +213,51 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
     locals.csrfToken = csrfToken;
 
+    // Authentication gate. Authorization (which capability, which role) is the API
+    // kernel's job — this only answers "is there a verified session at all".
+    const route = routeKey(url.pathname);
+    const preAuth = PRE_AUTH_PATHS.has(route);
+    const unauthenticated = (): Response => {
+      if (isAdminApi) return jsonError(401, 'unauthenticated');
+      const next = `${url.pathname}${url.search}`;
+      return context.redirect(`${LOGIN_PATH}?next=${encodeURIComponent(next)}`, 302);
+    };
+
     if (!SAFE_METHODS.has(request.method)) {
       if (!isSameOrigin(request.headers.get('origin'), request.headers.get('host'))) {
         return secured(jsonError(403, 'bad-origin'));
       }
+      // Signed out, on a path that needs a session: the answer is already known, so it is
+      // given before a byte of the body is read. The token check below clones a form body,
+      // and until the F7 review a signed-out post of any size to any admin path was read
+      // (the clone, and the original buffered behind it) before its 401.
+      if (!ctx && !preAuth) return secured(unauthenticated());
       // Anyone can post to a pre-auth path, and its body is read several times below (the
       // token check's clone, a refused form's clone, the handler): bound it first, before
       // any of them (src/lib/auth/bodyLimit.ts). A sign-in form goes back to its page.
-      if (PRE_AUTH_PATHS.has(url.pathname) && !(await bodyWithinLimit(request))) {
-        return secured(tooLargeSignInForm(request, url.pathname) ?? jsonError(413, 'too-large'));
+      if (preAuth && !(await bodyWithinLimit(request))) {
+        return secured(tooLargeSignInForm(request, route) ?? jsonError(413, 'too-large'));
+      }
+      // Behind a session, the one body this middleware reads itself is a form's, for its
+      // token: bounded too (what a handler reads is the handler's).
+      if (
+        !preAuth &&
+        tokenInBody(request) &&
+        !(await bodyWithinLimit(request, PRIVATE_FORM_BODY_LIMIT))
+      ) {
+        return secured(jsonError(413, 'too-large'));
       }
       const cookieToken = cookies.get(CSRF_COOKIE_NAME)?.value ?? null;
       if (!csrfTokenMatches(cookieToken, await submittedCsrf(request))) {
         // A sign-in screen's own form post (zero JS: the browser shows the answer) goes
         // back to its page with a fixed code, its handler never run, rather than to a
         // JSON page with no way out. Everything else keeps the JSON 403.
-        const back = await expiredSignInForm(request, url.pathname);
+        const back = await expiredSignInForm(request, route);
         return secured(back ?? jsonError(403, 'csrf'));
       }
     }
 
-    // Authentication gate. Authorization (which capability, which role) is the API
-    // kernel's job — this only answers "is there a verified session at all".
-    if (!ctx && !PRE_AUTH_PATHS.has(url.pathname)) {
-      if (isAdminApi) return secured(jsonError(401, 'unauthenticated'));
-      const next = `${url.pathname}${url.search}`;
-      return secured(context.redirect(`${LOGIN_PATH}?next=${encodeURIComponent(next)}`, 302));
-    }
+    if (!ctx && !preAuth) return secured(unauthenticated());
   }
 
   // 3) Render.
