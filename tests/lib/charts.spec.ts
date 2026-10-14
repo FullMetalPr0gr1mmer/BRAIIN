@@ -6,6 +6,7 @@ import {
   datumSummary,
   datumTable,
   donutGeometry,
+  drawnSeries,
   formatCompact,
   formatNumber,
   lineGeometry,
@@ -316,6 +317,26 @@ describe('the text alternatives come from the same data', () => {
       'Visits: highest 40 (2 Oct), latest 25 (3 Oct). Leads: highest 2 (2 Oct), latest 2 (2 Oct).',
     );
     expect(seriesSummary([], [])).toBe('No data yet.');
+  });
+
+  it('a series longer than its labels: summary, table, scale and points all stop at the last label', () => {
+    // One value more than there are dates: it is not drawn, so the image's name must not cite it
+    // (f4b review: the summary read the whole series, the drawing and the table did not).
+    const long = [{ name: 'Visits', data: [3, 5, 4, 99] }];
+    const dates = ['1 Oct', '2 Oct', '3 Oct'];
+    expect(seriesSummary(long, dates)).toBe('Visits: highest 5 (2 Oct), latest 4 (3 Oct).');
+    expect(seriesTable(long, dates).rows).toEqual([
+      ['1 Oct', '3'],
+      ['2 Oct', '5'],
+      ['3 Oct', '4'],
+    ]);
+    const g = lineGeometry(long, dates);
+    expect(g?.series[0]?.points.map((p) => p.value)).toEqual([3, 5, 4]);
+    // The scale is the drawn values', not the undrawn 99's.
+    expect(g?.ticks.at(-1)?.value).toBeLessThan(99);
+    expect(drawnSeries(long, dates)).toEqual([{ name: 'Visits', data: [3, 5, 4] }]);
+    // Unlabelled, every value is a position and is kept.
+    expect(drawnSeries(long, [])).toEqual(long);
   });
 
   it('tables bars and shares', () => {

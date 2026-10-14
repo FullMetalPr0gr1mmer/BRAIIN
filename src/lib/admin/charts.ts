@@ -209,15 +209,26 @@ function positions(series: readonly Series[], labels: readonly string[]): number
 }
 
 /**
+ * Each series cut to the chart's x positions: the values that are drawn. The drawing, its
+ * scale, its table and its summary all read these, so a value past the last label (a
+ * series one longer than its dates) is in none of them rather than only in the summary.
+ */
+export function drawnSeries(series: readonly Series[], labels: readonly string[]): Series[] {
+  const count = positions(series, labels);
+  return series.map((s) => ({ ...s, data: s.data.slice(0, count) }));
+}
+
+/**
  * The prototype's line chart: a 44px gutter for the y ticks, 28px under the plot for the x
  * labels, four round gridlines, one path and one soft area per series. Null when there is
  * no point to draw.
  */
 export function lineGeometry(
-  series: readonly Series[],
+  allSeries: readonly Series[],
   labels: readonly string[],
   { width = 800, height = 240 }: LineOptions = {},
 ): LineGeometry | null {
+  const series = drawnSeries(allSeries, labels);
   const count = positions(series, labels);
   const drawn = series.filter((s) => s.data.length > 0);
   if (count === 0 || drawn.length === 0) return null;
@@ -229,7 +240,7 @@ export function lineGeometry(
       : plot.left + (i / (count - 1)) * (plot.right - plot.left);
   const y = (v: number) => plot.bottom - (clean(v) / scale.top) * (plot.bottom - plot.top);
   const geometry = series.map((s, index) => {
-    const points = s.data.slice(0, count).map((v, i) => ({ x: x(i), y: y(v), value: clean(v) }));
+    const points = s.data.map((v, i) => ({ x: x(i), y: y(v), value: clean(v) }));
     const line = points.map((p, i) => `${i ? 'L' : 'M'}${n(p.x)} ${n(p.y)}`).join(' ');
     const first = points[0];
     const last = points[points.length - 1];
@@ -392,10 +403,11 @@ export interface ChartTable {
 
 /** Line chart data as a table: one row per label, one column per series. */
 export function seriesTable(
-  series: readonly Series[],
+  allSeries: readonly Series[],
   labels: readonly string[],
   labelHeading = 'Date',
 ): ChartTable {
+  const series = drawnSeries(allSeries, labels);
   const count = positions(series, labels);
   return {
     head: [labelHeading, ...series.map((s) => s.name)],
@@ -423,10 +435,10 @@ export function datumTable(
 
 /**
  * One line naming what a line chart shows, for its accessible name: per series, the
- * highest value and the latest, each with its label.
+ * highest value and the latest drawn, each with its label.
  */
-export function seriesSummary(series: readonly Series[], labels: readonly string[]): string {
-  const parts = series
+export function seriesSummary(allSeries: readonly Series[], labels: readonly string[]): string {
+  const parts = drawnSeries(allSeries, labels)
     .filter((s) => s.data.length > 0)
     .map((s) => {
       const values = s.data.map(clean);
