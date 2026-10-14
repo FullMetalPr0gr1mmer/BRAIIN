@@ -2981,16 +2981,31 @@ table.data .data-sel {
   gap: 6px;
 }
 
+/* Hidden actions take no presses: they sit above the row's link, so a press meant for the
+   row would land on a button nobody can see (a Move posts at once). Hover arms them only
+   once they have faded in (the pointer-events transition waits 0.2s): a tap on a
+   touchscreen laptop applies :hover and hit-tests again in the same gesture, so arming
+   at once would still hand that tap to the button it revealed. Focus, which reveals them
+   too, arms them at once; pointer-events never stops the keyboard reaching them. */
 @media (hover: hover) {
   .dt .row-acts {
     opacity: 0;
-    transition: opacity 0.2s;
+    pointer-events: none;
+    transition:
+      opacity 0.2s,
+      pointer-events 0s 0.2s allow-discrete;
   }
 
   .dt tbody tr:hover .row-acts,
   .dt tbody tr:focus-within .row-acts,
   .dt tbody tr[data-selected] .row-acts {
     opacity: 1;
+    pointer-events: auto;
+  }
+
+  .dt tbody tr:focus-within .row-acts,
+  .dt tbody tr[data-selected] .row-acts {
+    transition-delay: 0s;
   }
 }
 
@@ -3504,6 +3519,17 @@ dialog.drw[data-size='wide'] {
     transition: none !important;
     animation: none !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Not motion: the row actions' arming delay (DataTable, above) stays, or a tap would
+     again press an action it had only just revealed. */
+  .admin-body .dt .row-acts {
+    transition: pointer-events 0s 0.2s allow-discrete !important;
+  }
+
+  .admin-body .dt tbody tr:focus-within .row-acts,
+  .admin-body .dt tbody tr[data-selected] .row-acts {
+    transition-delay: 0s !important;
   }
 }
 

@@ -257,6 +257,40 @@ test.describe('as admin', () => {
     await expect(first).not.toBeChecked();
   });
 
+  test('the data table: a hidden row action takes no press; hover arms it, Tab reaches it', async ({
+    page,
+  }) => {
+    await open(page);
+    const card = page.getByRole('region', { name: 'A data table' });
+    const table = card.getByRole('table', { name: 'Sample entries, with selection' });
+    const preview = table.getByRole('button', { name: 'Preview Sample entry 1', exact: true });
+    const spot = (await preview.boundingBox())!;
+    const x = spot.x + spot.width / 2;
+    const y = spot.y + spot.height / 2;
+
+    // From outside the row, a press at once (as a tap is): it goes to the row's link (the
+    // sample rows link to #kit-<n>), never to the button nobody could see yet.
+    await page.mouse.move(1, 1);
+    await page.mouse.click(x, y);
+    await expect(page).toHaveURL(/#kit-1$/);
+    await expect(card.getByRole('status')).toHaveText('');
+
+    // Resting on the row shows the actions and, once they have faded in, arms them.
+    await expect(preview).toHaveCSS('pointer-events', 'auto');
+    await page.mouse.click(x, y);
+    await expect(card.getByRole('status')).toHaveText(
+      'A preview of Sample entry 1 would open here.',
+    );
+
+    // The keyboard reaches them from the row's link, and focus shows them.
+    await page.mouse.move(1, 1);
+    await table.getByRole('link', { name: 'Sample entry 2', exact: true }).focus();
+    await page.keyboard.press('Tab');
+    const next = table.getByRole('button', { name: 'Preview Sample entry 2', exact: true });
+    await expect(next).toBeFocused();
+    await expect(next).toHaveCSS('opacity', '1');
+  });
+
   test('the data table: emptying the last page steps back to the page before', async ({ page }) => {
     await open(page);
     const card = page.getByRole('region', { name: 'A data table' });

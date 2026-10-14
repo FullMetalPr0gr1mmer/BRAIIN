@@ -205,6 +205,44 @@ describe('admin.css: a list row wraps text it does not control (Admin v2 F8)', (
   });
 });
 
+describe('admin.css: a row’s hidden actions take no presses (Admin v2 F4b review)', () => {
+  // DataTable's row actions sit above the row's stretched link. Hidden by opacity alone
+  // they still took presses, so a tap at a row's end pressed an unseen Move (which posts
+  // at once). tests/admin/kit.e2e.ts proves it in a browser; this keeps the rules.
+
+  /** The declarations of the rule whose selector is exactly `selector`, indented two. */
+  const body = (selector: string) => {
+    const start = ADMIN.indexOf(`\n  ${selector} {`);
+    if (start === -1) return '';
+    const open = ADMIN.indexOf('{', start);
+    return ADMIN.slice(open + 1, ADMIN.indexOf('}', open));
+  };
+
+  it('hidden: click-through, armed by hover only after the fade', () => {
+    const hidden = body('.dt .row-acts');
+    expect(hidden).toMatch(/opacity:\s*0;/);
+    expect(hidden).toMatch(/pointer-events:\s*none;/);
+    expect(hidden).toMatch(/pointer-events 0s 0\.2s allow-discrete/);
+    // visibility: hidden would also take them out of the tab order; focus must reach them.
+    expect(hidden).not.toMatch(/visibility/);
+  });
+
+  it('shown on hover, focus or a tick; focus and a tick arm them at once', () => {
+    expect(ADMIN).toMatch(
+      /\.dt tbody tr:hover \.row-acts,\s*\.dt tbody tr:focus-within \.row-acts,\s*\.dt tbody tr\[data-selected\] \.row-acts\s*\{\s*opacity:\s*1;\s*pointer-events:\s*auto;/,
+    );
+    expect(ADMIN).toMatch(
+      /\n {2}\.dt tbody tr:focus-within \.row-acts,\s*\.dt tbody tr\[data-selected\] \.row-acts\s*\{\s*transition-delay:\s*0s;/,
+    );
+  });
+
+  it('reduced motion keeps the arming delay: it is not motion', () => {
+    expect(body('.admin-body .dt .row-acts')).toMatch(
+      /transition:\s*pointer-events 0s 0\.2s allow-discrete !important/,
+    );
+  });
+});
+
 describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
   // tests/admin/shell.e2e.ts proves it in a browser; this keeps the two halves together.
   it('pads the scroll port by the height the layout measures', () => {

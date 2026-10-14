@@ -95,7 +95,12 @@ function TableDemo() {
         offset={offset}
         onPage={setOffset}
         rowActions={(row) => (
-          <button type="button" className="icon-btn" aria-label={`Preview ${row.title}`}>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={`Preview ${row.title}`}
+            onClick={() => setDone(`A preview of ${row.title} would open here.`)}
+          >
             <Icon name="eye" size={15} />
           </button>
         )}
