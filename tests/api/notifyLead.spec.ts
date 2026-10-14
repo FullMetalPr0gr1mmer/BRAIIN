@@ -308,6 +308,30 @@ describe('notify-lead reads at most 1 KB before the signature is checked', () =>
     expect((await streamed(headers, lying).response).status).toBe(401);
   });
 
+  it('takes a signed body of exactly 1024 bytes, and refuses one of 1025', async () => {
+    // JSON whitespace is the only padding the strict schema lets through, one byte each.
+    const json = JSON.stringify(BODY);
+    const at = (n: number) => json + ' '.repeat(n - new TextEncoder().encode(json).byteLength);
+    const signed = await signedHeaders(BODY);
+    expect((await call(signed, at(1024))).status).toBe(200);
+    expect((await call(signed, at(1025))).status).toBe(401);
+    // The same edge for the reader, in one-byte chunks under an honest Content-Length.
+    for (const [size, status] of [
+      [1024, 200],
+      [1025, 401],
+    ] as const) {
+      const bytes = new TextEncoder().encode(at(size));
+      const trickle = new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
+          controller.close();
+        },
+      });
+      const headers = { ...signed, 'content-length': String(bytes.byteLength) };
+      expect((await streamed(headers, trickle).response).status, String(size)).toBe(status);
+    }
+  });
+
   it('accepts a correctly signed call that declares its size, streamed or not', async () => {
     expect((await signedCall()).status).toBe(200);
     const bytes = new TextEncoder().encode(JSON.stringify(BODY));
