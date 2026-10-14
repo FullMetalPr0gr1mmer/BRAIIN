@@ -37,7 +37,9 @@ const state = vi.hoisted(() => ({
   auth: { ctx: null, revoke: false } as { ctx: AuthContext | null; revoke: boolean },
   clearSessionCookies: vi.fn(),
   /** The "Keep me signed in" choice each sign-in recorded, in order. */
-  setSessionPersistence: vi.fn(),
+  chooseSessionPersistence: vi.fn(),
+  /** Each time a sign-in wrote that choice into the browser's marker cookie. */
+  commitSessionPersistence: vi.fn(),
 }));
 
 // The lockout RPCs answer the way 0009's do: a failure is recorded first, then compared
@@ -61,8 +63,9 @@ vi.mock('@/lib/auth/context', () => ({ resolveAuthContext: async () => state.aut
 vi.mock('@/lib/auth/session', () => ({
   createSessionClient: () => ({}),
   clearSessionCookies: state.clearSessionCookies,
-  setSessionPersistence: (_cookies: unknown, remember: boolean) =>
-    state.setSessionPersistence(remember),
+  chooseSessionPersistence: (_cookies: unknown, remember: boolean) =>
+    state.chooseSessionPersistence(remember),
+  commitSessionPersistence: () => state.commitSessionPersistence(),
   HOST_COOKIE_BASE: {},
 }));
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
@@ -80,7 +83,8 @@ beforeEach(() => {
   state.storeUp = true;
   state.auth = { ctx: null, revoke: false };
   state.clearSessionCookies.mockClear();
-  state.setSessionPersistence.mockClear();
+  state.chooseSessionPersistence.mockReset();
+  state.commitSessionPersistence.mockReset();
 });
 
 // ── The middleware ──────────────────────────────────────────────────────────────
@@ -438,7 +442,7 @@ describe('"Keep me signed in" (Admin v2 F7)', () => {
     await signIn(client, { email: EMAIL, password: PASSWORD });
     await signIn(client, { email: EMAIL, password: PASSWORD, remember: true });
     await signIn(client, { email: EMAIL, password: PASSWORD, remember: false });
-    expect(state.setSessionPersistence.mock.calls).toEqual([[true], [true], [false]]);
+    expect(state.chooseSessionPersistence.mock.calls).toEqual([[true], [true], [false]]);
   });
 
   it('follows the form box: ticked keeps the session, unticked (absent) does not', async () => {
@@ -446,28 +450,42 @@ describe('"Keep me signed in" (Admin v2 F7)', () => {
     const { client } = sessionClient();
     await signInForm(client, { email: EMAIL, password: PASSWORD, remember: '1' });
     await signInForm(client, { email: EMAIL, password: PASSWORD });
-    expect(state.setSessionPersistence.mock.calls).toEqual([[true], [false]]);
+    expect(state.chooseSessionPersistence.mock.calls).toEqual([[true], [false]]);
   });
 
-  it('is recorded before the sign-in writes the session cookie', async () => {
+  it('is chosen before the sign-in writes the session cookie, and kept only after it succeeds', async () => {
     state.auth = { ctx: DEVELOPER, revoke: false };
     const { client } = sessionClient();
     const order: string[] = [];
-    state.setSessionPersistence.mockImplementationOnce(() => order.push('persistence'));
+    state.chooseSessionPersistence.mockImplementationOnce(() => order.push('choose'));
+    state.commitSessionPersistence.mockImplementationOnce(() => order.push('commit'));
     client.auth.signInWithPassword.mockImplementationOnce(async () => {
       order.push('sign-in');
       return { data: {}, error: null };
     });
     await signIn(client, { email: EMAIL, password: PASSWORD, remember: false });
-    expect(order).toEqual(['persistence', 'sign-in']);
+    expect(order).toEqual(['choose', 'sign-in', 'commit']);
   });
 
-  it('is never recorded for a locked address or a body the schema refuses', async () => {
+  it('a failed sign-in never writes the choice into the browser (F7 review)', async () => {
+    // A wrong password, from a login page left open in another tab with the box at its
+    // default, must not change the lifetime of the session this browser already holds.
+    const { client } = sessionClient();
+    const wrong = await signInForm(client, { email: EMAIL, password: 'wrong password' });
+    expect(wrong.headers.get('location')).toBe('/admin/login?error=invalid');
+    // Valid credentials on an account that cannot hold a session: torn down, not kept.
+    await signIn(client, { email: EMAIL, password: PASSWORD, remember: false });
+    expect(state.chooseSessionPersistence).toHaveBeenCalledTimes(2);
+    expect(state.commitSessionPersistence).not.toHaveBeenCalled();
+  });
+
+  it('is never chosen for a locked address or a body the schema refuses', async () => {
     const { client } = sessionClient();
     await signIn(client, { email: 'not an address', password: PASSWORD });
     state.storeUp = false;
     await signIn(client, { email: EMAIL, password: PASSWORD });
-    expect(state.setSessionPersistence).not.toHaveBeenCalled();
+    expect(state.chooseSessionPersistence).not.toHaveBeenCalled();
+    expect(state.commitSessionPersistence).not.toHaveBeenCalled();
   });
 });
 

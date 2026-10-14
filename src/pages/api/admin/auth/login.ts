@@ -1,7 +1,11 @@
 import type { APIRoute } from 'astro';
 import { LoginSchema } from '@schemas/admin';
 import { resolveAuthContext } from '@/lib/auth/context';
-import { clearSessionCookies, setSessionPersistence } from '@/lib/auth/session';
+import {
+  chooseSessionPersistence,
+  clearSessionCookies,
+  commitSessionPersistence,
+} from '@/lib/auth/session';
 import {
   isLockedOut,
   registerFailure,
@@ -92,8 +96,10 @@ export const POST: APIRoute = async ({ request, locals, cookies }) => {
   if (await isLockedOut(email)) return fail(423, 'locked');
 
   // Before the sign-in: signInWithPassword writes the session cookie, and the cookie's
-  // lifetime is read from this choice as it is written.
-  setSessionPersistence(cookies, remember);
+  // lifetime is read from this choice as it is written. Only for this request: the marker
+  // the browser keeps changes below, once the sign-in has succeeded, so a failed attempt
+  // leaves a session already open in this browser as it was.
+  chooseSessionPersistence(cookies, remember);
 
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
@@ -115,6 +121,7 @@ export const POST: APIRoute = async ({ request, locals, cookies }) => {
     return fail(401, 'invalid');
   }
 
+  commitSessionPersistence(cookies);
   await registerSuccess(email, ip);
   await writeAudit(supabase, ctx, {
     action: 'auth.login',
