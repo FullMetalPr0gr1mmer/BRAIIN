@@ -551,5 +551,14 @@ test.describe('as admin', () => {
     const server = page.getByRole('table', { name: 'Sample entries', exact: true });
     await expect(server.getByRole('link', { name: 'Sample entry 26', exact: true })).toBeVisible();
     await expect(page.getByText('26 to 50 of 60', { exact: true }).first()).toBeVisible();
+
+    // A page past the end shows the last page's rows, not an empty table under its range.
+    await open(page, '?page=99');
+    await expect(
+      page
+        .getByRole('table', { name: 'Sample entries', exact: true })
+        .getByRole('link', { name: 'Sample entry 51', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('51 to 60 of 60', { exact: true }).first()).toBeVisible();
   });
 });

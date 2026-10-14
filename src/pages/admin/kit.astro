@@ -20,7 +20,7 @@ import Donut from '@/components/admin/ui/charts/Donut.astro';
 import Line from '@/components/admin/ui/charts/Line.astro';
 import Ring from '@/components/admin/ui/charts/Ring.astro';
 import { BADGE_TONES, CONTENT_STATUSES, NOTE_TONES } from '@/lib/admin/tones';
-import { offsetOf, pageParam, PAGE_SIZE } from '@/lib/admin/pager';
+import { offsetOf, pageInfo, pageParam, PAGE_SIZE } from '@/lib/admin/pager';
 import { KIT_TAB_IDS, KIT_TAB_PARAM } from '@/components/admin/screens/kit/samples';
 import { tabFromParam } from '@/lib/admin/roving';
 
@@ -37,9 +37,11 @@ export const prerender = false;
 
 const url = Astro.url;
 
-// A list of 60 made-up rows, paged by `?page=` like every server list.
+// A list of 60 made-up rows, paged by `?page=` like every server list. The page the URL
+// names is clamped to one that exists (pageInfo), as ServerTable's range and pager are:
+// `?page=99` shows the last page's rows, never an empty page under "51 to 60 of 60".
 const SAMPLE_TOTAL = 60;
-const offset = offsetOf(pageParam(url.searchParams.get('page')));
+const offset = pageInfo(SAMPLE_TOTAL, offsetOf(pageParam(url.searchParams.get('page')))).offset;
 const tableRows = Array.from({ length: Math.min(PAGE_SIZE, SAMPLE_TOTAL - offset) }, (_, i) => {
   const n = offset + i + 1;
   return {

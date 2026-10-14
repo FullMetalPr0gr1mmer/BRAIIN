@@ -12,6 +12,12 @@ import { formatDate, formatDateTime, isoOf, relTime, toDate } from '@/lib/admin/
 // overview). The rows are one page the server already read; paging is links (Pager), the
 // range "26 to 50 of 112" sits under the table.
 //
+// A page past the end is the screen's to handle: ServerTable clamps its range and pager to
+// the last page (pageInfo), but it cannot read rows. A screen reads the page the URL
+// names clamped the same way, `pageInfo(total, offsetOf(pageParam(value))).offset` (or
+// redirects to that page when it learns the total from the read itself); otherwise
+// `?page=99` shows an empty table under "51 to 60 of 60" (kit.astro does the former).
+//
 // Cells are typed, not free markup: text, a number (tabular, end-aligned), a status
 // badge, a date, a date and time, or "3 h ago" as a <time>. The `title` column links to
 // `rowHref(row)` (no click handler on the row) and its link covers the row.
