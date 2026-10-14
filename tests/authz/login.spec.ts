@@ -182,10 +182,131 @@ describe('the middleware in front of sign-in and sign-out', () => {
     expect((await middleware(formPost(TOKEN), good)).status).toBe(200);
     expect(good).toHaveBeenCalledOnce();
 
+    // A forged one never reaches the handler: the form goes back to its page (below).
     const forged = handler();
     const res = await middleware(formPost('b'.repeat(64)), forged);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/admin/login?error=expired-form');
     expect(forged).not.toHaveBeenCalled();
+  });
+});
+
+describe('a sign-in form post that fails the token check goes back to its page (F7 review)', () => {
+  // The screens are zero-JS forms, so the browser shows whatever the refusal is. A JSON 403
+  // was a dead end, met in ordinary use: __Host-csrf is a session cookie, so a sign-in tab a
+  // browser restores after a restart carries a token that matches nothing.
+
+  /** A urlencoded post with `fields`, the double-submit cookie set to TOKEN (or absent). */
+  function formPost(
+    path: string,
+    fields: Record<string, string>,
+    options: { cookie?: boolean; headers?: Record<string, string> } = {},
+  ) {
+    const ctx = post(path, {});
+    ctx.request = new Request(ctx.url, {
+      method: 'POST',
+      headers: {
+        host: ctx.url.host,
+        origin: ORIGIN,
+        'content-type': 'application/x-www-form-urlencoded',
+        ...options.headers,
+      },
+      body: new URLSearchParams(fields),
+    });
+    if (options.cookie === false) ctx.cookies.get = () => undefined;
+    return ctx;
+  }
+
+  const RESET_TOKEN = 'a1b2c3d4'.repeat(7);
+
+  it.each([
+    ['/api/admin/auth/login', '/admin/login?error=expired-form'],
+    ['/api/admin/auth/forgot', '/admin/forgot?status=expired-form'],
+    ['/api/admin/auth/reset', '/admin/reset?error=expired-form'],
+  ])('%s: 303 to %s, never the handler, never cached', async (path, location) => {
+    for (const [fields, cookie] of [
+      [{ email: 'a@b.test' }, true], // no token in the form
+      [{ _csrf: 'b'.repeat(64), email: 'a@b.test' }, true], // another token
+      [{ _csrf: TOKEN, email: 'a@b.test' }, false], // the cookie is gone (browser restart)
+    ] as const) {
+      const next = handler();
+      const res = await middleware(formPost(path, fields, { cookie }), next);
+      expect(res.status, JSON.stringify(fields)).toBe(303);
+      expect(res.headers.get('location')).toBe(location);
+      expect(res.headers.get('cache-control')).toContain('no-store');
+      expect(await res.text()).toBe('');
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
+
+  it("keeps what the page had in its own URL: sign-in's `next` (held to /admin), the reset link", async () => {
+    const back = async (path: string, fields: Record<string, string>) =>
+      (await middleware(formPost(path, fields), handler())).headers.get('location');
+
+    expect(
+      await back('/api/admin/auth/login', { next: '/admin/users?x=1', email: 'a@b.test' }),
+    ).toBe(
+      `/admin/login?${new URLSearchParams({ next: '/admin/users?x=1', error: 'expired-form' })}`,
+    );
+    expect(await back('/api/admin/auth/login', { next: 'https://evil.example/admin' })).toBe(
+      '/admin/login?error=expired-form',
+    );
+    expect(
+      await back('/api/admin/auth/reset', { token_hash: RESET_TOKEN, password: 'p', confirm: 'p' }),
+    ).toBe(`/admin/reset?token_hash=${RESET_TOKEN}&type=recovery&error=expired-form`);
+    // A token of the wrong shape is not carried; nothing typed is, ever.
+    const odd = await back('/api/admin/auth/reset', { token_hash: '<x>', password: 'secret pw' });
+    expect(odd).toBe('/admin/reset?error=expired-form');
+    const forgot = await back('/api/admin/auth/forgot', { email: 'staff@example.test' });
+    expect(forgot).toBe('/admin/forgot?status=expired-form');
+    expect(forgot).not.toContain('example.test');
+  });
+
+  it('keeps the JSON 403 for a script: a JSON body, or the token header', async () => {
+    for (const path of [
+      '/api/admin/auth/login',
+      '/api/admin/auth/forgot',
+      '/api/admin/auth/reset',
+    ]) {
+      const json = handler();
+      const res = await middleware(post(path, { origin: ORIGIN }), json);
+      expect(res.status, path).toBe(403);
+      expect(await res.json()).toEqual({ ok: false, error: 'csrf' });
+
+      const header = handler();
+      const viaHeader = await middleware(
+        formPost(path, { email: 'a@b.test' }, { headers: { [CSRF_HEADER_NAME]: 'b'.repeat(64) } }),
+        header,
+      );
+      expect(viaHeader.status, path).toBe(403);
+      expect(json).not.toHaveBeenCalled();
+      expect(header).not.toHaveBeenCalled();
+    }
+  });
+
+  it('and only the sign-in forms: any other admin form post keeps the JSON 403', async () => {
+    for (const path of ['/api/admin/auth/logout', '/api/admin/leads', '/admin/login']) {
+      const next = handler();
+      const res = await middleware(formPost(path, { email: 'a@b.test' }), next);
+      expect(res.status, path).toBe(403);
+      expect(await res.json()).toEqual({ ok: false, error: 'csrf' });
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a cross-site post is still the JSON 403 (the origin check comes first)', async () => {
+    const next = handler();
+    const res = await middleware(
+      formPost(
+        '/api/admin/auth/login',
+        { email: 'a@b.test' },
+        { headers: { origin: 'https://evil.example' } },
+      ),
+      next,
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ ok: false, error: 'bad-origin' });
+    expect(next).not.toHaveBeenCalled();
   });
 });
 

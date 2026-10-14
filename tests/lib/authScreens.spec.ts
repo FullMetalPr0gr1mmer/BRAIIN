@@ -17,6 +17,7 @@ import {
   resetLimitRules,
   resetPageUrl,
 } from '@/lib/auth/recovery';
+import { EXPIRED_FORM, expiredFormLocation } from '@/lib/auth/expiredForm';
 import { PASSWORD_MIN } from '@schemas/adminPrefs';
 import { PUBLIC_SITE_URL } from '../stubs/astro-env-client';
 
@@ -139,7 +140,8 @@ describe('the outcome codes the pages render', () => {
       'unavailable',
     ]);
     for (const code of codes) expect(messageFor(RESET_MESSAGES, code), code).not.toBeNull();
-    expect(Object.keys(RESET_MESSAGES).sort()).toEqual(codes);
+    // Plus the middleware's, for a form post that failed the token check (expiredForm.ts).
+    expect(Object.keys(RESET_MESSAGES).sort()).toEqual([...codes, EXPIRED_FORM].sort());
     // The link is gone after these: the page offers a new one instead of the form.
     expect([...RESET_LINK_SPENT].sort()).toEqual(['expired', 'interrupted', 'refused']);
   });
@@ -169,6 +171,27 @@ describe('the outcome codes the pages render', () => {
       const markup = readFileSync(file, 'utf8').split('---').slice(2).join('---');
       const visible = markup.replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
       expect(visible, file).not.toMatch(/[–—]/);
+    }
+  });
+
+  it('every page has copy for a form sent back by the CSRF check, and it keeps the reset link', () => {
+    for (const table of [LOGIN_MESSAGES, FORGOT_MESSAGES, RESET_MESSAGES]) {
+      expect(messageFor(table, EXPIRED_FORM)).toEqual({
+        kind: 'error',
+        text: 'This page was open too long. Please try again.',
+      });
+    }
+    expect(RESET_LINK_SPENT.has(EXPIRED_FORM)).toBe(false);
+    // Each page reads the code under its own key (forgot's outcomes are a `status`).
+    for (const [endpoint, page] of [
+      ['/api/admin/auth/login', '/admin/login?error='],
+      ['/api/admin/auth/forgot', '/admin/forgot?status='],
+      ['/api/admin/auth/reset', '/admin/reset?error='],
+    ] as const) {
+      expect(expiredFormLocation(endpoint, new URLSearchParams())).toBe(`${page}${EXPIRED_FORM}`);
+    }
+    for (const other of ['/api/admin/auth/logout', '/api/admin/auth/login/', '/admin/login']) {
+      expect(expiredFormLocation(other, new URLSearchParams()), other).toBeNull();
     }
   });
 

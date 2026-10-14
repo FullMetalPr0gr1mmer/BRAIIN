@@ -21,6 +21,7 @@ import {
 } from '@/lib/http/csrf';
 import { createSessionClient, clearSessionCookies, HOST_COOKIE_BASE } from '@/lib/auth/session';
 import { resolveAuthContext } from '@/lib/auth/context';
+import { expiredSignInForm } from '@/lib/auth/expiredForm';
 
 // The PRIMARY enforcement point for: maintenance pre-cache check → per-request CSP nonce →
 // strict security headers → admin session + CSRF → render → authored redirects on a 404.
@@ -202,7 +203,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
       }
       const cookieToken = cookies.get(CSRF_COOKIE_NAME)?.value ?? null;
       if (!csrfTokenMatches(cookieToken, await submittedCsrf(request))) {
-        return secured(jsonError(403, 'csrf'));
+        // A sign-in screen's own form post (zero JS: the browser shows the answer) goes
+        // back to its page with a fixed code, its handler never run, rather than to a
+        // JSON page with no way out. Everything else keeps the JSON 403.
+        const back = await expiredSignInForm(request, url.pathname);
+        return secured(back ?? jsonError(403, 'csrf'));
       }
     }
 

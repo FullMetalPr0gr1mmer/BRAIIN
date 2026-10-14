@@ -15,7 +15,9 @@ import { staffEnv } from '../admin/staff';
 //     CI preview is built with e-mail off until O-2 turns it on (AUTH_EMAIL_READY in
 //     wrangler.jsonc, which the CI build reads too); the set-up screen's markup is rendered
 //     by tests/lib/authPages.spec.ts meanwhile;
-//   - a reset link without a usable token offers a new one instead of a form.
+//   - a reset link without a usable token offers a new one instead of a form;
+//   - a sign-in form post the CSRF check refuses goes back to its page with a message (a
+//     tab restored after a browser restart has lost its token), never to a JSON page.
 
 const TOKEN = 'a1b2c3d4'.repeat(7);
 const SCREENS = ['/admin/login', '/admin/forgot', `/admin/reset?token_hash=${TOKEN}&type=recovery`];
@@ -128,6 +130,28 @@ test.describe('without JavaScript', () => {
     expect(answers[0]).toContain('Those credentials did not work.');
   });
 
+  test('a sign-in page open past its token comes back with a message, not a JSON page', async ({
+    page,
+    context,
+  }) => {
+    await page.goto('/admin/login?next=%2Fadmin%2Fusers');
+    // What a browser restart does to a tab it restores: the session cookie with the token
+    // the page carries is gone.
+    await context.clearCookies({ name: '__Host-csrf' });
+    await page.getByLabel('Email').fill('nobody-f7@example.com');
+    await page.getByLabel('Password', { exact: true }).fill('not the password');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.waitForURL((url) => url.searchParams.get('error') === 'expired-form');
+    const url = new URL(page.url());
+    expect(url.pathname).toBe('/admin/login');
+    expect(url.searchParams.get('next')).toBe('/admin/users');
+    await expect(page.getByRole('alert')).toHaveText(
+      'This page was open too long. Please try again.',
+    );
+    // The page minted a new token, so the form works again.
+    expect((await context.cookies()).map((c) => c.name)).toContain('__Host-csrf');
+  });
+
   test('a reset link with no usable token offers a new one, not a form', async ({ page }) => {
     for (const path of ['/admin/reset', '/admin/reset?token_hash=x&type=recovery']) {
       await page.goto(path);
@@ -143,8 +167,29 @@ test.describe('without JavaScript', () => {
 
 test('the sign-in endpoints refuse a post without the CSRF token', async ({ page }) => {
   await page.goto('/admin/login');
-  for (const path of ['/api/admin/auth/login', '/api/admin/auth/forgot', '/api/admin/auth/reset']) {
-    const res = await page.request.post(path, { form: { email: 'nobody-f7@example.com' } });
-    expect(res.status(), path).toBe(403);
+  const origin = new URL(page.url()).origin;
+  for (const [path, back] of [
+    ['/api/admin/auth/login', '/admin/login?error=expired-form'],
+    ['/api/admin/auth/forgot', '/admin/forgot?status=expired-form'],
+    ['/api/admin/auth/reset', '/admin/reset?error=expired-form'],
+  ] as const) {
+    // A form post (what the zero-JS screens send) goes back to its page with a code the
+    // page renders, never to a JSON page; nothing in it is acted on (src/lib/auth/expiredForm.ts).
+    const form = await page.request.post(path, {
+      form: { email: 'nobody-f7@example.com' },
+      headers: { origin },
+      maxRedirects: 0,
+    });
+    expect(form.status(), path).toBe(303);
+    const location = new URL(form.headers()['location'] ?? '', origin);
+    expect(`${location.pathname}${location.search}`, path).toBe(back);
+    // A script's post keeps the JSON 403.
+    const json = await page.request.post(path, {
+      data: { email: 'nobody-f7@example.com' },
+      headers: { origin },
+      maxRedirects: 0,
+    });
+    expect(json.status(), path).toBe(403);
+    expect(await json.json(), path).toEqual({ ok: false, error: 'csrf' });
   }
 });

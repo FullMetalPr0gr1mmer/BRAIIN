@@ -16,6 +16,12 @@ export interface PageMessage {
 
 const msg = (kind: MessageKind, text: string): PageMessage => ({ kind, text });
 
+/**
+ * A form post that failed the CSRF check, sent back to its page (src/lib/auth/expiredForm.ts):
+ * the page was open longer than its token lasts (a session cookie), or the browser dropped it.
+ */
+const EXPIRED_FORM_MESSAGE = msg('error', 'This page was open too long. Please try again.');
+
 /** /admin/login?error=… and ?reset=done. */
 export const LOGIN_MESSAGES = {
   // One message for every failed sign-in: the endpoint already refuses to tell them
@@ -23,6 +29,7 @@ export const LOGIN_MESSAGES = {
   invalid: msg('error', 'Those credentials did not work.'),
   locked: msg('error', `Too many attempts. Try again in ${LOCKOUT_DURATION_MINUTES} minutes.`),
   unavailable: msg('error', 'Signing in is not available right now. Try again in a few minutes.'),
+  'expired-form': EXPIRED_FORM_MESSAGE,
 } as const;
 
 export const RESET_DONE = msg(
@@ -39,6 +46,7 @@ export const FORGOT_MESSAGES = {
   ),
   limited: msg('error', 'Too many requests. Try again in an hour.'),
   unavailable: msg('error', 'Something went wrong on our side. Try again in a few minutes.'),
+  'expired-form': EXPIRED_FORM_MESSAGE,
 } as const;
 
 /** What the forgot screen says while Supabase cannot send e-mail (owner item O-2). */
@@ -68,6 +76,8 @@ export const RESET_MESSAGES = {
     'error',
     'Something went wrong on our side, and the link is now used up. Ask for a new one.',
   ),
+  // The link is untouched (the endpoint never ran): the form comes back with it.
+  'expired-form': EXPIRED_FORM_MESSAGE,
 } as const;
 
 /** The reset codes that leave the person without a usable link (the page drops the form). */
