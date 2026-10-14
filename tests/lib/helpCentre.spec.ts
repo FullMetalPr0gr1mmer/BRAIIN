@@ -301,6 +301,36 @@ describe('the guides say only what the admin does', () => {
     expect(guide('maintenance-mode', 'ar')).toContain('خلال دقيقة تقريبًا');
   });
 
+  it('scheduling is described as the editors and the job do it', () => {
+    // The job runs every five minutes (0010) over app.publish_scheduled()'s tables, which are
+    // exactly the editors with a Scheduled for field.
+    expect(source('supabase/migrations/0010_launch_readiness.sql')).toMatch(
+      /cron\.schedule\('publish-scheduled', '\*\/5 \* \* \* \*'/,
+    );
+    // The editors that offer the status with no Scheduled for field: the guide names them.
+    const LABELS: Record<string, string | null> = {
+      team: 'Team',
+      statistics: 'Statistics',
+      certifications: 'Certifications',
+      aiQuestions: null, // the Style-Finder's editors: not this guide's screens
+      aiStyles: null,
+    };
+    const dir = 'src/lib/admin/ui';
+    const noTime = readdirSync(dir)
+      .filter((f) => f.endsWith('.ts') && f !== 'fields.ts')
+      .filter((f) => {
+        const ui = source(`${dir}/${f}`);
+        return ui.includes('STATUS_FIELD') && !ui.includes('SCHEDULED_FIELD');
+      })
+      .map((f) => f.replace(/\.ts$/, ''))
+      .sort();
+    expect(noTime).toEqual(Object.keys(LABELS).sort());
+    const en = guide('saving-and-publishing', 'en');
+    expect(en).toContain('within five minutes of its Scheduled for time');
+    for (const label of Object.values(LABELS)) if (label) expect(en).toContain(label);
+    expect(guide('saving-and-publishing', 'ar')).toContain('خلال خمس دقائق');
+  });
+
   // @@guide-claims
 });
 

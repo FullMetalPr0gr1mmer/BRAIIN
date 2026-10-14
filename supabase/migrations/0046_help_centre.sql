@@ -572,7 +572,7 @@ create or replace function app.help_article_set() returns jsonb
           "t": "ol",
           "x": [
             "Draft: saved, not on the site.",
-            "Scheduled: goes live by itself once its Scheduled for time passes.",
+            "Scheduled: goes live by itself within five minutes of its Scheduled for time. Team, Statistics and Certifications have no Scheduled for field, so there Scheduled keeps an item off the site until you set it to Published.",
             "Published: on the site.",
             "Archived: off the site and kept. Only an Admin can archive or delete."
           ]
@@ -615,7 +615,7 @@ create or replace function app.help_article_set() returns jsonb
           "t": "ol",
           "x": [
             "Draft (مسودة): محفوظ، وليس على الموقع.",
-            "Scheduled (مجدول): يُنشر تلقائيًا عند حلول وقت Scheduled for.",
+            "Scheduled (مجدول): يُنشر تلقائيًا خلال خمس دقائق من وقت Scheduled for. ولا يوجد حقل Scheduled for في Team وStatistics وCertifications، لذا تُبقي حالة Scheduled العنصر هناك خارج الموقع حتى تجعله Published.",
             "Published (منشور): على الموقع.",
             "Archived (مؤرشف): أُزيل من الموقع مع الاحتفاظ به. الأرشفة والحذف للمسؤول (Admin) فقط."
           ]
