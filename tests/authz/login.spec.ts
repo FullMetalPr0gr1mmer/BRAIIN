@@ -239,9 +239,11 @@ describe('a sign-in form post that fails the token check goes back to its page (
     }
   });
 
-  it("keeps what the page had in its own URL: sign-in's `next` (held to /admin), the reset link", async () => {
+  it("keeps what the page had: sign-in's `next` (held to /admin), the reset link (in its cookie)", async () => {
+    const answer = (path: string, fields: Record<string, string>) =>
+      middleware(formPost(path, fields), handler());
     const back = async (path: string, fields: Record<string, string>) =>
-      (await middleware(formPost(path, fields), handler())).headers.get('location');
+      (await answer(path, fields)).headers.get('location');
 
     expect(
       await back('/api/admin/auth/login', { next: '/admin/users?x=1', email: 'a@b.test' }),
@@ -251,12 +253,21 @@ describe('a sign-in form post that fails the token check goes back to its page (
     expect(await back('/api/admin/auth/login', { next: 'https://evil.example/admin' })).toBe(
       '/admin/login?error=expired-form',
     );
-    expect(
-      await back('/api/admin/auth/reset', { token_hash: RESET_TOKEN, password: 'p', confirm: 'p' }),
-    ).toBe(`/admin/reset?token_hash=${RESET_TOKEN}&type=recovery&error=expired-form`);
+    // The reset link's token goes back in the page's own cookie, never into the URL (request
+    // URLs are logged: src/lib/auth/resetToken.ts).
+    const reset = await answer('/api/admin/auth/reset', {
+      token_hash: RESET_TOKEN,
+      password: 'p',
+      confirm: 'p',
+    });
+    expect(reset.headers.get('location')).toBe('/admin/reset?error=expired-form');
+    expect(reset.headers.getSetCookie()).toEqual([
+      `__Secure-braiin-reset=${RESET_TOKEN}; Max-Age=900; Path=/admin/reset; Secure; HttpOnly; SameSite=Strict`,
+    ]);
     // A token of the wrong shape is not carried; nothing typed is, ever.
-    const odd = await back('/api/admin/auth/reset', { token_hash: '<x>', password: 'secret pw' });
-    expect(odd).toBe('/admin/reset?error=expired-form');
+    const odd = await answer('/api/admin/auth/reset', { token_hash: '<x>', password: 'secret pw' });
+    expect(odd.headers.get('location')).toBe('/admin/reset?error=expired-form');
+    expect(odd.headers.getSetCookie()).toEqual([]);
     const forgot = await back('/api/admin/auth/forgot', { email: 'staff@example.test' });
     expect(forgot).toBe('/admin/forgot?status=expired-form');
     expect(forgot).not.toContain('example.test');

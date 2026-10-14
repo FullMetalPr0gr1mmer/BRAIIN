@@ -209,6 +209,27 @@ const reset = (body: Record<string, string> | string, options?: { form?: boolean
 
 const scopes = () => state.rpcs.map((r) => r.scope);
 
+/**
+ * A form failure that leaves the link unspent: back to the page with the code alone in the
+ * URL, the token in the page's own cookie (src/lib/auth/resetToken.ts), never the URL.
+ */
+function expectTokenKept(res: Response, code: string) {
+  expect(res.status).toBe(303);
+  expect(res.headers.get('location')).toBe(`/admin/reset?error=${code}`);
+  expect(res.headers.get('location')).not.toContain(TOKEN);
+  expect(res.headers.getSetCookie()).toEqual([
+    `__Secure-braiin-reset=${TOKEN}; Max-Age=900; Path=/admin/reset; Secure; HttpOnly; SameSite=Strict`,
+  ]);
+}
+
+/** A form answer after which the link is spent (or used): the cookie is dropped. */
+function expectTokenDropped(res: Response) {
+  expect(res.headers.getSetCookie()).toContain(
+    '__Secure-braiin-reset=; Max-Age=0; Path=/admin/reset; Secure; HttpOnly; SameSite=Strict',
+  );
+  expect(res.headers.get('location')).not.toContain('token_hash');
+}
+
 // ── Forgot ───────────────────────────────────────────────────────────────────────
 
 describe('POST /api/admin/auth/forgot while e-mail is not set up (owner item O-2)', () => {
@@ -467,9 +488,7 @@ describe('POST /api/admin/auth/reset: checks before the token is spent', () => {
         { token_hash: TOKEN, password, confirm: password },
         { form: true },
       );
-      expect(res.headers.get('location')).toBe(
-        `/admin/reset?token_hash=${TOKEN}&type=recovery&error=${code}`,
-      );
+      expectTokenKept(res, code);
     }
     expect(state.rpcs).toEqual([]);
     expect(state.calls).toEqual([]);
@@ -487,9 +506,7 @@ describe('POST /api/admin/auth/reset: checks before the token is spent', () => {
       { token_hash: TOKEN, password: NEW_PASSWORD, confirm: 'other password!' },
       { form: true },
     );
-    expect(page.headers.get('location')).toBe(
-      `/admin/reset?token_hash=${TOKEN}&type=recovery&error=mismatch`,
-    );
+    expectTokenKept(page, 'mismatch');
     expect(state.calls).toEqual([]);
   });
 
@@ -511,9 +528,7 @@ describe('POST /api/admin/auth/reset: checks before the token is spent', () => {
       { token_hash: TOKEN, password: NEW_PASSWORD, confirm: NEW_PASSWORD },
       { form: true },
     );
-    expect(page.headers.get('location')).toBe(
-      `/admin/reset?token_hash=${TOKEN}&type=recovery&error=limited`,
-    );
+    expectTokenKept(page, 'limited');
   });
 
   it('fails closed with the limiter down: 503, nothing verified', async () => {
@@ -555,6 +570,8 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
     );
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe('/admin/login?reset=done');
+    // The link is used: any token a failed try left in the page's cookie goes too.
+    expectTokenDropped(res);
   });
 
   it('is audited against the account, in its own tenant, with the sign-out outcome', async () => {
@@ -591,6 +608,7 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
       { form: true },
     );
     expect(page.headers.get('location')).toBe('/admin/reset?error=expired');
+    expectTokenDropped(page);
     expect(state.inserts).toEqual([]);
   });
 
@@ -607,9 +625,7 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
       { token_hash: TOKEN, password: NEW_PASSWORD, confirm: NEW_PASSWORD },
       { form: true },
     );
-    expect(page.headers.get('location')).toBe(
-      `/admin/reset?token_hash=${TOKEN}&type=recovery&error=limited`,
-    );
+    expectTokenKept(page, 'limited');
     expect(state.calls).toEqual(['verify:recovery', 'verify:recovery']);
   });
 
@@ -627,9 +643,7 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
         { token_hash: TOKEN, password: NEW_PASSWORD, confirm: NEW_PASSWORD },
         { form: true },
       );
-      expect(page.headers.get('location')).toBe(
-        `/admin/reset?token_hash=${TOKEN}&type=recovery&error=unavailable`,
-      );
+      expectTokenKept(page, 'unavailable');
     }
     expect(state.calls.every((c) => c === 'verify:recovery')).toBe(true);
     expect(state.inserts).toEqual([]);
@@ -655,6 +669,7 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
       { form: true },
     );
     expect(page.headers.get('location')).toBe('/admin/reset?error=refused');
+    expectTokenDropped(page);
     // An operator can see why, without the password.
     expect(state.logs).toEqual([
       expect.objectContaining({
@@ -708,6 +723,7 @@ describe('POST /api/admin/auth/reset: verify, set, sign out everywhere', () => {
       { form: true },
     );
     expect(page.headers.get('location')).toBe('/admin/reset?error=interrupted');
+    expectTokenDropped(page);
     expect(state.inserts).toEqual([]);
   });
 

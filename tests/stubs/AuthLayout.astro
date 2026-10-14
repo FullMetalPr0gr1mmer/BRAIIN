@@ -6,8 +6,9 @@
 interface Props {
   title: string;
   styles?: readonly string[] | undefined;
+  referrer?: 'strict-origin' | undefined;
 }
-const { title } = Astro.props;
+const { title, referrer } = Astro.props;
 ---
 
-<main data-title={title}><slot /></main>
+<main data-title={title} data-referrer={referrer}><slot /></main>

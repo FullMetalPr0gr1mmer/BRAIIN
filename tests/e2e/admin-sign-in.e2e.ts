@@ -152,6 +152,17 @@ test.describe('without JavaScript', () => {
     expect((await context.cookies()).map((c) => c.name)).toContain('__Host-csrf');
   });
 
+  test("the reset page's own requests send the origin alone as Referer, not its URL", async ({
+    page,
+  }) => {
+    // The URL carries the e-mail's token; `strict-origin` keeps it out of the form post's and
+    // the links' Referer, and, unlike `no-referrer`, still sends the Origin the post needs.
+    await page.goto(`/admin/reset?token_hash=${TOKEN}&type=recovery`);
+    await expect(page.locator('meta[name="referrer"]')).toHaveAttribute('content', 'strict-origin');
+    await page.goto('/admin/login');
+    await expect(page.locator('meta[name="referrer"]')).toHaveCount(0);
+  });
+
   test('a reset link with no usable token offers a new one, not a form', async ({ page }) => {
     for (const path of ['/admin/reset', '/admin/reset?token_hash=x&type=recovery']) {
       await page.goto(path);

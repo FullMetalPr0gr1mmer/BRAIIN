@@ -19,6 +19,12 @@ import {
   resetPageUrl,
 } from '@/lib/auth/recovery';
 import { EXPIRED_FORM, expiredFormLocation } from '@/lib/auth/expiredForm';
+import {
+  RESET_TOKEN_COOKIE,
+  dropResetToken,
+  keepResetToken,
+  resetTokenFrom,
+} from '@/lib/auth/resetToken';
 import { PASSWORD_MIN } from '@schemas/adminPrefs';
 import { PUBLIC_SITE_URL } from '../stubs/astro-env-client';
 
@@ -303,5 +309,46 @@ describe('the recovery limits and link', () => {
 
   it('the reset link lands on the configured origin, never the request host', () => {
     expect(resetPageUrl()).toBe(`${PUBLIC_SITE_URL}/admin/reset`);
+  });
+});
+
+describe("the reset link's token between a form post and its page (F7 review)", () => {
+  const LINK = 'a1b2c3d4'.repeat(7);
+
+  it('rides in a cookie only the reset page gets, short-lived, never readable by script', () => {
+    expect(keepResetToken(LINK)).toBe(
+      `${RESET_TOKEN_COOKIE}=${LINK}; Max-Age=900; Path=/admin/reset; Secure; HttpOnly; SameSite=Strict`,
+    );
+    // Dropped with the same Path, or the browser would keep it.
+    expect(dropResetToken()).toBe(
+      `${RESET_TOKEN_COOKIE}=; Max-Age=0; Path=/admin/reset; Secure; HttpOnly; SameSite=Strict`,
+    );
+    // `__Secure-`: the browser refuses it without Secure. Not `__Host-`, which needs Path=/.
+    expect(RESET_TOKEN_COOKIE.startsWith('__Secure-')).toBe(true);
+  });
+
+  it('only a token of the right shape goes into a header', () => {
+    for (const bad of [
+      '',
+      'x',
+      'a; Path=/',
+      `${LINK}
+Set-Cookie: y=1`,
+      'é'.repeat(20),
+    ]) {
+      expect(() => keepResetToken(bad), bad).toThrow();
+    }
+  });
+
+  it("the page takes the link's own token first, else the cookie's", () => {
+    const params = (search: string) => new URLSearchParams(search);
+    expect(resetTokenFrom(params(`token_hash=${LINK}&type=recovery`), undefined)).toBe(LINK);
+    expect(resetTokenFrom(params(`token_hash=${LINK}&type=recovery`), 'b'.repeat(56))).toBe(LINK);
+    expect(resetTokenFrom(params('error=mismatch'), LINK)).toBe(LINK);
+    // A link that carries a token the page cannot use is not swapped for the cookie's.
+    expect(resetTokenFrom(params(`token_hash=${LINK}`), LINK)).toBeNull();
+    expect(resetTokenFrom(params('token_hash=x&type=recovery'), LINK)).toBeNull();
+    expect(resetTokenFrom(params(''), '<x>')).toBeNull();
+    expect(resetTokenFrom(params(''), undefined)).toBeNull();
   });
 });

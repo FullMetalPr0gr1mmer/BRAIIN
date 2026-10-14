@@ -122,6 +122,30 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     `security_update_password_require_current_password: true`, `password_min_length: 10`
     and `security_update_password_require_reauthentication: true`.
 
+- **A reset link's token in the platform's request logs** (Admin v2 F7; owner item **O-2**).
+  - *The gap.* `wrangler.jsonc` turns observability on, so Workers Logs keep an invocation
+    log per request, with its URL. The reset e-mail's link carries its token in the query
+    string (`/admin/reset?token_hash=…&type=recovery`, the recovery template, launch runbook
+    §2b), so the click, and any mail scanner's prefetch of the link, write a live token into
+    the logs, readable by whoever can read the Cloudflare account's logs, for the link's hour
+    (one use; a reset then signs the account out everywhere). It opens with O-2: until
+    `AUTH_EMAIL_READY` is on, no reset e-mail is sent.
+  - *What the code does* (F7 final review). Nothing else puts the token in a URL: a form
+    post that keeps the link (a mismatch, a short password, a limit, an outage, a page left
+    open too long) goes back to `/admin/reset?error=<code>` with the token in
+    `__Secure-braiin-reset`, a 15-minute HttpOnly, SameSite Strict cookie scoped to
+    `/admin/reset` (`src/lib/auth/resetToken.ts`); and the page sends its Referer as
+    `strict-origin`, so its own form post and links carry the origin alone.
+  - *What closes it* (the owner's choice): accept it as above; or turn Workers Logs'
+    invocation logs off, or sample them (`observability.logs` in `wrangler.jsonc`: the
+    `console` lines the Worker's error path writes are not invocation logs); or put the
+    token in the link's fragment (`#token_hash=…`), which no request carries, read into the
+    form by a small nonced script on the reset page, a later slice since the sign-in screens
+    load no JavaScript today.
+  - *Owner:* Kareem (O-2). *Expiry:* the production deploy that turns `AUTH_EMAIL_READY` on,
+    at the latest 2026-12-31. *Closes when* one of the three is chosen and recorded here.
+
+
 ## The client's TDD, row by row
 
 Checked by the coverage reviewer against the three designs on 2026-10-03

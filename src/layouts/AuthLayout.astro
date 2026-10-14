@@ -24,9 +24,16 @@ interface Props {
   title: string;
   /** Screen stylesheets under /styles/admin/ (src/lib/admin/stylesheets.ts), as AdminLayout. */
   styles?: readonly AdminStylesheet[] | undefined;
+  /**
+   * A stricter Referer for a page whose URL carries a secret (the reset link's token): the
+   * page's own requests, its form post included, then send the origin alone. Not
+   * `no-referrer`, which makes a browser send `Origin: null` on a POST, and Astro's
+   * checkOrigin refuses that as cross-site.
+   */
+  referrer?: 'strict-origin' | undefined;
 }
 
-const { title, styles = [] } = Astro.props;
+const { title, styles = [], referrer } = Astro.props;
 const brand = (await getIdentity(Astro.locals)).brandName.en;
 const host = new URL(PUBLIC_SITE_URL).host.replace(/^www\./, '');
 ---
@@ -38,6 +45,7 @@ const host = new URL(PUBLIC_SITE_URL).host.replace(/^www\./, '');
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>{`${title} · ${brand} Admin`}</title>
     <meta name="robots" content="noindex,nofollow,noarchive,nosnippet" />
+    {referrer && <meta name="referrer" content={referrer} />}
     <link rel="stylesheet" href="/styles/admin.css" />
     {styles.map((sheet) => <link rel="stylesheet" href={`/styles/admin/${sheet}`} />)}
   </head>

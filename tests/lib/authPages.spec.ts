@@ -33,11 +33,17 @@ beforeEach(() => {
 /** What the middleware leaves for a page reached without a session (src/middleware.ts). */
 const LOCALS = { csrfToken: TOKEN, session: null } as Partial<App.Locals> as App.Locals;
 
-async function render(page: 'login' | 'forgot' | 'reset', search = ''): Promise<string> {
+async function render(
+  page: 'login' | 'forgot' | 'reset',
+  search = '',
+  cookie?: string,
+): Promise<string> {
   const { default: Page } = await import(`@/pages/admin/${page}.astro`);
   const container = await AstroContainer.create();
   return container.renderToString(Page, {
-    request: new Request(`${ORIGIN}/admin/${page}${search}`),
+    request: new Request(`${ORIGIN}/admin/${page}${search}`, {
+      headers: cookie === undefined ? {} : { cookie },
+    }),
     locals: LOCALS,
   });
 }
@@ -115,21 +121,25 @@ describe('a form the CSRF check sent back (src/lib/auth/expiredForm.ts)', () => 
   const expired = LOGIN_MESSAGES[EXPIRED_FORM].text;
 
   it.each([
-    ['login', `?error=${EXPIRED_FORM}`],
-    ['forgot', `?status=${EXPIRED_FORM}`],
-    ['reset', `?token_hash=${RESET_TOKEN}&type=recovery&error=${EXPIRED_FORM}`],
-  ] as const)('/admin/%s says so, as an alert, and offers the form again', async (page, search) => {
-    const html = await render(page, search);
-    expect(messages(html)).toEqual([{ role: 'alert', text: expired }]);
-    expect(html).toContain(`action="/api/admin/auth/${page}"`);
-    expect(html).toContain(`name="${CSRF_FIELD_NAME}" value="${TOKEN}"`);
-    expectNoScriptOrInlineStyle(html);
-  });
+    ['login', `?error=${EXPIRED_FORM}`, undefined],
+    ['forgot', `?status=${EXPIRED_FORM}`, undefined],
+    ['reset', `?error=${EXPIRED_FORM}`, `__Secure-braiin-reset=${RESET_TOKEN}`],
+  ] as const)(
+    '/admin/%s says so, as an alert, and offers the form again',
+    async (page, search, cookie) => {
+      const html = await render(page, search, cookie);
+      expect(messages(html)).toEqual([{ role: 'alert', text: expired }]);
+      expect(html).toContain(`action="/api/admin/auth/${page}"`);
+      expect(html).toContain(`name="${CSRF_FIELD_NAME}" value="${TOKEN}"`);
+      expectNoScriptOrInlineStyle(html);
+    },
+  );
 
   it('the reset page keeps the link: the token rides in the form again', async () => {
     const html = await render(
       'reset',
-      `?token_hash=${RESET_TOKEN}&type=recovery&error=${EXPIRED_FORM}`,
+      `?error=${EXPIRED_FORM}`,
+      `__Secure-braiin-reset=${RESET_TOKEN}`,
     );
     expect(html).toContain(`<input type="hidden" name="token_hash" value="${RESET_TOKEN}">`);
     expect(html).not.toContain('Ask for a new link');
@@ -138,5 +148,55 @@ describe('a form the CSRF check sent back (src/lib/auth/expiredForm.ts)', () => 
   it('sign-in keeps where the person was going', async () => {
     const html = await render('login', `?next=%2Fadmin%2Fusers&error=${EXPIRED_FORM}`);
     expect(html).toContain('<input type="hidden" name="next" value="/admin/users">');
+  });
+});
+
+describe('/admin/reset finds the link in its URL or, after a 303, in its cookie (F7 review)', () => {
+  const LINK = 'a1b2c3d4'.repeat(7);
+  const OTHER = 'e5f6a7b8'.repeat(7);
+  const hiddenToken = (html: string) =>
+    /<input type="hidden" name="token_hash" value="([^"]*)">/.exec(html)?.[1] ?? null;
+
+  it("the e-mail's link: the token from the URL", async () => {
+    expect(hiddenToken(await render('reset', `?token_hash=${LINK}&type=recovery`))).toBe(LINK);
+  });
+
+  it('a failure that kept the link: the code in the URL, the token from the cookie', async () => {
+    const html = await render('reset', '?error=mismatch', `__Secure-braiin-reset=${LINK}`);
+    expect(hiddenToken(html)).toBe(LINK);
+    expect(messages(html)).toEqual([{ role: 'alert', text: 'The two passwords do not match.' }]);
+  });
+
+  it('a fresh click wins over a cookie a while back left; a link without a usable token, too', async () => {
+    const cookie = `__Secure-braiin-reset=${OTHER}`;
+    expect(hiddenToken(await render('reset', `?token_hash=${LINK}&type=recovery`, cookie))).toBe(
+      LINK,
+    );
+    // A link the page cannot use is not quietly replaced by the cookie's.
+    const broken = await render('reset', '?token_hash=x&type=recovery', cookie);
+    expect(hiddenToken(broken)).toBeNull();
+    expect(broken).toContain('Ask for a new link');
+  });
+
+  it('no token anywhere, a cookie of the wrong shape, or a spent code: no form', async () => {
+    for (const [search, cookie] of [
+      ['?error=mismatch', undefined],
+      ['?error=mismatch', '__Secure-braiin-reset=%3Cx%3E'],
+      ['?error=refused', `__Secure-braiin-reset=${LINK}`],
+    ] as const) {
+      const html = await render('reset', search, cookie);
+      expect(hiddenToken(html), `${search} ${cookie}`).toBeNull();
+      expect(html).toContain('Ask for a new link');
+    }
+  });
+});
+
+describe("the reset page's URL stays out of its own requests' Referer (F7 review)", () => {
+  it('only /admin/reset asks for strict-origin (never no-referrer: that sends Origin: null)', async () => {
+    const reset = await render('reset', `?token_hash=${'a1b2c3d4'.repeat(7)}&type=recovery`);
+    expect(reset).toContain('data-referrer="strict-origin"');
+    for (const page of ['login', 'forgot'] as const) {
+      expect(await render(page), page).not.toContain('data-referrer');
+    }
   });
 });

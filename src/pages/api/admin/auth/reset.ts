@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { RECOVERY_TOKEN_PATTERN, ResetPasswordSchema, newPasswordProblem } from '@schemas/admin';
 import { readAuthBody, seeOther } from '@/lib/auth/body';
 import { clearSessionCookies } from '@/lib/auth/session';
+import { RESET_PAGE, dropResetToken, keepResetToken } from '@/lib/auth/resetToken';
 import {
   checkRecoveryLimits,
   profileOf,
@@ -38,12 +39,12 @@ import { json } from '@/lib/admin/route';
 // (never the password) go to system_logs, and the person needs a new link.
 //
 // Answers: JSON for a script (200, 400, 422, 429, 503), a 303 for the page's form: to
-// /admin/login?reset=done, or back to /admin/reset with an `error` code (and the token,
-// while it is still unspent).
+// /admin/login?reset=done, or back to /admin/reset with an `error` code. While the token is
+// still unspent it goes back in a cookie scoped to the page, never in the URL (request URLs
+// are logged: src/lib/auth/resetToken.ts); once it is spent, or the password is set, the
+// cookie is dropped.
 
 export const prerender = false;
-
-const RESET_PAGE = '/admin/reset';
 
 type Failure =
   | 'invalid-link'
@@ -66,7 +67,7 @@ const FAILURE_STATUS: Record<Failure, number> = {
   interrupted: 503,
 };
 
-/** The page codes. A failure before the token is spent keeps it in the URL. */
+/** The page codes. A failure before the token is spent keeps it (in the page's cookie). */
 const PAGE_CODE: Record<Failure, string> = {
   'invalid-link': 'expired',
   short: 'short',
@@ -115,13 +116,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const fail = (failure: Failure): Response => {
     if (body.kind === 'json') return json({ ok: false, error: failure }, FAILURE_STATUS[failure]);
-    const params = new URLSearchParams();
-    if (token && TOKEN_KEPT.has(failure)) {
-      params.set('token_hash', token);
-      params.set('type', 'recovery');
-    }
-    params.set('error', PAGE_CODE[failure]);
-    return seeOther(`${RESET_PAGE}?${params}`);
+    const res = seeOther(`${RESET_PAGE}?${new URLSearchParams({ error: PAGE_CODE[failure] })}`);
+    res.headers.append(
+      'set-cookie',
+      token && TOKEN_KEPT.has(failure) ? keepResetToken(token) : dropResetToken(),
+    );
+    return res;
   };
 
   if (!token) return fail('invalid-link');
@@ -214,7 +214,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     detail: { ip: ip ?? null, signedOutEverywhere },
   });
 
-  return body.kind === 'json'
-    ? json({ ok: true, data: { signedOutEverywhere } })
-    : seeOther('/admin/login?reset=done');
+  if (body.kind === 'json') return json({ ok: true, data: { signedOutEverywhere } });
+  const done = seeOther('/admin/login?reset=done');
+  done.headers.append('set-cookie', dropResetToken());
+  return done;
 };

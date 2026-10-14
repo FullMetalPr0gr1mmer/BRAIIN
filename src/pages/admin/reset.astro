@@ -1,9 +1,9 @@
 ---
 import AuthLayout from '@/layouts/AuthLayout.astro';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
-import { RECOVERY_TOKEN_PATTERN } from '@schemas/admin';
 import { PASSWORD_MAX_BYTES, PASSWORD_MIN } from '@schemas/adminPrefs';
 import { RESET_LINK_SPENT, RESET_MESSAGES, messageFor } from '@/lib/auth/messages';
+import { RESET_TOKEN_COOKIE, resetTokenFrom } from '@/lib/auth/resetToken';
 
 export const prerender = false;
 
@@ -14,22 +14,24 @@ export const prerender = false;
 // the token's shape and carries it, in a hidden field, to /api/admin/auth/reset, which
 // verifies it, sets the password and signs the account out everywhere, all on the server
 // (src/lib/auth/recovery.ts). A plain form, no script.
+//
+// After a form post that left the link unspent, the endpoint comes back here with only an
+// `error` code in the URL and the token in a cookie scoped to this page, so the token is
+// not written into one more logged request URL (src/lib/auth/resetToken.ts). And the page's
+// own requests (its form post, its links) send the origin alone as their Referer, never
+// this URL with the e-mail's token in it.
 
 const params = Astro.url.searchParams;
-const rawToken = params.get('token_hash');
-const token =
-  rawToken !== null && params.get('type') === 'recovery' && RECOVERY_TOKEN_PATTERN.test(rawToken)
-    ? rawToken
-    : null;
+const token = resetTokenFrom(params, Astro.cookies.get(RESET_TOKEN_COOKIE)?.value);
 const code = params.get('error');
 const message = messageFor(RESET_MESSAGES, code);
-// No usable link: none in the URL, or the endpoint said it is spent or was refused.
+// No usable link: none in the URL or the cookie, or the endpoint said it is spent or refused.
 const spent = token === null || (code !== null && RESET_LINK_SPENT.has(code));
 const shown = message ?? (spent ? RESET_MESSAGES.expired : null);
 const csrfToken = Astro.locals.csrfToken;
 ---
 
-<AuthLayout title="Choose a new password" styles={['login.css']}>
+<AuthLayout title="Choose a new password" styles={['login.css']} referrer="strict-origin">
   <h1>Choose a new password</h1>
 
   {
