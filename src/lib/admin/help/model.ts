@@ -75,16 +75,24 @@ export function relatedTo(
     .slice(0, limit);
 }
 
+/** Half of a UTF-16 surrogate pair, alone: what `Array.from` yields for a broken pair. */
+const LONE_SURROGATE = /^[\ud800-\udfff]$/;
+
 /**
  * A search as the server runs it (CLAUDE.md §3, the search endpoint's rule): control
- * characters stripped, trimmed, at most 64 characters. Under two characters searches
- * nothing.
+ * characters and lone surrogates stripped, trimmed, at most 64 characters. Under two
+ * characters searches nothing.
+ *
+ * Counted and cut by code points, as PostgreSQL's char_length counts them, never by UTF-16
+ * units: a cut through an emoji would leave half a surrogate pair, which no JSON or URL
+ * encoder can send (the database refuses it as JSON, `encodeURIComponent` throws).
  */
 export function cleanHelpQuery(raw: string): string {
-  return raw
-    .replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
-    .trim()
-    .slice(0, HELP_LIMITS.query);
+  const kept = Array.from(raw.replace(/[\u0000-\u001f\u007f-\u009f]/g, ''))
+    .filter((ch) => !LONE_SURROGATE.test(ch))
+    .join('')
+    .trim();
+  return Array.from(kept).slice(0, HELP_LIMITS.query).join('');
 }
 
 export const MIN_QUERY = 2;

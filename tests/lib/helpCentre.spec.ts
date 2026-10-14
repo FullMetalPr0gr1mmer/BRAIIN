@@ -401,6 +401,22 @@ describe('the shared rules', () => {
     expect(cleanHelpQuery('  pass\u0000word\n ')).toBe('password');
     expect(cleanHelpQuery('x'.repeat(100))).toHaveLength(HELP_LIMITS.query);
   });
+
+  it('a query cut inside a surrogate pair stays well formed (cut by code points)', () => {
+    const emoji = '\u{1F600}';
+    // 63 letters and an emoji are 64 characters: the emoji stays whole.
+    expect(cleanHelpQuery(`${'x'.repeat(63)}${emoji}`)).toBe(`${'x'.repeat(63)}${emoji}`);
+    // One more letter and the emoji is past the cut: none of it is kept.
+    expect(cleanHelpQuery(`${'x'.repeat(64)}${emoji}`)).toBe('x'.repeat(64));
+    // 64 characters, as PostgreSQL's char_length counts them.
+    expect(Array.from(cleanHelpQuery(emoji.repeat(70)))).toHaveLength(HELP_LIMITS.query);
+    // Half a pair anywhere is dropped.
+    expect(cleanHelpQuery('pass\ud83dword\ude00')).toBe('password');
+    for (const raw of [`${'x'.repeat(63)}${emoji}`, emoji.repeat(70), 'a\ud800b', '\udfffab']) {
+      const q = cleanHelpQuery(raw);
+      expect(() => encodeURIComponent(q), JSON.stringify(raw)).not.toThrow();
+    }
+  });
 });
 
 // ── 3. The loaders and the routes ───────────────────────────────────────────────────────
@@ -495,6 +511,14 @@ describe('the loaders', () => {
     expect(results.map((r) => r.slug)).toEqual(
       SET.filter((a) => mayRead('seo', a.caps)).map((a) => a.slug),
     );
+  });
+
+  it('search: a crafted query cut through an emoji reaches the RPC well formed', async () => {
+    const { sb, calls } = fakeDb({ rpc: [] });
+    await searchHelp(sb, auth('admin'), `${'x'.repeat(63)}\u{1F600}tail`);
+    const sent = String(calls.rpc[0]?.args['p_q']);
+    expect(sent).toBe(`${'x'.repeat(63)}\u{1F600}`);
+    expect(() => encodeURIComponent(sent)).not.toThrow();
   });
 
   it('a guide the role may not read is the same as no guide', async () => {
