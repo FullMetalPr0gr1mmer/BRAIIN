@@ -9,7 +9,9 @@
 --   2. pg_net is there (0048 creates it) and the trigger is enabled, AFTER INSERT FOR EACH
 --      ROW, no WHEN, calling the function; the only caller of it, and the only trigger on
 --      leads that makes an HTTP call; no trigger is attached to pg_net's queue;
---   3. what it queues: nothing without the Vault URL; nothing for an http:// URL; nothing
+--   3. what it queues: nothing without the Vault URL, even where the tenant's site_settings
+--      carry 0010's https notify_lead_url and the Vault secret is set (that source, which
+--      Admin and Developer write, is never read); nothing for an http:// URL; nothing
 --      for an https:// URL without the Vault secret; with both, exactly one POST to that URL
 --      whose body is exactly {lead_id, tenant_id} and whose headers are exactly the JSON
 --      content type, a timestamp and `v1=<HMAC-SHA-256 of '<ts>.<lead_id>.<tenant_id>'>`
@@ -37,7 +39,7 @@
 -- the transaction and rolled back with it. CLAUDE.md §3 (Pillar 1), §9, §10.
 
 begin;
-select plan(63);
+select plan(65);
 
 insert into public.tenants (id, name) values
   ('48000000-0000-4000-8000-00000000000a', 'NotifyA'),
@@ -213,6 +215,23 @@ begin
   return next is(_logs(a) - v_l, 0::bigint,
     'no Vault notify_lead_url: nothing is logged per lead (the daily check reports it)');
 
+  -- 0010's source, which Admin and Developer write: tenant A's site_settings name an https
+  -- URL, and the Vault secret 0010 signed with is set. Still no Vault URL, so nothing goes
+  -- anywhere; a function that read site_settings again would queue here. The row stays for
+  -- the rest of the suite, so every later request also shows where the URL comes from.
+  insert into public.site_settings (tenant_id, identity)
+    values (a, jsonb_build_object('notify_lead_url', 'https://staff-chosen.pgtap.invalid/x'))
+  on conflict (tenant_id) do update set identity = excluded.identity;
+  perform _vault('notify_lead_secret', v_secret);
+  v_n := _queued();
+  return next lives_ok(
+    $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
+       ('48000000-0000-4000-8000-0000000000aa', '48000000-0000-4000-8000-00000000000a', 'Ten', 'x', 'hi') $$,
+    'site_settings.identity.notify_lead_url (https) and the secret, no Vault URL: the lead is saved');
+  return next is(_queued() - v_n, 0::bigint,
+    'site_settings.identity.notify_lead_url (https) and the secret, no Vault URL: no request is queued');
+  perform _vault('notify_lead_secret', null);
+
   -- http://, with the secret: the call would travel in plaintext, so nothing is sent.
   perform _vault('notify_lead_url', 'http://notify.pgtap.invalid/api/hooks/notify-lead');
   perform _vault('notify_lead_secret', v_secret);
@@ -276,7 +295,8 @@ begin
     position(v_secret in r.headers::text) = 0 and position(v_secret in r.body::text) = 0
     and position(v_secret in r.url) = 0 and not (r.headers ? 'Authorization'),
     'the queue never holds the secret, and there is no bearer');
-  return next is(r.method || ' ' || r.url, 'POST ' || v_url, 'it is a POST to the Vault URL');
+  return next is(r.method || ' ' || r.url, 'POST ' || v_url,
+    'it is a POST to the Vault URL, not the one in tenant A''s site_settings');
 
   -- other_tenant: tenant B's lead is signed with tenant B's id, and A's id does not verify.
   v_n := _queued();
