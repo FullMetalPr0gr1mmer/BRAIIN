@@ -151,7 +151,7 @@ export interface HeroPresetData {
 /**
  * Per-page hero presets (a CODE-only argument, never stored — lead contract). `content` is
  * the page's built-in copy, verbatim from the design (src/lib/sections/copy/hero.ts, where
- * the page editor finds it too); `data` is its layout.
+ * the page editor, E1, will find it too); `data` is its layout.
  */
 export const HERO_PRESETS = {
   contact: {
@@ -243,7 +243,7 @@ export function ensureContactInquiry(sections: SectionData[]): SectionData[] {
  * design's order. Mirrored by the seeded composition (supabase/seed-data/55-join-page.json;
  * tests/lib/joinPage.spec.ts holds the two together). No band carries content here: the
  * hero's copy and banner layout come from `withHeroPreset(…, 'join')`, the bands' copy from
- * src/lib/sections/join.ts.
+ * src/lib/sections/copy/joinWhy.ts, joinSteps.ts and joinApply.ts.
  */
 export const DEFAULT_JOIN_SECTIONS: SectionData[] = [
   { type: 'hero' },

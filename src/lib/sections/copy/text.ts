@@ -3,8 +3,9 @@
 /**
  * The built-in values of a section type's copy fields, in the shape of its CMS content
  * (packages/schemas/sections.ts): every named field present, each a `{ en, ar }` pair (or
- * an accent range, or a list of them) exactly as an editor would author it. So a page
- * editor can show the built-in text in the fields, and store only what differs.
+ * an accent range, or a list of them) exactly as an editor would author it. So the page
+ * editor (E1, AV-25) can show the built-in text in its fields and store only what differs,
+ * a type's `together` groups whole (copy/index.ts).
  */
 export type BuiltIn<Content, Field extends keyof Content> = {
   readonly [F in Field]-?: Exclude<Content[F], undefined>;

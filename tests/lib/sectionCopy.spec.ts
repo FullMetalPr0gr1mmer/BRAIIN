@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { LocalizedTextSchema } from '@schemas/content';
@@ -225,6 +227,38 @@ describe('builtInLook / builtInContent', () => {
         expect(builtInContent(type, place)).toBe(content[look]);
       }
       if (Object.keys(content).length === 1) expect(Object.keys(content)).toEqual(['default']);
+    }
+  });
+});
+
+describe('the standard says what is built (CLAUDE.md §8, Section engine)', () => {
+  // The registry's readers outside src/lib/sections/copy/: the page editor's door
+  // (builtInContent, SECTION_COPY). Until one exists, the binding standard must not state
+  // the editor's prefill as fact; once one does, it must stop calling the editor unbuilt.
+  const src = join(process.cwd(), 'src');
+  const readers = readdirSync(src, { recursive: true, encoding: 'utf8' })
+    .map((f) => f.split(sep).join('/'))
+    .filter((f) => /\.(ts|tsx|astro)$/.test(f) && !f.startsWith('lib/sections/copy/'))
+    .filter((f) =>
+      /\b(builtInContent|builtInLook|SECTION_COPY)\b/.test(readFileSync(join(src, f), 'utf8')),
+    );
+  const md = readFileSync(join(process.cwd(), 'CLAUDE.md'), 'utf8');
+  const at = md.indexOf('- **Section engine:**');
+  const passage = md.slice(at, md.indexOf('\n', at));
+
+  it('names the storage rule the render spec holds: whole looks and `together` groups', () => {
+    expect(at).toBeGreaterThan(-1);
+    expect(passage).toContain('`together`');
+    expect(passage).toContain('`notVerbatim`');
+    expect(passage).toContain('tests/render/sectionCopy.spec.ts');
+  });
+
+  it('describes the page editor as built only once something reads the registry for it', () => {
+    if (readers.length > 0) {
+      expect(passage, `read by ${readers.join(', ')}`).not.toMatch(/not built yet/);
+    } else {
+      expect(passage).toMatch(/page editor \(E1, AV-25, not built yet\) is to prefill/);
+      expect(passage).not.toMatch(/page editor prefills/);
     }
   });
 });

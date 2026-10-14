@@ -165,7 +165,7 @@ export function builtInLook(type: RenderedSectionType, place: SectionPlace = {})
 
 /**
  * The built-in content of a section in `place`: what it renders with `content: {}`, field
- * for field, which the page editor prefills its fields with.
+ * for field, which the page editor (E1, AV-25) is to prefill its fields with.
  */
 export function builtInContent(
   type: RenderedSectionType,
