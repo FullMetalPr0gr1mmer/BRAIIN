@@ -466,7 +466,7 @@ create or replace function app.help_article_set() returns jsonb
           "x": [
             "Admin: everything, including people and their roles, archiving and deleting, and job applications.",
             "Content Creator: writes and publishes the site's content (services, projects, posts, pages, testimonials and the rest) and manages media. No settings and no leads.",
-            "SEO: SEO defaults, redirects, integrations, and the website and search stats. It can open pages, services, projects and posts without changing their content, and edit media details.",
+            "SEO: SEO defaults, redirects, integrations, and the website and search stats. It can open pages, services, projects and posts without changing their content.",
             "Developer: general settings, maintenance, the theme, media, leads, site health, logs and the activity log. It does not write or publish content, and it cannot see job applications."
           ]
         },
@@ -497,7 +497,7 @@ create or replace function app.help_article_set() returns jsonb
           "x": [
             "Admin (مسؤول): كل شيء، بما في ذلك الأشخاص وأدوارهم، والأرشفة والحذف، وطلبات التوظيف.",
             "Content Creator (صانع محتوى): يكتب محتوى الموقع وينشره (الخدمات والمشاريع والمقالات والصفحات والتوصيات وغيرها) ويدير الوسائط. لا إعدادات ولا عملاء محتملين.",
-            "SEO (تحسين محركات البحث): إعدادات SEO الافتراضية، وإعادة التوجيه، والتكاملات، وإحصاءات الموقع والبحث. يستطيع فتح الصفحات والخدمات والمشاريع والمقالات دون تغيير محتواها، وتعديل بيانات الوسائط.",
+            "SEO (تحسين محركات البحث): إعدادات SEO الافتراضية، وإعادة التوجيه، والتكاملات، وإحصاءات الموقع والبحث. يستطيع فتح الصفحات والخدمات والمشاريع والمقالات دون تغيير محتواها.",
             "Developer (مطوّر): الإعدادات العامة، ووضع الصيانة، والمظهر، والوسائط، والعملاء المحتملون، وصحة الموقع، والسجلات، وسجل النشاط. لا يكتب المحتوى ولا ينشره، ولا يرى طلبات التوظيف."
           ]
         },
@@ -670,7 +670,6 @@ create or replace function app.help_article_set() returns jsonb
           "x": [
             "Every image needs alt text in English and Arabic. Say what the image shows in a sentence, not the file name.",
             "Folders and tags help you find things here. Visitors never see them.",
-            "The SEO role can change an asset's details, such as its alt text, but not the file.",
             "Only an Admin can delete an asset for good, and only once nothing on the site uses it."
           ]
         },
@@ -689,7 +688,6 @@ create or replace function app.help_article_set() returns jsonb
           "x": [
             "تحتاج كل صورة إلى نص بديل بالإنجليزية والعربية. صف ما تُظهره الصورة في جملة، لا اسم الملف.",
             "تساعدك المجلدات والوسوم على إيجاد الملفات هنا، ولا يراها الزوار أبدًا.",
-            "يستطيع دور SEO تغيير بيانات الملف، مثل نصه البديل، لا الملف نفسه.",
             "حذف الملف نهائيًا للمسؤول (Admin) فقط، وفقط حين لا يستخدمه أي جزء من الموقع."
           ]
         },

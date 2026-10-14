@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
-import { CAPABILITIES } from '@/lib/authz/matrix';
+import { CAPABILITIES, ROLE_CAPS } from '@/lib/authz/matrix';
 import { reachableHrefs } from '@/lib/admin/nav';
 import {
   HELP_CAP,
@@ -246,6 +246,18 @@ describe('the guides say only what the admin does', () => {
     expect(guide('personal-data', 'en')).toContain('recorded against your account, with the time');
   });
 
+  it('SEO is not told it edits media details: the media editor needs media.write at full', () => {
+    expect(ROLE_CAPS.seo['media.write']).toBe('meta');
+    expect(source('src/lib/admin/resources/media.ts')).toContain("writeCap: 'media.write'");
+    // The meta-only route (/api/admin/media/meta/[id]) has no screen calling it yet.
+    for (const file of [...codeIn('src/components'), ...codeIn('src/lib/admin')]) {
+      expect(source(file), file).not.toMatch(/media\/meta/);
+    }
+    expect(everything('en')).not.toMatch(/edit media details|SEO role can change an asset/i);
+    expect(everything('ar')).not.toContain('وتعديل بيانات الوسائط');
+    expect(everything('ar')).not.toContain('يستطيع دور SEO تغيير بيانات الملف');
+  });
+
   // @@guide-claims
 });
 
@@ -399,7 +411,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
     ]);
   });
 
-  it('SEO: the basics, media details, SEO and redirects, and stats', () => {
+  it('SEO: the basics, the media library (it opens it), SEO and redirects, and stats', () => {
     expect(shown('seo')).toEqual([
       'finding-your-way',
       'media-library',
