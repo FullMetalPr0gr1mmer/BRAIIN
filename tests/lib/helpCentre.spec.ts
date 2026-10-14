@@ -213,6 +213,42 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
   });
 });
 
+// ── 1c. The guides say only what the admin does ──────────────────────────────────────────
+// Each claim a guide makes about the admin is held to the code that makes it true (U16's
+// pre-merge review), so a change to that code fails here until the guide is rewritten.
+
+describe('the guides say only what the admin does', () => {
+  const guide = (slug: string, lang: 'en' | 'ar') => {
+    const article = SET.find((a) => a.slug === slug);
+    if (!article) throw new Error(`no guide ${slug}`);
+    return textsOf(article, lang).join('\n');
+  };
+  const everything = (lang: 'en' | 'ar') => SET.map((a) => textsOf(a, lang).join('\n')).join('\n');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  /** Every .ts, .tsx and .astro file below a directory, as paths from the repository root. */
+  const codeIn = (dir: string) =>
+    (readdirSync(dir, { recursive: true, encoding: 'utf8' }) as string[])
+      .map((f) => f.replaceAll('\\', '/'))
+      .filter((f) => /\.(ts|tsx|astro)$/.test(f))
+      .map((f) => `${dir}/${f}`);
+
+  it('the activity log shows when, the role and the action, never who: no guide says who', () => {
+    // The screen's columns (src/pages/admin/audit.astro): the acting account is stored with
+    // each row, never shown.
+    const audit = source('src/pages/admin/audit.astro');
+    expect(audit).toContain("{ key: 'actor_role', label: 'Role' }");
+    expect(audit).not.toMatch(/actor_id|display_name|actor_name/);
+    expect(everything('en')).not.toMatch(/\bwho (looked|did|changed)\b|with your name/i);
+    for (const phrase of ['من اطلع', 'من فعل', 'من غيّر', 'باسمك']) {
+      expect(everything('ar')).not.toContain(phrase);
+    }
+    expect(guide('site-health-and-logs', 'en')).toContain('each against the account that made it');
+    expect(guide('personal-data', 'en')).toContain('recorded against your account, with the time');
+  });
+
+  // @@guide-claims
+});
+
 describe('the schema and the migration state the same rules', () => {
   const sql = readFileSync(`${MIGRATIONS}/0046_help_centre.sql`, 'utf8');
   // PostgreSQL's regex has no `(?:` and needs no escaped `/`; otherwise the same text.

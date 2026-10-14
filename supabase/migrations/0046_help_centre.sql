@@ -858,7 +858,7 @@ create or replace function app.help_article_set() returns jsonb
         {
           "t": "ol",
           "x": [
-            "Contact details are stored encrypted. They are shown one person at a time, only when you ask, and each look is logged with your name.",
+            "Contact details are stored encrypted. They are shown one person at a time, only when you ask, and each look is recorded against your account, with the time.",
             "Visits are counted only for visitors who accept analytics cookies on the site.",
             "Leads are deleted after 24 months by default, spam after 30 days. Job applications go after 12 months, or 24 if the applicant agreed to be kept for future roles.",
             "Exports and CV downloads are logged too, and exports are limited per hour.",
@@ -867,7 +867,7 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "tip",
-          "x": "Reveal contact details only when you are about to get in touch. The activity log shows who looked, and when."
+          "x": "Reveal contact details only when you are about to get in touch. Each look is recorded against the account that made it, and the activity log lists it with its time and that account's role."
         }
       ],
       "ar": [
@@ -878,7 +878,7 @@ create or replace function app.help_article_set() returns jsonb
         {
           "t": "ol",
           "x": [
-            "تُحفظ بيانات التواصل مشفّرة، وتُعرض لشخص واحد في كل مرة وعند طلبك فقط، ويُسجَّل كل اطلاع باسمك.",
+            "تُحفظ بيانات التواصل مشفّرة، وتُعرض بيانات شخص واحد في كل مرة وعند طلبك فقط، ويُسجَّل كل اطلاع على حسابك مع وقته.",
             "لا تُحتسب الزيارات إلا لمن يقبل من الزوار ملفات تعريف الارتباط الخاصة بالتحليلات.",
             "يُحذف العملاء المحتملون بعد 24 شهرًا افتراضيًا، والرسائل المزعجة بعد 30 يومًا. وتُحذف طلبات التوظيف بعد 12 شهرًا، أو 24 شهرًا إذا وافق المتقدم على الاحتفاظ بطلبه لوظائف مستقبلية.",
             "يُسجَّل التصدير وتنزيل السير الذاتية أيضًا، ولعمليات التصدير حد في الساعة.",
@@ -887,7 +887,7 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "tip",
-          "x": "اكشف بيانات التواصل فقط حين توشك على التواصل، ويُظهر سجل النشاط من اطلع عليها ومتى."
+          "x": "اكشف بيانات التواصل فقط حين توشك على التواصل. يُسجَّل كل اطلاع على الحساب الذي قام به، ويعرضه سجل النشاط مع وقته ودور ذلك الحساب."
         }
       ]
     }
@@ -1089,12 +1089,12 @@ create or replace function app.help_article_set() returns jsonb
           "x": [
             "Each measure has a budget. Over budget means visitors wait longer than they should, which is worth raising with whoever looks after the site's code.",
             "Errors lists problems the site ran into. An Admin can clear entries older than 30 days.",
-            "The activity log records who did what: saves, publishes, reveals of contact details and exports. Nobody can edit or delete it, not even an Admin."
+            "The activity log records saves, publishes, reveals of contact details and exports, each against the account that made it, with the time. The screen lists the time, the role, the action and what it touched. Nobody can edit or delete it, not even an Admin."
           ]
         },
         {
           "t": "tip",
-          "x": "To find out who changed something, and when, look in the activity log."
+          "x": "To find out when something changed, and which role changed it, look in the activity log."
         }
       ],
       "ar": [
@@ -1107,12 +1107,12 @@ create or replace function app.help_article_set() returns jsonb
           "x": [
             "لكل مقياس حد مستهدف، وتجاوزه يعني أن الزوار ينتظرون أكثر مما ينبغي، ويستحق ذلك إبلاغ المسؤول عن برمجة الموقع.",
             "يعرض Errors المشكلات التي واجهها الموقع، ويستطيع المسؤول (Admin) مسح الإدخالات الأقدم من 30 يومًا.",
-            "يسجّل سجل النشاط من فعل ماذا: الحفظ والنشر وكشف بيانات التواصل والتصدير. ولا يستطيع أحد تعديله أو حذفه، ولا حتى المسؤول (Admin)."
+            "يسجّل سجل النشاط الحفظ والنشر وكشف بيانات التواصل والتصدير، كلًّا على الحساب الذي قام به مع وقته. وتعرض الشاشة الوقت والدور والإجراء وما تناوله. ولا يستطيع أحد تعديله أو حذفه، ولا حتى المسؤول (Admin)."
           ]
         },
         {
           "t": "tip",
-          "x": "لمعرفة من غيّر شيئًا ومتى، ارجع إلى سجل النشاط."
+          "x": "لمعرفة متى تغيّر شيء وأي دور غيّره، ارجع إلى سجل النشاط."
         }
       ]
     }
