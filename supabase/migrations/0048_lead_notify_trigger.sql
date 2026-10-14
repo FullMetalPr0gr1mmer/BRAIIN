@@ -207,9 +207,15 @@ create trigger leads_notify after insert on public.leads
 -- and then lost (the worker down past the Worker's 300 s window, a 401 from a secret that
 -- differs between Vault and the Worker, the Worker failing). The Worker's daily cron
 -- (src/lib/cron/jobs.ts, `lead-notify`) calls this and logs the count. A miss is a lead
--- created between 24 hours and 15 minutes ago with no notification_log row: the hook writes
--- one row for every lead it accepts, recipients or not (src/pages/api/hooks/notify-lead.ts),
--- so a lead nobody was eligible to hear about is not a miss. Null while notifications are
+-- created from 24 hours 30 minutes to 15 minutes before the call with no notification_log
+-- row: the hook writes one row for every lead it accepts, recipients or not
+-- (src/pages/api/hooks/notify-lead.ts), so a lead nobody was eligible to hear about is not
+-- a miss. The newest 15 minutes are left to the next run (a request may still be on its
+-- way). The window is 24 h 15 min wide for a check that runs once a day, so each run's
+-- window reaches 15 minutes into the one before: no lead falls between two runs, even one
+-- that starts up to 15 minutes later than the day before (a 24-hour window would have
+-- skipped the 15 minutes before each run, every day), and a miss in that overlap is
+-- counted on both days, which a warning can bear. Null while notifications are
 -- not configured (no https Vault URL or no secret): then nothing was meant to be sent, and
 -- the cron logs that instead. Counted across tenants, since the URL is the deployment's.
 -- The first check after notifications are switched on may count leads that arrived in the
@@ -236,7 +242,7 @@ begin
   end if;
   return (select pg_catalog.count(*)::pg_catalog.int4
             from public.leads l
-           where l.created_at >= pg_catalog.now() - '24 hours'::pg_catalog.interval
+           where l.created_at >= pg_catalog.now() - '24 hours 30 minutes'::pg_catalog.interval
              and l.created_at < pg_catalog.now() - '15 minutes'::pg_catalog.interval
              and not exists (select 1 from public.notification_log n where n.lead_id = l.id));
 end $$;

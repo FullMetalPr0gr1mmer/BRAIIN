@@ -23,8 +23,9 @@
 --      system_logs row (warn, source leads_notify, a fixed message, detail {} or
 --      {sqlstate}); not configured, and announced, write none;
 --   6. the daily check, public.lead_notify_misses(): a definer for the service role alone;
---      null while not configured; once configured, the leads 15 minutes to 24 hours old
---      with no notification_log row;
+--      null while not configured; once configured, the leads created from 24 h 30 min to
+--      15 min before it with no notification_log row, both edges checked: so one day's run
+--      reaches into the window of the day before, and no lead falls between them;
 --   7. a trigger attached to pg_net's queue (PUBLIC holds TRIGGER on it, EXC-012, and the
 --      queue is written as the function's owner): nothing is queued, the attached trigger
 --      never runs, the lead is saved and one system_logs row says why.
@@ -36,7 +37,7 @@
 -- the transaction and rolled back with it. CLAUDE.md §3 (Pillar 1), §9, §10.
 
 begin;
-select plan(60);
+select plan(63);
 
 insert into public.tenants (id, name) values
   ('48000000-0000-4000-8000-00000000000a', 'NotifyA'),
@@ -383,13 +384,40 @@ begin
     ('48000000-0000-4000-8000-0000000000c3', b, 'Yesterday', 'x', 'hi', now() - interval '25 hours');
   set local role service_role;
   return next is(public.lead_notify_misses(), v_m + 1,
-    'the daily check: a lead under 15 minutes old or over a day old is not counted');
+    'the daily check: a lead 5 minutes old or 25 hours old is not counted');
   reset role;
   insert into public.notification_log (tenant_id, lead_id, channel, status)
     values (a, '48000000-0000-4000-8000-0000000000c1', 'inbox', 'queued');
   set local role service_role;
   return next is(public.lead_notify_misses(), v_m,
     'the daily check: a lead with its notification_log row is not a miss');
+  reset role;
+  -- The window's edges. now() is this transaction's start, the same in the inserts and in
+  -- the function, so an edge can be hit to the microsecond.
+  insert into public.leads (id, tenant_id, name, email_enc, message, created_at) values
+    ('48000000-0000-4000-8000-0000000000c4', a, 'Day and ten', 'x', 'hi',
+     now() - interval '24 hours 10 minutes');
+  set local role service_role;
+  return next is(public.lead_notify_misses(), v_m + 1,
+    'the daily check: a lead 24 h 10 min old is counted (the run a day earlier saw it as 10 minutes old, too young to count)');
+  reset role;
+  insert into public.leads (id, tenant_id, name, email_enc, message, created_at) values
+    ('48000000-0000-4000-8000-0000000000c5', b, 'Oldest edge', 'x', 'hi',
+     now() - interval '24 hours 30 minutes'),
+    ('48000000-0000-4000-8000-0000000000c6', b, 'Past the edge', 'x', 'hi',
+     now() - interval '24 hours 30 minutes' - interval '1 microsecond');
+  set local role service_role;
+  return next is(public.lead_notify_misses(), v_m + 2,
+    'the daily check''s older edge: a lead exactly 24 h 30 min old is counted, one a microsecond older is not');
+  reset role;
+  insert into public.leads (id, tenant_id, name, email_enc, message, created_at) values
+    ('48000000-0000-4000-8000-0000000000c7', a, 'Newest edge', 'x', 'hi',
+     now() - interval '15 minutes'),
+    ('48000000-0000-4000-8000-0000000000c8', a, 'Just past it', 'x', 'hi',
+     now() - interval '15 minutes' - interval '1 microsecond');
+  set local role service_role;
+  return next is(public.lead_notify_misses(), v_m + 3,
+    'the daily check''s newer edge: a lead exactly 15 min old is not counted yet, one a microsecond older is');
   reset role;
 
   -- 7. Last, because only the table's owner may drop a trigger, so this one stays until the

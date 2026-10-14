@@ -121,9 +121,10 @@ async function sweepMediaOrphans(): Promise<void> {
 // Leads no notification reached (H9, 0048): the trigger logs what it could not queue as it
 // happens; this catches what was queued and then lost (the pg_net worker late past the
 // hook's 300 s window, a Vault secret that differs from NOTIFY_LEAD_SECRET, the hook
-// failing). public.lead_notify_misses() counts the leads 15 minutes to a day old with no
-// notification_log row, or answers null while notifications are not configured. One line,
-// with the count only.
+// failing). public.lead_notify_misses() counts the leads created from 24 h 30 min to 15 min
+// before the call with no notification_log row (so each day's run reaches 15 minutes into
+// the day before's, and no lead falls between two runs), or answers null while
+// notifications are not configured. One line, with the count only.
 async function checkLeadNotifications(): Promise<void> {
   const { data, error } = await serviceClient().rpc('lead_notify_misses');
   if (error) throw new Error(error.message);
