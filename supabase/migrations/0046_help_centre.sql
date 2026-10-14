@@ -965,7 +965,7 @@ create or replace function app.help_article_set() returns jsonb
       "en": [
         {
           "t": "p",
-          "x": "Maintenance mode puts a short notice in front of the public site while you fix something. It takes effect at once, and the admin keeps working as usual."
+          "x": "Maintenance mode puts a short notice in front of the public site while you fix something. It takes effect within about a minute, and the admin keeps working as usual."
         },
         {
           "t": "ol",
@@ -984,7 +984,7 @@ create or replace function app.help_article_set() returns jsonb
       "ar": [
         {
           "t": "p",
-          "x": "يضع وضع الصيانة إشعارًا قصيرًا أمام الموقع العام أثناء إصلاحك لشيء ما. يسري فورًا، وتستمر لوحة الإدارة في العمل كالمعتاد."
+          "x": "يضع وضع الصيانة إشعارًا قصيرًا أمام الموقع العام أثناء إصلاحك لشيء ما. يسري خلال دقيقة تقريبًا، وتستمر لوحة الإدارة في العمل كالمعتاد."
         },
         {
           "t": "ol",

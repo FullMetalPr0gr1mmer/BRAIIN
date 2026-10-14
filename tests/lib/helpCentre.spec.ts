@@ -290,6 +290,17 @@ describe('the guides say only what the admin does', () => {
     expect(everything('ar')).not.toContain('المؤسسة');
   });
 
+  it('maintenance takes effect within about a minute: the flag is read from KV', () => {
+    // KV is eventually consistent: a write reaches every location within about a minute.
+    expect(source('src/lib/http/maintenance.ts')).toContain(
+      "MAINTENANCE_KV_KEY = 'site:maintenance'",
+    );
+    const en = guide('maintenance-mode', 'en');
+    expect(en).toContain('within about a minute');
+    expect(en).not.toMatch(/at once/);
+    expect(guide('maintenance-mode', 'ar')).toContain('خلال دقيقة تقريبًا');
+  });
+
   // @@guide-claims
 });
 
