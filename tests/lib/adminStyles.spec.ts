@@ -299,6 +299,7 @@ describe('admin.css keeps the hooks the markup renders', () => {
     ...walk('src/pages/admin'),
     ...walk('src/lib/admin'),
     'src/layouts/AdminLayout.astro',
+    'src/layouts/AuthLayout.astro',
   ];
 
   /** The classes one file renders. */
@@ -396,7 +397,18 @@ describe('admin.css keeps the hooks the markup renders', () => {
         [...new Set((renderers[sheet] ?? []).flatMap(({ file }) => pagesOf(file)))].sort();
       expect(pagesFor('help.css')).toEqual(['src/pages/admin/help.astro']);
       expect(pagesFor('kit.css')).toEqual(['src/pages/admin/kit.astro']);
-      expect(pagesFor('login.css')).toEqual(['src/pages/admin/login.astro']);
+      // The sign-in screens (F7) render login.css's classes in their pages and in the shell
+      // they share, src/layouts/AuthLayout.astro, which the walk traces to all three.
+      expect(pagesFor('login.css')).toEqual([
+        'src/pages/admin/forgot.astro',
+        'src/pages/admin/login.astro',
+        'src/pages/admin/reset.astro',
+      ]);
+      expect(pagesOf('src/layouts/AuthLayout.astro').sort()).toEqual([
+        'src/pages/admin/forgot.astro',
+        'src/pages/admin/login.astro',
+        'src/pages/admin/reset.astro',
+      ]);
       expect(pagesFor('search.css')).toEqual(['src/pages/admin/search.astro']);
       expect(pagesFor('personal.css')).toEqual([
         'src/pages/admin/account.astro',

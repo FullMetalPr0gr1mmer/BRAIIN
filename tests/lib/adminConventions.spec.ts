@@ -8,9 +8,10 @@ import { describe, expect, it } from 'vitest';
 //   no <script> in an admin PAGE   Admin behaviour lives in islands and src/lib/admin, where
 //                                  it is bundled into the admin-* chunks and weighed by the
 //                                  admin budget. A page script is a separate chunk on its
-//                                  own path (login.astro's pulls the whole admin-ui chunk
-//                                  onto the sign-in screen). Grandfathered: login.astro,
-//                                  until sign-in v2 (F7) moves its script into an enhancer.
+//                                  own path (login.astro's once pulled the whole admin-ui
+//                                  chunk onto the sign-in screen). None is grandfathered
+//                                  since sign-in v2 (F7) made the sign-in screens zero-JS
+//                                  forms; their shell, AuthLayout, carries none either.
 //   no style= in admin markup      style-src has no 'unsafe-inline': a style attribute in
 //                                  server HTML is dead, and React's style={{…}} emits one
 //                                  during the server render. Dynamic values use data-*
@@ -54,16 +55,17 @@ function code(path: string): string {
 }
 
 const ADMIN_PAGES = walk(join(ROOT, 'src/pages/admin'), ['.astro']);
+/** The sign-in screens' shell (Admin v2 F7): zero JavaScript, like the pages it frames. */
+const AUTH_LAYOUT = join(ROOT, 'src/layouts/AuthLayout.astro');
 const ADMIN_MARKUP = [
   ...ADMIN_PAGES,
   ...walk(join(ROOT, 'src/components/admin'), ['.tsx', '.ts', '.astro']),
   join(ROOT, 'src/layouts/AdminLayout.astro'),
+  AUTH_LAYOUT,
 ];
 
 /** Pages allowed a <script> until the named slice removes it. Only ever shrinks. */
-const SCRIPT_GRANDFATHERED: Record<string, string> = {
-  'src/pages/admin/login.astro': 'F7 (sign-in v2)',
-};
+const SCRIPT_GRANDFATHERED: Record<string, string> = {};
 
 describe('admin pages carry no <script>', () => {
   it('outside the grandfathered pages', () => {
@@ -76,6 +78,17 @@ describe('admin pages carry no <script>', () => {
   it('and a grandfathered page that no longer needs its entry loses it', () => {
     for (const file of Object.keys(SCRIPT_GRANDFATHERED)) {
       expect(/<script\b/i.test(code(join(ROOT, file))), `${file}: drop its entry`).toBe(true);
+    }
+  });
+
+  it("nor does the sign-in screens' shell, so they load no JavaScript at all", () => {
+    // A visitor with no session reaches only these pages, and their forms post as plain
+    // HTML (src/lib/auth/body.ts). AdminLayout's script serves the signed-in shell.
+    expect(/<script\b/i.test(code(AUTH_LAYOUT))).toBe(false);
+    for (const name of ['login', 'forgot', 'reset']) {
+      const page = read(join(ROOT, `src/pages/admin/${name}.astro`));
+      expect(page, name).toMatch(/import AuthLayout from '@\/layouts\/AuthLayout\.astro'/);
+      expect(page, name).not.toMatch(/\bclient:(?:load|idle|visible|media|only)\b/);
     }
   });
 });

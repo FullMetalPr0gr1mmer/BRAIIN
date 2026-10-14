@@ -126,6 +126,49 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     `security_update_password_require_current_password: true`, `password_min_length: 10`
     and `security_update_password_require_reauthentication: true`.
 
+- **A reset link's token in the platform's request logs** (Admin v2 F7; owner item **O-2**).
+  - *The gap.* `wrangler.jsonc` turns observability on, so Workers Logs keep an invocation
+    log per request, with its URL. The reset e-mail's link carries its token in the query
+    string (`/admin/reset?token_hash=…&type=recovery`, the recovery template, launch runbook
+    §2b), so the click, and any mail scanner's prefetch of the link, write a live token into
+    the logs, readable by whoever can read the Cloudflare account's logs, for the link's hour
+    (one use; a reset then signs the account out everywhere). It opens with O-2: until
+    `AUTH_EMAIL_READY` is on, no reset e-mail is sent.
+  - *What the code does* (F7 final review). Nothing else puts the token in a URL: a form
+    post that keeps the link (a mismatch, a short password, a limit, an outage, a page left
+    open too long) goes back to `/admin/reset?error=<code>` with the token in
+    `__Secure-braiin-reset`, a 15-minute HttpOnly, SameSite Strict cookie scoped to
+    `/admin/reset` (`src/lib/auth/resetToken.ts`), which the page drops as soon as the token is in its form, so the browser does not offer the link to whoever uses it next; and the page sends its Referer as
+    `strict-origin`, so its own form post and links carry the origin alone.
+  - *What closes it* (the owner's choice): accept it as above; or turn Workers Logs'
+    invocation logs off, or sample them (`observability.logs` in `wrangler.jsonc`: the
+    `console` lines the Worker's error path writes are not invocation logs); or put the
+    token in the link's fragment (`#token_hash=…`), which no request carries, read into the
+    form by a small nonced script on the reset page, a later slice since the sign-in screens
+    load no JavaScript today.
+  - *Owner:* Kareem (O-2). *Expiry:* the production deploy that turns `AUTH_EMAIL_READY` on,
+    at the latest 2026-12-31. *Closes when* one of the three is chosen and recorded here.
+
+- **A copied session cookie outlives the 7 days** (Admin v2 F7; owner item **O-24**).
+  - *The gap.* "Keep me signed in" bounds the session cookie: Max-Age 7 days, rewritten at
+    each token refresh, or a browser-session cookie when unticked. The refresh token inside
+    it is Supabase Auth's, and no environment sets Auth's own session limits, so the session
+    has no end of its own until a sign-out or a password reset revokes it. A cookie value
+    copied off a machine (devtools on an unlocked screen, a backup, malware) keeps working
+    after the browser has dropped its own copy; so does a session-only cookie a browser
+    restores after a restart. CLAUDE.md §3 states exactly this.
+  - *What the code does.* Every lifetime the Worker writes is its own (not @supabase/ssr's
+    400 days, `src/lib/auth/session.ts`); a sign-out revokes the session at the auth server;
+    a reset signs the account out everywhere; `tests/lib/session.spec.ts` holds §3's sentence
+    to the cookie's number and this residual.
+  - *What closes it* (launch runbook §2c, staging and production): the auth server's
+    inactivity timeout at 168 hours (the cookie's 7 days), and optionally a time-box, a
+    paid-plan setting. Local stacks set neither, so CI cannot prove it.
+  - *Owner:* Kareem (O-24). *Expiry:* 2026-12-31, or the move to a plan that offers the
+    setting, whichever is first. *Closes when* both projects' Authentication session settings
+    show the inactivity timeout (and the time-box, if chosen).
+
+
 ## The client's TDD, row by row
 
 Checked by the coverage reviewer against the three designs on 2026-10-03

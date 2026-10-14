@@ -38,6 +38,13 @@ const ROUTES = [
   // The privacy notice: its rights lines are mailto: links inside the prose (J-17)
   '/privacy',
   '/ar/privacy',
+  // Sign-in v2 (Admin v2 F7): the three screens a visitor without a session reaches, with
+  // a failed sign-in's message, the reset form, and a spent link
+  '/admin/login',
+  '/admin/login?error=invalid',
+  '/admin/forgot',
+  '/admin/reset?token_hash=a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4&type=recovery',
+  '/admin/reset?error=expired',
 ];
 
 // WCAG 2.0/2.1/2.2 level A + AA rule tags.

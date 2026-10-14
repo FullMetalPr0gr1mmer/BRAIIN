@@ -13,14 +13,16 @@ import { getRedirectMap, lookupRedirect, redirectResponse } from '@/lib/http/red
 import { checkImageRequest, imageGuardResponse, isImageEndpoint } from '@/lib/http/imageGuard';
 import {
   isSameOrigin,
+  csrfHeaderToken,
   csrfTokenMatches,
   generateCsrfToken,
   CSRF_COOKIE_NAME,
-  CSRF_HEADER_NAME,
   CSRF_FIELD_NAME,
 } from '@/lib/http/csrf';
 import { createSessionClient, clearSessionCookies, HOST_COOKIE_BASE } from '@/lib/auth/session';
 import { resolveAuthContext } from '@/lib/auth/context';
+import { expiredSignInForm, tooLargeSignInForm } from '@/lib/auth/expiredForm';
+import { PRIVATE_FORM_BODY_LIMIT, bodyWithinLimit } from '@/lib/auth/bodyLimit';
 
 // The PRIMARY enforcement point for: maintenance pre-cache check → per-request CSP nonce →
 // strict security headers → admin session + CSRF → render → authored redirects on a 404.
@@ -46,12 +48,60 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const REDIRECTABLE_METHODS = new Set(['GET', 'HEAD']);
 
 /**
- * The only two private paths reachable without a session — the login form and the
- * endpoint it posts to. Both still get the CSRF check and `no-store`; what they skip is
- * the authentication gate, which they obviously cannot satisfy.
+ * The only private paths reachable without a session: the three sign-in screens (sign
+ * in, forgot password, reset password: Admin v2 F7) and the endpoints their forms post
+ * to. All six still get the CSRF check and `no-store`; what they skip is the
+ * authentication gate, which they obviously cannot satisfy.
  */
 const LOGIN_PATH = '/admin/login';
-const LOGIN_API_PATH = '/api/admin/auth/login';
+const PRE_AUTH_PATHS: ReadonlySet<string> = new Set([
+  LOGIN_PATH,
+  '/admin/forgot',
+  '/admin/reset',
+  '/api/admin/auth/login',
+  '/api/admin/auth/forgot',
+  '/api/admin/auth/reset',
+]);
+
+/**
+ * The path the pre-auth list is read with. `trailingSlash: 'ignore'` (astro.config.mjs)
+ * routes `/api/admin/auth/login/` to the sign-in endpoint too, so the list, and the body
+ * limit it brings, must not depend on the slash.
+ */
+function routeKey(pathname: string): string {
+  return pathname.length > 1 ? pathname.replace(/\/+$/, '') || '/' : pathname;
+}
+
+const isAdminPath = (path: string): boolean => path === '/admin' || path.startsWith('/admin/');
+const isApiPath = (path: string): boolean => path.startsWith('/api/');
+const isAdminApiPath = (path: string): boolean => path.startsWith('/api/admin/');
+
+// What a request is (admin, API, private, pre-auth) is read from the path the middleware
+// sees AND from the route Astro matched (F7, third review), because the two can differ.
+// Astro 7.3.5's router matches the decoded path as it is (core/routing/match-request.js,
+// called by the adapter before the render; when that finds nothing, FetchState matches it
+// again with doubled slashes collapsed), while `url.pathname` has also been through the
+// URL setter (core/fetch/fetch-state.js), which resolves dot segments and reads `\` as `/`.
+// A dynamic segment takes `..\auth\login` whole, so `/api/admin/leads/..%5Cauth%5Clogin`
+// runs the lead endpoint while `url.pathname` reads `/api/admin/auth/login`, a pre-auth path;
+// `/api/admin/leads/..%5C..%5C..` reads `/`, not private at all; and
+// `/admin/blog/..%5C..%5C..%5Cx` renders an editor's shell under `/x`. Nothing leaked (the
+// API kernel refuses a request with no session client, and the pages load their data through
+// it), but the session gate, the CSRF check and `no-store` were the kernel's to supply. So a
+// request is private when either says so, and pre-auth only when both do; the route needs no
+// slash rule (it is `/admin/login` with or without one). `routePattern` is set on every
+// request Astro renders (the 404 page's own, `/404`, when nothing matched); a context without
+// one (a test's) is read by its path alone, and is never pre-auth.
+
+/**
+ * A form post the CSRF check reads for its token: urlencoded, no token header. The one test
+ * for both the bound on that read (below) and the read itself (`submittedCsrf`), so an empty
+ * header cannot skip the one and still get the other (F7 review).
+ */
+function tokenInBody(request: Request): boolean {
+  if (csrfHeaderToken(request) !== null) return false;
+  return (request.headers.get('content-type') ?? '').includes('application/x-www-form-urlencoded');
+}
 
 function jsonError(status: number, error: string): Response {
   return new Response(JSON.stringify({ ok: false, error }), {
@@ -68,11 +118,9 @@ function jsonError(status: number, error: string): Response {
  * find a 64-byte token trades real memory for nothing.
  */
 async function submittedCsrf(request: Request): Promise<string | null> {
-  const header = request.headers.get(CSRF_HEADER_NAME);
-  if (header) return header;
-
-  const contentType = request.headers.get('content-type') ?? '';
-  if (!contentType.includes('application/x-www-form-urlencoded')) return null;
+  const header = csrfHeaderToken(request);
+  if (header !== null) return header;
+  if (!tokenInBody(request)) return null;
   try {
     const form = await request.clone().formData();
     const value = form.get(CSRF_FIELD_NAME);
@@ -85,9 +133,11 @@ async function submittedCsrf(request: Request): Promise<string | null> {
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url, locals, cookies } = context;
 
-  const isAdmin = url.pathname === '/admin' || url.pathname.startsWith('/admin/');
-  const isApi = url.pathname.startsWith('/api/');
-  const isAdminApi = url.pathname.startsWith('/api/admin/');
+  // The route Astro matched, beside the path (see "What a request is" above).
+  const matched: string = context.routePattern ?? '';
+  const isAdmin = isAdminPath(url.pathname) || isAdminPath(matched);
+  const isApi = isApiPath(url.pathname) || isApiPath(matched);
+  const isAdminApi = isAdminApiPath(url.pathname) || isAdminApiPath(matched);
   // /healthz must answer during maintenance. §10 has external synthetic monitors hitting
   // it every 60s; if it 503s the moment maintenance is switched on, planned maintenance
   // pages the on-call — training everyone to ignore the alert that matters.
@@ -188,23 +238,53 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
     locals.csrfToken = csrfToken;
 
+    // Authentication gate. Authorization (which capability, which role) is the API
+    // kernel's job — this only answers "is there a verified session at all".
+    const route = routeKey(url.pathname);
+    // Both the path and the route Astro matched must be one of the six: a path that reads as
+    // the sign-in endpoint but routes to a lead's is not pre-auth (see "What a request is").
+    const preAuth = PRE_AUTH_PATHS.has(route) && PRE_AUTH_PATHS.has(matched);
+    const unauthenticated = (): Response => {
+      if (isAdminApi) return jsonError(401, 'unauthenticated');
+      const next = `${url.pathname}${url.search}`;
+      return context.redirect(`${LOGIN_PATH}?next=${encodeURIComponent(next)}`, 302);
+    };
+
     if (!SAFE_METHODS.has(request.method)) {
       if (!isSameOrigin(request.headers.get('origin'), request.headers.get('host'))) {
         return secured(jsonError(403, 'bad-origin'));
       }
+      // Signed out, on a path that needs a session: the answer is already known, so it is
+      // given before a byte of the body is read. The token check below clones a form body,
+      // and until the F7 review a signed-out post of any size to any admin path was read
+      // (the clone, and the original buffered behind it) before its 401.
+      if (!ctx && !preAuth) return secured(unauthenticated());
+      // Anyone can post to a pre-auth path, and its body is read several times below (the
+      // token check's clone, a refused form's clone, the handler): bound it first, before
+      // any of them (src/lib/auth/bodyLimit.ts). A sign-in form goes back to its page.
+      if (preAuth && !(await bodyWithinLimit(request))) {
+        return secured(tooLargeSignInForm(request, route) ?? jsonError(413, 'too-large'));
+      }
+      // Behind a session, the one body this middleware reads itself is a form's, for its
+      // token: bounded too (what a handler reads is the handler's).
+      if (
+        !preAuth &&
+        tokenInBody(request) &&
+        !(await bodyWithinLimit(request, PRIVATE_FORM_BODY_LIMIT))
+      ) {
+        return secured(jsonError(413, 'too-large'));
+      }
       const cookieToken = cookies.get(CSRF_COOKIE_NAME)?.value ?? null;
       if (!csrfTokenMatches(cookieToken, await submittedCsrf(request))) {
-        return secured(jsonError(403, 'csrf'));
+        // A sign-in screen's own form post (zero JS: the browser shows the answer) goes
+        // back to its page with a fixed code, its handler never run, rather than to a
+        // JSON page with no way out. Everything else keeps the JSON 403.
+        const back = await expiredSignInForm(request, route);
+        return secured(back ?? jsonError(403, 'csrf'));
       }
     }
 
-    // Authentication gate. Authorization (which capability, which role) is the API
-    // kernel's job — this only answers "is there a verified session at all".
-    if (!ctx && url.pathname !== LOGIN_PATH && url.pathname !== LOGIN_API_PATH) {
-      if (isAdminApi) return secured(jsonError(401, 'unauthenticated'));
-      const next = `${url.pathname}${url.search}`;
-      return secured(context.redirect(`${LOGIN_PATH}?next=${encodeURIComponent(next)}`, 302));
-    }
+    if (!ctx && !preAuth) return secured(unauthenticated());
   }
 
   // 3) Render.

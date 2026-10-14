@@ -102,7 +102,8 @@ export const PASSWORD_MIN = 10;
 /** bcrypt, which GoTrue hashes with, reads 72 bytes and ignores the rest. */
 export const PASSWORD_MAX_BYTES = 72;
 
-const utf8Bytes = (value: string) => new TextEncoder().encode(value).length;
+/** A password's length as bcrypt counts it. Shared with the reset form (F7, admin.ts). */
+export const utf8Bytes = (value: string) => new TextEncoder().encode(value).length;
 
 /**
  * POST /api/admin/me/password. The current password re-authenticates the person first

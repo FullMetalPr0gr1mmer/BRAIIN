@@ -621,7 +621,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
 
 - **Provisioning**
   - **O-1** Supabase Storage bucket `media` (staging + prod).
-  - **O-2** SMTP for Supabase Auth (invites, reset), with SPF/DKIM.
+  - **O-2** SMTP for Supabase Auth (invites, reset), with SPF/DKIM. For the reset (F7), also the recovery template, the link's one-hour lifetime and `AUTH_EMAIL_READY` (launch runbook §2b), and, before that switch, a decision on the reset token in Workers Logs' request URLs ([deviations.md](deviations.md), residual risks); until then "Forgot password?" says "Not set up".
   - **O-3** Cloudflare zone + a cache-purge-only token (KAN-20). Until then purges do nothing and pages stay fresh.
   - **O-17** An R2 bucket for scheduled content backups (R17).
   - **O-18** A GA4 property + Data API service account (U15).
@@ -648,7 +648,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
 - **Ops checks**
   - **O-16** Workers plan: measure CPU and subrequests for publish/validate, preview SSR, `/_image`, `theme.css` and the lead CSV export at its cap (`GET /api/admin/leads/export` carrying 80 leads with contact details, `EXPORT_ROW_CAP.pii`: its rows were measured at up to 6 ms, the rest of the request was not, [C3](as-built/C3.md)) on staging. The Free plan allows 10 ms/request. Workers Paid ($5/mo) may be needed.
   - **O-23** Production checks: Postgres major ≥ 15, leads grants (H2), and whether the pg_cron role bypasses RLS (retention).
-  - **O-24** Supabase Auth on staging and production (launch runbook §2a, F8): require the current password to change one, minimum password length 10, Secure password change on; and accept what remains (a direct call at the auth server counts no lockout, and a direct change is audited only in GoTrue's own log, as `user_updated_password`, never in the app's hash-chained `audit_log`). Until then a session token alone changes its owner's password at the auth server, and GoTrue signs out every other session of that user, the owner's own devices included ([deviations.md](deviations.md), residual risks, which also names a compensating alert the owner may choose).
+  - **O-24** Supabase Auth on staging and production (launch runbook §2a, F8): require the current password to change one, minimum password length 10, Secure password change on; and accept what remains (a direct call at the auth server counts no lockout, and a direct change is audited only in GoTrue's own log, as `user_updated_password`, never in the app's hash-chained `audit_log`). Until then a session token alone changes its owner's password at the auth server, and GoTrue signs out every other session of that user, the owner's own devices included ([deviations.md](deviations.md), residual risks, which also names a compensating alert the owner may choose). And for F7 (runbook §2c): a session inactivity timeout of 7 days, the session cookie's own, and optionally a time-box, so a copied session cookie stops working too (a paid-plan setting); until then the residual CLAUDE.md §3 states stands.
 
 ## Risks
 
@@ -689,6 +689,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [F4a](as-built/F4a.md): the admin bundle plan (#40, folded into #34)
 - [F4b](as-built/F4b.md): the component kit: server primitives, SVG charts, DataTable, tabs, chips, the Sortable core, ResourceTable on DataTable, `/admin/kit` (#64)
 - [F6](as-built/F6.md): built-in section copy as shared data, the public HTML byte-identical (#60)
+- [F7](as-built/F7.md): sign-in v2, keep me signed in, forgot and reset password (#61)
 - [F8](as-built/F8.md): the personal layer: preferences, the people directory, the bell, the account, the environment pill, 0044
 - [U3](as-built/U3.md): media uploads (A5): the storage provider, the upload, replace and download routes, delivery through `/_image`, 0045 (PR number at review)
 - [U16](as-built/U16.md): the help centre: guides as typed blocks in the database, the "?" drawer with search and this screen's guides, `/admin/help`, 0046 (#62)

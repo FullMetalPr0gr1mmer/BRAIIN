@@ -1,31 +1,157 @@
-/* Screen stylesheet: the sign-in page (/admin/login, the bare layout). Linked only
-   through AdminLayout's `styles` prop (styles={['login.css']}), after admin.css.
-   It uses admin.css's tokens and declares none, and holds no colour literal
-   (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+/* Screen stylesheet: the sign-in screens (/admin/login, /admin/forgot, /admin/reset), in
+   their own shell, src/layouts/AuthLayout.astro. Linked only through the `styles` prop
+   (styles={['login.css']}), after admin.css. It uses admin.css's tokens and declares
+   none, and holds no colour literal (tests/lib/adminStyles.spec.ts,
+   scripts/contrast-audit.mjs).
 
-/* ---- Sign in ---- */
+   Admin v2 F7: ported verbatim-first from the prototype's `.login*` block (app.css). The
+   departures: the prototype's overlay (`position: fixed; z-index: 100` over a SPA) is a
+   plain page grid here; its gradient and the quote's second line are token colours (the
+   line is the sidebar's text colour, AA on midnight, instead of white at 70%); its inline
+   styles are classes (`.login__row`, `.login__link`, the submit width). */
 
-.login-card {
-  width: min(400px, 92vw);
-  padding: 32px;
-  background: var(--ad-card);
-  border: 1px solid var(--ad-line);
-  border-radius: 18px;
-  box-shadow: var(--ad-shadow);
+.login {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  min-height: 100vh;
+  background: var(--ad-midnight);
 }
 
-.login-card h1 {
+/* ---- The art panel ---- */
+
+.login__art {
+  position: relative;
+  overflow: hidden;
+  background: var(--ad-midnight);
+}
+
+.login__art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.85;
+}
+
+.login__art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ad-midnight) 20%, transparent),
+    color-mix(in srgb, var(--ad-midnight) 85%, transparent)
+  );
+}
+
+.login__quote {
+  position: absolute;
+  z-index: 1;
+  inset-inline: 48px;
+  bottom: 48px;
+  max-width: 520px;
+  margin: 0;
+  color: var(--ad-on-dark);
+}
+
+.login__quote b {
+  display: block;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.login__quote span {
+  display: block;
+  margin-top: 12px;
+  color: var(--ad-side-text);
+}
+
+/* ---- The form panel ---- */
+
+.login__panel {
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  background: var(--ad-bg);
+  color: var(--ad-ink);
+}
+
+.login__box {
+  width: min(400px, 100%);
+}
+
+/* The white logo, drawn dark on the light panel. */
+.login__logo {
+  display: block;
+  width: 140px;
+  height: auto;
+  margin-bottom: 34px;
+  filter: invert(1);
+}
+
+.login__box h1 {
   margin: 0;
   font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 
-.login-card .admin-sub {
+.login__lead {
   margin: 6px 0 26px;
+  color: var(--ad-dim);
 }
 
-.login-card button[type='submit'] {
+.login__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 18px;
+  font-size: 12.5px;
+}
+
+.login__link {
+  color: var(--ad-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login__link:hover,
+.login__link:focus-visible {
+  text-decoration: underline;
+}
+
+.login__form button[type='submit'] {
   width: 100%;
-  margin-top: 6px;
+  padding: 12px;
+}
+
+.login__notice {
+  display: grid;
+  gap: 4px;
+}
+
+.login__back {
+  margin: 22px 0 0;
+  font-size: 13px;
+}
+
+/* One column below the shell's breakpoint: the form alone, the art panel gone (and, being
+   lazy, never downloaded). */
+@media (max-width: 899.98px) {
+  .login {
+    grid-template-columns: 1fr;
+  }
+
+  .login__art {
+    display: none;
+  }
+
+  .login__panel {
+    padding: 32px 16px;
+  }
 }

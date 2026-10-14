@@ -136,6 +136,99 @@ with no `auth.password_change` row in `public.audit_log` for the same user a mom
 (every change through the admin writes both); a recovery or invite link, once set up (O-2,
 O-22), is the expected exception.
 
+### 2b. Password reset e-mail (Admin v2 F7, owner item O-2)
+
+"Forgot password?" ships switched off: until the steps below are done, the screen says **Not
+set up** and sends nothing (`AUTH_EMAIL_READY`, default `false`). Supabase sends the e-mail;
+the Worker never sees it. Steps 1 to 4 are Supabase settings: do them on staging first, then
+production. Step 5 is code, and there is no staging Worker: it reaches only the production
+deploy of `main`, so staging is checked from a local build first (**Check it on staging**,
+below).
+
+1. **SMTP.** Dashboard → **Authentication → Emails → SMTP Settings** → a real provider, with
+   SPF and DKIM on the sender domain. The built-in sender only reaches the project's own
+   team and is rate-limited to a handful an hour.
+2. **Site URL and redirect.** Dashboard → **Authentication → URL Configuration**: Site URL =
+   the site's origin (`PUBLIC_SITE_URL`); add `<origin>/admin/reset` to the Redirect URLs.
+3. **The recovery template.** Dashboard → **Authentication → Emails → Templates → Reset
+   Password**: the link must carry the token hash to our page, which verifies it on the
+   server (the default `{{ .ConfirmationURL }}` puts a session in the URL's `#` fragment,
+   which no server can read, and the page would call the link "not valid"):
+
+   ```html
+   <a href="{{ .SiteURL }}/admin/reset?token_hash={{ .TokenHash }}&type=recovery">Choose a new password</a>
+   ```
+
+4. **The link lasts one hour.** Dashboard → **Authentication → Sign In / Providers → Email**
+   → **Email OTP Expiration = 3600** seconds (API field `mailer_otp_exp`). The forgot screen
+   tells people "The link works for one hour", and this setting is what makes it true: check
+   it reads 3600, and set it if not. Local stacks pin the same number (`otp_expiry` in
+   `supabase/config.toml`; `tests/lib/authScreens.spec.ts` holds the copy to it).
+5. **Switch it on, in production.** Add `"AUTH_EMAIL_READY": "true"` to `vars` in
+   `wrangler.jsonc` (a reviewed PR), after the staging check. It is read when the Worker is
+   built (`astro:env` inlines a public server variable, and the build reads
+   `wrangler.jsonc`'s `vars`, which win over the build environment), so the deploy that
+   carries the PR turns it on; a dashboard variable alone would not. The CI builds read the
+   same file, so from that PR on the e2e preview shows the set-up screen too, and
+   `tests/e2e/admin-sign-in.e2e.ts` posts its form (it empties the local stack's forgot
+   limiter first).
+
+**Check it on staging** (after steps 1 to 4 there, before step 5). Build and serve the Worker
+locally against `braiin-staging`, with the switch on in the build environment (it is not in
+`vars` yet, so the environment decides). Use a fresh clone with **no `.env` and no
+`.dev.vars`**: a local build reads them, and they may name another project. Export
+`PUBLIC_SITE_URL=http://localhost:8788`, `ALLOW_LOCAL_SITE_URL=1`, `AUTH_EMAIL_READY=true`,
+staging's `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and
+`SUPABASE_DB_POOL_URL`, and placeholder values for the other server secrets (as the CI
+preview does), then:
+
+```bash
+npm run build && node scripts/local-preview-config.mjs \
+  && npx wrangler dev --port 8788 --env-file dist/server/.preview.env
+```
+
+Open `http://localhost:8788/admin/forgot`. The e-mail's link points at staging's Site URL:
+open it with that origin replaced by `http://localhost:8788` (keep `token_hash` and `type`).
+
+**What to check** (on staging this way, and on production after step 5's deploy). Request a
+reset for your own staff address and one that does not exist: the screen must say the same
+thing for both, and only yours gets an e-mail. The answer hides a delivery failure by design
+(it must not depend on the address), so look for one where it is recorded: `select
+created_at, detail from system_logs where source = 'auth.forgot' order by id desc limit 20;`
+(a status code, never the address). Each accepted request also leaves an
+`auth.password_reset_requested` row in `audit_log`, and each completed reset an
+`auth.password_reset` row against the account.
+
+Then **complete one reset** with your own account, after §2a's three settings are on: open the
+link, set a new password, and sign in with it. The reset sets the password on the recovery
+session the link opens, without the current password (the person no longer has it). If the
+auth server refuses that, the page says the password was not accepted, the link is spent,
+and `select created_at, detail from system_logs where source = 'auth.reset' order by id desc
+limit 5;` names the status and code (never the password); report it before step 5. A
+completed reset is GoTrue's `user_updated_password` too: an alert built on §2a's suggestion
+matches it to the `auth.password_reset` row.
+
+### 2c. Session limits (Admin v2 F7, owner item O-24)
+
+Not a blocker: what is open until it is done is stated in CLAUDE.md §3. "Keep me signed in"
+sets the admin's session **cookie** to expire 7 days after its last token refresh (unticked,
+when the browser closes). That is all the Worker can bound. The refresh token inside the
+cookie is Supabase Auth's, and by default the session it belongs to has no end of its own:
+it goes on, refresh after refresh, until a sign-out or a password reset revokes it. So a
+cookie value copied off a machine keeps working after the browser has dropped its own copy. To bound the session itself, on each
+hosted project (staging, then production), in the dashboard's **Authentication** settings
+for user sessions:
+
+1. **Inactivity timeout: 168 hours** (7 days, the cookie's own). A session not refreshed for
+   that long is refused at the auth server too.
+2. **Time-box (optional):** the longest a session lasts however active, for example 30 days.
+   Everyone then signs in again at least that often.
+
+These are paid-plan settings (Pro and above); on the Free plan the residual stays as §3
+states it. Local stacks set neither (`supabase/config.toml` has no `[auth.sessions]`), so
+the e2e harness's saved sessions are not cut short. Check: sign in, then confirm the
+dashboard shows both values; a session idle past the timeout lands on the sign-in page.
+
 ## 3. Create and promote the first admin  ⛔ blocker
 
 `users.manage` is Admin-only, so there is no in-product path to the first admin.
@@ -1116,6 +1209,7 @@ Not code; nothing enforces these until they are created.
 | `/api/ai/style-finder` | rate-limit **60/hr/IP** → block (not 10/60s) |
 | `/api/hooks/notify-lead` | rate-limit; the endpoint verifies a signature (0048) but is unbounded by retry |
 | `/api/analytics`, `/api/rum` | rate-limit per IP — unauthenticated paths to a service-role write |
+| `/api/admin/auth/forgot`, `/api/admin/auth/reset` | rate-limit per IP — reached without a session; the Worker's own limits (Admin v2 F7) are the inner ring |
 | Training crawlers | block `GPTBot`, `ClaudeBot`, `Google-Extended`, `CCBot`, `Applebot-Extended`, `Meta-ExternalAgent` |
 | Retrieval crawlers | **allow** `OAI-SearchBot`, `Claude-SearchBot`, `PerplexityBot`, `Bingbot` |
 
