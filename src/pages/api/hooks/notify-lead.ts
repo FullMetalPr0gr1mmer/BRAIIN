@@ -29,6 +29,13 @@ import { notifySignatureValid, readNotifyHeaders } from '@/lib/leads/notifySigna
 //      cannot be verified is not parsed into an error that describes it. §9(d) requires a
 //      test for precisely this, because "notification endpoint that accepts anything" is
 //      how a lead table leaks one row at a time.
+//   4. Before the signature is checked, the body is all anyone's: the headers only prove
+//      a fresh timestamp and a well-formed signature, which anyone can write. So at most
+//      MAX_BODY_BYTES of it is ever read. The call must declare its size (pg_net, which is
+//      libcurl, always sends Content-Length with a POST body; a chunked body declares none)
+//      and declare at most that, and the body is then read through a reader that stops,
+//      and cancels the stream, the moment it passes the cap, whatever was declared. Both
+//      count bytes, not UTF-16 code units.
 //
 // Recipients are field-gated through the SAME helper the admin UI uses
 // (`canSeeLeadPii`) — §10 asks for one shared field-visibility rule, and the failure
@@ -45,8 +52,11 @@ const PayloadSchema = z
   })
   .strict();
 
-/** The trigger's body is about 90 bytes; anything far larger is not from it. */
+/** The trigger's body is about 90 bytes; anything far larger is not from it. In bytes. */
 const MAX_BODY_BYTES = 1024;
+
+/** A Content-Length of one to four digits: anything longer is over the cap anyway. */
+const CONTENT_LENGTH = /^[0-9]{1,4}$/;
 
 /** Who gets notified, and how much they see. Roles come from §5, never from the body. */
 const RECIPIENT_ROLES = ['admin', 'developer'] as const;
@@ -65,20 +75,20 @@ export const POST: APIRoute = async ({ request }) => {
   // 300 s window) makes us parse nothing.
   const signed = readNotifyHeaders(request.headers, Date.now());
   if (!signed) return unauthorized();
-  if (Number(request.headers.get('content-length') ?? '0') > MAX_BODY_BYTES) return unauthorized();
+  // The size, declared and within the cap, before a byte is read (point 4): no
+  // Content-Length (a chunked body) is refused, not taken as zero.
+  const declared = request.headers.get('content-length');
+  if (declared === null || !CONTENT_LENGTH.test(declared) || Number(declared) > MAX_BODY_BYTES) {
+    return unauthorized();
+  }
 
   // The signature covers the body's ids, so the body is read to verify it; until it
   // verifies, every failure is the same 401.
-  let text: string;
-  try {
-    text = await request.text();
-  } catch {
-    return unauthorized();
-  }
-  if (text.length > MAX_BODY_BYTES) return unauthorized();
+  const bytes = await readCapped(request.body, MAX_BODY_BYTES);
+  if (bytes === null) return unauthorized();
   let body: unknown;
   try {
-    body = JSON.parse(text);
+    body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch {
     return unauthorized();
   }
@@ -183,6 +193,36 @@ export const POST: APIRoute = async ({ request }) => {
 
   return json({ ok: true, notified: (recipients ?? []).length }, 200);
 };
+
+/**
+ * The body's bytes when there are at most `max` of them, else null (as for a body that
+ * cannot be read). Stops reading, and cancels the stream, as soon as the count passes `max`,
+ * so a body larger than it declared is never buffered: at most one chunk past the cap is
+ * ever held.
+ */
+async function readCapped(
+  stream: ReadableStream<Uint8Array> | null,
+  max: number,
+): Promise<Uint8Array | null> {
+  if (stream === null) return new Uint8Array(0);
+  const reader = stream.getReader();
+  const out = new Uint8Array(max);
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return out.slice(0, size);
+      if (value.byteLength > max - size) return null;
+      out.set(value, size);
+      size += value.byteLength;
+    }
+  } catch {
+    return null;
+  } finally {
+    // Not awaited: the answer does not wait on the sender.
+    void reader.cancel().catch(() => undefined);
+  }
+}
 
 async function safeDecrypt(ciphertext: unknown): Promise<string | null> {
   if (typeof ciphertext !== 'string' || ciphertext.length === 0) return null;

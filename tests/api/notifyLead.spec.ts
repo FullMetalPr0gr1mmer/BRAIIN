@@ -90,13 +90,50 @@ async function signedHeaders(body: { lead_id: string; tenant_id: string }, o: Si
   };
 }
 
+const URL_ = 'https://example.test/api/hooks/notify-lead';
+const handle = (request: Request) =>
+  (POST as unknown as (ctx: { request: Request }) => Promise<Response>)({ request });
+
+/** As pg_net (libcurl) sends it: the body with its Content-Length, counted in bytes. */
 function call(headers: Record<string, string>, body: unknown = BODY) {
-  const request = new Request('https://example.test/api/hooks/notify-lead', {
+  const text = typeof body === 'string' ? body : JSON.stringify(body);
+  return handle(
+    new Request(URL_, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'content-length': String(new TextEncoder().encode(text).byteLength),
+        ...headers,
+      },
+      body: text,
+    }),
+  );
+}
+
+/**
+ * A body that keeps coming: `chunks` chunks of `size` bytes, and the number of times the
+ * reader pulled one, so a test can show how much of it the hook asked for.
+ */
+function stream(chunks: number, size = 256, fill = 0x20) {
+  const counter = { pulls: 0 };
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      counter.pulls += 1;
+      if (counter.pulls > chunks) controller.close();
+      else controller.enqueue(new Uint8Array(size).fill(fill));
+    },
+  });
+  return { body, counter };
+}
+
+function streamed(headers: Record<string, string>, body: ReadableStream<Uint8Array>) {
+  const request = new Request(URL_, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
-    body: typeof body === 'string' ? body : JSON.stringify(body),
-  });
-  return (POST as unknown as (ctx: { request: Request }) => Promise<Response>)({ request });
+    body,
+    duplex: 'half',
+  } as RequestInit);
+  return { request, response: handle(request) };
 }
 
 const signedCall = async (o: Signing = {}) => call(await signedHeaders(BODY, o));
@@ -200,6 +237,92 @@ describe('notify-lead authentication', () => {
 
   it('accepts a correctly signed call', async () => {
     expect((await signedCall()).status).toBe(200);
+  });
+});
+
+describe('notify-lead reads at most 1 KB before the signature is checked', () => {
+  // Anyone can write headers that pass readNotifyHeaders (a fresh time, 64 hex digits), so
+  // everything below runs for an unauthenticated caller.
+
+  it('refuses a declared Content-Length over 1024 without reading the body', async () => {
+    const { body, counter } = stream(1_000);
+    const headers = { ...(await signedHeaders(BODY)), 'content-length': '1025' };
+    const { request, response } = streamed(headers, body);
+    expect((await response).status).toBe(401);
+    expect(request.bodyUsed).toBe(false);
+    expect(counter.pulls).toBeLessThanOrEqual(1);
+  });
+
+  it('refuses a Content-Length that is not a plain byte count', async () => {
+    for (const length of ['', '-1', '1e3', '0x10', '90, 90', '00001024000']) {
+      const headers = { ...(await signedHeaders(BODY)), 'content-length': length };
+      expect((await call(headers)).status, `content-length ${JSON.stringify(length)}`).toBe(401);
+    }
+  });
+
+  it('refuses a body with no Content-Length (chunked), however it is signed, unread', async () => {
+    // 64 KB on offer; the hook asks for none of it.
+    const { body, counter } = stream(256);
+    const { request, response } = streamed(await signedHeaders(BODY), body);
+    expect((await response).status).toBe(401);
+    expect(request.bodyUsed).toBe(false);
+    expect(counter.pulls).toBeLessThanOrEqual(1);
+    // A correctly signed, well-formed body without the header is refused too.
+    const ok = new TextEncoder().encode(JSON.stringify(BODY));
+    const exact = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(ok);
+        controller.close();
+      },
+    });
+    expect((await streamed(await signedHeaders(BODY), exact).response).status).toBe(401);
+  });
+
+  it('stops reading a body that runs past 1 KB, whatever it declared', async () => {
+    // Declares 90 bytes, sends 1 MB: the reader cancels as soon as the count passes 1024.
+    const { body, counter } = stream(4_096);
+    const headers = { ...(await signedHeaders(BODY)), 'content-length': '90' };
+    expect((await streamed(headers, body).response).status).toBe(401);
+    // 1024 bytes is four 256-byte chunks; the fifth passes the cap. One more may be
+    // pulled ahead by the stream's own queue.
+    expect(counter.pulls).toBeLessThanOrEqual(6);
+  });
+
+  it('counts the cap in bytes, not UTF-16 code units', async () => {
+    // 700 characters, 1,400 bytes: under 1024 as a string length, over it in bytes.
+    const padded = `{"pad":"${'é'.repeat(700)}"}`;
+    expect(padded.length).toBeLessThan(1024);
+    const bytes = new TextEncoder().encode(padded);
+    expect(bytes.byteLength).toBeGreaterThan(1024);
+    const signed = await signedHeaders(BODY);
+    // Declared honestly: refused before reading.
+    expect((await call(signed, padded)).status).toBe(401);
+    // Declared as 90: refused by the reader's byte count.
+    const lying = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
+    const headers = { ...signed, 'content-length': '90' };
+    expect((await streamed(headers, lying).response).status).toBe(401);
+  });
+
+  it('accepts a correctly signed call that declares its size, streamed or not', async () => {
+    expect((await signedCall()).status).toBe(200);
+    const bytes = new TextEncoder().encode(JSON.stringify(BODY));
+    const exact = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.subarray(0, 40));
+        controller.enqueue(bytes.subarray(40));
+        controller.close();
+      },
+    });
+    const headers = {
+      ...(await signedHeaders(BODY)),
+      'content-length': String(bytes.byteLength),
+    };
+    expect((await streamed(headers, exact).response).status).toBe(200);
   });
 });
 
