@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from 'react';
 import Icon from './Icon';
-import { backdropClose, useDialog } from './useDialog';
+import { useBackdropDismiss, useDialog } from './useDialog';
 
 // A modal (Admin v2 F4b; designed in AV-04, which F3 handed to the kit, the prototype's
 // .mdl): a native modal <dialog> with a title (h2, 18/800), an optional line under it, a
@@ -14,7 +14,10 @@ export interface ModalProps {
   sub?: string | undefined;
   footer?: ReactNode;
   size?: 'lg' | undefined;
-  /** A click on the backdrop closes it (the default); off for a form with input. */
+  /**
+   * A press on the backdrop closes it (the default; useDialog's backdropDismiss: a press
+   * that starts inside never does). Off for a form, so a stray press keeps its input.
+   */
   dismissible?: boolean;
   children: ReactNode;
 }
@@ -30,6 +33,7 @@ export default function Modal({
   children,
 }: ModalProps) {
   const ref = useDialog(open, onClose, '.mdl__b');
+  const dismiss = useBackdropDismiss(dismissible);
   const titleId = useId();
   const subId = useId();
   return (
@@ -39,7 +43,7 @@ export default function Modal({
       data-size={size}
       aria-labelledby={titleId}
       aria-describedby={sub ? subId : undefined}
-      onClick={dismissible ? backdropClose : undefined}
+      {...dismiss}
     >
       <div className="mdl__h">
         <div>

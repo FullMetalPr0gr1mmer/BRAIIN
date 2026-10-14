@@ -73,10 +73,50 @@ export function useDialog(
   return ref;
 }
 
+/** What light dismiss reads from a pointer or click event on the <dialog>. */
+export interface DialogPress {
+  target: EventTarget | null;
+  currentTarget: HTMLDialogElement;
+}
+
+export interface BackdropDismiss {
+  onPointerDown: (event: DialogPress) => void;
+  onPointerUp: (event: DialogPress) => void;
+  onClick: (event: DialogPress) => void;
+}
+
 /**
- * A click on the backdrop closes the dialog (light dismiss): the click lands on the
- * <dialog> itself only outside its content. Off for a form that would lose its input.
+ * Light dismiss: a press on the backdrop (a drawer's scrim) closes the dialog. Outside its
+ * content a press lands on the <dialog> itself, but a click there is not enough: a press
+ * that starts in a field (selecting its text) and is let go over the backdrop is
+ * dispatched as a click on the <dialog>, the two targets' common ancestor, and closing
+ * then threw away what was typed. So the press must go down AND come up on the backdrop;
+ * a click with no press behind it (the keyboard, assistive technology) never dismisses.
+ * Escape and the Close button are the other ways out.
  */
-export function backdropClose(event: { target: EventTarget; currentTarget: HTMLDialogElement }) {
-  if (event.target === event.currentTarget) event.currentTarget.close();
+export function backdropDismiss(): BackdropDismiss {
+  let down = false;
+  let up = false;
+  return {
+    onPointerDown(event) {
+      down = event.target === event.currentTarget;
+      up = false;
+    },
+    onPointerUp(event) {
+      up = down && event.target === event.currentTarget;
+    },
+    onClick(event) {
+      const close = up && event.target === event.currentTarget;
+      down = false;
+      up = false;
+      if (close) event.currentTarget.close();
+    },
+  };
+}
+
+/** backdropDismiss's handlers for a <dialog>, none when it is not dismissible. */
+export function useBackdropDismiss(dismissible: boolean): Partial<BackdropDismiss> {
+  const handlers = useRef<BackdropDismiss | null>(null);
+  handlers.current ??= backdropDismiss();
+  return dismissible ? handlers.current : {};
 }

@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from 'react';
 import Icon from './Icon';
-import { backdropClose, useDialog } from './useDialog';
+import { useBackdropDismiss, useDialog } from './useDialog';
 
 // A drawer (Admin v2 F4b; designed in AV-04, which F3 handed to the kit, the prototype's
 // .drw): a native modal <dialog> that opens from the inline end, 560px (820px `wide`),
@@ -16,7 +16,10 @@ export interface DrawerProps {
   title: string;
   footer?: ReactNode;
   size?: 'wide' | undefined;
-  /** A click on the scrim closes it (the default); off for a form with input. */
+  /**
+   * A press on the scrim closes it (the default; useDialog's backdropDismiss: a press
+   * that starts inside never does). Off for a form, so a stray press keeps its input.
+   */
   dismissible?: boolean;
   children: ReactNode;
 }
@@ -31,15 +34,10 @@ export default function Drawer({
   children,
 }: DrawerProps) {
   const ref = useDialog(open, onClose, '.drw__b');
+  const dismiss = useBackdropDismiss(dismissible);
   const titleId = useId();
   return (
-    <dialog
-      ref={ref}
-      className="drw"
-      data-size={size}
-      aria-labelledby={titleId}
-      onClick={dismissible ? backdropClose : undefined}
-    >
+    <dialog ref={ref} className="drw" data-size={size} aria-labelledby={titleId} {...dismiss}>
       <div className="drw__panel">
         <div className="drw__h">
           <h2 id={titleId}>{title}</h2>

@@ -17,7 +17,7 @@ import Segmented from '@/components/admin/kit/Segmented';
 import { MoveButtons, SORT_HINT, SortHandle, SortHint } from '@/components/admin/kit/Sortable';
 import StatusBadge from '@/components/admin/kit/StatusBadge';
 import Tabs from '@/components/admin/kit/Tabs';
-import { backdropClose } from '@/components/admin/kit/useDialog';
+import { backdropDismiss } from '@/components/admin/kit/useDialog';
 import KitGallery from '@/components/admin/screens/kit/KitGallery';
 import { KIT_ROWS, KIT_SECTIONS } from '@/components/admin/screens/kit/samples';
 import { nameOf, renderCell } from '@/components/admin/screens/resources/ResourceTable';
@@ -334,12 +334,29 @@ describe('Modal and Drawer', () => {
     expect(out).not.toContain('drw__f');
   });
 
-  it('a click on the backdrop closes the dialog; a click inside does not', () => {
+  it('only a press on the backdrop closes the dialog: one that starts or ends inside does not', () => {
     const close = vi.fn();
     const dialog = { close } as unknown as HTMLDialogElement;
-    backdropClose({ target: {} as EventTarget, currentTarget: dialog });
+    const field = {} as EventTarget;
+    const press = (from: EventTarget, to: EventTarget, click: EventTarget) => {
+      const dismiss = backdropDismiss();
+      dismiss.onPointerDown({ target: from, currentTarget: dialog });
+      dismiss.onPointerUp({ target: to, currentTarget: dialog });
+      dismiss.onClick({ target: click, currentTarget: dialog });
+    };
+    // Selecting a field's text and letting go over the backdrop: the browser sends the
+    // click to the <dialog> (the common ancestor). Closing would lose what was typed.
+    press(field, dialog, dialog);
+    // Pressed on the backdrop, let go inside: the click lands on the <dialog> too.
+    press(dialog, field, dialog);
+    // A click inside.
+    press(field, field, field);
+    // A click with no press behind it (the keyboard, assistive technology).
+    backdropDismiss().onClick({ target: dialog, currentTarget: dialog });
     expect(close).not.toHaveBeenCalled();
-    backdropClose({ target: dialog, currentTarget: dialog });
+
+    // Down and up on the backdrop: light dismiss.
+    press(dialog, dialog, dialog);
     expect(close).toHaveBeenCalledOnce();
   });
 });

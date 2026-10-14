@@ -316,6 +316,33 @@ test.describe('as admin', () => {
     await expect(opener).toBeFocused();
   });
 
+  test('the drawer: only a press on the scrim closes it, never one that starts inside', async ({
+    page,
+  }) => {
+    await open(page);
+    await page.getByRole('button', { name: 'Open the sample drawer' }).click();
+    const drawer = page.getByRole('dialog', { name: 'Sample details' });
+    await expect(drawer).toBeVisible();
+    const text = (await drawer
+      .getByText('A drawer opens from the inline end', { exact: false })
+      .boundingBox())!;
+    const panel = (await drawer.boundingBox())!;
+    // The scrim: the strip of the viewport left of the drawer (it opens from the right).
+    const scrim = { x: panel.x / 2, y: panel.y + panel.height / 2 };
+    expect(scrim.x).toBeGreaterThan(20);
+
+    // Selecting the body's text and letting go over the scrim: the browser sends that
+    // click to the <dialog> itself, which must not read as a light dismiss.
+    await page.mouse.move(text.x + 4, text.y + text.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(scrim.x, scrim.y, { steps: 6 });
+    await page.mouse.up();
+    await expect(drawer).toBeVisible();
+
+    await page.mouse.click(scrim.x, scrim.y);
+    await expect(drawer).toBeHidden();
+  });
+
   test('the error summary takes focus and each link reaches its field', async ({ page }) => {
     await open(page);
     await page.getByRole('button', { name: 'Check the sample form' }).click();
