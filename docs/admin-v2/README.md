@@ -687,6 +687,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [F2](as-built/F2.md): the shell and the information architecture (#37, folded into #34)
 - [F3](as-built/F3.md): overlays, toasts and the command palette (#39, folded into #34)
 - [F4a](as-built/F4a.md): the admin bundle plan (#40, folded into #34)
+- [F6](as-built/F6.md): built-in section copy as shared data, the public HTML byte-identical
 - [F7](as-built/F7.md): sign-in v2, keep me signed in, forgot and reset password (#61)
 - [F8](as-built/F8.md): the personal layer: preferences, the people directory, the bell, the account, the environment pill, 0044
 - [U3](as-built/U3.md): media uploads (A5): the storage provider, the upload, replace and download routes, delivery through `/_image`, 0045 (PR number at review)

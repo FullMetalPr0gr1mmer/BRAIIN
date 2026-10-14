@@ -5,6 +5,7 @@ import type { LocalizedText, StatPlacement } from '@schemas/content';
 import { pickLocale } from '@/lib/i18n';
 import { getPublishedStatistics, type StatisticRow } from '@/lib/data/statistics';
 import type { StatRating } from '@schemas/sections';
+import { STATISTICS_COPY } from '@/lib/sections/copy/statistics';
 import StatBand from './StatBand.astro';
 import ServicesProof from './ServicesProof.astro';
 
@@ -37,11 +38,6 @@ interface Props {
 
 const { locale, variant = 'cards', placement } = Astro.props;
 
-const STR = {
-  en: { heading: 'By the numbers' },
-  ar: { heading: 'بالأرقام' },
-}[locale];
-
 const items =
   Astro.props.data?.items ?? (await getPublishedStatistics(placement ? { placement } : {}));
 ---
@@ -51,7 +47,11 @@ const items =
     items.length >= (Astro.props.minItems ?? 1) && (
       <section class="statistics">
         <div class="container">
-          <h2>{Astro.props.heading ? pickLocale(Astro.props.heading, locale) : STR.heading}</h2>
+          <h2>
+            {Astro.props.heading
+              ? pickLocale(Astro.props.heading, locale)
+              : STATISTICS_COPY.cards.heading[locale]}
+          </h2>
           <ul class="stat-grid">
             {items.map((s) => (
               <li class="stat">

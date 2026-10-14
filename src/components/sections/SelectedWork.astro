@@ -1,7 +1,6 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import type { SelectedWorkSectionContent } from '@schemas/sections';
-import type { Accent } from '@schemas/media';
 import { getPortfolioCards, type PortfolioCard } from '@/lib/data/portfolio';
 import { pickSelectedWork } from '@/lib/portfolio/selectedWork';
 import { localizedHref, pickLocale } from '@/lib/i18n';
@@ -10,6 +9,7 @@ import FacetTags from '@/components/portfolio/FacetTags.astro';
 import ProjectCard from '@/components/portfolio/ProjectCard.astro';
 import AccentText from '@/components/ui/AccentText.astro';
 import Cta from '@/components/ui/Cta.astro';
+import { SELECTED_WORK_COPY as COPY } from '@/lib/sections/copy/selectedWork';
 
 // Home "Selected work" (UI v2 PR7; the mockup's `.sw-sec`) on the mist surface: the
 // featured project (its poster, a clip window while on screen, its blurb and facet links),
@@ -29,50 +29,26 @@ interface Props extends SelectedWorkSectionContent {
 
 const { locale, featuredSlug, cardSlugs, data } = Astro.props;
 
-const STR = {
-  en: {
-    tag: 'Selected work',
-    heading: 'Ideas that leave the brain and land in the world.',
-    lines: [
-      'Made to be remembered, not just seen.',
-      'Built to perform on every screen and stage.',
-      'Delivered by one team, start to finish.',
-    ],
-    link: 'See the project',
-    button: 'See all our work',
-  },
-  ar: {
-    tag: 'مختارات من أعمالنا',
-    heading: 'أفكار تطلع من الدماغ وتوصل للعالم.',
-    lines: [
-      'مصنوعة عشان تنتذكر، مو بس تنشاف.',
-      'مبنية عشان تحقق نتائج على كل شاشة ومسرح.',
-      'فريق واحد من البداية للنهاية.',
-    ],
-    link: 'شوف المشروع',
-    button: 'شوف كل أعمالنا',
-  },
-}[locale];
-// The design's <em>: "Ideas that <em>leave the brain</em> and land…" / "أفكار <em>تطلع من الدماغ</em>…"
-const DEFAULT_ACCENT: Accent = { en: { from: 2, to: 5 }, ar: { from: 1, to: 4 } };
-
 const pool = data?.cards ?? (await getPortfolioCards({ featuredOnly: true }));
 const pick = pickSelectedWork(pool, { featuredSlug, cardSlugs });
 
-const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : STR.tag;
-const heading = Astro.props.heading ? pickLocale(Astro.props.heading, locale) : STR.heading;
+// Built-in copy: src/lib/sections/copy/selectedWork.ts.
+const tag = Astro.props.tag ? pickLocale(Astro.props.tag, locale) : COPY.tag[locale];
+const heading = Astro.props.heading
+  ? pickLocale(Astro.props.heading, locale)
+  : COPY.heading[locale];
 // An authored heading keeps only an authored accent (the default range would land on the
 // wrong words).
-const accent = Astro.props.heading ? Astro.props.accent : (Astro.props.accent ?? DEFAULT_ACCENT);
+const accent = Astro.props.heading ? Astro.props.accent : (Astro.props.accent ?? COPY.accent);
 const lines = Astro.props.lines
   ? Astro.props.lines.map((l) => pickLocale(l.text, locale))
-  : STR.lines;
+  : COPY.lines.map((l) => l.text[locale]);
 const linkLabel = Astro.props.featuredLinkLabel
   ? pickLocale(Astro.props.featuredLinkLabel, locale)
-  : STR.link;
+  : COPY.featuredLinkLabel[locale];
 const buttonLabel = Astro.props.button?.label
   ? pickLocale(Astro.props.button.label, locale)
-  : STR.button;
+  : COPY.button.label[locale];
 const buttonHref = localizedHref(Astro.props.button?.href ?? '/portfolio', locale);
 
 const featured = pick?.featured ?? null;

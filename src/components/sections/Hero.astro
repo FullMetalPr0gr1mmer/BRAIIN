@@ -5,6 +5,7 @@ import type { HeroSectionContent } from '@schemas/sections';
 import { localizedHref, pickLocale } from '@/lib/i18n';
 import { splitTrailingMark } from '@/lib/text/accent';
 import { heroText, splitBold, type HeroText } from '@/lib/text/heroLinks';
+import { HERO_COPY, HERO_LABELS } from '@/lib/sections/copy/hero';
 import Cta from '@/components/ui/Cta.astro';
 import logo from '@/assets/braiin-logo-white.png';
 
@@ -78,55 +79,33 @@ const {
   data,
 } = Astro.props;
 
-const STR = {
-  en: {
-    headline: 'Creative work that performs*',
-    sub: 'From the brain to the real world.',
-    cta: 'See our work',
-    scroll: 'Scroll',
-    crumb: 'Breadcrumb',
-  },
-  ar: {
-    headline: 'شغل إبداعي يحقّق نتائج*',
-    sub: 'من الدماغ إلى أرض الواقع.',
-    cta: 'شوف أعمالنا',
-    scroll: 'انزل',
-    crumb: 'مسار التنقل',
-  },
-}[locale];
+// The built-in copy is src/lib/sections/copy/hero.ts (`default`: the page presets bring
+// their own as content, withHeroPreset).
+const BUILT_IN = HERO_COPY.default;
 
 type Word = { text: string; accent: boolean };
-// The accent never carries the footnote asterisk ("performs*": the mark stays white, as in
-// the design's `<em>performs</em>*`), so an accented word renders as body + plain mark.
-const WORDS: Record<Locale, Word[]> = {
-  en: [
-    { text: 'Creative', accent: false },
-    { text: 'work', accent: false },
-    { text: 'that', accent: false },
-    { text: 'performs*', accent: true },
-  ],
-  ar: [
-    { text: 'شغل', accent: false },
-    { text: 'إبداعي', accent: false },
-    { text: 'يحقّق', accent: true },
-    { text: 'نتائج*', accent: true },
-  ],
-};
-// A CMS headline is split on whitespace; accent starts at the authored per-locale word
-// index (no accent when omitted). Without an override, the built-in split applies.
-const headlineText = headline ? pickLocale(headline, locale) : STR.headline;
-const accentFrom = locale === 'ar' ? accentFromAr : accentFromEn;
-const words: Word[] = headline
-  ? headlineText
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((text, i) => ({ text, accent: accentFrom !== undefined && i >= accentFrom }))
-  : WORDS[locale];
+// The headline is split on whitespace; the accent starts at the per-locale word index (no
+// accent when omitted). The built-in headline brings its own index, and an authored one
+// takes only an authored index. The accent never carries the footnote asterisk
+// ("performs*": the mark stays white, as in the design's `<em>performs</em>*`), so an
+// accented word renders as body + plain mark.
+const headlineText = headline ? pickLocale(headline, locale) : BUILT_IN.headline[locale];
+const accentFrom = headline
+  ? locale === 'ar'
+    ? accentFromAr
+    : accentFromEn
+  : locale === 'ar'
+    ? BUILT_IN.accentFromAr
+    : BUILT_IN.accentFromEn;
+const words: Word[] = headlineText
+  .split(/\s+/)
+  .filter(Boolean)
+  .map((text, i) => ({ text, accent: accentFrom !== undefined && i >= accentFrom }));
 // A given sub wins; without one, the built-in slogan — unless the route says the page has
 // no sub (a service page's is its own tagline: the home slogan under "Logo Design" would be
 // unrelated copy).
-const subText = sub ? pickLocale(sub, locale) : data?.noSub === true ? '' : STR.sub;
-const ctaText = ctaLabel ? pickLocale(ctaLabel, locale) : STR.cta;
+const subText = sub ? pickLocale(sub, locale) : data?.noSub === true ? '' : BUILT_IN.sub[locale];
+const ctaText = ctaLabel ? pickLocale(ctaLabel, locale) : BUILT_IN.ctaLabel[locale];
 const perWord = locale === 'ar';
 const parts = words.map((w) => ({
   ...w,
@@ -240,7 +219,7 @@ const src = videoUid ? undefined : videoSrc;
       /* The service page's crumb, a sibling BEFORE the h1 (services.css gives it its own
         row above the headline), so no hero gains a wrapper around its LCP element. */
       crumbs.length > 0 && (
-        <nav class="crumb" aria-label={STR.crumb}>
+        <nav class="crumb" aria-label={HERO_LABELS.crumb[locale]}>
           {crumbs.map((c, i) => (
             <>
               {i > 0 && <span aria-hidden="true">/</span>}
@@ -308,7 +287,7 @@ const src = videoUid ? undefined : videoSrc;
     !banner && (
       <div class="hero__scroll" aria-hidden="true">
         <i />
-        <span>{STR.scroll}</span>
+        <span>{HERO_LABELS.scroll[locale]}</span>
       </div>
     )
   }

@@ -2,6 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import { BUDGET_BANDS, BUDGET_BAND_LABELS } from '@schemas/lead';
 import { getIdentity } from '@/lib/identity';
+import { CONTACT_FORM_COPY } from '@/lib/forms/contactCopy';
 import Cta from '@/components/ui/Cta.astro';
 import {
   CONTACT_FORM_FIELDS,
@@ -42,8 +43,8 @@ import {
 // CSV read too), and report the REAL outcome with per-field errors
 // (src/lib/client/formErrors.ts). Which fields exist, and the JSON they become, is one
 // list: src/lib/forms/contactPayload.ts — tested against LeadInputSchema's keys. The
-// design's copy is verbatim (its Saudi-voice Arabic); validation and system copy stays MSA
-// (owner decision 6).
+// form's words are src/lib/forms/contactCopy.ts: the design's copy verbatim (its
+// Saudi-voice Arabic); validation and system copy stays MSA (owner decision 6).
 
 export interface Props {
   locale: Locale;
@@ -73,71 +74,13 @@ const {
 const compact = fields === 'compact';
 const has = (f: ContactField) => (CONTACT_FORM_FIELDS[fields] as readonly string[]).includes(f);
 
+// The form's words: src/lib/forms/contactCopy.ts (two differ by layout).
+const COPY = CONTACT_FORM_COPY[locale];
 const STR = {
-  en: {
-    name: 'Name',
-    email: 'Email',
-    company: 'Company',
-    companyPh: 'Optional',
-    phone: 'Phone or WhatsApp',
-    phonePh: '+966 5X XXX XXXX',
-    namePh: 'Your full name',
-    emailPh: 'you@company.com',
-    messagePh: 'What are you making, who is it for, and when does it need to be ready?',
-    service: 'What do you need?',
-    budget: 'Budget range',
-    deadline: 'When do you need it?',
-    deadlinePh: 'A date, a season, or ASAP',
-    message: 'Tell us about the project',
-    note: 'We read everything and reply within one business day.',
-    chooseService: "Not sure yet, let's talk",
-    chooseBudget: 'Prefer to discuss',
-    consent: 'I agree to be contacted about my inquiry.',
-    submit: compact ? 'Send message' : 'Send a message',
-    sending: 'Sending…',
-    ok: "Got it. We'll be in touch within one business day.",
-    invalid: 'Please correct the marked fields and try again.',
-    rateLimited: 'Too many attempts. Please wait a minute and try again.',
-    unavailable: 'The form isn’t live yet — please email {email}.',
-    error: 'Something went wrong. Please try again.',
-    errRequired: 'This field is required.',
-    errEmail: 'Enter a valid email address, like name@company.com.',
-    errTooLong: 'This is longer than we can accept.',
-    errInvalid: 'Please check this field.',
-  },
-  ar: {
-    name: 'الاسم',
-    email: 'البريد الإلكتروني',
-    company: 'الشركة',
-    companyPh: 'اختياري',
-    phone: 'الجوال أو واتساب',
-    phonePh: '+966 5X XXX XXXX',
-    namePh: 'اسمك الكامل',
-    emailPh: 'you@company.com',
-    // The design words the placeholder per page: home "builds", /contact "makes".
-    messagePh: compact ? 'وش تبني، ولمين، ومتى لازم يطلع؟' : 'وش تصنع، ولمين، ومتى لازم يكون جاهز؟',
-    service: 'وش تحتاج؟',
-    budget: 'نطاق الميزانية',
-    deadline: 'متى تحتاجه؟',
-    deadlinePh: 'تاريخ، أو موسم، أو في أقرب وقت',
-    message: 'احكِ لنا عن المشروع',
-    note: 'نقرأ كل رسالة ونرد خلال يوم عمل واحد.',
-    chooseService: 'لسه ما قررت، خلّنا نتكلم',
-    chooseBudget: 'أفضّل نتناقش فيها',
-    consent: 'أوافق على التواصل معي بخصوص طلبي.',
-    submit: compact ? 'أرسل الرسالة' : 'أرسل رسالتك',
-    sending: 'جارٍ الإرسال…',
-    ok: 'وصلتنا. بنتواصل معك خلال يوم عمل واحد.',
-    invalid: 'يرجى تصحيح الحقول المشار إليها والمحاولة مرة أخرى.',
-    rateLimited: 'محاولات كثيرة. يرجى الانتظار دقيقة ثم المحاولة مرة أخرى.',
-    unavailable: 'النموذج غير مُفعّل بعد — راسلنا على {email}.',
-    error: 'حدث خطأ ما. حاول مرة أخرى.',
-    errRequired: 'هذا الحقل مطلوب.',
-    errEmail: 'أدخل بريدًا إلكترونيًا صحيحًا، مثل name@company.com.',
-    errTooLong: 'النص أطول من الحد المسموح.',
-    errInvalid: 'يرجى مراجعة هذا الحقل.',
-  },
-}[locale];
+  ...COPY,
+  messagePh: compact ? COPY.messagePhCompact : COPY.messagePh,
+  submit: compact ? COPY.submitCompact : COPY.submit,
+};
 
 const noteText = note ?? STR.note;
 const okText = okMessage ?? STR.ok;

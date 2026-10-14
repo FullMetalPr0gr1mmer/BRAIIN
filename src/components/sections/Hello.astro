@@ -3,7 +3,8 @@ import type { Locale } from '@schemas/primitives';
 import type { HelloSectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
 import { getPublishedDisciplines } from '@/lib/data/disciplines';
-import { HELLO_COPY, type HelloHeading } from '@/lib/sections/hello';
+import type { HelloHeading } from '@/lib/sections/hello';
+import { HELLO_COPY } from '@/lib/sections/copy/hello';
 import type { ServiceGroupInput } from '@/lib/forms/serviceSelect';
 import AccentText from '@/components/ui/AccentText.astro';
 import ContactForm from '@/components/ContactForm.astro';
@@ -16,7 +17,8 @@ import ContactForm from '@/components/ContactForm.astro';
 //
 // PUBLIC API (S3 renders it as a section, S4 directly):
 //   content  HelloSectionContentSchema — { tag, heading, accent, lead, points[≤3] }, every
-//            key an optional bilingual override of the mockup's copy (HELLO_COPY);
+//            key an optional bilingual override of the mockup's copy (HELLO_COPY,
+//            src/lib/sections/copy/hello.ts);
 //            `accent` only applies to an authored heading.
 //   data     { groups? } — ROUTE data: the disciplines with their services for the grouped
 //            select. Without it the section loads them itself.
@@ -26,7 +28,7 @@ import ContactForm from '@/components/ContactForm.astro';
 //     headingOverride?  { text, accent? } in the page's language — the service page's
 //                       "Let's talk *Logo Design*" (serviceHelloHeading() builds it); the
 //                       heading then takes the smaller service-page size
-//     leadOverride?     a string in the page's language (SERVICE_HELLO_LEAD)
+//     leadOverride?     a string in the page's language (SERVICE_PAGE_COPY helloLead)
 //
 // id="inquiry" is the target of every "Skip to the inquiry" / "Inquire" link.
 
@@ -53,18 +55,19 @@ const {
   leadOverride,
 } = Astro.props;
 
-const STR = HELLO_COPY[locale];
-const tagText = tag ? pickLocale(tag, locale) : STR.tag;
+const tagText = tag ? pickLocale(tag, locale) : HELLO_COPY.tag[locale];
 // Precedence: the page's own heading (a service page), then an authored one, then the
 // design's. An authored heading takes only an authored accent.
 const title = headingOverride
   ? { text: headingOverride.text, accent: headingOverride.accent }
   : heading
     ? { text: pickLocale(heading, locale), accent }
-    : { text: STR.heading, accent: HELLO_COPY.accent };
-const leadText = leadOverride ?? (lead ? pickLocale(lead, locale) : STR.lead);
+    : { text: HELLO_COPY.heading[locale], accent: HELLO_COPY.accent };
+const leadText = leadOverride ?? (lead ? pickLocale(lead, locale) : HELLO_COPY.lead[locale]);
 const pointTexts =
-  points && points.length > 0 ? points.map((p) => pickLocale(p.text, locale)) : STR.points;
+  points && points.length > 0
+    ? points.map((p) => pickLocale(p.text, locale))
+    : HELLO_COPY.points.map((p) => p.text[locale]);
 
 const groups = groupsProp ?? data?.groups ?? (await getPublishedDisciplines());
 ---

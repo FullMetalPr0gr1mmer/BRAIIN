@@ -1,5 +1,5 @@
 import type { Locale } from '@schemas/primitives';
-import type { Accent, VideoClip } from '@schemas/media';
+import type { VideoClip } from '@schemas/media';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import { countLabel, type PluralForms } from '@/lib/i18n/plural';
 import type { ImageRef } from '@/lib/media/resolve';
@@ -158,51 +158,3 @@ export function fallbackDisciplineCards(
     clip: null,
   }));
 }
-
-/**
- * The band's built-in copy, verbatim from the mockups: home is index.html's `services.*`
- * keys, page mode services.html's `s.catTag` / `s.catH` / `s.catP` / `s.hint`. The accent
- * is a word range of the built-in heading ("Five disciplines, <em>one studio</em>").
- */
-export const DISCIPLINE_BAND_COPY: Record<
-  DisciplineCardsMode,
-  Record<
-    Locale,
-    { tag: string; heading: string; sub: string; hint: string; allLabel: string | null }
-  > & { accent: Accent }
-> = {
-  home: {
-    en: {
-      tag: 'What we do',
-      heading: 'Five disciplines, one studio',
-      sub: 'Take one. Take all of them. The work holds together either way, because it never leaves the building.',
-      hint: 'Open one to see every service inside it',
-      allLabel: 'All services',
-    },
-    ar: {
-      tag: 'ما نقدّمه',
-      heading: 'خمسة تخصصات، استوديو واحد',
-      sub: 'خذ واحدة، أو خذها كلها. الشغل يبقى متماسكاً في الحالتين، لأنه لا يغادر المبنى.',
-      hint: 'افتح أي تخصص وشوف كل خدماته',
-      allLabel: 'كل الخدمات',
-    },
-    accent: { en: { from: 2 }, ar: { from: 2 } },
-  },
-  page: {
-    en: {
-      tag: 'Our services',
-      heading: 'Everything your brand needs',
-      sub: 'Five disciplines, twenty eight services. Open one to see everything inside it.',
-      hint: 'Tap a discipline to open it',
-      allLabel: null,
-    },
-    ar: {
-      tag: 'خدماتنا',
-      heading: 'كل اللي تحتاجه علامتك',
-      sub: 'خمسة تخصصات وثمان وعشرون خدمة. افتح أي تخصص وشوف كل اللي فيه.',
-      hint: 'اضغط على أي تخصص لفتحه',
-      allLabel: null,
-    },
-    accent: { en: { from: 3 }, ar: { from: 3 } },
-  },
-};

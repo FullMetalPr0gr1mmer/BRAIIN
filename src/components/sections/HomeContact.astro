@@ -5,12 +5,13 @@ import { pickLocale } from '@/lib/i18n';
 import ContactForm from '@/components/ContactForm.astro';
 import { getPublishedDisciplines } from '@/lib/data/disciplines';
 import type { ServiceGroupInput } from '@/lib/forms/serviceSelect';
+import { CONTACT_COPY } from '@/lib/sections/copy/contact';
 
 // Home contact — display-size CTA over the real lead form: ContactForm's compact variant
 // (UI v2 PR7 — the design's name, email, company, service and message, posted as
 // kind=contact; Zod-validated server-side at /api/contact, honeypot, consent checkbox,
 // real status and per-field errors). Heading/accent are CMS-overridable
-// (ContactSectionContentSchema).
+// (ContactSectionContentSchema) over the built-in line (src/lib/sections/copy/contact.ts).
 //
 // The service select is grouped by discipline (Round 2). The home route loads the
 // disciplines once for the cards and this form and hands them over as route `data.groups`
@@ -23,13 +24,8 @@ interface Props extends ContactSectionContent {
 
 const { locale, heading, accent, data } = Astro.props;
 
-const STR = {
-  en: { pre: "Let's make something", accent: 'that lands' },
-  ar: { pre: 'خلّنا نصنع شيئاً', accent: 'يترك أثراً' },
-}[locale];
-
-const preText = heading ? pickLocale(heading, locale) : STR.pre;
-const accentText = accent ? pickLocale(accent, locale) : STR.accent;
+const preText = heading ? pickLocale(heading, locale) : CONTACT_COPY.heading[locale];
+const accentText = accent ? pickLocale(accent, locale) : CONTACT_COPY.accent[locale];
 
 const groups = data?.groups ?? (await getPublishedDisciplines());
 ---

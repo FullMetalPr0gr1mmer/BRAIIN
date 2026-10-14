@@ -4,13 +4,13 @@ import type { ServicesOverviewSectionContent } from '@schemas/sections';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import { getPublishedDisciplines } from '@/lib/data/disciplines';
 import {
-  DISCIPLINE_BAND_COPY,
   disciplineSectionId,
   fallbackDisciplineCards,
   toDisciplineCards,
   type DisciplineCardInput,
   type DisciplineCardsMode,
 } from '@/lib/services/cards';
+import { SERVICES_OVERVIEW_COPY } from '@/lib/sections/copy/servicesOverview';
 import AccentText from '@/components/ui/AccentText.astro';
 import Cta from '@/components/ui/Cta.astro';
 import MediaFrame from '@/components/media/MediaFrame.astro';
@@ -21,7 +21,7 @@ import MediaFrame from '@/components/media/MediaFrame.astro';
 // PUBLIC API (S3 builds on it):
 //   content  ServicesOverviewSectionContentSchema — { tag, heading, accent, sub, hint,
 //            allLabel }, every key an optional bilingual override of the mockup's copy
-//            (src/lib/services/cards.ts DISCIPLINE_BAND_COPY). `accent` only applies to an
+//            (src/lib/sections/copy/servicesOverview.ts). `accent` only applies to an
 //            authored heading.
 //   data     { mode?: 'home' | 'page'; disciplines?: readonly DisciplineCardInput[] } —
 //            ROUTE data (SectionRenderer `data`), never content. `mode` defaults to 'home'.
@@ -60,17 +60,21 @@ interface Props extends ServicesOverviewSectionContent {
 const { locale, tag, heading, accent, sub, hint, allLabel, data } = Astro.props;
 
 const mode: DisciplineCardsMode = data?.mode === 'page' ? 'page' : 'home';
-const copy = DISCIPLINE_BAND_COPY[mode];
-const STR = copy[locale];
+const copy = SERVICES_OVERVIEW_COPY[mode];
 
-const tagText = tag ? pickLocale(tag, locale) : STR.tag;
-const headingText = heading ? pickLocale(heading, locale) : STR.heading;
+const tagText = tag ? pickLocale(tag, locale) : copy.tag[locale];
+const headingText = heading ? pickLocale(heading, locale) : copy.heading[locale];
 // An authored heading takes only an authored accent: the built-in range counts the words of
 // the built-in heading.
 const accentRange = heading ? accent : copy.accent;
-const subText = sub ? pickLocale(sub, locale) : STR.sub;
-const hintText = hint ? pickLocale(hint, locale) : STR.hint;
-const allText = mode === 'home' ? (allLabel ? pickLocale(allLabel, locale) : STR.allLabel) : null;
+const subText = sub ? pickLocale(sub, locale) : copy.sub[locale];
+const hintText = hint ? pickLocale(hint, locale) : copy.hint[locale];
+const allText =
+  mode === 'home'
+    ? allLabel
+      ? pickLocale(allLabel, locale)
+      : SERVICES_OVERVIEW_COPY.home.allLabel[locale]
+    : null;
 
 const disciplines = data?.disciplines ?? (await getPublishedDisciplines());
 const cards =
