@@ -23,8 +23,10 @@ import KitGallery from '@/components/admin/screens/kit/KitGallery';
 import { KIT_ROWS, KIT_SECTIONS } from '@/components/admin/screens/kit/samples';
 import {
   deleteMessage,
+  nameLang,
   nameOf,
   renderCell,
+  secondLine,
 } from '@/components/admin/screens/resources/ResourceTable';
 import { pageInfo } from '@/lib/admin/pager';
 import { formatDate } from '@/lib/admin/relTime';
@@ -402,6 +404,46 @@ describe('ResourceTable on the kit', () => {
     expect(nameOf({ en: ' ', ar: 'شعار' }, bilingual, 'Service')).toBe('شعار');
     expect(nameOf(null, bilingual, 'Service')).toBe('Untitled service');
     expect(nameOf('/old', { key: 'from', label: 'From' }, 'Redirect')).toBe('/old');
+  });
+
+  it('an Arabic-only title is the link, marked Arabic, and is not said twice', () => {
+    const bilingual = { key: 'title', label: 'Title', kind: 'bilingual' as const };
+    const cell = (value: unknown) =>
+      renderToStaticMarkup(createElement('div', null, secondLine(value, bilingual)));
+
+    // No English: the link says the Arabic (nameOf), in Arabic (WCAG 3.1.2), and the line
+    // under it says only that the English is missing (f4b review: it repeated the Arabic).
+    expect(nameLang({ en: ' ', ar: 'شعار' }, bilingual)).toBe('ar');
+    const arOnly = cell({ en: '', ar: 'شعار' });
+    expect(arOnly).toContain('<em>no English</em>');
+    expect(arOnly).not.toContain('شعار');
+    const link = html(DataTable<Row>, {
+      caption: 'Services',
+      columns: [{ key: 'title', label: 'Title' }],
+      rows: [{ id: 'a', title: 'شعار', views: 0 }],
+      rowName: (row) => row.title,
+      rowHref: (row) => `/admin/services/${row.id}`,
+      rowLang: () => nameLang({ en: '', ar: 'شعار' }, bilingual),
+      total: 1,
+      offset: 0,
+      onPage: () => {},
+    });
+    expect(link).toContain(
+      '<a class="data-link" href="/admin/services/a" dir="auto" lang="ar">شعار</a>',
+    );
+
+    // Both sides: English link, the Arabic under it in Arabic and right to left.
+    expect(nameLang({ en: 'Logo', ar: 'شعار' }, bilingual)).toBeUndefined();
+    expect(cell({ en: 'Logo', ar: 'شعار' })).toBe(
+      '<div><div dir="rtl" lang="ar" class="cell-secondary">شعار</div></div>',
+    );
+    // A missing side is said in English, never marked as Arabic.
+    expect(cell({ en: 'Logo', ar: '' })).toBe(
+      '<div><div class="cell-secondary"><em>no Arabic</em></div></div>',
+    );
+    expect(cell(null)).toContain('<em>no English</em>');
+    expect(cell(null)).toContain('<em>no Arabic</em>');
+    expect(nameLang('/old', { key: 'from', label: 'From' })).toBeUndefined();
   });
 
   it('names the row in the delete confirmation, isolated from the sentence', () => {

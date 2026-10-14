@@ -170,6 +170,7 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
         rows={rows}
         rowName={rowName}
         rowHref={(row) => `/admin/${ui.slug}/${row.id}`}
+        rowLang={(row) => (first ? nameLang(row[first.key], first) : undefined)}
         total={total}
         offset={offset}
         limit={PAGE_SIZE}
@@ -379,24 +380,53 @@ export function nameOf(value: unknown, column: ColumnDef, singular: string): str
   return text || `Untitled ${singular.toLowerCase()}`;
 }
 
-/** Under the link: a bilingual title's Arabic (or the cue that it has none). */
-function secondLine(value: unknown, column: ColumnDef) {
+/**
+ * The language of the row's name when it is not English: a bilingual title with only its
+ * Arabic, which nameOf then uses for the link. Undefined otherwise.
+ */
+export function nameLang(value: unknown, column: ColumnDef): 'ar' | undefined {
+  if (column.kind !== 'bilingual') return undefined;
+  const { en, ar } = sides(value);
+  return !en.trim() && ar.trim() ? 'ar' : undefined;
+}
+
+/**
+ * Under the link: a bilingual title's Arabic, or the cue that a side is missing. With no
+ * English the link already says the Arabic (nameOf, read as Arabic through nameLang), so
+ * only "no English" follows: the same words twice would be read twice.
+ */
+export function secondLine(value: unknown, column: ColumnDef) {
   if (column.kind !== 'bilingual') return null;
   const { en, ar } = sides(value);
+  const hasEn = en.trim() !== '';
+  const hasAr = ar.trim() !== '';
   return (
     <>
-      {!en && (
+      {!hasEn && (
         <div className="cell-secondary">
           <em>no English</em>
         </div>
       )}
-      {/* dir="rtl" on the Arabic line only — a mixed table where the Arabic renders LTR
-          shows correct characters with the punctuation in the wrong place, which
-          reviewers reliably miss. */}
-      <div dir="rtl" lang="ar" className="cell-secondary">
-        {ar || <em>no Arabic</em>}
-      </div>
+      {(hasEn || !hasAr) && <ArabicLine ar={ar} />}
     </>
+  );
+}
+
+/**
+ * A bilingual value's Arabic line, or "no Arabic". dir="rtl" and lang="ar" on the Arabic
+ * only: a mixed table where the Arabic renders LTR shows correct characters with the
+ * punctuation in the wrong place, which reviewers reliably miss, and the English cue is
+ * not Arabic.
+ */
+function ArabicLine({ ar }: { ar: string }) {
+  return ar.trim() ? (
+    <div dir="rtl" lang="ar" className="cell-secondary">
+      {ar}
+    </div>
+  ) : (
+    <div className="cell-secondary">
+      <em>no Arabic</em>
+    </div>
   );
 }
 
@@ -414,9 +444,7 @@ export function renderCell(value: unknown, column: ColumnDef) {
       return (
         <>
           <div dir="auto">{en || <em>no English</em>}</div>
-          <div dir="rtl" lang="ar" className="cell-secondary">
-            {ar || <em>no Arabic</em>}
-          </div>
+          <ArabicLine ar={ar} />
         </>
       );
     }

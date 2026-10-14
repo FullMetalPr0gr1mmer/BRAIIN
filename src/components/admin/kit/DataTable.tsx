@@ -52,6 +52,11 @@ export interface DataTableProps<Row extends { id: string }> {
   rowName: (row: Row) => string;
   /** The row's page; the title column links to it. */
   rowHref?: ((row: Row) => string) | undefined;
+  /**
+   * The language of a row's name when it is not English (an Arabic-only title: "ar"),
+   * set on its link so it is read in that language (WCAG 3.1.2).
+   */
+  rowLang?: ((row: Row) => string | undefined) | undefined;
   /** The column that holds the link: the first by default. */
   titleColumn?: string | undefined;
   total: number;
@@ -106,6 +111,7 @@ export default function DataTable<Row extends { id: string }>({
   rows,
   rowName,
   rowHref,
+  rowLang,
   titleColumn,
   total,
   offset,
@@ -231,7 +237,12 @@ export default function DataTable<Row extends { id: string }>({
                       <td key={column.key} className={column.num ? 'num' : undefined}>
                         {column.key === linkColumn && rowHref ? (
                           <>
-                            <a className="data-link" href={rowHref(row)} dir="auto">
+                            <a
+                              className="data-link"
+                              href={rowHref(row)}
+                              dir="auto"
+                              lang={rowLang?.(row)}
+                            >
                               {rowName(row)}
                             </a>
                             {column.render?.(row)}
