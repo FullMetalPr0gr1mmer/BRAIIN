@@ -18,6 +18,11 @@
 --     its variables are pg_catalog.text, so nothing on a caller's path, pg_temp included,
 --     can stand in for any of them. 0010's path was `public, app, extensions, net, pg_temp`.
 --   • The body is 0010's: exactly {lead_id, tenant_id}, nothing from the lead's content.
+--   • Every lead is announced, whichever door it came through: the contact form
+--     (crm_ingest_lead, or its fallback insert), and a lead staff add by hand (source
+--     'manual', crm_ingest_lead since 0041). Kept on purpose: the notification says a lead
+--     arrived, and the other recipients learn of a walk-in or a phone call the same way
+--     they learn of a form.
 --   • Where it goes is the Vault secret `notify_lead_url`: one URL for the deployment, set
 --     by whoever holds the database owner (the dashboard's Vault, or SQL as postgres), like
 --     the secret beside it. site_settings.identity ->> 'notify_lead_url', 0010's source, is
@@ -34,10 +39,14 @@
 --     JSON bytes, so no serializer can break it; the Worker recomputes it over the body's
 --     ids and refuses a timestamp more than 300 s from its clock. What the queue holds is
 --     then good for one lead, for five minutes, and a replay only re-announces that lead.
---   • Nothing it does can fail an insert. Any error while reading the configuration or
---     queueing the request is caught, and the lead is saved. A contact form that fails because a notification could not be
---     queued is the worse failure (0010 §6). 0010's body had no handler, so a pg_net error
---     would have failed the insert.
+--   • No error it can catch fails an insert. Every statement runs inside a handler: any
+--     error while reading the configuration, signing or queueing the request (and while
+--     logging that) is caught, and the lead is saved. A contact form that fails because a
+--     notification could not be queued is the worse failure (0010 §6); 0010's body had no
+--     handler, so a pg_net error would have failed the insert. What PL/pgSQL's WHEN OTHERS
+--     does not catch is a cancelled statement (query_canceled: a statement timeout, a
+--     cancel request) and a failed ASSERT (assert_failure); this function asserts nothing,
+--     and a cancel ends the insert as it would without the trigger.
 --   • Not silent. Configured but not announced (a non-https URL, no secret, an error) is a
 --     WARNING and a system_logs row (level warn, source leads_notify, a fixed message,
 --     detail {sqlstate} for an error, else {}), naming no value: never the URL, the secret

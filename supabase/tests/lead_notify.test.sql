@@ -16,6 +16,7 @@
 --      under the secret, which the queue never holds; a lead in another tenant is signed
 --      with that tenant's id; a lead arriving through crm_ingest_lead (the service role,
 --      the contact form's door) is announced once, and its retry is not announced again;
+--      a lead staff add by hand (source 'manual', 0041) is announced too;
 --   4. nothing it does fails an insert: a URL pg_net refuses leaves the lead saved and
 --      nothing queued, and a system_logs row that cannot be written fails nothing either;
 --   5. not silent: configured but not announced (http://, no secret, an error) writes one
@@ -32,11 +33,16 @@
 -- the transaction and rolled back with it. CLAUDE.md §3 (Pillar 1), §9, §10.
 
 begin;
-select plan(52);
+select plan(54);
 
 insert into public.tenants (id, name) values
   ('48000000-0000-4000-8000-00000000000a', 'NotifyA'),
   ('48000000-0000-4000-8000-00000000000b', 'NotifyB');
+-- Who adds a lead by hand in tenant A.
+insert into auth.users (id, email) values
+  ('48000000-0000-4000-8000-0000000000e1', 'notify-admin@example.test');
+insert into public.profiles (id, tenant_id, role, is_active, locked_until) values
+  ('48000000-0000-4000-8000-0000000000e1', '48000000-0000-4000-8000-00000000000a', 'admin', true, null);
 
 -- A Vault secret by name: set (created if missing), or taken away (renamed aside), inside
 -- this transaction.
@@ -296,6 +302,19 @@ begin
     'id', '48000000-0000-4000-8000-0000000000a4', 'name', 'Form', 'email_enc', 'x', 'message', 'hi'));
   reset role;
   return next is(_queued() - v_n, 0::bigint, 'a retried crm_ingest_lead is not announced again');
+
+  -- A lead added by hand (0041: source 'manual', naming who added it) is announced too.
+  v_n := _queued();
+  set local role service_role;
+  return next is(
+    public.crm_ingest_lead(a, jsonb_build_object(
+      'id', '48000000-0000-4000-8000-0000000000a8', 'name', 'Walk-in', 'email_enc', 'x',
+      'message', 'came by', 'source', 'manual', 'channel', 'walk_in',
+      'created_by', '48000000-0000-4000-8000-0000000000e1')),
+    '48000000-0000-4000-8000-0000000000a8'::uuid,
+    'a manual lead (source manual) is saved');
+  reset role;
+  return next is(_queued() - v_n, 1::bigint, 'a manual lead is announced, once');
 
   -- An https URL pg_net refuses when it queues (curl's URL parser rejects a space in the
   -- host): the error is caught inside the trigger, and the lead is saved.
