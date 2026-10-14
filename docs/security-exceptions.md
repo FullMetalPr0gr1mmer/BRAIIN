@@ -17,6 +17,7 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open (re-signed 2026-09-29) | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops |
 | EXC-010 | 2026-10-01 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `basic-ftp` GHSA-c475-qrg2-pj4r allowlisted in the dev audit gate — every 5.x is affected and no dependent in the Lighthouse CI chain takes the 6.x fix |
 | EXC-011 | 2026-10-03 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `http-cache-semantics` GHSA-ch52-4w7c-c8xp allowlisted in the prod audit gate — every release is affected (no fix exists); its only importer is Astro's build-time remote-image cache, which this site never uses, and it is absent from the Worker |
+| EXC-012 | 2026-10-14 | Developer (tech@purecoffee.sa) | 2027-01-31 | Open (accepted platform exception) | pg_net's queue and response tables (`net.http_request_queue`, `net._http_response`) grant **SELECT/INSERT/UPDATE/DELETE to PUBLIC** on Supabase, and `postgres` cannot revoke them. Since 0048 a queued lead notification holds only a timestamp and a signature for one lead (never the secret), and `net` must stay out of the exposed API schemas |
 
 ---
 
@@ -201,7 +202,7 @@ Precision matters here, because "no WAF" reads worse than it is and better than 
 
 - `/api/search` — Zod cap (≤64 chars, no control chars), `websearch_to_tsquery` (never raw `to_tsquery`), per-call `statement_timeout`, capped rows.
 - `/api/analytics`, `/api/rum` — same-origin check, Zod envelope, **server-side** consent re-check (the client's beacon decision is not trusted).
-- `/api/hooks/notify-lead` — bearer token, constant-time compared; verified live: an unsigned POST returns **401**.
+- `/api/hooks/notify-lead` — a signed call (since 0048: a timestamp and an HMAC over the lead and tenant ids, constant-time compared, 300 s window; before it, a bearer token); verified live: an unsigned POST returns **401**.
 - `/api/ai/style-finder` — the only public endpoint with a code-level limiter (per-IP 60/hr + per-session 20/hr) ahead of the spend cap.
 
 **Genuinely absent** — the **volumetric** layer, everywhere except style-finder. That layer was designed to live in the WAF, and `src/pages/api/search.ts:21` says so in a `TODO(KAN-20)`. Two consequences worth naming rather than implying:
@@ -736,3 +737,64 @@ fails every pull request, unrelated ones included.
 **Close condition:** `npm run audit` reports 0 unallowlisted high/critical with the
 `GHSA-ch52-4w7c-c8xp` entry REMOVED from `scripts/audit-gate.mjs`. If nothing lands by
 expiry, re-justify — never extend silently.
+
+---
+
+## EXC-012 — pg_net's queue is readable and writable by every database role
+
+**Pillar:** 1 (Security) — CLAUDE.md §3, §10, §11.
+**Opened:** 2026-10-14 · **Owner:** Developer (tech@purecoffee.sa) · **Expiry:** 2027-01-31
+(re-review; this is a platform default, not a debt with a fix date).
+
+### What is exposed
+
+Production runs pg_net 0.20.4, installed in schema `extensions` with its objects in `net`. Its
+two tables, `net.http_request_queue` (the requests waiting for pg_net's worker: method, URL,
+headers, body) and `net._http_response` (what came back, kept 6 hours), are owned by
+`supabase_admin`, and **PUBLIC holds SELECT, INSERT, UPDATE and DELETE on both**. `anon` and
+`authenticated` hold USAGE on schema `net`, and an event trigger (`issue_pg_net_access`)
+re-grants pg_net's access when the extension is created or updated. `postgres`, the role
+migrations run as, holds no grant option on those tables, so no migration can revoke the
+PUBLIC grants. Checked read-only on production on 2026-10-14; the read-only `deploy_guard`
+login role (launch runbook §5a) can SELECT the queue, as can any other login role.
+
+So any role that can open a database session can read a queued request, change or delete
+it before the worker sends it, or queue a request of its own (an HTTP call made from the
+database's network).
+
+### What we changed so it does not matter for leads (0048)
+
+- **The queue never holds a secret.** The lead-notification trigger used to put
+  `Authorization: Bearer <secret>` in the request headers; it now sends
+  `X-Braiin-Timestamp` and `X-Braiin-Signature: v1=<HMAC-SHA-256 of "<ts>.<lead_id>.<tenant_id>">`.
+  A queued notification holds that signature, a timestamp, the URL and the body
+  `{lead_id, tenant_id}`: no personal data, and nothing that signs anything else.
+- **What a reader can do with it:** replay it to the hook within 300 s of the timestamp,
+  which re-announces the same lead (a second `notification_log` row) and nothing more. A
+  signature cannot be moved to another lead or tenant, and the Worker refuses it after five
+  minutes.
+- **What a writer can do with it:** delete or alter a queued notification (that lead is not
+  announced; the daily `cron:lead-notify` check reports leads no notification reached), or
+  queue requests of its own. The last is the platform's exposure, not this feature's.
+
+### Why it is accepted
+
+- **No API path reaches `net`.** PostgREST serves only the schemas listed under *API → Exposed
+  schemas* (by default `public` and `graphql_public`). The `anon` and `authenticated` USAGE
+  grants matter only to a session opened directly against Postgres, which those roles cannot
+  do (they are NOLOGIN; the API switches into them).
+- **The login roles are ours.** `postgres` (the owner), `deploy_guard` (CI's read-only
+  check) and Supabase's own service roles. None is handed to a person or a third party.
+- **It cannot be fixed from a migration.** Revoking needs `supabase_admin`.
+
+### Owner actions
+
+1. ☐ In the Supabase dashboard, *Project Settings → API → Exposed schemas*: confirm `net` (and
+   `extensions`, `vault`, `app`) are **not** listed. If one is, remove it; that would put the
+   queue behind the anon key.
+2. ☐ Keep the database's login roles to the ones above; a new one (a BI tool, a contractor)
+   is a reason to re-review this entry first.
+
+**Close condition:** pg_net or Supabase ships narrower defaults on its tables (no PUBLIC
+INSERT/UPDATE/DELETE, no PUBLIC SELECT on the queue), or the platform lets the project owner
+revoke them. Re-review at expiry either way, and whenever a new database login role is added.
