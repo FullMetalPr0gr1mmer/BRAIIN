@@ -1,5 +1,6 @@
 import { APPLY_STATUSES, type ApplyStatus } from '@schemas/application';
 import { DEFAULT_JOIN_SECTIONS, ensureJoinApply, withHeroPreset, type SectionData } from './types';
+import { fillBrand } from './copy/text';
 
 // The Join page (/join, /ar/join): the route's cache entities, the no-JS answer
 // (`?status=`) and the composition the route renders. Pure, so the route guarantees are
@@ -16,11 +17,14 @@ import { DEFAULT_JOIN_SECTIONS, ensureJoinApply, withHeroPreset, type SectionDat
 export const JOIN_CACHE_ENTITIES = ['page:join'] as const;
 
 /** The token the copy names the studio by (as About's): replaced with the brand. */
-export const BRAND_TOKEN = '%brand%';
+export { BRAND as BRAND_TOKEN } from './copy/text';
 
-/** `%brand%` → the brand, in defaults and authored copy alike. */
+/**
+ * `%brand%` → the brand, in defaults and authored copy alike: fillBrand, so a brand is
+ * copied as written, never read as a `$&`-style replacement pattern.
+ */
 export function withBrand(text: string, brand: string): string {
-  return text.replaceAll(BRAND_TOKEN, brand);
+  return fillBrand(text, brand);
 }
 
 /** The application band's anchor — the hero's "Apply now" and the no-JS answer's `#apply`. */

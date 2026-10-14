@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { RENDERED_SECTION_TYPES, type RenderedSectionType } from '@/lib/sections/registry';
 import { SECTION_COPY } from '@/lib/sections/copy';
 import { withHeroPreset, type HeroPreset, type SectionData } from '@/lib/sections/types';
-import { CARDS, DISCIPLINES, LEADERS, STATS, TESTIMONIALS } from './fixtures';
+import { CARDS, DISCIPLINES, IDENTITY, LEADERS, STATS, TESTIMONIALS } from './fixtures';
 import { LOCALES, renderSections } from './harness';
 
 // Per section type and per look: the built-in copy (src/lib/sections/copy/) IS what the
@@ -149,6 +149,34 @@ describe('rendering with no content equals rendering the built-in copy', () => {
           }
         });
       }
+    }
+  }
+});
+
+describe('the brand is filled as written', () => {
+  // `%brand%` in a section's copy, built-in or authored, is the public identity's brand,
+  // copied as written: never read as a `$&`-style replacement pattern.
+  const brand = 'Studio $& $$ $` One';
+  const identity = { ...IDENTITY, brandName: { en: brand, ar: brand } };
+  const escaped = brand.replace(/&/g, '&amp;');
+  const authored = { en: 'Made at %brand%', ar: 'صنع في %brand%' };
+
+  const CASES: [type: RenderedSectionType, content: object][] = [
+    ['aboutIntro', {}],
+    ['aboutStory', {}],
+    ['joinWhy', {}],
+    ['joinWhy', { lead: authored }],
+    ['joinSteps', { lead: authored }],
+    ['joinApply', { lead: authored }],
+  ];
+
+  for (const [type, content] of CASES) {
+    for (const locale of LOCALES) {
+      test(`${type} ${JSON.stringify(content)} (${locale})`, async () => {
+        const html = await renderSections(compose(type, {}, content), locale, identity);
+        expect(html).toContain(escaped);
+        expect(html).not.toContain('%brand%');
+      });
     }
   }
 });

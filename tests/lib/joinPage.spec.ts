@@ -327,6 +327,11 @@ describe('the built-in copy', () => {
     expect(withBrand(JOIN_WHY_COPY.tag.ar, 'بريّن ستيشن')).toBe('ليش بريّن ستيشن');
     expect(withBrand('%brand% and %brand%', 'X')).toBe('X and X');
   });
+
+  it('copies the brand as written, never as a replacement pattern', () => {
+    expect(withBrand('Why %brand%', "A$'B")).toBe("Why A$'B");
+    expect(withBrand('%brand%!', 'A$&B $` $$')).toBe('A$&B $` $$!');
+  });
 });
 
 describe('join.css: what keeps the page still', () => {

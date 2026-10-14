@@ -2,11 +2,13 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import type { AstroComponentFactory } from 'astro/runtime/server/index.js';
 import type { Locale } from '@schemas/primitives';
 import SectionRenderer from '@/components/SectionRenderer.astro';
+import type { Identity } from '@/lib/identity/fallback';
 import type { SectionData } from '@/lib/sections/types';
 import { IDENTITY } from './fixtures';
 
 // Rendering for the render project's specs: Astro's container API, with the request's
-// identity (getIdentity reads `locals.identity`) set to the fixture identity.
+// identity (getIdentity reads `locals.identity`) set to the fixture identity, or to the one
+// a spec passes.
 
 export const LOCALES: readonly Locale[] = ['en', 'ar'];
 
@@ -30,13 +32,14 @@ export const normalise = (html: string): string =>
 export async function renderComponent(
   component: AstroComponentFactory,
   props: Record<string, unknown>,
+  identity: Identity = IDENTITY,
 ): Promise<string> {
   container ??= AstroContainer.create();
   const html = await (
     await container
   ).renderToString(component, {
     props,
-    locals: { identity: Promise.resolve(IDENTITY) } as App.Locals,
+    locals: { identity: Promise.resolve(identity) } as App.Locals,
   });
   return normalise(html);
 }
@@ -46,8 +49,12 @@ export async function renderComponent(
  * section that throws into an empty placeholder, so a render holding one fails here: a
  * snapshot of it would hold a broken section as the truth.
  */
-export async function renderSections(sections: SectionData[], locale: Locale): Promise<string> {
-  const html = await renderComponent(SectionRenderer, { locale, sections });
+export async function renderSections(
+  sections: SectionData[],
+  locale: Locale,
+  identity: Identity = IDENTITY,
+): Promise<string> {
+  const html = await renderComponent(SectionRenderer, { locale, sections }, identity);
   if (html.includes('section-error')) {
     throw new Error(`a section failed to render: ${sections.map((s) => s.type).join(', ')}`);
   }

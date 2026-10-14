@@ -18,7 +18,7 @@ export const BRAND = '%brand%';
  * as a `$&`-style replacement pattern.
  */
 export function fillBrand(text: string, brand: string): string {
-  return text.replace(/%brand%/g, () => brand);
+  return text.replaceAll(BRAND, () => brand);
 }
 
 /**
