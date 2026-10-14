@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
+import { astroComponents } from './tests/stubs/astro-components';
 
 // Path aliases mirror tsconfig.json so tests resolve @/ , @schemas/ , @consent/.
 export default defineConfig({
@@ -8,6 +9,8 @@ export default defineConfig({
   // React's automatic runtime is what the @astrojs/react integration compiles them with.
   // (Vite 8 transforms with Oxc — the `esbuild` option is no longer read.)
   oxc: { jsx: { runtime: 'automatic', importSource: 'react' } },
+  // `.astro` components, compiled for Astro's container API (tests/stubs/astro-components.ts).
+  plugins: [astroComponents()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

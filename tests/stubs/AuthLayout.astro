@@ -1,0 +1,13 @@
+---
+// Stands in for src/layouts/AuthLayout.astro in unit renders (tests/stubs/astro-components.ts):
+// the real shell needs astro:assets and the site profile. It renders the page's own markup
+// and nothing else, so what a test reads is the page's. The shell itself is covered by
+// tests/lib/adminConventions.spec.ts (no script) and the e2e suites.
+interface Props {
+  title: string;
+  styles?: readonly string[] | undefined;
+}
+const { title } = Astro.props;
+---
+
+<main data-title={title}><slot /></main>

@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
+import { staffEnv } from '../admin/staff';
 
 // The sign-in screens as a visitor with no session meets them (Admin v2 F7): sign in,
 // forgot password, reset password. No account is needed for anything here; signing in,
@@ -9,7 +11,10 @@ import { expect, test } from '@playwright/test';
 //     item O-14), "Forgot password?";
 //   - the no-JS form posts and comes back with one message for every failed sign-in;
 //   - forgot says "Not set up" while e-mail is off (owner item O-2), and otherwise answers
-//     a known and an unknown address alike; its API, the same;
+//     a known and an unknown address alike, through the no-JS form; its API, the same. The
+//     CI preview is built with e-mail off until O-2 turns it on (AUTH_EMAIL_READY in
+//     wrangler.jsonc, which the CI build reads too); the set-up screen's markup is rendered
+//     by tests/lib/authPages.spec.ts meanwhile;
 //   - a reset link without a usable token offers a new one instead of a form.
 
 const TOKEN = 'a1b2c3d4'.repeat(7);
@@ -44,8 +49,62 @@ test('sign in: the design, with "Keep me signed in" ticked by default', async ({
   await expect(page.locator('img.login__logo')).not.toHaveAttribute('alt', '');
 });
 
+/**
+ * Empties the forgot limiter's windows on the LOCAL stack (staffEnv: loopback Supabase and
+ * preview, the service key, a build against that Supabase), as apply-roundtrip.e2e.ts does
+ * for its own. The test below posts four times from one address and twice for one e-mail,
+ * within the 5 and 3 an hour (src/lib/auth/recovery.ts), but CI's retry, or a local
+ * re-run, would go past them and the two answers would differ for that reason alone.
+ */
+async function clearForgotLimits(): Promise<void> {
+  const env = staffEnv();
+  if (!env) return;
+  const svc = createClient(env.url, env.serviceKey, { auth: { persistSession: false } });
+  const { error } = await svc.from('public_write_attempts').delete().like('scope', 'auth.forgot:%');
+  expect(error).toBeNull();
+}
+
 test.describe('without JavaScript', () => {
   test.use({ javaScriptEnabled: false });
+
+  test('forgot password never says which addresses have an account', async ({ page }) => {
+    await page.goto('/admin/forgot');
+    const notSetUp = (await page.getByText('Not set up', { exact: true }).count()) > 0;
+    const origin = new URL(page.url()).origin;
+    const csrf = (await page.context().cookies()).find((c) => c.name === '__Host-csrf')?.value;
+    expect(csrf).toBeTruthy();
+
+    if (notSetUp) {
+      // E-mail is off (owner item O-2, the CI stack's state): no form pretends to send.
+      await expect(page.getByLabel('Email')).toHaveCount(0);
+      await expect(page.getByRole('status')).toContainText('cannot send password emails');
+    } else {
+      await clearForgotLimits();
+      const shown: string[] = [];
+      for (const email of ['e2e-admin@example.com', 'nobody-f7@example.com']) {
+        await page.goto('/admin/forgot');
+        await page.getByLabel('Email').fill(email);
+        await page.getByRole('button', { name: 'Send reset link' }).click();
+        await page.waitForURL((url) => url.searchParams.has('status'));
+        expect(page.url()).not.toContain('example.com');
+        shown.push(`${page.url()} ${await page.getByRole('status').innerText()}`);
+      }
+      expect(shown[0]).toBe(shown[1]);
+      expect(shown[0]).toContain('/admin/forgot?status=sent');
+    }
+
+    // The API: the same status and body for a staff address and an unknown one.
+    const answers: string[] = [];
+    for (const email of ['e2e-admin@example.com', 'nobody-f7@example.com']) {
+      const res = await page.request.post('/api/admin/auth/forgot', {
+        headers: { 'x-csrf-token': csrf ?? '', origin },
+        data: { email },
+      });
+      answers.push(`${res.status()} ${await res.text()}`);
+    }
+    expect(answers[0]).toBe(answers[1]);
+    if (notSetUp) expect(answers[0]).toBe('503 {"ok":false,"error":"not-set-up"}');
+  });
 
   test('a failed sign-in comes back with the one message, whatever failed', async ({ page }) => {
     const answers: string[] = [];
@@ -80,42 +139,6 @@ test.describe('without JavaScript', () => {
       await expect(page.getByLabel('New password', { exact: true })).toHaveCount(0);
     }
   });
-});
-
-test('forgot password never says which addresses have an account', async ({ page }) => {
-  await page.goto('/admin/forgot');
-  const notSetUp = (await page.getByText('Not set up', { exact: true }).count()) > 0;
-  const origin = new URL(page.url()).origin;
-  const csrf = (await page.context().cookies()).find((c) => c.name === '__Host-csrf')?.value;
-  expect(csrf).toBeTruthy();
-
-  if (notSetUp) {
-    // E-mail is off (owner item O-2, the CI stack's state): no form pretends to send.
-    await expect(page.getByLabel('Email')).toHaveCount(0);
-    await expect(page.getByRole('status')).toContainText('cannot send password emails');
-  } else {
-    const shown: string[] = [];
-    for (const email of ['e2e-admin@example.com', 'nobody-f7@example.com']) {
-      await page.goto('/admin/forgot');
-      await page.getByLabel('Email').fill(email);
-      await page.getByRole('button', { name: 'Send reset link' }).click();
-      await page.waitForURL((url) => url.searchParams.has('status'));
-      shown.push(`${page.url()} ${await page.getByRole('status').innerText()}`);
-    }
-    expect(shown[0]).toBe(shown[1]);
-  }
-
-  // The API: the same status and body for a staff address and an unknown one.
-  const answers: string[] = [];
-  for (const email of ['e2e-admin@example.com', 'nobody-f7@example.com']) {
-    const res = await page.request.post('/api/admin/auth/forgot', {
-      headers: { 'x-csrf-token': csrf ?? '', origin },
-      data: { email },
-    });
-    answers.push(`${res.status()} ${await res.text()}`);
-  }
-  expect(answers[0]).toBe(answers[1]);
-  if (notSetUp) expect(answers[0]).toBe('503 {"ok":false,"error":"not-set-up"}');
 });
 
 test('the sign-in endpoints refuse a post without the CSRF token', async ({ page }) => {
