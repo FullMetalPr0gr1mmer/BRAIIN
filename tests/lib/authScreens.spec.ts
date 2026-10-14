@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_NEXT, safeNext } from '@/lib/auth/next';
+import { LOCKOUT_DURATION_MINUTES } from '@/lib/auth/lockout';
 import { readAuthBody, seeOther, ticked } from '@/lib/auth/body';
 import {
   FORGOT_MESSAGES,
@@ -121,6 +122,16 @@ describe('the outcome codes the pages render', () => {
   it('keep the copy sign-in had: one message for every failure, the 15-minute lockout', () => {
     expect(LOGIN_MESSAGES.invalid.text).toBe('Those credentials did not work.');
     expect(LOGIN_MESSAGES.locked.text).toBe('Too many attempts. Try again in 15 minutes.');
+  });
+
+  it('a finished reset warns that a lockout outlasts it (F7 review)', () => {
+    // A reset does not clear the failures behind a lockout (0009's window), and the usual
+    // way to a reset is a few wrong passwords first: without this, the new password is
+    // answered "Too many attempts" with nothing to say why.
+    expect(RESET_DONE.text).toMatch(/^Your password is changed/);
+    expect(RESET_DONE.text).toContain(
+      `If sign-in was locked after too many attempts, it opens again within ${LOCKOUT_DURATION_MINUTES} minutes.`,
+    );
   });
 
   it('every reset code the endpoint sends has copy, and the spent ones drop the form', () => {

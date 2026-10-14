@@ -32,9 +32,13 @@ export const LOGIN_MESSAGES = {
   'expired-form': EXPIRED_FORM_MESSAGE,
 } as const;
 
+// A reset does not lift a sign-in lockout (src/lib/auth/lockout.ts: the failures stay in
+// their 15-minute window, which only a migration could clear; F7 takes none). The common way
+// here is a few wrong passwords and then "Forgot password?", so the notice says so rather
+// than leave the new password answered with "Too many attempts" unexplained (F7 review).
 export const RESET_DONE = msg(
   'ok',
-  'Your password is changed, and every session of your account is signed out. Sign in with the new password.',
+  `Your password is changed, and every session of your account is signed out. Sign in with the new password. If sign-in was locked after too many attempts, it opens again within ${LOCKOUT_DURATION_MINUTES} minutes.`,
 );
 
 /** /admin/forgot?status=… */
