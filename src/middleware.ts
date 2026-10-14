@@ -13,10 +13,10 @@ import { getRedirectMap, lookupRedirect, redirectResponse } from '@/lib/http/red
 import { checkImageRequest, imageGuardResponse, isImageEndpoint } from '@/lib/http/imageGuard';
 import {
   isSameOrigin,
+  csrfHeaderToken,
   csrfTokenMatches,
   generateCsrfToken,
   CSRF_COOKIE_NAME,
-  CSRF_HEADER_NAME,
   CSRF_FIELD_NAME,
 } from '@/lib/http/csrf';
 import { createSessionClient, clearSessionCookies, HOST_COOKIE_BASE } from '@/lib/auth/session';
@@ -72,9 +72,13 @@ function routeKey(pathname: string): string {
   return pathname.length > 1 ? pathname.replace(/\/+$/, '') || '/' : pathname;
 }
 
-/** A form post the CSRF check would read for its token: urlencoded, no token header. */
+/**
+ * A form post the CSRF check reads for its token: urlencoded, no token header. The one test
+ * for both the bound on that read (below) and the read itself (`submittedCsrf`), so an empty
+ * header cannot skip the one and still get the other (F7 review).
+ */
 function tokenInBody(request: Request): boolean {
-  if (request.headers.has(CSRF_HEADER_NAME)) return false;
+  if (csrfHeaderToken(request) !== null) return false;
   return (request.headers.get('content-type') ?? '').includes('application/x-www-form-urlencoded');
 }
 
@@ -93,11 +97,9 @@ function jsonError(status: number, error: string): Response {
  * find a 64-byte token trades real memory for nothing.
  */
 async function submittedCsrf(request: Request): Promise<string | null> {
-  const header = request.headers.get(CSRF_HEADER_NAME);
-  if (header) return header;
-
-  const contentType = request.headers.get('content-type') ?? '';
-  if (!contentType.includes('application/x-www-form-urlencoded')) return null;
+  const header = csrfHeaderToken(request);
+  if (header !== null) return header;
+  if (!tokenInBody(request)) return null;
   try {
     const form = await request.clone().formData();
     const value = form.get(CSRF_FIELD_NAME);

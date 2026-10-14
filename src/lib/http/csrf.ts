@@ -34,6 +34,18 @@ export const CSRF_COOKIE_NAME = '__Host-csrf';
 export const CSRF_HEADER_NAME = 'x-csrf-token';
 export const CSRF_FIELD_NAME = '_csrf';
 
+/**
+ * The token a request carries in the `x-csrf-token` header, or null: an empty header is no
+ * token, so the check falls back to the form field. The one answer to "does this request
+ * carry a token header", for every code that asks it: the middleware's token reader and the
+ * bound it puts on the body that reader reads (src/middleware.ts), and the sign-in forms'
+ * refusal (src/lib/auth/expiredForm.ts). Two answers let an empty header skip the bound
+ * while the reader, finding no token in it, read the whole body for its field (F7 review).
+ */
+export function csrfHeaderToken(request: Request): string | null {
+  return request.headers.get(CSRF_HEADER_NAME) || null;
+}
+
 /** 256-bit URL-safe token. */
 export function generateCsrfToken(): string {
   const bytes = new Uint8Array(32);

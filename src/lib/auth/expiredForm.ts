@@ -1,5 +1,5 @@
 import { RECOVERY_TOKEN_PATTERN } from '@schemas/admin';
-import { CSRF_HEADER_NAME } from '@/lib/http/csrf';
+import { csrfHeaderToken } from '@/lib/http/csrf';
 import { seeOther } from './body';
 import { DEFAULT_NEXT, safeNext } from './next';
 import { keepResetToken } from './resetToken';
@@ -60,10 +60,11 @@ function postedResetToken(endpoint: string, fields: URLSearchParams): string | n
 
 /**
  * True for a sign-in screen's own form post: one of the three endpoints, urlencoded, and no
- * token header (a script sends one; a form cannot). Reads nothing of the body.
+ * token header (a script sends one; a form cannot), as the middleware reads "no token header"
+ * (`csrfHeaderToken`: an empty one is none). Reads nothing of the body.
  */
 function isSignInFormPost(request: Request, pathname: string): boolean {
-  if (!SIGN_IN_FORMS.has(pathname) || request.headers.has(CSRF_HEADER_NAME)) return false;
+  if (!SIGN_IN_FORMS.has(pathname) || csrfHeaderToken(request) !== null) return false;
   const type = (request.headers.get('content-type') ?? '').toLowerCase();
   return type.includes('application/x-www-form-urlencoded');
 }

@@ -296,6 +296,34 @@ describe('a sign-in form post that fails the token check goes back to its page (
     }
   });
 
+  it('an empty token header is no token header: the form still goes back (F7 review)', async () => {
+    // The same question as the middleware's (src/lib/http/csrf.ts `csrfHeaderToken`): an
+    // empty header carries no token, so the post is a form's and is read like one.
+    const next = handler();
+    const res = await middleware(
+      formPost(
+        '/api/admin/auth/login',
+        { _csrf: 'b'.repeat(64), email: 'a@b.test' },
+        { headers: { [CSRF_HEADER_NAME]: '' } },
+      ),
+      next,
+    );
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/admin/login?error=expired-form');
+    expect(next).not.toHaveBeenCalled();
+    // And with the right token in its field, it is let through.
+    const good = handler();
+    await middleware(
+      formPost(
+        '/api/admin/auth/login',
+        { _csrf: TOKEN, email: 'a@b.test' },
+        { headers: { [CSRF_HEADER_NAME]: '' } },
+      ),
+      good,
+    );
+    expect(good).toHaveBeenCalledOnce();
+  });
+
   it('and only the sign-in forms: any other admin form post keeps the JSON 403', async () => {
     // Signed in (signed out, another path is the session gate's: below).
     state.auth = { ctx: DEVELOPER, revoke: false };
@@ -581,6 +609,58 @@ describe('a body is never read before the session gate has answered (F7 review)'
     const next = handler();
     const ok = await middleware(
       postBody('/admin/account', new URLSearchParams({ _csrf: TOKEN, intent: 'name' }), FORM),
+      next,
+    );
+    expect(next).toHaveBeenCalledOnce();
+    expect(ok.status).toBe(200);
+  });
+
+  it('signed in, an empty token header is no token: the form is bounded all the same (F7 review)', async () => {
+    // The bound asked whether the header was there; the reader, whether it held a token. So
+    // an empty one skipped the 1 MB bound and the reader, finding nothing in it, read the
+    // whole form for its field: eight megabytes here, a 403 after nine reads.
+    state.auth = { ctx: DEVELOPER, revoke: false };
+    /** `megabytes` of form body, then its end, counting each time anything reads it. */
+    const finite = (megabytes: number, pulls: { count: number }) =>
+      new ReadableStream<Uint8Array>(
+        {
+          pull(controller) {
+            pulls.count += 1;
+            if (pulls.count > megabytes) controller.close();
+            else controller.enqueue(new Uint8Array(1024 * 1024).fill(0x61));
+          },
+        },
+        new CountQueuingStrategy({ highWaterMark: 0 }),
+      );
+    const EMPTY = { [CSRF_HEADER_NAME]: '' };
+    const pulls = { count: 0 };
+    const big = await middleware(
+      postBody('/admin/account', finite(8, pulls), { ...FORM, ...EMPTY }),
+      handler(),
+    );
+    expect(big.status).toBe(413);
+    expect(await big.json()).toEqual({ ok: false, error: 'too-large' });
+    // Read up to the limit and no further.
+    expect(pulls.count).toBeLessThanOrEqual(3);
+    // Declared, it is refused unread.
+    const declared = { count: 0 };
+    const sized = await middleware(
+      postBody('/admin/account', finite(8, declared), {
+        ...FORM,
+        ...EMPTY,
+        'content-length': String(8 * 1024 * 1024),
+      }),
+      handler(),
+    );
+    expect(sized.status).toBe(413);
+    expect(declared.count).toBe(0);
+    // An honest form with an empty header is read for its field, as with none.
+    const next = handler();
+    const ok = await middleware(
+      postBody('/admin/account', new URLSearchParams({ _csrf: TOKEN, intent: 'name' }), {
+        ...FORM,
+        ...EMPTY,
+      }),
       next,
     );
     expect(next).toHaveBeenCalledOnce();
