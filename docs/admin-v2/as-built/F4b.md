@@ -165,12 +165,17 @@
 `admin-ui` claimed every module under `src/{components,lib}/admin/` by path, so the whole kit
 and the reference screen would have ridden along on every admin screen (each screen's eager
 graph went to 117.5 KB gz in the first build). `astro.config.mjs` now leaves the kit
-(`ADMIN_KIT`: `components/admin/kit/`, `lib/admin/client/`) and the reference screen
-(`ADMIN_KIT_SCREEN`: the `AdminKit` island and `screens/kit/`) out of the group's test. A
-group takes its modules' static dependencies, so a kit piece lands in `admin-ui` as soon as
-a screen there imports it. What of the kit no screen there imports goes to the lowest admin
-group, `admin-kit` (only `/admin/kit` loads it today), and the reference screen's own code
-stays in its `AdminKit` entry chunk.
+(`ADMIN_KIT`: `components/admin/kit/`, `lib/admin/client/`, and the two models in
+`src/lib/admin/` that only kit code reaches in the browser, `roving.ts` and `avatar.ts`)
+and the reference screen (`ADMIN_KIT_SCREEN`: the `AdminKit` island and `screens/kit/`) out
+of the group's test. A group takes its modules' static dependencies, so a kit piece lands
+in `admin-ui` as soon as a screen there imports it. What of the kit no screen there
+imports goes to the lowest admin group, `admin-kit` (only `/admin/kit` loads it today),
+and the reference screen's own code stays in its `AdminKit` entry chunk. The kit's other
+models in `src/lib/admin/` that reach the browser (`pager.ts`, `relTime.ts`, `tones.ts`,
+and `charts.ts`'s number format through Chips) are in `admin-ui` by its path rule and are
+used there (ResourceTable: its paging, dates, status badge and chips); `kpi.ts` is read by
+server primitives only.
 
 A group never follows `import()`. Before `admin-kit` existed, a kit module reached only
 lazily (an enhancer AdminLayout's script loads from `lib/admin/client/`, ui.md §2.1) would

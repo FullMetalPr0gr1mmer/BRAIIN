@@ -179,6 +179,12 @@ describe('the chunk plan in astro.config.mjs', () => {
     expect(at('src/lib/admin/client/sortable.ts')).toBe('admin-kit');
     // An enhancer that does not exist yet (ui.md §2.1) is claimed the day it is added.
     expect(at('src/lib/admin/client/enhance.ts')).toBe('admin-kit');
+    // The two models only kit code reaches in the browser ride with the kit, not on every
+    // screen; their neighbours stay admin-ui's (f4b pre-merge review).
+    expect(at('src/lib/admin/roving.ts')).toBe('admin-kit');
+    expect(at('src/lib/admin/avatar.ts')).toBe('admin-kit');
+    expect(at('src/lib/admin/initials.ts')).toBe('admin-ui');
+    expect(at('src/lib/admin/relTime.ts')).toBe('admin-ui');
     expect(groups.find((g) => g.name === 'admin-kit')?.priority).toBe(
       Math.min(...groups.filter((g) => g.name.startsWith('admin-')).map((g) => g.priority)),
     );

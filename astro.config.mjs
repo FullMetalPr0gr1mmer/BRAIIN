@@ -14,9 +14,14 @@ import { mediaRemotePatternsIntegration } from './scripts/media-remote-patterns.
 import { imageEndpointIntegration } from './scripts/image-endpoint.mjs';
 
 // The component kit's own modules (Admin v2 F4b): its React pieces
-// (src/components/admin/kit/) and the vanilla client code (src/lib/admin/client/: the
-// Sortable core, and the enhancers AdminLayout's script will lazy-load).
-const ADMIN_KIT = /[\\/]src[\\/](components[\\/]admin[\\/]kit[\\/]|lib[\\/]admin[\\/]client[\\/])/;
+// (src/components/admin/kit/), the vanilla client code (src/lib/admin/client/: the
+// Sortable core, and the enhancers AdminLayout's script will lazy-load), and the two
+// models in src/lib/admin/ that only kit code reaches in the browser (roving.ts: Tabs and
+// the Sortable core's arrow keys; avatar.ts: the Avatar's tone). Claimed by admin-ui's
+// path rule they rode on every screen; here they join admin-ui only when a screen there
+// imports them, like any kit piece.
+const ADMIN_KIT =
+  /[\\/]src[\\/](components[\\/]admin[\\/]kit[\\/]|lib[\\/]admin[\\/](client[\\/]|(roving|avatar)\.ts$))/;
 // The kit's reference screen (/admin/kit): its island and that island's own code, which
 // stay in the island's `AdminKit` entry chunk.
 const ADMIN_KIT_SCREEN =
