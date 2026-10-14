@@ -113,9 +113,13 @@
   posts at once. They take no presses while hidden (`pointer-events: none`), and hover
   arms them only once faded in (a 0.2s delay on the pointer-events transition): a tap on a
   touchscreen laptop applies `:hover` and hit-tests again in the same gesture, so arming at
-  once still handed the tap to the button it revealed (checked in Chromium). Focus and a
-  tick arm them at once, the keyboard reaches them as before, and reduced motion keeps the
-  delay, which is not motion.
+  once still handed the tap to the button it revealed (checked in Chromium). The cost: a
+  click within 0.2s of the pointer entering a row goes to the row's link, not the action
+  under it. Focus and a tick arm them at once, except while a hover's 0.2s is already
+  running (the transition ends to the same value, so it is not restarted, checked in
+  Chromium); the keyboard reaches them as before, and reduced motion keeps the delay,
+  which is not motion. A ListRow's actions (`.li__acts`) follow the same rules: they too
+  sat above a stretched title link.
 - **A KPI with no previous period draws no change pill**, where ui.md §2.4 shows "—".
   `kpi.ts` returns no change, and Kpi draws nothing: an absent trend reads better than a
   placeholder, and the admin copy has no dashes (P-12).

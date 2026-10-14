@@ -3001,8 +3001,11 @@ table.data .data-sel {
    row would land on a button nobody can see (a Move posts at once). Hover arms them only
    once they have faded in (the pointer-events transition waits 0.2s): a tap on a
    touchscreen laptop applies :hover and hit-tests again in the same gesture, so arming
-   at once would still hand that tap to the button it revealed. Focus, which reveals them
-   too, arms them at once; pointer-events never stops the keyboard reaching them. */
+   at once would still hand that tap to the button it revealed. Two consequences: a click
+   within 0.2s of the pointer entering a row goes to the row's link, and focus or a tick
+   arms them at once only when no hover is already waiting out its 0.2s (the running
+   transition ends to the same value, so it is not restarted). pointer-events never stops
+   the keyboard reaching them. */
 @media (hover: hover) {
   .dt .row-acts {
     opacity: 0;
