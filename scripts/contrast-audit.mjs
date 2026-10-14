@@ -330,7 +330,7 @@ const ADMIN_PAIRS = [
   ['sky-text', 'sky-soft', 4.5, 'scheduled / sky badge'],
   ['dim', 'gray-soft', 4.5, 'archived / gray badge'],
   ['note-ok-text', 'ok-soft', 4.5, ".msg[data-kind='ok']"],
-  ['note-warn-text', 'warn-soft', 4.5, '.pii labels'],
+  ['note-warn-text', 'warn-soft', 4.5, '.pii labels, help centre tips (.hc-tip)'],
   ['ink', 'warn-soft', 4.5, '.pii values'],
   ['err-text', 'card', 4.5, 'danger button, .field-error'],
   ['note-ok-text', 'card', 4.5, "a form's outcome (.acct__note, F8)"],

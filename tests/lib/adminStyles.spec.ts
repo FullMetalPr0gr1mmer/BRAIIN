@@ -127,7 +127,12 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
     const files = readdirSync(join(ROOT, 'public/styles/admin')).filter((f) => f.endsWith('.css'));
     expect(files.sort()).toEqual([...ADMIN_STYLESHEETS].sort());
     // Pinned, not derived: a sheet dropped from the list must fail, not go unchecked.
-    expect([...ADMIN_STYLESHEETS].sort()).toEqual(['login.css', 'personal.css', 'search.css']);
+    expect([...ADMIN_STYLESHEETS].sort()).toEqual([
+      'help.css',
+      'login.css',
+      'personal.css',
+      'search.css',
+    ]);
   });
 
   it.each([...ADMIN_STYLESHEETS])(
@@ -322,6 +327,7 @@ describe('admin.css keeps the hooks the markup renders', () => {
     it('traces each sheet to the pages it serves (the walk is not vacuous)', () => {
       const pagesFor = (sheet: string) =>
         [...new Set((renderers[sheet] ?? []).flatMap(({ file }) => pagesOf(file)))].sort();
+      expect(pagesFor('help.css')).toEqual(['src/pages/admin/help.astro']);
       // The sign-in screens (F7) render login.css's classes in their pages and in the shell
       // they share, src/layouts/AuthLayout.astro, which the walk traces to all three.
       expect(pagesFor('login.css')).toEqual([
