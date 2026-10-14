@@ -1,4 +1,3 @@
-import type { Locale } from '@schemas/primitives';
 import { APPLY_STATUSES, type ApplyStatus } from '@schemas/application';
 import { DEFAULT_JOIN_SECTIONS, ensureJoinApply, withHeroPreset, type SectionData } from './types';
 
