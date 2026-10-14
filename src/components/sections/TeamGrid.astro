@@ -2,6 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import { pickLocale } from '@/lib/i18n';
 import { getPublishedTeam, type TeamMemberRow } from '@/lib/data/team';
+import { TEAM_LABELS } from '@/lib/sections/copy/team';
 
 interface Props {
   locale: Locale;
@@ -9,11 +10,6 @@ interface Props {
 }
 
 const { locale } = Astro.props;
-
-const STR = {
-  en: { heading: 'The team', empty: 'Meet the team soon.' },
-  ar: { heading: 'الفريق', empty: 'تعرّف على الفريق قريبًا.' },
-}[locale];
 
 // Named authors = E-E-A-T (CLAUDE.md Pillar 3). Person JSON-LD is emitted at the page
 // level (one <head> choke point); this section is the visible author cards. Uses the
@@ -23,10 +19,10 @@ const members = Astro.props.members ?? (await getPublishedTeam());
 
 <section class="team-grid">
   <div class="container">
-    <h2>{STR.heading}</h2>
+    <h2>{TEAM_LABELS.heading[locale]}</h2>
     {
       members.length === 0 ? (
-        <p class="notice">{STR.empty}</p>
+        <p class="notice">{TEAM_LABELS.empty[locale]}</p>
       ) : (
         <ul class="team-list">
           {members.map((m) => {

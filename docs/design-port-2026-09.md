@@ -6,6 +6,12 @@ style or script), compositor-only motion, WCAG 2.2 AA, EN + `/ar` RTL. This file
 every place the port chooses something the mockup does not say, or deliberately does
 differently. It grows with each UI v2 PR; PR14 completes it.
 
+Where the copy lives (Admin v2 F6): every section's built-in copy, "the design's, verbatim"
+below, is data in one module per section type, `src/lib/sections/copy/<type>.ts`; the forms'
+own words are `src/lib/forms/contactCopy.ts` and `applicationCopy.ts`, and a service page's
+are `src/lib/services/pageCopy.ts`. The move changed no word and no byte of the pages
+([as-built/F6](admin-v2/as-built/F6.md)).
+
 ## Shared components (PR6)
 
 | Mockup | Site | Where |

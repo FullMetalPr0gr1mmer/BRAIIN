@@ -2,9 +2,9 @@
 import type { Locale } from '@schemas/primitives';
 import type { SocialSectionContent } from '@schemas/sections';
 import type { SocialNetwork } from '@schemas/siteProfile';
-import type { Accent } from '@schemas/media';
 import { pickLocale } from '@/lib/i18n';
 import { getIdentity } from '@/lib/identity';
+import { SOCIAL_COPY } from '@/lib/sections/copy/social';
 import AccentText from '@/components/ui/AccentText.astro';
 
 // "Follow the studio" — gradient hover boxes on paper. The links are the public
@@ -18,7 +18,7 @@ import AccentText from '@/components/ui/AccentText.astro';
 // Two layouts (UI v2 PR8): `paper` (default — home, contact) and `klein`, About's "Follow
 // the studio" band (the mockup's `.follow`): Klein ground with the sky glow, the heading
 // beside a line of text, its accent outlined, white-fill hover cards. Each layout has its
-// own built-in copy, verbatim from the design.
+// own built-in copy, verbatim from the design (src/lib/sections/copy/social.ts).
 
 interface Props extends SocialSectionContent {
   locale: Locale;
@@ -38,33 +38,17 @@ const {
   joined = false,
 } = Astro.props;
 
-type Copy = { tag: string; heading: string; text?: string; accent?: Accent };
-const STR_BY_VARIANT: Record<'paper' | 'klein', Record<Locale, Copy>> = {
-  paper: {
-    en: { tag: 'Follow the studio', heading: 'New work goes up here first.' },
-    ar: { tag: 'تابع الاستوديو', heading: 'الشغل الجديد ينزل هنا أول.' },
-  },
-  klein: {
-    en: {
-      tag: 'Follow the studio',
-      heading: 'See the work as it happens',
-      text: 'Launches, behind the scenes, and new work. It goes up on our channels first.',
-      accent: { en: { from: 3 } },
-    },
-    ar: {
-      tag: 'تابع الاستوديو',
-      heading: 'شوف الشغل وهو يصير',
-      text: 'الإطلاقات وكواليس العمل والشغل الجديد. كلها تنزل على حساباتنا أول.',
-      accent: { ar: { from: 2 } },
-    },
-  },
-};
-const STR = STR_BY_VARIANT[variant][locale];
 const klein = variant === 'klein';
-const headingText = heading ? pickLocale(heading, locale) : STR.heading;
-// An authored heading keeps only an authored accent.
-const headingAccent = heading ? accent : (accent ?? STR.accent);
-const lineText = text ? pickLocale(text, locale) : STR.text;
+const copy = SOCIAL_COPY[variant];
+const tagText = tag ? pickLocale(tag, locale) : copy.tag[locale];
+const headingText = heading ? pickLocale(heading, locale) : copy.heading[locale];
+// An authored heading keeps only an authored accent; only the Klein band has a built-in one.
+const headingAccent = heading ? accent : (accent ?? (klein ? SOCIAL_COPY.klein.accent : undefined));
+const lineText = text
+  ? pickLocale(text, locale)
+  : klein
+    ? SOCIAL_COPY.klein.text[locale]
+    : undefined;
 
 // Display name + icon per network. Handles and URLs are data (the identity), not code.
 // Complete by type: Record<SocialNetwork, …> makes the compiler flag a network added to
@@ -118,7 +102,7 @@ const resolved = links
           <div>
             <div class="tag rv">
               <span class="dot" />
-              <span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+              <span>{tagText}</span>
             </div>
             <h2 class="rv">
               <AccentText text={headingText} locale={locale} accent={headingAccent} />
@@ -130,7 +114,7 @@ const resolved = links
         <>
           <div class="tag rv">
             <span class="dot" />
-            <span>{tag ? pickLocale(tag, locale) : STR.tag}</span>
+            <span>{tagText}</span>
           </div>
           <h2 class="rv">
             <AccentText text={headingText} locale={locale} accent={headingAccent} />

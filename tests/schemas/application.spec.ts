@@ -271,6 +271,16 @@ describe('recruitment consent copy', () => {
     }
   });
 
+  it('fills the brand as written, never as a replacement pattern', () => {
+    const brand = "A$&B $' $` $$";
+    for (const locale of ['en', 'ar'] as const) {
+      const c = recruitmentConsent(locale, brand);
+      expect(c.application).toBe(
+        RECRUITMENT_CONSENT[locale].application.split('{brand}').join(brand),
+      );
+    }
+  });
+
   it('the policy version is a date the schema accepts', () => {
     expect(RECRUITMENT_POLICY_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });

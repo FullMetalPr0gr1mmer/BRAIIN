@@ -2,12 +2,14 @@
 import type { Locale } from '@schemas/primitives';
 import type { SloganSectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
+import { SLOGAN_COPY } from '@/lib/sections/copy/slogan';
 
 // Pinned slogan band — the ONLY overlaid section in the design. The word-by-word
 // reveal is a CSS scroll-driven animation (compositor-only, zero JS) behind
 // @supports; browsers without support (and reduced-motion visitors) see the slogan
 // fully visible. The plain text lives in an sr-only span; the animated spans are
-// presentation. Text + accent index are CMS-overridable (SloganSectionContentSchema).
+// presentation. Text + accent index are CMS-overridable (SloganSectionContentSchema) over
+// the built-in slogan (src/lib/sections/copy/slogan.ts).
 
 interface Props extends SloganSectionContent {
   locale: Locale;
@@ -17,13 +19,10 @@ interface Props extends SloganSectionContent {
 
 const { locale, videoSrc = '/media/showreel.mp4', text, accentFromEn, accentFromAr } = Astro.props;
 
-const SLOGAN = {
-  en: { text: "We don't make noise. We make things people remember.", accentFrom: 4 },
-  ar: { text: 'لا نصنع ضجيجاً. نصنع أشياء تبقى في الذاكرة.', accentFrom: 3 },
-}[locale];
-
-const sloganText = text ? pickLocale(text, locale) : SLOGAN.text;
-const accentFrom = (locale === 'ar' ? accentFromAr : accentFromEn) ?? SLOGAN.accentFrom;
+const sloganText = text ? pickLocale(text, locale) : SLOGAN_COPY.text[locale];
+const accentFrom =
+  (locale === 'ar' ? accentFromAr : accentFromEn) ??
+  (locale === 'ar' ? SLOGAN_COPY.accentFromAr : SLOGAN_COPY.accentFromEn);
 const words = sloganText.split(/\s+/);
 ---
 
