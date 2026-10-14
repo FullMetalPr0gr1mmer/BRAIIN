@@ -621,7 +621,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
 
 - **Provisioning**
   - **O-1** Supabase Storage bucket `media` (staging + prod).
-  - **O-2** SMTP for Supabase Auth (invites, reset), with SPF/DKIM. For the reset (F7), also the recovery template and `AUTH_EMAIL_READY` (launch runbook §2b); until then "Forgot password?" says "Not set up".
+  - **O-2** SMTP for Supabase Auth (invites, reset), with SPF/DKIM. For the reset (F7), also the recovery template, the link's one-hour lifetime and `AUTH_EMAIL_READY` (launch runbook §2b); until then "Forgot password?" says "Not set up".
   - **O-3** Cloudflare zone + a cache-purge-only token (KAN-20). Until then purges do nothing and pages stay fresh.
   - **O-17** An R2 bucket for scheduled content backups (R17).
   - **O-18** A GA4 property + Data API service account (U15).
