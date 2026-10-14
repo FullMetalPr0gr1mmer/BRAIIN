@@ -1,0 +1,54 @@
+---
+import { formatDateTime, isoOf, relTime, type Instant } from '@/lib/admin/relTime';
+
+// A timeline (Admin v2 F4b, the prototype's .tl): an ordered list of what happened, newest
+// first or oldest first as the caller orders it. Each entry: a title (a link when it has
+// somewhere to go), a line, and when it happened as a <time> ("3 h ago", the full Riyadh
+// time in its title). Titles and lines are often people's words, so they read in their
+// own direction (dir="auto"); the rail and the rings are logical, so they mirror too.
+
+export interface TimelineItem {
+  title: string;
+  text?: string | undefined;
+  at?: Instant | undefined;
+  href?: string | undefined;
+}
+
+interface Props {
+  items: readonly TimelineItem[];
+  /** The list's name, when no heading right above it names it. */
+  label?: string | undefined;
+  /** "Now" for the relative times (tests pin it; pages leave it out). */
+  now?: Instant | undefined;
+}
+
+const { items, label, now = Date.now() } = Astro.props;
+---
+
+<ol class="tl" aria-label={label}>
+  {
+    items.map((item) => (
+      <li class="tl__i">
+        <p class="tl__t" dir="auto">
+          {item.href ? (
+            <a class="data-link" href={item.href}>
+              {item.title}
+            </a>
+          ) : (
+            item.title
+          )}
+        </p>
+        {item.text && (
+          <p class="tl__s" dir="auto">
+            {item.text}
+          </p>
+        )}
+        {item.at !== undefined && isoOf(item.at) && (
+          <time class="tl__m" datetime={isoOf(item.at)} title={formatDateTime(item.at)}>
+            {relTime(item.at, now)}
+          </time>
+        )}
+      </li>
+    ))
+  }
+</ol>

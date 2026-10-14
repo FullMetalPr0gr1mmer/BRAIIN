@@ -1,0 +1,86 @@
+---
+import type { ChartTable } from '@/lib/admin/charts';
+
+// The frame every chart sits in (Admin v2 F4b, docs/admin-v2/ui.md §2.4):
+//   <figure>      the caption (visible, or visually hidden when a card title already says
+//                 it), the drawing (the default slot: an SVG with role="img"), a one-line
+//                 summary, an optional legend, and "View as table" with every number.
+//   the name      the SVG is labelled by `<id>-cap` and `<id>-sum`, the caption and the
+//                 summary, so a screen reader hears what the chart shows in one line
+//                 and can open the table for the rest. No value lives only in a hover.
+//   one dataset   the caller builds the drawing, the summary and the table from the same
+//                 data (src/lib/admin/charts.ts), so the text never drifts from the chart.
+// With no data, the figure says so in words instead of drawing an empty frame.
+
+interface Props {
+  /** Unique on the page: the caption and summary ids derive from it. */
+  id: string;
+  caption: string;
+  captionVisible?: boolean;
+  summary: string;
+  table: ChartTable;
+  empty?: boolean;
+  emptyText?: string;
+}
+
+const {
+  id,
+  caption,
+  captionVisible = true,
+  summary,
+  table,
+  empty = false,
+  emptyText = 'No data for this period yet.',
+} = Astro.props;
+---
+
+<figure class="chart-fig" id={id}>
+  <figcaption id={`${id}-cap`} class={captionVisible ? undefined : 'visually-hidden'}>
+    {caption}
+  </figcaption>
+  {
+    empty ? (
+      <p class="chart-empty">{emptyText}</p>
+    ) : (
+      <>
+        <slot />
+        <p id={`${id}-sum`} class="visually-hidden">
+          {summary}
+        </p>
+        <slot name="legend" />
+        <details class="chart-table">
+          <summary>View as table</summary>
+          <div class="table-wrap">
+            <table class="data">
+              <caption class="visually-hidden">{caption}</caption>
+              <thead>
+                <tr>
+                  {table.head.map((cell, i) => (
+                    <th scope="col" class={i > 0 ? 'num' : undefined}>
+                      {cell}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {table.rows.map((row) => (
+                  <tr>
+                    {row.map((cell, i) =>
+                      i === 0 ? (
+                        <th scope="row" dir="auto">
+                          {cell}
+                        </th>
+                      ) : (
+                        <td class="num">{cell}</td>
+                      ),
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </>
+    )
+  }
+</figure>

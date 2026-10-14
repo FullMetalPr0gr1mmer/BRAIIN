@@ -83,6 +83,10 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   // bell, each the drawer's twin. Every member has an account and a bell.
   { href: '/admin/account', label: 'Your account', caps: [] },
   { href: '/admin/notifications', label: 'Notifications', caps: [] },
+  // The component kit (Admin v2 F4b): every kit piece on made-up data, reached by its
+  // address. Every member may open it; its content reads nothing (its shell reads what
+  // every screen's shell reads).
+  { href: '/admin/kit', label: 'Component kit', caps: [] },
   // The help centre (Admin v2 U16): the no-JS twin of the "?" drawer, every member's. Its
   // four views: a screen's guides first, a search, a guide, and a guide's Arabic text (RTL).
   // The guide is one every role may read (supabase/migrations/0046_help_centre.sql).

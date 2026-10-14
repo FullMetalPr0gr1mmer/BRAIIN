@@ -1,7 +1,7 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { check, closure, dynamicImports, staticImports } from '../../scripts/admin-bundle.mjs';
 
 // scripts/admin-bundle.mjs (Admin v2 F4) reads the built chunks and fails `npm run size`
@@ -100,5 +100,104 @@ describe('the checks', () => {
     expect(names).toEqual(
       expect.arrayContaining(['AdminResourceForm', 'AdminChrome', '/admin/login script']),
     );
+  });
+
+  it('accept a lazily loaded kit module in admin-kit, and catch it under its own name', () => {
+    // An enhancer AdminLayout's script lazy-loads, importing the shared admin code. In the
+    // admin-kit chunk (astro.config.mjs) it is admin JavaScript and no island; named after
+    // its module, as Rolldown names a lazy chunk no group claims, it is public JavaScript
+    // importing admin code.
+    const lazy = 'import{f}from"./admin-client.C1.js";const E=()=>import("./admin-kit.K1.js");';
+    const kit = build({
+      ...GOOD,
+      'AdminLayout.astro_astro_type_script_index_0_lang.L1.js': lazy,
+      'admin-kit.K1.js': 'import{u}from"./admin-ui.U1.js";export const enhance=1;',
+    });
+    expect(check(kit).problems).toEqual([]);
+    expect((check(kit).report as [string, number][]).map(([name]) => name)).not.toContain(
+      'admin-kit',
+    );
+
+    const loose = build({
+      ...GOOD,
+      'AdminLayout.astro_astro_type_script_index_0_lang.L1.js': lazy.replace(
+        'admin-kit.K1.js',
+        'enhance.E1.js',
+      ),
+      'enhance.E1.js': 'import{u}from"./admin-ui.U1.js";export const enhance=1;',
+    });
+    expect(check(loose).problems.join('\n')).toMatch(
+      /public chunk enhance\.E1\.js imports admin-ui/,
+    );
+  });
+});
+
+describe('the chunk plan in astro.config.mjs', () => {
+  // A group claims the modules its `test` matches (and their static dependencies). Every
+  // module of ours under src/{components,lib}/admin/ must be claimed by an admin-* group,
+  // so that one reached only through import() still lands in an admin-* file: a chunk
+  // named after its module is weighed against the PUBLIC budget. The exceptions are the
+  // island entries (Astro names them Admin*) and the reference screen's own code, which
+  // only its AdminKit entry reaches.
+  interface Group {
+    name: string;
+    test: RegExp | ((id: string) => boolean);
+    priority: number;
+  }
+  let groups: Group[] = [];
+
+  beforeAll(async () => {
+    const config = (await import('../../astro.config.mjs')).default as {
+      vite: { build: { rollupOptions: { output: { codeSplitting: { groups: Group[] } } } } };
+    };
+    groups = [...config.vite.build.rollupOptions.output.codeSplitting.groups].sort(
+      (a, b) => b.priority - a.priority,
+    );
+  });
+
+  /** The group that claims a module: the highest-priority one whose test matches it. */
+  const claim = (id: string) =>
+    groups.find((g) => (typeof g.test === 'function' ? g.test(id) : g.test.test(id)))?.name;
+
+  const files = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory()
+        ? files(join(dir, entry.name))
+        : /\.(ts|tsx)$/.test(entry.name)
+          ? [join(dir, entry.name)]
+          : [],
+    );
+  const SELF_NAMED =
+    /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]Admin\w*\.tsx$|screens[\\/]kit[\\/])/;
+
+  it('names a group for each kind of admin module, the kit last', () => {
+    const at = (path: string) => claim(join(process.cwd(), path));
+    expect(at('src/lib/admin/client.ts')).toBe('admin-client');
+    expect(at('src/lib/admin/pager.ts')).toBe('admin-ui');
+    expect(at('src/components/admin/screens/resources/ResourceTable.tsx')).toBe('admin-ui');
+    expect(at('src/components/admin/kit/Modal.tsx')).toBe('admin-kit');
+    expect(at('src/lib/admin/client/sortable.ts')).toBe('admin-kit');
+    // An enhancer that does not exist yet (ui.md §2.1) is claimed the day it is added.
+    expect(at('src/lib/admin/client/enhance.ts')).toBe('admin-kit');
+    // The two models only kit code reaches in the browser ride with the kit, not on every
+    // screen; their neighbours stay admin-ui's (f4b pre-merge review).
+    expect(at('src/lib/admin/roving.ts')).toBe('admin-kit');
+    expect(at('src/lib/admin/avatar.ts')).toBe('admin-kit');
+    expect(at('src/lib/admin/initials.ts')).toBe('admin-ui');
+    expect(at('src/lib/admin/relTime.ts')).toBe('admin-ui');
+    expect(groups.find((g) => g.name === 'admin-kit')?.priority).toBe(
+      Math.min(...groups.filter((g) => g.name.startsWith('admin-')).map((g) => g.priority)),
+    );
+  });
+
+  it('leaves no admin module to a chunk named after itself', () => {
+    const roots = ['src/components/admin', 'src/lib/admin'].map((dir) => join(process.cwd(), dir));
+    const all = roots.flatMap(files);
+    expect(all.length).toBeGreaterThan(100);
+    const loose = all
+      .filter((id) => !SELF_NAMED.test(id))
+      .filter((id) => !claim(id)?.startsWith('admin-'))
+      .map((id) => id.slice(process.cwd().length + 1));
+    expect(loose).toEqual([]);
   });
 });

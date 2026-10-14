@@ -1,4 +1,5 @@
 ---
+import LinkTabs from './LinkTabs.astro';
 import type { NavTab } from '@/lib/admin/nav';
 import { guideHref, screenOf } from '@/lib/admin/help/model';
 import Icon from './Icon.astro';
@@ -6,7 +7,8 @@ import Icon from './Icon.astro';
 // The page head (Admin v2 F2, the prototype's .ph): the h1, its plain-language sub-line,
 // a wrapping actions slot, and the area's tabs. Tabs are the screens the prototype folds
 // into one area (Services · Disciplines · Case studies…): server-rendered links, the
-// current one marked aria-current, shown only when the role can open two or more.
+// current one marked aria-current, shown only when the role can open two or more
+// (LinkTabs, the kit's tabs as links, F4b).
 //
 // `guide` (U16, the prototype's ROUTE_GUIDE button) is the slug of this screen's guide for
 // the role, decided by the layout (src/lib/admin/help/pageGuides.ts): "Guide", first of the
@@ -47,14 +49,4 @@ const screen = screenOf(Astro.url.pathname);
   }
   <slot name="actions" />
 </header>
-{
-  tabs.length > 1 && (
-    <nav class="tabs" aria-label={`${area} sections`}>
-      {tabs.map((tab) => (
-        <a href={tab.href} aria-current={tab === currentTab ? 'page' : undefined}>
-          {tab.label}
-        </a>
-      ))}
-    </nav>
-  )
-}
+{tabs.length > 1 && <LinkTabs tabs={tabs} current={currentTab?.href} label={`${area} sections`} />}

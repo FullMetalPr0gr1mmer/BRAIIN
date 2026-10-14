@@ -1,0 +1,286 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminKit from '@/components/admin/islands/AdminKit';
+import Avatar from '@/components/admin/ui/Avatar.astro';
+import Badge from '@/components/admin/ui/Badge.astro';
+import BarList from '@/components/admin/ui/BarList.astro';
+import Card from '@/components/admin/ui/Card.astro';
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Kpi from '@/components/admin/ui/Kpi.astro';
+import LinkChips from '@/components/admin/ui/LinkChips.astro';
+import LinkTabs from '@/components/admin/ui/LinkTabs.astro';
+import ListRow from '@/components/admin/ui/ListRow.astro';
+import Note from '@/components/admin/ui/Note.astro';
+import ServerTable from '@/components/admin/ui/ServerTable.astro';
+import StatRows from '@/components/admin/ui/StatRows.astro';
+import Timeline from '@/components/admin/ui/Timeline.astro';
+import BarsV from '@/components/admin/ui/charts/BarsV.astro';
+import Donut from '@/components/admin/ui/charts/Donut.astro';
+import Line from '@/components/admin/ui/charts/Line.astro';
+import Ring from '@/components/admin/ui/charts/Ring.astro';
+import { BADGE_TONES, CONTENT_STATUSES, NOTE_TONES } from '@/lib/admin/tones';
+import { offsetOf, pageInfo, pageParam, PAGE_SIZE } from '@/lib/admin/pager';
+import { KIT_TAB_IDS, KIT_TAB_PARAM } from '@/components/admin/screens/kit/samples';
+import { tabFromParam } from '@/lib/admin/roving';
+
+export const prerender = false;
+
+// The component kit (Admin v2 F4b, docs/admin-v2/ui.md AV-07): every piece of the kit on
+// one screen, drawn from made-up sample data (the page's own content reads nothing; the
+// shell around it, AdminLayout, reads what every screen's shell reads: the identity, the
+// menu's counts, the bell, the environment and maintenance), so the signed-in sweep
+// checks each in a browser for every role (axe, CSP, no style attribute, no overflow) and
+// tests/admin/kit.e2e.ts drives the ones that move (the Sortable core, tabs, selection,
+// dialogs). Not in the menu: a reference for the people building screens, reached by its
+// address. Server primitives are drawn here; the stateful pieces are the AdminKit island.
+
+const url = Astro.url;
+
+// A list of 60 made-up rows, paged by `?page=` like every server list. The page the URL
+// names is clamped to one that exists (pageInfo), as ServerTable's range and pager are:
+// `?page=99` shows the last page's rows, never an empty page under "51 to 60 of 60".
+const SAMPLE_TOTAL = 60;
+const offset = pageInfo(SAMPLE_TOTAL, offsetOf(pageParam(url.searchParams.get('page')))).offset;
+const tableRows = Array.from({ length: Math.min(PAGE_SIZE, SAMPLE_TOTAL - offset) }, (_, i) => {
+  const n = offset + i + 1;
+  return {
+    id: `row-${n}`,
+    title: `Sample entry ${n}`,
+    status: CONTENT_STATUSES[n % 4] ?? 'draft',
+    views: n * 137,
+    updated: new Date(Date.UTC(2026, 8, 1 + (n % 28), 9, 30)).toISOString(),
+  };
+});
+
+// The chips and tabs as links: the current one is the URL's.
+const chipFilter = url.searchParams.get('chip') ?? 'all';
+const chipHref = (value: string) => (value === 'all' ? '/admin/kit' : `/admin/kit?chip=${value}`);
+const linkTabs = [
+  { label: 'Overview', href: '/admin/kit' },
+  { label: 'Website stats', href: '/admin/kit?view=stats' },
+  { label: 'Site health', href: '/admin/kit?view=health' },
+];
+const view = url.searchParams.get('view');
+const currentTab = view === 'stats' || view === 'health' ? `/admin/kit?view=${view}` : '/admin/kit';
+
+const days = Array.from({ length: 14 }, (_, i) => `${i + 1} Oct`);
+const visits = [120, 132, 101, 134, 190, 230, 210, 182, 191, 234, 290, 330, 310, 288];
+const leads = [4, 6, 3, 8, 9, 12, 7, 6, 9, 11, 14, 13, 12, 15];
+const now = Date.now();
+const hour = 3_600_000;
+---
+
+<AdminLayout
+  title="Component kit"
+  subtitle="Every piece screens are built from, drawn from sample data. Nothing here is saved."
+  styles={['kit.css']}
+>
+  <Note>
+    <p>A reference for building admin screens. The figures, names and rows below are made up.</p>
+  </Note>
+
+  <h2 class="kit__h">Figures</h2>
+  <div class="grid grid--4">
+    <Kpi label="Visits" value={3284} delta={12.4} period="the previous 14 days" spark={visits} />
+    <Kpi
+      label="New inquiries"
+      value={128}
+      delta={-6}
+      period="the previous 14 days"
+      spark={leads}
+      series={1}
+    />
+    <Kpi label="Errors" value={3} delta={-40} good="down" period="the previous 14 days" />
+    <Kpi label="Storage used" value="214" unit="MB" />
+  </div>
+
+  <div class="grid grid--2-1 kit__row">
+    <Card level={3} title="Visits and inquiries" sub="Made-up daily figures">
+      <Line
+        id="kit-line"
+        caption="Visits and inquiries per day"
+        captionVisible={false}
+        series={[
+          { name: 'Visits', data: visits },
+          { name: 'Inquiries', data: leads },
+        ]}
+        labels={days}
+      />
+    </Card>
+    <Card level={3} title="Site health">
+      <Ring value={87} label="Site health score" />
+      <StatRows
+        rows={[
+          { label: 'Largest paint', value: '1.8 s' },
+          { label: 'Layout shift', value: '0.02' },
+          { label: 'Interaction', value: '140 ms' },
+        ]}
+      />
+    </Card>
+  </div>
+
+  <div class="grid grid--3 kit__row">
+    <Card level={3} title="Inquiries by service">
+      <BarsV
+        id="kit-bars"
+        caption="Inquiries by service"
+        captionVisible={false}
+        data={[
+          { label: 'Branding', value: 42 },
+          { label: 'Production', value: 31 },
+          { label: 'Marketing', value: 27 },
+          { label: 'Web', value: 12 },
+          { label: 'Events', value: 8 },
+        ]}
+        labelHeading="Service"
+        valueHeading="Inquiries"
+      />
+    </Card>
+    <Card level={3} title="Where visitors come from">
+      <Donut
+        id="kit-donut"
+        caption="Visitors by source"
+        captionVisible={false}
+        data={[
+          { label: 'Search', value: 1420 },
+          { label: 'Direct', value: 980 },
+          { label: 'Social', value: 610 },
+          { label: 'Referral', value: 274 },
+        ]}
+        center="3,284"
+        labelHeading="Source"
+        valueHeading="Visitors"
+      />
+    </Card>
+    <Card level={3} title="Top pages">
+      <BarList
+        label="Visits per page"
+        items={[
+          { label: '/services/logo', value: 812 },
+          { label: '/portfolio', value: 640 },
+          { label: '/ar/services/logo', value: 402 },
+          { label: '/contact', value: 233 },
+        ]}
+      />
+    </Card>
+  </div>
+
+  <h2 class="kit__h">States and labels</h2>
+  <div class="grid grid--2 kit__row">
+    <Card level={3} title="Badges">
+      <p class="kit__line">
+        {CONTENT_STATUSES.map((status) => <Badge status={status} />)}
+      </p>
+      <p class="kit__line">
+        {BADGE_TONES.map((tone) => <Badge tone={tone}>{tone}</Badge>)}
+        <Badge plain>12</Badge>
+      </p>
+      <p class="kit__line">
+        {
+          ['a1', 'b2', 'c3', 'd4', 'e5', 'f6', 'g7', 'h8'].map((key) => (
+            <Avatar initials={key.toUpperCase()} toneKey={key} label={`Sample person ${key}`} />
+          ))
+        }
+      </p>
+    </Card>
+    <Card level={3} title="Notes">
+      <div class="kit__stack">
+        {
+          NOTE_TONES.map((tone) => (
+            <Note tone={tone}>
+              <p>A {tone} note: the icon and the words say it, the tint repeats it.</p>
+            </Note>
+          ))
+        }
+      </div>
+    </Card>
+  </div>
+
+  <h2 class="kit__h">Lists</h2>
+  <div class="grid grid--2 kit__row">
+    <Card level={3} title="List rows">
+      <ul class="list">
+        <ListRow title="Hero" sub="Banner with the showreel" href="#kit-rows" icon="layers" />
+        <ListRow
+          title="Services"
+          sub="The five disciplines"
+          href="#kit-rows"
+          icon="briefcase"
+          current
+        />
+        <ListRow title="Clients" sub="Logos, hidden until approved" icon="users" hidden>
+          <Badge slot="meta" tone="sky">Sample</Badge>
+        </ListRow>
+        <ListRow
+          title="Selected work"
+          sub="Six projects, newest first"
+          href="#kit-work"
+          icon="grid"
+        >
+          <a
+            slot="actions"
+            class="btn icon-btn"
+            href="#kit-work-edit"
+            aria-label="Edit Selected work"
+          >
+            <Icon name="edit" size={15} />
+          </a>
+        </ListRow>
+      </ul>
+    </Card>
+    <Card level={3} title="What happened">
+      <Timeline
+        label="Recent changes"
+        items={[
+          { title: 'Published Logo design', text: 'Content team', at: now - 2 * hour },
+          { title: 'Saved a draft of About', text: 'Content team', at: now - 26 * hour },
+          { title: 'Changed the footer', text: 'Developer', at: now - 9 * 24 * hour },
+        ]}
+      />
+    </Card>
+  </div>
+
+  <div class="grid grid--2 kit__row">
+    <Card level={3} title="Tabs and filters as links">
+      <div class="kit__stack">
+        <LinkTabs tabs={linkTabs} current={currentTab} label="Sample sections" />
+        <LinkChips
+          label="Filter the sample by status"
+          current={chipHref(chipFilter)}
+          chips={[
+            { label: 'All', href: chipHref('all'), count: 60 },
+            { label: 'Draft', href: chipHref('draft'), count: 15 },
+            { label: 'Published', href: chipHref('published'), count: 30 },
+          ]}
+        />
+      </div>
+    </Card>
+    <Card level={3} title="Nothing yet" flush>
+      <EmptyState title="No sample inquiries yet" text="When a visitor writes in, it lands here.">
+        <a class="btn" href="#kit-table">See the table</a>
+      </EmptyState>
+    </Card>
+  </div>
+
+  <h2 class="kit__h" id="kit-table">A server table</h2>
+  <ServerTable
+    caption="Sample entries"
+    columns={[
+      { key: 'title', label: 'Title', title: true },
+      { key: 'status', label: 'Status', kind: 'status' },
+      { key: 'views', label: 'Views', kind: 'number' },
+      { key: 'updated', label: 'Updated', kind: 'date' },
+    ]}
+    rows={tableRows}
+    rowHref={(row) => `#${String(row['id'])}`}
+    total={SAMPLE_TOTAL}
+    url={url}
+  />
+
+  <h2 class="kit__h">Pieces that keep state</h2>
+  <AdminKit
+    client:load
+    tab={tabFromParam(url.searchParams.get(KIT_TAB_PARAM), KIT_TAB_IDS, 'content')}
+  />
+</AdminLayout>

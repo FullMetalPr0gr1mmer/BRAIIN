@@ -333,6 +333,10 @@ const ADMIN_PAIRS = [
   ['ink', 'warn-soft', 4.5, '.pii values'],
   ['err-text', 'card', 4.5, 'danger button, .field-error'],
   ['note-ok-text', 'card', 4.5, "a form's outcome (.acct__note, F8)"],
+  // The component kit (F4b): a chosen table row, the save status, the score ring
+  ['ink', 'primary-soft', 4.5, 'a chosen row in a data table (F4b)'],
+  ['dim', 'primary-soft', 4.5, 'a secondary line in a chosen row (F4b)'],
+  ['warn-text', 'card', 4.5, '"Unsaved changes" (SaveStatus, F4b)'],
   // The midnight sidebar, toasts and dark badges
   ['side-text', 'midnight', 4.5, 'sidebar links'],
   ['side-label', 'midnight', 4.5, 'sidebar group titles'],
@@ -355,6 +359,7 @@ const ADMIN_PAIRS = [
   ['warn-text', 'card', 3.0, '.pii border'],
   ['err-text', 'card', 3.0, "the bell's unread dot (F8)"],
   ['primary', 'bg', 3.0, 'a list row icon on its ground (.li__ico, F8)'],
+  ['ok-text', 'card', 3.0, 'the score ring at 90 and up (Ring, F4b)'],
   ...[1, 2, 3, 4, 5, 6, 7].flatMap((i) => [
     [`series-${i}`, 'card', 3.0, `chart series ${i} on a card`],
     [`series-${i}`, 'bg', 3.0, `chart series ${i} on the ground`],
