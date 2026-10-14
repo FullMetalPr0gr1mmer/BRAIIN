@@ -138,10 +138,16 @@ export const SECTION_COPY: Readonly<Record<RenderedSectionType, SectionCopy>> = 
   joinApply: one(JOIN_APPLY_COPY, HEADING),
 };
 
-/** Where a section is: the slug of its page, and its content's `variant` if it has one. */
+/**
+ * Where a section is: the slug of its page, its content's `variant` if it has one, and
+ * whether it is the first section of its type in the page's composition (hidden ones
+ * count). A page preset dresses the first hero only (withHeroPreset), so a later hero on
+ * contact, services or join renders the home copy. Omitted, `firstOfType` means first.
+ */
 export interface SectionPlace {
   page?: string | undefined;
   variant?: unknown;
+  firstOfType?: boolean | undefined;
 }
 
 const HERO_PRESET_PAGES: readonly string[] = ['contact', 'services', 'join'];
@@ -151,7 +157,9 @@ const STAT_VARIANTS: readonly unknown[] = STAT_BAND_VARIANTS;
 export function builtInLook(type: RenderedSectionType, place: SectionPlace = {}): string {
   switch (type) {
     case 'hero':
-      return place.page && HERO_PRESET_PAGES.includes(place.page) ? place.page : 'default';
+      return place.firstOfType !== false && place.page && HERO_PRESET_PAGES.includes(place.page)
+        ? place.page
+        : 'default';
     case 'servicesOverview':
       return place.page === 'services' ? 'page' : 'home';
     case 'social':
