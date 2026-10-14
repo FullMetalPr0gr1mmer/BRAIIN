@@ -4,8 +4,8 @@ import type { CronJob } from '@/lib/cron/jobs';
 // The Worker's daily cron, run for real against a stub service client (src/lib/cron/daily.ts
 // running the registry in src/lib/cron/jobs.ts): the cheap purges before the lead indexing,
 // the privileged-op ledger cut at 48 hours, the media bucket's orphans removed after their
-// hour of grace (Admin v2 U3), a failing step logged without stopping the ones
-// after it, the indexing line written even for a partial run, the whole run inside the
+// hour of grace (Admin v2 U3), the lead-notification check's count (H9), a failing step
+// logged without stopping the ones after it, the indexing line written even for a partial run, the whole run inside the
 // Workers Free plan's 50 subrequests, and each job inside the budget it declares.
 
 interface Call {
@@ -25,6 +25,8 @@ const state = vi.hoisted(() => ({
   worstCaseRetention: false,
   worstCaseMedia: false,
   failMediaOrphans: false,
+  notifyMisses: 0 as unknown,
+  failNotifyCheck: false,
   removed: [] as { bucket: string; keys: string[] }[],
 }));
 
@@ -81,6 +83,10 @@ const svc = {
         data: state.worstCaseRetention ? [{ object_name: 't/old/y.pdf' }] : [],
         error: null,
       };
+    if (fn === 'lead_notify_misses') {
+      if (state.failNotifyCheck) return { data: null, error: { message: 'function down' } };
+      return { data: state.notifyMisses, error: null };
+    }
     if (fn === 'media_orphan_objects') {
       if (state.failMediaOrphans) return { data: null, error: { message: 'storage down' } };
       return {
@@ -144,6 +150,7 @@ async function leads(n: number) {
 const subrequests = () => state.requests.length + 2 * state.logs.length;
 const tables = () => state.requests.map((r) => `${r.table}:${r.op}`);
 const indexLine = () => state.logs.find((l) => l.source === 'cron:crm-index');
+const notifyLine = () => state.logs.find((l) => l.source === 'cron:lead-notify');
 
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -158,6 +165,8 @@ beforeEach(async () => {
   state.worstCaseRetention = false;
   state.worstCaseMedia = false;
   state.failMediaOrphans = false;
+  state.notifyMisses = 0;
+  state.failNotifyCheck = false;
   state.removed = [];
 });
 afterEach(() => {
@@ -226,6 +235,54 @@ describe('runDailyJobs', () => {
     expect(indexLine()).toMatchObject({ level: 'info' });
   });
 
+  it('checks lead notifications after the media sweep, before the lead indexing', async () => {
+    await runDailyJobs();
+    const order = tables();
+    expect(order.indexOf('lead_notify_misses:rpc')).toBeGreaterThan(
+      order.indexOf('media_orphan_objects:rpc'),
+    );
+    expect(order.indexOf('lead_notify_misses:rpc')).toBeLessThan(order.indexOf('leads:select'));
+    expect(order.filter((t) => t === 'lead_notify_misses:rpc')).toHaveLength(1);
+  });
+
+  it('warns with the count, and only the count, when leads reached no notification', async () => {
+    state.notifyMisses = 3;
+    await runDailyJobs();
+    expect(notifyLine()).toEqual({
+      level: 'warn',
+      source: 'cron:lead-notify',
+      message: '3 lead(s) from the last day reached no notification',
+      detail: { configured: true, missed: 3 },
+    });
+  });
+
+  it('notes a clean check, and says when notifications are not configured', async () => {
+    await runDailyJobs();
+    expect(notifyLine()).toMatchObject({ level: 'info', detail: { configured: true, missed: 0 } });
+    state.logs = [];
+    state.notifyMisses = null;
+    await runDailyJobs();
+    expect(notifyLine()).toMatchObject({ level: 'info', detail: { configured: false } });
+    expect(notifyLine()!.message).toContain('lead notifications are off');
+  });
+
+  it('a check that fails, or answers nonsense, is logged as an error; the indexing still runs', async () => {
+    state.failNotifyCheck = true;
+    await runDailyJobs();
+    expect(notifyLine()).toMatchObject({ level: 'error', message: 'function down' });
+    expect(indexLine()).toMatchObject({ level: 'info' });
+    for (const answer of ['3', -1, 1.5, {}]) {
+      state.logs = [];
+      state.failNotifyCheck = false;
+      state.notifyMisses = answer;
+      await runDailyJobs();
+      expect(notifyLine(), JSON.stringify(answer)).toMatchObject({
+        level: 'error',
+        message: 'lead notification check: an unexpected answer',
+      });
+    }
+  });
+
   it('a failing step is logged, and the steps after it still run', async () => {
     state.failPurge = true;
     await runDailyJobs();
@@ -288,6 +345,7 @@ describe('the job registry (src/lib/cron/jobs.ts)', () => {
       'privileged-ops',
       'retention',
       'media-orphans',
+      'lead-notify',
       'crm-index',
     ]);
   });
@@ -303,6 +361,7 @@ describe('the job registry (src/lib/cron/jobs.ts)', () => {
     state.failPurge = true;
     state.worstCaseRetention = true;
     state.worstCaseMedia = true;
+    state.notifyMisses = 7;
     // A phone on the leads adds the country lookup.
     const phone_enc = await encryptPII('0501234567', LEAD_PII_ENC_KEY);
     state.leads = state.leads.map((row) => ({ ...row, phone_enc }));
