@@ -269,6 +269,21 @@ describe('the guides say only what the admin does', () => {
     );
   });
 
+  it('a display name is said to show where it shows: the menu, and Users & roles', () => {
+    // The sidebar's account chip and the users list render it; nothing shows it beside a
+    // person's work yet.
+    expect(source('src/components/admin/ui/Sidebar.astro')).toContain('shell.displayName');
+    expect(source('src/components/admin/screens/users/UsersPanel.tsx')).toContain(
+      'row.display_name',
+    );
+    expect(everything('en')).not.toMatch(/beside your work/i);
+    expect(everything('ar')).not.toContain('بجانب عملك');
+    expect(guide('your-account', 'en')).toContain('to Admins, in Users & roles');
+    const panel = source('src/components/admin/screens/chrome/AccountPanel.tsx');
+    expect(panel).not.toContain('beside your changes');
+    expect(panel).toContain('Shown at the bottom of the menu and, to Admins, in Users & roles.');
+  });
+
   // @@guide-claims
 });
 

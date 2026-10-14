@@ -367,7 +367,7 @@ create or replace function app.help_article_set() returns jsonb
       "en": [
         {
           "t": "p",
-          "x": "Your account holds the name colleagues see beside your work, your password, and a plain list of what your role can do. Open it from your name at the bottom of the menu."
+          "x": "Your account holds your display name (shown at the bottom of the menu and, to Admins, in Users & roles), your password, and a plain list of what your role can do. Open it from your name at the bottom of the menu."
         },
         {
           "t": "h",
@@ -404,7 +404,7 @@ create or replace function app.help_article_set() returns jsonb
       "ar": [
         {
           "t": "p",
-          "x": "يضم حسابك الاسم الذي يراه زملاؤك بجانب عملك، وكلمة المرور، وقائمة واضحة بما يستطيع دورك فعله. افتحه من اسمك أسفل القائمة."
+          "x": "يضم حسابك اسم العرض (ويظهر أسفل القائمة، وللمسؤولين في Users & roles)، وكلمة المرور، وقائمة واضحة بما يستطيع دورك فعله. افتحه من اسمك أسفل القائمة."
         },
         {
           "t": "h",
