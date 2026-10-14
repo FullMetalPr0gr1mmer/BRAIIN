@@ -126,6 +126,24 @@ describe('the copy registry', () => {
       }
     }
   });
+
+  it('each `together` group is two or more fields with a built-in, in no other group', () => {
+    // That the groups are the right ones (each needed, none missing) is the render spec's.
+    for (const type of RENDERED_SECTION_TYPES) {
+      const { together, notVerbatim } = SECTION_COPY[type];
+      const covered = new Set(looks(type).flatMap(([, c]) => Object.keys(c)));
+      const seen = new Set<string>();
+      for (const group of together) {
+        expect(group.length, `${type}: ${group.join(' + ')}`).toBeGreaterThan(1);
+        for (const f of group) {
+          expect(covered.has(f), `${type}.${f} has no built-in`).toBe(true);
+          expect(notVerbatim, `${type}.${f} is never stored as written`).not.toContain(f);
+          expect(seen.has(f), `${type}.${f} is in two groups`).toBe(false);
+          seen.add(f);
+        }
+      }
+    }
+  });
 });
 
 describe('the words', () => {

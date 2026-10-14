@@ -1,21 +1,28 @@
 import { describe, expect, test } from 'vitest';
+import type { Locale } from '@schemas/primitives';
 import { RENDERED_SECTION_TYPES, type RenderedSectionType } from '@/lib/sections/registry';
-import { SECTION_COPY } from '@/lib/sections/copy';
+import { SECTION_COPY, type SectionCopy } from '@/lib/sections/copy';
 import { withHeroPreset, type HeroPreset, type SectionData } from '@/lib/sections/types';
 import { CARDS, DISCIPLINES, IDENTITY, LEADERS, STATS, TESTIMONIALS } from './fixtures';
 import { LOCALES, renderSections } from './harness';
 
 // Per section type and per look: the built-in copy (src/lib/sections/copy/) IS what the
 // section renders with no content (Admin v2 F6, ui.md AV-23 "rendering with empty content
-// equals the copy module"). Two renders through SectionRenderer, one with `content: {}`
-// and one with the look's built-in content stored as the content, must be the same bytes,
-// so a page editor that prefills its fields with this copy and stores only what differs
-// changes nothing on the page by opening it. Then each copy field, set to other words,
-// must change the output: the field is the one the section reads in that place, so the
-// equality above is not a section ignoring its content.
+// equals the copy module"), and the page editor can store only what differs from it.
+//
+// Two renders through SectionRenderer, one with `content: {}` and one with the look's
+// built-in content stored as the content, must be the same bytes. So must each unit the
+// editor stores on its own: a field, or a group the type declares `together` (an accent
+// with its heading), stored alone at its built-in value. Then each field, varied (other
+// words, or an accent one word over) and stored with the rest of its unit, must change
+// the output: the field is the one the section reads in that place, so the equalities
+// above are not a section ignoring its content, and a field the type reads only beside
+// another is caught unless the two are declared together. Every built-in field must be one
+// the spec can vary.
 //
 // The fields a type declares `notVerbatim` are the exception, and the spec holds the
-// declaration to the truth: stored as written, each of them DOES change the output.
+// declaration to the truth: stored as written, each of them DOES change the output. A
+// `together` group is held to the truth too: each one is needed somewhere.
 
 /** Where a look renders: its content's place keys, its route data, its page's preset. */
 interface Place {
@@ -75,6 +82,8 @@ const PLACES: Record<RenderedSectionType, Record<string, Place>> = {
   joinApply: { default: {} },
 };
 
+type Content = Readonly<Record<string, unknown>>;
+
 const compose = (type: string, place: Place, content: object): SectionData[] => {
   const section: SectionData = {
     type,
@@ -84,21 +93,53 @@ const compose = (type: string, place: Place, content: object): SectionData[] => 
   return place.preset ? withHeroPreset([section], place.preset) : [section];
 };
 
-const without = (content: object, fields: readonly string[]) =>
-  Object.fromEntries(Object.entries(content).filter(([k]) => !fields.includes(k)));
+const pick = (content: Content, fields: readonly string[]): Content =>
+  Object.fromEntries(Object.entries(content).filter(([k]) => fields.includes(k)));
 
-/** The field's value with every `{ en, ar }` pair of strings replaced by other words. */
-function otherWords(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(otherWords);
+/**
+ * What the page editor stores as one, among a look's fields: each `together` group (its
+ * fields this look has), then every other field on its own. `notVerbatim` fields are never
+ * stored as written, so they are in no unit.
+ */
+function units(builtIn: Content, copy: SectionCopy): string[][] {
+  const fields = Object.keys(builtIn).filter((k) => !copy.notVerbatim.includes(k));
+  const groups = copy.together
+    .map((g) => g.filter((f) => fields.includes(f)))
+    .filter((g) => g.length > 0);
+  const grouped = new Set(groups.flat());
+  return [...groups, ...fields.filter((f) => !grouped.has(f)).map((f) => [f])];
+}
+
+/** One word over: earlier where it can be, so the range still starts inside the line. */
+const nudge = (n: number) => (n > 0 ? n - 1 : n + 1);
+
+/**
+ * The field's value, varied: every `{ en, ar }` pair of strings replaced by other words,
+ * every accent range and word index moved by one word.
+ */
+function varied(value: unknown): unknown {
+  if (typeof value === 'number') return nudge(value);
+  if (Array.isArray(value)) return value.map(varied);
   if (value && typeof value === 'object') {
     const o = value as Record<string, unknown>;
     if (typeof o.en === 'string' && typeof o.ar === 'string') {
       return { en: 'Qzx other words', ar: 'كلمات أخرى قزكس' };
     }
-    return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, otherWords(v)]));
+    if (typeof o.from === 'number') {
+      const from = nudge(o.from);
+      const to = typeof o.to === 'number' && o.to <= from ? { to: from + 1 } : {};
+      return { ...o, from, ...to };
+    }
+    return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, varied(v)]));
   }
   return value;
 }
+
+/** A per-language field (`accentFromEn`, `accentFromAr`) is read on its language's page only. */
+const readIn = (field: string, locale: Locale) =>
+  /En$/.test(field) ? locale === 'en' : /Ar$/.test(field) ? locale === 'ar' : true;
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 describe('every look has a place to render', () => {
   test('PLACES names exactly the looks of every type', () => {
@@ -112,43 +153,88 @@ describe('every look has a place to render', () => {
 
 describe('rendering with no content equals rendering the built-in copy', () => {
   for (const type of RENDERED_SECTION_TYPES) {
-    const { content: looks, notVerbatim } = SECTION_COPY[type];
-    for (const [look, builtIn] of Object.entries(looks)) {
+    const copy = SECTION_COPY[type];
+    const { notVerbatim } = copy;
+    for (const [look, content] of Object.entries(copy.content)) {
+      const builtIn = content as Content;
       const place = PLACES[type][look];
       if (!place) continue; // the test above fails instead
       for (const locale of LOCALES) {
         test(`${type} ${look} (${locale})`, async () => {
-          const empty = await renderSections(compose(type, place, {}), locale);
+          const render = (stored: object) => renderSections(compose(type, place, stored), locale);
+          const empty = await render({});
           // Something rendered, so the comparisons below compare a section.
           expect(empty.length, 'the section rendered nothing').toBeGreaterThan(100);
 
-          const stored = await renderSections(
-            compose(type, place, without(builtIn, notVerbatim)),
-            locale,
+          const whole = Object.fromEntries(
+            Object.entries(builtIn).filter(([k]) => !notVerbatim.includes(k)),
           );
-          expect(stored).toBe(empty);
+          expect(await render(whole), 'the whole look, stored').toBe(empty);
 
-          for (const [field, value] of Object.entries(builtIn)) {
-            const changed = otherWords(value);
-            const isText = JSON.stringify(changed) !== JSON.stringify(value);
-            if (!isText && !notVerbatim.includes(field)) continue;
-            const html = await renderSections(
-              compose(
-                type,
-                place,
-                notVerbatim.includes(field) ? { [field]: value } : { [field]: changed },
-              ),
-              locale,
-            );
+          for (const unit of units(builtIn, copy)) {
+            const stored = pick(builtIn, unit);
             expect(
-              html,
-              notVerbatim.includes(field)
-                ? `${type}.${field} renders the same when stored: drop it from notVerbatim`
-                : `${type}.${field} is not read in this place`,
+              await render(stored),
+              `${type}: ${unit.join(' + ')} stored alone at its built-in renders differently: ` +
+                'store it with the fields it is read with (declare them `together`)',
+            ).toBe(empty);
+
+            for (const field of unit) {
+              const value = builtIn[field];
+              const changed = varied(value);
+              expect(same(changed, value), `${type}.${field}: a value the spec cannot vary`).toBe(
+                false,
+              );
+              if (!readIn(field, locale)) continue;
+              expect(
+                await render({ ...stored, [field]: changed }),
+                `${type}.${field} is not read in this place, or only beside a field ` +
+                  'it is not declared `together` with',
+              ).not.toBe(empty);
+            }
+          }
+
+          for (const field of notVerbatim) {
+            if (!(field in builtIn)) continue;
+            expect(
+              await render({ [field]: builtIn[field] }),
+              `${type}.${field} renders the same when stored: drop it from notVerbatim`,
             ).not.toBe(empty);
           }
         });
       }
+    }
+  }
+});
+
+describe('every `together` group is one the type needs', () => {
+  // Somewhere (a look, a language), a field of the group stored on its own renders other
+  // than the per-field model expects: at its built-in it changes the page, or varied it
+  // changes nothing. Otherwise the group would only make the editor store more than it must.
+  for (const type of RENDERED_SECTION_TYPES) {
+    const copy = SECTION_COPY[type];
+    for (const group of copy.together) {
+      test(`${type}: ${group.join(' + ')}`, async () => {
+        let needed = false;
+        for (const [look, content] of Object.entries(copy.content)) {
+          const builtIn = content as Content;
+          const place = PLACES[type][look];
+          if (!place) continue;
+          const here = group.filter((f) => f in builtIn);
+          if (here.length < 2) continue;
+          for (const locale of LOCALES) {
+            const render = (stored: object) => renderSections(compose(type, place, stored), locale);
+            const empty = await render({});
+            for (const field of here) {
+              if (!readIn(field, locale)) continue;
+              const alone = await render(pick(builtIn, [field]));
+              const variedAlone = await render({ [field]: varied(builtIn[field]) });
+              if (alone !== empty || variedAlone === empty) needed = true;
+            }
+          }
+        }
+        expect(needed, `${type}: ${group.join(' + ')} are read apart; drop the group`).toBe(true);
+      });
     }
   }
 });
