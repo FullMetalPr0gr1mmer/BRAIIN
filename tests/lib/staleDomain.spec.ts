@@ -81,7 +81,11 @@ const REPO = fileURLToPath(new URL('../..', import.meta.url));
  * GIT_WORK_TREE and GIT_INDEX_FILE to its hooks, so a run started from one would otherwise
  * list another repository's index (or a commit's temporary one).
  */
-function git(cwd: string, args: readonly string[], extra: NodeJS.ProcessEnv = {}): string {
+function git(
+  cwd: string,
+  args: readonly string[],
+  extra: Readonly<Record<string, string>> = {},
+): string {
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const key of Object.keys(env)) {
     if (/^GIT_(DIR|WORK_TREE|INDEX_FILE)$/i.test(key)) delete env[key];
