@@ -33,7 +33,7 @@
 --     is folded by the same function, and `%`, `_` and `\` in it are characters, not
 --     patterns.
 --     A query is at most 64 printable characters (22023 otherwise), under two characters
---     finds nothing, and the answer is at most 100 guides under a 500 ms statement timeout:
+--     once folded finds nothing, and the answer is at most 100 guides under a 500 ms statement timeout:
 --     the list's own cap, so the role's filter, which the Worker applies, comes before the
 --     cut to the 20 the drawer shows (a cut here would count other roles' guides, and a
 --     role would lose ones it may read). Like crm_people, the Worker names the tenant and
@@ -239,26 +239,30 @@ create trigger help_articles_guard before insert or update on public.help_articl
 -- The drawer's search. INVOKER: the caller's RLS decides the rows (staff of the tenant). The
 -- Worker names the tenant, as for crm_people, and gets nothing unless it is the token's. A
 -- query the Worker would never send (over 64 characters, a control character) is a 22023,
--- never quietly searched; one under two characters finds nothing. At most 100 guides, the
--- Worker's MAX_GUIDES (src/lib/admin/help): it filters them by role, THEN keeps 20.
+-- never quietly searched; one under two characters AFTER the fold finds nothing (the fold
+-- deletes tashkeel and kashida, so a query of those alone would otherwise be like '%%' and
+-- match every guide). At most 100 guides, the Worker's MAX_GUIDES (src/lib/admin/help): it
+-- filters them by role, THEN keeps 20.
 create or replace function public.help_search(p_tenant uuid, p_q text)
   returns table (id uuid, slug text, title text, title_ar text, minutes smallint, tags text[],
                  screens text[], caps text[], sort_order int)
   language plpgsql stable security invoker
   set search_path = '' set statement_timeout = '500ms' as $$
 declare
+  v_folded text;
   v_needle text;
 begin
   if p_q is null or char_length(p_q) > 64 or p_q ~ '[\u0001-\u001F\u007F-\u009F]' then
     raise exception using errcode = '22023',
       message = 'help_search: a query is at most 64 printable characters';
   end if;
-  if char_length(btrim(p_q)) < 2 or p_tenant is distinct from app.effective_tenant_id() then
+  -- Folded like search_text; the two-character floor is counted on what the fold leaves.
+  v_folded := btrim(lower(app.normalize_ar_q(p_q)));
+  if char_length(v_folded) < 2 or p_tenant is distinct from app.effective_tenant_id() then
     return;
   end if;
-  -- Folded like search_text, then escaped: a % or _ in the query is a character.
-  v_needle := replace(replace(replace(lower(app.normalize_ar_q(btrim(p_q))),
-                '\', '\\'), '%', '\%'), '_', '\_');
+  -- Escaped: a % or _ in the query is a character.
+  v_needle := replace(replace(replace(v_folded, '\', '\\'), '%', '\%'), '_', '\_');
   return query
     select h.id, h.slug, h.title, h.title_ar, h.minutes, h.tags, h.screens, h.caps, h.sort_order
       from public.help_articles h

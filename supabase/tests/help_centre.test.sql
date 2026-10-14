@@ -11,8 +11,8 @@
 --   • help_search: staff find their own tenant's guides, folded the way §8 folds Arabic
 --     for a contains search (app.normalize_ar_q: ta marbuta, alef forms, tashkeel) and in
 --     any case; `%` and `_` are characters, not patterns; an over-long or control-character
---     query is a 22023; a tenant other than the token's gets nothing; at most 100 guides;
---     anon may not call it.
+--     query is a 22023; under two characters once folded finds nothing; a tenant other than
+--     the token's gets nothing; at most 100 guides; anon may not call it.
 --   • the rules the CHECKs hold for every writer, the service role included: a body is typed
 --     blocks with no markup, both languages, known kinds and keys only; titles and keys are
 --     plain; a guide keeps its tenant and slug, and its version moves only when it changes.
@@ -23,7 +23,7 @@
 -- scoped to them (the launch tenant seed.sql creates holds the guides too).
 
 begin;
-select plan(62);
+select plan(64);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -201,6 +201,12 @@ select ok(_hits('46000000-0000-0000-0000-000000000001', 'e-mail') > 0,
   'the same words, typed as written, are found');
 select is(_hits('46000000-0000-0000-0000-000000000001', 'a'), 0,
   'a single character finds nothing');
+-- The floor is counted after the fold: a query the fold empties would be like '%%' and
+-- match every guide.
+select is(_hits('46000000-0000-0000-0000-000000000001', 'ًٌٍّ'), 0,
+  'a query the fold empties (tashkeel only) finds nothing, not every guide');
+select is(_hits('46000000-0000-0000-0000-000000000001', 'ـaـ'), 0,
+  'nor one the fold leaves under two characters (a letter between two kashidas)');
 select throws_ok($$ select * from public.help_search('46000000-0000-0000-0000-000000000001', repeat('x', 65)) $$,
   '22023', null, 'a query over 64 characters is refused');
 select throws_ok($$ select * from public.help_search('46000000-0000-0000-0000-000000000001', E'pass\nword') $$,
