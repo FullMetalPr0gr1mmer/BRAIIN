@@ -155,7 +155,8 @@ describe('rendering with no content equals rendering the built-in copy', () => {
 
 describe('the brand is filled as written', () => {
   // `%brand%` in a section's copy, built-in or authored, is the public identity's brand,
-  // copied as written: never read as a `$&`-style replacement pattern.
+  // copied as written: never read as a `$&`-style replacement pattern. So is the `{brand}`
+  // of the application band's consent line (packages/consent/recruitment.ts).
   const brand = 'Studio $& $$ $` One';
   const identity = { ...IDENTITY, brandName: { en: brand, ar: brand } };
   const escaped = brand.replace(/&/g, '&amp;');
@@ -167,6 +168,7 @@ describe('the brand is filled as written', () => {
     ['joinWhy', {}],
     ['joinWhy', { lead: authored }],
     ['joinSteps', { lead: authored }],
+    ['joinApply', {}],
     ['joinApply', { lead: authored }],
   ];
 
@@ -176,6 +178,7 @@ describe('the brand is filled as written', () => {
         const html = await renderSections(compose(type, {}, content), locale, identity);
         expect(html).toContain(escaped);
         expect(html).not.toContain('%brand%');
+        expect(html).not.toContain('{brand}');
       });
     }
   }
