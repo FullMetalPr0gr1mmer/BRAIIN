@@ -14,7 +14,9 @@
   period as a pill whose glyph is hidden and whose words are read, a spark), Note, EmptyState,
   Timeline (an `<ol>` of `<time>` entries), StatRows (a `<dl>`), ListRow, LinkTabs (PageHead's
   area tabs now render through it), LinkChips, Pager and ServerTable (typed cells: text,
-  number, status, date, date and time, "3 h ago"), BarList.
+  number, status, date, date and time, "3 h ago"; it clamps its range and pager to the last
+  page, and the screen clamps the page it reads, as kit.astro does), BarList. A ListRow's
+  actions are click-through while hidden, as DataTable's are (below).
 - **Charts** (`ui/charts/`): Spark, Line, BarsV, Donut and Ring, server-rendered SVG with no
   chart library and no style attribute. The geometry is pure functions
   (`src/lib/admin/charts.ts`: a round y scale, at most eight x labels, 5% bar buckets,
@@ -26,7 +28,7 @@
   `tests/astro/primitives.spec.ts` compares the table cell by cell with the data.
 - **React kit** (`src/components/admin/kit/`): DataTable (server paging with "26 to 50 of 112"
   in a live region and numbered pages, a page emptied past the end stepping back to the last
-  page with rows, the title a real link stretched over its row, opt-in selection with
+  page with rows and saying it is loading until they are in, the title a real link stretched over its row, opt-in selection with
   labelled checkboxes, a tri-state "Select all on this page" and the midnight bulk bar, the
   selection being the page's (below), row actions on hover and whenever focus is in the row,
   click-through while hidden, loading, empty and error states), Pager, Tabs (ARIA tabs, roving tabindex, mirrored arrows in a right-to-left block,
@@ -108,6 +110,12 @@
   delete: a bulk delete or publish (Media, Redirects, Projects, Testimonials) never reaches
   a row the person cannot see. A screen that needs "all 112 matching" later adds it as its
   own, said action.
+- **A table never widens the page.** `.table-wrap` is positioned: DataTable's "Actions"
+  heading carries visually hidden text, which is `position: absolute`, and with no
+  positioned box between it and the page it escaped the scroll container's clip and every
+  list screen scrolled sideways at phone width (WCAG 1.4.10). The kit page's stack is a
+  `minmax(0, 1fr)` track for the same reason. The per-role sweep runs at 1280px only, so
+  `kit.e2e` measures `/admin/services` and `/admin/kit` at 320 and 390px.
 - **Hidden row actions are click-through.** The prototype hid row actions with opacity
   only; above the stretched row link they still took presses, and ResourceTable's Move
   posts at once. They take no presses while hidden (`pointer-events: none`), and hover
@@ -189,14 +197,14 @@ Measured with `npm run size` (gzip):
 
 | | main (`4a6d78c`) | F4b |
 |---|---|---|
-| Each admin screen's eager graph | 107.6 to 107.7 KB | 111.1 to 111.2 KB |
-| `/admin/kit` (`AdminKit`) | (none) | 119.6 KB |
+| Each admin screen's eager graph | 107.6 to 107.7 KB | 111.0 to 111.1 KB |
+| `/admin/kit` (`AdminKit`) | (none) | 119.7 KB |
 | Sign-in script | 2.2 KB | 2.2 KB |
 | `admin-rich` (lazy) | 122.2 KB | 122.2 KB |
-| size-limit admin sum (≤ 300 KB) | 228.56 KB | 240.56 KB |
+| size-limit admin sum (≤ 300 KB) | 228.56 KB | 240.72 KB |
 | size-limit public (≤ 100 KB) | 25.51 KB | 25.51 KB |
 
-The 3.5 KB every screen gains is what ResourceTable now draws with: DataTable (its paging,
+The 3.4 KB every screen gains is what ResourceTable now draws with: DataTable (its paging,
 step back, page-scoped selection and row language), Pager, Chips, the status badge, the
 paging model and the Riyadh clock.
 
