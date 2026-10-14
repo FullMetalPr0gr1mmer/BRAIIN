@@ -26,7 +26,9 @@ import { tabFromParam } from '@/lib/admin/roving';
 export const prerender = false;
 
 // The component kit (Admin v2 F4b, docs/admin-v2/ui.md AV-07): every piece of the kit on
-// one screen, drawn from made-up sample data (no database read), so the signed-in sweep
+// one screen, drawn from made-up sample data (the page's own content reads nothing; the
+// shell around it, AdminLayout, reads what every screen's shell reads: the identity, the
+// menu's counts, the bell, the environment and maintenance), so the signed-in sweep
 // checks each in a browser for every role (axe, CSP, no style attribute, no overflow) and
 // tests/admin/kit.e2e.ts drives the ones that move (the Sortable core, tabs, selection,
 // dialogs). Not in the menu: a reference for the people building screens, reached by its

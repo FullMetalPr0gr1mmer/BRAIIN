@@ -84,7 +84,8 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   { href: '/admin/account', label: 'Your account', caps: [] },
   { href: '/admin/notifications', label: 'Notifications', caps: [] },
   // The component kit (Admin v2 F4b): every kit piece on made-up data, reached by its
-  // address. Every member may open it; it reads nothing.
+  // address. Every member may open it; its content reads nothing (its shell reads what
+  // every screen's shell reads).
   { href: '/admin/kit', label: 'Component kit', caps: [] },
 ];
 

@@ -17,8 +17,9 @@ import { uiFor, type ColumnDef, type SyncActionDef } from '@/lib/admin/uiSchema'
 // requests unchanged: the first column's text is a real link to the edit screen, stretched
 // over the row; Move up, Move down and Delete are the row's actions (shown on hover and
 // whenever focus is in the row); the status filter is chips; the range and the numbered
-// pages sit under the table. Dates are the studio's (Asia/Riyadh), so the server's HTML and
-// the hydrated render print the same day.
+// pages sit under the table. Dates are the studio's (Asia/Riyadh, relTime.ts): one clock
+// for every screen, whoever's browser shows it. (The rows are fetched after mount, so the
+// server's HTML holds no dates to disagree with.)
 //
 // Note what the delete button does NOT do: it never checks the caller's role to decide
 // whether to render. The server answers `content.archiveDelete` (Admin-only), and a
