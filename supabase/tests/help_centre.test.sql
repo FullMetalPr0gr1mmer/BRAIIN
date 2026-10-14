@@ -5,7 +5,8 @@
 -- tenant's admin (CLAUDE.md §9):
 --   • help_articles: each staff role reads every guide of its own tenant and none of another
 --     tenant's; no staff role writes one (insert, update and delete are refused by the
---     grants: CLAUDE.md §5 gives help no capability); anon reads nothing. Which guides a
+--     grants, matched by the grant layer's message, since RLS alone would refuse an insert
+--     with another: CLAUDE.md §5 gives help no capability); anon reads nothing. Which guides a
 --     role is SHOWN is the Worker's filter (tests/lib/helpCentre.spec.ts), not RLS.
 --   • help_search: staff find their own tenant's guides, folded the way §8 folds Arabic
 --     (ta marbuta, alef forms, tashkeel) and in any case; `%` and `_` are characters, not
@@ -103,44 +104,56 @@ select is(_seen(), _set_size(), 'admin reads every guide of its tenant, and only
 select throws_ok($$ insert into public.help_articles (tenant_id, slug, title, title_ar, minutes, screens, body)
                     values ('46000000-0000-0000-0000-000000000001', 'mine', 'Mine', 'لي', 1,
                             '{/admin}', _body('x')) $$,
-  '42501', null, 'admin cannot insert a guide (no capability writes help)');
+  '42501', 'permission denied for table help_articles',
+  'admin cannot insert a guide (no capability writes help)');
 select throws_ok($$ update public.help_articles set title = 'Changed' $$,
-  '42501', null, 'admin cannot update a guide');
+  '42501', 'permission denied for table help_articles',
+  'admin cannot update a guide');
 select throws_ok($$ delete from public.help_articles $$,
-  '42501', null, 'admin cannot delete a guide');
+  '42501', 'permission denied for table help_articles',
+  'admin cannot delete a guide');
 
 select _as('content_creator', '46000000-0000-0000-0000-000000000001');
 select is(_seen(), _set_size(), 'content_creator reads every guide of its tenant, and only those');
 select throws_ok($$ insert into public.help_articles (tenant_id, slug, title, title_ar, minutes, screens, body)
                     values ('46000000-0000-0000-0000-000000000001', 'mine', 'Mine', 'لي', 1,
                             '{/admin}', _body('x')) $$,
-  '42501', null, 'content_creator cannot insert a guide');
+  '42501', 'permission denied for table help_articles',
+  'content_creator cannot insert a guide');
 select throws_ok($$ update public.help_articles set title = 'Changed' $$,
-  '42501', null, 'content_creator cannot update a guide');
+  '42501', 'permission denied for table help_articles',
+  'content_creator cannot update a guide');
 select throws_ok($$ delete from public.help_articles $$,
-  '42501', null, 'content_creator cannot delete a guide');
+  '42501', 'permission denied for table help_articles',
+  'content_creator cannot delete a guide');
 
 select _as('seo', '46000000-0000-0000-0000-000000000001');
 select is(_seen(), _set_size(), 'seo reads every guide of its tenant, and only those');
 select throws_ok($$ insert into public.help_articles (tenant_id, slug, title, title_ar, minutes, screens, body)
                     values ('46000000-0000-0000-0000-000000000001', 'mine', 'Mine', 'لي', 1,
                             '{/admin}', _body('x')) $$,
-  '42501', null, 'seo cannot insert a guide');
+  '42501', 'permission denied for table help_articles',
+  'seo cannot insert a guide');
 select throws_ok($$ update public.help_articles set title = 'Changed' $$,
-  '42501', null, 'seo cannot update a guide');
+  '42501', 'permission denied for table help_articles',
+  'seo cannot update a guide');
 select throws_ok($$ delete from public.help_articles $$,
-  '42501', null, 'seo cannot delete a guide');
+  '42501', 'permission denied for table help_articles',
+  'seo cannot delete a guide');
 
 select _as('developer', '46000000-0000-0000-0000-000000000001');
 select is(_seen(), _set_size(), 'developer reads every guide of its tenant, and only those');
 select throws_ok($$ insert into public.help_articles (tenant_id, slug, title, title_ar, minutes, screens, body)
                     values ('46000000-0000-0000-0000-000000000001', 'mine', 'Mine', 'لي', 1,
                             '{/admin}', _body('x')) $$,
-  '42501', null, 'developer cannot insert a guide');
+  '42501', 'permission denied for table help_articles',
+  'developer cannot insert a guide');
 select throws_ok($$ update public.help_articles set title = 'Changed' $$,
-  '42501', null, 'developer cannot update a guide');
+  '42501', 'permission denied for table help_articles',
+  'developer cannot update a guide');
 select throws_ok($$ delete from public.help_articles $$,
-  '42501', null, 'developer cannot delete a guide');
+  '42501', 'permission denied for table help_articles',
+  'developer cannot delete a guide');
 
 -- A token with no staff role (a role this schema does not know) reads nothing.
 select _as('visitor', '46000000-0000-0000-0000-000000000001');
@@ -191,8 +204,6 @@ select throws_ok($$ select * from public.help_search('46000000-0000-0000-0000-00
   '22023', null, 'a query over 64 characters is refused');
 select throws_ok($$ select * from public.help_search('46000000-0000-0000-0000-000000000001', E'pass\nword') $$,
   '22023', null, 'a control character is refused');
-select ok(_hits('46000000-0000-0000-0000-000000000001', 'the') <= 20,
-  'a search answers at most 20 guides');
 
 -- ---- the rules every writer is held to (the service role, past RLS) ------------------------
 set local role service_role;
@@ -251,6 +262,21 @@ update public.help_articles set title = 'An operator note, edited'
 select is((select version from public.help_articles
             where tenant_id = '46000000-0000-0000-0000-000000000001' and slug = 'operator-note'), 2,
   'changing a guide moves its version');
+
+-- The search's cap: more guides match than it answers. Added here (staff write none), read
+-- as T1's admin, then removed so the counts below are the set's.
+insert into public.help_articles (tenant_id, slug, title, title_ar, minutes, screens, sort_order, body)
+select '46000000-0000-0000-0000-000000000001', 'bulk-' || n, 'Bulk guide ' || n, 'دليل', 1,
+       '{/admin}', 1000 + n, _body('Quokka facts.')
+  from generate_series(1, 25) n;
+set local role authenticated;
+select _as('admin', '46000000-0000-0000-0000-000000000001');
+select is(_hits('46000000-0000-0000-0000-000000000001', 'quokka'), 20,
+  'a search answers at most 20 guides (25 match)');
+set local role service_role;
+select _as(null, null);
+delete from public.help_articles
+ where tenant_id = '46000000-0000-0000-0000-000000000001' and slug like 'bulk-%';
 
 -- An operator edits a seeded guide, for the seed below to bring back.
 update public.help_articles set title = 'Edited by hand'
