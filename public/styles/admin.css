@@ -2741,17 +2741,28 @@ a.li__t::after {
 }
 
 /* Row actions show on hover and whenever focus is inside the row (WCAG 2.4.7), and
-   always where nothing can hover. */
+   always where nothing can hover. Hidden, they take no presses: they sit above the
+   title's stretched link, so a press meant for the row would land on an action nobody
+   can see. The rules are DataTable's .row-acts (below, where the timing is explained). */
 @media (hover: hover) {
   .li__acts {
     opacity: 0;
-    transition: opacity 0.2s;
+    pointer-events: none;
+    transition:
+      opacity 0.2s,
+      pointer-events 0s 0.2s allow-discrete;
   }
 
   .li:hover .li__acts,
   .li:focus-within .li__acts,
   .li[aria-current] .li__acts {
     opacity: 1;
+    pointer-events: auto;
+  }
+
+  .li:focus-within .li__acts,
+  .li[aria-current] .li__acts {
+    transition-delay: 0s;
   }
 }
 
@@ -3526,14 +3537,17 @@ dialog.drw[data-size='wide'] {
     scroll-behavior: auto !important;
   }
 
-  /* Not motion: the row actions' arming delay (DataTable, above) stays, or a tap would
-     again press an action it had only just revealed. */
-  .admin-body .dt .row-acts {
+  /* Not motion: the row actions' arming delay (DataTable's and a list row's, above)
+     stays, or a tap would again press an action it had only just revealed. */
+  .admin-body .dt .row-acts,
+  .admin-body .li__acts {
     transition: pointer-events 0s 0.2s allow-discrete !important;
   }
 
   .admin-body .dt tbody tr:focus-within .row-acts,
-  .admin-body .dt tbody tr[data-selected] .row-acts {
+  .admin-body .dt tbody tr[data-selected] .row-acts,
+  .admin-body .li:focus-within .li__acts,
+  .admin-body .li[aria-current] .li__acts {
     transition-delay: 0s !important;
   }
 }

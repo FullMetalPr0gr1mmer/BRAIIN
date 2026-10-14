@@ -6,6 +6,7 @@ import Badge from '@/components/admin/ui/Badge.astro';
 import BarList from '@/components/admin/ui/BarList.astro';
 import Card from '@/components/admin/ui/Card.astro';
 import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
 import Kpi from '@/components/admin/ui/Kpi.astro';
 import LinkChips from '@/components/admin/ui/LinkChips.astro';
 import LinkTabs from '@/components/admin/ui/LinkTabs.astro';
@@ -208,6 +209,21 @@ const hour = 3_600_000;
         />
         <ListRow title="Clients" sub="Logos, hidden until approved" icon="users" hidden>
           <Badge slot="meta" tone="sky">Sample</Badge>
+        </ListRow>
+        <ListRow
+          title="Selected work"
+          sub="Six projects, newest first"
+          href="#kit-work"
+          icon="grid"
+        >
+          <a
+            slot="actions"
+            class="btn icon-btn"
+            href="#kit-work-edit"
+            aria-label="Edit Selected work"
+          >
+            <Icon name="edit" size={15} />
+          </a>
         </ListRow>
       </ul>
     </Card>

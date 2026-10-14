@@ -331,6 +331,39 @@ test.describe('as admin', () => {
     await expect(next).toHaveCSS('opacity', '1');
   });
 
+  test('a list row: a hidden action takes no press; hover arms it, Tab reaches it', async ({
+    page,
+  }) => {
+    await open(page);
+    // A ListRow whose title links to #kit-work, with one action, "Edit", linking to
+    // #kit-work-edit (a zero-JS page: where the press went is the address it led to).
+    const title = page.getByRole('link', { name: 'Selected work', exact: true });
+    const edit = page.getByRole('link', { name: 'Edit Selected work', exact: true });
+    await edit.scrollIntoViewIfNeeded();
+    await page.mouse.move(1, 1);
+    const spot = (await edit.boundingBox())!;
+    const x = spot.x + spot.width / 2;
+    const y = spot.y + spot.height / 2;
+    expect(y).toBeGreaterThan(0);
+    expect(y).toBeLessThan(page.viewportSize()!.height);
+
+    // From outside the row, a press at once: the row's title link takes it.
+    await page.mouse.click(x, y);
+    await expect(page).toHaveURL(/#kit-work$/);
+
+    // Resting on the row shows the action and, once it has faded in, arms it.
+    await expect(edit).toHaveCSS('pointer-events', 'auto');
+    await page.mouse.click(x, y);
+    await expect(page).toHaveURL(/#kit-work-edit$/);
+
+    // The keyboard reaches it from the title link, and focus shows it.
+    await page.mouse.move(1, 1);
+    await title.focus();
+    await page.keyboard.press('Tab');
+    await expect(edit).toBeFocused();
+    await expect(edit.locator('..')).toHaveCSS('opacity', '1');
+  });
+
   test('the data table: emptying the last page steps back to the page before', async ({ page }) => {
     await open(page);
     const card = page.getByRole('region', { name: 'A data table' });

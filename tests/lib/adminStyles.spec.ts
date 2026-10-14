@@ -236,9 +236,23 @@ describe('admin.css: a row’s hidden actions take no presses (Admin v2 F4b revi
     );
   });
 
-  it('reduced motion keeps the arming delay: it is not motion', () => {
-    expect(body('.admin-body .dt .row-acts')).toMatch(
-      /transition:\s*pointer-events 0s 0\.2s allow-discrete !important/,
+  it('a list row’s actions follow the same rules (ListRow over its stretched title link)', () => {
+    const hidden = body('.li__acts');
+    expect(hidden).toMatch(/opacity:\s*0;/);
+    expect(hidden).toMatch(/pointer-events:\s*none;/);
+    expect(hidden).toMatch(/pointer-events 0s 0\.2s allow-discrete/);
+    expect(hidden).not.toMatch(/visibility/);
+    expect(ADMIN).toMatch(
+      /\.li:hover \.li__acts,\s*\.li:focus-within \.li__acts,\s*\.li\[aria-current\] \.li__acts\s*\{\s*opacity:\s*1;\s*pointer-events:\s*auto;/,
+    );
+    expect(ADMIN).toMatch(
+      /\n {2}\.li:focus-within \.li__acts,\s*\.li\[aria-current\] \.li__acts\s*\{\s*transition-delay:\s*0s;/,
+    );
+  });
+
+  it('reduced motion keeps the arming delay for both: it is not motion', () => {
+    expect(ADMIN).toMatch(
+      /\.admin-body \.dt \.row-acts,\s*\.admin-body \.li__acts\s*\{\s*transition:\s*pointer-events 0s 0\.2s allow-discrete !important;/,
     );
   });
 });
