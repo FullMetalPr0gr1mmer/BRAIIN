@@ -8,7 +8,7 @@
 --      and no API role (anon, authenticated, service_role, PUBLIC) may execute it;
 --   2. pg_net is there (0048 creates it) and the trigger is enabled, AFTER INSERT FOR EACH
 --      ROW, no WHEN, calling the function; the only caller of it, and the only trigger on
---      leads that makes an HTTP call;
+--      leads that makes an HTTP call; no trigger is attached to pg_net's queue;
 --   3. what it queues: nothing without the Vault URL; nothing for an http:// URL; nothing
 --      for an https:// URL without the Vault secret; with both, exactly one POST to that URL
 --      whose body is exactly {lead_id, tenant_id} and whose headers are exactly the JSON
@@ -24,7 +24,10 @@
 --      {sqlstate}); not configured, and announced, write none;
 --   6. the daily check, public.lead_notify_misses(): a definer for the service role alone;
 --      null while not configured; once configured, the leads 15 minutes to 24 hours old
---      with no notification_log row.
+--      with no notification_log row;
+--   7. a trigger attached to pg_net's queue (PUBLIC holds TRIGGER on it, EXC-012, and the
+--      queue is written as the function's owner): nothing is queued, the attached trigger
+--      never runs, the lead is saved and one system_logs row says why.
 --
 -- Nothing is skipped: 0048 creates pg_net where it is missing, so a database without it,
 -- or a queue this role cannot read, fails here rather than passing as skips. Requests are
@@ -33,7 +36,7 @@
 -- the transaction and rolled back with it. CLAUDE.md §3 (Pillar 1), §9, §10.
 
 begin;
-select plan(54);
+select plan(60);
 
 insert into public.tenants (id, name) values
   ('48000000-0000-4000-8000-00000000000a', 'NotifyA'),
@@ -172,6 +175,10 @@ select ok(
        and t.tgname <> 'leads_notify' and f.prosrc ~* 'http_(post|get|delete|request)'),
   'one announcement per lead: leads_notify alone calls the function, and no other trigger on leads makes an HTTP call');
 select ok(_readable(), 'this role reads pg_net''s queue (unreadable is a failure, not a skip)');
+select ok(
+  not exists (select 1 from pg_trigger t
+               where t.tgrelid = 'net.http_request_queue'::regclass and not t.tgisinternal),
+  'no trigger is attached to pg_net''s queue (0048 refuses to apply over one)');
 
 -- ---- 3 and 4. What reaches the queue --------------------------------------------------------
 -- The signing scheme on a fixed vector, the one tests/api/notifyLead.spec.ts checks the
@@ -384,6 +391,29 @@ begin
   return next is(public.lead_notify_misses(), v_m,
     'the daily check: a lead with its notification_log row is not a miss');
   reset role;
+
+  -- 7. Last, because only the table's owner may drop a trigger, so this one stays until the
+  -- rollback. Configured (the https Vault URL and the secret are set): a trigger attached to
+  -- pg_net's queue, as any login role may (EXC-012), would run as the function's owner on
+  -- the queue insert. The function queues nothing instead; the spy records whether it ran.
+  perform set_config('pgtap.queue_spy', 'idle', true);
+  execute 'create function _queue_spy() returns trigger language plpgsql as $s$
+             begin perform set_config(''pgtap.queue_spy'', ''ran'', true); return new; end $s$';
+  execute 'create trigger pgtap_queue_spy before insert on net.http_request_queue
+             for each row execute function _queue_spy()';
+  v_n := _queued();
+  v_l := _logs(a);
+  return next lives_ok(
+    $$ insert into public.leads (id, tenant_id, name, email_enc, message) values
+       ('48000000-0000-4000-8000-0000000000a9', '48000000-0000-4000-8000-00000000000a', 'Nine', 'x', 'hi') $$,
+    'a trigger on pg_net''s queue: the lead is saved');
+  return next is(_queued() - v_n, 0::bigint, 'a trigger on pg_net''s queue: no request is queued');
+  return next is(current_setting('pgtap.queue_spy'), 'idle',
+    'a trigger on pg_net''s queue: it never runs (as the function''s owner)');
+  return next is(_logs(a) - v_l, 1::bigint, 'a trigger on pg_net''s queue: one system_logs row');
+  return next is(_last_log(a),
+    'warn|lead notification skipped: a trigger is attached to pg_net''s queue|{}',
+    '... a warning with a fixed message, naming no value');
 end $f$;
 select * from _cases();
 

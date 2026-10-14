@@ -39,6 +39,17 @@
 --     JSON bytes, so no serializer can break it; the Worker recomputes it over the body's
 --     ids and refuses a timestamp more than 300 s from its clock. What the queue holds is
 --     then good for one lead, for five minutes, and a replay only re-announces that lead.
+--   • Nothing is queued while a trigger is attached to the queue. On Supabase PUBLIC holds
+--     ALL on net.http_request_queue, TRIGGER included (EXC-012), and this function writes
+--     the queue as its owner, postgres: a trigger anyone attached there would run its code
+--     as postgres on the next lead. So the function locks the queue (ROW EXCLUSIVE, the lock
+--     its insert takes anyway, which conflicts with the SHARE ROW EXCLUSIVE that CREATE
+--     TRIGGER needs, so none can be added between the check and the insert), looks for any
+--     trigger on it that is not internal, and if there is one queues nothing: a WARNING and
+--     a system_logs row, the lead saved. Section 5 refuses the push if one is there already.
+--     The check reads pg_trigger under the statement's snapshot, so it is race-free at READ
+--     COMMITTED, the isolation every lead insert runs at (PostgREST, crm_ingest_lead); a
+--     REPEATABLE READ insert could miss a trigger committed after its snapshot was taken.
 --   • No error it can catch fails an insert. Every statement runs inside a handler: any
 --     error while reading the configuration, signing or queueing the request (and while
 --     logging that) is caught, and the lead is saved. A contact form that fails because a
@@ -47,12 +58,13 @@
 --     does not catch is a cancelled statement (query_canceled: a statement timeout, a
 --     cancel request) and a failed ASSERT (assert_failure); this function asserts nothing,
 --     and a cancel ends the insert as it would without the trigger.
---   • Not silent. Configured but not announced (a non-https URL, no secret, an error) is a
---     WARNING and a system_logs row (level warn, source leads_notify, a fixed message,
---     detail {sqlstate} for an error, else {}), naming no value: never the URL, the secret
---     or a lead value (an error message can quote any of them, so only the SQLSTATE is
---     kept). The row is written in its own block, so a failed log fails nothing. Not
---     configured at all is not logged per lead; the daily check (section 4) reports it.
+--   • Not silent. Configured but not announced (a non-https URL, no secret, a trigger on
+--     the queue, an error) is a WARNING and a system_logs row (level warn, source
+--     leads_notify, a fixed message, detail {sqlstate} for an error, else {}), naming no
+--     value: never the URL, the secret or a lead value (an error message can quote any of
+--     them, so only the SQLSTATE is kept). The row is written in its own block, so a
+--     failed log fails nothing. Not configured at all is not logged per lead; the daily
+--     check (section 4) reports it.
 --   • The request timeout is explicit (5 s; pg_net's parameter `timeout_milliseconds`). A
 --     postcondition checks that net.http_post still takes the named parameters this
 --     function passes, so a pg_net whose signature changed fails this migration instead of
@@ -119,24 +131,34 @@ begin
       if v_secret is null or v_secret = '' then
         v_problem := 'lead notification skipped: the Vault secret notify_lead_secret is missing';
       else
-        -- Signed when the lead is saved (the clock, not the transaction's start), sent
-        -- after commit; the Worker allows 300 s either way.
-        v_ts := pg_catalog.floor(pg_catalog.date_part('epoch', pg_catalog.clock_timestamp()))
-                  ::pg_catalog.int8::pg_catalog.text;
-        perform net.http_post(
-          url := v_url,
-          body := pg_catalog.jsonb_build_object('lead_id', new.id, 'tenant_id', new.tenant_id),
-          headers := pg_catalog.jsonb_build_object(
-            'Content-Type', 'application/json',
-            'X-Braiin-Timestamp', v_ts,
-            'X-Braiin-Signature', 'v1=' || pg_catalog.encode(
-              extensions.hmac(v_ts || '.' || new.id::pg_catalog.text || '.' || new.tenant_id::pg_catalog.text,
-                              v_secret, 'sha256'),
-              'hex')
-          ),
-          timeout_milliseconds := 5000
-        );
-        return null;
+        -- The queue first: locked (ROW EXCLUSIVE, which CREATE TRIGGER's lock conflicts
+        -- with, so nothing is attached between this check and the insert), then nothing is
+        -- queued if any trigger is on it: one would run as this function's owner (EXC-012).
+        lock table net.http_request_queue in row exclusive mode;
+        if exists (select 1 from pg_catalog.pg_trigger t
+                    where t.tgrelid = 'net.http_request_queue'::pg_catalog.regclass
+                      and not t.tgisinternal) then
+          v_problem := 'lead notification skipped: a trigger is attached to pg_net''s queue';
+        else
+          -- Signed when the lead is saved (the clock, not the transaction's start), sent
+          -- after commit; the Worker allows 300 s either way.
+          v_ts := pg_catalog.floor(pg_catalog.date_part('epoch', pg_catalog.clock_timestamp()))
+                    ::pg_catalog.int8::pg_catalog.text;
+          perform net.http_post(
+            url := v_url,
+            body := pg_catalog.jsonb_build_object('lead_id', new.id, 'tenant_id', new.tenant_id),
+            headers := pg_catalog.jsonb_build_object(
+              'Content-Type', 'application/json',
+              'X-Braiin-Timestamp', v_ts,
+              'X-Braiin-Signature', 'v1=' || pg_catalog.encode(
+                extensions.hmac(v_ts || '.' || new.id::pg_catalog.text || '.' || new.tenant_id::pg_catalog.text,
+                                v_secret, 'sha256'),
+                'hex')
+            ),
+            timeout_milliseconds := 5000
+          );
+          return null;
+        end if;
       end if;
     end if;
   exception when others then
@@ -257,6 +279,17 @@ begin
   if not exists (select 1 from pg_extension where extname = 'pg_net')
      or to_regclass('net.http_request_queue') is null then
     raise exception '0048: pg_net is not installed, or its queue is not net.http_request_queue';
+  end if;
+  -- The queue carries no trigger of anyone's (EXC-012: PUBLIC may attach one, and it would
+  -- run as the function's owner on every lead); the function would refuse to queue anyway,
+  -- but a trigger there is a finding, not a state to push into. And the owner may take the
+  -- lock the function takes (ROW EXCLUSIVE: INSERT on the table is enough).
+  if exists (select 1 from pg_trigger t
+              where t.tgrelid = 'net.http_request_queue'::regclass and not t.tgisinternal) then
+    raise exception '0048: a trigger is attached to net.http_request_queue; find out who attached it before pushing (EXC-012)';
+  end if;
+  if not has_table_privilege(v_owner, 'net.http_request_queue', 'insert') then
+    raise exception '0048: % (the function''s owner) may not lock or insert into net.http_request_queue', v_owner;
   end if;
 
   -- The trigger: enabled, AFTER INSERT FOR EACH ROW (tgtype 5: ROW 1 + INSERT 4, BEFORE 2
