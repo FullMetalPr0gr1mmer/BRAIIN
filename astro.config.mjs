@@ -6,6 +6,12 @@ import cloudflare from '@astrojs/cloudflare';
 // hydrate an island, and the `codeSplitting` groups below put that runtime in
 // `admin-vendor-*.js` so the public 100 KB budget keeps measuring only public JS.
 import react from '@astrojs/react';
+// Admin v2 U3: `image.remotePatterns` = this build's public `media` bucket, derived from
+// PUBLIC_SUPABASE_URL (the build fails without it). See the script's header.
+import { mediaRemotePatternsIntegration } from './scripts/media-remote-patterns.mjs';
+// The `/_image` endpoint: the guard on the route itself, uploads checked before they are
+// transformed and cached for an hour, stills handed to the adapter (the script's header).
+import { imageEndpointIntegration } from './scripts/image-endpoint.mjs';
 
 /**
  * Braiin Station — render model (see CLAUDE.md §2 "Render tiers"):
@@ -128,7 +134,7 @@ export default defineConfig({
     },
   },
 
-  integrations: [react()],
+  integrations: [react(), mediaRemotePatternsIntegration(), imageEndpointIntegration()],
 
   // Astro's Markdown pipeline is NOT a render path in this project — there is not one
   // .md/.mdx file in src/, and blog bodies are Tiptap JSON rendered by
@@ -161,6 +167,11 @@ export default defineConfig({
 
   image: {
     // Cloudflare image transforms via the IMAGES binding; <Picture> enforces width/height.
+    // No domain is allowed. The one remote source, editors' uploads in this build's public
+    // `media` bucket, is added as a remote pattern by mediaRemotePatternsIntegration()
+    // (Admin v2 U3), pinned to the protocol, host, port and bucket path of
+    // PUBLIC_SUPABASE_URL; the `/_image` guard (src/lib/http/imageGuard.ts) admits only
+    // that bucket's keys.
     domains: [],
   },
 

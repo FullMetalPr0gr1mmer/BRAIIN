@@ -57,6 +57,38 @@ export const cases: readonly Case[] = [
     allow: ['admin', 'content_creator', 'seo', 'developer'],
   },
   {
+    name: 'media upload (a new image file)',
+    load: () => import('@/pages/api/admin/media/upload'),
+    method: 'POST',
+    url: '/api/admin/media/upload',
+    body: {},
+    // media.write in full (Admin v2 U3): SEO's 'meta only' cannot add a file.
+    allow: ['admin', 'content_creator', 'developer'],
+  },
+  {
+    name: 'media replace (a new file for the same asset)',
+    load: () => import('@/pages/api/admin/media/[id]/replace'),
+    method: 'POST',
+    url: `/api/admin/media/${UUID}/replace`,
+    body: {},
+    allow: ['admin', 'content_creator', 'developer'],
+  },
+  {
+    name: 'media download (the stored file)',
+    load: () => import('@/pages/api/admin/media/[id]/download'),
+    method: 'GET',
+    url: `/api/admin/media/${UUID}/download`,
+    // Every role that reads the library: media.write full or meta.
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+  },
+  {
+    name: 'media storage used',
+    load: () => import('@/pages/api/admin/media/stats'),
+    method: 'GET',
+    url: '/api/admin/media/stats',
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+  },
+  {
     name: 'media metadata (SEO "meta only" path)',
     load: () => import('@/pages/api/admin/media/meta/[id]'),
     method: 'PATCH',

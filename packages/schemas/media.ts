@@ -95,6 +95,186 @@ export const StaticMediaKeySchema = z
   .string()
   .regex(/^stills\/[a-z0-9][a-z0-9/_-]*\.(jpe?g|png|webp|avif)$/, 'not a stills/… key');
 
+// ── Uploaded images (Admin v2 U3, owner decision A5, migration 0045) ────────────
+
+/**
+ * The public Supabase Storage bucket uploads land in. Only the Worker writes to it (the
+ * service role), and only what it re-encoded: one WebP per upload, never the original.
+ */
+export const MEDIA_BUCKET = 'media';
+
+/**
+ * The largest file an editor may upload: the Images binding's `.input()` limit (20 MB),
+ * counted in decimal megabytes so it holds whichever way the limit is meant. Checked
+ * against Content-Length before a byte of the body is read.
+ */
+export const MEDIA_UPLOAD_MAX_BYTES = 20_000_000;
+
+/** The decompression guard, read from the file's own header before it is processed. */
+export const MEDIA_MAX_INPUT_SIDE_PX = 12_000;
+export const MEDIA_MAX_INPUT_PIXELS = 40_000_000;
+
+/**
+ * What is stored: a WebP no longer than this on its long edge (AVIF output stops at
+ * 1,200 px, so WebP is the master; `/_image` makes AVIF derivatives from it).
+ */
+export const MEDIA_LONG_EDGE_PX = 2560;
+
+/**
+ * How long and thin an upload may be: neither side more than this many times the other.
+ * Below it, every width the site renders an upload at (the `/_image` guard's
+ * TRANSFORM_WIDTHS, the narrowest 100 px, or the image's own) keeps it at least one pixel
+ * high, so the height Astro writes (and the admin thumbnail's) is never 0 and always within
+ * the guard's half pixel. A 2000x2 master would round to 0 at every listed width: Astro then
+ * drops `h` and `/_image` refuses the URL. Both ways round, because the sniffer reads the
+ * file before the Images binding applies its EXIF rotation, which can turn a tall file wide.
+ * The upload refuses past it (sniffed, then on the master), the key parser admits no key past
+ * it, and 0045's CHECK refuses the same; tests/lib/mediaDelivery.spec.ts holds it to the guard.
+ */
+export const MEDIA_MAX_ASPECT = 100;
+
+/** Is this size within MEDIA_MAX_ASPECT (neither side over 100 times the other)? */
+export function withinMediaAspect(width: number, height: number): boolean {
+  return Math.max(width, height) <= Math.min(width, height) * MEDIA_MAX_ASPECT;
+}
+
+/** The bucket's own file limit (0045). A re-encoded master is far smaller than this. */
+export const MEDIA_OBJECT_MAX_BYTES = 10_485_760;
+
+/** Where an upload's details travel: one header, `encodeMediaMeta(...)`, never the URL. */
+export const MEDIA_META_HEADER = 'x-media-meta';
+
+/** The longest value each detail may hold (UTF-16 units, after trimming). */
+export const MEDIA_META_LIMITS = {
+  alt: 300,
+  displayName: 200,
+  tag: 40,
+  tags: 20,
+  folder: 200,
+} as const;
+
+/**
+ * The header's ceiling, and it holds every valid set of details: no field takes a control
+ * character or a lone surrogate (`TEXT` below), so JSON.stringify escapes nothing into more
+ * than two bytes and each UTF-16 unit is at most three bytes of UTF-8; base64url writes four
+ * characters for every three bytes. 1,800 units of the costliest script (any character past
+ * U+07FF; Arabic takes two bytes) plus the JSON around them come to about 7.4 KB.
+ * tests/lib/mediaResource.spec.ts encodes the schema's maximum and reads it back.
+ */
+export const MEDIA_META_MAX_LENGTH = 8192;
+
+const UUID_PART = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+/**
+ * An uploaded image's object key: `<tenant>/<random id>_<width>x<height>.webp`. The size
+ * in the name is what lets the public `/_image` guard bound a transform without a database
+ * read (src/lib/http/imageGuard.ts); the 0045 CHECK holds it equal to the row's columns.
+ */
+const STORAGE_KEY = new RegExp(
+  `^(${UUID_PART})/(${UUID_PART})_([1-9][0-9]{0,3})x([1-9][0-9]{0,3})\\.webp$`,
+);
+
+export interface StorageKey {
+  tenantId: string;
+  objectId: string;
+  width: number;
+  height: number;
+}
+
+/** The parts of an uploaded image's key, or null for anything that is not one. */
+export function parseStorageKey(key: string): StorageKey | null {
+  const m = STORAGE_KEY.exec(key);
+  if (!m) return null;
+  const width = Number(m[3]);
+  const height = Number(m[4]);
+  if (Math.max(width, height) > MEDIA_LONG_EDGE_PX || !withinMediaAspect(width, height)) {
+    return null;
+  }
+  return { tenantId: m[1]!, objectId: m[2]!, width, height };
+}
+
+/**
+ * Text an upload's details may hold: no C0 or C1 control character (DEL included), no line
+ * or paragraph separator, and no lone surrogate (half of an emoji, which the database
+ * cannot store). What keeps MEDIA_META_MAX_LENGTH true.
+ */
+const TEXT = /^[^\p{Cc}\p{Cs}\u2028\u2029]*$/u;
+const text = (max: number) =>
+  z.string().trim().min(1).max(max).regex(TEXT, 'no control characters');
+
+/** Alt text an upload must carry: both languages, as for every image (DoD #4). */
+const UploadAltSchema = z.object({
+  en: text(MEDIA_META_LIMITS.alt),
+  ar: text(MEDIA_META_LIMITS.alt),
+});
+
+/**
+ * The name the library shows for a file: its own name, as the editor's computer had it,
+ * and nothing that could pass for a path. Never part of the object key. 0045's
+ * `media_assets_display_name` CHECK refuses the same characters, named the same way, so a
+ * name this admits is never refused by the database after its file is stored.
+ */
+export const MediaDisplayNameSchema = text(MEDIA_META_LIMITS.displayName).regex(
+  /^[^/\\]+$/,
+  'a file name, without folders',
+);
+
+/** `POST /api/admin/media/upload`: what describes the file in the body. */
+export const MediaUploadMetaSchema = z
+  .object({
+    alt: UploadAltSchema,
+    displayName: MediaDisplayNameSchema.optional(),
+    tags: z.array(text(MEDIA_META_LIMITS.tag)).max(MEDIA_META_LIMITS.tags).default([]),
+    folder: text(MEDIA_META_LIMITS.folder).optional(),
+  })
+  .strict();
+export type MediaUploadMeta = z.infer<typeof MediaUploadMetaSchema>;
+
+/**
+ * `POST /api/admin/media/[id]/replace`: the version the editor saw, the new name, and
+ * whether the previous file leaves the web now. `removePrevious` deletes its object at once,
+ * for an image that must come down (a portrait whose subject asked); without it the daily
+ * sweep removes the object, so a page cached before the replace keeps its image meanwhile.
+ */
+export const MediaReplaceMetaSchema = z
+  .object({
+    version: z.number().int().min(1),
+    displayName: MediaDisplayNameSchema.optional(),
+    removePrevious: z.boolean().optional(),
+  })
+  .strict();
+export type MediaReplaceMeta = z.infer<typeof MediaReplaceMetaSchema>;
+
+const BASE64URL = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * The header value for an upload's details: the JSON as UTF-8, in base64url. A header
+ * carries printable ASCII only; base64url costs an Arabic letter about 2.7 characters where
+ * percent-encoding cost 6, which is what keeps the schema's maximum under the ceiling.
+ */
+export function encodeMediaMeta(meta: unknown): string {
+  let binary = '';
+  for (const byte of new TextEncoder().encode(JSON.stringify(meta))) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** The details back from the header, or undefined when it is missing or unreadable. */
+export function decodeMediaMeta(value: string | null): unknown {
+  if (value === null || value.length === 0 || value.length > MEDIA_META_MAX_LENGTH) {
+    return undefined;
+  }
+  if (!BASE64URL.test(value)) return undefined;
+  try {
+    const b64 = value.replace(/-/g, '+').replace(/_/g, '/');
+    const binary = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 /** A reference to a media_assets row, with an optional per-use alt override. */
 export const MediaRefSchema = z.object({
   mediaId: UuidSchema,
