@@ -22,6 +22,12 @@ import HelpGuideList from './HelpGuideList';
 // in place with "All guides" to go back, its Arabic text a click away, and related guides
 // below it.
 //
+// Only the latest request is ever shown: a newer search cancels an older one, and a guide
+// still loading is cancelled when another is asked for, when the person goes back or types
+// a search, and when the drawer opens again; one that lands anyway is dropped unless it is
+// still the latest and the drawer is open, so a slow answer never replaces the view the
+// person moved on to or pulls focus away from them.
+//
 // What the server sends is already the role's: the list and the search are filtered from
 // ROLE_CAPS on the server (src/lib/admin/help), so nothing here decides who sees what. The
 // list is asked for the first time the drawer opens, never on a timer (P-15); a search
@@ -42,6 +48,8 @@ export default function HelpDrawer() {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const inFlight = useRef<AbortController | null>(null);
+  // The guide being fetched, if any (see the header: only the latest is shown).
+  const guideFlight = useRef<AbortController | null>(null);
   const articles = useRef(new Map<string, HelpArticle>());
   const cameFrom = useRef<string | null>(null);
 
@@ -69,26 +77,49 @@ export default function HelpDrawer() {
     }
   }, []);
 
+  /** Cancels a guide still loading, and its "Loading…", once the person has moved on. */
+  const cancelGuide = useCallback(() => {
+    if (!guideFlight.current) return;
+    guideFlight.current.abort();
+    guideFlight.current = null;
+    setStatus('');
+  }, []);
+
   const openGuide = useCallback(async (slug: string) => {
+    guideFlight.current?.abort();
+    guideFlight.current = null;
     cameFrom.current = slug;
     const cached = articles.current.get(slug);
     if (cached) {
       setArticle(cached);
       setLang('en');
+      setStatus('');
       setFocusTo('title');
       return;
     }
+    const controller = new AbortController();
+    guideFlight.current = controller;
+    // Still the latest guide asked for, with the drawer open to show it.
+    const current = () =>
+      !controller.signal.aborted &&
+      guideFlight.current === controller &&
+      dialogRef.current?.open === true;
     setStatus('Loading…');
     try {
       const data = await adminFetch<{ article: HelpArticle }>(
         `/api/admin/help/article?slug=${encodeURIComponent(slug)}`,
+        { signal: controller.signal },
       );
       articles.current.set(slug, data.article);
+      if (!current()) return;
+      guideFlight.current = null;
       setArticle(data.article);
       setLang('en');
       setStatus('');
       setFocusTo('title');
     } catch (err) {
+      if (!current()) return;
+      guideFlight.current = null;
       setStatus(
         err instanceof AdminApiError && err.info.status === 404
           ? 'That guide is not available.'
@@ -104,6 +135,8 @@ export default function HelpDrawer() {
       const dialog = dialogRef.current;
       if (!dialog || dialog.open) return;
       inFlight.current?.abort();
+      guideFlight.current?.abort();
+      guideFlight.current = null;
       setQuery('');
       setResults(null);
       setArticle(null);
@@ -164,6 +197,7 @@ export default function HelpDrawer() {
   }
 
   function back() {
+    cancelGuide();
     setArticle(null);
     setFocusTo('back');
     if (!index) void loadIndex();
@@ -208,6 +242,7 @@ export default function HelpDrawer() {
             autoComplete="off"
             maxLength={64}
             onChange={(event) => {
+              cancelGuide();
               setQuery(event.target.value);
               if (article) setArticle(null);
             }}

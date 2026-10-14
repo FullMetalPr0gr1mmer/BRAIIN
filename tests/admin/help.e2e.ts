@@ -34,6 +34,40 @@ async function expectNoAxeViolations(page: Page, label: string) {
 const helpButton = (page: Page) => page.locator('.admin-topbar [data-open="help"]');
 const guideButton = (page: Page) => page.locator('.admin-header [data-open="help"]');
 
+/**
+ * Holds one guide's answer until `release()`, then answers it with a stand-in titled as the
+ * real one; `settled` resolves once the answer was handed over, or refused because the
+ * drawer had already cancelled the request.
+ */
+async function holdGuide(page: Page, slug: string, title: string) {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = () => resolve();
+  });
+  let done!: () => void;
+  const settled = new Promise<void>((resolve) => {
+    done = () => resolve();
+  });
+  const article = {
+    slug,
+    title,
+    titleAr: 'إجابة متأخرة',
+    minutes: 1,
+    tags: [],
+    body: { en: [{ t: 'p', x: 'A late answer.' }], ar: [{ t: 'p', x: 'إجابة متأخرة.' }] },
+  };
+  await page.route(new RegExp(`/api/admin/help/article\\?slug=${slug}$`), async (route) => {
+    await held;
+    // The drawer may have aborted the request by now: then there is nothing to answer.
+    await route.fulfill({ json: { ok: true, data: { article } } }).catch(() => undefined);
+    done();
+  });
+  return { release, settled };
+}
+
+/** A late answer lands within this; checking that it changed nothing needs the wait. */
+const LATE_ANSWER_SETTLE_MS = 500;
+
 test.describe('as developer', () => {
   test.use({ storageState: authFile('developer') });
 
@@ -119,6 +153,73 @@ test.describe('as developer', () => {
     await page.keyboard.press('Escape');
     await expect(drawer).toBeHidden();
     await expect(guide).toBeFocused();
+  });
+
+  test('a guide that answers late never replaces the search typed while it loaded', async ({
+    page,
+  }) => {
+    const late = await holdGuide(page, 'maintenance-mode', 'Maintenance mode');
+    await ready(page, '/admin/leads');
+    await helpButton(page).click();
+    const drawer = page.getByRole('dialog', { name: 'Help centre' });
+    await drawer
+      .getByRole('list', { name: /^all guides$/i })
+      .getByRole('link', { name: /Maintenance mode/ })
+      .click();
+    await expect(drawer.getByRole('status')).toHaveText('Loading…');
+
+    // The person moves on before the guide arrives: a search.
+    const search = drawer.getByRole('searchbox', { name: 'Search the guides' });
+    await search.fill('password');
+    const results = drawer.getByRole('list', { name: /^results$/i });
+    const account = results.getByRole('link', { name: /Your account, password and bell/ });
+    await expect(account).toBeVisible();
+    await expect(search).toBeFocused();
+
+    late.release();
+    await late.settled;
+    await page.waitForTimeout(LATE_ANSWER_SETTLE_MS);
+    await expect(drawer.getByRole('heading', { level: 3, name: 'Maintenance mode' })).toHaveCount(
+      0,
+    );
+    await expect(account).toBeVisible();
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue('password');
+  });
+
+  test('a guide that answers after the drawer closed does not open over the lists', async ({
+    page,
+  }) => {
+    const late = await holdGuide(page, 'maintenance-mode', 'Maintenance mode');
+    await ready(page, '/admin/leads');
+    await helpButton(page).click();
+    const drawer = page.getByRole('dialog', { name: 'Help centre' });
+    await drawer
+      .getByRole('list', { name: /^all guides$/i })
+      .getByRole('link', { name: /Maintenance mode/ })
+      .click();
+    await expect(drawer.getByRole('status')).toHaveText('Loading…');
+
+    // Closed while the guide loads, then opened again on the lists.
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+    await helpButton(page).click();
+    await expect(drawer).toBeVisible();
+    const search = drawer.getByRole('searchbox', { name: 'Search the guides' });
+    await expect(search).toBeFocused();
+
+    late.release();
+    await late.settled;
+    await page.waitForTimeout(LATE_ANSWER_SETTLE_MS);
+    await expect(drawer.getByRole('heading', { level: 3, name: 'Maintenance mode' })).toHaveCount(
+      0,
+    );
+    await expect(
+      drawer.getByRole('list', { name: /^all guides$/i }).getByRole('link', {
+        name: /Maintenance mode/,
+      }),
+    ).toBeVisible();
+    await expect(search).toBeFocused();
   });
 });
 
