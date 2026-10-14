@@ -6,12 +6,13 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
 // drawer with JS and is a plain link to /admin/help without it; the drawer lists the guides
 // for the screen it was opened on first; a search finds a guide in either language and
 // never one the role may not read; a guide opens in place with its heading focused, reads in
-// Arabic (RTL) on request, and "All guides" goes back to the row it came from; axe finds
-// nothing with the drawer open, in English and in Arabic; Escape closes it and focus returns
-// to the "?". A page head's "Guide" opens the drawer on that screen's guide, and is a link
-// to it without JS; a role that may not read the guide gets no "Guide". The page itself,
-// in its four views, is in the per-role sweep (routes.ts EXTRA_LINKS). The guides are the
-// ones migration 0046 seeds into every tenant.
+// Arabic (RTL) on request, and "All guides" clears any search and goes back to the row it
+// came from; a guide that answers late never replaces a newer view; axe finds nothing with
+// the drawer open, in English and in Arabic; Escape closes it and focus returns to the "?".
+// A page head's "Guide" opens the drawer on that screen's guide, and is a link to it
+// without JS; a role that may not read the guide gets no "Guide". The page itself, in its
+// four views, is in the per-role sweep (routes.ts EXTRA_LINKS). The guides are the ones
+// migration 0046 seeds into every tenant.
 
 test.skip(!staffEnv(), SKIP_REASON);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
@@ -258,6 +259,33 @@ test.describe('as content_creator', () => {
     await search.fill('zzzz-nothing');
     await expect(drawer.getByRole('status')).toHaveText('No guide matches that. Try other words.');
     await expectNoAxeViolations(page, 'content_creator: a search with no result');
+  });
+
+  test('"All guides" from a search result clears the search and shows every guide', async ({
+    page,
+  }) => {
+    await ready(page, '/admin');
+    await helpButton(page).click();
+    const drawer = page.getByRole('dialog', { name: 'Help centre' });
+    const search = drawer.getByRole('searchbox', { name: 'Search the guides' });
+    await search.fill('draft');
+    await drawer
+      .getByRole('list', { name: /^results$/i })
+      .getByRole('link', { name: /Saving, publishing and scheduling/ })
+      .click();
+    await expect(
+      drawer.getByRole('heading', { level: 3, name: 'Saving, publishing and scheduling' }),
+    ).toBeFocused();
+
+    // The button says "All guides", and that is where it goes, as in the prototype.
+    await drawer.getByRole('button', { name: /^all guides$/i }).click();
+    await expect(search).toHaveValue('');
+    await expect(drawer.getByRole('list', { name: /^results$/i })).toHaveCount(0);
+    const all = drawer.getByRole('list', { name: /^all guides$/i });
+    await expect(
+      all.getByRole('link', { name: /Saving, publishing and scheduling/ }),
+    ).toBeFocused();
+    await expect(all.getByRole('link', { name: /Your account, password and bell/ })).toBeVisible();
   });
 
   test('Pages offers the content guide in its head to a role that writes content', async ({

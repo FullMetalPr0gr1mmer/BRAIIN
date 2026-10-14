@@ -20,7 +20,8 @@ import HelpGuideList from './HelpGuideList';
 // topbar's "?" (a link to /admin/help without JS) on every admin page. A search box, the
 // guides for the screen it was opened on, then every guide the role may read; a guide opens
 // in place with "All guides" to go back, its Arabic text a click away, and related guides
-// below it.
+// below it. "All guides" means what it says, as in the prototype (showList('')) and on the
+// no-JS page: it clears a search the guide was opened from and shows the lists.
 //
 // Only the latest request is ever shown: a newer search cancels an older one, and a guide
 // still loading is cancelled when another is asked for, when the person goes back or types
@@ -198,6 +199,10 @@ export default function HelpDrawer() {
 
   function back() {
     cancelGuide();
+    inFlight.current?.abort();
+    setQuery('');
+    setResults(null);
+    setMatches('');
     setArticle(null);
     setFocusTo('back');
     if (!index) void loadIndex();
