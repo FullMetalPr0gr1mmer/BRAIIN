@@ -3,9 +3,10 @@ import { describe, it, expect, vi } from 'vitest';
 // §9(d): "notify-lead (unsigned POST → 401, no PII in body)".
 //
 // This endpoint is the one public URL that can read the lead table. It is
-// unauthenticated by URL, discoverable, and retryable without limit — so the bearer
-// check is the only thing between the internet and a lead row, and it has to be proven
-// rather than assumed.
+// unauthenticated by URL, discoverable, and retryable without limit — so the signature
+// check (0048: a timestamp and an HMAC over the ids, src/lib/leads/notifySignature.ts) is
+// the only thing between the internet and a lead row, and it has to be proven rather than
+// assumed.
 
 const inserted: Record<string, unknown>[] = [];
 
@@ -49,57 +50,163 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 
 const { POST } = await import('@/pages/api/hooks/notify-lead');
+const {
+  NOTIFY_SIGNATURE_WINDOW_S,
+  notifySignature,
+  notifySignatureValid,
+  notifySignedString,
+  readNotifyHeaders,
+} = await import('@/lib/leads/notifySignature');
 
-const VALID_TOKEN = 'test-dummy-notify-lead-secret'; // matches tests/stubs/astro-env-server.ts
+const SECRET = 'test-dummy-notify-lead-secret'; // matches tests/stubs/astro-env-server.ts
 const BODY = {
   lead_id: '11111111-1111-4111-8111-111111111111',
   tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
 };
+const OTHER_ID = '22222222-2222-4222-8222-222222222222';
 
-function call(token: string | null, body: unknown = BODY) {
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (token !== null) headers['authorization'] = token;
-  const request = new Request('https://www.braiinstation.com/api/hooks/notify-lead', {
+const nowS = () => Math.floor(Date.now() / 1000);
+
+interface Signing {
+  /** The signed timestamp; now by default. */
+  ts?: number;
+  /** The key; the Worker's by default. */
+  secret?: string;
+  /** The ids the signature covers; the body's by default. */
+  signedLead?: string;
+  signedTenant?: string;
+}
+
+async function signedHeaders(body: { lead_id: string; tenant_id: string }, o: Signing = {}) {
+  const ts = String(o.ts ?? nowS());
+  return {
+    'x-braiin-timestamp': ts,
+    'x-braiin-signature': await notifySignature(
+      o.secret ?? SECRET,
+      ts,
+      o.signedLead ?? body.lead_id,
+      o.signedTenant ?? body.tenant_id,
+    ),
+  };
+}
+
+function call(headers: Record<string, string>, body: unknown = BODY) {
+  const request = new Request('https://example.test/api/hooks/notify-lead', {
     method: 'POST',
-    headers,
-    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json', ...headers },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
   });
   return (POST as unknown as (ctx: { request: Request }) => Promise<Response>)({ request });
 }
 
+const signedCall = async (o: Signing = {}) => call(await signedHeaders(BODY, o));
+
+describe('the signing scheme (src/lib/leads/notifySignature.ts)', () => {
+  it('signs the canonical string, not the JSON, exactly as 0048 does', async () => {
+    expect(notifySignedString('1760000000', BODY.lead_id, BODY.tenant_id)).toBe(
+      '1760000000.11111111-1111-4111-8111-111111111111.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
+    // The same vector supabase/tests/lead_notify.test.sql computes with pgcrypto's hmac.
+    expect(await notifySignature(SECRET, '1760000000', BODY.lead_id, BODY.tenant_id)).toBe(
+      'v1=b0d61ac408b980012f8d511b395bf660f9c27e29836763a570d8c2138c7eea22',
+    );
+  });
+
+  it('never verifies under a short or empty secret', async () => {
+    // A short secret, with a signature truly made under it.
+    const sig = await notifySignature('short', '1760000000', BODY.lead_id, BODY.tenant_id);
+    expect(
+      await notifySignatureValid('short', '1760000000', sig, BODY.lead_id, BODY.tenant_id),
+    ).toBe(false);
+    // An unset one (WebCrypto would refuse an empty key; the length check refuses first).
+    expect(
+      await notifySignatureValid(
+        '',
+        '1760000000',
+        `v1=${'0'.repeat(64)}`,
+        BODY.lead_id,
+        BODY.tenant_id,
+      ),
+    ).toBe(false);
+  });
+
+  it('reads the headers only when both are well formed and inside the window', () => {
+    const now = 1_760_000_000_000;
+    const sig = `v1=${'a'.repeat(64)}`;
+    const h = (ts: string | null, signature: string | null) => {
+      const headers = new Headers();
+      if (ts !== null) headers.set('x-braiin-timestamp', ts);
+      if (signature !== null) headers.set('x-braiin-signature', signature);
+      return readNotifyHeaders(headers, now);
+    };
+    expect(h('1760000000', sig)).toEqual({ ts: '1760000000', signature: sig });
+    expect(h(String(1_760_000_000 - NOTIFY_SIGNATURE_WINDOW_S), sig)).not.toBeNull();
+    expect(h(String(1_760_000_000 - NOTIFY_SIGNATURE_WINDOW_S - 1), sig)).toBeNull();
+    expect(h(String(1_760_000_000 + NOTIFY_SIGNATURE_WINDOW_S + 1), sig)).toBeNull();
+    expect(h(null, sig)).toBeNull();
+    expect(h('1760000000', null)).toBeNull();
+    expect(h('1760000000.5', sig)).toBeNull();
+    expect(h('-1760000000', sig)).toBeNull();
+    expect(h('1760000000', `v1=${'A'.repeat(64)}`)).toBeNull();
+    expect(h('1760000000', 'a'.repeat(64))).toBeNull();
+    expect(h('1760000000', `v2=${'a'.repeat(64)}`)).toBeNull();
+    expect(h('1760000000', `v1=${'a'.repeat(63)}`)).toBeNull();
+  });
+});
+
 describe('notify-lead authentication', () => {
-  it('rejects a POST with no Authorization header', async () => {
-    expect((await call(null)).status).toBe(401);
+  it('rejects a POST with no signature (§9(d): unsigned → 401)', async () => {
+    expect((await call({})).status).toBe(401);
   });
 
-  it('rejects an empty or malformed bearer', async () => {
-    expect((await call('Bearer ')).status).toBe(401);
-    expect((await call('Basic abc')).status).toBe(401);
-    expect((await call(VALID_TOKEN)).status).toBe(401); // no "Bearer " prefix
+  it('rejects a call with only one of the two headers', async () => {
+    const both = await signedHeaders(BODY);
+    expect((await call({ 'x-braiin-timestamp': both['x-braiin-timestamp'] })).status).toBe(401);
+    expect((await call({ 'x-braiin-signature': both['x-braiin-signature'] })).status).toBe(401);
   });
 
-  it('rejects a wrong token, including a prefix of the real one', async () => {
-    expect((await call('Bearer wrong')).status).toBe(401);
-    expect((await call(`Bearer ${VALID_TOKEN.slice(0, -1)}`)).status).toBe(401);
-    expect((await call(`Bearer ${VALID_TOKEN}x`)).status).toBe(401);
+  it('rejects the old bearer, even carrying the right secret', async () => {
+    expect((await call({ authorization: `Bearer ${SECRET}` })).status).toBe(401);
   });
 
-  it('accepts the correct token', async () => {
-    expect((await call(`Bearer ${VALID_TOKEN}`)).status).toBe(200);
+  it('rejects a signature under another secret', async () => {
+    expect((await signedCall({ secret: 'another-secret-of-enough-length' })).status).toBe(401);
   });
 
-  it('validates the payload only AFTER authenticating', async () => {
-    // An unauthenticated caller must not be able to make us parse anything, and must
-    // not learn the payload shape from a 422.
-    expect((await call(null, { garbage: true })).status).toBe(401);
-    expect((await call(`Bearer ${VALID_TOKEN}`, { garbage: true })).status).toBe(422);
+  it('rejects a stale or future timestamp, and accepts one inside the window', async () => {
+    expect((await signedCall({ ts: nowS() - NOTIFY_SIGNATURE_WINDOW_S - 5 })).status).toBe(401);
+    expect((await signedCall({ ts: nowS() + NOTIFY_SIGNATURE_WINDOW_S + 5 })).status).toBe(401);
+    expect((await signedCall({ ts: nowS() - NOTIFY_SIGNATURE_WINDOW_S + 5 })).status).toBe(200);
+  });
+
+  it('rejects a body naming a lead or tenant other than the signed one', async () => {
+    expect((await signedCall({ signedLead: OTHER_ID })).status).toBe(401);
+    expect((await signedCall({ signedTenant: OTHER_ID })).status).toBe(401);
+    // A valid signature for one lead does not carry over to another body.
+    const headers = await signedHeaders(BODY);
+    expect((await call(headers, { ...BODY, lead_id: OTHER_ID })).status).toBe(401);
+    expect((await call(headers, { ...BODY, tenant_id: OTHER_ID })).status).toBe(401);
+  });
+
+  it('answers 401 for a body it cannot verify, and describes nothing', async () => {
+    const headers = await signedHeaders(BODY);
+    for (const body of ['not json', { garbage: true }, { ...BODY, extra: 1 }]) {
+      const res = await call(headers, body);
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ ok: false, error: 'unauthorized' });
+    }
+    expect((await call(headers, { ...BODY, pad: 'x'.repeat(2000) })).status).toBe(401);
+  });
+
+  it('accepts a correctly signed call', async () => {
+    expect((await signedCall()).status).toBe(200);
   });
 });
 
 describe('notify-lead payload hygiene', () => {
   it('logs field NAMES and counts, never lead values', async () => {
     inserted.length = 0;
-    await call(`Bearer ${VALID_TOKEN}`);
+    await signedCall();
 
     const row = inserted.find((r) => 'channel' in r);
     expect(row, 'no notification_log row written').toBeDefined();
@@ -116,7 +223,7 @@ describe('notify-lead payload hygiene', () => {
 
   it('names the discipline among the fields a recipient is sent (0028)', async () => {
     inserted.length = 0;
-    await call(`Bearer ${VALID_TOKEN}`);
+    await signedCall();
     const row = inserted.find((r) => 'channel' in r) as { detail: { fields: string[] } };
     expect(row.detail.fields).toContain('discipline');
     expect(row.detail.fields).toContain('service');
@@ -124,7 +231,7 @@ describe('notify-lead payload hygiene', () => {
 
   it('sends readable labels beside the slugs (Round 3), still as field NAMES only', async () => {
     inserted.length = 0;
-    await call(`Bearer ${VALID_TOKEN}`);
+    await signedCall();
     const row = inserted.find((r) => 'channel' in r) as { detail: { fields: string[] } };
     expect(row.detail.fields).toContain('serviceLabel');
     expect(row.detail.fields).toContain('disciplineLabel');

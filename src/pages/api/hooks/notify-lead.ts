@@ -6,8 +6,8 @@ import { supabaseConfigured } from '@/lib/supabase/client';
 import { decryptPII } from '@/lib/crypto/pii';
 import { canSeeLeadPii } from '@/lib/admin/leadFields';
 import { writeSystemLog } from '@/lib/data/systemLog';
-import { timingSafeEqual } from '@/lib/http/csrf';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
+import { notifySignatureValid, readNotifyHeaders } from '@/lib/leads/notifySignature';
 
 // Lead-notification receiver (CLAUDE.md §10). Called by the `leads_notify` AFTER INSERT
 // trigger via pg_net, over the public `*.workers.dev` hop.
@@ -18,11 +18,17 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 //
 //   1. The request body carries ONLY `lead_id` + `tenant_id`. No name, no email, no
 //      message. PII never crosses the hop; this Worker re-reads the row server-side.
-//   2. The bearer token is compared in CONSTANT TIME. This endpoint is unauthenticated
-//      by URL and unlimited by retry, which is the exact shape a timing attack wants.
-//   3. An unsigned POST answers 401 with no body. §9(d) requires a test for precisely
-//      this, because "notification endpoint that accepts anything" is how a lead table
-//      leaks one row at a time.
+//   2. The call is SIGNED, not bearer-authenticated (0048, src/lib/leads/notifySignature.ts):
+//      a timestamp and an HMAC over '<ts>.<lead_id>.<tenant_id>' under NOTIFY_LEAD_SECRET,
+//      recomputed here over the body's ids and compared in CONSTANT TIME. pg_net's queue,
+//      where the request waits, is readable by every database login role (EXC-012), so it
+//      must never hold the secret itself; a signature there is good for one lead for five
+//      minutes. This endpoint is unauthenticated by URL and unlimited by retry, which is
+//      the exact shape a timing attack wants.
+//   3. An unsigned, stale or mis-signed POST answers 401 and nothing else: a body that
+//      cannot be verified is not parsed into an error that describes it. §9(d) requires a
+//      test for precisely this, because "notification endpoint that accepts anything" is
+//      how a lead table leaks one row at a time.
 //
 // Recipients are field-gated through the SAME helper the admin UI uses
 // (`canSeeLeadPii`) — §10 asks for one shared field-visibility rule, and the failure
@@ -31,10 +37,16 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 
 export const prerender = false;
 
-const PayloadSchema = z.object({
-  lead_id: z.string().uuid(),
-  tenant_id: z.string().uuid(),
-});
+// Exactly what the trigger sends: the two ids, nothing else.
+const PayloadSchema = z
+  .object({
+    lead_id: z.string().uuid(),
+    tenant_id: z.string().uuid(),
+  })
+  .strict();
+
+/** The trigger's body is about 90 bytes; anything far larger is not from it. */
+const MAX_BODY_BYTES = 1024;
 
 /** Who gets notified, and how much they see. Roles come from §5, never from the body. */
 const RECIPIENT_ROLES = ['admin', 'developer'] as const;
@@ -46,26 +58,42 @@ function json(body: unknown, status: number): Response {
   });
 }
 
+const unauthorized = () => json({ ok: false, error: 'unauthorized' }, 401);
+
 export const POST: APIRoute = async ({ request }) => {
-  const header = request.headers.get('authorization') ?? '';
-  const presented = header.startsWith('Bearer ') ? header.slice(7) : '';
-  // Constant-time, and checked BEFORE the body is read — an unauthenticated caller
-  // should not be able to make us parse anything.
-  if (!presented || !timingSafeEqual(presented, NOTIFY_LEAD_SECRET)) {
-    return json({ ok: false, error: 'unauthorized' }, 401);
+  // The headers first, before the body is read: an unsigned or stale call (outside the
+  // 300 s window) makes us parse nothing.
+  const signed = readNotifyHeaders(request.headers, Date.now());
+  if (!signed) return unauthorized();
+  if (Number(request.headers.get('content-length') ?? '0') > MAX_BODY_BYTES) return unauthorized();
+
+  // The signature covers the body's ids, so the body is read to verify it; until it
+  // verifies, every failure is the same 401.
+  let text: string;
+  try {
+    text = await request.text();
+  } catch {
+    return unauthorized();
   }
-
-  if (!supabaseConfigured()) return json({ ok: false, error: 'unavailable' }, 503);
-
+  if (text.length > MAX_BODY_BYTES) return unauthorized();
   let body: unknown;
   try {
-    body = await request.json();
+    body = JSON.parse(text);
   } catch {
-    return json({ ok: false, error: 'bad-request' }, 400);
+    return unauthorized();
   }
-
   const parsed = PayloadSchema.safeParse(body);
-  if (!parsed.success) return json({ ok: false, error: 'validation' }, 422);
+  if (!parsed.success) return unauthorized();
+  const verified = await notifySignatureValid(
+    NOTIFY_LEAD_SECRET,
+    signed.ts,
+    signed.signature,
+    parsed.data.lead_id,
+    parsed.data.tenant_id,
+  );
+  if (!verified) return unauthorized();
+
+  if (!supabaseConfigured()) return json({ ok: false, error: 'unavailable' }, 503);
 
   const sb = serviceClient();
 
