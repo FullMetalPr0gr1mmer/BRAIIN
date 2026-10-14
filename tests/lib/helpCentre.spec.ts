@@ -258,6 +258,17 @@ describe('the guides say only what the admin does', () => {
     expect(everything('ar')).not.toContain('يستطيع دور SEO تغيير بيانات الملف');
   });
 
+  it('the help button is drawn as an i in a circle, and the guides call it that', () => {
+    expect(source('src/components/admin/ui/Topbar.astro')).toMatch(
+      /data-open="help" aria-label="Help centre">\s*<Icon name="info"/,
+    );
+    expect(everything('en')).not.toMatch(/question mark/i);
+    expect(everything('ar')).not.toContain('علامة الاستفهام');
+    expect(guide('finding-your-way', 'en')).toContain(
+      'The Help centre button at the top, an i in a circle',
+    );
+  });
+
   // @@guide-claims
 });
 

@@ -314,7 +314,7 @@ create or replace function app.help_article_set() returns jsonb
             "The bell lists what arrived or changed for you lately.",
             "Your name at the bottom of the menu opens your account.",
             "View site opens the public site in a new tab, so you can check your work.",
-            "The question mark opens these guides, starting with the ones for the screen you are on."
+            "The Help centre button at the top, an i in a circle, opens these guides, starting with the ones for the screen you are on."
           ]
         },
         {
@@ -338,7 +338,7 @@ create or replace function app.help_article_set() returns jsonb
             "يعرض الجرس ما وصلك أو تغيّر لك مؤخرًا.",
             "يفتح اسمك أسفل القائمة صفحة حسابك.",
             "يفتح View site الموقع العام في تبويب جديد لتتحقق من عملك.",
-            "تفتح علامة الاستفهام هذه الأدلة، بدءًا بأدلة الشاشة التي أنت عليها."
+            "يفتح زر Help centre في الأعلى، وهو حرف i داخل دائرة، هذه الأدلة، بدءًا بأدلة الشاشة التي أنت عليها."
           ]
         },
         {
