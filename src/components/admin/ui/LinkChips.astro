@@ -1,0 +1,45 @@
+---
+import { formatNumber } from '@/lib/admin/charts';
+
+// Filter chips as links (Admin v2 F4b, the prototype's .chip): server-rendered, zero JS.
+// Each chip is a URL (?status=draft), the current one marked aria-current="page" and
+// filled; a count, when given, is part of the chip's name ("Draft 12"). Chips that
+// toggle in place are kit/Chips.tsx.
+
+export interface LinkChip {
+  label: string;
+  href: string;
+  count?: number | undefined;
+}
+
+interface Props {
+  chips: readonly LinkChip[];
+  /** The href of the current filter. */
+  current?: string | null | undefined;
+  /** The filter's name ("Filter by status"). */
+  label: string;
+}
+
+const { chips, current = null, label } = Astro.props;
+---
+
+<nav aria-label={label}>
+  <ul class="chips">
+    {
+      chips.map((chip) => (
+        <li>
+          <a
+            class="chip"
+            href={chip.href}
+            aria-current={chip.href === current ? 'page' : undefined}
+          >
+            {chip.label}
+            {/* A space, so the count is its own word in the link's name ("Draft 12"). */}
+            {chip.count !== undefined && ' '}
+            {chip.count !== undefined && <span class="chip__n">{formatNumber(chip.count)}</span>}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</nav>

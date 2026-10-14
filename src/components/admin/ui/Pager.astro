@@ -1,0 +1,74 @@
+---
+import { offsetOf, pageInfo, pageItems, pageParam, PAGE_SIZE } from '@/lib/admin/pager';
+
+// A pager as links (Admin v2 F4b, the prototype's .pager): Previous, the numbered pages
+// (the current one aria-current="page", a gap where pages are skipped) and Next, each a
+// URL that keeps the page's other query parameters. Zero JS. Nothing renders for a list
+// that fits on one page. The DataTable's pager (kit/DataTable.tsx) is the same model with
+// buttons.
+
+interface Props {
+  total: number;
+  /** The current page's URL: its query is kept, `param` is replaced. */
+  url: URL;
+  /** The query parameter holding the 1-based page (read from `url` too). */
+  param?: string;
+  limit?: number;
+  label?: string;
+}
+
+const { total, url, param = 'page', limit = PAGE_SIZE, label = 'Pages' } = Astro.props;
+const info = pageInfo(total, offsetOf(pageParam(url.searchParams.get(param)), limit), limit);
+
+/** The URL of a page: the first page drops the parameter, so it has one address. */
+function href(page: number): string {
+  const next = new URL(url);
+  if (page === 1) next.searchParams.delete(param);
+  else next.searchParams.set(param, String(page));
+  return `${next.pathname}${next.search}`;
+}
+---
+
+{
+  info.pages > 1 && (
+    <nav class="pager" aria-label={label}>
+      <ul>
+        <li>
+          {info.page > 1 ? (
+            <a href={href(info.page - 1)} rel="prev">
+              Previous
+            </a>
+          ) : (
+            <span class="pager__off">Previous</span>
+          )}
+        </li>
+        {pageItems(info.page, info.pages).map((item) => (
+          <li>
+            {item === 'gap' ? (
+              <span class="pager__gap" aria-hidden="true">
+                …
+              </span>
+            ) : (
+              <a
+                href={href(item)}
+                aria-label={`Page ${item}`}
+                aria-current={item === info.page ? 'page' : undefined}
+              >
+                {item}
+              </a>
+            )}
+          </li>
+        ))}
+        <li>
+          {info.page < info.pages ? (
+            <a href={href(info.page + 1)} rel="next">
+              Next
+            </a>
+          ) : (
+            <span class="pager__off">Next</span>
+          )}
+        </li>
+      </ul>
+    </nav>
+  )
+}

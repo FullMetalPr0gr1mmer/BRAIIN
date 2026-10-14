@@ -1,0 +1,42 @@
+---
+// A card (Admin v2 F4b, the prototype's .card): the white box every admin block sits in.
+// Zero JS. With a title alone, the title is F1's header band (`.card-title`); with a
+// sub-line or actions too, the prototype's header (`.card__h`): the title and its line on
+// the inline start, the actions slot on the inline end. `flush` drops the padding for a
+// table or a list that brings its own gutter.
+
+interface Props {
+  title?: string | undefined;
+  sub?: string | undefined;
+  /** The title's heading level: 2 under the page's h1 (the default), 3 inside a section. */
+  level?: 2 | 3;
+  flush?: boolean;
+  id?: string | undefined;
+  class?: string | undefined;
+}
+
+const { title, sub, level = 2, flush = false, id, class: className } = Astro.props;
+const Heading = level === 3 ? 'h3' : 'h2';
+const hasActions = Astro.slots.has('actions');
+const band = title !== undefined && !sub && !hasActions;
+---
+
+<div class:list={['card', { 'card--flush': flush }, className]} id={id}>
+  {band && <Heading class="card-title">{title}</Heading>}
+  {
+    !band && (title !== undefined || hasActions) && (
+      <div class="card__h">
+        <div>
+          {title !== undefined && <Heading class="card__t">{title}</Heading>}
+          {sub && <p class="card__sub">{sub}</p>}
+        </div>
+        {hasActions && (
+          <div class="card__acts">
+            <slot name="actions" />
+          </div>
+        )}
+      </div>
+    )
+  }
+  <slot />
+</div>

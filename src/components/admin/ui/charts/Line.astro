@@ -1,0 +1,108 @@
+---
+import ChartFigure from './ChartFigure.astro';
+import {
+  lineGeometry,
+  n,
+  seriesClass,
+  seriesSummary,
+  seriesTable,
+  type Series,
+} from '@/lib/admin/charts';
+
+// A line chart (Admin v2 F4b, the prototype's chart.line): one or more series over the
+// same labels, four round gridlines, at most eight x labels, a soft area under each line.
+// Server-rendered SVG with no inline style: geometry is attributes, colour a series class,
+// and the second series dashed (the third dotted) so colour is never the only cue. One
+// point is drawn as a dot. The figure's summary and table come from the same series.
+
+interface Props {
+  id: string;
+  caption: string;
+  captionVisible?: boolean;
+  series: readonly Series[];
+  labels: readonly string[];
+  height?: number;
+  /** Overrides the computed one-line summary. */
+  summary?: string | undefined;
+  /** The table's first heading ("Date"). */
+  labelHeading?: string;
+}
+
+const {
+  id,
+  caption,
+  captionVisible = true,
+  series,
+  labels,
+  height = 240,
+  summary,
+  labelHeading = 'Date',
+} = Astro.props;
+const g = lineGeometry(series, labels, { height });
+const table = seriesTable(series, labels, labelHeading);
+---
+
+<ChartFigure
+  id={id}
+  caption={caption}
+  captionVisible={captionVisible}
+  summary={summary ?? seriesSummary(series, labels)}
+  table={table}
+  empty={g === null}
+>
+  {
+    g && (
+      <svg
+        class="chart"
+        viewBox={`0 0 ${g.width} ${g.height}`}
+        role="img"
+        aria-labelledby={`${id}-cap ${id}-sum`}
+        focusable="false"
+      >
+        {g.ticks.map((tick) => (
+          <>
+            <line
+              class="ch-grid"
+              x1={g.plot.left}
+              x2={g.plot.right}
+              y1={n(tick.y)}
+              y2={n(tick.y)}
+            />
+            <text class="ch-axis" x={g.plot.left - 8} y={n(tick.y + 4)} text-anchor="end">
+              {tick.label}
+            </text>
+          </>
+        ))}
+        {g.xLabels.map((label) => (
+          <text class="ch-axis" x={n(label.x)} y={g.height - 8} text-anchor="middle">
+            {label.label}
+          </text>
+        ))}
+        {g.series.map((s) => (
+          <>
+            {s.area && <path class:list={['ch-area', s.className]} d={s.area} />}
+            <path class:list={['ch-line', s.className]} d={s.line} />
+            {s.points.length === 1 &&
+              s.points.map((p) => (
+                <circle class:list={['ch-dot', s.className]} cx={n(p.x)} cy={n(p.y)} r="4" />
+              ))}
+          </>
+        ))}
+      </svg>
+    )
+  }
+  {
+    series.length > 1 && (
+      <ul class="legend" slot="legend">
+        {series.map((s, index) => (
+          <li>
+            <svg width="18" height="10" aria-hidden="true" focusable="false">
+              <line class:list={['ch-line', seriesClass(index)]} x1="1" y1="5" x2="17" y2="5" />
+            </svg>
+            {s.name}
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</ChartFigure>

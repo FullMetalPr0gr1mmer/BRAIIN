@@ -1,0 +1,96 @@
+---
+import ChartFigure from './ChartFigure.astro';
+import { datumSummary, datumTable, donutGeometry, type Datum } from '@/lib/admin/charts';
+
+// A donut (Admin v2 F4b, the prototype's chart.donut): shares of a whole, each a stroked
+// arc offset by the ones before it, beside a legend that lists every share with its
+// percentage (whole numbers that add up to 100). The legend and the table carry every
+// value; a zero share stays in both and out of the drawing.
+
+interface Props {
+  id: string;
+  caption: string;
+  captionVisible?: boolean;
+  data: readonly Datum[];
+  /** The figure in the hole ("42 leads"). */
+  center?: string | undefined;
+  /** The drawing's width and height in px. */
+  size?: number;
+  summary?: string | undefined;
+  labelHeading?: string;
+  valueHeading?: string;
+}
+
+const {
+  id,
+  caption,
+  captionVisible = true,
+  data,
+  center,
+  size = 130,
+  summary,
+  labelHeading = 'Item',
+  valueHeading = 'Value',
+} = Astro.props;
+const g = donutGeometry(data);
+---
+
+<ChartFigure
+  id={id}
+  caption={caption}
+  captionVisible={captionVisible}
+  summary={summary ?? datumSummary(data, { shares: true })}
+  table={datumTable(data, { labelHeading, valueHeading, shares: true })}
+  empty={g.total === 0}
+>
+  <div class="donut">
+    <svg
+      viewBox="0 0 100 100"
+      width={size}
+      height={size}
+      role="img"
+      aria-labelledby={`${id}-cap ${id}-sum`}
+      focusable="false"
+    >
+      <circle class="ch-track" cx="50" cy="50" r={g.radius} stroke-width="14"></circle>
+      {
+        g.segments
+          .filter((segment) => segment.drawn)
+          .map((segment) => (
+            <circle
+              class:list={['ch-seg', segment.className]}
+              cx="50"
+              cy="50"
+              r={g.radius}
+              stroke-width="14"
+              stroke-dasharray={segment.dasharray}
+              stroke-dashoffset={segment.dashoffset}
+              transform="rotate(-90 50 50)"
+            />
+          ))
+      }
+      {
+        center && (
+          <text class="ch-center" x="50" y="55" text-anchor="middle">
+            {center}
+          </text>
+        )
+      }
+    </svg>
+    <ul class="legend">
+      {
+        g.segments.map((segment) => (
+          <li>
+            <span>
+              <svg width="10" height="10" aria-hidden="true" focusable="false">
+                <rect class:list={['ch-swatch', segment.className]} width="10" height="10" rx="3" />
+              </svg>{' '}
+              <span dir="auto">{segment.label}</span>
+            </span>
+            <b>{segment.percent}%</b>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</ChartFigure>

@@ -1,0 +1,29 @@
+---
+import Icon from './Icon.astro';
+import type { IconName } from '@/lib/admin/icons';
+
+// An empty state (Admin v2 F4b, the prototype's .empty): an icon tile, a title, a line,
+// and the default slot for the action (a link or a button). Honest copy: what is empty
+// and how to fill it, never a blank box. kit/EmptyState.tsx renders the same markup.
+
+interface Props {
+  title: string;
+  text?: string | undefined;
+  icon?: IconName;
+}
+
+const { title, text, icon = 'inbox' } = Astro.props;
+---
+
+<div class="empty">
+  <span class="empty__ico"><Icon name={icon} size={22} /></span>
+  <p class="empty__t">{title}</p>
+  {text && <p class="empty__x">{text}</p>}
+  {
+    Astro.slots.has('default') && (
+      <div class="empty__a">
+        <slot />
+      </div>
+    )
+  }
+</div>
