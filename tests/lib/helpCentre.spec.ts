@@ -185,25 +185,36 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
     }
   });
 
-  it('the roles guide promises no instant sign-out: an issued sign-in lasts up to an hour', () => {
-    // CLAUDE.md §2 (session invalidation): the admin turns a changed or switched-off
-    // person away at their next request, but an access token already issued keeps its
-    // role for RLS until it expires (an hour); only the tables with a live check (leads
-    // and the CRM through app.live_role(), job applications through app.is_live_admin())
-    // close at once. The guide an Admin reads before removing someone says exactly that.
+  it('the roles guide says what a role change ends at once, and the hour that remains', () => {
+    // CLAUDE.md §2 (session invalidation) and §3, as Admin v2 U12a (0055) leaves them: a role
+    // change or a switched-off account ends every session of that person in the database
+    // (profiles_revoke_sessions), so the admin turns them away at their next click; but an
+    // access token already issued keeps its role at the database directly until it expires
+    // (an hour) on the tables with no live check. People and roles (0050, 0055), the security
+    // settings (0055), leads and the CRM (app.live_role()) and job applications
+    // (app.is_live_admin()) close at once. The guide an Admin reads says exactly that, and
+    // never promises the database forgets an issued pass at once.
     const roles = SET.find((a) => a.slug === 'roles-and-access')!;
     const en = textsOf(roles, 'en').join('\n');
     const ar = textsOf(roles, 'ar').join('\n');
+    expect(en).toContain('ends every sign-in the person has, on every device');
+    expect(en).toContain('the admin turns them away at their next click');
+    expect(en).toContain(
+      'a sign-in pass already handed out keeps working for up to an hour when someone uses it directly against the database',
+    );
+    expect(en).toContain(
+      'People and their roles, the security settings, leads and job applications',
+    );
+    expect(en).toContain('Make account owner');
+    expect(en).toContain('1 day or 7 days');
     for (const text of textsOf(roles, 'en')) {
-      expect(text).not.toMatch(
-        /\bsign\w*\b[^.]*\bout\b[^.]*\b(at once|immediately|straight away)\b/i,
-      );
+      // The database is never said to drop an issued pass at once.
+      expect(text).not.toMatch(/\b(pass|token)\b[^.]*\b(at once|immediately|straight away)\b/i);
     }
+    expect(ar).toContain('يُنهي ذلك كل جلسات دخول الشخص على كل أجهزته');
+    expect(ar).toContain('يبقى صالحًا حتى ساعة');
+    expect(ar).toContain('Make account owner');
     expect(ar).not.toContain('يسجّل خروجه فورًا');
-    expect(en).toContain('a sign-in already handed out lasts up to an hour');
-    expect(en).toContain('Leads and job applications check the person');
-    expect(ar).toContain('تبقى صالحة حتى ساعة');
-    expect(ar).toContain('العملاء المحتملون وطلبات التوظيف');
   });
 
   it('the dollar-quote cannot end early: no text holds the literal’s tag', () => {
@@ -273,9 +284,11 @@ describe('the guides say only what the admin does', () => {
     // The sidebar's account chip and the users list render it; nothing shows it beside a
     // person's work yet.
     expect(source('src/components/admin/ui/Sidebar.astro')).toContain('shell.displayName');
+    // Users & roles (U12a) names each person by personName(): the display name first.
     expect(source('src/components/admin/screens/users/UsersPanel.tsx')).toContain(
-      'row.display_name',
+      'personName(row)',
     );
+    expect(source('src/lib/admin/userModel.ts')).toContain('row.displayName?.trim() ||');
     expect(everything('en')).not.toMatch(/beside your work/i);
     expect(everything('ar')).not.toContain('بجانب عملك');
     expect(guide('your-account', 'en')).toContain('to Admins, in Users & roles');

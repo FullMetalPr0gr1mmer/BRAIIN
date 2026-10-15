@@ -133,6 +133,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'login.css',
       'personal.css',
       'search.css',
+      'users.css',
     ]);
   });
 
@@ -410,6 +411,7 @@ describe('admin.css keeps the hooks the markup renders', () => {
         'src/pages/admin/reset.astro',
       ]);
       expect(pagesFor('search.css')).toEqual(['src/pages/admin/search.astro']);
+      expect(pagesFor('users.css')).toEqual(['src/pages/admin/users.astro']);
       expect(pagesFor('personal.css')).toEqual([
         'src/pages/admin/account.astro',
         'src/pages/admin/notifications.astro',
