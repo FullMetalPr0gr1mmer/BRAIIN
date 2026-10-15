@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(58);
+select plan(61);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -294,6 +294,23 @@ select ok(not has_table_privilege('anon', 'app.release_tenants', 'select, insert
 select ok(not has_table_privilege('authenticated', 'public.content_versions', 'insert')
           and not has_table_privilege('anon', 'public.content_versions', 'insert'),
   'content_versions INSERT stays revoked from the API roles (0032, R1)');
+
+-- ---- 12. Releases (0051): the apply's helpers -----------------------------------------
+-- A release's apply runs as the publisher (authenticated) when it writes a case study's
+-- link sets, as save_portfolio's callers do; the capture trigger is fired, never called;
+-- the apply asks the flag as the service role, before it impersonates anyone.
+select ok(has_function_privilege('authenticated', 'app.apply_portfolio_children(uuid, uuid, uuid[], jsonb)', 'execute')
+          and not has_function_privilege('anon', 'app.apply_portfolio_children(uuid, uuid, uuid[], jsonb)', 'execute')
+          and not has_function_privilege('service_role', 'app.apply_portfolio_children(uuid, uuid, uuid[], jsonb)', 'execute'),
+  'app.apply_portfolio_children is executable by authenticated only');
+select ok(not has_function_privilege('anon', 'app.tg_release_capture()', 'execute')
+          and not has_function_privilege('authenticated', 'app.tg_release_capture()', 'execute')
+          and not has_function_privilege('service_role', 'app.tg_release_capture()', 'execute'),
+  'app.tg_release_capture() is executable by no API role');
+select ok(has_function_privilege('service_role', 'app.releases_enabled(uuid)', 'execute')
+          and not has_function_privilege('authenticated', 'app.releases_enabled(uuid)', 'execute')
+          and not has_function_privilege('anon', 'app.releases_enabled(uuid)', 'execute'),
+  'app.releases_enabled(uuid) is executable by the service role only');
 
 select * from finish();
 rollback;

@@ -1,7 +1,9 @@
 import { ServiceCaseUpdateSchema, ServiceCaseWriteSchema } from '@schemas/admin';
 import type { ResourceConfig } from '../resource';
 import {
+  STAMPED,
   assertLinkInTenant,
+  fieldsOf,
   pick,
   publishStamp,
   refusePlaceholder,
@@ -12,6 +14,18 @@ import {
 } from './shared';
 
 // Service case studies (Round 2, 0028): one block per service page, linked to a project.
+
+const SERVICE_CASE_KEYS = {
+  serviceId: 'service_id',
+  portfolioId: 'portfolio_id',
+  title: 'title',
+  context: 'context',
+  problems: 'problems',
+  results: 'results',
+  isPlaceholder: 'is_placeholder',
+  status: 'status',
+  scheduledFor: 'scheduled_for',
+};
 
 export const serviceCaseResource: ResourceConfig = {
   table: 'service_cases',
@@ -37,20 +51,8 @@ export const serviceCaseResource: ResourceConfig = {
       message: 'that project does not exist',
     },
   },
-  toRow: (input) =>
-    publishStamp(
-      pick(input as Input, {
-        serviceId: 'service_id',
-        portfolioId: 'portfolio_id',
-        title: 'title',
-        context: 'context',
-        problems: 'problems',
-        results: 'results',
-        isPlaceholder: 'is_placeholder',
-        status: 'status',
-        scheduledFor: 'scheduled_for',
-      }),
-    ),
+  toRow: (input) => publishStamp(pick(input as Input, SERVICE_CASE_KEYS)),
+  fields: fieldsOf(SERVICE_CASE_KEYS, STAMPED),
   statusOf: (input) => statusOf(input as Input),
   // The database fences both links too (service_cases_write); this says which field.
   assertWritable: async (_merged, ctx) => {

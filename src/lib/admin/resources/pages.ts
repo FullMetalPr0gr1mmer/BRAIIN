@@ -1,8 +1,24 @@
 import { PageUpdateSchema, PageWriteSchema } from '@schemas/admin';
 import type { ResourceConfig } from '../resource';
-import { pick, publishStamp, requireBilingual, statusOf, type Input } from './shared';
+import {
+  STAMPED,
+  fieldsOf,
+  pick,
+  publishStamp,
+  requireBilingual,
+  statusOf,
+  type Input,
+} from './shared';
 
 // Pages.
+
+const PAGE_KEYS = {
+  slug: 'slug',
+  title: 'title',
+  status: 'status',
+  navVisible: 'nav_visible',
+  scheduledFor: 'scheduled_for',
+};
 
 export const pageResource: ResourceConfig = {
   table: 'pages',
@@ -16,16 +32,8 @@ export const pageResource: ResourceConfig = {
   searchColumn: 'slug',
   createSchema: PageWriteSchema,
   updateSchema: PageUpdateSchema,
-  toRow: (input) =>
-    publishStamp(
-      pick(input as Input, {
-        slug: 'slug',
-        title: 'title',
-        status: 'status',
-        navVisible: 'nav_visible',
-        scheduledFor: 'scheduled_for',
-      }),
-    ),
+  toRow: (input) => publishStamp(pick(input as Input, PAGE_KEYS)),
+  fields: fieldsOf(PAGE_KEYS, STAMPED),
   statusOf: (input) => statusOf(input as Input),
   assertPublishable: (row) => requireBilingual(row, 'title', 'Page title'),
 };

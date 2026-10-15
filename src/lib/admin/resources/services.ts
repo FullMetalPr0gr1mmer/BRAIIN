@@ -4,7 +4,10 @@ import type { ConstraintFields } from '../crud';
 import type { ResourceConfig } from '../resource';
 import {
   POSTER_LINK,
+  PREVIEW_PATH_COLUMNS,
+  STAMPED,
   assertLinkInTenant,
+  fieldsOf,
   pick,
   publishStamp,
   requireBilingual,
@@ -33,6 +36,25 @@ const SERVICE_CONSTRAINTS: ConstraintFields = {
   services_discipline_id_fkey: { field: 'disciplineId', message: 'that discipline does not exist' },
 };
 
+const SERVICE_KEYS = {
+  slug: 'slug',
+  title: 'title',
+  blurb: 'blurb',
+  body: 'body',
+  heroVideoUid: 'hero_video_uid',
+  category: 'category',
+  shortTitle: 'short_title',
+  status: 'status',
+  isTeaser: 'is_teaser',
+  sortOrder: 'sort_order',
+  scheduledFor: 'scheduled_for',
+  disciplineId: 'discipline_id',
+  intro: 'intro',
+  valuePoints: 'value_points',
+  deliverables: 'deliverables',
+  posterMediaId: 'poster_media_id',
+};
+
 export const serviceResource: ResourceConfig = {
   table: 'services',
   entity: 'service',
@@ -54,30 +76,15 @@ export const serviceResource: ResourceConfig = {
   toRow: (input) =>
     publishStamp(
       withPreviewPath(
-        withBodyHtml(
-          pick(input as Input, {
-            slug: 'slug',
-            title: 'title',
-            blurb: 'blurb',
-            body: 'body',
-            heroVideoUid: 'hero_video_uid',
-            category: 'category',
-            shortTitle: 'short_title',
-            status: 'status',
-            isTeaser: 'is_teaser',
-            sortOrder: 'sort_order',
-            scheduledFor: 'scheduled_for',
-            disciplineId: 'discipline_id',
-            intro: 'intro',
-            valuePoints: 'value_points',
-            deliverables: 'deliverables',
-            posterMediaId: 'poster_media_id',
-          }),
-          input as Input,
-        ),
+        withBodyHtml(pick(input as Input, SERVICE_KEYS), input as Input),
         input as Input,
       ),
     ),
+  fields: fieldsOf(SERVICE_KEYS, {
+    ...STAMPED,
+    body: ['body_html'],
+    clip: PREVIEW_PATH_COLUMNS,
+  }),
   statusOf: (input) => statusOf(input as Input),
   fromRow: withPreviewField,
   assertWritable: async (_merged, ctx) => {

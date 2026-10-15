@@ -232,14 +232,14 @@ Custom Access Token Hook projects `user_role` + `tenant_id` into `app_metadata`;
 
 Derived from one TS constant (`ROLE_CAPS` in `src/lib/authz/matrix.ts`). **This matrix is byte-for-byte identical to CLAUDE.md §5 and the §9.3 authz test matrix; a CI snapshot test fails on any drift between the three.**
 
-> **Canonical role model (reconciled 2026-06-10).** The feature inventory describes **Developer** as *"full technical access + site-health panel"* — an infrastructure/technical role, **not** a content author or publisher. So: **Developer owns settings/theme/maintenance/integrations? (no — integrations are SEO) + logs/audit/site-health + leads management & PII + backup export, but has NO content-authoring, NO publish/schedule/archive.** Content authoring belongs to Content Creator (who also publishes); publish/archive/delete to Admin (archive/delete Admin-only); SEO owns meta/schema/redirects/integrations. (Supersedes an earlier draft that granted Developer broad `content.write`/`content.publish`.)
+> **Canonical role model (reconciled 2026-06-10).** The feature inventory describes **Developer** as *"full technical access + site-health panel"* — an infrastructure/technical role, **not** a content author or publisher. So: **Developer owns settings/theme/maintenance/integrations? (no — integrations are SEO) + logs/audit/site-health + leads management & PII + backup export, but has NO content-authoring, NO content publish/schedule, NO archive.** Content authoring belongs to Content Creator (who also publishes); publish/archive/delete to Admin (archive/delete Admin-only); SEO owns meta/schema/redirects/integrations. (Supersedes an earlier draft that granted Developer broad `content.write`/`content.publish`.)
 
 Legend: ● full · ◐ limited/own · ○ none.
 
 | Capability | Admin | Content Creator | SEO | Developer |
 |---|---|---|---|---|
 | Content CRUD (services, blog, portfolio, pages/sections) | ● | ● | ◐ *(meta/SEO only)* | ○ |
-| **Publish / schedule / unpublish** | ● | ● | ○ | ○ |
+| **Publish / schedule / unpublish content** | ● | ● | ○ | ○ |
 | Archive / hard-delete content | ● | ○ | ○ | ○ |
 | Media — upload / edit metadata | ● | ● | ◐ *(meta only)* | ● |
 | Media — hard-delete | ● | ○ | ○ | ○ |
@@ -284,6 +284,22 @@ export const ROLE_CAPS: Record<AppRole, ReadonlySet<Cap>> = {
     'exports.leads','exports.backup','leads.manage','leads.sensitive','logs.view','audit.view','sitehealth.view']),
 };
 ```
+
+#### Release publish matrix (derived; Admin v2 R2)
+
+Who may publish a pending change once releases are on (docs/admin-v2/releases.md §4.1). No capability is added: an item needs its area's capabilities (a content item its write capability and `content.publish`), plus the remove capability for a removal or an archive (`content.archiveDelete`; for redirects `redirects.manage`), computed by `requiredCaps` in `src/lib/release/caps.ts`.
+
+| Release area | Admin | Content Creator | SEO | Developer |
+|---|:-:|:-:|:-:|:-:|
+| Release — content (pages, sections, services, disciplines, cases, Our work, collections, blog, navigation) | ✅ | ✅ | ❌ | ❌ |
+| Release — removals and archives (every area but redirects) | ✅ | ❌ | ❌ | ❌ |
+| Release — public identity | ✅ | ❌ | ❌ | ✅ |
+| Release — theme and appearance | ✅ | ❌ | ❌ | ✅ |
+| Release — per-entity SEO | ✅ | ❌ | ✅ | ❌ |
+| Release — global SEO defaults | ✅ | ❌ | ✅ | ❌ |
+| Release — redirects (removals included) | ✅ | ❌ | ✅ | ❌ |
+
+Derived, not authored: each cell equals what that role can already make live by saving (P-2); `tests/authz/releaseMatrix.spec.ts` evaluates `requiredCaps` for every registry type in the row's area against `ROLE_CAPS`. anon, other_tenant (and Sales, when it exists) are ❌ on every row. R14 copies it into CLAUDE.md §5.
 
 ### 3.5 Session / cookies / CSRF
 `httpOnly; Secure; SameSite=Lax` (`__Host-`) cookies; `getUser()` signature verification; double-submit `__Host-csrf` or same-origin check on all mutations.
