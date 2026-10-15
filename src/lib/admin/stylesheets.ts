@@ -9,6 +9,7 @@
 // them) and anything two screens share stay in admin.css.
 
 export const ADMIN_STYLESHEETS = [
+  'activity.css',
   'help.css',
   'kit.css',
   'login.css',

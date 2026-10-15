@@ -1,0 +1,513 @@
+import type { ActivityKind } from '@schemas/audit';
+import { RESOURCES } from '@/lib/admin/resources';
+import { columnOf, RESOURCE_UI, SINGLETON_UI, type FieldDef } from '@/lib/admin/ui';
+import type { BadgeTone } from '@/lib/admin/tones';
+import { hasTitleSource } from './auditTitles';
+
+// The activity log in plain words (Admin v2 U13, docs/admin-v2/ui.md AV-22): one registry
+// that says, for every action the admin writes to audit_log, what kind of activity it is
+// (the chips), what the person did ("Revealed the contact details of"), to what ("a lead"),
+// and whether the item's title may be shown beside it. The page, the JSON route and the CSV
+// export all describe rows through describe(); kindFilter() gives the SQL filter of a chip,
+// from the same entries, so a chip finds exactly the rows the badge names.
+//
+// What a row may show is decided here, not by the row: `detail` is metadata the writer
+// chose, and a staff token may insert a row of its own (0002's audit_insert; 0050 binds only
+// its actor, role and time), so nothing read from a row is trusted as markup or as a key.
+// The page renders every part as a text node; the field names a save changed are shown,
+// never their values; an action or a field name that is not a plain key is not shown at all.
+//
+// tests/lib/auditLabels.spec.ts holds the registry to the code: every action written in
+// src/ and in the migrations has an entry, the kinds are disjoint, every resource has a noun.
+
+/** A chip's kind, or `other`: an action no chip covers (job applications), shown under All. */
+export type ActivityRowKind = ActivityKind | 'other';
+
+export interface ActivityRow {
+  id: number | string;
+  actor_id: string | null;
+  actor_role: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  detail: unknown;
+  created_at: string;
+}
+
+export interface ActivityDescription {
+  kind: ActivityRowKind;
+  /** What the person did, sentence case: "Updated", "Revealed the contact details of". */
+  verb: string;
+  /** What it was done to ("the service", "a lead"), or null when the verb says it all. */
+  noun: string | null;
+  /** The item whose title may be shown (an allowlisted type, never a person or a lead). */
+  titleRef: { type: string; id: string } | null;
+  /** The names of the fields a save changed, in words; never what they hold. */
+  fields: string[];
+}
+
+type Detail = Readonly<Record<string, unknown>>;
+
+interface Label {
+  kind: ActivityRowKind | ((detail: Detail) => ActivityRowKind);
+  verb: string | ((detail: Detail) => string);
+  noun: string | null | ((detail: Detail) => string | null);
+  /** The touched item (`entity_type`, `entity_id`) may be titled. */
+  titled?: boolean;
+}
+
+/** What each kind is called on a row's badge and on its chip, and the badge's tone. */
+export const KIND_BADGE: Readonly<Record<ActivityRowKind, { label: string; tone: BadgeTone }>> =
+  {
+    edits: { label: 'Edit', tone: 'gray' },
+    publishing: { label: 'Publish', tone: 'klein' },
+    leads: { label: 'Lead', tone: 'ok' },
+    users: { label: 'User', tone: 'sky' },
+    settings: { label: 'Setting', tone: 'warn' },
+    other: { label: 'Other', tone: 'dark' },
+  };
+
+/** The chips, in the prototype's order (screens_ops.js, the activity log). */
+export const KIND_CHIPS: readonly { kind: ActivityKind; label: string }[] = [
+  { kind: 'edits', label: 'Edits' },
+  { kind: 'publishing', label: 'Publishing' },
+  { kind: 'leads', label: 'Leads' },
+  { kind: 'users', label: 'Users' },
+  { kind: 'settings', label: 'Settings' },
+];
+
+/** The statuses a save can move content to that make it a publish. */
+export const PUBLISHING_STATUSES = ['published', 'scheduled'] as const;
+
+const str = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
+/** "ok" outcomes read as done, "partial" as partly done, anything else as not done. */
+function outcome(done: string, notDone: string, partly?: string) {
+  return (detail: Detail) => {
+    const status = str(detail['status']);
+    if (status === 'ok') return done;
+    if (status === 'partial' && partly) return partly;
+    return notDone;
+  };
+}
+
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
+// ── The resource kernel's actions (src/lib/admin/resource.ts) ────────────────────────────
+
+/** A save's kind: a publish when it moved the item to published or scheduled (U13 records
+ *  the status a save moved to; older rows have none and read as edits). */
+function savedKind(detail: Detail): ActivityRowKind {
+  const status = str(detail['status']);
+  return status && (PUBLISHING_STATUSES as readonly string[]).includes(status)
+    ? 'publishing'
+    : 'edits';
+}
+
+function createVerb(detail: Detail): string {
+  const status = str(detail['status']);
+  if (status === 'published') return 'Published';
+  if (status === 'scheduled') return 'Scheduled';
+  return 'Added';
+}
+
+function updateVerb(detail: Detail): string {
+  const status = str(detail['status']);
+  if (status === 'published') return 'Published';
+  if (status === 'scheduled') return 'Scheduled';
+  if (status === 'archived') return 'Archived';
+  if (status === 'draft') {
+    const before = str(detail['previousStatus']);
+    if (before === 'archived') return 'Restored';
+    if (before === 'published' || before === 'scheduled') return 'Unpublished';
+  }
+  return 'Updated';
+}
+
+interface EntityInfo {
+  /** "the service". */
+  noun: string;
+  /** "Services": the list a reorder changed. */
+  list: string;
+  fields: readonly FieldDef[];
+}
+
+/** Every kernel entity (audit_log.entity_type) with its words, from its editor's config. */
+export const KERNEL_ENTITIES: ReadonlyMap<string, EntityInfo> = new Map(
+  Object.entries(RESOURCES).map(([slug, config]) => {
+    const ui = RESOURCE_UI[slug];
+    return [
+      config.entity,
+      {
+        noun: `the ${lowerFirst(ui?.singular ?? config.entity.replaceAll('_', ' '))}`,
+        list: ui?.title ?? config.entity,
+        fields: ui?.fields ?? [],
+      },
+    ];
+  }),
+);
+
+/** The kernel's actions for one entity, as resource.ts writes them. */
+export const KERNEL_VERBS = ['create', 'update', 'delete', 'reorder'] as const;
+
+/** The per-tenant settings rows (src/lib/admin/singleton.ts) and their editors. */
+const SINGLETONS: Readonly<Record<string, { noun: string; ui: string }>> = {
+  site_settings: { noun: 'the general settings', ui: 'settings' },
+  site_integrations: { noun: 'the integrations', ui: 'integrations' },
+  seo_defaults: { noun: 'the global SEO defaults', ui: 'seo' },
+  site_profile: { noun: 'the public identity', ui: 'profile' },
+  ai_config: { noun: 'the Style-Finder results and logic', ui: 'ai-config' },
+};
+export const SINGLETON_ENTITIES: readonly string[] = Object.keys(SINGLETONS);
+
+/** The noun of an entity type named by a row (entity SEO names its target type). */
+function nounOf(type: string | null): string | null {
+  if (!type) return null;
+  return KERNEL_ENTITIES.get(type)?.noun ?? null;
+}
+
+// ── Every other action, by its exact key ──────────────────────────────────────────────────
+
+const EXACT: Readonly<Record<string, Label>> = {
+  // Edits that are not the kernel's
+  'entity_seo.update': {
+    kind: 'edits',
+    verb: 'Updated the search details of',
+    noun: (detail) => nounOf(str(detail['target'])) ?? 'an item',
+  },
+  'page.visibility': {
+    kind: 'edits',
+    verb: (detail) => (detail['navVisible'] === false ? 'Hid from the menu' : 'Showed in the menu'),
+    noun: 'the page',
+    titled: true,
+  },
+  'redirect.sync': { kind: 'edits', verb: 'Refreshed', noun: 'the live redirects' },
+  'media_asset.upload': { kind: 'edits', verb: 'Uploaded', noun: 'the asset', titled: true },
+  'media_asset.replace': {
+    kind: 'edits',
+    verb: 'Replaced the file of',
+    noun: 'the asset',
+    titled: true,
+  },
+  'media_asset.update_meta': {
+    kind: 'edits',
+    verb: 'Updated the details of',
+    noun: 'the asset',
+    titled: true,
+  },
+
+  // Leads
+  'lead.create': { kind: 'leads', verb: 'Added', noun: 'a lead' },
+  'lead.create.duplicate': {
+    kind: 'leads',
+    verb: 'Found possible duplicates while adding',
+    noun: 'a lead',
+  },
+  'lead.update': { kind: 'leads', verb: 'Updated', noun: 'a lead' },
+  'lead.bulk': { kind: 'leads', verb: 'Changed several leads at once', noun: null },
+  'lead.view': { kind: 'leads', verb: 'Opened', noun: 'a lead' },
+  'lead.view_pii': { kind: 'leads', verb: 'Revealed the contact details of', noun: 'a lead' },
+  'lead.view_notes': { kind: 'leads', verb: 'Read the notes on', noun: 'a lead' },
+  'lead.note_add': { kind: 'leads', verb: 'Added a note to', noun: 'a lead' },
+  'lead.note.delete.attempt': {
+    kind: 'leads',
+    verb: 'Started deleting a note on',
+    noun: 'a lead',
+  },
+  'lead.note.delete.outcome': {
+    kind: 'leads',
+    verb: outcome('Deleted a note on', 'Could not delete a note on'),
+    noun: 'a lead',
+  },
+  'crm.erase.attempt': { kind: 'leads', verb: 'Started erasing', noun: 'a lead' },
+  'crm.erase.outcome': {
+    kind: 'leads',
+    verb: outcome('Erased', 'Could not erase'),
+    noun: 'a lead',
+  },
+  'export.csv.attempt': { kind: 'leads', verb: 'Started exporting', noun: 'the leads' },
+  'export.csv.outcome': {
+    kind: 'leads',
+    verb: outcome('Exported', 'Could not export'),
+    noun: 'the leads',
+  },
+
+  // Users
+  'user.invite': { kind: 'users', verb: 'Invited', noun: 'a new member' },
+  'user.update': { kind: 'users', verb: 'Changed the account of', noun: 'a member' },
+  'user.deactivate': { kind: 'users', verb: 'Switched off the account of', noun: 'a member' },
+  'profile.update': { kind: 'users', verb: 'Changed their display name', noun: null },
+  'auth.login': { kind: 'users', verb: 'Signed in', noun: null },
+  'auth.logout': { kind: 'users', verb: 'Signed out', noun: null },
+  'auth.password_change': { kind: 'users', verb: 'Changed their password', noun: null },
+  'auth.password_change_refused': {
+    kind: 'users',
+    verb: 'Tried to change their password',
+    noun: null,
+  },
+  'auth.password_reset_requested': {
+    kind: 'users',
+    verb: 'Asked for a password reset link',
+    noun: null,
+  },
+  'auth.password_reset': { kind: 'users', verb: 'Reset their password', noun: null },
+
+  // Settings
+  'maintenance.enable': { kind: 'settings', verb: 'Switched on', noun: 'maintenance mode' },
+  'maintenance.disable': { kind: 'settings', verb: 'Switched off', noun: 'maintenance mode' },
+  'logs.clear': { kind: 'settings', verb: 'Cleared', noun: 'old error logs' },
+  'export.backup.attempt': { kind: 'settings', verb: 'Started downloading', noun: 'a backup' },
+  'export.backup.outcome': {
+    kind: 'settings',
+    verb: outcome('Downloaded', 'Could not download', 'Downloaded part of'),
+    noun: 'a backup',
+  },
+  'export.activity.attempt': {
+    kind: 'settings',
+    verb: 'Started exporting',
+    noun: 'the activity log',
+  },
+  'export.activity.outcome': {
+    kind: 'settings',
+    verb: outcome('Exported', 'Could not export'),
+    noun: 'the activity log',
+  },
+  'placeholder_override.grant': {
+    kind: 'settings',
+    verb: 'Allowed design samples to go live',
+    noun: null,
+  },
+  'placeholder_override.revoke': {
+    kind: 'settings',
+    verb: 'Stopped design samples going live',
+    noun: null,
+  },
+
+  // Job applications (Admin only). No chip covers them: they show under All.
+  'application.view': { kind: 'other', verb: 'Opened', noun: 'a job application' },
+  'application.view_pii': {
+    kind: 'other',
+    verb: 'Revealed the contact details of',
+    noun: 'an applicant',
+  },
+  'application.cv_download': { kind: 'other', verb: 'Downloaded the CV of', noun: 'an applicant' },
+  'application.update': { kind: 'other', verb: 'Updated', noun: 'a job application' },
+  'application.erase': { kind: 'other', verb: 'Erased', noun: 'a job application' },
+};
+
+/**
+ * Actions known by their prefix: a release (`release.publish`, Admin v2 R4/R6) is a publish
+ * of the whole site's pending changes, "Published version 15". R6 may give each kind of
+ * release its own words; until then they read alike.
+ */
+const PREFIXES: readonly { prefix: string; label: Label }[] = [
+  {
+    prefix: 'release.',
+    label: {
+      kind: 'publishing',
+      verb: 'Published',
+      noun: (detail) => {
+        const n = detail['number'] ?? detail['version'];
+        return typeof n === 'number' && Number.isInteger(n) && n > 0
+          ? `version ${n}`
+          : 'a version';
+      },
+    },
+  },
+];
+
+const KERNEL: ReadonlyMap<string, Label> = new Map(
+  [...KERNEL_ENTITIES].flatMap(([entity, info]) => {
+    const titled = hasTitleSource(entity);
+    return [
+      [`${entity}.create`, { kind: savedKind, verb: createVerb, noun: info.noun, titled }],
+      [`${entity}.update`, { kind: savedKind, verb: updateVerb, noun: info.noun, titled }],
+      // A deleted item has no row left to title.
+      [`${entity}.delete`, { kind: 'edits', verb: 'Deleted', noun: info.noun }],
+      [`${entity}.reorder`, { kind: 'edits', verb: 'Changed the order of', noun: info.list }],
+    ] as [string, Label][];
+  }),
+);
+
+const SINGLETON_LABELS: ReadonlyMap<string, Label> = new Map(
+  Object.entries(SINGLETONS).map(([entity, { noun }]) => [
+    `${entity}.update`,
+    { kind: 'settings', verb: 'Updated', noun } satisfies Label,
+  ]),
+);
+
+/** The label of an action, or null when the registry does not know it. */
+function labelOf(action: string): Label | null {
+  return (
+    KERNEL.get(action) ??
+    SINGLETON_LABELS.get(action) ??
+    EXACT[action] ??
+    PREFIXES.find((p) => action.startsWith(p.prefix))?.label ??
+    null
+  );
+}
+
+/** Does the registry describe this action (exactly, or by its prefix)? */
+export function hasLabel(action: string): boolean {
+  return labelOf(action) !== null;
+}
+
+// ── Field names ──────────────────────────────────────────────────────────────────────────
+
+/** A stored key the page may show: lower-case words joined by underscores. */
+const PLAIN_KEY = /^[a-z][a-z0-9_]{0,62}$/;
+/** An action the fallback may spell out: plain keys joined by dots. */
+const PLAIN_ACTION = /^[a-z][a-z0-9_]{0,40}(\.[a-z][a-z0-9_]{0,40}){0,4}$/;
+
+/** Columns a save writes alongside the one the editor named (the HTML cache of a body). */
+const DERIVED_FIELDS = new Set(['body_html']);
+
+/** The lead pipeline's columns, as the leads screen names them. */
+const LEAD_FIELDS: Readonly<Record<string, string>> = {
+  stage_id: 'Stage',
+  assigned_to: 'Assignee',
+  is_spam: 'Spam',
+  value_sar: 'Value (SAR)',
+  internal_notes: 'Notes',
+  read_at: 'Read',
+  is_starred: 'Star',
+};
+
+/** The most field names one row shows; more read as "and N more". */
+export const MAX_FIELDS = 12;
+
+function words(key: string): string {
+  const text = key.replaceAll('_', ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** The editor's label for each column of an entity, dashes the copy rules forbid made plain. */
+function fieldLabels(entity: string | null): ReadonlyMap<string, string> {
+  if (!entity) return new Map();
+  const fields =
+    KERNEL_ENTITIES.get(entity)?.fields ??
+    (SINGLETONS[entity] ? (SINGLETON_UI[SINGLETONS[entity].ui]?.fields ?? []) : []);
+  return new Map(fields.map((field) => [columnOf(field), field.label.replace(/[–—]/g, '-')]));
+}
+
+/** The names of the fields a row says a save changed, in words; anything else is dropped. */
+export function changedFields(row: Pick<ActivityRow, 'entity_type' | 'detail'>): string[] {
+  const detail = isRecord(row.detail) ? row.detail : {};
+  const raw = Array.isArray(detail['fields']) ? (detail['fields'] as unknown[]) : [];
+  const labels = fieldLabels(row.entity_type);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const key of raw) {
+    if (typeof key !== 'string' || !PLAIN_KEY.test(key) || DERIVED_FIELDS.has(key)) continue;
+    const name = labels.get(key) ?? LEAD_FIELDS[key] ?? words(key);
+    if (seen.has(name)) continue;
+    seen.add(name);
+    out.push(name);
+  }
+  if (out.length <= MAX_FIELDS) return out;
+  return [...out.slice(0, MAX_FIELDS - 1), `and ${out.length - (MAX_FIELDS - 1)} more`];
+}
+
+// ── Describing a row ─────────────────────────────────────────────────────────────────────
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const resolve = <T>(value: T | ((detail: Detail) => T), detail: Detail): T =>
+  typeof value === 'function' ? (value as (detail: Detail) => T)(detail) : value;
+
+/** The item a titled row may show the title of; entity SEO titles its target. */
+function titleRefOf(row: ActivityRow, label: Label, detail: Detail): ActivityDescription['titleRef'] {
+  const id = row.entity_id;
+  if (!id) return null;
+  if (row.action === 'entity_seo.update') {
+    const target = str(detail['target']);
+    return target && hasTitleSource(target) ? { type: target, id } : null;
+  }
+  if (!label.titled || !row.entity_type || !hasTitleSource(row.entity_type)) return null;
+  return { type: row.entity_type, id };
+}
+
+/** One row in plain words. Unknown actions read "Did <the action's words>", kind `other`. */
+export function describe(row: ActivityRow): ActivityDescription {
+  const detail: Detail = isRecord(row.detail) ? row.detail : {};
+  const action = typeof row.action === 'string' ? row.action : '';
+  const label = labelOf(action);
+  if (!label) {
+    return {
+      kind: 'other',
+      verb: 'Did',
+      noun: PLAIN_ACTION.test(action)
+        ? action.replace(/[._]/g, ' ')
+        : 'something the log cannot describe',
+      titleRef: null,
+      fields: changedFields(row),
+    };
+  }
+  return {
+    kind: resolve(label.kind, detail),
+    verb: resolve(label.verb, detail),
+    noun: resolve(label.noun, detail),
+    titleRef: titleRefOf(row, label, detail),
+    fields: changedFields(row),
+  };
+}
+
+/** "Updated the service", with the title when there is one: the CSV's `what`. */
+export function sentence(description: ActivityDescription, title: string | null = null): string {
+  const parts = [description.verb, description.noun].filter(Boolean).join(' ');
+  return title ? `${parts} "${title}"` : parts;
+}
+
+// ── The chips' SQL ───────────────────────────────────────────────────────────────────────
+
+/** Every action the registry knows by its exact key, with its fixed kind or `null` (by status). */
+function exactKinds(): Map<string, ActivityRowKind | null> {
+  const out = new Map<string, ActivityRowKind | null>();
+  for (const [action, label] of [...KERNEL, ...SINGLETON_LABELS, ...Object.entries(EXACT)]) {
+    out.set(action, typeof label.kind === 'function' ? null : label.kind);
+  }
+  return out;
+}
+
+/** The kernel's saves, whose kind is their status (edits or publishing). */
+export const KERNEL_SAVES: readonly string[] = [...KERNEL]
+  .filter(([, label]) => typeof label.kind === 'function')
+  .map(([action]) => action)
+  .sort();
+
+/** The actions of a fixed kind, sorted: what a chip filters on, besides the kernel's saves. */
+export function actionsOfKind(kind: ActivityRowKind): string[] {
+  return [...exactKinds()]
+    .filter(([, k]) => k === kind)
+    .map(([action]) => action)
+    .sort();
+}
+
+/** The prefixes a kind also covers (a release is a publish). */
+export function prefixesOfKind(kind: ActivityRowKind): string[] {
+  return PREFIXES.filter((p) => p.label.kind === kind).map((p) => p.prefix);
+}
+
+/**
+ * A chip's filter, as the PostgREST `or` expression `loadActivity` hands `.or()`: the actions
+ * of its kind, the prefixes it covers, and, for Edits and Publishing, the kernel's saves told
+ * apart by the status a save recorded. Every action is a plain key (checked by the spec), so
+ * nothing here needs quoting.
+ */
+export function kindFilter(kind: ActivityKind): string {
+  const parts: string[] = [];
+  const exact = actionsOfKind(kind);
+  if (exact.length > 0) parts.push(`action.in.(${exact.join(',')})`);
+  for (const prefix of prefixesOfKind(kind)) parts.push(`action.like.${prefix}*`);
+  const saves = `action.in.(${KERNEL_SAVES.join(',')})`;
+  const statuses = `(${PUBLISHING_STATUSES.join(',')})`;
+  if (kind === 'publishing') parts.push(`and(${saves},detail->>status.in.${statuses})`);
+  if (kind === 'edits') {
+    parts.push(
+      `and(${saves},or(detail->>status.is.null,detail->>status.not.in.${statuses}))`,
+    );
+  }
+  return parts.join(',');
+}

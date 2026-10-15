@@ -29,7 +29,7 @@ const LABEL_TO_CAP: Record<string, Capability> = {
   'Media — hard delete': 'media.hardDelete',
   'Leads — view list / manage status / notes': 'leads.manage',
   'Leads — budget/timeline/internal_notes/ip (PII)': 'leads.pii',
-  'Leads / analytics — export CSV': 'export.csv',
+  'Leads / analytics / activity — export CSV': 'export.csv',
   "Leads & contacts — erase a person's data (DSAR)": 'crm.erase',
   'Job applications — view / manage status / notes / erase': 'applications.manage',
   'Job applications — contact details & CV download (PII)': 'applications.pii',

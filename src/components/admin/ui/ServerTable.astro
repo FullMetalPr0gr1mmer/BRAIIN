@@ -1,10 +1,12 @@
 ---
+import Avatar from './Avatar.astro';
 import Badge from './Badge.astro';
 import EmptyState from './EmptyState.astro';
 import Pager from './Pager.astro';
 import { formatNumber } from '@/lib/admin/charts';
 import { offsetOf, pageInfo, pageParam, rangeText, PAGE_SIZE } from '@/lib/admin/pager';
 import type { IconName } from '@/lib/admin/icons';
+import { BADGE_TONES, type BadgeTone } from '@/lib/admin/tones';
 import { formatDate, formatDateTime, isoOf, relTime, toDate } from '@/lib/admin/relTime';
 
 // A server-rendered table (Admin v2 F4b, the prototype's .tbl): the DataTable's look with
@@ -21,13 +23,67 @@ import { formatDate, formatDateTime, isoOf, relTime, toDate } from '@/lib/admin/
 // Cells are typed, not free markup: text, a number (tabular, end-aligned), a status
 // badge, a date, a date and time, or "3 h ago" as a <time>. The `title` column links to
 // `rowHref(row)` (no click handler on the row) and its link covers the row.
+//
+// Two cells carry a shape rather than one value (Admin v2 U13, the activity log; the
+// prototype's Who and What): `person`, an avatar beside a name and a sub-line, the name a
+// link when the row gives one; `tagged`, a badge (a tone and a word) before a sentence of
+// parts, each a plain, strong or muted text. Every part is a text node: a cell holds what
+// people typed (a name, an item's title), never markup. A value of the wrong shape renders
+// an empty cell.
+
+/** A `person` cell's value. */
+export interface PersonCell {
+  /** The person's id, which picks the avatar's tone (absent: the brand colour). */
+  id: string | null;
+  name: string;
+  sub?: string | null;
+  href?: string | null;
+}
+
+/** One run of a `tagged` cell's sentence. */
+export interface TaggedPart {
+  text: string;
+  strong?: boolean;
+  muted?: boolean;
+}
+
+/** A `tagged` cell's value. */
+export interface TaggedCell {
+  badge: { label: string; tone: BadgeTone };
+  parts: readonly TaggedPart[];
+}
 
 export interface ServerColumn {
   key: string;
   label: string;
-  kind?: 'text' | 'number' | 'status' | 'date' | 'datetime' | 'ago';
+  kind?: 'text' | 'number' | 'status' | 'date' | 'datetime' | 'ago' | 'person' | 'tagged';
   /** This column's cell links to the row's page. */
   title?: boolean;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+function personOf(value: unknown): PersonCell | null {
+  if (!isRecord(value) || typeof value['name'] !== 'string') return null;
+  return {
+    id: typeof value['id'] === 'string' ? value['id'] : null,
+    name: value['name'],
+    sub: typeof value['sub'] === 'string' ? value['sub'] : null,
+    href: typeof value['href'] === 'string' ? value['href'] : null,
+  };
+}
+
+function taggedOf(value: unknown): TaggedCell | null {
+  if (!isRecord(value) || !isRecord(value['badge']) || !Array.isArray(value['parts'])) return null;
+  const { label, tone } = value['badge'];
+  if (typeof label !== 'string' || !(BADGE_TONES as readonly unknown[]).includes(tone)) return null;
+  const parts = (value['parts'] as unknown[]).flatMap((part) =>
+    isRecord(part) && typeof part['text'] === 'string'
+      ? [{ text: part['text'], strong: part['strong'] === true, muted: part['muted'] === true }]
+      : [],
+  );
+  return { badge: { label, tone: tone as BadgeTone }, parts };
 }
 
 interface Props {
@@ -96,9 +152,46 @@ const text = (value: unknown) =>
                 {columns.map((column) => {
                   const value = row[column.key];
                   const href = column.title && rowHref ? rowHref(row) : null;
+                  const person = column.kind === 'person' ? personOf(value) : null;
+                  const tagged = column.kind === 'tagged' ? taggedOf(value) : null;
                   return (
                     <td class={numeric(column) ? 'num' : undefined}>
-                      {href ? (
+                      {person ? (
+                        <span class="cell-person">
+                          <Avatar name={person.name} toneKey={person.id ?? undefined} size="sm" />
+                          <span class="cell-person__t">
+                            {person.href ? (
+                              <a href={person.href} dir="auto">
+                                {person.name}
+                              </a>
+                            ) : (
+                              <span dir="auto">{person.name}</span>
+                            )}
+                            {person.sub && <span class="cell-secondary">{person.sub}</span>}
+                          </span>
+                        </span>
+                      ) : tagged ? (
+                        <span class="cell-tagged">
+                          <Badge tone={tagged.badge.tone} plain>
+                            {tagged.badge.label}
+                          </Badge>
+                          {tagged.parts.map((part) =>
+                            part.strong ? (
+                              <>
+                                {' '}
+                                <b dir="auto">{part.text}</b>
+                              </>
+                            ) : (
+                              <>
+                                {' '}
+                                <span class={part.muted ? 'cell-secondary' : undefined} dir="auto">
+                                  {part.text}
+                                </span>
+                              </>
+                            ),
+                          )}
+                        </span>
+                      ) : column.kind === 'person' || column.kind === 'tagged' ? null : href ? (
                         <a class="data-link" href={href} dir="auto">
                           {text(value) || 'Untitled'}
                         </a>

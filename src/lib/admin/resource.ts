@@ -389,6 +389,16 @@ export function itemRoutes(config: ResourceConfig): {
             config.afterWrite!({ auth, sb, row, input: payload, operation: 'update' }),
           )
         : {};
+      // The status a save MOVED the item to, and from, so the activity log can say
+      // "Published" rather than "Updated" (Admin v2 U13). Only a move: the editor sends the
+      // status with every save, and a typo fix on a published page is an edit, not a
+      // publish. The stored row is read above for every resource with a status (each has a
+      // publish rule; tests/lib/auditLabels.spec.ts holds that). A lifecycle word, not PII.
+      const statusTo = values['status'];
+      const statusMove =
+        typeof statusTo === 'string' && stored !== null && stored['status'] !== statusTo
+          ? { status: statusTo, previousStatus: stored['status'] ?? null }
+          : {};
       audit({
         action: `${config.entity}.update`,
         entityType: config.entity,
@@ -398,6 +408,7 @@ export function itemRoutes(config: ResourceConfig): {
         detail: {
           fields: [...Object.keys(values), ...childFields],
           version: payload.version,
+          ...statusMove,
           ...effect,
         },
       });
