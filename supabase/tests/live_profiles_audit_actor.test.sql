@@ -308,9 +308,10 @@ select ok(
   (select created_at = now() from public.audit_log where action = 'h10.service'),
   'with the database''s time, not the one it sent');
 select is(
-  (select actor_id::text || '/' || actor_role || '/' || created_at::date::text
+  (select actor_id::text || '/' || actor_role || '/'
+          || (created_at = '2020-01-01 00:00:00+00'::timestamptz)::text
      from public.audit_log where action = 'h10.operator'),
-  '50000000-0000-0000-0000-0000000000d1/developer/2020-01-01',
+  '50000000-0000-0000-0000-0000000000d1/developer/true',
   'an operator''s row is kept exactly as written');
 -- update_my_profile (section 4) audits from inside a definer, which keeps what it writes.
 select is(
