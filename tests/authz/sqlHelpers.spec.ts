@@ -14,6 +14,7 @@ import { ROLES } from '@/lib/auth/types';
 const HELPER_CAPABILITY: Record<string, Capability> = {
   role_works_leads: 'leads.manage',
   role_crm_erase: 'crm.erase',
+  role_manages_users: 'users.manage',
 };
 
 const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
