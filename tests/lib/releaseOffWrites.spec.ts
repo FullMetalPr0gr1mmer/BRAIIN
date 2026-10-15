@@ -19,6 +19,8 @@ import {
 // full sample, each key alone, and each key cleared (null), errors included; and the
 // values the site-profile, SEO-defaults and entity-SEO routes hand to the database on a
 // first save (an INSERT) and on an edit (an UPDATE), driven through the real routes.
+// The order of the keys each write sends is recorded too, as arrays (snapshots print
+// object keys sorted); that part was recorded from 23ce829's sources as well.
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 
@@ -63,10 +65,22 @@ function record(
   return { full: run(() => toRow(samplesFor(entity))), keys, nulls };
 }
 
+/** The key order of every output `record` captured (snapshots sort object keys). */
+function keyOrder(recorded: ReturnType<typeof record>) {
+  const order = (out: Out) => Object.keys(out);
+  const each = (map: Record<string, Out>) =>
+    Object.fromEntries(Object.entries(map).map(([key, out]) => [key, order(out)]));
+  return { full: order(recorded.full), keys: each(recorded.keys), nulls: each(recorded.nulls) };
+}
+
 describe('resource configs: toRow is what it was before R2', () => {
   for (const [slug, config] of Object.entries(RESOURCES).sort(([a], [b]) => a.localeCompare(b))) {
     it(slug, () => {
-      expect(record(config.entity, config.toRow)).toMatchSnapshot();
+      const recorded = record(config.entity, config.toRow);
+      expect(recorded).toMatchSnapshot();
+      // The snapshot prints object keys sorted, so the order a write sends them in is held
+      // apart, as arrays (R2 review L5).
+      expect(keyOrder(recorded)).toMatchSnapshot();
     });
   }
 });
@@ -200,6 +214,7 @@ describe('singleton and entity-SEO routes: the database receives what it did bef
       )) as Response;
       expect(res.status, await res.clone().text()).toBe(200);
       expect(writes).toMatchSnapshot();
+      expect(writes.map((w) => Object.keys(w.values as object))).toMatchSnapshot();
     });
 
     it(`${route.name}: an edit (an UPDATE)`, async () => {
@@ -210,6 +225,7 @@ describe('singleton and entity-SEO routes: the database receives what it did bef
       )) as Response;
       expect(res.status, await res.clone().text()).toBe(200);
       expect(writes).toMatchSnapshot();
+      expect(writes.map((w) => Object.keys(w.values as object))).toMatchSnapshot();
     });
 
     it(`${route.name}: a partial edit`, async () => {
@@ -223,6 +239,7 @@ describe('singleton and entity-SEO routes: the database receives what it did bef
       )) as Response;
       expect(res.status, await res.clone().text()).toBe(200);
       expect(writes).toMatchSnapshot();
+      expect(writes.map((w) => Object.keys(w.values as object))).toMatchSnapshot();
     });
   }
 });

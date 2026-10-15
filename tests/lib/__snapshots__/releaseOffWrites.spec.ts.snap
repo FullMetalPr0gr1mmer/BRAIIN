@@ -88,6 +88,66 @@ exports[`resource configs: toRow is what it was before R2 > ai-questions 1`] = `
 }
 `;
 
+exports[`resource configs: toRow is what it was before R2 > ai-questions 2`] = `
+{
+  "full": [
+    "slug",
+    "prompt",
+    "help_text",
+    "input_type",
+    "options",
+    "status",
+    "sort_order",
+  ],
+  "keys": {
+    "helpText": [
+      "help_text",
+    ],
+    "inputType": [
+      "input_type",
+    ],
+    "options": [
+      "options",
+    ],
+    "prompt": [
+      "prompt",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+  },
+  "nulls": {
+    "helpText": [
+      "help_text",
+    ],
+    "inputType": [
+      "input_type",
+    ],
+    "options": [
+      "options",
+    ],
+    "prompt": [
+      "prompt",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+  },
+}
+`;
+
 exports[`resource configs: toRow is what it was before R2 > ai-styles 1`] = `
 {
   "full": {
@@ -160,6 +220,66 @@ exports[`resource configs: toRow is what it was before R2 > ai-styles 1`] = `
     "traits": {
       "traits": null,
     },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > ai-styles 2`] = `
+{
+  "full": [
+    "slug",
+    "name",
+    "description",
+    "traits",
+    "image_url",
+    "status",
+    "sort_order",
+  ],
+  "keys": {
+    "description": [
+      "description",
+    ],
+    "imageUrl": [
+      "image_url",
+    ],
+    "name": [
+      "name",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+    "traits": [
+      "traits",
+    ],
+  },
+  "nulls": {
+    "description": [
+      "description",
+    ],
+    "imageUrl": [
+      "image_url",
+    ],
+    "name": [
+      "name",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+    "traits": [
+      "traits",
+    ],
   },
 }
 `;
@@ -321,6 +441,87 @@ exports[`resource configs: toRow is what it was before R2 > blog 1`] = `
 }
 `;
 
+exports[`resource configs: toRow is what it was before R2 > blog 2`] = `
+{
+  "full": [
+    "slug",
+    "title",
+    "excerpt",
+    "body",
+    "author_id",
+    "category_id",
+    "cover_image_url",
+    "status",
+    "scheduled_for",
+    "body_html",
+    "published_at",
+    "reading_minutes",
+  ],
+  "keys": {
+    "authorId": [
+      "author_id",
+    ],
+    "body": [
+      "body",
+      "body_html",
+      "reading_minutes",
+    ],
+    "categoryId": [
+      "category_id",
+    ],
+    "coverImageUrl": [
+      "cover_image_url",
+    ],
+    "excerpt": [
+      "excerpt",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "status": [
+      "status",
+      "published_at",
+    ],
+    "title": [
+      "title",
+    ],
+  },
+  "nulls": {
+    "authorId": [
+      "author_id",
+    ],
+    "body": [
+      "body",
+      "body_html",
+    ],
+    "categoryId": [
+      "category_id",
+    ],
+    "coverImageUrl": [
+      "cover_image_url",
+    ],
+    "excerpt": [
+      "excerpt",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "status": [
+      "status",
+    ],
+    "title": [
+      "title",
+    ],
+  },
+}
+`;
+
 exports[`resource configs: toRow is what it was before R2 > categories 1`] = `
 {
   "full": {
@@ -348,6 +549,31 @@ exports[`resource configs: toRow is what it was before R2 > categories 1`] = `
     "slug": {
       "slug": null,
     },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > categories 2`] = `
+{
+  "full": [
+    "slug",
+    "name",
+  ],
+  "keys": {
+    "name": [
+      "name",
+    ],
+    "slug": [
+      "slug",
+    ],
+  },
+  "nulls": {
+    "name": [
+      "name",
+    ],
+    "slug": [
+      "slug",
+    ],
   },
 }
 `;
@@ -424,6 +650,66 @@ exports[`resource configs: toRow is what it was before R2 > certifications 1`] =
 }
 `;
 
+exports[`resource configs: toRow is what it was before R2 > certifications 2`] = `
+{
+  "full": [
+    "slug",
+    "name",
+    "issuer",
+    "year",
+    "logo_url",
+    "status",
+    "sort_order",
+  ],
+  "keys": {
+    "issuer": [
+      "issuer",
+    ],
+    "logoUrl": [
+      "logo_url",
+    ],
+    "name": [
+      "name",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+    "year": [
+      "year",
+    ],
+  },
+  "nulls": {
+    "issuer": [
+      "issuer",
+    ],
+    "logoUrl": [
+      "logo_url",
+    ],
+    "name": [
+      "name",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+    "year": [
+      "year",
+    ],
+  },
+}
+`;
+
 exports[`resource configs: toRow is what it was before R2 > clients 1`] = `
 {
   "full": {
@@ -493,6 +779,73 @@ exports[`resource configs: toRow is what it was before R2 > clients 1`] = `
     "websiteUrl": {
       "website_url": null,
     },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > clients 2`] = `
+{
+  "full": [
+    "slug",
+    "name",
+    "logo_media_id",
+    "website_url",
+    "show_in_marquee",
+    "visible",
+    "is_placeholder",
+    "sort_order",
+  ],
+  "keys": {
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "logoMediaId": [
+      "logo_media_id",
+    ],
+    "name": [
+      "name",
+    ],
+    "showInMarquee": [
+      "show_in_marquee",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "visible": [
+      "visible",
+    ],
+    "websiteUrl": [
+      "website_url",
+    ],
+  },
+  "nulls": {
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "logoMediaId": [
+      "logo_media_id",
+    ],
+    "name": [
+      "name",
+    ],
+    "showInMarquee": [
+      "show_in_marquee",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "visible": [
+      "visible",
+    ],
+    "websiteUrl": [
+      "website_url",
+    ],
   },
 }
 `;
@@ -593,6 +946,88 @@ exports[`resource configs: toRow is what it was before R2 > disciplines 1`] = `
     "status": {
       "status": null,
     },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > disciplines 2`] = `
+{
+  "full": [
+    "slug",
+    "name",
+    "short",
+    "blurb",
+    "poster_media_id",
+    "status",
+    "sort_order",
+    "scheduled_for",
+    "preview_video_path",
+    "preview_start_s",
+    "preview_end_s",
+    "published_at",
+  ],
+  "keys": {
+    "blurb": [
+      "blurb",
+    ],
+    "clip": [
+      "preview_video_path",
+      "preview_start_s",
+      "preview_end_s",
+    ],
+    "name": [
+      "name",
+    ],
+    "posterMediaId": [
+      "poster_media_id",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "short": [
+      "short",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+      "published_at",
+    ],
+  },
+  "nulls": {
+    "blurb": [
+      "blurb",
+    ],
+    "clip": [
+      "preview_video_path",
+      "preview_start_s",
+      "preview_end_s",
+    ],
+    "name": [
+      "name",
+    ],
+    "posterMediaId": [
+      "poster_media_id",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "short": [
+      "short",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
   },
 }
 `;
@@ -702,6 +1137,101 @@ exports[`resource configs: toRow is what it was before R2 > media 1`] = `
 }
 `;
 
+exports[`resource configs: toRow is what it was before R2 > media 2`] = `
+{
+  "full": [
+    "kind",
+    "provider",
+    "storage_path",
+    "display_name",
+    "folder",
+    "alt",
+    "tags",
+    "width",
+    "height",
+    "mime_type",
+    "size_bytes",
+    "stream_uid",
+  ],
+  "keys": {
+    "alt": [
+      "alt",
+    ],
+    "displayName": [
+      "display_name",
+    ],
+    "folder": [
+      "folder",
+    ],
+    "height": [
+      "height",
+    ],
+    "kind": [
+      "kind",
+    ],
+    "mimeType": [
+      "mime_type",
+    ],
+    "provider": [
+      "provider",
+    ],
+    "sizeBytes": [
+      "size_bytes",
+    ],
+    "storagePath": [
+      "storage_path",
+    ],
+    "streamUid": [
+      "stream_uid",
+    ],
+    "tags": [
+      "tags",
+    ],
+    "width": [
+      "width",
+    ],
+  },
+  "nulls": {
+    "alt": [
+      "alt",
+    ],
+    "displayName": [
+      "display_name",
+    ],
+    "folder": [
+      "folder",
+    ],
+    "height": [
+      "height",
+    ],
+    "kind": [
+      "kind",
+    ],
+    "mimeType": [
+      "mime_type",
+    ],
+    "provider": [
+      "provider",
+    ],
+    "sizeBytes": [
+      "size_bytes",
+    ],
+    "storagePath": [
+      "storage_path",
+    ],
+    "streamUid": [
+      "stream_uid",
+    ],
+    "tags": [
+      "tags",
+    ],
+    "width": [
+      "width",
+    ],
+  },
+}
+`;
+
 exports[`resource configs: toRow is what it was before R2 > navigation 1`] = `
 {
   "full": {
@@ -768,6 +1298,66 @@ exports[`resource configs: toRow is what it was before R2 > navigation 1`] = `
 }
 `;
 
+exports[`resource configs: toRow is what it was before R2 > navigation 2`] = `
+{
+  "full": [
+    "location",
+    "parent_id",
+    "label",
+    "href",
+    "visible",
+    "is_key",
+    "sort_order",
+  ],
+  "keys": {
+    "href": [
+      "href",
+    ],
+    "isKey": [
+      "is_key",
+    ],
+    "label": [
+      "label",
+    ],
+    "location": [
+      "location",
+    ],
+    "parentId": [
+      "parent_id",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "visible": [
+      "visible",
+    ],
+  },
+  "nulls": {
+    "href": [
+      "error",
+    ],
+    "isKey": [
+      "is_key",
+    ],
+    "label": [
+      "label",
+    ],
+    "location": [
+      "location",
+    ],
+    "parentId": [
+      "parent_id",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "visible": [
+      "visible",
+    ],
+  },
+}
+`;
+
 exports[`resource configs: toRow is what it was before R2 > pages 1`] = `
 {
   "full": {
@@ -818,6 +1408,54 @@ exports[`resource configs: toRow is what it was before R2 > pages 1`] = `
     "title": {
       "title": null,
     },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > pages 2`] = `
+{
+  "full": [
+    "slug",
+    "title",
+    "status",
+    "nav_visible",
+    "scheduled_for",
+    "published_at",
+  ],
+  "keys": {
+    "navVisible": [
+      "nav_visible",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "status": [
+      "status",
+      "published_at",
+    ],
+    "title": [
+      "title",
+    ],
+  },
+  "nulls": {
+    "navVisible": [
+      "nav_visible",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "status": [
+      "status",
+    ],
+    "title": [
+      "title",
+    ],
   },
 }
 `;
@@ -1144,6 +1782,192 @@ exports[`resource configs: toRow is what it was before R2 > portfolio 1`] = `
 }
 `;
 
+exports[`resource configs: toRow is what it was before R2 > portfolio 2`] = `
+{
+  "full": [
+    "slug",
+    "title",
+    "summary",
+    "body",
+    "status",
+    "sort_order",
+    "scheduled_for",
+    "project_type",
+    "teaser",
+    "lead",
+    "goal",
+    "result",
+    "scope",
+    "keywords",
+    "results",
+    "sector_id",
+    "client_id",
+    "year",
+    "is_featured",
+    "poster_media_id",
+    "next_portfolio_id",
+    "is_placeholder",
+    "body_html",
+    "published_at",
+    "preview_video_uid",
+    "preview_video_path",
+    "preview_start_s",
+    "preview_end_s",
+  ],
+  "keys": {
+    "body": [
+      "body",
+      "body_html",
+    ],
+    "clientId": [
+      "client_id",
+    ],
+    "goal": [
+      "goal",
+    ],
+    "isFeatured": [
+      "is_featured",
+    ],
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "keywords": [
+      "keywords",
+    ],
+    "lead": [
+      "lead",
+    ],
+    "nextPortfolioId": [
+      "next_portfolio_id",
+    ],
+    "posterMediaId": [
+      "poster_media_id",
+    ],
+    "preview": [
+      "preview_video_uid",
+      "preview_video_path",
+      "preview_start_s",
+      "preview_end_s",
+    ],
+    "projectType": [
+      "project_type",
+    ],
+    "result": [
+      "result",
+    ],
+    "results": [
+      "results",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "scope": [
+      "scope",
+    ],
+    "sectorId": [
+      "sector_id",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+      "published_at",
+    ],
+    "summary": [
+      "summary",
+    ],
+    "teaser": [
+      "teaser",
+    ],
+    "title": [
+      "title",
+    ],
+    "year": [
+      "year",
+    ],
+  },
+  "nulls": {
+    "body": [
+      "body",
+      "body_html",
+    ],
+    "clientId": [
+      "client_id",
+    ],
+    "goal": [
+      "goal",
+    ],
+    "isFeatured": [
+      "is_featured",
+    ],
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "keywords": [
+      "keywords",
+    ],
+    "lead": [
+      "lead",
+    ],
+    "nextPortfolioId": [
+      "next_portfolio_id",
+    ],
+    "posterMediaId": [
+      "poster_media_id",
+    ],
+    "preview": [
+      "preview_video_uid",
+      "preview_video_path",
+      "preview_start_s",
+      "preview_end_s",
+    ],
+    "projectType": [
+      "project_type",
+    ],
+    "result": [
+      "result",
+    ],
+    "results": [
+      "results",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "scope": [
+      "scope",
+    ],
+    "sectorId": [
+      "sector_id",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+    "summary": [
+      "summary",
+    ],
+    "teaser": [
+      "teaser",
+    ],
+    "title": [
+      "title",
+    ],
+    "year": [
+      "year",
+    ],
+  },
+}
+`;
+
 exports[`resource configs: toRow is what it was before R2 > redirects 1`] = `
 {
   "full": {
@@ -1172,6 +1996,38 @@ exports[`resource configs: toRow is what it was before R2 > redirects 1`] = `
     "targetPath": {
       "error": "Validation failed: unsupported link scheme",
     },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > redirects 2`] = `
+{
+  "full": [
+    "source_path",
+    "target_path",
+    "status",
+  ],
+  "keys": {
+    "sourcePath": [
+      "source_path",
+    ],
+    "status": [
+      "status",
+    ],
+    "targetPath": [
+      "target_path",
+    ],
+  },
+  "nulls": {
+    "sourcePath": [
+      "source_path",
+    ],
+    "status": [
+      "status",
+    ],
+    "targetPath": [
+      "error",
+    ],
   },
 }
 `;
@@ -1239,6 +2095,59 @@ exports[`resource configs: toRow is what it was before R2 > sections 1`] = `
 }
 `;
 
+exports[`resource configs: toRow is what it was before R2 > sections 2`] = `
+{
+  "full": [
+    "page_id",
+    "type",
+    "content",
+    "visible",
+    "sort_order",
+    "is_placeholder",
+  ],
+  "keys": {
+    "content": [
+      "content",
+    ],
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "pageId": [
+      "page_id",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "type": [
+      "type",
+    ],
+    "visible": [
+      "visible",
+    ],
+  },
+  "nulls": {
+    "content": [
+      "content",
+    ],
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "pageId": [
+      "page_id",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "type": [
+      "type",
+    ],
+    "visible": [
+      "visible",
+    ],
+  },
+}
+`;
+
 exports[`resource configs: toRow is what it was before R2 > sectors 1`] = `
 {
   "full": {
@@ -1280,6 +2189,45 @@ exports[`resource configs: toRow is what it was before R2 > sectors 1`] = `
     "visible": {
       "visible": null,
     },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > sectors 2`] = `
+{
+  "full": [
+    "slug",
+    "name",
+    "visible",
+    "sort_order",
+  ],
+  "keys": {
+    "name": [
+      "name",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "visible": [
+      "visible",
+    ],
+  },
+  "nulls": {
+    "name": [
+      "name",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "visible": [
+      "visible",
+    ],
   },
 }
 `;
@@ -1398,6 +2346,82 @@ exports[`resource configs: toRow is what it was before R2 > service-cases 1`] = 
     "title": {
       "title": null,
     },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > service-cases 2`] = `
+{
+  "full": [
+    "service_id",
+    "portfolio_id",
+    "title",
+    "context",
+    "problems",
+    "results",
+    "is_placeholder",
+    "status",
+    "scheduled_for",
+    "published_at",
+  ],
+  "keys": {
+    "context": [
+      "context",
+    ],
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "portfolioId": [
+      "portfolio_id",
+    ],
+    "problems": [
+      "problems",
+    ],
+    "results": [
+      "results",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "serviceId": [
+      "service_id",
+    ],
+    "status": [
+      "status",
+      "published_at",
+    ],
+    "title": [
+      "title",
+    ],
+  },
+  "nulls": {
+    "context": [
+      "context",
+    ],
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "portfolioId": [
+      "portfolio_id",
+    ],
+    "problems": [
+      "problems",
+    ],
+    "results": [
+      "results",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "serviceId": [
+      "service_id",
+    ],
+    "status": [
+      "status",
+    ],
+    "title": [
+      "title",
+    ],
   },
 }
 `;
@@ -1663,6 +2687,147 @@ exports[`resource configs: toRow is what it was before R2 > services 1`] = `
 }
 `;
 
+exports[`resource configs: toRow is what it was before R2 > services 2`] = `
+{
+  "full": [
+    "slug",
+    "title",
+    "blurb",
+    "body",
+    "hero_video_uid",
+    "category",
+    "short_title",
+    "status",
+    "is_teaser",
+    "sort_order",
+    "scheduled_for",
+    "discipline_id",
+    "intro",
+    "value_points",
+    "deliverables",
+    "poster_media_id",
+    "body_html",
+    "preview_video_path",
+    "preview_start_s",
+    "preview_end_s",
+    "published_at",
+  ],
+  "keys": {
+    "blurb": [
+      "blurb",
+    ],
+    "body": [
+      "body",
+      "body_html",
+    ],
+    "category": [
+      "category",
+    ],
+    "clip": [
+      "preview_video_path",
+      "preview_start_s",
+      "preview_end_s",
+    ],
+    "deliverables": [
+      "deliverables",
+    ],
+    "disciplineId": [
+      "discipline_id",
+    ],
+    "heroVideoUid": [
+      "hero_video_uid",
+    ],
+    "intro": [
+      "intro",
+    ],
+    "isTeaser": [
+      "is_teaser",
+    ],
+    "posterMediaId": [
+      "poster_media_id",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "shortTitle": [
+      "short_title",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+      "published_at",
+    ],
+    "title": [
+      "title",
+    ],
+    "valuePoints": [
+      "value_points",
+    ],
+  },
+  "nulls": {
+    "blurb": [
+      "blurb",
+    ],
+    "body": [
+      "body",
+      "body_html",
+    ],
+    "category": [
+      "category",
+    ],
+    "clip": [
+      "preview_video_path",
+      "preview_start_s",
+      "preview_end_s",
+    ],
+    "deliverables": [
+      "deliverables",
+    ],
+    "disciplineId": [
+      "discipline_id",
+    ],
+    "heroVideoUid": [
+      "hero_video_uid",
+    ],
+    "intro": [
+      "intro",
+    ],
+    "isTeaser": [
+      "is_teaser",
+    ],
+    "posterMediaId": [
+      "poster_media_id",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "shortTitle": [
+      "short_title",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+    "title": [
+      "title",
+    ],
+    "valuePoints": [
+      "value_points",
+    ],
+  },
+}
+`;
+
 exports[`resource configs: toRow is what it was before R2 > statistics 1`] = `
 {
   "full": {
@@ -1763,6 +2928,90 @@ exports[`resource configs: toRow is what it was before R2 > statistics 1`] = `
     "valueSuffix": {
       "value_suffix": null,
     },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > statistics 2`] = `
+{
+  "full": [
+    "slug",
+    "label",
+    "value",
+    "value_numeric",
+    "value_suffix",
+    "placements",
+    "placement_labels",
+    "is_placeholder",
+    "status",
+    "sort_order",
+  ],
+  "keys": {
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "label": [
+      "label",
+    ],
+    "placementLabels": [
+      "placement_labels",
+    ],
+    "placements": [
+      "placements",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+    "value": [
+      "value",
+      "value_numeric",
+      "value_suffix",
+    ],
+    "valueNumeric": [
+      "value_numeric",
+      "value",
+    ],
+    "valueSuffix": [
+      "value_suffix",
+    ],
+  },
+  "nulls": {
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "label": [
+      "label",
+    ],
+    "placementLabels": [
+      "placement_labels",
+    ],
+    "placements": [
+      "placements",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+    "value": [
+      "value",
+    ],
+    "valueNumeric": [
+      "value_numeric",
+    ],
+    "valueSuffix": [
+      "value_suffix",
+    ],
   },
 }
 `;
@@ -1876,6 +3125,101 @@ exports[`resource configs: toRow is what it was before R2 > team 1`] = `
     "status": {
       "status": null,
     },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > team 2`] = `
+{
+  "full": [
+    "slug",
+    "name",
+    "bio",
+    "avatar_url",
+    "profile_user_id",
+    "role",
+    "linkedin_url",
+    "is_leadership",
+    "portrait_media_id",
+    "is_placeholder",
+    "status",
+    "sort_order",
+  ],
+  "keys": {
+    "avatarUrl": [
+      "avatar_url",
+    ],
+    "bio": [
+      "bio",
+    ],
+    "isLeadership": [
+      "is_leadership",
+    ],
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "linkedinUrl": [
+      "linkedin_url",
+    ],
+    "name": [
+      "name",
+    ],
+    "portraitMediaId": [
+      "portrait_media_id",
+    ],
+    "profileUserId": [
+      "profile_user_id",
+    ],
+    "role": [
+      "role",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+  },
+  "nulls": {
+    "avatarUrl": [
+      "avatar_url",
+    ],
+    "bio": [
+      "bio",
+    ],
+    "isLeadership": [
+      "is_leadership",
+    ],
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "linkedinUrl": [
+      "linkedin_url",
+    ],
+    "name": [
+      "name",
+    ],
+    "portraitMediaId": [
+      "portrait_media_id",
+    ],
+    "profileUserId": [
+      "profile_user_id",
+    ],
+    "role": [
+      "role",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
   },
 }
 `;
@@ -2013,6 +3357,117 @@ exports[`resource configs: toRow is what it was before R2 > testimonials 1`] = `
 }
 `;
 
+exports[`resource configs: toRow is what it was before R2 > testimonials 2`] = `
+{
+  "full": [
+    "slug",
+    "quote",
+    "author_name",
+    "author_role",
+    "client_id",
+    "portfolio_id",
+    "avatar_media_id",
+    "placements",
+    "consent_obtained_at",
+    "consent_reference",
+    "is_placeholder",
+    "status",
+    "sort_order",
+    "scheduled_for",
+    "published_at",
+  ],
+  "keys": {
+    "authorName": [
+      "author_name",
+    ],
+    "authorRole": [
+      "author_role",
+    ],
+    "avatarMediaId": [
+      "avatar_media_id",
+    ],
+    "clientId": [
+      "client_id",
+    ],
+    "consentObtainedAt": [
+      "consent_obtained_at",
+    ],
+    "consentReference": [
+      "consent_reference",
+    ],
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "placements": [
+      "placements",
+    ],
+    "portfolioId": [
+      "portfolio_id",
+    ],
+    "quote": [
+      "quote",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+      "published_at",
+    ],
+  },
+  "nulls": {
+    "authorName": [
+      "author_name",
+    ],
+    "authorRole": [
+      "author_role",
+    ],
+    "avatarMediaId": [
+      "avatar_media_id",
+    ],
+    "clientId": [
+      "client_id",
+    ],
+    "consentObtainedAt": [
+      "consent_obtained_at",
+    ],
+    "consentReference": [
+      "consent_reference",
+    ],
+    "isPlaceholder": [
+      "is_placeholder",
+    ],
+    "placements": [
+      "placements",
+    ],
+    "portfolioId": [
+      "portfolio_id",
+    ],
+    "quote": [
+      "quote",
+    ],
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "slug": [
+      "slug",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+  },
+}
+`;
+
 exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
 {
   "full": {
@@ -2049,6 +3504,38 @@ exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
 }
 `;
 
+exports[`resource configs: toRow is what it was before R2 > themes 2`] = `
+{
+  "full": [
+    "name",
+    "tokens",
+    "is_active",
+  ],
+  "keys": {
+    "isActive": [
+      "is_active",
+    ],
+    "name": [
+      "name",
+    ],
+    "tokens": [
+      "tokens",
+    ],
+  },
+  "nulls": {
+    "isActive": [
+      "is_active",
+    ],
+    "name": [
+      "name",
+    ],
+    "tokens": [
+      "tokens",
+    ],
+  },
+}
+`;
+
 exports[`singleton and entity-SEO routes: the database receives what it did before R2 > SEO defaults: a partial edit 1`] = `
 [
   {
@@ -2078,6 +3565,23 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
       "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     },
   },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > SEO defaults: a partial edit 2`] = `
+[
+  [
+    "title_template",
+  ],
+  [
+    "tenant_id",
+    "actor_id",
+    "actor_role",
+    "action",
+    "entity_type",
+    "entity_id",
+    "detail",
+  ],
 ]
 `;
 
@@ -2128,6 +3632,28 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
       "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     },
   },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > SEO defaults: an edit (an UPDATE) 2`] = `
+[
+  [
+    "title_template",
+    "default_title",
+    "default_description",
+    "default_og_image",
+    "organization",
+    "robots_directives",
+  ],
+  [
+    "tenant_id",
+    "actor_id",
+    "actor_role",
+    "action",
+    "entity_type",
+    "entity_id",
+    "detail",
+  ],
 ]
 `;
 
@@ -2182,6 +3708,29 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
 ]
 `;
 
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > SEO defaults: the first save (an INSERT) 2`] = `
+[
+  [
+    "title_template",
+    "default_title",
+    "default_description",
+    "organization",
+    "robots_directives",
+    "default_og_image",
+    "tenant_id",
+  ],
+  [
+    "tenant_id",
+    "actor_id",
+    "actor_role",
+    "action",
+    "entity_type",
+    "entity_id",
+    "detail",
+  ],
+]
+`;
+
 exports[`singleton and entity-SEO routes: the database receives what it did before R2 > entity SEO: an edit (an UPDATE) 1`] = `
 [
   {
@@ -2217,6 +3766,28 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
       "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     },
   },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > entity SEO: an edit (an UPDATE) 2`] = `
+[
+  [
+    "meta_title",
+    "meta_description",
+    "og_image",
+    "canonical_override",
+    "robots",
+    "schema_type",
+  ],
+  [
+    "tenant_id",
+    "actor_id",
+    "actor_role",
+    "action",
+    "entity_type",
+    "entity_id",
+    "detail",
+  ],
 ]
 `;
 
@@ -2261,6 +3832,31 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
 ]
 `;
 
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > entity SEO: the first save (an INSERT) 2`] = `
+[
+  [
+    "meta_title",
+    "meta_description",
+    "og_image",
+    "canonical_override",
+    "robots",
+    "schema_type",
+    "tenant_id",
+    "entity_type",
+    "entity_id",
+  ],
+  [
+    "tenant_id",
+    "actor_id",
+    "actor_role",
+    "action",
+    "entity_type",
+    "entity_id",
+    "detail",
+  ],
+]
+`;
+
 exports[`singleton and entity-SEO routes: the database receives what it did before R2 > site profile: a partial edit 1`] = `
 [
   {
@@ -2290,6 +3886,23 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
       "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     },
   },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > site profile: a partial edit 2`] = `
+[
+  [
+    "brand_name",
+  ],
+  [
+    "tenant_id",
+    "actor_id",
+    "actor_role",
+    "action",
+    "entity_type",
+    "entity_id",
+    "detail",
+  ],
 ]
 `;
 
@@ -2360,6 +3973,33 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
 ]
 `;
 
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > site profile: an edit (an UPDATE) 2`] = `
+[
+  [
+    "brand_name",
+    "legal_name",
+    "contact_email",
+    "whatsapp_e164",
+    "whatsapp_display",
+    "location",
+    "address_locality",
+    "address_country",
+    "founded_year",
+    "socials",
+    "accepting_applications",
+  ],
+  [
+    "tenant_id",
+    "actor_id",
+    "actor_role",
+    "action",
+    "entity_type",
+    "entity_id",
+    "detail",
+  ],
+]
+`;
+
 exports[`singleton and entity-SEO routes: the database receives what it did before R2 > site profile: the first save (an INSERT) 1`] = `
 [
   {
@@ -2425,5 +4065,33 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
       "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     },
   },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > site profile: the first save (an INSERT) 2`] = `
+[
+  [
+    "brand_name",
+    "legal_name",
+    "contact_email",
+    "whatsapp_e164",
+    "whatsapp_display",
+    "location",
+    "address_locality",
+    "address_country",
+    "founded_year",
+    "socials",
+    "accepting_applications",
+    "tenant_id",
+  ],
+  [
+    "tenant_id",
+    "actor_id",
+    "actor_role",
+    "action",
+    "entity_type",
+    "entity_id",
+    "detail",
+  ],
 ]
 `;
