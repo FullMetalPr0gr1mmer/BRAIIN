@@ -171,7 +171,7 @@ export function useEntitySave(
         dispatch({ type: 'conflict' });
         return false;
       }
-      const mapped = errorsFromApi(err, fields);
+      const mapped = errorsFromApi(err, fields, current.values);
       dispatch({
         type: 'save-failed',
         message: mapped ? null : describeError(err),

@@ -284,6 +284,20 @@ function repeaterToPayload(value: unknown, field: FieldDef): Row[] {
     .filter((item) => Object.keys(item).length > 0); // an untouched new row is not an item
 }
 
+/**
+ * Which form items a repeater sends, in order: entry k is the form index of the payload's
+ * item k (untouched blank items are left out above). fieldErrors.ts maps the server's item
+ * index back through it, so an error lands on the item the editor wrote.
+ */
+export function repeaterKeptIndexes(value: unknown, field: FieldDef): number[] {
+  const items = Array.isArray(value) ? (value as Row[]) : [];
+  const kept: number[] = [];
+  items.forEach((item, index) => {
+    if (Object.keys(objectToPayload(item, field.itemFields ?? [])).length > 0) kept.push(index);
+  });
+  return kept;
+}
+
 function valueToPayload(value: unknown, field: FieldDef, siblings: Row): unknown {
   switch (field.kind) {
     case 'json':

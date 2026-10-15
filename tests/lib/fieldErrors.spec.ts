@@ -70,7 +70,7 @@ describe('mapIssues', () => {
     ]);
   });
 
-  it('a whole bilingual pair lands on its English input; a deep rich-text path on its editor', () => {
+  it('a whole bilingual pair names its group (review L12); a deep rich-text path its editor', () => {
     const { byId, summary } = mapIssues(
       [
         { path: 'title', message: 'Required' },
@@ -78,8 +78,8 @@ describe('mapIssues', () => {
       ],
       FIELDS,
     );
-    expect(byId).toEqual({ 'f-title-en': 'Required', 'f-body-ar': 'Too long' });
-    expect(summary[0]).toEqual({ id: 'f-title-en', message: 'Service name: Required' });
+    expect(byId).toEqual({ 'f-title': 'Required', 'f-body-ar': 'Too long' });
+    expect(summary[0]).toEqual({ id: 'f-title', message: 'Service name: Required' });
     expect(summary[1]).toEqual({ id: 'f-body-ar', message: 'Body (Arabic): Too long' });
   });
 
@@ -89,13 +89,13 @@ describe('mapIssues', () => {
     });
   });
 
-  it('a clip’s window reaches its inputs; the clip as a whole is listed unlinked', () => {
+  it('a clip’s window reaches its inputs; the clip as a whole names its group', () => {
     const clip: FieldDef[] = [{ name: 'clip', label: 'Hero clip', kind: 'clip' }];
     expect(mapIssues([{ path: 'clip.endS', message: 'Too long' }], clip).byId).toEqual({
       'f-clip-end': 'Too long',
     });
     expect(mapIssues([{ path: 'clip', message: 'Choose one' }], clip).summary).toEqual([
-      { message: 'Hero clip: Choose one' },
+      { id: 'f-clip', message: 'Hero clip: Choose one' },
     ]);
   });
 
@@ -104,7 +104,6 @@ describe('mapIssues', () => {
       [
         { path: 'disciplineId', message: 'Publishing needs a discipline' },
         { path: '', message: 'Choose at least one' },
-        { path: 'valuePoints', message: 'At most 6' },
       ],
       FIELDS,
     );
@@ -112,8 +111,66 @@ describe('mapIssues', () => {
     expect(summary).toEqual([
       { message: 'disciplineId: Publishing needs a discipline' },
       { message: 'Choose at least one' },
-      { message: 'Value we add: At most 6' },
     ]);
+  });
+
+  it('a whole repeater, an item, an object or section content names its group (review L5)', () => {
+    const { byId, summary } = mapIssues(
+      [
+        { path: 'valuePoints', message: 'At most 6' },
+        { path: 'valuePoints.1', message: 'Fill this card or remove it' },
+        { path: 'rating', message: 'Give both parts' },
+        { path: 'content', message: 'Unknown key' },
+        { path: 'content.nope', message: 'Unrecognized key' },
+      ],
+      FIELDS,
+    );
+    expect(byId).toEqual({
+      'f-valuePoints': 'At most 6',
+      'f-rating': 'Give both parts',
+      'f-content': 'Unknown key',
+    });
+    expect(summary.map((e) => e.id)).toEqual([
+      'f-valuePoints',
+      'f-valuePoints',
+      'f-rating',
+      'f-content',
+      'f-content',
+    ]);
+    expect(summary[1]?.message).toBe('Value we add 2: Fill this card or remove it');
+  });
+
+  it('a repeater’s item index is the payload’s, mapped back past untouched blank items (review M3)', () => {
+    // The first item was never touched, so it is not sent: the server's item 0 is the
+    // form's item 1.
+    const values = { valuePoints: [{}, { title: { en: 'x', ar: '' } }] };
+    const { byId, summary } = mapIssues(
+      [{ path: 'valuePoints.0.title.ar', message: 'Required' }],
+      FIELDS,
+      'f',
+      values,
+    );
+    expect(byId).toEqual({ 'f-valuePoints-1-title-ar': 'Required' });
+    expect(summary[0]?.message).toBe('Value we add 2, Title (Arabic): Required');
+    // Without the values, the index is read as it came.
+    expect(
+      mapIssues([{ path: 'valuePoints.0.title.ar', message: 'Required' }], FIELDS).byId,
+    ).toEqual({ 'f-valuePoints-0-title-ar': 'Required' });
+  });
+
+  it('section content reads the section’s own type for a sub-field (review L7)', async () => {
+    const { SECTION_UI } = await import('@/lib/admin/sectionUi');
+    // A key two section types both hold, under different labels where they differ.
+    const types = Object.entries(SECTION_UI).filter(([, f]) => f?.some((x) => x.name === 'items'));
+    expect(types.length).toBeGreaterThan(1);
+    for (const [type, fields] of types) {
+      const own = fields!.find((x) => x.name === 'items')!;
+      const { summary } = mapIssues([{ path: 'content.items', message: 'x' }], FIELDS, 'f', {
+        type,
+        content: { values: {}, json: null },
+      });
+      expect(summary[0]?.message, type).toBe(`Content, ${own.label}: x`);
+    }
   });
 
   it('keeps the first message per field inline, and every one in the summary', () => {

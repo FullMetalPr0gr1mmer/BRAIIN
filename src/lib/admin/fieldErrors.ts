@@ -1,6 +1,7 @@
 import type { FieldError } from '@/components/admin/kit/ErrorSummary';
 import { AdminApiError, describeError } from './client';
-import { SECTION_UI } from './sectionUi';
+import { repeaterKeptIndexes, type SectionContentState } from './formPayload';
+import { SECTION_UI, sectionFields } from './sectionUi';
 import type { FieldDef } from './uiSchema';
 
 // The API's validation errors on the form (Admin v2 F5a, ui.md §2.6). The kernel
@@ -43,8 +44,10 @@ const CLIP_INPUTS: Record<string, string> = {
   endS: 'end',
 };
 
-/** Every field a section type's content can hold, by name (for a `sectionContent` path). */
-function sectionField(name: string): FieldDef | undefined {
+/** Every field a section type's content can hold: its type's, else any type's by name. */
+function sectionField(name: string, type: unknown): FieldDef | undefined {
+  const own = sectionFields(type)?.find((f) => f.name === name);
+  if (own) return own;
   for (const fields of Object.values(SECTION_UI)) {
     const found = fields?.find((f) => f.name === name);
     if (found) return found;
@@ -59,61 +62,83 @@ interface Resolved {
   name: string;
 }
 
-/** Follows a path through the declared fields to the element it names. */
+type Row = Record<string, unknown>;
+const asRow = (v: unknown): Row | undefined =>
+  v && typeof v === 'object' && !Array.isArray(v) ? (v as Row) : undefined;
+
+/**
+ * Follows a path through the declared fields to the element it names. `values` is the form
+ * state the request was built from, when the caller has it: a repeater's untouched blank
+ * items are not sent (formPayload.ts), so the server's item index is the PAYLOAD's and is
+ * mapped back to the form's; and section content is read with its own type's fields.
+ * A path that ends on a field of several controls, or goes deeper than the form knows,
+ * names that field's group (FieldShell's fieldset carries the id).
+ */
 function resolve(
   parts: readonly string[],
   fields: readonly FieldDef[],
   idPrefix: string,
+  values: Row | undefined,
 ): Resolved {
   const [head, ...rest] = parts;
   const field = fields.find((f) => f.name === head);
   if (!field || head === undefined) return { id: null, name: '' };
   const id = `${idPrefix}-${field.name}`;
+  const value = values?.[field.name];
 
   if (BILINGUAL.has(field.kind) || (field.kind === 'chips' && field.chips?.bilingual)) {
-    const lang = rest[0] === 'en' || rest[0] === 'ar' ? rest[0] : 'en';
-    const named = rest[0] === 'en' || rest[0] === 'ar';
-    return {
-      id: `${id}-${lang}`,
-      name: named ? `${field.label} (${LANGUAGE[lang]})` : field.label,
-    };
+    const lang = rest[0] === 'en' || rest[0] === 'ar' ? rest[0] : null;
+    return lang
+      ? { id: `${id}-${lang}`, name: `${field.label} (${LANGUAGE[lang]})` }
+      : { id, name: field.label };
   }
 
   if (field.kind === 'repeater') {
-    const index = Number(rest[0]);
-    if (!Number.isInteger(index) || index < 0 || rest.length < 2) {
-      return { id: null, name: field.label };
+    const sent = Number(rest[0]);
+    if (rest[0] === undefined || !Number.isInteger(sent) || sent < 0) {
+      return { id, name: field.label };
     }
-    const inner = resolve(rest.slice(1), field.itemFields ?? [], `${id}-${index}`);
+    const kept = Array.isArray(value) ? repeaterKeptIndexes(value, field) : [];
+    const index = kept[sent] ?? sent;
+    const itemName = `${field.label} ${index + 1}`;
+    if (rest.length < 2) return { id, name: itemName };
+    const item = Array.isArray(value) ? asRow(value[index]) : undefined;
+    const inner = resolve(rest.slice(1), field.itemFields ?? [], `${id}-${index}`, item);
     return {
-      id: inner.id,
-      name: inner.name
-        ? `${field.label} ${index + 1}, ${inner.name}`
-        : `${field.label} ${index + 1}`,
+      id: inner.id ?? id,
+      name: inner.name ? `${itemName}, ${inner.name}` : itemName,
     };
   }
 
   if (field.kind === 'object') {
-    if (rest.length === 0) return { id: null, name: field.label };
-    const inner = resolve(rest, field.itemFields ?? [], id);
-    return { id: inner.id, name: inner.name ? `${field.label}, ${inner.name}` : field.label };
+    if (rest.length === 0) return { id, name: field.label };
+    const inner = resolve(rest, field.itemFields ?? [], id, asRow(value));
+    return {
+      id: inner.id ?? id,
+      name: inner.name ? `${field.label}, ${inner.name}` : field.label,
+    };
   }
 
   if (field.kind === 'sectionContent') {
-    const sub = rest[0] === undefined ? undefined : sectionField(rest[0]);
-    if (!sub) return { id: null, name: field.label };
-    const inner = resolve(rest, [sub], id);
-    return { id: inner.id, name: inner.name ? `${field.label}, ${inner.name}` : field.label };
+    const type = values?.[field.typeField ?? 'type'];
+    const sub = rest[0] === undefined ? undefined : sectionField(rest[0], type);
+    if (!sub) return { id, name: field.label };
+    const state = asRow(value) as Partial<SectionContentState> | undefined;
+    const inner = resolve(rest, [sub], id, asRow(state?.values));
+    return {
+      id: inner.id ?? id,
+      name: inner.name ? `${field.label}, ${inner.name}` : field.label,
+    };
   }
 
   if (field.kind === 'clip') {
     // ClipField's inputs: the source's own box and the window (fields/ClipField.tsx).
     const input = rest[0] === undefined ? undefined : CLIP_INPUTS[rest[0]];
-    return { id: input ? `${id}-${input}` : null, name: field.label };
+    return { id: input ? `${id}-${input}` : id, name: field.label };
   }
 
   // A single control (text, select, switch, colour, chips…): an error inside its value
-  // (a chip's index, a clip's start) is still that control's.
+  // (a chip's index) is still that control's.
   return { id, name: field.label };
 }
 
@@ -126,13 +151,15 @@ export function mapIssues(
   issues: readonly ApiIssue[],
   fields: readonly FieldDef[],
   idPrefix = 'f',
+  /** The form state the request was built from (see resolve): optional, but more exact. */
+  values?: Readonly<Record<string, unknown>>,
 ): MappedErrors {
   const byId: Record<string, string> = {};
   const summary: FieldError[] = [];
   for (const issue of issues) {
     const parts = issue.path.split('.').filter((p) => p !== '');
     const { id, name } =
-      parts.length > 0 ? resolve(parts, fields, idPrefix) : { id: null, name: '' };
+      parts.length > 0 ? resolve(parts, fields, idPrefix, values) : { id: null, name: '' };
     if (id) {
       byId[id] ??= issue.message;
       summary.push({ id, message: `${name}: ${issue.message}` });
@@ -154,12 +181,21 @@ export function mapIssues(
  * a 409, the network): the caller says that in words instead. Reads the kernel's
  * `issues`, or the one `field` a mapped constraint names (a duplicate slug).
  */
-export function errorsFromApi(err: unknown, fields: readonly FieldDef[]): MappedErrors | null {
+export function errorsFromApi(
+  err: unknown,
+  fields: readonly FieldDef[],
+  values?: Readonly<Record<string, unknown>>,
+): MappedErrors | null {
   if (!(err instanceof AdminApiError)) return null;
   const { issues, field } = err.info;
-  if (issues && issues.length > 0) return mapIssues(issues, fields);
+  if (issues && issues.length > 0) return mapIssues(issues, fields, 'f', values);
   if (field) {
-    return mapIssues([{ path: field, message: err.info.detail ?? describeError(err) }], fields);
+    return mapIssues(
+      [{ path: field, message: err.info.detail ?? describeError(err) }],
+      fields,
+      'f',
+      values,
+    );
   }
   return null;
 }
