@@ -6,7 +6,9 @@
 -- content_creator, one deactivated and one locked, each still carrying an `admin` claim
 -- (CLAUDE.md §9 (b)).
 --   • profiles: no stale token changes any profile's role, activity or name, its own
---     included (the self re-promotion this hotfix closes), and nothing it tried stuck; a
+--     included (the self re-promotion this hotfix closes), and nothing it tried stuck; with
+--     INSERT and DELETE granted for a moment, the stale token still inserts and deletes
+--     nothing while a live Admin's deletes (the policies, not only the missing grants); a
 --     live Admin still changes colleagues (the users screen); another tenant's Admin, the
 --     other staff roles and anon change nothing; renaming yourself still works through
 --     update_my_profile, which the stale tokens cannot use either; the policy set is exactly
