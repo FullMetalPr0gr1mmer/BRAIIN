@@ -1,0 +1,172 @@
+import { describe, expect, it } from 'vitest';
+import { AdminApiError } from '@/lib/admin/client';
+import { errorsFromApi, issueToFieldId, mapIssues } from '@/lib/admin/fieldErrors';
+import { RESOURCE_UI, type FieldDef } from '@/lib/admin/uiSchema';
+
+// The API's `issues[].path` → the form's element ids and the ErrorSummary's words (Admin v2
+// F5a). The ids are the ones FormField renders (pinned in adminFields.spec.ts), so a path
+// that maps here reaches a real input.
+
+const FIELDS: FieldDef[] = [
+  { name: 'slug', label: 'Slug', kind: 'slug', required: true },
+  { name: 'title', label: 'Service name', kind: 'bilingual', required: true },
+  { name: 'blurb', label: 'Tagline', kind: 'prose' },
+  { name: 'body', label: 'Body', kind: 'richtext' },
+  {
+    name: 'valuePoints',
+    label: 'Value we add',
+    kind: 'repeater',
+    itemFields: [
+      { name: 'title', label: 'Title', kind: 'bilingual', required: true },
+      { name: 'text', label: 'Text', kind: 'bilingual', required: true },
+    ],
+  },
+  {
+    name: 'rating',
+    label: 'Rating line',
+    kind: 'object',
+    itemFields: [{ name: 'value', label: 'Rating as shown', kind: 'text' }],
+  },
+  { name: 'type', label: 'Type', kind: 'select' },
+  { name: 'content', label: 'Content', kind: 'sectionContent' },
+  { name: 'tags', label: 'Tags', kind: 'tags' },
+];
+
+describe('issueToFieldId', () => {
+  it('turns a dotted path into the element id the form renders', () => {
+    expect(issueToFieldId('title.ar')).toBe('f-title-ar');
+    expect(issueToFieldId('items.2.title.en')).toBe('f-items-2-title-en');
+    expect(issueToFieldId('content.heading.ar')).toBe('f-content-heading-ar');
+    expect(issueToFieldId('slug')).toBe('f-slug');
+    expect(issueToFieldId('slug', 'kit')).toBe('kit-slug');
+  });
+});
+
+describe('mapIssues', () => {
+  it('top level, bilingual, repeater, object and section content reach their inputs', () => {
+    const { byId, summary } = mapIssues(
+      [
+        { path: 'slug', message: 'Required' },
+        { path: 'title.ar', message: 'Required' },
+        { path: 'valuePoints.1.text.en', message: 'Too long' },
+        { path: 'rating.value', message: 'Required' },
+        { path: 'content.heading.ar', message: 'Required' },
+      ],
+      FIELDS,
+    );
+    expect(byId).toEqual({
+      'f-slug': 'Required',
+      'f-title-ar': 'Required',
+      'f-valuePoints-1-text-en': 'Too long',
+      'f-rating-value': 'Required',
+      'f-content-heading-ar': 'Required',
+    });
+    expect(summary).toEqual([
+      { id: 'f-slug', message: 'Slug: Required' },
+      { id: 'f-title-ar', message: 'Service name (Arabic): Required' },
+      { id: 'f-valuePoints-1-text-en', message: 'Value we add 2, Text (English): Too long' },
+      { id: 'f-rating-value', message: 'Rating line, Rating as shown: Required' },
+      { id: 'f-content-heading-ar', message: 'Content, Heading (Arabic): Required' },
+    ]);
+  });
+
+  it('a whole bilingual pair lands on its English input; a deep rich-text path on its editor', () => {
+    const { byId, summary } = mapIssues(
+      [
+        { path: 'title', message: 'Required' },
+        { path: 'body.ar.content.0.content.1.text', message: 'Too long' },
+      ],
+      FIELDS,
+    );
+    expect(byId).toEqual({ 'f-title-en': 'Required', 'f-body-ar': 'Too long' });
+    expect(summary[0]).toEqual({ id: 'f-title-en', message: 'Service name: Required' });
+    expect(summary[1]).toEqual({ id: 'f-body-ar', message: 'Body (Arabic): Too long' });
+  });
+
+  it('an error inside a single control is that control’s (a chip, an index)', () => {
+    expect(mapIssues([{ path: 'tags.3', message: 'Too long' }], FIELDS).byId).toEqual({
+      'f-tags': 'Too long',
+    });
+  });
+
+  it('a clip’s window reaches its inputs; the clip as a whole is listed unlinked', () => {
+    const clip: FieldDef[] = [{ name: 'clip', label: 'Hero clip', kind: 'clip' }];
+    expect(mapIssues([{ path: 'clip.endS', message: 'Too long' }], clip).byId).toEqual({
+      'f-clip-end': 'Too long',
+    });
+    expect(mapIssues([{ path: 'clip', message: 'Choose one' }], clip).summary).toEqual([
+      { message: 'Hero clip: Choose one' },
+    ]);
+  });
+
+  it('a path that names no declared field is listed without a link', () => {
+    const { byId, summary } = mapIssues(
+      [
+        { path: 'disciplineId', message: 'Publishing needs a discipline' },
+        { path: '', message: 'Choose at least one' },
+        { path: 'valuePoints', message: 'At most 6' },
+      ],
+      FIELDS,
+    );
+    expect(byId).toEqual({});
+    expect(summary).toEqual([
+      { message: 'disciplineId: Publishing needs a discipline' },
+      { message: 'Choose at least one' },
+      { message: 'Value we add: At most 6' },
+    ]);
+  });
+
+  it('keeps the first message per field inline, and every one in the summary', () => {
+    const { byId, summary } = mapIssues(
+      [
+        { path: 'slug', message: 'Required' },
+        { path: 'slug', message: 'Lower case only' },
+      ],
+      FIELDS,
+    );
+    expect(byId).toEqual({ 'f-slug': 'Required' });
+    expect(summary).toHaveLength(2);
+  });
+
+  it('maps every resource field’s own path to an id it renders', () => {
+    for (const ui of Object.values(RESOURCE_UI)) {
+      for (const field of ui.fields) {
+        const lang = ['bilingual', 'prose', 'richtext'].includes(field.kind) ? '.en' : '';
+        const { byId } = mapIssues([{ path: `${field.name}${lang}`, message: 'x' }], ui.fields);
+        if (['repeater', 'object', 'sectionContent', 'clip'].includes(field.kind)) continue;
+        expect(Object.keys(byId), `${ui.slug}.${field.name}`).toEqual([
+          issueToFieldId(`${field.name}${lang}`),
+        ]);
+      }
+    }
+  });
+});
+
+describe('errorsFromApi', () => {
+  it('reads the kernel’s issues', () => {
+    const err = new AdminApiError({
+      error: 'validation',
+      status: 422,
+      issues: [{ path: 'title.en', message: 'Required' }],
+    });
+    expect(errorsFromApi(err, FIELDS)?.byId).toEqual({ 'f-title-en': 'Required' });
+  });
+
+  it('reads the one field a mapped constraint names', () => {
+    const err = new AdminApiError({
+      error: 'validation',
+      status: 422,
+      detail: 'That slug is taken.',
+      field: 'slug',
+    });
+    expect(errorsFromApi(err, FIELDS)).toEqual({
+      byId: { 'f-slug': 'That slug is taken.' },
+      summary: [{ id: 'f-slug', message: 'Slug: That slug is taken.' }],
+    });
+  });
+
+  it('is null for an error that is not about fields', () => {
+    expect(errorsFromApi(new AdminApiError({ error: 'conflict', status: 409 }), FIELDS)).toBeNull();
+    expect(errorsFromApi(new Error('offline'), FIELDS)).toBeNull();
+  });
+});

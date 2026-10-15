@@ -1,5 +1,6 @@
 import { columnOf, type FieldDef } from '@/lib/admin/uiSchema';
 import { sectionFields } from '@/lib/admin/sectionUi';
+import { clampToStep, cleanChips, normalizeHex } from '@/lib/admin/fieldValues';
 
 // Form state <-> API payload for the admin ResourceForm / SingletonForm. Kept apart from
 // the React field components so it can be unit-tested in node — a regression here does
@@ -99,10 +100,33 @@ function valueToForm(raw: unknown, field: FieldDef, siblings: Row): unknown {
     }
     case 'sectionContent':
       return sectionStateFromObject(raw, siblings[field.typeField ?? 'type']);
+    // F5a. A colour shows as stored, uppercased when it is one; a slider's number as a
+    // number; chips as their strings (a bilingual set as two lists).
+    case 'color':
+      return normalizeHex(raw) ?? toStringOrEmpty(raw);
+    case 'range': {
+      if (raw === null || raw === undefined || raw === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    }
+    case 'chips':
+      if (field.chips?.bilingual) {
+        const pair = (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}) as Row;
+        return raw === null || raw === undefined
+          ? null
+          : { en: cleanChips(pair['en']), ar: cleanChips(pair['ar']) };
+      }
+      return Array.isArray(raw) ? raw.map(String) : (raw ?? null);
     default:
       return raw ?? null;
   }
 }
+
+/** True for a bilingual chip set with no chip in either language. */
+const noChips = (value: unknown): boolean => {
+  const pair = (value && typeof value === 'object' ? value : {}) as Row;
+  return cleanChips(pair['en']).length === 0 && cleanChips(pair['ar']).length === 0;
+};
 
 /**
  * Stored section content → editor state for a section of `type`.
@@ -222,6 +246,13 @@ function overrideToPayload(value: unknown, field: FieldDef, siblings: Row): unkn
       const items = repeaterToPayload(value, field);
       return items.length > 0 ? items : undefined;
     }
+    case 'chips':
+    case 'tags': {
+      if (field.chips?.bilingual)
+        return noChips(value) ? undefined : valueToPayload(value, field, siblings);
+      const chips = cleanChips(value);
+      return chips.length > 0 ? chips : undefined;
+    }
     case 'object': {
       // Blank → the KEY is omitted (an untouched rating editor saves no `rating`, which
       // a strict schema needs); a half-filled object is sent as-is so the server can say
@@ -274,6 +305,22 @@ function valueToPayload(value: unknown, field: FieldDef, siblings: Row): unknown
       return objectToPayload((value ?? {}) as Row, field.itemFields ?? []);
     case 'clip':
       return clipToPayload(value, field.label);
+    // F5a. An invalid colour is sent as typed (trimmed), so the server's refusal names the
+    // field; a slider's number is held to its range and step.
+    case 'color':
+      return normalizeHex(value) ?? (isBlank(value) ? null : String(value).trim());
+    case 'range':
+      if (value === null || value === undefined || value === '') return null;
+      return field.range ? clampToStep(value, field.range) : Number(value);
+    case 'chips':
+    case 'tags': {
+      if (field.chips?.bilingual) {
+        if (value === null || value === undefined) return null;
+        const pair = (typeof value === 'object' ? value : {}) as Row;
+        return { en: cleanChips(pair['en']), ar: cleanChips(pair['ar']) };
+      }
+      return Array.isArray(value) ? cleanChips(value) : value;
+    }
     case 'sectionContent': {
       const state = (value ?? { values: {}, json: '{}' }) as SectionContentState;
       if (state.json !== null) return parseJson(state.json, field.label);
