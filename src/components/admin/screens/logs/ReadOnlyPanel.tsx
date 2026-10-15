@@ -94,7 +94,10 @@ export default function ReadOnlyPanel({ endpoint, columns, canClear = false }: R
         </p>
       )}
 
-      <div className="card table-wrap">
+      {/* A focusable, named region: these rows hold no link or button, so when a wide row
+          (a long `detail`) makes the table scroll sideways, the keyboard needs the region
+          itself to reach the rest (axe scrollable-region-focusable, WCAG 2.1.1). */}
+      <div className="card table-wrap" tabIndex={0} role="region" aria-label="System logs">
         <table className="data">
           <caption className="visually-hidden">System logs</caption>
           <thead>
@@ -110,7 +113,9 @@ export default function ReadOnlyPanel({ endpoint, columns, canClear = false }: R
             {rows.map((row) => (
               <tr key={String(row.id)}>
                 {columns.map((column) => (
-                  <td key={column.key}>{renderCell(row[column.key], column.kind)}</td>
+                  <td key={column.key} className={cellClass(column.kind)}>
+                    {renderCell(row[column.key], column.kind)}
+                  </td>
                 ))}
               </tr>
             ))}
@@ -145,6 +150,10 @@ export default function ReadOnlyPanel({ endpoint, columns, canClear = false }: R
     </div>
   );
 }
+
+/** A JSON cell may break anywhere: a 160-character blob has no spaces to wrap at. */
+const JSON_CELL = 'data-json';
+const cellClass = (kind?: 'date' | 'json' | 'text') => (kind === 'json' ? JSON_CELL : undefined);
 
 function renderCell(value: unknown, kind?: 'date' | 'json' | 'text') {
   if (value === null || value === undefined) return '—';

@@ -1,11 +1,14 @@
 import { useEffect, useId, useRef, type MouseEvent } from 'react';
+import { revealAndFocus } from '@/components/admin/fields/reveal';
 
 // The error summary (Admin v2 F4b, ui.md AV-08 uses it): after a save the server refused,
 // one block at the top of the form that says how many things need fixing, lists them,
 // and links each to its field. It takes focus when it appears (so a keyboard or screen
 // reader user lands on it, not on a button that did nothing visible) and each link moves
 // focus to the field itself, not just the scroll position. Field errors also stay inline
-// beside each field; this is the way to them.
+// beside each field; this is the way to them. A field can be on the form but out of sight
+// (the Arabic half while the editor shows English, a collapsed repeater item): the link
+// asks for it to be shown first (fields/reveal.ts, F5a) and focuses it on the next frame.
 
 export interface FieldError {
   /** The field's element id; without one the error is listed but not linked. */
@@ -37,11 +40,7 @@ export default function ErrorSummary({ errors, title, focus = true }: ErrorSumma
   if (errors.length === 0) return null;
 
   function jump(event: MouseEvent<HTMLAnchorElement>, id: string) {
-    const field = document.getElementById(id);
-    if (!field) return;
-    event.preventDefault();
-    field.focus();
-    field.scrollIntoView({ block: 'center' });
+    if (revealAndFocus(id)) event.preventDefault();
   }
 
   return (

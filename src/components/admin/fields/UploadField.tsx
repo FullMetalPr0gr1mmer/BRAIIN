@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { adminUpload, describeError } from '@/lib/admin/client';
+import type { FieldErrors } from '@/lib/admin/fieldErrors';
 import type { FieldDef } from '@/lib/admin/uiSchema';
+import { FieldErrorText, describedBy } from './FieldShell';
 
 // A file sent to `field.upload.endpoint` (multipart, CSRF-headed — adminUpload); the
 // field then holds the id the endpoint returns. The endpoint is the gate: it checks the
@@ -12,15 +14,17 @@ interface Props {
   value: unknown;
   onChange: (name: string, value: unknown) => void;
   idPrefix: string;
+  errors?: FieldErrors | undefined;
 }
 
-export default function UploadField({ field, value, onChange, idPrefix }: Props) {
+export default function UploadField({ field, value, onChange, idPrefix, errors }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const id = `${idPrefix}-${field.name}`;
   const current = typeof value === 'string' ? value : '';
+  const fieldError = errors?.[id];
 
   async function send(file: File) {
     if (!field.upload) return;
@@ -60,6 +64,8 @@ export default function UploadField({ field, value, onChange, idPrefix }: Props)
           type="file"
           accept={field.upload?.accept}
           disabled={busy || !field.upload}
+          aria-invalid={fieldError ? true : undefined}
+          aria-describedby={describedBy(id, { error: fieldError })}
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void send(file);
@@ -80,6 +86,7 @@ export default function UploadField({ field, value, onChange, idPrefix }: Props)
         </p>
       )}
       {field.help && <p className="admin-sub">{field.help}</p>}
+      <FieldErrorText id={id} message={fieldError} />
     </div>
   );
 }
