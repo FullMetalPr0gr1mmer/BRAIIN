@@ -4,6 +4,7 @@ import { DisplayNameValueSchema } from '@schemas/adminPrefs';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { NotFoundError, ValidationError } from '@/lib/admin/errors';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
+import { AuthorizationError } from '@/lib/authz/errors';
 import { serviceClient } from '@/lib/supabase/server';
 
 // Change a colleague's role, or deactivate them. `users.manage` — Admin only.
@@ -63,12 +64,22 @@ export const PATCH = defineAdminRoute({
       throw new ValidationError('no updatable fields supplied');
     }
 
-    const { error: updateError } = await sb
+    const { data: updated, error: updateError } = await sb
       .from('profiles')
       .update(values)
       .eq('tenant_id', auth.tenantId)
-      .eq('id', id);
+      .eq('id', id)
+      .select('id');
     if (updateError) throw new Error(`update profile: ${updateError.message}`);
+    // RLS skips a row it will not let this session write rather than raising, so a refused
+    // write looks like a successful one. The read above found the profile, so no row back
+    // means the database refused the session: the live check (0050) wants the token's role to
+    // be the profile's, active, unlocked and in this tenant, which liveRecheck does not see
+    // (it compares the profile with the session, not with the token). Nothing changed, so
+    // nothing is stamped into the person's claims and nothing is audited.
+    if (!Array.isArray(updated) || updated.length === 0) {
+      throw new AuthorizationError('users.manage', 'the database refused this session');
+    }
 
     if (input.role !== undefined) {
       const { error: claimError } = await serviceClient().auth.admin.updateUserById(id, {

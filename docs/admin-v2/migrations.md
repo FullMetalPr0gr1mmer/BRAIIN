@@ -33,8 +33,8 @@ Each slice's file under [as-built/](as-built/) has the detail.
 
 ## Reserved
 
-Wave 1's migrations and hotfix H9's are reserved below; the next free number after them is
-**0050**. Before a wave's slices branch, each migration the wave plans gets a row here,
+Wave 1's held migration and Wave 2's (with hotfix H10) are reserved below; the next free number
+after them is **0059**. Before a wave's slices branch, each migration the wave plans gets a row here,
 numbered in the wave's planned merge order. The slice's own PR moves its row to "Applied" once
 production has applied the migration, before the PR merges (Pushing to production, step 5), so
 the row is true when the PR lands and nothing here is edited after a merge.
@@ -47,6 +47,15 @@ the row is true when the PR lands and nothing here is edited after a merge.
 | 0043 | (released) | unused, as 0042: C13 moved to 0047 | 1 |
 | 0047 | (released) | unused: U16 (0046) and then H9 (0048) merge before C13, and once 0048 is on `main` a 0047 would sort below its highest, so C13 moved to 0049 | 1 |
 | 0049 | C13 | lead attribution capture (built, held for the privacy notice, O-11); moved from 0047 | 1 |
+| 0050 | H10 | live profile writes and the audit actor binding: RESTRICTIVE live policies on every staff write to `profiles`, `app.role_manages_users`, the `audit_log_actor` trigger, `audit_log`'s grants stated (no TRUNCATE for any API role) | 2 |
+| 0051 | R4 | `apply_release` and capture (inert while `release_tenants` is empty) | 2 |
+| 0052 | U2 | stats and health, `rollup_daily_vitals` | 2 |
+| 0053 | U1 | the dashboard: presets and team notes | 2 |
+| 0054 | U13 | the activity log v2: the live read on `audit_log`, `audit_people` (the actor binding is H10's) | 2 |
+| 0055 | U12a | users v2 and the session posture: the live read on `profiles`, session revocation on a role change, owner protection, security settings | 2 |
+| 0056 | U12b | invites: the help guide | 2 |
+| 0057 | U14a | page visibility | 2 |
+| 0058 | U14b | the page password | 2 |
 
 ## Rules
 
