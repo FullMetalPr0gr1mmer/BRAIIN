@@ -49,7 +49,7 @@ the row is true when the PR lands and nothing here is edited after a merge.
 | 0049 | (released) | unused: H10 (0050) merges before C13, and once 0050 is on `main` a 0049 would sort below its highest (rule 1), so C13 moved to 0059 | 1 |
 | 0050 | H10 | live profile writes and the audit actor binding: RESTRICTIVE live policies on every staff write to `profiles`, `app.role_manages_users`, the `audit_log_actor` trigger, `audit_log`'s grants stated (no TRUNCATE for any API role) | 2 |
 | 0051 | R4 | `apply_release` and capture (inert while `release_tenants` is empty) | 2 |
-| 0052 | U2 | stats and health, `rollup_daily_vitals` | 2 |
+| 0052 | U2 | stats and health: `rollup_daily_vitals`, the invoker readers, whole-day page views (`app.rollup_pageviews` restated) | 2 |
 | 0053 | U1 | the dashboard: presets and team notes | 2 |
 | 0054 | U13 | the activity log v2: the live read on `audit_log`, `audit_people` (the actor binding is H10's) | 2 |
 | 0055 | U12a | users v2 and the session posture: the live read on `profiles`, session revocation on a role change, owner protection, security settings | 2 |

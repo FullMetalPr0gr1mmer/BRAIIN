@@ -57,9 +57,10 @@
 -- THE BACKFILLS (data effects; check volumes read-only before the push). app.rollup_vitals(90)
 -- aggregates the last 90 days of web_vitals and app.rollup_pageviews(90) the last 90 days of
 -- page views in analytics_events, each in one pass: a grouped scan of the partitions in that
--- window. Measured on PGlite (PostgreSQL 17 in WebAssembly, slower than a server) at about
--- 2 s per 100,000 web_vitals rows and 0.4 s per 100,000 page views; production's volume is
--- modest, so a few seconds at most. Both are idempotent: run again, they write nothing.
+-- window. Measured on PGlite (PostgreSQL 18 in WebAssembly, slower than a server): the whole
+-- migration in about 8 s over 100,000 web_vitals rows and 100,000 page views; production's
+-- volume is modest, so a few seconds at most. Both are idempotent: run again, they write
+-- nothing.
 --
 -- Production as of 2026-10-15: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046,
 -- 0048, 0050 and 0051. Grants are stated for both Supabase privilege regimes (README P-14).
