@@ -3,9 +3,19 @@ import { sectionContentIssues, type SectionType } from '@schemas/sections';
 import { isSampleRating } from '@/lib/sections/samples';
 import { ValidationError } from '../errors';
 import type { ResourceConfig } from '../resource';
-import { pick, type Input } from './shared';
+import { fieldsOf, pick, type Input } from './shared';
 
 // Page sections: content typed per section type (packages/schemas/sections.ts).
+
+// `style` is deliberately absent: it is no longer writable (see SectionWriteSchema).
+const SECTION_KEYS = {
+  pageId: 'page_id',
+  type: 'type',
+  content: 'content',
+  visible: 'visible',
+  sortOrder: 'sort_order',
+  isPlaceholder: 'is_placeholder',
+};
 
 export const sectionResource: ResourceConfig = {
   table: 'page_sections',
@@ -22,16 +32,8 @@ export const sectionResource: ResourceConfig = {
   filterableColumns: ['page_id'],
   createSchema: SectionWriteSchema,
   updateSchema: SectionUpdateSchema,
-  // `style` is deliberately absent: it is no longer writable (see SectionWriteSchema).
-  toRow: (input) =>
-    pick(input as Input, {
-      pageId: 'page_id',
-      type: 'type',
-      content: 'content',
-      visible: 'visible',
-      sortOrder: 'sort_order',
-      isPlaceholder: 'is_placeholder',
-    }),
+  toRow: (input) => pick(input as Input, SECTION_KEYS),
+  fields: fieldsOf(SECTION_KEYS),
   // The schema validates content only when a payload carries BOTH type and content. A
   // PATCH of content alone (or of type alone) is checked here, against the type the row
   // will have — otherwise it saves "fine" and the loader silently drops it.

@@ -72,6 +72,17 @@ export interface ResourceConfig {
   updateSchema: z.ZodTypeAny;
   /** camelCase input → snake_case column patch. Only listed keys ever reach SQL. */
   toRow: (input: ResourcePayload) => Record<string, unknown>;
+  /**
+   * Payload key → every column `toRow` can emit for it, derived columns included (`body` →
+   * `body`, `body_html`; a clip → its `preview_*` columns; `status` → `status`,
+   * `published_at`). Built with `fieldsOf` from the same key map `toRow` picks with, so the
+   * two cannot drift. Required for every config whose `entity` is a release registry type
+   * (src/lib/release/registry.ts; tests/lib/resourceFields.spec.ts enforces it and checks
+   * every key against `toRow`); the media and Style-Finder configs, which stay immediate,
+   * omit it. Nothing on the legacy write path reads it: releases use it to find the
+   * columns of a pending change, its conflicts and "use the live version" (Admin v2 R2).
+   */
+  fields?: Readonly<Record<string, readonly string[]>>;
   /** Lifecycle status of an incoming payload, when the entity has one. */
   statusOf?: (input: ResourcePayload) => ContentStatus | undefined;
   /**
