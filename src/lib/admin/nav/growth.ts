@@ -17,15 +17,13 @@ export const growth: NavArea = {
       ],
     },
     {
+      // Its views (Overview, Speed, Errors, SEO) are in-page tabs (Admin v2 U2); the old
+      // /admin/logs redirects to the Errors tab and still lights this link.
       href: '/admin/site-health',
       label: 'Site health',
       icon: 'shield',
       caps: ['siteHealth.view'],
       match: ['/admin/logs'],
-      tabs: [
-        { href: '/admin/site-health', label: 'Health', caps: ['siteHealth.view'] },
-        { href: '/admin/logs', label: 'Errors', caps: ['logs.view'] },
-      ],
     },
     {
       href: '/admin/ai-questions',

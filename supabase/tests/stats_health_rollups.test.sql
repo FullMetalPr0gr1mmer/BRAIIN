@@ -28,7 +28,7 @@
 -- Fixtures are two tenants of this file's own; every count is scoped to them.
 
 begin;
-select plan(78);
+select plan(80);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -324,6 +324,8 @@ select is(jsonb_array_length(public.pageview_summary('52000000-0000-0000-0000-00
 select is(public.pageview_summary('52000000-0000-0000-0000-000000000001', _d(29), _d(0)) -> 'by_locale',
   '[{"locale": "en", "views": 19500}, {"locale": "ar", "views": 18750}]'::jsonb,
   'views by language, the larger first');
+select is((public.pageview_summary('52000000-0000-0000-0000-000000000001', _d(29), _d(0), 'ar') ->> 'total')::int,
+  18750, 'in one language when asked');
 select is(public.pageview_summary('52000000-0000-0000-0000-000000000001', _d(29), _d(0)) -> 'top_paths' -> 0,
   '{"path": "/p50", "views": 1500}'::jsonb, 'the busiest page first');
 select is(jsonb_array_length(public.pageview_summary('52000000-0000-0000-0000-000000000001', _d(29), _d(0)) -> 'top_paths'),
@@ -353,6 +355,8 @@ select throws_ok($$ select public.pageview_summary('52000000-0000-0000-0000-0000
   '22023', null, 'pageview_summary: 401 days is refused');
 select lives_ok($$ select public.pageview_summary('52000000-0000-0000-0000-000000000001', _d(399), _d(0)) $$,
   'pageview_summary: 400 days is allowed');
+select throws_ok($$ select public.pageview_summary('52000000-0000-0000-0000-000000000001', _d(1), _d(0), 'fr') $$,
+  '22023', null, 'pageview_summary: a language other than en or ar is refused');
 select throws_ok($$ select * from public.pageview_paths('52000000-0000-0000-0000-000000000001', _d(1), _d(0), 101, 0) $$,
   '22023', null, 'pageview_paths: a page of 101 is refused');
 select throws_ok($$ select * from public.pageview_paths('52000000-0000-0000-0000-000000000001', _d(1), _d(0), 25, -1) $$,
@@ -373,8 +377,9 @@ insert into public.search_queries (tenant_id, q, locale, results_count) values
   ('52000000-0000-0000-0000-000000000001', 'xyz', 'en', 0);
 set local role authenticated;
 select _as('seo', '52000000-0000-0000-0000-000000000001');
-select is((public.search_summary('52000000-0000-0000-0000-000000000001', 30) ->> 'total')::int, 6,
-  'seo sees every search');
+select is((select row((x ->> 'total')::int, (x ->> 'zero_total')::int)::text
+             from public.search_summary('52000000-0000-0000-0000-000000000001', 30) x),
+  '(6,3)', 'seo sees every search, and how many found nothing');
 select is(public.search_summary('52000000-0000-0000-0000-000000000001', 30) -> 'top' -> 0,
   '{"q": "logo", "locale": "en", "hits": 3, "zero": 0}'::jsonb, 'the most frequent first');
 select is(public.search_summary('52000000-0000-0000-0000-000000000001', 30) -> 'zero',
@@ -434,7 +439,7 @@ select ok(app.role_analytics_read('admin') and app.role_analytics_read('content_
 select is(
   (select coalesce(string_agg(format('%s %s', w.who, f.fn), ', ' order by f.fn, w.who), '')
      from (values ('public.vitals_summary(uuid, integer)'),
-                  ('public.pageview_summary(uuid, date, date)'),
+                  ('public.pageview_summary(uuid, date, date, text)'),
                   ('public.pageview_paths(uuid, date, date, integer, integer)'),
                   ('public.search_summary(uuid, integer, text)'),
                   ('public.content_health(uuid)')) as f(fn)

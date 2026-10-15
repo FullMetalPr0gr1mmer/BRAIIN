@@ -370,12 +370,47 @@ describe('the guides say only what the admin does', () => {
     expect(source('supabase/migrations/0008_retention_jobs.sql')).toContain(
       "'system_logs_days')::int, 30)",
     );
-    expect(source('src/components/admin/screens/logs/ReadOnlyPanel.tsx')).toContain(
-      'Clear logs older than 30 days',
-    );
+    // Clear logs is site health's since U2: older than 7 days, older than 30, or all.
+    const clear = source('src/components/admin/screens/logs/ClearLogs.tsx');
+    expect(clear).toContain("{ value: '7', label: 'Older than 7 days' }");
+    expect(clear).toContain("{ value: '30', label: 'Older than 30 days' }");
+    expect(clear).toContain("{ value: 'all', label: 'All entries' }");
+    expect(clear).toContain('Clear logs');
     const en = guide('site-health-and-logs', 'en');
     expect(en).toContain('Every night, entries older than 30 days are deleted by themselves');
-    expect(en).toContain('Clear logs older than 30 days removes any still left');
+    expect(en).toContain(
+      'clear them sooner with Clear logs, choosing entries older than 7 days, older than 30 days, or all of them',
+    );
+  });
+
+  it('website stats are described as the screen and the rollups do them (U2)', () => {
+    // The range links, the 15-minute page-view rollup (0010) and its UTC days, the raw horizon.
+    expect(source('src/lib/admin/stats/range.ts')).toContain('STAT_RANGES = [7, 30, 90] as const');
+    expect(source('supabase/migrations/0010_launch_readiness.sql')).toMatch(
+      /cron\.schedule\('rollup-pageviews', '\*\/15 \* \* \* \*'/,
+    );
+    const en = guide('website-stats', 'en');
+    expect(en).toContain('Pick 7, 30 or 90 days at the top');
+    expect(en).toContain('Counts are added up every 15 minutes');
+    expect(en).toContain('midnight to midnight UTC (3 am in Riyadh)');
+    expect(en).toContain('Raw visit records are kept 90 days');
+    expect(guide('website-stats', 'ar')).toContain('كل 15 دقيقة');
+  });
+
+  it('site health is described as the score, the rollup and the tabs do it (U2)', () => {
+    expect(source('src/lib/admin/health/vitals.ts')).toContain('HEALTH_WINDOW_DAYS = 28');
+    expect(source('src/lib/admin/health/score.ts')).toContain('Uptime is not measured here yet.');
+    const migration = source('supabase/migrations/0052_stats_health_rollups.sql');
+    expect(migration).toContain("cron.schedule('rollup-vitals', '7 * * * *'");
+    expect(migration).toMatch(/v\.day < \(pg_catalog\.now\(\) at time zone 'UTC'\)::date - 400;/);
+    const en = guide('site-health-and-logs', 'en');
+    expect(en).toContain('The score is half speed and half checklist');
+    expect(en).toContain('real visits over the last 28 days');
+    expect(en).toContain('Uptime is not measured here yet.');
+    expect(en).toContain('added up every hour and kept 400 days');
+    expect(en).toContain('Lab scores run in CI on every change');
+    expect(guide('site-health-and-logs', 'ar')).toContain('آخر 28 يومًا');
+    expect(guide('site-health-and-logs', 'ar')).toContain('400 يوم');
   });
 
   it('the Arabic says what it means', () => {

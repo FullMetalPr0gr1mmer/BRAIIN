@@ -42,15 +42,22 @@ export const UNSEEDED_LISTS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Screens only the holders of one capability may use, with the API each one's island loads
- * on mount (tests/admin/refusals.e2e.ts). Every role WITHOUT the capability, which has the
- * screen outside its menu (tests/lib/adminRoutes.spec.ts), must get the server's 403 from
- * the API and see it on the screen: the hidden menu link is not what protects them.
+ * Screens only the holders of one capability may use, with the API behind each
+ * (tests/admin/refusals.e2e.ts). Every role WITHOUT the capability, which has the screen
+ * outside its menu (tests/lib/adminRoutes.spec.ts), must get the server's 403 and see it on
+ * the screen: the hidden menu link is not what protects them. How the screen refuses
+ * depends on how it is built (`render`, Admin v2 U2; U13's activity log reuses it):
+ *   island  the page renders for any member and its island's API answers 403 on mount;
+ *           the island shows that refusal (the default);
+ *   server  the page reads on the server, so it refuses itself: the response is a 403
+ *           and the layout shows the refusal (src/components/admin/ui/Refused.astro),
+ *           having read nothing. Its JSON twin, `api`, answers 403 as well.
  */
 export interface LockedScreen {
   href: string;
   api: string;
   cap: Capability;
+  render?: 'island' | 'server';
 }
 
 export const LOCKED_SCREENS: readonly LockedScreen[] = [
@@ -58,16 +65,30 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/applications', api: '/api/admin/applications', cap: 'applications.manage' },
   { href: '/admin/leads', api: '/api/admin/leads', cap: 'leads.manage' },
   { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view' },
-  { href: '/admin/logs', api: '/api/admin/logs', cap: 'logs.view' },
-  { href: '/admin/site-health', api: '/api/admin/site-health', cap: 'siteHealth.view' },
+  {
+    href: '/admin/site-health',
+    api: '/api/admin/site-health',
+    cap: 'siteHealth.view',
+    render: 'server',
+  },
   { href: '/admin/settings', api: '/api/admin/settings', cap: 'settings.general' },
   { href: '/admin/integrations', api: '/api/admin/integrations', cap: 'settings.integrations' },
   { href: '/admin/themes', api: '/api/admin/themes', cap: 'theme.edit' },
   { href: '/admin/redirects', api: '/api/admin/redirects', cap: 'redirects.manage' },
   { href: '/admin/service-cases', api: '/api/admin/service-cases', cap: 'services.write' },
-  { href: '/admin/analytics/search', api: '/api/admin/analytics/search', cap: 'analytics.search' },
+  {
+    href: '/admin/analytics/search',
+    api: '/api/admin/analytics/search',
+    cap: 'analytics.search',
+    render: 'server',
+  },
   { href: '/admin/ai-config', api: '/api/admin/ai-config', cap: 'ai.config' },
 ];
+
+/** How a locked screen refuses (see LockedScreen). */
+export function renderOf(screen: LockedScreen): 'island' | 'server' {
+  return screen.render ?? 'island';
+}
 
 /** The roles a locked screen must refuse: those with no access at all to its capability. */
 export function refusedRoles(screen: LockedScreen): Role[] {
@@ -94,6 +115,16 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   { href: '/admin/help?q=password', label: 'Help search', caps: [] },
   { href: '/admin/help?guide=finding-your-way', label: 'A help guide', caps: [] },
   { href: '/admin/help?guide=finding-your-way&lang=ar', label: 'A help guide in Arabic', caps: [] },
+  // Website stats and site health (Admin v2 U2): their in-page tabs and range links, each
+  // a URL of the same page, with the capability that page or tab asks for.
+  {
+    href: '/admin/analytics?tab=pages&range=7',
+    label: 'Website stats pages',
+    caps: ['analytics.read'],
+  },
+  { href: '/admin/site-health?tab=speed', label: 'Site health speed', caps: ['siteHealth.view'] },
+  { href: '/admin/site-health?tab=errors', label: 'Site health errors', caps: ['logs.view'] },
+  { href: '/admin/site-health?tab=seo', label: 'Site health SEO', caps: ['siteHealth.view'] },
 ];
 
 /** Every screen of the menu: sidebar links, then their tabs, each once. */

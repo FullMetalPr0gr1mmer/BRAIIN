@@ -406,14 +406,19 @@ begin
 end $$;
 
 -- The stats overview: page views in [p_from, p_to] (UTC days, both ends included), at most
--- 400 days. `first_day` is the tenant's earliest rollup day, so the screen shows a change
--- only when the rollups hold the previous period too.
-create or replace function public.pageview_summary(p_tenant uuid, p_from date, p_to date)
+-- 400 days, in one language when p_locale names it. `first_day` is the tenant's earliest
+-- rollup day (any language), so the screen shows a change only when the rollups hold the
+-- previous period too.
+create or replace function public.pageview_summary(p_tenant uuid, p_from date, p_to date,
+                                                   p_locale text default null)
   returns jsonb
   language plpgsql stable security invoker set search_path = '' as $$
 begin
   if p_from is null or p_to is null or p_to < p_from or p_to - p_from >= 400 then
     raise exception using errcode = '22023', message = 'pageview_summary: a range of 1 to 400 days';
+  end if;
+  if p_locale is not null and p_locale not in ('en', 'ar') then
+    raise exception using errcode = '22023', message = 'pageview_summary: p_locale is en or ar';
   end if;
   if p_tenant is distinct from app.effective_tenant_id() then
     return jsonb_build_object('total', 0, 'by_day', '[]'::jsonb, 'by_locale', '[]'::jsonb,
@@ -424,6 +429,7 @@ begin
       select v.day, v.path, v.locale, v.views
         from public.rollup_daily_pageviews v
        where v.tenant_id = p_tenant and v.day between p_from and p_to
+         and (p_locale is null or v.locale = p_locale)
     )
     select jsonb_build_object(
              'total', coalesce((select sum(r.views) from r), 0),
@@ -480,7 +486,8 @@ begin
 end $$;
 
 -- The search tab: the searches of the last p_days days (search_queries' RLS keeps Content
--- Creator out), the 50 most frequent and the 50 that found nothing most often.
+-- Creator out): how many, how many found nothing, the 50 most frequent and the 50 that found
+-- nothing most often.
 create or replace function public.search_summary(p_tenant uuid, p_days int, p_locale text default null)
   returns jsonb
   language plpgsql stable security invoker set search_path = '' as $$
@@ -492,7 +499,7 @@ begin
     raise exception using errcode = '22023', message = 'search_summary: p_locale is en or ar';
   end if;
   if p_tenant is distinct from app.effective_tenant_id() then
-    return jsonb_build_object('total', 0, 'top', '[]'::jsonb, 'zero', '[]'::jsonb);
+    return jsonb_build_object('total', 0, 'zero_total', 0, 'top', '[]'::jsonb, 'zero', '[]'::jsonb);
   end if;
   return (
     with q as (
@@ -506,6 +513,7 @@ begin
     )
     select jsonb_build_object(
              'total', coalesce((select sum(q.hits) from q), 0),
+             'zero_total', coalesce((select sum(q.zero) from q), 0),
              'top', coalesce((select jsonb_agg(jsonb_build_object('q', t.q, 'locale', t.locale,
                                                                   'hits', t.hits, 'zero', t.zero)
                                                order by t.hits desc, t.q, t.locale)
@@ -584,12 +592,12 @@ end $$;
 
 -- ---- 10. Grants on the readers (P-14) ------------------------------------------------------
 revoke all on function public.vitals_summary(uuid, int) from public, anon, authenticated, service_role;
-revoke all on function public.pageview_summary(uuid, date, date) from public, anon, authenticated, service_role;
+revoke all on function public.pageview_summary(uuid, date, date, text) from public, anon, authenticated, service_role;
 revoke all on function public.pageview_paths(uuid, date, date, int, int) from public, anon, authenticated, service_role;
 revoke all on function public.search_summary(uuid, int, text) from public, anon, authenticated, service_role;
 revoke all on function public.content_health(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.vitals_summary(uuid, int) to authenticated;
-grant execute on function public.pageview_summary(uuid, date, date) to authenticated;
+grant execute on function public.pageview_summary(uuid, date, date, text) to authenticated;
 grant execute on function public.pageview_paths(uuid, date, date, int, int) to authenticated;
 grant execute on function public.search_summary(uuid, int, text) to authenticated;
 grant execute on function public.content_health(uuid) to authenticated;
@@ -1594,7 +1602,7 @@ begin
     raise exception '0052: app.vitals_edges must be executable by authenticated alone';
   end if;
   foreach p in array array['public.vitals_summary(uuid, integer)',
-                           'public.pageview_summary(uuid, date, date)',
+                           'public.pageview_summary(uuid, date, date, text)',
                            'public.pageview_paths(uuid, date, date, integer, integer)',
                            'public.search_summary(uuid, integer, text)',
                            'public.content_health(uuid)'] loop

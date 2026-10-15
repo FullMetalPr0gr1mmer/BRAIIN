@@ -1,0 +1,42 @@
+---
+import Note from '@/components/admin/ui/Note.astro';
+import ServerTable from '@/components/admin/ui/ServerTable.astro';
+import type { PathPage } from '@/lib/admin/stats/pageviews';
+
+// Website stats, Pages (Admin v2 U2; the prototype's opsStatsPages): every page with its
+// views in the range, English and Arabic apart, the busiest first, 25 a page. The rows are
+// one page the server read (public.pageview_paths), so a long range is never cut; paging is
+// links that keep the range.
+
+interface Props {
+  pages: PathPage;
+  url: URL;
+  days: number;
+}
+
+const { pages, url, days } = Astro.props;
+---
+
+<Note class="stats__note">
+  <p>
+    The last {days} days. Days run midnight to midnight UTC (3 am in Riyadh), and counts are added up
+    every 15 minutes.
+  </p>
+</Note>
+<ServerTable
+  caption={`Page views per page, the last ${days} days`}
+  columns={[
+    { key: 'path', label: 'Page' },
+    { key: 'views', label: 'Views', kind: 'number' },
+    { key: 'views_en', label: 'English', kind: 'number' },
+    { key: 'views_ar', label: 'Arabic', kind: 'number' },
+  ]}
+  rows={pages.rows as unknown as Record<string, unknown>[]}
+  total={pages.total}
+  url={url}
+  empty={{
+    title: 'No visits counted in this period.',
+    text: 'Visits arrive from visitors who accept analytics cookies.',
+    icon: 'chart',
+  }}
+/>

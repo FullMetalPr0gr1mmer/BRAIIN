@@ -1,0 +1,136 @@
+---
+import BarList from '@/components/admin/ui/BarList.astro';
+import Card from '@/components/admin/ui/Card.astro';
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import Kpi from '@/components/admin/ui/Kpi.astro';
+import Donut from '@/components/admin/ui/charts/Donut.astro';
+import Line from '@/components/admin/ui/charts/Line.astro';
+import { formatNumber } from '@/lib/admin/charts';
+import { percentChange } from '@/lib/admin/kpi';
+import { perThousand, type LeadKpis } from '@/lib/admin/stats/leads';
+import { arabicShare, dailyArabicShare, type PageviewSummary } from '@/lib/admin/stats/pageviews';
+import { dayLabel, periodLabel } from '@/lib/admin/stats/range';
+
+// Website stats, Overview (Admin v2 U2; the prototype's opsStatsOverview, screens_ops.js):
+// the KPIs, English and Arabic views day by day, the language split and the top pages, all
+// from the page-view rollup. A KPI shows its change only when the rollups hold the previous
+// period too (`summary.previous`); the lead figures only for leads.manage holders
+// (`leads`, null otherwise). Zero JS: every chart is server-drawn SVG with its table.
+
+interface Props {
+  summary: PageviewSummary;
+  leads: LeadKpis | null;
+}
+
+const { summary, leads } = Astro.props;
+const { current, previous, range } = summary;
+const period = periodLabel(range);
+
+const views = current.total;
+const prevViews = previous ? previous.total : null;
+const share = arabicShare(current.byLocale);
+const prevShare = previous ? arabicShare(previous.byLocale) : null;
+const rate = leads ? perThousand(leads.current, views) : null;
+const prevRate =
+  leads && leads.previous !== null && prevViews !== null
+    ? perThousand(leads.previous, prevViews)
+    : null;
+
+const percent = (value: number) =>
+  `${new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 }).format(value)}%`;
+const dayViews = current.byDay.map((d) => d.en + d.ar);
+const labels = current.byDay.map((d) => dayLabel(d.day));
+const en = current.byLocale.find((l) => l.locale === 'en')?.views ?? 0;
+const ar = current.byLocale.find((l) => l.locale === 'ar')?.views ?? 0;
+const other = Math.max(0, views - en - ar);
+const languages = [
+  { label: 'English', value: en },
+  { label: 'Arabic', value: ar },
+  ...(other > 0 ? [{ label: 'Other', value: other }] : []),
+];
+const top = current.topPaths.slice(0, 10).map((p) => ({ label: p.path, value: p.views }));
+const delta = (now: number | null, before: number | null) =>
+  now === null ? null : percentChange(now, before);
+---
+
+<div class:list={['grid', leads ? 'grid--4' : 'grid--2']}>
+  <Kpi
+    label="Page views"
+    value={views}
+    delta={delta(views, prevViews)}
+    period={period}
+    spark={dayViews}
+  />
+  <Kpi
+    label="Arabic share"
+    value={share === null ? 'No views yet' : percent(share)}
+    delta={delta(share, prevShare)}
+    period={period}
+    spark={dailyArabicShare(current.byDay)}
+    series={1}
+  />
+  {
+    leads && (
+      <Kpi
+        label="New leads"
+        value={leads.current}
+        delta={delta(leads.current, leads.previous)}
+        period={period}
+      />
+    )
+  }
+  {
+    leads && (
+      <Kpi
+        label="Inquiries per 1,000 page views"
+        value={rate === null ? 'No views yet' : formatNumber(rate)}
+        delta={delta(rate, prevRate)}
+        period={period}
+      />
+    )
+  }
+</div>
+
+{
+  views === 0 ? (
+    <Card level={2} class="stats__row" flush>
+      <EmptyState
+        icon="chart"
+        title={summary.firstDay ? 'No visits counted in this period.' : 'No visits counted yet.'}
+        text="Visits arrive from visitors who accept analytics cookies."
+      />
+    </Card>
+  ) : (
+    <>
+      <div class="grid grid--2-1 stats__row">
+        <Card level={2} title="English and Arabic page views" sub={`The last ${range.days} days`}>
+          <Line
+            id="stats-line"
+            caption="Page views per day, English and Arabic"
+            captionVisible={false}
+            series={[
+              { name: 'English', data: current.byDay.map((d) => d.en) },
+              { name: 'Arabic', data: current.byDay.map((d) => d.ar) },
+            ]}
+            labels={labels}
+            labelHeading="Day"
+          />
+        </Card>
+        <Card level={2} title="Language">
+          <Donut
+            id="stats-donut"
+            caption="Page views by language"
+            captionVisible={false}
+            data={languages}
+            center={formatNumber(views)}
+            labelHeading="Language"
+            valueHeading="Page views"
+          />
+        </Card>
+      </div>
+      <Card level={2} title="Top pages" sub="By page views" class="stats__row">
+        <BarList label="Page views per page" items={top} />
+      </Card>
+    </>
+  )
+}

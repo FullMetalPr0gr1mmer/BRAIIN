@@ -1,76 +1,52 @@
 import { defineAdminRoute } from '@/lib/admin/route';
+import { loadHealthReport } from '@/lib/admin/health/summary';
+import {
+  BUDGETED,
+  BUDGETS,
+  HEALTH_WINDOW_DAYS,
+  judged,
+  siteVital,
+} from '@/lib/admin/health/vitals';
 
-// Site Health & Performance panel — `siteHealth.view` (Admin + Developer).
+// Site health as JSON: the /admin/site-health screen's twin (Admin v2 U2) — `siteHealth.view`
+// (Admin + Developer).
 //
-// Reads `web_vitals`, which is FIELD data. CLAUDE.md Pillar 2 names field RUM as the
-// source of truth for INP specifically because lab numbers (Lighthouse/TBT) are a proxy
-// that a fast CI machine flatters. The p75s below are what the budget is actually
-// measured against; the CI gate is the early warning, not the verdict.
+// FIELD data, the source of truth for INP (CLAUDE.md Pillar 2; the lab gate is the early
+// warning, not the verdict), read from the vitals rollup (public.vitals_summary, migration
+// 0052), never the raw beacons: the route used to scan up to 20,000 web_vitals rows in the
+// Worker (Pillar 4: dashboards read rollup_* only) and PostgREST returned 1,000 of them.
+// Over more than one day a p75 is the upper edge of its histogram bucket (`approx`); the
+// budgets are bucket edges, so `withinBudget` is exact either way. The score, the tiles and
+// the checklist are the screen's, gated as there by the caller's capabilities.
 
 export const prerender = false;
 
-/** CLAUDE.md §6. Kept here so the panel can colour a metric without a round-trip. */
-const BUDGETS: Record<string, number> = { LCP: 2500, INP: 200, CLS: 0.1, TTFB: 800, FCP: 1800 };
-
-interface VitalRow {
-  metric: string;
-  value: number;
-  path: string | null;
-}
-
 export const GET = defineAdminRoute({
   cap: 'siteHealth.view',
-  handler: async ({ auth, sb, url }) => {
-    const days = Math.min(Math.max(Number(url.searchParams.get('days') ?? '7'), 1), 90);
-    const since = new Date(Date.now() - days * 86_400_000).toISOString();
-
-    const { data, error } = await sb
-      .from('web_vitals')
-      .select('metric,value,path')
-      .eq('tenant_id', auth.tenantId)
-      .gte('occurred_at', since)
-      .limit(20_000);
-    if (error) throw new Error(`site health: ${error.message}`);
-    const rows = (data ?? []) as VitalRow[];
-
-    const grouped = new Map<string, number[]>();
-    for (const row of rows) {
-      const bucket = grouped.get(row.metric) ?? [];
-      bucket.push(row.value);
-      grouped.set(row.metric, bucket);
-    }
-
-    const metrics = [...grouped.entries()].map(([metric, values]) => {
-      const p75 = percentile(values, 75);
-      const budget = BUDGETS[metric];
+  handler: async ({ auth, sb }) => {
+    const report = await loadHealthReport(sb, auth);
+    const metrics = BUDGETED.map((metric) => {
+      const row = report.vitals ? siteVital(report.vitals, metric) : null;
       return {
         metric,
-        samples: values.length,
-        p75,
-        p95: percentile(values, 95),
-        budget: budget ?? null,
-        // `null` rather than `true` when there is no budget for this metric — an
-        // unbudgeted metric is not the same as a passing one.
-        withinBudget: budget === undefined ? null : p75 <= budget,
+        samples: row?.samples ?? 0,
+        p75: row?.p75 ?? null,
+        approx: row?.approx ?? false,
+        budget: BUDGETS[metric],
+        // `null` rather than false when there are too few visits to judge: unjudged is not
+        // the same as over budget.
+        withinBudget: judged(row) === null ? null : judged(row) === 'good',
       };
     });
-
-    const { count: errorCount } = await sb
-      .from('system_logs')
-      .select('id', { count: 'exact', head: true })
-      .eq('tenant_id', auth.tenantId)
-      .eq('level', 'error')
-      .gte('created_at', since);
-
-    return { days, metrics, samples: rows.length, errorCount: errorCount ?? 0 };
+    return {
+      days: HEALTH_WINDOW_DAYS,
+      rolledUpAt: report.vitals?.rolledUpAt ?? null,
+      metrics,
+      errorCount: report.errors7d ?? 0,
+      score: report.score,
+      scoreLabel: report.scoreLabel,
+      tiles: report.tiles,
+      checks: report.checks,
+    };
   },
 });
-
-/** Nearest-rank percentile. Exact for the sample sizes a RUM panel deals in. */
-function percentile(values: number[], p: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const rank = Math.ceil((p / 100) * sorted.length);
-  const index = Math.min(Math.max(rank - 1, 0), sorted.length - 1);
-  return Number((sorted[index] ?? 0).toFixed(3));
-}

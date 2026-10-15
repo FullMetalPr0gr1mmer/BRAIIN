@@ -1,0 +1,270 @@
+/* Screen stylesheet: site health, /admin/site-health (Admin v2 U2). Linked only through
+   AdminLayout's `styles` prop (styles={['health.css']}), after admin.css. Ported from the
+   prototype's screens_health.js: the summary band (.hs: the ring, its word and formula, the
+   tiles), the checklist rows (.hsrow with their state dot, .st), the Speed and Errors
+   tables' cells. The ring, badges, tables, tabs and chips are admin.css's kit. Not ported:
+   the uptime strip and the gauge (nothing measures uptime yet, and the Speed tab says a
+   rating in words), and the Lighthouse score chips (.sc: no lab numbers are shown here).
+   The prototype's inline styles are classes; its tints are the badge tokens. It uses
+   admin.css's tokens and declares none, and holds no colour literal
+   (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+/* ---- The summary band ---- */
+
+.hs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  margin-block-end: 18px;
+}
+
+.hs__score {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+}
+
+.hs__sum {
+  min-inline-size: 0;
+}
+
+.hs__t {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.hs__f {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ad-dim);
+}
+
+/* No score yet: the ring's place, said in words. */
+.hs__none {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 96px;
+  block-size: 96px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--ad-bg);
+  color: var(--ad-dim);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.hs__k {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: 10px;
+  flex: 3 1 24rem;
+  min-inline-size: 0;
+  margin: 0;
+}
+
+.hs__i {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-bg);
+}
+
+.hs__i dt {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ad-dim);
+}
+
+.hs__i dd {
+  margin: 0;
+}
+
+.hs__v {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.hs__n {
+  font-size: 11.5px;
+  color: var(--ad-dim);
+}
+
+/* The Errors tab's level chips and Clear logs; the Speed tab's note. */
+.hs__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-block-end: 14px;
+}
+
+.hs__note {
+  margin-block-end: 14px;
+}
+
+/* ---- The checklist ---- */
+
+.hc__group + .hc__group {
+  margin-block-start: 18px;
+}
+
+.hc__h {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 8px;
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hc__n {
+  font-weight: 600;
+  color: var(--ad-dim);
+}
+
+.hc__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hsrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-block-end: 1px solid var(--ad-line);
+  font-size: 13.5px;
+}
+
+.hsrow:last-child {
+  border-block-end: 0;
+}
+
+.hsrow__main {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.hsrow__t {
+  display: block;
+}
+
+/* A passing, informative or unjudged row reads quieter than one that needs fixing. */
+.hsrow:not([data-state='fail']) .hsrow__t {
+  color: var(--ad-dim);
+}
+
+.hsrow__s {
+  display: block;
+  margin-block-start: 2px;
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+/* The state dot: a tint and an icon, the word beside it for assistive technology. */
+.st {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: 50%;
+}
+
+.st[data-tone='ok'] {
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok-text);
+}
+
+.st[data-tone='warn'] {
+  background: var(--ad-warn-soft);
+  color: var(--ad-warn-text);
+}
+
+.st[data-tone='err'] {
+  background: var(--ad-err-soft);
+  color: var(--ad-err-text);
+}
+
+.st[data-tone='sky'] {
+  background: var(--ad-sky-soft);
+  color: var(--ad-sky-text);
+}
+
+.st[data-tone='gray'] {
+  background: var(--ad-gray-soft);
+  color: var(--ad-dim);
+}
+
+/* ---- The Speed and Errors tables ---- */
+
+.speed__path,
+.log__src {
+  font-family: var(--ad-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.speed__v {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.speed__few {
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+.log__when {
+  white-space: nowrap;
+}
+
+.log__msg {
+  min-inline-size: 14rem;
+  overflow-wrap: anywhere;
+}
+
+.log__d {
+  margin-block-start: 6px;
+}
+
+/* At least 24px tall (WCAG 2.5.8): the summary is the one control in a row. */
+.log__d > summary {
+  padding-block: 4px;
+  line-height: 16px;
+  color: var(--ad-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.log__d pre {
+  max-inline-size: 60ch;
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--ad-r-xs);
+  background: var(--ad-bg);
+  font-family: var(--ad-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

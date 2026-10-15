@@ -1,0 +1,52 @@
+---
+import Badge from '@/components/admin/ui/Badge.astro';
+import Ring from '@/components/admin/ui/charts/Ring.astro';
+import { RATING_LABEL, RATING_TONE } from '@/lib/admin/health/vitals';
+import type { HealthScore } from '@/lib/admin/health/score';
+import type { HealthTile } from '@/lib/admin/health/summary';
+
+// The site health summary (Admin v2 U2; the prototype's .hs band, screens_health.js): the
+// score ring, its word and the formula it is made of, then the tiles (LCP, INP and CLS over
+// 28 days, the errors of 7 days, the checklist). The ring is the kit's, named in words; each
+// tile is a label and a figure in a description list, a rating said as a word.
+
+interface Props {
+  score: HealthScore;
+  label: string;
+  tiles: readonly HealthTile[];
+}
+
+const { score, label, tiles } = Astro.props;
+---
+
+<section class="card hs" aria-labelledby="hs-title">
+  <div class="hs__score">
+    {
+      score.total === null ? (
+        <p class="hs__none">No score</p>
+      ) : (
+        <Ring value={score.total} label="Site health score" />
+      )
+    }
+    <div class="hs__sum">
+      <h2 class="hs__t" id="hs-title">{label}</h2>
+      <p class="hs__f">{score.formula}</p>
+    </div>
+  </div>
+  <dl class="hs__k">
+    {
+      tiles.map((tile) => (
+        <div class="hs__i">
+          <dt>{tile.label}</dt>
+          <dd class="hs__v">{tile.value}</dd>
+          {tile.rating && (
+            <dd>
+              <Badge tone={RATING_TONE[tile.rating]}>{RATING_LABEL[tile.rating]}</Badge>
+            </dd>
+          )}
+          {tile.note && <dd class="hs__n">{tile.note}</dd>}
+        </div>
+      ))
+    }
+  </dl>
+</section>

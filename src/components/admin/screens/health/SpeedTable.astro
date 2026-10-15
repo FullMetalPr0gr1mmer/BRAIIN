@@ -1,0 +1,101 @@
+---
+import Badge from '@/components/admin/ui/Badge.astro';
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import Pager from '@/components/admin/ui/Pager.astro';
+import { formatNumber } from '@/lib/admin/charts';
+import { PAGE_SIZE, offsetOf, pageInfo, pageParam, rangeText } from '@/lib/admin/pager';
+import {
+  BUDGETED,
+  RATING_LABEL,
+  RATING_TONE,
+  formatVital,
+  judged,
+  type SpeedRow,
+} from '@/lib/admin/health/vitals';
+
+// The Speed tab's table (Admin v2 U2; the prototype's "Core Web Vitals by page", with field
+// data instead of its Lighthouse numbers): each page's LCP, INP and CLS at the 75th
+// percentile of real visits, a rating in words where the page has enough visits to judge,
+// the busiest first, 25 a page. The scroll box is a named region in the tab order, so a
+// keyboard can reach what a phone has to scroll to.
+
+interface Props {
+  rows: readonly SpeedRow[];
+  url: URL;
+  days: number;
+}
+
+const { rows, url, days } = Astro.props;
+const info = pageInfo(rows.length, offsetOf(pageParam(url.searchParams.get('page'))));
+const page = rows.slice(info.offset, info.offset + PAGE_SIZE);
+const caption = `Speed by page, the last ${days} days`;
+---
+
+<div class="card card--flush dt">
+  <div class="table-wrap" tabindex="0" role="region" aria-label={caption}>
+    <table class="data">
+      <caption class="visually-hidden">{caption}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Page</th>
+          {BUDGETED.map((metric) => <th scope="col">{metric}</th>)}
+          <th scope="col" class="num">Visits</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          page.length === 0 ? (
+            <tr>
+              <td colspan={BUDGETED.length + 2}>
+                <EmptyState
+                  icon="zap"
+                  title="No speed measured yet."
+                  text="Figures arrive from visitors who accept analytics cookies, added up every hour."
+                />
+              </td>
+            </tr>
+          ) : (
+            page.map((row) => (
+              <tr>
+                <td>
+                  <span class="speed__path" dir="ltr">
+                    {row.path}
+                  </span>
+                </td>
+                {BUDGETED.map((metric) => {
+                  const vital = row.vitals[metric];
+                  const rating = judged(vital ?? null);
+                  return (
+                    <td>
+                      {vital ? (
+                        <span class="speed__v">
+                          {formatVital(metric, vital.p75, vital.open)}
+                          {rating ? (
+                            <Badge tone={RATING_TONE[rating]}>{RATING_LABEL[rating]}</Badge>
+                          ) : (
+                            <small class="speed__few">few visits</small>
+                          )}
+                        </span>
+                      ) : (
+                        <small class="speed__few">not measured</small>
+                      )}
+                    </td>
+                  );
+                })}
+                <td class="num">{formatNumber(row.samples)}</td>
+              </tr>
+            ))
+          )
+        }
+      </tbody>
+    </table>
+  </div>
+  {
+    rows.length > 0 && (
+      <div class="tbl__foot">
+        <p class="tbl__range">{rangeText(info)}</p>
+        <Pager total={info.total} url={url} />
+      </div>
+    )
+  }
+</div>
