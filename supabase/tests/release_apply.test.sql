@@ -122,9 +122,9 @@ insert into public.page_sections (id, tenant_id, page_id, type) values
    '51000000-0000-0000-0002-000000000001', 'cta');
 insert into public.navigation (id, tenant_id, location, label, href, is_key) values
   ('51000000-0000-0000-0004-000000000001', '51000000-0000-0000-0000-00000000000a', 'header',
-   '{"en":"X","ar":"س"}', '/r4-x', true),
+   '{"en":"X","ar":"س"}', '/r4-x', false),
   ('51000000-0000-0000-0004-000000000002', '51000000-0000-0000-0000-00000000000a', 'header',
-   '{"en":"Y","ar":"ص"}', '/r4-y', false);
+   '{"en":"Y","ar":"ص"}', '/r4-y', true);
 insert into public.custom_themes (id, tenant_id, name, is_active) values
   ('51000000-0000-0000-0005-000000000001', '51000000-0000-0000-0000-00000000000a', 'r4 live theme', true),
   ('51000000-0000-0000-0005-000000000002', '51000000-0000-0000-0000-00000000000a', 'r4 next theme', false);
@@ -589,9 +589,10 @@ delete from public.content_drafts
  where id in (select (item ->> 'draft_id')::uuid from _r4 where name in ('g-consent', 'g-sample', 'g-placeholder'));
 
 -- ── 9. The order ─────────────────────────────────────────────────────────────────────
--- The navigation key moves from X to Y: X's cleared flag lands before Y's.
-select _stage('o-key-y', 'nav_item', '51000000-0000-0000-0004-000000000002', 'update', '{"is_key":true}');
-select _stage('o-key-x', 'nav_item', '51000000-0000-0000-0004-000000000001', 'update', '{"is_key":false}');
+-- The navigation key moves from Y to X, the row whose id sorts first: by id alone X's flag
+-- would be set while Y still holds it, so this passes only because a cleared flag lands first.
+select _stage('o-key-y', 'nav_item', '51000000-0000-0000-0004-000000000002', 'update', '{"is_key":false}');
+select _stage('o-key-x', 'nav_item', '51000000-0000-0000-0004-000000000001', 'update', '{"is_key":true}');
 -- A project created with its "next" pointing at another project created in the same release.
 select _stage('o-proj-a', 'portfolio', '51000000-0000-0000-0006-0000000000a1', 'create',
               '{"slug":"r4-next-a","title":{"en":"A","ar":"أ"},"next_portfolio_id":"51000000-0000-0000-0006-0000000000a2"}');
@@ -616,7 +617,7 @@ select is(
        where tenant_id = '51000000-0000-0000-0000-00000000000a'),
      (select next_portfolio_id from public.portfolio where id = '51000000-0000-0000-0006-0000000000a1'),
      (select page_id from public.page_sections where id = '51000000-0000-0000-0003-0000000000a1'))),
-  '51000000-0000-0000-0004-000000000001=false,51000000-0000-0000-0004-000000000002=true '
+  '51000000-0000-0000-0004-000000000001=true,51000000-0000-0000-0004-000000000002=false '
   || '51000000-0000-0000-0006-0000000000a2 51000000-0000-0000-0002-0000000000a1',
   'the key moved, the self-reference was set in the second pass, the section sits on its page');
 select is(
