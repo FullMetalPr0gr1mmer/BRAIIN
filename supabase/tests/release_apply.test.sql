@@ -20,7 +20,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(98);
+select plan(100);
 
 -- ── 0. The catalog, before this file creates any function ─────────────────────────────
 -- (Its helpers below call set_config, and would show up here.)
@@ -654,6 +654,38 @@ select is(
 select is((select count(*)::int from public.custom_themes
             where tenant_id = '51000000-0000-0000-0000-00000000000a' and is_active),
   1, 'one active theme');
+
+-- Removing a menu link and its child together, whichever id sorts first: the parent's
+-- removal cascades to the child, whose own removal then finds it gone, and is done.
+insert into public.navigation (id, tenant_id, location, parent_id, label, href) values
+  ('51000000-0000-0000-0004-0000000000a1', '51000000-0000-0000-0000-00000000000a', 'footer', null,
+   '{"en":"P1","ar":"أ١"}', '/r4-p1'),
+  ('51000000-0000-0000-0004-0000000000a2', '51000000-0000-0000-0000-00000000000a', 'footer',
+   '51000000-0000-0000-0004-0000000000a1', '{"en":"C1","ar":"ب١"}', '/r4-c1'),
+  ('51000000-0000-0000-0004-0000000000b2', '51000000-0000-0000-0000-00000000000a', 'footer', null,
+   '{"en":"P2","ar":"أ٢"}', '/r4-p2'),
+  ('51000000-0000-0000-0004-0000000000b1', '51000000-0000-0000-0000-00000000000a', 'footer',
+   '51000000-0000-0000-0004-0000000000b2', '{"en":"C2","ar":"ب٢"}', '/r4-c2');
+select _stage('n-p1', 'nav_item', '51000000-0000-0000-0004-0000000000a1', 'delete', '{}');
+select _stage('n-c1', 'nav_item', '51000000-0000-0000-0004-0000000000a2', 'delete', '{}');
+select _stage('n-p2', 'nav_item', '51000000-0000-0000-0004-0000000000b2', 'delete', '{}');
+select _stage('n-c2', 'nav_item', '51000000-0000-0000-0004-0000000000b1', 'delete', '{}');
+set local role service_role;
+select is(
+  (select r ->> 'ok' from (select _pub('51000000-0000-0000-0000-0000000000a1', 'admin',
+     array['n-p1', 'n-c1', 'n-p2', 'n-c2'], 'dry_run') r) s),
+  'true', 'a dry run removing two links and their children, parent id first and child id first, is clean');
+insert into _out (name, result)
+select 'nav-tree', _pub('51000000-0000-0000-0000-0000000000a1', 'admin', array['n-p1', 'n-c1', 'n-p2', 'n-c2']);
+reset role;
+select is(
+  (select format('%s %s',
+     (select count(*) from public.navigation where location = 'footer'
+         and tenant_id = '51000000-0000-0000-0000-00000000000a'),
+     (select count(*) from public.content_release_items i, _out o
+       where o.name = 'nav-tree' and i.release_id = (o.result ->> 'release_id')::uuid
+         and i.entity_type = 'nav_item' and i.op = 'delete'))),
+  '0 4', 'and the publish removes all four, each captured once');
 
 -- ── 11. A case study's link sets ─────────────────────────────────────────────────────
 select _stage('l-sets', 'portfolio', '51000000-0000-0000-0006-000000000001', 'update', '{"year":2026}',

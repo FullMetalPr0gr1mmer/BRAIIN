@@ -861,8 +861,17 @@ begin
           if v_it ->> 'sql' is not null then
             execute v_it ->> 'sql' using v_it -> 'row', v_tenant, (v_it ->> 'entity_id')::uuid;
             get diagnostics v_n = row_count;
-            if v_n = 0 then
-              -- RLS filtered the statement: the publisher may not make this change.
+            -- No row: RLS filtered the statement (the publisher may not make this change),
+            -- unless a removal found its row already removed by this release, a cascade from
+            -- a parent removed before it (navigation children go with their parent, and
+            -- removals of one type run by id, not by depth): done, then, and captured.
+            if v_n = 0 and not (
+                 v_it ->> 'op' = 'delete'
+                 and exists (select 1 from public.content_release_items as i
+                              where i.tenant_id = v_tenant and i.release_id = v_release
+                                and i.entity_type = v_it ->> 'entity_type'
+                                and i.entity_id = (v_it ->> 'entity_id')::uuid
+                                and i.op = 'delete')) then
               raise exception 'the database refused this change for the person publishing it'
                 using errcode = '42501';
             end if;
