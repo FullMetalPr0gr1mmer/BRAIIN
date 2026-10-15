@@ -73,7 +73,7 @@ export const RELEASE_ENTITY_META: Readonly<Record<ReleaseEntityType, ReleaseEnti
   custom_theme: {
     area: 'appearance',
     authorCaps: ['theme.edit'],
-    // custom_themes_delete_admin (0038): only an Admin removes a theme.
+    // The admin-only theme delete gate (0038): only an Admin removes a theme.
     removeCap: 'content.archiveDelete',
     key: 'id',
     applyOrder: 110,
