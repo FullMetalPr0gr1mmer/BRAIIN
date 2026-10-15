@@ -209,3 +209,188 @@ export const ReleaseItemRowSchema = z.object({
   created_at: Timestamp,
 });
 export type ReleaseItemRow = z.infer<typeof ReleaseItemRowSchema>;
+
+// ---- Applying a release (public.apply_release, migration 0051, R4) --------------------------
+// R6 builds the RPC's arguments with ApplyRequestSchema and parses what comes back with
+// ApplyResultSchema (publish) or DryRunReportSchema (dry run); the error details of BR403,
+// BR409 and BR422 arrive as JSON text in the error's detail. The database re-checks every
+// rule here (tests/schemas/release.spec.ts holds the two sides equal where they overlap).
+
+/** The roles that may publish at all; each change is then the database's to allow. */
+export const PUBLISHER_ROLES = ['admin', 'content_creator', 'seo', 'developer'] as const;
+/** Media items in a case study's link set (save_portfolio and the apply refuse more). */
+export const RELEASE_CHILD_MEDIA_MAX = 40;
+/** The largest draft version the apply reads (an int, nine digits). */
+const DRAFT_VERSION_MAX = 999_999_999;
+
+/** Column values keyed by column name: a change as the Worker's toRow writes it. */
+export const ColumnValuesSchema = z.record(z.string().regex(DRAFT_FIELD_NAME), z.unknown());
+
+/** A case study's link sets, each replaced as a whole; absent or null leaves a set as it is. */
+export const ApplyChildrenSchema = z
+  .object({
+    service_ids: z.array(Uuid).nullable().optional(),
+    media: z
+      .array(z.record(z.string(), z.unknown()))
+      .max(RELEASE_CHILD_MEDIA_MAX)
+      .nullable()
+      .optional(),
+  })
+  .strict();
+
+/**
+ * One change as `public.apply_release` takes it (snake_case, as the RPC reads it): the
+ * draft and the version the publisher saw, the entity, the operation, the change as column
+ * values, the live values of those columns when the draft began, and a case study's link
+ * sets.
+ */
+export const ApplyItemSchema = z
+  .object({
+    draft_id: Uuid,
+    draft_version: z.number().int().min(1).max(DRAFT_VERSION_MAX),
+    entity_type: ReleaseEntityTypeSchema,
+    entity_id: Uuid,
+    op: DraftOpSchema,
+    patch: ColumnValuesSchema,
+    base: ColumnValuesSchema,
+    children: ApplyChildrenSchema.optional(),
+  })
+  .strict()
+  .superRefine((item, ctx) => {
+    const patched = Object.keys(item.patch);
+    if (item.op === 'delete' && patched.length > 0) {
+      ctx.addIssue({ code: 'custom', path: ['patch'], message: 'a removal carries no patch' });
+    }
+    if (item.children && (item.entity_type !== 'portfolio' || item.op === 'delete')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['children'],
+        message: 'only a case study that stays carries link sets',
+      });
+    }
+    if (item.op === 'update' && patched.length === 0 && !item.children) {
+      ctx.addIssue({ code: 'custom', path: ['patch'], message: 'the change changes nothing' });
+    }
+    if (item.op === 'update') {
+      for (const column of patched) {
+        if (!Object.hasOwn(item.base, column)) {
+          ctx.addIssue({ code: 'custom', path: ['base', column], message: 'base-missing' });
+        }
+      }
+    }
+    if (item.patch.status === 'scheduled') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['patch', 'status'],
+        message: 'schedule the release, not the change',
+      });
+    }
+  });
+export type ApplyItem = z.infer<typeof ApplyItemSchema>;
+
+/** The changes of one release: 1 to RELEASE_MAX_ITEMS, each draft once. */
+export const ApplyItemsSchema = z
+  .array(ApplyItemSchema)
+  .min(1)
+  .max(RELEASE_MAX_ITEMS)
+  .refine((items) => new Set(items.map((i) => i.draft_id)).size === items.length, {
+    message: 'a change is listed twice',
+  });
+
+/** `public.apply_release`'s arguments as R6 sends them (schedule and fire arrive with R11). */
+export const ApplyRequestSchema = z
+  .object({
+    p_actor: Uuid,
+    p_role: z.enum(PUBLISHER_ROLES),
+    p_mode: z.enum(['publish', 'dry_run']),
+    p_items: ApplyItemsSchema,
+    p_note: ReleaseNoteSchema.nullable().optional(),
+    p_kind: z.enum(['publish', 'rollback']).default('publish'),
+    p_restores_release_id: Uuid.nullable().optional(),
+  })
+  .strict()
+  .refine((r) => (r.p_kind === 'rollback') === (r.p_restores_release_id != null), {
+    message: 'a rollback names the version it restores, and a publish none',
+    path: ['p_restores_release_id'],
+  });
+export type ApplyRequest = z.infer<typeof ApplyRequestSchema>;
+
+/** A team-member change in a publish's answer: applied, but no images kept (owner item O-12). */
+export const TeamMemberApplyItemSchema = z
+  .object({
+    entity_type: z.literal('team_member'),
+    entity_id: Uuid,
+    op: DraftOpSchema,
+    draft_id: Uuid,
+  })
+  .strict();
+
+/** What a publish answers: the release, its number, and every item it recorded. */
+export const ApplyResultSchema = z
+  .object({
+    release_id: Uuid,
+    number: z.number().int().min(1),
+    items: z.array(z.union([ReleaseItemRowSchema, TeamMemberApplyItemSchema])),
+  })
+  .strict();
+export type ApplyResult = z.infer<typeof ApplyResultSchema>;
+
+/** One change the database refused: the draft (null when no single change was at fault),
+ *  the SQLSTATE, and the constraint and column it named, for the field-level message. */
+export const ApplyItemErrorSchema = z
+  .object({
+    draftId: Uuid.nullable(),
+    sqlstate: z.string().regex(/^[0-9A-Z]{5}$/),
+    constraint: z.string().nullable(),
+    column: z.string().nullable(),
+    message: z.string(),
+  })
+  .strict();
+
+/** The live site moved under a pending change: the columns that moved (a dry run adds the
+ *  live and base values, for "Compare"), or the row is gone. */
+export const ApplyConflictSchema = z.union([
+  z.object({ draftId: Uuid, removed: z.literal(true) }).strict(),
+  z
+    .object({
+      draftId: Uuid,
+      columns: z.array(z.string()).min(1),
+      live: z.record(z.string(), z.unknown()).optional(),
+      base: z.record(z.string(), z.unknown()).optional(),
+    })
+    .strict(),
+]);
+
+/** BR403: this person cannot publish now (inactive, locked, another role, no CMS role). */
+export const ApplyForbiddenDetailSchema = z.object({ code: z.literal('actor') }).strict();
+
+/** BR409: a draft moved since it was read, or the live site moved under one. */
+export const ApplyConflictDetailSchema = z.discriminatedUnion('code', [
+  z.object({ code: z.literal('pending-changed'), draftIds: z.array(Uuid).min(1) }).strict(),
+  z.object({ code: z.literal('conflict'), items: z.array(ApplyConflictSchema).min(1) }).strict(),
+]);
+
+/** BR422: the database refused a change (a publish stops at the first), or a draft carries
+ *  no base for a column it changes. */
+export const ApplyRefusedDetailSchema = z.discriminatedUnion('code', [
+  z.object({ code: z.literal('refused'), items: z.array(ApplyItemErrorSchema).min(1) }).strict(),
+  z
+    .object({
+      code: z.literal('base-missing'),
+      draftId: Uuid,
+      columns: z.array(z.string()).min(1),
+    })
+    .strict(),
+]);
+
+/** What a dry run answers: every change's outcome, and nothing kept. */
+export const DryRunReportSchema = z
+  .object({
+    mode: z.literal('dry_run'),
+    ok: z.boolean(),
+    item_count: z.number().int().min(1).max(RELEASE_MAX_ITEMS),
+    conflicts: z.array(ApplyConflictSchema),
+    errors: z.array(ApplyItemErrorSchema),
+  })
+  .strict();
+export type DryRunReport = z.infer<typeof DryRunReportSchema>;

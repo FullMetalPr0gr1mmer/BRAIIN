@@ -1,6 +1,17 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
+  ApplyConflictDetailSchema,
+  ApplyForbiddenDetailSchema,
+  ApplyItemSchema,
+  ApplyRefusedDetailSchema,
+  ApplyRequestSchema,
+  ApplyResultSchema,
   ContentDraftRowSchema,
+  DryRunReportSchema,
+  PUBLISHER_ROLES,
+  RELEASE_CHILD_MEDIA_MAX,
   ContentReleaseRowSchema,
   DRAFT_FIELD_NAME,
   DRAFT_FIELDS_MAX,
@@ -266,5 +277,231 @@ describe('the vocabularies equal migration 0038', () => {
     const name = DRAFT_FIELD_NAME.source.slice(1, -1); // without ^ and $
     expect(RELEASE_LEDGER_SQL).toContain(String.raw`fields::text ~ '^\{(${name}(,${name})*)?\}$'`);
     expect(RELEASE_LEDGER_SQL).toContain('array_position(fields, null::text) is null');
+  });
+});
+
+// ---- Applying a release (migration 0051, R4) ------------------------------------------------
+
+const APPLY_SQL = readFileSync(
+  join(process.cwd(), 'supabase', 'migrations', '0051_release_apply.sql'),
+  'utf8',
+).replace(/--[^\n]*/g, '');
+
+const item = (over: Record<string, unknown> = {}) => ({
+  draft_id: uuid(1),
+  draft_version: 1,
+  entity_type: 'service',
+  entity_id: uuid(2),
+  op: 'update',
+  patch: { title: { en: 'Logo', ar: 'شعار' } },
+  base: { title: { en: 'Old', ar: 'قديم' } },
+  ...over,
+});
+const items = (n: number) =>
+  Array.from({ length: n }, (_, i) => item({ draft_id: uuid(100 + i), entity_id: uuid(200 + i) }));
+const request = (over: Record<string, unknown> = {}) => ({
+  p_actor: uuid(9),
+  p_role: 'content_creator',
+  p_mode: 'publish',
+  p_items: items(1),
+  ...over,
+});
+
+describe('ApplyItemSchema', () => {
+  it('reads one change as the RPC takes it', () => {
+    expect(ApplyItemSchema.parse(item()).op).toBe('update');
+    expect(
+      ApplyItemSchema.safeParse(item({ op: 'create', base: {}, patch: { slug: 'logo' } })).success,
+    ).toBe(true);
+    expect(ApplyItemSchema.safeParse(item({ op: 'delete', patch: {}, base: {} })).success).toBe(
+      true,
+    );
+  });
+
+  it('is strict, and every id a uuid and the version a positive integer', () => {
+    expect(ApplyItemSchema.safeParse({ ...item(), payload: {} }).success).toBe(false);
+    expect(ApplyItemSchema.safeParse(item({ draft_id: 'abc' })).success).toBe(false);
+    for (const draft_version of [0, 1.5, '1', 1_000_000_000]) {
+      expect(ApplyItemSchema.safeParse(item({ draft_version })).success).toBe(false);
+    }
+    expect(ApplyItemSchema.safeParse(item({ entity_type: 'lead' })).success).toBe(false);
+  });
+
+  it('a removal carries no patch; an update changes something and has a base for it', () => {
+    expect(ApplyItemSchema.safeParse(item({ op: 'delete' })).success).toBe(false);
+    expect(ApplyItemSchema.safeParse(item({ patch: {}, base: {} })).success).toBe(false);
+    expect(ApplyItemSchema.safeParse(item({ base: {} })).success).toBe(false);
+  });
+
+  it('never schedules a change on its own, and patch keys are column names', () => {
+    expect(
+      ApplyItemSchema.safeParse(item({ patch: { status: 'scheduled' }, base: { status: 'draft' } }))
+        .success,
+    ).toBe(false);
+    expect(
+      ApplyItemSchema.safeParse(item({ patch: { 'title" = 1, "slug': 'x' }, base: {} })).success,
+    ).toBe(false);
+  });
+
+  it('link sets: a case study that stays, at most 40 media', () => {
+    const children = { service_ids: [uuid(3)], media: [{ role: 'gallery', kind: 'image' }] };
+    const project = (over: Record<string, unknown>) =>
+      item({ entity_type: 'portfolio', patch: {}, base: {}, children, ...over });
+    expect(ApplyItemSchema.safeParse(project({})).success).toBe(true);
+    expect(ApplyItemSchema.safeParse(item({ children })).success).toBe(false);
+    expect(ApplyItemSchema.safeParse(project({ op: 'delete' })).success).toBe(false);
+    const media = Array.from({ length: RELEASE_CHILD_MEDIA_MAX + 1 }, () => ({ role: 'gallery' }));
+    expect(ApplyItemSchema.safeParse(project({ children: { media } })).success).toBe(false);
+    expect(ApplyItemSchema.safeParse(project({ children: { other: [] } })).success).toBe(false);
+  });
+});
+
+describe('ApplyRequestSchema', () => {
+  it('takes one to sixty changes, each draft once, as a CMS role', () => {
+    expect(ApplyRequestSchema.parse(request()).p_kind).toBe('publish');
+    expect(
+      ApplyRequestSchema.safeParse(request({ p_items: items(RELEASE_MAX_ITEMS) })).success,
+    ).toBe(true);
+    expect(
+      ApplyRequestSchema.safeParse(request({ p_items: items(RELEASE_MAX_ITEMS + 1) })).success,
+    ).toBe(false);
+    expect(ApplyRequestSchema.safeParse(request({ p_items: [] })).success).toBe(false);
+    expect(ApplyRequestSchema.safeParse(request({ p_items: [item(), item()] })).success).toBe(
+      false,
+    );
+    expect(ApplyRequestSchema.safeParse(request({ p_role: 'sales' })).success).toBe(false);
+    expect([...PUBLISHER_ROLES].sort()).toEqual(['admin', 'content_creator', 'developer', 'seo']);
+  });
+
+  it('publish and dry run only (schedule and fire arrive with R11)', () => {
+    expect(ApplyRequestSchema.safeParse(request({ p_mode: 'dry_run' })).success).toBe(true);
+    for (const p_mode of ['schedule', 'fire']) {
+      expect(ApplyRequestSchema.safeParse(request({ p_mode })).success).toBe(false);
+    }
+    expect(
+      ApplyRequestSchema.safeParse(request({ p_scheduled_for: '2026-11-01T00:00:00Z' })).success,
+    ).toBe(false);
+  });
+
+  it('a rollback names the version it restores, a publish none', () => {
+    expect(ApplyRequestSchema.safeParse(request({ p_kind: 'rollback' })).success).toBe(false);
+    expect(
+      ApplyRequestSchema.safeParse(request({ p_kind: 'rollback', p_restores_release_id: uuid(5) }))
+        .success,
+    ).toBe(true);
+    expect(ApplyRequestSchema.safeParse(request({ p_restores_release_id: uuid(5) })).success).toBe(
+      false,
+    );
+  });
+});
+
+describe('what apply_release answers', () => {
+  const at = '2026-10-15T08:00:00+00:00';
+
+  it('a publish: the release, its number, its items and the team-member changes', () => {
+    const result = {
+      release_id: uuid(1),
+      number: 2,
+      items: [
+        {
+          id: 1,
+          tenant_id: uuid(2),
+          release_id: uuid(1),
+          entity_type: 'service',
+          entity_id: uuid(3),
+          op: 'update',
+          before: { slug: 'logo' },
+          after: { slug: 'logo-design' },
+          draft_id: uuid(4),
+          actor_id: uuid(5),
+          created_at: at,
+        },
+        { entity_type: 'team_member', entity_id: uuid(6), op: 'update', draft_id: uuid(7) },
+      ],
+    };
+    expect(ApplyResultSchema.parse(result).items).toHaveLength(2);
+    expect(ApplyResultSchema.safeParse({ ...result, number: 0 }).success).toBe(false);
+  });
+
+  it('a dry run: every outcome, conflicts with the live and base values', () => {
+    const report = {
+      mode: 'dry_run',
+      ok: false,
+      item_count: 3,
+      conflicts: [
+        {
+          draftId: uuid(1),
+          columns: ['sort_order'],
+          live: { sort_order: 42 },
+          base: { sort_order: 41 },
+        },
+        { draftId: uuid(2), removed: true },
+      ],
+      errors: [
+        {
+          draftId: uuid(3),
+          sqlstate: '23505',
+          constraint: 'services_tenant_id_slug_key',
+          column: null,
+          message: 'duplicate key value violates unique constraint "services_tenant_id_slug_key"',
+        },
+      ],
+    };
+    expect(DryRunReportSchema.parse(report).ok).toBe(false);
+    expect(DryRunReportSchema.safeParse({ ...report, mode: 'publish' }).success).toBe(false);
+  });
+
+  it('the error details of BR403, BR409 and BR422', () => {
+    expect(ApplyForbiddenDetailSchema.safeParse({ code: 'actor' }).success).toBe(true);
+    expect(
+      ApplyConflictDetailSchema.safeParse({ code: 'pending-changed', draftIds: [uuid(1)] }).success,
+    ).toBe(true);
+    expect(
+      ApplyConflictDetailSchema.safeParse({
+        code: 'conflict',
+        items: [{ draftId: uuid(1), columns: ['title'] }],
+      }).success,
+    ).toBe(true);
+    expect(
+      ApplyRefusedDetailSchema.safeParse({
+        code: 'refused',
+        items: [{ draftId: null, sqlstate: '42501', constraint: null, column: null, message: 'x' }],
+      }).success,
+    ).toBe(true);
+    expect(
+      ApplyRefusedDetailSchema.safeParse({
+        code: 'base-missing',
+        draftId: uuid(1),
+        columns: ['title'],
+      }).success,
+    ).toBe(true);
+    expect(ApplyRefusedDetailSchema.safeParse({ code: 'conflict', items: [] }).success).toBe(false);
+  });
+});
+
+describe('the apply shapes equal migration 0051', () => {
+  const quoted = (literal: string) =>
+    [...literal.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!).sort();
+
+  it('the item cap is RELEASE_MAX_ITEMS', () => {
+    const cap = /c_max_items constant int := (\d+);/.exec(APPLY_SQL)?.[1];
+    expect(Number(cap)).toBe(RELEASE_MAX_ITEMS);
+    expect(APPLY_SQL).toContain(`a release holds 1 to ${RELEASE_MAX_ITEMS} changes`);
+  });
+
+  it('an item has exactly the keys ApplyItemSchema reads', () => {
+    const required = /v_item \?& array\[([^\]]*)\]/.exec(APPLY_SQL)?.[1] ?? '';
+    const allowed = /k\.key <> all \(array\[([^\]]*)\]\)/.exec(APPLY_SQL)?.[1] ?? '';
+    const shape = Object.keys(ApplyItemSchema.innerType().shape).sort();
+    expect(quoted(allowed)).toEqual(shape);
+    expect(quoted(required)).toEqual(shape.filter((k) => k !== 'children'));
+  });
+
+  it('the publisher roles, the link-set media cap and the purge statuses', () => {
+    const roles = /p\.role::text in \(([^)]*)\)/.exec(APPLY_SQL)?.[1] ?? '';
+    expect(quoted(roles)).toEqual([...PUBLISHER_ROLES].sort());
+    expect(APPLY_SQL).toContain(`jsonb_array_length(p_media) > ${RELEASE_CHILD_MEDIA_MAX}`);
+    const purge = /p_status not in \(([^)]*)\)/.exec(APPLY_SQL)?.[1] ?? '';
+    expect(quoted(purge)).toEqual([...PURGE_STATUSES].sort());
   });
 });
