@@ -162,13 +162,23 @@ function refuseSchedule(entry: RegistryEntry, parsed: Payload): void {
 }
 
 /**
- * The patch without the columns that already hold the live value; `null` when nothing is
- * left (the pending change is then discarded: saving the live value back is not a change).
+ * The patch without the columns that already hold the live value, so saving the live value
+ * back is not a change; `null` when nothing is left (the pending change is then
+ * discarded). With the change's `base` (releases.md §3: "equal to both live and base"), a
+ * column the base recorded is dropped only when it also equals that base: if live moved
+ * since, the column stays and shows as a conflict to resolve rather than vanishing. A
+ * column `live` does not carry is kept: an absent value is unknown, not null.
  */
-export function dropNoOps(patch: Readonly<Row>, live: Readonly<Row>): Row | null {
+export function dropNoOps(
+  patch: Readonly<Row>,
+  live: Readonly<Row>,
+  base?: Readonly<Row> | null,
+): Row | null {
   const out: Row = {};
   for (const [column, value] of Object.entries(patch)) {
-    if (!jsonEqual(value, live[column])) out[column] = value;
+    const sameAsLive = column in live && jsonEqual(value, live[column]);
+    const sameAsBase = !base || !(column in base) || jsonEqual(value, base[column]);
+    if (!(sameAsLive && sameAsBase)) out[column] = value;
   }
   return Object.keys(out).length > 0 ? out : null;
 }

@@ -490,4 +490,14 @@ describe('review fixes (R2 review M2, L3, L4)', () => {
     const moved = { ...fullLive, body: { en: DOC('Someone else'), ar: DOC('آخر') } };
     expect(overlayRow(moved, d, service).draft.conflict).toEqual(['body']);
   });
+
+  it('dropNoOps keeps a column live does not carry, and honours the base', () => {
+    expect(dropNoOps({ og_image: null }, {})).toEqual({ og_image: null });
+    // Equal to live and to its base: nothing to publish.
+    expect(dropNoOps({ slug: 'a' }, { slug: 'a' }, { slug: 'a' })).toBeNull();
+    // Equal to live, but live moved off the base: kept, so the conflict is resolved, not lost.
+    expect(dropNoOps({ slug: 'a' }, { slug: 'a' }, { slug: 'b' })).toEqual({ slug: 'a' });
+    // A column the base never recorded: live alone decides.
+    expect(dropNoOps({ slug: 'a' }, { slug: 'a' }, { title: 'x' })).toBeNull();
+  });
 });
