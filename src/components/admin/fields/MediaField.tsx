@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import Icon from '@/components/admin/kit/Icon';
 import { adminFetch, describeError } from '@/lib/admin/client';
-import type { FieldDef } from '@/lib/admin/uiSchema';
+import FieldShell from './FieldShell';
+import type { FieldComponentProps } from './types';
 import { labelOf } from './useOptions';
 
 // One media asset, chosen in a native <dialog> (showModal gives the focus trap, Escape
@@ -9,13 +11,24 @@ import { labelOf } from './useOptions';
 //
 // Thumbnails show when the media API returns a `thumb_url` (resolved per provider in
 // UI v2 PR4a); until then an asset is identified by its alt text and path.
+//
+// v2 (Admin v2 F5a, ui.md §2.6, the prototype's .imgf): the choice is a tile, its thumbnail
+// beside its name, Choose (or Change) and Remove, and a badge when its alt text is missing
+// ("No alt text", "No Arabic alt"): the picture is chosen here, its words are written in
+// the media library. The picker keeps its grid; uploading from it is U4's.
 
 type MediaRow = Record<string, unknown>;
 
-interface Props {
-  field: FieldDef;
-  value: unknown;
-  onChange: (name: string, value: unknown) => void;
+/** What the chosen asset's alt text lacks, in words, or null when both languages have it. */
+export function altGap(row: MediaRow | null): string | null {
+  if (!row || !('alt' in row)) return null;
+  const alt = (row['alt'] && typeof row['alt'] === 'object' ? row['alt'] : {}) as MediaRow;
+  const has = (lang: string) =>
+    typeof alt[lang] === 'string' && (alt[lang] as string).trim() !== '';
+  if (!has('en') && !has('ar')) return 'No alt text';
+  if (!has('ar')) return 'No Arabic alt';
+  if (!has('en')) return 'No English alt';
+  return null;
 }
 
 const LIMIT = 100;
@@ -26,7 +39,14 @@ function caption(row: MediaRow): string {
   return alt && alt !== row['id'] ? alt : path || String(row['id'] ?? '');
 }
 
-export default function MediaField({ field, value, onChange }: Props) {
+export default function MediaField({
+  field,
+  value,
+  onChange,
+  idPrefix,
+  errors,
+}: FieldComponentProps) {
+  const id = `${idPrefix}-${field.name}`;
   const dialog = useRef<HTMLDialogElement>(null);
   const [rows, setRows] = useState<MediaRow[] | null>(null);
   const [current, setCurrent] = useState<MediaRow | null>(null);
@@ -68,29 +88,51 @@ export default function MediaField({ field, value, onChange }: Props) {
   const needle = query.trim().toLowerCase();
   const visible = (rows ?? []).filter((r) => !needle || caption(r).toLowerCase().includes(needle));
 
+  const gap = altGap(current);
   return (
     // A fieldset, so the Choose/Change/Remove buttons are announced with the field's name
     // ("Poster, group") — several media fields on one form would otherwise read alike.
-    <fieldset className="field-group">
-      <legend className="field-legend">
-        {field.label}
-        {field.required ? ' *' : ''}
-      </legend>
-      <div className="media-current">
-        {current && typeof current['thumb_url'] === 'string' ? (
-          <img className="media-thumb" src={current['thumb_url']} alt="" width="96" height="64" />
-        ) : null}
-        <span className="item-label">{current ? caption(current) : 'No image chosen'}</span>
-        <button type="button" className="btn" onClick={() => void open()}>
-          {selectedId ? 'Change…' : 'Choose…'}
-        </button>
-        {selectedId && (
-          <button type="button" className="btn" onClick={() => onChange(field.name, '')}>
-            Remove
-          </button>
-        )}
+    <FieldShell
+      as="fieldset"
+      id={id}
+      label={field.label}
+      required={field.required}
+      hint={field.help}
+      error={errors?.[id]}
+    >
+      <div className="imgf">
+        <div className="imgf__pv">
+          {current && typeof current['thumb_url'] === 'string' ? (
+            <img src={current['thumb_url']} alt="" width="96" height="64" />
+          ) : (
+            <Icon name="image" size={20} />
+          )}
+        </div>
+        <div className="imgf__body">
+          <span className="item-label">{current ? caption(current) : 'No image chosen'}</span>
+          {gap && (
+            <span className="badge" data-tone="warn">
+              {gap}
+            </span>
+          )}
+          <span className="imgf__acts">
+            <button type="button" className="btn" onClick={() => void open()}>
+              <Icon name="image" size={14} />
+              {selectedId ? 'Change…' : 'Choose…'}
+            </button>
+            {selectedId && (
+              <button
+                type="button"
+                className="btn"
+                data-variant="ghost"
+                onClick={() => onChange(field.name, '')}
+              >
+                Remove
+              </button>
+            )}
+          </span>
+        </div>
       </div>
-      {field.help && <p className="admin-sub">{field.help}</p>}
 
       <dialog
         ref={dialog}
@@ -150,6 +192,6 @@ export default function MediaField({ field, value, onChange }: Props) {
           })}
         </ul>
       </dialog>
-    </fieldset>
+    </FieldShell>
   );
 }

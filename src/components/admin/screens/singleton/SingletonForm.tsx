@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { adminFetch, describeError } from '@/lib/admin/client';
+import EditorForm from '@/components/admin/fields/EditorForm';
+import { saveModeFor } from '@/lib/admin/saveMode';
 import { singletonFor } from '@/lib/admin/uiSchema';
-import { Field, formToPayload, rowToForm, type Row } from '@/components/admin/FormField';
+import { useEntitySave } from '@/lib/admin/useEntitySave';
 
 // Editor for the per-tenant config singletons: SEO defaults, general settings,
 // integrations, Style-Finder logic.
@@ -12,6 +12,10 @@ import { Field, formToPayload, rowToForm, type Row } from '@/components/admin/Fo
 // optimistic-lock story hold across the create boundary: two admins who both open a
 // fresh settings page and both save produce one insert and one 409, not two inserts or
 // a silent overwrite.
+//
+// Since Admin v2 F5a the save is useEntitySave's (the version-0 rule is in the pure
+// entitySave.ts, tested there and by tests/lib/singletonFirstSave.spec.ts on the routes)
+// and the form is EditorForm's, which says "Not saved yet" until the first save.
 
 export interface SingletonFormProps {
   /** Key into SINGLETON_UI. */
@@ -20,85 +24,10 @@ export interface SingletonFormProps {
 
 export default function SingletonForm({ config }: SingletonFormProps) {
   const ui = singletonFor(config);
-  const [values, setValues] = useState<Row>({});
-  const [version, setVersion] = useState(0);
-  const [error, setError] = useState('');
-  const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState(true);
-
-  const load = useCallback(async () => {
-    setBusy(true);
-    try {
-      const row = await adminFetch<Row>(ui.endpoint);
-      setValues(rowToForm(row, ui.fields));
-      setVersion(Number(row['version'] ?? 0));
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setBusy(false);
-    }
-  }, [ui.endpoint, ui.fields]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  function set(name: string, value: unknown) {
-    setSaved(false);
-    setValues((previous) => ({ ...previous, [name]: value }));
-  }
-
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    setError('');
-    setSaved(false);
-    try {
-      const body = formToPayload(values, ui.fields);
-      const updated = await adminFetch<Row>(ui.endpoint, {
-        method: 'PATCH',
-        body: { ...body, version },
-      });
-      setValues(rowToForm(updated, ui.fields));
-      setVersion(Number(updated['version'] ?? version + 1));
-      setSaved(true);
-    } catch (err) {
-      setError(describeError(err));
-    }
-  }
-
-  if (busy) return <p>Loading…</p>;
+  const target = { kind: 'singleton', endpoint: ui.endpoint } as const;
+  const save = useEntitySave(target, null, { fields: ui.fields, mode: saveModeFor(target) });
 
   return (
-    <form onSubmit={(event) => void save(event)}>
-      {error && (
-        <p className="msg" data-kind="error" role="alert">
-          {error}
-        </p>
-      )}
-      {saved && (
-        <p className="msg" data-kind="ok" role="status">
-          Saved.
-        </p>
-      )}
-
-      <div className="card">
-        {ui.fields.map((field) => (
-          <Field
-            key={field.name}
-            field={field}
-            value={values[field.name]}
-            values={values}
-            onChange={set}
-          />
-        ))}
-      </div>
-
-      <div className="toolbar form-actions">
-        <button type="submit" data-variant="primary">
-          Save {ui.title.toLowerCase()}
-        </button>
-        <span className="admin-sub">{version === 0 ? 'Not saved yet' : `Version ${version}`}</span>
-      </div>
-    </form>
+    <EditorForm save={save} fields={ui.fields} submitLabel={`Save ${ui.title.toLowerCase()}`} />
   );
 }

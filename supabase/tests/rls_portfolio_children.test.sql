@@ -6,9 +6,13 @@
 --   • save_portfolio() writes the parent and both child sets in ONE transaction, SECURITY
 --     INVOKER (RLS applies to every row it writes), with the optimistic version check,
 --     and refuses links to another tenant's rows.
+--   • Since 0051 (Admin v2 R4) its child sets are written by app.apply_portfolio_children,
+--     which a release's apply calls too: every row above holds unchanged, and the helper
+--     binds RLS as its caller, refuses another tenant's ids and writes in the caller's
+--     tenant only.
 
 begin;
-select plan(27);
+select plan(30);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -166,6 +170,22 @@ select throws_ok(
      values (_tid()::uuid, '64000000-0000-0000-0000-00000000c002', 'gallery', 'image',
              '64000000-0000-0000-0000-00000000a001') $$,
   '42501', null, 'a media row cannot hang off another tenant''s project');
+
+-- ── 5. The shared link-set helper (0051) ─────────────────────────────────────────
+select ok(has_function_privilege('authenticated', 'app.apply_portfolio_children(uuid, uuid, uuid[], jsonb)', 'execute')
+          and not has_function_privilege('anon', 'app.apply_portfolio_children(uuid, uuid, uuid[], jsonb)', 'execute')
+          and not has_function_privilege('service_role', 'app.apply_portfolio_children(uuid, uuid, uuid[], jsonb)', 'execute')
+          and not (select prosecdef from pg_proc
+                    where oid = 'app.apply_portfolio_children(uuid, uuid, uuid[], jsonb)'::regprocedure),
+  'app.apply_portfolio_children is SECURITY INVOKER, executable by authenticated only');
+select throws_ok(
+  $$ select app.apply_portfolio_children(_tid()::uuid, _sp_id(), null,
+       '[{"role":"gallery","kind":"image","media_id":"64000000-0000-0000-0000-00000000a002"}]'::jsonb) $$,
+  '23503', null, 'the helper refuses another tenant''s media, as save_portfolio did');
+select throws_ok(
+  $$ select app.apply_portfolio_children('64000000-0000-0000-0000-000000000002'::uuid, _sp_id(),
+       array['64000000-0000-0000-0000-00000000e001']::uuid[], null) $$,
+  '42501', null, 'the helper writes in the caller''s own tenant only');
 
 select * from finish();
 rollback;

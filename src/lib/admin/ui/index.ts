@@ -26,7 +26,9 @@ import { themesUi } from './themes';
 import type { ResourceUi, SingletonUi } from './types';
 
 export type {
+  AccentDef,
   ColumnDef,
+  EditorLanguage,
   FieldDef,
   FieldKind,
   RelationDef,

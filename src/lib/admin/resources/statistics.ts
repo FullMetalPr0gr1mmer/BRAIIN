@@ -1,8 +1,28 @@
 import { StatisticUpdateSchema, StatisticWriteSchema } from '@schemas/admin';
 import type { ResourceConfig } from '../resource';
-import { pick, refusePlaceholder, requireBilingual, statusOf, type Input } from './shared';
+import {
+  fieldsOf,
+  pick,
+  refusePlaceholder,
+  requireBilingual,
+  statusOf,
+  type Input,
+} from './shared';
 
 // Statistics: the figures the number bands count up to (0023).
+
+const STATISTIC_KEYS = {
+  slug: 'slug',
+  label: 'label',
+  value: 'value',
+  valueNumeric: 'value_numeric',
+  valueSuffix: 'value_suffix',
+  placements: 'placements',
+  placementLabels: 'placement_labels',
+  isPlaceholder: 'is_placeholder',
+  status: 'status',
+  sortOrder: 'sort_order',
+};
 
 export const statisticResource: ResourceConfig = {
   table: 'statistics',
@@ -18,18 +38,7 @@ export const statisticResource: ResourceConfig = {
   updateSchema: StatisticUpdateSchema,
   toRow: (input) => {
     const i = input as Input;
-    const values = pick(i, {
-      slug: 'slug',
-      label: 'label',
-      value: 'value',
-      valueNumeric: 'value_numeric',
-      valueSuffix: 'value_suffix',
-      placements: 'placements',
-      placementLabels: 'placement_labels',
-      isPlaceholder: 'is_placeholder',
-      status: 'status',
-      sortOrder: 'sort_order',
-    });
+    const values = pick(i, STATISTIC_KEYS);
     // The 0023 statistics_value_consistent CHECK: with a number, the displayed value IS the
     // number plus its suffix (derived here); free text written without a number drops the
     // count-up number, or the stored one would contradict it.
@@ -42,6 +51,13 @@ export const statisticResource: ResourceConfig = {
     }
     return values;
   },
+  // The value rule below: a number (with its suffix) also writes the displayed `value`;
+  // free text with no number clears the number and its suffix.
+  fields: fieldsOf(STATISTIC_KEYS, {
+    value: ['value_numeric', 'value_suffix'],
+    valueNumeric: ['value'],
+    valueSuffix: ['value'],
+  }),
   statusOf: (input) => statusOf(input as Input),
   // The form edits per-page labels as a list; the column is an object keyed by page.
   fromRow: (row) => {

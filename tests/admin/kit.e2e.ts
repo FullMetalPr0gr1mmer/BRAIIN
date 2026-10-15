@@ -562,3 +562,231 @@ test.describe('as admin', () => {
     await expect(page.getByText('51 to 60 of 60', { exact: true }).first()).toBeVisible();
   });
 });
+
+// ---- The field kit v2 (Admin v2 F5a): the "Fields" card on /admin/kit -----------------
+// Every field kind on made-up values (screens/kit/samples.ts KIT_FIELDS), in the editor's
+// language context. The markup and the rules are unit-tested (tests/lib/adminFields.spec.ts,
+// editorForm.spec.ts, fieldErrors.spec.ts); here a browser drives what moves.
+
+test.describe('the field kit, as admin', () => {
+  test.use({ storageState: authFile('admin') });
+
+  const fields = (page: Page) => page.getByRole('region', { name: 'Fields', exact: true });
+  const steps = (page: Page) => fields(page).getByRole('list', { name: 'Step' });
+  const stepTitles = (page: Page) => steps(page).locator('.repeat__t').allTextContents();
+
+  test.beforeEach(async ({ page }) => {
+    await open(page);
+    await fields(page).evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  });
+
+  test('the repeater reorders by keyboard, each step said, and by its Move buttons', async ({
+    page,
+  }) => {
+    const handle = fields(page).getByRole('button', { name: 'Reorder Brief' });
+    await handle.focus();
+    await page.keyboard.press('Space');
+    await expect(announced(page, 'Brief lifted, position 1 of 3.')).toHaveCount(1);
+    await page.keyboard.press('ArrowDown');
+    await expect(announced(page, 'Brief, position 2 of 3.')).toHaveCount(1);
+    await page.keyboard.press('Space');
+    await expect(announced(page, 'Brief dropped, position 2 of 3.')).toHaveCount(1);
+    await expect(handle).toBeFocused();
+    expect(await stepTitles(page)).toEqual(['Sketch', 'Brief', 'Deliver']);
+    // The item's number follows its place; its fields' ids follow it too.
+    await expect(steps(page).locator('.repeat__n').first()).toHaveText('Step 1');
+    await expect(fields(page).locator('#f-steps-0-title-en')).toHaveValue('Sketch');
+
+    await fields(page).getByRole('button', { name: 'Move Deliver up' }).click();
+    await expect(announced(page, 'Deliver moved to position 2 of 3.')).toHaveCount(1);
+    expect(await stepTitles(page)).toEqual(['Sketch', 'Deliver', 'Brief']);
+    await expect(fields(page).getByRole('button', { name: 'Move Sketch up' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  test('the repeater adds up to its most, collapses an item and removes one', async ({ page }) => {
+    const add = fields(page).getByRole('button', { name: 'Add step' });
+    await add.click();
+    await expect(steps(page).getByRole('listitem')).toHaveCount(4);
+    await expect(fields(page).getByRole('button', { name: 'At most 4' })).toBeDisabled();
+
+    const collapse = fields(page).getByRole('button', { name: 'Collapse Sketch' });
+    await collapse.click();
+    await expect(fields(page).locator('#f-steps-1-title-en')).toBeHidden();
+    await expect(fields(page).getByRole('button', { name: 'Expand Sketch' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+
+    await fields(page).getByRole('button', { name: 'Remove step 4' }).click();
+    await expect(steps(page).getByRole('listitem')).toHaveCount(3);
+    await expect(fields(page).getByRole('button', { name: 'Add step' })).toBeEnabled();
+  });
+
+  test('a switch toggles with Space and says its state', async ({ page }) => {
+    const toggle = fields(page).getByRole('switch', { name: 'Show the sample on the site' });
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await toggle.focus();
+    await page.keyboard.press('Space');
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    // A click on its label toggles it too (a label for a button forwards the click).
+    await fields(page).getByText('Show the sample on the site', { exact: true }).click();
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  test('English, Arabic, Both: the halves follow the editor’s language', async ({ page }) => {
+    const en = fields(page).locator('#f-title-en');
+    const ar = fields(page).locator('#f-title-ar');
+    await expect(en).toBeVisible();
+    await expect(ar).toBeHidden();
+    // The missing Arabic is named on the field's own switch, and counted.
+    await expect(
+      fields(page)
+        .getByRole('group', { name: 'Sample name language' })
+        .getByRole('radio', { name: 'Arabic (missing)' }),
+    ).toHaveCount(1);
+    await expect(fields(page).getByText('Arabic missing: 1')).toBeVisible();
+
+    const language = fields(page).getByRole('group', { name: 'Editing language' });
+    await language.getByRole('radio', { name: 'Both' }).check();
+    await expect(en).toBeVisible();
+    await expect(ar).toBeVisible();
+    await expect(ar).toHaveAttribute('dir', 'rtl');
+
+    await language.getByRole('radio', { name: 'العربية' }).check();
+    await expect(en).toBeHidden();
+    await expect(ar).toBeVisible();
+
+    // The field's own switch overrides the editor's language for that field only.
+    await fields(page)
+      .getByRole('group', { name: 'Sample name language' })
+      .getByRole('radio', { name: 'English' })
+      .check();
+    await expect(en).toBeVisible();
+    await expect(fields(page).locator('#f-blurb-ar')).toBeVisible();
+
+    // Writing the Arabic closes the gap.
+    await fields(page)
+      .getByRole('group', { name: 'Sample name language' })
+      .getByRole('radio', { name: 'Arabic (missing)' })
+      .check();
+    await ar.fill('عينة');
+    await expect(fields(page).getByText('Arabic missing: 1')).toHaveCount(0);
+    await expect(
+      fields(page)
+        .getByRole('group', { name: 'Sample name language' })
+        .getByRole('radio', { name: 'Arabic', exact: true }),
+    ).toHaveCount(1);
+  });
+
+  test('an error in the hidden Arabic half: the summary link shows it and focuses it', async ({
+    page,
+  }) => {
+    const ar = fields(page).locator('#f-title-ar');
+    await expect(ar).toBeHidden();
+    await fields(page).getByRole('button', { name: 'Check the sample fields' }).click();
+    const summary = fields(page).getByRole('alert', { name: 'Fix 3 problems to save' });
+    await expect(summary).toBeFocused();
+    await expect(ar).toHaveAttribute('aria-invalid', 'true');
+    await summary
+      .getByRole('link', { name: 'Sample name (Arabic): Write the name in Arabic too.' })
+      .click();
+    await expect(ar).toBeVisible();
+    await expect(ar).toBeFocused();
+    // The inline message is the input's description.
+    await expect(ar).toHaveAccessibleDescription(/Write the name in Arabic too\./);
+  });
+
+  test('"Next gap" shows and focuses each missing Arabic in turn', async ({ page }) => {
+    await fields(page).getByRole('button', { name: 'Next gap' }).click();
+    const ar = fields(page).locator('#f-title-ar');
+    await expect(ar).toBeVisible();
+    await expect(ar).toBeFocused();
+  });
+
+  test('chips: Enter and a comma add, the remove button names its chip, Arabic chips are RTL', async ({
+    page,
+  }) => {
+    const box = fields(page).locator('#f-tags');
+    await box.fill('poster');
+    await box.press('Enter');
+    await box.pressSequentially('motion,');
+    await expect(fields(page).getByRole('button', { name: 'Remove tag poster' })).toHaveCount(1);
+    await expect(fields(page).getByRole('button', { name: 'Remove tag motion' })).toHaveCount(1);
+    await fields(page).getByRole('button', { name: 'Remove tag kit' }).click();
+    await expect(fields(page).getByRole('button', { name: 'Remove tag kit' })).toHaveCount(0);
+    await expect(fields(page).getByText('3 of 5', { exact: true })).toBeVisible();
+    // The bilingual set's Arabic list is typed right to left, its chips marked Arabic.
+    await fields(page)
+      .getByRole('group', { name: 'Keywords language' })
+      .getByRole('radio', { name: 'Arabic' })
+      .check();
+    await expect(fields(page).locator('#f-keywords-ar')).toHaveAttribute('dir', 'rtl');
+    await expect(fields(page).getByRole('button', { name: 'Remove tag هوية' })).toBeVisible();
+  });
+
+  test('colour: a swatch is pressed by value, the hex follows, the contrast is in words', async ({
+    page,
+  }) => {
+    const hex = fields(page).locator('#f-tint');
+    await expect(hex).toHaveValue('#0024BC');
+    await expect(fields(page).getByRole('button', { name: '#0024BC' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await fields(page).getByRole('button', { name: '#0B0D14' }).click();
+    await expect(hex).toHaveValue('#0B0D14');
+    await expect(fields(page).getByRole('button', { name: '#0B0D14' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(fields(page).getByText(/White text on it: \d+\.\d:1, passes AA\./)).toBeVisible();
+  });
+
+  test('the rich-text link dialog refuses an address the page would drop, and adds a site link', async ({
+    page,
+  }) => {
+    const editor = fields(page).getByRole('textbox', { name: 'Sample body English' });
+    await expect(editor).toBeVisible();
+    await editor.click();
+    await page.keyboard.press('End');
+    await fields(page)
+      .getByRole('toolbar', { name: 'Sample body English formatting' })
+      .getByRole('button', { name: 'Link' })
+      .click();
+    const dialog = page.getByRole('dialog', { name: 'Add a link' });
+    await expect(dialog).toBeVisible();
+    const address = dialog.getByLabel('Link address');
+    await expect(address).toBeFocused();
+    await address.fill('javascript:alert(1)');
+    await dialog.getByRole('button', { name: 'Add link' }).click();
+    await expect(dialog.getByText(/Use a web address/)).toBeVisible();
+    await address.fill('/about');
+    await dialog.getByRole('button', { name: 'Add link' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(editor.locator('a[href="/about"]')).toHaveCount(1);
+  });
+
+  test('axe: every field open, in Both, with the errors shown and the link dialog open', async ({
+    page,
+  }) => {
+    await fields(page)
+      .getByRole('group', { name: 'Editing language' })
+      .getByRole('radio', { name: 'Both' })
+      .check();
+    await expect(fields(page).getByRole('textbox', { name: 'Sample body Arabic' })).toBeVisible();
+    await fields(page).getByRole('button', { name: 'Check the sample fields' }).click();
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+    expect(results.violations, 'axe with every field open').toEqual([]);
+
+    await fields(page)
+      .getByRole('toolbar', { name: 'Sample body English formatting' })
+      .getByRole('button', { name: 'Link' })
+      .click();
+    await expect(page.getByRole('dialog', { name: 'Add a link' })).toBeVisible();
+    const withDialog = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+    expect(withDialog.violations, 'axe with the link dialog open').toEqual([]);
+  });
+});

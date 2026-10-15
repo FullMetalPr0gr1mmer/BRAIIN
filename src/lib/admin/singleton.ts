@@ -51,6 +51,17 @@ export interface SingletonConfig {
   columns: string;
   schema: z.ZodTypeAny;
   toRow: (input: ResourcePayload) => Record<string, unknown>;
+  /**
+   * Payload key → the columns `toRow` emits for it (see ResourceConfig.fields). Required
+   * for a singleton in the release registry (site_profile, seo_defaults); the others omit it.
+   */
+  fields?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Columns that are never staged by a release: they stay immediate, written by their own
+   * endpoint (site_profile.accepting_applications, Admin v2 P-3; app.release_entities'
+   * exempt_columns). The legacy PATCH still writes them while releases are off.
+   */
+  immediateColumns?: readonly string[];
   /** Returned by GET when no row exists yet. */
   defaults: Record<string, unknown>;
   /**
