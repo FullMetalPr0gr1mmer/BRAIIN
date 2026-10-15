@@ -1,0 +1,200 @@
+import { useCallback, useEffect, useReducer, useRef } from 'react';
+import type { FieldError } from '@/components/admin/kit/ErrorSummary';
+import type { SaveState } from '@/components/admin/kit/SaveStatus';
+import { AdminApiError, adminFetch, describeError } from './client';
+import {
+  buildSaveRequest,
+  createdHref,
+  entitySaveReducer,
+  initialSaveState,
+  isDirty,
+  loadUrl,
+  versionFallback,
+  type SaveMode,
+  type SaveTarget,
+} from './entitySave';
+import { errorsFromApi, type FieldErrors } from './fieldErrors';
+import type { FieldDef } from './uiSchema';
+
+// The editor's save hook (Admin v2 F5a, ui.md §2.6, P-5): every editor saves through it,
+// so it is the one place that knows HOW an editor saves. The rules live in the pure
+// machine (entitySave.ts, unit-tested); this file loads the row, sends the request, and
+// wires the page's events.
+//
+// Live mode (until releases switch on): an explicit Save sends the version the form
+// loaded; a 409 keeps the editor's work and offers "Reload their version"; a 422 lands
+// on the fields (fieldErrors.ts); Ctrl/⌘+S saves (useSaveShortcut); leaving the page with
+// unsaved changes asks first (`beforeunload`). No keystroke autosave (P-5, D8).
+//
+// Draft mode is R12's: it keeps every call site as it is (`mode: saveModeFor(target)`)
+// and adds base_version, the 800 ms debounce and the `admin:pending` event here.
+
+type Row = Record<string, unknown>;
+
+export interface EntitySave {
+  isNew: boolean;
+  values: Row;
+  set(name: string, value: unknown): void;
+  version: number;
+  /** Loading the row, or saving it. */
+  busy: boolean;
+  loadError: string | null;
+  status: SaveState;
+  savedAt: string | null;
+  errors: { byId: FieldErrors; summary: readonly FieldError[] };
+  conflict: boolean;
+  edgeMissed: boolean;
+  dirty: boolean;
+  /** Why the last save was refused, when it is not about one field (a 403, a bad JSON box). */
+  message: string | null;
+  save(): Promise<boolean>;
+  reloadTheirs(): Promise<void>;
+}
+
+export interface UseEntitySaveOptions {
+  fields: readonly FieldDef[];
+  mode?: SaveMode;
+  /** A new record's starting values, over each field's `defaultValue`. */
+  defaults?: Row;
+  /** A created record: by default its edit screen opens (resources only). */
+  onCreated?: (row: Row) => void;
+}
+
+/** "?edge=missed" on the address: the create that led here missed the edge snapshot. */
+function arrivedEdgeMissed(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('edge') === 'missed'
+  );
+}
+
+export function useEntitySave(
+  target: SaveTarget,
+  id: string | null,
+  options: UseEntitySaveOptions,
+): EntitySave {
+  if ((options.mode ?? 'live') === 'draft') {
+    throw new Error('Draft saving arrives with releases (R12)');
+  }
+  const { fields, defaults, onCreated } = options;
+  const isNew = target.kind === 'resource' && id === null;
+  const [state, dispatch] = useReducer(entitySaveReducer, undefined, () => {
+    const first = initialSaveState(fields, isNew, defaults);
+    return { ...first, edgeMissed: arrivedEdgeMissed() };
+  });
+  // The latest state for save(): a value changed in the same event (a chip committed on
+  // blur as Save is pressed) is read from here, not from a stale closure.
+  const latest = useRef(state);
+  latest.current = state;
+  // The target is an object literal at most call sites (a new one each render): read
+  // through a ref, and the callbacks follow its address instead.
+  const targetRef = useRef(target);
+  targetRef.current = target;
+  const url = loadUrl(target, id);
+
+  const load = useCallback(async () => {
+    try {
+      const row = await adminFetch<Row>(url);
+      dispatch({
+        type: 'loaded',
+        row,
+        fields,
+        versionFallback: versionFallback(targetRef.current),
+      });
+    } catch (err) {
+      dispatch({ type: 'load-failed', message: describeError(err) });
+    }
+  }, [url, fields]);
+
+  useEffect(() => {
+    if (!isNew) void load();
+  }, [isNew, load]);
+
+  const save = useCallback(async (): Promise<boolean> => {
+    const current = latest.current;
+    const target = targetRef.current;
+    if (current.phase !== 'ready') return false;
+    let request: ReturnType<typeof buildSaveRequest>;
+    try {
+      request = buildSaveRequest(target, id, current, fields);
+    } catch (err) {
+      dispatch({ type: 'save-failed', message: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+    dispatch({ type: 'save-start' });
+    try {
+      const row = await adminFetch<Row>(request.url, {
+        method: request.method,
+        body: request.body,
+      });
+      if (request.method === 'POST' && target.kind === 'resource') {
+        // A create opens the record's edit screen; the form's state goes with the page.
+        if (onCreated) onCreated(row);
+        else window.location.href = createdHref(target.slug, row);
+        return true;
+      }
+      dispatch({ type: 'saved', row, fields, at: new Date().toISOString() });
+      return true;
+    } catch (err) {
+      if (err instanceof AdminApiError && err.info.status === 409) {
+        dispatch({ type: 'conflict' });
+        return false;
+      }
+      const mapped = errorsFromApi(err, fields);
+      dispatch({
+        type: 'save-failed',
+        message: mapped ? null : describeError(err),
+        errors: mapped ?? undefined,
+      });
+      return false;
+    }
+  }, [id, fields, onCreated]);
+
+  const dirty = isDirty(state);
+
+  // Leaving with unsaved changes asks first (D7). The browser writes the question.
+  useEffect(() => {
+    if (!dirty) return;
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      // Older engines show the prompt only when returnValue is set.
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guard);
+    return () => window.removeEventListener('beforeunload', guard);
+  }, [dirty]);
+
+  return {
+    isNew,
+    values: state.values,
+    set: useCallback((name: string, value: unknown) => dispatch({ type: 'set', name, value }), []),
+    version: state.version,
+    busy: state.phase === 'loading' || state.phase === 'saving',
+    loadError: state.phase === 'load-failed' ? state.message : null,
+    status: state.status,
+    savedAt: state.savedAt,
+    errors: state.errors,
+    conflict: state.conflict,
+    edgeMissed: state.edgeMissed,
+    dirty,
+    message: state.phase === 'load-failed' ? null : state.message,
+    save,
+    reloadTheirs: load,
+  };
+}
+
+/** Ctrl+S (⌘S on a Mac) saves instead of saving the web page (D7). */
+export function useSaveShortcut(save: () => unknown): void {
+  const latest = useRef(save);
+  latest.current = save;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void latest.current();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+}
