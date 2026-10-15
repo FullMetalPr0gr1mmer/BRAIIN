@@ -121,3 +121,14 @@ describe('EditorForm', () => {
     }
   });
 });
+
+describe('the ErrorSummary’s links are 24px targets (WCAG 2.5.8; F5a CI axe target-size)', () => {
+  it('admin.css gives each link a 24px block size of its own', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(new URL('../../public/styles/admin.css', import.meta.url), 'utf8');
+    const rule = /\.error-summary a\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toMatch(/display:\s*inline-block/);
+    const size = Number(/min-block-size:\s*(\d+)px/.exec(rule)?.[1]);
+    expect(size).toBeGreaterThanOrEqual(24);
+  });
+});

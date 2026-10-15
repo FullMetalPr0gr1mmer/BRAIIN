@@ -4076,7 +4076,13 @@ table.data .data-sel {
   padding-inline-start: 18px;
 }
 
+/* Each link is a target of at least 24px (WCAG 2.5.8): a list of several, one per line,
+   left 15px-tall lines 19px apart (axe target-size, F5a's Fields card). */
 .error-summary a {
+  display: inline-block;
+  min-block-size: 24px;
+  padding-block: 3px;
+  line-height: 18px;
   color: inherit;
   font-weight: 600;
   text-decoration: underline;
