@@ -8,9 +8,11 @@ import { NotFoundError, OptimisticLockError, ValidationError } from '../errors';
 import { getRow, translateWriteError, type ConstraintFields } from '../crud';
 import type { ResourceConfig } from '../resource';
 import {
+  STAMPED,
   bySortOrder,
   clipColumns,
   clipOfColumns,
+  fieldsOf,
   pick,
   publishStamp,
   refusePlaceholder,
@@ -23,8 +25,37 @@ import {
 
 // Portfolio: a case study, saved with its services and media in one transaction (0022).
 
-/** A media item as the form edits it (camelCase) → one element of save_portfolio's p_media. */
-function mediaItemToRow(item: PortfolioMediaItem): Input {
+const PORTFOLIO_KEYS = {
+  slug: 'slug',
+  title: 'title',
+  summary: 'summary',
+  body: 'body',
+  status: 'status',
+  sortOrder: 'sort_order',
+  scheduledFor: 'scheduled_for',
+  projectType: 'project_type',
+  teaser: 'teaser',
+  lead: 'lead',
+  goal: 'goal',
+  result: 'result',
+  scope: 'scope',
+  keywords: 'keywords',
+  results: 'results',
+  sectorId: 'sector_id',
+  clientId: 'client_id',
+  year: 'year',
+  isFeatured: 'is_featured',
+  posterMediaId: 'poster_media_id',
+  nextPortfolioId: 'next_portfolio_id',
+  isPlaceholder: 'is_placeholder',
+};
+
+/**
+ * A media item as the form edits it (camelCase) → one element of save_portfolio's p_media.
+ * Exported for releases (Admin v2 R2): a pending change keeps `media` in the form's shape,
+ * and the publish path (R6) maps it with this, as `persist` does.
+ */
+export function mediaItemToRow(item: PortfolioMediaItem): Input {
   const clip = item.clip ?? null;
   return {
     role: item.role,
@@ -109,40 +140,19 @@ export const portfolioResource: ResourceConfig = {
   updateSchema: PortfolioUpdateSchema,
   constraintFields: PORTFOLIO_CONSTRAINTS,
   toRow: (input) => {
-    const values = publishStamp(
-      withBodyHtml(
-        pick(input as Input, {
-          slug: 'slug',
-          title: 'title',
-          summary: 'summary',
-          body: 'body',
-          status: 'status',
-          sortOrder: 'sort_order',
-          scheduledFor: 'scheduled_for',
-          projectType: 'project_type',
-          teaser: 'teaser',
-          lead: 'lead',
-          goal: 'goal',
-          result: 'result',
-          scope: 'scope',
-          keywords: 'keywords',
-          results: 'results',
-          sectorId: 'sector_id',
-          clientId: 'client_id',
-          year: 'year',
-          isFeatured: 'is_featured',
-          posterMediaId: 'poster_media_id',
-          nextPortfolioId: 'next_portfolio_id',
-          isPlaceholder: 'is_placeholder',
-        }),
-        input as Input,
-      ),
-    );
+    const values = publishStamp(withBodyHtml(pick(input as Input, PORTFOLIO_KEYS), input as Input));
     const preview = (input as Input)['preview'];
     return preview === undefined
       ? values
       : { ...values, ...clipColumns((preview as VideoClip | null) ?? null, 'preview_', 'video') };
   },
+  // `serviceIds` and `media` are child keys (below): they write rows of their own tables,
+  // no column of this one.
+  fields: fieldsOf(PORTFOLIO_KEYS, {
+    ...STAMPED,
+    body: ['body_html'],
+    preview: ['preview_video_uid', 'preview_video_path', 'preview_start_s', 'preview_end_s'],
+  }),
   statusOf: (input) => statusOf(input as Input),
   // A case study and its services + media are ONE save (save_portfolio(), migration
   // 0022): SECURITY INVOKER so RLS applies to every row it writes, version-checked, and

@@ -9,9 +9,15 @@ import {
 import { chainRefusal, liveRouteRefusal, type RedirectRow } from '../redirectRules';
 import { syncRedirectsToEdge } from '../redirectSync';
 import type { ResourceConfig } from '../resource';
-import { pick, type Input } from './shared';
+import { fieldsOf, pick, type Input } from './shared';
 
 // Redirects (Admin + SEO).
+
+const REDIRECT_KEYS = {
+  sourcePath: 'source_path',
+  targetPath: 'target_path',
+  status: 'status',
+};
 
 /**
  * What a redirect's audit row and response carry beside the sync outcome: the rule itself.
@@ -53,11 +59,7 @@ export const redirectResource: ResourceConfig = {
     },
   },
   toRow: (input) => {
-    const values = pick(input as Input, {
-      sourcePath: 'source_path',
-      targetPath: 'target_path',
-      status: 'status',
-    });
+    const values = pick(input as Input, REDIRECT_KEYS);
     if (typeof values['source_path'] === 'string') {
       // One spelling per source: the edge map is keyed by the normalised path, and two
       // rows differing only by a trailing slash would silently shadow each other.
@@ -73,6 +75,8 @@ export const redirectResource: ResourceConfig = {
     }
     return values;
   },
+  // The source is normalised and the target sanitised in place: one column each.
+  fields: fieldsOf(REDIRECT_KEYS),
   assertWritable: async (merged, { changed, sb, auth }) => {
     if (!('source_path' in changed) && !('target_path' in changed)) return;
     const source = String(merged['source_path'] ?? '');

@@ -1,8 +1,11 @@
 import { CategoryUpdateSchema, CategoryWriteSchema } from '@schemas/admin';
 import type { ResourceConfig } from '../resource';
-import { pick, type Input } from './shared';
+import { fieldsOf, pick, type Input } from './shared';
 
 // Blog categories.
+
+/** Payload key → column: what `toRow` picks, and (through `fieldsOf`) its `fields`. */
+const CATEGORY_KEYS = { slug: 'slug', name: 'name' };
 
 export const categoryResource: ResourceConfig = {
   table: 'categories',
@@ -15,5 +18,6 @@ export const categoryResource: ResourceConfig = {
   searchColumn: 'slug',
   createSchema: CategoryWriteSchema,
   updateSchema: CategoryUpdateSchema,
-  toRow: (input) => pick(input as Input, { slug: 'slug', name: 'name' }),
+  toRow: (input) => pick(input as Input, CATEGORY_KEYS),
+  fields: fieldsOf(CATEGORY_KEYS),
 };

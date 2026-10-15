@@ -1,8 +1,15 @@
 import { SectorUpdateSchema, SectorWriteSchema } from '@schemas/admin';
 import type { ResourceConfig } from '../resource';
-import { pick, type Input } from './shared';
+import { fieldsOf, pick, type Input } from './shared';
 
 // Sectors (UI v2, 0021): the industries a case study is filed under.
+
+const SECTOR_KEYS = {
+  slug: 'slug',
+  name: 'name',
+  visible: 'visible',
+  sortOrder: 'sort_order',
+};
 
 export const sectorResource: ResourceConfig = {
   table: 'sectors',
@@ -18,13 +25,14 @@ export const sectorResource: ResourceConfig = {
   searchColumn: 'slug',
   createSchema: SectorWriteSchema,
   updateSchema: SectorUpdateSchema,
-  toRow: (input) =>
-    pick(input as Input, {
-      slug: 'slug',
-      name: 'name',
-      visible: 'visible',
-      sortOrder: 'sort_order',
-    }),
+  toRow: (input) => pick(input as Input, SECTOR_KEYS),
+  fields: fieldsOf(SECTOR_KEYS),
+  // `visible` is the sector's go-live flag (app.release_entities.publish_flag, 0038), as
+  // it is for clients: turning it on is gated like a publish (content.publish). Every
+  // holder of categories.manage holds content.publish (Admin, Content Creator), and
+  // sectors have no assertPublishable, so no request changes outcome (Admin v2 R2, D5;
+  // tests/lib/releaseCaps.spec.ts holds the holder sets).
+  publishFlag: 'visible',
   constraintFields: {
     sectors_slug_check: {
       field: 'slug',

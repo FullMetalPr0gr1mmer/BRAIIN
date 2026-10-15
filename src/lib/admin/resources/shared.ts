@@ -20,13 +20,45 @@ export type Input = ResourcePayload;
  * `undefined` is skipped so a PATCH touches exactly the fields it sent — `null` is
  * kept, because "clear this field" is a real edit.
  */
-export function pick(input: Input, map: Record<string, string>): Input {
+export function pick(input: Input, map: Readonly<Record<string, string>>): Input {
   const out: Input = {};
   for (const [key, column] of Object.entries(map)) {
     if (key in input && input[key] !== undefined) out[column] = input[key];
   }
   return out;
 }
+
+/**
+ * A config's `fields` (payload key → the columns it can emit), built from the SAME key map
+ * its `toRow` hands to `pick`, plus what `toRow` derives on top: `derived[key]` lists the
+ * extra columns a key also writes (`body` → `body_html`), or every column of a key `pick`
+ * does not map (`clip` → the three `preview_*` columns). One constant feeds both, so a key
+ * added to the map is in `fields` too; tests/lib/resourceFields.spec.ts drives `toRow` key
+ * by key to catch a derived column left out here (Admin v2 R2).
+ */
+export function fieldsOf(
+  map: Readonly<Record<string, string>>,
+  derived: Readonly<Record<string, readonly string[]>> = {},
+): Readonly<Record<string, readonly string[]>> {
+  const out: Record<string, readonly string[]> = {};
+  for (const [key, column] of Object.entries(map)) {
+    out[key] = [...new Set([column, ...(derived[key] ?? [])])];
+  }
+  for (const [key, columns] of Object.entries(derived)) {
+    if (!(key in map)) out[key] = [...new Set(columns)];
+  }
+  return out;
+}
+
+/** What `publishStamp` adds: a save with status `published` also writes `published_at`. */
+export const STAMPED = { status: ['published_at'] } as const;
+
+/** The three columns a path-only clip writes (`withPreviewPath`). */
+export const PREVIEW_PATH_COLUMNS = [
+  'preview_video_path',
+  'preview_start_s',
+  'preview_end_s',
+] as const;
 
 /** Locale-keyed Tiptap JSON → locale-keyed sanitised HTML (the render-time cache). */
 function deriveBodyHtml(body: unknown): Record<string, string> | null {

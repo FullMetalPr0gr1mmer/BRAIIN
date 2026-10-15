@@ -1,8 +1,19 @@
 import { ClientUpdateSchema, ClientWriteSchema } from '@schemas/admin';
 import type { ResourceConfig } from '../resource';
-import { pick, refusePlaceholder, requireBilingual, type Input } from './shared';
+import { fieldsOf, pick, refusePlaceholder, requireBilingual, type Input } from './shared';
 
 // Clients (UI v2, 0021): `visible` is the permission to name the client on the site.
+
+const CLIENT_KEYS = {
+  slug: 'slug',
+  name: 'name',
+  logoMediaId: 'logo_media_id',
+  websiteUrl: 'website_url',
+  showInMarquee: 'show_in_marquee',
+  visible: 'visible',
+  isPlaceholder: 'is_placeholder',
+  sortOrder: 'sort_order',
+};
 
 export const clientResource: ResourceConfig = {
   table: 'clients',
@@ -33,17 +44,8 @@ export const clientResource: ResourceConfig = {
   filterableColumns: ['show_in_marquee', 'visible'],
   createSchema: ClientWriteSchema,
   updateSchema: ClientUpdateSchema,
-  toRow: (input) =>
-    pick(input as Input, {
-      slug: 'slug',
-      name: 'name',
-      logoMediaId: 'logo_media_id',
-      websiteUrl: 'website_url',
-      showInMarquee: 'show_in_marquee',
-      visible: 'visible',
-      isPlaceholder: 'is_placeholder',
-      sortOrder: 'sort_order',
-    }),
+  toRow: (input) => pick(input as Input, CLIENT_KEYS),
+  fields: fieldsOf(CLIENT_KEYS),
   assertPublishable: (row) => {
     requireBilingual(row, 'name', 'Client name');
     refusePlaceholder(row, 'client');

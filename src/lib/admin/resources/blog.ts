@@ -3,9 +3,30 @@ import { PostUpdateSchema, PostWriteSchema } from '@schemas/admin';
 import { readingMinutes } from '@/lib/content/tiptap';
 import { ValidationError } from '../errors';
 import type { ResourceConfig } from '../resource';
-import { pick, publishStamp, requireBilingual, statusOf, withBodyHtml, type Input } from './shared';
+import {
+  STAMPED,
+  fieldsOf,
+  pick,
+  publishStamp,
+  requireBilingual,
+  statusOf,
+  withBodyHtml,
+  type Input,
+} from './shared';
 
 // Blog posts (Creative Knowledge).
+
+const POST_KEYS = {
+  slug: 'slug',
+  title: 'title',
+  excerpt: 'excerpt',
+  body: 'body',
+  authorId: 'author_id',
+  categoryId: 'category_id',
+  coverImageUrl: 'cover_image_url',
+  status: 'status',
+  scheduledFor: 'scheduled_for',
+};
 
 export const postResource: ResourceConfig = {
   table: 'blog_posts',
@@ -21,27 +42,13 @@ export const postResource: ResourceConfig = {
   createSchema: PostWriteSchema,
   updateSchema: PostUpdateSchema,
   toRow: (input) => {
-    const values = publishStamp(
-      withBodyHtml(
-        pick(input as Input, {
-          slug: 'slug',
-          title: 'title',
-          excerpt: 'excerpt',
-          body: 'body',
-          authorId: 'author_id',
-          categoryId: 'category_id',
-          coverImageUrl: 'cover_image_url',
-          status: 'status',
-          scheduledFor: 'scheduled_for',
-        }),
-        input as Input,
-      ),
-    );
+    const values = publishStamp(withBodyHtml(pick(input as Input, POST_KEYS), input as Input));
     const body = (input as Input)['body'] as Partial<LocalizedDoc> | undefined;
     // Reading time is DERIVED, never authored: an editor-supplied number drifts from
     // the body the moment anyone edits it, and it is user-visible.
     return body?.en ? { ...values, reading_minutes: readingMinutes(body.en) } : values;
   },
+  fields: fieldsOf(POST_KEYS, { ...STAMPED, body: ['body_html', 'reading_minutes'] }),
   statusOf: (input) => statusOf(input as Input),
   assertPublishable: (row) => {
     requireBilingual(row, 'title', 'Post title');

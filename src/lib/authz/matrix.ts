@@ -171,7 +171,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
   },
   // Developer — technical role: settings/identity/maintenance/theme, logs/audit/
   // site-health, leads management + PII + backup export. NO content authoring, NO
-  // publish/schedule, NO archive/delete — and NO job applications (Join, owner decision
+  // content publish/schedule, NO archive/delete — and NO job applications (Join, owner decision
   // J6: applicants' CVs and contact details are Admin-only, unlike leads), and NO erasing
   // a lead or a person's data (crm.erase is Admin's, Admin v2 C3).
   developer: {
