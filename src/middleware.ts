@@ -218,9 +218,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
     locals.supabase = supabase;
 
     const { ctx, revoke } = await resolveAuthContext(supabase);
-    // A stale or disabled session is torn down here rather than merely ignored, so the
-    // browser stops presenting a JWT that RLS would still honour (see auth/context.ts).
-    if (revoke) clearSessionCookies(cookies);
+    // A stale, disabled or too-old session is torn down here rather than merely ignored:
+    // signed out at the auth server (this session only, best effort: the refresh token in
+    // the cookie stops working even if the cookie was copied), then its cookies cleared, so
+    // the browser stops presenting a JWT that RLS would still honour (see auth/context.ts).
+    if (revoke) {
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+      clearSessionCookies(cookies);
+    }
     locals.session = ctx;
 
     // Mint the double-submit token on first contact so the login form itself is
