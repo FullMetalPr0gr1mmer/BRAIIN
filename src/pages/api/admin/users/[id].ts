@@ -4,7 +4,9 @@ import { DisplayNameValueSchema } from '@schemas/adminPrefs';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { NotFoundError, ValidationError } from '@/lib/admin/errors';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
+import { AuthorizationError } from '@/lib/authz/errors';
 import { serviceClient } from '@/lib/supabase/server';
+import { writeSystemLog } from '@/lib/data/systemLog';
 
 // Change a colleague's role, or deactivate them. `users.manage` — Admin only.
 //
@@ -63,12 +65,30 @@ export const PATCH = defineAdminRoute({
       throw new ValidationError('no updatable fields supplied');
     }
 
-    const { error: updateError } = await sb
+    const { data: updated, error: updateError } = await sb
       .from('profiles')
       .update(values)
       .eq('tenant_id', auth.tenantId)
-      .eq('id', id);
+      .eq('id', id)
+      .select('id');
     if (updateError) throw new Error(`update profile: ${updateError.message}`);
+    // RLS skips a row it will not let this session write rather than raising, so a refused
+    // write looks like a successful one. No row back means one of two things: the profile went
+    // between the read above and the write (404), or the database refused the session: the
+    // live check (0050) wants the token's role to be the profile's, active, unlocked and in
+    // this tenant, which liveRecheck does not see (it compares the profile with the session,
+    // not with the token). Either way nothing changed, so nothing is stamped into the person's
+    // claims and nothing is audited; a refusal is logged, naming the target only.
+    if (!Array.isArray(updated) || updated.length === 0) {
+      if (!(await profileExists(auth.tenantId, id))) throw new NotFoundError('profile');
+      await writeSystemLog({
+        level: 'warn',
+        source: 'admin:users.manage',
+        message: 'profile write refused by the database for this session',
+        detail: { target: id },
+      });
+      throw new AuthorizationError('users.manage', 'the database refused this session');
+    }
 
     if (input.role !== undefined) {
       const { error: claimError } = await serviceClient().auth.admin.updateUserById(id, {
@@ -94,3 +114,23 @@ export const PATCH = defineAdminRoute({
     return { id, ...values };
   },
 });
+
+/**
+ * Whether the profile is still there, read as the service role (tenant-scoped here), so the
+ * answer does not depend on what this session's RLS lets it see. An unreadable table counts
+ * as present: the caller then answers the refusal, never a 404 it cannot vouch for.
+ */
+async function profileExists(tenantId: string, id: string): Promise<boolean> {
+  try {
+    const { data, error } = await serviceClient()
+      .from('profiles')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('id', id)
+      .maybeSingle<{ id: string }>();
+    if (error) return true;
+    return data !== null;
+  } catch {
+    return true;
+  }
+}
