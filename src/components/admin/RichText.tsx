@@ -120,8 +120,9 @@ export default function RichText({
 
   if (!editor) return <div className="rich rich--loading">Loading the editor…</div>;
 
-  // The prototype's .rich bar: each button says what it does (its name), and a pressed
-  // one says so (aria-pressed), never by colour alone.
+  // The prototype's .rich bar: each button's words are its name (WCAG 2.5.3: what is
+  // seen is what is said), its title the longer form, and a pressed one says so
+  // (aria-pressed), never by colour alone.
   const button = (
     key: string,
     text: string,
@@ -133,7 +134,6 @@ export default function RichText({
       key={key}
       type="button"
       title={title}
-      aria-label={title}
       aria-pressed={isActive ?? undefined}
       onClick={() => run()}
     >
@@ -146,14 +146,14 @@ export default function RichText({
       <div className="rich__bar" role="toolbar" aria-label={`${label} formatting`}>
         {button(
           'b',
-          'B',
+          'Bold',
           editor.isActive('bold'),
           () => editor.chain().focus().toggleBold().run(),
           'Bold',
         )}
         {button(
           'i',
-          'I',
+          'Italic',
           editor.isActive('italic'),
           () => editor.chain().focus().toggleItalic().run(),
           'Italic',
@@ -225,7 +225,6 @@ export default function RichText({
           type="button"
           className="rich__clear"
           title="Clear formatting"
-          aria-label="Clear formatting"
           onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
         >
           Clear

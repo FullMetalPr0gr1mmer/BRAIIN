@@ -381,8 +381,8 @@ describe('the field kit v2 (Admin v2 F5a)', () => {
       itemFields: [f({ name: 'title', label: 'Title', kind: 'bilingual' })],
     });
     const html = render(rep, [{ title: { en: 'Faster', ar: 'أسرع' } }, {}]);
-    expect(html).toContain('aria-label="Reorder Value we add 1, Faster"');
-    expect(html).toContain('aria-label="Move Value we add 1, Faster up"');
+    expect(html).toContain('aria-label="Reorder Faster"');
+    expect(html).toContain('aria-label="Move Faster up"');
     expect(html).toContain('aria-label="Move Value we add 2 down"');
     expect(html).toContain('aria-label="Remove value we add 2"');
     expect(html).toContain('aria-label="Collapse Value we add 2"');

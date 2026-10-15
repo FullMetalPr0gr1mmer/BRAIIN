@@ -132,7 +132,9 @@ export default function RepeaterField({
           if (!item || index === -1) return null;
           const title = itemTitle(item, itemFields);
           const name = nameOf(index);
-          const sortName = title ? `${name}, ${title}` : name;
+          // The item's own words name it while it moves ("Brief lifted, position 1 of 3"):
+          // its number changes with its place, its title does not.
+          const sortName = title || name;
           const shut = collapsed.has(key);
           const headId = `${base}-${index}--head`;
           const bodyId = `${base}-${index}--body`;
