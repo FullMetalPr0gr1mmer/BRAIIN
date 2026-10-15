@@ -194,6 +194,14 @@ is its own commit.
   "Arabic missing" live region stays in the page at zero. **L13:** a test that `mode:
   'draft'` throws. **L14:** bilingual inputs are named by the legend plus their language.
 
+CI's e2e run on `fc9d338` failed three tests, also fixed: axe `target-size` on the
+ErrorSummary's links when several are listed (each link is now a 24px inline block), and
+axe `scrollable-region-focusable` on `/admin/audit` for admin and developer: the suite's own
+new saves wrote audit rows whose 160-character JSON detail has no space to wrap at, the table
+scrolled sideways, and its rows hold nothing focusable. ReadOnlyPanel's scrolling box is now a
+focusable region named by its caption, and a JSON cell may break anywhere
+(`tests/lib/readOnlyPanel.spec.ts`).
+
 API additions from the fixes (additive): `mapIssues(issues, fields, idPrefix?, values?)`,
 `errorsFromApi(err, fields, values?)`, the `created` action, `repeaterKeptIndexes` in
 `formPayload.ts`, `badInputErrors` and `UnreadableControl` in `fieldErrors.ts`,
@@ -217,18 +225,18 @@ Measured with `npm run size` (gzip, KB = 1,000 B):
 
 | | main (`23ce829`) | F5a |
 |---|---|---|
-| Screens without an editor (Applications, Chrome, Insights, Leads, Logs, Maintenance, ResourceTable, Users) | 113.4 to 113.5 KB | 104.4 to 104.5 KB |
-| Editors (`AdminResourceForm`, `AdminSingletonForm`) | 113.5 KB | 126.9 KB |
-| `/admin/kit` (`AdminKit`) | 122.1 KB | 132.0 KB |
+| Screens without an editor (Applications, Chrome, Insights, Leads, Logs, Maintenance, ResourceTable, Users) | 113.4 to 113.5 KB | 104.5 to 104.6 KB |
+| Editors (`AdminResourceForm`, `AdminSingletonForm`) | 113.5 KB | 127.8 KB |
+| `/admin/kit` (`AdminKit`) | 122.1 KB | 132.9 KB |
 | `admin-rich` (lazy, ≤ 140 KB) | 122.2 KB | 122.6 KB |
 | `admin-fields` chunk alone | (none) | 21.6 KB |
 | Sign-in script | 0 KB | 0 KB |
-| size-limit admin sum (≤ 300 KB) | 242.66 KB | 252.93 KB |
+| size-limit admin sum (≤ 300 KB) | 242.66 KB | 253.82 KB |
 | size-limit public (≤ 100 KB) | 25.51 KB | 25.51 KB |
 
-The ledger (ui.md §2.11) estimated +6 KB for the fields; the editors pay +13.4 KB, the field
+The ledger (ui.md §2.11) estimated +6 KB for the fields; the editors pay +14.3 KB (after the review fixes), the field
 kit (21.6 KB with the kit pieces it draws with: Segmented, Modal, the Sortable core) less the
-old forms' code that left `admin-ui`. Every other screen is 9 KB lighter than on main.
+old forms' code that left `admin-ui`. Every other screen is 8.9 KB lighter than on main.
 
 ## Help guide
 
@@ -238,7 +246,7 @@ the English / Arabic / Both switch and the "Arabic missing" count.
 
 ## Owner questions
 
-- **The editors' weight.** 126.9 KB eager against P-10's proposed 300 KB per screen, +13.4 KB
+- **The editors' weight.** 127.8 KB eager against P-10's proposed 300 KB per screen, +14.3 KB
   where the ledger guessed +6. Input for O-15; L1 (an explicit Tiptap extension set) is still
   the lever for `admin-rich`, which is lazy.
 - **Leaving with unsaved changes** now asks the browser's "Leave site?" question on every
