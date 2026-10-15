@@ -451,3 +451,43 @@ describe('overlayList (decision D3)', () => {
     expect(overlayList(live, [other], {}, service).rows).toHaveLength(3);
   });
 });
+
+describe('review fixes (R2 review M2, L3, L4)', () => {
+  const body = { en: DOC('Live body'), ar: DOC('نص') };
+  const html = { en: '<p>Live body</p>', ar: '<p>نص</p>' };
+
+  it('a list does not report a conflict on a column it did not select', () => {
+    const base = { body, body_html: html, title: BI('Logo', 'شعار') };
+    const d = draft(
+      'service',
+      'update',
+      ID(1),
+      { body: { en: DOC('Mine'), ar: DOC('لي') } },
+      { base },
+    );
+    // The item read selects every column: base equals live, no conflict.
+    const fullLive = {
+      id: ID(1),
+      slug: 'logo',
+      title: BI('Logo', 'شعار'),
+      body,
+      body_html: html,
+      version: 1,
+    };
+    expect(overlayRow(fullLive, d, service).draft.conflict).toBeUndefined();
+    // The list selects a few: body and body_html are absent, not changed.
+    const listRow = {
+      id: ID(1),
+      slug: 'logo',
+      title: BI('Logo', 'شعار'),
+      status: 'draft',
+      sort_order: 1,
+      version: 1,
+    };
+    const { rows } = overlayList({ rows: [listRow], total: 1 }, [d], {}, service);
+    expect((rows[0]!['draft'] as { conflict?: string[] }).conflict).toBeUndefined();
+    // When live really moved, the item read says so.
+    const moved = { ...fullLive, body: { en: DOC('Someone else'), ar: DOC('آخر') } };
+    expect(overlayRow(moved, d, service).draft.conflict).toEqual(['body']);
+  });
+});

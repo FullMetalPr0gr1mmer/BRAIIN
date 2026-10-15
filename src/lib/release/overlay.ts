@@ -192,7 +192,9 @@ export function recordBase(
 
 /**
  * The patch's columns that moved on the live site after the change was made: live no
- * longer equals the recorded base. For display ("Keep mine / Use the live version"); the
+ * longer equals the recorded base. Only columns `live` carries are judged: a list row
+ * selects a few columns, and a missing one is unknown, not a change (the item read, which
+ * selects them all, reports it). For display ("Keep mine / Use the live version"); the
  * apply's typed check (R4) decides.
  */
 export function conflicts(
@@ -202,7 +204,7 @@ export function conflicts(
 ): string[] {
   if (!base) return [];
   return Object.keys(patch).filter(
-    (column) => column in base && !jsonEqual(base[column], live[column]),
+    (column) => column in base && column in live && !jsonEqual(base[column], live[column]),
   );
 }
 
