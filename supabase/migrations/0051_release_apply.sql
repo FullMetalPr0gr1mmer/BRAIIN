@@ -324,6 +324,14 @@ grant execute on function public.save_portfolio(uuid, int, jsonb, uuid[], jsonb)
 -- a unique flag to true after the others, so a cleared flag lands first), then the
 -- self-references held back from them (second pass), then removals by apply order
 -- descending (children before parents).
+--
+-- Time: lock_timeout (5 s) binds every lock this function waits for, the advisory lock
+-- included (55P03). The statement_timeout in its SET clause does NOT bound the call: the
+-- timer is armed when a top-level statement starts, and a function's SET clause does not
+-- re-arm it. It stays only because PostgREST v12 hoists a function's statement_timeout to
+-- the transaction it opens (verification Q1e), which R6 must confirm on staging; the cap
+-- that holds is the caller's (a statement_timeout PostgREST applies for the service role,
+-- or the Worker's own request timeout and cancel), an R6 item.
 create or replace function public.apply_release(
   p_actor uuid,
   p_role text,
@@ -1058,9 +1066,10 @@ begin
   if exists (select 1 from pg_proc where oid in (v_apply::regprocedure, v_purge::regprocedure) and prosecdef) then
     raise exception '0051: apply_release and record_release_purge must be SECURITY INVOKER (SET ROLE needs it)';
   end if;
-  if not (select coalesce(proconfig, '{}') @> array['search_path=""', 'statement_timeout=20s', 'lock_timeout=5s']
+  -- (Its statement_timeout is not checked: inside a call it bounds nothing; see its header.)
+  if not (select coalesce(proconfig, '{}') @> array['search_path=""', 'lock_timeout=5s']
             from pg_proc where oid = v_apply::regprocedure) then
-    raise exception '0051: apply_release must pin search_path, statement_timeout 20s and lock_timeout 5s';
+    raise exception '0051: apply_release must pin an empty search_path and lock_timeout 5s';
   end if;
   if not (select coalesce(proconfig, '{}') @> array['search_path=""'] from pg_proc where oid = v_purge::regprocedure) then
     raise exception '0051: record_release_purge must pin an empty search_path';

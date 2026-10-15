@@ -115,10 +115,11 @@ describe('apply_release: settings and identity', () => {
   const head = header('public.apply_release');
   const fn = body('public.apply_release');
 
-  it('is SECURITY INVOKER, with an empty search_path and both timeouts pinned', () => {
+  it('is SECURITY INVOKER, with an empty search_path and its lock waits bounded', () => {
     expect(head).toMatch(/language plpgsql volatile security invoker\s+set search_path = ''/);
-    expect(head).toContain("set statement_timeout = '20s'");
     expect(head).toContain("set lock_timeout = '5s'");
+    // Its statement_timeout bounds nothing inside a call; the migration must not say it does.
+    expect(SQL).not.toMatch(/must pin[^;]*statement_timeout/);
     expect(head).not.toMatch(/security definer/);
   });
 
