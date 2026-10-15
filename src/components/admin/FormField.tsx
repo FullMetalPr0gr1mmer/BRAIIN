@@ -209,10 +209,11 @@ export function Field({
         : typeof value === 'string'
           ? value
           : JSON.stringify(value ?? {}, null, 2);
+    const json = field.kind === 'json';
     return shell(
       <textarea
         {...control}
-        className={field.kind === 'json' ? 'in--mono' : undefined}
+        className={json ? 'in--mono' : undefined}
         value={text}
         maxLength={field.maxLength}
         onChange={(e) => onChange(field.name, e.target.value)}
@@ -234,6 +235,7 @@ export function Field({
   // A list of bilingual phrases stores each as {en, ar} (ui/fields.ts bilingualList): the
   // `ar` box of an item is Arabic text.
   const arabic = field.name === 'ar';
+  const narrow = inputType === 'number';
 
   return shell(
     <input
@@ -241,7 +243,7 @@ export function Field({
       type={inputType}
       lang={arabic ? 'ar' : undefined}
       dir={arabic ? 'rtl' : undefined}
-      className={field.kind === 'number' ? 'in--num' : undefined}
+      className={narrow ? NUMBER_CLASS : undefined}
       value={text}
       maxLength={inputType === 'text' ? field.maxLength : undefined}
       onChange={(e) =>
@@ -332,6 +334,9 @@ function RichTextField({
     </FieldShell>
   );
 }
+
+/** A number box is narrow (the prototype's max-width: 160px). */
+const NUMBER_CLASS = 'in--num';
 
 function numberOrNull(raw: string): number | null {
   if (raw.trim() === '') return null;

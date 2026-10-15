@@ -1393,6 +1393,371 @@ button[role='switch'][aria-checked='true']::before {
   transform: translateX(-18px);
 }
 
+/* ---- The field kit v2 (Admin v2 F5a, ui.md §2.6; the prototype's app.css "forms") ----
+   FieldShell (src/components/admin/fields/FieldShell.tsx) draws every field of the kit:
+   .f, the label row .f__l with its meta on the right, the control, the inline error, the
+   hint. States are attributes (aria-invalid, aria-checked, aria-pressed, [hidden],
+   data-lang), never a style attribute; every colour is a token. */
+
+.f {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0 0 16px;
+  min-width: 0;
+}
+
+.f:last-child {
+  margin-bottom: 0;
+}
+
+.f__l {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ad-ink);
+}
+
+.f__meta {
+  margin-inline-start: auto;
+  color: var(--ad-dim2);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.f__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ad-dim2);
+}
+
+.f__err {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.f__cue {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ad-dim2);
+}
+
+/* The required star: the error colour, seen; "required" is in the name, heard. */
+.req {
+  color: var(--ad-err-text);
+}
+
+/* A field of several controls: a fieldset whose legend shares its row with the meta and
+   the EN | AR switch. A floated legend leaves the fieldset's special legend layout, so the
+   bar sits beside it; everything after them starts below. */
+.f--group {
+  display: block;
+  padding: 0;
+  border: 0;
+}
+
+.f--group > legend {
+  float: left;
+  margin: 0 0 7px;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.f--group > .f__bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-height: 22px;
+  margin-bottom: 7px;
+}
+
+.f--group > :not(legend, .f__bar) {
+  clear: both;
+}
+
+.f--group > * + :not(legend, .f__bar, dialog) {
+  margin-top: 7px;
+}
+
+.f--group:focus {
+  outline: none;
+}
+
+.f--group:focus-visible {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: 4px;
+}
+
+/* The EN | AR switch in a label row is the kit's Segmented, smaller. */
+.f__bar .seg {
+  padding: 2px;
+}
+
+.f__bar .seg__o {
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* "Arabic (missing)": a warn dot after the option's word (the name says it in words). */
+.seg__cue {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--ad-warn-text);
+}
+
+/* A switch beside its label (SwitchField): the label and its hint on the start side. */
+.f--inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 16px;
+}
+
+.f--inline > .f__l {
+  grid-column: 1;
+}
+
+.f--inline > button[role='switch'] {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.f--inline > .f__hint,
+.f--inline > .f__err {
+  grid-column: 1 / -1;
+}
+
+/* A bilingual pair (BilingualField, ChipsField, the rich-text halves): one half shown, the
+   other [hidden]; in Both, side by side while each half has 16rem, one column below 32rem
+   of the field's own width (ui.md §10). */
+.bi[data-lang='both'] {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+}
+
+.bi__half {
+  min-width: 0;
+}
+
+.bi__h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bi__lang {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--ad-dim);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Numbers and code read best in a fixed width (the prototype's .in--num, .colorf .in). */
+.in--num {
+  max-inline-size: 160px;
+}
+
+.in--mono {
+  font-family: var(--ad-mono);
+}
+
+input.in--mono[type='text'] {
+  text-transform: uppercase;
+}
+
+/* An editor (EditorForm): the fields' card, then the action bar. */
+.editor > .card {
+  margin-bottom: 0;
+}
+
+/* The editor's own bars (EditorForm): the language switch and "Arabic missing: N". */
+.editor__lang {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 16px;
+}
+
+.ar-gaps {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ar-gaps__n {
+  margin: 0;
+  color: var(--ad-warn-text);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.ar-gaps__n:empty {
+  display: none;
+}
+
+.editor__conflict {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.form-actions .save-status {
+  margin-inline-start: 4px;
+}
+
+/* Colour (ColorField, the prototype's .colorf and .swatches): the swatch is painted by an
+   SVG rect (no style attribute); a pressed one is ringed in ink. */
+.colorf {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.colorf input[type='color'] {
+  inline-size: 44px;
+  block-size: 40px;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--ad-control);
+  border-radius: var(--ad-r-xs);
+  background: var(--ad-card);
+  cursor: pointer;
+}
+
+.colorf input[type='text'] {
+  flex: 1;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.swatch {
+  inline-size: 32px;
+  block-size: 32px;
+  padding: 1px;
+  border: 2px solid transparent;
+  border-radius: var(--ad-r-xs);
+  background: transparent;
+}
+
+.swatch:hover {
+  border-color: var(--ad-line-2);
+}
+
+.swatch[aria-pressed='true'] {
+  border-color: var(--ad-ink);
+}
+
+/* Range (RangeField, the prototype's .range): the slider, then its value. */
+.range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.range input[type='range'] {
+  flex: 1;
+  min-inline-size: 0;
+  accent-color: var(--ad-primary);
+}
+
+.range output {
+  min-inline-size: 44px;
+  text-align: end;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.range__unset {
+  color: var(--ad-dim2);
+  font-weight: 500;
+}
+
+/* Chips (ChipsField, the prototype's .tagsf): the chips, then the box that adds one. */
+.tagsf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 6px 8px;
+  border: 1px solid var(--ad-control);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+}
+
+.tagsf:focus-within {
+  border-color: var(--ad-focus);
+  outline: 2px solid var(--ad-focus);
+  outline-offset: 0;
+}
+
+.tagsf__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tg {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
+  border-radius: var(--ad-r-pill);
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.tg__x {
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ad-primary);
+}
+
+.tg__x:hover {
+  background: var(--ad-primary-soft-2);
+}
+
+.tagsf input[type='text'] {
+  flex: 1;
+  min-inline-size: 8rem;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+}
+
+.tagsf input[type='text']:focus-visible {
+  outline: none;
+}
+
 /* ---- Messages (inline; errors never only in a toast) ---- */
 
 .msg {
@@ -2314,13 +2679,22 @@ img.ProseMirror-separator {
   display: block;
 }
 
-.editor-surface {
+.rich {
   border: 1px solid var(--ad-control);
   border-radius: var(--ad-r-sm);
   background: var(--ad-card);
 }
 
-.editor-toolbar {
+/* The skeleton while the lazy editor loads (the admin-rich chunk). */
+.rich--loading {
+  min-height: 6rem;
+  padding: 10px 12px;
+  color: var(--ad-dim);
+  font-size: 13px;
+}
+
+/* The prototype's .rich__bar (F5a): small square buttons, the pressed one tinted. */
+.rich__bar {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
@@ -2328,8 +2702,10 @@ img.ProseMirror-separator {
   border-bottom: 1px solid var(--ad-line);
 }
 
-.editor-toolbar button {
-  padding: 5px 9px;
+.rich__bar button {
+  min-inline-size: 30px;
+  block-size: 30px;
+  padding: 0 8px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -2339,26 +2715,36 @@ img.ProseMirror-separator {
   box-shadow: none;
 }
 
-.editor-toolbar button:hover {
+.rich__bar button:hover {
   background: var(--ad-bg);
   color: var(--ad-ink);
 }
 
-.editor-toolbar button[aria-pressed='true'] {
+.rich__bar button[aria-pressed='true'] {
   background: var(--ad-primary-soft);
   color: var(--ad-primary);
 }
 
-.editor-surface .tiptap {
+.rich__bar .rich__clear {
+  margin-inline-start: auto;
+  font-size: 11.5px;
+}
+
+.rich .tiptap {
   min-height: 14rem;
   padding: 10px 12px;
   line-height: 1.55;
   border-radius: 0 0 var(--ad-r-sm) var(--ad-r-sm);
 }
 
-.editor-surface .tiptap:focus-visible {
+.rich .tiptap:focus-visible {
   outline: 2px solid var(--ad-focus);
   outline-offset: -2px;
+}
+
+.rich .tiptap a {
+  color: var(--ad-primary);
+  text-decoration: underline;
 }
 
 /* ---- Composite fields: relations, repeaters, the media picker ---- */
@@ -2449,6 +2835,116 @@ img.ProseMirror-separator {
   width: 100%;
   height: auto;
   aspect-ratio: 4 / 3;
+}
+
+/* Repeater v2 (RepeaterField, Admin v2 F5a, the prototype's .repeat): item cards headed by
+   the kit's Sortable handle, the item's name and title, Move up / down, collapse and
+   remove; the body a group, [hidden] while collapsed. */
+.repeat__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.repeat__i {
+  position: relative;
+  border: 1px solid var(--ad-line);
+  border-radius: 12px;
+  background: var(--ad-surface-2);
+}
+
+.repeat__h {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 8px 10px 8px 14px;
+}
+
+.repeat__n {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ad-ink);
+}
+
+.repeat__t {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ad-dim);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repeat__h > .li__move {
+  margin-inline-start: auto;
+}
+
+.repeat__t + .li__move {
+  margin-inline-start: 0;
+}
+
+.repeat__h > .drag {
+  margin-block: -8px;
+}
+
+.repeat__b {
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--ad-line);
+}
+
+.repeat__b > .f:first-child,
+.repeat__b > .field-group:first-child {
+  margin-top: 10px;
+}
+
+.repeat__add {
+  justify-self: start;
+  margin-top: 10px;
+}
+
+/* Media v2 (MediaField, the prototype's .imgf): the thumbnail, then its name, the alt
+   badge and the buttons. */
+.imgf {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.imgf__pv {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 96px;
+  block-size: 64px;
+  overflow: hidden;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-xs);
+  background: var(--ad-bg);
+  color: var(--ad-dim2);
+}
+
+.imgf__pv img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.imgf__body {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.imgf__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ---- Component kit (Admin v2 F4b, docs/admin-v2/ui.md §2.4, §2.5, AV-07) ----
@@ -3687,8 +4183,10 @@ dialog.drw[data-size='wide'] {
   .toast,
   .admin-nav-group a[aria-current='page'],
   .tabs a[aria-current],
-  .editor-toolbar button[aria-pressed='true'],
+  .rich__bar button[aria-pressed='true'],
   .media-pick[aria-pressed='true'],
+  .swatch[aria-pressed='true'],
+  .tg,
   .cmd__i[aria-selected='true'],
   .hc-tip,
   .note,
@@ -3710,6 +4208,12 @@ dialog.drw[data-size='wide'] {
 
   button[role='switch'] {
     border: 1px solid ButtonText;
+  }
+
+  /* The "Arabic (missing)" dot is a fill: a system colour keeps it seen (the words are
+     in the option's name either way). */
+  .seg__cue {
+    background: Mark;
   }
 
   .bar-fill {

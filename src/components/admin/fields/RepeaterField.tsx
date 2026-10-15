@@ -119,7 +119,7 @@ export default function RepeaterField({
   const groupError = errors?.[base];
 
   return (
-    <fieldset id={base} tabIndex={-1} className="f f--group repeat">
+    <fieldset id={base} tabIndex={-1} className="f f--group">
       <legend className="field-legend">{field.label}</legend>
       <div className="f__bar">
         <span className="f__meta">{count === '1' ? '1 item' : `${count} items`}</span>
