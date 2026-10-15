@@ -1,0 +1,2429 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`resource configs: toRow is what it was before R2 > ai-questions 1`] = `
+{
+  "full": {
+    "help_text": {
+      "ar": "مساعدة",
+      "en": "Help",
+    },
+    "input_type": "single",
+    "options": [
+      {
+        "label": {
+          "ar": "أ",
+          "en": "A",
+        },
+        "value": "a",
+      },
+    ],
+    "prompt": {
+      "ar": "سؤال",
+      "en": "Prompt",
+    },
+    "slug": "sample-slug",
+    "sort_order": 7,
+    "status": "published",
+  },
+  "keys": {
+    "helpText": {
+      "help_text": {
+        "ar": "مساعدة",
+        "en": "Help",
+      },
+    },
+    "inputType": {
+      "input_type": "single",
+    },
+    "options": {
+      "options": [
+        {
+          "label": {
+            "ar": "أ",
+            "en": "A",
+          },
+          "value": "a",
+        },
+      ],
+    },
+    "prompt": {
+      "prompt": {
+        "ar": "سؤال",
+        "en": "Prompt",
+      },
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "status": {
+      "status": "published",
+    },
+  },
+  "nulls": {
+    "helpText": {
+      "help_text": null,
+    },
+    "inputType": {
+      "input_type": null,
+    },
+    "options": {
+      "options": null,
+    },
+    "prompt": {
+      "prompt": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "status": {
+      "status": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > ai-styles 1`] = `
+{
+  "full": {
+    "description": {
+      "ar": "وصف",
+      "en": "Description",
+    },
+    "image_url": "https://images.example.test/style.jpg",
+    "name": {
+      "ar": "اسم تجريبي",
+      "en": "Sample name",
+    },
+    "slug": "sample-slug",
+    "sort_order": 7,
+    "status": "published",
+    "traits": [
+      "bold",
+    ],
+  },
+  "keys": {
+    "description": {
+      "description": {
+        "ar": "وصف",
+        "en": "Description",
+      },
+    },
+    "imageUrl": {
+      "image_url": "https://images.example.test/style.jpg",
+    },
+    "name": {
+      "name": {
+        "ar": "اسم تجريبي",
+        "en": "Sample name",
+      },
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "status": {
+      "status": "published",
+    },
+    "traits": {
+      "traits": [
+        "bold",
+      ],
+    },
+  },
+  "nulls": {
+    "description": {
+      "description": null,
+    },
+    "imageUrl": {
+      "image_url": null,
+    },
+    "name": {
+      "name": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "status": {
+      "status": null,
+    },
+    "traits": {
+      "traits": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > blog 1`] = `
+{
+  "full": {
+    "author_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    "body": {
+      "ar": {
+        "content": [
+          {
+            "content": [
+              {
+                "text": "فقرة واحدة من نص تجريبي.",
+                "type": "text",
+              },
+            ],
+            "type": "paragraph",
+          },
+        ],
+        "type": "doc",
+      },
+      "en": {
+        "content": [
+          {
+            "content": [
+              {
+                "text": "One paragraph of sample copy for the reading time.",
+                "type": "text",
+              },
+            ],
+            "type": "paragraph",
+          },
+        ],
+        "type": "doc",
+      },
+    },
+    "body_html": {
+      "ar": "<p>فقرة واحدة من نص تجريبي.</p>",
+      "en": "<p>One paragraph of sample copy for the reading time.</p>",
+    },
+    "category_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    "cover_image_url": "https://images.example.test/cover.jpg",
+    "excerpt": {
+      "ar": "مقتطف",
+      "en": "Excerpt",
+    },
+    "published_at": "2026-06-01T08:00:00.000Z",
+    "reading_minutes": 1,
+    "scheduled_for": "2027-01-01T09:00:00.000Z",
+    "slug": "sample-slug",
+    "status": "published",
+    "title": {
+      "ar": "عنوان تجريبي",
+      "en": "Sample title",
+    },
+  },
+  "keys": {
+    "authorId": {
+      "author_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    },
+    "body": {
+      "body": {
+        "ar": {
+          "content": [
+            {
+              "content": [
+                {
+                  "text": "فقرة واحدة من نص تجريبي.",
+                  "type": "text",
+                },
+              ],
+              "type": "paragraph",
+            },
+          ],
+          "type": "doc",
+        },
+        "en": {
+          "content": [
+            {
+              "content": [
+                {
+                  "text": "One paragraph of sample copy for the reading time.",
+                  "type": "text",
+                },
+              ],
+              "type": "paragraph",
+            },
+          ],
+          "type": "doc",
+        },
+      },
+      "body_html": {
+        "ar": "<p>فقرة واحدة من نص تجريبي.</p>",
+        "en": "<p>One paragraph of sample copy for the reading time.</p>",
+      },
+      "reading_minutes": 1,
+    },
+    "categoryId": {
+      "category_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    },
+    "coverImageUrl": {
+      "cover_image_url": "https://images.example.test/cover.jpg",
+    },
+    "excerpt": {
+      "excerpt": {
+        "ar": "مقتطف",
+        "en": "Excerpt",
+      },
+    },
+    "scheduledFor": {
+      "scheduled_for": "2027-01-01T09:00:00.000Z",
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "status": {
+      "published_at": "2026-06-01T08:00:00.000Z",
+      "status": "published",
+    },
+    "title": {
+      "title": {
+        "ar": "عنوان تجريبي",
+        "en": "Sample title",
+      },
+    },
+  },
+  "nulls": {
+    "authorId": {
+      "author_id": null,
+    },
+    "body": {
+      "body": null,
+      "body_html": null,
+    },
+    "categoryId": {
+      "category_id": null,
+    },
+    "coverImageUrl": {
+      "cover_image_url": null,
+    },
+    "excerpt": {
+      "excerpt": null,
+    },
+    "scheduledFor": {
+      "scheduled_for": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "status": {
+      "status": null,
+    },
+    "title": {
+      "title": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > categories 1`] = `
+{
+  "full": {
+    "name": {
+      "ar": "اسم تجريبي",
+      "en": "Sample name",
+    },
+    "slug": "sample-slug",
+  },
+  "keys": {
+    "name": {
+      "name": {
+        "ar": "اسم تجريبي",
+        "en": "Sample name",
+      },
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+  },
+  "nulls": {
+    "name": {
+      "name": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > certifications 1`] = `
+{
+  "full": {
+    "issuer": {
+      "ar": "جهة",
+      "en": "Issuer",
+    },
+    "logo_url": "https://images.example.test/logo.png",
+    "name": {
+      "ar": "اسم تجريبي",
+      "en": "Sample name",
+    },
+    "slug": "sample-slug",
+    "sort_order": 7,
+    "status": "published",
+    "year": 2026,
+  },
+  "keys": {
+    "issuer": {
+      "issuer": {
+        "ar": "جهة",
+        "en": "Issuer",
+      },
+    },
+    "logoUrl": {
+      "logo_url": "https://images.example.test/logo.png",
+    },
+    "name": {
+      "name": {
+        "ar": "اسم تجريبي",
+        "en": "Sample name",
+      },
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "status": {
+      "status": "published",
+    },
+    "year": {
+      "year": 2026,
+    },
+  },
+  "nulls": {
+    "issuer": {
+      "issuer": null,
+    },
+    "logoUrl": {
+      "logo_url": null,
+    },
+    "name": {
+      "name": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "status": {
+      "status": null,
+    },
+    "year": {
+      "year": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > clients 1`] = `
+{
+  "full": {
+    "is_placeholder": false,
+    "logo_media_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    "name": {
+      "ar": "اسم تجريبي",
+      "en": "Sample name",
+    },
+    "show_in_marquee": true,
+    "slug": "sample-slug",
+    "sort_order": 7,
+    "visible": true,
+    "website_url": "https://client.example.test",
+  },
+  "keys": {
+    "isPlaceholder": {
+      "is_placeholder": false,
+    },
+    "logoMediaId": {
+      "logo_media_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    },
+    "name": {
+      "name": {
+        "ar": "اسم تجريبي",
+        "en": "Sample name",
+      },
+    },
+    "showInMarquee": {
+      "show_in_marquee": true,
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "visible": {
+      "visible": true,
+    },
+    "websiteUrl": {
+      "website_url": "https://client.example.test",
+    },
+  },
+  "nulls": {
+    "isPlaceholder": {
+      "is_placeholder": null,
+    },
+    "logoMediaId": {
+      "logo_media_id": null,
+    },
+    "name": {
+      "name": null,
+    },
+    "showInMarquee": {
+      "show_in_marquee": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "visible": {
+      "visible": null,
+    },
+    "websiteUrl": {
+      "website_url": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > disciplines 1`] = `
+{
+  "full": {
+    "blurb": {
+      "ar": "سطر قصير",
+      "en": "A short line",
+    },
+    "name": {
+      "ar": "اسم تجريبي",
+      "en": "Sample name",
+    },
+    "poster_media_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    "preview_end_s": 6,
+    "preview_start_s": 2,
+    "preview_video_path": "/media/sample-reel.mp4",
+    "published_at": "2026-06-01T08:00:00.000Z",
+    "scheduled_for": "2027-01-01T09:00:00.000Z",
+    "short": {
+      "ar": "سطر البطاقة",
+      "en": "Card line",
+    },
+    "slug": "sample-slug",
+    "sort_order": 7,
+    "status": "published",
+  },
+  "keys": {
+    "blurb": {
+      "blurb": {
+        "ar": "سطر قصير",
+        "en": "A short line",
+      },
+    },
+    "clip": {
+      "preview_end_s": 6,
+      "preview_start_s": 2,
+      "preview_video_path": "/media/sample-reel.mp4",
+    },
+    "name": {
+      "name": {
+        "ar": "اسم تجريبي",
+        "en": "Sample name",
+      },
+    },
+    "posterMediaId": {
+      "poster_media_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    },
+    "scheduledFor": {
+      "scheduled_for": "2027-01-01T09:00:00.000Z",
+    },
+    "short": {
+      "short": {
+        "ar": "سطر البطاقة",
+        "en": "Card line",
+      },
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "status": {
+      "published_at": "2026-06-01T08:00:00.000Z",
+      "status": "published",
+    },
+  },
+  "nulls": {
+    "blurb": {
+      "blurb": null,
+    },
+    "clip": {
+      "preview_end_s": null,
+      "preview_start_s": null,
+      "preview_video_path": null,
+    },
+    "name": {
+      "name": null,
+    },
+    "posterMediaId": {
+      "poster_media_id": null,
+    },
+    "scheduledFor": {
+      "scheduled_for": null,
+    },
+    "short": {
+      "short": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "status": {
+      "status": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > media 1`] = `
+{
+  "full": {
+    "alt": {
+      "ar": "بديل",
+      "en": "Alt",
+    },
+    "display_name": "x.jpg",
+    "folder": "samples",
+    "height": 480,
+    "kind": "image",
+    "mime_type": "image/jpeg",
+    "provider": "external",
+    "size_bytes": 1024,
+    "storage_path": "https://images.example.test/x.jpg",
+    "stream_uid": "sample-stream",
+    "tags": [
+      "sample",
+    ],
+    "width": 640,
+  },
+  "keys": {
+    "alt": {
+      "alt": {
+        "ar": "بديل",
+        "en": "Alt",
+      },
+    },
+    "displayName": {
+      "display_name": "x.jpg",
+    },
+    "folder": {
+      "folder": "samples",
+    },
+    "height": {
+      "height": 480,
+    },
+    "kind": {
+      "kind": "image",
+    },
+    "mimeType": {
+      "mime_type": "image/jpeg",
+    },
+    "provider": {
+      "provider": "external",
+    },
+    "sizeBytes": {
+      "size_bytes": 1024,
+    },
+    "storagePath": {
+      "storage_path": "https://images.example.test/x.jpg",
+    },
+    "streamUid": {
+      "stream_uid": "sample-stream",
+    },
+    "tags": {
+      "tags": [
+        "sample",
+      ],
+    },
+    "width": {
+      "width": 640,
+    },
+  },
+  "nulls": {
+    "alt": {
+      "alt": null,
+    },
+    "displayName": {
+      "display_name": null,
+    },
+    "folder": {
+      "folder": null,
+    },
+    "height": {
+      "height": null,
+    },
+    "kind": {
+      "kind": null,
+    },
+    "mimeType": {
+      "mime_type": null,
+    },
+    "provider": {
+      "provider": null,
+    },
+    "sizeBytes": {
+      "size_bytes": null,
+    },
+    "storagePath": {
+      "storage_path": null,
+    },
+    "streamUid": {
+      "stream_uid": null,
+    },
+    "tags": {
+      "tags": null,
+    },
+    "width": {
+      "width": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > navigation 1`] = `
+{
+  "full": {
+    "href": "/services",
+    "is_key": true,
+    "label": {
+      "ar": "الخدمات",
+      "en": "Services",
+    },
+    "location": "header",
+    "parent_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    "sort_order": 7,
+    "visible": true,
+  },
+  "keys": {
+    "href": {
+      "href": "/services",
+    },
+    "isKey": {
+      "is_key": true,
+    },
+    "label": {
+      "label": {
+        "ar": "الخدمات",
+        "en": "Services",
+      },
+    },
+    "location": {
+      "location": "header",
+    },
+    "parentId": {
+      "parent_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "visible": {
+      "visible": true,
+    },
+  },
+  "nulls": {
+    "href": {
+      "error": "Validation failed: unsupported link scheme",
+    },
+    "isKey": {
+      "is_key": null,
+    },
+    "label": {
+      "label": null,
+    },
+    "location": {
+      "location": null,
+    },
+    "parentId": {
+      "parent_id": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "visible": {
+      "visible": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > pages 1`] = `
+{
+  "full": {
+    "nav_visible": false,
+    "published_at": "2026-06-01T08:00:00.000Z",
+    "scheduled_for": "2027-01-01T09:00:00.000Z",
+    "slug": "sample-slug",
+    "status": "published",
+    "title": {
+      "ar": "عنوان تجريبي",
+      "en": "Sample title",
+    },
+  },
+  "keys": {
+    "navVisible": {
+      "nav_visible": false,
+    },
+    "scheduledFor": {
+      "scheduled_for": "2027-01-01T09:00:00.000Z",
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "status": {
+      "published_at": "2026-06-01T08:00:00.000Z",
+      "status": "published",
+    },
+    "title": {
+      "title": {
+        "ar": "عنوان تجريبي",
+        "en": "Sample title",
+      },
+    },
+  },
+  "nulls": {
+    "navVisible": {
+      "nav_visible": null,
+    },
+    "scheduledFor": {
+      "scheduled_for": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "status": {
+      "status": null,
+    },
+    "title": {
+      "title": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > portfolio 1`] = `
+{
+  "full": {
+    "body": {
+      "ar": {
+        "content": [
+          {
+            "content": [
+              {
+                "text": "فقرة واحدة من نص تجريبي.",
+                "type": "text",
+              },
+            ],
+            "type": "paragraph",
+          },
+        ],
+        "type": "doc",
+      },
+      "en": {
+        "content": [
+          {
+            "content": [
+              {
+                "text": "One paragraph of sample copy for the reading time.",
+                "type": "text",
+              },
+            ],
+            "type": "paragraph",
+          },
+        ],
+        "type": "doc",
+      },
+    },
+    "body_html": {
+      "ar": "<p>فقرة واحدة من نص تجريبي.</p>",
+      "en": "<p>One paragraph of sample copy for the reading time.</p>",
+    },
+    "client_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    "goal": {
+      "ar": "هدف",
+      "en": "Goal",
+    },
+    "is_featured": true,
+    "is_placeholder": false,
+    "keywords": [
+      "sample",
+    ],
+    "lead": {
+      "ar": "مقدمة",
+      "en": "Lead",
+    },
+    "next_portfolio_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    "poster_media_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    "preview_end_s": 4,
+    "preview_start_s": 1,
+    "preview_video_path": "/media/sample-reel.mp4",
+    "preview_video_uid": null,
+    "project_type": {
+      "ar": "فيلم",
+      "en": "Brand film",
+    },
+    "published_at": "2026-06-01T08:00:00.000Z",
+    "result": {
+      "ar": "نتيجة",
+      "en": "Result",
+    },
+    "results": [
+      {
+        "label": {
+          "ar": "تسمية",
+          "en": "Label",
+        },
+        "value": "12",
+      },
+    ],
+    "scheduled_for": "2027-01-01T09:00:00.000Z",
+    "scope": [
+      {
+        "ar": "بند",
+        "en": "Scope item",
+      },
+    ],
+    "sector_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    "slug": "sample-slug",
+    "sort_order": 7,
+    "status": "published",
+    "summary": {
+      "ar": "ملخص",
+      "en": "Summary",
+    },
+    "teaser": {
+      "ar": "تشويق",
+      "en": "Teaser",
+    },
+    "title": {
+      "ar": "عنوان تجريبي",
+      "en": "Sample title",
+    },
+    "year": 2026,
+  },
+  "keys": {
+    "body": {
+      "body": {
+        "ar": {
+          "content": [
+            {
+              "content": [
+                {
+                  "text": "فقرة واحدة من نص تجريبي.",
+                  "type": "text",
+                },
+              ],
+              "type": "paragraph",
+            },
+          ],
+          "type": "doc",
+        },
+        "en": {
+          "content": [
+            {
+              "content": [
+                {
+                  "text": "One paragraph of sample copy for the reading time.",
+                  "type": "text",
+                },
+              ],
+              "type": "paragraph",
+            },
+          ],
+          "type": "doc",
+        },
+      },
+      "body_html": {
+        "ar": "<p>فقرة واحدة من نص تجريبي.</p>",
+        "en": "<p>One paragraph of sample copy for the reading time.</p>",
+      },
+    },
+    "clientId": {
+      "client_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    },
+    "goal": {
+      "goal": {
+        "ar": "هدف",
+        "en": "Goal",
+      },
+    },
+    "isFeatured": {
+      "is_featured": true,
+    },
+    "isPlaceholder": {
+      "is_placeholder": false,
+    },
+    "keywords": {
+      "keywords": [
+        "sample",
+      ],
+    },
+    "lead": {
+      "lead": {
+        "ar": "مقدمة",
+        "en": "Lead",
+      },
+    },
+    "nextPortfolioId": {
+      "next_portfolio_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    },
+    "posterMediaId": {
+      "poster_media_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    },
+    "preview": {
+      "preview_end_s": 4,
+      "preview_start_s": 1,
+      "preview_video_path": "/media/sample-reel.mp4",
+      "preview_video_uid": null,
+    },
+    "projectType": {
+      "project_type": {
+        "ar": "فيلم",
+        "en": "Brand film",
+      },
+    },
+    "result": {
+      "result": {
+        "ar": "نتيجة",
+        "en": "Result",
+      },
+    },
+    "results": {
+      "results": [
+        {
+          "label": {
+            "ar": "تسمية",
+            "en": "Label",
+          },
+          "value": "12",
+        },
+      ],
+    },
+    "scheduledFor": {
+      "scheduled_for": "2027-01-01T09:00:00.000Z",
+    },
+    "scope": {
+      "scope": [
+        {
+          "ar": "بند",
+          "en": "Scope item",
+        },
+      ],
+    },
+    "sectorId": {
+      "sector_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "status": {
+      "published_at": "2026-06-01T08:00:00.000Z",
+      "status": "published",
+    },
+    "summary": {
+      "summary": {
+        "ar": "ملخص",
+        "en": "Summary",
+      },
+    },
+    "teaser": {
+      "teaser": {
+        "ar": "تشويق",
+        "en": "Teaser",
+      },
+    },
+    "title": {
+      "title": {
+        "ar": "عنوان تجريبي",
+        "en": "Sample title",
+      },
+    },
+    "year": {
+      "year": 2026,
+    },
+  },
+  "nulls": {
+    "body": {
+      "body": null,
+      "body_html": null,
+    },
+    "clientId": {
+      "client_id": null,
+    },
+    "goal": {
+      "goal": null,
+    },
+    "isFeatured": {
+      "is_featured": null,
+    },
+    "isPlaceholder": {
+      "is_placeholder": null,
+    },
+    "keywords": {
+      "keywords": null,
+    },
+    "lead": {
+      "lead": null,
+    },
+    "nextPortfolioId": {
+      "next_portfolio_id": null,
+    },
+    "posterMediaId": {
+      "poster_media_id": null,
+    },
+    "preview": {
+      "preview_end_s": null,
+      "preview_start_s": null,
+      "preview_video_path": null,
+      "preview_video_uid": null,
+    },
+    "projectType": {
+      "project_type": null,
+    },
+    "result": {
+      "result": null,
+    },
+    "results": {
+      "results": null,
+    },
+    "scheduledFor": {
+      "scheduled_for": null,
+    },
+    "scope": {
+      "scope": null,
+    },
+    "sectorId": {
+      "sector_id": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "status": {
+      "status": null,
+    },
+    "summary": {
+      "summary": null,
+    },
+    "teaser": {
+      "teaser": null,
+    },
+    "title": {
+      "title": null,
+    },
+    "year": {
+      "year": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > redirects 1`] = `
+{
+  "full": {
+    "source_path": "/old-page",
+    "status": 301,
+    "target_path": "/new-page",
+  },
+  "keys": {
+    "sourcePath": {
+      "source_path": "/old-page",
+    },
+    "status": {
+      "status": 301,
+    },
+    "targetPath": {
+      "target_path": "/new-page",
+    },
+  },
+  "nulls": {
+    "sourcePath": {
+      "source_path": null,
+    },
+    "status": {
+      "status": null,
+    },
+    "targetPath": {
+      "error": "Validation failed: unsupported link scheme",
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > sections 1`] = `
+{
+  "full": {
+    "content": {
+      "heading": {
+        "ar": "عنوان",
+        "en": "Heading",
+      },
+    },
+    "is_placeholder": false,
+    "page_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    "sort_order": 7,
+    "type": "richText",
+    "visible": true,
+  },
+  "keys": {
+    "content": {
+      "content": {
+        "heading": {
+          "ar": "عنوان",
+          "en": "Heading",
+        },
+      },
+    },
+    "isPlaceholder": {
+      "is_placeholder": false,
+    },
+    "pageId": {
+      "page_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "type": {
+      "type": "richText",
+    },
+    "visible": {
+      "visible": true,
+    },
+  },
+  "nulls": {
+    "content": {
+      "content": null,
+    },
+    "isPlaceholder": {
+      "is_placeholder": null,
+    },
+    "pageId": {
+      "page_id": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "type": {
+      "type": null,
+    },
+    "visible": {
+      "visible": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > sectors 1`] = `
+{
+  "full": {
+    "name": {
+      "ar": "اسم تجريبي",
+      "en": "Sample name",
+    },
+    "slug": "sample-slug",
+    "sort_order": 7,
+    "visible": true,
+  },
+  "keys": {
+    "name": {
+      "name": {
+        "ar": "اسم تجريبي",
+        "en": "Sample name",
+      },
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "visible": {
+      "visible": true,
+    },
+  },
+  "nulls": {
+    "name": {
+      "name": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "visible": {
+      "visible": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > service-cases 1`] = `
+{
+  "full": {
+    "context": {
+      "ar": "أين كانوا",
+      "en": "Where they were",
+    },
+    "is_placeholder": false,
+    "portfolio_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    "problems": [
+      {
+        "title": {
+          "ar": "مشكلة",
+          "en": "Problem",
+        },
+      },
+    ],
+    "published_at": "2026-06-01T08:00:00.000Z",
+    "results": [
+      {
+        "label": {
+          "ar": "تسمية",
+          "en": "Label",
+        },
+        "value": "12",
+      },
+    ],
+    "scheduled_for": "2027-01-01T09:00:00.000Z",
+    "service_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    "status": "published",
+    "title": {
+      "ar": "عنوان تجريبي",
+      "en": "Sample title",
+    },
+  },
+  "keys": {
+    "context": {
+      "context": {
+        "ar": "أين كانوا",
+        "en": "Where they were",
+      },
+    },
+    "isPlaceholder": {
+      "is_placeholder": false,
+    },
+    "portfolioId": {
+      "portfolio_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    },
+    "problems": {
+      "problems": [
+        {
+          "title": {
+            "ar": "مشكلة",
+            "en": "Problem",
+          },
+        },
+      ],
+    },
+    "results": {
+      "results": [
+        {
+          "label": {
+            "ar": "تسمية",
+            "en": "Label",
+          },
+          "value": "12",
+        },
+      ],
+    },
+    "scheduledFor": {
+      "scheduled_for": "2027-01-01T09:00:00.000Z",
+    },
+    "serviceId": {
+      "service_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    },
+    "status": {
+      "published_at": "2026-06-01T08:00:00.000Z",
+      "status": "published",
+    },
+    "title": {
+      "title": {
+        "ar": "عنوان تجريبي",
+        "en": "Sample title",
+      },
+    },
+  },
+  "nulls": {
+    "context": {
+      "context": null,
+    },
+    "isPlaceholder": {
+      "is_placeholder": null,
+    },
+    "portfolioId": {
+      "portfolio_id": null,
+    },
+    "problems": {
+      "problems": null,
+    },
+    "results": {
+      "results": null,
+    },
+    "scheduledFor": {
+      "scheduled_for": null,
+    },
+    "serviceId": {
+      "service_id": null,
+    },
+    "status": {
+      "status": null,
+    },
+    "title": {
+      "title": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > services 1`] = `
+{
+  "full": {
+    "blurb": {
+      "ar": "سطر قصير",
+      "en": "A short line",
+    },
+    "body": {
+      "ar": {
+        "content": [
+          {
+            "content": [
+              {
+                "text": "فقرة واحدة من نص تجريبي.",
+                "type": "text",
+              },
+            ],
+            "type": "paragraph",
+          },
+        ],
+        "type": "doc",
+      },
+      "en": {
+        "content": [
+          {
+            "content": [
+              {
+                "text": "One paragraph of sample copy for the reading time.",
+                "type": "text",
+              },
+            ],
+            "type": "paragraph",
+          },
+        ],
+        "type": "doc",
+      },
+    },
+    "body_html": {
+      "ar": "<p>فقرة واحدة من نص تجريبي.</p>",
+      "en": "<p>One paragraph of sample copy for the reading time.</p>",
+    },
+    "category": "sample-category",
+    "deliverables": [
+      {
+        "ar": "مخرج",
+        "en": "A deliverable",
+      },
+    ],
+    "discipline_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    "hero_video_uid": "sample-uid",
+    "intro": {
+      "ar": "ما هو",
+      "en": "What it is",
+    },
+    "is_teaser": false,
+    "poster_media_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    "preview_end_s": 6,
+    "preview_start_s": 2,
+    "preview_video_path": "/media/sample-reel.mp4",
+    "published_at": "2026-06-01T08:00:00.000Z",
+    "scheduled_for": "2027-01-01T09:00:00.000Z",
+    "short_title": {
+      "ar": "قصير",
+      "en": "Short",
+    },
+    "slug": "sample-slug",
+    "sort_order": 7,
+    "status": "published",
+    "title": {
+      "ar": "عنوان تجريبي",
+      "en": "Sample title",
+    },
+    "value_points": [
+      {
+        "body": {
+          "ar": "لماذا",
+          "en": "Why",
+        },
+        "title": {
+          "ar": "نقطة",
+          "en": "Point",
+        },
+      },
+    ],
+  },
+  "keys": {
+    "blurb": {
+      "blurb": {
+        "ar": "سطر قصير",
+        "en": "A short line",
+      },
+    },
+    "body": {
+      "body": {
+        "ar": {
+          "content": [
+            {
+              "content": [
+                {
+                  "text": "فقرة واحدة من نص تجريبي.",
+                  "type": "text",
+                },
+              ],
+              "type": "paragraph",
+            },
+          ],
+          "type": "doc",
+        },
+        "en": {
+          "content": [
+            {
+              "content": [
+                {
+                  "text": "One paragraph of sample copy for the reading time.",
+                  "type": "text",
+                },
+              ],
+              "type": "paragraph",
+            },
+          ],
+          "type": "doc",
+        },
+      },
+      "body_html": {
+        "ar": "<p>فقرة واحدة من نص تجريبي.</p>",
+        "en": "<p>One paragraph of sample copy for the reading time.</p>",
+      },
+    },
+    "category": {
+      "category": "sample-category",
+    },
+    "clip": {
+      "preview_end_s": 6,
+      "preview_start_s": 2,
+      "preview_video_path": "/media/sample-reel.mp4",
+    },
+    "deliverables": {
+      "deliverables": [
+        {
+          "ar": "مخرج",
+          "en": "A deliverable",
+        },
+      ],
+    },
+    "disciplineId": {
+      "discipline_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    },
+    "heroVideoUid": {
+      "hero_video_uid": "sample-uid",
+    },
+    "intro": {
+      "intro": {
+        "ar": "ما هو",
+        "en": "What it is",
+      },
+    },
+    "isTeaser": {
+      "is_teaser": false,
+    },
+    "posterMediaId": {
+      "poster_media_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    },
+    "scheduledFor": {
+      "scheduled_for": "2027-01-01T09:00:00.000Z",
+    },
+    "shortTitle": {
+      "short_title": {
+        "ar": "قصير",
+        "en": "Short",
+      },
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "status": {
+      "published_at": "2026-06-01T08:00:00.000Z",
+      "status": "published",
+    },
+    "title": {
+      "title": {
+        "ar": "عنوان تجريبي",
+        "en": "Sample title",
+      },
+    },
+    "valuePoints": {
+      "value_points": [
+        {
+          "body": {
+            "ar": "لماذا",
+            "en": "Why",
+          },
+          "title": {
+            "ar": "نقطة",
+            "en": "Point",
+          },
+        },
+      ],
+    },
+  },
+  "nulls": {
+    "blurb": {
+      "blurb": null,
+    },
+    "body": {
+      "body": null,
+      "body_html": null,
+    },
+    "category": {
+      "category": null,
+    },
+    "clip": {
+      "preview_end_s": null,
+      "preview_start_s": null,
+      "preview_video_path": null,
+    },
+    "deliverables": {
+      "deliverables": null,
+    },
+    "disciplineId": {
+      "discipline_id": null,
+    },
+    "heroVideoUid": {
+      "hero_video_uid": null,
+    },
+    "intro": {
+      "intro": null,
+    },
+    "isTeaser": {
+      "is_teaser": null,
+    },
+    "posterMediaId": {
+      "poster_media_id": null,
+    },
+    "scheduledFor": {
+      "scheduled_for": null,
+    },
+    "shortTitle": {
+      "short_title": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "status": {
+      "status": null,
+    },
+    "title": {
+      "title": null,
+    },
+    "valuePoints": {
+      "value_points": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > statistics 1`] = `
+{
+  "full": {
+    "is_placeholder": false,
+    "label": {
+      "ar": "الخدمات",
+      "en": "Services",
+    },
+    "placement_labels": {
+      "home": {
+        "ar": "مشاريع",
+        "en": "Projects",
+      },
+    },
+    "placements": [
+      "home",
+    ],
+    "slug": "sample-slug",
+    "sort_order": 7,
+    "status": "published",
+    "value": "12.5+",
+    "value_numeric": 12.5,
+    "value_suffix": "+",
+  },
+  "keys": {
+    "isPlaceholder": {
+      "is_placeholder": false,
+    },
+    "label": {
+      "label": {
+        "ar": "الخدمات",
+        "en": "Services",
+      },
+    },
+    "placementLabels": {
+      "placement_labels": {
+        "home": {
+          "ar": "مشاريع",
+          "en": "Projects",
+        },
+      },
+    },
+    "placements": {
+      "placements": [
+        "home",
+      ],
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "status": {
+      "status": "published",
+    },
+    "value": {
+      "value": "12.5+",
+      "value_numeric": null,
+      "value_suffix": null,
+    },
+    "valueNumeric": {
+      "value": "12.5",
+      "value_numeric": 12.5,
+    },
+    "valueSuffix": {
+      "value_suffix": "+",
+    },
+  },
+  "nulls": {
+    "isPlaceholder": {
+      "is_placeholder": null,
+    },
+    "label": {
+      "label": null,
+    },
+    "placementLabels": {
+      "placement_labels": null,
+    },
+    "placements": {
+      "placements": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "status": {
+      "status": null,
+    },
+    "value": {
+      "value": null,
+    },
+    "valueNumeric": {
+      "value_numeric": null,
+    },
+    "valueSuffix": {
+      "value_suffix": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > team 1`] = `
+{
+  "full": {
+    "avatar_url": "https://images.example.test/a.jpg",
+    "bio": {
+      "ar": "نبذة",
+      "en": "Bio",
+    },
+    "is_leadership": true,
+    "is_placeholder": false,
+    "linkedin_url": "https://linkedin.com/in/sample",
+    "name": {
+      "ar": "اسم تجريبي",
+      "en": "Sample name",
+    },
+    "portrait_media_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    "profile_user_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    "role": {
+      "ar": "مصمم",
+      "en": "Designer",
+    },
+    "slug": "sample-slug",
+    "sort_order": 7,
+    "status": "published",
+  },
+  "keys": {
+    "avatarUrl": {
+      "avatar_url": "https://images.example.test/a.jpg",
+    },
+    "bio": {
+      "bio": {
+        "ar": "نبذة",
+        "en": "Bio",
+      },
+    },
+    "isLeadership": {
+      "is_leadership": true,
+    },
+    "isPlaceholder": {
+      "is_placeholder": false,
+    },
+    "linkedinUrl": {
+      "linkedin_url": "https://linkedin.com/in/sample",
+    },
+    "name": {
+      "name": {
+        "ar": "اسم تجريبي",
+        "en": "Sample name",
+      },
+    },
+    "portraitMediaId": {
+      "portrait_media_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    },
+    "profileUserId": {
+      "profile_user_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    },
+    "role": {
+      "role": {
+        "ar": "مصمم",
+        "en": "Designer",
+      },
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "status": {
+      "status": "published",
+    },
+  },
+  "nulls": {
+    "avatarUrl": {
+      "avatar_url": null,
+    },
+    "bio": {
+      "bio": null,
+    },
+    "isLeadership": {
+      "is_leadership": null,
+    },
+    "isPlaceholder": {
+      "is_placeholder": null,
+    },
+    "linkedinUrl": {
+      "linkedin_url": null,
+    },
+    "name": {
+      "name": null,
+    },
+    "portraitMediaId": {
+      "portrait_media_id": null,
+    },
+    "profileUserId": {
+      "profile_user_id": null,
+    },
+    "role": {
+      "role": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "status": {
+      "status": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > testimonials 1`] = `
+{
+  "full": {
+    "author_name": {
+      "ar": "شخص تجريبي",
+      "en": "Sample Person",
+    },
+    "author_role": {
+      "ar": "مدير",
+      "en": "Director",
+    },
+    "avatar_media_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    "client_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    "consent_obtained_at": "2026-01-02T03:04:05.000Z",
+    "consent_reference": "sample-ref",
+    "is_placeholder": false,
+    "placements": [
+      "home",
+    ],
+    "portfolio_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    "published_at": "2026-06-01T08:00:00.000Z",
+    "quote": {
+      "ar": "اقتباس تجريبي",
+      "en": "A sample quote",
+    },
+    "scheduled_for": "2027-01-01T09:00:00.000Z",
+    "slug": "sample-slug",
+    "sort_order": 7,
+    "status": "published",
+  },
+  "keys": {
+    "authorName": {
+      "author_name": {
+        "ar": "شخص تجريبي",
+        "en": "Sample Person",
+      },
+    },
+    "authorRole": {
+      "author_role": {
+        "ar": "مدير",
+        "en": "Director",
+      },
+    },
+    "avatarMediaId": {
+      "avatar_media_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    },
+    "clientId": {
+      "client_id": "0f0f0f0f-0000-4000-8000-00000000000c",
+    },
+    "consentObtainedAt": {
+      "consent_obtained_at": "2026-01-02T03:04:05.000Z",
+    },
+    "consentReference": {
+      "consent_reference": "sample-ref",
+    },
+    "isPlaceholder": {
+      "is_placeholder": false,
+    },
+    "placements": {
+      "placements": [
+        "home",
+      ],
+    },
+    "portfolioId": {
+      "portfolio_id": "0f0f0f0f-0000-4000-8000-00000000000b",
+    },
+    "quote": {
+      "quote": {
+        "ar": "اقتباس تجريبي",
+        "en": "A sample quote",
+      },
+    },
+    "scheduledFor": {
+      "scheduled_for": "2027-01-01T09:00:00.000Z",
+    },
+    "slug": {
+      "slug": "sample-slug",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "status": {
+      "published_at": "2026-06-01T08:00:00.000Z",
+      "status": "published",
+    },
+  },
+  "nulls": {
+    "authorName": {
+      "author_name": null,
+    },
+    "authorRole": {
+      "author_role": null,
+    },
+    "avatarMediaId": {
+      "avatar_media_id": null,
+    },
+    "clientId": {
+      "client_id": null,
+    },
+    "consentObtainedAt": {
+      "consent_obtained_at": null,
+    },
+    "consentReference": {
+      "consent_reference": null,
+    },
+    "isPlaceholder": {
+      "is_placeholder": null,
+    },
+    "placements": {
+      "placements": null,
+    },
+    "portfolioId": {
+      "portfolio_id": null,
+    },
+    "quote": {
+      "quote": null,
+    },
+    "scheduledFor": {
+      "scheduled_for": null,
+    },
+    "slug": {
+      "slug": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "status": {
+      "status": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
+{
+  "full": {
+    "is_active": true,
+    "name": "Sample theme",
+    "tokens": {
+      "--bs-klein": "#0024BC",
+    },
+  },
+  "keys": {
+    "isActive": {
+      "is_active": true,
+    },
+    "name": {
+      "name": "Sample theme",
+    },
+    "tokens": {
+      "tokens": {
+        "--bs-klein": "#0024BC",
+      },
+    },
+  },
+  "nulls": {
+    "isActive": {
+      "is_active": null,
+    },
+    "name": {
+      "name": null,
+    },
+    "tokens": {
+      "tokens": null,
+    },
+  },
+}
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > SEO defaults: a partial edit 1`] = `
+[
+  {
+    "op": "update",
+    "table": "seo_defaults",
+    "values": {
+      "title_template": {
+        "ar": "%s | تجريبي",
+        "en": "%s | Sample",
+      },
+    },
+  },
+  {
+    "op": "insert",
+    "table": "audit_log",
+    "values": {
+      "action": "seo_defaults.update",
+      "actor_id": "11111111-1111-4111-8111-111111111111",
+      "actor_role": "admin",
+      "detail": {
+        "fields": [
+          "title_template",
+        ],
+      },
+      "entity_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "entity_type": "seo_defaults",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > SEO defaults: an edit (an UPDATE) 1`] = `
+[
+  {
+    "op": "update",
+    "table": "seo_defaults",
+    "values": {
+      "default_description": {
+        "ar": "وصف تجريبي",
+        "en": "Sample description",
+      },
+      "default_og_image": "/og/sample.jpg",
+      "default_title": {
+        "ar": "تجريبي",
+        "en": "Sample",
+      },
+      "organization": {
+        "name": "Sample",
+      },
+      "robots_directives": "index,follow",
+      "title_template": {
+        "ar": "%s | تجريبي",
+        "en": "%s | Sample",
+      },
+    },
+  },
+  {
+    "op": "insert",
+    "table": "audit_log",
+    "values": {
+      "action": "seo_defaults.update",
+      "actor_id": "11111111-1111-4111-8111-111111111111",
+      "actor_role": "admin",
+      "detail": {
+        "fields": [
+          "title_template",
+          "default_title",
+          "default_description",
+          "default_og_image",
+          "organization",
+          "robots_directives",
+        ],
+      },
+      "entity_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "entity_type": "seo_defaults",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > SEO defaults: the first save (an INSERT) 1`] = `
+[
+  {
+    "op": "insert",
+    "table": "seo_defaults",
+    "values": {
+      "default_description": {
+        "ar": "وصف تجريبي",
+        "en": "Sample description",
+      },
+      "default_og_image": "/og/sample.jpg",
+      "default_title": {
+        "ar": "تجريبي",
+        "en": "Sample",
+      },
+      "organization": {
+        "name": "Sample",
+      },
+      "robots_directives": "index,follow",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "title_template": {
+        "ar": "%s | تجريبي",
+        "en": "%s | Sample",
+      },
+    },
+  },
+  {
+    "op": "insert",
+    "table": "audit_log",
+    "values": {
+      "action": "seo_defaults.update",
+      "actor_id": "11111111-1111-4111-8111-111111111111",
+      "actor_role": "admin",
+      "detail": {
+        "fields": [
+          "title_template",
+          "default_title",
+          "default_description",
+          "default_og_image",
+          "organization",
+          "robots_directives",
+        ],
+      },
+      "entity_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "entity_type": "seo_defaults",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > entity SEO: an edit (an UPDATE) 1`] = `
+[
+  {
+    "op": "update",
+    "table": "entity_seo",
+    "values": {
+      "canonical_override": "https://example.test/services/sample",
+      "meta_description": {
+        "ar": "وصف",
+        "en": "Meta description",
+      },
+      "meta_title": {
+        "ar": "عنوان",
+        "en": "Meta title",
+      },
+      "og_image": "/og/service.jpg",
+      "robots": "index,follow",
+      "schema_type": "Service",
+    },
+  },
+  {
+    "op": "insert",
+    "table": "audit_log",
+    "values": {
+      "action": "entity_seo.update",
+      "actor_id": "11111111-1111-4111-8111-111111111111",
+      "actor_role": "admin",
+      "detail": {
+        "target": "service",
+      },
+      "entity_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+      "entity_type": "entity_seo",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > entity SEO: the first save (an INSERT) 1`] = `
+[
+  {
+    "op": "insert",
+    "table": "entity_seo",
+    "values": {
+      "canonical_override": "https://example.test/services/sample",
+      "entity_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+      "entity_type": "service",
+      "meta_description": {
+        "ar": "وصف",
+        "en": "Meta description",
+      },
+      "meta_title": {
+        "ar": "عنوان",
+        "en": "Meta title",
+      },
+      "og_image": "/og/service.jpg",
+      "robots": "index,follow",
+      "schema_type": "Service",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  },
+  {
+    "op": "insert",
+    "table": "audit_log",
+    "values": {
+      "action": "entity_seo.update",
+      "actor_id": "11111111-1111-4111-8111-111111111111",
+      "actor_role": "admin",
+      "detail": {
+        "target": "service",
+      },
+      "entity_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+      "entity_type": "entity_seo",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > site profile: a partial edit 1`] = `
+[
+  {
+    "op": "update",
+    "table": "site_profile",
+    "values": {
+      "brand_name": {
+        "ar": "استوديو تجريبي",
+        "en": "Sample Studio",
+      },
+    },
+  },
+  {
+    "op": "insert",
+    "table": "audit_log",
+    "values": {
+      "action": "site_profile.update",
+      "actor_id": "11111111-1111-4111-8111-111111111111",
+      "actor_role": "admin",
+      "detail": {
+        "fields": [
+          "brand_name",
+        ],
+      },
+      "entity_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "entity_type": "site_profile",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > site profile: an edit (an UPDATE) 1`] = `
+[
+  {
+    "op": "update",
+    "table": "site_profile",
+    "values": {
+      "accepting_applications": true,
+      "address_country": "SA",
+      "address_locality": {
+        "ar": "الرياض",
+        "en": "Riyadh",
+      },
+      "brand_name": {
+        "ar": "استوديو تجريبي",
+        "en": "Sample Studio",
+      },
+      "contact_email": "hello@example.test",
+      "founded_year": 2020,
+      "legal_name": {
+        "ar": "استوديو تجريبي ذ.م.م",
+        "en": "Sample Studio LLC",
+      },
+      "location": {
+        "ar": "الرياض، السعودية",
+        "en": "Riyadh, Saudi Arabia",
+      },
+      "socials": [
+        {
+          "handle": "@sample",
+          "network": "instagram",
+          "url": "https://instagram.com/sample",
+        },
+      ],
+      "whatsapp_display": "050 000 0000",
+      "whatsapp_e164": "+966500000000",
+    },
+  },
+  {
+    "op": "insert",
+    "table": "audit_log",
+    "values": {
+      "action": "site_profile.update",
+      "actor_id": "11111111-1111-4111-8111-111111111111",
+      "actor_role": "admin",
+      "detail": {
+        "fields": [
+          "brand_name",
+          "legal_name",
+          "contact_email",
+          "whatsapp_e164",
+          "whatsapp_display",
+          "location",
+          "address_locality",
+          "address_country",
+          "founded_year",
+          "socials",
+          "accepting_applications",
+        ],
+      },
+      "entity_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "entity_type": "site_profile",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  },
+]
+`;
+
+exports[`singleton and entity-SEO routes: the database receives what it did before R2 > site profile: the first save (an INSERT) 1`] = `
+[
+  {
+    "op": "insert",
+    "table": "site_profile",
+    "values": {
+      "accepting_applications": true,
+      "address_country": "SA",
+      "address_locality": {
+        "ar": "الرياض",
+        "en": "Riyadh",
+      },
+      "brand_name": {
+        "ar": "استوديو تجريبي",
+        "en": "Sample Studio",
+      },
+      "contact_email": "hello@example.test",
+      "founded_year": 2020,
+      "legal_name": {
+        "ar": "استوديو تجريبي ذ.م.م",
+        "en": "Sample Studio LLC",
+      },
+      "location": {
+        "ar": "الرياض، السعودية",
+        "en": "Riyadh, Saudi Arabia",
+      },
+      "socials": [
+        {
+          "handle": "@sample",
+          "network": "instagram",
+          "url": "https://instagram.com/sample",
+        },
+      ],
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "whatsapp_display": "050 000 0000",
+      "whatsapp_e164": "+966500000000",
+    },
+  },
+  {
+    "op": "insert",
+    "table": "audit_log",
+    "values": {
+      "action": "site_profile.update",
+      "actor_id": "11111111-1111-4111-8111-111111111111",
+      "actor_role": "admin",
+      "detail": {
+        "fields": [
+          "brand_name",
+          "legal_name",
+          "contact_email",
+          "whatsapp_e164",
+          "whatsapp_display",
+          "location",
+          "address_locality",
+          "address_country",
+          "founded_year",
+          "socials",
+          "accepting_applications",
+        ],
+      },
+      "entity_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "entity_type": "site_profile",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  },
+]
+`;
