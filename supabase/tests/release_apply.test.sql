@@ -20,7 +20,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(96);
+select plan(98);
 
 -- ── 0. The catalog, before this file creates any function ─────────────────────────────
 -- (Its helpers below call set_config, and would show up here.)
@@ -683,7 +683,22 @@ set local role service_role;
 select is(_fails($$ select _pub('51000000-0000-0000-0000-0000000000c1', 'content_creator', array['l-foreign']) $$),
   'BR422:refused:23503', 'another tenant''s media in a link set is refused');
 reset role;
-delete from public.content_drafts where id = (select (item ->> 'draft_id')::uuid from _r4 where name = 'l-foreign');
+-- A change to the link sets alone, by someone who may not write case studies: refused, not
+-- consumed with nothing done; and link sets that name no set are refused.
+select _stage('l-empty', 'portfolio', '51000000-0000-0000-0006-000000000001', 'update', '{}', '{}');
+select _stage('l-seo', 'portfolio', '51000000-0000-0000-0006-000000000001', 'update', '{}',
+              '{"service_ids":[]}');
+update _r4 set item = item || jsonb_build_object('draft_id', (select item ->> 'draft_id' from _r4 where name = 'l-seo'))
+ where name = 'l-empty';
+set local role service_role;
+select is(_fails($$ select _pub('51000000-0000-0000-0000-0000000000e1', 'seo', array['l-seo']) $$)
+          || ' ' || _fails($$ select _pub('51000000-0000-0000-0000-0000000000c1', 'content_creator', array['l-empty']) $$),
+  'BR422:refused:42501 22023',
+  'seo CANNOT change a case study''s links alone; link sets that name no set are refused');
+reset role;
+select is((select count(*)::int from public.portfolio_services where portfolio_id = '51000000-0000-0000-0006-000000000001'),
+  1, 'and the links are as they were');
+delete from public.content_drafts where id in (select (item ->> 'draft_id')::uuid from _r4 where name in ('l-foreign', 'l-seo', 'l-empty'));
 
 -- ── 12. The dry run ──────────────────────────────────────────────────────────────────
 select _stage('v-ok', 'nav_item', '51000000-0000-0000-0004-000000000002', 'update', '{"label":{"en":"Why","ar":"لماذا"}}');

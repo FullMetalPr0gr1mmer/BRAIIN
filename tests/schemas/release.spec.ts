@@ -353,6 +353,11 @@ describe('ApplyItemSchema', () => {
     const media = Array.from({ length: RELEASE_CHILD_MEDIA_MAX + 1 }, () => ({ role: 'gallery' }));
     expect(ApplyItemSchema.safeParse(project({ children: { media } })).success).toBe(false);
     expect(ApplyItemSchema.safeParse(project({ children: { other: [] } })).success).toBe(false);
+    // Link sets name at least one set: {} or two nulls would change nothing.
+    expect(ApplyItemSchema.safeParse(project({ children: {} })).success).toBe(false);
+    expect(
+      ApplyItemSchema.safeParse(project({ children: { service_ids: null, media: null } })).success,
+    ).toBe(false);
   });
 });
 

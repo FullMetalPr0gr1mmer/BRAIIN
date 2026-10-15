@@ -566,6 +566,10 @@ begin
       if v_media is not null and pg_catalog.jsonb_typeof(v_media) <> 'array' then
         raise exception 'apply_release: media is an array' using errcode = '22023';
       end if;
+      if v_sids is null and v_media is null then
+        raise exception 'apply_release: link sets name at least one set (service_ids or media)'
+          using errcode = '22023';
+      end if;
       v_children := pg_catalog.jsonb_build_object('service_ids', v_sids, 'media', v_media);
     end if;
 
@@ -866,6 +870,20 @@ begin
           -- A case study's link sets, replaced as whole sets (save_portfolio's own code),
           -- with their images before and after for the synthetic portfolio_children item.
           if nullif(v_it -> 'children', 'null'::jsonb) is not null then
+            -- A change to the link sets alone writes no project row, so nothing above has
+            -- shown that the publisher may write this project: lock it as them first (FOR
+            -- UPDATE binds the UPDATE policy). Without it, RLS would silently filter the
+            -- link-set deletes for a role that may not write case studies, and the change
+            -- would be consumed with nothing done.
+            if v_it ->> 'sql' is null then
+              perform 1 from public.portfolio as t
+               where t.tenant_id = v_tenant and t.id = (v_it ->> 'entity_id')::uuid
+                 for update;
+              if not found then
+                raise exception 'the database refused this change for the person publishing it'
+                  using errcode = '42501';
+              end if;
+            end if;
             select pg_catalog.jsonb_build_object(
                      'service_ids', coalesce((select pg_catalog.jsonb_agg(ps.service_id order by ps.sort_order, ps.service_id)
                                                 from public.portfolio_services ps

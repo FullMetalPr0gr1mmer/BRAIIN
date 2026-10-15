@@ -236,7 +236,10 @@ export const ApplyChildrenSchema = z
       .nullable()
       .optional(),
   })
-  .strict();
+  .strict()
+  .refine((c) => c.service_ids != null || c.media != null, {
+    message: 'link sets name at least one set',
+  });
 
 /**
  * One change as `public.apply_release` takes it (snake_case, as the RPC reads it): the
