@@ -64,6 +64,16 @@ export type EntitySaveAction =
       message: string | null;
       errors?: { byId: FieldErrors; summary: readonly FieldError[] } | undefined;
     }
+  | {
+      /**
+       * A create landed (POST). The form is clean from here: what it shows is what was
+       * stored, so leaving for the record's edit screen asks nothing. While that page
+       * loads (`navigating`) Save stays disabled, so a second press cannot create a twin.
+       */
+      type: 'created';
+      at: string;
+      navigating: boolean;
+    }
   | { type: 'conflict' }
   | { type: 'reset' };
 
@@ -154,6 +164,16 @@ export function entitySaveReducer(
         edgeMissed: action.row['kvSynced'] === false,
       };
     }
+    case 'created':
+      return {
+        ...state,
+        initial: state.values,
+        phase: action.navigating ? 'saving' : 'ready',
+        status: 'saved',
+        savedAt: action.at,
+        errors: NO_ERRORS,
+        message: null,
+      };
     case 'save-failed':
       return {
         ...state,

@@ -232,3 +232,59 @@ describe('the save mode', () => {
     expect(saveModeFor(SEO)).toBe('live');
   });
 });
+
+describe('a create (review H1: no "Leave site?" on the way to the new record)', () => {
+  it('marks the form clean, and keeps Save off while the edit screen loads', () => {
+    const typed = run(
+      initialSaveState(FIELDS, true),
+      { type: 'set', name: 'slug', value: 'new' },
+      { type: 'set', name: 'title', value: { en: 'New', ar: 'جديد' } },
+      { type: 'save-start' },
+    );
+    expect(isDirty(typed)).toBe(true);
+    const created = run(typed, { type: 'created', at: 'x', navigating: true });
+    expect(isDirty(created)).toBe(false);
+    expect(created.phase).toBe('saving');
+    expect(created.status).toBe('saved');
+    // A screen that stays (onCreated) gets a ready, clean form back.
+    const stays = run(typed, { type: 'created', at: 'x', navigating: false });
+    expect(stays.phase).toBe('ready');
+    expect(isDirty(stays)).toBe(false);
+  });
+});
+
+describe('a failed "Reload their version" (review L10)', () => {
+  it('keeps the editor’s values and the conflict, and says why', () => {
+    const state = run(
+      loaded(),
+      { type: 'set', name: 'slug', value: 'mine' },
+      { type: 'save-start' },
+      { type: 'conflict' },
+      { type: 'save-failed', message: 'Their version could not be loaded: offline' },
+    );
+    expect(state.phase).toBe('ready');
+    expect(state.values['slug']).toBe('mine');
+    expect(state.conflict).toBe(true);
+    expect(state.message).toMatch(/^Their version could not be loaded/);
+  });
+});
+
+describe('draft mode (brief §9)', () => {
+  it('throws until releases fill it in (R12)', async () => {
+    const { createElement } = await import('react');
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { useEntitySave } = await import('@/lib/admin/useEntitySave');
+    function Draft() {
+      useEntitySave(SERVICES, 'r1', { fields: FIELDS, mode: 'draft' });
+      return null;
+    }
+    expect(() => renderToStaticMarkup(createElement(Draft))).toThrow(
+      'Draft saving arrives with releases (R12)',
+    );
+    function Live() {
+      const save = useEntitySave(SERVICES, null, { fields: FIELDS, mode: 'live' });
+      return createElement('p', null, save.isNew ? 'new' : 'old');
+    }
+    expect(renderToStaticMarkup(createElement(Live))).toBe('<p>new</p>');
+  });
+});

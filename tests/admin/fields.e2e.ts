@@ -13,6 +13,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *             unit-tested in tests/lib/arabicDigits.spec.ts and tests/render/);
  *   conflict  two tabs on one service: the first saves, the second's save is a 409 that
  *             keeps its form and offers "Reload their version", which loads theirs.
+ *   create    a new category opens its edit screen with no "Leave site?" prompt (the
+ *             form is clean once the row exists), and is deleted again.
  *
  * Each role works on its own service and the conflict on a third, so the parallel workers
  * never race each other's versions. The title is put back afterwards (the public pages and
@@ -150,5 +152,55 @@ test.describe('as admin, two tabs on one service', () => {
     await expect(second.locator('form.editor .form-actions')).toContainText(
       `Version ${before + 2}`,
     );
+  });
+});
+
+test.describe('as admin, a create (review H1)', () => {
+  test.use({ storageState: authFile('admin') });
+
+  test('opens the new record without a "Leave site?" prompt', async ({ page }) => {
+    // Any dialog fails the test: the create used to leave with the unsaved-changes guard
+    // still attached, so the browser asked, and "Stay" left a form that could not save.
+    const dialogs: string[] = [];
+    page.on('dialog', (dialog) => {
+      dialogs.push(`${dialog.type()}: ${dialog.message()}`);
+      void dialog.dismiss();
+    });
+    await page.goto('/admin/categories/new', { waitUntil: 'networkidle' });
+    await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
+    // Sorts after every seeded category, so the sweep's "first row" edit screen never
+    // opens the one this test makes and deletes.
+    const slug = `zz-e2e-create-${Date.now().toString(36)}`;
+    await page.locator('#f-slug').fill(slug);
+    await page.locator('#f-name-en').fill('E2E category');
+    await page
+      .getByRole('group', { name: 'Editing language' })
+      .getByRole('radio', { name: 'Both' })
+      .check();
+    await page.locator('#f-name-ar').fill('فئة الاختبار');
+    let id = '';
+    try {
+      await Promise.all([
+        page.waitForURL(/\/admin\/categories\/[0-9a-f-]{36}$/),
+        page.getByRole('button', { name: 'Create category', exact: true }).click(),
+      ]);
+      id = page.url().split('/').pop() ?? '';
+      expect(dialogs).toEqual([]);
+      await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
+      await expect(page.locator('#f-slug')).toHaveValue(slug);
+    } finally {
+      if (!id) {
+        const res = await page.request.get('/api/admin/categories?limit=100');
+        const body = (await res.json()) as { data?: { rows?: { id: string; slug: string }[] } };
+        id = body.data?.rows?.find((r) => r.slug === slug)?.id ?? '';
+      }
+      if (id) {
+        const csrf = await page.locator('meta[name="csrf-token"]').getAttribute('content');
+        const res = await page.request.delete(`/api/admin/categories/${id}`, {
+          headers: { 'x-csrf-token': csrf ?? '', origin: new URL(page.url()).origin },
+        });
+        expect(res.status(), await res.text()).toBeLessThan(300);
+      }
+    }
   });
 });

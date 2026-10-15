@@ -90,6 +90,10 @@ export function useEntitySave(
   // through a ref, and the callbacks follow its address instead.
   const targetRef = useRef(target);
   targetRef.current = target;
+  // Set when this form sends the page away itself (a create opening its edit screen): the
+  // unsaved-changes guard then lets it go. The state is marked clean too ('created'), but
+  // the guard's listener comes off only after the next render, and the page leaves now.
+  const leaving = useRef(false);
   const url = loadUrl(target, id);
 
   const load = useCallback(async () => {
@@ -110,6 +114,26 @@ export function useEntitySave(
     if (!isNew) void load();
   }, [isNew, load]);
 
+  // "Reload their version" after a 409. If their row cannot be read, the editor keeps what
+  // is on screen (and the conflict banner) and is told why: a failed reload never throws
+  // the editor's work away the way a failed first load shows no form.
+  const reloadTheirs = useCallback(async () => {
+    try {
+      const row = await adminFetch<Row>(url);
+      dispatch({
+        type: 'loaded',
+        row,
+        fields,
+        versionFallback: versionFallback(targetRef.current),
+      });
+    } catch (err) {
+      dispatch({
+        type: 'save-failed',
+        message: `Their version could not be loaded: ${describeError(err)}`,
+      });
+    }
+  }, [url, fields]);
+
   const save = useCallback(async (): Promise<boolean> => {
     const current = latest.current;
     const target = targetRef.current;
@@ -129,8 +153,15 @@ export function useEntitySave(
       });
       if (request.method === 'POST' && target.kind === 'resource') {
         // A create opens the record's edit screen; the form's state goes with the page.
-        if (onCreated) onCreated(row);
-        else window.location.href = createdHref(target.slug, row);
+        const at = new Date().toISOString();
+        if (onCreated) {
+          dispatch({ type: 'created', at, navigating: false });
+          onCreated(row);
+        } else {
+          dispatch({ type: 'created', at, navigating: true });
+          leaving.current = true;
+          window.location.href = createdHref(target.slug, row);
+        }
         return true;
       }
       dispatch({ type: 'saved', row, fields, at: new Date().toISOString() });
@@ -156,6 +187,7 @@ export function useEntitySave(
   useEffect(() => {
     if (!dirty) return;
     const guard = (event: BeforeUnloadEvent) => {
+      if (leaving.current) return;
       event.preventDefault();
       // Older engines show the prompt only when returnValue is set.
       event.returnValue = '';
@@ -179,7 +211,7 @@ export function useEntitySave(
     dirty,
     message: state.phase === 'load-failed' ? null : state.message,
     save,
-    reloadTheirs: load,
+    reloadTheirs,
   };
 }
 
