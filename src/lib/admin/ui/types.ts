@@ -27,7 +27,26 @@ export type FieldKind =
   | 'object'
   | 'clip' // a video clip: a Stream UID or a /media/*.mp4 path, plus a ≤30s window
   | 'sectionContent' // page_sections.content, typed by the sibling `type` field
-  | 'upload'; // a file sent to `upload.endpoint`; the field holds the returned id
+  | 'upload' // a file sent to `upload.endpoint`; the field holds the returned id
+  // Admin v2 F5a (the field kit v2)
+  | 'color' // a #RRGGBB colour: a picker, the hex, optional swatches and a contrast line
+  | 'range' // a bounded number on a slider (`range`), its value read out beside it
+  | 'chips' // a list of short phrases as removable chips; `chips.bilingual` = {en: [], ar: []}
+  // Admin v2 F5b (reserved here so the union is written once)
+  | 'accent' // a word range of a sibling bilingual text, highlighted in Klein blue
+  | 'link' // {label: {en, ar}, href}: a site link (or https where the schema takes one)
+  | 'slugRelation'; // an ordered multi-pick of another resource, stored by slug
+
+/** The language an editor shows its bilingual fields in (Admin v2 F5a). */
+export type EditorLanguage = 'en' | 'ar' | 'both';
+
+/**
+ * An accent field (F5b): which sibling bilingual field it highlights, and how it stores
+ * the range: `range` writes AccentSchema ({en: {from, to}, ar: …}); `from` writes two
+ * numbers, the hero's accentFromEn / accentFromAr ("from word N to the end").
+ */
+export type AccentDef =
+  { of: string; mode: 'range' } | { of: string; mode: 'from'; keys: { en: string; ar: string } };
 
 /**
  * One filter of a relation's options query: a value means "equals", `{ neq }` means "is
@@ -43,6 +62,8 @@ export interface RelationDef {
   labelKey: string;
   /** Options-query filters: { location: 'header' } (equals), { status: { neq: 'archived' } }. */
   filter?: Readonly<Record<string, RelationFilterValue>>;
+  /** F5b: what the stored value is; 'slug' for slugRelation. Default 'id'. */
+  valueKey?: 'id' | 'slug';
 }
 
 export interface FieldDef {
@@ -82,6 +103,18 @@ export interface FieldDef {
    * the form shows one thing (an unticked box) while the server stores another.
    */
   defaultValue?: unknown;
+  /** Text kinds: the most characters; shows "n/max" in the label row and sets maxLength. */
+  maxLength?: number;
+  /** `color`: swatches to offer, and the text colour its contrast line is measured for. */
+  color?: { swatches?: readonly string[]; contrastWith?: string };
+  /** `range`: bounded steps; the value is a number. */
+  range?: { min: number; max: number; step: number; suffix?: string };
+  /** `chips` / `tags`: bilingual = {en: string[], ar: string[]}; each chip at most maxLength. */
+  chips?: { bilingual?: boolean; maxLength?: number };
+  /** `accent` (F5b). */
+  accent?: AccentDef;
+  /** `link` (F5b): external https links only where the target schema accepts them. */
+  link?: { external?: boolean };
 }
 
 export interface ColumnDef {

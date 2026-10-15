@@ -1,4 +1,12 @@
 import { useEffect, useState } from 'react';
+import { Field } from '@/components/admin/FormField';
+import {
+  ArabicGapsProvider,
+  ArabicMissingBar,
+  EditorLanguageProvider,
+  EditorLanguageSwitch,
+} from '@/components/admin/fields/editorLanguage';
+import { mapIssues, type MappedErrors } from '@/lib/admin/fieldErrors';
 import Chips from '@/components/admin/kit/Chips';
 import DataTable, { type DataColumn } from '@/components/admin/kit/DataTable';
 import Drawer from '@/components/admin/kit/Drawer';
@@ -17,6 +25,9 @@ import { PAGE_SIZE } from '@/lib/admin/pager';
 import {
   KIT_COLUMNS,
   KIT_DRAWER_ITEMS,
+  KIT_FIELD_ISSUES,
+  KIT_FIELD_VALUES,
+  KIT_FIELDS,
   KIT_ROWS,
   KIT_SECTIONS,
   KIT_TAB_PARAM,
@@ -59,6 +70,7 @@ export default function KitGallery({ tab }: KitGalleryProps) {
         <DialogsDemo />
       </div>
       <FormDemo />
+      <FieldsDemo />
     </div>
   );
 }
@@ -474,6 +486,61 @@ function FormDemo() {
           </button>
         </p>
       </div>
+    </section>
+  );
+}
+
+const NO_FIELD_ERRORS: MappedErrors = { byId: {}, summary: [] };
+
+/**
+ * The field kit v2 (Admin v2 F5a): every field kind on made-up values, in the editor's
+ * language context (English / العربية / Both, "Arabic missing: N" and "Next gap"), with
+ * a pretend refusal whose errors land on the fields, one in the hidden Arabic half.
+ */
+function FieldsDemo() {
+  const [values, setValues] = useState<Record<string, unknown>>(() => ({ ...KIT_FIELD_VALUES }));
+  const [errors, setErrors] = useState<MappedErrors>(NO_FIELD_ERRORS);
+  const set = (name: string, value: unknown) =>
+    setValues((current) => ({ ...current, [name]: value }));
+  return (
+    <section className="card" aria-labelledby="kit-fields-h">
+      <h3 id="kit-fields-h" className="card-title">
+        Fields
+      </h3>
+      <EditorLanguageProvider>
+        <ArabicGapsProvider>
+          <div className="kit__stack">
+            <ErrorSummary errors={errors.summary} />
+            <div className="editor__lang">
+              <EditorLanguageSwitch />
+              <ArabicMissingBar />
+            </div>
+            <div>
+              {KIT_FIELDS.map((field) => (
+                <Field
+                  key={field.name}
+                  field={field}
+                  value={values[field.name]}
+                  values={values}
+                  onChange={set}
+                  errors={errors.byId}
+                />
+              ))}
+            </div>
+            <p className="kit__line">
+              <button
+                type="button"
+                onClick={() => setErrors(mapIssues(KIT_FIELD_ISSUES, KIT_FIELDS))}
+              >
+                Check the sample fields
+              </button>
+              <button type="button" data-variant="ghost" onClick={() => setErrors(NO_FIELD_ERRORS)}>
+                Clear the field errors
+              </button>
+            </p>
+          </div>
+        </ArabicGapsProvider>
+      </EditorLanguageProvider>
     </section>
   );
 }
