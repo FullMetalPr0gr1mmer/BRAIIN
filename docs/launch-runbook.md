@@ -252,6 +252,43 @@ select p.role, p.is_active, u.raw_app_meta_data->>'role' as jwt_role
 -- role = admin, is_active = true, jwt_role = admin
 ```
 
+### 3a. Mark the account owner (Admin v2 U12a, migration 0055)
+
+Not a blocker, but do it once the first admin exists, and again after a restore into an
+empty project. The account owner is one Admin per tenant whom nobody (another Admin, the
+service role, or an operator who skips this step) can demote, switch off, move to another
+tenant or delete (`app.tg_profiles_owner_guard`). Until one is marked, the users screen says
+"No account owner is set yet". The migration never picks one (the oldest Admin may be the
+developer's account), and nobody can claim it from the admin. In the SQL editor, as
+`postgres` (an operator: the guard refuses the marker to every API role), for an **active
+Admin**:
+
+```sql
+update public.profiles set is_owner = true where id = '<the owner''s user id>';
+```
+
+Verify (one row per tenant, an active admin):
+
+```sql
+select p.tenant_id, p.id, p.role, p.is_active, u.email
+  from public.profiles p join auth.users u on u.id = p.id
+ where p.is_owner;
+```
+
+The owner hands ownership on in the admin ("Make account owner" on another active Admin,
+`public.transfer_ownership`, audited). If the owner is gone (left, lost access), move it here,
+in one transaction, clearing the old marker first (one owner per tenant, `profiles_one_owner`):
+
+```sql
+begin;
+update public.profiles set is_owner = false where id = '<old owner''s user id>';
+update public.profiles set is_owner = true  where id = '<new owner''s user id>';
+commit;
+```
+
+Deleting the owner's account (the dashboard, or `auth.admin.deleteUser`) fails while the
+marker is set: clear it first, as above.
+
 ## 4. Worker secrets  ⛔ blocker
 
 Never in `.env`, never in `wrangler.jsonc`.
@@ -1299,3 +1336,12 @@ staff only read (the telemetry tables, the pageview rollup, the search, consent 
 notification ledgers, `tenants` and `profiles`), but no build since the line writes them with
 a staff token except the users screen, whose update of `profiles.role`, `is_active` and
 `display_name` 0037 keeps. A Worker rollback across #51 is safe.
+
+0055 (Admin v2 U12a) does not move the line either: it is expand only (a column no older
+Worker reads, a RESTRICTIVE read that a live Admin passes, triggers, a table and two RPCs no
+older Worker calls). A Worker rollback across U12a's PR is safe: the older session check
+compares the profile with the auth server's record (it needs nothing 0055 added), and the
+database keeps revoking sessions on a role change. An older users screen meets the owner
+guard as a 500 instead of the 422. To roll back only the new session check, revert
+`src/lib/auth/context.ts` (and `src/lib/auth/claims.ts`) to their pre-U12a versions in a PR
+(`docs/admin-v2/as-built/U12a.md`, Rollback).

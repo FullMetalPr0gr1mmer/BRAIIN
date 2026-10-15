@@ -168,15 +168,13 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     setting, whichever is first. *Closes when* both projects' Authentication session settings
     show the inactivity timeout (and the time-box, if chosen).
 
-- **A stale access token keeps its old role for up to an hour** (hotfix H10; U12a and U13
+- **A stale access token keeps its old role for up to an hour** (hotfix H10, U12a and U13
   close more of it; owner item: confirm the remainder).
   - *The gap.* RLS reads the role from the token, and an access token lives up to an hour
-    (`jwt_expiry`, Supabase's default 3600 s; `supabase/config.toml` does not set it). A role
-    change, a deactivation or a lock revokes no session, and `resolveAuthContext` compares
-    the profile with the auth server's current record (`getUser()`), not with the token's
-    claims, so the Worker cannot see a stale token either (CLAUDE.md §2, session
-    invalidation, is true only once the record and the token agree). Until it expires, the
-    token keeps its old role at PostgREST, directly, on every table without a live check.
+    (`jwt_expiry`, Supabase's default 3600 s; `supabase/config.toml` does not set it). PostgREST
+    checks the token's signature and expiry, not whether its session still exists, so a token
+    already issued keeps its old role there, directly, until it expires, on every table
+    without a live check.
   - *Closed before H10.* Leads and the CRM tables (`leads_live` and the CRM's live policies,
     0033 on), job applications (`app.is_live_admin()`, 0029), preferences (0044), and the
     export and reveal paths (`liveRecheck`).
@@ -190,21 +188,28 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     so a forged row naming a colleague, backdated, can no longer be chained. A stale token's
     audit insert is still accepted, but names the stale account and the role its token
     carries.
-  - *Left for U12a (0055).* Comparing the profile with the token's own claims in
-    `resolveAuthContext`; revoking every session of a person whose role, activity or tenant
-    changes; the live check on reading colleagues' profiles (`profiles_self_select` still
-    lets a stale Admin token list them); the roles guide's sentence. *For U13 (0054):* the
-    live check on reading `audit_log` (`audit_read` still trusts the token's role).
-  - *Left after both.* The token's old role on the tables with no live check:
-    `site_settings`, `site_integrations`, `ai_config`, `media_assets`, `system_logs` and
-    the content tables (the staged ones close when R5's guard switches on at R14). The
-    proposed follow-up: a catalog-driven pgTAP asserting a RESTRICTIVE live companion on
-    every policy that admits an `authenticated` write, and the missing companions; the
-    owner may also shorten `jwt_expiry` to 900 s (the dashboard and `config.toml`), which
-    shrinks the window to 15 minutes at four times the token refreshes.
-  - *Owner:* Kareem. *Expiry:* U12a's merge for the sessions; the follow-up slice or R14,
-    whichever is first, for the remaining tables, at the latest 2026-12-31. *Closes when*
-    U12a is applied and merged and every policy admitting an `authenticated` write has a
+  - *Closed by U12a (0055).* `resolveAuthContext` compares the profile with the claims of the
+    token the request carries (no longer the auth server's current record, which the users
+    screen rewrites with the profile), so the admin revokes a stale token at its next
+    request (CLAUDE.md §2, session invalidation, now true); a change of `profiles.role`,
+    `is_active` or `tenant_id` deletes every session and refresh token of that person
+    (`profiles_revoke_sessions`), so no refresh is possible and the admin finds no session at
+    the next click; reading colleagues' profiles is live (`profiles_live_read`), and so is
+    every staff command on `admin_security_settings`; the roles guide says exactly what
+    closes at once and what lasts the hour.
+  - *For U13 (0054).* The live check on reading `audit_log` (`audit_read` still trusts the
+    token's role).
+  - *Left after them.* The issued token's old role at PostgREST, until it expires, on the
+    tables with no live check: `site_settings`, `site_integrations`, `ai_config`,
+    `media_assets`, `system_logs` and the content tables (the staged ones close when R5's
+    guard switches on at R14). The proposed follow-up: a catalog-driven pgTAP asserting a
+    RESTRICTIVE live companion on every policy that admits an `authenticated` write, and the
+    missing companions; the owner may also shorten `jwt_expiry` to 900 s (the dashboard and
+    `config.toml`), which shrinks the window to 15 minutes at four times the token refreshes.
+    Supabase Auth's own endpoints are the residual above (O-24): the session-length setting
+    (U12a) is enforced by the admin on every request it serves, not by Auth.
+  - *Owner:* Kareem. *Expiry:* the follow-up slice or R14, whichever is first, at the latest
+    2026-12-31. *Closes when* every policy admitting an `authenticated` write has a
     RESTRICTIVE live companion, checked over the catalog.
 
 ## The client's TDD, row by row
@@ -286,7 +291,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §6.4 notifications | In-app bell with read state | covered | covered | AV-05 | Derived feed; read state is one watermark, not per item. |
 | §6.4/§15 backups | Daily automatic (keep 30), manual, downloadable, restorable | deviated-challenge | built under A6 | AV-24/R13 export-backup; DR runbook (§10) | No leads in admin backups (§7) is standard; scheduled content snapshots are not barred. |
 | §7 | Every endpoint declares its permission; 403 server-side | covered | covered | defineAdminRoute/assertCap + RLS; endpoints.spec over all roles incl. sales, other_tenant |  |
-| §7 | An owner cannot be downgraded by an admin | missing | added as a slice | src/pages/api/admin/users/[id].ts refuses only self-demotion | Any Admin can demote the principal Admin. An owner marker needs no new role. |
+| §7 | An owner cannot be downgraded by an admin | missing | built (U12a) | U12a, migration 0055 | `profiles.is_owner` (one per tenant, set by the runbook, never claimable): nobody demotes, deactivates, moves or deletes the owner (`app.tg_profiles_owner_guard`, the users PATCH's 422 first); ownership moves only by the owner's own action (`public.transfer_ownership`, audited). No new role. |
 | §7 | Email + password, session cookie, login rate limiting | covered | covered | existing lockout (5/15 min -> 423), AV-06 | The lockout is the Worker's, the password change's re-authentication included (F8); Supabase Auth's own endpoints are the residual risk above (O-24). |
 | §7 | Sales = leads + stats | deviated-challenge | built under A6 | CRM-10 (no analytics.read) | §5 gives analytics.read to every current role; aggregates carry no PII. |
 | §8.1 | Three-column editor; drag reorder, eye, rename, remove, add section | covered | covered | AV-25 | Remove is Admin-only (§5 archive/delete). |
