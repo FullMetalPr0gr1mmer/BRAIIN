@@ -163,3 +163,29 @@ export function errorsFromApi(err: unknown, fields: readonly FieldDef[]): Mapped
   }
   return null;
 }
+
+/** A number or date-and-time box whose text the browser could not read (validity.badInput). */
+export interface UnreadableControl {
+  id: string;
+  type: string;
+  /** The field's label (FormField puts it on the input as data-label). */
+  label: string;
+}
+
+/**
+ * The form's own errors for boxes the browser could not read: such a box reports '' to
+ * script, which the payload would send as "no value" (EditorForm refuses the save).
+ */
+export function badInputErrors(controls: readonly UnreadableControl[]): MappedErrors {
+  const byId: Record<string, string> = {};
+  const summary: FieldError[] = [];
+  for (const control of controls) {
+    const message =
+      control.type === 'number'
+        ? 'Enter a number, or clear the box.'
+        : 'Enter the whole date and time, or clear it.';
+    byId[control.id] = message;
+    summary.push({ id: control.id, message: `${control.label || 'A field'}: ${message}` });
+  }
+  return { byId, summary };
+}

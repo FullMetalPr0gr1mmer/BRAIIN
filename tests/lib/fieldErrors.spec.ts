@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AdminApiError } from '@/lib/admin/client';
-import { errorsFromApi, issueToFieldId, mapIssues } from '@/lib/admin/fieldErrors';
+import { badInputErrors, errorsFromApi, issueToFieldId, mapIssues } from '@/lib/admin/fieldErrors';
 import { RESOURCE_UI, type FieldDef } from '@/lib/admin/uiSchema';
 
 // The API's `issues[].path` → the form's element ids and the ErrorSummary's words (Admin v2
@@ -168,5 +168,28 @@ describe('errorsFromApi', () => {
   it('is null for an error that is not about fields', () => {
     expect(errorsFromApi(new AdminApiError({ error: 'conflict', status: 409 }), FIELDS)).toBeNull();
     expect(errorsFromApi(new Error('offline'), FIELDS)).toBeNull();
+  });
+});
+
+describe('badInputErrors (review M2)', () => {
+  it('names each box the browser could not read, linked to it', () => {
+    expect(
+      badInputErrors([
+        { id: 'f-sortOrder', type: 'number', label: 'Sort order' },
+        { id: 'f-scheduledFor', type: 'datetime-local', label: 'Scheduled for' },
+      ]),
+    ).toEqual({
+      byId: {
+        'f-sortOrder': 'Enter a number, or clear the box.',
+        'f-scheduledFor': 'Enter the whole date and time, or clear it.',
+      },
+      summary: [
+        { id: 'f-sortOrder', message: 'Sort order: Enter a number, or clear the box.' },
+        {
+          id: 'f-scheduledFor',
+          message: 'Scheduled for: Enter the whole date and time, or clear it.',
+        },
+      ],
+    });
   });
 });

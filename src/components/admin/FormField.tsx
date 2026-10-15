@@ -244,6 +244,8 @@ export function Field({
       lang={arabic ? 'ar' : undefined}
       dir={arabic ? 'rtl' : undefined}
       className={narrow ? NUMBER_CLASS : undefined}
+      // EditorForm names a box the browser could not read by this (fieldErrors.ts).
+      data-label={inputType === 'text' || inputType === 'url' ? undefined : field.label}
       value={text}
       maxLength={inputType === 'text' ? field.maxLength : undefined}
       onChange={(e) =>

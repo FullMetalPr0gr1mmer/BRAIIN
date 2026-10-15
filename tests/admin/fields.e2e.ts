@@ -204,3 +204,33 @@ test.describe('as admin, a create (review H1)', () => {
     }
   });
 });
+
+test.describe('as admin, a number the browser cannot read (review M2)', () => {
+  test.use({ storageState: authFile('admin') });
+
+  test('refuses the save and says so, instead of clearing the stored value', async ({ page }) => {
+    // Its own service: nothing here may save, and if it did it would race no other test.
+    const id = await serviceId(page, 'brand-guidelines');
+    await openEditor(page, id);
+    const sort = page.locator('#f-sortOrder');
+    const before = await sort.inputValue();
+    const version = await page.locator('form.editor .form-actions').textContent();
+    let sent = false;
+    page.on('request', (request) => {
+      if (request.method() === 'PATCH') sent = true;
+    });
+    await sort.fill('');
+    await sort.pressSequentially('1e');
+    expect(await sort.evaluate((el) => (el as HTMLInputElement).validity.badInput)).toBe(true);
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    const summary = page.getByRole('alert', { name: 'Fix 1 problem to save' });
+    await expect(summary).toBeFocused();
+    await expect(summary).toContainText('Sort order: Enter a number, or clear the box.');
+    await expect(sort).toHaveAttribute('aria-invalid', 'true');
+    expect(sent).toBe(false);
+    await expect(page.locator('form.editor .form-actions')).toHaveText(version ?? '');
+    // Put back, the box reads again (the stored value was never touched).
+    await sort.fill(before);
+    expect(await sort.evaluate((el) => (el as HTMLInputElement).validity.badInput)).toBe(false);
+  });
+});

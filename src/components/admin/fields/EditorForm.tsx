@@ -1,6 +1,8 @@
-import { useRef, type FormEvent, type ReactNode } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import ErrorSummary from '@/components/admin/kit/ErrorSummary';
 import SaveStatus from '@/components/admin/kit/SaveStatus';
+import { badInputErrors, type MappedErrors } from '@/lib/admin/fieldErrors';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
 import { useSaveShortcut } from '@/lib/admin/useEntitySave';
 import type { FieldDef } from '@/lib/admin/uiSchema';
@@ -56,13 +58,53 @@ export default function EditorForm({
   children,
 }: EditorFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
-  // Ctrl/⌘+S saves this form when it has changes, unless focus is in another editor on the
-  // page (General settings shows two): each shortcut press saves one form, the one in use.
+  // Errors found here before anything is sent (a number or a date the browser could not
+  // read): shown like the server's, cleared by the next attempt.
+  const [local, setLocal] = useState<MappedErrors | null>(null);
+
+  /**
+   * Saves, unless a number or date-and-time box holds text the browser could not read.
+   * noValidate (below) turned off the browser's own block, and such a box reports '' to
+   * script, which would be sent as "no value" and clear the stored one (a schedule, a
+   * sort order). So those boxes are read here and the save refused with their names.
+   */
+  function submit() {
+    const form = formRef.current;
+    const unreadable = form
+      ? [
+          ...form.querySelectorAll<HTMLInputElement>(
+            'input[type="number"], input[type="datetime-local"]',
+          ),
+        ]
+          .filter((input) => input.validity.badInput)
+          .map((input) => ({ id: input.id, type: input.type, label: input.dataset['label'] ?? '' }))
+      : [];
+    if (unreadable.length > 0) {
+      setLocal(badInputErrors(unreadable));
+      return;
+    }
+    setLocal(null);
+    void save.save();
+  }
+
+  // Ctrl/⌘+S saves this form when it has changes and is the one in use: focus is in it, or
+  // focus is in no form and it is the page's only editor (General settings shows two, and
+  // one press must never save a form nobody was looking at). A box being typed in is let
+  // go first, synchronously, so what it holds (a chip not yet added) is in the save.
   useSaveShortcut(() => {
+    const form = formRef.current;
+    if (!form) return;
     const active = document.activeElement;
-    const other = active?.closest('form.editor');
-    if (other && other !== formRef.current) return;
-    if (save.dirty) void save.save();
+    const inForm = active instanceof HTMLElement && form.contains(active);
+    const onlyEditor = document.querySelectorAll('form.editor').length === 1;
+    if (!inForm && !(onlyEditor && !active?.closest('form'))) return;
+    if (inForm) {
+      flushSync(() => (active as HTMLElement).blur());
+      (active as HTMLElement).focus();
+    }
+    // Not gated on `save.dirty`: that is the last render's, and the blur above may just
+    // have changed the form. Saving an unchanged form is harmless (a new version).
+    submit();
   });
 
   if (save.loadError) {
@@ -78,15 +120,16 @@ export default function EditorForm({
   const bilingual = hasBilingual(fields);
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    void save.save();
+    submit();
   };
+  const errors = local ?? save.errors;
 
   const form = (
     // noValidate: an input of the hidden language must never block a save silently (a
     // browser cannot show its bubble on a hidden input); the server validates, and its
     // answer lands on the fields.
     <form ref={formRef} className="editor" noValidate onSubmit={onSubmit}>
-      <ErrorSummary errors={save.errors.summary} />
+      <ErrorSummary errors={errors.summary} />
       {save.message && (
         <p className="msg" data-kind="error" role="alert">
           {save.message}
@@ -116,7 +159,7 @@ export default function EditorForm({
             value={save.values[field.name]}
             values={save.values}
             onChange={save.set}
-            errors={save.errors.byId}
+            errors={errors.byId}
             canAdvanced={canAdvanced}
           />
         ))}
