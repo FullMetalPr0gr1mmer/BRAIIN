@@ -70,6 +70,7 @@ const caption = `Speed by page, the last ${days} days`;
                       {vital ? (
                         <span class="speed__v">
                           {formatVital(metric, vital.p75, vital.open)}
+                          {/* A space, so the value and its rating are two words when read. */}{' '}
                           {rating ? (
                             <Badge tone={RATING_TONE[rating]}>{RATING_LABEL[rating]}</Badge>
                           ) : (

@@ -1,5 +1,5 @@
 import { writeSystemLog } from '@/lib/data/systemLog';
-import { logSafeError } from '../globalSearch';
+import { scrubPii } from '@/lib/log/scrub';
 
 // What the stats and health loaders do with a read the database refused (Admin v2 U2): log
 // it to system_logs, scrubbed, then throw, so a JSON route answers 500 and a server page
@@ -10,7 +10,7 @@ export async function readFailed(source: string, what: string, message: string):
     level: 'error',
     source,
     message: `${what} could not be read`,
-    detail: { error: logSafeError(message, []) },
+    detail: { error: scrubPii(message) },
   });
   return new Error(`${what} could not be read`);
 }
