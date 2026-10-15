@@ -14,10 +14,24 @@ const TARGET = '22222222-2222-4222-8222-222222222222';
 
 const stamps: unknown[] = [];
 const audits: unknown[] = [];
+const logs: unknown[] = [];
+const existenceReads: unknown[][] = [];
 let updatedRows: unknown[] = [];
+// What the service role's existence read finds after a write came back empty.
+let stillThere: { data: unknown; error: unknown } = { data: { id: TARGET }, error: null };
 
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
+    from: (table: string) => {
+      const b: Record<string, unknown> = {};
+      b['select'] = () => b;
+      b['eq'] = (...args: unknown[]) => {
+        existenceReads.push([table, ...args]);
+        return b;
+      };
+      b['maybeSingle'] = async () => stillThere;
+      return b;
+    },
     auth: {
       admin: {
         updateUserById: async (id: string, attrs: unknown) => {
@@ -35,7 +49,12 @@ vi.mock('@/lib/admin/audit', () => ({
     return true;
   },
 }));
-vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+vi.mock('@/lib/data/systemLog', () => ({
+  writeSystemLog: async (entry: unknown) => {
+    logs.push(entry);
+    return true;
+  },
+}));
 
 const { PATCH } = await import('@/pages/api/admin/users/[id]');
 
@@ -84,15 +103,46 @@ function call(body: unknown) {
 beforeEach(() => {
   stamps.length = 0;
   audits.length = 0;
+  logs.length = 0;
+  existenceReads.length = 0;
   updatedRows = [];
+  stillThere = { data: { id: TARGET }, error: null };
 });
 
 describe('PATCH /api/admin/users/[id] when the database refuses the session (0050)', () => {
-  it('is a 403 that stamps no claims and audits nothing', async () => {
+  it('is a 403 that stamps no claims, audits nothing and logs the refusal by target id only', async () => {
     const res = await call({ role: 'seo' });
     expect(res.status).toBe(403);
     expect(stamps).toEqual([]);
     expect(audits).toEqual([]);
+    expect(logs).toEqual([
+      {
+        level: 'warn',
+        source: 'admin:users.manage',
+        message: 'profile write refused by the database for this session',
+        detail: { target: TARGET },
+      },
+    ]);
+    // The existence check is the service role's, fenced to the caller's tenant.
+    expect(existenceReads).toContainEqual(['profiles', 'tenant_id', TENANT]);
+    expect(existenceReads).toContainEqual(['profiles', 'id', TARGET]);
+  });
+
+  it('is a 404 when the profile went between the read and the write: nothing stamped, audited or logged', async () => {
+    stillThere = { data: null, error: null };
+    const res = await call({ role: 'seo' });
+    expect(res.status).toBe(404);
+    expect(stamps).toEqual([]);
+    expect(audits).toEqual([]);
+    expect(logs).toEqual([]);
+  });
+
+  it('stays a 403 when the existence read itself fails (never a 404 it cannot vouch for)', async () => {
+    stillThere = { data: null, error: { message: 'unavailable' } };
+    const res = await call({ isActive: false });
+    expect(res.status).toBe(403);
+    expect(audits).toEqual([]);
+    expect(logs).toHaveLength(1);
   });
 
   it('a deactivation the database refused is not audited either', async () => {
@@ -111,5 +161,7 @@ describe('PATCH /api/admin/users/[id] when the database refuses the session (005
     expect(audits).toEqual([
       expect.objectContaining({ action: 'user.update', entityType: 'profile', entityId: TARGET }),
     ]);
+    expect(logs).toEqual([]);
+    expect(existenceReads).toEqual([]);
   });
 });
