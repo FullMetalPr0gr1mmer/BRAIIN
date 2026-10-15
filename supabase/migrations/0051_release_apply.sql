@@ -491,7 +491,6 @@ begin
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('release:' || v_tenant::text, 0));
 
   -- ── 3. Each change against the registry, then against its draft (as the service role) ──
-  v_items_loop:
   for v_it in select x.value from pg_catalog.jsonb_array_elements(v_plan) as x(value) loop
     select e.* into v_reg from app.release_entities e where e.entity_type = v_it ->> 'entity_type';
     if not found then
@@ -745,7 +744,7 @@ begin
       end if;
       v_it := v_it || pg_catalog.jsonb_build_object(
         'sql', v_sql, 'row', v_row,
-        'theme_on', v_it ->> 'entity_type' = 'custom_theme' and v_patch -> 'is_active' = 'true'::jsonb);
+        'theme_on', coalesce(v_it ->> 'entity_type' = 'custom_theme' and v_patch -> 'is_active' = 'true'::jsonb, false));
       if v_it ->> 'op' = 'delete' then
         v_removals := v_removals || pg_catalog.jsonb_build_array(v_it);
       else
@@ -789,9 +788,9 @@ begin
     -- token is this transaction's id (app.release_token_valid compares it), so no other
     -- transaction can borrow it. What was there before is kept, and put back below.
     perform pg_catalog.pg_current_xact_id();
-    v_saved_claims := pg_catalog.current_setting('request.jwt.claims', true);
-    v_saved_sub := pg_catalog.current_setting('request.jwt.claim.sub', true);
-    v_saved_role := pg_catalog.current_setting('request.jwt.claim.role', true);
+    v_saved_claims := coalesce(pg_catalog.current_setting('request.jwt.claims', true), '');
+    v_saved_sub := coalesce(pg_catalog.current_setting('request.jwt.claim.sub', true), '');
+    v_saved_role := coalesce(pg_catalog.current_setting('request.jwt.claim.role', true), '');
     perform pg_catalog.set_config('app.release_apply', pg_catalog.pg_current_xact_id()::text, true);
     perform pg_catalog.set_config('app.release_id', v_release::text, true);
     perform pg_catalog.set_config('request.jwt.claims',
@@ -911,14 +910,16 @@ begin
       -- The block's own settings are already undone with it; put back what came before,
       -- explicitly, before the error leaves.
       execute 'set local role service_role';
-      perform pg_catalog.set_config('request.jwt.claims', coalesce(v_saved_claims, pg_catalog.current_setting('request.jwt.claims', true), ''), true);
-      perform pg_catalog.set_config('request.jwt.claim.sub', coalesce(v_saved_sub, pg_catalog.current_setting('request.jwt.claim.sub', true), ''), true);
-      perform pg_catalog.set_config('request.jwt.claim.role', coalesce(v_saved_role, pg_catalog.current_setting('request.jwt.claim.role', true), ''), true);
+      if v_saved_claims is not null then
+        perform pg_catalog.set_config('request.jwt.claims', v_saved_claims, true);
+        perform pg_catalog.set_config('request.jwt.claim.sub', v_saved_sub, true);
+        perform pg_catalog.set_config('request.jwt.claim.role', v_saved_role, true);
+      end if;
       perform pg_catalog.set_config('app.release_apply', '', true);
       perform pg_catalog.set_config('app.release_id', '', true);
       perform pg_catalog.set_config('app.release_item', '', true);
       if v_state in ('BR409', 'BR422') then
-        raise exception '%', v_msg using errcode = v_state, detail = v_det;
+        raise exception '%', v_msg using errcode = v_state, detail = coalesce(v_det, '');
       end if;
       raise exception 'apply_release: the release could not be applied' using errcode = 'BR422',
         detail = pg_catalog.jsonb_build_object('code', 'refused', 'items', pg_catalog.jsonb_build_array(
@@ -929,9 +930,11 @@ begin
   -- ── 9. Back to the service role; the token and the publisher's claims go ───────────────
   -- So nothing later in the same transaction counts as inside the release, or as them.
   execute 'set local role service_role';
-  perform pg_catalog.set_config('request.jwt.claims', coalesce(v_saved_claims, pg_catalog.current_setting('request.jwt.claims', true), ''), true);
-  perform pg_catalog.set_config('request.jwt.claim.sub', coalesce(v_saved_sub, pg_catalog.current_setting('request.jwt.claim.sub', true), ''), true);
-  perform pg_catalog.set_config('request.jwt.claim.role', coalesce(v_saved_role, pg_catalog.current_setting('request.jwt.claim.role', true), ''), true);
+  if v_saved_claims is not null then
+    perform pg_catalog.set_config('request.jwt.claims', v_saved_claims, true);
+    perform pg_catalog.set_config('request.jwt.claim.sub', v_saved_sub, true);
+    perform pg_catalog.set_config('request.jwt.claim.role', v_saved_role, true);
+  end if;
   perform pg_catalog.set_config('app.release_apply', '', true);
   perform pg_catalog.set_config('app.release_id', '', true);
   perform pg_catalog.set_config('app.release_item', '', true);
@@ -1021,7 +1024,8 @@ begin
          purge_attempts = r.purge_attempts + case when p_status = 'not_needed' then 0 else 1 end,
          purge_next_at = p_next_at,
          purged_at = case when p_status = 'done' then pg_catalog.now() else r.purged_at end,
-         tags = coalesce(array(select distinct t.tag from unnest(p_tags) as t(tag) order by t.tag), r.tags),
+         tags = case when p_tags is null then r.tags
+                     else array(select distinct t.tag from unnest(p_tags) as t(tag) order by t.tag) end,
          side_effects = r.side_effects || coalesce(p_side_effects, '{}'::jsonb)
    where r.tenant_id = p_tenant and r.id = p_release and r.status = 'published';
   if not found then
@@ -1129,8 +1133,8 @@ begin
              and tg.tgfoid = 'app.tg_release_capture()'::regprocedure
              and tg.tgname = e.table_name || '_release_capture'
              and tg.tgtype = 29 and tg.tgnargs = 3
-             and tg.tgargs like convert_to(e.entity_type, 'UTF8') || '\x00'::bytea
-                                || convert_to(e.key_column, 'UTF8') || '\x00'::bytea || '%') <> 1;
+             and position(convert_to(e.entity_type, 'UTF8') || '\x00'::bytea
+                          || convert_to(e.key_column, 'UTF8') || '\x00'::bytea in tg.tgargs) = 1) <> 1;
   if v_bad is not null then
     raise exception '0051: registry tables without exactly one capture trigger: %', v_bad;
   end if;
@@ -1147,8 +1151,7 @@ begin
   -- UPDATE (FOR UPDATE needs it) on every registry table -----------------------------------
   select string_agg(e.table_name, ', ' order by e.table_name) into v_bad
     from app.release_entities e
-   where not has_table_privilege('service_role', format('public.%I', e.table_name), 'select, update')
-      or not (has_table_privilege('service_role', format('public.%I', e.table_name), 'select')
+   where not (has_table_privilege('service_role', format('public.%I', e.table_name), 'select')
               and has_table_privilege('service_role', format('public.%I', e.table_name), 'update'));
   if v_bad is not null then
     raise exception '0051: the service role cannot read and lock: %', v_bad;
