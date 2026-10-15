@@ -241,7 +241,8 @@ export const ApplyChildrenSchema = z
 /**
  * One change as `public.apply_release` takes it (snake_case, as the RPC reads it): the
  * draft and the version the publisher saw, the entity, the operation, the change as column
- * values, the live values of those columns when the draft began, and a case study's link
+ * values, the live values of those columns when the draft began (the draft's own `base`,
+ * which the database compares with and reads, never the request's), and a case study's link
  * sets.
  */
 export const ApplyItemSchema = z

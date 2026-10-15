@@ -20,7 +20,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(94);
+select plan(95);
 
 -- ── 0. The catalog, before this file creates any function ─────────────────────────────
 -- (Its helpers below call set_config, and would show up here.)
@@ -470,7 +470,7 @@ delete from public.content_drafts where id = (select (item ->> 'draft_id')::uuid
 select _stage('c-typed', 'service', '51000000-0000-0000-0001-000000000001', 'update',
               '{"preview_start_s":13,"preview_end_s":15}');
 update _r4 set item = jsonb_set(item, '{base,preview_start_s}', '"12.5"') where name = 'c-typed';
-update public.content_drafts set base_version = base_version - 1
+update public.content_drafts set base = jsonb_set(base, '{preview_start_s}', '"12.5"'), base_version = base_version - 1
  where id = (select (item ->> 'draft_id')::uuid from _r4 where name = 'c-typed');
 select _sync('c-typed');
 -- An unpatched column moved under another draft: no conflict either.
@@ -486,18 +486,26 @@ select lives_ok(
 reset role;
 select _stage('c-nobase', 'service', '51000000-0000-0000-0001-000000000001', 'update', '{"sort_order":4}');
 update _r4 set item = jsonb_set(item, '{base}', '{}') where name = 'c-nobase';
+update public.content_drafts set base = '{}'
+ where id = (select (item ->> 'draft_id')::uuid from _r4 where name = 'c-nobase');
+select _sync('c-nobase');
+-- A request whose base is not its draft's: the draft is the one that counts.
+select _stage('c-otherbase', 'service', '51000000-0000-0000-0001-000000000005', 'update', '{"sort_order":8}');
+update _r4 set item = jsonb_set(item, '{base,sort_order}', '999') where name = 'c-otherbase';
 select _stage('c-gone', 'service', '51000000-0000-0000-0001-000000000004', 'update', '{"sort_order":9}');
 delete from public.services where id = '51000000-0000-0000-0001-000000000004';
 set local role service_role;
 select is(_fails($$ select _pub('51000000-0000-0000-0000-0000000000c1', 'content_creator', array['c-nobase']) $$),
   'BR422:base-missing', 'a draft with no base for a column it changes is refused (422)');
+select is(_fails($$ select _pub('51000000-0000-0000-0000-0000000000c1', 'content_creator', array['c-otherbase']) $$),
+  'BR409:pending-changed', 'a request whose base differs from its draft''s is refused (the draft''s base counts)');
 select is(
   (select c -> 'detail' -> 'items' -> 0 from (select _catch($$ select _pub('51000000-0000-0000-0000-0000000000c1', 'content_creator', array['c-gone']) $$) c) s),
   jsonb_build_object('draftId', (select item ->> 'draft_id' from _r4 where name = 'c-gone'), 'removed', true),
   'a row removed under a pending change is a conflict: removed');
 reset role;
 delete from public.content_drafts
- where id in (select (item ->> 'draft_id')::uuid from _r4 where name in ('c-title', 'c-nobase', 'c-gone'));
+ where id in (select (item ->> 'draft_id')::uuid from _r4 where name in ('c-title', 'c-nobase', 'c-gone', 'c-otherbase'));
 
 -- ── 6. Atomic: one refused change keeps nothing ──────────────────────────────────────
 select _stage('a-1', 'service', '51000000-0000-0000-0001-000000000001', 'update', '{"sort_order":11}');
@@ -718,7 +726,7 @@ select is((select (o.result ->> 'number')::int = b.top + 1 from _out o, _dry_bef
   true, 'the next publish takes the next number: a dry run uses none');
 -- A conflict in a dry run comes with the live and base values, for "Compare".
 update public.services set sort_order = 42 where id = '51000000-0000-0000-0001-000000000001';
-update public.content_drafts set base = '{"status":"published"}', base_version = 1
+update public.content_drafts set base = '{"sort_order":41}', base_version = 1
  where id = (select (item ->> 'draft_id')::uuid from _r4 where name = 'v-bad2');
 update _r4 set item = jsonb_set(item, '{patch}', '{"sort_order":43}') || '{"base":{"sort_order":41}}' where name = 'v-bad2';
 select _sync('v-bad2');

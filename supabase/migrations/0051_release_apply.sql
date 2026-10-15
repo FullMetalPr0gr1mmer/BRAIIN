@@ -379,6 +379,7 @@ declare
   v_child_before jsonb;
   v_child_after jsonb;
   v_stale jsonb;
+  v_draft_bases jsonb;
   v_fail jsonb;
   v_result jsonb;
   v_cols text[];
@@ -571,18 +572,6 @@ begin
     if v_it ->> 'op' = 'update' and v_patch = '{}'::jsonb and v_children is null then
       raise exception 'apply_release: change % changes nothing', v_it ->> 'ord' using errcode = '22023';
     end if;
-    if v_it ->> 'op' = 'update' then
-      select string_agg(c.col, ', ' order by c.col) into v_bad
-        from unnest(v_cols) as c(col) where not ((v_it -> 'base') ? c.col);
-      if v_bad is not null then
-        raise exception 'apply_release: a pending change carries no base for %', v_bad
-          using errcode = 'BR422',
-                detail = pg_catalog.jsonb_build_object(
-                  'code', 'base-missing', 'draftId', v_it ->> 'draft_id',
-                  'columns', pg_catalog.to_jsonb(pg_catalog.string_to_array(v_bad, ', ')))::text;
-      end if;
-    end if;
-
     select coalesce(array_agg(c.col order by c.col), '{}'::text[]) into v_deferred
       from unnest(v_cols) as c(col) where c.col = any (v_reg.deferred_columns);
     v_first := v_first || pg_catalog.jsonb_build_array(
@@ -603,8 +592,10 @@ begin
   v_plan := v_first;
   v_first := '[]'::jsonb;
 
-  -- The drafts: locked, in id order, and each still the one the publisher saw. Another
-  -- tenant's draft is not found here, as a missing one is not.
+  -- The drafts: locked, in id order, and each still the one the publisher saw: its
+  -- version, entity, operation, and, for an update, the base it holds for every column the
+  -- change names (the conflict check reads the draft's own base, never the request's).
+  -- Another tenant's draft is not found here, as a missing one is not.
   select array_agg((x.value ->> 'draft_id')::uuid order by (x.value ->> 'draft_id')::uuid)
     into v_draft_ids
     from pg_catalog.jsonb_array_elements(v_plan) as x(value);
@@ -614,16 +605,44 @@ begin
     for update;
   select coalesce(pg_catalog.jsonb_agg(i.draft_id order by i.draft_id), '[]'::jsonb) into v_stale
     from pg_catalog.jsonb_to_recordset(v_plan)
-           as i(draft_id uuid, draft_version int, entity_type text, entity_id uuid, op text)
+           as i(draft_id uuid, draft_version int, entity_type text, entity_id uuid, op text,
+                patch jsonb, base jsonb)
    where not exists (
      select 1 from public.content_drafts d
       where d.tenant_id = v_tenant and d.id = i.draft_id and d.release_id is null
         and d.version = i.draft_version and d.entity_type = i.entity_type
-        and d.entity_id = i.entity_id and d.op = i.op);
+        and d.entity_id = i.entity_id and d.op = i.op
+        and (i.op <> 'update' or (
+              select coalesce(pg_catalog.jsonb_object_agg(k.key, i.base -> k.key)
+                                filter (where i.base ? k.key), '{}'::jsonb)
+                from pg_catalog.jsonb_object_keys(i.patch) as k(key))
+            = (select coalesce(pg_catalog.jsonb_object_agg(k.key, d.base -> k.key)
+                                 filter (where d.base ? k.key), '{}'::jsonb)
+                 from pg_catalog.jsonb_object_keys(i.patch) as k(key))));
   if pg_catalog.jsonb_array_length(v_stale) > 0 then
     raise exception 'apply_release: a pending change moved since it was read' using errcode = 'BR409',
       detail = pg_catalog.jsonb_build_object('code', 'pending-changed', 'draftIds', v_stale)::text;
   end if;
+  select coalesce(pg_catalog.jsonb_object_agg(d.id, d.base), '{}'::jsonb) into v_draft_bases
+    from public.content_drafts d
+   where d.tenant_id = v_tenant and d.id = any (v_draft_ids);
+  -- Every column an update changes needs its base, or a conflict could not be seen.
+  for v_it in
+    select x.value from pg_catalog.jsonb_array_elements(v_plan) as x(value)
+     where x.value ->> 'op' = 'update'
+     order by (x.value ->> 'ord')::int
+  loop
+    select string_agg(k.key, ', ' order by k.key) into v_bad
+      from pg_catalog.jsonb_object_keys(v_it -> 'patch') as k(key)
+     where not ((v_draft_bases -> (v_it ->> 'draft_id')) ? k.key);
+    if v_bad is not null then
+      raise exception 'apply_release: a pending change carries no base for %', v_bad
+        using errcode = 'BR422',
+              detail = pg_catalog.jsonb_build_object(
+                'code', 'base-missing', 'draftId', v_it ->> 'draft_id',
+                'columns', pg_catalog.to_jsonb(pg_catalog.string_to_array(v_bad, ', ')))::text;
+    end if;
+  end loop;
   if p_restores_release_id is not null and not exists (
        select 1 from public.content_releases r
         where r.tenant_id = v_tenant and r.id = p_restores_release_id and r.status = 'published') then
@@ -645,7 +664,7 @@ begin
 
     -- 6. Conflicts, before any write and still as the service role: each live row an update
     -- or a removal touches, locked in registry order then id order, compared with the
-    -- draft's base column by column as the column's own type ('12.50' is 12.5), whatever
+    -- locked draft's own base column by column as the column's own type ('12.50' is 12.5), whatever
     -- the row's version says (a writer may send a version back: app.tg_bump_version keeps
     -- one that differs from the stored one, so an equal version proves nothing). Read past
     -- RLS on purpose: whether the row is there is a fact, and whether this person may change
@@ -673,7 +692,7 @@ begin
       select string_agg(pg_catalog.format('(%L, (s.l).%I is distinct from (s.b).%I)', c.col, c.col, c.col),
                         ', ' order by c.col),
              pg_catalog.jsonb_object_agg(c.col, v_live -> c.col),
-             pg_catalog.jsonb_object_agg(c.col, (v_it -> 'base') -> c.col)
+             pg_catalog.jsonb_object_agg(c.col, (v_draft_bases -> v_current) -> c.col)
         into v_list, v_live_args, v_base_args
         from unnest(v_cols) as c(col);
       execute pg_catalog.format(
@@ -689,7 +708,7 @@ begin
             pg_catalog.jsonb_build_object(
               'draftId', v_current, 'columns', pg_catalog.to_jsonb(v_moved),
               'live', (select pg_catalog.jsonb_object_agg(m.col, v_live -> m.col) from unnest(v_moved) as m(col)),
-              'base', (select pg_catalog.jsonb_object_agg(m.col, (v_it -> 'base') -> m.col) from unnest(v_moved) as m(col)))
+              'base', (select pg_catalog.jsonb_object_agg(m.col, (v_draft_bases -> v_current) -> m.col) from unnest(v_moved) as m(col)))
           else
             pg_catalog.jsonb_build_object('draftId', v_current, 'columns', pg_catalog.to_jsonb(v_moved))
           end);
