@@ -1,8 +1,10 @@
 import { ThemeUpdateSchema, ThemeWriteSchema } from '@schemas/admin';
 import type { ResourceConfig } from '../resource';
-import { pick, type Input } from './shared';
+import { fieldsOf, pick, type Input } from './shared';
 
 // Themes (Admin + Developer).
+
+const THEME_KEYS = { name: 'name', tokens: 'tokens', isActive: 'is_active' };
 
 export const themeResource: ResourceConfig = {
   table: 'custom_themes',
@@ -14,7 +16,10 @@ export const themeResource: ResourceConfig = {
   searchColumn: 'name',
   createSchema: ThemeWriteSchema,
   updateSchema: ThemeUpdateSchema,
-  toRow: (input) => pick(input as Input, { name: 'name', tokens: 'tokens', isActive: 'is_active' }),
+  toRow: (input) => pick(input as Input, THEME_KEYS),
+  // Activating one theme deactivates the others in `afterWrite` (other rows, no column of
+  // this patch).
+  fields: fieldsOf(THEME_KEYS),
   afterWrite: async ({ auth, sb, row, input }) => {
     if (input['isActive'] !== true) return;
     // Exactly one active theme. Done after the write rather than in a transaction
