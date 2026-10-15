@@ -234,3 +234,22 @@ test.describe('as admin, a number the browser cannot read (review M2)', () => {
     expect(await sort.evaluate((el) => (el as HTMLInputElement).validity.badInput)).toBe(false);
   });
 });
+
+test.describe('as admin, Ctrl+S on a page with two editors (review L8)', () => {
+  test.use({ storageState: authFile('admin') });
+
+  test('with focus in neither form, saves neither', async ({ page }) => {
+    await page.goto('/admin/settings', { waitUntil: 'networkidle' });
+    await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
+    await expect(page.locator('form.editor')).toHaveCount(2);
+    let sent = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'PATCH') sent += 1;
+    });
+    await page.locator('h1').first().click();
+    await page.keyboard.press('Control+s');
+    // Nothing to wait for but time: a save would have gone at once.
+    await page.waitForTimeout(500);
+    expect(sent).toBe(0);
+  });
+});
