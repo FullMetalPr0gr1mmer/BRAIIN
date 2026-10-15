@@ -177,16 +177,15 @@ function rowOf(entry: ActivityEntry): Record<string, unknown> {
         {notice === 'limit' && (
           <Note tone="warn" role="status" class="act-note">
             <p>
-              The activity log can be exported three times an hour. Try again later; the list
-              below is still here.
+              The activity log can be exported three times an hour. Try again later; the list below
+              is still here.
             </p>
           </Note>
         )}
         {notice === 'unavailable' && (
           <Note tone="err" role="alert" class="act-note">
             <p>
-              The export could not be recorded in the log, so it did not run. Try again in a
-              moment.
+              The export could not be recorded in the log, so it did not run. Try again in a moment.
             </p>
           </Note>
         )}

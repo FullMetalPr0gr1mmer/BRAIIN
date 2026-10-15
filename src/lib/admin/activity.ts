@@ -1,9 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import {
-  ActivityQuerySchema,
-  type ActivityFilters,
-  type ActivityQuery,
-} from '@schemas/audit';
+import { ActivityQuerySchema, type ActivityFilters, type ActivityQuery } from '@schemas/audit';
 import type { AuthContext, Role } from '@/lib/auth/types';
 import { isRole } from '@/lib/auth/types';
 import { ROLE_LABELS } from '@/lib/authz/capLabels';
@@ -178,7 +174,14 @@ export function personOf(
   const person = people.get(row.actor_id);
   if (!person) {
     // No profile left: a member removed from the team altogether.
-    return { id: row.actor_id, name: 'A former member', role, roleLabel, former: true, known: false };
+    return {
+      id: row.actor_id,
+      name: 'A former member',
+      role,
+      roleLabel,
+      former: true,
+      known: false,
+    };
   }
   const name = (person.display_name ?? '').trim() || 'A member with no name';
   return {
@@ -275,7 +278,8 @@ export async function loadActivity(
   let read = first;
   let page = query.page;
   if (read.outOfRange || (read.rows.length === 0 && page > 1)) {
-    const total = read.outOfRange && read.total === 0 ? await countMatching(sb, tenantId, query) : read.total;
+    const total =
+      read.outOfRange && read.total === 0 ? await countMatching(sb, tenantId, query) : read.total;
     const last = Math.max(1, Math.ceil(total / PAGE_SIZE));
     if (last < page) {
       page = last;

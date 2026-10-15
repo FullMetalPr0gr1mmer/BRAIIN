@@ -11,7 +11,9 @@ import { LOCKED_SCREENS, refusedRoles } from './routes';
  *   signed in   each screen in LOCKED_SCREENS, as every role without its capability: the
  *               API its island loads answers assertCap's 403 (`forbidden`, not a CSRF or
  *               origin refusal), and the screen shows that refusal rather than data. The
- *               middleware asks only for a session, so the page itself still renders.
+ *               middleware asks only for a session, so an island screen's page still
+ *               renders; a server-rendered screen (`render: 'server'`) answers 403 itself,
+ *               with the refusal in its HTML.
  *   writes      creating a service as a role without `services.write`, with a valid CSRF
  *               token and origin, so the only thing left to refuse it is the capability.
  *   signed out  every locked screen sends a visitor to sign in, its API answers 401.
@@ -45,6 +47,14 @@ for (const role of STAFF_ROLES) {
         const res = await page.request.get(screen.api);
         expect(res.status(), `${screen.api} as ${role}`).toBe(403);
         expect(await res.json()).toMatchObject({ ok: false, error: 'forbidden' });
+
+        if (screen.render === 'server') {
+          const page403 = await page.goto(screen.href);
+          expect(page403?.status(), `${screen.href} as ${role}`).toBe(403);
+          await expect(page.locator('main .msg[data-kind="error"]').first()).toContainText(REFUSAL);
+          await expect(page.locator('main table')).toHaveCount(0);
+          return;
+        }
 
         const refused = page.waitForResponse(
           (r) => new URL(r.url()).pathname === screen.api && r.status() === 403,

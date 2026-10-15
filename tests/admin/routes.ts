@@ -51,13 +51,19 @@ export interface LockedScreen {
   href: string;
   api: string;
   cap: Capability;
+  /**
+   * How the screen refuses: `island` (the default), the page renders and its island shows
+   * the API's 403; `server`, the page itself answers 403 with the refusal in its HTML and
+   * reads nothing (a server-rendered screen, Admin v2 U2 and U13).
+   */
+  render?: 'island' | 'server';
 }
 
 export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/users', api: '/api/admin/users', cap: 'users.manage' },
   { href: '/admin/applications', api: '/api/admin/applications', cap: 'applications.manage' },
   { href: '/admin/leads', api: '/api/admin/leads', cap: 'leads.manage' },
-  { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view' },
+  { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view', render: 'server' },
   { href: '/admin/logs', api: '/api/admin/logs', cap: 'logs.view' },
   { href: '/admin/site-health', api: '/api/admin/site-health', cap: 'siteHealth.view' },
   { href: '/admin/settings', api: '/api/admin/settings', cap: 'settings.general' },
@@ -94,6 +100,14 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   { href: '/admin/help?q=password', label: 'Help search', caps: [] },
   { href: '/admin/help?guide=finding-your-way', label: 'A help guide', caps: [] },
   { href: '/admin/help?guide=finding-your-way&lang=ar', label: 'A help guide in Arabic', caps: [] },
+  // The activity log filtered (Admin v2 U13): a kind, a day range and an empty result can
+  // render differently from the plain list (the chips' current one, the notes, the empty
+  // state), so a filtered view is swept too, for the roles that may read the log.
+  {
+    href: '/admin/audit?kind=leads&from=2026-01-01',
+    label: 'Activity log, filtered',
+    caps: ['audit.view'],
+  },
 ];
 
 /** Every screen of the menu: sidebar links, then their tabs, each once. */

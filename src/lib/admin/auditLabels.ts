@@ -57,15 +57,14 @@ interface Label {
 }
 
 /** What each kind is called on a row's badge and on its chip, and the badge's tone. */
-export const KIND_BADGE: Readonly<Record<ActivityRowKind, { label: string; tone: BadgeTone }>> =
-  {
-    edits: { label: 'Edit', tone: 'gray' },
-    publishing: { label: 'Publish', tone: 'klein' },
-    leads: { label: 'Lead', tone: 'ok' },
-    users: { label: 'User', tone: 'sky' },
-    settings: { label: 'Setting', tone: 'warn' },
-    other: { label: 'Other', tone: 'dark' },
-  };
+export const KIND_BADGE: Readonly<Record<ActivityRowKind, { label: string; tone: BadgeTone }>> = {
+  edits: { label: 'Edit', tone: 'gray' },
+  publishing: { label: 'Publish', tone: 'klein' },
+  leads: { label: 'Lead', tone: 'ok' },
+  users: { label: 'User', tone: 'sky' },
+  settings: { label: 'Setting', tone: 'warn' },
+  other: { label: 'Other', tone: 'dark' },
+};
 
 /** The chips, in the prototype's order (screens_ops.js, the activity log). */
 export const KIND_CHIPS: readonly { kind: ActivityKind; label: string }[] = [
@@ -308,9 +307,7 @@ const PREFIXES: readonly { prefix: string; label: Label }[] = [
       verb: 'Published',
       noun: (detail) => {
         const n = detail['number'] ?? detail['version'];
-        return typeof n === 'number' && Number.isInteger(n) && n > 0
-          ? `version ${n}`
-          : 'a version';
+        return typeof n === 'number' && Number.isInteger(n) && n > 0 ? `version ${n}` : 'a version';
       },
     },
   },
@@ -381,13 +378,28 @@ function words(key: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** The editor's label for each column of an entity, dashes the copy rules forbid made plain. */
+const NO_LABELS: ReadonlyMap<string, string> = new Map();
+const labelCache = new Map<string, ReadonlyMap<string, string>>();
+
+/**
+ * The editor's label for each column of an entity, dashes the copy rules forbid made plain.
+ * Built once per entity (an export describes up to 1,000 rows on the Free plan's 10 ms).
+ */
 function fieldLabels(entity: string | null): ReadonlyMap<string, string> {
-  if (!entity) return new Map();
+  if (!entity) return NO_LABELS;
+  const cached = labelCache.get(entity);
+  if (cached) return cached;
   const fields =
     KERNEL_ENTITIES.get(entity)?.fields ??
-    (SINGLETONS[entity] ? (SINGLETON_UI[SINGLETONS[entity].ui]?.fields ?? []) : []);
-  return new Map(fields.map((field) => [columnOf(field), field.label.replace(/[–—]/g, '-')]));
+    (Object.hasOwn(SINGLETONS, entity)
+      ? (SINGLETON_UI[SINGLETONS[entity]!.ui]?.fields ?? [])
+      : null);
+  if (!fields) return NO_LABELS;
+  const labels = new Map(
+    fields.map((field) => [columnOf(field), field.label.replace(/[–—]/g, '-')]),
+  );
+  labelCache.set(entity, labels);
+  return labels;
 }
 
 /** The names of the fields a row says a save changed, in words; anything else is dropped. */
@@ -418,7 +430,11 @@ const resolve = <T>(value: T | ((detail: Detail) => T), detail: Detail): T =>
   typeof value === 'function' ? (value as (detail: Detail) => T)(detail) : value;
 
 /** The item a titled row may show the title of; entity SEO titles its target. */
-function titleRefOf(row: ActivityRow, label: Label, detail: Detail): ActivityDescription['titleRef'] {
+function titleRefOf(
+  row: ActivityRow,
+  label: Label,
+  detail: Detail,
+): ActivityDescription['titleRef'] {
   const id = row.entity_id;
   if (!id) return null;
   if (row.action === 'entity_seo.update') {
@@ -505,9 +521,7 @@ export function kindFilter(kind: ActivityKind): string {
   const statuses = `(${PUBLISHING_STATUSES.join(',')})`;
   if (kind === 'publishing') parts.push(`and(${saves},detail->>status.in.${statuses})`);
   if (kind === 'edits') {
-    parts.push(
-      `and(${saves},or(detail->>status.is.null,detail->>status.not.in.${statuses}))`,
-    );
+    parts.push(`and(${saves},or(detail->>status.is.null,detail->>status.not.in.${statuses}))`);
   }
   return parts.join(',');
 }

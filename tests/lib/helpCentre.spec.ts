@@ -92,9 +92,15 @@ function textsOf(article: HelpArticleRow, lang?: 'en' | 'ar'): string[] {
   ];
 }
 
-/** The screens every member reaches outside the menu: the sweep's extras and the help page. */
+/**
+ * The screens every member reaches outside the menu: the sweep's extras that need no
+ * capability, and the help page. An extra that needs one (a filtered view of a menu screen)
+ * is reached by its holders through the menu already.
+ */
 const MEMBER_SCREENS = new Set([
-  ...EXTRA_LINKS.map((link) => link.href.split('?')[0] ?? link.href),
+  ...EXTRA_LINKS.filter((link) => link.caps.length === 0).map(
+    (link) => link.href.split('?')[0] ?? link.href,
+  ),
   '/admin/help',
 ]);
 const reaches = (role: Role, screen: string) =>
@@ -232,18 +238,33 @@ describe('the guides say only what the admin does', () => {
       .filter((f) => /\.(ts|tsx|astro)$/.test(f))
       .map((f) => `${dir}/${f}`);
 
-  it('the activity log shows when, the role and the action, never who: no guide says who', () => {
-    // The screen's columns (src/pages/admin/audit.astro): the acting account is stored with
-    // each row, never shown.
+  it('the activity log names who acted, filters and exports: the guide says what the screen does', () => {
+    // Since U13 (0054) the screen names the person (public.audit_people, former members
+    // included) beside the role, filters by kind, person and day, and exports a CSV under
+    // the lockdown; the database binds who and when (0050).
     const audit = source('src/pages/admin/audit.astro');
-    expect(audit).toContain("{ key: 'actor_role', label: 'Role' }");
-    expect(audit).not.toMatch(/actor_id|display_name|actor_name/);
-    expect(everything('en')).not.toMatch(/\bwho (looked|did|changed)\b|with your name/i);
-    for (const phrase of ['من اطلع', 'من فعل', 'من غيّر', 'باسمك']) {
-      expect(everything('ar')).not.toContain(phrase);
-    }
-    expect(guide('site-health-and-logs', 'en')).toContain('each against the account that made it');
+    expect(audit).toContain("{ key: 'who', label: 'Who', kind: 'person' }");
+    expect(source('src/lib/admin/activity.ts')).toContain("sb.rpc('audit_people'");
+    expect(audit).toContain('/api/admin/audit/export');
+    const en = guide('site-health-and-logs', 'en');
+    expect(en).toContain('each against the account that made it');
+    expect(en).toContain('names the person, former members included');
+    expect(en).toContain('so nobody can record something in someone else');
+    expect(en).toContain('a kind of activity, a person or a range of days');
+    expect(en).toContain('up to three times an hour');
+    expect(en).toContain('never what they hold');
+    expect(en).not.toContain('The screen lists the time, the role');
+    expect(guide('site-health-and-logs', 'ar')).toContain('اسم الشخص');
     expect(guide('personal-data', 'en')).toContain('recorded against your account, with the time');
+  });
+
+  it('the activity log export allows what the guide says: three an hour, recorded', async () => {
+    const { EXPORT_LIMITS } = await import('@/lib/admin/rateLimit');
+    expect(EXPORT_LIMITS.perUser).toBe(3);
+    expect(EXPORT_LIMITS.windowMinutes).toBe(60);
+    const route = source('src/pages/api/admin/audit/export.ts');
+    expect(route).toContain("claimPrivilegedOp(auth, 'export-activity')");
+    expect(route).toContain("action: 'export.activity.attempt'");
   });
 
   it('SEO is not told it edits media details: the media editor needs media.write at full', () => {

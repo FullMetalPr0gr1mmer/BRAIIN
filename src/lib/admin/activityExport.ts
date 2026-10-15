@@ -3,7 +3,6 @@ import type { ActivityFilters } from '@schemas/audit';
 import type { AuthContext } from '@/lib/auth/types';
 import { describe, KIND_BADGE, sentence, type ActivityRow } from './auditLabels';
 import { applyFilters, personOf, readPeople } from './activity';
-import { formatDateTime } from './relTime';
 
 // The activity log as a CSV file (Admin v2 U13, GET /api/admin/audit/export; the route holds
 // the lockdown's order). This module reads the rows and writes the records.
@@ -17,9 +16,13 @@ import { formatDateTime } from './relTime';
 
 /**
  * The most entries one file carries (U13 decision D4). Set by CPU, as the lead export's caps
- * are (src/lib/crm/exportRead.ts): a row costs what `describe` and the CSV writer cost, with
- * nothing decrypted; `node scripts/bench-activity-export.mjs` measures it in workerd and
- * docs/admin-v2/as-built/U13.md records the run.
+ * are (src/lib/crm/exportRead.ts): a row costs what parsing it, `describe`, the name and the
+ * CSV writer cost, with nothing decrypted. `node scripts/bench-activity-export.mjs` measures
+ * it in workerd: 5 to 6 µs a row (it was 23 before the Riyadh time stopped going through
+ * Intl, riyadhDateTime below), so a full file's rows take about 6 ms of the Free plan's 10,
+ * the margin the lead export keeps for the rest of the request (the session, the two audit
+ * rows, the reads' answers), which was not measured. docs/admin-v2/as-built/U13.md records
+ * the run. On Workers Paid the cap could rise toward the 20 pages MAX_PAGES allows.
  */
 export const ACTIVITY_EXPORT_CAP = 1000;
 
@@ -41,6 +44,23 @@ export const ACTIVITY_CSV_HEADER = [
   'item_id',
   'changed_fields',
 ] as const;
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000;
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * "15 Oct 2026, 12:30" in the studio's clock: the string relTime's formatDateTime prints,
+ * computed from the fixed offset (Asia/Riyadh is UTC+3 all year) instead of through
+ * Intl.DateTimeFormat, which costs about 17 µs a call (three formatToParts), most of a row's
+ * CPU in a 1,000-row file. tests/lib/activityExport.spec.ts holds the two equal.
+ */
+export function riyadhDateTime(at: string): string {
+  const time = Date.parse(at);
+  if (Number.isNaN(time)) return '';
+  const d = new Date(time + RIYADH_OFFSET_MS);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}, ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
 
 export interface ActivityRead {
   rows: ActivityRow[];
@@ -74,7 +94,8 @@ export async function readActivityRows(
     rows.push(...got);
     if (rows.length >= want) return { rows: rows.slice(0, cap), truncated: true };
     const last = Number(got[got.length - 1]!.id);
-    if (!Number.isSafeInteger(last)) throw new Error('activity export: a row came back without its id');
+    if (!Number.isSafeInteger(last))
+      throw new Error('activity export: a row came back without its id');
     before = last;
   }
   return { rows: rows.slice(0, cap), truncated: true };
@@ -93,7 +114,7 @@ export async function toActivityRecords(
     const who = personOf(row, people);
     return {
       when_utc: typeof row.created_at === 'string' ? new Date(row.created_at).toISOString() : '',
-      when_riyadh: formatDateTime(row.created_at),
+      when_riyadh: typeof row.created_at === 'string' ? riyadhDateTime(row.created_at) : '',
       // A member switched off keeps their name, marked; one removed altogether has none.
       who: who.former && who.known ? `${who.name} (former member)` : who.name,
       role: who.roleLabel ?? '',

@@ -116,7 +116,13 @@ export const GET = defineAdminRoute({
         level: 'warn',
         source: 'admin:export-activity',
         message: `activity export reached its cap: ${rows} rows${truncated ? ', more matched' : ''}`,
-        detail: { actorId: auth.userId, role: auth.role, rows, cap: ACTIVITY_EXPORT_CAP, truncated },
+        detail: {
+          actorId: auth.userId,
+          role: auth.role,
+          rows,
+          cap: ACTIVITY_EXPORT_CAP,
+          truncated,
+        },
       });
     }
 
