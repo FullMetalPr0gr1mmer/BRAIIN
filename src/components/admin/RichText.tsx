@@ -1,8 +1,11 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useEffect } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 import type { JSONContent } from '@tiptap/core';
 import type { TiptapDoc } from '@schemas/tiptap';
+// Types only: nothing from the shared admin code is imported at runtime here, or it would
+// be pulled into this lazy chunk (the LinkDialog arrives as a prop instead).
+import type { LinkDialogProps } from './fields/LinkDialog';
 
 // The rich-text editor: Tiptap and ProseMirror, about 100 KB gzipped. FormField loads
 // this module with import(), and astro.config.mjs's `admin-rich` group keeps it and its
@@ -25,6 +28,12 @@ export interface RichTextProps {
   label: string;
   /** Arabic gets an RTL editing surface so authors see the real reading order. */
   locale?: 'en' | 'ar';
+  /** The editable surface's id, so an error link (fieldErrors.ts) can focus it. */
+  id?: string | undefined;
+  invalid?: boolean | undefined;
+  describedBy?: string | undefined;
+  /** The link dialog (FormField passes fields/LinkDialog). Without one, no link button. */
+  linkDialog?: ComponentType<LinkDialogProps> | undefined;
 }
 
 const EMPTY: TiptapDoc = { type: 'doc', content: [] };
@@ -41,13 +50,34 @@ function asEditorContent(doc: TiptapDoc): JSONContent {
   return doc as JSONContent;
 }
 
-export default function RichText({ value, onChange, label, locale = 'en' }: RichTextProps) {
+/** The sprite's icon, drawn here (kit/Icon.tsx is shared code: see the import note). */
+function Glyph({ name }: { name: string }) {
+  return (
+    <svg className="ic" width="15" height="15" aria-hidden="true" focusable="false">
+      <use href={`/styles/admin-icons.svg#i-${name}`} />
+    </svg>
+  );
+}
+
+export default function RichText({
+  value,
+  onChange,
+  label,
+  locale = 'en',
+  id,
+  invalid,
+  describedBy,
+  linkDialog: LinkDialog,
+}: RichTextProps) {
+  const [linking, setLinking] = useState<{ href: string } | null>(null);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         // The renderer clamps headings to h2–h6 (the page's h1 is the entity title), so
         // offering h1 in the toolbar would silently demote it and confuse the author.
         heading: { levels: [2, 3, 4] },
+        // A link in the editor is text being edited, not a way off the page.
+        link: { openOnClick: false },
       }),
     ],
     content: asEditorContent(value ?? EMPTY),
@@ -68,6 +98,9 @@ export default function RichText({ value, onChange, label, locale = 'en' }: Rich
         'aria-label': label,
         role: 'textbox',
         'aria-multiline': 'true',
+        ...(id ? { id } : {}),
+        ...(invalid ? { 'aria-invalid': 'true' } : {}),
+        ...(describedBy ? { 'aria-describedby': describedBy } : {}),
       },
     },
     onUpdate: ({ editor: instance }) => {
@@ -85,17 +118,32 @@ export default function RichText({ value, onChange, label, locale = 'en' }: Rich
     editor.commands.setContent(asEditorContent(next), { emitUpdate: false });
   }, [editor, value]);
 
-  if (!editor) return <div className="editor-surface">Loading editor…</div>;
+  if (!editor) return <div className="rich rich--loading">Loading the editor…</div>;
 
-  const button = (key: string, text: string, isActive: boolean, run: () => void, title: string) => (
-    <button key={key} type="button" title={title} aria-pressed={isActive} onClick={() => run()}>
+  // The prototype's .rich bar: each button's words are its name (WCAG 2.5.3: what is
+  // seen is what is said), its title the longer form, and a pressed one says so
+  // (aria-pressed), never by colour alone.
+  const button = (
+    key: string,
+    text: string,
+    isActive: boolean | null,
+    run: () => void,
+    title: string,
+  ) => (
+    <button
+      key={key}
+      type="button"
+      title={title}
+      aria-pressed={isActive ?? undefined}
+      onClick={() => run()}
+    >
       {text}
     </button>
   );
 
   return (
-    <div className="editor-surface">
-      <div className="editor-toolbar" role="toolbar" aria-label={`${label} formatting`}>
+    <div className="rich">
+      <div className="rich__bar" role="toolbar" aria-label={`${label} formatting`}>
         {button(
           'b',
           'Bold',
@@ -154,13 +202,64 @@ export default function RichText({ value, onChange, label, locale = 'en' }: Rich
         )}
         {button(
           'hr',
-          '—',
-          false,
+          'Rule',
+          null,
           () => editor.chain().focus().setHorizontalRule().run(),
           'Horizontal rule',
         )}
+        {LinkDialog && (
+          <button
+            type="button"
+            title="Link"
+            aria-label="Link"
+            aria-pressed={editor.isActive('link')}
+            onClick={() => {
+              const href: unknown = editor.getAttributes('link')['href'];
+              setLinking({ href: typeof href === 'string' ? href : '' });
+            }}
+          >
+            <Glyph name="link" />
+          </button>
+        )}
+        <button
+          type="button"
+          className="rich__clear"
+          title="Clear formatting"
+          onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+        >
+          Clear
+        </button>
       </div>
       <EditorContent editor={editor} />
+      {LinkDialog && (
+        <LinkDialog
+          open={linking !== null}
+          href={linking?.href ?? ''}
+          label={`Link in ${label}`}
+          onClose={() => setLinking(null)}
+          onRemove={() => {
+            editor.chain().focus().extendMarkRange('link').unsetLink().run();
+            setLinking(null);
+          }}
+          onSave={(href) => {
+            if (editor.state.selection.empty && !editor.isActive('link')) {
+              // Nothing selected: the address itself becomes the linked words.
+              editor
+                .chain()
+                .focus()
+                .insertContent({
+                  type: 'text',
+                  text: href,
+                  marks: [{ type: 'link', attrs: { href } }],
+                })
+                .run();
+            } else {
+              editor.chain().focus().extendMarkRange('link').setLink({ href }).run();
+            }
+            setLinking(null);
+          }}
+        />
+      )}
     </div>
   );
 }

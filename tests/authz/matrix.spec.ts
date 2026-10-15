@@ -20,7 +20,7 @@ const LABEL_TO_CAP: Record<string, Capability> = {
   'Pages & sections — edit/reorder/style': 'pages.write',
   'Navigation editor': 'nav.edit',
   'Categories management': 'categories.manage',
-  'Publish / schedule': 'content.publish',
+  'Publish / schedule content': 'content.publish',
   'Archive / delete content': 'content.archiveDelete',
   'Per-entity SEO meta / slug / schema': 'seo.entityMeta',
   'Global SEO defaults': 'seo.globalDefaults',

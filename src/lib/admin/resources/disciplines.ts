@@ -2,7 +2,10 @@ import { DisciplineUpdateSchema, DisciplineWriteSchema } from '@schemas/admin';
 import type { ResourceConfig } from '../resource';
 import {
   POSTER_LINK,
+  PREVIEW_PATH_COLUMNS,
+  STAMPED,
   assertLinkInTenant,
+  fieldsOf,
   pick,
   publishStamp,
   requireBilingual,
@@ -13,6 +16,17 @@ import {
 } from './shared';
 
 // Disciplines (Round 2, 0028): the five groups the services are filed under.
+
+const DISCIPLINE_KEYS = {
+  slug: 'slug',
+  name: 'name',
+  short: 'short',
+  blurb: 'blurb',
+  posterMediaId: 'poster_media_id',
+  status: 'status',
+  sortOrder: 'sort_order',
+  scheduledFor: 'scheduled_for',
+};
 
 export const disciplineResource: ResourceConfig = {
   table: 'disciplines',
@@ -53,21 +67,8 @@ export const disciplineResource: ResourceConfig = {
     },
   },
   toRow: (input) =>
-    publishStamp(
-      withPreviewPath(
-        pick(input as Input, {
-          slug: 'slug',
-          name: 'name',
-          short: 'short',
-          blurb: 'blurb',
-          posterMediaId: 'poster_media_id',
-          status: 'status',
-          sortOrder: 'sort_order',
-          scheduledFor: 'scheduled_for',
-        }),
-        input as Input,
-      ),
-    ),
+    publishStamp(withPreviewPath(pick(input as Input, DISCIPLINE_KEYS), input as Input)),
+  fields: fieldsOf(DISCIPLINE_KEYS, { ...STAMPED, clip: PREVIEW_PATH_COLUMNS }),
   statusOf: (input) => statusOf(input as Input),
   fromRow: withPreviewField,
   assertWritable: (_merged, ctx) => assertLinkInTenant(ctx, POSTER_LINK),

@@ -301,3 +301,62 @@ describe('datetime fields round-trip in a non-UTC browser', () => {
     expect(formToPayload(form, [field])['scheduledFor']).toBe('2026-09-26T10:00:00.000Z');
   });
 });
+
+describe('the field kit v2 kinds (Admin v2 F5a)', () => {
+  const color: FieldDef = { name: 'tint', label: 'Tint', kind: 'color' };
+  const range: FieldDef = {
+    name: 'intervalMs',
+    label: 'Interval',
+    kind: 'range',
+    range: { min: 2000, max: 12000, step: 500, suffix: ' ms' },
+  };
+  const tags: FieldDef = { name: 'tags', label: 'Tags', kind: 'tags' };
+  const chips: FieldDef = {
+    name: 'keywords',
+    label: 'Keywords',
+    kind: 'chips',
+    chips: { bilingual: true, maxLength: 40 },
+  };
+
+  it('a colour round-trips as uppercase #RRGGBB; blank is null at the top, omitted inside jsonb', () => {
+    const form = rowToForm({ tint: '#0024bc' }, [color]);
+    expect(form['tint']).toBe('#0024BC');
+    expect(formToPayload(form, [color])['tint']).toBe('#0024BC');
+    expect(formToPayload({ tint: '0024bc' }, [color])['tint']).toBe('#0024BC');
+    expect(formToPayload({ tint: '' }, [color])['tint']).toBeNull();
+    expect(objectToPayload({ tint: '' }, [color])).toEqual({});
+    // Not a colour: sent as typed, so the server's refusal names the field.
+    expect(formToPayload({ tint: ' #12345 ' }, [color])['tint']).toBe('#12345');
+  });
+
+  it('a range round-trips as a number held to its bounds and step', () => {
+    expect(rowToForm({ interval_ms: 6000 }, [range])['intervalMs']).toBe(6000);
+    expect(rowToForm({ interval_ms: null }, [range])['intervalMs']).toBeNull();
+    expect(formToPayload({ intervalMs: 6200 }, [range])['intervalMs']).toBe(6000);
+    expect(formToPayload({ intervalMs: 99999 }, [range])['intervalMs']).toBe(12000);
+    expect(formToPayload({ intervalMs: 10 }, [range])['intervalMs']).toBe(2000);
+    expect(formToPayload({ intervalMs: null }, [range])['intervalMs']).toBeNull();
+    expect(objectToPayload({ intervalMs: null }, [range])).toEqual({});
+    expect(objectToPayload({ intervalMs: 7000 }, [range])).toEqual({ intervalMs: 7000 });
+  });
+
+  it('tags (chips) are trimmed and deduped, an untouched null stays null', () => {
+    expect(formToPayload({ tags: [' a ', 'b', 'a', ''] }, [tags])['tags']).toEqual(['a', 'b']);
+    expect(formToPayload(rowToForm({ tags: null }, [tags]), [tags])['tags']).toBeNull();
+    expect(objectToPayload({ tags: [] }, [tags])).toEqual({});
+  });
+
+  it('bilingual chips are two lists, and omitted inside jsonb while both are empty', () => {
+    const stored = { keywords: { en: ['brand', 'logo'], ar: ['هوية', 'شعار'] } };
+    const form = rowToForm(stored, [chips]);
+    expect(form['keywords']).toEqual(stored.keywords);
+    expect(formToPayload(form, [chips])['keywords']).toEqual(stored.keywords);
+    expect(
+      formToPayload({ keywords: { en: ['a', 'a ', ' '], ar: ['ب'] } }, [chips])['keywords'],
+    ).toEqual({ en: ['a'], ar: ['ب'] });
+    expect(objectToPayload({ keywords: { en: [], ar: [] } }, [chips])).toEqual({});
+    expect(objectToPayload({ keywords: { en: ['x'], ar: [] } }, [chips])).toEqual({
+      keywords: { en: ['x'], ar: [] },
+    });
+  });
+});

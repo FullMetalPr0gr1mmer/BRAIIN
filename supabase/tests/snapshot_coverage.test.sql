@@ -19,7 +19,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
 begin;
-select plan(21);
+select plan(23);
 
 -- ── 1. The catalog ─────────────────────────────────────────────────────────────────
 select is(
@@ -103,11 +103,38 @@ select is(
   (select coalesce(string_agg(r || ' ' || f, ', ' order by r, f), '')
      from unnest(array['anon', 'authenticated', 'service_role']::name[]) as r
      cross join unnest(array['app.release_token_valid()', 'app.current_release_id()',
-                             'app.releases_enabled(uuid)', 'app.tg_snapshot_version()',
-                             'app.tg_snapshot_singleton()', 'app.tg_draft_lock()']) as f
+                             'app.tg_snapshot_version()', 'app.tg_snapshot_singleton()',
+                             'app.tg_draft_lock()', 'app.tg_release_capture()']) as f
     where has_function_privilege(r, f, 'execute')),
   '',
-  'no API role can call the token, flag or trigger functions');
+  'no API role can call the token or trigger functions (the flag reader: the service role, 0051)');
+
+-- Capture (0051, Admin v2 R4): every registry table but team_members records what a release
+-- changes, through one AFTER INSERT/UPDATE/DELETE row trigger named for its table, called
+-- with its entity type and key; team_members records nothing until owner item O-12.
+select is(
+  (select coalesce(string_agg(e.entity_type, ', ' order by e.entity_type), '')
+     from app.release_entities e
+    where e.entity_type <> 'team_member'   -- O-12, below
+      and not exists (
+      select 1 from pg_trigger tg
+       where tg.tgrelid = format('public.%I', e.table_name)::regclass
+         and not tg.tgisinternal
+         and tg.tgname = e.table_name || '_release_capture'
+         and tg.tgfoid = 'app.tg_release_capture()'::regprocedure
+         -- AFTER, FOR EACH ROW, on INSERT, UPDATE and DELETE.
+         and tg.tgtype = 1 + 4 + 8 + 16
+         and position(convert_to(e.entity_type, 'UTF8') || '\x00'::bytea
+                      || convert_to(e.key_column, 'UTF8') || '\x00'::bytea in tg.tgargs) = 1)),
+  '',
+  'every registry table but team_members captures a release''s changes under its type and key');
+select is(
+  (select coalesce(string_agg(tg.tgname, ', ' order by tg.tgname), '')
+     from pg_trigger tg
+    where tg.tgrelid = 'public.team_members'::regclass
+      and tg.tgfoid = 'app.tg_release_capture()'::regprocedure),
+  '',
+  'team_members captures nothing until owner item O-12 (PDPL: staff names and bios)');
 
 -- ── 2. Fixtures (as the migration role) ────────────────────────────────────────────
 insert into public.tenants (id, name) values

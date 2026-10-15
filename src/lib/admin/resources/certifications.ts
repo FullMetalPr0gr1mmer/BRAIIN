@@ -1,8 +1,18 @@
 import { CertificationUpdateSchema, CertificationWriteSchema } from '@schemas/admin';
 import type { ResourceConfig } from '../resource';
-import { pick, requireBilingual, statusOf, type Input } from './shared';
+import { fieldsOf, pick, requireBilingual, statusOf, type Input } from './shared';
 
 // Certifications.
+
+const CERTIFICATION_KEYS = {
+  slug: 'slug',
+  name: 'name',
+  issuer: 'issuer',
+  year: 'year',
+  logoUrl: 'logo_url',
+  status: 'status',
+  sortOrder: 'sort_order',
+};
 
 export const certificationResource: ResourceConfig = {
   table: 'certifications',
@@ -14,16 +24,9 @@ export const certificationResource: ResourceConfig = {
   searchColumn: 'slug',
   createSchema: CertificationWriteSchema,
   updateSchema: CertificationUpdateSchema,
-  toRow: (input) =>
-    pick(input as Input, {
-      slug: 'slug',
-      name: 'name',
-      issuer: 'issuer',
-      year: 'year',
-      logoUrl: 'logo_url',
-      status: 'status',
-      sortOrder: 'sort_order',
-    }),
+  // No publish stamp: this toRow writes no published_at.
+  toRow: (input) => pick(input as Input, CERTIFICATION_KEYS),
+  fields: fieldsOf(CERTIFICATION_KEYS),
   statusOf: (input) => statusOf(input as Input),
   assertPublishable: (row) => requireBilingual(row, 'name', 'Certification name'),
 };

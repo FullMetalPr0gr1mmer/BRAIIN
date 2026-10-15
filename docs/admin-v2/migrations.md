@@ -8,8 +8,9 @@ the program applies it. No URL, credential or project reference belongs here.
 
 ## Applied
 
-Production has applied 0001 to 0038, 0041, 0044, 0045, 0046 and 0048, the same files `main`
-holds (0039, 0040, 0042, 0043 and 0047 were released unused; gaps are allowed).
+Production has applied 0001 to 0038, 0041, 0044, 0045, 0046, 0048, 0050 and 0051, the same
+files `main` holds (0039, 0040, 0042, 0043, 0047 and 0049 were released unused; gaps are
+allowed).
 
 | Migration | What | PR |
 |---|---|---|
@@ -28,6 +29,8 @@ holds (0039, 0040, 0042, 0043 and 0047 were released unused; gaps are allowed).
 | 0045 | media uploads: the public media bucket (refused if a different `media` bucket exists) and its policies, the `media_assets` provider widening and shape check, one row per uploaded file (a unique key index), `display_name`, `media_assets`' grants stated, the storage meter and the orphan lookup with its floor (`0045_media_uploads.sql`) (U3) | #59 |
 | 0046 | `0046_help_centre.sql`: the help centre: `help_articles` (typed blocks, never HTML; staff read their tenant's guides, nothing writes but the migrations and the service role), `help_search` (a contains search, Arabic folded with `app.normalize_ar_q` as §8's contains searches are; up to 100 guides, filtered by role in the Worker), the guides (`app.help_article_set()`) and their seed into every tenant and, by a trigger on `tenants`, each new one. Renumbered from 0042 (U16) | #62 |
 | 0048 | `0048_lead_notify_trigger.sql`: the lead-notification trigger restored and hardened: pg_net created where missing; `app.tg_notify_lead()` re-created SECURITY DEFINER with an empty search_path, posting to the https URL in Vault (`notify_lead_url`, no longer `site_settings`) with a timestamp and an HMAC signature instead of the secret, and no catchable error failing an insert (a lead it cannot announce is a WARNING and a `system_logs` row); `leads_notify` created on every database (0010 created it only where pg_net already was, and production's was not); `public.lead_notify_misses()` for the daily cron (`0048_lead_notify_trigger.sql`) (H9) | #63 |
+| 0050 | `0050_live_profiles_audit_actor.sql`: live profile writes and the audit actor binding: RESTRICTIVE live policies on every staff write to `profiles`, `app.role_manages_users`, the `audit_log_actor` trigger, `audit_log`'s grants stated (no TRUNCATE for any API role) (H10) | #66 |
+| 0051 | `0051_release_apply.sql`: `apply_release` and capture (inert while `release_tenants` is empty) (R4) | #69 |
 
 Each slice's file under [as-built/](as-built/) has the detail.
 
@@ -47,8 +50,6 @@ the row is true when the PR lands and nothing here is edited after a merge.
 | 0043 | (released) | unused, as 0042: C13 moved to 0047 | 1 |
 | 0047 | (released) | unused: U16 (0046) and then H9 (0048) merge before C13, and once 0048 is on `main` a 0047 would sort below its highest, so C13 moved to 0049 | 1 |
 | 0049 | (released) | unused: H10 (0050) merges before C13, and once 0050 is on `main` a 0049 would sort below its highest (rule 1), so C13 moved to 0059 | 1 |
-| 0050 | H10 | live profile writes and the audit actor binding: RESTRICTIVE live policies on every staff write to `profiles`, `app.role_manages_users`, the `audit_log_actor` trigger, `audit_log`'s grants stated (no TRUNCATE for any API role) | 2 |
-| 0051 | R4 | `apply_release` and capture (inert while `release_tenants` is empty) | 2 |
 | 0052 | U2 | stats and health: `rollup_daily_vitals`, the invoker readers, whole-day page views (`app.rollup_pageviews` restated) | 2 |
 | 0053 | U1 | the dashboard: presets and team notes | 2 |
 | 0054 | U13 | the activity log v2: the live read on `audit_log`, `audit_people` (the actor binding is H10's) | 2 |

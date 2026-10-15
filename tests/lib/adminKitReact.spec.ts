@@ -513,9 +513,15 @@ describe('the kit screen’s island', () => {
       expect(out).toContain(`aria-label="Reorder ${section.label}"`);
     expect(out).toContain('data-sortable-list="left"');
     expect(out).toContain('aria-label="Move Visits to the next list"');
-    expect(out.match(/<dialog/g)).toHaveLength(3);
-    // Every sortable list's live region sits beside it, the drawer's inside its dialog.
-    expect(out.match(/data-sortable-live=""/g)).toHaveLength(3);
+    // The modal, the two drawers, and (since F5a's Fields card) the media field's picker.
+    expect(out.match(/<dialog/g)).toHaveLength(4);
+    // Every sortable list's live region sits beside it, the drawer's inside its dialog
+    // (the fourth is the Fields card's repeater, F5a).
+    expect(out.match(/data-sortable-live=""/g)).toHaveLength(4);
+    // The Fields card: every kind of the field kit, the language bar.
+    expect(out).toContain('<legend class="visually-hidden">Editing language</legend>');
+    expect(out).toContain('role="switch"');
+    expect(out).toContain('aria-label="Reorder Brief"');
     expect(out).toMatch(/<dialog[^>]*>(?:(?!<\/dialog>)[\s\S])*data-sortable-live=""/);
   });
 });

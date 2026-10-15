@@ -338,6 +338,8 @@ const ADMIN_PAIRS = [
   ['ink', 'primary-soft', 4.5, 'a chosen row in a data table (F4b)'],
   ['dim', 'primary-soft', 4.5, 'a secondary line in a chosen row (F4b)'],
   ['warn-text', 'card', 4.5, '"Unsaved changes" (SaveStatus, F4b)'],
+  // The field kit v2 (F5a): "Arabic missing: N" and a chip are text pairs above
+  // (warn-text on card, primary on primary-soft); these are its new non-text marks.
   // The midnight sidebar, toasts and dark badges
   ['side-text', 'midnight', 4.5, 'sidebar links'],
   ['side-label', 'midnight', 4.5, 'sidebar group titles'],
@@ -361,6 +363,11 @@ const ADMIN_PAIRS = [
   ['err-text', 'card', 3.0, "the bell's unread dot (F8)"],
   ['primary', 'bg', 3.0, 'a list row icon on its ground (.li__ico, F8)'],
   ['ok-text', 'card', 3.0, 'the score ring at 90 and up (Ring, F4b)'],
+  ['warn-text', 'bg', 3.0, 'the "Arabic (missing)" dot on an EN | AR segment (F5a)'],
+  ['warn-text', 'card', 3.0, 'the "Arabic (missing)" dot on the chosen segment (F5a)'],
+  ['card', 'control', 3.0, "a switch's knob on its off track (F5a)"],
+  ['card', 'primary', 3.0, "a switch's knob on its on track (F5a)"],
+  ['ink', 'card', 3.0, 'the ring around a chosen colour swatch (F5a)'],
   ...[1, 2, 3, 4, 5, 6, 7].flatMap((i) => [
     [`series-${i}`, 'card', 3.0, `chart series ${i} on a card`],
     [`series-${i}`, 'bg', 3.0, `chart series ${i} on the ground`],

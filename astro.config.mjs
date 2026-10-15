@@ -26,7 +26,21 @@ const ADMIN_KIT =
 // stay in the island's `AdminKit` entry chunk.
 const ADMIN_KIT_SCREEN =
   /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]kit[\\/]|islands[\\/]AdminKit\.tsx$)/;
-// The shared admin-ui chunk claims neither by path. A group also takes its modules' static
+// The field kit and the editors built on it (Admin v2 F5a): the field renderer and its
+// components, the payload shaping, the section editor's descriptors, the error mapping, the
+// save machine and its hook, and the two forms that use them. Claimed by admin-ui's path
+// rule they rode on every screen, a list or a dashboard included (12.1 KB gz each, measured
+// in F5a); here they are their own group, which only an editor's island loads. Nothing in
+// admin-ui may import them, and admin-ui leaves the two editor islands alone
+// (ADMIN_EDITOR_ISLANDS): a group takes its modules' static dependencies, and admin-ui's
+// path rule also matches an island's entry module, so either would pull the field kit
+// back into admin-ui (tests/lib/adminBundle.spec.ts checks both).
+const ADMIN_FIELDS =
+  /[\\/]src[\\/](components[\\/]admin[\\/](FormField\.tsx$|fields[\\/]|screens[\\/](resources[\\/]ResourceForm|singleton[\\/]SingletonForm)\.tsx$)|lib[\\/]admin[\\/](formPayload|sectionUi|fieldErrors|fieldValues|entitySave|useEntitySave|saveMode|contrast)\.ts$)/;
+// The islands that hydrate an editor: their entry chunks import admin-fields.
+const ADMIN_EDITOR_ISLANDS =
+  /[\\/]src[\\/]components[\\/]admin[\\/]islands[\\/]Admin(ResourceForm|SingletonForm)\.tsx$/;
+// The shared admin-ui chunk claims none of these by path. A group also takes its modules' static
 // dependencies, so a kit piece still lands in admin-ui the moment a screen there imports
 // it; the rest of the kit goes to the lowest admin group, `admin-kit`, instead of riding
 // along on every admin screen.
@@ -134,8 +148,19 @@ export default defineConfig({
                 test: (id) =>
                   /[\\/]src[\\/](components|lib)[\\/]admin[\\/]/.test(id) &&
                   !ADMIN_KIT.test(id) &&
-                  !ADMIN_KIT_SCREEN.test(id),
+                  !ADMIN_KIT_SCREEN.test(id) &&
+                  !ADMIN_FIELDS.test(id) &&
+                  !ADMIN_EDITOR_ISLANDS.test(id),
                 priority: 20,
+              },
+              {
+                // The field kit and the editors (F5a): below admin-ui, so a module both
+                // use (the API client, the descriptors, zod) stays in admin-ui and this
+                // chunk imports it from there; above the kit, so the kit pieces the fields
+                // draw with (Segmented, Modal, the Sortable core) come with them.
+                name: 'admin-fields',
+                test: ADMIN_FIELDS,
+                priority: 15,
               },
               {
                 // The lowest admin group (Admin v2 F4b review): the kit modules admin-ui

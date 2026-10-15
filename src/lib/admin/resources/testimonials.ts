@@ -3,6 +3,8 @@ import { ValidationError } from '../errors';
 import type { WriteRefusals } from '../crud';
 import type { ResourceConfig } from '../resource';
 import {
+  STAMPED,
+  fieldsOf,
   pick,
   publishStamp,
   refusePlaceholder,
@@ -39,6 +41,23 @@ const TESTIMONIAL_REFUSALS: WriteRefusals = [
   },
 ];
 
+const TESTIMONIAL_KEYS = {
+  slug: 'slug',
+  quote: 'quote',
+  authorName: 'author_name',
+  authorRole: 'author_role',
+  clientId: 'client_id',
+  portfolioId: 'portfolio_id',
+  avatarMediaId: 'avatar_media_id',
+  placements: 'placements',
+  consentObtainedAt: 'consent_obtained_at',
+  consentReference: 'consent_reference',
+  isPlaceholder: 'is_placeholder',
+  status: 'status',
+  sortOrder: 'sort_order',
+  scheduledFor: 'scheduled_for',
+};
+
 export const testimonialResource: ResourceConfig = {
   table: 'testimonials',
   entity: 'testimonial',
@@ -73,25 +92,8 @@ export const testimonialResource: ResourceConfig = {
     },
   },
   writeRefusals: TESTIMONIAL_REFUSALS,
-  toRow: (input) =>
-    publishStamp(
-      pick(input as Input, {
-        slug: 'slug',
-        quote: 'quote',
-        authorName: 'author_name',
-        authorRole: 'author_role',
-        clientId: 'client_id',
-        portfolioId: 'portfolio_id',
-        avatarMediaId: 'avatar_media_id',
-        placements: 'placements',
-        consentObtainedAt: 'consent_obtained_at',
-        consentReference: 'consent_reference',
-        isPlaceholder: 'is_placeholder',
-        status: 'status',
-        sortOrder: 'sort_order',
-        scheduledFor: 'scheduled_for',
-      }),
-    ),
+  toRow: (input) => publishStamp(pick(input as Input, TESTIMONIAL_KEYS)),
+  fields: fieldsOf(TESTIMONIAL_KEYS, STAMPED),
   statusOf: (input) => statusOf(input as Input),
   // The database CHECK is the gate of record for consent (every path, the cron included);
   // this says it on the field first.

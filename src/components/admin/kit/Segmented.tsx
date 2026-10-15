@@ -14,6 +14,12 @@ export interface SegmentOption<T extends string> {
   icon?: IconName | undefined;
   /** The option's language, when its label is in another one (العربية). */
   lang?: string | undefined;
+  /**
+   * Words read after the label, shown as a dot (Admin v2 F5a): the bilingual field's
+   * Arabic option is named "Arabic (missing)" while its required Arabic is empty. The
+   * visible label stays inside the name (WCAG 2.5.3).
+   */
+  cue?: string | undefined;
 }
 
 export interface SegmentedProps<T extends string> {
@@ -49,6 +55,12 @@ export default function Segmented<T extends string>({
           />
           {option.icon && <Icon name={option.icon} size={14} />}
           {option.label}
+          {option.cue && (
+            <>
+              <span className="seg__cue" aria-hidden="true" />
+              <span className="visually-hidden">{option.cue}</span>
+            </>
+          )}
         </label>
       ))}
     </fieldset>
