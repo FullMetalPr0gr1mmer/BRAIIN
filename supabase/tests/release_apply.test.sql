@@ -20,7 +20,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(95);
+select plan(96);
 
 -- ── 0. The catalog, before this file creates any function ─────────────────────────────
 -- (Its helpers below call set_config, and would show up here.)
@@ -769,6 +769,23 @@ select is(
     where o.name = 'upper' and r.name = 'u-lower' and i.release_id = (o.result ->> 'release_id')::uuid),
   '51000000-0000-0000-0001-000000000005 t',
   'a change named in upper case is applied and captured under its draft');
+
+-- Busy is not refused: a lock wait past lock_timeout (stood in for by a trigger raising its
+-- SQLSTATE) leaves the apply as it is, in both modes, for the caller to retry.
+create function _busy() returns trigger language plpgsql as $$
+begin
+  raise exception 'pgTAP stand-in for a lock wait past lock_timeout' using errcode = '55P03';
+end $$;
+create trigger r4_busy before update on public.services
+  for each row when (new.sort_order = 777) execute function _busy();
+select _stage('b-busy', 'service', '51000000-0000-0000-0001-000000000005', 'update', '{"sort_order":777}');
+set local role service_role;
+select is(_fails($$ select _pub('51000000-0000-0000-0000-0000000000c1', 'content_creator', array['b-busy']) $$)
+          || ' ' || _fails($$ select _pub('51000000-0000-0000-0000-0000000000c1', 'content_creator', array['b-busy'], 'dry_run') $$),
+  '55P03 55P03', 'a lock timeout passes through unchanged (publish and dry run), never as BR422');
+reset role;
+drop trigger r4_busy on public.services;
+delete from public.content_drafts where id = (select (item ->> 'draft_id')::uuid from _r4 where name = 'b-busy');
 
 select _stage('t-bio', 'team_member', '51000000-0000-0000-0009-000000000001', 'update', '{"bio":{"en":"Bio","ar":"نبذة"}}');
 set local role service_role;

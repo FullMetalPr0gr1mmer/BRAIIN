@@ -176,6 +176,17 @@ describe('apply_release: settings and identity', () => {
     expect(fn).toMatch(/from public\.profiles p\s+where p\.id = p_actor\s+and p\.is_active/);
   });
 
+  it('passes lock timeouts, deadlocks and serialization failures through, never as BR422', () => {
+    const busy =
+      /if v_state in \([^)]*'55P03', '40P01', '40001'\) then\s+raise exception '%', v_msg using errcode = v_state/g;
+    // Both handlers: the per-change block's and the outer block's.
+    expect([...fn.matchAll(busy)]).toHaveLength(2);
+    const inner = fn.indexOf("if v_state in ('55P03', '40P01', '40001') then");
+    expect(inner).toBeGreaterThan(0);
+    // ...before the per-change handler turns anything else into a refusal.
+    expect(inner).toBeLessThan(fn.indexOf("'apply_release: the database refused a change'"));
+  });
+
   it('writes the audit row before it switches back (as the publisher, in the transaction)', () => {
     const audit = fn.indexOf('insert into public.audit_log');
     const back = fn.indexOf("execute 'set local role service_role';");

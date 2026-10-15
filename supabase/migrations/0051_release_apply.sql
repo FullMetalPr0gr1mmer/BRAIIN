@@ -312,7 +312,10 @@ grant execute on function public.save_portfolio(uuid, int, jsonb, uuid[], jsonb)
 -- pending change moved since it was read, or the live site moved under it (409, detail
 -- JSON); BR422 the database refused a change, or a draft carries no base for a column it
 -- changes (422, detail JSON per item and field); 55000 releases are off for the tenant
--- (409); 22023 a malformed call (400); 42501 a caller other than the service role.
+-- (409); 22023 a malformed call (400); 42501 a caller other than the service role; and,
+-- passed through unchanged as "busy, try again" (never mapped to BR422): 55P03 a lock
+-- waited past lock_timeout (the per-tenant advisory lock, a draft or a live row), 40P01 a
+-- deadlock, 40001 a serialization failure.
 --
 -- p_items: an array of 1 to 60 changes, each exactly
 --   {draft_id, draft_version, entity_type, entity_id, op, patch, base[, children]}
@@ -910,6 +913,11 @@ begin
       exception when others then
         get stacked diagnostics v_state = returned_sqlstate, v_msg = message_text,
                                 v_con = constraint_name, v_col = column_name;
+        -- Busy, not refused: a lock wait past lock_timeout, a deadlock, a serialization
+        -- failure leave as they are, in both modes, for the caller to retry (R6).
+        if v_state in ('55P03', '40P01', '40001') then
+          raise exception '%', v_msg using errcode = v_state;
+        end if;
         v_fail := pg_catalog.jsonb_build_object(
           'draftId', v_current, 'sqlstate', v_state, 'constraint', nullif(v_con, ''),
           'column', nullif(v_col, ''), 'message', v_msg);
@@ -946,7 +954,7 @@ begin
       perform pg_catalog.set_config('app.release_apply', '', true);
       perform pg_catalog.set_config('app.release_id', '', true);
       perform pg_catalog.set_config('app.release_item', '', true);
-      if v_state in ('BR409', 'BR422') then
+      if v_state in ('BR409', 'BR422', '55P03', '40P01', '40001') then
         raise exception '%', v_msg using errcode = v_state, detail = coalesce(v_det, '');
       end if;
       raise exception 'apply_release: the release could not be applied' using errcode = 'BR422',
