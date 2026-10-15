@@ -296,14 +296,16 @@ begin
   -- ---- audit_log: exactly two triggers, both BEFORE INSERT FOR EACH ROW (tgtype 7: ROW 1 +
   -- BEFORE 2 + INSERT 4), enabled, no WHEN clause or argument: the actor binding, then the
   -- chain. BEFORE triggers on one event fire in name order (byte order, as strcmp), so
-  -- audit_log_actor must sort first.
-  select coalesce(array_agg(format('%s %s', t.tgname, t.tgfoid::regprocedure) order by t.tgname collate "C"), '{}')
+  -- audit_log_actor must sort first. Each function is compared by oid, not by its printed
+  -- name, which depends on the search_path.
+  select coalesce(array_agg(t.tgname::text order by t.tgname collate "C"), '{}')
     into v_have
     from pg_trigger t
    where t.tgrelid = 'public.audit_log'::regclass and not t.tgisinternal
-     and t.tgenabled::text = 'O' and t.tgtype = 7 and t.tgqual is null and t.tgnargs = 0;
-  if v_have is distinct from array['audit_log_actor app.tg_audit_actor()',
-                                   'audit_log_chain app.tg_audit_chain()']
+     and t.tgenabled::text = 'O' and t.tgtype = 7 and t.tgqual is null and t.tgnargs = 0
+     and ((t.tgname = 'audit_log_actor' and t.tgfoid = 'app.tg_audit_actor()'::regprocedure)
+          or (t.tgname = 'audit_log_chain' and t.tgfoid = 'app.tg_audit_chain()'::regprocedure));
+  if v_have is distinct from array['audit_log_actor', 'audit_log_chain']
      or (select count(*) from pg_trigger t
           where t.tgrelid = 'public.audit_log'::regclass and not t.tgisinternal) <> 2 then
     raise exception '0050: audit_log triggers are %, expected audit_log_actor then audit_log_chain, both BEFORE INSERT FOR EACH ROW', v_have;
