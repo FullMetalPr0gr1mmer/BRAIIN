@@ -23,7 +23,7 @@
 --     and nobody may setval its id sequence.
 
 begin;
-select plan(51);
+select plan(54);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -40,7 +40,9 @@ insert into auth.users (id, email) values
   ('50000000-0000-0000-0000-0000000000d1', 'h10-developer@example.test'),
   ('50000000-0000-0000-0000-0000000000f1', 'h10-other-admin@example.test'),
   ('50000000-0000-0000-0000-0000000000b1', 'h10-target@example.test'),
-  ('50000000-0000-0000-0000-0000000000b2', 'h10-other-target@example.test');
+  ('50000000-0000-0000-0000-0000000000b2', 'h10-other-target@example.test'),
+  ('50000000-0000-0000-0000-0000000000b3', 'h10-throwaway@example.test'),
+  ('50000000-0000-0000-0000-0000000000b4', 'h10-uninvited@example.test');
 insert into public.profiles (id, tenant_id, role, is_active, locked_until, display_name) values
   ('50000000-0000-0000-0000-0000000000a1', '50000000-0000-0000-0000-000000000001', 'admin', true, null, 'Amal'),
   -- Stale: each token below still says admin.
@@ -54,7 +56,9 @@ insert into public.profiles (id, tenant_id, role, is_active, locked_until, displ
   ('50000000-0000-0000-0000-0000000000f1', '50000000-0000-0000-0000-0000000000ff', 'admin', true, null, 'Faris'),
   -- The colleague every write below aims at, and one in the other tenant.
   ('50000000-0000-0000-0000-0000000000b1', '50000000-0000-0000-0000-000000000001', 'content_creator', true, null, 'Target'),
-  ('50000000-0000-0000-0000-0000000000b2', '50000000-0000-0000-0000-0000000000ff', 'content_creator', true, null, 'Other');
+  ('50000000-0000-0000-0000-0000000000b2', '50000000-0000-0000-0000-0000000000ff', 'content_creator', true, null, 'Other'),
+  -- Deleted by the live Admin in the temporary-grant check below.
+  ('50000000-0000-0000-0000-0000000000b3', '50000000-0000-0000-0000-000000000001', 'content_creator', true, null, 'Throwaway');
 
 create function _as(p_sub text, p_role text, p_tid text) returns void language sql as $$
   select set_config(
@@ -155,7 +159,29 @@ select is(
   0, 'nor rename itself');
 select throws_ok(
   $$ delete from public.profiles where id = '50000000-0000-0000-0000-0000000000b1' $$,
-  '42501', null, 'and no staff token deletes a profile (no grant; profiles_live_delete behind it)');
+  '42501', null, 'and no staff token deletes a profile: the GRANT layer refuses first (no DELETE grant)');
+
+-- The second layer on its own: with INSERT and DELETE granted to staff for the moment
+-- (withdrawn again below), the stale token still inserts and deletes nothing, while a live
+-- Admin's token, through the same grant, does.
+reset role;
+grant insert, delete on public.profiles to authenticated;
+set local role authenticated;
+select _as('50000000-0000-0000-0000-0000000000a2', 'admin', '50000000-0000-0000-0000-000000000001');
+select is(
+  _rows($$ delete from public.profiles where id = '50000000-0000-0000-0000-0000000000b3' $$),
+  0, 'with DELETE granted, a stale Admin token still deletes no profile (profiles_live_delete)');
+select throws_ok(
+  $$ insert into public.profiles (id, tenant_id, role)
+     values ('50000000-0000-0000-0000-0000000000b4', '50000000-0000-0000-0000-000000000001', 'admin') $$,
+  '42501', null, 'with INSERT granted, nor inserts one (profiles_live_insert)');
+select _as('50000000-0000-0000-0000-0000000000a1', 'admin', '50000000-0000-0000-0000-000000000001');
+select is(
+  _rows($$ delete from public.profiles where id = '50000000-0000-0000-0000-0000000000b3' $$),
+  1, 'while a live Admin''s token, through the same grant, does: the policies narrow, they do not shut');
+reset role;
+revoke insert, delete on public.profiles from authenticated;
+set local role authenticated;
 
 reset role;
 select is(
