@@ -234,7 +234,10 @@ describe('the field kit v2 (Admin v2 F5a)', () => {
       /<div class="bi__half" hidden="">\s*<div class="bi__h"><label for="f-title-ar"/,
     );
     // The group is named by its label; the EN | AR switch by "<Label> language".
-    expect(html).toContain('<legend class="field-legend">Service name');
+    expect(html).toContain('<legend id="f-title-legend" class="field-legend">Service name');
+    // Each input is named by the group's label and its language (review L14).
+    expect(html).toContain('aria-labelledby="f-title-legend f-title-en-lang"');
+    expect(html).toContain('<label for="f-title-ar" id="f-title-ar-lang"');
     expect(html).toContain('<legend class="visually-hidden">Service name language</legend>');
     expectUniqueIds(html);
   });
@@ -431,5 +434,111 @@ describe('the field kit v2 (Admin v2 F5a)', () => {
     for (const ui of Object.values(RESOURCE_UI)) {
       for (const field of ui.fields) expect(render(field, undefined)).not.toMatch(/\sstyle=/);
     }
+  });
+});
+
+describe('every field shows its own error (F5a review L5, L6, L12)', () => {
+  const withError = (field: FieldDef, value: unknown, errors: Record<string, string>) =>
+    renderToStaticMarkup(createElement(Field, { field, value, onChange: noop, errors }));
+
+  it('a whole bilingual pair: on the group, read as its description', () => {
+    const html = withError(
+      f({ name: 'title', label: 'Service name', kind: 'bilingual' }),
+      { en: '', ar: '' },
+      { 'f-title': 'Write both languages.' },
+    );
+    expect(html).toMatch(/<fieldset id="f-title"[^>]*aria-describedby="f-title-error"/);
+    expect(html).toContain(
+      '<p id="f-title-error" class="field-error f__err">Write both languages.</p>',
+    );
+  });
+
+  it('a relation, under the idPrefix it is rendered with', () => {
+    const relation = f({
+      name: 'disciplineId',
+      label: 'Discipline',
+      kind: 'relation',
+      relation: { resource: 'disciplines', labelKey: 'name' },
+    });
+    const html = renderToStaticMarkup(
+      createElement(Field, {
+        field: relation,
+        value: '',
+        onChange: noop,
+        idPrefix: 'f-items-0',
+        errors: { 'f-items-0-disciplineId': 'Choose one.' },
+      }),
+    );
+    expect(html).toMatch(
+      /<select id="f-items-0-disciplineId"[^>]*aria-invalid="true" aria-describedby="f-items-0-disciplineId-error"/,
+    );
+    expect(html).toContain('Choose one.');
+  });
+
+  it('an object, a clip, section content and an upload: the group or the box, marked', () => {
+    const object = withError(
+      f({
+        name: 'rating',
+        label: 'Rating line',
+        kind: 'object',
+        itemFields: [f({ name: 'value', label: 'Value', kind: 'text' })],
+      }),
+      {},
+      { 'f-rating': 'Give both parts.' },
+    );
+    expect(object).toMatch(
+      /<fieldset id="f-rating" tabindex="-1"[^>]*aria-describedby="f-rating-error"/,
+    );
+    expect(object).toContain('Give both parts.');
+
+    const clip = withError(
+      f({ name: 'clip', label: 'Hero clip', kind: 'clip' }),
+      { source: 'path', streamUid: '', path: '/media/a.mp4', startS: '1', endS: '40' },
+      { 'f-clip-end': 'At most 30 seconds.', 'f-clip': 'Check the window.' },
+    );
+    expect(clip).toMatch(
+      /id="f-clip-end"[^>]*aria-invalid="true" aria-describedby="f-clip-end-error"/,
+    );
+    expect(clip).toContain(
+      '<p id="f-clip-end-error" class="field-error f__err">At most 30 seconds.</p>',
+    );
+    expect(clip).toMatch(/<fieldset id="f-clip" tabindex="-1"/);
+    expect(clip).toContain('Check the window.');
+
+    const content = RESOURCE_UI['sections']!.fields.find((x) => x.kind === 'sectionContent')!;
+    const section = renderToStaticMarkup(
+      createElement(Field, {
+        field: content,
+        value: { values: {}, json: null },
+        values: { type: 'cta' },
+        onChange: noop,
+        errors: { 'f-content': 'Unrecognized key.' },
+      }),
+    );
+    expect(section).toMatch(/<fieldset id="f-content" tabindex="-1"/);
+    expect(section).toContain('Unrecognized key.');
+
+    const upload = withError(
+      f({ name: 'cv', label: 'CV', kind: 'upload', upload: { endpoint: '/x', accept: '.pdf' } }),
+      '',
+      { 'f-cv': 'Too large.' },
+    );
+    expect(upload).toMatch(/id="f-cv"[^>]*aria-invalid="true" aria-describedby="f-cv-error"/);
+    expect(upload).toContain('Too large.');
+  });
+
+  it('a whole repeater: on its group', () => {
+    const html = withError(
+      f({
+        name: 'steps',
+        label: 'Step',
+        kind: 'repeater',
+        itemFields: [f({ name: 'title', label: 'Title', kind: 'text' })],
+      }),
+      [],
+      { 'f-steps': 'At most 4.' },
+    );
+    expect(html).toMatch(/<fieldset id="f-steps" tabindex="-1"/);
+    expect(html).toContain('<p id="f-steps-error" class="field-error f__err">At most 4.</p>');
   });
 });

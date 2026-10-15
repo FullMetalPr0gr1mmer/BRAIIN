@@ -62,6 +62,7 @@ export default function BilingualField({
         (lang === 'en' ? field.required === true : arabicRequired && field.required === true) ||
         undefined,
       'aria-invalid': error ? true : undefined,
+      'aria-labelledby': `${id}-legend ${ids[lang]}-lang`,
       'aria-describedby':
         [field.help ? `${id}-hint` : null, error ? `${ids[lang]}-error` : null]
           .filter(Boolean)
@@ -77,6 +78,7 @@ export default function BilingualField({
       <div className="bi__h">
         <label
           htmlFor={ids[lang]}
+          id={`${ids[lang]}-lang`}
           className={both ? 'bi__lang' : 'bi__lang visually-hidden'}
           lang={lang === 'ar' ? 'ar' : undefined}
         >
@@ -108,6 +110,8 @@ export default function BilingualField({
       required={field.required}
       meta={both ? undefined : counter(shown as Lang)}
       hint={field.help}
+      error={errors?.[id]}
+      legendId={`${id}-legend`}
       labelExtra={toggle}
     >
       <div className="bi" data-lang={shown}>

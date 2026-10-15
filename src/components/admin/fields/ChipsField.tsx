@@ -25,6 +25,8 @@ interface ListProps {
   maxLength: number | undefined;
   lang?: Lang | undefined;
   describedBy?: string | undefined;
+  /** The group's label plus the language's, for a bilingual set's box. */
+  labelledBy?: string | undefined;
   invalid: boolean;
 }
 
@@ -37,6 +39,7 @@ function ChipList({
   maxLength,
   lang,
   describedBy,
+  labelledBy,
   invalid,
 }: ListProps) {
   const [draft, setDraft] = useState('');
@@ -93,6 +96,7 @@ function ChipList({
         placeholder={full ? `At most ${max}` : 'Type, then press Enter'}
         maxLength={maxLength}
         aria-describedby={describedBy}
+        aria-labelledby={labelledBy}
         aria-invalid={invalid || undefined}
         onKeyDown={onKeyDown}
         onBlur={() => commit(draft)}
@@ -164,6 +168,7 @@ export default function ChipsField({
         <div className="bi__h">
           <label
             htmlFor={ids[lang]}
+            id={`${ids[lang]}-lang`}
             className={both ? 'bi__lang' : 'bi__lang visually-hidden'}
             lang={lang === 'ar' ? 'ar' : undefined}
           >
@@ -181,6 +186,7 @@ export default function ChipsField({
           max={max}
           maxLength={maxLength}
           lang={lang}
+          labelledBy={`${id}-legend ${ids[lang]}-lang`}
           describedBy={
             [hint ? hintId : null, error ? `${ids[lang]}-error` : null].filter(Boolean).join(' ') ||
             undefined
@@ -204,6 +210,8 @@ export default function ChipsField({
       required={field.required}
       meta={both ? undefined : count(lists[shown as Lang].length)}
       hint={hint}
+      error={errors?.[id]}
+      legendId={`${id}-legend`}
       labelExtra={
         !both && (
           <Segmented<Lang>

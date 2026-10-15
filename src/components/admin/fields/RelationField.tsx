@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import type { FieldErrors } from '@/lib/admin/fieldErrors';
 import type { FieldDef } from '@/lib/admin/uiSchema';
+import { FieldErrorText, describedBy } from './FieldShell';
 import { useOptions } from './useOptions';
 
 // `relation` (one id) and `multiRelation` (an ORDERED list of ids). Order is data for a
@@ -10,13 +12,17 @@ interface Props {
   field: FieldDef;
   value: unknown;
   onChange: (name: string, value: unknown) => void;
+  idPrefix?: string | undefined;
+  errors?: FieldErrors | undefined;
 }
 
-export default function RelationField({ field, value, onChange }: Props) {
+export default function RelationField({ field, value, onChange, idPrefix = 'f', errors }: Props) {
   const { options, error, loading } = useOptions(field.relation);
   // The multi relation's pending choice (hooks run unconditionally, before the branch).
   const [pick, setPick] = useState('');
-  const id = `f-${field.name}`;
+  const id = `${idPrefix}-${field.name}`;
+  const fieldError = errors?.[id];
+  const invalid = fieldError ? true : undefined;
   const labelFor = (v: string) => options.find((o) => o.value === v)?.label ?? v;
 
   if (field.kind === 'relation') {
@@ -31,6 +37,8 @@ export default function RelationField({ field, value, onChange }: Props) {
           id={id}
           value={current}
           disabled={loading}
+          aria-invalid={invalid}
+          aria-describedby={describedBy(id, { error: fieldError })}
           onChange={(e) => onChange(field.name, e.target.value)}
         >
           <option value="">{loading ? 'Loading…' : '—'}</option>
@@ -46,6 +54,7 @@ export default function RelationField({ field, value, onChange }: Props) {
         </select>
         {error && <span role="alert">{error}</span>}
         {field.help && <span>{field.help}</span>}
+        <FieldErrorText id={id} message={fieldError} />
       </label>
     );
   }
@@ -111,7 +120,14 @@ export default function RelationField({ field, value, onChange }: Props) {
       <div className="item-row">
         <label className="field" htmlFor={id}>
           <span>Add to {field.label}</span>
-          <select id={id} value={pick} disabled={loading} onChange={(e) => setPick(e.target.value)}>
+          <select
+            id={id}
+            value={pick}
+            disabled={loading}
+            aria-invalid={invalid}
+            aria-describedby={describedBy(id, { error: fieldError })}
+            onChange={(e) => setPick(e.target.value)}
+          >
             <option value="">
               {loading ? 'Loading…' : full ? `At most ${field.maxItems}` : '—'}
             </option>
@@ -142,6 +158,7 @@ export default function RelationField({ field, value, onChange }: Props) {
         </p>
       )}
       {field.help && <p className="admin-sub">{field.help}</p>}
+      <FieldErrorText id={id} message={fieldError} />
     </fieldset>
   );
 }

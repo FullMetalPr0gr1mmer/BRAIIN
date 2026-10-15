@@ -84,7 +84,15 @@ export function Field({
 
   // ── composite and referencing kinds ──────────────────────────────────────────
   if (field.kind === 'relation' || field.kind === 'multiRelation') {
-    return <RelationField field={field} value={value} onChange={onChange} />;
+    return (
+      <RelationField
+        field={field}
+        value={value}
+        onChange={onChange}
+        idPrefix={idPrefix}
+        errors={errors}
+      />
+    );
   }
   if (field.kind === 'media') return <MediaField {...common} />;
   if (field.kind === 'repeater') return <RepeaterField {...common} renderField={renderField} />;
@@ -96,11 +104,20 @@ export function Field({
         onChange={onChange}
         renderField={renderField}
         idPrefix={idPrefix}
+        errors={errors}
       />
     );
   }
   if (field.kind === 'clip') {
-    return <ClipField field={field} value={value} onChange={onChange} idPrefix={idPrefix} />;
+    return (
+      <ClipField
+        field={field}
+        value={value}
+        onChange={onChange}
+        idPrefix={idPrefix}
+        errors={errors}
+      />
+    );
   }
   if (field.kind === 'sectionContent') {
     return (
@@ -111,11 +128,20 @@ export function Field({
         onChange={onChange}
         renderField={renderField}
         idPrefix={idPrefix}
+        errors={errors}
       />
     );
   }
   if (field.kind === 'upload') {
-    return <UploadField field={field} value={value} onChange={onChange} idPrefix={idPrefix} />;
+    return (
+      <UploadField
+        field={field}
+        value={value}
+        onChange={onChange}
+        idPrefix={idPrefix}
+        errors={errors}
+      />
+    );
   }
 
   // ── the field kit v2 (F5a) ───────────────────────────────────────────────────
@@ -315,6 +341,7 @@ function RichTextField({
       label={field.label}
       required={field.required}
       hint={field.help}
+      error={errors?.[id]}
       labelExtra={
         !both && (
           <Segmented<'en' | 'ar'>

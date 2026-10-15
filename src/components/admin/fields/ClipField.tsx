@@ -1,5 +1,7 @@
 import type { ClipState } from '@/lib/admin/formPayload';
+import type { FieldErrors } from '@/lib/admin/fieldErrors';
 import type { FieldDef } from '@/lib/admin/uiSchema';
+import { FieldErrorText, describedBy } from './FieldShell';
 
 // A video clip (VideoClipSchema in packages/schemas/media.ts): EITHER a Cloudflare Stream
 // UID OR a self-hosted `/media/….mp4` path (EXC-009, until Stream lands — KAN-20), plus
@@ -11,17 +13,32 @@ interface Props {
   value: unknown;
   onChange: (name: string, value: unknown) => void;
   idPrefix: string;
+  errors?: FieldErrors | undefined;
 }
 
 const EMPTY: ClipState = { source: '', streamUid: '', path: '', startS: '', endS: '' };
 
-export default function ClipField({ field, value, onChange, idPrefix }: Props) {
+export default function ClipField({ field, value, onChange, idPrefix, errors }: Props) {
   const state = { ...EMPTY, ...((value ?? {}) as Partial<ClipState>) };
   const id = `${idPrefix}-${field.name}`;
   const set = (patch: Partial<ClipState>) => onChange(field.name, { ...state, ...patch });
+  const error = errors?.[id];
+  /** aria-invalid and aria-describedby for one of the clip's own inputs. */
+  const marked = (input: string) => {
+    const message = errors?.[`${id}-${input}`];
+    return {
+      'aria-invalid': message ? true : undefined,
+      'aria-describedby': describedBy(`${id}-${input}`, { error: message }),
+    };
+  };
 
   return (
-    <fieldset className="field-group">
+    <fieldset
+      id={id}
+      tabIndex={-1}
+      className="field-group"
+      aria-describedby={describedBy(id, { error })}
+    >
       <legend className="field-legend">{field.label}</legend>
       <div className="row-3">
         {(
@@ -53,6 +70,7 @@ export default function ClipField({ field, value, onChange, idPrefix }: Props) {
           <span>Stream UID *</span>
           <input
             id={`${id}-uid`}
+            {...marked('uid')}
             type="text"
             value={state.streamUid}
             onChange={(e) => set({ streamUid: e.target.value })}
@@ -64,6 +82,7 @@ export default function ClipField({ field, value, onChange, idPrefix }: Props) {
           <span>Path *</span>
           <input
             id={`${id}-path`}
+            {...marked('path')}
             type="text"
             placeholder="/media/showreel.mp4"
             value={state.path}
@@ -77,6 +96,7 @@ export default function ClipField({ field, value, onChange, idPrefix }: Props) {
             <span>Start (seconds)</span>
             <input
               id={`${id}-start`}
+              {...marked('start')}
               type="number"
               min="0"
               step="0.1"
@@ -88,6 +108,7 @@ export default function ClipField({ field, value, onChange, idPrefix }: Props) {
             <span>End (seconds)</span>
             <input
               id={`${id}-end`}
+              {...marked('end')}
               type="number"
               min="0"
               step="0.1"
@@ -101,6 +122,10 @@ export default function ClipField({ field, value, onChange, idPrefix }: Props) {
         {field.help ??
           'A window plays that part of the video on a loop — at most 30 seconds. Leave both empty for the whole video.'}
       </p>
+      <FieldErrorText id={id} message={error} />
+      {(['uid', 'path', 'start', 'end'] as const).map((input) => (
+        <FieldErrorText key={input} id={`${id}-${input}`} message={errors?.[`${id}-${input}`]} />
+      ))}
     </fieldset>
   );
 }

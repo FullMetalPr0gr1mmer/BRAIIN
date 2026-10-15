@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { enterAdvanced, leaveAdvanced, type SectionContentState } from '@/lib/admin/formPayload';
 import { sectionFields } from '@/lib/admin/sectionUi';
+import type { FieldErrors } from '@/lib/admin/fieldErrors';
 import type { FieldDef } from '@/lib/admin/uiSchema';
+import { FieldErrorText, describedBy } from './FieldShell';
 import type { RenderField } from './RepeaterField';
 
 // `page_sections.content`, edited with the fields of the section's own type (SECTION_UI)
@@ -16,6 +18,7 @@ interface Props {
   onChange: (name: string, value: unknown) => void;
   renderField: RenderField;
   idPrefix: string;
+  errors?: FieldErrors | undefined;
 }
 
 export default function SectionContentField({
@@ -25,10 +28,12 @@ export default function SectionContentField({
   onChange,
   renderField,
   idPrefix,
+  errors,
 }: Props) {
   const state = (value ?? { values: {}, json: null }) as SectionContentState;
   const typed = sectionFields(sectionType);
   const id = `${idPrefix}-${field.name}`;
+  const error = errors?.[id];
   const [jsonError, setJsonError] = useState<string | null>(null);
   const set = (patch: Partial<SectionContentState>) => onChange(field.name, { ...state, ...patch });
 
@@ -52,20 +57,31 @@ export default function SectionContentField({
   // No type chosen yet, or a type whose data lives in its own table.
   if (!typed && state.json === null) {
     return (
-      <div className="field-group">
+      <div
+        id={id}
+        tabIndex={-1}
+        className="field-group"
+        aria-describedby={describedBy(id, { error })}
+      >
         <p className="field-legend">{field.label}</p>
         <p className="admin-sub">
           {sectionType
             ? 'This section takes its content from its own table (team, certifications…) — there is nothing to override here.'
             : 'Choose a section type to edit its content.'}
         </p>
+        <FieldErrorText id={id} message={error} />
       </div>
     );
   }
 
   const advanced = state.json !== null;
   return (
-    <fieldset className="field-group">
+    <fieldset
+      id={id}
+      tabIndex={-1}
+      className="field-group"
+      aria-describedby={describedBy(id, { error })}
+    >
       <legend className="field-legend">{field.label}</legend>
       <label className="field field-inline" htmlFor={`${id}-advanced`}>
         <input
@@ -112,6 +128,7 @@ export default function SectionContentField({
           Every field is optional — leave one empty to keep the built-in copy.
         </p>
       )}
+      <FieldErrorText id={id} message={error} />
     </fieldset>
   );
 }

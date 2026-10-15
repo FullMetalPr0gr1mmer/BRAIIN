@@ -26,6 +26,11 @@ export interface FieldShellProps {
   labelExtra?: ReactNode;
   /** The label beside the control instead of above it (a switch). */
   inline?: boolean;
+  /**
+   * The legend's id (fieldset only), for controls named by the group's label plus their
+   * own ("Service name, English": aria-labelledby, review L14).
+   */
+  legendId?: string | undefined;
   children: ReactNode;
 }
 
@@ -42,6 +47,18 @@ export function describedBy(
   const ids = fieldIds(id);
   const list = [shown.hint ? ids.hint : null, shown.error ? ids.error : null].filter(Boolean);
   return list.length > 0 ? list.join(' ') : undefined;
+}
+
+/**
+ * An inline error for a field that draws its own markup (a relation, an object, a clip,
+ * section content, an upload): the id its control's aria-describedby names.
+ */
+export function FieldErrorText({ id, message }: { id: string; message: string | undefined }) {
+  return message ? (
+    <p id={fieldIds(id).error} className="field-error f__err">
+      {message}
+    </p>
+  ) : null;
 }
 
 /** The required star (seen) and the word (heard). */
@@ -67,6 +84,7 @@ export default function FieldShell({
   as = 'label',
   labelExtra,
   inline = false,
+  legendId,
   children,
 }: FieldShellProps) {
   const ids = fieldIds(id);
@@ -100,7 +118,7 @@ export default function FieldShell({
         data-invalid={error ? '' : undefined}
         aria-describedby={describedBy(id, { hint, error })}
       >
-        <legend className="field-legend">
+        <legend id={legendId} className="field-legend">
           {label}
           {required && <Required />}
         </legend>
