@@ -1819,6 +1819,13 @@ input.in--mono[type='text'] {
   overflow-x: auto;
 }
 
+/* A JSON cell (the logs' detail): no spaces to wrap at, so it may break anywhere rather
+   than widen the whole table (ReadOnlyPanel). */
+table.data td.data-json {
+  min-inline-size: 16rem;
+  overflow-wrap: anywhere;
+}
+
 /* A table sits flush in its card; the cells' padding is the gutter. */
 .card.table-wrap {
   padding: 0;
