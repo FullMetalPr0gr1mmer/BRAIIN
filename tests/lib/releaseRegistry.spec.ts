@@ -15,7 +15,12 @@ import {
   type RegistryEntry,
 } from '@/lib/release/registry';
 import { RELEASE_ENTITY_TYPES, type ReleaseEntityType } from '@schemas/release';
-import { registryRows } from '../fixtures/releaseRegistry';
+import {
+  RELEASE_LEDGER_SQL,
+  foldRegistry,
+  registryInserts,
+  registryRows,
+} from '../fixtures/releaseRegistry';
 
 // The TypeScript release registry equals app.release_entities (Admin v2 R2).
 //
@@ -320,5 +325,53 @@ describe('the registry stays on the server', () => {
         file,
       ).toEqual([]);
     }
+  });
+});
+
+describe('the registry fixture reads every registry write, or fails', () => {
+  const HEAD =
+    'insert into app.release_entities\n  (entity_type, table_name, key_column, area, author_roles, delete_roles, columns,\n   deferred_columns, unique_flags, exempt_columns, apply_order, has_status, publish_flag)\nvalues\n';
+  const row = (type: string, order: number) =>
+    `  ('${type}', '${type}s', 'id', 'pages', '{admin}', '{}', '{a,b}', '{}', '{}', '{}', ${order}, false, null)`;
+  const insert = (rows: string[], conflict = 'do nothing') =>
+    `${HEAD}${rows.join(',\n')}\non conflict (entity_type) ${conflict};`;
+
+  it('0038 parses into exactly its twenty value tuples', () => {
+    const [only, ...rest] = registryInserts(RELEASE_LEDGER_SQL, '0038');
+    expect(rest).toEqual([]);
+    expect(only!.rows).toHaveLength(20);
+    expect(only!.onConflict).toBe('nothing');
+  });
+
+  it('`do nothing` keeps the first row; `do update` replaces it', () => {
+    const first = { file: 'a', sql: insert([row('x', 10)]) };
+    const ignored = { file: 'b', sql: insert([row('x', 20)]) };
+    const replaced = {
+      file: 'c',
+      sql: insert([row('x', 30)], 'do update set apply_order = excluded.apply_order'),
+    };
+    expect(foldRegistry([first, ignored]).map((r) => r.applyOrder)).toEqual([10]);
+    expect(foldRegistry([first, ignored, replaced]).map((r) => r.applyOrder)).toEqual([30]);
+  });
+
+  it('refuses a registry write it cannot read', () => {
+    const refused = [
+      "update app.release_entities set columns = '{a}' where entity_type = 'x';",
+      "delete from app.release_entities where entity_type = 'x';",
+      'truncate app.release_entities;',
+      'alter table app.release_entities add column note text;',
+      insert([row('x', 10).replace("'{}', '{}', '{}', 10", "NULL, '{}', '{}', 10")]),
+      insert([row('x', 10).replace("'{a,b}'", "ARRAY['a','b']")]),
+      insert([row('x', 10).replace("'{a,b}'", "'{a,b}'::text[]")]),
+      insert([row('x', 10)]).replace('entity_type, table_name', 'table_name, entity_type'),
+      `${HEAD}${row('x', 10)};`,
+    ];
+    for (const sql of refused) expect(() => foldRegistry([{ file: 'z', sql }]), sql).toThrow();
+  });
+
+  it('allows the registry’s own RLS switches', () => {
+    const sql =
+      'alter table app.release_entities enable row level security;\nalter table app.release_entities force row level security;';
+    expect(foldRegistry([{ file: 'z', sql }])).toEqual([]);
   });
 });
