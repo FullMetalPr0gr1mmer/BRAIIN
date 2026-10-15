@@ -692,6 +692,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [F7](as-built/F7.md): sign-in v2, keep me signed in, forgot and reset password (#61)
 - [F8](as-built/F8.md): the personal layer: preferences, the people directory, the bell, the account, the environment pill, 0044
 - [U3](as-built/U3.md): media uploads (A5): the storage provider, the upload, replace and download routes, delivery through `/_image`, 0045 (PR number at review)
+- [U13](as-built/U13.md): the activity log v2: names, kind, person and day filters, plain language, the export under the lockdown, the live read on `audit_log`, 0054
 - [U16](as-built/U16.md): the help centre: guides as typed blocks in the database, the "?" drawer with search and this screen's guides, `/admin/help`, 0046 (#62)
 
 **Releases**

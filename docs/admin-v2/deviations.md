@@ -63,7 +63,7 @@
   - referrer/UTM/device/country and unique visitors wait for L5 (legal);
   - "No cookie banner needed" is corrected (§7).
 - **Backups**: leads are never in admin backups (DR via the runbook, §7/§10).
-- **Activity log**: kept permanently and tamper-evident, not "12 months" or "90 days" (§3).
+- **Activity log**: kept permanently and tamper-evident, not "12 months" or "90 days" (§3); exportable under the export lockdown, with no titles in the file (U13).
 - **Invites** expire per Supabase Auth (≤ 24 h, with Resend) instead of 7 days, until L6 brings transactional email (O-22).
 - **Health**: no in-Worker uptime checker; uptime comes from the external monitor (§10).
 - **Help** (U16):
@@ -193,8 +193,11 @@ owner, an expiry and a close condition (CLAUDE.md §11).
   - *Left for U12a (0055).* Comparing the profile with the token's own claims in
     `resolveAuthContext`; revoking every session of a person whose role, activity or tenant
     changes; the live check on reading colleagues' profiles (`profiles_self_select` still
-    lets a stale Admin token list them); the roles guide's sentence. *For U13 (0054):* the
-    live check on reading `audit_log` (`audit_read` still trusts the token's role).
+    lets a stale Admin token list them); the roles guide's sentence.
+  - *Closed by U13 (0054).* Reading `audit_log`: `audit_log_live_read` (RESTRICTIVE, FOR
+    SELECT) requires `app.role_views_audit(app.live_role())`, so a demoted, deactivated or
+    locked Admin or Developer token reads no entry at PostgREST; the names the log shows come
+    through `public.audit_people`, which answers nobody for such a token either.
   - *Left after both.* The token's old role on the tables with no live check:
     `site_settings`, `site_integrations`, `ai_config`, `media_assets`, `system_logs` and
     the content tables (the staged ones close when R5's guard switches on at R14). The
@@ -333,7 +336,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §14 | Health visible to every 'stats' role | deviated-ok | deviation (standard or owner decision) | AV-10 (siteHealth.view) | §5: Admin + Developer. |
 | §15 | Twelve widgets, per-user layout, Customize across three columns | covered | covered | AV-09 | Realtime and Team notes omitted (challenged). |
 | §15 | Users: invite with role, deactivate, reset 2FA, editable matrix, personal access | covered | covered | AV-21 | Read-only matrix and no personal access (binding); reset 2FA missing. |
-| §15 | Activity log filterable by person, action and date; exportable | deviated-challenge | built under A6 | AV-22 (kind chips + q; no export) |  |
+| §15 | Activity log filterable by person, action and date; exportable | covered | covered | AV-22, U13 (kind chips, person, Riyadh days; CSV under the export lockdown) | No free-text search (U13 D1): the sentences are composed in code. The file names items by type and id, not title (D5). |
 | §15 | Publish versions list with restore | covered | covered | R10, R13, AV-24 |  |
 | §16 | REST/JSON, session cookie, CSRF on writes, per-route permission | covered | covered | defineAdminRoute, __Host-csrf, assertCap | /state bootstrap and /site/*.json are not needed (SSR, P-1). |
 | §16 | /auth/2fa and /auth/invite/:token | missing | added as a slice | none | Follows the 2FA and 7-day invite gaps. |
