@@ -1,14 +1,18 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-// The release registry as migration 0038 seeds it (app.release_entities, Admin v2 R1),
-// read from the SQL so the tests can hold it against ROLE_CAPS, the resource configs and
-// packages/schemas/release.ts. The migration keeps each row in one fixed shape for this.
+// The release registry (app.release_entities, Admin v2 R1) as the migrations seed it,
+// read from the SQL so the tests can hold it against ROLE_CAPS, the resource configs, the
+// TypeScript registry (src/lib/release/registry.ts, R2) and packages/schemas/release.ts.
+// Each migration keeps every registry row in one fixed shape for this.
 
-export const RELEASE_LEDGER_SQL = readFileSync(
-  join(process.cwd(), 'supabase', 'migrations', '0038_release_ledger.sql'),
-  'utf8',
-).replace(/--[^\n]*/g, '');
+const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
+
+const sqlOf = (file: string) =>
+  readFileSync(join(MIGRATIONS, file), 'utf8').replace(/--[^\n]*/g, '');
+
+/** 0038, which creates the registry (its CHECKs are parsed from here). */
+export const RELEASE_LEDGER_SQL = sqlOf('0038_release_ledger.sql');
 
 export interface RegistryRow {
   entityType: string;
@@ -42,10 +46,8 @@ const ROW = new RegExp(
   'g',
 );
 
-/** Every row of the registry insert, in migration order. */
-export function registryRows(sql: string = RELEASE_LEDGER_SQL): RegistryRow[] {
-  const insert = /insert into app\.release_entities[\s\S]*?on conflict/i.exec(sql)?.[0] ?? '';
-  return [...insert.matchAll(ROW)].map((m) => ({
+function toRow(m: RegExpMatchArray): RegistryRow {
+  return {
     entityType: m[1]!,
     table: m[2]!,
     keyColumn: m[3] as 'id' | 'tenant_id',
@@ -59,7 +61,35 @@ export function registryRows(sql: string = RELEASE_LEDGER_SQL): RegistryRow[] {
     applyOrder: Number(m[11]),
     hasStatus: m[12] === 'true',
     publishFlag: m[13] === 'null' ? null : m[13]!.slice(1, -1),
-  }));
+  };
+}
+
+/** Every row of every registry insert in one migration's SQL, in order. */
+function rowsOf(sql: string): RegistryRow[] {
+  const inserts = sql.match(/insert into app\.release_entities[\s\S]*?on conflict/gi) ?? [];
+  return inserts.flatMap((insert) => [...insert.matchAll(ROW)].map(toRow));
+}
+
+/** The migration files, in the order they apply. */
+export function migrationFiles(): string[] {
+  return readdirSync(MIGRATIONS)
+    .filter((f) => /^\d{4}_.+\.sql$/.test(f))
+    .sort();
+}
+
+/**
+ * The registry as the migrations leave it: every migration's `insert into
+ * app.release_entities … on conflict` blocks in file order, a later row for an entity type
+ * replacing the earlier one (U7, U14, E3, E5 and E8 add theirs with their tables). With
+ * `sql`, the rows of that SQL alone.
+ */
+export function registryRows(sql?: string): RegistryRow[] {
+  if (sql !== undefined) return rowsOf(sql);
+  const byType = new Map<string, RegistryRow>();
+  for (const file of migrationFiles()) {
+    for (const row of rowsOf(sqlOf(file))) byType.set(row.entityType, row);
+  }
+  return [...byType.values()];
 }
 
 /** The quoted values of the `check (<column> in (...))` the migration declares. */

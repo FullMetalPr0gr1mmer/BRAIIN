@@ -16,9 +16,9 @@ import { registryRows, type RegistryRow } from '../fixtures/releaseRegistry';
 
 /** Entity types edited outside the resource configs: their route's write capability. */
 const ROUTE_CAPS: Record<string, Capability> = {
-  site_profile: 'settings.general', // src/pages/api/admin/site-profile.ts
-  seo_defaults: 'seo.globalDefaults', // src/pages/api/admin/seo-defaults.ts
-  entity_seo: 'seo.entityMeta', // src/pages/api/admin/entity-seo.ts
+  site_profile: 'settings.general', // src/lib/admin/singletons/siteProfile.ts
+  seo_defaults: 'seo.globalDefaults', // src/lib/admin/singletons/seoDefaults.ts
+  entity_seo: 'seo.entityMeta', // src/lib/admin/entitySeo.ts
 };
 
 const holders = (cap: Capability) => ROLES.filter((role) => ROLE_CAPS[role][cap] === 'full').sort();
@@ -60,8 +60,11 @@ describe('the release registry (app.release_entities) equals ROLE_CAPS', () => {
         expect([...row.deleteRoles].sort()).toEqual(expected);
       });
 
-      it('its go-live flag agrees with the resource config', () => {
-        if (config?.publishFlag) expect(row.publishFlag).toBe(config.publishFlag);
+      // Strict both ways since R2 gave sectors and navigation the flag 0038 names: a
+      // go-live flag in SQL that the config does not gate (or the reverse) would let a
+      // release make live what a save gates as a publish, or the other way round.
+      it('its go-live flag equals the resource config (none for a singleton or SEO meta)', () => {
+        expect(row.publishFlag).toBe(config?.publishFlag ?? null);
         if (row.publishFlag) expect(row.columns).toContain(row.publishFlag);
       });
     });
