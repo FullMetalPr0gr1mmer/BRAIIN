@@ -236,12 +236,14 @@ select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 select _stage('s1-title', 'service', '51000000-0000-0000-0001-000000000001', 'update',
               '{"title":{"en":"Uno","ar":"واحد"}}');
 set local role authenticated;
-select throws_ok($$ select _pub('51000000-0000-0000-0000-0000000000a1', 'admin', array['s1-title']) $$,
-  '42501', null, 'authenticated CANNOT execute apply_release');
+select throws_ok(
+  $$ select public.apply_release('51000000-0000-0000-0000-0000000000a1', 'admin', 'publish', '[]'::jsonb) $$,
+  '42501', 'permission denied for function apply_release', 'authenticated CANNOT execute apply_release');
 reset role;
 set local role anon;
-select throws_ok($$ select _pub('51000000-0000-0000-0000-0000000000a1', 'admin', array['s1-title']) $$,
-  '42501', null, 'anon CANNOT execute apply_release');
+select throws_ok(
+  $$ select public.apply_release('51000000-0000-0000-0000-0000000000a1', 'admin', 'publish', '[]'::jsonb) $$,
+  '42501', 'permission denied for function apply_release', 'anon CANNOT execute apply_release');
 reset role;
 select is(_fails($$ select _pub('51000000-0000-0000-0000-0000000000a1', 'admin', array['s1-title']) $$),
   '42501', 'postgres is refused too: the service role only (a postgres-owned definer cannot reach it)');
@@ -744,7 +746,7 @@ select is(
 set local role authenticated;
 select throws_ok(
   $$ select public.record_release_purge('51000000-0000-0000-0000-00000000000a', gen_random_uuid(), 'done', null) $$,
-  '42501', null, 'authenticated CANNOT record a purge');
+  '42501', 'permission denied for function record_release_purge', 'authenticated CANNOT record a purge');
 reset role;
 set local role service_role;
 select lives_ok(
