@@ -1,6 +1,6 @@
-import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { check, closure, dynamicImports, staticImports } from '../../scripts/admin-bundle.mjs';
 
@@ -228,5 +228,97 @@ describe('the chunk plan in astro.config.mjs', () => {
       .filter((id) => !claim(id)?.startsWith('admin-'))
       .map((id) => id.slice(process.cwd().length + 1));
     expect(loose).toEqual([]);
+  });
+});
+
+describe('the field kit is its own group (Admin v2 F5a)', () => {
+  interface Group {
+    name: string;
+    test: RegExp | ((id: string) => boolean);
+    priority: number;
+  }
+  let groups: Group[] = [];
+  beforeAll(async () => {
+    const config = (await import('../../astro.config.mjs')).default as {
+      vite: { build: { rollupOptions: { output: { codeSplitting: { groups: Group[] } } } } };
+    };
+    groups = [...config.vite.build.rollupOptions.output.codeSplitting.groups].sort(
+      (a, b) => b.priority - a.priority,
+    );
+  });
+  const claim = (path: string) => {
+    const id = join(process.cwd(), path);
+    return groups.find((g) => (typeof g.test === 'function' ? g.test(id) : g.test.test(id)))?.name;
+  };
+
+  it('claims the field kit, the save machine and the two editors for admin-fields', () => {
+    for (const path of [
+      'src/components/admin/FormField.tsx',
+      'src/components/admin/fields/EditorForm.tsx',
+      'src/components/admin/fields/RepeaterField.tsx',
+      'src/components/admin/screens/resources/ResourceForm.tsx',
+      'src/components/admin/screens/singleton/SingletonForm.tsx',
+      'src/lib/admin/formPayload.ts',
+      'src/lib/admin/sectionUi.ts',
+      'src/lib/admin/useEntitySave.ts',
+      'src/lib/admin/entitySave.ts',
+      'src/lib/admin/fieldErrors.ts',
+    ]) {
+      expect(claim(path), path).toBe('admin-fields');
+    }
+    // The list beside the form, and the editor itself, keep their groups.
+    expect(claim('src/components/admin/screens/resources/ResourceTable.tsx')).toBe('admin-ui');
+    expect(claim('src/components/admin/RichText.tsx')).toBe('admin-rich');
+    // The editor islands are left to their entry chunks: admin-ui's path rule matched them,
+    // and a group takes its modules' dependencies, so it took the whole field kit along.
+    expect(claim('src/components/admin/islands/AdminResourceForm.tsx')).toBeUndefined();
+    expect(claim('src/components/admin/islands/AdminSingletonForm.tsx')).toBeUndefined();
+    const priority = (name: string) => groups.find((g) => g.name === name)!.priority;
+    expect(priority('admin-fields')).toBeLessThan(priority('admin-ui'));
+    expect(priority('admin-fields')).toBeGreaterThan(priority('admin-kit'));
+  });
+
+  it('no module admin-ui claims imports one of admin-fields (it would pull it back)', () => {
+    const files = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory()
+          ? files(join(dir, entry.name))
+          : /\.(ts|tsx)$/.test(entry.name)
+            ? [join(dir, entry.name)]
+            : [],
+      );
+    const root = process.cwd();
+    const all = ['src/components/admin', 'src/lib/admin'].flatMap((d) => files(join(root, d)));
+    const rel = (abs: string) =>
+      abs
+        .slice(root.length + 1)
+        .split(sep)
+        .join('/');
+    const resolve = (from: string, spec: string): string | null => {
+      const base = spec.startsWith('@/')
+        ? `src/${spec.slice(2)}`
+        : spec.startsWith('.')
+          ? join(from, '..', spec)
+              .slice(root.length + 1)
+              .split(sep)
+              .join('/')
+          : null;
+      if (!base) return null;
+      for (const ext of ['', '.ts', '.tsx']) {
+        if (all.some((f) => rel(f) === base + ext)) return base + ext;
+      }
+      return null;
+    };
+    const offenders: string[] = [];
+    for (const file of all) {
+      if (claim(rel(file)) !== 'admin-ui') continue;
+      const source = readFileSync(file, 'utf8');
+      // Static, value imports only: `import type` is erased, `import()` is lazy.
+      for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
+        const target = resolve(file, m[1] as string);
+        if (target && claim(target) === 'admin-fields') offenders.push(`${rel(file)} → ${target}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });
