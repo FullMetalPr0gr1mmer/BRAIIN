@@ -1,8 +1,30 @@
 import { TeamMemberUpdateSchema, TeamMemberWriteSchema } from '@schemas/admin';
 import type { ResourceConfig } from '../resource';
-import { pick, refusePlaceholder, requireBilingual, statusOf, type Input } from './shared';
+import {
+  fieldsOf,
+  pick,
+  refusePlaceholder,
+  requireBilingual,
+  statusOf,
+  type Input,
+} from './shared';
 
 // Team members: the About page's people and the blog's authors (E-E-A-T).
+
+const TEAM_KEYS = {
+  slug: 'slug',
+  name: 'name',
+  bio: 'bio',
+  avatarUrl: 'avatar_url',
+  profileUserId: 'profile_user_id',
+  role: 'role',
+  linkedinUrl: 'linkedin_url',
+  isLeadership: 'is_leadership',
+  portraitMediaId: 'portrait_media_id',
+  isPlaceholder: 'is_placeholder',
+  status: 'status',
+  sortOrder: 'sort_order',
+};
 
 export const teamResource: ResourceConfig = {
   table: 'team_members',
@@ -18,21 +40,9 @@ export const teamResource: ResourceConfig = {
   searchColumn: 'slug',
   createSchema: TeamMemberWriteSchema,
   updateSchema: TeamMemberUpdateSchema,
-  toRow: (input) =>
-    pick(input as Input, {
-      slug: 'slug',
-      name: 'name',
-      bio: 'bio',
-      avatarUrl: 'avatar_url',
-      profileUserId: 'profile_user_id',
-      role: 'role',
-      linkedinUrl: 'linkedin_url',
-      isLeadership: 'is_leadership',
-      portraitMediaId: 'portrait_media_id',
-      isPlaceholder: 'is_placeholder',
-      status: 'status',
-      sortOrder: 'sort_order',
-    }),
+  // No publish stamp: this toRow writes no published_at.
+  toRow: (input) => pick(input as Input, TEAM_KEYS),
+  fields: fieldsOf(TEAM_KEYS),
   statusOf: (input) => statusOf(input as Input),
   constraintFields: {
     team_members_linkedin_url_check: {
