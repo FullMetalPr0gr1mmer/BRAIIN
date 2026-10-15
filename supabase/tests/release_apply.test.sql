@@ -20,7 +20,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(91);
+select plan(93);
 
 -- ── 0. The catalog, before this file creates any function ─────────────────────────────
 -- (Its helpers below call set_config, and would show up here.)
@@ -728,6 +728,27 @@ reset role;
 select is((select count(*) from public.content_release_items) - (select items from _n), 0::bigint,
   'a staff write outside a release records no item');
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+-- Upper-case ids are the same ids: one draft listed in both spellings is listed twice, and
+-- a change named in upper case is captured under its draft.
+select _stage('u-lower', 'service', '51000000-0000-0000-0001-000000000005', 'update', '{"sort_order":6}');
+insert into _r4 (name, item)
+select 'u-upper', item || jsonb_build_object('draft_id', upper(item ->> 'draft_id'),
+                                             'entity_id', upper(item ->> 'entity_id'))
+  from _r4 where name = 'u-lower';
+set local role service_role;
+select is(_fails($$ select _pub('51000000-0000-0000-0000-0000000000c1', 'content_creator', array['u-lower', 'u-upper']) $$),
+  '22023', 'one draft named in two spellings is a change listed twice');
+insert into _out (name, result)
+select 'upper', _pub('51000000-0000-0000-0000-0000000000c1', 'content_creator', array['u-upper']);
+reset role;
+select is(
+  (select format('%s %s', i.entity_id, i.draft_id = (r.item ->> 'draft_id')::uuid)
+     from public.content_release_items i, _out o, _r4 r
+    where o.name = 'upper' and r.name = 'u-lower' and i.release_id = (o.result ->> 'release_id')::uuid),
+  '51000000-0000-0000-0001-000000000005 t',
+  'a change named in upper case is applied and captured under its draft');
+
 select _stage('t-bio', 'team_member', '51000000-0000-0000-0009-000000000001', 'update', '{"bio":{"en":"Bio","ar":"نبذة"}}');
 set local role service_role;
 insert into _out (name, result)

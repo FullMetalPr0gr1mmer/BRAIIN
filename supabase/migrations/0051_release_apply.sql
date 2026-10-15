@@ -470,6 +470,10 @@ begin
       raise exception 'apply_release: change % has a malformed id, version or operation', v_ord
         using errcode = '22023';
     end if;
+    -- The ids in their canonical (lower-case) spelling, so every comparison below, the
+    -- duplicate check and the capture trigger's match included, sees one spelling.
+    v_item := v_item || pg_catalog.jsonb_build_object(
+      'draft_id', (v_item ->> 'draft_id')::uuid, 'entity_id', (v_item ->> 'entity_id')::uuid);
     v_plan := v_plan || pg_catalog.jsonb_build_array(v_item || pg_catalog.jsonb_build_object('ord', v_ord));
   end loop;
   if (select count(distinct x.value ->> 'draft_id') from pg_catalog.jsonb_array_elements(v_plan) as x(value))
