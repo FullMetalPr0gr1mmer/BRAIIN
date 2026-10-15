@@ -70,7 +70,8 @@
 --   • audit_log's grants, stated (section 4): SELECT and INSERT for staff and the service
 --     role, nothing else for any API role. 0002 revoked UPDATE and DELETE but left the rest
 --     of Supabase's default ALL, TRUNCATE included, which no policy or row trigger sees.
---   • MAINTAIN on profiles withdrawn from the API roles (PostgreSQL 17), which 0037 missed.
+--   • MAINTAIN on profiles withdrawn from PUBLIC, anon and authenticated (PostgreSQL 17),
+--     which 0037 missed; the service role keeps it, as it keeps its other privileges here.
 --
 -- Production as of 2026-10-15: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046
 -- and 0048. Grants are stated for both Supabase privilege regimes (README P-14). CLAUDE.md §3
@@ -108,7 +109,8 @@ drop policy if exists profiles_live_delete on public.profiles;
 create policy profiles_live_delete on public.profiles as restrictive for delete to authenticated
   using (tenant_id = app.effective_tenant_id() and app.role_manages_users((select app.live_role())));
 
--- 0037 withdrew Supabase's default writes on profiles from the API roles but not MAINTAIN,
+-- 0037 withdrew Supabase's default writes on profiles from PUBLIC, anon and authenticated but
+-- not MAINTAIN,
 -- which PostgreSQL 17 (production) adds to the default ALL: VACUUM, ANALYZE, REINDEX,
 -- CLUSTER and LOCK TABLE, the last enough to hold every sign-in up. Nothing in the app uses
 -- it. The word does not parse before 17 (CI), so the statement is built only there.
