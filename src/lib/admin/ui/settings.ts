@@ -9,7 +9,7 @@ export const settingsUi: SingletonUi = {
       name: 'identity',
       label: 'Technical identity keys (JSON)',
       kind: 'json',
-      help: 'Server-side keys only (e.g. notify_lead_url). The public brand, contact details and socials live in “Public identity” above.',
+      help: 'Server-side keys only. The public brand, contact details and socials live in “Public identity” above.',
     },
     {
       name: 'retention',

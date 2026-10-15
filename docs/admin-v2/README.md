@@ -710,6 +710,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [H6](as-built/H6.md): history rows are written by the snapshot trigger only, 0032 (#42)
 - [H7](as-built/H7.md): a singleton's first save is accepted (#50)
 - [H8](as-built/H8.md): RLS on every telemetry partition, SELECT only where staff only read, 0037 (#51)
+- [H9](as-built/H9.md): lead notifications restored, signed and never silent, 0048; the staleDomain flake (#63)
 
 **Wave 0**
 - [W0-a](as-built/W0-a.md): CLAUDE.md §8 in bullets with one lane per track, the as-built files, the migration ledger, the runbook's rollback floor

@@ -260,7 +260,7 @@ Never in `.env`, never in `wrangler.jsonc`.
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler secret put LEAD_PII_ENC_KEY        # openssl rand -hex 32
 npx wrangler secret put AUDIT_HMAC_KEY          # unused by the Worker; see note
-npx wrangler secret put NOTIFY_LEAD_SECRET      # openssl rand -hex 32
+npx wrangler secret put NOTIFY_LEAD_SECRET      # openssl rand -hex 32; Vault's notify_lead_secret gets the same value (§5)
 npx wrangler secret put ANTHROPIC_API_KEY       # optional — Style-Finder is a 501 stub
 ```
 
@@ -295,23 +295,63 @@ select cron.schedule('telemetry-partitions', '0 2 25 * *',   $$ select app.ensur
 select jobname, schedule from cron.job;
 ```
 
-`pg_net` enables the lead-notification trigger. It is created by 0010 only when the
-extension exists, so after enabling it:
+**Lead notifications.** `pg_net` carries the lead-notification trigger, `leads_notify`
+(CLAUDE.md §10). 0010 created it only if pg_net was already installed when 0010 ran; where it
+was not (production), the trigger never existed and no lead was announced. **0048 restores
+it**: it creates pg_net where it is missing (in schema `extensions`; its objects live in
+`net`) and the trigger on every database, so there is nothing to create by hand.
+
+The trigger sends nothing until **all three** of these exist:
+
+1. **The Vault secret `notify_lead_url`**: the deployed origin's `/api/hooks/notify-lead`,
+   **https only**. One URL for the deployment. (Before 0048 it lived in
+   `site_settings.identity.notify_lead_url`; that key is no longer read, and can be removed.)
+2. **The Vault secret `notify_lead_secret`**: the key the trigger signs each call with.
+3. **The Worker secret `NOTIFY_LEAD_SECRET`** (§4), with **the same value** as (2): the key
+   the Worker checks the signature with. Two different values mean a 401 for every lead.
+
+The trigger never puts the secret in the request: pg_net keeps a queued request in
+`net.http_request_queue`, which every database login role may read (EXC-012). It sends
+`X-Braiin-Timestamp` and `X-Braiin-Signature: v1=<HMAC-SHA-256 of "<ts>.<lead_id>.<tenant_id>">`
+instead; the Worker recomputes it and refuses a timestamp more than 300 s from its clock.
 
 ```sql
-create trigger leads_notify after insert on public.leads
-  for each row execute function app.tg_notify_lead();
+-- 1. Where the trigger posts: the DEPLOYED origin (workers.dev until the DNS cutover, then
+-- the production domain), over https.
+select vault.create_secret('https://<deployed origin>/api/hooks/notify-lead', 'notify_lead_url',
+  'Where the leads_notify trigger posts (https only)');
 
--- Where the trigger posts — the DEPLOYED origin (workers.dev until the DNS cutover, then
--- https://www.braiinstatiion.com) — and the shared secret it presents:
-update public.site_settings
-   set identity = identity || jsonb_build_object(
-         'notify_lead_url', 'https://braiin-station.braiin.workers.dev/api/hooks/notify-lead')
- where tenant_id = (select id from public.tenants order by created_at limit 1);
-
-select vault.create_secret('<same value as NOTIFY_LEAD_SECRET>', 'notify_lead_secret',
-  'Bearer token the leads_notify trigger presents to the Worker');
+-- 2. The signing key: the value given to NOTIFY_LEAD_SECRET in §4, never committed anywhere.
+select vault.create_secret('<the NOTIFY_LEAD_SECRET value>', 'notify_lead_secret',
+  'Key the leads_notify trigger signs each call with; equals the Worker secret NOTIFY_LEAD_SECRET');
 ```
+
+**Rotating the key** (a leak, or a routine change): generate a new value
+(`openssl rand -hex 32`), set it in both places, Worker first, then Vault, within a minute of
+each other; a lead saved in between is refused (401) and the daily check reports it.
+
+```bash
+npx wrangler secret put NOTIFY_LEAD_SECRET
+```
+
+```sql
+select vault.update_secret(id, '<the new value>') from vault.secrets where name = 'notify_lead_secret';
+-- Moving the URL (the DNS cutover) is the same, for notify_lead_url.
+```
+
+No error the trigger can catch fails a lead's insert (a cancelled statement is the one thing
+PL/pgSQL cannot catch, and it ends the insert as it would without the trigger). With no Vault
+URL it does nothing, and the Worker's daily cron logs "lead notifications are off" once a day.
+Configured but unable to announce a lead (a non-https URL, no Vault secret, a trigger attached
+to pg_net's queue, a pg_net error), it writes a WARNING to the Postgres log and a `system_logs`
+row (source `leads_notify`, a fixed message, at most an SQLSTATE: never the URL, the secret or
+a lead value); the lead is saved either way. A trigger on the queue is never ours: find out who
+attached it before anything else (EXC-012). The daily cron (`cron:lead-notify`) also warns with a count when leads from the
+last day reached no notification at all (a call queued and then lost or refused); the first
+run after switching notifications on may count leads from the day before, once. So check it
+once all three are in place: submit one test inquiry through the contact form, confirm
+`notification_log` has a row for it (the Worker writes it; none means the call never arrived,
+or was refused), then erase the test lead in the admin.
 
 **Cron runs on the direct `:5432` connection, never the Supavisor pooler** — pg_cron
 holds a session, which transaction-mode pooling cannot provide.
@@ -1167,7 +1207,7 @@ Not code; nothing enforces these until they are created.
 |---|---|
 | `/api/search` | rate-limit 30/min/IP → block |
 | `/api/ai/style-finder` | rate-limit **60/hr/IP** → block (not 10/60s) |
-| `/api/hooks/notify-lead` | rate-limit; the endpoint is bearer-authenticated but unbounded by retry |
+| `/api/hooks/notify-lead` | rate-limit; the endpoint verifies a signature (0048) but is unbounded by retry |
 | `/api/analytics`, `/api/rum` | rate-limit per IP — unauthenticated paths to a service-role write |
 | `/api/admin/auth/forgot`, `/api/admin/auth/reset` | rate-limit per IP — reached without a session; the Worker's own limits (Admin v2 F7) are the inner ring |
 | Training crawlers | block `GPTBot`, `ClaudeBot`, `Google-Extended`, `CCBot`, `Applebot-Extended`, `Meta-ExternalAgent` |

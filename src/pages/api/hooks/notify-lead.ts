@@ -6,8 +6,8 @@ import { supabaseConfigured } from '@/lib/supabase/client';
 import { decryptPII } from '@/lib/crypto/pii';
 import { canSeeLeadPii } from '@/lib/admin/leadFields';
 import { writeSystemLog } from '@/lib/data/systemLog';
-import { timingSafeEqual } from '@/lib/http/csrf';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
+import { notifySignatureValid, readNotifyHeaders } from '@/lib/leads/notifySignature';
 
 // Lead-notification receiver (CLAUDE.md §10). Called by the `leads_notify` AFTER INSERT
 // trigger via pg_net, over the public `*.workers.dev` hop.
@@ -18,11 +18,24 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 //
 //   1. The request body carries ONLY `lead_id` + `tenant_id`. No name, no email, no
 //      message. PII never crosses the hop; this Worker re-reads the row server-side.
-//   2. The bearer token is compared in CONSTANT TIME. This endpoint is unauthenticated
-//      by URL and unlimited by retry, which is the exact shape a timing attack wants.
-//   3. An unsigned POST answers 401 with no body. §9(d) requires a test for precisely
-//      this, because "notification endpoint that accepts anything" is how a lead table
-//      leaks one row at a time.
+//   2. The call is SIGNED, not bearer-authenticated (0048, src/lib/leads/notifySignature.ts):
+//      a timestamp and an HMAC over '<ts>.<lead_id>.<tenant_id>' under NOTIFY_LEAD_SECRET,
+//      recomputed here over the body's ids and compared in CONSTANT TIME. pg_net's queue,
+//      where the request waits, is readable by every database login role (EXC-012), so it
+//      must never hold the secret itself; a signature there is good for one lead for five
+//      minutes. This endpoint is unauthenticated by URL and unlimited by retry, which is
+//      the exact shape a timing attack wants.
+//   3. An unsigned, stale or mis-signed POST answers 401 and nothing else: a body that
+//      cannot be verified is not parsed into an error that describes it. §9(d) requires a
+//      test for precisely this, because "notification endpoint that accepts anything" is
+//      how a lead table leaks one row at a time.
+//   4. Before the signature is checked, the body is all anyone's: the headers only prove
+//      a fresh timestamp and a well-formed signature, which anyone can write. So at most
+//      MAX_BODY_BYTES of it is ever read. The call must declare its size (pg_net, which is
+//      libcurl, always sends Content-Length with a POST body; a chunked body declares none)
+//      and declare at most that, and the body is then read through a reader that stops,
+//      and cancels the stream, the moment it passes the cap, whatever was declared. Both
+//      count bytes, not UTF-16 code units.
 //
 // Recipients are field-gated through the SAME helper the admin UI uses
 // (`canSeeLeadPii`) — §10 asks for one shared field-visibility rule, and the failure
@@ -31,10 +44,19 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 
 export const prerender = false;
 
-const PayloadSchema = z.object({
-  lead_id: z.string().uuid(),
-  tenant_id: z.string().uuid(),
-});
+// Exactly what the trigger sends: the two ids, nothing else.
+const PayloadSchema = z
+  .object({
+    lead_id: z.string().uuid(),
+    tenant_id: z.string().uuid(),
+  })
+  .strict();
+
+/** The trigger's body is about 90 bytes; anything far larger is not from it. In bytes. */
+const MAX_BODY_BYTES = 1024;
+
+/** A Content-Length of one to four digits: anything longer is over the cap anyway. */
+const CONTENT_LENGTH = /^[0-9]{1,4}$/;
 
 /** Who gets notified, and how much they see. Roles come from §5, never from the body. */
 const RECIPIENT_ROLES = ['admin', 'developer'] as const;
@@ -46,26 +68,42 @@ function json(body: unknown, status: number): Response {
   });
 }
 
+const unauthorized = () => json({ ok: false, error: 'unauthorized' }, 401);
+
 export const POST: APIRoute = async ({ request }) => {
-  const header = request.headers.get('authorization') ?? '';
-  const presented = header.startsWith('Bearer ') ? header.slice(7) : '';
-  // Constant-time, and checked BEFORE the body is read — an unauthenticated caller
-  // should not be able to make us parse anything.
-  if (!presented || !timingSafeEqual(presented, NOTIFY_LEAD_SECRET)) {
-    return json({ ok: false, error: 'unauthorized' }, 401);
+  // The headers first, before the body is read: an unsigned or stale call (outside the
+  // 300 s window) makes us parse nothing.
+  const signed = readNotifyHeaders(request.headers, Date.now());
+  if (!signed) return unauthorized();
+  // The size, declared and within the cap, before a byte is read (point 4): no
+  // Content-Length (a chunked body) is refused, not taken as zero.
+  const declared = request.headers.get('content-length');
+  if (declared === null || !CONTENT_LENGTH.test(declared) || Number(declared) > MAX_BODY_BYTES) {
+    return unauthorized();
   }
 
-  if (!supabaseConfigured()) return json({ ok: false, error: 'unavailable' }, 503);
-
+  // The signature covers the body's ids, so the body is read to verify it; until it
+  // verifies, every failure is the same 401.
+  const bytes = await readCapped(request.body, MAX_BODY_BYTES);
+  if (bytes === null) return unauthorized();
   let body: unknown;
   try {
-    body = await request.json();
+    body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch {
-    return json({ ok: false, error: 'bad-request' }, 400);
+    return unauthorized();
   }
-
   const parsed = PayloadSchema.safeParse(body);
-  if (!parsed.success) return json({ ok: false, error: 'validation' }, 422);
+  if (!parsed.success) return unauthorized();
+  const verified = await notifySignatureValid(
+    NOTIFY_LEAD_SECRET,
+    signed.ts,
+    signed.signature,
+    parsed.data.lead_id,
+    parsed.data.tenant_id,
+  );
+  if (!verified) return unauthorized();
+
+  if (!supabaseConfigured()) return json({ ok: false, error: 'unavailable' }, 503);
 
   const sb = serviceClient();
 
@@ -155,6 +193,36 @@ export const POST: APIRoute = async ({ request }) => {
 
   return json({ ok: true, notified: (recipients ?? []).length }, 200);
 };
+
+/**
+ * The body's bytes when there are at most `max` of them, else null (as for a body that
+ * cannot be read). Stops reading, and cancels the stream, as soon as the count passes `max`,
+ * so a body larger than it declared is never buffered: at most one chunk past the cap is
+ * ever held.
+ */
+async function readCapped(
+  stream: ReadableStream<Uint8Array> | null,
+  max: number,
+): Promise<Uint8Array | null> {
+  if (stream === null) return new Uint8Array(0);
+  const reader = stream.getReader();
+  const out = new Uint8Array(max);
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return out.slice(0, size);
+      if (value.byteLength > max - size) return null;
+      out.set(value, size);
+      size += value.byteLength;
+    }
+  } catch {
+    return null;
+  } finally {
+    // Not awaited: the answer does not wait on the sender.
+    void reader.cancel().catch(() => undefined);
+  }
+}
 
 async function safeDecrypt(ciphertext: unknown): Promise<string | null> {
   if (typeof ciphertext !== 'string' || ciphertext.length === 0) return null;

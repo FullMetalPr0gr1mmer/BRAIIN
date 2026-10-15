@@ -17,6 +17,7 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open (re-signed 2026-09-29) | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops |
 | EXC-010 | 2026-10-01 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `basic-ftp` GHSA-c475-qrg2-pj4r allowlisted in the dev audit gate — every 5.x is affected and no dependent in the Lighthouse CI chain takes the 6.x fix |
 | EXC-011 | 2026-10-03 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `http-cache-semantics` GHSA-ch52-4w7c-c8xp allowlisted in the prod audit gate — every release is affected (no fix exists); its only importer is Astro's build-time remote-image cache, which this site never uses, and it is absent from the Worker |
+| EXC-012 | 2026-10-14 | Developer (tech@purecoffee.sa) | 2027-01-31 | Open (accepted platform exception; amended 2026-10-14) | pg_net's queue and response tables (`net.http_request_queue`, `net._http_response`) grant **ALL to PUBLIC** on Supabase (SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER and, on PostgreSQL 17, MAINTAIN), and `postgres` cannot revoke them. TRIGGER lets any login role that has a function to call attach code that runs as whoever writes the table. Since 0048 a queued lead notification holds only a timestamp and a signature for one lead (never the secret), nothing is queued while any trigger is on the queue, and `net` must stay out of the exposed API schemas |
 
 ---
 
@@ -201,7 +202,7 @@ Precision matters here, because "no WAF" reads worse than it is and better than 
 
 - `/api/search` — Zod cap (≤64 chars, no control chars), `websearch_to_tsquery` (never raw `to_tsquery`), per-call `statement_timeout`, capped rows.
 - `/api/analytics`, `/api/rum` — same-origin check, Zod envelope, **server-side** consent re-check (the client's beacon decision is not trusted).
-- `/api/hooks/notify-lead` — bearer token, constant-time compared; verified live: an unsigned POST returns **401**.
+- `/api/hooks/notify-lead` — a signed call (since 0048: a timestamp and an HMAC over the lead and tenant ids, constant-time compared, 300 s window; before it, a bearer token); verified live: an unsigned POST returns **401**.
 - `/api/ai/style-finder` — the only public endpoint with a code-level limiter (per-IP 60/hr + per-session 20/hr) ahead of the spend cap.
 
 **Genuinely absent** — the **volumetric** layer, everywhere except style-finder. That layer was designed to live in the WAF, and `src/pages/api/search.ts:21` says so in a `TODO(KAN-20)`. Two consequences worth naming rather than implying:
@@ -736,3 +737,116 @@ fails every pull request, unrelated ones included.
 **Close condition:** `npm run audit` reports 0 unallowlisted high/critical with the
 `GHSA-ch52-4w7c-c8xp` entry REMOVED from `scripts/audit-gate.mjs`. If nothing lands by
 expiry, re-justify — never extend silently.
+
+---
+
+## EXC-012 — pg_net's queue is readable and writable by every database role
+
+**Pillar:** 1 (Security) — CLAUDE.md §3, §10, §11.
+**Opened:** 2026-10-14 · **Amended:** 2026-10-14 (H9 review: PUBLIC holds ALL, not four
+privileges; the trigger guard) · **Owner:** Developer (tech@purecoffee.sa) · **Expiry:**
+2027-01-31 (re-review; this is a platform default, not a debt with a fix date).
+
+### What is exposed
+
+Production runs pg_net 0.20.4 on PostgreSQL 17.6, installed in schema `extensions` with its
+objects in `net`. Its two tables, `net.http_request_queue` (the requests waiting for pg_net's
+worker: method, URL, headers, body) and `net._http_response` (what came back, kept 6 hours),
+are owned by `supabase_admin`, and **PUBLIC holds ALL on both**: SELECT, INSERT, UPDATE,
+DELETE, TRUNCATE, REFERENCES, TRIGGER and MAINTAIN. (This entry first listed only the first
+four, because the read-only query behind it asked about those four and no others.) `anon` and
+`authenticated` hold USAGE on schema `net`, and an event trigger (`issue_pg_net_access`)
+re-grants pg_net's access when the extension is created or updated. `postgres`, the role
+migrations run as, holds no grant option on those tables, so no migration can revoke the
+PUBLIC grants. Checked read-only on production on 2026-10-14.
+
+So any role that can open a database session can:
+
+- **read** a queued request, **change or delete** it before the worker sends it, or
+  **queue** a request of its own (an HTTP call made from the database's network);
+- **empty** either table (TRUNCATE), and **lock** either in any mode (TRUNCATE, UPDATE,
+  DELETE and MAINTAIN each allow every lock mode): a session holding an exclusive lock on the
+  queue stalls every insert into it, a lead's included while notifications are configured,
+  until it lets go or the inserting statement times out;
+- **attach a trigger** (TRIGGER) to either table, which needs nothing more than a function
+  the role may execute. A trigger function runs as the role whose statement fired it, so
+  the attached code would run as whoever writes the table: on the queue, `postgres` through
+  the lead-notification trigger since 0048 (its function is SECURITY DEFINER, owned by
+  `postgres`, and `net.http_post` runs as its caller), and pg_net's background worker when
+  it deletes a sent request; on `_http_response`, that worker when it records a response.
+  As `postgres` such code could read Vault (the audit key, the notification secret) and
+  bypass RLS. The worker's exposure exists with or without 0048; it is the platform's.
+
+### Why it is not exploitable today (production, read-only, 2026-10-14)
+
+- **No role that can log in can supply its own trigger function.** No login role outside
+  the platform's own holds CREATE on any schema, and `anon`, `authenticated` and
+  `service_role` hold CREATE on none (they are NOLOGIN as well: the API switches into them,
+  and PostgREST runs no DDL). An existing function that PUBLIC may execute runs its own
+  code, not the role's: attached to the queue it can make a lead's queue insert fail, which
+  0048 catches and logs, but it cannot run code of the role's choosing.
+- **`deploy_guard`** (CI's deploy check, launch runbook §5a) is a login role, and through
+  PUBLIC it holds TRIGGER on the queue. `scripts/deploy-guard-role.sh` gives it
+  `default_transaction_read_only = on` (and `statement_timeout = 15s`), and a read-only
+  transaction refuses CREATE TRIGGER, but that setting is a session **default**, not a
+  privilege: the session may turn it off (`set default_transaction_read_only = off`, or
+  `begin read write`). What stops it is that it holds CREATE on no schema, that its
+  credential exists only as the repository secret `SUPABASE_GUARD_DB_URL` (connection limit
+  5), and the guard below. One way is not yet ruled out: a temporary function (`pg_temp`)
+  needs only the database's TEMPORARY privilege, which was not checked (owner action 4).
+- **The queue has no trigger** (none that is not internal). 0048 refuses to apply over one
+  (a postcondition), and its trigger function **queues nothing while any trigger is
+  attached to the queue**: it locks the queue first (ROW EXCLUSIVE, the lock its insert
+  takes anyway, which conflicts with the lock CREATE TRIGGER needs, so none can be added
+  between the check and the insert), and if one is there the lead is saved, nothing is
+  queued, and a WARNING and a `system_logs` row (`lead notification skipped: a trigger is
+  attached to pg_net's queue`) say so. So the lead path never runs attached code as
+  `postgres`. pgTAP: `supabase/tests/lead_notify.test.sql`, case 7.
+
+### What we changed so it does not matter for leads (0048)
+
+- **The queue never holds a secret.** The lead-notification trigger used to put
+  `Authorization: Bearer <secret>` in the request headers; it now sends
+  `X-Braiin-Timestamp` and `X-Braiin-Signature: v1=<HMAC-SHA-256 of "<ts>.<lead_id>.<tenant_id>">`.
+  A queued notification holds that signature, a timestamp, the URL and the body
+  `{lead_id, tenant_id}`: no personal data, and nothing that signs anything else.
+- **Nothing is queued over a trigger**, as above.
+- **What a reader can do with it:** replay it to the hook within 300 s of the timestamp,
+  which re-announces the same lead (a second `notification_log` row) and nothing more. A
+  signature cannot be moved to another lead or tenant, and the Worker refuses it after five
+  minutes.
+- **What a writer can do with it:** delete, alter or truncate a queued notification (that
+  lead is not announced; the daily `cron:lead-notify` check reports leads no notification
+  reached), lock the queue (lead inserts wait, as above), or queue requests of its own. The
+  last two are the platform's exposure, not this feature's.
+
+### Why it is accepted
+
+- **No API path reaches `net`.** PostgREST serves only the schemas listed under *API → Exposed
+  schemas* (by default `public` and `graphql_public`). The `anon` and `authenticated` USAGE
+  grants matter only to a session opened directly against Postgres, which those roles cannot
+  do (they are NOLOGIN; the API switches into them).
+- **The login roles are ours.** `postgres` (the owner), `deploy_guard` (CI's read-only
+  check) and Supabase's own service roles. None is handed to a person or a third party.
+- **It cannot be fixed from a migration.** Revoking needs `supabase_admin`.
+
+### Owner actions
+
+1. ☐ In the Supabase dashboard, *Project Settings → API → Exposed schemas*: confirm `net` (and
+   `extensions`, `vault`, `app`) are **not** listed. If one is, remove it; that would put the
+   queue behind the anon key.
+2. ☐ Keep the database's login roles to the ones above; a new one (a BI tool, a contractor)
+   is a reason to re-review this entry first.
+3. ☐ Report the PUBLIC grants on `net.http_request_queue` and `net._http_response` to
+   Supabase (TRIGGER above all: code attached there runs as pg_net's worker), and record the
+   answer here.
+4. ☐ Read `has_database_privilege('deploy_guard', current_database(), 'temporary')` (the
+   0048 read-back reports it). If true, `deploy_guard` could write a `pg_temp` function and
+   attach it to the queue for the length of a session: the lead path refuses to queue while
+   it is there, but pg_net's worker would run it. Ask Supabase to revoke TEMPORARY from
+   PUBLIC on the database, or accept it here in writing.
+
+**Close condition:** pg_net or Supabase ships narrower defaults on its tables (no PUBLIC
+TRIGGER, TRUNCATE, INSERT, UPDATE or DELETE, no PUBLIC SELECT on the queue), or the platform
+lets the project owner revoke them. Re-review at expiry either way, and whenever a new
+database login role is added.

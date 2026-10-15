@@ -18,7 +18,7 @@ import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 // CPU and 50 subrequests per invocation) has still done the purges. Each job declares its
 // `budget`: its worst case in subrequests, its own log lines included (a line costs two, the
 // tenant lookup and the insert). tests/lib/dailyJobs.spec.ts runs every job at its worst
-// against its budget and holds the sum under the 50: 39 today, at 20 leads a batch.
+// against its budget and holds the sum under the 50: 42 today, at 20 leads a batch.
 //
 // Counts only go to system_logs — never an applicant's name, path or address, never a
 // lead's details. A failed job is logged as an error so Site Health shows it; the next
@@ -62,6 +62,14 @@ export const DAILY_JOBS: readonly CronJob[] = [
     // The orphans, their removal (one call), then its line (src/lib/media/orphans.ts).
     budget: 2 + 2,
     run: sweepMediaOrphans,
+  },
+  {
+    // Before the lead indexing, the longest: one call and one line.
+    name: 'lead-notify',
+    label: 'lead notification check',
+    // The count (one call), then its line.
+    budget: 1 + 2,
+    run: checkLeadNotifications,
   },
   {
     name: 'crm-index',
@@ -108,6 +116,50 @@ async function sweepMediaOrphans(): Promise<void> {
         : 'media orphan sweep ran',
     detail: { ...run },
   });
+}
+
+// Leads no notification reached (H9, 0048): the trigger logs what it could not queue as it
+// happens; this catches what was queued and then lost (the pg_net worker late past the
+// hook's 300 s window, a Vault secret that differs from NOTIFY_LEAD_SECRET, the hook
+// failing). public.lead_notify_misses() counts the leads created from 24 h 30 min to 15 min
+// before the call with no notification_log row (so each day's run reaches 15 minutes into
+// the day before's, and no lead falls between two runs), or answers null while
+// notifications are not configured. One line, with the count only.
+async function checkLeadNotifications(): Promise<void> {
+  const { data, error } = await serviceClient().rpc('lead_notify_misses');
+  if (error) throw new Error(error.message);
+  if (data !== null && (typeof data !== 'number' || !Number.isInteger(data) || data < 0)) {
+    throw new Error('lead notification check: an unexpected answer');
+  }
+  await writeSystemLog(leadNotifyLogEntry(data));
+}
+
+/** The lead-notification check's line: a warning when leads were missed, else a note. */
+export function leadNotifyLogEntry(missed: number | null): SystemLogEntry {
+  const source = 'cron:lead-notify';
+  if (missed === null) {
+    return {
+      level: 'info',
+      source,
+      message:
+        'lead notifications are off: the Vault notify_lead_url (https) or notify_lead_secret is not set',
+      detail: { configured: false },
+    };
+  }
+  if (missed > 0) {
+    return {
+      level: 'warn',
+      source,
+      message: `${missed} lead(s) from the last day reached no notification`,
+      detail: { configured: true, missed },
+    };
+  }
+  return {
+    level: 'info',
+    source,
+    message: 'lead notification check ran',
+    detail: { configured: true, missed: 0 },
+  };
 }
 
 // CRM lead indexing (Admin v2 C1b): blind indexes, signals and scores for leads that
