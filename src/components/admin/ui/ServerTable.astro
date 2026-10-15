@@ -99,6 +99,12 @@ interface Props {
   limit?: number;
   empty?: { title: string; text?: string; icon?: IconName } | undefined;
   now?: Date | number | string | undefined;
+  /**
+   * The scroll container as a focusable, named region (the caption is its name): for a
+   * table whose rows may hold no link, so the keyboard can still reach what a narrow screen
+   * scrolls sideways (axe scrollable-region-focusable, WCAG 2.1.1).
+   */
+  region?: boolean;
 }
 
 const {
@@ -112,6 +118,7 @@ const {
   limit = PAGE_SIZE,
   empty = { title: 'Nothing here yet' },
   now = Date.now(),
+  region = false,
 } = Astro.props;
 
 const paged = total !== undefined && url !== undefined;
@@ -124,7 +131,12 @@ const text = (value: unknown) =>
 ---
 
 <div class="card card--flush dt">
-  <div class="table-wrap">
+  <div
+    class="table-wrap"
+    tabindex={region ? 0 : undefined}
+    role={region ? 'region' : undefined}
+    aria-label={region ? caption : undefined}
+  >
     <table class="data">
       <caption class="visually-hidden">{caption}</caption>
       <thead>

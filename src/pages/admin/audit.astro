@@ -263,6 +263,7 @@ function rowOf(entry: ActivityEntry): Record<string, unknown> {
             )}
             <ServerTable
               caption="Activity, newest first"
+              region
               columns={columns}
               rows={(result?.entries ?? []).map(rowOf)}
               total={result?.total ?? 0}
