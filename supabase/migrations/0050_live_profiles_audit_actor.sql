@@ -308,9 +308,6 @@ begin
           where t.tgrelid = 'public.audit_log'::regclass and not t.tgisinternal) <> 2 then
     raise exception '0050: audit_log triggers are %, expected audit_log_actor then audit_log_chain, both BEFORE INSERT FOR EACH ROW', v_have;
   end if;
-  if not ('audit_log_actor' collate "C" < 'audit_log_chain' collate "C") then
-    raise exception '0050: audit_log_actor does not sort before audit_log_chain';
-  end if;
 
   -- ---- The binding function: an invoker (current_user must be the writer) with an empty
   -- search_path, executable by no API role; its body binds the three columns, keyed on the
