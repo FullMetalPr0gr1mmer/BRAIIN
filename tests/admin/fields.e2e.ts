@@ -214,7 +214,10 @@ test.describe('as admin, a number the browser cannot read (review M2)', () => {
     await openEditor(page, id);
     const sort = page.locator('#f-sortOrder');
     const before = await sort.inputValue();
-    const version = await page.locator('form.editor .form-actions').textContent();
+    // The row's version, as the actions bar shows it: it must not move, since nothing saves.
+    const versionOf = (text: string | null) => /Version \d+/.exec(text ?? '')?.[0] ?? null;
+    const version = versionOf(await page.locator('form.editor .form-actions').textContent());
+    expect(version).not.toBeNull();
     let sent = false;
     page.on('request', (request) => {
       if (request.method() === 'PATCH') sent = true;
@@ -228,7 +231,9 @@ test.describe('as admin, a number the browser cannot read (review M2)', () => {
     await expect(summary).toContainText('Sort order: Enter a number, or clear the box.');
     await expect(sort).toHaveAttribute('aria-invalid', 'true');
     expect(sent).toBe(false);
-    await expect(page.locator('form.editor .form-actions')).toHaveText(version ?? '');
+    // The edit is still there (Unsaved changes), and the stored row did not move.
+    await expect(page.locator('form.editor .form-actions')).toContainText('Unsaved changes');
+    expect(versionOf(await page.locator('form.editor .form-actions').textContent())).toBe(version);
     // Put back, the box reads again (the stored value was never touched).
     await sort.fill(before);
     expect(await sort.evaluate((el) => (el as HTMLInputElement).validity.badInput)).toBe(false);
