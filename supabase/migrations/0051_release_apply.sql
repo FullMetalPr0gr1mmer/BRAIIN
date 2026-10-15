@@ -371,7 +371,6 @@ declare
   v_row jsonb;
   v_live jsonb;
   v_live_pub jsonb := '{}'::jsonb;
-  v_base_versions jsonb;
   v_conflicts jsonb := '[]'::jsonb;
   v_skip jsonb := '{}'::jsonb;
   v_errors jsonb := '[]'::jsonb;
@@ -625,9 +624,6 @@ begin
     raise exception 'apply_release: a pending change moved since it was read' using errcode = 'BR409',
       detail = pg_catalog.jsonb_build_object('code', 'pending-changed', 'draftIds', v_stale)::text;
   end if;
-  select coalesce(pg_catalog.jsonb_object_agg(d.id, d.base_version), '{}'::jsonb) into v_base_versions
-    from public.content_drafts d
-   where d.tenant_id = v_tenant and d.id = any (v_draft_ids);
   if p_restores_release_id is not null and not exists (
        select 1 from public.content_releases r
         where r.tenant_id = v_tenant and r.id = p_restores_release_id and r.status = 'published') then
@@ -649,7 +645,9 @@ begin
 
     -- 6. Conflicts, before any write and still as the service role: each live row an update
     -- or a removal touches, locked in registry order then id order, compared with the
-    -- draft's base column by column as the column's own type ('12.50' is 12.5). Read past
+    -- draft's base column by column as the column's own type ('12.50' is 12.5), whatever
+    -- the row's version says (a writer may send a version back: app.tg_bump_version keeps
+    -- one that differs from the stored one, so an equal version proves nothing). Read past
     -- RLS on purpose: whether the row is there is a fact, and whether this person may change
     -- it is the apply's to decide, under their own policies.
     for v_it in
@@ -669,7 +667,6 @@ begin
         continue;
       end if;
       v_live_pub := v_live_pub || pg_catalog.jsonb_build_object(v_current, v_live -> 'published_at');
-      continue when (v_base_versions ->> v_current)::int is not distinct from (v_live ->> 'version')::int;
       select array_agg(k.key order by k.key) into v_cols
         from pg_catalog.jsonb_object_keys(v_it -> 'patch') as k(key);
       continue when v_cols is null;

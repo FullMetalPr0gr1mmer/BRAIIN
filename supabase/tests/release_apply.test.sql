@@ -20,7 +20,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(93);
+select plan(94);
 
 -- ── 0. The catalog, before this file creates any function ─────────────────────────────
 -- (Its helpers below call set_config, and would show up here.)
@@ -453,6 +453,19 @@ select is(
     'draftId', (select item ->> 'draft_id' from _r4 where name = 'c-title'), 'columns', jsonb_build_array('title')))),
   'the live row moved on a column the draft changes: 409, naming the column');
 reset role;
+-- A writer that sends the old version back (app.tg_bump_version keeps a version that differs
+-- from the stored one): the version equals the draft's base version, the column moved.
+select _stage('c-version', 'service', '51000000-0000-0000-0001-000000000005', 'update', '{"title":{"en":"Mine","ar":"لي"}}');
+update public.services set title = '{"en":"Sneaky","ar":"خفي"}' where id = '51000000-0000-0000-0001-000000000005';
+update public.services s set version = d.base_version
+  from public.content_drafts d, _r4 r
+ where s.id = '51000000-0000-0000-0001-000000000005' and r.name = 'c-version'
+   and d.id = (r.item ->> 'draft_id')::uuid;
+set local role service_role;
+select is(_fails($$ select _pub('51000000-0000-0000-0000-0000000000c1', 'content_creator', array['c-version']) $$),
+  'BR409:conflict', 'a moved column is a conflict even when the version was sent back to the base version');
+reset role;
+delete from public.content_drafts where id = (select (item ->> 'draft_id')::uuid from _r4 where name = 'c-version');
 -- Typed: the base carries "12.5" (text) where the column holds 12.50; the version moved.
 select _stage('c-typed', 'service', '51000000-0000-0000-0001-000000000001', 'update',
               '{"preview_start_s":13,"preview_end_s":15}');
