@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
 import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
 import { ROLES } from '@/lib/auth/types';
 import { RESOURCES } from '@/lib/admin/resources';
