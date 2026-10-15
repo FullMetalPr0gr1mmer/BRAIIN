@@ -162,6 +162,44 @@ As the brief's §4, with these additions (nothing in it was removed or renamed):
   resources' `toRow`, the Tiptap gate, renderer and plain text, the accent tokeniser, and the
   render project.
 
+## Review fixes (PR #67)
+
+The independent review of `fc9d338` found one high, three medium and ten low items; each
+is its own commit.
+
+- **H1, a create left with "Leave site?".** The create POSTed and sent the page away with
+  the form still dirty, so the `beforeunload` guard asked; "Stay" left a form stuck in
+  `saving` over a row that existed (a reload and retry made a twin). A `created` action now
+  marks the form clean and keeps Save off while the edit screen loads, and the guard lets a
+  navigation the form starts itself go. `entitySave.spec` and a `fields.e2e` create (any
+  dialog fails it; the category is deleted after).
+- **M2, unreadable numbers and dates.** `noValidate` removed the browser's block on a bad
+  number or `datetime-local`, which reports `''` to script and was sent as null, clearing a
+  sort order or a schedule. EditorForm reads `validity.badInput` on those boxes and refuses
+  the save with inline errors (`badInputErrors`; FormField puts the label on them as
+  `data-label`).
+- **M3, repeater indexes.** Untouched blank items are not sent, so the server's item index
+  is the payload's; `mapIssues` maps it back through `repeaterKeptIndexes` when it has the
+  form state.
+- **M4, the source scan.** One detector, run on the tree and on a sample per refused shape;
+  it now also refuses `\p{Nd}`/`\p{N}` classes, charCode or codePointAt arithmetic on the
+  sets' ends, digit maps and tables, and Number/parseInt/parseFloat of Arabic digits.
+- **L5, L12:** a path ending on a repeater, an item, an object, a clip, section content or a
+  whole bilingual pair names the field's group (which carries the id). **L6:** relation
+  (under its `idPrefix`), multi relation, object, clip, section content and upload show their
+  inline error with `aria-invalid`. **L7:** section content reads its own type's fields.
+  **L8:** Ctrl/⌘+S saves only the form in use (focus in it, or the page's only editor).
+  **L9:** a box being typed in is let go first, so a chip not yet added is saved. **L10:** a
+  failed "Reload their version" keeps the editor's work and says why. **L11:** the
+  "Arabic missing" live region stays in the page at zero. **L13:** a test that `mode:
+  'draft'` throws. **L14:** bilingual inputs are named by the legend plus their language.
+
+API additions from the fixes (additive): `mapIssues(issues, fields, idPrefix?, values?)`,
+`errorsFromApi(err, fields, values?)`, the `created` action, `repeaterKeptIndexes` in
+`formPayload.ts`, `badInputErrors` and `UnreadableControl` in `fieldErrors.ts`,
+`FieldErrorText` and `FieldShellProps.legendId` in `FieldShell.tsx`, and `idPrefix`/`errors`
+props on RelationField, ObjectField, ClipField, SectionContentField and UploadField.
+
 ## The bundle (P-10, D9)
 
 In `admin-ui` the field kit rode on every admin screen (each screen's eager graph 113.5 to
