@@ -125,7 +125,7 @@ Supavisor transaction mode (`:6543`, `pgbouncer=true`, `prepare:false`); `:5432`
 
 From `ROLE_CAPS` in `src/lib/authz/matrix.ts`. **Byte-for-byte identical to architecture.md §3.4, its `ROLE_CAPS` block, and the §9.3 authz test matrix; a CI snapshot test fails on any drift between the four.**
 
-> **Canonical role model.** **Admin** = everything. **Content Creator** = authors content **and publishes/schedules** (no archive/delete, no leads, no settings). **SEO** = per-entity + global SEO meta/schema, redirects/canonical, integrations (GA4/Search Console/Calendly) + analytics; no content body, no leads. **Developer** = technical role: settings/identity/maintenance/theme, logs/audit/site-health, **leads management + PII + backup export** — but **NO content authoring, NO publish/schedule, NO archive/delete**, and **no job applications** (the Join careers form — applicants' CVs and contact details are **Admin only**, both caps, both server layers; owner decision J6). (Feature inventory: "Developer = full technical access + site-health panel.")
+> **Canonical role model.** **Admin** = everything. **Content Creator** = authors content **and publishes/schedules** (no archive/delete, no leads, no settings). **SEO** = per-entity + global SEO meta/schema, redirects/canonical, integrations (GA4/Search Console/Calendly) + analytics; no content body, no leads. **Developer** = technical role: settings/identity/maintenance/theme, logs/audit/site-health, **leads management + PII + backup export** — but **NO content authoring, NO content publish/schedule, NO archive/delete**, and **no job applications** (the Join careers form — applicants' CVs and contact details are **Admin only**, both caps, both server layers; owner decision J6). (Feature inventory: "Developer = full technical access + site-health panel.")
 
 | Capability / Area | Admin | Content Creator | SEO | Developer |
 |---|:---:|:---:|:---:|:---:|
@@ -140,7 +140,7 @@ From `ROLE_CAPS` in `src/lib/authz/matrix.ts`. **Byte-for-byte identical to arch
 | Pages & sections — edit/reorder/style | ✅ | ✅ | ❌ | ❌ |
 | Navigation editor | ✅ | ✅ | ❌ | ❌ |
 | Categories management | ✅ | ✅ | ❌ | ❌ |
-| Publish / schedule | ✅ | ✅ | ❌ | ❌ |
+| Publish / schedule content | ✅ | ✅ | ❌ | ❌ |
 | Archive / delete content | ✅ | ❌ | ❌ | ❌ |
 | Per-entity SEO meta / slug / schema | ✅ | view | ✅ | ❌ |
 | Global SEO defaults | ✅ | ❌ | ✅ | ❌ |
