@@ -417,7 +417,9 @@ const project = (row: Readonly<Row>, keys: Iterable<string>): Row => {
  * - a delete stays listed, marked `pendingRemoval`;
  * - a create that matches the query's filters, exclusions, status and search is added to
  *   the FIRST page only (offset 0), and `total` counts every matching create on every page;
- * - the page is then sorted by the list's order (a pending reorder moves its row).
+ * - the live rows keep the database's order (its collation, not JavaScript's); only a
+ *   create and an update that changes the sort column are placed among them by the list's
+ *   order, so a pending reorder moves its row and nothing else moves.
  * Rows come in as selected (before `fromRow`) and leave shaped, with the list's columns
  * only and `draft` meta on each changed row. A draft whose payload no longer parses is left
  * out and its id reported in `invalid` (a malformed draft written around the API).
@@ -435,24 +437,41 @@ export function overlayList(
   const byEntity = new Map(own.filter((d) => d.op !== 'create').map((d) => [d.entity_id, d]));
   const invalid: string[] = [];
 
-  const rows: Row[] = live.rows.map((liveRow) => {
+  const orderBy = query.orderBy ?? config.orderBy;
+  const sortColumn = orderBy.column;
+  /** Rows that keep their live place, and rows placed by the list's order. */
+  const rows: Row[] = [];
+  const movers: Row[] = [];
+
+  for (const liveRow of live.rows) {
     const draft = byEntity.get(String(liveRow[entry.key]));
-    if (!draft) return shape(entry, { ...liveRow });
+    if (!draft) {
+      rows.push(shape(entry, { ...liveRow }));
+      continue;
+    }
     try {
       if (draft.op === 'delete') {
-        return { ...shape(entry, { ...liveRow }), pendingRemoval: true, draft: meta(draft, null) };
+        rows.push({
+          ...shape(entry, { ...liveRow }),
+          pendingRemoval: true,
+          draft: meta(draft, null),
+        });
+        continue;
       }
       const derived = derivePatch(entry, 'update', draft.payload);
       const info = meta(draft, derived);
       const conflict = conflicts(draft.base, liveRow, derived.patch);
       if (conflict.length > 0) info.conflict = conflict;
       const merged = project({ ...liveRow, ...derived.patch }, Object.keys(liveRow));
-      return { ...shape(entry, merged), draft: info };
+      const row = { ...shape(entry, merged), draft: info };
+      const moved =
+        sortColumn in derived.patch && !jsonEqual(derived.patch[sortColumn], liveRow[sortColumn]);
+      (moved ? movers : rows).push(row);
     } catch {
       invalid.push(draft.id);
-      return shape(entry, { ...liveRow });
+      rows.push(shape(entry, { ...liveRow }));
     }
-  });
+  }
 
   let created = 0;
   for (const draft of own.filter((d) => d.op === 'create')) {
@@ -467,11 +486,14 @@ export function overlayList(
     if (!matchesQuery(row, query)) continue;
     created += 1;
     if ((query.offset ?? 0) === 0) {
-      rows.push({ ...shape(entry, project(row, listKeys)), draft: meta(draft, derived) });
+      movers.push({ ...shape(entry, project(row, listKeys)), draft: meta(draft, derived) });
     }
   }
 
-  const orderBy = query.orderBy ?? config.orderBy;
-  rows.sort(compareBy(orderBy.column, orderBy.ascending ?? true));
+  const compare = compareBy(sortColumn, orderBy.ascending ?? true);
+  for (const mover of movers.sort(compare)) {
+    const at = rows.findIndex((row) => compare(mover, row) < 0);
+    rows.splice(at === -1 ? rows.length : at, 0, mover);
+  }
   return { rows, total: live.total + created, invalid };
 }

@@ -500,4 +500,33 @@ describe('review fixes (R2 review M2, L3, L4)', () => {
     // A column the base never recorded: live alone decides.
     expect(dropNoOps({ slug: 'a' }, { slug: 'a' }, { title: 'x' })).toBeNull();
   });
+
+  it('live rows keep the database order; only changed and new rows are placed', () => {
+    const theme = RELEASE_REGISTRY.custom_theme;
+    const themeRow = (n: number, name: string) => ({
+      id: ID(n),
+      name,
+      is_active: false,
+      version: 1,
+      updated_at: '2026-05-01T00:00:00.000Z',
+    });
+    // The database's collation put 'alpha' before 'Zeta' (JavaScript would not).
+    const live = { rows: [themeRow(80, 'alpha'), themeRow(81, 'Zeta')], total: 2 };
+    const names = (drafts: DraftInput[]) =>
+      overlayList(live, drafts, {}, theme).rows.map((r) => r['name']);
+    expect(names([])).toEqual(['alpha', 'Zeta']);
+    expect(names([draft('custom_theme', 'update', ID(81), { isActive: true })])).toEqual([
+      'alpha',
+      'Zeta',
+    ]);
+    expect(names([draft('custom_theme', 'create', ID(82), { name: 'beta' })])).toEqual([
+      'alpha',
+      'Zeta',
+      'beta',
+    ]);
+    expect(names([draft('custom_theme', 'update', ID(80), { name: 'zzz' })])).toEqual([
+      'Zeta',
+      'zzz',
+    ]);
+  });
 });
