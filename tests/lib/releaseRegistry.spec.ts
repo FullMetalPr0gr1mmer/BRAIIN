@@ -291,23 +291,129 @@ describe('apply order', () => {
 });
 
 describe('the registry stays on the server', () => {
-  const ROOT = process.cwd();
+  // Walks the real import graph (R2 review L6): from every hydrated island and client
+  // script, through relative, aliased and dynamic imports in either quote style, the
+  // registry and the overlay are never reached. Type-only imports are erased by the
+  // compiler and not followed.
+  const ROOT = process.cwd().replaceAll(String.fromCharCode(92), '/');
+  const EXTENSIONS = ['', '.ts', '.tsx', '.mjs', '.js', '.astro', '/index.ts', '/index.tsx'];
+  const ALIASES: Record<string, string> = {
+    '@/': 'src/',
+    '@schemas/': 'packages/schemas/',
+    '@consent/': 'packages/consent/',
+  };
+
   function files(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {
-      const path = join(dir, name);
+      const path = `${dir}/${name}`;
       return statSync(path).isDirectory() ? files(path) : [path];
     });
   }
 
-  it('no island, client helper or component imports the registry or the overlay', () => {
-    const client = [
-      ...files(join(ROOT, 'src', 'components')),
-      ...files(join(ROOT, 'src', 'lib', 'admin', 'client')),
-    ].filter((f) => /\.(tsx?|astro|mjs|js)$/.test(f));
-    const offenders = client.filter((f) =>
-      /lib\/release\/(registry|overlay)/.test(readFileSync(f, 'utf8')),
+  /** The module specifiers a source imports at runtime (static, side-effect, dynamic). */
+  function specifiers(source: string): string[] {
+    const out: string[] = [];
+    const patterns = [
+      /\b(?:import|export)\s+(?!type\b)(?:[^'"`;]*?\s)?from\s*(['"])([^'"]+)\1/g,
+      /\bimport\s*(['"])([^'"]+)\1/g,
+      /\bimport\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g,
+    ];
+    for (const pattern of patterns) for (const m of source.matchAll(pattern)) out.push(m[2]!);
+    return out;
+  }
+
+  function resolve(from: string, spec: string): string | null {
+    const clean = spec.replace(/\?.*$/, '');
+    let base: string | null = null;
+    for (const [alias, dir] of Object.entries(ALIASES)) {
+      if (clean.startsWith(alias)) base = `${ROOT}/${dir}${clean.slice(alias.length)}`;
+    }
+    if (clean.startsWith('.')) {
+      const parts = `${from.slice(0, from.lastIndexOf('/'))}/${clean}`.split('/');
+      const stack: string[] = [];
+      for (const part of parts) {
+        if (part === '..') stack.pop();
+        else if (part !== '.') stack.push(part);
+      }
+      base = stack.join('/');
+    }
+    if (base === null) return null; // a package
+    for (const ext of EXTENSIONS) {
+      const path = base + ext;
+      try {
+        if (statSync(path).isFile()) return path;
+      } catch {
+        // try the next extension
+      }
+    }
+    return null;
+  }
+
+  /** Every file reachable from the roots; an .astro root contributes its <script> blocks. */
+  function reach(roots: readonly string[]): Set<string> {
+    const seen = new Set<string>();
+    const queue = [...roots];
+    while (queue.length > 0) {
+      const file = queue.pop()!;
+      if (seen.has(file)) continue;
+      seen.add(file);
+      let source = readFileSync(file, 'utf8');
+      if (file.endsWith('.astro')) {
+        source = [...source.matchAll(/<script(?![^>]*is:inline)[^>]*>([\s\S]*?)<\/script>/g)]
+          .map((m) => m[1])
+          .join('\n');
+      }
+      for (const spec of specifiers(source)) {
+        const target = resolve(file, spec);
+        if (target) queue.push(target);
+      }
+    }
+    return seen;
+  }
+
+  const FORBIDDEN = [`${ROOT}/src/lib/release/registry.ts`, `${ROOT}/src/lib/release/overlay.ts`];
+
+  it('reads imports in every form the build follows', () => {
+    const src = [
+      `import x from "../lib/release/registry";`,
+      `import './side-effect';`,
+      `export { y } from '@/lib/release/overlay';`,
+      'const lazy = () => import(`./lazy`);',
+      `const other = import("@schemas/release");`,
+      `import type { T } from '@/lib/release/registry';`,
+    ].join('\n');
+    expect(specifiers(src).sort()).toEqual(
+      [
+        '../lib/release/registry',
+        './side-effect',
+        '@/lib/release/overlay',
+        './lazy',
+        '@schemas/release',
+      ].sort(),
     );
-    expect(offenders).toEqual([]);
+  });
+
+  it('follows the graph (caps.ts reaches areas.ts and the role matrix)', () => {
+    const seen = reach([`${ROOT}/src/lib/release/caps.ts`]);
+    expect(seen).toContain(`${ROOT}/src/lib/release/areas.ts`);
+    expect(seen).toContain(`${ROOT}/src/lib/authz/matrix.ts`);
+    // and that the walk would see the registry where it is imported
+    expect(reach([`${ROOT}/src/lib/release/registry.ts`])).toContain(
+      `${ROOT}/src/lib/admin/resources/services.ts`,
+    );
+  });
+
+  it('no island, component or client script reaches the registry or the overlay', () => {
+    const roots = [
+      ...files(`${ROOT}/src/components`).filter((f) => /\.(tsx|ts|astro)$/.test(f)),
+      ...files(`${ROOT}/src/lib/admin/client`),
+      ...files(`${ROOT}/src/pages`).filter((f) => f.endsWith('.astro')),
+      ...files(`${ROOT}/src/layouts`).filter((f) => f.endsWith('.astro')),
+    ];
+    expect(roots.some((f) => /islands\/AdminResourceForm\.tsx$/.test(f))).toBe(true);
+    const seen = reach(roots);
+    expect(seen.size).toBeGreaterThan(roots.length);
+    expect(FORBIDDEN.filter((f) => seen.has(f))).toEqual([]);
   });
 
   it('areas.ts and caps.ts import nothing server-side (an island may import them)', () => {
@@ -318,10 +424,14 @@ describe('the registry stays on the server', () => {
       './areas',
     ]);
     for (const file of ['areas.ts', 'caps.ts']) {
-      const src = readFileSync(join(ROOT, 'src', 'lib', 'release', file), 'utf8');
-      const imports = [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1]!);
+      const source = readFileSync(`${ROOT}/src/lib/release/${file}`, 'utf8');
+      const all = [...source.matchAll(/from\s*(['"])([^'"]+)\1/g)].map((m) => m[2]!);
       expect(
-        imports.filter((i) => !allowed.has(i)),
+        all.filter((i) => !allowed.has(i)),
+        file,
+      ).toEqual([]);
+      expect(
+        specifiers(source).filter((i) => !allowed.has(i)),
         file,
       ).toEqual([]);
     }
