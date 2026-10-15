@@ -1605,10 +1605,6 @@ input.in--mono[type='text'] {
   font-weight: 700;
 }
 
-.ar-gaps__n:empty {
-  display: none;
-}
-
 .editor__conflict {
   display: flex;
   align-items: center;
