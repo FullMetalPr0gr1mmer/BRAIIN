@@ -1,5 +1,6 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, type ReactNode } from 'react';
 import type { TiptapDoc } from '@schemas/tiptap';
+import type { FieldErrors } from '@/lib/admin/fieldErrors';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 
 // The rich-text editor is Tiptap plus ProseMirror, about 100 KB gzipped: loaded with
@@ -14,13 +15,27 @@ import ObjectField from './fields/ObjectField';
 import ClipField from './fields/ClipField';
 import SectionContentField from './fields/SectionContentField';
 import UploadField from './fields/UploadField';
+import BilingualField from './fields/BilingualField';
+import SwitchField from './fields/SwitchField';
+import ColorField from './fields/ColorField';
+import RangeField from './fields/RangeField';
+import ChipsField from './fields/ChipsField';
+import FieldShell, { describedBy } from './fields/FieldShell';
+import LinkDialog from './fields/LinkDialog';
+import { useFieldLanguage } from './fields/editorLanguage';
+import Segmented from './kit/Segmented';
 
-// One renderer per field kind, shared by ResourceForm and SingletonForm.
+// One renderer per field kind, shared by every editor (EditorForm: ResourceForm and
+// SingletonForm today, every Wave 3 screen next).
 //
 // Shared on purpose. The two forms have different save paths (collection vs singleton),
 // but if they each rendered their own inputs, "bilingual" would eventually mean two
 // inputs in one and one input in the other — and the half that lost its Arabic field
-// would keep passing every test, because the server accepts a partial PATCH.
+// would keep passing every test, because the server accepts a partial PATCH. So this is
+// the one switch over the kinds: each kind's component lives in ./fields/ (the field kit,
+// Admin v2 F5a) and takes the same props (fields/types.ts), and the element ids are
+// `<idPrefix>-<name>` (`-en`/`-ar` for a language), which the API's error paths map onto
+// (src/lib/admin/fieldErrors.ts). No `style=` anywhere (CSP: §3 Pillar 1).
 
 export type Row = Record<string, unknown>;
 
@@ -32,34 +47,47 @@ export interface FieldProps {
   values?: Row;
   /** Keeps element ids unique when the same field renders inside repeater items. */
   idPrefix?: string;
+  /** Inline messages by element id, from the API's issues (fieldErrors.ts). */
+  errors?: FieldErrors | undefined;
+  /** F5b: what the field shows when nothing is stored (a section's built-in copy). */
+  builtIn?: unknown;
+  /** F5b: "Advanced (JSON)" on section content is offered (Admin, D5). */
+  canAdvanced?: boolean | undefined;
 }
 
-/** Renders a nested field (repeater items, section content) with the same renderer. */
-const renderField: RenderField = (field, value, onChange, idPrefix) => (
-  <Field key={field.name} field={field} value={value} onChange={onChange} idPrefix={idPrefix} />
-);
-
-export function Field({ field, value, onChange, values = {}, idPrefix = 'f' }: FieldProps) {
+export function Field({
+  field,
+  value,
+  onChange,
+  values = {},
+  idPrefix = 'f',
+  errors,
+  builtIn,
+  canAdvanced,
+}: FieldProps) {
   const id = `${idPrefix}-${field.name}`;
+  const error = errors?.[id];
 
-  // ── composite and referencing kinds (UI v2) ──────────────────────────────────
+  /** Renders a nested field (repeater items, section content) with this same renderer. */
+  const renderField: RenderField = (sub, subValue, subChange, subPrefix) => (
+    <Field
+      key={sub.name}
+      field={sub}
+      value={subValue}
+      onChange={subChange}
+      idPrefix={subPrefix}
+      errors={errors}
+      canAdvanced={canAdvanced}
+    />
+  );
+  const common = { field, value, onChange, idPrefix, errors, builtIn };
+
+  // ── composite and referencing kinds ──────────────────────────────────────────
   if (field.kind === 'relation' || field.kind === 'multiRelation') {
     return <RelationField field={field} value={value} onChange={onChange} />;
   }
-  if (field.kind === 'media') {
-    return <MediaField field={field} value={value} onChange={onChange} />;
-  }
-  if (field.kind === 'repeater') {
-    return (
-      <RepeaterField
-        field={field}
-        value={value}
-        onChange={onChange}
-        renderField={renderField}
-        idPrefix={idPrefix}
-      />
-    );
-  }
+  if (field.kind === 'media') return <MediaField {...common} />;
+  if (field.kind === 'repeater') return <RepeaterField {...common} renderField={renderField} />;
   if (field.kind === 'object') {
     return (
       <ObjectField
@@ -89,14 +117,27 @@ export function Field({ field, value, onChange, values = {}, idPrefix = 'f' }: F
   if (field.kind === 'upload') {
     return <UploadField field={field} value={value} onChange={onChange} idPrefix={idPrefix} />;
   }
+
+  // ── the field kit v2 (F5a) ───────────────────────────────────────────────────
+  if (field.kind === 'bilingual' || field.kind === 'prose') return <BilingualField {...common} />;
+  if (field.kind === 'checkbox') return <SwitchField {...common} />;
+  if (field.kind === 'color') return <ColorField {...common} />;
+  if (field.kind === 'range') return <RangeField {...common} />;
+  if (field.kind === 'chips' || field.kind === 'tags') return <ChipsField {...common} />;
+  if (field.kind === 'richtext') return <RichTextField {...common} />;
+
   if (field.kind === 'multiSelect') {
     const chosen = Array.isArray(value) ? (value as string[]) : [];
     return (
-      <fieldset className="field-group">
-        <legend className="field-legend">
-          {field.label}
-          {field.required ? ' *' : ''}
-        </legend>
+      <FieldShell
+        as="fieldset"
+        id={id}
+        label={field.label}
+        required={field.required}
+        meta={field.maxItems !== undefined ? `${chosen.length} of ${field.maxItems}` : undefined}
+        hint={field.help}
+        error={error}
+      >
         <div className="row-3">
           {field.options?.map((option) => (
             <label key={option.value} className="field field-inline">
@@ -116,125 +157,46 @@ export function Field({ field, value, onChange, values = {}, idPrefix = 'f' }: F
             </label>
           ))}
         </div>
-        {field.help && <p className="admin-sub">{field.help}</p>}
-      </fieldset>
+      </FieldShell>
     );
   }
 
-  if (field.kind === 'bilingual' || field.kind === 'prose') {
-    const record = (value ?? {}) as Record<string, string>;
-    const multiline = field.kind === 'prose';
-    return (
-      <fieldset className="field-group">
-        <legend className="field-legend">
-          {field.label}
-          {field.required ? ' *' : ''}
-        </legend>
-        <div className="row-2">
-          <label className="field">
-            <span>English</span>
-            {multiline ? (
-              <textarea
-                id={`${id}-en`}
-                lang="en"
-                value={record['en'] ?? ''}
-                onChange={(e) => onChange(field.name, { ...record, en: e.target.value })}
-              />
-            ) : (
-              <input
-                id={`${id}-en`}
-                type="text"
-                lang="en"
-                value={record['en'] ?? ''}
-                onChange={(e) => onChange(field.name, { ...record, en: e.target.value })}
-              />
-            )}
-          </label>
-          <label className="field">
-            {/* AR is starred for `bilingual` because indexable metadata must be
-                bilingual from day one (Pillar 3); `prose` lets AR lag translation. */}
-            <span>العربية{field.kind === 'bilingual' ? ' *' : ''}</span>
-            {multiline ? (
-              <textarea
-                id={`${id}-ar`}
-                lang="ar"
-                dir="rtl"
-                value={record['ar'] ?? ''}
-                onChange={(e) => onChange(field.name, { ...record, ar: e.target.value })}
-              />
-            ) : (
-              <input
-                id={`${id}-ar`}
-                type="text"
-                lang="ar"
-                dir="rtl"
-                value={record['ar'] ?? ''}
-                onChange={(e) => onChange(field.name, { ...record, ar: e.target.value })}
-              />
-            )}
-          </label>
-        </div>
-        {field.help && <p className="admin-sub">{field.help}</p>}
-      </fieldset>
-    );
-  }
-
-  if (field.kind === 'richtext') {
-    const doc = (value ?? {}) as Record<string, TiptapDoc | undefined>;
-    return (
-      <div className="field-group">
-        <Suspense fallback={<div className="editor-surface">Loading editor…</div>}>
-          <p className="field-legend">{field.label} — English</p>
-          <RichText
-            label={`${field.label} English`}
-            locale="en"
-            value={doc['en'] ?? null}
-            onChange={(next) => onChange(field.name, { ...doc, en: next })}
-          />
-          <p className="field-legend">{field.label} — العربية</p>
-          <RichText
-            label={`${field.label} Arabic`}
-            locale="ar"
-            value={doc['ar'] ?? null}
-            onChange={(next) => onChange(field.name, { ...doc, ar: next })}
-          />
-        </Suspense>
-      </div>
-    );
-  }
+  const control = {
+    id,
+    'aria-required': field.required || undefined,
+    'aria-invalid': error ? true : undefined,
+    'aria-describedby': describedBy(id, { hint: field.help, error }),
+  };
+  const shell = (children: ReactNode, meta?: string) => (
+    <FieldShell
+      id={id}
+      label={field.label}
+      required={field.required}
+      meta={meta}
+      hint={field.help}
+      error={error}
+    >
+      {children}
+    </FieldShell>
+  );
+  const counter = (text: string) =>
+    field.maxLength !== undefined ? `${text.length}/${field.maxLength}` : undefined;
 
   if (field.kind === 'select') {
-    return (
-      <label className="field" htmlFor={id}>
-        <span>{field.label}</span>
-        <select
-          id={id}
-          value={String(value ?? '')}
-          onChange={(e) => onChange(field.name, e.target.value)}
-        >
-          <option value="">—</option>
-          {field.options?.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        {field.help && <span>{field.help}</span>}
-      </label>
-    );
-  }
-
-  if (field.kind === 'checkbox') {
-    return (
-      <label className="field field-inline" htmlFor={id}>
-        <input
-          id={id}
-          type="checkbox"
-          checked={value === true}
-          onChange={(e) => onChange(field.name, e.target.checked)}
-        />
-        <span>{field.label}</span>
-      </label>
+    return shell(
+      <select
+        {...control}
+        value={String(value ?? '')}
+        onChange={(e) => onChange(field.name, e.target.value)}
+      >
+        {/* An unset select means "leave it alone" (formPayload.ts). */}
+        <option value="">Not set</option>
+        {field.options?.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>,
     );
   }
 
@@ -247,41 +209,16 @@ export function Field({ field, value, onChange, values = {}, idPrefix = 'f' }: F
         : typeof value === 'string'
           ? value
           : JSON.stringify(value ?? {}, null, 2);
-    return (
-      <label className="field" htmlFor={id}>
-        <span>{field.label}</span>
-        <textarea
-          id={id}
-          value={text}
-          onChange={(e) => onChange(field.name, e.target.value)}
-          spellCheck={field.kind === 'textarea'}
-        />
-        {field.help && <span>{field.help}</span>}
-      </label>
-    );
-  }
-
-  if (field.kind === 'tags') {
-    const tags = Array.isArray(value) ? (value as string[]) : [];
-    return (
-      <label className="field" htmlFor={id}>
-        <span>{field.label}</span>
-        <input
-          id={id}
-          type="text"
-          value={tags.join(', ')}
-          onChange={(e) =>
-            onChange(
-              field.name,
-              e.target.value
-                .split(',')
-                .map((tag) => tag.trim())
-                .filter(Boolean),
-            )
-          }
-        />
-        <span>Comma-separated.</span>
-      </label>
+    return shell(
+      <textarea
+        {...control}
+        className={field.kind === 'json' ? 'in--mono' : undefined}
+        value={text}
+        maxLength={field.maxLength}
+        onChange={(e) => onChange(field.name, e.target.value)}
+        spellCheck={field.kind === 'textarea'}
+      />,
+      field.kind === 'textarea' ? counter(text) : undefined,
     );
   }
 
@@ -293,26 +230,106 @@ export function Field({ field, value, onChange, values = {}, idPrefix = 'f' }: F
         : field.kind === 'datetime'
           ? 'datetime-local'
           : 'text';
+  const text = value === null || value === undefined ? '' : String(value);
+  // A list of bilingual phrases stores each as {en, ar} (ui/fields.ts bilingualList): the
+  // `ar` box of an item is Arabic text.
+  const arabic = field.name === 'ar';
 
+  return shell(
+    <input
+      {...control}
+      type={inputType}
+      lang={arabic ? 'ar' : undefined}
+      dir={arabic ? 'rtl' : undefined}
+      className={field.kind === 'number' ? 'in--num' : undefined}
+      value={text}
+      maxLength={inputType === 'text' ? field.maxLength : undefined}
+      onChange={(e) =>
+        onChange(
+          field.name,
+          field.kind === 'number' ? numberOrNull(e.target.value) : e.target.value,
+        )
+      }
+    />,
+    inputType === 'text' ? counter(text) : undefined,
+  );
+}
+
+/**
+ * `richtext`: one Tiptap editor per language, the same halves as a bilingual field (the EN
+ * | AR switch, Both side by side), the editor loaded lazily with a skeleton until it is in.
+ * Its link button opens the kit's Modal (LinkDialog), passed in rather than imported by
+ * RichText.tsx: a shared module RichText imported would be pulled into the lazy admin-rich
+ * chunk, and every screen that uses it would then load the editor eagerly.
+ */
+function RichTextField({
+  field,
+  value,
+  onChange,
+  idPrefix,
+  errors,
+}: FieldProps & { idPrefix: string }) {
+  const id = `${idPrefix}-${field.name}`;
+  const ids = { en: `${id}-en`, ar: `${id}-ar` };
+  const doc = (value ?? {}) as Record<string, TiptapDoc | undefined>;
+  const { shown, choose } = useFieldLanguage(ids);
+  const both = shown === 'both';
+  const half = (lang: 'en' | 'ar') => {
+    const error = errors?.[ids[lang]];
+    return (
+      <div className="bi__half" hidden={!both && shown !== lang}>
+        <p
+          className={both ? 'bi__lang' : 'bi__lang visually-hidden'}
+          lang={lang === 'ar' ? 'ar' : undefined}
+        >
+          {lang === 'en' ? 'English' : 'العربية'}
+        </p>
+        <Suspense fallback={<div className="rich rich--loading">Loading the editor…</div>}>
+          <RichText
+            id={ids[lang]}
+            label={`${field.label} ${lang === 'en' ? 'English' : 'Arabic'}`}
+            locale={lang}
+            value={doc[lang] ?? null}
+            onChange={(next) => onChange(field.name, { ...doc, [lang]: next })}
+            invalid={Boolean(error)}
+            describedBy={error ? `${ids[lang]}-error` : undefined}
+            linkDialog={LinkDialog}
+          />
+        </Suspense>
+        {error && (
+          <p id={`${ids[lang]}-error`} className="field-error f__err">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  };
   return (
-    <label className="field" htmlFor={id}>
-      <span>
-        {field.label}
-        {field.required ? ' *' : ''}
-      </span>
-      <input
-        id={id}
-        type={inputType}
-        value={value === null || value === undefined ? '' : String(value)}
-        onChange={(e) =>
-          onChange(
-            field.name,
-            field.kind === 'number' ? numberOrNull(e.target.value) : e.target.value,
-          )
-        }
-      />
-      {field.help && <span>{field.help}</span>}
-    </label>
+    <FieldShell
+      as="fieldset"
+      id={id}
+      label={field.label}
+      required={field.required}
+      hint={field.help}
+      labelExtra={
+        !both && (
+          <Segmented<'en' | 'ar'>
+            label={`${field.label} language`}
+            value={shown as 'en' | 'ar'}
+            onChange={choose}
+            options={[
+              { value: 'en', label: 'English' },
+              { value: 'ar', label: 'Arabic' },
+            ]}
+          />
+        )
+      }
+    >
+      <div className="bi" data-lang={shown}>
+        {half('en')}
+        {half('ar')}
+      </div>
+    </FieldShell>
   );
 }
 
