@@ -168,6 +168,44 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     setting, whichever is first. *Closes when* both projects' Authentication session settings
     show the inactivity timeout (and the time-box, if chosen).
 
+- **A stale access token keeps its old role for up to an hour** (hotfix H10; U12a and U13
+  close more of it; owner item: confirm the remainder).
+  - *The gap.* RLS reads the role from the token, and an access token lives up to an hour
+    (`jwt_expiry`, Supabase's default 3600 s; `supabase/config.toml` does not set it). A role
+    change, a deactivation or a lock revokes no session, and `resolveAuthContext` compares
+    the profile with the auth server's current record (`getUser()`), not with the token's
+    claims, so the Worker cannot see a stale token either (CLAUDE.md §2, session
+    invalidation, is true only once the record and the token agree). Until it expires, the
+    token keeps its old role at PostgREST, directly, on every table without a live check.
+  - *Closed before H10.* Leads and the CRM tables (`leads_live` and the CRM's live policies,
+    0033 on), job applications (`app.is_live_admin()`, 0029), preferences (0044), and the
+    export and reveal paths (`liveRecheck`).
+  - *Closed by H10 (0050).* Every staff write to `profiles`: RESTRICTIVE policies require
+    `app.role_manages_users(app.live_role())`, so a demoted, deactivated or locked Admin's
+    token can no longer promote or reactivate itself (which the access-token hook would then
+    have stamped into its next token, outliving the hour) or change anyone else; the users
+    screen's PATCH also refuses (403) a write the database skipped, instead of stamping the
+    claims and auditing a change that never happened. And the actor of a staff token's audit
+    row: `audit_log_actor` binds `actor_id`, `actor_role` and `created_at` to the caller,
+    so a forged row naming a colleague, backdated, can no longer be chained. A stale token's
+    audit insert is still accepted, but names the stale account and the role its token
+    carries.
+  - *Left for U12a (0055).* Comparing the profile with the token's own claims in
+    `resolveAuthContext`; revoking every session of a person whose role, activity or tenant
+    changes; the live check on reading colleagues' profiles (`profiles_self_select` still
+    lets a stale Admin token list them); the roles guide's sentence. *For U13 (0054):* the
+    live check on reading `audit_log` (`audit_read` still trusts the token's role).
+  - *Left after both.* The token's old role on the tables with no live check:
+    `site_settings`, `site_integrations`, `ai_config`, `media_assets`, `system_logs` and
+    the content tables (the staged ones close when R5's guard switches on at R14). The
+    proposed follow-up: a catalog-driven pgTAP asserting a RESTRICTIVE live companion on
+    every policy that admits an `authenticated` write, and the missing companions; the
+    owner may also shorten `jwt_expiry` to 900 s (the dashboard and `config.toml`), which
+    shrinks the window to 15 minutes at four times the token refreshes.
+  - *Owner:* Kareem. *Expiry:* U12a's merge for the sessions; the follow-up slice or R14,
+    whichever is first, for the remaining tables, at the latest 2026-12-31. *Closes when*
+    U12a is applied and merged and every policy admitting an `authenticated` write has a
+    RESTRICTIVE live companion, checked over the catalog.
 
 ## The client's TDD, row by row
 
