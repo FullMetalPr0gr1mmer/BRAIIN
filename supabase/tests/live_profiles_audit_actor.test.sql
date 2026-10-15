@@ -18,6 +18,9 @@
 --     everything it writes; a definer (update_my_profile) names its caller; the chain still
 --     links every row in id order, and each hash is over the stored, bound values, so the
 --     binding ran before the chain; the two triggers fire in that order.
+--   • grants: staff keep only the users screen's three profile columns; on audit_log staff
+--     and the service role hold SELECT and INSERT, so the service role cannot TRUNCATE it,
+--     and nobody may setval its id sequence.
 
 begin;
 select plan(51);
@@ -374,7 +377,8 @@ select ok(
     and not has_table_privilege('service_role', 'public.audit_log', 'delete')
     and not has_table_privilege('service_role', 'public.audit_log', 'truncate')
     and not has_table_privilege('anon', 'public.audit_log', 'insert')
-    and has_table_privilege('authenticated', 'public.audit_log', 'select, insert')
+    and has_table_privilege('authenticated', 'public.audit_log', 'select')
+    and has_table_privilege('authenticated', 'public.audit_log', 'insert')
     and has_table_privilege('service_role', 'public.audit_log', 'insert'),
   'staff and the service role read and insert audit rows, and no API role may UPDATE, DELETE or TRUNCATE one');
 reset role;
