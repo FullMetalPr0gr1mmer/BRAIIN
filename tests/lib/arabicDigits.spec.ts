@@ -10,7 +10,7 @@ import { statisticResource } from '@/lib/admin/resources/statistics';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import { renderTiptapToHtml, tiptapToPlainText } from '@/lib/content/tiptap';
 import { splitAccent } from '@/lib/text/accent';
-import { nodesOf, scanTree } from './sourceScan';
+import { nodesOf, scanSource, scanTree, type ScannedFile } from './sourceScan';
 
 // Arabic content digits are never transformed (P-12; verification.md "Details the designs
 // missed"; Admin v2 F5a). Eastern Arabic digits (U+0660-0669) and their Persian/Urdu forms
@@ -197,62 +197,103 @@ const ALLOWED: Record<string, string> = {
     'NFKD folds the command palette’s query and labels for matching; nothing is stored or shown',
 };
 
-/** U+0660-0669, U+06F0-06F9, as characters or as \u escapes in a regex. */
-const ARABIC_DIGIT = /[٠-٩۰-۹]|\\u06[6fF][0-9a-fA-F]/;
+/** U+0660-0669, U+06F0-06F9, as characters or as \u escapes. */
+const ARABIC_DIGIT = /[٠-٩۰-۹]|\\u0?6[6fF][0-9a-fA-F]|\\u\{6[6fF][0-9a-fA-F]\}/;
+/** A Unicode digit or number class: `\p{Nd}`, `\p{N}`, `\p{Number}`, `\p{Decimal_Number}`. */
+const UNICODE_NUMBER = /\\p\{(?:N|Nd|Number|Decimal_Number|gc=Nd|General_Category=Nd)\}/;
+/** Where each Arabic digit set starts and ends: charCode arithmetic leans on these. */
+const DIGIT_CODES = new Set([0x660, 0x669, 0x6f0, 0x6f9]);
+const FULL_SETS = ['٠١٢٣٤٥٦٧٨٩', '۰۱۲۳۴۵۶۷۸۹'];
 
 interface Finding {
   path: string;
   what: string;
 }
 
-function findings(): Finding[] {
+const isArabicDigitText = (text: string) =>
+  [...text].length > 0 && [...text].every((c) => /[٠-٩۰-۹]/.test(c));
+
+/**
+ * Every place one source file could fold an Arabic digit: a `.normalize()` call or an
+ * NFKC/NFKD form; a regex (literal, or RegExp from a string) naming the digits or a
+ * Unicode number class; charCode arithmetic on the sets' first or last code point; a digit
+ * table (an object keyed by Arabic digits, a string or array holding a whole set); and
+ * Number(), parseInt() or parseFloat() of Arabic digits. Copy that merely contains Arabic
+ * digits ("١٠ ميجابايت") is not a fold and is not reported.
+ */
+function detect(file: ScannedFile): Finding[] {
   const out: Finding[] = [];
-  for (const file of [...scanTree('src'), ...scanTree('packages')]) {
-    if (!file.ast) {
-      // An .astro page or a stylesheet, read as words: a call in its script is still text.
-      continue;
+  const report = (what: string) => out.push({ path: file.path, what });
+  if (!file.ast) {
+    // An .astro page or a stylesheet, read as words (sourceScan.ts).
+    if (['normalize', 'NFKC', 'NFKD'].some((name) => file.names.has(name))) {
+      report('normalize / NFKC / NFKD');
     }
-    for (const node of nodesOf(file.ast)) {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === 'normalize'
-      ) {
-        out.push({ path: file.path, what: `.normalize(): ${node.getText().slice(0, 60)}` });
-      }
-      if (ts.isStringLiteralLike(node) && /^NFK?[CD]$/.test(node.text)) {
-        out.push({ path: file.path, what: `the form "${node.text}"` });
-      }
-      if (ts.isRegularExpressionLiteral(node) && ARABIC_DIGIT.test(node.text)) {
-        out.push({ path: file.path, what: `a regex over Arabic digits: ${node.text}` });
-      }
-      if (
-        ts.isNewExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === 'RegExp' &&
-        ARABIC_DIGIT.test(node.getText())
-      ) {
-        out.push({ path: file.path, what: `a RegExp over Arabic digits` });
-      }
+    return out;
+  }
+  for (const node of nodesOf(file.ast)) {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'normalize'
+    ) {
+      report(`.normalize(): ${node.getText().slice(0, 60)}`);
+    }
+    if (ts.isStringLiteralLike(node) && /^NFK?[CD]$/.test(node.text)) {
+      report(`the form "${node.text}"`);
+    }
+    if (
+      ts.isRegularExpressionLiteral(node) &&
+      (ARABIC_DIGIT.test(node.text) || UNICODE_NUMBER.test(node.text))
+    ) {
+      report(`a regex over digits: ${node.text}`);
+    }
+    if (
+      (ts.isNewExpression(node) || ts.isCallExpression(node)) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'RegExp' &&
+      (ARABIC_DIGIT.test(node.getText()) || UNICODE_NUMBER.test(node.getText()))
+    ) {
+      report('a RegExp over digits');
+    }
+    if (ts.isNumericLiteral(node) && DIGIT_CODES.has(Number(node.text))) {
+      report(`charCode arithmetic on an Arabic digit set: ${node.parent.getText().slice(0, 60)}`);
+    }
+    if (
+      ts.isPropertyAssignment(node) &&
+      (ts.isStringLiteral(node.name) || ts.isIdentifier(node.name)) &&
+      isArabicDigitText(node.name.text)
+    ) {
+      report(`a digit map keyed by "${node.name.text}"`);
+    }
+    if (ts.isStringLiteralLike(node) && FULL_SETS.some((set) => node.text.includes(set))) {
+      report('a string holding a whole Arabic digit set (a lookup table)');
+    }
+    if (
+      ts.isArrayLiteralExpression(node) &&
+      node.elements.filter((e) => ts.isStringLiteralLike(e) && isArabicDigitText(e.text)).length >=
+        5
+    ) {
+      report('an array of Arabic digits (a lookup table)');
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      ['Number', 'parseInt', 'parseFloat'].includes(node.expression.text) &&
+      node.arguments.some((arg) => ARABIC_DIGIT.test(arg.getText()))
+    ) {
+      report(`${node.expression.text}() of Arabic digits`);
     }
   }
   return out;
 }
 
-/** .astro files are read whole (sourceScan.ts): their code may not fold either. */
-function astroFindings(): Finding[] {
-  return [...scanTree('src')]
-    .filter((file) => file.path.endsWith('.astro'))
-    .filter(
-      (file) => file.names.has('normalize') || file.names.has('NFKC') || file.names.has('NFKD'),
-    )
-    .map((file) => ({ path: file.path, what: 'normalize / NFKC / NFKD' }));
-}
+const findings = (): Finding[] =>
+  [...scanTree('src'), ...scanTree('packages')].flatMap((file) => detect(file));
 
 describe('no code path folds Arabic digits (source scan)', () => {
-  it('refuses .normalize(), NFKC/NFKD and digit regexes outside the allow-list', () => {
-    const found = [...findings(), ...astroFindings()];
-    const outside = found.filter((f) => !(f.path in ALLOWED));
+  it('refuses every fold outside the allow-list', () => {
+    const outside = findings().filter((f) => !(f.path in ALLOWED));
     expect(outside, JSON.stringify(outside, null, 2)).toEqual([]);
   });
 
@@ -261,23 +302,39 @@ describe('no code path folds Arabic digits (source scan)', () => {
     for (const path of Object.keys(ALLOWED)) expect(found.has(path), path).toBe(true);
   });
 
-  it('would catch a fold: the scanner sees each shape it refuses', async () => {
-    const { scanSource } = await import('./sourceScan');
-    const sample = scanSource(
-      'src/x.ts',
-      [
-        "const a = s.normalize('NFKC');",
-        'const b = s.replace(/[٠-٩]/g, (d) => d);',
-        "const c = s.replace(new RegExp('[\\u0660-\\u0669]', 'g'), '');",
-      ].join('\n'),
-    );
-    const kinds: string[] = [];
-    for (const node of nodesOf(sample.ast!)) {
-      if (ts.isCallExpression(node) && node.getText().includes('.normalize(')) kinds.push('call');
-      if (ts.isStringLiteralLike(node) && node.text === 'NFKC') kinds.push('form');
-      if (ts.isRegularExpressionLiteral(node) && ARABIC_DIGIT.test(node.text)) kinds.push('regex');
-      if (ts.isNewExpression(node) && ARABIC_DIGIT.test(node.getText())) kinds.push('RegExp');
-    }
-    expect(kinds).toEqual(expect.arrayContaining(['call', 'form', 'regex', 'RegExp']));
+  // The detector itself, run on files (review M4): each shape it must refuse, one per
+  // sample, and the copy it must leave alone.
+  const SAMPLES: Record<string, string> = {
+    'normalize()': "export const a = (s: string) => s.normalize('NFKC');",
+    'an NFKD form': "const FORM = 'NFKD'; export const b = (s: string) => s[FORM];",
+    'a digit regex': 'export const c = (s: string) => s.replace(/[٠-٩]/g, (d) => d);',
+    'an escaped digit regex':
+      "export const d = (s: string) => s.replace(/[\\u06F0-\\u06F9]/g, '');",
+    'a RegExp from a string': "export const e = new RegExp('[\\\\u0660-\\\\u0669]', 'g');",
+    '\\p{Nd}': 'export const f = (s: string) => s.replace(/\\p{Nd}/gu, (d) => d);',
+    '\\p{N}': "export const g = (s: string) => s.replace(/\\p{N}+/gu, '#');",
+    'charCode arithmetic (hex)':
+      'export const h = (c: string) => String.fromCharCode(c.charCodeAt(0) - 0x660 + 48);',
+    'codePointAt arithmetic (decimal)': 'export const i = (c: string) => c.codePointAt(0)! - 1776;',
+    'a digit map': "export const j: Record<string, string> = { '٠': '0', '١': '1' };",
+    'a digit table string': "export const k = (c: string) => '٠١٢٣٤٥٦٧٨٩'.indexOf(c);",
+    'a digit array': "export const l = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];",
+    'Number() of Arabic digits': "export const m = Number('٤٢');",
+    'parseInt() of Arabic digits': "export const n = parseInt('\\u0664\\u0662', 10);",
+  };
+
+  for (const [name, code] of Object.entries(SAMPLES)) {
+    it(`catches ${name}`, () => {
+      expect(detect(scanSource('src/sample.ts', code)), code).not.toEqual([]);
+    });
+  }
+
+  it('leaves copy that holds Arabic digits alone, and code-formatted numbers', () => {
+    const copy = [
+      "export const hint = 'PDF أو Word، حتى ١٠ ميجابايت';",
+      "export const year = new Intl.NumberFormat('ar-SA-u-nu-arab').format(2026);",
+      'export const width = 1640;',
+    ].join('\n');
+    expect(detect(scanSource('src/copy.ts', copy))).toEqual([]);
   });
 });
