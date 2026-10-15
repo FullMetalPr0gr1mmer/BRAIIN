@@ -696,7 +696,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 
 **Releases**
 - [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)
-- [R2](as-built/R2.md): the release registry, caps and overlay core in TypeScript, `fields` on every release-managed config, the §5 relabel and the derived release publish matrix, no migration (PR number at review)
+- [R2](as-built/R2.md): the release registry, caps and overlay core in TypeScript, `fields` on every release-managed config, the §5 relabel and the derived release publish matrix, no migration (#68)
 
 **CRM**
 - [C1a-1](as-built/C1a-1.md): lead personal data at the database layer, 0033 (#43)
