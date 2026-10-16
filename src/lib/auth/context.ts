@@ -4,6 +4,14 @@ import { isRole } from './types';
 import { accessClaims, signedInAt } from './claims';
 import { serviceClient } from '@/lib/supabase/server';
 import { writeSystemLog } from '@/lib/data/systemLog';
+import {
+  AMR_MISSING,
+  PROFILE_ONLY,
+  PROFILE_WITH_SETTING,
+  SESSION_LOG_SOURCE,
+  SETTING_MISSHAPEN,
+  SETTING_UNREADABLE,
+} from './sessionSetting';
 
 // Resolves the verified auth context for a request, or null (→ deny).
 //
@@ -80,10 +88,8 @@ export const DEFAULT_SESSION_MAX_DAYS = 7;
 
 const DAY_SECONDS = 86_400;
 
-/** The profile and, in the same request, the tenant's session length (0055). */
-const PROFILE_WITH_SETTING =
-  'tenant_id,role,is_active,locked_until,tenant:tenants(security:admin_security_settings(session_max_days))';
-const PROFILE_ONLY = 'tenant_id,role,is_active,locked_until';
+// The select and the log messages: src/lib/auth/sessionSetting.ts (shared with the e2e).
+export { PROFILE_WITH_SETTING, SETTING_UNREADABLE, SETTING_MISSHAPEN, AMR_MISSING };
 
 /** What has been logged in this isolate already (each once: a log per request is noise). */
 const loggedOnce = new Set<string>();
@@ -93,11 +99,23 @@ export function resetAuthContextLogs(): void {
   loggedOnce.clear();
 }
 
-async function logOnce(key: string, message: string): Promise<void> {
+async function logOnce(key: string, level: 'warn' | 'error', message: string): Promise<void> {
   if (loggedOnce.has(key)) return;
   loggedOnce.add(key);
+  // Workers Logs too, so the line is seen even if the system_logs insert fails.
+  console.error(`${SESSION_LOG_SOURCE} ${message}`);
   // Never throws (src/lib/data/systemLog.ts). No detail: nothing about the person.
-  await writeSystemLog({ level: 'warn', source: 'auth:session', message });
+  await writeSystemLog({ level, source: SESSION_LOG_SOURCE, message });
+}
+
+/**
+ * Whether the embed came back in the shape the select asks for: a `tenant` object holding a
+ * `security` key (null when the tenant has not saved its settings). Anything else means the
+ * relationship was not resolved as written, and the session length would silently default.
+ */
+export function embedShapeOk(row: { tenant?: unknown }): boolean {
+  const tenant = one(row.tenant);
+  return tenant !== null && 'security' in tenant;
 }
 
 /** A to-one embed as PostgREST answers it: an object, or a one-row array on older servers. */
@@ -126,14 +144,16 @@ async function readProfile(userId: string): Promise<ProfileRow | null> {
       .select(PROFILE_WITH_SETTING)
       .eq('id', userId)
       .maybeSingle<ProfileRow>();
-    if (!error) return data ?? null;
+    if (!error) {
+      if (data && !embedShapeOk(data))
+        await logOnce('setting-misshapen', 'error', SETTING_MISSHAPEN);
+      return data ?? null;
+    }
   } catch {
     // Fall through to the plain read: an embed problem must not sign anyone out.
   }
-  await logOnce(
-    'setting-unreadable',
-    'session length unreadable with the profile; the 7-day default applies',
-  );
+  // An error, not a warning: the tenant's session length is not being enforced.
+  await logOnce('setting-unreadable', 'error', SETTING_UNREADABLE);
   const { data, error } = await sb
     .from('profiles')
     .select(PROFILE_ONLY)
@@ -213,7 +233,7 @@ export async function resolveAuthContext(
   // The session length. No sign-in time in the token: let through, never refused.
   const signedIn = signedInAt(claims);
   if (signedIn === null) {
-    await logOnce('amr-missing', 'access token without a sign-in time; session age not checked');
+    await logOnce('amr-missing', 'warn', AMR_MISSING);
   } else if (nowSeconds - signedIn > sessionMaxDays(profile) * DAY_SECONDS + CLOCK_SKEW_SECONDS) {
     return DENY_REVOKE;
   }

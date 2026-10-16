@@ -1,3 +1,4 @@
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ROLES, type Role } from '@/lib/auth/types';
@@ -54,8 +55,16 @@ vi.mock('@/lib/data/systemLog', () => ({
   },
 }));
 
-const { resolveAuthContext, resetAuthContextLogs, sessionMaxDays, CLOCK_SKEW_SECONDS } =
-  await import('@/lib/auth/context');
+const {
+  resolveAuthContext,
+  resetAuthContextLogs,
+  sessionMaxDays,
+  embedShapeOk,
+  CLOCK_SKEW_SECONDS,
+  PROFILE_WITH_SETTING,
+  SETTING_UNREADABLE,
+  SETTING_MISSHAPEN,
+} = await import('@/lib/auth/context');
 const { liveRecheck } = await import('@/lib/admin/liveRecheck');
 
 const USER = '11111111-1111-4111-8111-111111111111';
@@ -285,10 +294,69 @@ describe('resolveAuthContext: a valid, current session is never refused', () => 
     expect((await resolve(client({ token: sixDays }))).ctx).not.toBeNull();
     expect(state.selects.filter((s) => !s.includes('tenant:'))).toHaveLength(2);
     expect(logs).toHaveLength(1);
-    expect(logs[0]).toMatchObject({ level: 'warn', source: 'auth:session' });
+    // An error, not a warning: the tenant's session length is not being enforced.
+    expect(logs[0]).toEqual({
+      level: 'error',
+      source: 'auth:session',
+      message: SETTING_UNREADABLE,
+    });
     // ...and the 7-day default still ends an 8-day-old sign-in.
     const eightDays = jwt(claims({ amr: [{ method: 'password', timestamp: NOW_S - 8 * DAY }] }));
     expect(await resolve(client({ token: eightDays }))).toEqual({ ctx: null, revoke: true });
+  });
+
+  it('an embed that answers without the tenant or its security key is logged as an error', async () => {
+    // A relationship PostgREST resolved differently (an alias lost, a junction table added)
+    // would answer without the shape the select asks for, and the length would default to 7
+    // with no error at all. Said once, as an error.
+    state.withSetting = {
+      data: { tenant_id: TENANT, role: 'admin', is_active: true, locked_until: null },
+      error: null,
+    };
+    expect((await resolve(client())).ctx).not.toBeNull();
+    expect((await resolve(client())).ctx).not.toBeNull();
+    expect(logs).toEqual([{ level: 'error', source: 'auth:session', message: SETTING_MISSHAPEN }]);
+    expect(embedShapeOk({ tenant: { security: null } })).toBe(true);
+    expect(embedShapeOk({ tenant: [{ security: { session_max_days: 1 } }] })).toBe(true);
+    expect(embedShapeOk({ tenant: {} })).toBe(false);
+    expect(embedShapeOk({ tenant: null })).toBe(false);
+  });
+
+  it('the embed names relationships the migrations declare, each one way only', () => {
+    // The contract the select relies on, read off the schema (the e2e also runs it through
+    // the local PostgREST): profiles -> tenants by profiles.tenant_id (many to one), and
+    // tenants -> admin_security_settings by its primary key (one to one). A second foreign
+    // key between either pair would make PostgREST refuse the embed as ambiguous.
+    expect(PROFILE_WITH_SETTING).toBe(
+      'tenant_id,role,is_active,locked_until,tenant:tenants(security:admin_security_settings(session_max_days))',
+    );
+    const dir = 'supabase/migrations';
+    const sql = readdirSync(dir)
+      .filter((f) => f.endsWith('.sql'))
+      .sort()
+      .map((f) => readFileSync(`${dir}/${f}`, 'utf8'))
+      .join('\n')
+      .replace(/--[^\n]*/g, '');
+    expect(sql).toMatch(
+      /create table public\.profiles \([^;]*tenant_id uuid not null references public\.tenants \(id\)/,
+    );
+    expect(sql).toMatch(
+      /create table if not exists public\.admin_security_settings \(\s*tenant_id uuid primary key references public\.tenants \(id\)/,
+    );
+    /** Every create or alter statement of a table, joined. */
+    const block = (table: string) =>
+      [
+        ...sql.matchAll(
+          new RegExp(
+            `(?:create table(?: if not exists)? public\\.${table} \\(|alter table public\\.${table}\\b)[^;]*`,
+            'g',
+          ),
+        ),
+      ]
+        .map((m) => m[0])
+        .join('\n');
+    expect(block('profiles').match(/references public\.tenants/g)).toHaveLength(1);
+    expect(block('admin_security_settings').match(/references public\.tenants/g)).toHaveLength(1);
   });
 
   it('reads an embedded setting PostgREST returns as a one-row list', () => {
