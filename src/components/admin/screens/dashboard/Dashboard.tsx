@@ -2,12 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import type { DashboardLayout, DashboardPref, QuickItem, WidgetId } from '@schemas/dashboard';
 import Icon from '@/components/admin/kit/Icon';
-import Modal from '@/components/admin/kit/Modal';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
-import AddWidgetDrawer from './AddWidgetDrawer';
-import { readBoard, startCustomize, type BoardLists, type Customize } from './customize';
-import QuickActionsDrawer from './QuickActionsDrawer';
-import RoleDefaultsModal from './RoleDefaultsModal';
+import type { BoardLists, Customize } from './customize';
 import type { DashboardIslandProps } from './types';
 
 // The dashboard's one island (Admin v2 U1): the head's Customize, and what it opens over the
@@ -20,9 +16,19 @@ import type { DashboardIslandProps } from './types';
 //   Quick       "Customize quick actions" on that widget opens its editor (a drawer).
 //   Notes       "Edit notes" opens the field kit's singleton editor in place, loaded only
 //               then (import()), so the board itself carries no form code.
+// Everything that edits is loaded on first use (import()): the Customize binder, the two
+// drawers and the two modals are the admin-dashboard chunk (astro.config.mjs), so this
+// island's eager code is this file and the dashboard costs no other admin screen a byte.
 
 // The field kit is the admin-fields chunk group (F5a): reached lazily, never from here.
 const NotesEditor = lazy(() => import('@/components/admin/screens/singleton/SingletonForm'));
+const AddWidgetDrawer = lazy(() => import('./AddWidgetDrawer'));
+const QuickActionsDrawer = lazy(() => import('./QuickActionsDrawer'));
+const RoleDefaultsModal = lazy(() => import('./RoleDefaultsModal'));
+const ResetModal = lazy(() => import('./ResetModal'));
+/** The board's order as the DOM has it now (customize.ts, in the lazy chunk). */
+const readBoard = async (root: HTMLElement): Promise<BoardLists> =>
+  (await import('./customize')).readBoard(root);
 
 type Status = { kind: 'ok' | 'error'; text: string } | null;
 
@@ -49,6 +55,13 @@ export default function Dashboard(props: DashboardIslandProps) {
   const live = useRef<HTMLParagraphElement | null>(null);
   const hiddenRef = useRef(hidden);
   hiddenRef.current = hidden;
+  // A lazy drawer or modal mounts the first time it opens and stays mounted after, so it
+  // closes as the kit's dialogs do (focus back to the opener), not by vanishing.
+  const mounted = useRef(new Set<string>());
+  const keep = (key: string, open: boolean) => {
+    if (open) mounted.current.add(key);
+    return mounted.current.has(key);
+  };
 
   // The server markup this island works on, and the two buttons it shows there.
   useEffect(() => {
@@ -119,22 +132,31 @@ export default function Dashboard(props: DashboardIslandProps) {
     [props.storedQuickSet],
   );
 
-  // Customize on and off: the binder over the board.
+  // Customize on and off: the binder over the board, loaded the first time it is used.
   useEffect(() => {
     const board = targets.board;
     if (!editing || !board) return;
-    customize.current = startCustomize(board, {
-      live: live.current,
-      onChange: (lists, hiddenNow) => {
-        const nextHidden = hiddenNow ? [...hiddenRef.current, hiddenNow] : hiddenRef.current;
-        if (hiddenNow) setHidden(nextHidden);
-        setSource('mine');
-        void save({ dashboard: layoutOf(lists, nextHidden) }).then((ok) => {
-          if (ok) setStatus({ kind: 'ok', text: 'Saved.' });
+    let on = true;
+    import('./customize')
+      .then(({ startCustomize }) => {
+        if (!on) return;
+        customize.current = startCustomize(board, {
+          live: live.current,
+          onChange: (lists, hiddenNow) => {
+            const nextHidden = hiddenNow ? [...hiddenRef.current, hiddenNow] : hiddenRef.current;
+            if (hiddenNow) setHidden(nextHidden);
+            setSource('mine');
+            void save({ dashboard: layoutOf(lists, nextHidden) }).then((ok) => {
+              if (ok) setStatus({ kind: 'ok', text: 'Saved.' });
+            });
+          },
         });
-      },
-    });
+      })
+      .catch((err: unknown) => {
+        if (on) setStatus({ kind: 'error', text: describeError(err) });
+      });
     return () => {
+      on = false;
       customize.current?.stop();
       customize.current = null;
     };
@@ -143,7 +165,7 @@ export default function Dashboard(props: DashboardIslandProps) {
   async function addWidget(id: WidgetId, column: 'left' | 'right') {
     const board = targets.board;
     if (!board) return;
-    const lists = readBoard(board);
+    const lists = await readBoard(board);
     lists[column] = [...lists[column], id];
     const ok = await save({
       dashboard: layoutOf(
@@ -231,83 +253,75 @@ export default function Dashboard(props: DashboardIslandProps) {
           targets.bar,
         )}
 
-      <AddWidgetDrawer
-        open={adding}
-        onClose={() => setAdding(false)}
-        widgets={hidden.map((id) => ({
-          id,
-          label: catalogLabel(id),
-          description: props.catalog.find((w) => w.id === id)?.description ?? '',
-        }))}
-        onAdd={(id, column) => void addWidget(id, column)}
-      />
+      <Suspense fallback={null}>
+        {keep('add', adding) && (
+          <AddWidgetDrawer
+            open={adding}
+            onClose={() => setAdding(false)}
+            widgets={hidden.map((id) => ({
+              id,
+              label: catalogLabel(id),
+              description: props.catalog.find((w) => w.id === id)?.description ?? '',
+            }))}
+            onAdd={(id, column) => void addWidget(id, column)}
+          />
+        )}
 
-      <Modal
-        open={resetting}
-        onClose={() => setResetting(false)}
-        title="Reset the dashboard?"
-        sub={
-          source === 'mine'
-            ? 'Back to the layout for your role. Only your dashboard changes.'
-            : 'Your dashboard already shows the layout for your role.'
-        }
-        footer={
-          <>
-            <button type="button" data-autofocus="" onClick={() => setResetting(false)}>
-              Cancel
-            </button>
-            <button type="button" data-variant="primary" onClick={() => void reset()}>
-              Reset
-            </button>
-          </>
-        }
-      >
-        <p>Your quick actions stay as they are.</p>
-      </Modal>
+        {keep('reset', resetting) && (
+          <ResetModal
+            open={resetting}
+            onClose={() => setResetting(false)}
+            mine={source === 'mine'}
+            onReset={() => void reset()}
+          />
+        )}
 
-      {props.presets && (
-        <RoleDefaultsModal
-          open={presetsOpen}
-          onClose={() => setPresetsOpen(false)}
-          roles={props.presets}
-          board={targets.board}
-          hidden={hidden}
-          quick={props.quick.items}
-        />
-      )}
+        {props.presets && keep('presets', presetsOpen) && (
+          <RoleDefaultsModal
+            open={presetsOpen}
+            onClose={() => setPresetsOpen(false)}
+            roles={props.presets}
+            board={targets.board}
+            hidden={hidden}
+            quick={props.quick.items}
+          />
+        )}
+      </Suspense>
 
-      {props.quickShown && (
-        <QuickActionsDrawer
-          open={quickOpen}
-          onClose={() => setQuickOpen(false)}
-          items={props.quick.items}
-          library={props.quick.library}
-          onSave={async (items) => {
-            const lists = targets.board ? readBoard(targets.board) : props.layout;
-            const ok = await save({
-              quickActions: items,
-              dashboard:
-                source === 'mine'
-                  ? { ...layoutOf(lists, hidden), quickSet: true }
-                  : { quickSet: true },
-            });
-            if (ok) window.location.reload();
-            return ok;
-          }}
-          onReset={async () => {
-            const lists = targets.board ? readBoard(targets.board) : props.layout;
-            const base = layoutOf(lists, hidden);
-            const ok = await save({
-              quickActions: [],
-              dashboard:
-                source === 'mine'
-                  ? { top: base.top, left: base.left, right: base.right, hidden: base.hidden }
-                  : {},
-            });
-            if (ok) window.location.reload();
-            return ok;
-          }}
-        />
+      {props.quickShown && keep('quick', quickOpen) && (
+        <Suspense fallback={null}>
+          <QuickActionsDrawer
+            open={quickOpen}
+            onClose={() => setQuickOpen(false)}
+            items={props.quick.items}
+            library={props.quick.library}
+            onSave={async (items) => {
+              const lists = targets.board ? await readBoard(targets.board) : props.layout;
+              const ok = await save({
+                quickActions: items,
+                dashboard:
+                  source === 'mine'
+                    ? { ...layoutOf(lists, hidden), quickSet: true }
+                    : { quickSet: true },
+              });
+              if (ok) window.location.reload();
+              return ok;
+            }}
+            onReset={async () => {
+              const lists = targets.board ? await readBoard(targets.board) : props.layout;
+              const base = layoutOf(lists, hidden);
+              const ok = await save({
+                quickActions: [],
+                dashboard:
+                  source === 'mine'
+                    ? { top: base.top, left: base.left, right: base.right, hidden: base.hidden }
+                    : {},
+              });
+              if (ok) window.location.reload();
+              return ok;
+            }}
+          />
+        </Suspense>
       )}
 
       {notesOpen &&
