@@ -152,18 +152,42 @@ export async function readVisibilityRows(
 }
 
 /**
- * Reads the tenant's rows under the caller's RLS-bound client (never the service role: a
- * caller who may not read the table may not snapshot it either), builds the snapshot and
- * writes it. NEVER throws: it runs after a committed write, where a throw would report a
- * failed save of a row that is already saved.
+ * Reads the tenant's rows, builds the snapshot and writes it, then reads the rows once more
+ * and writes again if they moved. KV has no compare-and-swap, so two saves at once each do a
+ * blind put of what they read, and the one that read first can land last: without the second
+ * read the edge would keep the older settings (a page just hidden still public) until the
+ * next save or the daily cron. The second read follows this writer's own put, so it sees
+ * every save whose put this one could have overwritten. The window left is a third save
+ * landing between that read and the second put; its own second read covers most of it and
+ * the daily cron the rest. One read and at most one put more, only when the rows moved.
+ */
+export async function rebuildVisibilitySnapshot(
+  sb: SupabaseClient,
+  tenantId: string,
+): Promise<{ snapshot: VisibilitySnapshot; kvSynced: boolean }> {
+  let snapshot = buildVisibilitySnapshot(await readVisibilityRows(sb, tenantId));
+  let kvSynced = await putVisibilitySnapshot(env, snapshot);
+  if (!kvSynced) return { snapshot, kvSynced };
+  const again = buildVisibilitySnapshot(await readVisibilityRows(sb, tenantId));
+  if (again.rev !== snapshot.rev) {
+    snapshot = again;
+    kvSynced = await putVisibilitySnapshot(env, snapshot);
+  }
+  return { snapshot, kvSynced };
+}
+
+/**
+ * Rebuilds the tenant's snapshot under the caller's RLS-bound client (never the service role:
+ * a caller who may not read the table may not snapshot it either). NEVER throws: it runs
+ * after a committed write, where a throw would report a failed save of a row that is already
+ * saved.
  */
 export async function syncVisibilityToEdge(
   sb: SupabaseClient,
   auth: AuthContext,
 ): Promise<VisibilitySyncResult> {
   try {
-    const snapshot = buildVisibilitySnapshot(await readVisibilityRows(sb, auth.tenantId));
-    const kvSynced = await putVisibilitySnapshot(env, snapshot);
+    const { snapshot, kvSynced } = await rebuildVisibilitySnapshot(sb, auth.tenantId);
     return { kvSynced, count: restrictedCount(snapshot) };
   } catch (err) {
     void writeSystemLog({

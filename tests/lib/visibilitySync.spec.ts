@@ -52,6 +52,8 @@ function client(db: {
   visibility?: Record<string, unknown> | null;
   /** The rows a list read of page_visibility answers (default: `visibility`, if any). */
   visibilityRows?: Record<string, unknown>[];
+  /** Successive list reads' answers, one each, the last repeated (two saves at once). */
+  visibilityReads?: Record<string, unknown>[][];
   insertError?: { code: string; message: string } | null;
   readError?: { message: string } | null;
 }) {
@@ -63,11 +65,17 @@ function client(db: {
     const list = () => {
       if (db.readError) return { data: null, error: db.readError };
       if (table === 'pages') return { data: db.pages ?? [], error: null };
-      if (table === 'page_visibility')
+      if (table === 'page_visibility') {
+        if (db.visibilityReads) {
+          const n = ops.filter((o) => o.table === 'page_visibility' && o.op === 'select').length;
+          const at = Math.min(n, db.visibilityReads.length) - 1;
+          return { data: db.visibilityReads[at] ?? [], error: null };
+        }
         return {
           data: db.visibilityRows ?? (db.visibility ? [db.visibility] : []),
           error: null,
         };
+      }
       return { data: [], error: null };
     };
     b['select'] = (columns: string) => {
@@ -265,6 +273,36 @@ describe('syncVisibilityToEdge', () => {
       visibilityRows: Array.from({ length: VISIBILITY_ROW_LIMIT - 1 }, () => row),
     });
     expect(await syncVisibilityToEdge(under.sb, AUTH)).toEqual({ kvSynced: true, count: 1 });
+  });
+
+  it('two saves at once: a save that landed after the read is written again, never lost', async () => {
+    // KV has no compare-and-swap. This save read About as public; another save hid it and
+    // put its snapshot; this one's blind put of the older read would then win. The second
+    // read sees the other save, and the newer snapshot is what KV keeps.
+    const about = {
+      id: 'r-about',
+      version: 2,
+      mode: 'hidden',
+      template: null,
+      hide_from: null,
+      show_on: null,
+      page: { slug: 'about' },
+      redirect: null,
+    };
+    const put = vi.spyOn(env.SESSION, 'put');
+    const raced = client({ visibilityReads: [[], [about]] });
+    expect(await syncVisibilityToEdge(raced.sb, AUTH)).toEqual({ kvSynced: true, count: 1 });
+    expect(put).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(__kv.get(VISIBILITY_KV_KEY)!).pages).toEqual({
+      about: { mode: 'hidden', target: null },
+    });
+    // Nothing moved in between: one read more, no second put.
+    put.mockClear();
+    const calm = client({ visibilityReads: [[about]] });
+    expect(await syncVisibilityToEdge(calm.sb, AUTH)).toEqual({ kvSynced: true, count: 1 });
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(calm.ops.filter((o) => o.table === 'page_visibility')).toHaveLength(2);
+    put.mockRestore();
   });
 
   it('kvSynced: false when KV refuses, never a throw', async () => {

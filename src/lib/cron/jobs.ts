@@ -19,7 +19,7 @@ import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 // CPU and 50 subrequests per invocation) has still done the purges. Each job declares its
 // `budget`: its worst case in subrequests, its own log lines included (a line costs two, the
 // tenant lookup and the insert). tests/lib/dailyJobs.spec.ts runs every job at its worst
-// against its budget and holds the sum under the 50: 47 today, at 20 leads a batch.
+// against its budget and holds the sum under the 50: 49 today, at 20 leads a batch.
 //
 // Counts only go to system_logs — never an applicant's name, path or address, never a
 // lead's details. A failed job is logged as an error so Site Health shows it; the next
@@ -78,8 +78,9 @@ export const DAILY_JOBS: readonly CronJob[] = [
     // longest.
     name: 'visibility',
     label: 'page visibility re-sync',
-    // The launch tenant, the rows, the KV write, then its line.
-    budget: 3 + 2,
+    // The launch tenant, the rows, the KV write, the rows again and the KV write again when
+    // a save landed in between, then its line.
+    budget: 5 + 2,
     run: resyncVisibility,
   },
   {
