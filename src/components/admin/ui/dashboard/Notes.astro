@@ -16,8 +16,8 @@ const { notes, now = Date.now() } = Astro.props;
 const lines = notes.body.split('\n');
 ---
 
-<div class="notes" data-notes>
-  <div class="notes__view" data-notes-view>
+<div data-notes>
+  <div data-notes-view>
     {
       notes.body.trim() ? (
         <p class="notes__text" dir="auto">

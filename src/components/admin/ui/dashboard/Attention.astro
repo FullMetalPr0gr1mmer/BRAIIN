@@ -20,7 +20,7 @@ const empty = data.goingLive.length === 0 && data.groups.length === 0;
   empty ? (
     <EmptyState icon="check" title="Nothing needs your attention." />
   ) : (
-    <div class="att">
+    <div>
       {data.goingLive.length > 0 && (
         <section class="att__g" aria-labelledby="att-live">
           <h3 class="dash__h" id="att-live">
