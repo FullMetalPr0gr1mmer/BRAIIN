@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import {
   isCustomItem,
   type DashboardLayout,
@@ -61,6 +61,7 @@ export default function RoleDefaultsModal(props: RoleDefaultsModalProps) {
   const [presets, setPresets] = useState<Preset[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const roleId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -143,9 +144,11 @@ export default function RoleDefaultsModal(props: RoleDefaultsModalProps) {
         </>
       }
     >
-      <label className="field">
-        <span>Role</span>
+      {/* A label beside the select (for/id), not around it, so its name is "Role" alone. */}
+      <div className="field dash__select">
+        <label htmlFor={roleId}>Role</label>
         <select
+          id={roleId}
           value={role}
           onChange={(event) => {
             setRole(event.target.value as Role);
@@ -158,7 +161,7 @@ export default function RoleDefaultsModal(props: RoleDefaultsModalProps) {
             </option>
           ))}
         </select>
-      </label>
+      </div>
       <p className="admin-sub">
         Save this layout and your quick actions (library items only) as the default for{' '}
         {entry?.label ?? 'the role'}. Widgets and actions the role cannot use are left out.

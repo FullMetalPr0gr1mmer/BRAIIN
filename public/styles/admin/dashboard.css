@@ -267,6 +267,16 @@
   justify-self: start;
 }
 
+/* A select's label beside it (for/id), set as admin.css sets a field's wrapping one
+   (.field > span): a wrapping label would add every option's text to the select's name. */
+.dash__select > label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ad-ink);
+}
+
 /* Team notes: the text as written (its line breaks kept), the rule under it. */
 .notes__text {
   margin: 0;

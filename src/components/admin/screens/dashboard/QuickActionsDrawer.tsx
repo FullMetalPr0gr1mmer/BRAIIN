@@ -255,9 +255,12 @@ export default function QuickActionsDrawer(props: QuickActionsDrawerProps) {
             {errors.href}
           </p>
         )}
-        <label className="field">
-          <span>Icon</span>
+        {/* A label beside the select (for/id), not around it: a wrapping label's text takes in
+            every option's ("Link", "Outside link"…), so the select would answer to them too. */}
+        <div className="field dash__select">
+          <label htmlFor={`${formId}-icon`}>Icon</label>
           <select
+            id={`${formId}-icon`}
             value={icon}
             onChange={(event) => setIcon(event.target.value as (typeof QUICK_ICONS)[number])}
           >
@@ -267,7 +270,7 @@ export default function QuickActionsDrawer(props: QuickActionsDrawerProps) {
               </option>
             ))}
           </select>
-        </label>
+        </div>
         {errors.form && (
           <p className="msg" data-kind="error" role="alert">
             {errors.form}

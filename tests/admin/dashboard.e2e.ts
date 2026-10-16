@@ -224,15 +224,17 @@ test.describe('as admin, arranging the dashboard', () => {
     expect(after.indexOf('edit-seo')).toBe(before.indexOf('edit-seo') - 1);
 
     // A javascript: link is refused where it is typed.
-    await drawer.getByLabel('Label').fill('Bad');
-    await drawer.getByLabel('Link').fill('javascript:alert(1)');
+    await drawer.getByRole('textbox', { name: 'Label', exact: true }).fill('Bad');
+    await drawer.getByRole('textbox', { name: 'Link', exact: true }).fill('javascript:alert(1)');
     await drawer.getByRole('button', { name: 'Add action' }).click();
     await expect(
       drawer.getByText('Use an admin path starting with /admin, or an https:// address.'),
     ).toBeVisible();
 
-    await drawer.getByLabel('Label').fill('Drive');
-    await drawer.getByLabel('Link').fill('https://drive.example.com/team');
+    await drawer.getByRole('textbox', { name: 'Label', exact: true }).fill('Drive');
+    await drawer
+      .getByRole('textbox', { name: 'Link', exact: true })
+      .fill('https://drive.example.com/team');
     await drawer.getByRole('button', { name: 'Add action' }).click();
     await expect(list.getByText('Drive', { exact: true })).toBeVisible();
 
@@ -308,7 +310,7 @@ test.describe('as admin, arranging the dashboard', () => {
     await page.getByRole('button', { name: 'Save as the default for a role' }).click();
     const modal = page.getByRole('dialog', { name: 'Save as the default for a role' });
     await expect(modal).toBeVisible();
-    await modal.getByLabel('Role').selectOption('seo');
+    await modal.getByRole('combobox', { name: 'Role', exact: true }).selectOption('seo');
     await expect(
       modal.getByText(/SEO (has a saved default|uses the standard layout)\./),
     ).toBeVisible();
