@@ -369,6 +369,6 @@ describe('the export notice is said once (U13 review)', () => {
     const { readFileSync } = await import('node:fs');
     const page = readFileSync('src/pages/admin/audit.astro', 'utf8');
     expect(page).toContain('url={pagingUrl(url)}');
-    expect(page).not.toMatch(/url=\{url\}/);
+    expect(page).not.toMatch(/\burl=\{url\}/);
   });
 });
