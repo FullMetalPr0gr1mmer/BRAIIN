@@ -9,6 +9,7 @@ import {
   TEAM_NOTE_MESSAGES,
   TEAM_NOTE_PHONE,
   TeamNotesPutSchema,
+  hasEmailShape,
   teamNoteProblem,
   trimNote,
 } from '@schemas/dashboard';
@@ -61,6 +62,49 @@ describe('the Worker and the database refuse the same notes', () => {
     expect(teamNoteProblem(input)).toBe(want);
     const parsed = TeamNotesPutSchema.safeParse({ version: 1, body: input });
     expect(parsed.success).toBe(want === null);
+  });
+
+  it('the linear e-mail scan finds exactly what the shared pattern matches', () => {
+    // Every string up to 6 characters over the characters the pattern turns on, then random
+    // longer ones: the scan and TEAM_NOTE_EMAIL (the database's text) must agree on each.
+    const alphabet = ['a', '@', '.', ' ', '\n', '\t', 'b'];
+    const disagree: string[] = [];
+    const check = (text: string) => {
+      if (hasEmailShape(text) !== TEAM_NOTE_EMAIL.test(text)) disagree.push(text);
+    };
+    const walk = (prefix: string, depth: number) => {
+      check(prefix);
+      if (depth === 0) return;
+      for (const ch of alphabet) walk(prefix + ch, depth - 1);
+    };
+    walk('', 6);
+    let seed = 7;
+    const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648);
+    for (let n = 0; n < 5000; n += 1) {
+      let text = '';
+      const length = 7 + (next() % 24);
+      for (let i = 0; i < length; i += 1) text += alphabet[next() % alphabet.length];
+      check(text);
+    }
+    expect(disagree).toEqual([]);
+  });
+
+  it('one long unbroken token costs a scan, not a backtrack', () => {
+    // At the 2,000 limit the regex costs about 4 ms a test in JavaScript; the scan is linear.
+    const tokens = [
+      'a'.repeat(TEAM_NOTES_MAX),
+      'a'.repeat(TEAM_NOTES_MAX - 1) + '@',
+      'a@' + 'b'.repeat(TEAM_NOTES_MAX - 2),
+    ];
+    const started = performance.now();
+    for (let n = 0; n < 25; n += 1)
+      for (const token of tokens) expect(teamNoteProblem(token)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(100);
+    // Far past the limit too: the scan alone, on 100,000 characters.
+    const long = performance.now();
+    expect(hasEmailShape('a'.repeat(100_000) + '@')).toBe(false);
+    expect(hasEmailShape('a@' + 'b'.repeat(100_000))).toBe(false);
+    expect(performance.now() - long).toBeLessThan(100);
   });
 
   it('the e-mail and phone patterns are the same text in both', () => {

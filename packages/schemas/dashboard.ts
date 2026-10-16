@@ -310,11 +310,35 @@ export function trimNote(value: string): string {
   return value.slice(0, end);
 }
 
+/**
+ * Whether the text holds something TEAM_NOTE_EMAIL matches, found by a linear scan. The regex
+ * stays the statement of the rule (the database runs that text; tests/lib/teamNotes.spec.ts
+ * holds this scan to it), but in JavaScript it backtracks along one long unbroken token
+ * (2,000 letters cost about 4 ms, nearly half the Free plan's 10 ms CPU). A match is X@Y.Z
+ * inside one whitespace-delimited token, X, Y and Z non-empty and free of `@`: so two
+ * neighbouring `@`-parts of a token, the first non-empty, the second with a dot that is
+ * neither its first nor its last character.
+ */
+export function hasEmailShape(value: string): boolean {
+  if (!value.includes('@')) return false;
+  for (const token of value.split(/[ \t\n\v\f\r]/u)) {
+    if (!token.includes('@')) continue;
+    const parts = token.split('@');
+    for (let i = 0; i + 1 < parts.length; i += 1) {
+      const local = parts[i] ?? '';
+      const domain = parts[i + 1] ?? '';
+      const dot = domain.indexOf('.', 1);
+      if (local.length > 0 && dot !== -1 && dot < domain.length - 1) return true;
+    }
+  }
+  return false;
+}
+
 /** Why a note is refused, as the database says it, or null. Counts code points, as it does. */
 export function teamNoteProblem(value: string): TeamNoteProblem | null {
   if ([...value].length > TEAM_NOTES_MAX) return 'team_notes_length';
   if (TEAM_NOTE_CONTROL.test(value)) return 'team_notes_chars';
-  if (TEAM_NOTE_EMAIL.test(value) || TEAM_NOTE_PHONE.test(value)) return 'team_notes_contact';
+  if (hasEmailShape(value) || TEAM_NOTE_PHONE.test(value)) return 'team_notes_contact';
   return null;
 }
 
