@@ -23,6 +23,7 @@ const rpcs: { fn: string; args: Record<string, unknown> }[] = [];
 let pages: Record<string, unknown>[][] = [];
 let attemptFails = false;
 let limited = false;
+let ledgerDown = false;
 let demoted = false;
 let names: Record<string, unknown>[] = [];
 
@@ -36,6 +37,7 @@ vi.mock('@/lib/admin/rateLimit', () => ({
   claimPrivilegedOp: async (_auth: unknown, op: string) => {
     order.push(`limit:${op}`);
     if (limited) throw new RateLimitError(`${op}:user`);
+    if (ledgerDown) throw new RateLimitError(`${op}:unavailable`);
   },
 }));
 vi.mock('@/lib/admin/audit', () => ({
@@ -143,6 +145,7 @@ beforeEach(() => {
   pages = [[ROW]];
   attemptFails = false;
   limited = false;
+  ledgerDown = false;
   demoted = false;
   names = [
     { id: AMAL, display_name: 'Amal', role: 'admin', is_active: true },
@@ -225,6 +228,16 @@ describe('the lockdown, in order', () => {
       `/admin/audit?kind=leads&actor=${AMAL}&export=limit`,
     );
     expect(person.headers.get('cache-control')).toContain('no-store');
+    expect(order.filter((o) => o.startsWith('read') || o.startsWith('export'))).toEqual([]);
+  });
+
+  it('a limiter that cannot be read is not the hourly limit: the page says it could not run', async () => {
+    ledgerDown = true;
+    const api = await call('?kind=leads');
+    expect(api.status).toBe(429);
+    const person = await call('?kind=leads', { navigate: true });
+    expect(person.status).toBe(303);
+    expect(person.headers.get('location')).toBe('/admin/audit?kind=leads&export=unavailable');
     expect(order.filter((o) => o.startsWith('read') || o.startsWith('export'))).toEqual([]);
   });
 

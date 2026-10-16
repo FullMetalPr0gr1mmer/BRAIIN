@@ -82,7 +82,10 @@ export const GET = defineAdminRoute({
     try {
       await claimPrivilegedOp(auth, 'export-activity');
     } catch (err) {
-      if (err instanceof RateLimitError && navigated(request)) return backToLog(input, 'limit');
+      // The ledger itself down (`:unavailable`) is no hourly limit: say it could not run.
+      if (err instanceof RateLimitError && navigated(request)) {
+        return backToLog(input, err.scope.endsWith(':unavailable') ? 'unavailable' : 'limit');
+      }
       throw err;
     }
 
