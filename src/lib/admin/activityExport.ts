@@ -134,7 +134,9 @@ export async function readActivityRows(
       .order('id', { ascending: false })
       .limit(Math.min(PAGE_ROWS, want - rows.length));
     if (error) throw new Error(`activity export: ${error.code ?? 'no code'}`);
-    const got = (Array.isArray(data) ? (data as Record<string, unknown>[]) : []).map(withDetail);
+    const got = (Array.isArray(data) ? (data as unknown as Record<string, unknown>[]) : []).map(
+      withDetail,
+    );
     if (got.length === 0) return { rows, truncated: false };
     rows.push(...got);
     if (rows.length >= want) return { rows: rows.slice(0, cap), truncated: true };
