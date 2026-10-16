@@ -191,9 +191,10 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
     // (profiles_revoke_sessions), so the admin turns them away at their next click; but an
     // access token already issued keeps its role at the database directly until it expires
     // (an hour) on the tables with no live check. People and roles (0050, 0055), the security
-    // settings (0055), leads and the CRM (app.live_role()) and job applications
-    // (app.is_live_admin()) close at once. The guide an Admin reads says exactly that, and
-    // never promises the database forgets an issued pass at once.
+    // settings (0055), leads and the CRM (app.live_role()), job applications
+    // (app.is_live_admin()) and the activity log (0054, U13's audit_log_live_read, applied
+    // before 0055) close at once. The guide an Admin reads says exactly that, and never
+    // promises the database forgets an issued pass at once.
     const roles = SET.find((a) => a.slug === 'roles-and-access')!;
     const en = textsOf(roles, 'en').join('\n');
     const ar = textsOf(roles, 'ar').join('\n');
@@ -202,9 +203,12 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
     expect(en).toContain(
       'a sign-in pass already handed out keeps working for up to an hour when someone uses it directly against the database',
     );
+    expect(en).toContain('On settings, media, the system logs and content');
     expect(en).toContain(
-      'People and their roles, the security settings, leads and job applications',
+      'People and their roles, the security settings, leads, job applications and the activity log check',
     );
+    expect(ar).toContain('وطلبات التوظيف، وسجل النشاط فتتحقق من حساب الشخص');
+    expect(ar).toContain('وسجلات النظام');
     expect(en).toContain('Make account owner');
     expect(en).toContain('1 day or 7 days');
     for (const text of textsOf(roles, 'en')) {
