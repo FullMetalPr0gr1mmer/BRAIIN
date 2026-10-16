@@ -332,7 +332,7 @@ create or replace function app.help_article_set() returns jsonb
           "x": [
             "They get an email with a link to set their password. The link works for one hour. If it runs out, choose Resend on their row under Pending invites.",
             "They choose a password of at least 10 characters, then sign in with their email and that password. Their role is the one you chose.",
-            "Until they have set a password, you can Cancel the invite: the link stops working and the account is removed. After that, use Remove access instead.",
+            "Until they have accepted the invite, you can Cancel it: the link stops working and the account is removed. After that, use Remove access instead.",
             "When an allowed email domain is set in Security, invites and resends go only to addresses at exactly that domain."
           ]
         },
@@ -359,7 +359,7 @@ create or replace function app.help_article_set() returns jsonb
           "x": [
             "تصله رسالة بريد إلكتروني فيها رابط لاختيار كلمة المرور. يعمل الرابط ساعة واحدة، وإذا انتهت مدته فاختر Resend في صفه ضمن Pending invites.",
             "يختار كلمة مرور من 10 أحرف على الأقل، ثم يسجّل الدخول ببريده الإلكتروني وكلمة المرور تلك، ويحصل على الدور الذي اخترته.",
-            "ما دام لم يختر كلمة مرور بعد، يمكنك إلغاء الدعوة بزر Cancel: يتوقف الرابط عن العمل ويُحذف الحساب. وبعد ذلك استخدم Remove access بدلًا منه.",
+            "ما دام لم يقبل الدعوة بعد، يمكنك إلغاءها بزر Cancel: يتوقف الرابط عن العمل ويُحذف الحساب. وبعد ذلك استخدم Remove access بدلًا منه.",
             "إذا حُدّد نطاق بريد مسموح به في بطاقة Security، فلا تُرسل الدعوات ولا يُعاد إرسالها إلا إلى عناوين ذلك النطاق بالضبط."
           ]
         },

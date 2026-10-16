@@ -26,6 +26,8 @@ const state = vi.hoisted(() => ({
   rpcs: [] as { scope: string; key: string }[],
   inserts: [] as { table: string; row: Record<string, unknown> }[],
   profile: null as { tenant_id: string; role: string; is_active: boolean } | null,
+  /** The service-role read of the invitee's profile failing (an outage). */
+  profileError: null as null | { message: string },
   logs: [] as Record<string, unknown>[],
   clients: [] as unknown[],
   verify: { ok: true, status: 403 },
@@ -56,7 +58,10 @@ vi.mock('@/lib/supabase/server', () => ({
         maybeSingle: async () => {
           if (table === 'tenants')
             return { data: state.tenant ? { id: state.tenant } : null, error: null };
-          if (table === 'profiles') return { data: state.profile, error: null };
+          if (table === 'profiles')
+            return state.profileError
+              ? { data: null, error: state.profileError }
+              : { data: state.profile, error: null };
           return { data: null, error: null };
         },
         insert: async (row: Record<string, unknown>) => {
@@ -124,6 +129,7 @@ beforeEach(() => {
   state.rpcs.length = 0;
   state.inserts.length = 0;
   state.profile = { tenant_id: TENANT, role: 'seo', is_active: true };
+  state.profileError = null;
   state.logs.length = 0;
   state.clients.length = 0;
   state.verify = { ok: true, status: 403 };
@@ -329,6 +335,22 @@ describe('POST /api/admin/auth/invite: verify, set, sign out everywhere', () => 
       expectTokenDropped(page, 'closed');
     }
     expect(state.logs.some((l) => l['source'] === 'auth.invite')).toBe(true);
+  });
+
+  it('a profile that cannot be read after the verify is our outage (interrupted), not a closed invite', async () => {
+    // The link is spent and the account confirmed, so it cannot be invited again: the page
+    // must point at "Forgot password?", never at a new invite the system would refuse.
+    state.profileError = { message: 'down' };
+    const { res } = await accept(good);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ ok: false, error: 'interrupted' });
+    expect(state.calls).toEqual(['verify:invite', 'sign-out:local']);
+    expect(state.inserts.filter((i) => i.table === 'audit_log')).toEqual([]);
+    const log = state.logs.find((l) => l['source'] === 'auth.invite');
+    expect(log).toMatchObject({
+      detail: { failure: 'interrupted', userId: UUID, profile: 'unreadable' },
+    });
+    expectTokenDropped((await accept(good, { form: true })).res, 'interrupted');
   });
 
   it('a token GoTrue refuses is an invalid link: nothing set, and the form drops the token', async () => {

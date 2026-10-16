@@ -237,27 +237,35 @@ export async function writeAuthAudit(row: AuthAuditRow): Promise<boolean> {
   }
 }
 
+/** What the acceptance finds of the invited account's profile (inviteeOf). */
+export type Invitee =
+  | { kind: 'found'; tenantId: string; role: string; isActive: boolean }
+  /** No profile row: the account was never fully invited, or its profile is gone. */
+  | { kind: 'missing' }
+  /** The read failed (an outage), so nothing is known about the account. */
+  | { kind: 'unreadable' };
+
 /**
  * The account's tenant, role and whether it may sign in, for an accepted invite: a person
- * switched off after the invite went out sets no password (Admin v2 U12b). Null when there
- * is no profile, or it cannot be read.
+ * switched off after the invite went out sets no password (Admin v2 U12b). A profile that is
+ * not there is told apart from one that could not be read: the first is the invite's, the
+ * second is ours.
  */
-export async function inviteeOf(
-  userId: string,
-): Promise<{ tenantId: string; role: string; isActive: boolean } | null> {
+export async function inviteeOf(userId: string): Promise<Invitee> {
   try {
     const { data, error } = await serviceClient()
       .from('profiles')
       .select('tenant_id,role,is_active')
       .eq('id', userId)
       .maybeSingle<{ tenant_id: unknown; role: unknown; is_active: unknown }>();
-    if (error || !data) return null;
+    if (error) return { kind: 'unreadable' };
+    if (!data) return { kind: 'missing' };
     const { tenant_id: tenantId, role, is_active: isActive } = data;
     return typeof tenantId === 'string' && typeof role === 'string'
-      ? { tenantId, role, isActive: isActive === true }
-      : null;
+      ? { kind: 'found', tenantId, role, isActive: isActive === true }
+      : { kind: 'unreadable' };
   } catch {
-    return null;
+    return { kind: 'unreadable' };
   }
 }
 

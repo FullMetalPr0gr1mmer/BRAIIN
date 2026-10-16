@@ -585,10 +585,12 @@ describe('accepting an invite (Admin v2 U12b): its codes, its link, its limits',
     expect(INVITE_MESSAGES.expired.text).toContain('Ask the Admin who invited you');
     // After the verify the account is confirmed and cannot be invited again: "Forgot
     // password?" is its way to a password, never "ask for the invite again".
-    for (const code of ['refused', 'interrupted'] as const) {
+    // A switched-off account (closed) is confirmed too: the Admin switches it back on first.
+    for (const code of ['refused', 'interrupted', 'closed'] as const) {
       expect(INVITE_MESSAGES[code].text).toContain('"Forgot password?"');
       expect(INVITE_MESSAGES[code].text).not.toContain('invite again');
     }
+    expect(INVITE_MESSAGES.closed.text).toContain('switch your access back on');
     expect(INVITE_READY.text).toBe(
       'Your password is set. Sign in with your email and the new password.',
     );

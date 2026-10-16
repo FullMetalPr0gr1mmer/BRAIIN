@@ -548,6 +548,13 @@ describe('the guides say only what the admin does', () => {
     expect(ROLES.filter((role) => mayRead(role, invites.caps))).toEqual(['admin']);
     // The users screen's head keeps the roles guide, which every member may read.
     expect(pageGuideFor('/admin/users', 'admin')).toBe('roles-and-access');
+    // Cancel works while the invite is pending (isPendingInvite: never confirmed, never
+    // signed in), and a spent link confirms the address whether or not a password was set:
+    // so the guide ties Cancel to accepting the invite, not to setting a password.
+    const cancelLine = textsOf(invites, 'en').join('\n');
+    expect(cancelLine).toContain('Until they have accepted the invite, you can Cancel it');
+    expect(cancelLine).not.toContain('set a password, you can Cancel');
+    expect(textsOf(invites, 'ar').join('\n')).toContain('ما دام لم يقبل الدعوة بعد');
   });
 
   it('the Arabic says what it means', () => {

@@ -34,7 +34,7 @@ import { json } from '@/lib/admin/route';
 // the password) go to system_logs. The person has never signed in, so step 6 has one session
 // to end: the one the verify itself opened.
 //
-// Answers: JSON for a script (200, 400, 422, 429, 503), a 303 for the page's form: to
+// Answers: JSON for a script (200, 400, 403, 422, 429, 503), a 303 for the page's form: to
 // /admin/login?invite=ready, or back to /admin/invite with an `error` code. While the token
 // is unspent it goes back in a cookie scoped to the page, never in the URL (request URLs are
 // logged: src/lib/auth/inviteToken.ts); once it is spent, or the password is set, the cookie
@@ -160,11 +160,19 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   }
 
   // Switched off, or no profile at all, since the invite went out: no password for it. The
-  // session the verify opened is ended, and the link is spent.
+  // session the verify opened is ended, and the link is spent. A profile that could not be
+  // read is our outage, not the invite's: `interrupted`, whose words point at "Forgot
+  // password?" (the account is confirmed now, so it cannot be invited again).
   const invitee = await inviteeOf(userId);
-  if (!invitee || !invitee.isActive) {
+  if (invitee.kind !== 'found' || !invitee.isActive) {
     await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
-    await logSpent('closed', userId, { profile: invitee ? 'inactive' : 'missing' });
+    if (invitee.kind === 'unreadable') {
+      await logSpent('interrupted', userId, { profile: 'unreadable' });
+      return fail('interrupted');
+    }
+    await logSpent('closed', userId, {
+      profile: invitee.kind === 'found' ? 'inactive' : 'missing',
+    });
     return fail('closed');
   }
 

@@ -93,6 +93,8 @@ function messages(html: string): { role: string | null; text: string }[] {
     text: (m[3] ?? '')
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
+      // The page escapes a quote in its copy (the "Forgot password?" pointers).
+      .replaceAll('&quot;', '"')
       .trim(),
   }));
 }

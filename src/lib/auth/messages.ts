@@ -143,8 +143,12 @@ export const INVITE_MESSAGES = {
   ),
   unavailable: msg('error', 'Something went wrong on our side. Try again in a few minutes.'),
   // The account was switched off after the invite went out: the link is spent, and no
-  // password was set.
-  closed: msg('error', `This invite is no longer open. ${INVITE_ASK_AGAIN}`),
+  // password was set. The account is confirmed now, so a new invite cannot be sent: the
+  // way on is the Admin switching it back on, then a reset.
+  closed: msg(
+    'error',
+    `This invite is no longer open. Ask the Admin who invited you to switch your access back on, then ${INVITE_USE_FORGOT}`,
+  ),
   // After the verify the account is confirmed, so it cannot be invited again: its password
   // is chosen the way any member's is reset.
   refused: msg(
