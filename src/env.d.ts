@@ -27,5 +27,10 @@ declare namespace App {
     // The public identity (`site_profile`), fetched at most once per request — see
     // src/lib/identity/index.ts. A promise, so concurrent components share one fetch.
     identity?: Promise<import('@/lib/identity/fallback').Identity>;
+    // Page visibility's snapshot (Admin v2 U14a), read once by the middleware for every
+    // public request (src/lib/http/visibility.ts, memoised per isolate): the menus, the
+    // sitemap and llms.txt leave out what it does not list. Absent on /admin, /api and the
+    // health probe, and in a render with no middleware: read as "every page public".
+    visibility?: import('@/lib/http/visibility').VisibilitySnapshot;
   }
 }
