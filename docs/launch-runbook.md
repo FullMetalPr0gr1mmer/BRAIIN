@@ -1197,6 +1197,43 @@ was removed and stops being served within two hours. Shortening that needs Supab
 register. The Supabase dashboard's Storage browser removes an object by hand, with the same
 window.
 
+### 6j. Page visibility — first edge snapshot after deploy (migration 0057, Admin v2 U14a)
+
+Migration 0057 adds `page_visibility`: who can see each CMS page (visible to everyone, hidden
+with a 302 to another page or a 404, or only people with the link) and whether the service
+page or the case study page template is hidden. **No row is public**, so applying it changes
+nothing on the site. Every save rebuilds the whole snapshot into KV `site:visibility`, which
+the middleware reads after the maintenance check (through a one-minute isolate memo), and the
+daily Worker cron rebuilds it again. Apply 0057 before merging the PR that carries it (§1, the
+deploy guard); then, **once after the deploy** (and after any KV incident), as Admin or
+Developer:
+
+1. Admin → **Settings › General › Page visibility**. The line above the list reads "Every
+   page is visible, and the live site agrees" (nothing set yet), or says the live site has no
+   copy yet.
+2. Click **Sync to edge**. The toast says the live site has the latest settings, and the audit
+   log gains a `page_visibility.sync` row with `kvSynced: true`. A red "did not take the
+   settings" means KV refused the write: Site health's Errors tab has the reason
+   (`admin:page_visibility.sync`); fix, then click again. Or wait for the next morning's cron
+   (`cron:visibility` in the same tab).
+3. Verify from outside, after hiding a test page (allow a minute):
+
+   ```bash
+   curl -sI $BASE/<hidden-page> | grep -i '^HTTP\|^location\|^cache-control\|^x-robots-tag'
+   # 302 (or 404) · location: <target> · cache-control: private, no-store · x-robots-tag: noindex
+   curl -sI $BASE/ar/<hidden-page> | grep -i '^location'      # the Arabic twin of the target
+   curl -s $BASE/sitemap.xml | grep -c '<hidden-page>'        # 0
+   ```
+
+   Then set the page back to **Visible to everyone**.
+
+The homepage cannot be hidden (the database refuses it for every writer, the service role
+included): to take the whole site down, use maintenance mode (§5). A page hidden from the
+sitemap may stay in a crawler's copy for up to an hour (`max-age=3600`). Nothing caches Tier A
+in front of the Worker yet; when a cache arrives (L9, KAN-20), a page that leaves public must
+also be purged (the save answers the tags: `page:<slug>` or `services:all`/`portfolio:all`,
+`nav:all`, `route:sitemap`, `route:llms`), which R7 wires.
+
 ---
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)

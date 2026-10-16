@@ -70,8 +70,10 @@
   - guides only for features that are built (nine of the prototype's fifteen described later-phase screens; "roles" promised per-person exceptions §5 does not have);
   - no editing yet: the migrations write the guides until an editor and its capability exist (§5, TDD phase 7);
   - no "Get connected" or "Ask us" in the drawer (A1 later phase; no support channel exists).
+- **Page visibility** (U14a): four modes in the prototype, three in U14a ("Behind a password" is U14b); the KV snapshot is its own key, `site:visibility`, not part of `site:maintenance` as AV-13 said (two writers on one value would race); no anon read of the table (D3); templates are public or hidden only (D1).
 - **Copy corrected** where untrue:
   - maintenance "…after you publish";
+  - page visibility "Takes effect when you publish" / "Hidden from the site after you publish" → "Applies to the live site within a minute" until releases switch on (U14a, D7);
   - "Kept for 90 days";
   - "Backups cover everything, including leads";
   - "nothing is saved until you publish" → "nothing goes live until you publish";
