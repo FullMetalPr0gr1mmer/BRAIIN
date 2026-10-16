@@ -233,6 +233,7 @@ describe('the locked screens the refusals e2e opens', () => {
     const server = LOCKED_SCREENS.filter((screen) => renderOf(screen) === 'server');
     expect(server.map((s) => s.href).sort()).toEqual([
       '/admin/analytics/search',
+      '/admin/audit',
       '/admin/site-health',
     ]);
     for (const screen of server) {

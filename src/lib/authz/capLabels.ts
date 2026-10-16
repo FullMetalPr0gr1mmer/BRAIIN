@@ -45,7 +45,7 @@ export const CAP_LABELS: Readonly<Record<Capability, CapLabel>> = {
   'media.hardDelete': { full: 'Delete media for good' },
   'leads.manage': { full: 'See and manage inquiries' },
   'leads.pii': { full: 'See an inquirer’s contact details, one at a time' },
-  'export.csv': { full: 'Export inquiries and stats as CSV' },
+  'export.csv': { full: 'Export inquiries, stats and the activity log as CSV' },
   'crm.erase': { full: 'Erase an inquiry and its notes for good' },
   'applications.manage': { full: 'See and manage job applications' },
   'applications.pii': { full: 'See applicants’ contact details and download CVs' },

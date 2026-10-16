@@ -128,6 +128,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
     expect(files.sort()).toEqual([...ADMIN_STYLESHEETS].sort());
     // Pinned, not derived: a sheet dropped from the list must fail, not go unchecked.
     expect([...ADMIN_STYLESHEETS].sort()).toEqual([
+      'activity.css',
       'health.css',
       'help.css',
       'kit.css',
@@ -397,6 +398,7 @@ describe('admin.css keeps the hooks the markup renders', () => {
     it('traces each sheet to the pages it serves (the walk is not vacuous)', () => {
       const pagesFor = (sheet: string) =>
         [...new Set((renderers[sheet] ?? []).flatMap(({ file }) => pagesOf(file)))].sort();
+      expect(pagesFor('activity.css')).toEqual(['src/pages/admin/audit.astro']);
       expect(pagesFor('help.css')).toEqual(['src/pages/admin/help.astro']);
       expect(pagesFor('kit.css')).toEqual(['src/pages/admin/kit.astro']);
       // The sign-in screens (F7) render login.css's classes in their pages and in the shell

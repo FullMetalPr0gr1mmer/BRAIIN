@@ -51,7 +51,12 @@ vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({ from: (t: string) => recorder('svc', t), rpc: rpcFor('svc') }),
 }));
 vi.mock('@/lib/admin/liveRecheck', () => ({ liveRecheck: async () => undefined }));
-vi.mock('@/lib/admin/rateLimit', () => ({ claimPrivilegedOp: async () => undefined }));
+const claims: string[] = [];
+vi.mock('@/lib/admin/rateLimit', () => ({
+  claimPrivilegedOp: async (_auth: unknown, op: string) => {
+    claims.push(op);
+  },
+}));
 vi.mock('@/lib/admin/audit', () => ({
   writeAudit: async (_sb: unknown, _auth: unknown, entry: (typeof audits)[number]) => {
     audits.push(entry);
@@ -91,10 +96,10 @@ const { EXPORT_ROW_CAP, MAX_PAGES, PAGE_ROWS } = await import('@/lib/crm/exportR
 // Every role holding export.csv holds leads.pii, so every export here is a PII export.
 const CAP = EXPORT_ROW_CAP.pii;
 
-function call(query = '') {
+function call(query = '', headers: Record<string, string> = {}) {
   const url = new URL(`https://admin.example.test/api/admin/leads/export${query}`);
   return (GET as APIRoute)({
-    request: new Request(url),
+    request: new Request(url, { headers }),
     url,
     params: {},
     locals: {
@@ -146,6 +151,7 @@ const onPage = (page: number, method: string) =>
 const outcome = () => audits.find((a) => a.action === 'export.csv.outcome')!.detail!;
 
 beforeEach(() => {
+  claims.length = 0;
   calls.length = 0;
   rpcs.length = 0;
   audits.length = 0;
@@ -163,6 +169,28 @@ function cells(line: string): string[] {
     (m[1] ?? m[2] ?? '').replace(/""/g, '"'),
   );
 }
+
+describe('the lead export: never on another site’s say-so (U13 review)', () => {
+  it('a cross-site link is refused before a slot, a row or a lead is touched', async () => {
+    for (const headers of [
+      { 'sec-fetch-site': 'cross-site' },
+      { origin: 'https://evil.example' },
+      { referer: 'https://evil.example/trap' },
+    ]) {
+      claims.length = 0;
+      audits.length = 0;
+      calls.length = 0;
+      const res = await call('', headers);
+      expect(res.status, JSON.stringify(headers)).toBe(403);
+      expect(claims).toEqual([]);
+      expect(audits).toEqual([]);
+      expect(calls.filter((c) => c.table === 'leads')).toEqual([]);
+    }
+    const ours = await call('', { 'sec-fetch-site': 'same-origin' });
+    expect(ours.status).toBe(200);
+    expect(claims).toEqual(['export-csv']);
+  });
+});
 
 describe('the lead export (C3): filters', () => {
   it('applies the stage, spam and date filters on the service-role read, for this tenant', async () => {

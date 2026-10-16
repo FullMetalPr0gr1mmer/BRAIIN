@@ -64,7 +64,7 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/users', api: '/api/admin/users', cap: 'users.manage' },
   { href: '/admin/applications', api: '/api/admin/applications', cap: 'applications.manage' },
   { href: '/admin/leads', api: '/api/admin/leads', cap: 'leads.manage' },
-  { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view' },
+  { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view', render: 'server' },
   {
     href: '/admin/site-health',
     api: '/api/admin/site-health',
@@ -115,6 +115,14 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   { href: '/admin/help?q=password', label: 'Help search', caps: [] },
   { href: '/admin/help?guide=finding-your-way', label: 'A help guide', caps: [] },
   { href: '/admin/help?guide=finding-your-way&lang=ar', label: 'A help guide in Arabic', caps: [] },
+  // The activity log filtered (Admin v2 U13): a kind, a day range and an empty result can
+  // render differently from the plain list (the chips' current one, the notes, the empty
+  // state), so a filtered view is swept too, for the roles that may read the log.
+  {
+    href: '/admin/audit?kind=leads&from=2026-01-01',
+    label: 'Activity log, filtered',
+    caps: ['audit.view'],
+  },
   // Website stats and site health (Admin v2 U2): their in-page tabs and range links, each
   // a URL of the same page, with the capability that page or tab asks for.
   {

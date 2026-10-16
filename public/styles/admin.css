@@ -3674,6 +3674,45 @@ table.data .data-sel {
   font-variant-numeric: tabular-nums;
 }
 
+/* ServerTable's shaped cells (Admin v2 U13, the prototype's Who and What): an avatar beside
+   a name and its sub-line, the name a link only when it filters; a kind badge before a
+   sentence. Both wrap what people typed (a name, an item's title) wherever they must. */
+.cell-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cell-person__t {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.cell-person__t .cell-secondary {
+  font-weight: 400;
+}
+
+.cell-person a {
+  color: var(--ad-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.cell-person a:hover {
+  color: var(--ad-primary-hover);
+}
+
+.cell-tagged {
+  overflow-wrap: anywhere;
+}
+
+.cell-tagged .badge {
+  margin-inline-end: 2px;
+}
+
 .pager ul {
   display: flex;
   flex-wrap: wrap;

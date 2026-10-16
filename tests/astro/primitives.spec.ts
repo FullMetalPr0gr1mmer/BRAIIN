@@ -306,6 +306,54 @@ describe('ServerTable', () => {
     expect(html).toContain('No entries yet');
   });
 
+  it('draws a person and a tagged sentence (U13), every part as text', async () => {
+    const html = await render(ServerTable, {
+      caption: 'Activity',
+      columns: [
+        { key: 'who', label: 'Who', kind: 'person' },
+        { key: 'what', label: 'What', kind: 'tagged' },
+      ],
+      rows: [
+        {
+          who: { id: 'p-1', name: '<b>Amal</b>', sub: 'Admin' },
+          what: {
+            badge: { label: 'Lead', tone: 'ok' },
+            parts: [
+              { text: 'Revealed the contact details of', strong: true },
+              { text: 'a lead' },
+              { text: '<img src=x>', muted: true },
+            ],
+          },
+        },
+        {
+          who: {
+            id: 'p-2',
+            name: 'Bashir',
+            sub: 'SEO, former member',
+            href: '/admin/audit?actor=p-2',
+          },
+          what: { badge: { label: 'Edit', tone: 'not-a-tone' }, parts: [] },
+        },
+      ],
+    });
+    // The avatar's tone is the person's, and the name sits beside it with its sub-line.
+    expect(html).toContain(`data-tone="${avatarTone('p-1')}"`);
+    expect(html).toContain('&lt;b&gt;Amal&lt;/b&gt;');
+    expect(html).not.toContain('<b>Amal</b>');
+    expect(html).toContain('<span class="cell-secondary">Admin</span>');
+    // A name with a filter link is a link.
+    expect(html).toMatch(/<a href="\/admin\/audit\?actor=p-2" dir="auto">\s*Bashir\s*<\/a>/);
+    // The badge, then the sentence: strong, plain, muted; markup in a part stays text.
+    expect(html).toMatch(/<span class="badge" data-tone="ok" data-plain[^>]*>\s*Lead\s*<\/span>/);
+    expect(html).toMatch(/<b dir="auto">Revealed the contact details of<\/b>/);
+    expect(html).toMatch(/<span dir="auto">a lead<\/span>/);
+    expect(html).toContain('<span class="cell-secondary" dir="auto">&lt;img src=x&gt;</span>');
+    expect(html).not.toContain('<img src=x>');
+    // A value of the wrong shape (an unknown tone) is an empty cell, never a guess.
+    expect(html).not.toContain('not-a-tone');
+    expect(html.match(/class="cell-tagged"/g)).toHaveLength(1);
+  });
+
   it('shows the range and the pager under a paged list', async () => {
     const html = await render(ServerTable, {
       caption: 'Entries',
