@@ -118,7 +118,11 @@ const ROW = {
   action: 'lead.update',
   entity_type: 'lead',
   entity_id: '44444444-4444-4444-8444-444444444444',
-  detail: { fields: ['stage_id', 'tags'], email: 'sara@acme.example', note: 'Called twice' },
+  // As the export reads it: the few detail keys it names, one by one (EXPORT_COLUMNS). A
+  // `detail` the fake also returns stands for what a careless select would have read.
+  d_fields: ['stage_id', 'tags'],
+  d_status: null,
+  detail: { email: 'sara@acme.example', note: 'Called twice' },
   created_at: '2026-10-15T09:30:00.000Z',
   prev_hash: 'should-never-be-read',
   hash: 'should-never-be-read',
@@ -270,6 +274,34 @@ describe('the lockdown, in order', () => {
 });
 
 describe('the file', () => {
+  it('reads only the detail keys its words need, never the whole detail', async () => {
+    await call();
+    const select = String(
+      reads.find((r) => r.table === 'audit_log')?.calls.find(([m]) => m === 'select')?.[1][0],
+    );
+    expect(select.split(',')).not.toContain('detail');
+    expect(select).toContain('d_status:detail->>status');
+    expect(select).toContain('d_fields:detail->fields');
+    expect(select).not.toMatch(/hash/);
+  });
+
+  it('a save that published reads as a publish from the keys it read', async () => {
+    pages = [
+      [
+        {
+          ...ROW,
+          action: 'service.update',
+          entity_type: 'service',
+          d_fields: ['status'],
+          d_status: 'published',
+          d_previous: 'draft',
+        },
+      ],
+    ];
+    const [, line] = (await (await call()).text()).split('\r\n');
+    expect(cells(line!).slice(4, 6)).toEqual(['Publish', 'Published the service']);
+  });
+
   it('is a no-store attachment with the stated columns', async () => {
     const res = await call();
     expect(res.headers.get('content-type')).toBe('text/csv; charset=utf-8');
@@ -300,7 +332,8 @@ describe('the file', () => {
           ...ROW,
           action: 'service.update',
           entity_type: 'service',
-          detail: { fields: ['title'], email: 'sara@acme.example' },
+          d_fields: ['title'],
+          detail: { email: 'sara@acme.example', items: ['a'.repeat(100)] },
         },
       ],
     ];

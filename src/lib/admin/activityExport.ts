@@ -31,7 +31,52 @@ const PAGE_ROWS = 1000;
 /** The most pages one file reads (the lead export's bound, for the same 50 subrequests). */
 const MAX_PAGES = 20;
 
-const COLUMNS = 'id,actor_id,actor_role,action,entity_type,entity_id,detail,created_at';
+/**
+ * The keys of `detail` the file's words are made from (auditLabels.ts `describe`): the
+ * status a save moved to and from, entity SEO's target, a menu visibility, a release's
+ * number, the changed fields' names. Read one by one, never the whole jsonb: a detail can be
+ * large (a release lists every item it applied, a bulk change its counts), and 1,000 of them
+ * would be parsed for nothing on the Free plan's 10 ms (U13 review).
+ */
+const DETAIL_KEYS = {
+  d_status: 'detail->>status',
+  d_previous: 'detail->>previousStatus',
+  d_target: 'detail->>target',
+  d_nav: 'detail->navVisible',
+  d_number: 'detail->number',
+  d_version: 'detail->version',
+  d_fields: 'detail->fields',
+} as const;
+const DETAIL_NAMES: Readonly<Record<keyof typeof DETAIL_KEYS, string>> = {
+  d_status: 'status',
+  d_previous: 'previousStatus',
+  d_target: 'target',
+  d_nav: 'navVisible',
+  d_number: 'number',
+  d_version: 'version',
+  d_fields: 'fields',
+};
+
+export const EXPORT_COLUMNS = [
+  'id,actor_id,actor_role,action,entity_type,entity_id,created_at',
+  ...Object.entries(DETAIL_KEYS).map(([alias, path]) => `${alias}:${path}`),
+].join(',');
+
+/** A row as read for the file, its few detail keys put back into a small `detail`. */
+function withDetail(row: Record<string, unknown>): ActivityRow {
+  const detail: Record<string, unknown> = {};
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (Object.hasOwn(DETAIL_NAMES, key)) {
+      if (value !== null && value !== undefined) {
+        detail[DETAIL_NAMES[key as keyof typeof DETAIL_KEYS]] = value;
+      }
+    } else {
+      out[key] = value;
+    }
+  }
+  return { ...(out as unknown as ActivityRow), detail };
+}
 
 export const ACTIVITY_CSV_HEADER = [
   'when_utc',
@@ -83,13 +128,13 @@ export async function readActivityRows(
   const rows: ActivityRow[] = [];
   let before: number | null = null;
   for (let n = 0; n < MAX_PAGES; n += 1) {
-    let query = applyFilters(sb.from('audit_log').select(COLUMNS), tenantId, filters);
+    let query = applyFilters(sb.from('audit_log').select(EXPORT_COLUMNS), tenantId, filters);
     if (before !== null) query = query.lt('id', before);
     const { data, error } = await query
       .order('id', { ascending: false })
       .limit(Math.min(PAGE_ROWS, want - rows.length));
     if (error) throw new Error(`activity export: ${error.code ?? 'no code'}`);
-    const got = (Array.isArray(data) ? data : []) as ActivityRow[];
+    const got = (Array.isArray(data) ? (data as Record<string, unknown>[]) : []).map(withDetail);
     if (got.length === 0) return { rows, truncated: false };
     rows.push(...got);
     if (rows.length >= want) return { rows: rows.slice(0, cap), truncated: true };
