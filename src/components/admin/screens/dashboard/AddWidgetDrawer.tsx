@@ -34,7 +34,8 @@ export default function AddWidgetDrawer({ open, onClose, widgets, onAdd }: AddWi
               </div>
               <span className="dash__add">
                 <button type="button" data-size="sm" onClick={() => onAdd(widget.id, 'left')}>
-                  Left<span className="visually-hidden">: add {widget.label} to the left column</span>
+                  Left
+                  <span className="visually-hidden">: add {widget.label} to the left column</span>
                 </button>
                 <button type="button" data-size="sm" onClick={() => onAdd(widget.id, 'right')}>
                   Right

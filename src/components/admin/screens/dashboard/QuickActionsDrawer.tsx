@@ -152,48 +152,49 @@ export default function QuickActionsDrawer(props: QuickActionsDrawerProps) {
       }
     >
       <p className="admin-sub">
-        Tick the actions you want on your dashboard. Drag to reorder. Each person has their own
-        set.
+        Tick the actions you want on your dashboard. Drag to reorder. Each person has their own set.
       </p>
 
       <h3 className="dash__h">On your dashboard</h3>
       {items.length === 0 && <p className="dash__empty-line">Nothing yet.</p>}
       {/* Always rendered, so the Sortable core is bound before the first item arrives. */}
       <ul className="list" ref={ref} aria-label="Your quick actions">
-          {(lists['list'] ?? []).map((id) => {
-            const item = byId.get(id);
-            if (!item) return null;
-            const custom = isCustomItem(item);
-            const name = nameOf(id);
-            return (
-              <ListRow
-                key={id}
-                title={name}
-                sub={custom ? `${item.href}, your own link` : 'From the library'}
-                sortId={id}
-                sortLabel={name}
-                lead={<SortHandle label={name} describedBy={hintId} />}
-                meta={<MoveButtons label={name} />}
-                actions={
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    data-variant="danger"
-                    aria-label={`Remove ${name}`}
-                    onClick={() => setItems((list) => list.filter((x) => x.id !== id))}
-                  >
-                    <Icon name="x" size={14} />
-                  </button>
-                }
-              />
-            );
-          })}
+        {(lists['list'] ?? []).map((id) => {
+          const item = byId.get(id);
+          if (!item) return null;
+          const custom = isCustomItem(item);
+          const name = nameOf(id);
+          return (
+            <ListRow
+              key={id}
+              title={name}
+              sub={custom ? `${item.href}, your own link` : 'From the library'}
+              sortId={id}
+              sortLabel={name}
+              lead={<SortHandle label={name} describedBy={hintId} />}
+              meta={<MoveButtons label={name} />}
+              actions={
+                <button
+                  type="button"
+                  className="icon-btn"
+                  data-variant="danger"
+                  aria-label={`Remove ${name}`}
+                  onClick={() => setItems((list) => list.filter((x) => x.id !== id))}
+                >
+                  <Icon name="x" size={14} />
+                </button>
+              }
+            />
+          );
+        })}
       </ul>
       <SortHint id={hintId} />
 
       <h3 className="dash__h">Add from the library</h3>
       {remaining.length === 0 ? (
-        <p className="dash__empty-line">Everything from the library is already on your dashboard.</p>
+        <p className="dash__empty-line">
+          Everything from the library is already on your dashboard.
+        </p>
       ) : (
         <div className="dash__chips">
           {remaining.map((action) => (

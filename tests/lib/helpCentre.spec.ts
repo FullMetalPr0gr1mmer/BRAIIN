@@ -518,7 +518,8 @@ describe('the guides say only what the admin does', () => {
     expect(schema.TEAM_NOTE_PHONE.source).toContain('{8,}');
     // The Customize bar and the editors name these controls.
     const island = source('src/components/admin/screens/dashboard/Dashboard.tsx');
-    for (const label of ['Add widget', 'Reset', 'Done', 'Customize']) expect(island).toContain(label);
+    for (const label of ['Add widget', 'Reset', 'Done', 'Customize'])
+      expect(island).toContain(label);
     expect(source('src/components/admin/ui/dashboard/Widget.astro')).toContain('Edit notes');
     expect(source('src/lib/admin/ui/teamNotes.ts')).toContain("title: 'Team notes'");
     const en = guide('your-dashboard', 'en');

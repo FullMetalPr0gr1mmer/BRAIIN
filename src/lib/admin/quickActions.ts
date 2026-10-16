@@ -105,7 +105,13 @@ export const QUICK_LIBRARY: readonly LibraryAction[] = [
     cap: 'redirects.manage',
     palette: { label: 'New redirect', icon: 'plus' },
   },
-  { id: 'open-leads', label: 'Open leads', href: '/admin/leads', icon: 'inbox', cap: 'leads.manage' },
+  {
+    id: 'open-leads',
+    label: 'Open leads',
+    href: '/admin/leads',
+    icon: 'inbox',
+    cap: 'leads.manage',
+  },
   {
     id: 'stats',
     label: 'Website stats',
@@ -173,7 +179,14 @@ export const QUICK_DEFAULTS: Readonly<Record<Role, readonly string[]>> = {
 
 const PALETTE: readonly QuickAction[] = QUICK_LIBRARY.flatMap((action) =>
   action.palette && action.cap && action.href.startsWith('/')
-    ? [{ label: action.palette.label, href: action.href, icon: action.palette.icon, cap: action.cap }]
+    ? [
+        {
+          label: action.palette.label,
+          href: action.href,
+          icon: action.palette.icon,
+          cap: action.cap,
+        },
+      ]
     : [],
 );
 

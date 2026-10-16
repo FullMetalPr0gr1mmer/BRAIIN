@@ -22,15 +22,17 @@ const toneOf = (tone: string): BadgeTone =>
 
 {
   data.rows.length === 0 ? (
-    <EmptyState icon="inbox" title="No inquiries yet." text="Inquiries sent from the site arrive here." />
+    <EmptyState
+      icon="inbox"
+      title="No inquiries yet."
+      text="Inquiries sent from the site arrive here."
+    />
   ) : (
     <ul class="list">
       {data.rows.map((row) => (
         <ListRow title={row.name} sub={row.interest ?? 'No service named'} href="/admin/leads">
           <Fragment slot="meta">
-            {row.stage && (
-              <Badge tone={toneOf(row.stage.tone)}>{row.stage.label}</Badge>
-            )}
+            {row.stage && <Badge tone={toneOf(row.stage.tone)}>{row.stage.label}</Badge>}
             {row.at && <span class="dash__ago">{relTime(row.at, now)}</span>}
           </Fragment>
         </ListRow>

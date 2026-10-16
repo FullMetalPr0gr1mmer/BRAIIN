@@ -57,7 +57,9 @@ export function relabel(root: HTMLElement): void {
         if (!button || !base) continue;
         button.setAttribute(
           'aria-label',
-          target ? `${base} ${WHERE[target]}` : `${base} ${kind === 'prev' ? 'up a column' : 'down a column'}`,
+          target
+            ? `${base} ${WHERE[target]}`
+            : `${base} ${kind === 'prev' ? 'up a column' : 'down a column'}`,
         );
       }
     }

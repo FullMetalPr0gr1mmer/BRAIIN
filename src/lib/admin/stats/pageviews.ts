@@ -104,12 +104,13 @@ export async function loadPageviewSummary(
   const current = await summaryOf(sb, auth, range.from, range.to, locale);
   const first = record(current)['first_day'];
   const firstDay = typeof first === 'string' ? first : null;
-  const previous = options.previous !== false && hasPreviousPeriod(firstDay, range)
-    ? totalsOf(await summaryOf(sb, auth, range.prevFrom, range.prevTo, locale), {
-        from: range.prevFrom,
-        to: range.prevTo,
-      })
-    : null;
+  const previous =
+    options.previous !== false && hasPreviousPeriod(firstDay, range)
+      ? totalsOf(await summaryOf(sb, auth, range.prevFrom, range.prevTo, locale), {
+          from: range.prevFrom,
+          to: range.prevTo,
+        })
+      : null;
   return { range, current: totalsOf(current, range), previous, firstDay };
 }
 

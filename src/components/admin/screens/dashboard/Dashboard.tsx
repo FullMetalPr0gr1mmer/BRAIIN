@@ -179,7 +179,12 @@ export default function Dashboard(props: DashboardIslandProps) {
         Reset
       </button>
       {props.presets && (
-        <button type="button" data-size="sm" data-variant="ghost" onClick={() => setPresetsOpen(true)}>
+        <button
+          type="button"
+          data-size="sm"
+          data-variant="ghost"
+          onClick={() => setPresetsOpen(true)}
+        >
           Save as the default for a role
         </button>
       )}
@@ -214,7 +219,8 @@ export default function Dashboard(props: DashboardIslandProps) {
         {editing ? 'Done customizing' : 'Customize'}
       </button>
       {bar && targets.bar && createPortal(bar, targets.bar)}
-      {conflict && targets.bar &&
+      {conflict &&
+        targets.bar &&
         createPortal(
           <div className="msg editor__conflict" data-kind="error" role="alert">
             <span>Your dashboard was changed in another tab.</span>

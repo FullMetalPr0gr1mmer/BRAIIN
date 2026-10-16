@@ -85,7 +85,9 @@ describe('the Worker and the database refuse the same notes', () => {
       ranges.push([from, end ? parseInt(end, 16) : from]);
       consumed += m[0].length;
     }
-    expect(consumed, 'every character of the SQL class is an escape or a range').toBe(source.length);
+    expect(consumed, 'every character of the SQL class is an escape or a range').toBe(
+      source.length,
+    );
     const mismatches: string[] = [];
     // From 1: NUL cannot reach a text value. Surrogates are not characters.
     for (let cp = 1; cp <= 0x10ffff; cp += 1) {
@@ -140,7 +142,11 @@ describe('the door’s refusals become the route’s answers', () => {
     expect(calls).toEqual([
       { fn: 'save_team_notes', args: { p_tenant: 't-1', p_body: 'Shoot moved.', p_version: 4 } },
     ]);
-    expect(saved).toMatchObject({ body: 'Shoot moved.', version: 5, updatedAt: '2026-10-16T09:00:00Z' });
+    expect(saved).toMatchObject({
+      body: 'Shoot moved.',
+      version: 5,
+      updatedAt: '2026-10-16T09:00:00Z',
+    });
   });
 
   it.each([

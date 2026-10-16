@@ -97,7 +97,13 @@ export interface AttentionGroup {
   kind: string;
   label: string;
   count: number;
-  rows: { title: string; type: string; href: string | null; where: string | null; at: string | null }[];
+  rows: {
+    title: string;
+    type: string;
+    href: string | null;
+    where: string | null;
+    at: string | null;
+  }[];
 }
 
 export interface AttentionData {
@@ -131,8 +137,7 @@ export interface WidgetDataMap {
 }
 
 export type WidgetResult<K extends WidgetId = WidgetId> =
-  | { ok: true; data: WidgetDataMap[K] }
-  | { ok: false };
+  { ok: true; data: WidgetDataMap[K] } | { ok: false };
 
 export type WidgetResults = { [K in WidgetId]?: WidgetResult<K> };
 
@@ -359,7 +364,8 @@ function weekOf(summary: PageviewSummary, now: Date) {
     views,
     share: views > 0 ? (ar / views) * 100 : null,
     prevViews,
-    prevShare: prevViews !== null && prevViews > 0 && prevAr !== null ? (prevAr / prevViews) * 100 : null,
+    prevShare:
+      prevViews !== null && prevViews > 0 && prevAr !== null ? (prevAr / prevViews) * 100 : null,
   };
 }
 
@@ -475,13 +481,11 @@ export function widgetLoaders(
     async leads() {
       const [list, stages] = await Promise.all([
         sb.rpc('leads_list', { p_tenant: auth.tenantId, p_filter: { limit: 6, sort: 'newest' } }),
-        sb
-          .from('lead_stages')
-          .select('id,label,tone')
-          .eq('tenant_id', auth.tenantId),
+        sb.from('lead_stages').select('id,label,tone').eq('tenant_id', auth.tenantId),
       ]);
       if (list.error) throw new Error(`latest leads: ${list.error.code ?? list.error.message}`);
-      if (stages.error) throw new Error(`lead stages: ${stages.error.code ?? stages.error.message}`);
+      if (stages.error)
+        throw new Error(`lead stages: ${stages.error.code ?? stages.error.message}`);
       const page = record(list.data);
       // The safe columns only (§3): no budget, no contact detail is read or shown.
       const rows = (Array.isArray(page['rows']) ? page['rows'] : []) as Record<string, unknown>[];
@@ -495,9 +499,13 @@ export function widgetLoaders(
         stage_id: typeof row['stage_id'] === 'string' ? row['stage_id'] : null,
         created_at: typeof row['created_at'] === 'string' ? row['created_at'] : '',
       }));
-      const labels = picked.length > 0 ? await resolveLeadInterests(sb, auth.tenantId, picked) : null;
+      const labels =
+        picked.length > 0 ? await resolveLeadInterests(sb, auth.tenantId, picked) : null;
       const stageOf = new Map(
-        ((stages.data ?? []) as { id: string; label: string; tone: string }[]).map((s) => [s.id, s]),
+        ((stages.data ?? []) as { id: string; label: string; tone: string }[]).map((s) => [
+          s.id,
+          s,
+        ]),
       );
       return {
         rows: picked.map((row) => {
@@ -567,7 +575,8 @@ export function widgetLoaders(
       if (error) throw new Error(`activity: ${error.code ?? error.message}`);
       const rows = (data ?? []) as ActivityRow[];
       const ids = rows.map((row) => row.actor_id).filter((id): id is string => !!id);
-      const people = ids.length > 0 ? await readPeople(sb, auth.tenantId, ids).catch(() => null) : null;
+      const people =
+        ids.length > 0 ? await readPeople(sb, auth.tenantId, ids).catch(() => null) : null;
       // The activity log's own words (src/lib/admin/auditLabels.ts): changed fields' names,
       // never what they hold; no item titles here (the log has them).
       return rows.map((row) => ({
@@ -619,9 +628,7 @@ export function widgetLoaders(
           : null;
       const items = [...counts.entries()]
         .map(([slug, value]) => ({
-          label: slug
-            ? (labels?.get(`discipline:${slug}`)?.label.en ?? slug)
-            : 'Not given',
+          label: slug ? (labels?.get(`discipline:${slug}`)?.label.en ?? slug) : 'Not given',
           value,
         }))
         .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
@@ -645,7 +652,10 @@ async function settleWidget<K extends WidgetId>(
       level: 'error',
       source: SOURCE,
       message: `Dashboard widget ${id} could not be read`,
-      detail: { error: scrubPii(err instanceof Error ? err.message : String(err)), role: auth.role },
+      detail: {
+        error: scrubPii(err instanceof Error ? err.message : String(err)),
+        role: auth.role,
+      },
     });
     return { ok: false };
   }
@@ -695,7 +705,9 @@ export async function loadDashboard(ctx: DashboardContext): Promise<Dashboard> {
     layout,
     source,
     widgets,
-    banners: { placeholdersLive: attention.filter((row) => row.kind === 'placeholder_live').length },
+    banners: {
+      placeholdersLive: attention.filter((row) => row.kind === 'placeholder_live').length,
+    },
     prefs,
     quick: quick.items,
     homeHref: mayPages ? (home ? `/admin/pages/${home}` : '/admin/pages') : null,

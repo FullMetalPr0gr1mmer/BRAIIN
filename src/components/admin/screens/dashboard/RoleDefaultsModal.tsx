@@ -165,7 +165,9 @@ export default function RoleDefaultsModal(props: RoleDefaultsModalProps) {
       </p>
       {presets !== null && (
         <p className="admin-sub">
-          {version ? `${entry?.label} has a saved default.` : `${entry?.label} uses the standard layout.`}
+          {version
+            ? `${entry?.label} has a saved default.`
+            : `${entry?.label} uses the standard layout.`}
         </p>
       )}
       {message && (

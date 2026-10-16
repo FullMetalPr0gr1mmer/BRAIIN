@@ -33,10 +33,14 @@ const layout = (top: string[], left: string[], right: string[], hidden: string[]
 
 describe('the schemas refuse on write', () => {
   it('a widget twice, across columns or within one', () => {
-    expect(DashboardLayoutSchema.safeParse(layout(['kpis'], ['quick'], ['quick'])).success).toBe(false);
+    expect(DashboardLayoutSchema.safeParse(layout(['kpis'], ['quick'], ['quick'])).success).toBe(
+      false,
+    );
     expect(DashboardLayoutSchema.safeParse(layout([], ['quick', 'quick'], [])).success).toBe(false);
     expect(DashboardLayoutSchema.safeParse(layout(['kpis'], [], [], ['kpis'])).success).toBe(false);
-    expect(DashboardLayoutSchema.safeParse(layout(['kpis'], ['quick'], ['notes'])).success).toBe(true);
+    expect(DashboardLayoutSchema.safeParse(layout(['kpis'], ['quick'], ['notes'])).success).toBe(
+      true,
+    );
   });
 
   it('an id this build does not know, and an unknown key', () => {
@@ -50,11 +54,15 @@ describe('the schemas refuse on write', () => {
     expect(DashboardPrefSchema.safeParse({}).success).toBe(true);
     expect(DashboardPrefSchema.safeParse({ quickSet: true }).success).toBe(true);
     expect(DashboardPrefSchema.safeParse({ top: ['kpis'] }).success).toBe(false);
-    expect(DashboardPrefSchema.safeParse({ ...layout(['kpis'], [], []), quickSet: true }).success).toBe(true);
+    expect(
+      DashboardPrefSchema.safeParse({ ...layout(['kpis'], [], []), quickSet: true }).success,
+    ).toBe(true);
   });
 
   it('a preferences save names at least one preference; `notifications` alone still works', () => {
-    expect(AdminPrefsPutSchema.safeParse({ version: 0, notifications: { muted: [] } }).success).toBe(true);
+    expect(
+      AdminPrefsPutSchema.safeParse({ version: 0, notifications: { muted: [] } }).success,
+    ).toBe(true);
     expect(AdminPrefsPutSchema.safeParse({ version: 0, dashboard: {} }).success).toBe(true);
     expect(AdminPrefsPutSchema.safeParse({ version: 0, quickActions: [] }).success).toBe(true);
     expect(AdminPrefsPutSchema.safeParse({ version: 0 }).success).toBe(false);
@@ -62,15 +70,22 @@ describe('the schemas refuse on write', () => {
 
   it('a preset save names a layout, quick actions or both; quick actions are library ids only', () => {
     expect(RoleDefaultsPutSchema.safeParse({ version: 0 }).success).toBe(false);
-    expect(RoleDefaultsPutSchema.safeParse({ version: 0, quickActions: [{ id: 'stats' }] }).success).toBe(true);
+    expect(
+      RoleDefaultsPutSchema.safeParse({ version: 0, quickActions: [{ id: 'stats' }] }).success,
+    ).toBe(true);
     expect(
       RoleDefaultsPutSchema.safeParse({
         version: 0,
-        quickActions: [{ id: 'c-abcdefgh12', label: 'Drive', href: 'https://drive.example.com', icon: 'link' }],
+        quickActions: [
+          { id: 'c-abcdefgh12', label: 'Drive', href: 'https://drive.example.com', icon: 'link' },
+        ],
       }).success,
     ).toBe(false);
     expect(
-      RoleDefaultsPutSchema.safeParse({ version: 0, quickActions: [{ id: 'x', href: 'https://a.b' }] }).success,
+      RoleDefaultsPutSchema.safeParse({
+        version: 0,
+        quickActions: [{ id: 'x', href: 'https://a.b' }],
+      }).success,
     ).toBe(false);
   });
 });
@@ -108,7 +123,10 @@ describe('resolution: the person, then the preset, then the default', () => {
   });
 
   it('else the role’s preset', () => {
-    expect(resolveLayout({}, preset, 'seo')).toMatchObject({ source: 'preset', layout: { top: ['kpis'], left: ['views'] } });
+    expect(resolveLayout({}, preset, 'seo')).toMatchObject({
+      source: 'preset',
+      layout: { top: ['kpis'], left: ['views'] },
+    });
     expect(resolveLayout({ quickSet: true }, preset, 'seo').source).toBe('preset');
   });
 
@@ -134,7 +152,11 @@ describe('resolution: the person, then the preset, then the default', () => {
 
   it('keeps every widget the role may have that the layout does not mention, off the board', () => {
     const { layout: got } = resolveLayout(layout(['kpis'], [], []), null, 'developer');
-    expect(got.hidden.sort()).toEqual(widgetsFor('developer').filter((id) => id !== 'kpis').sort());
+    expect(got.hidden.sort()).toEqual(
+      widgetsFor('developer')
+        .filter((id) => id !== 'kpis')
+        .sort(),
+    );
   });
 
   it('names the forbidden ids a save carries, and the library ids a role may not use', () => {
@@ -143,12 +165,14 @@ describe('resolution: the person, then the preset, then the default', () => {
       'applications',
     ]);
     expect(forbiddenWidgets(layout(['kpis'], ['leads'], []), 'developer')).toEqual([]);
-    expect(forbiddenActions([{ id: 'open-leads' }, { id: 'stats' }, { id: 'gone' }], 'seo')).toEqual([
-      'open-leads',
-      'gone',
-    ]);
     expect(
-      forbiddenActions([{ id: 'c-abcdefgh12', label: 'Drive', href: 'https://drive.example.com', icon: 'link' }], 'seo'),
+      forbiddenActions([{ id: 'open-leads' }, { id: 'stats' }, { id: 'gone' }], 'seo'),
+    ).toEqual(['open-leads', 'gone']);
+    expect(
+      forbiddenActions(
+        [{ id: 'c-abcdefgh12', label: 'Drive', href: 'https://drive.example.com', icon: 'link' }],
+        'seo',
+      ),
     ).toEqual([]);
   });
 });
@@ -163,33 +187,53 @@ describe('quick actions: the person’s once chosen (D8), else the preset’s, e
   });
 
   it('removed every action: an empty list honoured', () => {
-    expect(resolveQuick({ quickSet: true }, [], { quickSet: true }, [{ id: 'stats' }], 'seo')).toEqual({
+    expect(
+      resolveQuick({ quickSet: true }, [], { quickSet: true }, [{ id: 'stats' }], 'seo'),
+    ).toEqual({
       items: [],
       source: 'mine',
     });
   });
 
   it('a preset’s list when the person never chose; its links, if any were stored, never', () => {
-    const got = resolveQuick({}, [], { quickSet: true }, [
-      { id: 'stats' },
-      { id: 'c-abcdefgh12', label: 'Drive', href: 'https://drive.example.com', icon: 'link' },
-    ], 'seo');
+    const got = resolveQuick(
+      {},
+      [],
+      { quickSet: true },
+      [
+        { id: 'stats' },
+        { id: 'c-abcdefgh12', label: 'Drive', href: 'https://drive.example.com', icon: 'link' },
+      ],
+      'seo',
+    );
     expect(got).toEqual({ items: [{ id: 'stats' }], source: 'preset' });
   });
 
   it('drops library actions the role may not use, or that are gone', () => {
-    const got = resolveQuick({ quickSet: true }, [{ id: 'open-leads' }, { id: 'stats' }, { id: 'gone' }], {}, [], 'seo');
+    const got = resolveQuick(
+      { quickSet: true },
+      [{ id: 'open-leads' }, { id: 'stats' }, { id: 'gone' }],
+      {},
+      [],
+      'seo',
+    );
     expect(got.items).toEqual([{ id: 'stats' }]);
   });
 });
 
 describe('presets hold the target role to what it may have (D3)', () => {
-  const none = { role: 'seo' as const, version: 0, dashboard: {}, quickActions: [], updatedAt: null };
+  const none = {
+    role: 'seo' as const,
+    version: 0,
+    dashboard: {},
+    quickActions: [],
+    updatedAt: null,
+  };
 
   it('refuses a widget or an action the role cannot use (the modal sends none)', () => {
-    expect(() =>
-      presetValues('seo', { dashboard: layout(['kpis'], ['leads'], []) }, none),
-    ).toThrow(/Not available to this role: leads/);
+    expect(() => presetValues('seo', { dashboard: layout(['kpis'], ['leads'], []) }, none)).toThrow(
+      /Not available to this role: leads/,
+    );
     expect(() => presetValues('seo', { quickActions: [{ id: 'open-leads' }] }, none)).toThrow(
       /open-leads/,
     );
@@ -200,7 +244,11 @@ describe('presets hold the target role to what it may have (D3)', () => {
       dashboard: { top: [], left: [], right: [], hidden: [], quickSet: true },
       quick_actions: [{ id: 'stats' }],
     });
-    const stored = { ...none, dashboard: { ...layout(['kpis'], [], []), quickSet: true }, quickActions: [{ id: 'edit-seo' }] };
+    const stored = {
+      ...none,
+      dashboard: { ...layout(['kpis'], [], []), quickSet: true },
+      quickActions: [{ id: 'edit-seo' }],
+    };
     expect(presetValues('seo', { dashboard: layout([], ['pages'], []) }, stored)).toEqual({
       dashboard: { top: [], left: ['pages'], right: [], hidden: [], quickSet: true },
       quick_actions: [{ id: 'edit-seo' }],

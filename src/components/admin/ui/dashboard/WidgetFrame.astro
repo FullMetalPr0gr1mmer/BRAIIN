@@ -27,12 +27,18 @@ const { id, title, sub, column, bare = false, flush = false, failed = false } = 
 const headingId = `wg-${id}-t`;
 const hasActions = Astro.slots.has('actions');
 /** What the column buttons say from where the widget starts (the island relabels on a move). */
-const PREV: Partial<Record<DashColumn, string>> = { left: 'to the top row', right: 'to the left column' };
-const NEXT: Partial<Record<DashColumn, string>> = { top: 'to the left column', left: 'to the right column' };
+const PREV: Partial<Record<DashColumn, string>> = {
+  left: 'to the top row',
+  right: 'to the left column',
+};
+const NEXT: Partial<Record<DashColumn, string>> = {
+  top: 'to the left column',
+  left: 'to the right column',
+};
 ---
 
 <section
-  class:list={["wg", { "wg--bare": bare }]}
+  class:list={['wg', { 'wg--bare': bare }]}
   id={`wg-${id}`}
   data-widget={id}
   data-sortable-id={id}
@@ -85,7 +91,12 @@ const NEXT: Partial<Record<DashColumn, string>> = { top: 'to the left column', l
     <button type="button" class="icon-btn" data-sortable-move="up" aria-label={`Move ${title} up`}>
       <Icon name="chevd" size={14} class="ic--flip" />
     </button>
-    <button type="button" class="icon-btn" data-sortable-move="down" aria-label={`Move ${title} down`}>
+    <button
+      type="button"
+      class="icon-btn"
+      data-sortable-move="down"
+      aria-label={`Move ${title} down`}
+    >
       <Icon name="chevd" size={14} />
     </button>
     <button

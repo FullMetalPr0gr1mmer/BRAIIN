@@ -65,7 +65,8 @@ export async function saveTeamNotes(
     p_version: version,
   });
   if (error) {
-    if (error.code === '42501') throw new AuthorizationError('analytics.read', 'the database refused the save (live check)');
+    if (error.code === '42501')
+      throw new AuthorizationError('analytics.read', 'the database refused the save (live check)');
     if (error.code === '40001') throw new OptimisticLockError('team_notes');
     if (error.code === '22023') {
       const problem = PROBLEMS.has(error.message) ? (error.message as TeamNoteProblem) : null;

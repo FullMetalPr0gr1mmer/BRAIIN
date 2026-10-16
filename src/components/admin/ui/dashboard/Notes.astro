@@ -36,7 +36,8 @@ const lines = notes.body.split('\n');
   </div>
   <div data-notes-editor></div>
   <p class="notes__rule">
-    For the team. Do not paste client e-mail addresses or phone numbers here. Notes clear
-    {notes.retentionDays} days after the last edit.
+    {
+      `For the team. Do not paste client e-mail addresses or phone numbers here. Notes clear ${notes.retentionDays} days after the last edit.`
+    }
   </p>
 </div>

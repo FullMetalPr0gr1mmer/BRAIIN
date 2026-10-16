@@ -44,7 +44,9 @@ export interface DashboardLayout {
 }
 
 /** No widget twice across the four lists. */
-function eachOnce(layout: { [K in DashColumn | 'hidden']?: readonly string[] | undefined }): boolean {
+function eachOnce(layout: {
+  [K in DashColumn | 'hidden']?: readonly string[] | undefined;
+}): boolean {
   const ids = [...DASH_COLUMNS, 'hidden' as const].flatMap((key) => layout[key] ?? []);
   return new Set(ids).size === ids.length;
 }
@@ -154,7 +156,8 @@ export const QUICK_HREF_MAX = 300;
 const LABEL_REFUSED = /[\p{Cc}\p{Cf}]/u;
 
 /** An admin path: `/admin` or `/admin/…`, path characters only, an optional query. */
-const ADMIN_PATH = /^\/admin(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%-]+)*\/?(?:\?[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*)?$/;
+const ADMIN_PATH =
+  /^\/admin(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%-]+)*\/?(?:\?[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*)?$/;
 
 /**
  * Where a person's own link may lead: an admin screen (`/admin…`) or an outside https
@@ -193,9 +196,7 @@ export const AdminOrHttpsHref = z
   .trim()
   .refine(isAdminOrHttpsHref, 'Use an admin path starting with /admin, or an https:// address.');
 
-export const QuickLibraryItemSchema = z
-  .object({ id: z.string().regex(QUICK_LIBRARY_ID) })
-  .strict();
+export const QuickLibraryItemSchema = z.object({ id: z.string().regex(QUICK_LIBRARY_ID) }).strict();
 export type QuickLibraryItem = z.infer<typeof QuickLibraryItemSchema>;
 
 export const QuickCustomItemSchema = z
@@ -320,7 +321,8 @@ export const TeamNotesPutSchema = z
       .transform(trimNote)
       .superRefine((value, ctx) => {
         const problem = teamNoteProblem(value);
-        if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: TEAM_NOTE_MESSAGES[problem] });
+        if (problem)
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: TEAM_NOTE_MESSAGES[problem] });
       }),
   })
   .strict();

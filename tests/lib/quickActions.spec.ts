@@ -72,11 +72,21 @@ describe('a person’s own link: /admin… or https://… only', () => {
 
   it('a label is 1 to 40 characters with no control or format character; the icon is from the list', () => {
     expect(QuickCustomItemSchema.safeParse({ ...custom('/admin'), label: '' }).success).toBe(false);
-    expect(QuickCustomItemSchema.safeParse({ ...custom('/admin'), label: 'x'.repeat(41) }).success).toBe(false);
-    expect(QuickCustomItemSchema.safeParse({ ...custom('/admin'), label: 'a\u202Eb' }).success).toBe(false);
-    expect(QuickCustomItemSchema.safeParse({ ...custom('/admin'), label: 'Google Drive' }).success).toBe(true);
-    expect(QuickCustomItemSchema.safeParse({ ...custom('/admin'), icon: 'bomb' }).success).toBe(false);
-    expect(QuickCustomItemSchema.safeParse({ ...custom('/admin'), id: 'stats' }).success).toBe(false);
+    expect(
+      QuickCustomItemSchema.safeParse({ ...custom('/admin'), label: 'x'.repeat(41) }).success,
+    ).toBe(false);
+    expect(
+      QuickCustomItemSchema.safeParse({ ...custom('/admin'), label: 'a\u202Eb' }).success,
+    ).toBe(false);
+    expect(
+      QuickCustomItemSchema.safeParse({ ...custom('/admin'), label: 'Google Drive' }).success,
+    ).toBe(true);
+    expect(QuickCustomItemSchema.safeParse({ ...custom('/admin'), icon: 'bomb' }).success).toBe(
+      false,
+    );
+    expect(QuickCustomItemSchema.safeParse({ ...custom('/admin'), id: 'stats' }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -92,14 +102,22 @@ describe('the list: at most 12, at most 8 of the person’s own, each once', () 
   it('12 in all pass, 13 do not', () => {
     const library = QUICK_LIBRARY.slice(0, 4).map((a) => ({ id: a.id }));
     expect(QuickActionsSchema.safeParse([...library, ...own(8)]).success).toBe(true);
-    expect(QuickActionsSchema.safeParse([...library, { id: 'stats' }, ...own(8)]).success).toBe(false);
+    expect(QuickActionsSchema.safeParse([...library, { id: 'stats' }, ...own(8)]).success).toBe(
+      false,
+    );
   });
 
   it('an id twice is refused; read back leniently, the second goes', () => {
     expect(QuickActionsSchema.safeParse([{ id: 'stats' }, { id: 'stats' }]).success).toBe(false);
-    expect(readQuickActions([{ id: 'stats' }, { id: 'stats' }, { id: 'Bad!' }, 'x', custom('javascript:x')])).toEqual([
-      { id: 'stats' },
-    ]);
+    expect(
+      readQuickActions([
+        { id: 'stats' },
+        { id: 'stats' },
+        { id: 'Bad!' },
+        'x',
+        custom('javascript:x'),
+      ]),
+    ).toEqual([{ id: 'stats' }]);
   });
 });
 

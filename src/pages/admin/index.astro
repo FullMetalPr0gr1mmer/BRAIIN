@@ -71,7 +71,11 @@ const island: DashboardIslandProps | null =
         })),
         quick: {
           items: dashboard.quick,
-          library: libraryFor(session.role).map((a) => ({ id: a.id, label: a.label, icon: a.icon })),
+          library: libraryFor(session.role).map((a) => ({
+            id: a.id,
+            label: a.label,
+            icon: a.icon,
+          })),
           defaults: [...QUICK_DEFAULTS[session.role]],
         },
         notesShown: shown.includes('notes'),

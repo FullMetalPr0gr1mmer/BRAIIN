@@ -4,7 +4,12 @@ import { WIDGET_IDS, type WidgetId } from '@schemas/dashboard';
 import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
 import { CAPABILITIES, ROLE_CAPS, type Access, type Capability } from '@/lib/authz/matrix';
 import { loadDashboard, perRiyadhDay, riyadhDate } from '@/lib/admin/dashboard/loaders';
-import { DEFAULT_LAYOUTS, WIDGETS, widgetsFor, widgetsForCaps } from '@/lib/admin/dashboard/widgets';
+import {
+  DEFAULT_LAYOUTS,
+  WIDGETS,
+  widgetsFor,
+  widgetsForCaps,
+} from '@/lib/admin/dashboard/widgets';
 import { visibleNav } from '@/lib/admin/nav';
 import { loadShellState } from '@/lib/admin/shell';
 
@@ -62,7 +67,10 @@ function fakeDb(answers: Answers = {}) {
       for (const op of ['select', 'order', 'limit', 'range', 'insert', 'update', 'delete']) {
         builder[op] = () => builder;
       }
-      builder['maybeSingle'] = async () => ({ data: answer.row ?? null, error: answer.error ?? null });
+      builder['maybeSingle'] = async () => ({
+        data: answer.row ?? null,
+        error: answer.error ?? null,
+      });
       builder['then'] = (resolve: (v: unknown) => unknown, reject?: (r: unknown) => unknown) =>
         Promise.resolve({
           data: answer.rows ?? [],
@@ -157,14 +165,31 @@ describe('the loaders read only what the role sees', () => {
   it.each(['content_creator', 'seo'] as const)(
     '%s never queries leads or applications, even with a layout naming them',
     async (role) => {
-      const { sb, calls } = fakeDb({ tables: { admin_user_prefs: { row: { dashboard: EVERYTHING, quick_actions: [], version: 3 } } } });
-      const dashboard = await loadDashboard({ sb, auth: auth(role), now: NOW, siteUrl: 'https://site.example' });
+      const { sb, calls } = fakeDb({
+        tables: {
+          admin_user_prefs: { row: { dashboard: EVERYTHING, quick_actions: [], version: 3 } },
+        },
+      });
+      const dashboard = await loadDashboard({
+        sb,
+        auth: auth(role),
+        now: NOW,
+        siteUrl: 'https://site.example',
+      });
       expect(Object.keys(dashboard.widgets).sort()).toEqual([...widgetsFor(role)].sort());
       expect(calls.filter((c) => c.kind === 'from').map((c) => c.name)).not.toEqual(
         expect.arrayContaining([expect.stringMatching(/^(leads|lead_stages|job_applications)$/)]),
       );
-      for (const table of LEAD_TABLES) expect(calls.some((c) => c.name === table), table).toBe(false);
-      for (const fn of LEAD_RPCS) expect(calls.some((c) => c.name === fn), fn).toBe(false);
+      for (const table of LEAD_TABLES)
+        expect(
+          calls.some((c) => c.name === table),
+          table,
+        ).toBe(false);
+      for (const fn of LEAD_RPCS)
+        expect(
+          calls.some((c) => c.name === fn),
+          fn,
+        ).toBe(false);
       // No lead figure in what the page renders: the KPI row says pages and services instead.
       const kpis = dashboard.widgets.kpis;
       expect(kpis?.ok && kpis.data.map((k) => k.label)).toEqual([
@@ -180,10 +205,17 @@ describe('the loaders read only what the role sees', () => {
 
   it('Admin with every widget reads each, the lead figures included', async () => {
     const { sb, calls } = fakeDb({
-      tables: { admin_user_prefs: { row: { dashboard: EVERYTHING, quick_actions: [], version: 3 } } },
+      tables: {
+        admin_user_prefs: { row: { dashboard: EVERYTHING, quick_actions: [], version: 3 } },
+      },
       rpcs: { lead_summary: { data: { new: 4 } } },
     });
-    const dashboard = await loadDashboard({ sb, auth: auth('admin'), now: NOW, siteUrl: 'https://site.example' });
+    const dashboard = await loadDashboard({
+      sb,
+      auth: auth('admin'),
+      now: NOW,
+      siteUrl: 'https://site.example',
+    });
     expect(Object.keys(dashboard.widgets).sort()).toEqual([...WIDGET_IDS].sort());
     for (const id of WIDGET_IDS) expect(dashboard.widgets[id]?.ok, id).toBe(true);
     const kpis = dashboard.widgets.kpis;
@@ -204,7 +236,12 @@ describe('the loaders read only what the role sees', () => {
         },
       },
     });
-    const dashboard = await loadDashboard({ sb, auth: auth('developer'), now: NOW, siteUrl: 'https://site.example' });
+    const dashboard = await loadDashboard({
+      sb,
+      auth: auth('developer'),
+      now: NOW,
+      siteUrl: 'https://site.example',
+    });
     expect(Object.keys(dashboard.widgets)).toEqual(['quick']);
     // The preferences row alone: the layout and quick list are the person's own, so no preset
     // is read; no stats, lead, health or audit read; no homepage (no edit-home in the list,
@@ -213,9 +250,29 @@ describe('the loaders read only what the role sees', () => {
   });
 
   it('the preset is read only when the person’s own layout or quick list leaves a gap', async () => {
-    const fresh = fakeDb({ tables: { admin_role_defaults: { row: { role: 'seo', dashboard: { top: [], left: ['pages'], right: [], hidden: [] }, quick_actions: [], version: 1, updated_at: null } } } });
-    const dashboard = await loadDashboard({ sb: fresh.sb, auth: auth('seo'), now: NOW, siteUrl: 'https://site.example' });
-    expect(fresh.calls.slice(0, 2).map((c) => c.name)).toEqual(['admin_user_prefs', 'admin_role_defaults']);
+    const fresh = fakeDb({
+      tables: {
+        admin_role_defaults: {
+          row: {
+            role: 'seo',
+            dashboard: { top: [], left: ['pages'], right: [], hidden: [] },
+            quick_actions: [],
+            version: 1,
+            updated_at: null,
+          },
+        },
+      },
+    });
+    const dashboard = await loadDashboard({
+      sb: fresh.sb,
+      auth: auth('seo'),
+      now: NOW,
+      siteUrl: 'https://site.example',
+    });
+    expect(fresh.calls.slice(0, 2).map((c) => c.name)).toEqual([
+      'admin_user_prefs',
+      'admin_role_defaults',
+    ]);
     expect(dashboard.source).toBe('preset');
     expect(dashboard.layout.left).toEqual(['pages']);
   });
@@ -227,7 +284,12 @@ describe('the loaders read only what the role sees', () => {
         audit_log: { error: { code: '57014', message: 'canceling statement due to timeout' } },
       },
     });
-    const dashboard = await loadDashboard({ sb, auth: auth('admin'), now: NOW, siteUrl: 'https://site.example' });
+    const dashboard = await loadDashboard({
+      sb,
+      auth: auth('admin'),
+      now: NOW,
+      siteUrl: 'https://site.example',
+    });
     expect(dashboard.widgets.activity).toEqual({ ok: false });
     expect(dashboard.widgets.applications?.ok).toBe(true);
     expect(dashboard.widgets.notes?.ok).toBe(true);
@@ -245,8 +307,15 @@ describe('the loaders read only what the role sees', () => {
   });
 
   it('a failed preferences read still shows the role’s layout, with editing off', async () => {
-    const { sb } = fakeDb({ tables: { admin_user_prefs: { error: { code: '42501', message: 'denied' } } } });
-    const dashboard = await loadDashboard({ sb, auth: auth('seo'), now: NOW, siteUrl: 'https://site.example' });
+    const { sb } = fakeDb({
+      tables: { admin_user_prefs: { error: { code: '42501', message: 'denied' } } },
+    });
+    const dashboard = await loadDashboard({
+      sb,
+      auth: auth('seo'),
+      now: NOW,
+      siteUrl: 'https://site.example',
+    });
     expect(dashboard.prefs).toBeNull();
     expect(dashboard.source).toBe('default');
     expect(dashboard.layout.top).toEqual(['kpis']);
@@ -254,10 +323,23 @@ describe('the loaders read only what the role sees', () => {
 
   it('"Going live today" is the Riyadh day, read like the bell; the view’s UTC day is not used', async () => {
     const { sb, calls } = fakeDb({
-      tables: { admin_user_prefs: { row: { dashboard: { top: [], left: ['attention'], right: [], hidden: [] }, quick_actions: [], version: 1 } } },
+      tables: {
+        admin_user_prefs: {
+          row: {
+            dashboard: { top: [], left: ['attention'], right: [], hidden: [] },
+            quick_actions: [],
+            version: 1,
+          },
+        },
+      },
     });
     // 22:30 UTC on the 15th is 01:30 on the 16th in Riyadh: "today" is the 16th there.
-    await loadDashboard({ sb, auth: auth('content_creator'), now: new Date('2026-10-15T22:30:00.000Z'), siteUrl: 'https://site.example' });
+    await loadDashboard({
+      sb,
+      auth: auth('content_creator'),
+      now: new Date('2026-10-15T22:30:00.000Z'),
+      siteUrl: 'https://site.example',
+    });
     const view = calls.find((c) => c.name === 'dashboard_attention');
     expect(view?.filters).toContainEqual(['neq', 'kind', 'scheduled_today']);
     const services = calls.find((c) => c.name === 'services');
@@ -283,12 +365,37 @@ describe('the loaders read only what the role sees', () => {
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
   it('Admin with every widget, page and shell together, stays well inside it', async () => {
     const { sb, calls } = fakeDb({
-      tables: { admin_user_prefs: { row: { dashboard: EVERYTHING, quick_actions: [{ id: 'edit-home' }], version: 1 } } },
-      rpcs: { leads_list: { data: { rows: [{ id: 'l1', name: 'Sam', service_of_interest: 'logo', discipline_of_interest: 'branding', stage_id: null, created_at: NOW.toISOString() }] } } },
+      tables: {
+        admin_user_prefs: {
+          row: { dashboard: EVERYTHING, quick_actions: [{ id: 'edit-home' }], version: 1 },
+        },
+      },
+      rpcs: {
+        leads_list: {
+          data: {
+            rows: [
+              {
+                id: 'l1',
+                name: 'Sam',
+                service_of_interest: 'logo',
+                discipline_of_interest: 'branding',
+                stage_id: null,
+                created_at: NOW.toISOString(),
+              },
+            ],
+          },
+        },
+      },
     });
     await loadDashboard({ sb, auth: auth('admin'), now: NOW, siteUrl: 'https://site.example' });
     const page = calls.length;
-    await loadShellState(sb, auth('admin'), visibleNav('admin'), {}, { maintenance: null, displayName: 'Amal' });
+    await loadShellState(
+      sb,
+      auth('admin'),
+      visibleNav('admin'),
+      {},
+      { maintenance: null, displayName: 'Amal' },
+    );
     const shell = calls.length - page;
     // Measured: recorded in docs/admin-v2/as-built/U1.md. The page's reads, plus the shell's
     // (the bell, the menu's counts, the environment), plus the middleware's session check and

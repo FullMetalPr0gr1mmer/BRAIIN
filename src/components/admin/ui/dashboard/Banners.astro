@@ -21,8 +21,8 @@ const { maintenance, canManageMaintenance, placeholdersLive, attentionShown } = 
   maintenance && (
     <Note tone="warn" class="dash__banner">
       <p>
-        <strong>Maintenance mode is on.</strong> Visitors see the maintenance notice instead of
-        the site.
+        <strong>Maintenance mode is on.</strong> Visitors see the maintenance notice instead of the
+        site.
       </p>
       {canManageMaintenance && (
         <a class="btn" data-size="sm" href="/admin/maintenance">
