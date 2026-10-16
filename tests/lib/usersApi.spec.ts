@@ -620,10 +620,37 @@ describe('GET /api/admin/users: profiles joined to their accounts', () => {
       rpc: { staff_accounts: { data: null, error: { message: 'function does not exist' } } },
     });
     const res = await call(users.GET as APIRoute, 'GET', '/api/admin/users', sb);
-    const data = (await bodyOf(res))['data'] as { rows: { email: unknown }[]; hasOwner: boolean };
+    const data = (await bodyOf(res))['data'] as {
+      rows: { email: unknown }[];
+      hasOwner: boolean | null;
+    };
     expect(res.status).toBe(200);
     expect(data.rows.map((r) => r.email)).toEqual([null, null]);
-    expect(data.hasOwner).toBe(false);
+    // Not "no owner": this page lists one (its own rows say so), and with none listed the
+    // answer is unknown, never false (the screen would announce a missing owner).
+    expect(data.hasOwner).toBe(true);
+  });
+
+  it('says nothing about the owner when the directory fails and no listed row is it', async () => {
+    const noOwner: Read = {
+      data: (profiles.data as Record<string, unknown>[]).map((p) => ({ ...p, is_owner: false })),
+      error: null,
+    };
+    const sb = session({
+      reads: { profiles: noOwner },
+      rpc: { staff_accounts: { data: null, error: { message: 'down' } } },
+    });
+    const res = await call(users.GET as APIRoute, 'GET', '/api/admin/users', sb);
+    expect(((await bodyOf(res))['data'] as { hasOwner: unknown }).hasOwner).toBeNull();
+  });
+
+  it('says no owner only when the directory was read and names none', async () => {
+    const sb = session({
+      reads: { profiles },
+      rpc: { staff_accounts: { data: [], error: null } },
+    });
+    const res = await call(users.GET as APIRoute, 'GET', '/api/admin/users', sb);
+    expect(((await bodyOf(res))['data'] as { hasOwner: unknown }).hasOwner).toBe(false);
   });
 });
 

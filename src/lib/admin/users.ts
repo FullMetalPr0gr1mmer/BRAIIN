@@ -28,7 +28,7 @@ export async function loadUsers(
   auth: AuthContext,
   page: { limit: number; offset: number },
   now: number = Date.now(),
-): Promise<{ rows: UserRow[]; total: number; hasOwner: boolean }> {
+): Promise<{ rows: UserRow[]; total: number; hasOwner: boolean | null }> {
   const [{ rows: profiles, total }, accounts] = await Promise.all([
     listRows<Record<string, unknown>>(sb, 'profiles', auth, {
       columns: PROFILE_COLUMNS,
@@ -38,7 +38,7 @@ export async function loadUsers(
     }),
     staffAccounts(sb, auth.tenantId),
   ]);
-  const byId = new Map(accounts.map((account) => [account.id, account]));
+  const byId = new Map((accounts ?? []).map((account) => [account.id, account]));
   const rows: UserRow[] = [];
   for (const profile of profiles) {
     const id = text(profile['id']);
@@ -63,19 +63,31 @@ export async function loadUsers(
       status: userStatus(partial, now),
     });
   }
-  return { rows, total, hasOwner: accounts.some((account) => account.is_owner) };
+  // Whether the tenant has an owner: the directory sees every profile (up to 200); when it
+  // cannot be read, this page's own rows can only say "yes" (an owner listed here) or
+  // "unknown", never "no owner", which the screen would then wrongly announce.
+  const hasOwner =
+    accounts !== null
+      ? accounts.some((account) => account.is_owner)
+      : rows.some((row) => row.isOwner)
+        ? true
+        : null;
+  return { rows, total, hasOwner };
 }
 
-/** public.staff_accounts for the caller's tenant; empty when it cannot be read. */
-async function staffAccounts(sb: SupabaseClient, tenantId: string): Promise<StaffAccountRow[]> {
+/** public.staff_accounts for the caller's tenant; null when it cannot be read. */
+async function staffAccounts(
+  sb: SupabaseClient,
+  tenantId: string,
+): Promise<StaffAccountRow[] | null> {
   try {
     const { data, error } = await sb.rpc('staff_accounts', { p_tenant: tenantId });
-    if (error || !Array.isArray(data)) return [];
+    if (error || !Array.isArray(data)) return null;
     return data.flatMap((row: unknown) => {
       const parsed = StaffAccountRowSchema.safeParse(row);
       return parsed.success ? [parsed.data] : [];
     });
   } catch {
-    return [];
+    return null;
   }
 }

@@ -36,7 +36,8 @@ export interface UsersPanelProps {
 interface Page {
   rows: UserRow[];
   total: number;
-  hasOwner: boolean;
+  /** null: unknown (the directory could not be read), so nothing is said about it. */
+  hasOwner: boolean | null;
 }
 
 const STATUS_TONE: Readonly<Record<UserStatus, BadgeTone>> = {
@@ -60,7 +61,11 @@ export default function UsersPanel({ selfId, isOwner, canManage }: UsersPanelPro
     setError(undefined);
     try {
       const data = await adminFetch<Page>(`/api/admin/users?limit=25&offset=${at}`);
-      setPage({ rows: data.rows ?? [], total: data.total ?? 0, hasOwner: data.hasOwner !== false });
+      setPage({
+        rows: data.rows ?? [],
+        total: data.total ?? 0,
+        hasOwner: typeof data.hasOwner === 'boolean' ? data.hasOwner : null,
+      });
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -135,7 +140,7 @@ export default function UsersPanel({ selfId, isOwner, canManage }: UsersPanelPro
           {notice}
         </Note>
       )}
-      {!busy && !error && !page.hasOwner && (
+      {!busy && !error && page.hasOwner === false && (
         <Note tone="warn">
           No account owner is set yet. Ask whoever runs the database to mark it (launch runbook §3).
         </Note>
