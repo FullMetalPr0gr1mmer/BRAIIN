@@ -56,22 +56,29 @@ export default function UsersPanel({ selfId, isOwner, canManage }: UsersPanelPro
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [viewerOwns, setViewerOwns] = useState(isOwner);
 
-  const load = useCallback(async (at: number) => {
-    setBusy(true);
-    setError(undefined);
-    try {
-      const data = await adminFetch<Page>(`/api/admin/users?limit=25&offset=${at}`);
-      setPage({
-        rows: data.rows ?? [],
-        total: data.total ?? 0,
-        hasOwner: typeof data.hasOwner === 'boolean' ? data.hasOwner : null,
-      });
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setBusy(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (at: number) => {
+      setBusy(true);
+      setError(undefined);
+      try {
+        const data = await adminFetch<Page>(`/api/admin/users?limit=25&offset=${at}`);
+        setPage({
+          rows: data.rows ?? [],
+          total: data.total ?? 0,
+          hasOwner: typeof data.hasOwner === 'boolean' ? data.hasOwner : null,
+        });
+        // Whether the viewer owns the account, as fresh as the list: the page's prop is the
+        // server's answer at render time, and ownership may have moved since.
+        const me = (data.rows ?? []).find((row) => row.id === selfId);
+        if (me) setViewerOwns(me.isOwner);
+      } catch (err) {
+        setError(describeError(err));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [selfId],
+  );
 
   useEffect(() => {
     void load(offset);

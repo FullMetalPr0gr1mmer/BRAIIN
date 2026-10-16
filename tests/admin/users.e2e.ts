@@ -1,23 +1,34 @@
 import AxeBuilder from '@axe-core/playwright';
+import { createClient } from '@supabase/supabase-js';
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { SKIP_REASON, authFile, ensureAccount, staffEmail, staffEnv } from './staff';
+import {
+  PROFILE_WITH_SETTING,
+  SESSION_LOG_SOURCE,
+  SETTING_MISSHAPEN,
+  SETTING_UNREADABLE,
+} from '@/lib/auth/sessionSetting';
+import { SKIP_REASON, STAFF_IDS, authFile, ensureAccount, staffEmail, staffEnv } from './staff';
 
 // Users & roles v2 (Admin v2 U12a) in a real browser, signed in as the Admin: the people
 // table with e-mails, the read-only role matrix in its own scroll region, the edit drawer and
-// its confirms with axe, the Security card's save and its stale-version refusal, and the
-// whole session posture end to end: a throwaway account signs in in a second browser, its
-// access token is read off its cookie and pinned to the shape resolveAuthContext relies on
-// (the claims' role and tenant, a password `amr` with a time), then the Admin changes its
-// role and its next click lands on the sign-in page (0055 deleted its sessions).
+// both confirms with axe and no sideways scroll at 320, 390 and 1280, the Security card's save
+// and its stale-version refusal, the session-length embed through the real PostgREST, and the
+// session posture end to end: a throwaway account signs in in a second browser, its access
+// token is read off its cookie and pinned to the shape resolveAuthContext relies on (the
+// claims' role and tenant, a password `amr` with a time), then the Admin changes its role and
+// its next click lands on the sign-in page (0055 deleted its sessions).
 //
-// The role accounts every other spec runs on are never changed here: a role change ends
-// every session of that person, and their saved sessions are shared by the whole run. The
-// accounts this spec changes are its own.
+// Serial, with the accounts made once: the tests share this file's throwaway accounts and the
+// tenant's one Security row. The role accounts every other spec runs on are never changed
+// here: a role change ends every session of that person, and their saved sessions are shared
+// by the whole run.
 
 test.skip(!staffEnv(), SKIP_REASON);
+test.describe.configure({ mode: 'serial' });
 test.use({ contextOptions: { reducedMotion: 'reduce' }, storageState: authFile('admin') });
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+const WIDTHS = [320, 390, 1280] as const;
 
 /** Accounts of this spec alone (fixed ids keep a re-run idempotent). */
 const MOVED = {
@@ -32,6 +43,22 @@ const EDITED = {
   role: 'seo' as const,
   displayName: 'E2E Edited',
 };
+/** An active Admin the (pretended) owner may hand ownership to. */
+const NEXT_OWNER = {
+  id: 'e2e00000-0000-4000-8000-0000000012a3',
+  email: 'e2e-u12-next-owner@example.com',
+  role: 'admin' as const,
+  displayName: 'E2E Next Owner',
+};
+
+let movedPassword = '';
+
+test.beforeAll(async () => {
+  const env = staffEnv()!;
+  await ensureAccount(env, EDITED);
+  await ensureAccount(env, NEXT_OWNER);
+  movedPassword = (await ensureAccount(env, MOVED)).password;
+});
 
 async function ready(page: Page, path = '/admin/users') {
   await page.goto(path, { waitUntil: 'networkidle' });
@@ -44,6 +71,23 @@ async function expectNoAxeViolations(page: Page, label: string) {
     violations.map((v) => `${v.id} [${v.impact ?? 'n/a'}] ${v.nodes.length}x: ${v.help}`),
     label,
   ).toEqual([]);
+}
+
+/** No sideways scroll: the page, and the body of whatever dialog is open. */
+async function expectNoOverflow(page: Page, label: string) {
+  const sideways = await page.evaluate(() => {
+    const page = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+    const bodies = [...document.querySelectorAll('dialog[open] .drw__b, dialog[open] .mdl__b')]
+      .map((body) => body.scrollWidth - body.clientWidth)
+      .concat([0]);
+    return Math.max(page, ...bodies);
+  });
+  expect(sideways, `${label}: no sideways scroll`).toBeLessThanOrEqual(1);
+}
+
+async function expectClean(page: Page, label: string) {
+  await expectNoOverflow(page, label);
+  await expectNoAxeViolations(page, label);
 }
 
 /** Opens a person's edit drawer: focus arms the row's hidden action at once (the kit's rule). */
@@ -92,10 +136,9 @@ async function signInElsewhere(
   return { context, page };
 }
 
-test('the screen: people with e-mails, the role matrix, no overflow at 320, 390 and 1280', async ({
+test('the screen: people with e-mails and the role matrix, clean at 320, 390 and 1280', async ({
   page,
 }) => {
-  await ensureAccount(staffEnv()!, EDITED);
   await ready(page);
   const table = page.getByRole('table', { name: 'People who can use the admin' });
   await expect(table).toBeVisible();
@@ -113,43 +156,65 @@ test('the screen: people with e-mails, the role matrix, no overflow at 320, 390 
     matrix.getByRole('rowheader', { name: 'Invite people and change their roles' }),
   ).toBeVisible();
 
-  await expectNoAxeViolations(page, 'the users screen');
-  for (const width of [320, 390, 1280]) {
+  for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 800 });
-    const sideways = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(sideways, `no horizontal page scroll at ${width}px`).toBeLessThanOrEqual(1);
+    await expectClean(page, `the users screen at ${width}px`);
   }
 });
 
-test('the edit drawer: the sign-out warning, Remove access confirmed, axe with each open', async ({
+test('the drawer and both confirms: axe and no sideways scroll at 320, 390 and 1280', async ({
   page,
 }) => {
-  await ensureAccount(staffEnv()!, EDITED);
-  await ready(page);
-  await openEdit(page, EDITED.displayName);
-  const drawer = page.getByRole('dialog', { name: 'Edit user' });
-  await expect(drawer).toBeVisible();
-  await expect(drawer.getByText(EDITED.email)).toBeVisible();
-  await expectNoAxeViolations(page, 'the edit drawer');
+  // "Make account owner" shows only to the owner. The harness cannot mark one (only an
+  // operator can, runbook §3a), so the list the screen loads says the Admin is the owner;
+  // the confirm is opened and cancelled, never sent.
+  await page.route('**/api/admin/users?*', async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as { data: { rows: Record<string, unknown>[] } };
+    body.data.rows = body.data.rows.map((row) =>
+      row['id'] === STAFF_IDS.admin ? { ...row, isOwner: true } : row,
+    );
+    await route.fulfill({ response, json: body });
+  });
 
-  await drawer.getByLabel('Role').selectOption('developer');
-  await expect(drawer.getByText('A role change signs them out on every device.')).toBeVisible();
-  await drawer.getByLabel('Role').selectOption(EDITED.role);
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 800 });
+    await ready(page);
 
-  await drawer.getByRole('button', { name: 'Remove access' }).click();
-  const confirm = page.getByRole('dialog', { name: `Remove access for ${EDITED.displayName}?` });
-  await expect(confirm).toBeVisible();
-  await expect(
-    confirm.getByText('They are signed out and cannot sign in again until you re-enable them.'),
-  ).toBeVisible();
-  await expectNoAxeViolations(page, 'the remove-access confirm');
-  await confirm.getByRole('button', { name: 'Cancel' }).click();
-  await expect(confirm).toBeHidden();
+    await openEdit(page, EDITED.displayName);
+    const drawer = page.getByRole('dialog', { name: 'Edit user' });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByText(EDITED.email)).toBeVisible();
+    await drawer.getByLabel('Role').selectOption('developer');
+    await expect(drawer.getByText('A role change signs them out on every device.')).toBeVisible();
+    await expectClean(page, `the edit drawer at ${width}px`);
+    await drawer.getByLabel('Role').selectOption(EDITED.role);
 
-  await page.keyboard.press('Escape');
-  await expect(drawer).toBeHidden();
+    await drawer.getByRole('button', { name: 'Remove access' }).click();
+    const remove = page.getByRole('dialog', { name: `Remove access for ${EDITED.displayName}?` });
+    await expect(remove).toBeVisible();
+    await expect(
+      remove.getByText('They are signed out and cannot sign in again until you re-enable them.'),
+    ).toBeVisible();
+    await expectClean(page, `the remove-access confirm at ${width}px`);
+    await remove.getByRole('button', { name: 'Cancel' }).click();
+    await expect(remove).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+
+    await openEdit(page, NEXT_OWNER.displayName);
+    await expect(drawer).toBeVisible();
+    await drawer.getByRole('button', { name: 'Make account owner' }).click();
+    const owner = page.getByRole('dialog', {
+      name: `Make ${NEXT_OWNER.displayName} the account owner?`,
+    });
+    await expect(owner).toBeVisible();
+    await expectClean(page, `the make-owner confirm at ${width}px`);
+    await owner.getByRole('button', { name: 'Cancel' }).click();
+    await expect(owner).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+  }
 });
 
 test('the Security card saves, and a save over someone else’s change is refused (409)', async ({
@@ -197,9 +262,7 @@ test('a role change signs the person out: the next click lands on the sign-in pa
   page,
   browser,
 }) => {
-  const env = staffEnv()!;
-  const account = await ensureAccount(env, MOVED);
-  const elsewhere = await signInElsewhere(browser, account);
+  const elsewhere = await signInElsewhere(browser, { email: MOVED.email, password: movedPassword });
   try {
     // The token GoTrue issued, as resolveAuthContext reads it (src/lib/auth/claims.ts): the
     // hook's role and tenant in app_metadata, and a password sign-in with its time in amr.
@@ -231,4 +294,32 @@ test('a role change signs the person out: the next click lands on the sign-in pa
   } finally {
     await elsewhere.context.close();
   }
+});
+
+test('the session length is read through the real embed, and never fell back', async () => {
+  // The unit tests mock PostgREST; this runs the session check's own select against the local
+  // one, as the service role, and expects the shape it relies on: a tenant holding a
+  // `security` key. Then, after every request this file made, no isolate logged that the
+  // embed failed or came back misshapen (each would mean the 7-day default was applied).
+  const env = staffEnv()!;
+  const svc = createClient(env.url, env.serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data, error } = await svc
+    .from('profiles')
+    .select(PROFILE_WITH_SETTING)
+    .eq('id', STAFF_IDS.admin)
+    .maybeSingle<{ tenant: unknown }>();
+  expect(error, error?.message).toBeNull();
+  const tenant = (Array.isArray(data?.tenant) ? data?.tenant[0] : data?.tenant) as
+    Record<string, unknown> | null | undefined;
+  expect(tenant && typeof tenant === 'object' && 'security' in tenant).toBe(true);
+
+  const { count, error: logError } = await svc
+    .from('system_logs')
+    .select('id', { count: 'exact', head: true })
+    .eq('source', SESSION_LOG_SOURCE)
+    .in('message', [SETTING_UNREADABLE, SETTING_MISSHAPEN]);
+  expect(logError, logError?.message).toBeNull();
+  expect(count).toBe(0);
 });
