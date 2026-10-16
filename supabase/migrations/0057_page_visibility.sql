@@ -2,8 +2,8 @@
 -- 0057 — Page visibility, without the password mode (Admin v2 U14a, AV-13+). Forward-only,
 -- expand only. Depends on 0001 (pages, tenants, app.current_role, app.is_staff), 0009 (the
 -- actor and version triggers), 0033 (app.live_role), 0038 (the release registry and
--- app.tg_snapshot_version), 0046 (the help centre), 0051 (app.tg_release_capture) and 0054
--- (the guides as U13 left them).
+-- app.tg_snapshot_version), 0046 (the help centre), 0051 (app.tg_release_capture) and 0055
+-- (the guides as U12a left them).
 --
 -- Who can see each CMS page of the public site, set by Admin and Developer (§5 "Maintenance /
 -- hidden pages / page visibility", `maintenance.manage`). The Worker snapshots the table into
@@ -35,12 +35,12 @@
 --   • The release registry row (registry contract #4) with the snapshot and capture triggers
 --     every registry table carries (0038, 0051): staged once releases switch on (P-3, R14),
 --     immediate until then.
---   • app.help_article_set() restated and seeded into every tenant again: 0054's set and one
+--   • app.help_article_set() restated and seeded into every tenant again: 0055's set and one
 --     new guide, page-visibility.
 --
 -- Grants are stated for both Supabase privilege regimes (README P-14). Production as of
--- 2026-10-16: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046, 0048, 0050-0052
--- and 0054, with 0055 (U12a) next. CLAUDE.md §3 (Pillar 1), §5, §8, §9.
+-- 2026-10-16: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046, 0048, 0050-0052,
+-- 0054 and 0055 (U12a). CLAUDE.md §3 (Pillar 1), §5, §8, §9.
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 
 -- A busy table fails the push instead of queueing: pages gains a unique constraint (its index
@@ -232,7 +232,7 @@ values
 on conflict (entity_type) do nothing;
 
 -- ---- 8. The guides ------------------------------------------------------------------------------
--- The set as 0054 (U13) left it, with one guide added, page-visibility, after
+-- The set as 0055 (U12a) left it, with one guide added, page-visibility, after
 -- maintenance-mode. A later slice that changes a guide restates the set from this text (U16's
 -- rule).
 create or replace function app.help_article_set() returns jsonb
@@ -400,7 +400,7 @@ create or replace function app.help_article_set() returns jsonb
   {
     "slug": "roles-and-access",
     "sort_order": 30,
-    "minutes": 3,
+    "minutes": 4,
     "tags": [
       "account",
       "team"
@@ -433,11 +433,27 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "p",
-          "x": "Only an Admin can, in Settings › Users & roles. The admin checks a person's role and account again on every request, so a role taken away stops working at their next click, and someone whose account is switched off is signed out at that click. A role given reaches every save once their sign-in renews, within the hour, or at once if they sign out and in again."
+          "x": "Only an Admin can, in Settings › Users & roles: open the person, choose the role or switch off Can sign in, and save. That ends every sign-in the person has, on every device: the admin turns them away at their next click, and they sign in again to get the new role. You cannot change your own role or switch yourself off."
         },
         {
           "t": "p",
-          "x": "One limit to know: a sign-in already handed out lasts up to an hour. Until it runs out, it can still reach the database directly, outside the admin, with the role it was issued with. Leads and job applications check the person's account on every read, so those close at once."
+          "x": "One limit to know: a sign-in pass already handed out keeps working for up to an hour when someone uses it directly against the database, outside the admin. On settings, media, the system logs and content it still carries the role it was issued with until it runs out. People and their roles, the security settings, leads, job applications and the activity log check the person's account on every request, so those close at once."
+        },
+        {
+          "t": "h",
+          "x": "The account owner"
+        },
+        {
+          "t": "p",
+          "x": "One Admin is the account owner, marked by whoever runs the database. The owner always keeps the Admin role: nobody can change it, switch the owner off or remove them. To hand ownership on, the owner opens another active Admin and chooses Make account owner."
+        },
+        {
+          "t": "h",
+          "x": "Security settings"
+        },
+        {
+          "t": "p",
+          "x": "The Security card on Users & roles sets the session length, 1 day or 7 days: someone who signed in longer ago than that is asked to sign in again at their next click. It also sets the allowed email domain: when it is filled in, invites go only to addresses at that domain."
         },
         {
           "t": "tip",
@@ -464,11 +480,27 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "p",
-          "x": "يستطيع ذلك المسؤول (Admin) فقط، من Settings › Users & roles. تتحقق لوحة الإدارة من دور الشخص وحسابه من جديد عند كل طلب، فالدور الذي يُسحب يتوقف عن العمل عند نقرته التالية، ومن أُوقف حسابه يُسجَّل خروجه عند تلك النقرة. أما الدور الجديد فيشمل كل حفظ بعد تجديد جلسة دخوله، خلال ساعة، أو فورًا إن سجّل خروجه ثم دخل من جديد."
+          "x": "يستطيع ذلك المسؤول (Admin) فقط، من Settings › Users & roles: افتح حساب الشخص، واختر الدور أو أوقف Can sign in، ثم احفظ. يُنهي ذلك كل جلسات دخول الشخص على كل أجهزته: ترفضه لوحة الإدارة عند نقرته التالية، ثم يسجّل دخوله من جديد ليحصل على الدور الجديد. لا يمكنك تغيير دورك بنفسك ولا إيقاف حسابك."
         },
         {
           "t": "p",
-          "x": "وهناك حدّ ينبغي معرفته: جلسة الدخول التي صدرت بالفعل تبقى صالحة حتى ساعة. وإلى أن تنتهي، يمكن استخدامها للوصول إلى قاعدة البيانات مباشرة، خارج لوحة الإدارة، بالدور الذي صدرت به. أما العملاء المحتملون وطلبات التوظيف فتتحقق من حساب الشخص عند كل قراءة، فيُغلق الوصول إليها فورًا."
+          "x": "وهناك حدّ ينبغي معرفته: تصريح الدخول الذي صدر بالفعل يبقى صالحًا حتى ساعة إذا استُخدم مباشرة على قاعدة البيانات، خارج لوحة الإدارة. ففي الإعدادات والوسائط وسجلات النظام والمحتوى يبقى يحمل الدور الذي صدر به إلى أن ينتهي. أما الأشخاص وأدوارهم، وإعدادات الأمان، والعملاء المحتملون، وطلبات التوظيف، وسجل النشاط فتتحقق من حساب الشخص عند كل طلب، فيُغلق الوصول إليها فورًا."
+        },
+        {
+          "t": "h",
+          "x": "مالك الحساب"
+        },
+        {
+          "t": "p",
+          "x": "أحد المسؤولين هو مالك الحساب، ويحدّده من يدير قاعدة البيانات. يحتفظ المالك بدور Admin دائمًا: لا يستطيع أحد تغييره أو إيقاف حساب المالك أو حذفه. ولنقل الملكية، يفتح المالك حساب مسؤول آخر نشط ويختار Make account owner."
+        },
+        {
+          "t": "h",
+          "x": "إعدادات الأمان"
+        },
+        {
+          "t": "p",
+          "x": "تحدّد بطاقة Security في Users & roles مدة الجلسة، يومًا واحدًا أو 7 أيام: من سجّل دخوله قبل أكثر من ذلك يُطلب منه تسجيل الدخول من جديد عند نقرته التالية. وتحدّد أيضًا نطاق البريد الإلكتروني المسموح به: إذا مُلئ، لا تُرسل الدعوات إلا إلى عناوين ذلك النطاق."
         },
         {
           "t": "tip",
