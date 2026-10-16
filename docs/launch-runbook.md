@@ -1284,6 +1284,14 @@ Then in a browser:
 5. Accept analytics consent, reload twice, wait for the rollup (≤15 min), and confirm
    `/admin/analytics` is non-zero.
 
+After the Admin v2 U12a deploy (migration 0055), expect each member signed in more than 7 days
+ago to be signed out once, the owner included: the admin now counts the session length (7 days
+unless the Users screen's Security card says 1) from the original sign-in, where before a
+session refreshed at least weekly never ended. Tell staff before the deploy that they will be
+asked to sign in again once. Then sign in afresh and click through two or three admin screens:
+being signed out again at every click after a fresh sign-in is the fault §10's rollback is for
+(`docs/admin-v2/as-built/U12a.md`, Rollback).
+
 ---
 
 ## 9. Known-outstanding at MVP
