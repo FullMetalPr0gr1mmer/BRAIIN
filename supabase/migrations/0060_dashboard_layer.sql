@@ -28,7 +28,8 @@
 --   • No client contact details in a team note (D5, PDPL): app.team_note_problem() refuses
 --     control and format characters (but tab and line feed), anything shaped like an e-mail
 --     address, and a run of 8 or more digits (Western, Arabic-Indic or Extended Arabic-Indic)
---     with optional single spaces or hyphens between them, the shape of a phone number.
+--     with up to two spaces, dots, hyphens or brackets between them, the shape of a phone
+--     number.
 --     packages/schemas/dashboard.ts states the same rules for the Worker, and
 --     tests/lib/teamNotes.spec.ts holds the two to one table of inputs, which
 --     supabase/tests/dashboard_layer.test.sql runs here.
@@ -84,7 +85,9 @@ grant execute on function app.quick_library_only(jsonb) to authenticated, servic
 --                       zero-width characters; 0044's list, as Unicode 15 to 17 have it);
 --   team_notes_contact  something shaped like an e-mail address (non-space@non-space.non-space),
 --                       or 8 or more digits of any of the three digit sets, each followed by
---                       at most one space or hyphen: a phone number however it is written.
+--                       at most two of space, dot, hyphen and brackets: a phone number as it
+--                       is usually written (055.123.4567, (055) 123-4567). Slashes are not
+--                       separators, so a date written 14/10/2026 passes.
 -- The length (2,000 characters) is the table's CHECK and the definer's first test (after a
 -- raw cap of 4,000 before its trim). The whitespace classes are written out (space, tab, line feed, vertical tab, form feed,
 -- carriage return) so the database and JavaScript read them alike.
@@ -96,7 +99,7 @@ create or replace function app.team_note_problem(p text) returns text
       then 'team_notes_chars'
     when p ~ '[^ \t\n\v\f\r@]+@[^ \t\n\v\f\r@]+\.[^ \t\n\v\f\r@]+'
       then 'team_notes_contact'
-    when p ~ '([0-9\u0660-\u0669\u06F0-\u06F9][ -]?){8,}'
+    when p ~ '([0-9\u0660-\u0669\u06F0-\u06F9][ .()-]{0,2}){8,}'
       then 'team_notes_contact'
   end
 $$;
@@ -474,7 +477,7 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "p",
-          "x": "Team notes is one note shared by everyone who sees the dashboard. Edit notes opens it, and Save team notes keeps your change; if someone saved first, reload their version and make your change again. A note is cleared 180 days after its last edit. It refuses e-mail addresses and phone numbers, and so any run of 8 or more digits: keep client details in leads, where they are protected."
+          "x": "Team notes is one note shared by everyone who sees the dashboard. Edit notes opens it, and Save team notes keeps your change; if someone saved first, reload their version and make your change again. A note is cleared 180 days after its last edit. It refuses anything that looks like an e-mail address or a phone number: any run of 8 or more digits, even with spaces, dots, hyphens or brackets between them. Keep client details in leads, where they are protected."
         },
         {
           "t": "tip",
@@ -513,7 +516,7 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "p",
-          "x": "ملاحظات الفريق ملاحظة واحدة يشترك فيها كل من يرى لوحة التحكم. يفتحها Edit notes، ويحفظ Save team notes تغييرك، وإذا حفظ أحد قبلك فأعد تحميل نسخته ثم أعد تغييرك. وتُمسح الملاحظة بعد 180 يومًا من آخر تعديل. وهي ترفض عناوين البريد الإلكتروني وأرقام الهواتف، ومن ثم أي سلسلة من 8 أرقام أو أكثر، فاحتفظ ببيانات العملاء في شاشة العملاء المحتملين حيث تكون محمية."
+          "x": "ملاحظات الفريق ملاحظة واحدة يشترك فيها كل من يرى لوحة التحكم. يفتحها Edit notes، ويحفظ Save team notes تغييرك، وإذا حفظ أحد قبلك فأعد تحميل نسخته ثم أعد تغييرك. وتُمسح الملاحظة بعد 180 يومًا من آخر تعديل. وهي ترفض كل ما يشبه عنوان بريد إلكتروني أو رقم هاتف: أي سلسلة من 8 أرقام أو أكثر، حتى لو فصلت بينها مسافات أو نقاط أو شرطات أو أقواس. فاحتفظ ببيانات العملاء في شاشة العملاء المحتملين حيث تكون محمية."
         },
         {
           "t": "tip",
@@ -1598,6 +1601,7 @@ begin
           and not app.team_note_ok('٠٥٥١٢٣٤٥٦٧')
           and not app.team_note_ok('۰۵۵۱۲۳۴۵۶۷')
           and not app.team_note_ok('055-123-4567')
+          and not app.team_note_ok('(055) 123.4567')
           and not app.team_note_ok(E'abc\u202Edef')
           and not app.team_note_ok(E'a\u200Bb')
           and not app.team_note_ok(E'a\rb')
