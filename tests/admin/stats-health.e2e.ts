@@ -134,18 +134,24 @@ test.describe('the error log', () => {
     const page = await context.newPage();
     await open(page, '/admin/site-health?tab=errors');
     await page.getByRole('button', { name: 'Clear logs' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Clear logs older than 30 days?' });
+    // Found by its role, not its name: the title follows the choice. One dialog is open.
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toHaveCount(1);
     await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAccessibleName('Clear logs older than 30 days?');
     // A destructive dialog starts on Cancel.
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
     await dialog.getByLabel('Older than 7 days').check();
-    await expect(page.getByRole('dialog', { name: 'Clear logs older than 7 days?' })).toBeVisible();
+    await expect(dialog).toHaveAccessibleName('Clear logs older than 7 days?');
+    await dialog.getByLabel('All entries').check();
+    await expect(dialog).toHaveAccessibleName('Clear every log entry?');
     const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
     expect(
       violations.map((v) => v.id),
       'axe with the dialog open',
     ).toEqual([]);
     await dialog.getByLabel('Older than 30 days').check();
+    await expect(dialog).toHaveAccessibleName('Clear logs older than 30 days?');
     const cleared = page.waitForResponse(
       (r) => new URL(r.url()).pathname === '/api/admin/logs' && r.request().method() === 'DELETE',
     );
