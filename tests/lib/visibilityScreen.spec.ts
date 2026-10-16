@@ -133,6 +133,14 @@ describe('the drawer', () => {
     expect(html).not.toMatch(/\sstyle=/);
   });
 
+  it('the hidden option names both of its outcomes: the page you choose, or page not found', () => {
+    // The select offers a redirect or the 404 (decide(): no target is a 404).
+    const html = drawer(hiddenAbout);
+    expect(MODE_COPY.hidden.text).toContain('sent to a page you choose');
+    expect(MODE_COPY.hidden.text).toContain('or sees a page not found screen');
+    expect(html).toContain(MODE_COPY.hidden.text);
+  });
+
   it('the homepage: the other modes are disabled and the refusal is said', () => {
     const html = drawer(page('home', HOME));
     expect(html).toContain(HOME_REFUSAL);

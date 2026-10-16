@@ -17,7 +17,7 @@ export const MODE_COPY = {
   },
   hidden: {
     title: 'Hidden from the site',
-    text: 'Removed from the menu and search engines. Anyone who opens the link is sent to another page.',
+    text: 'Removed from the menu and search engines. Anyone who opens the link is sent to a page you choose, or sees a page not found screen.',
     badge: 'Hidden',
   },
   link: {
