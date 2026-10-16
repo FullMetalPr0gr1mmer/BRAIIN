@@ -7,16 +7,28 @@ import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { serviceClient } from '@/lib/supabase/server';
 import { writeSystemLog } from '@/lib/data/systemLog';
+import {
+  OWNER_PROTECTED,
+  OWNER_PROTECTED_CODE,
+  isOwnerGuardError,
+  ownerRefusal,
+} from '@/lib/admin/users';
 
 // Change a colleague's role, or deactivate them. `users.manage` — Admin only.
 //
-// ── Why the JWT claim and the profile row are written together ───────────────────
-// Postgres RLS reads `app_metadata.role` out of the JWT; assertCap reads
-// `profiles.role`. Writing only the row would demote someone at the second layer while
-// the first one carried on enforcing their old, higher role until the token expired.
-// So both are written, and `resolveAuthContext` treats any disagreement between them as
-// a dead session — which is what turns a role change into an immediate, effective
-// revocation rather than one that takes up to an hour.
+// ── What a role or activity change does ─────────────────────────────────────────
+// Postgres RLS reads `app_metadata.role` out of the access token; assertCap reads
+// `profiles.role`. Changing the row ends every session of that person in the database
+// (profiles_revoke_sessions, 0055), so their next request finds no session and they sign
+// in again; the next token the access-token hook mints carries the new role. Their current
+// token, until then, disagrees with the profile, and resolveAuthContext revokes a session
+// whose token's claims and profile disagree (the second layer). `app_metadata` is stamped
+// too, for an environment whose hook is off (the claims then come from it).
+//
+// ── The account owner (0055) ─────────────────────────────────────────────────────
+// The owner cannot be demoted or switched off by anyone: refused here (422) before the
+// database, whose guard trigger is the second layer (its 42501 `owner_protected` answers
+// the same 422). The owner hands ownership on through POST ./[id]/owner.
 //
 // ── Why you cannot demote or disable yourself ────────────────────────────────────
 // Not paternalism: `users.manage` is Admin-only, so an admin removing their own admin
@@ -50,12 +62,14 @@ export const PATCH = defineAdminRoute({
     // from editing a profile in tenant B by pasting its uuid.
     const { data: target, error: readError } = await sb
       .from('profiles')
-      .select('id,role,is_active')
+      .select('id,role,is_active,is_owner')
       .eq('tenant_id', auth.tenantId)
       .eq('id', id)
-      .maybeSingle<{ id: string; role: string; is_active: boolean }>();
+      .maybeSingle<{ id: string; role: string; is_active: boolean; is_owner?: boolean }>();
     if (readError) throw new Error(`read profile: ${readError.message}`);
     if (!target) throw new NotFoundError('profile');
+    if (ownerRefusal(target, input))
+      throw new ValidationError(OWNER_PROTECTED, OWNER_PROTECTED_CODE);
 
     const values: Record<string, unknown> = {};
     if (input.role !== undefined) values['role'] = input.role;
@@ -71,7 +85,12 @@ export const PATCH = defineAdminRoute({
       .eq('tenant_id', auth.tenantId)
       .eq('id', id)
       .select('id');
-    if (updateError) throw new Error(`update profile: ${updateError.message}`);
+    if (updateError) {
+      if (isOwnerGuardError(updateError)) {
+        throw new ValidationError(OWNER_PROTECTED, OWNER_PROTECTED_CODE);
+      }
+      throw new Error(`update profile: ${updateError.message}`);
+    }
     // RLS skips a row it will not let this session write rather than raising, so a refused
     // write looks like a successful one. No row back means one of two things: the profile went
     // between the read above and the write (404), or the database refused the session: the
@@ -94,9 +113,9 @@ export const PATCH = defineAdminRoute({
       const { error: claimError } = await serviceClient().auth.admin.updateUserById(id, {
         app_metadata: { role: input.role, tenant_id: auth.tenantId },
       });
-      // Loud, not silent: the row now says one thing and the token another, and
-      // resolveAuthContext will lock the user out until this is fixed. Better a 500 the
-      // admin sees than a colleague mysteriously unable to log in.
+      // Loud, not silent: where the access-token hook is off, the claims come from
+      // app_metadata, and a stale one would lock the person out until this is fixed.
+      // Better a 500 the admin sees than a colleague mysteriously unable to sign in.
       if (claimError) throw new Error(`stamp claims: ${claimError.message}`);
     }
 
@@ -111,7 +130,12 @@ export const PATCH = defineAdminRoute({
       },
     });
 
-    return { id, ...values };
+    // A changed role or activity has ended every session of that person (0055): the screen
+    // says so.
+    const signedOut =
+      (input.role !== undefined && input.role !== target.role) ||
+      (input.isActive !== undefined && input.isActive !== target.is_active);
+    return { id, ...values, signedOut };
   },
 });
 

@@ -8,8 +8,8 @@ the program applies it. No URL, credential or project reference belongs here.
 
 ## Applied
 
-Production has applied 0001 to 0038, 0041, 0044, 0045, 0046, 0048, 0050, 0051, 0052 and 0054,
-the files `main` holds once #71 merges (0039, 0040, 0042, 0043, 0047 and 0049 were released unused; gaps are
+Production has applied 0001 to 0038, 0041, 0044, 0045, 0046, 0048, 0050, 0051, 0052, 0054 and
+0055, the files `main` holds once #70 merges (0039, 0040, 0042, 0043, 0047 and 0049 were released unused; gaps are
 allowed).
 
 | Migration | What | PR |
@@ -33,6 +33,7 @@ allowed).
 | 0051 | `0051_release_apply.sql`: `apply_release` and capture (inert while `release_tenants` is empty) (R4) | #69 |
 | 0052 | `0052_stats_health_rollups.sql`: stats and health: `rollup_daily_vitals`, the invoker readers, whole-day page views (`app.rollup_pageviews` restated), the help set restated (U2). Applied before #72 merged | #72 |
 | 0054 | `0054_activity_log.sql`: the activity log v2: `app.role_views_audit`, the RESTRICTIVE live read on `audit_log` (`audit_log_live_read`), the person and day filter indexes, `public.audit_people` (the people directory's audit door, former members included), the help set restated from 0052's with the activity log's guide text (the actor binding is H10's, 0050) (U13). Applied before #71 merges | #71 |
+| 0055 | `0055_users_v2.sql`: users v2 and the session posture: `profiles_revoke_sessions` (every session of a person whose role, activity or tenant changes is deleted; the postconditions refuse the push unless the owner can DELETE `auth.sessions`/`auth.refresh_tokens`), the RESTRICTIVE live read on `profiles` (`profiles_live_read`), the account owner (`profiles.is_owner`, `profiles_one_owner`, `app.tg_profiles_owner_guard`, `public.transfer_ownership`), `admin_security_settings`, `public.staff_accounts`, the help set restated from 0054's with the roles guide rewritten (U12a). Applied before #70 merges | #70 |
 
 Each slice's file under [as-built/](as-built/) has the detail.
 
@@ -53,7 +54,6 @@ the row is true when the PR lands and nothing here is edited after a merge.
 | 0047 | (released) | unused: U16 (0046) and then H9 (0048) merge before C13, and once 0048 is on `main` a 0047 would sort below its highest, so C13 moved to 0049 | 1 |
 | 0049 | (released) | unused: H10 (0050) merges before C13, and once 0050 is on `main` a 0049 would sort below its highest (rule 1), so C13 moved to 0059 | 1 |
 | 0053 | U1 | the dashboard: presets and team notes | 2 |
-| 0055 | U12a | users v2 and the session posture: the live read on `profiles`, session revocation on a role change, owner protection, security settings | 2 |
 | 0056 | U12b | invites: the help guide | 2 |
 | 0057 | U14a | page visibility | 2 |
 | 0058 | U14b | the page password | 2 |

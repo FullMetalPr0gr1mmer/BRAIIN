@@ -28,7 +28,7 @@ import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 export const STAFF_ROLES: readonly Role[] = ROLES;
 
 /** Fixed ids keep the setup idempotent on a local stack that outlives one run. */
-const STAFF_IDS: Record<Role, string> = {
+export const STAFF_IDS: Record<Role, string> = {
   admin: 'e2e00000-0000-4000-8000-000000000001',
   content_creator: 'e2e00000-0000-4000-8000-000000000002',
   seo: 'e2e00000-0000-4000-8000-000000000003',
@@ -193,9 +193,13 @@ export async function ensureAccount(
   };
 
   const existing = await svc.auth.admin.getUserById(id);
-  const { error: userError } = existing.data.user
+  let { error: userError } = existing.data.user
     ? await svc.auth.admin.updateUserById(id, attributes)
     : await svc.auth.admin.createUser({ id, ...attributes });
+  // Idempotent under a race: another worker created it between the read and the create.
+  if (userError && !existing.data.user && (await svc.auth.admin.getUserById(id)).data.user) {
+    ({ error: userError } = await svc.auth.admin.updateUserById(id, attributes));
+  }
   if (userError) throw new Error(`staff ${email}: ${userError.message}`);
 
   const { error: profileError } = await svc.from('profiles').upsert({
