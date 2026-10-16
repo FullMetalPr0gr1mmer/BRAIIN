@@ -174,7 +174,7 @@ describe('admin navigation gating', () => {
     expect(hrefs).not.toContain('/admin/blog');
     // …but keeps the technical surfaces §5 grants it.
     expect(hrefs).toContain('/admin/leads');
-    expect(hrefs).toContain('/admin/logs');
+    // The system log is site health's Errors tab (U2).
     expect(hrefs).toContain('/admin/site-health');
   });
 

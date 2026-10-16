@@ -1,0 +1,96 @@
+---
+import Badge from '@/components/admin/ui/Badge.astro';
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import Pager from '@/components/admin/ui/Pager.astro';
+import { offsetOf, pageInfo, pageParam, rangeText } from '@/lib/admin/pager';
+import { formatDateTime, isoOf, relTime } from '@/lib/admin/relTime';
+import { LOG_LEVEL_LABEL, type LogLevel, type LogPage } from '@/lib/admin/health/logs';
+import type { BadgeTone } from '@/lib/admin/tones';
+
+// The Errors tab's table (Admin v2 U2; it replaces /admin/logs): when, the level as a word,
+// the source and the message, newest first, 25 a page. A row's detail opens in place
+// (<details>), as text in a <pre>: what the writers logged, already scrubbed of personal
+// data, never markup. The scroll box is a named region in the tab order.
+
+interface Props {
+  logs: LogPage;
+  url: URL;
+  now?: number | undefined;
+}
+
+const { logs, url, now = Date.now() } = Astro.props;
+const info = pageInfo(logs.total, offsetOf(pageParam(url.searchParams.get('page'))));
+const TONE: Record<LogLevel, BadgeTone> = {
+  error: 'err',
+  warn: 'warn',
+  info: 'sky',
+  debug: 'gray',
+};
+const caption = 'The error log, newest first';
+---
+
+<div class="card card--flush dt">
+  <div class="table-wrap" tabindex="0" role="region" aria-label={caption}>
+    <table class="data">
+      <caption class="visually-hidden">{caption}</caption>
+      <thead>
+        <tr>
+          <th scope="col">When</th>
+          <th scope="col">Level</th>
+          <th scope="col">Source</th>
+          <th scope="col">Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          logs.rows.length === 0 ? (
+            <tr>
+              <td colspan="4">
+                <EmptyState
+                  icon="check"
+                  title="Nothing logged."
+                  text="Problems the site runs into are listed here for 30 days."
+                />
+              </td>
+            </tr>
+          ) : (
+            logs.rows.map((row) => (
+              <tr>
+                <td class="log__when">
+                  <time datetime={isoOf(row.created_at)} title={formatDateTime(row.created_at)}>
+                    {relTime(row.created_at, now)}
+                  </time>
+                </td>
+                <td>
+                  <Badge tone={TONE[row.level]}>{LOG_LEVEL_LABEL[row.level]}</Badge>
+                </td>
+                <td>
+                  <span class="log__src" dir="ltr">
+                    {row.source ?? 'unknown'}
+                  </span>
+                </td>
+                <td class="log__msg">
+                  <span dir="auto">{row.message}</span>
+                  {row.detail && (
+                    <details class="log__d">
+                      <summary>Detail</summary>
+                      <pre dir="ltr">{row.detail}</pre>
+                    </details>
+                  )}
+                </td>
+              </tr>
+            ))
+          )
+        }
+      </tbody>
+    </table>
+  </div>
+  {
+    logs.total > 0 && (
+      <div class="tbl__foot">
+        <p class="tbl__range">{rangeText(info)}</p>
+        <Pager total={info.total} url={url} />
+      </div>
+    )
+  }
+</div>

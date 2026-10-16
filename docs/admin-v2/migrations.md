@@ -50,7 +50,7 @@ the row is true when the PR lands and nothing here is edited after a merge.
 | 0043 | (released) | unused, as 0042: C13 moved to 0047 | 1 |
 | 0047 | (released) | unused: U16 (0046) and then H9 (0048) merge before C13, and once 0048 is on `main` a 0047 would sort below its highest, so C13 moved to 0049 | 1 |
 | 0049 | (released) | unused: H10 (0050) merges before C13, and once 0050 is on `main` a 0049 would sort below its highest (rule 1), so C13 moved to 0059 | 1 |
-| 0052 | U2 | stats and health, `rollup_daily_vitals` | 2 |
+| 0052 | U2 | stats and health: `rollup_daily_vitals`, the invoker readers, whole-day page views (`app.rollup_pageviews` restated) | 2 |
 | 0053 | U1 | the dashboard: presets and team notes | 2 |
 | 0054 | U13 | the activity log v2: the live read on `audit_log`, `audit_people` (the actor binding is H10's) | 2 |
 | 0055 | U12a | users v2 and the session posture: the live read on `profiles`, session revocation on a role change, owner protection, security settings | 2 |

@@ -1,13 +1,176 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminInsights from '@/components/admin/islands/AdminInsights';
+import AdminLogsClear from '@/components/admin/islands/AdminLogsClear';
+import Card from '@/components/admin/ui/Card.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
+import LinkChips from '@/components/admin/ui/LinkChips.astro';
+import LinkTabs from '@/components/admin/ui/LinkTabs.astro';
+import Note from '@/components/admin/ui/Note.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import ErrorsTable from '@/components/admin/screens/health/ErrorsTable.astro';
+import HealthChecklist from '@/components/admin/screens/health/HealthChecklist.astro';
+import HealthSummary from '@/components/admin/screens/health/HealthSummary.astro';
+import SpeedTable from '@/components/admin/screens/health/SpeedTable.astro';
+import { can } from '@/lib/authz/matrix';
+import { pageParam } from '@/lib/admin/pager';
+import { relTime } from '@/lib/admin/relTime';
+import {
+  LOG_LEVELS,
+  LOG_LEVEL_LABEL,
+  levelParam,
+  loadLogs,
+  type LogPage,
+} from '@/lib/admin/health/logs';
+import { SEO_BUILT_IN } from '@/lib/admin/health/seo';
+import { loadHealthReport, type HealthReport } from '@/lib/admin/health/summary';
+import { HEALTH_WINDOW_DAYS, speedRows } from '@/lib/admin/health/vitals';
+import { statsHref } from '@/lib/admin/stats/range';
 
 export const prerender = false;
+
+// Site health (Admin v2 U2, docs/admin-v2/ui.md "Site health v1"): server-rendered, with one
+// island (Clear logs, for logs.clear holders). siteHealth.view (Admin, Developer); a role
+// without it gets the layout with the refusal and a 403, and nothing is read.
+//   summary   the score ring (field vitals half, checklist half, the formula printed) and the
+//             tiles, on every tab;
+//   tabs      Overview (the checklist, grouped, with fix links), Speed (each page's field p75
+//             from the vitals rollup; lab scores run in CI), Errors (system_logs, logs.view;
+//             /admin/logs redirects here), SEO (the readiness rows).
+// Every read is the person's own (RLS decides), through src/lib/admin/health.
+
+const PATH = '/admin/site-health';
+type Tab = 'overview' | 'speed' | 'errors' | 'seo';
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = Boolean(session && sb && can(session.role, 'siteHealth.view') === 'full');
+if (!allowed) Astro.response.status = 403;
+
+const url = Astro.url;
+const mayErrors = Boolean(session && can(session.role, 'logs.view') === 'full');
+const canClear = Boolean(session && can(session.role, 'logs.clear') === 'full');
+const asked = url.searchParams.get('tab');
+const tab: Tab =
+  asked === 'speed' || asked === 'seo' || (asked === 'errors' && mayErrors) ? asked : 'overview';
+const level = levelParam(url.searchParams.get('level'));
+
+let report: HealthReport | null = null;
+let logs: LogPage | null = null;
+let logsFailed = false;
+if (allowed && session && sb) {
+  report = await loadHealthReport(sb, session);
+  if (tab === 'errors') {
+    try {
+      logs = await loadLogs(sb, session, { level, page: pageParam(url.searchParams.get('page')) });
+    } catch {
+      // Logged by the loader (system_logs).
+      logsFailed = true;
+    }
+  }
+}
+
+const tabHref = (id: Tab) =>
+  statsHref(PATH, url, { tab: id === 'overview' ? null : id, level: null });
+const levelHref = (value: string | null) => statsHref(PATH, url, { level: value });
+const tabs = [
+  { label: 'Overview', href: tabHref('overview') },
+  { label: 'Speed', href: tabHref('speed') },
+  ...(mayErrors ? [{ label: 'Errors', href: tabHref('errors') }] : []),
+  { label: 'SEO', href: tabHref('seo') },
+];
+const rolledUp = report?.vitals?.rolledUpAt ?? null;
 ---
 
 <AdminLayout
   title="Site health"
-  subtitle="Field Core Web Vitals — the source of truth the CI lab gate approximates."
+  subtitle="How fast the site is for real visitors, and a checklist of what is worth fixing."
+  styles={['health.css']}
 >
-  <AdminInsights client:load mode="health" />
+  {
+    !allowed || !report ? (
+      <Refused />
+    ) : (
+      <>
+        <HealthSummary score={report.score} label={report.scoreLabel} tiles={report.tiles} />
+        <LinkTabs label="Site health views" current={tabHref(tab)} tabs={tabs} />
+
+        {tab === 'overview' && (
+          <Card title="Checklist" sub="What should be right, before and after launch">
+            <HealthChecklist checks={report.checks} />
+          </Card>
+        )}
+
+        {tab === 'speed' && (
+          <>
+            <Note class="hs__note">
+              <p>
+                Measured in visitors' own browsers over the last {HEALTH_WINDOW_DAYS} days: each
+                figure is what 3 visits in 4 were at, or better. LCP is how fast the biggest thing
+                appears, INP how fast the page answers a tap, CLS how much it jumps. Lab scores run
+                in CI on every change, so none are shown here.
+              </p>
+              <p>
+                {rolledUp
+                  ? `Added up every hour; last changed ${relTime(rolledUp)}.`
+                  : 'Added up every hour.'}
+              </p>
+            </Note>
+            <SpeedTable
+              rows={report.vitals ? speedRows(report.vitals) : []}
+              url={url}
+              days={HEALTH_WINDOW_DAYS}
+            />
+          </>
+        )}
+
+        {tab === 'errors' && (
+          <>
+            <div class="hs__bar">
+              <LinkChips
+                label="Filter by level"
+                current={levelHref(level)}
+                chips={[
+                  { label: 'All', href: levelHref(null) },
+                  ...LOG_LEVELS.map((value) => ({
+                    label: LOG_LEVEL_LABEL[value],
+                    href: levelHref(value),
+                  })),
+                ]}
+              />
+              {canClear && <AdminLogsClear client:load />}
+            </div>
+            {logsFailed && (
+              <p class="msg" data-kind="error" role="alert">
+                The error log could not be read just now. The system log has the detail.
+              </p>
+            )}
+            {logs && <ErrorsTable logs={logs} url={url} />}
+          </>
+        )}
+
+        {tab === 'seo' && (
+          <div class="grid grid--2">
+            <Card title="Search readiness" sub="From what is published">
+              <HealthChecklist checks={report.checks} groups={['SEO']} />
+            </Card>
+            <Card title="Built in" sub="How the site is made for search">
+              <ul class="hc__list">
+                {SEO_BUILT_IN.map((fact) => (
+                  <li class="hsrow" data-state="ok">
+                    <span class="st" data-tone="ok" aria-hidden="true">
+                      <Icon name="check" size={12} />
+                    </span>
+                    <div class="hsrow__main">
+                      <span class="hsrow__t">{fact.text}</span>
+                      <small class="hsrow__s">{fact.detail}</small>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          </div>
+        )}
+      </>
+    )
+  }
 </AdminLayout>

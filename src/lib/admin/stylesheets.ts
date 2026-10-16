@@ -9,11 +9,13 @@
 // them) and anything two screens share stay in admin.css.
 
 export const ADMIN_STYLESHEETS = [
+  'health.css',
   'help.css',
   'kit.css',
   'login.css',
   'personal.css',
   'search.css',
+  'stats.css',
 ] as const;
 
 export type AdminStylesheet = (typeof ADMIN_STYLESHEETS)[number];

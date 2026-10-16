@@ -21,6 +21,10 @@ import { formatDate, formatDateTime, isoOf, relTime, toDate } from '@/lib/admin/
 // Cells are typed, not free markup: text, a number (tabular, end-aligned), a status
 // badge, a date, a date and time, or "3 h ago" as a <time>. The `title` column links to
 // `rowHref(row)` (no click handler on the row) and its link covers the row.
+//
+// The scroll box is a named region in the tab order (U2): a table wider than a phone
+// scrolls inside it, and a table with no link in it would otherwise leave that scrolling
+// out of reach of the keyboard (WCAG 2.1.1; axe's scrollable-region-focusable).
 
 export interface ServerColumn {
   key: string;
@@ -68,7 +72,7 @@ const text = (value: unknown) =>
 ---
 
 <div class="card card--flush dt">
-  <div class="table-wrap">
+  <div class="table-wrap" tabindex="0" role="region" aria-label={caption}>
     <table class="data">
       <caption class="visually-hidden">{caption}</caption>
       <thead>

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
 import { SKIP_REASON, STAFF_ROLES, authFile, staffEnv } from './staff';
-import { LOCKED_SCREENS, refusedRoles } from './routes';
+import { LOCKED_SCREENS, refusedRoles, renderOf } from './routes';
 
 /*
  * The server's refusals, end to end (CLAUDE.md §9: "Negative E2E proves server 403, not
@@ -9,9 +9,12 @@ import { LOCKED_SCREENS, refusedRoles } from './routes';
  * what it does not, through the real Worker, session and access-token hook.
  *
  *   signed in   each screen in LOCKED_SCREENS, as every role without its capability: the
- *               API its island loads answers assertCap's 403 (`forbidden`, not a CSRF or
- *               origin refusal), and the screen shows that refusal rather than data. The
- *               middleware asks only for a session, so the page itself still renders.
+ *               API behind it answers assertCap's 403 (`forbidden`, not a CSRF or origin
+ *               refusal), and the screen shows that refusal rather than data. The
+ *               middleware asks only for a session, so the page itself still renders: an
+ *               island screen's page answers 200 and its island shows the API's 403; a
+ *               server-rendered screen (render: 'server', Admin v2 U2) answers 403 itself
+ *               with the refusal in the layout.
  *   writes      creating a service as a role without `services.write`, with a valid CSRF
  *               token and origin, so the only thing left to refuse it is the capability.
  *   signed out  every locked screen sends a visitor to sign in, its API answers 401.
@@ -46,11 +49,18 @@ for (const role of STAFF_ROLES) {
         expect(res.status(), `${screen.api} as ${role}`).toBe(403);
         expect(await res.json()).toMatchObject({ ok: false, error: 'forbidden' });
 
-        const refused = page.waitForResponse(
-          (r) => new URL(r.url()).pathname === screen.api && r.status() === 403,
-        );
-        await page.goto(screen.href);
-        await refused;
+        if (renderOf(screen) === 'server') {
+          // The page refuses itself: a 403 with the layout and the refusal, nothing read.
+          const response = await page.goto(screen.href);
+          expect(response?.status(), `${screen.href} as ${role}`).toBe(403);
+          expect(new URL(page.url()).pathname).toBe(screen.href);
+        } else {
+          const refused = page.waitForResponse(
+            (r) => new URL(r.url()).pathname === screen.api && r.status() === 403,
+          );
+          await page.goto(screen.href);
+          await refused;
+        }
         await expect(page.locator('main .msg[data-kind="error"]').first()).toContainText(REFUSAL);
       });
     }

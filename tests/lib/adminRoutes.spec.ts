@@ -17,6 +17,7 @@ import {
   menuScreens,
   pageFileFor,
   refusedRoles,
+  renderOf,
   routeKey,
   sweepRoutes,
 } from '../admin/routes';
@@ -225,6 +226,26 @@ describe('the locked screens the refusals e2e opens', () => {
           !refused.includes(role),
         );
       }
+    }
+  });
+
+  it('a server-rendered one refuses itself: a 403, the refusal, no island (U2)', () => {
+    const server = LOCKED_SCREENS.filter((screen) => renderOf(screen) === 'server');
+    expect(server.map((s) => s.href).sort()).toEqual([
+      '/admin/analytics/search',
+      '/admin/site-health',
+    ]);
+    for (const screen of server) {
+      const page = readFileSync(pageFileFor(screen.href), 'utf8');
+      expect(page, screen.href).toContain(
+        "import Refused from '@/components/admin/ui/Refused.astro'",
+      );
+      expect(page, screen.href).toMatch(/if \(!allowed\) Astro\.response\.status = 403;/);
+      expect(page, screen.href).toContain(`can(session.role, '${screen.cap}') === 'full'`);
+    }
+    // An island screen loads its data on mount, so its page has no Refused of its own.
+    for (const screen of LOCKED_SCREENS.filter((s) => renderOf(s) === 'island')) {
+      expect(readFileSync(pageFileFor(screen.href), 'utf8'), screen.href).not.toContain('Refused');
     }
   });
 

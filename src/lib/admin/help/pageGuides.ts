@@ -73,7 +73,7 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
   {
     slug: 'site-health-and-logs',
     caps: ['siteHealth.view', 'logs.view', 'audit.view'],
-    screens: ['/admin/site-health', '/admin/logs', '/admin/audit'],
+    screens: ['/admin/site-health', '/admin/audit'],
   },
 ];
 
