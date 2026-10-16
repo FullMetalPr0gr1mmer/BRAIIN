@@ -45,6 +45,9 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/dashboard/defaults/[role]'),
     method: 'PUT',
     url: '/api/admin/dashboard/defaults/seo',
+    // The route reads `[role]`: without it every principal past assertCap would get 404 and
+    // the handler, its tenant scoping and its audit row would never run here.
+    params: { role: 'seo' },
     body: { version: 0, quickActions: [{ id: 'edit-seo' }] },
     allow: ['admin'],
   },
@@ -53,6 +56,7 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/dashboard/defaults/[role]'),
     method: 'DELETE',
     url: '/api/admin/dashboard/defaults/seo',
+    params: { role: 'seo' },
     allow: ['admin'],
   },
 ];
