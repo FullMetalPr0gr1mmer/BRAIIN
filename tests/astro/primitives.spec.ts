@@ -354,20 +354,6 @@ describe('ServerTable', () => {
     expect(html.match(/class="cell-tagged"/g)).toHaveLength(1);
   });
 
-  it('makes its scroll container a named, focusable region only when asked', async () => {
-    const plain = await render(ServerTable, { caption: 'Entries', columns, rows: [] });
-    expect(plain).toMatch(/<div class="table-wrap">/);
-    const region = await render(ServerTable, {
-      caption: 'Entries',
-      columns,
-      rows: [],
-      region: true,
-    });
-    expect(region).toMatch(
-      /<div class="table-wrap" tabindex="0" role="region" aria-label="Entries">/,
-    );
-  });
-
   it('shows the range and the pager under a paged list', async () => {
     const html = await render(ServerTable, {
       caption: 'Entries',

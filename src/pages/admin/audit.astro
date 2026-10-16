@@ -3,6 +3,7 @@ import AdminLayout from '@/layouts/AdminLayout.astro';
 import Icon from '@/components/admin/ui/Icon.astro';
 import LinkChips from '@/components/admin/ui/LinkChips.astro';
 import Note from '@/components/admin/ui/Note.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
 import ServerTable, { type ServerColumn } from '@/components/admin/ui/ServerTable.astro';
 import { can } from '@/lib/authz/matrix';
 import {
@@ -38,6 +39,9 @@ const sb = Astro.locals.supabase;
 const url = Astro.url;
 const allowed = session !== null && can(session.role, 'audit.view') === 'full';
 const canExport = allowed && can(session.role, 'export.csv') === 'full';
+// The menu offers this screen to Admin and Developer only; any other role that opens it is
+// refused here, the U2 way (Refused.astro), and reads nothing.
+if (!allowed) Astro.response.status = 403;
 
 const { query, dropped } = readActivityQuery(url.searchParams);
 const filters: ActivityFilters = {
@@ -60,11 +64,7 @@ let result: ActivityPage | null = null;
 let failed = false;
 let directory: { id: string; name: string; role: string | null }[] = [];
 
-if (!allowed) {
-  // The menu offers this screen to Admin and Developer only; any other role that opens it
-  // is refused here and reads nothing.
-  Astro.response.status = 403;
-} else if (session && sb) {
+if (allowed && session && sb) {
   const [loaded, staff] = await Promise.all([
     loadActivity(sb, session, query, query.actor ? [query.actor] : []).catch(async (err) => {
       await writeSystemLog({
@@ -171,9 +171,7 @@ function rowOf(entry: ActivityEntry): Record<string, unknown> {
 
   {
     !allowed ? (
-      <p class="msg" data-kind="error" role="alert">
-        Your role does not allow that.
-      </p>
+      <Refused />
     ) : (
       <>
         {notice === 'limit' && (
@@ -266,7 +264,6 @@ function rowOf(entry: ActivityEntry): Record<string, unknown> {
             )}
             <ServerTable
               caption="Activity, newest first"
-              region
               columns={columns}
               rows={(result?.entries ?? []).map(rowOf)}
               total={result?.total ?? 0}

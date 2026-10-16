@@ -1,13 +1,95 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminInsights from '@/components/admin/islands/AdminInsights';
+import LinkChips from '@/components/admin/ui/LinkChips.astro';
+import LinkTabs from '@/components/admin/ui/LinkTabs.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import StatsOverview from '@/components/admin/screens/stats/StatsOverview.astro';
+import StatsPages from '@/components/admin/screens/stats/StatsPages.astro';
+import { can } from '@/lib/authz/matrix';
+import { pageParam } from '@/lib/admin/pager';
+import { loadLeadKpis, type LeadKpis } from '@/lib/admin/stats/leads';
+import {
+  loadPagePaths,
+  loadPageviewSummary,
+  type PathPage,
+  type PageviewSummary,
+} from '@/lib/admin/stats/pageviews';
+import { RANGE_PARAM, STAT_RANGES, rangeFrom, statsHref } from '@/lib/admin/stats/range';
 
 export const prerender = false;
+
+// Website stats (Admin v2 U2, docs/admin-v2/ui.md "Website stats v1"): server-rendered, zero
+// JS. Range links (7, 30 or 90 days, `?range=`) and two in-page tabs (`?tab=`, links that
+// keep the range): Overview and Pages. Search is its own route (analytics.search). Every
+// figure comes from the page-view rollup through the invoker RPCs of migration 0052, read as
+// the person (analytics.read, every staff role).
+
+const PATH = '/admin/analytics';
+const SUBTITLE = 'First-party stats from visitors who accepted analytics cookies.';
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = Boolean(session && sb && can(session.role, 'analytics.read') === 'full');
+if (!allowed) Astro.response.status = 403;
+
+const url = Astro.url;
+const tab = url.searchParams.get('tab') === 'pages' ? 'pages' : 'overview';
+const range = rangeFrom(url);
+
+let overview: { summary: PageviewSummary; leads: LeadKpis | null } | null = null;
+let pages: PathPage | null = null;
+let failed = false;
+if (allowed && session && sb) {
+  try {
+    if (tab === 'overview') {
+      const summary = await loadPageviewSummary(sb, session, range);
+      overview = {
+        summary,
+        leads: await loadLeadKpis(sb, session, range, summary.previous !== null),
+      };
+    } else {
+      pages = await loadPagePaths(sb, session, range, pageParam(url.searchParams.get('page')));
+    }
+  } catch {
+    // Logged by the loader (system_logs); the screen says so instead of showing zeros.
+    failed = true;
+  }
+}
+
+const tabHref = (id: 'overview' | 'pages') =>
+  statsHref(PATH, url, { tab: id === 'overview' ? null : id });
+const rangeHref = (days: number) => statsHref(PATH, url, { [RANGE_PARAM]: String(days) });
 ---
 
-<AdminLayout
-  title="Analytics"
-  subtitle="First-party, consent-gated, and read from pre-aggregated rollups rather than raw events."
->
-  <AdminInsights client:load mode="analytics" />
+<AdminLayout title="Website stats" subtitle={SUBTITLE} styles={['stats.css']}>
+  {
+    !allowed ? (
+      <Refused />
+    ) : (
+      <>
+        <div class="stats__bar">
+          <LinkTabs
+            label="Website stats views"
+            current={tabHref(tab)}
+            tabs={[
+              { label: 'Overview', href: tabHref('overview') },
+              { label: 'Pages', href: tabHref('pages') },
+            ]}
+          />
+          <LinkChips
+            label="Date range"
+            current={rangeHref(range.days)}
+            chips={STAT_RANGES.map((days) => ({ label: `${days} days`, href: rangeHref(days) }))}
+          />
+        </div>
+        {failed && (
+          <p class="msg" data-kind="error" role="alert">
+            The stats could not be read just now. The system log has the detail.
+          </p>
+        )}
+        {overview && <StatsOverview summary={overview.summary} leads={overview.leads} />}
+        {pages && <StatsPages pages={pages} url={url} days={range.days} />}
+      </>
+    )
+  }
 </AdminLayout>

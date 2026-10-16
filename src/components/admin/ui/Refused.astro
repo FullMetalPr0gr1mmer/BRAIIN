@@ -1,0 +1,10 @@
+---
+// A server-rendered screen this role may not open (Admin v2 U2): what the page shows inside
+// the layout once it has set its response to 403 and read nothing. The words and the look
+// are an island's refusal (src/lib/admin/client.ts, `.msg[data-kind='error']`), so a screen
+// refuses the same way whether it is an island or not, and tests/admin/refusals.e2e.ts finds
+// both with one selector. The menu never offers the screen to the role; this is what a
+// typed or old link gets.
+---
+
+<p class="msg" data-kind="error" role="alert">Your role does not allow that.</p>

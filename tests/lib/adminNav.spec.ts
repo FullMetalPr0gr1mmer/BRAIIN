@@ -52,12 +52,17 @@ describe('the admin menu', () => {
   });
 
   it('keeps every screen of the old menu reachable for the roles that had it', () => {
-    // Folding Disciplines, Sectors, System logs… into tabs must not strand a role.
+    // Folding Disciplines, Sectors, System logs… into tabs must not strand a role. The
+    // system log is site health's Errors tab since U2 (/admin/logs redirects there).
     expect(reachableHrefs('content_creator')).toEqual(
       expect.arrayContaining(['/admin/disciplines', '/admin/service-cases', '/admin/sectors']),
     );
     expect(reachableHrefs('developer')).toEqual(
-      expect.arrayContaining(['/admin/logs', '/admin/maintenance', '/admin/analytics/search']),
+      expect.arrayContaining([
+        '/admin/site-health',
+        '/admin/maintenance',
+        '/admin/analytics/search',
+      ]),
     );
     expect(reachableHrefs('seo')).toEqual(
       expect.arrayContaining(['/admin/redirects', '/admin/analytics/search']),

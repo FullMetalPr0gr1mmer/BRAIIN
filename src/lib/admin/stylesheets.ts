@@ -10,11 +10,13 @@
 
 export const ADMIN_STYLESHEETS = [
   'activity.css',
+  'health.css',
   'help.css',
   'kit.css',
   'login.css',
   'personal.css',
   'search.css',
+  'stats.css',
 ] as const;
 
 export type AdminStylesheet = (typeof ADMIN_STYLESHEETS)[number];

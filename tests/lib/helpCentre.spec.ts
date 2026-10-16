@@ -391,12 +391,88 @@ describe('the guides say only what the admin does', () => {
     expect(source('supabase/migrations/0008_retention_jobs.sql')).toContain(
       "'system_logs_days')::int, 30)",
     );
-    expect(source('src/components/admin/screens/logs/ReadOnlyPanel.tsx')).toContain(
-      'Clear logs older than 30 days',
-    );
+    // Clear logs is site health's since U2: older than 7 days, older than 30, or all.
+    const clear = source('src/components/admin/screens/logs/ClearLogs.tsx');
+    expect(clear).toContain("{ value: '7', label: 'Older than 7 days' }");
+    expect(clear).toContain("{ value: '30', label: 'Older than 30 days' }");
+    expect(clear).toContain("{ value: 'all', label: 'All entries' }");
+    expect(clear).toContain('Clear logs');
     const en = guide('site-health-and-logs', 'en');
     expect(en).toContain('Every night, entries older than 30 days are deleted by themselves');
-    expect(en).toContain('Clear logs older than 30 days removes any still left');
+    expect(en).toContain(
+      'clear them sooner with Clear logs, choosing entries older than 7 days, older than 30 days, or all of them',
+    );
+  });
+
+  it('website stats are described as the screen and the rollups do them (U2)', () => {
+    // The range links, the 15-minute page-view rollup (0010) and its UTC days, the raw horizon.
+    expect(source('src/lib/admin/stats/range.ts')).toContain('STAT_RANGES = [7, 30, 90] as const');
+    expect(source('supabase/migrations/0010_launch_readiness.sql')).toMatch(
+      /cron\.schedule\('rollup-pageviews', '\*\/15 \* \* \* \*'/,
+    );
+    const en = guide('website-stats', 'en');
+    expect(en).toContain('Pick 7, 30 or 90 days at the top');
+    expect(en).toContain('Counts are added up every 15 minutes');
+    expect(en).toContain('midnight to midnight UTC (3 am in Riyadh)');
+    expect(en).toContain('Raw visit records are kept 90 days');
+    expect(guide('website-stats', 'ar')).toContain('كل 15 دقيقة');
+  });
+
+  it('site health is described as the score, the rollup and the tabs do it (U2)', () => {
+    expect(source('src/lib/admin/health/vitals.ts')).toContain('HEALTH_WINDOW_DAYS = 28');
+    expect(source('src/lib/admin/health/score.ts')).toContain('Uptime is not measured here yet.');
+    const migration = source('supabase/migrations/0052_stats_health_rollups.sql');
+    expect(migration).toContain("cron.schedule('rollup-vitals', '7 * * * *'");
+    expect(migration).toMatch(/v\.day < \(pg_catalog\.now\(\) at time zone 'UTC'\)::date - 400;/);
+    const en = guide('site-health-and-logs', 'en');
+    expect(en).toContain('The score is half speed and half checklist');
+    expect(en).toContain('real visits over the last 28 days');
+    expect(en).toContain('Uptime is not measured here yet.');
+    expect(en).toContain('added up every hour and kept 400 days');
+    expect(en).toContain('Lab scores run in CI on every change');
+    expect(guide('site-health-and-logs', 'ar')).toContain('آخر 28 يومًا');
+    expect(guide('site-health-and-logs', 'ar')).toContain('400 يوم');
+  });
+
+  it('U13 (0054) restates U2’s set (0052) and changes only the activity log’s part', () => {
+    // Production applies 0052 then 0054, so 0054's set must carry U2's guides as 0052 left
+    // them: every guide but site-health-and-logs byte for byte (website-stats among them),
+    // and in that one, only the activity log's item, the new filters item and the tip.
+    const setOf = (file: string) => {
+      const sql = source(`${MIGRATIONS}/${file}`);
+      return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
+    };
+    const u2 = setOf('0052_stats_health_rollups.sql');
+    const u13 = setOf('0054_activity_log.sql');
+    expect(u13.map((a) => a.slug)).toEqual(u2.map((a) => a.slug));
+    for (const article of u2.filter((a) => a.slug !== 'site-health-and-logs')) {
+      expect(
+        u13.find((a) => a.slug === article.slug),
+        article.slug,
+      ).toEqual(article);
+    }
+    const before = u2.find((a) => a.slug === 'site-health-and-logs')!;
+    const after = u13.find((a) => a.slug === 'site-health-and-logs')!;
+    expect({ ...after, body: null }).toEqual({ ...before, body: null });
+    for (const lang of ['en', 'ar'] as const) {
+      const [p0, ol0] = before.body[lang];
+      const [p1, ol1, tip1] = after.body[lang];
+      expect(p1, lang).toEqual(p0);
+      const items0 = ol0!.x as string[];
+      const items1 = ol1!.x as string[];
+      // U2's four items first, unchanged; then U13's two in place of the old activity item.
+      expect(items1.slice(0, 4), lang).toEqual(items0.slice(0, 4));
+      expect(items1).toHaveLength(6);
+      expect(items0).toHaveLength(5);
+      expect(tip1!.t).toBe('tip');
+    }
+    expect(guide('site-health-and-logs', 'en')).toContain(
+      'The score is half speed and half checklist',
+    );
+    expect(guide('site-health-and-logs', 'en')).toContain(
+      'names the person, former members included',
+    );
+    expect(guide('website-stats', 'en')).toContain('Counts are added up every 15 minutes');
   });
 
   it('the Arabic says what it means', () => {

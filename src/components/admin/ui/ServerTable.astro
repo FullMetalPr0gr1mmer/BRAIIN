@@ -52,6 +52,10 @@ export interface TaggedCell {
   badge: { label: string; tone: BadgeTone };
   parts: readonly TaggedPart[];
 }
+//
+// The scroll box is a named region in the tab order (U2): a table wider than a phone
+// scrolls inside it, and a table with no link in it would otherwise leave that scrolling
+// out of reach of the keyboard (WCAG 2.1.1; axe's scrollable-region-focusable).
 
 export interface ServerColumn {
   key: string;
@@ -99,12 +103,6 @@ interface Props {
   limit?: number;
   empty?: { title: string; text?: string; icon?: IconName } | undefined;
   now?: Date | number | string | undefined;
-  /**
-   * The scroll container as a focusable, named region (the caption is its name): for a
-   * table whose rows may hold no link, so the keyboard can still reach what a narrow screen
-   * scrolls sideways (axe scrollable-region-focusable, WCAG 2.1.1).
-   */
-  region?: boolean;
 }
 
 const {
@@ -118,7 +116,6 @@ const {
   limit = PAGE_SIZE,
   empty = { title: 'Nothing here yet' },
   now = Date.now(),
-  region = false,
 } = Astro.props;
 
 const paged = total !== undefined && url !== undefined;
@@ -131,12 +128,7 @@ const text = (value: unknown) =>
 ---
 
 <div class="card card--flush dt">
-  <div
-    class="table-wrap"
-    tabindex={region ? 0 : undefined}
-    role={region ? 'region' : undefined}
-    aria-label={region ? caption : undefined}
-  >
+  <div class="table-wrap" tabindex="0" role="region" aria-label={caption}>
     <table class="data">
       <caption class="visually-hidden">{caption}</caption>
       <thead>
