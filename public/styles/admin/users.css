@@ -1,0 +1,115 @@
+/* Screen stylesheet: Users & roles, /admin/users (Admin v2 U12a). Linked only through
+   AdminLayout's `styles` prop (styles={['users.css']}), after admin.css. The table, the
+   drawer, the cards and the badges are the kit's (admin.css); only the screen's own
+   arrangement is here: a person's name beside their avatar, the drawer's header and footer,
+   the save row, and the read-only role matrix, which scrolls inside its own focusable
+   region and never widens the page. Tokens only (tests/lib/adminStyles.spec.ts,
+   scripts/contrast-audit.mjs). */
+
+.users {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.users-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.users-person__who {
+  display: grid;
+  min-width: 0;
+}
+
+.users-person__name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.users-person__you {
+  font-weight: 600;
+  color: var(--ad-dim);
+}
+
+.users-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.users-cards {
+  align-items: flex-start;
+}
+
+.users-who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.users-who p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.users-who__name {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.users-drawer__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  inline-size: 100%;
+}
+
+.users-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.users-matrix {
+  margin-top: 18px;
+}
+
+.users-matrix__scroll:focus-visible {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: 2px;
+}
+
+.users-perm th[scope='row'] {
+  font-weight: 600;
+  min-inline-size: 14rem;
+}
+
+.users-perm td {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.users-perm td[data-cell='yes'] {
+  color: var(--ad-ok-text);
+  font-weight: 800;
+}
+
+.users-perm td[data-cell='no'] {
+  color: var(--ad-dim2);
+}
+
+.users-perm__group th {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ad-dim);
+  background: var(--ad-bg);
+}

@@ -1,6 +1,7 @@
 import { UUID, type Case } from '../harness';
 
-// Users & roles (§5 "Users & roles", Admin only).
+// Users & roles (§5 "Users & roles", Admin only). The Security card and "Make account owner"
+// are Admin v2 U12a's.
 
 export const cases: readonly Case[] = [
   {
@@ -27,6 +28,30 @@ export const cases: readonly Case[] = [
     method: 'PATCH',
     url: `/api/admin/users/${UUID}`,
     body: { displayName: 'Sam Example' },
+    allow: ['admin'],
+  },
+  {
+    name: 'user security settings read',
+    load: () => import('@/pages/api/admin/users/security'),
+    method: 'GET',
+    url: '/api/admin/users/security',
+    allow: ['admin'],
+  },
+  {
+    name: 'user security settings save',
+    load: () => import('@/pages/api/admin/users/security'),
+    method: 'PUT',
+    url: '/api/admin/users/security',
+    body: { sessionMaxDays: 1, inviteDomain: 'example.test', version: 1 },
+    allow: ['admin'],
+  },
+  {
+    // The owner rule comes after the gate: an Admin who is not the owner (the stub's) is a
+    // 422, never a 403 (tests/lib/usersApi.spec.ts drives the owner's own transfer).
+    name: 'user ownership transfer',
+    load: () => import('@/pages/api/admin/users/[id]/owner'),
+    method: 'POST',
+    url: `/api/admin/users/${UUID}/owner`,
     allow: ['admin'],
   },
 ];

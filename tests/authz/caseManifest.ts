@@ -194,5 +194,8 @@ export const CASE_MANIFEST: readonly string[] = [
   'styleFinder: style-finder styles reorder',
   'users: user invite',
   'users: user list',
+  'users: user ownership transfer',
+  'users: user security settings read',
+  'users: user security settings save',
   'users: user update',
 ];

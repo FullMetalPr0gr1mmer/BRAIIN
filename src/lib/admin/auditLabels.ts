@@ -235,6 +235,17 @@ const EXACT: Readonly<Record<string, Label>> = {
   'user.invite': { kind: 'users', verb: 'Invited', noun: 'a new member' },
   'user.update': { kind: 'users', verb: 'Changed the account of', noun: 'a member' },
   'user.deactivate': { kind: 'users', verb: 'Switched off the account of', noun: 'a member' },
+  // Admin v2 U12a (0055): the Security card, and handing ownership on (written by the RPC).
+  'user.security_update': {
+    kind: 'users',
+    verb: 'Changed the security settings',
+    noun: null,
+  },
+  'user.ownership_transfer': {
+    kind: 'users',
+    verb: 'Handed the account ownership to',
+    noun: 'a member',
+  },
   'profile.update': { kind: 'users', verb: 'Changed their display name', noun: null },
   'auth.login': { kind: 'users', verb: 'Signed in', noun: null },
   'auth.logout': { kind: 'users', verb: 'Signed out', noun: null },

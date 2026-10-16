@@ -12,7 +12,8 @@
 --     live Admin still changes colleagues (the users screen); another tenant's Admin, the
 --     other staff roles and anon change nothing; renaming yourself still works through
 --     update_my_profile, which the stale tokens cannot use either; the policy set is exactly
---     0001's, 0010's and 0050's three RESTRICTIVE ones.
+--     0001's, 0010's, 0050's three RESTRICTIVE ones and 0055's live read (whose rows are
+--     proven in users_security.test.sql).
 --   • audit_log: a staff token's row is stored as the caller, the token's role and now(),
 --     whatever it sent (a forged actor, role and date included); a stale token's row names
 --     the stale account and the role its token carries; another tenant and anon cannot
@@ -105,9 +106,10 @@ select is(
   'profiles_auth_admin_read SELECT PERMISSIVE {supabase_auth_admin}, '
   'profiles_live_delete DELETE RESTRICTIVE {authenticated}, '
   'profiles_live_insert INSERT RESTRICTIVE {authenticated}, '
+  'profiles_live_read SELECT RESTRICTIVE {authenticated}, '
   'profiles_live_update UPDATE RESTRICTIVE {authenticated}, '
   'profiles_self_select SELECT PERMISSIVE {public}',
-  'profiles carries exactly its three earlier policies and the three RESTRICTIVE live ones');
+  'profiles carries exactly its three earlier policies, the three RESTRICTIVE live writes and 0055''s live read');
 select is(
   (select count(*)::int from pg_policies
     where schemaname = 'public' and tablename = 'profiles' and permissive = 'RESTRICTIVE'
