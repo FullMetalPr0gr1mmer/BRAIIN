@@ -48,13 +48,15 @@ for (const role of ['admin', 'developer'] as const) {
       page,
     }) => {
       await open(page, '/admin/audit');
-      await expect(page.getByRole('heading', { level: 1, name: 'Activity log' })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { level: 1, name: 'Activity log', exact: true }),
+      ).toBeVisible();
       await expect(page.locator('.admin-sub').first()).toHaveText(
         'Who changed what, and when. Kept permanently and tamper-evident.',
       );
       // Every role signed in during the setup, so the log holds entries: a table with its
       // caption, Who and When columns, and the chain line over the newest entries.
-      const table = page.getByRole('table', { name: 'Activity, newest first' });
+      const table = page.getByRole('table', { name: 'Activity, newest first', exact: true });
       await expect(table).toBeVisible();
       await expect(table.getByRole('columnheader')).toHaveText(['Who', 'What', 'Details', 'When']);
       await expect(table.locator('tbody tr').first().locator('.cell-person')).toBeVisible();
@@ -84,23 +86,33 @@ for (const role of ['admin', 'developer'] as const) {
       await expect(table.getByText('Signed in').first()).toBeVisible();
 
       // A person and a range of days, through the GET form: the kind is kept.
-      const person = page.getByLabel('Person');
+      // Every control is found inside the filter form, by its exact name: page-wide, 'To'
+      // also matches the palette's "Go to" group and a person whose name holds "to".
+      const filters = page.locator('form.act-filters');
+      const person = filters.getByLabel('Person', { exact: true });
       const firstPerson = await person.locator('option').nth(1).getAttribute('value');
       expect(firstPerson).toMatch(/^[0-9a-f-]{36}$/);
       await person.selectOption(firstPerson!);
-      await page.getByLabel('From').fill('2026-01-01');
-      await page.getByLabel('To').fill('2099-12-31');
-      await page.getByRole('button', { name: 'Apply' }).click();
+      await filters.getByLabel('From', { exact: true }).fill('2026-01-01');
+      await filters.getByLabel('To', { exact: true }).fill('2099-12-31');
+      await filters.getByRole('button', { name: 'Apply', exact: true }).click();
       await expect(page).toHaveURL(
         new RegExp(`kind=users&actor=${firstPerson}&from=2026-01-01&to=2099-12-31$`),
       );
-      await expect(page.getByLabel('Person')).toHaveValue(firstPerson!);
+      await expect(
+        page.locator('form.act-filters').getByLabel('Person', { exact: true }),
+      ).toHaveValue(firstPerson!);
       await expectNoAxeViolations(page, `${role}: the activity log, filtered`);
 
       // A range with nothing in it says so; Clear filters goes back to everything.
       await open(page, '/admin/audit?from=2000-01-01&to=2000-01-02');
-      await expect(page.getByText('No activity matches these filters')).toBeVisible();
-      await page.getByRole('link', { name: 'Clear filters' }).click();
+      await expect(
+        page.locator('main .empty').getByText('No activity matches these filters', { exact: true }),
+      ).toBeVisible();
+      await page
+        .locator('form.act-filters')
+        .getByRole('link', { name: 'Clear filters', exact: true })
+        .click();
       await expect(page).toHaveURL(/\/admin\/audit$/);
 
       // A page past the end shows the last one, never an empty table under a range.
@@ -113,7 +125,7 @@ for (const role of ['admin', 'developer'] as const) {
       page,
     }) => {
       await open(page, '/admin/audit');
-      const exportLink = page.getByRole('link', { name: /^Export/ });
+      const exportLink = page.locator('.admin-header').getByRole('link', { name: /^Export/ });
       await expect(exportLink).toHaveAttribute('href', '/api/admin/audit/export');
 
       // Spend the hour's budget: three files, then a 429 (a retry finds it spent already).
@@ -142,7 +154,10 @@ for (const role of ['admin', 'developer'] as const) {
 
       // The budget is spent: following the link comes back to the page, filters kept.
       await open(page, '/admin/audit?kind=users');
-      await page.getByRole('link', { name: /^Export/ }).click();
+      await page
+        .locator('.admin-header')
+        .getByRole('link', { name: /^Export/ })
+        .click();
       await expect(page).toHaveURL(/\/admin\/audit\?kind=users&export=limit$/);
       await expect(page.locator('.act-note').first()).toContainText(
         'The activity log can be exported three times an hour.',
