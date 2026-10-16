@@ -202,6 +202,7 @@ export default function QuickActionsDrawer(props: QuickActionsDrawerProps) {
               key={action.id}
               type="button"
               className="chip"
+              aria-label={`${action.label}: add to your quick actions`}
               aria-disabled={full ? 'true' : undefined}
               onClick={() => {
                 if (!full) setItems((list) => [...list, { id: action.id }]);
@@ -209,7 +210,6 @@ export default function QuickActionsDrawer(props: QuickActionsDrawerProps) {
             >
               <Icon name={action.icon} size={14} />
               {action.label}
-              <span className="visually-hidden">: add to your quick actions</span>
             </button>
           ))}
         </div>
