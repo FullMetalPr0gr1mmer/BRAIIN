@@ -122,6 +122,9 @@ describe('StatsOverview', () => {
     });
     // 132 against 50: up 164%.
     expect(html).toContain('Up 164% vs the previous 7 days');
+    // The Arabic share, 28.8% against 28% (14 of 50), is a change in points, not percent.
+    expect(html).toContain('Up 1 point vs the previous 7 days');
+    expect(html).not.toContain('Up 3% vs');
     expect(html).toContain('New leads');
     expect(html).toContain('Up 100% vs the previous 7 days');
     expect(html).toContain('Inquiries per 1,000 page views');
@@ -141,6 +144,19 @@ describe('StatsOverview', () => {
     expect(html).not.toContain('chart-fig');
     expect(html).toContain('No views yet');
   });
+});
+
+it('says a share’s change in points: 10% to 20% is up 10 points, not up 100%', async () => {
+  const before = totals([9, 9, 9, 9, 9, 9, 9], [1, 1, 1, 1, 1, 1, 1]); // 10% Arabic
+  const now: PageviewSummary = {
+    range,
+    current: totals([8, 8, 8, 8, 8, 8, 8], [2, 2, 2, 2, 2, 2, 2]), // 20% Arabic
+    previous: before,
+    firstDay: '2026-09-01',
+  };
+  const html = await render(StatsOverview, { summary: now, leads: null });
+  expect(html).toContain('Up 10 points vs the previous 7 days');
+  expect(html).not.toContain('Up 100%');
 });
 
 describe('StatsPages', () => {

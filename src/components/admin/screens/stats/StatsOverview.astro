@@ -6,7 +6,7 @@ import Kpi from '@/components/admin/ui/Kpi.astro';
 import Donut from '@/components/admin/ui/charts/Donut.astro';
 import Line from '@/components/admin/ui/charts/Line.astro';
 import { formatNumber } from '@/lib/admin/charts';
-import { percentChange } from '@/lib/admin/kpi';
+import { percentChange, pointChange } from '@/lib/admin/kpi';
 import { perThousand, type LeadKpis } from '@/lib/admin/stats/leads';
 import { arabicShare, dailyArabicShare, type PageviewSummary } from '@/lib/admin/stats/pageviews';
 import { dayLabel, periodLabel } from '@/lib/admin/stats/range';
@@ -64,7 +64,8 @@ const delta = (now: number | null, before: number | null) =>
   <Kpi
     label="Arabic share"
     value={share === null ? 'No views yet' : percent(share)}
-    delta={delta(share, prevShare)}
+    delta={pointChange(share, prevShare)}
+    deltaUnit="points"
     period={period}
     spark={dailyArabicShare(current.byDay)}
     series={1}

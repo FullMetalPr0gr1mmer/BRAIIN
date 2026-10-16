@@ -106,3 +106,23 @@ describe('links', () => {
     expect(dayLabel('nonsense')).toBe('nonsense');
   });
 });
+
+describe('a share changes in points (U2 review)', () => {
+  it('10% to 20% is up 10 points, said as points', async () => {
+    const { deltaView, pointChange } = await import('@/lib/admin/kpi');
+    expect(pointChange(20, 10)).toBe(10);
+    expect(pointChange(20, null)).toBeNull();
+    expect(pointChange(null, 10)).toBeNull();
+    expect(deltaView(10, 'up', 'points')).toMatchObject({
+      text: '10 points',
+      spoken: 'up 10 points',
+    });
+    expect(deltaView(-1.2, 'up', 'points')).toMatchObject({
+      text: '1 point',
+      spoken: 'down 1 point',
+    });
+    expect(deltaView(0.2, 'up', 'points')?.spoken).toBe('no change');
+    // The default is still a percent of the previous value.
+    expect(deltaView(100)?.text).toBe('100%');
+  });
+});
