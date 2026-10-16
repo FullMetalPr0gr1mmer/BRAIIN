@@ -322,6 +322,47 @@ describe('the guides say only what the admin does', () => {
     expect(guide('maintenance-mode', 'ar')).toContain('خلال دقيقة تقريبًا');
   });
 
+  it('page visibility is described as the gate, the menus and the admin do it (U14a)', () => {
+    // A minute: the edge snapshot's isolate memo; Riyadh days, [from, until); the homepage
+    // refused with these words; templates hidden whole; link only unlisted, not private;
+    // a crawler's sitemap copy up to an hour (max-age=3600).
+    expect(source('src/lib/http/visibility.ts')).toContain('VISIBILITY_MEMO_MS = 60_000');
+    expect(source('packages/schemas/visibility.ts')).toContain('T00:00:00+03:00');
+    expect(source('src/lib/admin/visibilityCopy.ts')).toContain(
+      "'The homepage cannot be hidden. Use maintenance mode instead.'",
+    );
+    expect(source('src/pages/sitemap.xml.ts')).toContain("'cache-control': 'public, max-age=3600'");
+    expect(source('src/lib/admin/visibilityCopy.ts')).toContain("badge: 'Link only'");
+    const en = guide('page-visibility', 'en');
+    expect(en).toContain('applies to the live site within a minute');
+    expect(en).toContain('Riyadh time');
+    expect(en).toContain('unlisted, not private');
+    expect(en).toContain('The homepage is always visible');
+    expect(en).toContain('up to an hour');
+    expect(en).toContain('Sync to edge');
+    expect(en).not.toMatch(/password/i);
+    const ar = guide('page-visibility', 'ar');
+    expect(ar).toContain('خلال دقيقة');
+    expect(ar).toContain('بتوقيت الرياض');
+    expect(ar).toContain('غير مدرجة وليست خاصة');
+  });
+
+  it('U14a (0057) restates U13’s set (0054) and only adds the page-visibility guide', () => {
+    const setOf = (file: string) => {
+      const sql = source(`${MIGRATIONS}/${file}`);
+      return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
+    };
+    const u13 = setOf('0054_activity_log.sql');
+    const u14 = setOf('0057_page_visibility.sql');
+    expect(u14.filter((a) => a.slug !== 'page-visibility')).toEqual(u13);
+    const added = u14.find((a) => a.slug === 'page-visibility')!;
+    expect(added.caps).toEqual(['maintenance.manage']);
+    expect(added.screens).toEqual(['/admin/visibility']);
+    // Listed after maintenance mode.
+    const maintenance = u14.find((a) => a.slug === 'maintenance-mode')!;
+    expect(added.sort_order).toBeGreaterThan(maintenance.sort_order);
+  });
+
   it('scheduling is described as the editors and the job do it', () => {
     // The job runs every five minutes (0010) over app.publish_scheduled()'s tables, which are
     // exactly the editors with a Scheduled for field.
@@ -648,6 +689,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'finding-your-way',
       'maintenance-mode',
       'media-library',
+      'page-visibility',
       'personal-data',
       'roles-and-access',
       'site-health-and-logs',

@@ -1,0 +1,39 @@
+// Page visibility's words (Admin v2 U14a), shared by the route that refuses and the screen
+// that explains: plain strings only, so the island imports them without the server code.
+// The prototype's copy (screens_cms.js, visibilityDrawer), with "after you publish" made
+// "within a minute" until releases switch on (decision D7; docs/admin-v2/deviations.md).
+
+/** What the admin shows when the homepage is asked to be anything but visible. */
+export const HOME_REFUSAL = 'The homepage cannot be hidden. Use maintenance mode instead.';
+
+/** How soon a change reaches the live site (the edge snapshot's memo, a minute). */
+export const APPLIES_WITHIN = 'Applies to the live site within a minute.';
+
+export const MODE_COPY = {
+  public: {
+    title: 'Visible to everyone',
+    text: 'Normal. In the menu, in search engines, open to all.',
+    badge: 'Visible',
+  },
+  hidden: {
+    title: 'Hidden from the site',
+    text: 'Removed from the menu and search engines. Anyone who opens the link is sent to another page.',
+    badge: 'Hidden',
+  },
+  link: {
+    title: 'Only people with the link',
+    text: 'Not in the menu or search engines, but the link works. Good for proposals and previews.',
+    badge: 'Link only',
+  },
+} as const;
+
+/** The template note: a template hides every page it renders. */
+export const TEMPLATE_NOTE = {
+  service:
+    'This is a template. Hiding it hides every service page at once. To hide one service, unpublish that service instead.',
+  case_study:
+    'This is a template. Hiding it hides every project page at once. To hide one project, unpublish that project instead.',
+} as const;
+
+/** The save landed, the edge did not take it. */
+export const EDGE_MISSED = 'Saved, but the live site has not picked it up. Use Sync to edge.';

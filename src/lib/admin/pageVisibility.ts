@@ -14,6 +14,7 @@ import {
   type VisibilityTemplate,
 } from '@/lib/visibility/routes';
 import { NotFoundError, OptimisticLockError, ValidationError } from './errors';
+import { HOME_REFUSAL } from './visibilityCopy';
 import { translateWriteError, updateRow, type ConstraintFields } from './crud';
 
 // Page visibility's server half (Admin v2 U14a): what `/api/admin/page-visibility` lists and
@@ -60,8 +61,7 @@ export const PAGE_VISIBILITY = {
   } as Readonly<Record<string, readonly string[]>>,
 } as const;
 
-/** What the admin shows when the homepage is asked to be anything but visible. */
-export const HOME_REFUSAL = 'The homepage cannot be hidden. Use maintenance mode instead.';
+export { HOME_REFUSAL } from './visibilityCopy';
 
 /** The two templates, as the screen names them. */
 export const TEMPLATE_LABELS: Readonly<

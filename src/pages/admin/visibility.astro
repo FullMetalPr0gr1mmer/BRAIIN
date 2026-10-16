@@ -1,0 +1,17 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminVisibility from '@/components/admin/islands/AdminVisibility';
+
+// Page visibility (Admin v2 U14a): a tab of Settings › General, `maintenance.manage` (Admin +
+// Developer). The island reads GET /api/admin/page-visibility, which refuses every other role;
+// the island shows that refusal.
+export const prerender = false;
+---
+
+<AdminLayout
+  title="Page visibility"
+  subtitle="Who can see each page of the public site. A change reaches the live site within a minute."
+  styles={['visibility.css']}
+>
+  <AdminVisibility client:load />
+</AdminLayout>

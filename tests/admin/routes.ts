@@ -83,6 +83,8 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     render: 'server',
   },
   { href: '/admin/ai-config', api: '/api/admin/ai-config', cap: 'ai.config' },
+  // Admin v2 U14a: Admin + Developer; the island shows the API's 403.
+  { href: '/admin/visibility', api: '/api/admin/page-visibility', cap: 'maintenance.manage' },
 ];
 
 /** How a locked screen refuses (see LockedScreen). */
