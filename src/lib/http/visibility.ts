@@ -52,6 +52,12 @@ export interface VisibilitySnapshot {
   v: 1;
   /** When the snapshot was built (ISO): the admin's "the live site has the settings" line. */
   builtAt: string | null;
+  /**
+   * Which rows it was built from, as `visibilityRevision` writes it: the admin compares it
+   * with the rows it lists to say whether the live site has these settings. Absent on a
+   * snapshot that does not carry one (it then never agrees). Never read by the gate.
+   */
+  rev?: string;
   pages: Partial<Record<VisibilityPageSlug, VisibilityEntry>>;
   templates: Partial<Record<VisibilityTemplate, VisibilityEntry>>;
 }
@@ -63,6 +69,22 @@ export const EMPTY_VISIBILITY: VisibilitySnapshot = Object.freeze({
   pages: Object.freeze({}),
   templates: Object.freeze({}),
 }) as VisibilitySnapshot;
+
+/** The longest revision a snapshot may carry (a row is a uuid, a colon and a version). */
+const MAX_REV_LENGTH = 16_384;
+
+/**
+ * The revision of a set of rows: each row's `id:version`, sorted, joined with commas. Every
+ * write to a row moves its version (the database's trigger), so two sets of rows read alike
+ * exactly when they hold the same settings. Pure, so the snapshot's builder and the admin
+ * screen compute it the same way.
+ */
+export function visibilityRevision(rows: readonly { id: string; version: number }[]): string {
+  return rows
+    .map((row) => `${row.id}:${row.version}`)
+    .sort()
+    .join(',');
+}
 
 /** Whether a snapshot hides or unlists anything at all (the readers' fast path). */
 export function hasRestrictions(snapshot: VisibilitySnapshot | null | undefined): boolean {
@@ -118,9 +140,11 @@ export function parseVisibilitySnapshot(raw: string | null | undefined): Visibil
         if (parsedEntry) templates[template] = parsedEntry;
       }
     }
+    const rev = value['rev'];
     return {
       v: 1,
       builtAt: isInstant(value['builtAt']) ? value['builtAt'] : null,
+      ...(typeof rev === 'string' && rev.length <= MAX_REV_LENGTH ? { rev } : {}),
       pages,
       templates,
     };

@@ -136,21 +136,24 @@ describe('buildVisibilitySnapshot', () => {
     const snap = buildVisibilitySnapshot(
       [
         row({
+          id: 'r-about',
+          version: 3,
           mode: 'hidden',
           page: { slug: 'about' },
           redirect: { slug: 'contact' },
           hide_from: '2026-10-31T21:00:00+00:00',
           show_on: '2026-11-07T21:00:00+00:00',
         }),
-        row({ mode: 'link', page: { slug: 'Join' } }),
-        row({ mode: 'public', page: { slug: 'contact' } }),
-        row({ mode: 'hidden', template: 'case_study' }),
+        row({ id: 'r-join', version: 1, mode: 'link', page: { slug: 'Join' } }),
+        row({ id: 'r-contact', version: 2, mode: 'public', page: { slug: 'contact' } }),
+        row({ id: 'r-case', version: 5, mode: 'hidden', template: 'case_study' }),
       ],
       new Date('2026-10-16T09:00:00Z'),
     );
     expect(snap).toEqual({
       v: 1,
       builtAt: '2026-10-16T09:00:00.000Z',
+      rev: 'r-about:3,r-case:5,r-join:1',
       pages: {
         about: {
           mode: 'hidden',
@@ -162,6 +165,22 @@ describe('buildVisibilitySnapshot', () => {
       },
       templates: { case_study: { mode: 'hidden', target: null } },
     });
+  });
+
+  it('the revision names exactly the rows that made an entry, by id and version', () => {
+    const rows = [
+      row({ id: 'r-about', version: 2, mode: 'hidden', page: { slug: 'about' } }),
+      row({ id: 'r-home', version: 1, mode: 'hidden', page: { slug: 'home' } }),
+      row({ id: 'r-careers', version: 1, mode: 'link', page: { slug: 'careers' } }),
+      row({ id: 'r-svc', version: 4, mode: 'link', template: 'service' }),
+    ];
+    expect(buildVisibilitySnapshot(rows).rev).toBe('r-about:2');
+    // A save moves the version, so the same count with another setting is another revision.
+    const moved = buildVisibilitySnapshot([
+      row({ id: 'r-about', version: 3, mode: 'link', page: { slug: 'about' } }),
+    ]);
+    expect(Object.keys(moved.pages)).toHaveLength(1);
+    expect(moved.rev).toBe('r-about:3');
   });
 
   it('drops the homepage, a page the route map does not know, a redirect to one, and bad modes', () => {
@@ -215,7 +234,7 @@ describe('syncVisibilityToEdge', () => {
       ],
     });
     expect(JSON.parse(__kv.get(VISIBILITY_KV_KEY)!).pages).toEqual({ about: { mode: 'link' } });
-    expect(await edgeVisibilityStatus()).toMatchObject({ present: true, count: 1 });
+    expect(await edgeVisibilityStatus()).toMatchObject({ present: true, count: 1, rev: '' });
   });
 
   it('reads only what is not public, in a fixed order, and refuses a read that reaches the bound', async () => {
@@ -265,7 +284,12 @@ describe('syncVisibilityToEdge', () => {
   });
 
   it('the edge status says when there is no snapshot yet', async () => {
-    expect(await edgeVisibilityStatus()).toEqual({ present: false, builtAt: null, count: 0 });
+    expect(await edgeVisibilityStatus()).toEqual({
+      present: false,
+      builtAt: null,
+      count: 0,
+      rev: null,
+    });
   });
 });
 

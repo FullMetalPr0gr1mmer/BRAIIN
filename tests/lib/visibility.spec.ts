@@ -10,6 +10,7 @@ import {
   hasRestrictions,
   isListed,
   parseVisibilitySnapshot,
+  visibilityRevision,
   putVisibilitySnapshot,
   type VisibilitySnapshot,
 } from '@/lib/http/visibility';
@@ -177,6 +178,24 @@ describe('parseVisibilitySnapshot: anything unreadable is every page public', ()
       contact: { mode: 'hidden', target: null },
     });
     expect(parsed.templates).toEqual({});
+  });
+
+  it('keeps the revision the admin compares, and drops one that is not a bounded string', () => {
+    const base = { v: 1, builtAt: null, pages: {}, templates: {} };
+    expect(parseVisibilitySnapshot(JSON.stringify({ ...base, rev: 'a:1,b:2' })).rev).toBe(
+      'a:1,b:2',
+    );
+    expect(parseVisibilitySnapshot(JSON.stringify({ ...base, rev: 7 })).rev).toBeUndefined();
+    expect(
+      parseVisibilitySnapshot(JSON.stringify({ ...base, rev: 'x'.repeat(20_000) })).rev,
+    ).toBeUndefined();
+    expect(
+      visibilityRevision([
+        { id: 'b', version: 2 },
+        { id: 'a', version: 1 },
+      ]),
+    ).toBe('a:1,b:2');
+    expect(visibilityRevision([])).toBe('');
   });
 
   it('hasRestrictions is false for no snapshot and for an empty one', () => {

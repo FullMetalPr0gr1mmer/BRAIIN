@@ -3,6 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import VisibilityList, { windowText } from '@/components/admin/screens/visibility/VisibilityList';
 import VisibilityDrawer, { draftOf } from '@/components/admin/screens/visibility/VisibilityDrawer';
+import { edgeLine } from '@/components/admin/screens/visibility/VisibilityScreen';
 import type { VisibilityItem } from '@/components/admin/screens/visibility/types';
 import { HOME_REFUSAL, MODE_COPY, TEMPLATE_NOTE } from '@/lib/admin/visibilityCopy';
 
@@ -154,6 +155,39 @@ describe('the drawer', () => {
     });
     expect(draftOf(hiddenAbout, HOME).redirect).toBe(HOME);
     expect(draftOf(template, HOME).redirect).toBe('');
+  });
+});
+
+describe('the edge status line compares settings, not counts', () => {
+  const list = (about: VisibilityItem, rev: string | null, count = 2) => ({
+    pages: [page('home', HOME) as Extract<VisibilityItem, { kind: 'page' }>, about as never],
+    templates: [template as Extract<VisibilityItem, { kind: 'template' }>],
+    edge: { present: true, builtAt: null, count, rev },
+  });
+
+  it('agrees when the snapshot was built from these rows at these versions', () => {
+    expect(edgeLine(list(hiddenAbout, 'row-a:2,row-t:1')).tone).toBe('info');
+  });
+
+  it('is behind when the counts match but a setting moved (hidden to link only, failed KV write)', () => {
+    // The table now holds About as link only (version 3); the edge still has version 2.
+    const linkAbout = page('about', ABOUT, {
+      ...(hiddenAbout.setting as NonNullable<VisibilityItem['setting']>),
+      mode: 'link',
+      redirectPageId: null,
+      hideFrom: null,
+      showOn: null,
+      version: 3,
+    });
+    const line = edgeLine(list(linkAbout, 'row-a:2,row-t:1'));
+    expect(line).toEqual({
+      tone: 'warn',
+      text: 'The live site is behind these settings. Use Sync to edge.',
+    });
+  });
+
+  it('is behind when the snapshot carries no revision', () => {
+    expect(edgeLine(list(hiddenAbout, null)).tone).toBe('warn');
   });
 });
 

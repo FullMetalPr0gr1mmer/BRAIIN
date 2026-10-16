@@ -7,6 +7,7 @@ import {
   VISIBILITY_KV_KEY,
   parseVisibilitySnapshot,
   putVisibilitySnapshot,
+  visibilityRevision,
   type VisibilityEntry,
   type VisibilitySnapshot,
 } from '@/lib/http/visibility';
@@ -27,7 +28,7 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 
 /** The columns a snapshot is built from, the page and the redirect target named by slug. */
 export const VISIBILITY_SNAPSHOT_SELECT =
-  'mode,template,hide_from,show_on,page:pages!page_visibility_page_fk(slug),redirect:pages!page_visibility_redirect_fk(slug)';
+  'id,version,mode,template,hide_from,show_on,page:pages!page_visibility_page_fk(slug),redirect:pages!page_visibility_redirect_fk(slug)';
 
 /**
  * The most rows one snapshot read takes. Only the rows that are not public are read (a public
@@ -39,6 +40,8 @@ export const VISIBILITY_ROW_LIMIT = 200;
 
 /** A `page_visibility` row as the snapshot query returns it. */
 export interface VisibilitySourceRow {
+  id?: unknown;
+  version?: unknown;
   mode: unknown;
   template: unknown;
   hide_from: unknown;
@@ -71,6 +74,13 @@ export function buildVisibilitySnapshot(
 ): VisibilitySnapshot {
   const pages: VisibilitySnapshot['pages'] = {};
   const templates: VisibilitySnapshot['templates'] = {};
+  // The rows that made an entry, for the revision the admin compares with its list.
+  const used: { id: string; version: number }[] = [];
+  const use = (row: VisibilitySourceRow) => {
+    if (typeof row.id === 'string' && typeof row.version === 'number') {
+      used.push({ id: row.id, version: row.version });
+    }
+  };
   for (const row of rows) {
     if (row.mode !== 'hidden' && row.mode !== 'link') continue;
     const entry: VisibilityEntry = { mode: row.mode };
@@ -83,14 +93,24 @@ export function buildVisibilitySnapshot(
       if (until) entry.until = until;
     }
     if (isVisibilityTemplate(row.template)) {
-      if (entry.mode === 'hidden') templates[row.template] = entry;
+      if (entry.mode === 'hidden') {
+        templates[row.template] = entry;
+        use(row);
+      }
       continue;
     }
     const slug = slugOf(row.page);
     if (!isVisibilityPageSlug(slug) || slug === HOME_SLUG) continue;
     pages[slug] = entry;
+    use(row);
   }
-  return { v: 1, builtAt: builtAt.toISOString(), pages, templates };
+  return {
+    v: 1,
+    builtAt: builtAt.toISOString(),
+    rev: visibilityRevision(used),
+    pages,
+    templates,
+  };
 }
 
 /** How many pages and templates a snapshot restricts. */
@@ -163,6 +183,8 @@ export interface EdgeVisibilityStatus {
   builtAt: string | null;
   /** Pages and templates it restricts. */
   count: number;
+  /** The rows it was built from (`visibilityRevision`), or null when it carries none. */
+  rev: string | null;
 }
 
 /**
@@ -174,9 +196,16 @@ export async function edgeVisibilityStatus(): Promise<EdgeVisibilityStatus | nul
   try {
     if (!env.SESSION) return null;
     const raw = await env.SESSION.get(VISIBILITY_KV_KEY);
-    if (raw === null || raw === undefined) return { present: false, builtAt: null, count: 0 };
+    if (raw === null || raw === undefined) {
+      return { present: false, builtAt: null, count: 0, rev: null };
+    }
     const snapshot = parseVisibilitySnapshot(raw);
-    return { present: true, builtAt: snapshot.builtAt, count: restrictedCount(snapshot) };
+    return {
+      present: true,
+      builtAt: snapshot.builtAt,
+      count: restrictedCount(snapshot),
+      rev: snapshot.rev ?? null,
+    };
   } catch {
     return null;
   }

@@ -6,6 +6,7 @@ import { adminFetch, describeError } from '@/lib/admin/client';
 import { toast } from '@/lib/admin/toast';
 import { relTime } from '@/lib/admin/relTime';
 import { EDGE_MISSED, MODE_COPY } from '@/lib/admin/visibilityCopy';
+import { visibilityRevision } from '@/lib/http/visibility';
 import VisibilityList, { itemTitle } from './VisibilityList';
 import VisibilityDrawer, { type RedirectChoice, type VisibilityDraft } from './VisibilityDrawer';
 import type { VisibilityItem, VisibilityList as ListAnswer, VisibilitySaveAnswer } from './types';
@@ -17,24 +18,34 @@ import type { VisibilityItem, VisibilityList as ListAnswer, VisibilitySaveAnswer
 
 const API = '/api/admin/page-visibility';
 
-/** What the line above the list says about the live site's copy. */
-function edgeLine(list: ListAnswer): { tone: 'info' | 'warn'; text: string } {
+/**
+ * What the line above the list says about the live site's copy. It compares the rows the
+ * snapshot was built from (their ids and versions) with the rows listed here, not only how
+ * many are restricted: hidden to link only, a new redirect or new days keep the count and
+ * still leave the live site behind.
+ */
+export function edgeLine(list: ListAnswer): { tone: 'info' | 'warn'; text: string } {
   const edge = list.edge;
   if (edge === null) return { tone: 'warn', text: 'The live site’s copy could not be read.' };
   const restricted = [...list.pages, ...list.templates].filter(
     (item) =>
       (item.setting?.mode ?? 'public') !== 'public' &&
       !(item.kind === 'page' && item.slug === 'home'),
-  ).length;
+  );
   if (!edge.present) {
-    return restricted === 0
+    return restricted.length === 0
       ? { tone: 'info', text: 'Every page is visible, and the live site agrees.' }
       : {
           tone: 'warn',
           text: 'The live site has no copy of these settings yet. Use Sync to edge.',
         };
   }
-  if (edge.count !== restricted) {
+  const rev = visibilityRevision(
+    restricted.flatMap((item) =>
+      item.setting ? [{ id: item.setting.id, version: item.setting.version }] : [],
+    ),
+  );
+  if (edge.count !== restricted.length || edge.rev !== rev) {
     return { tone: 'warn', text: 'The live site is behind these settings. Use Sync to edge.' };
   }
   const when = edge.builtAt ? `, as of ${relTime(edge.builtAt)}` : '';
