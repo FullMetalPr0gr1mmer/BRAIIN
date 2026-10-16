@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Page } from '@playwright/test';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import { SKIP_REASON, authFile, staffEnv } from './staff';
 
@@ -14,6 +14,9 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
 //     and 1280 (the drawer is reached by rewriting the page's `emailReady` prop, as a
 //     switched-on build would render it; its send is still refused by the server);
 //   - Cancel removes an invite nobody accepted;
+//   - Resend's call (decision D8): GoTrue's invite, made again for an account invited and not
+//     yet joined, sends it a fresh link on the same account (its mail goes to the local
+//     stack's mail catcher), and the first link stops working;
 //   - a whole acceptance: the invite link (from GoTrue's admin API, which sends no e-mail;
 //     the local stack has no SMTP to speak of) opens /admin/invite with JavaScript off, the
 //     password is set, the person signs in with it in the role chosen, the acceptance is
@@ -33,6 +36,7 @@ const WIDTHS = [320, 390, 1280] as const;
 
 const TO_CANCEL = { email: 'e2e-u12b-cancel@example.com', role: 'content_creator' as const };
 const TO_ACCEPT = { email: 'e2e-u12b-accept@example.com', role: 'seo' as const };
+const TO_RESEND = { email: 'e2e-u12b-resend@example.com', role: 'developer' as const };
 
 function service(): SupabaseClient {
   return createClient(env!.url, env!.serviceKey, {
@@ -119,6 +123,7 @@ function pendingCard(page: Page) {
 
 let cancelId = '';
 let accept = { id: '', token: '' };
+let resent = { id: '', token: '' };
 
 test.beforeAll(async () => {
   const svc = service();
@@ -127,7 +132,31 @@ test.beforeAll(async () => {
   await svc.from('public_write_attempts').delete().like('scope', 'auth.invite:%');
   cancelId = (await invite(TO_CANCEL)).id;
   accept = await invite(TO_ACCEPT);
+  resent = await invite(TO_RESEND);
 });
+
+/** Submits a password with this invite token on /admin/invite, JavaScript off, signed out. */
+async function submitInvite(browser: Browser, token: string, password: string): Promise<URL> {
+  const context = await browser.newContext({
+    javaScriptEnabled: false,
+    storageState: { cookies: [], origins: [] },
+  });
+  try {
+    const invitee = await context.newPage();
+    await invitee.goto(`/admin/invite?token_hash=${token}&type=invite`);
+    await invitee.getByLabel('Password', { exact: true }).fill(password);
+    await invitee.getByLabel('Confirm password', { exact: true }).fill(password);
+    await invitee.getByRole('button', { name: 'Set password' }).click();
+    // The form's answer is a 303: back to the page with an error code, or to the login page.
+    // (The page it leaves carries the token and no code, so neither matches it.)
+    await invitee.waitForURL(
+      (url) => url.searchParams.has('error') || url.pathname === '/admin/login',
+    );
+    return new URL(invitee.url());
+  } finally {
+    await context.close();
+  }
+}
 
 test('pending invites are listed; while e-mail is off, invites and resends are Not set up', async ({
   page,
@@ -226,6 +255,47 @@ test('Cancel removes an invite nobody accepted', async ({ page }) => {
 
   const { data } = await service().auth.admin.getUserById(cancelId);
   expect(data.user).toBeNull();
+});
+
+test('Resend (D8): GoTrue sends a pending invite a fresh link, and the first one stops working', async ({
+  browser,
+  baseURL,
+}) => {
+  const svc = service();
+  const { data: first, error: firstError } = await svc.auth.admin.getUserById(resent.id);
+  expect(firstError, firstError?.message).toBeNull();
+  const invitedAt = first.user?.invited_at;
+  expect(invitedAt).toBeTruthy();
+
+  // The call POST /api/admin/users/[id]/resend makes (src/pages/api/admin/users/[id]/resend.ts),
+  // made directly: the CI preview is built with e-mail off, so the route itself answers 503.
+  // GoTrue really sends here (the local stack's mail catcher), as it would after O-2.
+  const { data, error } = await svc.auth.admin.inviteUserByEmail(TO_RESEND.email, {
+    redirectTo: new URL('/admin/invite', baseURL).toString(),
+  });
+  expect(error, error?.message).toBeNull();
+  expect(data.user?.id).toBe(resent.id);
+
+  const { data: again } = await svc.auth.admin.getUserById(resent.id);
+  expect(Date.parse(again.user?.invited_at ?? '')).toBeGreaterThan(Date.parse(invitedAt!));
+  expect(again.user?.email_confirmed_at ?? null).toBeNull();
+
+  // The first link no longer verifies: the page says it is not valid, and the account is
+  // still an unaccepted invite (nothing confirmed, no password set).
+  const landed = await submitInvite(
+    browser,
+    resent.token,
+    `${randomBytes(18).toString('base64url')} d8`,
+  );
+  expect(landed.pathname).toBe('/admin/invite');
+  expect(landed.searchParams.get('error')).toBe('expired');
+  const { data: after } = await svc.auth.admin.getUserById(resent.id);
+  expect(after.user?.email_confirmed_at ?? null).toBeNull();
+  expect(after.user?.last_sign_in_at ?? null).toBeNull();
+
+  // Tidy: the screen's later sweeps should not meet this account.
+  const { error: deleteError } = await svc.auth.admin.deleteUser(resent.id);
+  expect(deleteError, deleteError?.message).toBeNull();
 });
 
 test('an invite link sets the password, the person signs in, and Cancel is refused after', async ({
