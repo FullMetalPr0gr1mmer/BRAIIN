@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 0053 — The dashboard's shared layer (Admin v2 U1, AV-09+). Forward-only, expand only.
+-- 0060 — The dashboard's shared layer (Admin v2 U1, AV-09+). Forward-only, expand only.
 -- Depends on 0001 (tenants, profiles, app.current_role, app.is_staff), 0002 (audit_log),
 -- 0031 (the audit chain's trigger), 0033 (app.live_role), 0044 (admin_user_prefs, whose
 -- dashboard and quick_actions columns the per-person layout fills), 0046 (the help centre),
@@ -1347,23 +1347,23 @@ begin
   if not (app.role_manages_users('admin') and not app.role_manages_users('developer')
           and not app.role_manages_users('content_creator') and not app.role_manages_users('seo')
           and not app.role_manages_users(null)) then
-    raise exception '0053: app.role_manages_users does not answer users.manage (Admin only)';
+    raise exception '0060: app.role_manages_users does not answer users.manage (Admin only)';
   end if;
   if not (app.role_analytics_read('admin') and app.role_analytics_read('content_creator')
           and app.role_analytics_read('seo') and app.role_analytics_read('developer')
           and not app.role_analytics_read('anon') and not app.role_analytics_read(null)) then
-    raise exception '0053: app.role_analytics_read does not answer analytics.read (the four staff roles)';
+    raise exception '0060: app.role_analytics_read does not answer analytics.read (the four staff roles)';
   end if;
   if not exists (select 1 from pg_proc where oid = 'app.live_role()'::regprocedure and prosecdef)
      or not has_function_privilege('authenticated', 'app.live_role()', 'execute')
      or has_function_privilege('anon', 'app.live_role()', 'execute') then
-    raise exception '0053: app.live_role() must be a SECURITY DEFINER that authenticated alone executes';
+    raise exception '0060: app.live_role() must be a SECURITY DEFINER that authenticated alone executes';
   end if;
 
   -- ---- RLS on and forced on both tables.
   foreach t in array array['public.admin_role_defaults', 'public.team_notes'] loop
     if not (select relrowsecurity and relforcerowsecurity from pg_class where oid = t::regclass) then
-      raise exception '0053: % is not ENABLE + FORCE row level security', t;
+      raise exception '0060: % is not ENABLE + FORCE row level security', t;
     end if;
   end loop;
 
@@ -1381,7 +1381,7 @@ begin
     'team_notes team_notes_read SELECT PERMISSIVE {authenticated}'];
   select array_agg(w order by w) into v_want from unnest(v_want) as w;
   if v_have is distinct from v_want then
-    raise exception '0053: the dashboard policies are %, expected %', v_have, v_want;
+    raise exception '0060: the dashboard policies are %, expected %', v_have, v_want;
   end if;
 
   -- ---- Each side of each policy, read separately: the tenant predicate first, then the
@@ -1409,7 +1409,7 @@ begin
       or (x.pattern is null and e.expr is not null)
       or (x.pattern is not null and coalesce(e.expr, '') !~ x.pattern);
   if v_bad is not null then
-    raise exception '0053: dashboard policy expressions are not as stated: %', v_bad;
+    raise exception '0060: dashboard policy expressions are not as stated: %', v_bad;
   end if;
 
   -- ---- Table privileges, as each API role holds them (directly or through a role it is a
@@ -1433,7 +1433,7 @@ begin
             cross join unnest(v_privs) as pr(priv)) g
    where g.held is distinct from g.wanted;
   if v_bad is not null then
-    raise exception '0053: wrong table privileges (table role privilege): %', v_bad;
+    raise exception '0060: wrong table privileges (table role privilege): %', v_bad;
   end if;
 
   -- ---- Each table's own ACL, grantee by grantee: the owner's, plus exactly the grants
@@ -1454,7 +1454,7 @@ begin
                   'team_notes service_role update'];
   select array_agg(w order by w) into v_want from unnest(v_want) as w;
   if v_have is distinct from v_want then
-    raise exception '0053: the dashboard tables are granted %, expected %', v_have, v_want;
+    raise exception '0060: the dashboard tables are granted %, expected %', v_have, v_want;
   end if;
 
   -- ---- Column grants: exactly authenticated's INSERT on the preset's key and its two
@@ -1473,7 +1473,7 @@ begin
           union all
           select format('admin_role_defaults %s authenticated update', c) from unnest(v_rd_update) c) s;
   if v_have is distinct from v_want then
-    raise exception '0053: the dashboard column grants are %, expected %', v_have, v_want;
+    raise exception '0060: the dashboard column grants are %, expected %', v_have, v_want;
   end if;
 
   -- ---- Column privileges as held: PUBLIC and anon none on any column of either table; no
@@ -1482,31 +1482,31 @@ begin
   foreach t in array array['public.admin_role_defaults', 'public.team_notes'] loop
     foreach p in array array['public', 'anon'] loop
       if has_any_column_privilege(p::name, t, 'select, insert, update, references') then
-        raise exception '0053: % holds a column privilege on %', p, t;
+        raise exception '0060: % holds a column privilege on %', p, t;
       end if;
     end loop;
     foreach p in array array['authenticated', 'service_role'] loop
       if has_any_column_privilege(p::name, t, 'references') then
-        raise exception '0053: % holds REFERENCES on a column of %', p, t;
+        raise exception '0060: % holds REFERENCES on a column of %', p, t;
       end if;
     end loop;
   end loop;
   if has_any_column_privilege('authenticated', 'public.team_notes', 'insert, update') then
-    raise exception '0053: a staff token may write a column of team_notes (writes go through save_team_notes)';
+    raise exception '0060: a staff token may write a column of team_notes (writes go through save_team_notes)';
   end if;
   select coalesce(array_agg(a.attname::text order by a.attname), '{}') into v_cols
     from pg_attribute a
    where a.attrelid = 'public.admin_role_defaults'::regclass and a.attnum > 0 and not a.attisdropped
      and has_column_privilege('authenticated', 'public.admin_role_defaults', a.attname::text, 'insert');
   if v_cols is distinct from v_rd_insert then
-    raise exception '0053: authenticated inserts admin_role_defaults columns % (expected exactly %)', v_cols, v_rd_insert;
+    raise exception '0060: authenticated inserts admin_role_defaults columns % (expected exactly %)', v_cols, v_rd_insert;
   end if;
   select coalesce(array_agg(a.attname::text order by a.attname), '{}') into v_cols
     from pg_attribute a
    where a.attrelid = 'public.admin_role_defaults'::regclass and a.attnum > 0 and not a.attisdropped
      and has_column_privilege('authenticated', 'public.admin_role_defaults', a.attname::text, 'update');
   if v_cols is distinct from v_rd_update then
-    raise exception '0053: authenticated updates admin_role_defaults columns % (expected exactly %)', v_cols, v_rd_update;
+    raise exception '0060: authenticated updates admin_role_defaults columns % (expected exactly %)', v_cols, v_rd_update;
   end if;
 
   -- ---- The preset's trigger is its one BEFORE trigger, on insert and update, enabled.
@@ -1520,11 +1520,11 @@ begin
                        and t2.tgfoid = 'app.tg_admin_role_defaults()'::regprocedure
                        and pg_get_triggerdef(t2.oid) ~
                            '^CREATE TRIGGER admin_role_defaults_guard BEFORE INSERT OR UPDATE ON (public\.)?admin_role_defaults FOR EACH ROW EXECUTE FUNCTION (app\.)?tg_admin_role_defaults\(\)$') then
-    raise exception '0053: admin_role_defaults must have exactly one trigger, admin_role_defaults_guard, BEFORE INSERT OR UPDATE';
+    raise exception '0060: admin_role_defaults must have exactly one trigger, admin_role_defaults_guard, BEFORE INSERT OR UPDATE';
   end if;
   if exists (select 1 from pg_trigger t2
               where t2.tgrelid = 'public.team_notes'::regclass and not t2.tgisinternal) then
-    raise exception '0053: team_notes carries a trigger (the definer owns its version)';
+    raise exception '0060: team_notes carries a trigger (the definer owns its version)';
   end if;
 
   -- ---- The CHECKs: a preset's quick actions are library ids only; a note is at most 2,000
@@ -1538,7 +1538,7 @@ begin
                        and conname = 'team_notes_body_rule'
                        and pg_get_constraintdef(oid) ~ 'char_length\(body\) <= 2000'
                        and pg_get_constraintdef(oid) ~ 'team_note_ok\(body\)') then
-    raise exception '0053: the preset and note CHECKs are not as stated';
+    raise exception '0060: the preset and note CHECKs are not as stated';
   end if;
   if not (app.quick_library_only('[]') and app.quick_library_only('[{"id": "add-service"}]')
           and not app.quick_library_only('[{"id": "x", "href": "https://a.example"}]')
@@ -1549,7 +1549,7 @@ begin
           and not app.quick_library_only('{}')
           and not app.quick_library_only(
             (select jsonb_agg(jsonb_build_object('id', 'a' || g)) from generate_series(10, 22) g))) then
-    raise exception '0053: app.quick_library_only does not hold presets to library ids';
+    raise exception '0060: app.quick_library_only does not hold presets to library ids';
   end if;
   if not (app.team_note_ok('') and app.team_note_ok(E'Shoot moved to the 14th.\nSwap the samples.\tSoon.')
           and app.team_note_ok('Budget 1,500,000 SAR, call on 14/10')
@@ -1563,7 +1563,7 @@ begin
           and not app.team_note_ok(E'a​b')
           and not app.team_note_ok(E'a\rb')
           and not app.team_note_ok(null)) then
-    raise exception '0053: app.team_note_ok does not apply the team-note rule';
+    raise exception '0060: app.team_note_ok does not apply the team-note rule';
   end if;
 
   -- ---- The functions: the door is a definer staff tokens alone may call; the retention and
@@ -1572,12 +1572,12 @@ begin
      or has_function_privilege('public', 'public.save_team_notes(uuid, text, integer)', 'execute')
      or has_function_privilege('service_role', 'public.save_team_notes(uuid, text, integer)', 'execute')
      or not has_function_privilege('authenticated', 'public.save_team_notes(uuid, text, integer)', 'execute') then
-    raise exception '0053: public.save_team_notes must be executable by authenticated only';
+    raise exception '0060: public.save_team_notes must be executable by authenticated only';
   end if;
   foreach p in array array['app.expire_team_notes()', 'app.tg_admin_role_defaults()'] loop
     foreach t in array array['public', 'anon', 'authenticated', 'service_role'] loop
       if has_function_privilege(t, p, 'execute') then
-        raise exception '0053: % may execute %', t, p;
+        raise exception '0060: % may execute %', t, p;
       end if;
     end loop;
   end loop;
@@ -1586,21 +1586,21 @@ begin
        or has_function_privilege('authenticated', p, 'execute')
        or has_function_privilege('anon', p, 'execute')
        or has_function_privilege('public', p, 'execute') then
-      raise exception '0053: % must be executable by service_role only (the CHECK runs as the writer)', p;
+      raise exception '0060: % must be executable by service_role only (the CHECK runs as the writer)', p;
     end if;
   end loop;
   if not has_function_privilege('authenticated', 'app.quick_library_only(jsonb)', 'execute')
      or not has_function_privilege('service_role', 'app.quick_library_only(jsonb)', 'execute')
      or has_function_privilege('anon', 'app.quick_library_only(jsonb)', 'execute')
      or has_function_privilege('public', 'app.quick_library_only(jsonb)', 'execute') then
-    raise exception '0053: app.quick_library_only must be executable by authenticated and service_role only';
+    raise exception '0060: app.quick_library_only must be executable by authenticated and service_role only';
   end if;
   foreach p in array array['public.save_team_notes(uuid, text, integer)', 'app.expire_team_notes()'] loop
     if not exists (select 1 from pg_proc
                     where oid = p::regprocedure and prosecdef
                       and exists (select 1 from unnest(coalesce(proconfig, '{}'::text[])) c
                                    where c in ('search_path=""', 'search_path='))) then
-      raise exception '0053: % must be SECURITY DEFINER with an empty search_path', p;
+      raise exception '0060: % must be SECURITY DEFINER with an empty search_path', p;
     end if;
   end loop;
   foreach p in array array['app.quick_library_only(jsonb)', 'app.team_note_problem(text)',
@@ -1609,21 +1609,23 @@ begin
                     where oid = p::regprocedure and not prosecdef
                       and exists (select 1 from unnest(coalesce(proconfig, '{}'::text[])) c
                                    where c in ('search_path=""', 'search_path='))) then
-      raise exception '0053: % must be SECURITY INVOKER with an empty search_path', p;
+      raise exception '0060: % must be SECURITY INVOKER with an empty search_path', p;
     end if;
   end loop;
   -- The door never writes the note's text into the log: its audit detail is the length.
   if (select prosrc from pg_proc where oid = 'public.save_team_notes(uuid, text, integer)'::regprocedure)
        !~ $re$jsonb_build_object\('length', pg_catalog\.char_length\(v_body\)\)$re$ then
-    raise exception '0053: save_team_notes must audit the length only';
+    raise exception '0060: save_team_notes must audit the length only';
   end if;
 
-  -- ---- The retention job, where pg_cron is installed.
-  if exists (select 1 from pg_extension where extname = 'pg_cron')
-     and not exists (select 1 from cron.job
-                      where jobname = 'team-notes-retention' and schedule = '25 3 * * *'
-                        and command ~ 'app\.expire_team_notes\(\)') then
-    raise exception '0053: the team-notes-retention job is not scheduled as stated';
+  -- ---- The retention job, where pg_cron is installed. Nested: PL/pgSQL plans a condition
+  -- when it first runs it, so cron.job is never named on a server without the extension.
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    if not exists (select 1 from cron.job
+                    where jobname = 'team-notes-retention' and schedule = '25 3 * * *'
+                      and command ~ 'app\.expire_team_notes\(\)') then
+      raise exception '0060: the team-notes-retention job is not scheduled as stated';
+    end if;
   end if;
 
   -- ---- The guides: the set parses and holds 13, the new guide is for everyone on /admin,
@@ -1631,7 +1633,7 @@ begin
   -- holds both guides as the set states them.
   v_set := app.help_article_set();
   if jsonb_typeof(v_set) <> 'array' or jsonb_array_length(v_set) <> 13 then
-    raise exception '0053: app.help_article_set() must hold 13 guides';
+    raise exception '0060: app.help_article_set() must hold 13 guides';
   end if;
   if not exists (select 1 from jsonb_array_elements(v_set) a
                   where a ->> 'slug' = 'your-dashboard'
@@ -1639,11 +1641,11 @@ begin
      or not exists (select 1 from jsonb_array_elements(v_set) a
                      where a ->> 'slug' = 'finding-your-way'
                        and a -> 'screens' = '["/admin/search", "/admin/help"]'::jsonb) then
-    raise exception '0053: app.help_article_set() does not hold your-dashboard and the narrowed finding-your-way';
+    raise exception '0060: app.help_article_set() does not hold your-dashboard and the narrowed finding-your-way';
   end if;
   foreach p in array array['public', 'anon', 'authenticated', 'service_role'] loop
     if has_function_privilege(p, 'app.help_article_set()', 'execute') then
-      raise exception '0053: % may execute app.help_article_set()', p;
+      raise exception '0060: % may execute app.help_article_set()', p;
     end if;
   end loop;
   if exists (select 1 from public.tenants tn
@@ -1654,6 +1656,6 @@ begin
                     on a.slug = h.slug
                  where h.tenant_id = tn.id and h.slug = g.slug
                    and h.body = a.body and h.screens = a.screens)) then
-    raise exception '0053: a tenant does not hold the your-dashboard and finding-your-way guides as the set states them';
+    raise exception '0060: a tenant does not hold the your-dashboard and finding-your-way guides as the set states them';
   end if;
 end $$;
