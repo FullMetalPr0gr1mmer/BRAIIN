@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { WIDGET_IDS, type WidgetId } from '@schemas/dashboard';
@@ -44,8 +45,11 @@ interface Call {
   filters: [string, string, unknown][];
 }
 
+type TableAnswer = { rows?: unknown[]; row?: unknown; count?: number; error?: unknown };
 type Answers = {
-  tables?: Record<string, { rows?: unknown[]; row?: unknown; count?: number; error?: unknown }>;
+  tables?: Record<string, TableAnswer>;
+  /** What a table the answers do not name returns (default: nothing). */
+  otherTables?: TableAnswer;
   rpcs?: Record<string, { data?: unknown; error?: unknown }>;
 };
 
@@ -56,7 +60,7 @@ function fakeDb(answers: Answers = {}) {
     from(table: string) {
       const call: Call = { kind: 'from', name: table, filters: [] };
       calls.push(call);
-      const answer = answers.tables?.[table] ?? {};
+      const answer = answers.tables?.[table] ?? answers.otherTables ?? {};
       const builder: Record<string, unknown> = {};
       for (const op of ['eq', 'neq', 'gte', 'lt', 'lte', 'in', 'is']) {
         builder[op] = (column: string, value: unknown) => {
@@ -362,13 +366,46 @@ describe('the loaders read only what the role sees', () => {
   });
 });
 
+/** The middleware's reads before the page runs: the session check (getUser), the profile row
+ *  it is held to, and the identity row the layout renders. */
+const MIDDLEWARE = 3;
+/** What the budget test measures; docs/admin-v2/as-built/U1.md records the same figures. */
+const MEASURED = { loadDashboard: 24, total: 34 };
+
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
   it('Admin with every widget, page and shell together, stays well inside it', async () => {
+    // Every table answers a row, so the reads that run only when there is data run too: the
+    // activity's people lookup (audit_people), the disciplines' and the latest leads' labels
+    // (services, disciplines), the scheduled items. An empty fake skips them and undercounts.
+    const at = NOW.toISOString();
     const { sb, calls } = fakeDb({
       tables: {
         admin_user_prefs: {
           row: { dashboard: EVERYTHING, quick_actions: [{ id: 'edit-home' }], version: 1 },
         },
+      },
+      otherTables: {
+        rows: [
+          {
+            id: 'r1',
+            actor_id: 'u-2',
+            actor_role: 'seo',
+            action: 'service.update',
+            entity_type: 'service',
+            entity_id: 's1',
+            detail: {},
+            created_at: at,
+            name: 'Sam',
+            service_of_interest: 'logo',
+            discipline_of_interest: 'branding',
+            slug: 'branding',
+            title: { en: 'Logo design', ar: 'تصميم الشعار' },
+            status: 'scheduled',
+            scheduled_for: at,
+            updated_at: at,
+          },
+        ],
+        count: 1,
       },
       rpcs: {
         leads_list: {
@@ -397,10 +434,24 @@ describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () 
       { maintenance: null, displayName: 'Amal' },
     );
     const shell = calls.length - page;
-    // Measured: recorded in docs/admin-v2/as-built/U1.md. The page's reads, plus the shell's
-    // (the bell, the menu's counts, the environment), plus the middleware's session check and
-    // the identity row, must leave room under 50.
-    expect(page).toBeLessThanOrEqual(26);
-    expect(page + shell).toBeLessThanOrEqual(40);
+    // The page's own read beside loadDashboard (src/pages/admin/index.astro): the greeting's
+    // display name, one `sb.from(` there; the maintenance snapshot is a KV read, not a fetch.
+    const indexPage = readFileSync('src/pages/admin/index.astro', 'utf8');
+    const own = indexPage.match(/\bsb\s*\.\s*(from|rpc)\(/g)?.length ?? 0;
+    expect(own).toBe(1);
+    const byName = (from: number, to: number) =>
+      calls
+        .slice(from, to)
+        .map((c) => c.name)
+        .sort();
+    // The reads that run only on data did run (the point of answering rows).
+    expect(byName(0, page)).toEqual(
+      expect.arrayContaining(['audit_people', 'disciplines', 'services']),
+    );
+    // Measured: recorded in docs/admin-v2/as-built/U1.md (the page, its own read, the shell;
+    // then the middleware's session check and identity row, 3, must still leave room).
+    expect(page).toBeLessThanOrEqual(MEASURED.loadDashboard);
+    expect(own + page + shell + MIDDLEWARE).toBeLessThanOrEqual(MEASURED.total);
+    expect(MEASURED.total).toBeLessThanOrEqual(40);
   });
 });
