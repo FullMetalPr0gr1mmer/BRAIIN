@@ -6,8 +6,10 @@ import Note from '@/components/admin/ui/Note.astro';
 import ServerTable, { type ServerColumn } from '@/components/admin/ui/ServerTable.astro';
 import { can } from '@/lib/authz/matrix';
 import {
+  EXPORT_NOTICE_PARAM,
   filterParams,
   loadActivity,
+  pagingUrl,
   readActivityQuery,
   roleLabelOf,
   type ActivityEntry,
@@ -107,7 +109,7 @@ if (!allowed) {
 const filtered = Boolean(
   filters.kind || filters.actor || filters.from || filters.to || filters.entityType,
 );
-const notice = url.searchParams.get('export');
+const notice = url.searchParams.get(EXPORT_NOTICE_PARAM);
 const exportHref = (() => {
   const search = filterParams(filters).toString();
   return search ? `/api/admin/audit/export?${search}` : '/api/admin/audit/export';
@@ -268,7 +270,7 @@ function rowOf(entry: ActivityEntry): Record<string, unknown> {
               columns={columns}
               rows={(result?.entries ?? []).map(rowOf)}
               total={result?.total ?? 0}
-              url={url}
+              url={pagingUrl(url)}
               empty={
                 filtered
                   ? {

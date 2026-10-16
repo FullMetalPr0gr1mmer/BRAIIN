@@ -6,6 +6,7 @@ import {
   CHAIN_WINDOW,
   filterParams,
   loadActivity,
+  pagingUrl,
   readActivityQuery,
   riyadhDayEnd,
   riyadhDayStart,
@@ -354,5 +355,20 @@ describe('titles: the bounds', () => {
     expect(queries.map((q) => q.table)).toEqual(
       types.slice(0, MAX_TYPES).map((type) => titleSourceOf(type)!.table),
     );
+  });
+});
+
+describe('the export notice is said once (U13 review)', () => {
+  it('the pager builds its links from the URL without it, the filters and page kept', () => {
+    const url = new URL('https://admin.test/admin/audit?kind=users&export=limit&page=2');
+    expect(pagingUrl(url).search).toBe('?kind=users&page=2');
+    expect(url.search).toBe('?kind=users&export=limit&page=2');
+  });
+
+  it('the page hands its table that URL', async () => {
+    const { readFileSync } = await import('node:fs');
+    const page = readFileSync('src/pages/admin/audit.astro', 'utf8');
+    expect(page).toContain('url={pagingUrl(url)}');
+    expect(page).not.toMatch(/url=\{url\}/);
   });
 });

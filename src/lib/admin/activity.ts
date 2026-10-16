@@ -367,6 +367,19 @@ export function filterParams(filters: ActivityFilters): URLSearchParams {
   return params;
 }
 
+/** The one-time notice the export sends a person back with (`?export=limit|unavailable`). */
+export const EXPORT_NOTICE_PARAM = 'export';
+
+/**
+ * The page's URL as its pager builds links from: the notice dropped, so it is said once, on
+ * the page the export sent the person back to, and never follows them from page to page.
+ */
+export function pagingUrl(url: URL): URL {
+  const out = new URL(url);
+  out.searchParams.delete(EXPORT_NOTICE_PARAM);
+  return out;
+}
+
 /** A role's label, for a person the select names. */
 export function roleLabelOf(role: unknown): string | null {
   return isRole(role) ? ROLE_LABELS[role] : null;
