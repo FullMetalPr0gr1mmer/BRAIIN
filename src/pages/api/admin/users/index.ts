@@ -68,9 +68,14 @@ export const POST = defineAdminRoute({
     // An address that already has an account here is not invited again from this form:
     // GoTrue would re-send an unaccepted invite under its first role, or refuse a joined one.
     // Resend is the way for the first, and nothing is the way for the second. Read through
-    // the directory (the live Admin's own view, 0055); an unreadable one does not block, as
-    // GoTrue and the profile's primary key still refuse a duplicate below.
-    const { data: directory } = await sb.rpc('staff_accounts', { p_tenant: auth.tenantId });
+    // the directory (the live Admin's own view, 0055). An unreadable one refuses the invite
+    // (fails closed): past this point GoTrue would send an existing account its link again.
+    const { data: directory, error: directoryError } = await sb.rpc('staff_accounts', {
+      p_tenant: auth.tenantId,
+    });
+    if (directoryError || !Array.isArray(directory)) {
+      throw new Error(`read directory: ${directoryError?.message ?? 'not a list'}`);
+    }
     if (
       Array.isArray(directory) &&
       directory.some(
@@ -102,6 +107,19 @@ export const POST = defineAdminRoute({
     }
 
     const userId = data.user.id;
+
+    // The directory sees this tenant alone (up to 200 people). For an address it missed,
+    // GoTrue answers with the existing account (re-sending an unaccepted one its link), so
+    // before anything is stamped on it: an account that already has a profile, in any
+    // tenant, is refused here, and its role, tenant and profile are left as they were.
+    const { data: existing, error: existingError } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+    if (existingError) throw new Error(`check profile: ${existingError.message}`);
+    if (existing) throw new ValidationError(INVITE_EXISTS, 'email');
+
     const { error: metaError } = await admin.auth.admin.updateUserById(userId, {
       app_metadata: { role: input.role, tenant_id: auth.tenantId },
     });

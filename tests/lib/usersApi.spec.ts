@@ -20,6 +20,8 @@ const { state } = vi.hoisted(() => ({
   state: {
     /** What liveRecheck's service-role read of the caller's profile finds. */
     live: { data: null, error: null } as Read,
+    /** What the invite's service-role check finds for the invited account's profile. */
+    invitedProfile: { data: null, error: null } as Read,
     stamps: [] as unknown[],
     invites: [] as unknown[],
     /** The options each invite call carried (redirectTo, data). */
@@ -44,10 +46,20 @@ vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
     from: (table: string) => {
       const b: Record<string, unknown> = {};
-      b['select'] = () => b;
+      let columns = '';
+      b['select'] = (cols: string) => {
+        columns = cols;
+        return b;
+      };
       b['eq'] = () => b;
+      // liveRecheck reads the caller's role, is_active and locked_until; the invite asks
+      // only whether the invited account already has a profile (its id).
       b['maybeSingle'] = async () =>
-        table === 'profiles' ? state.live : { data: null, error: null };
+        table !== 'profiles'
+          ? { data: null, error: null }
+          : columns === 'id'
+            ? state.invitedProfile
+            : state.live;
       b['insert'] = async (row: unknown) => {
         state.serviceInserts.push([table, row]);
         return { error: table === 'profiles' ? state.profileInsertError : null };
@@ -170,7 +182,11 @@ function session(fake: Fake) {
     },
     async rpc(fn: string, args: unknown) {
       calls.push(['rpc', fn, args]);
-      return fake.rpc?.[fn] ?? { data: null, error: null };
+      // The directory answers (empty) unless a test says otherwise.
+      return (
+        fake.rpc?.[fn] ??
+        (fn === 'staff_accounts' ? { data: [], error: null } : { data: null, error: null })
+      );
     },
   };
   return client;
@@ -220,6 +236,7 @@ const liveAdmin: Read = {
 
 beforeEach(() => {
   state.live = liveAdmin;
+  state.invitedProfile = { data: null, error: null };
   state.stamps = [];
   state.invites = [];
   state.inviteOptions = [];
@@ -925,6 +942,52 @@ describe('POST /api/admin/users: the invite, switched on', () => {
     expect(res.status).toBe(422);
     expect(await bodyOf(res)).toMatchObject({ detail: INVITE_EXISTS });
     expect(state.audits).toEqual([]);
+  });
+
+  it('an existing account the directory did not show is refused before anything is stamped on it', async () => {
+    // GoTrue answers an address it knows with that account (another tenant's, or past the
+    // directory's 200): its role, tenant and profile are left as they were.
+    state.invitedProfile = { data: { id: '99999999-9999-4999-8999-999999999999' }, error: null };
+    const sb = session({});
+    const res = await call(users.POST as APIRoute, 'POST', '/api/admin/users', sb, {
+      email: 'elsewhere@example.test',
+      role: 'admin',
+    });
+    expect(res.status).toBe(422);
+    expect(await bodyOf(res)).toMatchObject({ field: 'email', detail: INVITE_EXISTS });
+    expect(state.stamps).toEqual([]);
+    expect(state.serviceInserts).toEqual([]);
+    expect(state.audits).toEqual([]);
+  });
+
+  it('an unreadable profile check stamps nothing', async () => {
+    state.invitedProfile = { data: null, error: { message: 'down' } };
+    const sb = session({});
+    const res = await call(users.POST as APIRoute, 'POST', '/api/admin/users', sb, {
+      email: 'a@example.test',
+      role: 'seo',
+    });
+    expect(res.status).toBe(500);
+    expect(state.stamps).toEqual([]);
+    expect(state.serviceInserts).toEqual([]);
+  });
+
+  it('an unreadable directory refuses the invite (fails closed): nothing counted or sent', async () => {
+    for (const answer of [
+      { data: null, error: { message: 'down' } },
+      { data: null, error: null },
+    ]) {
+      state.claims = [];
+      const sb = session({ rpc: { staff_accounts: answer } });
+      const res = await call(users.POST as APIRoute, 'POST', '/api/admin/users', sb, {
+        email: 'a@example.test',
+        role: 'seo',
+      });
+      expect(res.status).toBe(500);
+      expect(state.claims).toEqual([]);
+      expect(state.invites).toEqual([]);
+      expect(state.stamps).toEqual([]);
+    }
   });
 
   it('past the limit: 429, and nothing is sent', async () => {
