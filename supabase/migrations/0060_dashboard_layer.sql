@@ -4,7 +4,7 @@
 -- 0031 (the audit chain's trigger), 0033 (app.live_role), 0044 (admin_user_prefs, whose
 -- dashboard and quick_actions columns the per-person layout fills), 0046 (the help centre),
 -- 0050 (app.role_manages_users, H10: users.manage), 0052 (app.role_analytics_read, U2:
--- analytics.read) and 0054 (U13: the guides as it left them).
+-- analytics.read) and 0055 (U12a: the guides as it left them, U13's 0054 included).
 --
 -- /admin becomes a server-rendered board of widgets, each loaded only for a role whose
 -- capabilities show it. A person's own layout and quick actions live in admin_user_prefs
@@ -35,19 +35,20 @@
 --   • app.expire_team_notes(): a note left 180 days without an edit is blanked (version + 1,
 --     audited with no actor), daily by pg_cron (team-notes-retention, 03:25 UTC). Not the
 --     Worker's daily cron: that one is near the Free plan's 50 subrequests.
---   • app.help_article_set() restated from 0054's text and seeded into every tenant: one new
---     guide, your-dashboard, and finding-your-way no longer names /admin (the dashboard has
---     its own guide now). Every other guide is 0054's, byte for byte.
+--   • app.help_article_set() restated from 0055's text (U12a, the set on main before this one)
+--     and seeded into every tenant: one new guide, your-dashboard, and finding-your-way no
+--     longer names /admin (the dashboard has its own guide now). Every other guide is 0055's,
+--     byte for byte.
 --
 -- No new capability (§5 unchanged): presets are users.manage's, team notes analytics.read's,
 -- through the helpers 0050 and 0052 define.
 --
 -- Production as of 2026-10-16: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046,
--- 0048, 0050, 0051, 0052 and 0054. Grants are stated for both Supabase privilege regimes
+-- 0048, 0050, 0051, 0052, 0054 and 0055. Grants are stated for both Supabase privilege regimes
 -- (README P-14). CLAUDE.md §3 (Pillar 1), §5, §7, §8, §10.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- A busy table fails the push instead of queueing (as in 0038 to 0054). The new tables'
+-- A busy table fails the push instead of queueing (as in 0038 to 0055). The new tables'
 -- foreign keys take SHARE ROW EXCLUSIVE on public.tenants, and the reseed writes
 -- public.help_articles. A statement below that waits more than five seconds for a lock
 -- raises instead, the whole migration rolls back, and the push is retried later.
@@ -349,8 +350,8 @@ begin
 end $$;
 
 -- ---- 5. The guides --------------------------------------------------------------------------
--- The set as 0054 (U13) left it, with the your-dashboard guide added and /admin taken off
--- finding-your-way's screens; every other guide is 0054's, byte for byte. A later slice that
+-- The set as 0055 (U12a) left it, with the your-dashboard guide added and /admin taken off
+-- finding-your-way's screens; every other guide is 0055's, byte for byte. A later slice that
 -- changes a guide restates the set from this text (U16's rule).
 create or replace function app.help_article_set() returns jsonb
   language sql immutable set search_path = '' as $fn$
@@ -610,7 +611,7 @@ create or replace function app.help_article_set() returns jsonb
   {
     "slug": "roles-and-access",
     "sort_order": 30,
-    "minutes": 3,
+    "minutes": 4,
     "tags": [
       "account",
       "team"
@@ -643,11 +644,27 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "p",
-          "x": "Only an Admin can, in Settings › Users & roles. The admin checks a person's role and account again on every request, so a role taken away stops working at their next click, and someone whose account is switched off is signed out at that click. A role given reaches every save once their sign-in renews, within the hour, or at once if they sign out and in again."
+          "x": "Only an Admin can, in Settings › Users & roles: open the person, choose the role or switch off Can sign in, and save. That ends every sign-in the person has, on every device: the admin turns them away at their next click, and they sign in again to get the new role. You cannot change your own role or switch yourself off."
         },
         {
           "t": "p",
-          "x": "One limit to know: a sign-in already handed out lasts up to an hour. Until it runs out, it can still reach the database directly, outside the admin, with the role it was issued with. Leads and job applications check the person's account on every read, so those close at once."
+          "x": "One limit to know: a sign-in pass already handed out keeps working for up to an hour when someone uses it directly against the database, outside the admin. On settings, media, the system logs and content it still carries the role it was issued with until it runs out. People and their roles, the security settings, leads, job applications and the activity log check the person's account on every request, so those close at once."
+        },
+        {
+          "t": "h",
+          "x": "The account owner"
+        },
+        {
+          "t": "p",
+          "x": "One Admin is the account owner, marked by whoever runs the database. The owner always keeps the Admin role: nobody can change it, switch the owner off or remove them. To hand ownership on, the owner opens another active Admin and chooses Make account owner."
+        },
+        {
+          "t": "h",
+          "x": "Security settings"
+        },
+        {
+          "t": "p",
+          "x": "The Security card on Users & roles sets the session length, 1 day or 7 days: someone who signed in longer ago than that is asked to sign in again at their next click. It also sets the allowed email domain: when it is filled in, invites go only to addresses at that domain."
         },
         {
           "t": "tip",
@@ -674,11 +691,27 @@ create or replace function app.help_article_set() returns jsonb
         },
         {
           "t": "p",
-          "x": "يستطيع ذلك المسؤول (Admin) فقط، من Settings › Users & roles. تتحقق لوحة الإدارة من دور الشخص وحسابه من جديد عند كل طلب، فالدور الذي يُسحب يتوقف عن العمل عند نقرته التالية، ومن أُوقف حسابه يُسجَّل خروجه عند تلك النقرة. أما الدور الجديد فيشمل كل حفظ بعد تجديد جلسة دخوله، خلال ساعة، أو فورًا إن سجّل خروجه ثم دخل من جديد."
+          "x": "يستطيع ذلك المسؤول (Admin) فقط، من Settings › Users & roles: افتح حساب الشخص، واختر الدور أو أوقف Can sign in، ثم احفظ. يُنهي ذلك كل جلسات دخول الشخص على كل أجهزته: ترفضه لوحة الإدارة عند نقرته التالية، ثم يسجّل دخوله من جديد ليحصل على الدور الجديد. لا يمكنك تغيير دورك بنفسك ولا إيقاف حسابك."
         },
         {
           "t": "p",
-          "x": "وهناك حدّ ينبغي معرفته: جلسة الدخول التي صدرت بالفعل تبقى صالحة حتى ساعة. وإلى أن تنتهي، يمكن استخدامها للوصول إلى قاعدة البيانات مباشرة، خارج لوحة الإدارة، بالدور الذي صدرت به. أما العملاء المحتملون وطلبات التوظيف فتتحقق من حساب الشخص عند كل قراءة، فيُغلق الوصول إليها فورًا."
+          "x": "وهناك حدّ ينبغي معرفته: تصريح الدخول الذي صدر بالفعل يبقى صالحًا حتى ساعة إذا استُخدم مباشرة على قاعدة البيانات، خارج لوحة الإدارة. ففي الإعدادات والوسائط وسجلات النظام والمحتوى يبقى يحمل الدور الذي صدر به إلى أن ينتهي. أما الأشخاص وأدوارهم، وإعدادات الأمان، والعملاء المحتملون، وطلبات التوظيف، وسجل النشاط فتتحقق من حساب الشخص عند كل طلب، فيُغلق الوصول إليها فورًا."
+        },
+        {
+          "t": "h",
+          "x": "مالك الحساب"
+        },
+        {
+          "t": "p",
+          "x": "أحد المسؤولين هو مالك الحساب، ويحدّده من يدير قاعدة البيانات. يحتفظ المالك بدور Admin دائمًا: لا يستطيع أحد تغييره أو إيقاف حساب المالك أو حذفه. ولنقل الملكية، يفتح المالك حساب مسؤول آخر نشط ويختار Make account owner."
+        },
+        {
+          "t": "h",
+          "x": "إعدادات الأمان"
+        },
+        {
+          "t": "p",
+          "x": "تحدّد بطاقة Security في Users & roles مدة الجلسة، يومًا واحدًا أو 7 أيام: من سجّل دخوله قبل أكثر من ذلك يُطلب منه تسجيل الدخول من جديد عند نقرته التالية. وتحدّد أيضًا نطاق البريد الإلكتروني المسموح به: إذا مُلئ، لا تُرسل الدعوات إلا إلى عناوين ذلك النطاق."
         },
         {
           "t": "tip",

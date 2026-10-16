@@ -20,9 +20,10 @@ import { LOCKED_SCREENS, refusedRoles, renderOf } from './routes';
  *   signed out  every locked screen sends a visitor to sign in, its API answers 401.
  *
  * Not here: `other_tenant` (the harness has one tenant; the tenant predicate is proven in
- * pgTAP and tests/authz/endpoints.spec.ts) and a demotion mid-session (the claims check
- * compares the profile with getUser()'s fresh app_metadata, which a demotion through the
- * users API updates too, so editing the profile alone would test a path no one takes).
+ * pgTAP and tests/authz/endpoints.spec.ts) and a role change mid-session, which is
+ * tests/admin/users.e2e.ts's: a throwaway account signed in elsewhere is moved to another
+ * role through the users screen, and its next click lands on the sign-in page (Admin v2
+ * U12a: the change ends its sessions, and the claims check compares the token itself).
  */
 
 test.skip(!staffEnv(), SKIP_REASON);

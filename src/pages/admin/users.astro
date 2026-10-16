@@ -1,15 +1,110 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminUsers from '@/components/admin/islands/AdminUsers';
+import Card from '@/components/admin/ui/Card.astro';
+import { can } from '@/lib/authz/matrix';
+import { CELL_SPOKEN, matrixColumns, roleMatrix } from '@/lib/authz/roleMatrix';
 
 export const prerender = false;
 
-const selfId = Astro.locals.session?.userId ?? '';
+// Users & roles (Admin v2 U12a; `users.manage`, Admin only). The island is the people table,
+// its edit drawer, the invite card and the Security card; beside it, server-rendered and
+// zero JS, the read-only "Roles & permissions" matrix from ROLE_CAPS. Another role still
+// reaches the page (the middleware asks only for a session): its island shows the API's
+// refusal, and nothing here reads or renders what the role may not see.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const manages = session !== null && can(session.role, 'users.manage') === 'full';
+
+let canSignIn: number | null = null;
+let isOwner = false;
+if (manages && session && sb) {
+  // Through the Admin's own session: RLS (the live read, 0055) decides what is counted.
+  const [count, self] = await Promise.all([
+    sb
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', session.tenantId)
+      .eq('is_active', true),
+    sb
+      .from('profiles')
+      .select('is_owner')
+      .eq('tenant_id', session.tenantId)
+      .eq('id', session.userId)
+      .maybeSingle<{ is_owner?: unknown }>(),
+  ]);
+  canSignIn = count.error ? null : (count.count ?? null);
+  isOwner = self.data?.is_owner === true;
+}
+
+const subtitle =
+  canSignIn === null
+    ? 'Roles decide what each person sees.'
+    : `${canSignIn === 1 ? '1 person can' : `${canSignIn} people can`} sign in. Roles decide what each one sees.`;
+const columns = matrixColumns();
+const groups = manages ? roleMatrix() : [];
 ---
 
-<AdminLayout
-  title="Users & roles"
-  subtitle="Admin only. Role changes end the affected session immediately."
->
-  <AdminUsers client:load selfId={selfId} />
+<AdminLayout title="Users & roles" subtitle={subtitle} styles={['users.css']}>
+  <AdminUsers client:load selfId={session?.userId ?? ''} isOwner={isOwner} canManage={manages} />
+  {
+    manages && (
+      <Card
+        title="Roles & permissions"
+        sub="Roles are fixed and checked twice, on the server and in the database."
+        class="users-matrix"
+      >
+        <div
+          class="table-wrap users-matrix__scroll"
+          role="region"
+          tabindex="0"
+          aria-labelledby="users-matrix-caption"
+        >
+          <table class="data users-perm">
+            <caption id="users-matrix-caption" class="visually-hidden">
+              What each role can do
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Permission</th>
+                {columns.map((column) => (
+                  <th scope="col">{column.label}</th>
+                ))}
+              </tr>
+            </thead>
+            {groups.map((group) => (
+              <tbody>
+                <tr class="users-perm__group">
+                  <th scope="colgroup" colspan={columns.length + 1}>
+                    {group.label}
+                  </th>
+                </tr>
+                {group.rows.map((row) => (
+                  <tr>
+                    <th scope="row">{row.label}</th>
+                    {columns.map((column) => {
+                      const cell = row.cells[column.role];
+                      return (
+                        <td data-cell={cell === '✓' ? 'yes' : cell === '—' ? 'no' : 'part'}>
+                          {cell === '✓' || cell === '—' ? (
+                            <>
+                              <span aria-hidden="true">{cell}</span>
+                              <span class="visually-hidden">{CELL_SPOKEN[cell]}</span>
+                            </>
+                          ) : (
+                            cell
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            ))}
+          </table>
+        </div>
+      </Card>
+    )
+  }
 </AdminLayout>

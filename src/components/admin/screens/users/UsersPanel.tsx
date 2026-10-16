@@ -1,199 +1,206 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import { ROLE_LABELS } from '@/lib/authz/capLabels';
+import { formatDateTime, relTime } from '@/lib/admin/relTime';
+import { STATUS_LABEL, personName, type UserRow, type UserStatus } from '@/lib/admin/userModel';
+import type { BadgeTone } from '@/lib/admin/tones';
+import DataTable, { type DataColumn } from '@/components/admin/kit/DataTable';
+import Avatar from '@/components/admin/kit/Avatar';
+import Note from '@/components/admin/kit/Note';
+import { Badge } from '@/components/admin/kit/StatusBadge';
+import EditUserDrawer from './EditUserDrawer';
+import InviteCard from './InviteCard';
+import SecurityCard from './SecurityCard';
 
-// Users & roles — Admin only (`users.manage`).
+// Users & roles (Admin v2 U12a, ui.md AV-21; `users.manage`, Admin only). Built on the kit:
+// the people table (DataTable), the edit drawer (Drawer, with Modal confirms), the invite
+// card (today's invite; U12b replaces it with the invite drawer and pending invites) and the
+// Security card. The read-only role matrix is server-rendered by the page beside this island.
 //
-// The copy under the role selector is doing real work: changing someone's role rewrites
-// their JWT claim AND their profile row, and `resolveAuthContext` kills any session
-// where those two disagree. So a role change signs the person out. That is the correct
-// behaviour (it is what makes a demotion take effect against RLS immediately) but it is
-// surprising if nobody says so, and the admin who does it should not have to discover
-// it from a colleague's confused message.
-
-interface UserRow {
-  id: string;
-  role: string;
-  is_active: boolean;
-  display_name: string | null;
-  locked_until: string | null;
-  last_login_at: string | null;
-  created_at: string;
-}
-
-const ROLES = ['admin', 'content_creator', 'seo', 'developer'] as const;
+// What a change does, said where it is made: a role change or switching someone off ends
+// every sign-in that person has, on every device (0055 deletes their sessions; the admin
+// turns them away at their next click). The account owner keeps the Admin role.
 
 export interface UsersPanelProps {
-  /** The signed-in admin's id — used to disable self-demotion in the UI. */
+  /** The signed-in Admin's id: self-demotion and self-deactivation are refused. */
   selfId: string;
+  /** Whether the signed-in Admin is the account owner (who alone can hand it on). */
+  isOwner: boolean;
+  /**
+   * The viewer holds `users.manage` (the server's answer, from ROLE_CAPS). Without it the
+   * screen is the table alone, which shows the API's refusal (CLAUDE.md §9, refusals e2e).
+   */
+  canManage: boolean;
 }
 
-export default function UsersPanel({ selfId }: UsersPanelProps) {
-  const [rows, setRows] = useState<UserRow[]>([]);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<string>('content_creator');
+interface Page {
+  rows: UserRow[];
+  total: number;
+  /** null: unknown (the directory could not be read), so nothing is said about it. */
+  hasOwner: boolean | null;
+}
 
-  const load = useCallback(async () => {
-    setError('');
-    try {
-      const data = await adminFetch<{ rows: UserRow[] }>('/api/admin/users?limit=100');
-      setRows(data.rows ?? []);
-    } catch (err) {
-      setError(describeError(err));
-    }
-  }, []);
+const STATUS_TONE: Readonly<Record<UserStatus, BadgeTone>> = {
+  active: 'ok',
+  removed: 'gray',
+  locked: 'err',
+  invited: 'sky',
+};
+
+export default function UsersPanel({ selfId, isOwner, canManage }: UsersPanelProps) {
+  const [page, setPage] = useState<Page>({ rows: [], total: 0, hasOwner: true });
+  const [offset, setOffset] = useState(0);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState<string | undefined>();
+  const [notice, setNotice] = useState('');
+  const [editing, setEditing] = useState<UserRow | null>(null);
+  const [viewerOwns, setViewerOwns] = useState(isOwner);
+
+  const load = useCallback(
+    async (at: number) => {
+      setBusy(true);
+      setError(undefined);
+      try {
+        const data = await adminFetch<Page>(`/api/admin/users?limit=25&offset=${at}`);
+        setPage({
+          rows: data.rows ?? [],
+          total: data.total ?? 0,
+          hasOwner: typeof data.hasOwner === 'boolean' ? data.hasOwner : null,
+        });
+        // Whether the viewer owns the account, as fresh as the list: the page's prop is the
+        // server's answer at render time, and ownership may have moved since.
+        const me = (data.rows ?? []).find((row) => row.id === selfId);
+        if (me) setViewerOwns(me.isOwner);
+      } catch (err) {
+        setError(describeError(err));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [selfId],
+  );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load(offset);
+  }, [load, offset]);
 
-  async function invite(event: FormEvent) {
-    event.preventDefault();
-    setError('');
-    setNotice('');
-    try {
-      await adminFetch('/api/admin/users', {
-        method: 'POST',
-        body: { email: inviteEmail, role: inviteRole },
-      });
-      setNotice(`Invitation sent to ${inviteEmail}.`);
-      setInviteEmail('');
-      await load();
-    } catch (err) {
-      setError(describeError(err));
-    }
-  }
-
-  async function update(id: string, body: Record<string, unknown>) {
-    setError('');
-    setNotice('');
-    try {
-      await adminFetch(`/api/admin/users/${id}`, { method: 'PATCH', body });
-      setNotice('Updated. If you changed a role, that person will need to sign in again.');
-      await load();
-    } catch (err) {
-      setError(describeError(err));
-    }
-  }
+  const columns: readonly DataColumn<UserRow>[] = [
+    {
+      key: 'person',
+      label: 'Person',
+      render: (row) => (
+        <span className="users-person">
+          <Avatar name={row.displayName} email={row.email ?? ''} toneKey={row.id} size="sm" />
+          <span className="users-person__who">
+            <span className="users-person__name" dir="auto">
+              {personName(row)}
+              {row.id === selfId && <span className="users-person__you"> (you)</span>}
+            </span>
+            {row.email && row.displayName && (
+              <span className="cell-secondary" dir="ltr">
+                {row.email}
+              </span>
+            )}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: 'role',
+      label: 'Role',
+      render: (row) => (
+        <span className="users-badges">
+          <Badge tone={row.role === 'admin' ? 'sky' : 'gray'} plain>
+            {ROLE_LABELS[row.role]}
+          </Badge>
+          {row.isOwner && (
+            <Badge tone="klein" plain>
+              Account owner
+            </Badge>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Access',
+      render: (row) => <Badge tone={STATUS_TONE[row.status]}>{STATUS_LABEL[row.status]}</Badge>,
+    },
+    {
+      key: 'lastSignInAt',
+      label: 'Last sign-in',
+      render: (row) =>
+        row.lastSignInAt ? (
+          <time dateTime={row.lastSignInAt} title={formatDateTime(row.lastSignInAt)}>
+            {relTime(row.lastSignInAt)}
+          </time>
+        ) : (
+          'Never'
+        ),
+    },
+  ];
 
   return (
-    <div>
-      {error && (
-        <p className="msg" data-kind="error" role="alert">
-          {error}
-        </p>
-      )}
+    <div className="users">
       {notice && (
-        <p className="msg" data-kind="ok" role="status">
+        <Note tone="ok" role="status">
           {notice}
-        </p>
+        </Note>
       )}
-
-      <form className="card" onSubmit={(event) => void invite(event)}>
-        <h2 className="card-title">Invite a colleague</h2>
-        <div className="row-2">
-          <label className="field">
-            <span>Email</span>
-            <input
-              type="email"
-              required
-              value={inviteEmail}
-              onChange={(event) => setInviteEmail(event.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Role</span>
-            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)}>
-              {ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {role.replace('_', ' ')}
-                </option>
-              ))}
-            </select>
-          </label>
+      {!busy && !error && page.hasOwner === false && (
+        <Note tone="warn">
+          No account owner is set yet. Ask whoever runs the database to mark it (launch runbook §3).
+        </Note>
+      )}
+      <DataTable
+        caption="People who can use the admin"
+        columns={columns}
+        rows={page.rows}
+        rowName={personName}
+        total={page.total}
+        offset={offset}
+        onPage={setOffset}
+        busy={busy}
+        error={error}
+        actionsLabel="Edit"
+        rowActions={
+          canManage
+            ? (row) => (
+                <button
+                  type="button"
+                  data-size="sm"
+                  data-variant="ghost"
+                  aria-label={`Edit ${personName(row)}`}
+                  onClick={() => {
+                    setNotice('');
+                    setEditing(row);
+                  }}
+                >
+                  Edit
+                </button>
+              )
+            : undefined
+        }
+        empty={{ title: 'Nobody here yet', text: 'Invite someone below.', icon: 'users' }}
+      />
+      {canManage && (
+        <div className="grid grid--2-1 users-cards">
+          <InviteCard onInvited={() => void load(offset)} />
+          <SecurityCard />
         </div>
-        <button type="submit" data-variant="primary">
-          Send invitation
-        </button>
-      </form>
-
-      <div className="card table-wrap">
-        <table className="data">
-          <caption className="visually-hidden">Users and roles</caption>
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Role</th>
-              <th scope="col">Active</th>
-              <th scope="col">Last sign-in</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const isSelf = row.id === selfId;
-              const locked = row.locked_until !== null && Date.parse(row.locked_until) > Date.now();
-              return (
-                <tr key={row.id}>
-                  <td>
-                    {row.display_name ?? row.id.slice(0, 8)}
-                    {isSelf && (
-                      <span className="badge" data-tone="klein">
-                        {' '}
-                        you
-                      </span>
-                    )}
-                    {locked && (
-                      <span className="badge" data-tone="err">
-                        {' '}
-                        locked
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <label className="visually-hidden" htmlFor={`r-${row.id}`}>
-                      Role
-                    </label>
-                    <select
-                      id={`r-${row.id}`}
-                      value={row.role}
-                      disabled={isSelf}
-                      onChange={(event) => void update(row.id, { role: event.target.value })}
-                    >
-                      {ROLES.map((role) => (
-                        <option key={role} value={role}>
-                          {role.replace('_', ' ')}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>{row.is_active ? 'Yes' : 'No'}</td>
-                  <td>{row.last_login_at ? new Date(row.last_login_at).toLocaleString() : '—'}</td>
-                  <td>
-                    {/* Disabled for yourself: users.manage is Admin-only, so a lone
-                        admin who deactivates themselves leaves nobody who can undo it. */}
-                    <button
-                      type="button"
-                      data-variant={row.is_active ? 'danger' : undefined}
-                      disabled={isSelf}
-                      onClick={() => void update(row.id, { isActive: !row.is_active })}
-                    >
-                      {row.is_active ? 'Deactivate' : 'Reactivate'}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <p className="admin-sub">
-        Changing a role rewrites the person’s access token claim and their profile row together.
-        Their current session stops working immediately — that is what makes a demotion effective
-        against the database, not just the interface.
-      </p>
+      )}
+      <EditUserDrawer
+        user={editing}
+        selfId={selfId}
+        viewerOwns={viewerOwns}
+        onClose={() => setEditing(null)}
+        onChanged={(message, change) => {
+          setNotice(message);
+          if (change?.transferred) setViewerOwns(false);
+          setEditing(null);
+          void load(offset);
+        }}
+      />
     </div>
   );
 }
