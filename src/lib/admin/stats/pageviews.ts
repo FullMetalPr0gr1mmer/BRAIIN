@@ -1,8 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
-import { PAGE_SIZE, offsetOf, pageInfo } from '../pager';
+import { PAGE_SIZE, pageInfo } from '../pager';
 import { daysOf, hasPreviousPeriod, type DateRange } from './range';
-import { count, list, readFailed, record } from './read';
+import { boundedOffset, count, list, readError, record } from './read';
 
 // Page views for the stats screens (Admin v2 U2) and the dashboard's widgets (U1 imports
 // these): read from rollup_daily_pageviews through the invoker RPCs of migration 0052, so
@@ -84,7 +84,7 @@ async function summaryOf(
     p_to: to,
     p_locale: locale,
   });
-  if (error) throw await readFailed(SOURCE, 'Page views', error.message);
+  if (error) throw await readError(SOURCE, 'Page views', error);
   return data;
 }
 
@@ -152,7 +152,7 @@ async function pathsAt(
     p_limit: limit,
     p_offset: offset,
   });
-  if (error) throw await readFailed(SOURCE, 'Pages', error.message);
+  if (error) throw await readError(SOURCE, 'Pages', error);
   const rows = list(data);
   return {
     rows: rows.map((row) => ({
@@ -175,7 +175,7 @@ export async function loadPagePaths(
   range: DateRange,
   page: number,
 ): Promise<PathPage> {
-  const offset = offsetOf(page);
+  const offset = boundedOffset(page);
   const first = await pathsAt(sb, auth, range, PAGE_SIZE, offset);
   if (first.rows.length > 0 || offset === 0) return { ...first, offset };
   // Past the end: learn the total, then read the last page.

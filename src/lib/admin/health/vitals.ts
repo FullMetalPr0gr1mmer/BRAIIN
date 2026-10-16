@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import type { BadgeTone } from '../tones';
-import { count, list, readFailed, record } from '../stats/read';
+import { count, list, readError, record } from '../stats/read';
 
 // Field Core Web Vitals for site health (Admin v2 U2): what visitors' own browsers measured,
 // read from rollup_daily_vitals through public.vitals_summary (migration 0052), never from
@@ -151,7 +151,7 @@ export async function loadVitals(
   days: number = HEALTH_WINDOW_DAYS,
 ): Promise<VitalsReport> {
   const { data, error } = await sb.rpc('vitals_summary', { p_tenant: auth.tenantId, p_days: days });
-  if (error) throw await readFailed('admin:health', 'Speed', error.message);
+  if (error) throw await readError('admin:health', 'Speed', error);
   const summary = record(data);
   const rows: VitalRow[] = [];
   for (const row of list(summary['rows'])) {

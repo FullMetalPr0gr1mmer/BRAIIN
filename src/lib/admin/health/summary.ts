@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { can } from '@/lib/authz/matrix';
-import { count, readFailed, record } from '../stats/read';
+import { count, readError, record } from '../stats/read';
 import {
   ERROR_WINDOW_DAYS,
   runChecklist,
@@ -78,7 +78,7 @@ async function settle<T, F>(read: () => Promise<T>, failed: F): Promise<T | F> {
 
 async function loadContentHealth(sb: SupabaseClient, auth: AuthContext): Promise<ContentHealth> {
   const { data, error } = await sb.rpc('content_health', { p_tenant: auth.tenantId });
-  if (error) throw await readFailed(SOURCE, 'Checklist', error.message);
+  if (error) throw await readError(SOURCE, 'Checklist', error);
   const c = record(data);
   return {
     placeholdersLive: count(c['placeholders_live']),
@@ -100,7 +100,7 @@ async function loadErrorCount(sb: SupabaseClient, auth: AuthContext, now: number
     .eq('tenant_id', auth.tenantId)
     .eq('level', 'error')
     .gte('created_at', since);
-  if (error) throw await readFailed(SOURCE, 'Errors', error.message);
+  if (error) throw await readError(SOURCE, 'Errors', error);
   return n ?? 0;
 }
 
@@ -112,7 +112,7 @@ async function loadLastBackup(sb: SupabaseClient, auth: AuthContext): Promise<Ba
     .eq('action', 'export.backup.outcome')
     .order('created_at', { ascending: false })
     .limit(1);
-  if (error) throw await readFailed(SOURCE, 'Backups', error.message);
+  if (error) throw await readError(SOURCE, 'Backups', error);
   const row = Array.isArray(data) ? record(data[0]) : {};
   if (typeof row['created_at'] !== 'string') return null;
   const detail = record(row['detail']);

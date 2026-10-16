@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import type { StatLocale } from './pageviews';
-import { count, list, readFailed, record } from './read';
+import { count, list, readError, record } from './read';
 
 // What visitors searched for (Admin v2 U2, the Search tab: analytics.search, Admin, SEO and
 // Developer). One read of public.search_summary (migration 0052), which counts the searches
@@ -49,7 +49,7 @@ export async function loadSearchSummary(
     p_days: days,
     p_locale: locale,
   });
-  if (error) throw await readFailed('admin:stats', 'Searches', error.message);
+  if (error) throw await readError('admin:stats', 'Searches', error);
   const summary = record(data);
   return {
     days,

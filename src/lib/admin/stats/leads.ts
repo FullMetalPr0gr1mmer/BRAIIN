@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { can } from '@/lib/authz/matrix';
 import { addDays, type DateRange } from './range';
-import { count, readFailed, record } from './read';
+import { count, readError, record } from './read';
 
 // The stats overview's lead figures (Admin v2 U2), for leads.manage holders only: how many
 // leads arrived in the range and in the previous period, from public.lead_summary (0036:
@@ -34,7 +34,7 @@ async function arrived(
     p_tenant: auth.tenantId,
     p_filter: dayWindow(from, to),
   });
-  if (error) throw await readFailed('admin:stats', 'Leads', error.message);
+  if (error) throw await readError('admin:stats', 'Leads', error);
   return count(record(data)['total']);
 }
 

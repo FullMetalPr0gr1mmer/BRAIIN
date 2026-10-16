@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
-import { PAGE_SIZE, offsetOf, pageInfo } from '../pager';
-import { readFailed } from '../stats/read';
+import { PAGE_SIZE, pageInfo } from '../pager';
+import { boundedOffset, readError } from '../stats/read';
 
 // The Errors tab of site health (Admin v2 U2; it replaces /admin/logs, now a redirect): one
 // page of system_logs, newest first, optionally one level. logs.view (Admin, Developer), as
@@ -66,7 +66,7 @@ async function pageAt(
   if (level) query = query.eq('level', level);
   const { data, error, count } = await query;
   if (error?.code === PAST_THE_END) return { rows: [], total: null };
-  if (error) throw await readFailed('admin:health', 'Errors', error.message);
+  if (error) throw await readError('admin:health', 'Errors', error);
   const rows = (Array.isArray(data) ? data : []) as Record<string, unknown>[];
   return {
     rows: rows.map((row) => ({
@@ -92,7 +92,7 @@ async function countAll(
     .eq('tenant_id', auth.tenantId);
   if (level) query = query.eq('level', level);
   const { count, error } = await query;
-  if (error) throw await readFailed('admin:health', 'Errors', error.message);
+  if (error) throw await readError('admin:health', 'Errors', error);
   return count ?? 0;
 }
 
@@ -102,7 +102,7 @@ export async function loadLogs(
   auth: AuthContext,
   { level, page }: { level: LogLevel | null; page: number },
 ): Promise<LogPage> {
-  const offset = offsetOf(page);
+  const offset = boundedOffset(page);
   const first = await pageAt(sb, auth, level, offset);
   if (first.rows.length > 0 || offset === 0) {
     return { rows: first.rows, total: first.total ?? first.rows.length, offset };
