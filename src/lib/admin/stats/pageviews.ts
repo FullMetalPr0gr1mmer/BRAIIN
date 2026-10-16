@@ -91,17 +91,20 @@ async function summaryOf(
 /**
  * The range's page views, and the previous period's when the rollups hold it (two reads
  * then, one otherwise). `locale` keeps one language (the JSON route's `?locale=`).
+ * `previous: false` skips the previous period (the dashboard's widgets, U1, which compare
+ * within one read: `previous` is then null).
  */
 export async function loadPageviewSummary(
   sb: SupabaseClient,
   auth: AuthContext,
   range: DateRange,
   locale: StatLocale | null = null,
+  options: { previous?: boolean } = {},
 ): Promise<PageviewSummary> {
   const current = await summaryOf(sb, auth, range.from, range.to, locale);
   const first = record(current)['first_day'];
   const firstDay = typeof first === 'string' ? first : null;
-  const previous = hasPreviousPeriod(firstDay, range)
+  const previous = options.previous !== false && hasPreviousPeriod(firstDay, range)
     ? totalsOf(await summaryOf(sb, auth, range.prevFrom, range.prevTo, locale), {
         from: range.prevFrom,
         to: range.prevTo,

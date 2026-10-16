@@ -451,15 +451,22 @@ describe('the account schemas', () => {
     expect(same.error?.issues[0]?.path).toEqual(['next']);
   });
 
-  it('preferences: known kinds only, each once; the dashboard waits for its own slice', () => {
+  it('preferences: known kinds only, each once; the dashboard joins with U1, one at least', () => {
     expect(NotificationPrefsSchema.parse({ muted: ['leads', 'leads'] })).toEqual({
       muted: ['leads'],
     });
     expect(NotificationPrefsSchema.safeParse({ muted: ['everything'] }).success).toBe(false);
+    // The account drawer sends the bell's alone; U1's dashboard fields join it (README U1
+    // risk 5); a body with none of the three, or an unknown key, is refused.
+    expect(
+      AdminPrefsPutSchema.safeParse({ version: 1, notifications: { muted: [] } }).success,
+    ).toBe(true);
     expect(
       AdminPrefsPutSchema.safeParse({ version: 1, notifications: { muted: [] }, dashboard: {} })
         .success,
-    ).toBe(false);
+    ).toBe(true);
+    expect(AdminPrefsPutSchema.safeParse({ version: 1 }).success).toBe(false);
+    expect(AdminPrefsPutSchema.safeParse({ version: 1, theme: 'dark' }).success).toBe(false);
     expect(readNotificationPrefs('garbage')).toEqual({ muted: [] });
     expect(readNotificationPrefs({ muted: ['maintenance', 7, null] })).toEqual({
       muted: ['maintenance'],
