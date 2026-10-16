@@ -246,6 +246,10 @@ const EXACT: Readonly<Record<string, Label>> = {
     verb: 'Handed the account ownership to',
     noun: 'a member',
   },
+  // Admin v2 U12b: invites sent again and cancelled, and an invite accepted (written by the
+  // service role against the account that accepted it).
+  'user.invite_resend': { kind: 'users', verb: 'Sent the invite again to', noun: 'a new member' },
+  'user.invite_cancel': { kind: 'users', verb: 'Cancelled the invite of', noun: 'a new member' },
   'profile.update': { kind: 'users', verb: 'Changed their display name', noun: null },
   'auth.login': { kind: 'users', verb: 'Signed in', noun: null },
   'auth.logout': { kind: 'users', verb: 'Signed out', noun: null },
@@ -261,6 +265,7 @@ const EXACT: Readonly<Record<string, Label>> = {
     noun: null,
   },
   'auth.password_reset': { kind: 'users', verb: 'Reset their password', noun: null },
+  'auth.invite_accepted': { kind: 'users', verb: 'Accepted their invite', noun: null },
 
   // Settings
   'maintenance.enable': { kind: 'settings', verb: 'Switched on', noun: 'maintenance mode' },

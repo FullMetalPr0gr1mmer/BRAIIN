@@ -42,6 +42,12 @@ const NOT_DRIVABLE: Readonly<Record<string, string>> = {
     'recovery token, not a role. tests/authz/recovery.spec.ts drives it: the middleware, the ' +
     'token and password checks before anything is spent, the limit (fail closed), verify, set, ' +
     'sign out everywhere, the cleared cookies and the audit row.',
+  'POST /api/admin/auth/invite':
+    'Accepting an invite (Admin v2 U12b) is reached without a session; its authority is the ' +
+    'one-time invite token, not a role. tests/authz/invite.spec.ts drives it: the token and ' +
+    'password checks before anything is spent, the limits (fail closed), verify, the closed ' +
+    'account, set, sign out everywhere, the cleared cookies and the audit row; the middleware ' +
+    'in front of it is in tests/authz/login.spec.ts.',
   'POST /api/admin/auth/logout':
     'Sign-out needs a session, not a capability: every role may sign out, and the session ' +
     'gate is src/middleware.ts (401 before the handler, which this suite invokes directly; ' +

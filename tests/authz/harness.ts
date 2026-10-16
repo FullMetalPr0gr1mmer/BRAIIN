@@ -96,6 +96,20 @@ export function makeStubClient(options: StubOptions = {}) {
       admin: {
         inviteUserByEmail: async () => ({ data: { user: { id: row['id'] } }, error: null }),
         updateUserById: async () => ({ data: {}, error: null }),
+        // An invite nobody has accepted (Admin v2 U12b: Resend and Cancel read it first).
+        getUserById: async () => ({
+          data: {
+            user: {
+              id: row['id'],
+              email: 'invited@example.test',
+              invited_at: '2026-10-01T00:00:00Z',
+              email_confirmed_at: null,
+              last_sign_in_at: null,
+            },
+          },
+          error: null,
+        }),
+        deleteUser: async () => ({ data: {}, error: null }),
       },
     },
   };

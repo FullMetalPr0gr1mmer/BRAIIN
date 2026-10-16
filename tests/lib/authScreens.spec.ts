@@ -27,6 +27,20 @@ import {
   keepResetToken,
   resetTokenFrom,
 } from '@/lib/auth/resetToken';
+import {
+  INVITE_TOKEN_COOKIE,
+  dropInviteToken,
+  inviteTokenFrom,
+  keepInviteToken,
+} from '@/lib/auth/inviteToken';
+import {
+  INVITE_LINK_SPENT,
+  INVITE_MESSAGES,
+  INVITE_READY,
+  INVITE_REOPEN,
+  INVITE_TOO_LARGE,
+} from '@/lib/auth/messages';
+import { inviteLimitRules, invitePageUrl } from '@/lib/auth/recovery';
 import { PASSWORD_MIN } from '@schemas/adminPrefs';
 // Astro's own path steps (the installed release), to hold safeNext to the path Astro routes.
 // Not in astro's package exports, so they are reached by path (as tests/lib/session.spec.ts
@@ -409,6 +423,10 @@ describe('the outcome codes the pages render', () => {
       RESET_TOO_LARGE.text,
       FORGOT_NOT_SET_UP.title,
       FORGOT_NOT_SET_UP.text,
+      ...Object.values(INVITE_MESSAGES).map((m) => m.text),
+      INVITE_READY.text,
+      INVITE_REOPEN.text,
+      INVITE_TOO_LARGE.text,
     ];
     for (const text of all) expect(text, text).not.toMatch(/[–—]/);
     // And the screens' own words.
@@ -416,6 +434,7 @@ describe('the outcome codes the pages render', () => {
       'src/pages/admin/login.astro',
       'src/pages/admin/forgot.astro',
       'src/pages/admin/reset.astro',
+      'src/pages/admin/invite.astro',
       'src/layouts/AuthLayout.astro',
     ]) {
       const markup = readFileSync(file, 'utf8').split('---').slice(2).join('---');
@@ -425,14 +444,15 @@ describe('the outcome codes the pages render', () => {
   });
 
   it('every page has copy for a form sent back by the CSRF check, and it keeps the reset link', () => {
-    for (const table of [LOGIN_MESSAGES, FORGOT_MESSAGES, RESET_MESSAGES]) {
+    for (const table of [LOGIN_MESSAGES, FORGOT_MESSAGES, RESET_MESSAGES, INVITE_MESSAGES]) {
       expect(messageFor(table, EXPIRED_FORM)).toEqual({
         kind: 'error',
         text: 'This page was open too long. Please try again.',
       });
     }
     expect(RESET_LINK_SPENT.has(EXPIRED_FORM)).toBe(false);
-    for (const table of [LOGIN_MESSAGES, FORGOT_MESSAGES, RESET_MESSAGES]) {
+    expect(INVITE_LINK_SPENT.has(EXPIRED_FORM)).toBe(false);
+    for (const table of [LOGIN_MESSAGES, FORGOT_MESSAGES, RESET_MESSAGES, INVITE_MESSAGES]) {
       expect(messageFor(table, FORM_TOO_LARGE)).toEqual({
         kind: 'error',
         text: 'That form was too large to send. Please try again.',
@@ -443,6 +463,7 @@ describe('the outcome codes the pages render', () => {
       ['/api/admin/auth/login', '/admin/login?error='],
       ['/api/admin/auth/forgot', '/admin/forgot?status='],
       ['/api/admin/auth/reset', '/admin/reset?error='],
+      ['/api/admin/auth/invite', '/admin/invite?error='],
     ] as const) {
       expect(expiredFormLocation(endpoint, new URLSearchParams())).toBe(`${page}${EXPIRED_FORM}`);
     }
@@ -528,5 +549,93 @@ Set-Cookie: y=1`,
     expect(resetTokenFrom(params('token_hash=x&type=recovery'), LINK)).toBeNull();
     expect(resetTokenFrom(params(''), '<x>')).toBeNull();
     expect(resetTokenFrom(params(''), undefined)).toBeNull();
+  });
+});
+
+describe('accepting an invite (Admin v2 U12b): its codes, its link, its limits', () => {
+  const LINK = 'a1b2c3d4'.repeat(7);
+
+  it('every invite code the endpoint sends has copy, and the spent ones drop the form', () => {
+    const source = readFileSync('src/pages/api/admin/auth/invite.ts', 'utf8');
+    const table = /const PAGE_CODE[^{]*\{([^}]*)\}/.exec(source)?.[1] ?? '';
+    const codes = [...table.matchAll(/:\s*'([a-z-]+)'/g)].map((m) => m[1]!).sort();
+    expect(codes).toEqual([
+      'closed',
+      'expired',
+      'interrupted',
+      'limited',
+      'long',
+      'mismatch',
+      'refused',
+      'short',
+      'unavailable',
+    ]);
+    for (const code of codes) expect(messageFor(INVITE_MESSAGES, code), code).not.toBeNull();
+    expect(Object.keys(INVITE_MESSAGES).sort()).toEqual(
+      [...codes, EXPIRED_FORM, FORM_TOO_LARGE].sort(),
+    );
+    expect([...INVITE_LINK_SPENT].sort()).toEqual(['closed', 'expired', 'interrupted', 'refused']);
+    for (const code of [null, '', '__proto__', 'constructor', '<b>x</b>']) {
+      expect(messageFor(INVITE_MESSAGES, code), String(code)).toBeNull();
+    }
+  });
+
+  it("states the account screen's password rule, and sends a spent link back to an Admin", () => {
+    expect(INVITE_MESSAGES.short.text).toBe(`Use at least ${PASSWORD_MIN} characters.`);
+    expect(INVITE_MESSAGES.expired.text).toContain('Ask the Admin who invited you');
+    // After the verify the account is confirmed and cannot be invited again: "Forgot
+    // password?" is its way to a password, never "ask for the invite again".
+    // A switched-off account (closed) is confirmed too: the Admin switches it back on first.
+    for (const code of ['refused', 'interrupted', 'closed'] as const) {
+      expect(INVITE_MESSAGES[code].text).toContain('"Forgot password?"');
+      expect(INVITE_MESSAGES[code].text).not.toContain('invite again');
+    }
+    expect(INVITE_MESSAGES.closed.text).toContain('switch your access back on');
+    expect(INVITE_READY.text).toBe(
+      'Your password is set. Sign in with your email and the new password.',
+    );
+  });
+
+  it('rides in a cookie only the invite page gets, short-lived, never readable by script', () => {
+    expect(keepInviteToken(LINK)).toBe(
+      `${INVITE_TOKEN_COOKIE}=${LINK}; Max-Age=900; Path=/admin/invite; Secure; HttpOnly; SameSite=Strict`,
+    );
+    expect(dropInviteToken()).toBe(
+      `${INVITE_TOKEN_COOKIE}=; Max-Age=0; Path=/admin/invite; Secure; HttpOnly; SameSite=Strict`,
+    );
+    expect(INVITE_TOKEN_COOKIE.startsWith('__Secure-')).toBe(true);
+    for (const bad of [
+      '',
+      'x',
+      'a; Path=/',
+      `${LINK}
+Set-Cookie: y=1`,
+    ]) {
+      expect(() => keepInviteToken(bad), bad).toThrow();
+    }
+  });
+
+  it("the page takes the link's own token first, else the cookie's, and never a reset link's", () => {
+    const params = (search: string) => new URLSearchParams(search);
+    expect(inviteTokenFrom(params(`token_hash=${LINK}&type=invite`), undefined)).toBe(LINK);
+    expect(inviteTokenFrom(params(`token_hash=${LINK}&type=invite`), 'b'.repeat(56))).toBe(LINK);
+    expect(inviteTokenFrom(params('error=mismatch'), LINK)).toBe(LINK);
+    expect(inviteTokenFrom(params(`token_hash=${LINK}&type=recovery`), LINK)).toBeNull();
+    expect(inviteTokenFrom(params(`token_hash=${LINK}`), LINK)).toBeNull();
+    expect(inviteTokenFrom(params(''), '<x>')).toBeNull();
+    expect(inviteTokenFrom(params(''), undefined)).toBeNull();
+  });
+
+  it("counts per address, then the tenant's window; the link lands on the configured origin", () => {
+    const { caller, tenant } = inviteLimitRules('203.0.113.7');
+    expect(caller).toEqual([
+      { scope: 'auth.invite:ip', value: '203.0.113.7', ...RECOVERY_LIMITS.invitePerIp },
+    ]);
+    expect(tenant).toEqual({
+      scope: 'auth.invite:tenant',
+      value: 'all',
+      ...RECOVERY_LIMITS.invitePerTenant,
+    });
+    expect(invitePageUrl()).toBe(`${PUBLIC_SITE_URL}/admin/invite`);
   });
 });

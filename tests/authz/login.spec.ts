@@ -232,6 +232,7 @@ describe('a sign-in form post that fails the token check goes back to its page (
     ['/api/admin/auth/login', '/admin/login?error=expired-form'],
     ['/api/admin/auth/forgot', '/admin/forgot?status=expired-form'],
     ['/api/admin/auth/reset', '/admin/reset?error=expired-form'],
+    ['/api/admin/auth/invite', '/admin/invite?error=expired-form'],
   ])('%s: 303 to %s, never the handler, never cached', async (path, location) => {
     for (const [fields, cookie] of [
       [{ email: 'a@b.test' }, true], // no token in the form
@@ -277,6 +278,16 @@ describe('a sign-in form post that fails the token check goes back to its page (
     const odd = await answer('/api/admin/auth/reset', { token_hash: '<x>', password: 'secret pw' });
     expect(odd.headers.get('location')).toBe('/admin/reset?error=expired-form');
     expect(odd.headers.getSetCookie()).toEqual([]);
+    // The invite link likewise, in the invite page's own cookie (src/lib/auth/inviteToken.ts).
+    const invite = await answer('/api/admin/auth/invite', {
+      token_hash: RESET_TOKEN,
+      password: 'p',
+      confirm: 'p',
+    });
+    expect(invite.headers.get('location')).toBe('/admin/invite?error=expired-form');
+    expect(invite.headers.getSetCookie()).toEqual([
+      `__Secure-braiin-invite=${RESET_TOKEN}; Max-Age=900; Path=/admin/invite; Secure; HttpOnly; SameSite=Strict`,
+    ]);
     const forgot = await back('/api/admin/auth/forgot', { email: 'staff@example.test' });
     expect(forgot).toBe('/admin/forgot?status=expired-form');
     expect(forgot).not.toContain('example.test');
@@ -287,6 +298,7 @@ describe('a sign-in form post that fails the token check goes back to its page (
       '/api/admin/auth/login',
       '/api/admin/auth/forgot',
       '/api/admin/auth/reset',
+      '/api/admin/auth/invite',
     ]) {
       const json = handler();
       const res = await middleware(post(path, { origin: ORIGIN }), json);
@@ -396,6 +408,7 @@ describe('the pre-auth body limit, before anything reads a body (F7 final review
     ['/api/admin/auth/login', '/admin/login?error=too-large'],
     ['/api/admin/auth/forgot', '/admin/forgot?status=too-large'],
     ['/api/admin/auth/reset', '/admin/reset?error=too-large'],
+    ['/api/admin/auth/invite', '/admin/invite?error=too-large'],
   ])('a form over the limit to %s goes back to %s, unread', async (path, location) => {
     // The token is right: the size is refused first, so nothing of the body is read, not even
     // to find it (or `next`, or the reset link).
@@ -413,7 +426,9 @@ describe('the pre-auth body limit, before anything reads a body (F7 final review
       '/api/admin/auth/login',
       '/api/admin/auth/forgot',
       '/api/admin/auth/reset',
+      '/api/admin/auth/invite',
       '/admin/login',
+      '/admin/invite',
     ]) {
       const next = handler();
       const res = await middleware(
@@ -716,6 +731,31 @@ describe('a path that reads public but routes private is private (F7 final revie
     expect(next).not.toHaveBeenCalled();
   });
 
+  it('the invite paths (U12b) are pre-auth only when the route is the invite page or endpoint', async () => {
+    // Reads as the invite endpoint, routes to a colleague's invite (cancel): needs a session.
+    const next = handler();
+    const res = await middleware(
+      routed(
+        post('/api/admin/auth/invite', { origin: ORIGIN, [CSRF_HEADER_NAME]: TOKEN }),
+        '/api/admin/users/[id]/invite',
+      ),
+      next,
+    );
+    expect(res.status).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+    // Reads as a lead, routes to the invite endpoint: not pre-auth either.
+    const other = handler();
+    const viaLead = await middleware(
+      routed(
+        post('/api/admin/leads/x', { origin: ORIGIN, [CSRF_HEADER_NAME]: TOKEN }),
+        '/api/admin/auth/invite',
+      ),
+      other,
+    );
+    expect(viaLead.status).toBe(401);
+    expect(other).not.toHaveBeenCalled();
+  });
+
   it('a request that reads as / but routes to an admin API is private: 401, never cached', async () => {
     const next = handler();
     const ctx = post('/', { origin: ORIGIN, [CSRF_HEADER_NAME]: TOKEN });
@@ -767,26 +807,31 @@ describe('what the middleware lets through without a session (Admin v2 F7)', () 
   }
   const page = () => vi.fn(async () => new Response('<html></html>', { status: 200 }));
 
-  it.each(['/admin/login', '/admin/forgot', '/admin/reset'])('renders %s', async (path) => {
-    const next = page();
-    const res = await middleware(get(`${path}?x=1`), next);
-    expect(next).toHaveBeenCalledOnce();
-    expect(res.status).toBe(200);
-    // Still Tier C: never cached.
-    expect(res.headers.get('cache-control')).toContain('no-store');
-  });
-
-  it.each(['/api/admin/auth/login', '/api/admin/auth/forgot', '/api/admin/auth/reset'])(
-    'lets a same-origin POST to %s with the token reach its handler',
+  it.each(['/admin/login', '/admin/forgot', '/admin/reset', '/admin/invite'])(
+    'renders %s',
     async (path) => {
-      const next = handler();
-      const res = await middleware(post(path, { origin: ORIGIN, [CSRF_HEADER_NAME]: TOKEN }), next);
+      const next = page();
+      const res = await middleware(get(`${path}?x=1`), next);
       expect(next).toHaveBeenCalledOnce();
       expect(res.status).toBe(200);
+      // Still Tier C: never cached.
+      expect(res.headers.get('cache-control')).toContain('no-store');
     },
   );
 
-  it.each(['/api/admin/auth/forgot', '/api/admin/auth/reset'])(
+  it.each([
+    '/api/admin/auth/login',
+    '/api/admin/auth/forgot',
+    '/api/admin/auth/reset',
+    '/api/admin/auth/invite',
+  ])('lets a same-origin POST to %s with the token reach its handler', async (path) => {
+    const next = handler();
+    const res = await middleware(post(path, { origin: ORIGIN, [CSRF_HEADER_NAME]: TOKEN }), next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+  });
+
+  it.each(['/api/admin/auth/forgot', '/api/admin/auth/reset', '/api/admin/auth/invite'])(
     'still refuses a cross-site or tokenless POST to %s',
     async (path) => {
       for (const headers of [
@@ -802,7 +847,14 @@ describe('what the middleware lets through without a session (Admin v2 F7)', () 
   );
 
   it('and nothing else: another screen goes to sign in, another API answers 401', async () => {
-    for (const path of ['/admin', '/admin/users', '/admin/forgot-me', '/admin/reset/x']) {
+    for (const path of [
+      '/admin',
+      '/admin/users',
+      '/admin/forgot-me',
+      '/admin/reset/x',
+      '/admin/invite/x',
+      '/admin/invites',
+    ]) {
       const next = page();
       const res = await middleware(get(path), next);
       expect(res.status, path).toBe(302);

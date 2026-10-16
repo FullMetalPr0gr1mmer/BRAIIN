@@ -698,6 +698,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [U14a](as-built/U14a.md): page visibility without the password mode: `page_visibility`, the middleware gate on the matched route, KV `site:visibility` through a 60 s isolate memo, the menus, sitemap, llms.txt and search filtered, `/admin/visibility`, the `nav_visible` alias, the registry row, 0057 (PR number at review)
 - [U16](as-built/U16.md): the help centre: guides as typed blocks in the database, the "?" drawer with search and this screen's guides, `/admin/help`, 0046 (#62)
 - [U12a](as-built/U12a.md): users v2 and the session posture: the token's own claims and the session length checked, sessions revoked on a role change, the live read of profiles, the account owner, the Security card, the read-only role matrix, 0055 (PR number at review)
+- [U12b](as-built/U12b.md): invites: the acceptance page `/admin/invite` (eight pre-auth paths), Pending invites with Resend and Cancel, the invite drawer and message, switched off ("Not set up") until SMTP, the invite e-mail template, no address in the invite audit rows, 0056 (the help guide; PR number at review)
 
 **Releases**
 - [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)

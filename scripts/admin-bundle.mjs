@@ -55,15 +55,16 @@ export function closure(entry, read) {
   return seen;
 }
 
-// The sign-in screens (Admin v2 F7): login, forgot and reset, and their shell AuthLayout.
+// The sign-in screens (Admin v2 F7): login, forgot and reset, the invite page (U12b), and
+// their shell AuthLayout.
 // Zero-JS since F7 (tests/lib/adminConventions.spec.ts), so no such chunk is built; one
 // that appears is weighed against LOGIN_BUDGET.
-const SIGN_IN_FILE = /^(?:login|forgot|reset|AuthLayout)\.astro_/;
+const SIGN_IN_FILE = /^(?:login|forgot|reset|invite|AuthLayout)\.astro_/;
 
 // Every admin chunk is `admin-*` (the groups in astro.config.mjs) or an island entry named
 // `Admin*` (src/components/admin/islands), plus a sign-in screen's script. A chunk named
 // otherwise is public, whatever it holds.
-const ADMIN_FILE = /^(?:admin-|Admin|(?:login|forgot|reset|AuthLayout)\.astro_)/;
+const ADMIN_FILE = /^(?:admin-|Admin|(?:login|forgot|reset|invite|AuthLayout)\.astro_)/;
 
 export function check(dir) {
   const files = readdirSync(dir).filter((f) => f.endsWith('.js'));
@@ -127,7 +128,7 @@ export function check(dir) {
     files.filter((f) => SIGN_IN_FILE.test(f)).flatMap((f) => [...closure(f, read)]),
   );
   const signInBytes = sum(signIn);
-  report.push(['sign-in screens script (login, forgot, reset)', signInBytes]);
+  report.push(['sign-in screens script (login, forgot, reset, invite)', signInBytes]);
   if (signInBytes > LOGIN_BUDGET)
     problems.push(`the sign-in script loads ${signInBytes} B gz, over ${LOGIN_BUDGET}`);
   if (rich) report.push(['admin-rich (lazy)', gz(rich)]);
