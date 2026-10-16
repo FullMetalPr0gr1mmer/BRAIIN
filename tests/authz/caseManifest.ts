@@ -28,6 +28,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'applications: application erase',
   'applications: application status / notes',
   'applications: applications list',
+  'audit: activity log export (CSV)',
   'audit: audit log read',
   'backups: backup export',
   'blog: blog create',

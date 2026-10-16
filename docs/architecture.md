@@ -253,7 +253,7 @@ Legend: ● full · ◐ limited/own · ○ none.
 | Search analytics | ● | ○ | ● | ● |
 | AI Style-Finder — questions/styles editor | ● | ● | ○ | ○ |
 | AI Style-Finder — results/logic config | ● | ○ | ○ | ○ |
-| Exports — `export-csv` (leads/analytics) | ● | ○ | ○ | ● |
+| Exports — `export-csv` (leads/analytics/activity) | ● | ○ | ○ | ● |
 | Exports — `export-backup` | ● | ○ | ○ | ● |
 | Leads — list/manage (status, notes) | ● | ○ | ○ | ● |
 | **Leads — budget/timeline/internal_notes/ip (PII)** | ● | ○ | ○ | ● |

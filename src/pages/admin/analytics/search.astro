@@ -1,13 +1,65 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminInsights from '@/components/admin/islands/AdminInsights';
+import LinkChips from '@/components/admin/ui/LinkChips.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import StatsSearch from '@/components/admin/screens/stats/StatsSearch.astro';
+import { can } from '@/lib/authz/matrix';
+import { RANGE_PARAM, STAT_RANGES, rangeFrom, statsHref } from '@/lib/admin/stats/range';
+import { loadSearchSummary, type SearchSummary } from '@/lib/admin/stats/search';
 
 export const prerender = false;
+
+// Website stats, Search (Admin v2 U2): server-rendered, zero JS. analytics.search (Admin,
+// SEO, Developer). A role without it, which the menu never sends here, gets the layout with
+// the refusal and a 403, and nothing is read. The searches are counted in SQL
+// (public.search_summary, migration 0052) over the range the links choose.
+
+const PATH = '/admin/analytics/search';
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = Boolean(session && sb && can(session.role, 'analytics.search') === 'full');
+if (!allowed) Astro.response.status = 403;
+
+const url = Astro.url;
+const range = rangeFrom(url);
+let search: SearchSummary | null = null;
+let failed = false;
+if (allowed && session && sb) {
+  try {
+    search = await loadSearchSummary(sb, session, range.days);
+  } catch {
+    // Logged by the loader (system_logs).
+    failed = true;
+  }
+}
+const rangeHref = (days: number) => statsHref(PATH, url, { [RANGE_PARAM]: String(days) });
 ---
 
 <AdminLayout
   title="Search analytics"
-  subtitle="What visitors looked for, and what they failed to find."
+  subtitle="What visitors looked for on the site, and what they did not find."
+  styles={['stats.css']}
 >
-  <AdminInsights client:load mode="search" />
+  {
+    !allowed ? (
+      <Refused />
+    ) : (
+      <>
+        <div class="stats__bar">
+          <LinkChips
+            label="Date range"
+            current={rangeHref(range.days)}
+            chips={STAT_RANGES.map((days) => ({ label: `${days} days`, href: rangeHref(days) }))}
+          />
+        </div>
+        {failed && (
+          <p class="msg" data-kind="error" role="alert">
+            The searches could not be read just now. The system log has the detail.
+          </p>
+        )}
+        {search && <StatsSearch search={search} />}
+      </>
+    )
+  }
 </AdminLayout>

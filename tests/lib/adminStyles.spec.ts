@@ -128,11 +128,14 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
     expect(files.sort()).toEqual([...ADMIN_STYLESHEETS].sort());
     // Pinned, not derived: a sheet dropped from the list must fail, not go unchecked.
     expect([...ADMIN_STYLESHEETS].sort()).toEqual([
+      'activity.css',
+      'health.css',
       'help.css',
       'kit.css',
       'login.css',
       'personal.css',
       'search.css',
+      'stats.css',
       'users.css',
     ]);
   });
@@ -396,6 +399,7 @@ describe('admin.css keeps the hooks the markup renders', () => {
     it('traces each sheet to the pages it serves (the walk is not vacuous)', () => {
       const pagesFor = (sheet: string) =>
         [...new Set((renderers[sheet] ?? []).flatMap(({ file }) => pagesOf(file)))].sort();
+      expect(pagesFor('activity.css')).toEqual(['src/pages/admin/audit.astro']);
       expect(pagesFor('help.css')).toEqual(['src/pages/admin/help.astro']);
       expect(pagesFor('kit.css')).toEqual(['src/pages/admin/kit.astro']);
       // The sign-in screens (F7) render login.css's classes in their pages and in the shell
@@ -416,11 +420,15 @@ describe('admin.css keeps the hooks the markup renders', () => {
         'src/pages/admin/account.astro',
         'src/pages/admin/notifications.astro',
       ]);
-      // Both sheets' classes are rendered by their pages themselves, so the import walk
-      // is proved on a screen's code: through its island entry to every page hydrating it.
-      expect(pagesOf('src/components/admin/screens/insights/InsightsPanel.tsx').sort()).toEqual([
+      // Website stats and site health (U2): rendered by server partials, traced through
+      // the import walk to the pages that render them.
+      expect(pagesFor('stats.css')).toEqual([
         'src/pages/admin/analytics/index.astro',
         'src/pages/admin/analytics/search.astro',
+      ]);
+      expect(pagesFor('health.css')).toEqual(['src/pages/admin/site-health.astro']);
+      // And on an island's code: through its entry to the page hydrating it.
+      expect(pagesOf('src/components/admin/screens/logs/ClearLogs.tsx')).toEqual([
         'src/pages/admin/site-health.astro',
       ]);
     });

@@ -1,7 +1,7 @@
 ---
 import Spark from './charts/Spark.astro';
 import { formatNumber } from '@/lib/admin/charts';
-import { deltaView } from '@/lib/admin/kpi';
+import { deltaView, type DeltaUnit } from '@/lib/admin/kpi';
 
 // A KPI card (Admin v2 F4b, the prototype's .kpi on F1's `.card:has(> .stat)` look): the
 // label, the figure (tabular), the change against the previous period, and a spark.
@@ -18,6 +18,8 @@ interface Props {
   value: string | number;
   unit?: string | undefined;
   delta?: number | null | undefined;
+  /** `points` for a share's change in percentage points (U2); percent by default. */
+  deltaUnit?: DeltaUnit;
   good?: 'up' | 'down';
   /** Said after the change: "the previous 7 days". */
   period?: string | undefined;
@@ -26,8 +28,18 @@ interface Props {
   series?: number;
 }
 
-const { label, value, unit, delta, good = 'up', period, spark, series = 0 } = Astro.props;
-const view = deltaView(delta, good);
+const {
+  label,
+  value,
+  unit,
+  delta,
+  deltaUnit = 'percent',
+  good = 'up',
+  period,
+  spark,
+  series = 0,
+} = Astro.props;
+const view = deltaView(delta, good, deltaUnit);
 const shown = typeof value === 'number' ? formatNumber(value) : value;
 const spoken = view
   ? `${view.spoken[0]?.toUpperCase()}${view.spoken.slice(1)}${period ? ` vs ${period}` : ''}`

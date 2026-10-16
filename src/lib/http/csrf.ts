@@ -17,6 +17,34 @@ export function isSameOrigin(origin: string | null, host: string | null): boolea
   }
 }
 
+/**
+ * True when a GET that costs something (the CSV exports: a rate-limit slot and two audit
+ * rows, Admin v2 U13 review) came from this site, not from another site's page. Those are
+ * GETs a person follows as plain links, and the session cookie is SameSite=Lax, so a
+ * top-level navigation from another site carries it; Astro's origin check covers only
+ * non-GET methods. Refused: `Sec-Fetch-Site` saying another site (`cross-site`, or
+ * `same-site`, a sibling host: the admin is one origin), an `Origin` from another host, a
+ * `Referer` from another host or one that does not parse. Allowed: this origin, `none` (a
+ * typed address or a bookmark) and a request with none of the three headers (a script, a
+ * browser that sends none), which the export's session and capabilities still gate.
+ */
+export function isSameSiteGet(request: Request): boolean {
+  const headers = request.headers;
+  const host = headers.get('host') ?? new URL(request.url).host;
+  const site = headers.get('sec-fetch-site');
+  if (site === 'cross-site' || site === 'same-site') return false;
+  if (!isSameOrigin(headers.get('origin'), host)) return false;
+  const referer = headers.get('referer');
+  if (referer) {
+    try {
+      if (new URL(referer).host !== host) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 // ── Double-submit token (the admin half of the same rule) ───────────────────────
 // The origin check above is necessary but not sufficient for /admin: `Origin` is absent
 // on ordinary same-site form navigations, and `isSameOrigin` deliberately allows that

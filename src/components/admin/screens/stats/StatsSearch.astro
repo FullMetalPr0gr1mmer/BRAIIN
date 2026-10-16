@@ -1,0 +1,49 @@
+---
+import Kpi from '@/components/admin/ui/Kpi.astro';
+import ServerTable from '@/components/admin/ui/ServerTable.astro';
+import type { SearchRow, SearchSummary } from '@/lib/admin/stats/search';
+
+// Website stats, Search (Admin v2 U2; analytics.search): what visitors typed into the site's
+// search in the range, the most frequent first, and the searches that found nothing. A
+// search is printed as the text it is (dir="auto", so an Arabic one reads right to left).
+
+interface Props {
+  search: SearchSummary;
+}
+
+const { search } = Astro.props;
+const LANGUAGE: Record<string, string> = { en: 'English', ar: 'Arabic' };
+const rows = (list: readonly SearchRow[]) =>
+  list.map((row) => ({ ...row, language: LANGUAGE[row.locale] ?? row.locale }));
+const columns = [
+  { key: 'q', label: 'Search' },
+  { key: 'language', label: 'Language' },
+  { key: 'hits', label: 'Times searched', kind: 'number' as const },
+  { key: 'zero', label: 'Found nothing', kind: 'number' as const },
+];
+---
+
+<div class="grid grid--2">
+  <Kpi label="Searches" value={search.total} />
+  <Kpi label="Searches that found nothing" value={search.zeroTotal} />
+</div>
+<div class="grid grid--2 stats__row">
+  <section class="stats__section" aria-labelledby="stats-search-top">
+    <h2 class="stats__h" id="stats-search-top">Top searches</h2>
+    <ServerTable
+      caption="Top searches, the most frequent first"
+      columns={columns}
+      rows={rows(search.top)}
+      empty={{ title: 'No searches yet.', icon: 'search' }}
+    />
+  </section>
+  <section class="stats__section" aria-labelledby="stats-search-zero">
+    <h2 class="stats__h" id="stats-search-zero">Searches that found nothing</h2>
+    <ServerTable
+      caption="Searches that found nothing, the most frequent first"
+      columns={columns}
+      rows={rows(search.zero)}
+      empty={{ title: 'Every search found something.', icon: 'search' }}
+    />
+  </section>
+</div>

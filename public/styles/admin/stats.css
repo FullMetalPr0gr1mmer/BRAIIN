@@ -1,0 +1,40 @@
+/* Screen stylesheet: website stats, /admin/analytics and /admin/analytics/search (Admin v2
+   U2). Linked only through AdminLayout's `styles` prop (styles={['stats.css']}), after
+   admin.css. The KPIs, charts, tables, tabs and chips are admin.css's kit; this is the
+   screen's frame: the bar holding the in-page tabs and the range links, the gaps between
+   rows, and the search tables' headings. It uses admin.css's tokens and declares none, and
+   holds no colour literal (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+/* The tabs on the inline start, the range links on the end; they wrap under each other when
+   the row is too narrow for both. */
+.stats__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-block-end: 18px;
+}
+
+.stats__bar > .tabs {
+  margin: 0;
+}
+
+.stats__row {
+  margin-block-start: 18px;
+}
+
+.stats__note {
+  margin-block-end: 14px;
+}
+
+.stats__section {
+  min-inline-size: 0;
+}
+
+.stats__h {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}

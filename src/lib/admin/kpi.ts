@@ -33,14 +33,32 @@ export function percentChange(current: number, previous: number | null | undefin
   return ((current - previous) / previous) * 100;
 }
 
-/** How the pill reads for a change in percent; null draws no pill. */
+/**
+ * What a change is measured in: `percent` of the previous value (page views up 12%), or
+ * percentage `points` for a figure that is itself a share (the Arabic share from 10% to 20%
+ * is "up 10 points", not "up 100%"; U2).
+ */
+export type DeltaUnit = 'percent' | 'points';
+
+/** The change in percentage points between two shares, or null without a previous one. */
+export function pointChange(current: number | null, previous: number | null | undefined) {
+  if (current === null || typeof previous !== 'number') return null;
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return null;
+  return current - previous;
+}
+
+/** How the pill reads for a change in percent (or points); null draws no pill. */
 export function deltaView(
   delta: number | null | undefined,
   good: 'up' | 'down' = 'up',
+  unit: DeltaUnit = 'percent',
 ): DeltaView | null {
   if (typeof delta !== 'number' || !Number.isFinite(delta)) return null;
   const size = Math.round(Math.abs(delta));
-  const text = `${PERCENT.format(size)}%`;
+  const text =
+    unit === 'points'
+      ? `${PERCENT.format(size)} ${size === 1 ? 'point' : 'points'}`
+      : `${PERCENT.format(size)}%`;
   if (size === 0) return { trend: 'flat', tone: 'flat', glyph: '•', text, spoken: `no change` };
   const trend: Trend = delta > 0 ? 'up' : 'down';
   return {

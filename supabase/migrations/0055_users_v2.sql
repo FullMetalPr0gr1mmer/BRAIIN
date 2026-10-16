@@ -53,10 +53,11 @@
 --   • The roles guide (app.help_article_set(), U16's rule): rewritten for what H10 and this
 --     migration close and what stays open; every other guide is main's text unchanged.
 --
--- Production as of 2026-10-15: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046,
--- 0048, 0050 and 0051 (0052-0054 may be there too; none touches what this one does but the
--- help set, which a later slice rebases). Grants are stated for both Supabase privilege
--- regimes (README P-14). CLAUDE.md §2 (session invalidation), §3 (Pillar 1), §8, §9.
+-- Production as of 2026-10-16: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046,
+-- 0048, 0050, 0051, 0052 and 0054. The help set below is 0054's (which carries 0052's
+-- website-stats and site-health-and-logs and 0054's site-health-and-logs), so applying this
+-- one after them keeps their guides. Grants are stated for both Supabase privilege regimes
+-- (README P-14). CLAUDE.md §2 (session invalidation), §3 (Pillar 1), §8, §9.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- A busy table fails the push instead of queueing (as in 0038 to 0050). The column, the
@@ -276,8 +277,8 @@ grant execute on function public.transfer_ownership(uuid, uuid) to authenticated
 
 -- ---- 7. The guides ---------------------------------------------------------------------------
 -- U16's rule: a slice that changes a screen a guide describes replaces the whole set and
--- seeds every tenant again. Only roles-and-access changes; every other guide is main's text.
--- The set as 0046_help_centre.sql left it, with roles-and-access rewritten (the owner, the
+-- seeds every tenant again. Only roles-and-access changes; every other guide is 0054's text.
+-- The set as 0054_activity_log.sql left it, with roles-and-access rewritten (the owner, the
 -- sign-out on every device, the hour that remains at the database, the Security card).
 create or replace function app.help_article_set() returns jsonb
   language sql immutable set search_path = '' as $fn$
@@ -1060,9 +1061,11 @@ create or replace function app.help_article_set() returns jsonb
         {
           "t": "ol",
           "x": [
-            "Counts are added up on a schedule, so the latest visits can take a while to show.",
+            "Pick 7, 30 or 90 days at the top. Overview shows page views, the Arabic share, English and Arabic views day by day and the top pages; Pages lists every page with its views in each language. If you work with leads, Overview also shows new leads and inquiries per 1,000 page views.",
+            "A change against the previous period shows only when there is a previous period to compare: the same number of days just before.",
+            "Counts are added up every 15 minutes, by days that run midnight to midnight UTC (3 am in Riyadh), so the latest visits can take a while to show.",
             "Where your role has a Search tab, it shows what visitors typed into the site's search, and which searches found nothing. A search that finds nothing is often a page worth writing.",
-            "Raw visit records are kept 90 days."
+            "Raw visit records are kept 90 days; the daily totals the screen reads are kept after that."
           ]
         },
         {
@@ -1078,9 +1081,11 @@ create or replace function app.help_article_set() returns jsonb
         {
           "t": "ol",
           "x": [
-            "تُجمع الأرقام وفق جدول زمني، لذا قد تتأخر أحدث الزيارات في الظهور.",
+            "اختر 7 أو 30 أو 90 يومًا في الأعلى. يعرض تبويب Overview مشاهدات الصفحات وحصة العربية والمشاهدات بالإنجليزية والعربية يومًا بيوم وأكثر الصفحات زيارة، ويسرد تبويب Pages كل صفحة مع مشاهداتها بكل لغة. وإذا كنت تعمل على العملاء المحتملين فسيعرض Overview أيضًا العملاء الجدد والاستفسارات لكل 1,000 مشاهدة.",
+            "لا يظهر التغيّر مقارنة بالفترة السابقة إلا إذا وُجدت فترة سابقة للمقارنة، أي العدد نفسه من الأيام التي تسبقها مباشرة.",
+            "تُجمع الأرقام كل 15 دقيقة، بأيام تمتد من منتصف الليل إلى منتصف الليل بتوقيت UTC (الثالثة فجرًا بتوقيت الرياض)، لذا قد تتأخر أحدث الزيارات في الظهور.",
             "إذا كان لدورك تبويب Search فهو يعرض ما كتبه الزوار في بحث الموقع، وعمليات البحث التي لم تجد شيئًا. والبحث الذي لا يجد شيئًا كثيرًا ما يشير إلى صفحة تستحق الكتابة.",
-            "تُحفظ سجلات الزيارات الأولية 90 يومًا."
+            "تُحفظ سجلات الزيارات الأولية 90 يومًا، وتبقى المجاميع اليومية التي تقرؤها الشاشة بعد ذلك."
           ]
         },
         {
@@ -1099,7 +1104,6 @@ create or replace function app.help_article_set() returns jsonb
     ],
     "screens": [
       "/admin/site-health",
-      "/admin/logs",
       "/admin/audit"
     ],
     "caps": [
@@ -1113,37 +1117,43 @@ create or replace function app.help_article_set() returns jsonb
       "en": [
         {
           "t": "p",
-          "x": "Site health shows how fast the site feels to real visitors (Core Web Vitals), measured in their own browsers when they accept analytics cookies."
+          "x": "Site health shows how fast the site feels to real visitors (Core Web Vitals), measured in their own browsers when they accept analytics cookies, beside a checklist of things worth fixing."
         },
         {
           "t": "ol",
           "x": [
-            "Each measure has a budget. Over budget means visitors wait longer than they should, which is worth raising with whoever looks after the site's code.",
-            "Errors lists problems the site ran into. Every night, entries older than 30 days are deleted by themselves; an Admin's Clear logs older than 30 days removes any still left before then, and the clearing itself is recorded in the activity log.",
-            "The activity log records saves, publishes, reveals of contact details and exports, each against the account that made it, with the time. The screen lists the time, the role, the action and what it touched. Nobody can edit or delete it, not even an Admin."
+            "The score is half speed and half checklist. Speed comes from real visits over the last 28 days: each of LCP, INP and CLS counts in full when it is within budget, half when it needs work and not at all when it is poor. Uptime is not measured here yet.",
+            "The checklist groups what it checks: content, SEO, speed, errors, security and backups. A row that needs fixing links to the screen where you fix it, and a row your role cannot check says so.",
+            "Speed lists each page's figures from visitors' browsers, added up every hour and kept 400 days. Lab scores run in CI on every change, so none are shown here.",
+            "Errors lists problems the site ran into. Every night, entries older than 30 days are deleted by themselves; an Admin can clear them sooner with Clear logs, choosing entries older than 7 days, older than 30 days, or all of them, and the clearing itself is recorded in the activity log.",
+            "The activity log records saves, publishes, reveals of contact details, sign-ins and exports, each against the account that made it, with the time. The database itself writes who made an entry and when, so nobody can record something in someone else's name. Each entry names the person, former members included, and says what they did in plain words, with the names of the fields a save changed, never what they hold. Nobody can edit or delete an entry, not even an Admin, and the log is kept for good.",
+            "Narrow the log to a kind of activity, a person or a range of days. Publishing finds publishes recorded since these filters arrived; earlier ones are listed as updates. Export downloads the entries that match as a spreadsheet file (CSV), up to three times an hour, and each download is recorded in the log too; the file names each item by its type and id, not its title. If the line above the list says the latest entries do not link up, tell whoever runs the site."
           ]
         },
         {
           "t": "tip",
-          "x": "To find out when something changed, and which role changed it, look in the activity log."
+          "x": "To find out when something changed, and who changed it, look in the activity log."
         }
       ],
       "ar": [
         {
           "t": "p",
-          "x": "تُظهر صحة الموقع مدى سرعة الموقع كما يشعر بها الزوار الحقيقيون (Core Web Vitals)، وتُقاس في متصفحاتهم عندما يقبلون ملفات تعريف الارتباط الخاصة بالتحليلات."
+          "x": "تُظهر صحة الموقع مدى سرعة الموقع كما يشعر بها الزوار الحقيقيون (Core Web Vitals)، وتُقاس في متصفحاتهم عندما يقبلون ملفات تعريف الارتباط الخاصة بالتحليلات، إلى جانب قائمة تحقق بما يستحق الإصلاح."
         },
         {
           "t": "ol",
           "x": [
-            "لكل مقياس حد مستهدف، وتجاوزه يعني أن الزوار ينتظرون أكثر مما ينبغي، ويستحق ذلك إبلاغ المسؤول عن برمجة الموقع.",
-            "يعرض Errors المشكلات التي واجهها الموقع. تُحذف كل ليلة الإدخالات الأقدم من 30 يومًا تلقائيًا، ويزيل زر Clear logs older than 30 days لدى المسؤول (Admin) ما تبقى منها قبل ذلك، ويُسجَّل المسح نفسه في سجل النشاط.",
-            "يسجّل سجل النشاط الحفظ والنشر وكشف بيانات التواصل والتصدير، كلًّا على الحساب الذي قام به مع وقته. وتعرض الشاشة الوقت والدور والإجراء وما تناوله. ولا يستطيع أحد تعديله أو حذفه، ولا حتى المسؤول (Admin)."
+            "نصف الدرجة للسرعة ونصفها لقائمة التحقق. تأتي السرعة من زيارات حقيقية خلال آخر 28 يومًا: يُحتسب كل من LCP وINP وCLS كاملًا إذا كان ضمن الحد المستهدف، ونصفه إذا احتاج إلى تحسين، ولا يُحتسب إذا كان ضعيفًا. ولا يُقاس وقت التشغيل هنا بعد.",
+            "تجمع قائمة التحقق ما تفحصه في مجموعات: المحتوى وSEO والسرعة والأخطاء والأمان والنسخ الاحتياطية. والبند الذي يحتاج إلى إصلاح يرتبط بالشاشة التي تصلحه منها، والبند الذي لا يستطيع دورك فحصه يذكر ذلك.",
+            "يعرض تبويب Speed أرقام كل صفحة من متصفحات الزوار، تُجمع كل ساعة وتُحفظ 400 يوم. أما درجات المختبر فتُشغَّل في CI مع كل تغيير، لذا لا تظهر هنا.",
+            "يعرض تبويب Errors المشكلات التي واجهها الموقع. تُحذف كل ليلة الإدخالات الأقدم من 30 يومًا تلقائيًا، ويستطيع المسؤول (Admin) مسحها قبل ذلك بزر Clear logs، فيختار الإدخالات الأقدم من 7 أيام أو الأقدم من 30 يومًا أو كلها، ويُسجَّل المسح نفسه في سجل النشاط.",
+            "يسجّل سجل النشاط الحفظ والنشر وكشف بيانات التواصل وتسجيل الدخول والتصدير، كلًّا على الحساب الذي قام به مع وقته. وتكتب قاعدة البيانات بنفسها صاحب كل إدخال ووقته، فلا يستطيع أحد أن يسجّل شيئًا باسم غيره. ويذكر كل إدخال اسم الشخص، ومنهم من غادر الفريق، وما فعله بكلمات واضحة، مع أسماء الحقول التي غيّرها الحفظ دون محتواها. ولا يستطيع أحد تعديل أي إدخال أو حذفه، ولا حتى المسؤول (Admin)، ويُحتفظ بالسجل دائمًا.",
+            "ضيّق السجل حسب نوع النشاط أو الشخص أو مدة من الأيام. يجد مرشّح Publishing ما نُشر منذ إضافة هذه المرشّحات، ويظهر ما نُشر قبلها كتحديثات. ويُنزّل زر Export الإدخالات المطابقة في ملف جدول بيانات (CSV) حتى ثلاث مرات في الساعة، ويُسجَّل كل تنزيل في السجل أيضًا، ويذكر الملف كل عنصر بنوعه ومعرّفه لا بعنوانه. وإذا ذكر السطر أعلى القائمة أن أحدث الإدخالات لا تتصل كما ينبغي، فأبلغ المسؤول عن الموقع."
           ]
         },
         {
           "t": "tip",
-          "x": "لمعرفة متى تغيّر شيء وأي دور غيّره، ارجع إلى سجل النشاط."
+          "x": "لمعرفة متى تغيّر شيء ومن قام بتغييره، ارجع إلى سجل النشاط."
         }
       ]
     }

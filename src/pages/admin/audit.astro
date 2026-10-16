@@ -1,22 +1,298 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminLogs from '@/components/admin/islands/AdminLogs';
+import Icon from '@/components/admin/ui/Icon.astro';
+import LinkChips from '@/components/admin/ui/LinkChips.astro';
+import Note from '@/components/admin/ui/Note.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import ServerTable, { type ServerColumn } from '@/components/admin/ui/ServerTable.astro';
+import { can } from '@/lib/authz/matrix';
+import {
+  EXPORT_NOTICE_PARAM,
+  filterParams,
+  loadActivity,
+  pagingUrl,
+  readActivityQuery,
+  roleLabelOf,
+  type ActivityEntry,
+  type ActivityPage,
+} from '@/lib/admin/activity';
+import { KIND_BADGE, KIND_CHIPS } from '@/lib/admin/auditLabels';
+import { writeSystemLog } from '@/lib/data/systemLog';
+import type { ActivityFilters } from '@schemas/audit';
 
 export const prerender = false;
 
-const columns = [
-  { key: 'created_at', label: 'When', kind: 'date' as const },
-  { key: 'actor_role', label: 'Role' },
-  { key: 'action', label: 'Action' },
-  { key: 'entity_type', label: 'Entity' },
-  { key: 'entity_id', label: 'Id' },
-  { key: 'detail', label: 'Detail', kind: 'json' as const },
+// The activity log (Admin v2 U13, docs/admin-v2/ui.md AV-22): who changed what, and when.
+// Server-rendered with zero JS of its own: the filters are a GET form and links (kind chips,
+// the pager, a former member's name), and Export is a plain link to the CSV route, so every
+// view of the log is a URL. `audit.view` (Admin + Developer): the page itself refuses any
+// other role with a 403 and reads nothing; RLS (audit_read and, since 0054, the live read)
+// refuses them again in the database.
+//
+// What a row shows is decided by src/lib/admin/auditLabels.ts (the sentence and the kind),
+// src/lib/admin/auditTitles.ts (the item's title, read under the viewer's RLS, never for
+// people or their data) and src/lib/admin/activity.ts (the reads, the names, the chain);
+// everything is rendered as text. Changed fields are named, never their values.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const url = Astro.url;
+const allowed = session !== null && can(session.role, 'audit.view') === 'full';
+const canExport = allowed && can(session.role, 'export.csv') === 'full';
+// The menu offers this screen to Admin and Developer only; any other role that opens it is
+// refused here, the U2 way (Refused.astro), and reads nothing.
+if (!allowed) Astro.response.status = 403;
+
+const { query, dropped } = readActivityQuery(url.searchParams);
+const filters: ActivityFilters = {
+  kind: query.kind,
+  actor: query.actor,
+  from: query.from,
+  to: query.to,
+  entityType: query.entityType,
+  entityId: query.entityId,
+};
+
+/** This page with other filters (the chips keep the person and days; a page resets). */
+function hrefWith(changes: Partial<ActivityFilters>): string {
+  const params = filterParams({ ...filters, ...changes });
+  const search = params.toString();
+  return search ? `/admin/audit?${search}` : '/admin/audit';
+}
+
+let result: ActivityPage | null = null;
+let failed = false;
+let directory: { id: string; name: string; role: string | null }[] = [];
+
+if (allowed && session && sb) {
+  const [loaded, staff] = await Promise.all([
+    loadActivity(sb, session, query, query.actor ? [query.actor] : []).catch(async (err) => {
+      await writeSystemLog({
+        level: 'error',
+        source: 'admin:audit.view',
+        message: err instanceof Error ? err.message : 'activity log read failed',
+        detail: { path: url.pathname },
+      });
+      return null;
+    }),
+    // The person filter lists the members who can act today (the one people directory,
+    // P-7); a former member is reached from their name in the list, and added below.
+    Promise.resolve(sb.rpc('staff_directory', { p_tenant: session.tenantId })).then(
+      ({ data, error }) =>
+        error || !Array.isArray(data)
+          ? []
+          : (data as { id: string; display_name: string | null; role: string }[]).map((p) => ({
+              id: p.id,
+              name: (p.display_name ?? '').trim() || 'A member with no name',
+              role: roleLabelOf(p.role),
+            })),
+      () => [],
+    ),
+  ]);
+  result = loaded;
+  failed = loaded === null;
+  directory = staff;
+  // The person the filter names, when they are not in the directory any more.
+  if (query.actor && !directory.some((p) => p.id === query.actor)) {
+    const who = result?.people.get(query.actor);
+    directory = [
+      ...directory,
+      {
+        id: query.actor,
+        name: who?.known ? `${who.name} (former member)` : 'A former member',
+        role: null,
+      },
+    ];
+  }
+}
+
+const filtered = Boolean(
+  filters.kind || filters.actor || filters.from || filters.to || filters.entityType,
+);
+const notice = url.searchParams.get(EXPORT_NOTICE_PARAM);
+const exportHref = (() => {
+  const search = filterParams(filters).toString();
+  return search ? `/api/admin/audit/export?${search}` : '/api/admin/audit/export';
+})();
+
+const chips = [
+  { label: 'All', href: hrefWith({ kind: undefined }) },
+  ...KIND_CHIPS.map((chip) => ({ label: chip.label, href: hrefWith({ kind: chip.kind }) })),
 ];
+
+const columns: readonly ServerColumn[] = [
+  { key: 'who', label: 'Who', kind: 'person' },
+  { key: 'what', label: 'What', kind: 'tagged' },
+  { key: 'details', label: 'Details' },
+  { key: 'when', label: 'When', kind: 'ago' },
+];
+
+function rowOf(entry: ActivityEntry): Record<string, unknown> {
+  const { who, description } = entry;
+  const sub = [who.roleLabel, who.former && who.known ? 'former member' : null]
+    .filter(Boolean)
+    .join(', ');
+  const badge = KIND_BADGE[description.kind];
+  return {
+    who: {
+      id: who.id,
+      name: who.name,
+      sub: sub || null,
+      // A former member is not in the person select: their name is how to filter by them.
+      href: who.former && who.id && who.id !== filters.actor ? hrefWith({ actor: who.id }) : null,
+    },
+    what: {
+      badge,
+      parts: [
+        { text: description.verb, strong: true },
+        ...(description.noun ? [{ text: description.noun }] : []),
+        ...(entry.title ? [{ text: entry.title, muted: true }] : []),
+      ],
+    },
+    details: description.fields.join(', '),
+    when: entry.at,
+  };
+}
 ---
 
 <AdminLayout
-  title="Audit log"
-  subtitle="Append-only and hash-chained by the database. There is no edit or delete path, by design."
+  title="Activity log"
+  subtitle="Who changed what, and when. Kept permanently and tamper-evident."
+  styles={['activity.css']}
 >
-  <AdminLogs client:load endpoint="/api/admin/audit" columns={columns} variant="audit" />
+  {
+    canExport && (
+      <a slot="actions" class="btn" href={exportHref}>
+        <Icon name="download" size={16} />
+        Export<span class="visually-hidden"> these entries as a CSV file</span>
+      </a>
+    )
+  }
+
+  {
+    !allowed ? (
+      <Refused />
+    ) : (
+      <>
+        {notice === 'limit' && (
+          <Note tone="warn" role="status" class="act-note">
+            <p>
+              The activity log can be exported three times an hour. Try again later; the list below
+              is still here.
+            </p>
+          </Note>
+        )}
+        {notice === 'unavailable' && (
+          <Note tone="err" role="alert" class="act-note">
+            <p>
+              The export could not be checked and recorded, so it did not run. Try again in a
+              moment.
+            </p>
+          </Note>
+        )}
+        {dropped.length > 0 && (
+          <Note tone="warn" role="status" class="act-note">
+            <p>Some filters in the address could not be read, so they were left out.</p>
+          </Note>
+        )}
+
+        {/* Each control is named by its own label (for/id), never by a wrapping one: a label
+            around a <select> takes the chosen option's text into the select's name. */}
+        <form class="act-filters" method="get" action="/admin/audit">
+          {filters.kind && <input type="hidden" name="kind" value={filters.kind} />}
+          {filters.entityType && (
+            <input type="hidden" name="entityType" value={filters.entityType} />
+          )}
+          {filters.entityId && <input type="hidden" name="entityId" value={filters.entityId} />}
+          <div class="field">
+            <label for="act-actor">Person</label>
+            <select id="act-actor" name="actor">
+              <option value="" selected={!filters.actor}>
+                Everyone
+              </option>
+              {directory.map((person) => (
+                <option value={person.id} selected={person.id === filters.actor}>
+                  {person.role ? `${person.name} (${person.role})` : person.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div class="field">
+            <label for="act-from">From</label>
+            <input
+              id="act-from"
+              type="date"
+              name="from"
+              value={filters.from ?? ''}
+              min="2000-01-01"
+            />
+          </div>
+          <div class="field">
+            <label for="act-to">To</label>
+            <input id="act-to" type="date" name="to" value={filters.to ?? ''} min="2000-01-01" />
+          </div>
+          <div class="act-filters__go">
+            <button type="submit" data-variant="primary">
+              Apply
+            </button>
+            {filtered && (
+              <a class="btn" data-variant="ghost" href="/admin/audit">
+                Clear filters
+              </a>
+            )}
+          </div>
+        </form>
+
+        <div class="act-chips">
+          <LinkChips
+            label="Filter by kind of activity"
+            chips={chips}
+            current={hrefWith({ kind: filters.kind })}
+          />
+        </div>
+
+        {failed ? (
+          <Note tone="err" role="alert" class="act-note">
+            <p>The activity log could not be read just now. Try again in a moment.</p>
+          </Note>
+        ) : (
+          <>
+            {result?.chain && result.chain.checked > 1 && (
+              <Note
+                tone={result.chain.contiguous ? 'ok' : 'err'}
+                role={result.chain.contiguous ? undefined : 'alert'}
+                class="act-note"
+              >
+                <p>
+                  {result.chain.contiguous
+                    ? `The latest ${result.chain.checked} entries link up: none has been removed or moved.`
+                    : `Entry ${result.chain.brokenAt} does not link to the one before it. Tell whoever runs the site.`}
+                </p>
+              </Note>
+            )}
+            <ServerTable
+              caption="Activity, newest first"
+              columns={columns}
+              rows={(result?.entries ?? []).map(rowOf)}
+              total={result?.total ?? 0}
+              url={pagingUrl(url)}
+              empty={
+                filtered
+                  ? {
+                      title: 'No activity matches these filters',
+                      text: 'Try another kind, person or range of days.',
+                      icon: 'history',
+                    }
+                  : {
+                      title: 'Nothing logged yet',
+                      text: 'Saves, publishes, sign-ins and exports appear here as they happen.',
+                      icon: 'history',
+                    }
+              }
+            />
+          </>
+        )}
+      </>
+    )
+  }
 </AdminLayout>
