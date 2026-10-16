@@ -1,0 +1,71 @@
+---
+import EmptyState from '../EmptyState.astro';
+import { formatDate, formatTime } from '@/lib/admin/relTime';
+import type { AttentionData } from '@/lib/admin/dashboard/loaders';
+
+// What needs attention (Admin v2 U1, `attention`, the content roles): what goes live today,
+// by the Riyadh day (README U1 D9: the attention view's own "scheduled today" is UTC's, and
+// filed tomorrow's 00:00 to 03:00 items under today every evening), then the attention
+// list's kinds (0028), each with its count and its first rows, linked to their editors.
+
+interface Props {
+  data: AttentionData;
+}
+
+const { data } = Astro.props;
+const empty = data.goingLive.length === 0 && data.groups.length === 0;
+---
+
+{
+  empty ? (
+    <EmptyState icon="check" title="Nothing needs your attention." />
+  ) : (
+    <div class="att">
+      {data.goingLive.length > 0 && (
+        <section class="att__g" aria-labelledby="att-live">
+          <h3 class="dash__h" id="att-live">
+            Going live today <span class="att__n">{data.goingLive.length}</span>
+          </h3>
+          <ul class="att__list">
+            {data.goingLive.map((item) => (
+              <li>
+                <a class="data-link" href={item.href} dir="auto">
+                  {item.title}
+                </a>
+                <span class="att__m">At {formatTime(item.at)}, Riyadh time</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {data.groups.map((group) => (
+        <section class="att__g" aria-labelledby={`att-${group.kind}`}>
+          <h3 class="dash__h" id={`att-${group.kind}`}>
+            {group.label} <span class="att__n">{group.count}</span>
+          </h3>
+          <ul class="att__list">
+            {group.rows.map((row) => (
+              <li>
+                {row.href ? (
+                  <a class="data-link" href={row.href} dir="auto">
+                    {row.title}
+                  </a>
+                ) : (
+                  <span dir="auto">{row.title}</span>
+                )}
+                <span class="att__m">
+                  {[row.type, row.where, row.at ? formatDate(row.at) : null]
+                    .filter(Boolean)
+                    .join(', ')}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {group.count > group.rows.length && (
+            <p class="att__more">and {group.count - group.rows.length} more</p>
+          )}
+        </section>
+      ))}
+    </div>
+  )
+}

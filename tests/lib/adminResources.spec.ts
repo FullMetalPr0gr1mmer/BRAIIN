@@ -36,7 +36,7 @@ const SLUGS = [
   'testimonials',
   'themes',
 ];
-const SINGLETONS = ['ai-config', 'integrations', 'profile', 'seo', 'settings'];
+const SINGLETONS = ['ai-config', 'integrations', 'profile', 'seo', 'settings', 'team-notes'];
 
 /**
  * The top-level keys a PostgREST select returns: plain columns, and each embed under its

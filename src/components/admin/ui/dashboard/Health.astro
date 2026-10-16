@@ -1,0 +1,78 @@
+---
+import Badge from '../Badge.astro';
+import Icon from '../Icon.astro';
+import Ring from '../charts/Ring.astro';
+import { RATING_LABEL, RATING_TONE } from '@/lib/admin/health/vitals';
+import type { HealthSummary } from '@/lib/admin/health/summary';
+
+// Site health (Admin v2 U1, `health`, siteHealth.view): U2's summary (the score ring, its word
+// and formula, the tiles) and the first failing checklist rows, each with its fix link for
+// the role. The classes are site health's own (health.css, which the dashboard links too).
+
+interface Props {
+  data: HealthSummary;
+}
+
+const { data } = Astro.props;
+---
+
+<div class="hs hs--dash">
+  <div class="hs__score">
+    {
+      data.score.total === null ? (
+        <p class="hs__none">No score</p>
+      ) : (
+        <Ring value={data.score.total} label="Site health score" />
+      )
+    }
+    <div class="hs__sum">
+      <p class="hs__t">{data.scoreLabel}</p>
+      <p class="hs__f">{data.score.formula}</p>
+    </div>
+  </div>
+  <dl class="hs__k">
+    {
+      data.tiles.map((tile) => (
+        <div class="hs__i">
+          <dt>{tile.label}</dt>
+          <dd class="hs__v">{tile.value}</dd>
+          {tile.rating && (
+            <dd>
+              <Badge tone={RATING_TONE[tile.rating]}>{RATING_LABEL[tile.rating]}</Badge>
+            </dd>
+          )}
+          {tile.note && <dd class="hs__n">{tile.note}</dd>}
+        </div>
+      ))
+    }
+  </dl>
+</div>
+{
+  data.failing.length > 0 && (
+    <ul class="hc__list dash__fail">
+      {data.failing.map((check) => (
+        <li class="hsrow" data-state="fail">
+          <span class="st" data-tone="warn" aria-hidden="true">
+            <Icon name="warn" size={12} />
+          </span>
+          <div class="hsrow__main">
+            <span class="visually-hidden">Needs fixing: </span>
+            <span class="hsrow__t">{check.text}</span>
+          </div>
+          {check.fix && (
+            <a class="btn" data-size="sm" href={check.fix}>
+              Fix<span class="visually-hidden">: {check.text}</span>
+            </a>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+{
+  data.failingCount > data.failing.length && (
+    <p class="att__more">
+      and {data.failingCount - data.failing.length} more to fix on Site health
+    </p>
+  )
+}

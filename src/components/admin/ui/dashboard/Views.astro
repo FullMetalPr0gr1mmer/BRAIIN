@@ -1,0 +1,54 @@
+---
+import EmptyState from '../EmptyState.astro';
+import BarsV from '../charts/BarsV.astro';
+import Line from '../charts/Line.astro';
+import type { ViewsData } from '@/lib/admin/dashboard/loaders';
+
+// Page views over 30 days, English and Arabic (Admin v2 U1, `views`; the rollup's UTC days).
+// Lead roles get the leads of the same 30 days on their own chart, per Riyadh day: never
+// scaled onto the views (the prototype's "Leads ×20" is gone, ui.md deviations).
+
+interface Props {
+  data: ViewsData;
+}
+
+const { data } = Astro.props;
+---
+
+{
+  data.total === 0 ? (
+    <EmptyState
+      icon="chart"
+      title="No visits counted in the last 30 days."
+      text="Visits arrive from visitors who accept analytics cookies."
+    />
+  ) : (
+    <Line
+      id="dash-views"
+      caption="Page views per day, English and Arabic, the last 30 days"
+      captionVisible={false}
+      series={[
+        { name: 'English', data: data.en },
+        { name: 'Arabic', data: data.ar },
+      ]}
+      labels={data.labels}
+      labelHeading="Day"
+    />
+  )
+}
+{
+  data.leads && (
+    <div class="dash__sub">
+      <h3 class="dash__h">Leads, last 30 days</h3>
+      <BarsV
+        id="dash-leads"
+        caption={`New leads per day (Riyadh time), the last 30 days${data.leads.capped ? ', the newest 1,000' : ''}`}
+        captionVisible={false}
+        data={data.leads.labels.map((label, i) => ({ label, value: data.leads?.counts[i] ?? 0 }))}
+        labelHeading="Day"
+        valueHeading="Leads"
+        series={2}
+      />
+    </div>
+  )
+}

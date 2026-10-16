@@ -1,0 +1,40 @@
+---
+import EmptyState from '../EmptyState.astro';
+import ListRow from '../ListRow.astro';
+import Badge from '../Badge.astro';
+import { relTime } from '@/lib/admin/relTime';
+import { BADGE_TONES, type BadgeTone } from '@/lib/admin/tones';
+import type { LeadsData } from '@/lib/admin/dashboard/loaders';
+
+// The latest inquiries (Admin v2 U1, `leads`, lead roles only): the 6 newest, the safe
+// columns only (§3): the name, what they asked about, the stage and when. Never a budget or
+// a contact detail.
+
+interface Props {
+  data: LeadsData;
+  now?: number | undefined;
+}
+
+const { data, now = Date.now() } = Astro.props;
+const toneOf = (tone: string): BadgeTone =>
+  (BADGE_TONES as readonly string[]).includes(tone) ? (tone as BadgeTone) : 'gray';
+---
+
+{
+  data.rows.length === 0 ? (
+    <EmptyState icon="inbox" title="No inquiries yet." text="Inquiries sent from the site arrive here." />
+  ) : (
+    <ul class="list">
+      {data.rows.map((row) => (
+        <ListRow title={row.name} sub={row.interest ?? 'No service named'} href="/admin/leads">
+          <Fragment slot="meta">
+            {row.stage && (
+              <Badge tone={toneOf(row.stage.tone)}>{row.stage.label}</Badge>
+            )}
+            {row.at && <span class="dash__ago">{relTime(row.at, now)}</span>}
+          </Fragment>
+        </ListRow>
+      ))}
+    </ul>
+  )
+}

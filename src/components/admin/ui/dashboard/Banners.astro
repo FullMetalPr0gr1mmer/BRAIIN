@@ -1,0 +1,53 @@
+---
+import Note from '../Note.astro';
+
+// The dashboard's banners (Admin v2 U1, ui.md §4 "Banners"): maintenance on, with the way to
+// turn it off for maintenance.manage (the maintenance screen today; U9 moves it to General),
+// and placeholder content live on the site, a launch blocker, for the roles that can read
+// the attention list. The hidden-pages banner is U14's.
+
+interface Props {
+  maintenance: boolean;
+  canManageMaintenance: boolean;
+  placeholdersLive: number;
+  /** The attention widget is on the board: the placeholder banner links to it. */
+  attentionShown: boolean;
+}
+
+const { maintenance, canManageMaintenance, placeholdersLive, attentionShown } = Astro.props;
+---
+
+{
+  maintenance && (
+    <Note tone="warn" class="dash__banner">
+      <p>
+        <strong>Maintenance mode is on.</strong> Visitors see the maintenance notice instead of
+        the site.
+      </p>
+      {canManageMaintenance && (
+        <a class="btn" data-size="sm" href="/admin/maintenance">
+          Turn off<span class="visually-hidden"> maintenance mode</span>
+        </a>
+      )}
+    </Note>
+  )
+}
+{
+  placeholdersLive > 0 && (
+    <Note tone="warn" class="dash__banner">
+      <p>
+        <strong>
+          {placeholdersLive === 1
+            ? '1 placeholder is live on the site.'
+            : `${placeholdersLive} placeholders are live on the site.`}
+        </strong>{' '}
+        Replace design samples with real content before launch.
+      </p>
+      {attentionShown && (
+        <a class="btn" data-size="sm" href="#wg-attention">
+          Review<span class="visually-hidden"> the placeholders</span>
+        </a>
+      )}
+    </Note>
+  )
+}

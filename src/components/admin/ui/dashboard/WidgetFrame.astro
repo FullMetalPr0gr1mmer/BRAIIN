@@ -1,0 +1,113 @@
+---
+import Icon from '../Icon.astro';
+import type { DashColumn } from '@schemas/dashboard';
+
+// One widget on the board (Admin v2 U1; the prototype's .wg): a <section> named by its
+// heading, which the Sortable core moves between the three columns (data-sortable-id). The
+// card is the kit's look (.card, .card__h); `bare` drops it for a widget that is a row of
+// cards itself (the KPIs), whose heading is then for screen readers only. Its edit controls
+// are server-rendered `hidden`: Customize (the island, with JS) shows them. Every control is
+// named for its widget, so a screen reader hears "Move Site health down", not "Move down".
+// Zero JS here; no style attribute anywhere.
+
+interface Props {
+  id: string;
+  title: string;
+  sub?: string | undefined;
+  column: DashColumn;
+  /** No card: the content is a row of cards (the KPIs). */
+  bare?: boolean;
+  /** The card brings its own gutter (a list, a table). */
+  flush?: boolean;
+  /** The widget could not be read (logged): its frame says so instead. */
+  failed?: boolean;
+}
+
+const { id, title, sub, column, bare = false, flush = false, failed = false } = Astro.props;
+const headingId = `wg-${id}-t`;
+const hasActions = Astro.slots.has('actions');
+/** What the column buttons say from where the widget starts (the island relabels on a move). */
+const PREV: Partial<Record<DashColumn, string>> = { left: 'to the top row', right: 'to the left column' };
+const NEXT: Partial<Record<DashColumn, string>> = { top: 'to the left column', left: 'to the right column' };
+---
+
+<section
+  class:list={["wg", { "wg--bare": bare }]}
+  id={`wg-${id}`}
+  data-widget={id}
+  data-sortable-id={id}
+  data-sortable-label={title}
+  aria-labelledby={headingId}
+>
+  {
+    bare ? (
+      <>
+        <h2 class="visually-hidden" id={headingId}>
+          {title}
+        </h2>
+        {failed ? (
+          <p class="msg" data-kind="error">
+            {title} could not be loaded. The system log has the detail.
+          </p>
+        ) : (
+          <slot />
+        )}
+      </>
+    ) : (
+      <div class:list={['card', { 'card--flush': flush && !failed }]}>
+        <div class="card__h">
+          <div>
+            <h2 class="card__t" id={headingId}>
+              {title}
+            </h2>
+            {sub && <p class="card__sub">{sub}</p>}
+          </div>
+          {hasActions && !failed && (
+            <div class="card__acts">
+              <slot name="actions" />
+            </div>
+          )}
+        </div>
+        {failed ? (
+          <p class="msg" data-kind="error">
+            This widget could not be loaded. The system log has the detail.
+          </p>
+        ) : (
+          <slot />
+        )}
+      </div>
+    )
+  }
+  <div class="wg__h" data-wg-controls hidden>
+    <button type="button" class="drag" data-sortable-handle aria-label={`Reorder ${title}`}>
+      <Icon name="drag" size={18} />
+    </button>
+    <button type="button" class="icon-btn" data-sortable-move="up" aria-label={`Move ${title} up`}>
+      <Icon name="chevd" size={14} class="ic--flip" />
+    </button>
+    <button type="button" class="icon-btn" data-sortable-move="down" aria-label={`Move ${title} down`}>
+      <Icon name="chevd" size={14} />
+    </button>
+    <button
+      type="button"
+      class="icon-btn"
+      data-sortable-move="prev"
+      data-wg-move-label={`Move ${title}`}
+      aria-label={`Move ${title} ${PREV[column] ?? 'to the previous column'}`}
+    >
+      <Icon name="back" size={14} />
+    </button>
+    <button
+      type="button"
+      class="icon-btn"
+      data-sortable-move="next"
+      data-wg-move-label={`Move ${title}`}
+      aria-label={`Move ${title} ${NEXT[column] ?? 'to the next column'}`}
+    >
+      <Icon name="arrow" size={14} />
+    </button>
+    <button type="button" class="icon-btn" data-wg-hide aria-label={`Hide ${title}`}>
+      <Icon name="eyeoff" size={14} />
+    </button>
+  </div>
+</section>
