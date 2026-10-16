@@ -5,7 +5,7 @@ import VisibilityList, { windowText } from '@/components/admin/screens/visibilit
 import VisibilityDrawer, { draftOf } from '@/components/admin/screens/visibility/VisibilityDrawer';
 import { edgeLine } from '@/components/admin/screens/visibility/VisibilityScreen';
 import type { VisibilityItem } from '@/components/admin/screens/visibility/types';
-import { HOME_REFUSAL, MODE_COPY, TEMPLATE_NOTE } from '@/lib/admin/visibilityCopy';
+import { HIDDEN_NOTE, HOME_REFUSAL, MODE_COPY, TEMPLATE_NOTE } from '@/lib/admin/visibilityCopy';
 
 // The /admin/visibility screen's markup (Admin v2 U14a), rendered on the server as the
 // island's first paint would be: real radios in a fieldset with its legend (never clickable
@@ -141,6 +141,15 @@ describe('the drawer', () => {
     expect(html).toContain(MODE_COPY.hidden.text);
   });
 
+  it('hidden says what it does not do: the words stay published, the form stays open', () => {
+    const html = drawer(hiddenAbout);
+    expect(HIDDEN_NOTE).toContain('Hiding is not deleting');
+    expect(HIDDEN_NOTE).toContain('Accepting job applications');
+    expect(html).toContain('Hiding is not deleting');
+    // Only with the hidden option: a page visible to everyone has nothing to warn about.
+    expect(drawer(page('about', ABOUT))).not.toContain('Hiding is not deleting');
+  });
+
   it('the homepage: the other modes are disabled and the refusal is said', () => {
     const html = drawer(page('home', HOME));
     expect(html).toContain(HOME_REFUSAL);
@@ -205,6 +214,7 @@ describe('the copy keeps the client’s rules (P-12)', () => {
       HOME_REFUSAL,
       ...Object.values(MODE_COPY).flatMap((c) => [c.title, c.text, c.badge]),
       ...Object.values(TEMPLATE_NOTE),
+      HIDDEN_NOTE,
     ];
     for (const text of texts) {
       expect(text).not.toMatch(/[–—]/);

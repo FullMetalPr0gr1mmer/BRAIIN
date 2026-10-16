@@ -354,6 +354,11 @@ describe('the guides say only what the admin does', () => {
     expect(en).toContain('applies to the live site within a minute');
     expect(en).toContain('Riyadh time');
     expect(en).toContain('unlisted, not private');
+    // Hiding is not deleting, and a hidden page's form stays open (/api is never gated).
+    expect(source('src/middleware.ts')).toMatch(/\/api/);
+    expect(en).toContain("Hiding is not deleting: the page's words stay published.");
+    expect(en).toContain('still takes what its form sends');
+    expect(en).toContain('Accepting job applications');
     expect(en).toContain('The homepage is always visible');
     expect(en).toContain('up to an hour');
     expect(en).toContain('Sync to edge');
@@ -362,6 +367,8 @@ describe('the guides say only what the admin does', () => {
     expect(ar).toContain('خلال دقيقة');
     expect(ar).toContain('بتوقيت الرياض');
     expect(ar).toContain('غير مدرجة وليست خاصة');
+    expect(ar).toContain('الإخفاء ليس حذفًا');
+    expect(ar).toContain('Accepting job applications');
   });
 
   it('U14a (0057) restates U12a’s set (0055) and only adds the page-visibility guide', () => {

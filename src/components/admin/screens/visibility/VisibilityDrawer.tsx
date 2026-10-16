@@ -3,7 +3,13 @@ import Drawer from '@/components/admin/kit/Drawer';
 import Icon from '@/components/admin/kit/Icon';
 import Note from '@/components/admin/kit/Note';
 import type { IconName } from '@/lib/admin/icons';
-import { APPLIES_WITHIN, HOME_REFUSAL, MODE_COPY, TEMPLATE_NOTE } from '@/lib/admin/visibilityCopy';
+import {
+  APPLIES_WITHIN,
+  HIDDEN_NOTE,
+  HOME_REFUSAL,
+  MODE_COPY,
+  TEMPLATE_NOTE,
+} from '@/lib/admin/visibilityCopy';
 import { itemTitle } from './VisibilityList';
 import type { VisibilityItem, VisibilityMode } from './types';
 
@@ -184,6 +190,7 @@ export default function VisibilityDrawer({
                   Show again on must be after Hide from.
                 </Note>
               )}
+              <Note>{HIDDEN_NOTE}</Note>
             </div>
           )}
 

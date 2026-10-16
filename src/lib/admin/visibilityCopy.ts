@@ -27,6 +27,14 @@ export const MODE_COPY = {
   },
 } as const;
 
+/**
+ * What hiding does not do: the page's words stay published (the public data the site reads is
+ * still readable), and its form still takes submissions (/api is never gated). Shown with the
+ * hidden option, and said in the guide.
+ */
+export const HIDDEN_NOTE =
+  'Hiding is not deleting: the page’s words stay published. Unpublish it, or keep confidential details off it. A hidden Join or Contact page still takes what its form sends: to stop job applications, turn off Accepting job applications in General settings.';
+
 /** The template note: a template hides every page it renders. */
 export const TEMPLATE_NOTE = {
   service:
