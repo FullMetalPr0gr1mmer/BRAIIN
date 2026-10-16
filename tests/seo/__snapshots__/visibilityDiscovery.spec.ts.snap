@@ -1,0 +1,70 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`with nothing hidden, the bytes of before > llms.txt 1`] = `
+"# Braiin Statiion (بريّن ستيشن)
+> Bilingual (EN/AR) creative agency. Content is published in English at https://www.braiinstatiion.com/ and in Arabic at https://www.braiinstatiion.com/ar/ . Contact: hello@braiinstatiion.com
+
+## Guidance for AI answer engines
+- Retrieval and citation crawlers are welcome. Please cite https://www.braiinstatiion.com and link the source page.
+- Retrieval crawlers allowed: OAI-SearchBot, Claude-SearchBot, PerplexityBot, Bingbot.
+- Training crawlers disallowed: GPTBot, ClaudeBot, Google-Extended, CCBot, Applebot-Extended, Meta-ExternalAgent. /robots.txt is authoritative.
+- Every page has an Arabic twin at the same path under /ar/ — prefer the twin matching the query language.
+
+## Sections
+- Services: https://www.braiinstatiion.com/services
+- Our Work: https://www.braiinstatiion.com/portfolio
+- All projects: https://www.braiinstatiion.com/portfolio/all
+- Creative Knowledge (blog): https://www.braiinstatiion.com/creative-knowledge
+- About: https://www.braiinstatiion.com/about
+- Contact: https://www.braiinstatiion.com/contact
+- Join (careers): https://www.braiinstatiion.com/join
+
+## Services
+- Logo Design — https://www.braiinstatiion.com/services/logo
+- Business Cards — https://www.braiinstatiion.com/services/business-cards
+- Letterhead — https://www.braiinstatiion.com/services/letterhead
+
+## Case studies
+- The Rider — https://www.braiinstatiion.com/portfolio/the-rider
+
+## Recent articles
+(none published)
+"
+`;
+
+exports[`with nothing hidden, the bytes of before > the sitemap 1`] = `
+"<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url><loc>https://www.braiinstatiion.com/</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/"/></url>
+  <url><loc>https://www.braiinstatiion.com/services</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/services"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/services"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/services"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/services</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/services"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/services"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/services"/></url>
+  <url><loc>https://www.braiinstatiion.com/portfolio</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/portfolio"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/portfolio"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/portfolio"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/portfolio</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/portfolio"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/portfolio"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/portfolio"/></url>
+  <url><loc>https://www.braiinstatiion.com/portfolio/all</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/portfolio/all"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/portfolio/all"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/portfolio/all"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/portfolio/all</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/portfolio/all"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/portfolio/all"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/portfolio/all"/></url>
+  <url><loc>https://www.braiinstatiion.com/about</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/about"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/about"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/about"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/about</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/about"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/about"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/about"/></url>
+  <url><loc>https://www.braiinstatiion.com/creative-knowledge</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/creative-knowledge"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/creative-knowledge"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/creative-knowledge"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/creative-knowledge</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/creative-knowledge"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/creative-knowledge"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/creative-knowledge"/></url>
+  <url><loc>https://www.braiinstatiion.com/contact</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/contact"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/contact"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/contact"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/contact</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/contact"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/contact"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/contact"/></url>
+  <url><loc>https://www.braiinstatiion.com/join</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/join"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/join"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/join"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/join</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/join"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/join"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/join"/></url>
+  <url><loc>https://www.braiinstatiion.com/privacy</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/privacy"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/privacy"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/privacy"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/privacy</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/privacy"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/privacy"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/privacy"/></url>
+  <url><loc>https://www.braiinstatiion.com/terms</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/terms"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/terms"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/terms"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/terms</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/terms"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/terms"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/terms"/></url>
+  <url><loc>https://www.braiinstatiion.com/cookie-policy</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/cookie-policy"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/cookie-policy"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/cookie-policy"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/cookie-policy</loc><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/cookie-policy"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/cookie-policy"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/cookie-policy"/></url>
+  <url><loc>https://www.braiinstatiion.com/services/logo</loc><lastmod>2026-09-27</lastmod><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/services/logo"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/services/logo"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/services/logo"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/services/logo</loc><lastmod>2026-09-27</lastmod><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/services/logo"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/services/logo"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/services/logo"/></url>
+  <url><loc>https://www.braiinstatiion.com/services/business-cards</loc><lastmod>2026-09-27</lastmod><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/services/business-cards"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/services/business-cards"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/services/business-cards"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/services/business-cards</loc><lastmod>2026-09-27</lastmod><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/services/business-cards"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/services/business-cards"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/services/business-cards"/></url>
+  <url><loc>https://www.braiinstatiion.com/services/letterhead</loc><lastmod>2026-09-27</lastmod><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/services/letterhead"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/services/letterhead"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/services/letterhead"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/services/letterhead</loc><lastmod>2026-09-27</lastmod><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/services/letterhead"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/services/letterhead"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/services/letterhead"/></url>
+  <url><loc>https://www.braiinstatiion.com/portfolio/the-rider</loc><lastmod>2026-09-20</lastmod><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/portfolio/the-rider"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/portfolio/the-rider"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/portfolio/the-rider"/></url>
+  <url><loc>https://www.braiinstatiion.com/ar/portfolio/the-rider</loc><lastmod>2026-09-20</lastmod><xhtml:link rel="alternate" hreflang="en" href="https://www.braiinstatiion.com/portfolio/the-rider"/><xhtml:link rel="alternate" hreflang="ar" href="https://www.braiinstatiion.com/ar/portfolio/the-rider"/><xhtml:link rel="alternate" hreflang="x-default" href="https://www.braiinstatiion.com/portfolio/the-rider"/></url>
+</urlset>
+"
+`;

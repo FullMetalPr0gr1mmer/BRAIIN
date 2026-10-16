@@ -3,6 +3,7 @@ import { Picture } from 'astro:assets';
 import type { Locale } from '@schemas/primitives';
 import { getNavigation, type NavNode } from '@/lib/data/navigation';
 import { HEADER_FALLBACK } from '@/lib/nav/fallback';
+import { filterNavForVisibility } from '@/lib/visibility/listing';
 import { isCurrentNav } from '@/lib/nav/current';
 import { getIdentity, brandName } from '@/lib/identity';
 import { localizedHref, localizedPath } from '@/lib/i18n';
@@ -42,7 +43,13 @@ const identity = await getIdentity(Astro.locals);
 const brand = brandName(identity, locale);
 
 const authored = await getNavigation('header');
-const items: NavNode[] = authored.length > 0 ? authored : HEADER_FALLBACK;
+// A page that is not public (page visibility, Admin v2 U14a) leaves the menu; with nothing
+// hidden the list is returned as it came, so the markup is byte-identical.
+const items: NavNode[] = filterNavForVisibility(
+  authored.length > 0 ? authored : HEADER_FALLBACK,
+  Astro.locals.visibility,
+  Date.now(),
+);
 const key = items.find((i) => i.is_key);
 
 const current = Astro.url.pathname;

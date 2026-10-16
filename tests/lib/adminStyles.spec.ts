@@ -137,6 +137,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'search.css',
       'stats.css',
       'users.css',
+      'visibility.css',
     ]);
   });
 

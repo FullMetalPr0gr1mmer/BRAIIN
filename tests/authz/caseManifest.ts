@@ -113,7 +113,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'media: media usage',
   'notifications: mark all read',
   'notifications: the bell list',
-  'pages: page visibility toggle',
+  'pages: page visibility toggle (alias over page_visibility)',
   'pages: pages create',
   'pages: pages delete',
   'pages: pages list',
@@ -200,4 +200,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'users: user security settings read',
   'users: user security settings save',
   'users: user update',
+  'visibility: page visibility list',
+  'visibility: page visibility save',
+  'visibility: page visibility sync to edge',
 ];

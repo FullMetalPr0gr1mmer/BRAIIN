@@ -10,10 +10,12 @@ export const settings: NavArea = {
       label: 'General',
       icon: 'settings',
       caps: ['settings.general'],
-      match: ['/admin/maintenance'],
+      match: ['/admin/maintenance', '/admin/visibility'],
       tabs: [
         { href: '/admin/settings', label: 'General', caps: ['settings.general'] },
         { href: '/admin/maintenance', label: 'Maintenance', caps: ['maintenance.manage'] },
+        // Admin v2 U14a: who can see each page.
+        { href: '/admin/visibility', label: 'Page visibility', caps: ['maintenance.manage'] },
       ],
     },
     {

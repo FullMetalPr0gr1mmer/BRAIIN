@@ -37,6 +37,7 @@ export const RELEASE_ANY_CAP: readonly Capability[] = [
   'seo.entityMeta',
   'seo.globalDefaults',
   'redirects.manage',
+  'maintenance.manage',
 ];
 
 /** Whether this change removes the row from the site: a delete, or an archive. */

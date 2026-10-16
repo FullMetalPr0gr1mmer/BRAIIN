@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
 import { RESOURCES } from '@/lib/admin/resources';
 import { ENTITY_SEO } from '@/lib/admin/entitySeo';
+import { PAGE_VISIBILITY } from '@/lib/admin/pageVisibility';
 import { RELEASE_REGISTRY, type RegistryEntry } from '@/lib/release/registry';
 import { registryRows } from '../fixtures/releaseRegistry';
 import { SAMPLE_NOW, sampleOf, samplesFor } from '../fixtures/resourceSamples';
@@ -41,8 +42,13 @@ const union = (fields: Readonly<Record<string, readonly string[]>>, keys: readon
 
 const sorted = (list: Iterable<string>) => [...list].sort();
 
-/** The release-managed entries whose `toRow` takes a partial payload (not entity SEO's PUT). */
-const PATCHABLE = Object.values(RELEASE_REGISTRY).filter((e) => e.kind !== 'entitySeo');
+/**
+ * The release-managed entries whose `toRow` takes a partial payload (not entity SEO's PUT,
+ * nor page visibility's, Admin v2 U14a: both full replaces, checked below).
+ */
+const PATCHABLE = Object.values(RELEASE_REGISTRY).filter(
+  (e) => e.kind !== 'entitySeo' && e.kind !== 'pageVisibility',
+);
 
 function toRowOf(entry: RegistryEntry): ToRow {
   return (entry.resource?.toRow ?? entry.singleton?.toRow)!;
@@ -114,6 +120,38 @@ for (const entry of PATCHABLE) {
   });
 }
 
+describe('page_visibility: a full replace writes the declared columns', () => {
+  const entry = RELEASE_REGISTRY.page_visibility;
+
+  it('a save writes the mode and its three extras; a create adds the target', () => {
+    const page = PAGE_VISIBILITY.WriteSchema.parse({
+      target: { pageId: '11111111-1111-4111-8111-111111111111' },
+      mode: 'hidden',
+      redirectPageId: '22222222-2222-4222-8222-222222222222',
+      hideFrom: '2026-11-01',
+      showOn: '2026-11-08',
+      version: 0,
+    });
+    const template = PAGE_VISIBILITY.WriteSchema.parse({
+      target: { template: 'service' },
+      mode: 'public',
+      version: 0,
+    });
+    const meta = Object.keys(PAGE_VISIBILITY.toRow(page));
+    expect(sorted(meta)).toEqual(['hide_from', 'mode', 'redirect_page_id', 'show_on']);
+    expect(Object.keys(PAGE_VISIBILITY.toRow(template)).sort()).toEqual(sorted(meta));
+    const targets = [
+      ...Object.keys(PAGE_VISIBILITY.target(page)),
+      ...Object.keys(PAGE_VISIBILITY.target(template)),
+    ];
+    expect(sorted([...meta, ...targets])).toEqual(
+      sorted(union(entry.fields, Object.keys(entry.fields))),
+    );
+    expect(PAGE_VISIBILITY.toRow(page).hide_from).toBe('2026-10-31T21:00:00.000Z');
+    expect(PAGE_VISIBILITY.toRow(template).redirect_page_id).toBeNull();
+  });
+});
+
 describe('entity_seo: a full replace writes the declared columns', () => {
   const entry = RELEASE_REGISTRY.entity_seo;
 
@@ -165,7 +203,10 @@ describe('fields covers exactly the payload keys the write schema accepts', () =
   for (const entry of Object.values(RELEASE_REGISTRY)) {
     it(entry.entityType, () => {
       const schema =
-        entry.resource?.createSchema ?? entry.singleton?.schema ?? ENTITY_SEO.WriteSchema;
+        entry.resource?.createSchema ??
+        entry.singleton?.schema ??
+        entry.pageVisibility?.WriteSchema ??
+        ENTITY_SEO.WriteSchema;
       expect(sorted([...Object.keys(entry.fields), ...entry.childKeys])).toEqual(
         sorted(shapeKeys(schema)),
       );

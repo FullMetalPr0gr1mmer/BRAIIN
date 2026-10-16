@@ -10,7 +10,9 @@ import {
   type Input,
 } from './shared';
 
-// Pages.
+// Pages. `navVisible` stays a key while `nav_visible` is a column the release registry
+// classifies (0038's page row); no screen sends it since page visibility (Admin v2 U14a)
+// replaced the "Show in navigation" checkbox, and nothing public reads it.
 
 const PAGE_KEYS = {
   slug: 'slug',
@@ -25,7 +27,7 @@ export const pageResource: ResourceConfig = {
   entity: 'page',
   writeCap: 'pages.write',
   readCaps: ['pages.write', 'seo.entityMeta', 'maintenance.manage'],
-  listColumns: 'id,slug,title,status,nav_visible,version,updated_at',
+  listColumns: 'id,slug,title,status,version,updated_at',
   columns:
     'id,slug,title,status,nav_visible,version,published_at,scheduled_for,created_at,updated_at',
   orderBy: { column: 'slug', ascending: true },
@@ -36,4 +38,12 @@ export const pageResource: ResourceConfig = {
   fields: fieldsOf(PAGE_KEYS, STAMPED),
   statusOf: (input) => statusOf(input as Input),
   assertPublishable: (row) => requireBilingual(row, 'title', 'Page title'),
+  // 0057: the pages the public routes render keep their slugs (page visibility is stored by
+  // page id and enforced by slug at the edge), and so does any page that has a setting.
+  constraintFields: {
+    pages_route_slug_fixed: {
+      field: 'slug',
+      message: 'This page’s address is part of the site’s routes and cannot change.',
+    },
+  },
 };

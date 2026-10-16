@@ -31,6 +31,7 @@ const ROWS: Record<string, { types: ReleaseEntityType[]; kinds: Kind[] }> = {
   'Release — per-entity SEO': { types: ['entity_seo'], kinds: ['edit'] },
   'Release — global SEO defaults': { types: ['seo_defaults'], kinds: ['edit'] },
   'Release — redirects (removals included)': { types: ['redirect'], kinds: ['edit', 'removal'] },
+  'Release — page visibility': { types: ['page_visibility'], kinds: ['edit'] },
 };
 
 /** The concrete changes of a kind: create, update and a visible flip; delete and archive. */
@@ -81,7 +82,7 @@ function parseReleaseMatrix(): Map<string, boolean[]> {
 describe('the release publish matrix (architecture.md §3.4) equals ROLE_CAPS', () => {
   const doc = parseReleaseMatrix();
 
-  it('documents exactly the seven derived rows', () => {
+  it('documents exactly the eight derived rows', () => {
     expect([...doc.keys()].sort()).toEqual(Object.keys(ROWS).sort());
   });
 

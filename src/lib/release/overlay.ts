@@ -119,6 +119,12 @@ export function derivePatch(entry: RegistryEntry, op: DraftOp, payload: Payload)
       );
       values = { ...defaults, ...values };
     }
+  } else if (entry.kind === 'pageVisibility') {
+    // A full replace, as entity SEO's; the target is fixed once the row exists.
+    const config = entry.pageVisibility!;
+    const write = config.WriteSchema.parse({ ...input, version: 0 });
+    parsed = withoutVersion(write);
+    values = { ...config.toRow(write), ...(op === 'create' ? config.target(write) : {}) };
   } else {
     const config = entry.entitySeo!;
     const write = config.WriteSchema.parse({ ...input, version: 1 });

@@ -2,6 +2,7 @@ import type { Access, Capability } from '@/lib/authz/matrix';
 import type { ResourceConfig } from '@/lib/admin/resource';
 import type { SingletonConfig } from '@/lib/admin/singleton';
 import { ENTITY_SEO } from '@/lib/admin/entitySeo';
+import { PAGE_VISIBILITY } from '@/lib/admin/pageVisibility';
 import { postResource } from '@/lib/admin/resources/blog';
 import { categoryResource } from '@/lib/admin/resources/categories';
 import { certificationResource } from '@/lib/admin/resources/certifications';
@@ -47,13 +48,15 @@ export interface RegistryEntry {
   table: string;
   key: 'id' | 'tenant_id';
   area: ReleaseArea;
-  kind: 'resource' | 'singleton' | 'entitySeo';
+  kind: 'resource' | 'singleton' | 'entitySeo' | 'pageVisibility';
   /** kind 'resource'. */
   resource?: ResourceConfig;
   /** kind 'singleton'. */
   singleton?: SingletonConfig;
   /** kind 'entitySeo'. */
   entitySeo?: typeof ENTITY_SEO;
+  /** kind 'pageVisibility' (Admin v2 U14a). */
+  pageVisibility?: typeof PAGE_VISIBILITY;
   /** All required to stage or publish a change (with content.publish for content areas). */
   authorCaps: readonly Capability[];
   /** Required in addition for op 'delete' or a status → archived; null = never removable. */
@@ -273,6 +276,35 @@ function fromEntitySeo(extra: Extra): RegistryEntry {
   };
 }
 
+function fromPageVisibility(extra: Extra): RegistryEntry {
+  const meta = RELEASE_ENTITY_META.page_visibility;
+  return {
+    entityType: 'page_visibility',
+    table: PAGE_VISIBILITY.table,
+    key: meta.key,
+    area: meta.area,
+    kind: 'pageVisibility',
+    pageVisibility: PAGE_VISIBILITY,
+    authorCaps: meta.authorCaps,
+    removeCap: meta.removeCap,
+    readCaps: PAGE_VISIBILITY.readCaps,
+    readAccess: ['full'],
+    fields: PAGE_VISIBILITY.fields,
+    columns: columnsOf(PAGE_VISIBILITY.fields, [], []),
+    deferredColumns: [],
+    uniqueFlags: [],
+    immediateColumns: [],
+    applyOrder: meta.applyOrder,
+    hasStatus: meta.hasStatus,
+    publishFlag: meta.publishFlag,
+    childKeys: [],
+    childRowKeys: {},
+    label: extra.label,
+    entityTags: extra.entityTags,
+    ...(extra.tagParent ? { tagParent: extra.tagParent } : {}),
+  };
+}
+
 const named = (fallback: string) => labelFrom(['name', 'slug'], fallback);
 const titled = (fallback: string) => labelFrom(['title', 'slug'], fallback);
 
@@ -376,6 +408,26 @@ export const RELEASE_REGISTRY: Readonly<Record<ReleaseEntityType, RegistryEntry>
           : 'Redirect',
     }),
     entityTags: tags(),
+  }),
+  // A page's visibility tags its page (R7 resolves the slug through tagParent) and the menus;
+  // a template's, every page it renders. R7 adds the sitemap and llms.txt, and re-syncs the
+  // KV snapshot after the apply and after a rollback (P-3).
+  page_visibility: fromPageVisibility({
+    label: (row) => ({
+      en:
+        row['template'] === 'service'
+          ? 'Visibility: every service page'
+          : row['template'] === 'case_study'
+            ? 'Visibility: every case study page'
+            : 'Page visibility',
+    }),
+    entityTags: (row) =>
+      row?.['template'] === 'service'
+        ? ['services:all', 'nav:all']
+        : row?.['template'] === 'case_study'
+          ? ['portfolio:all', 'nav:all']
+          : ['nav:all'],
+    tagParent: { entityType: 'page', column: 'page_id' },
   }),
 };
 

@@ -2,6 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import { getNavigation, type NavNode } from '@/lib/data/navigation';
 import { FOOTER_FALLBACK, LEGAL_LINKS } from '@/lib/nav/fallback';
+import { filterNavForVisibility } from '@/lib/visibility/listing';
 import { getIdentity, brandName } from '@/lib/identity';
 import { arabicIndic, localizedHref, localizedPath } from '@/lib/i18n';
 
@@ -26,7 +27,12 @@ const brand = brandName(identity, locale);
 const place = identity.location[locale];
 
 const authored = await getNavigation('footer');
-const items: NavNode[] = authored.length > 0 ? authored : FOOTER_FALLBACK;
+// As the header: a page that is not public leaves the menu (the legal links never do).
+const items: NavNode[] = filterNavForVisibility(
+  authored.length > 0 ? authored : FOOTER_FALLBACK,
+  Astro.locals.visibility,
+  Date.now(),
+);
 
 // The Arabic bar writes the year in Arabic-Indic digits, as the mockup does (© ٢٠٢٦).
 const year = new Date().getFullYear();

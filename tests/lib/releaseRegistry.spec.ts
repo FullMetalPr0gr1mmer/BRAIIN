@@ -4,6 +4,7 @@ import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
 import { ROLES } from '@/lib/auth/types';
 import { RESOURCES } from '@/lib/admin/resources';
 import { ENTITY_SEO } from '@/lib/admin/entitySeo';
+import { PAGE_VISIBILITY } from '@/lib/admin/pageVisibility';
 import { siteProfileSingleton } from '@/lib/admin/singletons/siteProfile';
 import { seoDefaultsSingleton } from '@/lib/admin/singletons/seoDefaults';
 import { CONTENT_AREAS, RELEASE_ENTITY_META } from '@/lib/release/areas';
@@ -92,6 +93,7 @@ for (const row of rows) {
 function editorWriteCap(entry: RegistryEntry): Capability {
   if (entry.resource) return entry.resource.writeCap;
   if (entry.singleton) return entry.singleton.writeCap;
+  if (entry.pageVisibility) return entry.pageVisibility.writeCap;
   return entry.entitySeo!.writeCap;
 }
 
@@ -106,6 +108,7 @@ describe('each entry is bound to the config its editor uses', () => {
     expect(RELEASE_REGISTRY.site_profile.singleton).toBe(siteProfileSingleton);
     expect(RELEASE_REGISTRY.seo_defaults.singleton).toBe(seoDefaultsSingleton);
     expect(RELEASE_REGISTRY.entity_seo.entitySeo).toBe(ENTITY_SEO);
+    expect(RELEASE_REGISTRY.page_visibility.pageVisibility).toBe(PAGE_VISIBILITY);
   });
 
   it('every resource config of a registry type is in the registry, and only those', () => {
@@ -150,11 +153,16 @@ describe('each entry is bound to the config its editor uses', () => {
       }
     }
     expect(RELEASE_REGISTRY.entity_seo.readAccess).toEqual(['full', 'view']);
+    expect(RELEASE_REGISTRY.page_visibility.readCaps).toEqual(['maintenance.manage']);
   });
 
   it('`fields` is the bound config’s own map', () => {
     for (const entry of entries) {
-      const own = entry.resource?.fields ?? entry.singleton?.fields ?? entry.entitySeo?.fields;
+      const own =
+        entry.resource?.fields ??
+        entry.singleton?.fields ??
+        entry.pageVisibility?.fields ??
+        entry.entitySeo?.fields;
       expect(entry.fields).toBe(own);
     }
   });
@@ -197,6 +205,15 @@ describe('cache tags and labels', () => {
       column: 'page_id',
     });
     expect(RELEASE_REGISTRY.entity_seo.tagTarget).toBe(true);
+    // Page visibility tags its page through the page's slug, which R7 resolves.
+    expect(RELEASE_REGISTRY.page_visibility.tagParent).toEqual({
+      entityType: 'page',
+      column: 'page_id',
+    });
+    expect(RELEASE_REGISTRY.page_visibility.entityTags({ template: 'service' })).toEqual([
+      'services:all',
+      'nav:all',
+    ]);
   });
 
   it('slugged rows tag their own page as well as the collection', () => {
@@ -247,6 +264,9 @@ describe('apply order', () => {
     'blog_posts.category_id': 'category',
     'page_sections.page_id': 'page',
     'navigation.parent_id': 'nav_item',
+    // Page visibility names its page and its redirect target (Admin v2 U14a).
+    'page_visibility.page_id': 'page',
+    'page_visibility.redirect_page_id': 'page',
     // A target of any of four types: entity_seo applies after every one of them.
     'entity_seo.entity_id': 'outside',
     // media_assets and profiles are not release-managed.
