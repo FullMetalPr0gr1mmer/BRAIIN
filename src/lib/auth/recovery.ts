@@ -44,6 +44,15 @@ export const RECOVERY_LIMITS = {
   forgotPerEmail: { max: 3, windowSeconds: 3600 },
   forgotPerTenant: { max: 50, windowSeconds: 3600 },
   resetPerIp: { max: 10, windowSeconds: 3600 },
+  // Accepting an invite (Admin v2 U12b): reset's per-address window, and a tenant-wide one
+  // counted only for a request the first let through (as forgot's), which bounds what a
+  // crowd of addresses can make the endpoint do (a GoTrue verify each). The tenant window is
+  // shared and fails closed, so whoever fills it blocks every real acceptance for the hour an
+  // invite link lives: its ceiling sits far above any real number of invites an hour (10 per
+  // Admin an hour, INVITE_LIMITS), so filling it takes 20 addresses, not 3. Counting only the
+  // verifies GoTrue refused would not help: a junk token is always refused.
+  invitePerIp: { max: 10, windowSeconds: 3600 },
+  invitePerTenant: { max: 200, windowSeconds: 3600 },
 } as const;
 
 /**
@@ -68,6 +77,17 @@ export function forgotLimitRules(
 
 export function resetLimitRules(ip: string | null): PublicLimitRule[] {
   return [{ scope: 'auth.reset:ip', value: ipLimitValue(ip), ...RECOVERY_LIMITS.resetPerIp }];
+}
+
+/** The invite acceptance's rules: the caller's address, and the tenant's one window. */
+export function inviteLimitRules(ip: string | null): {
+  caller: PublicLimitRule[];
+  tenant: PublicLimitRule;
+} {
+  return {
+    caller: [{ scope: 'auth.invite:ip', value: ipLimitValue(ip), ...RECOVERY_LIMITS.invitePerIp }],
+    tenant: { scope: 'auth.invite:tenant', value: 'all', ...RECOVERY_LIMITS.invitePerTenant },
+  };
 }
 
 /** Counts one attempt (service role; the key is a labelled HMAC, never the raw value). */
@@ -104,6 +124,20 @@ export async function checkForgotLimits(
 }
 
 /**
+ * The invite acceptance's limits, as checkForgotLimits counts its own: the address first, the
+ * tenant's window only for a request the address's limit let through. Both fail CLOSED.
+ */
+export async function checkInviteLimits(
+  tenantId: string,
+  ip: string | null,
+): Promise<LimitOutcome> {
+  const { caller, tenant } = inviteLimitRules(ip);
+  const own = await checkRecoveryLimits(tenantId, caller);
+  if (own !== 'ok') return own;
+  return checkRecoveryLimits(tenantId, [tenant]);
+}
+
+/**
  * A Supabase client for ONE recovery request: the anon key, no persistence, no refresh,
  * the implicit flow (a PKCE verifier would need a cookie, and the e-mail's token_hash link
  * needs none). Never shared: the session a verified token opens lives in this object's
@@ -124,6 +158,11 @@ export function recoveryClient(): SupabaseClient {
 /** Where the e-mail's link lands: the configured origin, never the request's Host. */
 export function resetPageUrl(): string {
   return new URL('/admin/reset', PUBLIC_SITE_URL).toString();
+}
+
+/** Where an invite e-mail's link lands (Admin v2 U12b): the configured origin, likewise. */
+export function invitePageUrl(): string {
+  return new URL('/admin/invite', PUBLIC_SITE_URL).toString();
 }
 
 /**
@@ -161,7 +200,7 @@ export interface AuthAuditRow {
   /** The account the event is about, when there is one (a reset); null for a request. */
   actorId: string | null;
   actorRole: string | null;
-  action: 'auth.password_reset_requested' | 'auth.password_reset';
+  action: 'auth.password_reset_requested' | 'auth.password_reset' | 'auth.invite_accepted';
   entityType: string;
   entityId: string | null;
   detail: Record<string, unknown>;
@@ -199,6 +238,38 @@ export async function writeAuthAudit(row: AuthAuditRow): Promise<boolean> {
     return true;
   } catch (err) {
     return await report({ message: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+/** What the acceptance finds of the invited account's profile (inviteeOf). */
+export type Invitee =
+  | { kind: 'found'; tenantId: string; role: string; isActive: boolean }
+  /** No profile row: the account was never fully invited, or its profile is gone. */
+  | { kind: 'missing' }
+  /** The read failed (an outage), so nothing is known about the account. */
+  | { kind: 'unreadable' };
+
+/**
+ * The account's tenant, role and whether it may sign in, for an accepted invite: a person
+ * switched off after the invite went out sets no password (Admin v2 U12b). A profile that is
+ * not there is told apart from one that could not be read: the first is the invite's, the
+ * second is ours.
+ */
+export async function inviteeOf(userId: string): Promise<Invitee> {
+  try {
+    const { data, error } = await serviceClient()
+      .from('profiles')
+      .select('tenant_id,role,is_active')
+      .eq('id', userId)
+      .maybeSingle<{ tenant_id: unknown; role: unknown; is_active: unknown }>();
+    if (error) return { kind: 'unreadable' };
+    if (!data) return { kind: 'missing' };
+    const { tenant_id: tenantId, role, is_active: isActive } = data;
+    return typeof tenantId === 'string' && typeof role === 'string'
+      ? { kind: 'found', tenantId, role, isActive: isActive === true }
+      : { kind: 'unreadable' };
+  } catch {
+    return { kind: 'unreadable' };
   }
 }
 

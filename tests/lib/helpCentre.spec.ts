@@ -530,6 +530,33 @@ describe('the guides say only what the admin does', () => {
     expect(guide('site-health-and-logs', 'ar')).toContain('400 يوم');
   });
 
+  it('U12b (0056) restates U12a’s set (0055) and only adds the invites guide', () => {
+    // Production applies 0055, then 0056: every guide 0055 seeds stays byte for byte, and the
+    // one new guide sits after the roles guide, for Admin alone, on the users screen.
+    const setOf = (file: string) => {
+      const sql = source(`${MIGRATIONS}/${file}`);
+      return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
+    };
+    const u12a = setOf('0055_users_v2.sql');
+    const u12b = setOf('0056_invites.sql');
+    expect(u12b.filter((a) => a.slug !== 'inviting-people')).toEqual(u12a);
+    const at = u12b.findIndex((a) => a.slug === 'inviting-people');
+    expect(u12b[at - 1]?.slug).toBe('roles-and-access');
+    const invites = u12b[at]!;
+    expect(invites.caps).toEqual(['users.manage']);
+    expect(invites.screens).toEqual(['/admin/users']);
+    expect(ROLES.filter((role) => mayRead(role, invites.caps))).toEqual(['admin']);
+    // The users screen's head keeps the roles guide, which every member may read.
+    expect(pageGuideFor('/admin/users', 'admin')).toBe('roles-and-access');
+    // Cancel works while the invite is pending (isPendingInvite: never confirmed, never
+    // signed in), and a spent link confirms the address whether or not a password was set:
+    // so the guide ties Cancel to accepting the invite, not to setting a password.
+    const cancelLine = textsOf(invites, 'en').join('\n');
+    expect(cancelLine).toContain('Until they have accepted the invite, you can Cancel it');
+    expect(cancelLine).not.toContain('set a password, you can Cancel');
+    expect(textsOf(invites, 'ar').join('\n')).toContain('ما دام لم يقبل الدعوة بعد');
+  });
+
   it('the Arabic says what it means', () => {
     expect(everything('ar')).not.toContain('شوركت');
     expect(guide('seo-and-redirects', 'ar')).toContain('الروابط التي تمت مشاركتها');

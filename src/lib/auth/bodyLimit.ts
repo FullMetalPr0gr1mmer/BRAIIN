@@ -1,8 +1,9 @@
 // How much a private request's body may carry before the middleware reads it (Admin v2 F7,
 // final review).
 //
-// A body sent without a session is read only on the six pre-auth paths (the three sign-in
-// screens and their three endpoints): on every other private path the middleware answers a
+// A body sent without a session is read only on the eight pre-auth paths (the four sign-in
+// screens and their four endpoints; the invite page joined in Admin v2 U12b, its form no
+// larger than the reset's): on every other private path the middleware answers a
 // signed-out post (401, or the sign-in redirect) before it reads a byte (src/middleware.ts);
 // until the review's second pass the CSRF check cloned any urlencoded body first, unbounded.
 // On a pre-auth path a post is read more than once: the CSRF check reads a clone of a form

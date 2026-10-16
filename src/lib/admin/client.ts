@@ -128,6 +128,9 @@ export function describeError(err: unknown): string {
       return 'Your session expired. Reload the page and try again.';
     case 'rate-limit':
       return 'Rate limit reached. Try again in an hour.';
+    case 'not-set-up':
+      // A feature that needs an account not provisioned yet (invites before SMTP, U12b).
+      return 'Not set up yet: this needs email delivery, which is not connected.';
     case 'validation':
       return (
         err.info.detail ??

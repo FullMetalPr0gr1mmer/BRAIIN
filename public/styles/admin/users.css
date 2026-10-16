@@ -113,3 +113,21 @@
   color: var(--ad-dim);
   background: var(--ad-bg);
 }
+
+/* Invites (Admin v2 U12b): the Pending invites card's head (Invite someone, or "Not set up"
+   beside it), its line about the link, and the invite drawer's lead. */
+.users-invites__head {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.users-invites__lead,
+.users-invite__lead {
+  margin: 0 0 12px;
+}
+
+.users-invites .li__t {
+  overflow-wrap: anywhere;
+}

@@ -1,7 +1,9 @@
 import { UUID, type Case } from '../harness';
 
 // Users & roles (§5 "Users & roles", Admin only). The Security card and "Make account owner"
-// are Admin v2 U12a's.
+// are Admin v2 U12a's; Resend and Cancel of an invite are U12b's. The invite and the resend
+// answer 503 `not-set-up` after the gate while e-mail is off (the stubs' AUTH_EMAIL_READY);
+// tests/lib/usersApi.spec.ts drives them switched on.
 
 export const cases: readonly Case[] = [
   {
@@ -43,6 +45,20 @@ export const cases: readonly Case[] = [
     method: 'PUT',
     url: '/api/admin/users/security',
     body: { sessionMaxDays: 1, inviteDomain: 'example.test', version: 1 },
+    allow: ['admin'],
+  },
+  {
+    name: 'user invite resend',
+    load: () => import('@/pages/api/admin/users/[id]/resend'),
+    method: 'POST',
+    url: `/api/admin/users/${UUID}/resend`,
+    allow: ['admin'],
+  },
+  {
+    name: 'user invite cancel',
+    load: () => import('@/pages/api/admin/users/[id]/invite'),
+    method: 'DELETE',
+    url: `/api/admin/users/${UUID}/invite`,
     allow: ['admin'],
   },
   {

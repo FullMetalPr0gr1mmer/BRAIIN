@@ -35,6 +35,15 @@ secure_password_change = true
 # Expiration, launch runbook §2b step 4.
 otp_expiry = 3600
 
+# Admin v2 U12b: the invite e-mail. Its link opens /admin/invite with the token hash, which
+# the page's form posts to the server (never the default ConfirmationURL, whose session would
+# arrive in a # fragment). Hosted projects: Templates > Invite user, launch runbook §2b. An
+# invite link lasts as long as a reset link (otp_expiry above, decision D1: one hour, with
+# Resend); GoTrue has one expiry for both. tests/lib/inviteTemplate.spec.ts holds the link.
+[auth.email.template.invite]
+subject = "You are invited to the admin"
+content_path = "./supabase/templates/invite.html"
+
 # The Custom Access Token Hook (migration 0010), enabled for the LOCAL stack the way the
 # launch runbook §2 enables it in the dashboard for staging and production. Without it a
 # locally signed-in user's JWT carries no role or tenant claim, every admin sign-in is

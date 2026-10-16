@@ -48,19 +48,22 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const REDIRECTABLE_METHODS = new Set(['GET', 'HEAD']);
 
 /**
- * The only private paths reachable without a session: the three sign-in screens (sign
- * in, forgot password, reset password: Admin v2 F7) and the endpoints their forms post
- * to. All six still get the CSRF check and `no-store`; what they skip is the
- * authentication gate, which they obviously cannot satisfy.
+ * The only private paths reachable without a session: the four sign-in screens (sign in,
+ * forgot password, reset password: Admin v2 F7; accepting an invite: U12b) and the
+ * endpoints their forms post to. All eight still get the CSRF check, the pre-auth body
+ * limit and `no-store`; what they skip is the authentication gate, which they obviously
+ * cannot satisfy.
  */
 const LOGIN_PATH = '/admin/login';
 const PRE_AUTH_PATHS: ReadonlySet<string> = new Set([
   LOGIN_PATH,
   '/admin/forgot',
   '/admin/reset',
+  '/admin/invite',
   '/api/admin/auth/login',
   '/api/admin/auth/forgot',
   '/api/admin/auth/reset',
+  '/api/admin/auth/invite',
 ]);
 
 /**
@@ -246,7 +249,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Authentication gate. Authorization (which capability, which role) is the API
     // kernel's job — this only answers "is there a verified session at all".
     const route = routeKey(url.pathname);
-    // Both the path and the route Astro matched must be one of the six: a path that reads as
+    // Both the path and the route Astro matched must be one of the eight: a path that reads as
     // the sign-in endpoint but routes to a lead's is not pre-auth (see "What a request is").
     const preAuth = PRE_AUTH_PATHS.has(route) && PRE_AUTH_PATHS.has(matched);
     const unauthenticated = (): Response => {

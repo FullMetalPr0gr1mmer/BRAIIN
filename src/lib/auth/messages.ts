@@ -114,6 +114,75 @@ export const RESET_TOO_LARGE = msg(
 /** The reset codes that leave the person without a usable link (the page drops the form). */
 export const RESET_LINK_SPENT: ReadonlySet<string> = new Set(['expired', 'refused', 'interrupted']);
 
+// ── Accepting an invite (Admin v2 U12b): /admin/invite?error=… and /admin/login?invite=ready ──
+// The reset page's outcomes, in an invite's words: a spent or expired invite is sent again by
+// an Admin (Resend), never by "Forgot password?" (the account has no password yet).
+
+/** /admin/login?invite=ready: the password is set, and the invite's session is gone. */
+export const INVITE_READY = msg(
+  'ok',
+  'Your password is set. Sign in with your email and the new password.',
+);
+
+/** What the invite page says about a link it cannot use, and who can send a new one. */
+const INVITE_ASK_AGAIN = 'Ask the Admin who invited you to send the invite again.';
+const INVITE_USE_FORGOT = 'choose your password with "Forgot password?" on the sign-in page.';
+
+/** /admin/invite?error=… */
+export const INVITE_MESSAGES = {
+  expired: msg(
+    'error',
+    `This invite link is not valid, has been used, or has expired. ${INVITE_ASK_AGAIN}`,
+  ),
+  short: msg('error', `Use at least ${PASSWORD_MIN} characters.`),
+  long: msg('error', 'That password is too long. Try a shorter one.'),
+  mismatch: msg('error', 'The two passwords do not match.'),
+  limited: msg(
+    'error',
+    'Too many attempts. Try again later; this link still works until it expires.',
+  ),
+  unavailable: msg('error', 'Something went wrong on our side. Try again in a few minutes.'),
+  // The account was switched off after the invite went out: the link is spent, and no
+  // password was set. The account is confirmed now, so a new invite cannot be sent: the
+  // way on is the Admin switching it back on, then a reset.
+  closed: msg(
+    'error',
+    `This invite is no longer open. Ask the Admin who invited you to switch your access back on, then ${INVITE_USE_FORGOT}`,
+  ),
+  // After the verify the account is confirmed, so it cannot be invited again: its password
+  // is chosen the way any member's is reset.
+  refused: msg(
+    'error',
+    `That password was not accepted. It may be too common. The link is now used up, so ${INVITE_USE_FORGOT}`,
+  ),
+  interrupted: msg(
+    'error',
+    `Something went wrong on our side, and the link is now used up, so ${INVITE_USE_FORGOT}`,
+  ),
+  'expired-form': EXPIRED_FORM_MESSAGE,
+  'too-large': TOO_LARGE_MESSAGE,
+} as const;
+
+/** A failure that kept the link, shown again without it (the page's cookie is gone). */
+export const INVITE_REOPEN = msg(
+  'error',
+  'To try again, open the link in your invite email once more.',
+);
+
+/** An invite form over the body limit, sent back unread: the link cannot come back with it. */
+export const INVITE_TOO_LARGE = msg(
+  'error',
+  'That form was too large to send. To try again, open the link in your invite email once more.',
+);
+
+/** The invite codes that leave the person without a usable link (the page drops the form). */
+export const INVITE_LINK_SPENT: ReadonlySet<string> = new Set([
+  'expired',
+  'closed',
+  'refused',
+  'interrupted',
+]);
+
 /** A code from the query string → its message, or null for anything not on the list. */
 export function messageFor<T extends Record<string, PageMessage>>(
   table: T,
