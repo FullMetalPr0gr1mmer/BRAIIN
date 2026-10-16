@@ -160,9 +160,19 @@ const ADMIN_PATH =
   /^\/admin(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%-]+)*\/?(?:\?[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*)?$/;
 
 /**
+ * A segment a browser reads as `.` or `..`: the WHATWG URL parser takes `%2e`, in either
+ * case, as a dot there, so `/admin/%2e%2e/x` opens `/x`.
+ */
+function isDotSegment(segment: string): boolean {
+  const decoded = segment.replace(/%2e/giu, '.');
+  return decoded === '.' || decoded === '..';
+}
+
+/**
  * Where a person's own link may lead: an admin screen (`/admin…`) or an outside https
  * address. Refused: any other scheme (`javascript:` in any case, `data:`, `http:`), a
- * protocol-relative `//host` or `/\host`, a `..` segment, a backslash, a username or
+ * protocol-relative `//host` or `/\host`, a `.` or `..` segment (percent-encoded too:
+ * `%2e%2e`, `.%2E`), a backslash, a username or
  * password, a host without a dot, more than 300 characters.
  */
 export function isAdminOrHttpsHref(value: string): boolean {
@@ -172,7 +182,7 @@ export function isAdminOrHttpsHref(value: string): boolean {
     if (value.startsWith('//')) return false;
     if (!ADMIN_PATH.test(value)) return false;
     const path = value.split('?')[0] ?? '';
-    return !path.split('/').some((segment) => segment === '..' || segment === '.');
+    return !path.split('/').some(isDotSegment);
   }
   let url: URL;
   try {

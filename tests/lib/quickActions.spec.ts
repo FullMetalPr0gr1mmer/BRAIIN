@@ -40,6 +40,18 @@ describe('a person’s own link: /admin… or https://… only', () => {
   ])('accepts %s', (href) => {
     expect(isAdminOrHttpsHref(href)).toBe(true);
     expect(AdminOrHttpsHref.safeParse(href).success).toBe(true);
+    // An accepted path opens an admin screen as a browser resolves it.
+    if (href.startsWith('/')) {
+      expect(new URL(href, 'https://admin.example.test').pathname).toMatch(/^\/admin(\/|$)/);
+    }
+  });
+
+  it('a path that a browser resolves outside /admin is refused, whatever its spelling', () => {
+    for (const dots of ['..', '.%2e', '%2e.', '%2e%2e', '.%2E', '%2E%2E']) {
+      const href = `/admin/${dots}/x`;
+      expect(new URL(href, 'https://admin.example.test').pathname).toBe('/x');
+      expect(isAdminOrHttpsHref(href)).toBe(false);
+    }
   });
 
   it.each([
@@ -58,6 +70,12 @@ describe('a person’s own link: /admin… or https://… only', () => {
     'https://intranet',
     '/admin/../x',
     '/admin/./x',
+    // Dot segments a browser decodes (WHATWG URL): each would open a page outside /admin.
+    '/admin/%2e%2e/x',
+    '/admin/.%2E/x',
+    '/admin/%2E./x',
+    '/admin/%2e/x',
+    '/admin/leads/%2e%2e',
     '/administrator',
     '/about',
     'admin/leads',
