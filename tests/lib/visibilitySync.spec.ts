@@ -21,6 +21,7 @@ const {
   edgeVisibilityStatus,
   syncVisibilityToEdge,
   visibilityPurgeTags,
+  VISIBILITY_ROW_LIMIT,
   VISIBILITY_SNAPSHOT_SELECT,
 } = await import('@/lib/admin/visibilitySync');
 const { HOME_REFUSAL, saveVisibility } = await import('@/lib/admin/pageVisibility');
@@ -49,6 +50,8 @@ interface Op {
 function client(db: {
   pages?: Record<string, unknown>[];
   visibility?: Record<string, unknown> | null;
+  /** The rows a list read of page_visibility answers (default: `visibility`, if any). */
+  visibilityRows?: Record<string, unknown>[];
   insertError?: { code: string; message: string } | null;
   readError?: { message: string } | null;
 }) {
@@ -61,7 +64,10 @@ function client(db: {
       if (db.readError) return { data: null, error: db.readError };
       if (table === 'pages') return { data: db.pages ?? [], error: null };
       if (table === 'page_visibility')
-        return { data: db.visibility ? [db.visibility] : [], error: null };
+        return {
+          data: db.visibilityRows ?? (db.visibility ? [db.visibility] : []),
+          error: null,
+        };
       return { data: [], error: null };
     };
     b['select'] = (columns: string) => {
@@ -78,7 +84,7 @@ function client(db: {
       op.values = values;
       return b;
     };
-    for (const m of ['eq', 'match', 'limit', 'order']) {
+    for (const m of ['eq', 'neq', 'match', 'limit', 'order']) {
       b[m] = (a: unknown, v?: unknown) => {
         op.filters.push(
           `${m}:${typeof a === 'object' ? JSON.stringify(a) : `${String(a)}=${String(v)}`}`,
@@ -201,10 +207,45 @@ describe('syncVisibilityToEdge', () => {
     expect(ops[0]).toMatchObject({
       table: 'page_visibility',
       select: VISIBILITY_SNAPSHOT_SELECT,
-      filters: [`eq:tenant_id=${AUTH.tenantId}`, 'limit:9=undefined'],
+      filters: [
+        `eq:tenant_id=${AUTH.tenantId}`,
+        'neq:mode=public',
+        'order:id=[object Object]',
+        'limit:200=undefined',
+      ],
     });
     expect(JSON.parse(__kv.get(VISIBILITY_KV_KEY)!).pages).toEqual({ about: { mode: 'link' } });
     expect(await edgeVisibilityStatus()).toMatchObject({ present: true, count: 1 });
+  });
+
+  it('reads only what is not public, in a fixed order, and refuses a read that reaches the bound', async () => {
+    // Over the bound the cut would be arbitrary and could leave out a hidden page (fail
+    // open), so nothing is written: the edge keeps the snapshot it has, and the log says why.
+    __kv.set(VISIBILITY_KV_KEY, 'previous');
+    const row = {
+      mode: 'hidden',
+      template: null,
+      hide_from: null,
+      show_on: null,
+      page: { slug: 'about' },
+      redirect: null,
+    };
+    const { sb } = client({
+      visibilityRows: Array.from({ length: VISIBILITY_ROW_LIMIT }, () => row),
+    });
+    expect(await syncVisibilityToEdge(sb, AUTH)).toEqual({ kvSynced: false, count: 0 });
+    expect(__kv.get(VISIBILITY_KV_KEY)).toBe('previous');
+    expect(logs).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        source: 'admin:page_visibility.sync',
+        message: expect.stringMatching(/200 or more restricted rows/),
+      }),
+    ]);
+    const under = client({
+      visibilityRows: Array.from({ length: VISIBILITY_ROW_LIMIT - 1 }, () => row),
+    });
+    expect(await syncVisibilityToEdge(under.sb, AUTH)).toEqual({ kvSynced: true, count: 1 });
   });
 
   it('kvSynced: false when KV refuses, never a throw', async () => {

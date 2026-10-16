@@ -12,7 +12,6 @@ import {
 } from '@/lib/http/visibility';
 import {
   HOME_SLUG,
-  PAGE_PATHS,
   isVisibilityPageSlug,
   isVisibilityTemplate,
   type VisibilityPageSlug,
@@ -30,8 +29,13 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 export const VISIBILITY_SNAPSHOT_SELECT =
   'mode,template,hide_from,show_on,page:pages!page_visibility_page_fk(slug),redirect:pages!page_visibility_redirect_fk(slug)';
 
-/** The most rows one tenant can have: seven pages and two templates (CLAUDE.md §8). */
-export const VISIBILITY_ROW_LIMIT = Object.keys(PAGE_PATHS).length + 2;
+/**
+ * The most rows one snapshot read takes. Only the rows that are not public are read (a public
+ * row and no row mean the same), one per page or template at most, so a tenant reaches this
+ * only with 200 restricted pages. A read that reaches it is refused rather than snapshotted:
+ * an arbitrary cut could leave out a hidden page, which would then fail open.
+ */
+export const VISIBILITY_ROW_LIMIT = 200;
 
 /** A `page_visibility` row as the snapshot query returns it. */
 export interface VisibilitySourceRow {
@@ -101,7 +105,11 @@ export interface VisibilitySyncResult {
   count: number;
 }
 
-/** Reads one tenant's rows (the caller's client: RLS for staff, the cron's service role). */
+/**
+ * Reads one tenant's rows that are not public, in a fixed order (the caller's client: RLS for
+ * staff, the cron's service role). Throws when the read reaches VISIBILITY_ROW_LIMIT, so the
+ * edge keeps the snapshot it has instead of one that may be missing a hidden page.
+ */
 export async function readVisibilityRows(
   sb: SupabaseClient,
   tenantId: string,
@@ -110,9 +118,17 @@ export async function readVisibilityRows(
     .from('page_visibility')
     .select(VISIBILITY_SNAPSHOT_SELECT)
     .eq('tenant_id', tenantId)
+    .neq('mode', 'public')
+    .order('id', { ascending: true })
     .limit(VISIBILITY_ROW_LIMIT);
   if (error) throw new Error(`read page_visibility: ${error.message}`);
-  return (data ?? []) as VisibilitySourceRow[];
+  const rows = (data ?? []) as VisibilitySourceRow[];
+  if (rows.length >= VISIBILITY_ROW_LIMIT) {
+    throw new Error(
+      `read page_visibility: ${VISIBILITY_ROW_LIMIT} or more restricted rows, snapshot not rebuilt`,
+    );
+  }
+  return rows;
 }
 
 /**

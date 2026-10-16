@@ -40,7 +40,7 @@ function builder(table: string) {
     req.op = 'delete';
     return b;
   };
-  for (const m of ['eq', 'lt', 'is', 'in', 'order']) {
+  for (const m of ['eq', 'neq', 'lt', 'is', 'in', 'order']) {
     b[m] = (column: string, value: unknown) => {
       req.filters.push(`${m}:${column}=${String(value)}`);
       return b;
@@ -384,7 +384,11 @@ describe('the page-visibility re-sync (Admin v2 U14a)', () => {
     ];
     await runDailyJobs();
     const read = state.requests.find((r) => r.table === 'page_visibility')!;
-    expect(read.filters).toEqual(['eq:tenant_id=tenant-1']);
+    expect(read.filters).toEqual([
+      'eq:tenant_id=tenant-1',
+      'neq:mode=public',
+      'order:id=[object Object]',
+    ]);
     const order = tables();
     expect(order.indexOf('page_visibility:select')).toBeGreaterThan(
       order.indexOf('lead_notify_misses:rpc'),
