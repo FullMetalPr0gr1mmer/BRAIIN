@@ -10,6 +10,7 @@ import { AuthorizationError } from '@/lib/authz/errors';
 import { decryptPII, importPIIKey } from '@/lib/crypto/pii';
 import { budgetBandLabel } from '@schemas/lead';
 import { writeSystemLog } from '@/lib/data/systemLog';
+import { isSameSiteGet } from '@/lib/http/csrf';
 import { toCsv } from '@/lib/admin/csv';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 import { serviceClient } from '@/lib/supabase/server';
@@ -24,6 +25,8 @@ import {
 // Lead CSV export — the full §3 lockdown, in order:
 //
 //   1. assertCap('export.csv')          Admin + Developer only
+//      + this site only                 a cross-site link is refused before anything is
+//                                       spent (isSameSiteGet: Admin v2 U13 review)
 //   2. liveRecheck()                    demotion effective immediately
 //   3. rate limit                       3/hr/user AND 10/hr/tenant, fail-closed
 //   4. audit entry #1 — ATTEMPT         written BEFORE any lead is read, and FATAL if
@@ -137,7 +140,11 @@ function leadPage(
 export const GET = defineAdminRoute({
   cap: 'export.csv',
   input: LeadExportQuerySchema,
-  handler: async ({ auth, sb, input }) => {
+  handler: async ({ auth, sb, input, request }) => {
+    // A plain-link GET with side effects (a limiter slot, two audit rows): never on another
+    // site's say-so (src/lib/http/csrf.ts isSameSiteGet), and before anything is spent.
+    if (!isSameSiteGet(request))
+      throw new AuthorizationError('export.csv', 'cross-site export refused');
     await liveRecheck(auth);
     await claimPrivilegedOp(auth, 'export-csv');
 

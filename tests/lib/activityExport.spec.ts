@@ -85,10 +85,19 @@ function db() {
   };
 }
 
-function call(query = '', { role = 'developer', navigate = false } = {}) {
+function call(
+  query = '',
+  {
+    role = 'developer',
+    navigate = false,
+    headers = {} as Record<string, string>,
+  }: { role?: string; navigate?: boolean; headers?: Record<string, string> } = {},
+) {
   const url = new URL(`https://admin.example.test/api/admin/audit/export${query}`);
   return (GET as APIRoute)({
-    request: new Request(url, navigate ? { headers: { 'sec-fetch-mode': 'navigate' } } : {}),
+    request: new Request(url, {
+      headers: { ...(navigate ? { 'sec-fetch-mode': 'navigate' } : {}), ...headers },
+    }),
     url,
     params: {},
     locals: {
@@ -179,6 +188,24 @@ describe('the lockdown, in order', () => {
       expect(res.status, role).toBe(403);
       expect(order, role).toEqual([]);
     }
+  });
+
+  it('another site cannot make a person export: 403 before a slot or a row is spent', async () => {
+    for (const headers of [
+      { 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'navigate' },
+      { origin: 'https://evil.example' },
+      { referer: 'https://evil.example/trap' },
+    ]) {
+      order.length = 0;
+      audits.length = 0;
+      const res = await call('?kind=leads', { headers });
+      expect(res.status, JSON.stringify(headers)).toBe(403);
+      expect(await res.json()).toMatchObject({ ok: false, error: 'forbidden' });
+      expect(order, JSON.stringify(headers)).toEqual([]);
+      expect(audits).toEqual([]);
+    }
+    const ours = await call('', { headers: { 'sec-fetch-site': 'same-origin' } });
+    expect(ours.status).toBe(200);
   });
 
   it('a demoted Developer (the live recheck) is refused: no attempt row, nothing read (§9 b)', async () => {

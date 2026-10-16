@@ -14,6 +14,8 @@ import {
   toActivityRecords,
 } from '@/lib/admin/activityExport';
 import { assertCap } from '@/lib/authz/matrix';
+import { AuthorizationError } from '@/lib/authz/errors';
+import { isSameSiteGet } from '@/lib/http/csrf';
 import { writeSystemLog } from '@/lib/data/systemLog';
 
 // The activity log as a CSV file (Admin v2 U13): the export lockdown of CLAUDE.md §3 and §7,
@@ -22,6 +24,10 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 //   1. assertCap('export.csv') AND assertCap('audit.view')   Admin + Developer: the file is
 //                                       the log, so its readers only, and an export, so its
 //                                       exporters only (§5 "Leads / analytics / activity")
+//      + this site only                 a link followed from another site's page is refused
+//                                       (403) before a slot or a row is spent: the session
+//                                       cookie is SameSite=Lax, and Astro's origin check
+//                                       covers non-GET methods only (isSameSiteGet)
 //   2. liveRecheck()                    a demotion is effective immediately
 //   3. rate limit                       3 an hour per person AND 10 per tenant, fail-closed,
 //                                       on its own ledger op, so a lead export does not spend
@@ -68,6 +74,10 @@ export const GET = defineAdminRoute({
   input: ActivityExportQuerySchema,
   handler: async ({ auth, sb, input, request }) => {
     assertCap(auth, 'audit.view', ['full']);
+    // A plain-link GET with side effects (a limiter slot, two audit rows): never on another
+    // site's say-so (src/lib/http/csrf.ts isSameSiteGet), and before anything is spent.
+    if (!isSameSiteGet(request))
+      throw new AuthorizationError('export.csv', 'cross-site export refused');
     await liveRecheck(auth);
     try {
       await claimPrivilegedOp(auth, 'export-activity');
