@@ -5,6 +5,7 @@ import {
   RoleDefaultsPutSchema,
   hasColumns,
   readDashboardLayout,
+  type WidgetId,
 } from '@schemas/dashboard';
 import { AdminPrefsPutSchema } from '@schemas/adminPrefs';
 import { ROLES } from '@/lib/auth/types';
@@ -24,7 +25,7 @@ import { QUICK_DEFAULTS } from '@/lib/admin/quickActions';
 // resolution goes person, then the role's preset, then the code's default, dropping what the
 // role may not see. A preference never grants access.
 
-const layout = (top: string[], left: string[], right: string[], hidden: string[] = []) => ({
+const layout = (top: WidgetId[], left: WidgetId[], right: WidgetId[], hidden: WidgetId[] = []) => ({
   top,
   left,
   right,
@@ -44,7 +45,9 @@ describe('the schemas refuse on write', () => {
   });
 
   it('an id this build does not know, and an unknown key', () => {
-    expect(DashboardLayoutSchema.safeParse(layout(['realtime'], [], [])).success).toBe(false);
+    expect(DashboardLayoutSchema.safeParse(layout(['realtime' as WidgetId], [], [])).success).toBe(
+      false,
+    );
     expect(
       DashboardLayoutSchema.safeParse({ ...layout(['kpis'], [], []), extra: true }).success,
     ).toBe(false);
