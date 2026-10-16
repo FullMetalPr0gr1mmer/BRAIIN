@@ -85,8 +85,8 @@ grant execute on function app.quick_library_only(jsonb) to authenticated, servic
 --   team_notes_contact  something shaped like an e-mail address (non-space@non-space.non-space),
 --                       or 8 or more digits of any of the three digit sets, each followed by
 --                       at most one space or hyphen: a phone number however it is written.
--- The length (2,000 characters) is the table's CHECK and the definer's first test. The
--- whitespace classes are written out (space, tab, line feed, vertical tab, form feed,
+-- The length (2,000 characters) is the table's CHECK and the definer's first test (after a
+-- raw cap of 4,000 before its trim). The whitespace classes are written out (space, tab, line feed, vertical tab, form feed,
 -- carriage return) so the database and JavaScript read them alike.
 create or replace function app.team_note_problem(p text) returns text
   language sql immutable set search_path = '' as $$
@@ -271,7 +271,13 @@ begin
   if p_version is null or p_version < 0 then
     raise exception using errcode = '22023', message = 'team_notes_version';
   end if;
-  v_body := pg_catalog.regexp_replace(coalesce(p_body, ''), '[ \t\n\v\f\r]+$', '');
+  -- The raw length first (twice the limit, the Worker's TEAM_NOTES_RAW_MAX), so a body of
+  -- any size costs one length test before anything scans it; then a linear trim of the six
+  -- whitespace characters (rtrim, not a `[...]+$` regex, which retries along a long run).
+  if pg_catalog.char_length(coalesce(p_body, '')) > 4000 then
+    raise exception using errcode = '22023', message = 'team_notes_length';
+  end if;
+  v_body := pg_catalog.rtrim(coalesce(p_body, ''), E' \t\n\x0B\f\r');
   if pg_catalog.char_length(v_body) > 2000 then
     raise exception using errcode = '22023', message = 'team_notes_length';
   end if;

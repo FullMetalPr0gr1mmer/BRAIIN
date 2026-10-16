@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   TEAM_NOTES_MAX,
+  TEAM_NOTES_RAW_MAX,
   TEAM_NOTE_CONTROL,
   TEAM_NOTE_EMAIL,
   TEAM_NOTE_MESSAGES,
@@ -103,10 +104,13 @@ describe('the Worker and the database refuse the same notes', () => {
 
   it('trims what the definer trims, and counts the length as it does (code points)', () => {
     expect(MIGRATION).toContain(
-      "v_body := pg_catalog.regexp_replace(coalesce(p_body, ''), '[ \\t\\n\\v\\f\\r]+$', '');",
+      "v_body := pg_catalog.rtrim(coalesce(p_body, ''), E' \\t\\n\\x0B\\f\\r');",
     );
     expect(trimNote('Note  \n\t \r\n')).toBe('Note');
+    expect(trimNote('Note \v\f')).toBe('Note');
     expect(trimNote('  kept in front')).toBe('  kept in front');
+    expect(trimNote(' \n\t')).toBe('');
+    expect(trimNote('')).toBe('');
     expect(MIGRATION).toContain(`char_length(body) <= ${TEAM_NOTES_MAX}`);
     expect(MIGRATION).toContain(`if pg_catalog.char_length(v_body) > ${TEAM_NOTES_MAX} then`);
     expect(teamNoteProblem('x'.repeat(TEAM_NOTES_MAX))).toBeNull();
@@ -114,6 +118,41 @@ describe('the Worker and the database refuse the same notes', () => {
     // An astral character is one, as char_length counts it (two UTF-16 units in JS).
     expect(teamNoteProblem('😀'.repeat(TEAM_NOTES_MAX))).toBeNull();
     expect(TeamNotesPutSchema.parse({ version: 0, body: 'Hi \n' }).body).toBe('Hi');
+  });
+
+  // A long run of spaces before one letter is the worst case for a `[…]+$` trim: it retries
+  // from every position of the run (40,000 spaces cost 1.6 s, against a 10 ms CPU limit).
+  it('a long run of whitespace costs a length test, not a scan, on both sides', () => {
+    const run = ' '.repeat(50_000) + 'x';
+    let started = performance.now();
+    expect(trimNote(run + ' \n')).toBe(run);
+    expect(performance.now() - started).toBeLessThan(250);
+
+    // The schema refuses the raw body by its size before it trims or tests it.
+    started = performance.now();
+    const parsed = TeamNotesPutSchema.safeParse({ version: 1, body: run });
+    expect(performance.now() - started).toBeLessThan(250);
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues).toMatchObject([
+      { code: 'too_big', path: ['body'], message: TEAM_NOTE_MESSAGES.team_notes_length },
+    ]);
+    // 2,000 astral characters are 4,000 UTF-16 units: still within the raw cap.
+    expect(TEAM_NOTES_RAW_MAX).toBe(TEAM_NOTES_MAX * 2);
+    expect(
+      TeamNotesPutSchema.safeParse({ version: 1, body: '😀'.repeat(TEAM_NOTES_MAX) }).success,
+    ).toBe(true);
+
+    // The definer: the raw length is refused before the trim, which is rtrim, not a regex.
+    const door = MIGRATION.slice(
+      MIGRATION.indexOf('create or replace function public.save_team_notes'),
+      MIGRATION.indexOf('create or replace function app.expire_team_notes'),
+    );
+    const rawCheck = door.indexOf(
+      `if pg_catalog.char_length(coalesce(p_body, '')) > ${TEAM_NOTES_RAW_MAX} then`,
+    );
+    expect(rawCheck).toBeGreaterThan(0);
+    expect(rawCheck).toBeLessThan(door.indexOf('pg_catalog.rtrim(coalesce(p_body'));
+    expect(door).not.toContain('regexp_replace');
   });
 });
 

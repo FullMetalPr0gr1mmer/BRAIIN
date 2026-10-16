@@ -290,8 +290,25 @@ export const TEAM_NOTE_PHONE = /([0-9\u0660-\u0669\u06F0-\u06F9][ -]?){8,}/u;
 
 export type TeamNoteProblem = 'team_notes_chars' | 'team_notes_contact' | 'team_notes_length';
 
-/** What the definer trims first: trailing spaces, tabs and line breaks. */
-export const trimNote = (value: string): string => value.replace(/[ \t\n\v\f\r]+$/u, '');
+/**
+ * The most a save may send before it is trimmed: twice the limit, in UTF-16 units (2,000
+ * astral characters are 4,000 of them). Checked before anything else reads the text, by the
+ * Worker and by the definer, so a body of any size costs one length test, never a scan.
+ */
+export const TEAM_NOTES_RAW_MAX = TEAM_NOTES_MAX * 2;
+
+/** Space, tab, line feed, vertical tab, form feed, carriage return. */
+const TRIMMED: ReadonlySet<number> = new Set([0x20, 0x09, 0x0a, 0x0b, 0x0c, 0x0d]);
+
+/**
+ * What the definer trims first: trailing spaces, tabs and line breaks. A walk back from the
+ * end, linear: `/[…]+$/` retries from every position of a long run, which is quadratic.
+ */
+export function trimNote(value: string): string {
+  let end = value.length;
+  while (end > 0 && TRIMMED.has(value.charCodeAt(end - 1))) end -= 1;
+  return value.slice(0, end);
+}
 
 /** Why a note is refused, as the database says it, or null. Counts code points, as it does. */
 export function teamNoteProblem(value: string): TeamNoteProblem | null {
@@ -318,6 +335,7 @@ export const TeamNotesPutSchema = z
     version: z.number().int().min(0),
     body: z
       .string()
+      .max(TEAM_NOTES_RAW_MAX, TEAM_NOTE_MESSAGES.team_notes_length)
       .transform(trimNote)
       .superRefine((value, ctx) => {
         const problem = teamNoteProblem(value);

@@ -11,7 +11,8 @@
 --     fails the CHECK; a change of role is refused; the version moves only on a change.
 --   • team_notes: all four live roles read; none inserts or updates it directly; the door,
 --     public.save_team_notes, saves for each live role with one audit row each (the length
---     only), 40001 on a stale version, 22023 on 2,001 characters, an e-mail address, a
+--     only), 40001 on a stale version, 22023 on 2,001 characters (and on a raw body over
+--     4,000 before the trim, so a huge one is never scanned), an e-mail address, a
 --     phone number in Western and in Arabic-Indic digits and a bidi override; another
 --     tenant's Admin naming T1, each stale token, anon and the service role are refused;
 --     the rule answers the shared table of inputs (tests/lib/teamNotes.spec.ts reads it);
@@ -20,7 +21,7 @@
 --     grants, the retention job where pg_cron is installed, the guides in every tenant.
 
 begin;
-select plan(72);
+select plan(73);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -289,6 +290,9 @@ select throws_ok(
 select throws_ok(
   $$ select public.save_team_notes('60000000-0000-0000-0000-000000000001', repeat('x', 2001), 4) $$,
   '22023', 'team_notes_length', '2,001 characters are refused');
+select throws_ok(
+  $$ select public.save_team_notes('60000000-0000-0000-0000-000000000001', 'Short.' || repeat(' ', 4000), 4) $$,
+  '22023', 'team_notes_length', 'a raw body over 4,000 is refused before the trim, however short it trims to');
 select throws_ok(
   $$ select public.save_team_notes('60000000-0000-0000-0000-000000000001', 'Write to sam@client.example', 4) $$,
   '22023', 'team_notes_contact', 'an e-mail address is refused');
