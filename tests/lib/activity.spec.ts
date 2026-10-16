@@ -372,3 +372,19 @@ describe('the export notice is said once (U13 review)', () => {
     expect(page).not.toMatch(/\burl=\{url\}/);
   });
 });
+
+describe('the filter form names each control by its own label (U13 CI)', () => {
+  it('for/id pairs, never a label wrapping its control', async () => {
+    const { readFileSync } = await import('node:fs');
+    const page = readFileSync('src/pages/admin/audit.astro', 'utf8');
+    for (const [id, name] of [
+      ['act-actor', 'Person'],
+      ['act-from', 'From'],
+      ['act-to', 'To'],
+    ]) {
+      expect(page).toContain(`<label for="${id}">${name}</label>`);
+      expect(page).toMatch(new RegExp(`<(select|input)[^>]*\\sid="${id}"`));
+    }
+    expect(page).not.toContain('<label class="field">');
+  });
+});

@@ -196,15 +196,17 @@ function rowOf(entry: ActivityEntry): Record<string, unknown> {
           </Note>
         )}
 
+        {/* Each control is named by its own label (for/id), never by a wrapping one: a label
+            around a <select> takes the chosen option's text into the select's name. */}
         <form class="act-filters" method="get" action="/admin/audit">
           {filters.kind && <input type="hidden" name="kind" value={filters.kind} />}
           {filters.entityType && (
             <input type="hidden" name="entityType" value={filters.entityType} />
           )}
           {filters.entityId && <input type="hidden" name="entityId" value={filters.entityId} />}
-          <label class="field">
-            <span>Person</span>
-            <select name="actor">
+          <div class="field">
+            <label for="act-actor">Person</label>
+            <select id="act-actor" name="actor">
               <option value="" selected={!filters.actor}>
                 Everyone
               </option>
@@ -214,15 +216,21 @@ function rowOf(entry: ActivityEntry): Record<string, unknown> {
                 </option>
               ))}
             </select>
-          </label>
-          <label class="field">
-            <span>From</span>
-            <input type="date" name="from" value={filters.from ?? ''} min="2000-01-01" />
-          </label>
-          <label class="field">
-            <span>To</span>
-            <input type="date" name="to" value={filters.to ?? ''} min="2000-01-01" />
-          </label>
+          </div>
+          <div class="field">
+            <label for="act-from">From</label>
+            <input
+              id="act-from"
+              type="date"
+              name="from"
+              value={filters.from ?? ''}
+              min="2000-01-01"
+            />
+          </div>
+          <div class="field">
+            <label for="act-to">To</label>
+            <input id="act-to" type="date" name="to" value={filters.to ?? ''} min="2000-01-01" />
+          </div>
           <div class="act-filters__go">
             <button type="submit" data-variant="primary">
               Apply

@@ -86,8 +86,9 @@ for (const role of ['admin', 'developer'] as const) {
       await expect(table.getByText('Signed in').first()).toBeVisible();
 
       // A person and a range of days, through the GET form: the kind is kept.
-      // Every control is found inside the filter form, by its exact name: page-wide, 'To'
-      // also matches the palette's "Go to" group and a person whose name holds "to".
+      // Every control is found inside the filter form by its exact label (for/id: a label
+      // wrapping the select would put the chosen option's text in its name). Page-wide, 'To'
+      // also matches the palette's "Go to" group.
       const filters = page.locator('form.act-filters');
       const person = filters.getByLabel('Person', { exact: true });
       const firstPerson = await person.locator('option').nth(1).getAttribute('value');
