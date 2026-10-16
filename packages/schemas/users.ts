@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { UuidSchema } from './primitives';
+import { UserInviteSchema } from './admin';
 
 // Users & roles v2 (Admin v2 U12a): the Security card, handing ownership on, and the
 // colleague directory the users screen joins to the profiles. The database holds the same
@@ -56,3 +57,33 @@ export const StaffAccountRowSchema = z.object({
   is_owner: z.boolean(),
 });
 export type StaffAccountRow = z.infer<typeof StaffAccountRowSchema>;
+
+// ── Invites (Admin v2 U12b) ─────────────────────────────────────────────────────────────
+
+/** The longest invite message, in characters (decision D9). */
+export const INVITE_MESSAGE_MAX = 300;
+
+/**
+ * The optional note an Admin adds to an invite. GoTrue renders it into the invite e-mail from
+ * the account's user metadata (`invite_message`) through Go's html/template, which escapes
+ * it; it is cleared when the invite is accepted. Plain text: line breaks and tabs become
+ * spaces, then any control or format character, `<` or `>` is refused, so nothing in it can
+ * read as markup or hide what it says. Empty (after trimming) is no message.
+ */
+export const InviteMessageSchema = z
+  .string()
+  .transform((value) => value.replace(/[\t\r\n]+/g, ' ').trim())
+  .pipe(
+    z
+      .string()
+      .max(INVITE_MESSAGE_MAX, `Use ${INVITE_MESSAGE_MAX} characters or fewer.`)
+      .refine((value) => !/[\p{Cc}\p{Cf}]/u.test(value), 'Use plain text only.')
+      .refine((value) => !/[<>]/.test(value), 'Leave out < and >.'),
+  )
+  .transform((value) => (value === '' ? null : value));
+
+/** POST /api/admin/users: the invite, with its optional message. */
+export const UserInviteV2Schema = UserInviteSchema.extend({
+  message: InviteMessageSchema.nullish(),
+});
+export type UserInviteV2Input = z.infer<typeof UserInviteV2Schema>;

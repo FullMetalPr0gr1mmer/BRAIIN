@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
+  INVITE_MESSAGE_MAX,
   InviteDomainSchema,
+  InviteMessageSchema,
   SecuritySettingsSchema,
+  UserInviteV2Schema,
   StaffAccountRowSchema,
   TransferOwnershipSchema,
 } from '@schemas/users';
 import {
+  canCancelInvite,
+  canResendInvite,
   inviteDomainRefusal,
   isOwnerGuardError,
+  isPendingInvite,
   ownerRefusal,
   securityFromRow,
   userStatus,
@@ -154,5 +160,60 @@ describe('the Security card input', () => {
       }).success,
     ).toBe(true);
     expect(TransferOwnershipSchema.safeParse({ to: 'nope' }).success).toBe(false);
+  });
+});
+
+describe('invites (Admin v2 U12b)', () => {
+  const pending = {
+    invitedAt: '2026-10-14T10:00:00Z',
+    confirmed: false,
+    lastSignInAt: null,
+    isOwner: false,
+    isActive: true,
+  };
+
+  it('an invite is pending until it is confirmed or signed in with, and only then cancelled or resent', () => {
+    expect(isPendingInvite(pending)).toBe(true);
+    expect(isPendingInvite({ ...pending, confirmed: true })).toBe(false);
+    expect(isPendingInvite({ ...pending, lastSignInAt: '2026-10-15T00:00:00Z' })).toBe(false);
+    expect(isPendingInvite({ ...pending, invitedAt: null })).toBe(false);
+    expect(canCancelInvite(pending)).toBe(true);
+    expect(canCancelInvite({ ...pending, isOwner: true })).toBe(false);
+    expect(canResendInvite(pending)).toBe(true);
+    expect(canResendInvite({ ...pending, isActive: false })).toBe(false);
+    // A switched-off pending invite can still be cancelled.
+    expect(canCancelInvite({ ...pending, isActive: false })).toBe(true);
+  });
+
+  it('the message: plain text up to 300 characters, line breaks as spaces, empty is none', () => {
+    expect(InviteMessageSchema.parse('  Welcome!\r\nSee you Monday.\t ')).toBe(
+      'Welcome! See you Monday.',
+    );
+    expect(InviteMessageSchema.parse('   ')).toBeNull();
+    expect(InviteMessageSchema.parse('مرحبًا بك في الفريق')).toBe('مرحبًا بك في الفريق');
+    expect(InviteMessageSchema.parse('x'.repeat(INVITE_MESSAGE_MAX))).toHaveLength(300);
+    for (const bad of [
+      'x'.repeat(INVITE_MESSAGE_MAX + 1),
+      'a <b> tag',
+      'a > b',
+      'bell\u0007',
+      'bidi\u202Eoverride',
+      'zero\u200Bwidth',
+    ]) {
+      expect(InviteMessageSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('the invite takes the message beside the e-mail, role and name', () => {
+    expect(UserInviteV2Schema.parse({ email: ' A@B.test ', role: 'seo', message: 'Hi' })).toEqual({
+      email: 'a@b.test',
+      role: 'seo',
+      message: 'Hi',
+    });
+    expect(UserInviteV2Schema.parse({ email: 'a@b.test', role: 'seo' })).toEqual({
+      email: 'a@b.test',
+      role: 'seo',
+    });
+    expect(UserInviteV2Schema.safeParse({ email: 'a@b.test', role: 'owner' }).success).toBe(false);
   });
 });
