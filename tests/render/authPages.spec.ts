@@ -8,6 +8,10 @@ import {
   RESET_MESSAGES,
   RESET_REOPEN,
   RESET_TOO_LARGE,
+  INVITE_MESSAGES,
+  INVITE_READY,
+  INVITE_REOPEN,
+  INVITE_TOO_LARGE,
 } from '@/lib/auth/messages';
 import { EXPIRED_FORM, expiredSignInForm, tooLargeSignInForm } from '@/lib/auth/expiredForm';
 import { IDENTITY } from './fixtures';
@@ -52,7 +56,7 @@ const LOCALS = {
 let container: Promise<AstroContainer> | undefined;
 
 async function render(
-  page: 'login' | 'forgot' | 'reset',
+  page: 'login' | 'forgot' | 'reset' | 'invite',
   search = '',
   cookie?: string,
 ): Promise<string> {
@@ -61,7 +65,7 @@ async function render(
 
 /** The page's whole response: its markup and the cookies it sets. */
 async function renderResponse(
-  page: 'login' | 'forgot' | 'reset',
+  page: 'login' | 'forgot' | 'reset' | 'invite',
   search = '',
   cookie?: string,
 ): Promise<Response> {
@@ -332,5 +336,98 @@ describe('the reset page drops the kept link once it is in the form (second revi
     expect(messages(await render('reset', '?error=refused'))[0]?.text).toContain('used up');
     const fresh = await renderResponse('reset', `?token_hash=${LINK}&type=recovery`);
     expect(resetCookies(fresh)).toEqual([]);
+  });
+});
+
+describe('/admin/invite: the page an invite link opens (Admin v2 U12b)', () => {
+  const LINK = 'a1b2c3d4'.repeat(7);
+  const hiddenToken = (html: string) =>
+    /<input type="hidden" name="token_hash" value="([^"]*)">/.exec(html)?.[1] ?? null;
+  const inviteCookies = (res: Response): string[] => {
+    const jar = Reflect.get(res, Symbol.for('astro.cookies')) as
+      { consume(): Iterable<string> } | undefined;
+    return [...(jar?.consume() ?? []), ...res.headers.getSetCookie()].filter((c) =>
+      c.startsWith('__Secure-braiin-invite='),
+    );
+  };
+
+  it("the e-mail's link: a plain form to the endpoint, with the CSRF field and the token", async () => {
+    const html = await render('invite', `?token_hash=${LINK}&type=invite`);
+    const form = /<form([^>]*)>([\s\S]*?)<\/form>/.exec(html);
+    expect(form?.[1]).toContain('method="post"');
+    expect(form?.[1]).toContain('action="/api/admin/auth/invite"');
+    expect(form?.[2]).toContain(`<input type="hidden" name="${CSRF_FIELD_NAME}" value="${TOKEN}">`);
+    expect(hiddenToken(html)).toBe(LINK);
+    expect(form?.[2]).toMatch(
+      /name="password" autocomplete="new-password" required minlength="10"/,
+    );
+    expect(form?.[2]).toMatch(/name="confirm" autocomplete="new-password" required/);
+    expect(form?.[2]).toMatch(/<button type="submit"[^>]*>\s*Set password\s*<\/button>/);
+    expect(messages(html)).toEqual([]);
+    expectNoScriptOrInlineStyle(html);
+    // Its URL carries the token: its own requests send the origin alone as their Referer.
+    expect(html).toMatch(/<head>[\s\S]*<meta name="referrer" content="strict-origin">/);
+  });
+
+  it('works whether or not e-mail is set up: the token can only come from an invite', async () => {
+    state.ready = false;
+    expect(hiddenToken(await render('invite', `?token_hash=${LINK}&type=invite`))).toBe(LINK);
+  });
+
+  it("a reset link's token, no token, or a spent code: no form, and who to ask", async () => {
+    for (const [search, cookie] of [
+      [`?token_hash=${LINK}&type=recovery`, undefined],
+      ['', undefined],
+      ['?error=expired', `__Secure-braiin-invite=${LINK}`],
+      ['?error=closed', `__Secure-braiin-invite=${LINK}`],
+      ['?error=refused', `__Secure-braiin-invite=${LINK}`],
+    ] as const) {
+      const html = await render('invite', search, cookie);
+      expect(hiddenToken(html), search).toBeNull();
+      expect(html).not.toMatch(/<form/);
+      expect(messages(html)).toHaveLength(1);
+      expectNoScriptOrInlineStyle(html);
+    }
+    expect(messages(await render('invite'))).toEqual([
+      { role: 'alert', text: INVITE_MESSAGES.expired.text },
+    ]);
+    expect(messages(await render('invite', '?error=closed'))).toEqual([
+      { role: 'alert', text: INVITE_MESSAGES.closed.text },
+    ]);
+  });
+
+  it('a failure that kept the link: the code in the URL, the token from the cookie, dropped at once', async () => {
+    const res = await renderResponse('invite', '?error=mismatch', `__Secure-braiin-invite=${LINK}`);
+    const html = normalise(await res.text());
+    expect(hiddenToken(html)).toBe(LINK);
+    expect(messages(html)).toEqual([{ role: 'alert', text: 'The two passwords do not match.' }]);
+    const [drop, ...rest] = inviteCookies(res);
+    expect(rest).toEqual([]);
+    expect(drop).toMatch(/; Path=\/admin\/invite(;|$)/);
+    expect(drop).toMatch(/Expires=Thu, 01 Jan 1970 00:00:00 GMT/);
+  });
+
+  it('a reload finds no link, and says to open it again; a form too large says why', async () => {
+    expect(messages(await render('invite', '?error=mismatch'))).toEqual([
+      { role: 'alert', text: INVITE_REOPEN.text },
+    ]);
+    expect(messages(await render('invite', '?error=too-large'))).toEqual([
+      { role: 'alert', text: INVITE_TOO_LARGE.text },
+    ]);
+  });
+
+  it('a form the CSRF check sent back keeps the link', async () => {
+    const html = await render('invite', `?error=${EXPIRED_FORM}`, `__Secure-braiin-invite=${LINK}`);
+    expect(hiddenToken(html)).toBe(LINK);
+    expect(messages(html)).toEqual([{ role: 'alert', text: LOGIN_MESSAGES[EXPIRED_FORM].text }]);
+  });
+
+  it('the sign-in page says the password is set once the invite is accepted', async () => {
+    const html = await render('login', '?invite=ready');
+    expect(messages(html)).toEqual([{ role: 'status', text: INVITE_READY.text }]);
+    // A failure's message wins over it, as over a finished reset's.
+    expect(messages(await render('login', '?invite=ready&error=invalid'))).toEqual([
+      { role: 'alert', text: LOGIN_MESSAGES.invalid.text },
+    ]);
   });
 });

@@ -403,14 +403,17 @@ describe('admin.css keeps the hooks the markup renders', () => {
       expect(pagesFor('help.css')).toEqual(['src/pages/admin/help.astro']);
       expect(pagesFor('kit.css')).toEqual(['src/pages/admin/kit.astro']);
       // The sign-in screens (F7) render login.css's classes in their pages and in the shell
-      // they share, src/layouts/AuthLayout.astro, which the walk traces to all three.
+      // they share, src/layouts/AuthLayout.astro, which the walk traces to all four (the
+      // invite page joined in U12b).
       expect(pagesFor('login.css')).toEqual([
         'src/pages/admin/forgot.astro',
+        'src/pages/admin/invite.astro',
         'src/pages/admin/login.astro',
         'src/pages/admin/reset.astro',
       ]);
       expect(pagesOf('src/layouts/AuthLayout.astro').sort()).toEqual([
         'src/pages/admin/forgot.astro',
+        'src/pages/admin/invite.astro',
         'src/pages/admin/login.astro',
         'src/pages/admin/reset.astro',
       ]);

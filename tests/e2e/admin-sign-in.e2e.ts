@@ -6,7 +6,8 @@ import { staffEnv } from '../admin/staff';
 // forgot password, reset password. No account is needed for anything here; signing in,
 // "Keep me signed in" and a whole reset run signed in, in tests/admin/signin.e2e.ts.
 //
-//   - zero JavaScript on all three (the login page used to download the admin's scripts);
+//   - zero JavaScript on all of them, the invite page too (the login page used to download
+//     the admin's scripts);
 //   - the design's parts: "Welcome back", "Keep me signed in" ticked by default (owner
 //     item O-14), "Forgot password?";
 //   - the no-JS form posts and comes back with one message for every failed sign-in;
@@ -20,7 +21,13 @@ import { staffEnv } from '../admin/staff';
 //     tab restored after a browser restart has lost its token), never to a JSON page.
 
 const TOKEN = 'a1b2c3d4'.repeat(7);
-const SCREENS = ['/admin/login', '/admin/forgot', `/admin/reset?token_hash=${TOKEN}&type=recovery`];
+const SCREENS = [
+  '/admin/login',
+  '/admin/forgot',
+  `/admin/reset?token_hash=${TOKEN}&type=recovery`,
+  // Accepting an invite (Admin v2 U12b): the fourth screen reached without a session.
+  `/admin/invite?token_hash=${TOKEN}&type=invite`,
+];
 
 for (const path of SCREENS) {
   test(`${path.split('?')[0]} loads no JavaScript`, async ({ page }) => {

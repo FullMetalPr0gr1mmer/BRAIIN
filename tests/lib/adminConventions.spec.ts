@@ -85,7 +85,7 @@ describe('admin pages carry no <script>', () => {
     // A visitor with no session reaches only these pages, and their forms post as plain
     // HTML (src/lib/auth/body.ts). AdminLayout's script serves the signed-in shell.
     expect(/<script\b/i.test(code(AUTH_LAYOUT))).toBe(false);
-    for (const name of ['login', 'forgot', 'reset']) {
+    for (const name of ['login', 'forgot', 'reset', 'invite']) {
       const page = read(join(ROOT, `src/pages/admin/${name}.astro`));
       expect(page, name).toMatch(/import AuthLayout from '@\/layouts\/AuthLayout\.astro'/);
       expect(page, name).not.toMatch(/\bclient:(?:load|idle|visible|media|only)\b/);

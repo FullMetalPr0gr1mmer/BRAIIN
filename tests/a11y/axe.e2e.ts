@@ -45,6 +45,9 @@ const ROUTES = [
   '/admin/forgot',
   '/admin/reset?token_hash=a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4&type=recovery',
   '/admin/reset?error=expired',
+  // Accepting an invite (Admin v2 U12b): the form, and a spent link
+  '/admin/invite?token_hash=a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4&type=invite',
+  '/admin/invite?error=expired',
 ];
 
 // WCAG 2.0/2.1/2.2 level A + AA rule tags.
