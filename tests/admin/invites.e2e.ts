@@ -1,9 +1,19 @@
 import { randomBytes } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import { SKIP_REASON, authFile, staffEnv } from './staff';
+
+/**
+ * A list row's action takes no pointer press until hover arms it (F4b: hidden row actions
+ * take no presses, so a tap cannot land on an invisible button); focus arms it at once. So
+ * the test reaches it the way a keyboard user does: focus, then Enter.
+ */
+async function pressRowAction(button: Locator): Promise<void> {
+  await button.focus();
+  await button.press('Enter');
+}
 
 // Invites (Admin v2 U12b) in a real browser, signed in as the Admin, on the local stack:
 //
@@ -232,7 +242,9 @@ test('the invite drawer and the Cancel confirm: axe and no sideways scroll at 32
     await page.keyboard.press('Escape');
     await expect(drawer).toBeHidden();
 
-    await card.getByRole('button', { name: `Cancel the invite to ${TO_CANCEL.email}` }).click();
+    await pressRowAction(
+      card.getByRole('button', { name: `Cancel the invite to ${TO_CANCEL.email}` }),
+    );
     const confirm = page.getByRole('dialog', { name: 'Cancel invite?' });
     await expect(confirm).toBeVisible();
     await expect(
@@ -247,7 +259,9 @@ test('the invite drawer and the Cancel confirm: axe and no sideways scroll at 32
 test('Cancel removes an invite nobody accepted', async ({ page }) => {
   await ready(page);
   const card = pendingCard(page);
-  await card.getByRole('button', { name: `Cancel the invite to ${TO_CANCEL.email}` }).click();
+  await pressRowAction(
+    card.getByRole('button', { name: `Cancel the invite to ${TO_CANCEL.email}` }),
+  );
   const confirm = page.getByRole('dialog', { name: 'Cancel invite?' });
   await confirm.getByRole('button', { name: 'Cancel invite' }).click();
   await expect(page.getByText(`Invite cancelled. ${TO_CANCEL.email} cannot join`)).toBeVisible();
