@@ -165,8 +165,17 @@ select is((_row('52000000-0000-0000-0000-000000000001', 1, '/a', 'LCP')).hist,
 select is((_row('52000000-0000-0000-0000-000000000001', 1, '/c', 'LCP')).hist[11], 1,
   'a value just over an edge is in the next bucket (2501 above 2500)');
 
+-- Every row as the first run left it, kept to compare with what the second run leaves: the
+-- upsert's count says nothing was rewritten, the snapshot that nothing was deleted either.
+create temporary table _first_run on commit drop as select _snapshot() as rows, count(*)::int as n
+  from public.rollup_daily_vitals
+ where tenant_id in ('52000000-0000-0000-0000-000000000001', '52000000-0000-0000-0000-0000000000ff');
 select is(_rollup(3), 0, 'a second run rewrites nothing');
-select is(_snapshot(), _snapshot(), 'and the snapshot is stable');
+select is(row(_snapshot(), (select count(*)::int from public.rollup_daily_vitals
+                             where tenant_id in ('52000000-0000-0000-0000-000000000001',
+                                                 '52000000-0000-0000-0000-0000000000ff')))::text,
+          (select row(f.rows, f.n)::text from _first_run f),
+  'and deletes nothing: every row is as the first run left it');
 
 -- ── 2. reads (RLS, the grant layer) ─────────────────────────────────────────────
 set local role anon;
