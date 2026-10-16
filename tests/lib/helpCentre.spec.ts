@@ -374,16 +374,16 @@ describe('the guides say only what the admin does', () => {
     expect(ar).toContain('Accepting job applications');
   });
 
-  it('U14a (0057) restates U12a’s set (0055) and only adds the page-visibility guide', () => {
-    // Production applies 0055 before 0057, so 0057's set must carry U12a's roles guide as
-    // 0055 left it, or it would revert it.
+  it('U14a (0057) restates U12b’s set (0056) and only adds the page-visibility guide', () => {
+    // Production applies 0056 before 0057, so 0057's set must carry every guide 0056 seeds
+    // (U12a's roles guide, U12b's invites guide) as 0056 left it, or it would revert them.
     const setOf = (file: string) => {
       const sql = source(`${MIGRATIONS}/${file}`);
       return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
     };
-    const u12a = setOf('0055_users_v2.sql');
+    const u12b = setOf('0056_invites.sql');
     const u14 = setOf('0057_page_visibility.sql');
-    expect(u14.filter((a) => a.slug !== 'page-visibility')).toEqual(u12a);
+    expect(u14.filter((a) => a.slug !== 'page-visibility')).toEqual(u12b);
     const added = u14.find((a) => a.slug === 'page-visibility')!;
     expect(added.caps).toEqual(['maintenance.manage']);
     expect(added.screens).toEqual(['/admin/visibility']);

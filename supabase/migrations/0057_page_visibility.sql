@@ -2,8 +2,8 @@
 -- 0057 — Page visibility, without the password mode (Admin v2 U14a, AV-13+). Forward-only,
 -- expand only. Depends on 0001 (pages, tenants, app.current_role, app.is_staff), 0009 (the
 -- actor and version triggers), 0033 (app.live_role), 0038 (the release registry and
--- app.tg_snapshot_version), 0046 (the help centre), 0051 (app.tg_release_capture) and 0055
--- (the guides as U12a left them).
+-- app.tg_snapshot_version), 0046 (the help centre), 0051 (app.tg_release_capture) and 0056
+-- (the guides as U12b left them).
 --
 -- Who can see each CMS page of the public site, set by Admin and Developer (§5 "Maintenance /
 -- hidden pages / page visibility", `maintenance.manage`). The Worker snapshots the table into
@@ -39,12 +39,12 @@
 --   • The release registry row (registry contract #4) with the snapshot and capture triggers
 --     every registry table carries (0038, 0051): staged once releases switch on (P-3, R14),
 --     immediate until then.
---   • app.help_article_set() restated and seeded into every tenant again: 0055's set and one
+--   • app.help_article_set() restated and seeded into every tenant again: 0056's set and one
 --     new guide, page-visibility.
 --
 -- Grants are stated for both Supabase privilege regimes (README P-14). Production as of
 -- 2026-10-16: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046, 0048, 0050-0052,
--- 0054 and 0055 (U12a). CLAUDE.md §3 (Pillar 1), §5, §8, §9.
+-- 0054, 0055 (U12a) and 0056 (U12b). CLAUDE.md §3 (Pillar 1), §5, §8, §9.
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 
 -- A busy table fails the push instead of queueing: pages gains a unique constraint (its index
@@ -272,7 +272,7 @@ values
 on conflict (entity_type) do nothing;
 
 -- ---- 8. The guides ------------------------------------------------------------------------------
--- The set as 0055 (U12a) left it, with one guide added, page-visibility, after
+-- The set as 0056 (U12b) left it, with one guide added, page-visibility, after
 -- maintenance-mode. A later slice that changes a guide restates the set from this text (U16's
 -- rule).
 create or replace function app.help_article_set() returns jsonb
@@ -545,6 +545,78 @@ create or replace function app.help_article_set() returns jsonb
         {
           "t": "tip",
           "x": "الأدوار ثابتة، ولا استثناءات لشخص بعينه. من يحتاج إلى صلاحيات أكثر يحتاج إلى دور مختلف."
+        }
+      ]
+    }
+  },
+  {
+    "slug": "inviting-people",
+    "sort_order": 35,
+    "minutes": 2,
+    "tags": [
+      "team"
+    ],
+    "screens": [
+      "/admin/users"
+    ],
+    "caps": [
+      "users.manage"
+    ],
+    "title": "Inviting people",
+    "title_ar": "دعوة الأشخاص",
+    "body": {
+      "en": [
+        {
+          "t": "p",
+          "x": "Only an Admin can invite people. In Settings › Users & roles, choose Invite someone, enter their email and role, and if you like their name and a short message (up to 300 characters) that appears in the email."
+        },
+        {
+          "t": "ol",
+          "x": [
+            "They get an email with a link to set their password. The link works for one hour. If it runs out, choose Resend on their row under Pending invites.",
+            "They choose a password of at least 10 characters, then sign in with their email and that password. Their role is the one you chose.",
+            "Until they have accepted the invite, you can Cancel it: the link stops working and the account is removed. After that, use Remove access instead.",
+            "When an allowed email domain is set in Security, invites and resends go only to addresses at exactly that domain."
+          ]
+        },
+        {
+          "t": "h",
+          "x": "Before email is set up"
+        },
+        {
+          "t": "p",
+          "x": "Invites need the site to send email. Until that is connected, Invite someone and Resend say Not set up and send nothing. Pending invites, Cancel and the rest of the screen still work."
+        },
+        {
+          "t": "tip",
+          "x": "Every invite, resend, cancelled invite and accepted invite is recorded in the activity log, without their email or your message."
+        }
+      ],
+      "ar": [
+        {
+          "t": "p",
+          "x": "يستطيع المسؤول (Admin) وحده دعوة الأشخاص. من Settings › Users & roles اختر Invite someone، وأدخل البريد الإلكتروني للشخص ودوره، ويمكنك إضافة اسمه ورسالة قصيرة (حتى 300 حرف) تظهر في الرسالة الإلكترونية."
+        },
+        {
+          "t": "ol",
+          "x": [
+            "تصله رسالة بريد إلكتروني فيها رابط لاختيار كلمة المرور. يعمل الرابط ساعة واحدة، وإذا انتهت مدته فاختر Resend في صفه ضمن Pending invites.",
+            "يختار كلمة مرور من 10 أحرف على الأقل، ثم يسجّل الدخول ببريده الإلكتروني وكلمة المرور تلك، ويحصل على الدور الذي اخترته.",
+            "ما دام لم يقبل الدعوة بعد، يمكنك إلغاءها بزر Cancel: يتوقف الرابط عن العمل ويُحذف الحساب. وبعد ذلك استخدم Remove access بدلًا منه.",
+            "إذا حُدّد نطاق بريد مسموح به في بطاقة Security، فلا تُرسل الدعوات ولا يُعاد إرسالها إلا إلى عناوين ذلك النطاق بالضبط."
+          ]
+        },
+        {
+          "t": "h",
+          "x": "قبل إعداد البريد الإلكتروني"
+        },
+        {
+          "t": "p",
+          "x": "تحتاج الدعوات إلى أن يرسل الموقع رسائل بريد إلكتروني. وإلى أن يُربط ذلك، يظهر Not set up على Invite someone وResend ولا يُرسل شيء. أما Pending invites وCancel وبقية الشاشة فتعمل كالمعتاد."
+        },
+        {
+          "t": "tip",
+          "x": "تُسجَّل في سجل النشاط كل دعوة وكل إعادة إرسال وكل دعوة أُلغيت أو قُبلت، دون بريد الشخص الإلكتروني أو رسالتك."
         }
       ]
     }
