@@ -182,7 +182,8 @@ describe('invites (Admin v2 U12b)', () => {
     expect(canResendInvite(pending)).toBe(true);
     expect(canResendInvite({ ...pending, isActive: false })).toBe(false);
     // A switched-off pending invite can still be cancelled.
-    expect(canCancelInvite({ ...pending, isActive: false })).toBe(true);
+    const switchedOff = { ...pending, isActive: false };
+    expect(canCancelInvite(switchedOff)).toBe(true);
   });
 
   it('the message: plain text up to 300 characters, line breaks as spaces, empty is none', () => {

@@ -9,13 +9,15 @@ import Avatar from '@/components/admin/kit/Avatar';
 import Note from '@/components/admin/kit/Note';
 import { Badge } from '@/components/admin/kit/StatusBadge';
 import EditUserDrawer from './EditUserDrawer';
-import InviteCard from './InviteCard';
+import InviteDrawer from './InviteDrawer';
+import PendingInvites from './PendingInvites';
 import SecurityCard from './SecurityCard';
 
 // Users & roles (Admin v2 U12a, ui.md AV-21; `users.manage`, Admin only). Built on the kit:
-// the people table (DataTable), the edit drawer (Drawer, with Modal confirms), the invite
-// card (today's invite; U12b replaces it with the invite drawer and pending invites) and the
-// Security card. The read-only role matrix is server-rendered by the page beside this island.
+// the people table (DataTable), the edit drawer (Drawer, with Modal confirms), Pending
+// invites with Resend and Cancel and the invite drawer (U12b; "Not set up" while the site
+// cannot send e-mail) and the Security card. The read-only role matrix is server-rendered by
+// the page beside this island.
 //
 // What a change does, said where it is made: a role change or switching someone off ends
 // every sign-in that person has, on every device (0055 deletes their sessions; the admin
@@ -31,6 +33,11 @@ export interface UsersPanelProps {
    * screen is the table alone, which shows the API's refusal (CLAUDE.md §9, refusals e2e).
    */
   canManage: boolean;
+  /**
+   * The site can send e-mail (AUTH_EMAIL_READY, owner items O-2 and O-22): invites and
+   * resends are offered. Off, they say "Not set up" (the API answers 503 the same).
+   */
+  emailReady: boolean;
 }
 
 interface Page {
@@ -38,6 +45,8 @@ interface Page {
   total: number;
   /** null: unknown (the directory could not be read), so nothing is said about it. */
   hasOwner: boolean | null;
+  /** Every invite nobody has accepted yet, wherever it falls in the pages (U12b). */
+  pending: UserRow[];
 }
 
 const STATUS_TONE: Readonly<Record<UserStatus, BadgeTone>> = {
@@ -47,14 +56,15 @@ const STATUS_TONE: Readonly<Record<UserStatus, BadgeTone>> = {
   invited: 'sky',
 };
 
-export default function UsersPanel({ selfId, isOwner, canManage }: UsersPanelProps) {
-  const [page, setPage] = useState<Page>({ rows: [], total: 0, hasOwner: true });
+export default function UsersPanel({ selfId, isOwner, canManage, emailReady }: UsersPanelProps) {
+  const [page, setPage] = useState<Page>({ rows: [], total: 0, hasOwner: true, pending: [] });
   const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | undefined>();
   const [notice, setNotice] = useState('');
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [viewerOwns, setViewerOwns] = useState(isOwner);
+  const [inviting, setInviting] = useState(false);
 
   const load = useCallback(
     async (at: number) => {
@@ -66,6 +76,7 @@ export default function UsersPanel({ selfId, isOwner, canManage }: UsersPanelPro
           rows: data.rows ?? [],
           total: data.total ?? 0,
           hasOwner: typeof data.hasOwner === 'boolean' ? data.hasOwner : null,
+          pending: Array.isArray(data.pending) ? data.pending : [],
         });
         // Whether the viewer owns the account, as fresh as the list: the page's prop is the
         // server's answer at render time, and ownership may have moved since.
@@ -181,13 +192,39 @@ export default function UsersPanel({ selfId, isOwner, canManage }: UsersPanelPro
               )
             : undefined
         }
-        empty={{ title: 'Nobody here yet', text: 'Invite someone below.', icon: 'users' }}
+        empty={{
+          title: 'Nobody here yet',
+          text: 'Invite someone from Pending invites below.',
+          icon: 'users',
+        }}
       />
       {canManage && (
         <div className="grid grid--2-1 users-cards">
-          <InviteCard onInvited={() => void load(offset)} />
+          <PendingInvites
+            pending={page.pending}
+            emailReady={emailReady}
+            onInvite={() => {
+              setNotice('');
+              setInviting(true);
+            }}
+            onChanged={(message) => {
+              setNotice(message);
+              void load(offset);
+            }}
+          />
           <SecurityCard />
         </div>
+      )}
+      {canManage && emailReady && (
+        <InviteDrawer
+          open={inviting}
+          onClose={() => setInviting(false)}
+          onInvited={(email) => {
+            setInviting(false);
+            setNotice(`Invite sent to ${email}.`);
+            void load(offset);
+          }}
+        />
       )}
       <EditUserDrawer
         user={editing}
