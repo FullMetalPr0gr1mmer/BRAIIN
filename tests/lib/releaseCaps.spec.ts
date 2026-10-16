@@ -108,6 +108,8 @@ describe('waitingFor: the roles that could publish it', () => {
     entity_seo: { edit: ['admin', 'seo'], remove: [] },
     seo_defaults: { edit: ['admin', 'seo'], remove: [] },
     redirect: { edit: ['admin', 'seo'], remove: ['admin', 'seo'] },
+    // §5 "Maintenance / hidden pages / page visibility" (Admin v2 U14a); never removed.
+    page_visibility: { edit: ['admin', 'developer'], remove: [] },
   };
 
   for (const entityType of RELEASE_ENTITY_TYPES) {

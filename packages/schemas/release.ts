@@ -30,6 +30,8 @@ export const RELEASE_ENTITY_TYPES = [
   'entity_seo',
   'seo_defaults',
   'redirect',
+  // Admin v2 U14a (0057): who can see each page.
+  'page_visibility',
 ] as const;
 export type ReleaseEntityType = (typeof RELEASE_ENTITY_TYPES)[number];
 export const ReleaseEntityTypeSchema = z.enum(RELEASE_ENTITY_TYPES);

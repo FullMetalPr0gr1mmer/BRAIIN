@@ -10,7 +10,9 @@ import {
   type Input,
 } from './shared';
 
-// Pages.
+// Pages. `navVisible` stays a key while `nav_visible` is a column the release registry
+// classifies (0038's page row); no screen sends it since page visibility (Admin v2 U14a)
+// replaced the "Show in navigation" checkbox, and nothing public reads it.
 
 const PAGE_KEYS = {
   slug: 'slug',
@@ -25,7 +27,7 @@ export const pageResource: ResourceConfig = {
   entity: 'page',
   writeCap: 'pages.write',
   readCaps: ['pages.write', 'seo.entityMeta', 'maintenance.manage'],
-  listColumns: 'id,slug,title,status,nav_visible,version,updated_at',
+  listColumns: 'id,slug,title,status,version,updated_at',
   columns:
     'id,slug,title,status,nav_visible,version,published_at,scheduled_for,created_at,updated_at',
   orderBy: { column: 'slug', ascending: true },

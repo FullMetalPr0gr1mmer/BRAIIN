@@ -298,6 +298,7 @@ Who may publish a pending change once releases are on (docs/admin-v2/releases.md
 | Release — per-entity SEO | ✅ | ❌ | ✅ | ❌ |
 | Release — global SEO defaults | ✅ | ❌ | ✅ | ❌ |
 | Release — redirects (removals included) | ✅ | ❌ | ✅ | ❌ |
+| Release — page visibility | ✅ | ❌ | ❌ | ✅ |
 
 Derived, not authored: each cell equals what that role can already make live by saving (P-2); `tests/authz/releaseMatrix.spec.ts` evaluates `requiredCaps` for every registry type in the row's area against `ROLE_CAPS`. anon, other_tenant (and Sales, when it exists) are ❌ on every row. R14 copies it into CLAUDE.md §5.
 

@@ -254,6 +254,24 @@ const EXACT: Readonly<Record<string, Label>> = {
   // Settings
   'maintenance.enable': { kind: 'settings', verb: 'Switched on', noun: 'maintenance mode' },
   'maintenance.disable': { kind: 'settings', verb: 'Switched off', noun: 'maintenance mode' },
+  // Page visibility (U14a): the page is titled; a template is named by its kind.
+  'page_visibility.update': {
+    kind: 'settings',
+    verb: (detail) =>
+      detail['mode'] === 'hidden'
+        ? 'Hid from the site'
+        : detail['mode'] === 'link'
+          ? 'Made link only'
+          : 'Made visible to everyone',
+    noun: (detail) =>
+      detail['template'] === 'service'
+        ? 'every service page'
+        : detail['template'] === 'case_study'
+          ? 'every case study page'
+          : 'the page',
+    titled: true,
+  },
+  'page_visibility.sync': { kind: 'settings', verb: 'Refreshed', noun: 'the live page visibility' },
   'logs.clear': { kind: 'settings', verb: 'Cleared', noun: 'old error logs' },
   'export.backup.attempt': { kind: 'settings', verb: 'Started downloading', noun: 'a backup' },
   'export.backup.outcome': {

@@ -2,6 +2,7 @@ import { serviceClient } from '@/lib/supabase/server';
 import { writeSystemLog, type SystemLogEntry } from '@/lib/data/systemLog';
 import { runApplicationRetention } from '@/lib/applications/retention';
 import { runMediaOrphanSweep } from '@/lib/media/orphans';
+import { runVisibilitySnapshot } from './visibilitySnapshot';
 import {
   INDEX_BATCH,
   newIndexRun,
@@ -18,7 +19,7 @@ import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 // CPU and 50 subrequests per invocation) has still done the purges. Each job declares its
 // `budget`: its worst case in subrequests, its own log lines included (a line costs two, the
 // tenant lookup and the insert). tests/lib/dailyJobs.spec.ts runs every job at its worst
-// against its budget and holds the sum under the 50: 42 today, at 20 leads a batch.
+// against its budget and holds the sum under the 50: 47 today, at 20 leads a batch.
 //
 // Counts only go to system_logs — never an applicant's name, path or address, never a
 // lead's details. A failed job is logged as an error so Site Health shows it; the next
@@ -70,6 +71,16 @@ export const DAILY_JOBS: readonly CronJob[] = [
     // The count (one call), then its line.
     budget: 1 + 2,
     run: checkLeadNotifications,
+  },
+  {
+    // Page visibility (Admin v2 U14a): the edge snapshot rebuilt from the table, so a save
+    // whose KV write failed is live by the next morning. Before the lead indexing, the
+    // longest.
+    name: 'visibility',
+    label: 'page visibility re-sync',
+    // The launch tenant, the rows, the KV write, then its line.
+    budget: 3 + 2,
+    run: resyncVisibility,
   },
   {
     name: 'crm-index',
@@ -160,6 +171,20 @@ export function leadNotifyLogEntry(missed: number | null): SystemLogEntry {
     message: 'lead notification check ran',
     detail: { configured: true, missed: 0 },
   };
+}
+
+// The edge's page-visibility snapshot, rebuilt (src/lib/cron/visibilitySnapshot.ts). One
+// line, with the count of restricted pages only.
+async function resyncVisibility(): Promise<void> {
+  const run = await runVisibilitySnapshot(serviceClient());
+  await writeSystemLog({
+    level: run.kvSynced ? 'info' : 'error',
+    source: 'cron:visibility',
+    message: run.kvSynced
+      ? 'page visibility re-sync ran'
+      : 'page visibility re-sync: the live site did not take the snapshot',
+    detail: { ...run },
+  });
 }
 
 // CRM lead indexing (Admin v2 C1b): blind indexes, signals and scores for leads that
