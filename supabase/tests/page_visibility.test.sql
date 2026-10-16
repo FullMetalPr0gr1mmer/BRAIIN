@@ -15,11 +15,13 @@
 --     redirect and a window only on a hidden row, the window in order, no redirect to the page
 --     itself, and no page or redirect of another tenant (the composite keys); a row's target
 --     never moves; a deleted redirect target leaves the row hidden, with a 404;
+--   • the route-bound slugs: no writer renames a page a public route renders, gives a page
+--     such a slug, or renames a page that has a setting (the edge enforces settings by slug);
 --   • the history and actor triggers fire; the catalog: the helper, the exact policy set (the
 --     tenant predicate first in each), the grants, the triggers and the registry row.
 
 begin;
-select plan(58);
+select plan(66);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -57,7 +59,12 @@ insert into public.pages (id, tenant_id, slug, title, status) values
   ('57000000-0000-0000-0000-00000000a004', '57000000-0000-0000-0000-000000000001', 'join',
    '{"en":"Join","ar":"انضم"}', 'published'),
   ('57000000-0000-0000-0000-00000000f002', '57000000-0000-0000-0000-0000000000ff', 'about',
-   '{"en":"About","ar":"من نحن"}', 'published');
+   '{"en":"About","ar":"من نحن"}', 'published'),
+  -- Two pages no public route renders (the slug freeze leaves them alone, until one is set).
+  ('57000000-0000-0000-0000-00000000a0e1', '57000000-0000-0000-0000-000000000001', 'u14-free',
+   '{"en":"Free","ar":"حرة"}', 'draft'),
+  ('57000000-0000-0000-0000-00000000a0e2', '57000000-0000-0000-0000-000000000001', 'u14-set',
+   '{"en":"Set","ar":"محددة"}', 'draft');
 
 create function _as(p_sub text, p_role text, p_tid text) returns void language sql as $$
   select set_config(
@@ -343,6 +350,38 @@ set local role service_role;
 select is(_run($$ update public.page_visibility set page_id = '57000000-0000-0000-0000-00000000a004'
                   where id = '57000000-0000-0000-0000-0000000b0001' $$),
   '23514', 'a row''s target never moves, whoever writes it');
+reset role;
+
+-- ── 5b. the route-bound slugs never move (a setting is stored by id, enforced by slug) ──
+set local role authenticated;
+select _as('57000000-0000-0000-0000-0000000000c1', 'content_creator', '57000000-0000-0000-0000-000000000001');
+select is(_run($$ update public.pages set slug = 'about-old'
+                  where id = '57000000-0000-0000-0000-00000000a002' $$),
+  '23514', 'content_creator cannot rename a hidden page off its route (it would show again)');
+select is(_run($$ update public.pages set slug = 'services'
+                  where id = '57000000-0000-0000-0000-00000000a0e1' $$),
+  '23514', 'nor give a page a slug a public route renders (a swap would move a setting)');
+select is(_run($$ update public.pages set slug = 'u14-free-2'
+                  where id = '57000000-0000-0000-0000-00000000a0e1' $$),
+  'ok:1', 'a page no route renders, with no setting, is renamed as before');
+select is(_run($$ update public.pages set slug = 'about', title = '{"en":"About us","ar":"من نحن"}'
+                  where id = '57000000-0000-0000-0000-00000000a002' $$),
+  'ok:1', 'a save that sends the slug unchanged is not a rename');
+select _as('57000000-0000-0000-0000-0000000000a1', 'admin', '57000000-0000-0000-0000-000000000001');
+select is(_run($$ update public.pages set slug = 'contact-2'
+                  where id = '57000000-0000-0000-0000-00000000a003' $$),
+  '23514', 'nor can an Admin rename a route-bound page');
+select is(_run($$ insert into public.page_visibility (tenant_id, page_id, mode)
+                  values ('57000000-0000-0000-0000-000000000001', '57000000-0000-0000-0000-00000000a0e2', 'link') $$),
+  'ok:1', 'admin sets a page no route renders (RLS allows any page of the tenant)');
+select is(_run($$ update public.pages set slug = 'about-2'
+                  where id = '57000000-0000-0000-0000-00000000a0e2' $$),
+  '23514', 'and that page keeps its slug from then on');
+reset role;
+set local role service_role;
+select is(_run($$ update public.pages set slug = 'home-2'
+                  where id = '57000000-0000-0000-0000-00000000a001' $$),
+  '23514', 'not even the service role renames one');
 reset role;
 
 -- ── 6. the triggers, and a deleted target ────────────────────────────────────

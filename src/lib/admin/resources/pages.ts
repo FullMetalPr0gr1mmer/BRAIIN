@@ -38,4 +38,12 @@ export const pageResource: ResourceConfig = {
   fields: fieldsOf(PAGE_KEYS, STAMPED),
   statusOf: (input) => statusOf(input as Input),
   assertPublishable: (row) => requireBilingual(row, 'title', 'Page title'),
+  // 0057: the pages the public routes render keep their slugs (page visibility is stored by
+  // page id and enforced by slug at the edge), and so does any page that has a setting.
+  constraintFields: {
+    pages_route_slug_fixed: {
+      field: 'slug',
+      message: 'This page’s address is part of the site’s routes and cannot change.',
+    },
+  },
 };

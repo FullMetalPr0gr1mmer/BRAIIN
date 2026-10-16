@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { translateWriteError } from '@/lib/admin/crud';
+import { pageResource } from '@/lib/admin/resources/pages';
 import {
   GATED_ROUTES,
   PAGE_PATHS,
@@ -151,5 +153,42 @@ describe('paths, for the readers that hold paths', () => {
     expect(localizedPagePath('home', 'ar')).toBe('/ar');
     expect(localizedPagePath('contact', 'ar')).toBe('/ar/contact');
     expect(localizedPagePath('portfolio-all', 'en')).toBe('/portfolio/all');
+  });
+});
+
+describe('the route-bound slugs are frozen in the database (0057, pages_route_slug_fixed)', () => {
+  const migration = readFileSync(
+    join(process.cwd(), 'supabase', 'migrations', '0057_page_visibility.sql'),
+    'utf8',
+  );
+  const fn = /create or replace function app\.tg_pages_route_slug_fixed\(\)[\s\S]*?end \$\$;/.exec(
+    migration,
+  )?.[0];
+
+  it('the trigger refuses a rename to or from exactly the route map’s slugs', () => {
+    expect(fn, 'the trigger function is in 0057').toBeDefined();
+    const lists = [...fn!.matchAll(/array\[([^\]]+)\]/g)].map((m) =>
+      [...m[1]!.matchAll(/'([^']+)'/g)].map((q) => q[1]).sort(),
+    );
+    expect(lists).toHaveLength(2);
+    for (const list of lists) expect(list).toEqual(Object.keys(PAGE_PATHS).sort());
+    expect(migration).toMatch(
+      /create trigger pages_route_slug_fixed before update of slug on public\.pages\s+for each row/,
+    );
+  });
+
+  it('a refused rename reaches the editor on the slug field, in plain words', () => {
+    const error = translateWriteError(
+      {
+        code: '23514',
+        message: "This page's address is part of the site's routes and cannot change.",
+        details: 'Failing row violates check constraint "pages_route_slug_fixed".',
+      },
+      'pages',
+      'write',
+      pageResource.constraintFields,
+    );
+    expect(error).toMatchObject({ field: 'slug' });
+    expect(error.message).toMatch(/cannot change/);
   });
 });

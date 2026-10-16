@@ -32,6 +32,10 @@
 --     no DELETE grant: "public" is a mode, so a row never needs deleting, and one goes only
 --     with its page (on delete cascade). No anon access (decision D3): nothing public reads
 --     the table, and an anon read would list every unlisted page.
+--   • pages_route_slug_fixed, a trigger on public.pages: the slugs the public routes render
+--     (PAGE_PATHS) never change, no page takes one by rename, and a page with a visibility row
+--     keeps its slug, for every writer (23514). A setting is stored by page id and enforced by
+--     slug, so a rename would otherwise let a role without maintenance.manage move or drop one.
 --   • The release registry row (registry contract #4) with the snapshot and capture triggers
 --     every registry table carries (0038, 0051): staged once releases switch on (P-3, R14),
 --     immediate until then.
@@ -166,6 +170,42 @@ drop trigger if exists page_visibility_release_capture on public.page_visibility
 create trigger page_visibility_release_capture
   after insert or update or delete on public.page_visibility
   for each row execute function app.tg_release_capture('page_visibility', 'id', '');
+
+-- The route-bound pages keep their slugs. A setting is stored by page id, but the edge
+-- enforces it by the page's slug (the snapshot names each page by slug, and each public route
+-- renders one fixed slug, src/lib/visibility/routes.ts), and Content Creator may edit
+-- `pages.slug` (pages.write). Without this, renaming a hidden page off its route would show
+-- the route again at the next snapshot, and swapping two slugs would move a setting from one
+-- page to another: a role without maintenance.manage changing who sees a page. So a slug in
+-- the route map never changes, no page takes one by rename, and a page with a visibility row
+-- keeps its slug, for every writer, the service role and the migration role included. Nothing
+-- legitimate is lost: renaming one of these pages already breaks its route. The homepage's
+-- guard (above) reads the slug when a row is written, and this keeps it true afterwards.
+-- Invoker: it reads page_visibility under the writer's RLS (every CMS role reads its tenant's
+-- rows; the service role all of them). The slug list is PAGE_PATHS's keys; tests/lib/
+-- visibilityRoutes.spec.ts holds the two equal.
+create or replace function app.tg_pages_route_slug_fixed() returns trigger
+  language plpgsql set search_path = ''
+as $$
+begin
+  if new.slug::text is distinct from old.slug::text
+     and (pg_catalog.lower(old.slug::text) = any (array['home', 'about', 'contact', 'join',
+                                                       'services', 'portfolio', 'portfolio-all'])
+          or pg_catalog.lower(new.slug::text) = any (array['home', 'about', 'contact', 'join',
+                                                          'services', 'portfolio', 'portfolio-all'])
+          or exists (select 1 from public.page_visibility v
+                      where v.tenant_id = old.tenant_id and v.page_id = old.id)) then
+    raise exception 'This page''s address is part of the site''s routes and cannot change.'
+      using errcode = '23514', constraint = 'pages_route_slug_fixed',
+            detail = 'Failing row violates check constraint "pages_route_slug_fixed".';
+  end if;
+  return new;
+end $$;
+revoke all on function app.tg_pages_route_slug_fixed() from public, anon, authenticated, service_role;
+
+drop trigger if exists pages_route_slug_fixed on public.pages;
+create trigger pages_route_slug_fixed before update of slug on public.pages
+  for each row execute function app.tg_pages_route_slug_fixed();
 
 -- ---- 5. RLS ------------------------------------------------------------------------------------
 -- Every policy is for staff tokens (TO authenticated) and states the tenant first. The JWT
@@ -1453,6 +1493,31 @@ begin
   foreach p in array array['public', 'anon', 'authenticated', 'service_role'] loop
     if has_function_privilege(p, 'app.tg_page_visibility_guard()', 'execute') then
       raise exception '0057: % may execute app.tg_page_visibility_guard()', p;
+    end if;
+  end loop;
+
+  -- ---- The route-bound slugs: one trigger on pages, BEFORE UPDATE OF slug, row level,
+  -- enabled, no WHEN, its function an invoker with an empty search path that no API role may
+  -- call.
+  if (select count(*) from pg_trigger t
+       where t.tgrelid = 'public.pages'::regclass and not t.tgisinternal
+         and t.tgname = 'pages_route_slug_fixed' and t.tgtype = 19 and t.tgenabled::text = 'O'
+         and t.tgqual is null and t.tgnargs = 0
+         and t.tgfoid = 'app.tg_pages_route_slug_fixed()'::regprocedure
+         and t.tgattr::text = (select a.attnum::text from pg_attribute a
+                                where a.attrelid = 'public.pages'::regclass
+                                  and a.attname = 'slug')) <> 1 then
+    raise exception '0057: pages_route_slug_fixed must be BEFORE UPDATE OF slug, for each row';
+  end if;
+  if not exists (select 1 from pg_proc
+                  where oid = 'app.tg_pages_route_slug_fixed()'::regprocedure and not prosecdef
+                    and exists (select 1 from unnest(coalesce(proconfig, '{}'::text[])) c
+                                 where c in ('search_path=""', 'search_path='))) then
+    raise exception '0057: app.tg_pages_route_slug_fixed must be SECURITY INVOKER with an empty search_path';
+  end if;
+  foreach p in array array['public', 'anon', 'authenticated', 'service_role'] loop
+    if has_function_privilege(p, 'app.tg_pages_route_slug_fixed()', 'execute') then
+      raise exception '0057: % may execute app.tg_pages_route_slug_fixed()', p;
     end if;
   end loop;
 
