@@ -266,6 +266,20 @@ describe('POST /api/admin/auth/invite: checks before the token is spent', () => 
     expect(res.status).toBe(429);
   });
 
+  it('a few addresses sending junk tokens cannot shut acceptance for everyone', async () => {
+    // The tenant window fails closed for the hour a link lives, so it must take far more
+    // than a handful of addresses (each at its own limit) to fill it.
+    state.verify = { ok: false, status: 403 };
+    for (let a = 1; a <= 10; a++) {
+      for (let i = 0; i < RECOVERY_LIMITS.invitePerIp.max; i++) {
+        await accept(good, { ip: `198.51.100.${a}` });
+      }
+    }
+    state.verify = { ok: true, status: 403 };
+    const { res } = await accept(good, { ip: '192.0.2.10' });
+    expect(res.status).toBe(200);
+  });
+
   it('fails closed with the limiter down, or no tenant: 503, nothing verified', async () => {
     state.limiterUp = false;
     expect((await accept(good)).res.status).toBe(503);

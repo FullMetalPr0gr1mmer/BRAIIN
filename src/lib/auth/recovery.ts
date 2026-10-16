@@ -46,9 +46,13 @@ export const RECOVERY_LIMITS = {
   resetPerIp: { max: 10, windowSeconds: 3600 },
   // Accepting an invite (Admin v2 U12b): reset's per-address window, and a tenant-wide one
   // counted only for a request the first let through (as forgot's), which bounds what a
-  // crowd of addresses can make the endpoint do (a GoTrue verify each).
+  // crowd of addresses can make the endpoint do (a GoTrue verify each). The tenant window is
+  // shared and fails closed, so whoever fills it blocks every real acceptance for the hour an
+  // invite link lives: its ceiling sits far above any real number of invites an hour (10 per
+  // Admin an hour, INVITE_LIMITS), so filling it takes 20 addresses, not 3. Counting only the
+  // verifies GoTrue refused would not help: a junk token is always refused.
   invitePerIp: { max: 10, windowSeconds: 3600 },
-  invitePerTenant: { max: 30, windowSeconds: 3600 },
+  invitePerTenant: { max: 200, windowSeconds: 3600 },
 } as const;
 
 /**
