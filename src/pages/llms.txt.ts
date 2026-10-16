@@ -7,6 +7,7 @@ import { getPublishedPosts } from '@/lib/data/blog';
 import { getCaseStudyIndex } from '@/lib/data/portfolio';
 import { TRAINING_DENY, RETRIEVAL_ALLOW } from '@/lib/seo/crawlers';
 import { getIdentity } from '@/lib/identity';
+import { isListedPath } from '@/lib/visibility/listing';
 
 // llms.txt — guidance for AI answer engines (NOT access control; that's robots.txt + the
 // WAF). CLAUDE.md Pillar 3: "Sitemaps + llms.txt regenerate on publish."
@@ -19,9 +20,25 @@ import { getIdentity } from '@/lib/identity';
 // uses and the same crawler map robots.txt uses, so it cannot disagree with either.
 export const prerender = false;
 
+/** The section index: each line a page of the site, left out when that page is not public. */
+const SECTIONS: readonly (readonly [label: string, path: string])[] = [
+  ['Services', '/services'],
+  ['Our Work', '/portfolio'],
+  ['All projects', '/portfolio/all'],
+  ['Creative Knowledge (blog)', '/creative-knowledge'],
+  ['About', '/about'],
+  ['Contact', '/contact'],
+  ['Join (careers)', '/join'],
+];
+
 export const GET: APIRoute = async ({ locals }) => {
   const site = PUBLIC_SITE_URL.replace(/\/$/, '');
-  const [services, disciplines, posts, caseStudies, identity] = await Promise.all([
+  // Page visibility (Admin v2 U14a): a page that is not public, or the pages of a hidden
+  // template, are not offered to answer engines (the middleware's snapshot, from `locals`).
+  const visibility = locals?.visibility;
+  const now = Date.now();
+  const listed = (path: string) => isListedPath(visibility, path, now);
+  const [allServices, disciplines, posts, allCaseStudies, identity] = await Promise.all([
     getPublishedServices(),
     getPublishedDisciplines(),
     getPublishedPosts(),
@@ -29,6 +46,11 @@ export const GET: APIRoute = async ({ locals }) => {
     getCaseStudyIndex(),
     getIdentity(locals),
   ]);
+  const services = allServices.filter((s) => listed(`/services/${s.slug}`));
+  const caseStudies = allCaseStudies.filter((p) => listed(`/portfolio/${p.slug}`));
+  const sectionLines = SECTIONS.filter(([, path]) => listed(path))
+    .map(([label, path]) => `- ${label}: ${site}${path}`)
+    .join('\n');
 
   // Answer engines cite pages, so list the live ones rather than only a section index —
   // grouped under their discipline (Round 2), still with no count anywhere.
@@ -57,13 +79,7 @@ export const GET: APIRoute = async ({ locals }) => {
 - Every page has an Arabic twin at the same path under /ar/ — prefer the twin matching the query language.
 
 ## Sections
-- Services: ${site}/services
-- Our Work: ${site}/portfolio
-- All projects: ${site}/portfolio/all
-- Creative Knowledge (blog): ${site}/creative-knowledge
-- About: ${site}/about
-- Contact: ${site}/contact
-- Join (careers): ${site}/join
+${sectionLines}
 
 ## Services${list(serviceLines)}
 

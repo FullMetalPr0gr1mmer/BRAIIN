@@ -1,7 +1,11 @@
 import type { APIRoute } from 'astro';
+// Worker bindings come from the runtime module (Astro 6+ removed `locals.runtime.env`).
+import { env } from 'cloudflare:workers';
 import { SearchQuerySchema } from '@schemas/search';
 import { searchContent, searchSuggest } from '@/lib/data/search';
 import { recordSearchQuery } from '@/lib/data/telemetry';
+import { getVisibilitySnapshot } from '@/lib/http/visibility';
+import { listedSearchHits } from '@/lib/visibility/listing';
 
 // Public unified-search endpoint (KAN-29). NOT captcha-gated; the safety envelope is the
 // Zod cap (≤64 chars, no control chars) + websearch_to_tsquery + per-call statement_timeout
@@ -26,9 +30,14 @@ export const GET: APIRoute = async ({ url }) => {
   if (!parsed.success) return json({ ok: false, error: 'validation', results: [] }, 422);
 
   const { q, locale } = parsed.data;
-  const results = await searchContent(q, locale);
+  // Page visibility (Admin v2 U14a): no hit under a hidden template. /api is not gated by the
+  // middleware, so the endpoint reads the snapshot itself, through the same isolate memo.
+  const visibility = await getVisibilitySnapshot(env);
+  const now = Date.now();
+  const results = listedSearchHits(await searchContent(q, locale), visibility, now);
   // Did-you-mean only when the primary search came back empty.
-  const suggestions = results.length === 0 ? await searchSuggest(q, locale) : [];
+  const suggestions =
+    results.length === 0 ? listedSearchHits(await searchSuggest(q, locale), visibility, now) : [];
 
   // Feeds the SEO role's zero-result report. Not consent-gated and carrying no session
   // id: what is stored is the query and its result count — a property of the CONTENT,

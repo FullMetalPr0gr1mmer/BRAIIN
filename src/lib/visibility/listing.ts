@@ -1,3 +1,4 @@
+import type { SearchHit } from '@schemas/search';
 import { toLogicalPath } from '@/lib/i18n';
 import { hasRestrictions, isListed, type VisibilitySnapshot } from '@/lib/http/visibility';
 import { targetForPath } from './routes';
@@ -55,4 +56,23 @@ export function filterNavForVisibility<T extends NavLike>(
   return nodes
     .filter(keep)
     .map((node) => ({ ...node, children: filterNavForVisibility(node.children, snapshot, now) }));
+}
+
+/** The page each kind of search hit opens. */
+const HIT_PATH: Readonly<Record<SearchHit['entity_type'], string>> = {
+  service: '/services/',
+  portfolio: '/portfolio/',
+  blog: '/creative-knowledge/',
+};
+
+/** The public search's hits a visitor may be shown: none under a hidden template. */
+export function listedSearchHits(
+  hits: SearchHit[],
+  snapshot: VisibilitySnapshot | null | undefined,
+  now: number,
+): SearchHit[] {
+  if (!hasRestrictions(snapshot)) return hits;
+  return hits.filter((hit) =>
+    isListedPath(snapshot, `${HIT_PATH[hit.entity_type]}${hit.slug}`, now),
+  );
 }

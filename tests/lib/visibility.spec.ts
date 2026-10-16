@@ -13,9 +13,17 @@ import {
   putVisibilitySnapshot,
   type VisibilitySnapshot,
 } from '@/lib/http/visibility';
-import { filterNavForVisibility, isListedPath, logicalPathOfHref } from '@/lib/visibility/listing';
+import {
+  filterNavForVisibility,
+  isListedPath,
+  listedSearchHits,
+  logicalPathOfHref,
+} from '@/lib/visibility/listing';
 import { riyadhDayOf, riyadhMidnight, PageVisibilityWriteSchema } from '@schemas/visibility';
-import { env, __kv } from '../stubs/cloudflare-workers';
+import { env as stubEnv, __kv } from '../stubs/cloudflare-workers';
+
+/** The stub, typed as the binding the module reads (it implements the methods used). */
+const env = stubEnv as unknown as { SESSION: KVNamespace };
 
 // Page visibility's edge half (Admin v2 U14a): the snapshot as the middleware reads it, what
 // a request gets for each mode and window, the menus' filter, and the drawer's schema.
@@ -267,11 +275,12 @@ describe('what is listed (menus, sitemap, llms.txt, search)', () => {
     }
   });
 
-  const node = (href: string, children: ReturnType<typeof node>[] = []) => ({
-    id: href,
-    href,
-    children,
-  });
+  interface Item {
+    id: string;
+    href: string;
+    children: Item[];
+  }
+  const node = (href: string, children: Item[] = []): Item => ({ id: href, href, children });
 
   it('the menu filter drops unlisted items, with their children, and keeps the rest in order', () => {
     const nav = [
@@ -296,6 +305,34 @@ describe('what is listed (menus, sitemap, llms.txt, search)', () => {
     const nav = [node('/'), node('/about')];
     expect(filterNavForVisibility(nav, undefined, now)).toBe(nav);
     expect(filterNavForVisibility(nav, EMPTY_VISIBILITY, now)).toBe(nav);
+  });
+});
+
+describe('the public search', () => {
+  const hit = (entity_type: 'service' | 'portfolio' | 'blog', slug: string) => ({
+    entity_type,
+    slug,
+    title: { en: slug },
+    snippet: null,
+    rank: 1,
+  });
+  const hits = [hit('service', 'logo'), hit('portfolio', 'the-rider'), hit('blog', 'arabic')];
+
+  it('drops the hits under a hidden template, and only those', () => {
+    const s = snap({ templates: { service: { mode: 'hidden', target: null } } });
+    expect(listedSearchHits(hits, s, 0).map((h) => h.slug)).toEqual(['the-rider', 'arabic']);
+    const both = snap({
+      templates: {
+        service: { mode: 'hidden', target: null },
+        case_study: { mode: 'hidden', target: null },
+      },
+    });
+    expect(listedSearchHits(hits, both, 0).map((h) => h.slug)).toEqual(['arabic']);
+  });
+
+  it('with nothing restricted returns the very same list', () => {
+    expect(listedSearchHits(hits, EMPTY_VISIBILITY, 0)).toBe(hits);
+    expect(listedSearchHits(hits, snap({ pages: { about: { mode: 'link' } } }), 0)).toEqual(hits);
   });
 });
 
