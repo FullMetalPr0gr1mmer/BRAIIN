@@ -285,7 +285,7 @@ export const TEAM_NOTES_RETENTION_DAYS = 180;
  */
 export const TEAM_NOTE_CONTROL = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]|\p{Cf}/u;
 export const TEAM_NOTE_EMAIL = /[^ \t\n\v\f\r@]+@[^ \t\n\v\f\r@]+\.[^ \t\n\v\f\r@]+/u;
-export const TEAM_NOTE_PHONE = /([0-9٠-٩۰-۹][ -]?){8,}/u;
+export const TEAM_NOTE_PHONE = /([0-9\u0660-\u0669\u06F0-\u06F9][ -]?){8,}/u;
 
 export type TeamNoteProblem = 'team_notes_chars' | 'team_notes_contact' | 'team_notes_length';
 

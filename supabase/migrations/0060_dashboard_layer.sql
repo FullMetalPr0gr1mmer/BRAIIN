@@ -91,11 +91,11 @@ create or replace function app.team_note_problem(p text) returns text
   language sql immutable set search_path = '' as $$
   select case
     when p is null then 'team_notes_chars'
-    when p ~ '[\u0001-\u0008\u000B-\u001F\u007F-\u009F­؀-؅؜۝܏࢐-࢑࣢᠎​-‏‪-‮⁠-⁤⁦-⁯﻿￹-￻\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]'
+    when p ~ '[\u0001-\u0008\u000B-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]'
       then 'team_notes_chars'
     when p ~ '[^ \t\n\v\f\r@]+@[^ \t\n\v\f\r@]+\.[^ \t\n\v\f\r@]+'
       then 'team_notes_contact'
-    when p ~ '([0-9٠-٩۰-۹][ -]?){8,}'
+    when p ~ '([0-9\u0660-\u0669\u06F0-\u06F9][ -]?){8,}'
       then 'team_notes_contact'
   end
 $$;
@@ -1559,8 +1559,8 @@ begin
           and not app.team_note_ok('٠٥٥١٢٣٤٥٦٧')
           and not app.team_note_ok('۰۵۵۱۲۳۴۵۶۷')
           and not app.team_note_ok('055-123-4567')
-          and not app.team_note_ok(E'abc‮def')
-          and not app.team_note_ok(E'a​b')
+          and not app.team_note_ok(E'abc\u202Edef')
+          and not app.team_note_ok(E'a\u200Bb')
           and not app.team_note_ok(E'a\rb')
           and not app.team_note_ok(null)) then
     raise exception '0060: app.team_note_ok does not apply the team-note rule';

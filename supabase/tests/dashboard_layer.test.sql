@@ -299,7 +299,7 @@ select throws_ok(
   $$ select public.save_team_notes('60000000-0000-0000-0000-000000000001', 'الرقم ٠٥٥١٢٣٤٥٦٧', 4) $$,
   '22023', 'team_notes_contact', 'a phone number in Arabic-Indic digits is refused');
 select throws_ok(
-  $$ select public.save_team_notes('60000000-0000-0000-0000-000000000001', E'gnp.‮exe', 4) $$,
+  $$ select public.save_team_notes('60000000-0000-0000-0000-000000000001', E'gnp.\u202Eexe', 4) $$,
   '22023', 'team_notes_chars', 'a bidi override is refused');
 select is(
   (select version || ' ' || body from public.team_notes where tenant_id = '60000000-0000-0000-0000-000000000001'),
@@ -392,11 +392,11 @@ insert into _note_cases values
   (E'a\rb', 'team_notes_chars'),
   (E'bell\u0007', 'team_notes_chars'),
   (E'next\u0085line', 'team_notes_chars'),
-  (E'gnp.‮exe', 'team_notes_chars'),
-  (E'iso⁦late', 'team_notes_chars'),
-  (E'zero​width', 'team_notes_chars'),
-  (E'soft­hyphen', 'team_notes_chars'),
-  (E'bom﻿', 'team_notes_chars');
+  (E'gnp.\u202Eexe', 'team_notes_chars'),
+  (E'iso\u2066late', 'team_notes_chars'),
+  (E'zero\u200Bwidth', 'team_notes_chars'),
+  (E'soft\u00ADhyphen', 'team_notes_chars'),
+  (E'bom\uFEFF', 'team_notes_chars');
 -- team-note-table:end
 select is(
   (select string_agg(format('%L→%s', input, coalesce(app.team_note_problem(input), 'ok')), '; ')
