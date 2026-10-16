@@ -1240,7 +1240,9 @@ Migration 0057 adds `page_visibility`: who can see each CMS page (visible to eve
 with a 302 to another page or a 404, or only people with the link) and whether the service
 page or the case study page template is hidden. **No row is public**, so applying it changes
 nothing on the site. Every save rebuilds the whole snapshot into KV `site:visibility`, which
-the middleware reads after the maintenance check (through a one-minute isolate memo), and the
+the middleware reads after the maintenance check (through a one-minute isolate memo over KV's
+own one-minute edge cache and its propagation, so a change is live everywhere within about
+three minutes), and the
 daily Worker cron rebuilds it again. Apply 0057 before merging the PR that carries it (§1, the
 deploy guard); then, **once after the deploy** (and after any KV incident), as Admin or
 Developer:
@@ -1253,7 +1255,7 @@ Developer:
    settings" means KV refused the write: Site health's Errors tab has the reason
    (`admin:page_visibility.sync`); fix, then click again. Or wait for the next morning's cron
    (`cron:visibility` in the same tab).
-3. Verify from outside, after hiding a test page (allow a minute):
+3. Verify from outside, after hiding a test page (allow a few minutes):
 
    ```bash
    curl -sI $BASE/<hidden-page> | grep -i '^HTTP\|^location\|^cache-control\|^x-robots-tag'

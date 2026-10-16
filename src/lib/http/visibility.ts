@@ -14,6 +14,12 @@
 // against the Free plan's daily quota as traffic grows. A minute's memo makes it about one
 // read per isolate per minute; the isolate that writes refreshes its own memo at once.
 //
+// How soon a change is live everywhere else, at worst: the memo (60 s), over KV's own edge
+// cache (`cacheTtl`, 60 s, KV's minimum), over KV's propagation between locations (up to
+// about 60 s): about three minutes. The admin says "within a few minutes" (visibilityCopy.ts,
+// the page-visibility guide, launch runbook §6j); tests/lib/visibilityScreen.spec.ts holds the
+// copy to these constants.
+//
 // Dependency-free on purpose, like redirects.ts: src/middleware.ts imports it, and the route
 // map it uses is pure.
 
@@ -29,7 +35,7 @@ import {
 
 export const VISIBILITY_KV_KEY = 'site:visibility';
 
-/** How long an isolate serves the snapshot it last read (ms): a save is live within this. */
+/** How long an isolate serves the snapshot it last read (ms): one third of the bound above. */
 export const VISIBILITY_MEMO_MS = 60_000;
 
 /** The same minute, as KV's own edge cache takes it (seconds). */

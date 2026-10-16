@@ -1050,7 +1050,7 @@ create or replace function app.help_article_set() returns jsonb
       "en": [
         {
           "t": "p",
-          "x": "Page visibility decides who can see each page of the public site. A change applies to the live site within a minute, and the admin keeps working as usual."
+          "x": "Page visibility decides who can see each page of the public site. A change applies to the live site within a few minutes, and the admin keeps working as usual."
         },
         {
           "t": "ol",
@@ -1073,7 +1073,7 @@ create or replace function app.help_article_set() returns jsonb
       "ar": [
         {
           "t": "p",
-          "x": "يحدد ظهور الصفحات من يستطيع رؤية كل صفحة من صفحات الموقع العام. يسري التغيير على الموقع المباشر خلال دقيقة، وتستمر لوحة الإدارة في العمل كالمعتاد."
+          "x": "يحدد ظهور الصفحات من يستطيع رؤية كل صفحة من صفحات الموقع العام. يسري التغيير على الموقع المباشر خلال بضع دقائق، وتستمر لوحة الإدارة في العمل كالمعتاد."
         },
         {
           "t": "ol",

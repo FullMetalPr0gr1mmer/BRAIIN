@@ -5,7 +5,17 @@ import VisibilityList, { windowText } from '@/components/admin/screens/visibilit
 import VisibilityDrawer, { draftOf } from '@/components/admin/screens/visibility/VisibilityDrawer';
 import { edgeLine } from '@/components/admin/screens/visibility/VisibilityScreen';
 import type { VisibilityItem } from '@/components/admin/screens/visibility/types';
-import { HIDDEN_NOTE, HOME_REFUSAL, MODE_COPY, TEMPLATE_NOTE } from '@/lib/admin/visibilityCopy';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  APPLIES_WITHIN,
+  CONFIRM_SUB,
+  HIDDEN_NOTE,
+  HOME_REFUSAL,
+  MODE_COPY,
+  TEMPLATE_NOTE,
+} from '@/lib/admin/visibilityCopy';
+import { VISIBILITY_KV_CACHE_TTL_S, VISIBILITY_MEMO_MS } from '@/lib/http/visibility';
 
 // The /admin/visibility screen's markup (Admin v2 U14a), rendered on the server as the
 // island's first paint would be: real radios in a fieldset with its legend (never clickable
@@ -129,7 +139,7 @@ describe('the drawer', () => {
     expect(html).toContain('>The homepage</option>');
     expect(html).not.toContain(`value="${ABOUT}"`);
     expect(html).toContain('A “page not found” screen');
-    expect(html).toContain('Applies to the live site within a minute.');
+    expect(html).toContain('Applies to the live site within a few minutes.');
     expect(html).not.toMatch(/\sstyle=/);
   });
 
@@ -205,6 +215,25 @@ describe('the edge status line compares settings, not counts', () => {
 
   it('is behind when the snapshot carries no revision', () => {
     expect(edgeLine(list(hiddenAbout, null)).tone).toBe('warn');
+  });
+});
+
+describe('the copy promises no more than the edge keeps', () => {
+  it('a few minutes: the memo, over KV’s edge cache, over KV’s propagation', () => {
+    // KV propagates a write to every location within about a minute (Cloudflare's figure).
+    const worstSeconds = VISIBILITY_MEMO_MS / 1000 + VISIBILITY_KV_CACHE_TTL_S + 60;
+    expect(worstSeconds).toBeGreaterThan(60);
+    expect(worstSeconds).toBeLessThanOrEqual(5 * 60);
+    expect(APPLIES_WITHIN).toBe('Applies to the live site within a few minutes.');
+    expect(CONFIRM_SUB).toBe('This changes the live site within a few minutes.');
+    for (const file of [
+      'src/lib/admin/visibilityCopy.ts',
+      'src/pages/admin/visibility.astro',
+      'src/components/admin/screens/visibility/VisibilityScreen.tsx',
+      'src/components/admin/screens/visibility/VisibilityDrawer.tsx',
+    ]) {
+      expect(readFileSync(join(process.cwd(), file), 'utf8'), file).not.toMatch(/within a minute/);
+    }
   });
 });
 

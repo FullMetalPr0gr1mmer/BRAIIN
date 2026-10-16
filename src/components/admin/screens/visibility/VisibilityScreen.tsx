@@ -5,7 +5,7 @@ import Icon from '@/components/admin/kit/Icon';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { toast } from '@/lib/admin/toast';
 import { relTime } from '@/lib/admin/relTime';
-import { EDGE_MISSED, MODE_COPY } from '@/lib/admin/visibilityCopy';
+import { CONFIRM_SUB, EDGE_MISSED, MODE_COPY } from '@/lib/admin/visibilityCopy';
 import { visibilityRevision } from '@/lib/http/visibility';
 import VisibilityList, { itemTitle } from './VisibilityList';
 import VisibilityDrawer, { type RedirectChoice, type VisibilityDraft } from './VisibilityDrawer';
@@ -190,7 +190,7 @@ export default function VisibilityScreen() {
         open={pending !== null && open !== null}
         onClose={() => setPending(null)}
         title={pending ? `${MODE_COPY[pending.mode].title}?` : ''}
-        sub="This changes the live site within a minute."
+        sub={CONFIRM_SUB}
         footer={
           <>
             <button

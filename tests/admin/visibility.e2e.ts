@@ -271,7 +271,7 @@ test('the screen: the drawer, the confirm and the toast, with no axe violation o
 
   const confirm = page.getByRole('dialog', { name: 'Only people with the link?' });
   await expect(confirm).toBeVisible();
-  await expect(confirm).toContainText('This changes the live site within a minute.');
+  await expect(confirm).toContainText('This changes the live site within a few minutes.');
   await expectNoAxe(page, 'the confirm');
   await confirm.getByRole('button', { name: 'Apply change' }).click();
   await expect(page.locator('#admin-toasts')).toContainText('Join us is open only to people');

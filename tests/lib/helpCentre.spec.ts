@@ -340,7 +340,8 @@ describe('the guides say only what the admin does', () => {
   });
 
   it('page visibility is described as the gate, the menus and the admin do it (U14a)', () => {
-    // A minute: the edge snapshot's isolate memo; Riyadh days, [from, until); the homepage
+    // A few minutes: the isolate memo over KV's edge cache and propagation (about three at
+    // worst, src/lib/http/visibility.ts); Riyadh days, [from, until); the homepage
     // refused with these words; templates hidden whole; link only unlisted, not private;
     // a crawler's sitemap copy up to an hour (max-age=3600).
     expect(source('src/lib/http/visibility.ts')).toContain('VISIBILITY_MEMO_MS = 60_000');
@@ -351,7 +352,8 @@ describe('the guides say only what the admin does', () => {
     expect(source('src/pages/sitemap.xml.ts')).toContain("'cache-control': 'public, max-age=3600'");
     expect(source('src/lib/admin/visibilityCopy.ts')).toContain("badge: 'Link only'");
     const en = guide('page-visibility', 'en');
-    expect(en).toContain('applies to the live site within a minute');
+    expect(en).toContain('applies to the live site within a few minutes');
+    expect(en).not.toMatch(/within a minute/);
     expect(en).toContain('Riyadh time');
     expect(en).toContain('unlisted, not private');
     // Hiding is not deleting, and a hidden page's form stays open (/api is never gated).
@@ -364,7 +366,8 @@ describe('the guides say only what the admin does', () => {
     expect(en).toContain('Sync to edge');
     expect(en).not.toMatch(/password/i);
     const ar = guide('page-visibility', 'ar');
-    expect(ar).toContain('خلال دقيقة');
+    expect(ar).toContain('خلال بضع دقائق');
+    expect(ar).not.toContain('خلال دقيقة');
     expect(ar).toContain('بتوقيت الرياض');
     expect(ar).toContain('غير مدرجة وليست خاصة');
     expect(ar).toContain('الإخفاء ليس حذفًا');

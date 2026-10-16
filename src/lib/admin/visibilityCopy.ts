@@ -1,13 +1,19 @@
 // Page visibility's words (Admin v2 U14a), shared by the route that refuses and the screen
 // that explains: plain strings only, so the island imports them without the server code.
 // The prototype's copy (screens_cms.js, visibilityDrawer), with "after you publish" made
-// "within a minute" until releases switch on (decision D7; docs/admin-v2/deviations.md).
+// "within a few minutes" until releases switch on (decision D7; docs/admin-v2/deviations.md).
 
 /** What the admin shows when the homepage is asked to be anything but visible. */
 export const HOME_REFUSAL = 'The homepage cannot be hidden. Use maintenance mode instead.';
 
-/** How soon a change reaches the live site (the edge snapshot's memo, a minute). */
-export const APPLIES_WITHIN = 'Applies to the live site within a minute.';
+/**
+ * How soon a change reaches the live site: the bound src/lib/http/visibility.ts states (the
+ * isolate memo, KV's edge cache and KV's own propagation, about three minutes at worst).
+ */
+export const APPLIES_WITHIN = 'Applies to the live site within a few minutes.';
+
+/** The confirm before a change goes live. */
+export const CONFIRM_SUB = 'This changes the live site within a few minutes.';
 
 export const MODE_COPY = {
   public: {
