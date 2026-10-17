@@ -11,7 +11,11 @@ import {
 
 // The preview's fail-closed verdict and its copy (Admin v2 R8, src/lib/preview/report.ts).
 
-const trusted = (): PreviewReport => ({ ...createReport(), reads: 3, tables: { services: 2, pages: 1 } });
+const trusted = (): PreviewReport => ({
+  ...createReport(),
+  reads: 3,
+  tables: { services: 2, pages: 1 },
+});
 
 describe('assessPreview', () => {
   it('is ok with reads and nothing wrong, carrying the count, the invalid drafts and what is not previewed', () => {
@@ -62,7 +66,12 @@ describe('previewLogFields', () => {
     });
     r.unsupported.push('services.neq');
     const fields = previewLogFields(r);
-    expect(fields).toMatchObject({ reads: 3, tables: ['pages', 'services'], invalid: 1, unsupported: ['services.neq'] });
+    expect(fields).toMatchObject({
+      reads: 3,
+      tables: ['pages', 'services'],
+      invalid: 1,
+      unsupported: ['services.neq'],
+    });
     expect(JSON.stringify(fields)).not.toMatch(/0000-4000/);
   });
 });
@@ -73,9 +82,14 @@ describe('the copy', () => {
   const all = strings(PREVIEW_COPY);
 
   it('names a reason for every untrusted state', () => {
-    expect(Object.keys(PREVIEW_COPY.reasons).sort()).toEqual(
-      ['anon-lookup', 'failed-table', 'foreign-tenant', 'no-reads', 'truncated', 'unsupported'],
-    );
+    expect(Object.keys(PREVIEW_COPY.reasons).sort()).toEqual([
+      'anon-lookup',
+      'failed-table',
+      'foreign-tenant',
+      'no-reads',
+      'truncated',
+      'unsupported',
+    ]);
   });
 
   it('has no em or en dash and never spells the brand (P-12)', () => {

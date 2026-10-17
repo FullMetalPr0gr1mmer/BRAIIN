@@ -64,28 +64,96 @@ const N: Outcome = 'not shown';
  */
 const EXPECTED: Record<Role, Record<ReleaseEntityType, Outcome>> = {
   admin: {
-    category: O, sector: O, client: O, team_member: O, statistic: O, certification: O,
-    discipline: O, service: O, portfolio: O, service_case: O, testimonial: O, blog_post: O,
-    page: O, page_section: O, nav_item: O, site_profile: O, custom_theme: P, entity_seo: O,
-    seo_defaults: O, redirect: P, page_visibility: P,
+    category: O,
+    sector: O,
+    client: O,
+    team_member: O,
+    statistic: O,
+    certification: O,
+    discipline: O,
+    service: O,
+    portfolio: O,
+    service_case: O,
+    testimonial: O,
+    blog_post: O,
+    page: O,
+    page_section: O,
+    nav_item: O,
+    site_profile: O,
+    custom_theme: P,
+    entity_seo: O,
+    seo_defaults: O,
+    redirect: P,
+    page_visibility: P,
   },
   content_creator: {
-    category: O, sector: O, client: O, team_member: O, statistic: O, certification: O,
-    discipline: O, service: O, portfolio: O, service_case: O, testimonial: O, blog_post: O,
-    page: O, page_section: O, nav_item: O, site_profile: N, custom_theme: N, entity_seo: O,
-    seo_defaults: N, redirect: N, page_visibility: N,
+    category: O,
+    sector: O,
+    client: O,
+    team_member: O,
+    statistic: O,
+    certification: O,
+    discipline: O,
+    service: O,
+    portfolio: O,
+    service_case: O,
+    testimonial: O,
+    blog_post: O,
+    page: O,
+    page_section: O,
+    nav_item: O,
+    site_profile: N,
+    custom_theme: N,
+    entity_seo: O,
+    seo_defaults: N,
+    redirect: N,
+    page_visibility: N,
   },
   seo: {
-    category: O, sector: O, client: O, team_member: O, statistic: N, certification: N,
-    discipline: O, service: O, portfolio: O, service_case: N, testimonial: N, blog_post: O,
-    page: O, page_section: N, nav_item: N, site_profile: N, custom_theme: N, entity_seo: O,
-    seo_defaults: O, redirect: P, page_visibility: N,
+    category: O,
+    sector: O,
+    client: O,
+    team_member: O,
+    statistic: N,
+    certification: N,
+    discipline: O,
+    service: O,
+    portfolio: O,
+    service_case: N,
+    testimonial: N,
+    blog_post: O,
+    page: O,
+    page_section: N,
+    nav_item: N,
+    site_profile: N,
+    custom_theme: N,
+    entity_seo: O,
+    seo_defaults: O,
+    redirect: P,
+    page_visibility: N,
   },
   developer: {
-    category: N, sector: N, client: N, team_member: N, statistic: N, certification: N,
-    discipline: N, service: N, portfolio: N, service_case: N, testimonial: N, blog_post: N,
-    page: O, page_section: N, nav_item: N, site_profile: O, custom_theme: P, entity_seo: N,
-    seo_defaults: N, redirect: N, page_visibility: P,
+    category: N,
+    sector: N,
+    client: N,
+    team_member: N,
+    statistic: N,
+    certification: N,
+    discipline: N,
+    service: N,
+    portfolio: N,
+    service_case: N,
+    testimonial: N,
+    blog_post: N,
+    page: O,
+    page_section: N,
+    nav_item: N,
+    site_profile: O,
+    custom_theme: P,
+    entity_seo: N,
+    seo_defaults: N,
+    redirect: N,
+    page_visibility: P,
   },
 };
 
@@ -97,9 +165,15 @@ async function outcome(role: Role, type: ReleaseEntityType): Promise<Outcome> {
   const table = RELEASE_REGISTRY[type].table;
   const db = preview.client();
   // Read the type's table when the preview has it; any table loads the drafts.
-  await db.from(['custom_themes', 'redirects', 'page_visibility'].includes(table) ? 'pages' : table).select(
-    table === 'site_profile' || table === 'seo_defaults' ? 'tenant_id' : table === 'portfolio_services' ? 'portfolio_id' : 'id',
-  );
+  await db
+    .from(['custom_themes', 'redirects', 'page_visibility'].includes(table) ? 'pages' : table)
+    .select(
+      table === 'site_profile' || table === 'seo_defaults'
+        ? 'tenant_id'
+        : table === 'portfolio_services'
+          ? 'portfolio_id'
+          : 'id',
+    );
   const r = preview.report();
   expect(r.invalid, `${role} ${type}`).toEqual([]);
   expect(r.unsupported, `${role} ${type}`).toEqual([]);
@@ -111,7 +185,8 @@ async function outcome(role: Role, type: ReleaseEntityType): Promise<Outcome> {
 
 describe('pending changes a preview shows, per role and entity type', () => {
   it('covers every registry type and every role', () => {
-    for (const role of ROLES) expect(Object.keys(EXPECTED[role]).sort()).toEqual([...RELEASE_ENTITY_TYPES].sort());
+    for (const role of ROLES)
+      expect(Object.keys(EXPECTED[role]).sort()).toEqual([...RELEASE_ENTITY_TYPES].sort());
   });
 
   for (const role of ROLES) {
@@ -135,25 +210,29 @@ describe('who may open a preview at all', () => {
       expect(canPreview(role)).toBe(true);
       expect(() => createPreviewSource({ supabase, session: session(role) })).not.toThrow();
       // R9's gate on the same list agrees.
-      expect(() => assertAnyCap(session(role), PREVIEW_READ_CAPS, ['full', 'view', 'meta'])).not.toThrow();
+      expect(() =>
+        assertAnyCap(session(role), PREVIEW_READ_CAPS, ['full', 'view', 'meta']),
+      ).not.toThrow();
     }
   });
 
   it('anon (no session) and an inactive member are refused', () => {
     expect(() => createPreviewSource({ supabase, session: null })).toThrow(AuthorizationError);
     expect(() => createPreviewSource({ supabase, session: undefined })).toThrow(AuthorizationError);
-    expect(() => createPreviewSource({ supabase, session: session('admin', { isActive: false }) })).toThrow(
-      AuthorizationError,
-    );
+    expect(() =>
+      createPreviewSource({ supabase, session: session('admin', { isActive: false }) }),
+    ).toThrow(AuthorizationError);
   });
 
   it('a role holding none of the read capabilities is refused (Sales, C10a)', () => {
     const sales = 'sales' as Role;
     expect(canPreview(sales)).toBe(false);
-    expect(() => createPreviewSource({ supabase, session: session(sales) })).toThrow(AuthorizationError);
+    expect(() => createPreviewSource({ supabase, session: session(sales) })).toThrow(
+      AuthorizationError,
+    );
   });
 
-  it('PREVIEW_READ_CAPS is the union of the registry\'s read capabilities', () => {
+  it("PREVIEW_READ_CAPS is the union of the registry's read capabilities", () => {
     expect([...PREVIEW_READ_CAPS].sort()).toEqual(
       [
         'blog.write',
