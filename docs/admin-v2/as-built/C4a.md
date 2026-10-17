@@ -133,6 +133,13 @@ So every route the old Worker serves answers byte for byte what it answered befo
 - **Sales (C10a, risk R9).** The discipline filter reads `services` and `disciplines` as the
   caller. Staff read every status; Sales is not staff, so for Sales a lead of an archived
   service would not match its discipline.
+- **For C4b to decide: the ranged comparison is uneven today.** `rangeToInstants` ends a
+  range at midnight tonight (today included) and `previousPeriod` gives the full N days
+  before it, so until the day ends the current period has fewer elapsed hours than the one it
+  is compared with, and the deltas lean negative early in the day. C4b picks one: compare the
+  same elapsed span (the previous period cut at the same time of day), or compare completed
+  days only (end the range at midnight last night). Either is a change to `rangeToInstants`
+  or to what the screen passes `summary.ts`, not to 0063 (review, low 4).
 - **What D7 does and does not hide.** The reasons reach a person only through the audited
   reveal. The score itself has been readable by lead workers since 0035/0036, and so are the
   points (`crm_settings.scoring`), so a score can imply the budget band: with the default
