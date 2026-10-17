@@ -31,6 +31,12 @@ the new policies refuse every staff draft insert and update even through PostgRE
   false for any tenant but the caller's, EXECUTE for `authenticated` only (R1's open item).
 - **`app.draft_key_ok(type, entity, tenant)`**: invoker, reads the registry under the
   caller's RLS (staff only); an unknown type is false (R1's open item, D13).
+- **The draft lock restated (`app.tg_draft_lock`, 0038's body plus one step).** A bound caller
+  (a staff claim, or anon/authenticated) can neither set nor change a draft's provenance: an
+  insert gets `origin_kind` and `origin_release_id` null, an update keeps the stored values.
+  Only the restore path (the service role, or no role claim) writes them, so the history a
+  rollback shows (R6, R10, R11) cannot be forged through the new INSERT/UPDATE grant (pre-merge
+  security review S1).
 - **`public.write_drafts(p_tenant, p_ops)`**, the one draft writer (D3): SECURITY INVOKER,
   `search_path ''`, EXECUTE for `authenticated` only, never sets a GUC. 1 to 200 changes, each
   a `put` (new, or an edit at `expected_version`) or a `discard` at a version; every shape is
@@ -43,7 +49,8 @@ the new policies refuse every staff draft insert and update even through PostgRE
   RLS forced, the exact seven-policy set, every USING and WITH CHECK led by the tenant
   predicate, each RESTRICTIVE expression read structurally, the draft lock still the only
   trigger, the three functions' kinds, search paths and EXECUTE sets, the flag reader's owner
-  bypassing RLS, `app.releases_enabled` still the service role's alone, no `set_config` in the
+  bypassing RLS, the lock pinning the provenance and callable by no API role,
+  `app.releases_enabled` still the service role's alone, no `set_config` in the
   writer, and `app.release_tenants` still empty.
 
 ### The kernel
@@ -168,12 +175,13 @@ stay live writes until their slice:
 
 ## Proof
 
-- **pgTAP**: `supabase/tests/release_drafts.test.sql` `plan(81)`, new: the catalog, the grant
+- **pgTAP**: `supabase/tests/release_drafts.test.sql` `plan(85)`, new: the catalog, the grant
   and policy sets, releases off per role (insert and edit refused, directly and through the
   writer; discard allowed for the author roles), releases on per area and role (content,
   identity and themes, SEO meta, SEO defaults and redirects; removals; archives), a `sales`
   claim, anon, another tenant, three stale Admin tokens (demoted, deactivated, locked: no
-  insert, edit or discard), the singleton key (insert and re-key refused), and the writer's
+  insert, edit or discard), the singleton key (insert and re-key refused), the provenance (a staff insert or edit
+  neither sets nor clears it; the service role still writes it), and the writer's
   outcomes (new, edit, discard, BR409 codes, all or nothing, another tenant, malformed calls,
   RLS and CHECK pass-through, the fixed order, the lock binding).
   `rls_releases.test.sql` stays `plan(111)`: section 0 now proves R3's grant exists and that

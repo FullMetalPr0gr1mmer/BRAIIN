@@ -35,6 +35,8 @@
 --     fixed order, so two concurrent reorders cannot deadlock.
 --   • app.draft_key_ok(type, entity, tenant): invoker, reads the registry under the
 --     caller's own RLS (CMS staff only); an unknown type is false.
+--   • app.tg_draft_lock (0038) restated: a staff caller can no longer set or change a
+--     draft's provenance (`origin_kind`, `origin_release_id`), which only a restore writes.
 --
 -- No capability, no app.role_* helper (the live check is generic, not a capability), no
 -- registry row, no help guide. Grants are stated for both Supabase grant regimes (Admin v2
@@ -111,6 +113,79 @@ create policy content_drafts_live_delete on public.content_drafts
   as restrictive for delete to authenticated
   using (tenant_id = app.effective_tenant_id()
          and (select app.live_role()) is not null);
+
+-- ═══ 4b. The draft lock pins a draft's provenance too ════════════════════════════════════
+-- 0038's lock makes a draft's id, version, author and stamps the database's for a bound
+-- caller (a staff claim, or anon/authenticated). With staff now holding INSERT and UPDATE, it
+-- also pins where a draft came from: `origin_kind` ('restore') and `origin_release_id` are
+-- written only by the paths that restore a version (the service role, or no role claim: the
+-- runbook), never by a staff token, so the history a rollback shows (R6, R10, R11) cannot be
+-- forged. A bound insert gets nulls, a bound update keeps the stored values. Otherwise 0038's
+-- body, unchanged.
+create or replace function app.tg_draft_lock() returns trigger
+  language plpgsql set search_path = ''
+as $$
+declare
+  v_role text := nullif(pg_catalog.current_setting('request.jwt.claims', true), '')::jsonb
+                   #>> '{app_metadata,role}';
+  v_bound constant boolean := current_user::text in ('anon', 'authenticated')
+                              or (v_role is not null and current_user::text <> 'service_role');
+begin
+  -- 1. The claim lock.
+  if v_bound then
+    if tg_op = 'INSERT' then
+      if new.release_id is not null then
+        raise exception 'a pending change is claimed and released only by a scheduled release'
+          using errcode = '42501',
+                hint = 'Schedule or unschedule the release instead.';
+      end if;
+    elsif old.release_id is not null then
+      raise exception 'a pending change claimed by a scheduled release cannot be changed or discarded'
+        using errcode = '42501',
+              hint = 'Unschedule the release first.';
+    elsif tg_op = 'UPDATE' and new.release_id is not null then
+      raise exception 'a pending change is claimed and released only by a scheduled release'
+        using errcode = '42501',
+              hint = 'Schedule or unschedule the release instead.';
+    end if;
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+
+  -- 2 and 3. The version, the id, the actor and the stamps.
+  if tg_op = 'INSERT' then
+    if v_role is not null then
+      new.id := pg_catalog.gen_random_uuid();
+      new.version := 1;
+      new.created_by := auth.uid();
+      new.created_at := pg_catalog.now();
+    else
+      new.created_by := coalesce(new.created_by, auth.uid());
+    end if;
+  else
+    new.id := old.id;
+    new.version := old.version + 1;
+    new.created_by := old.created_by;
+    new.created_at := old.created_at;
+  end if;
+  new.updated_by := auth.uid();
+  new.updated_at := pg_catalog.now();
+
+  -- 4. The provenance (0062): a bound caller never sets or changes it.
+  if v_bound then
+    if tg_op = 'INSERT' then
+      new.origin_kind := null;
+      new.origin_release_id := null;
+    else
+      new.origin_kind := old.origin_kind;
+      new.origin_release_id := old.origin_release_id;
+    end if;
+  end if;
+  return new;
+end $$;
+revoke all on function app.tg_draft_lock() from public, anon, authenticated, service_role;
 
 -- ═══ 5. The one draft writer ═════════════════════════════════════════════════════════════
 -- p_ops is a JSON array of 1 to 200 changes, all for p_tenant (the caller's own, else 42501):
@@ -442,6 +517,19 @@ begin
        where tg.tgrelid = 'public.content_drafts'::regclass and not tg.tgisinternal)
      is distinct from 'content_drafts_lock app.tg_draft_lock 31' then
     raise exception '0062: content_drafts must carry exactly one trigger, the draft lock';
+  end if;
+
+  -- ---- The lock pins the provenance, and stays a trigger nobody calls ----------------
+  if not exists (select 1 from pg_proc
+                  where oid = 'app.tg_draft_lock()'::regprocedure and not prosecdef
+                    and proconfig = array['search_path=""']
+                    and prosrc ~ 'new\.origin_kind := null'
+                    and prosrc ~ 'new\.origin_release_id := old\.origin_release_id')
+     or has_function_privilege('anon', 'app.tg_draft_lock()', 'execute')
+     or has_function_privilege('authenticated', 'app.tg_draft_lock()', 'execute')
+     or has_function_privilege('service_role', 'app.tg_draft_lock()', 'execute')
+     or has_function_privilege('public', 'app.tg_draft_lock()', 'execute') then
+    raise exception '0062: app.tg_draft_lock must pin the provenance and be callable by no API role';
   end if;
 
   -- ---- Functions: who may call what, and how they run --------------------------------

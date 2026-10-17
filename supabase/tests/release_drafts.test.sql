@@ -16,6 +16,7 @@
 --     another tenant neither writes nor reads tenant A's drafts;
 --   • the stale tokens insert, edit and discard nothing, even for the role they claim;
 --   • a singleton's draft is keyed by its tenant;
+--   • a draft's provenance (origin_kind, origin_release_id) is never a staff token's to set;
 --   • write_drafts: a new draft, an edit, a discard; a moved version, a claimed draft and a
 --     second draft for one entity are BR409 with their code; a batch with one bad change
 --     keeps nothing; another tenant's id, a malformed call and too many changes refused;
@@ -23,7 +24,7 @@
 -- CLAUDE.md §3 (Pillar 1), §8 (Releases), §9.
 
 begin;
-select plan(81);
+select plan(85);
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────
 insert into public.tenants (id, name) values
@@ -74,6 +75,12 @@ values
    '62000000-0000-0000-0000-0000000e0005', 'update', '{"title":{"en":"Thrown away too"}}', null),
   ('62000000-0000-0000-0000-000000000db1', '62000000-0000-0000-0000-00000000000b', 'service',
    '62000000-0000-0000-0000-0000000e00b1', 'update', '{"title":{"en":"Theirs"}}', null);
+-- A restore's draft (its provenance written by the runbook path, no role claim).
+insert into public.content_drafts (id, tenant_id, entity_type, entity_id, op, payload,
+                                   origin_kind, origin_release_id)
+values ('62000000-0000-0000-0000-000000000d06', '62000000-0000-0000-0000-00000000000a', 'service',
+        '62000000-0000-0000-0000-0000000e0006', 'update', '{"title":{"en":"Restored"}}',
+        'restore', '62000000-0000-0000-0000-0000000001a2');
 
 -- A claim set (anon when p_role is null).
 create function _as(p_sub text, p_role text, p_tid text) returns void language sql as $$
@@ -398,6 +405,46 @@ select is((select count(*)::int from public.content_drafts
             where entity_type in ('site_profile', 'seo_defaults')
               and entity_id = '62000000-0000-0000-0000-00000000000a'), 2,
   'the singleton drafts staged above are keyed by the tenant (equal accepted)');
+
+-- ── 7b. A draft's provenance is the restore path's, never a staff token's ────────
+select _as_a('62000000-0000-0000-0000-0000000000c1', 'content_creator');
+insert into public.content_drafts (tenant_id, entity_type, entity_id, op, payload,
+                                   origin_kind, origin_release_id)
+values ('62000000-0000-0000-0000-00000000000a', 'service', '62000000-0000-0000-0000-0000000e0007',
+        'update', '{"title":{"en":"Forged"}}', 'restore', '62000000-0000-0000-0000-0000000001a2');
+select is(
+  (select coalesce(origin_kind, '-') || ' ' || coalesce(origin_release_id::text, '-')
+     from public.content_drafts where entity_id = '62000000-0000-0000-0000-0000000e0007'),
+  '- -', 'a staff insert CANNOT claim a restore''s provenance (the lock writes nulls)');
+update public.content_drafts
+   set origin_kind = null, origin_release_id = null, payload = '{"title":{"en":"Edited"}}'
+ where id = '62000000-0000-0000-0000-000000000d06';
+select is(
+  (select format('%s %s %s', origin_kind, origin_release_id, payload -> 'title' ->> 'en')
+     from public.content_drafts where id = '62000000-0000-0000-0000-000000000d06'),
+  'restore 62000000-0000-0000-0000-0000000001a2 Edited',
+  'a staff edit keeps a restore''s provenance, whatever it sends');
+update public.content_drafts
+   set origin_kind = 'restore', origin_release_id = '62000000-0000-0000-0000-0000000001a2'
+ where entity_id = '62000000-0000-0000-0000-0000000e0007';
+select is(
+  (select coalesce(origin_kind, '-') || ' ' || coalesce(origin_release_id::text, '-')
+     from public.content_drafts where entity_id = '62000000-0000-0000-0000-0000000e0007'),
+  '- -', 'a staff edit CANNOT give a draft a restore''s provenance');
+reset role;
+set local role service_role;
+select _as_a('62000000-0000-0000-0000-0000000000a1', 'admin');
+insert into public.content_drafts (tenant_id, entity_type, entity_id, op, payload,
+                                   origin_kind, origin_release_id)
+values ('62000000-0000-0000-0000-00000000000a', 'service', '62000000-0000-0000-0000-0000000e0008',
+        'update', '{}', 'restore', '62000000-0000-0000-0000-0000000001a2');
+select is(
+  (select origin_kind from public.content_drafts
+    where entity_id = '62000000-0000-0000-0000-0000000e0008'),
+  'restore', 'the service role (the restore path) still writes a draft''s provenance');
+reset role;
+set local role authenticated;
+select _as_a('62000000-0000-0000-0000-0000000000a1', 'admin');
 
 -- ── 8. The draft writer ──────────────────────────────────────────────────────────
 select set_config('pgtap.new',
