@@ -131,6 +131,12 @@ So every route the old Worker serves answers byte for byte what it answered befo
 - **Sales (C10a, risk R9).** The discipline filter reads `services` and `disciplines` as the
   caller. Staff read every status; Sales is not staff, so for Sales a lead of an archived
   service would not match its discipline.
+- **What D7 does and does not hide.** The reasons reach a person only through the audited
+  reveal. The score itself has been readable by lead workers since 0035/0036, and so are the
+  points (`crm_settings.scoring`), so a score can imply the budget band: with the default
+  points, any score above 65 includes `budget_200k_plus`. Every lead worker holds `leads.pii`
+  today, so no one learns the band who could not reveal it; a role that works leads without
+  `leads.pii` (C10a's Sales holds both) would need the score hidden too.
 - **Search and Previous/Next (D8).** The neighbours follow the URL's filters; a list searched
   by `q` steps through the unsearched filter.
 

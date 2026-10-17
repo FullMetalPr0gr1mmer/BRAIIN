@@ -54,7 +54,7 @@
   - ad pixels wait for marketing consent (L6).
 - **CRM**:
   - contact details behind an audited reveal; no budget in lists;
-  - a lead's score shows as a number until the reveal: its reasons come with the contact details, through the audited reveal, because three of them (a budget given, a budget over 200k, a timeline given) disclose the budget band and the timeline (C4a, D7);
+  - a lead's score shows as a number until the reveal: its reasons come with the contact details, through the audited reveal, because three of them (a budget given, a budget over 200k, a timeline given) name the budget band and the timeline (C4a, D7). The number itself is readable by every lead worker (all of whom hold `leads.pii`) and, with the scoring points, can imply the band: with the default points any score above 65 includes a budget over 200k;
   - the list's default order is starred first, then newest; "Newest" stays newest only, so the dashboard's latest leads do not move (C4a, D6);
   - no client-side CSV;
   - Mark as spam + Admin-only Erase instead of delete;
