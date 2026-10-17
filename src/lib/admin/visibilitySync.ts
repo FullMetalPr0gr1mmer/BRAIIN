@@ -9,6 +9,7 @@ import {
   putVisibilitySnapshot,
   visibilityRevision,
   type VisibilityEntry,
+  type VisibilityNote,
   type VisibilitySnapshot,
 } from '@/lib/http/visibility';
 import {
@@ -28,7 +29,7 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 
 /** The columns a snapshot is built from, the page and the redirect target named by slug. */
 export const VISIBILITY_SNAPSHOT_SELECT =
-  'id,version,mode,template,hide_from,show_on,page:pages!page_visibility_page_fk(slug),redirect:pages!page_visibility_redirect_fk(slug)';
+  'id,version,mode,template,page_id,note,password_version,hide_from,show_on,page:pages!page_visibility_page_fk(slug),redirect:pages!page_visibility_redirect_fk(slug)';
 
 /**
  * The most rows one snapshot read takes. Only the rows that are not public are read (a public
@@ -44,6 +45,11 @@ export interface VisibilitySourceRow {
   version?: unknown;
   mode: unknown;
   template: unknown;
+  /** The page the row is about: what names the unlock cookie of a password page. */
+  page_id?: unknown;
+  /** A password page's message, and the version every password change moves. */
+  note?: unknown;
+  password_version?: unknown;
   hide_from: unknown;
   show_on: unknown;
   page: { slug?: unknown } | null | unknown;
@@ -54,6 +60,18 @@ const slugOf = (value: unknown): string | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const slug = (value as { slug?: unknown }).slug;
   return typeof slug === 'string' ? slug.toLowerCase() : null;
+};
+
+/** The password gate's message as stored: {en, ar}, either side absent, plain text only. */
+const noteOf = (value: unknown): VisibilityNote | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const out: VisibilityNote = {};
+  for (const lang of ['en', 'ar'] as const) {
+    const line = raw[lang];
+    if (typeof line === 'string' && line.trim().length > 0) out[lang] = line.trim();
+  }
+  return out.en === undefined && out.ar === undefined ? null : out;
 };
 
 const instantOf = (value: unknown): string | undefined =>
@@ -70,6 +88,7 @@ const instantOf = (value: unknown): string | undefined =>
  */
 export function buildVisibilitySnapshot(
   rows: readonly VisibilitySourceRow[],
+  tenantId: string,
   builtAt: Date = new Date(),
 ): VisibilitySnapshot {
   const pages: VisibilitySnapshot['pages'] = {};
@@ -82,8 +101,20 @@ export function buildVisibilitySnapshot(
     }
   };
   for (const row of rows) {
-    if (row.mode !== 'hidden' && row.mode !== 'link') continue;
+    if (row.mode !== 'hidden' && row.mode !== 'link' && row.mode !== 'password') continue;
     const entry: VisibilityEntry = { mode: row.mode };
+    if (row.mode === 'password') {
+      // The page's id and the current password version: what the unlock cookie is signed
+      // over. NEVER the password or its hash — the snapshot is who may see what, not the
+      // secret, and page_passwords is unreadable by every API role (0061).
+      const pageId = typeof row.page_id === 'string' ? row.page_id : null;
+      const pv = typeof row.password_version === 'number' ? row.password_version : 0;
+      if (pageId === null || !Number.isSafeInteger(pv) || pv < 1) continue;
+      entry.id = pageId;
+      entry.pv = pv;
+      const note = noteOf(row.note);
+      if (note) entry.note = note;
+    }
     if (row.mode === 'hidden') {
       const to = slugOf(row.redirect);
       entry.target = isVisibilityPageSlug(to) ? to : null;
@@ -107,6 +138,7 @@ export function buildVisibilitySnapshot(
   return {
     v: 1,
     builtAt: builtAt.toISOString(),
+    tenant: tenantId,
     rev: visibilityRevision(used),
     pages,
     templates,
@@ -165,10 +197,10 @@ export async function rebuildVisibilitySnapshot(
   sb: SupabaseClient,
   tenantId: string,
 ): Promise<{ snapshot: VisibilitySnapshot; kvSynced: boolean }> {
-  let snapshot = buildVisibilitySnapshot(await readVisibilityRows(sb, tenantId));
+  let snapshot = buildVisibilitySnapshot(await readVisibilityRows(sb, tenantId), tenantId);
   let kvSynced = await putVisibilitySnapshot(env, snapshot);
   if (!kvSynced) return { snapshot, kvSynced };
-  const again = buildVisibilitySnapshot(await readVisibilityRows(sb, tenantId));
+  const again = buildVisibilitySnapshot(await readVisibilityRows(sb, tenantId), tenantId);
   if (again.rev !== snapshot.rev) {
     snapshot = again;
     kvSynced = await putVisibilitySnapshot(env, snapshot);

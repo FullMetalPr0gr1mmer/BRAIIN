@@ -123,3 +123,19 @@
     border-color: Highlight;
   }
 }
+
+/* The password field and its Show button on one line; the button keeps its own height, and
+   both wrap under each other when the drawer is narrow. The field is an ordinary admin
+   input: nothing here reveals the password except the button, which the island toggles by
+   swapping the input's type (no style= anywhere, F0). */
+.vis-secret {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.vis-secret > input {
+  flex: 1 1 11rem;
+  min-inline-size: 0;
+}

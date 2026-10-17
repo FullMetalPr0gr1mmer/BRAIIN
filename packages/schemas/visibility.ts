@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isCalendarDay } from './audit';
+import { HELP_FORBIDDEN } from './help';
 
 // Page visibility (Admin v2 U14a): what the admin sends to `PUT /api/admin/page-visibility`,
 // one page's or one template's setting. The database holds the same rules (0057's CHECKs and
@@ -9,9 +10,19 @@ import { isCalendarDay } from './audit';
 // daylight saving), stored as the instant of that day's midnight in Riyadh (decision D4).
 // "Hide from" is the first hidden day; "Show again on" the first day it is visible again.
 
-export const VISIBILITY_MODES = ['public', 'hidden', 'link'] as const;
+/** Every mode `page_visibility.mode` knows (0057, widened by 0061). */
+export const VISIBILITY_MODES = ['public', 'hidden', 'link', 'password'] as const;
 export const VisibilityModeSchema = z.enum(VISIBILITY_MODES);
 export type VisibilityModeInput = z.infer<typeof VisibilityModeSchema>;
+
+/**
+ * The modes `PUT /api/admin/page-visibility` takes. `password` is not one: a password goes
+ * through its own door, `POST /api/admin/page-visibility/password`, which hands it to
+ * `public.set_page_password` and never stores or echoes it (Admin v2 U14b). A save that
+ * named `password` here would have no password to set.
+ */
+export const VISIBILITY_WRITE_MODES = ['public', 'hidden', 'link'] as const;
+export const VisibilityWriteModeSchema = z.enum(VISIBILITY_WRITE_MODES);
 
 const RiyadhDay = z
   .string()
@@ -38,7 +49,7 @@ export const VisibilityTargetSchema = z.union([
 export const PageVisibilityWriteSchema = z
   .object({
     target: VisibilityTargetSchema,
-    mode: VisibilityModeSchema,
+    mode: VisibilityWriteModeSchema,
     /** A hidden page's redirect (another page's id), or null for a "page not found". */
     redirectPageId: z.string().uuid().nullable().default(null),
     hideFrom: RiyadhDay.nullable().default(null),
@@ -75,3 +86,60 @@ export const PageVisibilityWriteSchema = z
     }
   });
 export type PageVisibilityWrite = z.infer<typeof PageVisibilityWriteSchema>;
+
+// ---- the password mode (U14b) ---------------------------------------------------------
+
+/** What bcrypt reads, and what 0061's `set_page_password` refuses outside. */
+export const PAGE_PASSWORD_BYTES = { min: 8, max: 72 } as const;
+
+/** The longest line the gate shows above the box, per language (0061's CHECK). */
+export const PAGE_NOTE_MAX = 140;
+
+const noteLine = z
+  .string()
+  .max(PAGE_NOTE_MAX)
+  .refine((s) => /\S/.test(s), 'empty')
+  .refine((s) => !HELP_FORBIDDEN.test(s), 'no markup or control characters');
+
+/**
+ * The line above the password box, in either language or both. Plain text: the gate page
+ * renders it escaped, and the database refuses `<`, `>` and control characters too.
+ */
+export const PageNoteSchema = z
+  .object({ en: noteLine.optional(), ar: noteLine.optional() })
+  .strict()
+  .refine((v) => v.en !== undefined || v.ar !== undefined, {
+    message: 'Write the message in English, in Arabic, or in both.',
+  });
+export type PageNote = z.infer<typeof PageNoteSchema>;
+
+/** A password is measured in BYTES, as bcrypt reads it, not in characters. */
+export const passwordBytes = (value: string): number => new TextEncoder().encode(value).length;
+
+/**
+ * `POST /api/admin/page-visibility/password`: one page, one password, one optional message.
+ * The password is never stored by the Worker, never logged and never sent back.
+ */
+export const PagePasswordWriteSchema = z
+  .object({
+    pageId: z.string().uuid(),
+    password: z
+      .string()
+      .max(200)
+      .refine(
+        (v) => passwordBytes(v) >= PAGE_PASSWORD_BYTES.min,
+        `A password is at least ${PAGE_PASSWORD_BYTES.min} characters.`,
+      )
+      .refine(
+        (v) => passwordBytes(v) <= PAGE_PASSWORD_BYTES.max,
+        `A password is at most ${PAGE_PASSWORD_BYTES.max} bytes.`,
+      ),
+    note: PageNoteSchema.nullable().default(null),
+    /** The version the drawer read; 0 for a page that has no row yet. */
+    version: z.number().int().min(0),
+  })
+  .strict();
+export type PagePasswordWrite = z.infer<typeof PagePasswordWriteSchema>;
+
+/** What the unlock form posts (src/pages/api/page-access.ts). Never logged, never echoed. */
+export const PAGE_ACCESS_FIELDS = { page: 'page', next: 'next', password: 'password' } as const;

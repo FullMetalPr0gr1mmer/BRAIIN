@@ -41,8 +41,14 @@ export const VISIBILITY_MEMO_MS = 60_000;
 /** The same minute, as KV's own edge cache takes it (seconds). */
 export const VISIBILITY_KV_CACHE_TTL_S = 60;
 
-export const VISIBILITY_MODES = ['public', 'hidden', 'link'] as const;
+export const VISIBILITY_MODES = ['public', 'hidden', 'link', 'password'] as const;
 export type VisibilityMode = (typeof VISIBILITY_MODES)[number];
+
+/** The line above the password box, in either language or both (never a secret). */
+export interface VisibilityNote {
+  en?: string;
+  ar?: string;
+}
 
 /** One page's or template's setting, as the edge needs it. */
 export interface VisibilityEntry {
@@ -52,12 +58,28 @@ export interface VisibilityEntry {
   /** The hidden window, [from, until): ISO instants, either end open. */
   from?: string;
   until?: string;
+  /**
+   * A password page only: the page's id, its password version, and the message to show.
+   * NEVER the password and never its hash — the snapshot is a cache of who may see what,
+   * not of the secret. The id names the cookie and is signed into it; the version is what
+   * ends every cookie when the password changes (src/lib/visibility/access.ts).
+   */
+  id?: string;
+  pv?: number;
+  note?: VisibilityNote;
 }
 
 export interface VisibilitySnapshot {
   v: 1;
   /** When the snapshot was built (ISO): the admin's "the live site has the settings" line. */
   builtAt: string | null;
+  /**
+   * The tenant whose rows it was built from. Written by the save (the staff token's tenant,
+   * under RLS) and by the daily cron (`resolveLaunchTenantId`), so it is the server-resolved
+   * tenant, cached: the password paths name it rather than asking the database again, and a
+   * snapshot that carries a password entry always carries it (the same put writes both).
+   */
+  tenant?: string;
   /**
    * Which rows it was built from, as `visibilityRevision` writes it: the admin compares it
    * with the rows it lists to say whether the live site has these settings. Absent on a
@@ -98,8 +120,34 @@ export function hasRestrictions(snapshot: VisibilitySnapshot | null | undefined)
   return Object.keys(snapshot.pages).length > 0 || Object.keys(snapshot.templates).length > 0;
 }
 
+/** The id of a page or a tenant, as the snapshot writes it: a uuid, nothing else. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function isInstant(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value));
+}
+
+/**
+ * Markup and control characters, which no note may hold. Built from a string so the
+ * source itself carries no control character (0061 refuses the same set in SQL).
+ */
+const NOTE_FORBIDDEN = new RegExp('[<>\u0000-\u001f\u007f-\u009f]');
+
+/** One line of a note, as the gate will render it: short, plain, no markup. */
+function parseNoteLine(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const line = value.trim();
+  if (line.length === 0 || line.length > 140) return undefined;
+  return NOTE_FORBIDDEN.test(line) ? undefined : line;
+}
+
+function parseNote(raw: unknown): VisibilityNote | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const value = raw as Record<string, unknown>;
+  const en = parseNoteLine(value['en']);
+  const ar = parseNoteLine(value['ar']);
+  if (en === undefined && ar === undefined) return undefined;
+  return { ...(en === undefined ? {} : { en }), ...(ar === undefined ? {} : { ar }) };
 }
 
 /** One entry as stored, or null when it is not one (a bad value is no restriction). */
@@ -107,8 +155,27 @@ function parseEntry(raw: unknown, template: boolean): VisibilityEntry | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const entry = raw as Record<string, unknown>;
   const mode = entry['mode'];
-  if (mode !== 'hidden' && mode !== 'link') return null;
+  if (mode !== 'hidden' && mode !== 'link' && mode !== 'password') return null;
   if (template && mode !== 'hidden') return null;
+  if (mode === 'password') {
+    const id = entry['id'];
+    const pv = entry['pv'];
+    // A password entry whose id or version cannot be read cannot be unlocked either (the
+    // cookie is signed over both), so it degrades to a 404 rather than to a public page: a
+    // broken snapshot must not publish a page someone put behind a password. The next save
+    // or the daily re-sync writes it again.
+    if (
+      typeof id !== 'string' ||
+      !UUID.test(id) ||
+      typeof pv !== 'number' ||
+      !Number.isSafeInteger(pv) ||
+      pv < 1
+    ) {
+      return { mode: 'hidden', target: null };
+    }
+    const note = parseNote(entry['note']);
+    return { mode, id, pv, ...(note === undefined ? {} : { note }) };
+  }
   const out: VisibilityEntry = { mode };
   if (mode === 'hidden') {
     const target = entry['target'];
@@ -147,10 +214,12 @@ export function parseVisibilitySnapshot(raw: string | null | undefined): Visibil
       }
     }
     const rev = value['rev'];
+    const tenant = value['tenant'];
     return {
       v: 1,
       builtAt: isInstant(value['builtAt']) ? value['builtAt'] : null,
       ...(typeof rev === 'string' && rev.length <= MAX_REV_LENGTH ? { rev } : {}),
+      ...(typeof tenant === 'string' && UUID.test(tenant) ? { tenant } : {}),
       pages,
       templates,
     };
@@ -220,6 +289,7 @@ export async function putVisibilitySnapshot(
  */
 export function effectiveMode(entry: VisibilityEntry | undefined, now: number): VisibilityMode {
   if (!entry) return 'public';
+  // Only a hidden page has a window: link only and password have no dates (0057's CHECK).
   if (entry.mode !== 'hidden') return entry.mode;
   if (entry.from !== undefined && now < Date.parse(entry.from)) return 'public';
   if (entry.until !== undefined && now >= Date.parse(entry.until)) return 'public';
@@ -249,7 +319,11 @@ export function modeOf(
 }
 
 export type VisibilityGate =
-  { action: 'pass' } | { action: 'noindex' } | { action: 'hide'; to: VisibilityPageSlug | null };
+  | { action: 'pass' }
+  | { action: 'noindex' }
+  | { action: 'hide'; to: VisibilityPageSlug | null }
+  /** Behind a password: the entry carries the page's id, its version and the message. */
+  | { action: 'password'; id: string; pv: number; note: VisibilityNote | null };
 
 export const PASS: VisibilityGate = Object.freeze({ action: 'pass' }) as VisibilityGate;
 
@@ -268,6 +342,13 @@ export function decide(
   const mode = effectiveMode(entry, now);
   if (mode === 'public') return PASS;
   if (mode === 'link') return { action: 'noindex' };
+  if (mode === 'password') {
+    // parseEntry has already refused a password entry without both, so this is belt and
+    // braces for a snapshot built in this isolate.
+    return entry?.id !== undefined && entry.pv !== undefined
+      ? { action: 'password', id: entry.id, pv: entry.pv, note: entry.note ?? null }
+      : { action: 'hide', to: null };
+  }
   const to = entry?.target ?? null;
   if (
     to === null ||
@@ -293,5 +374,8 @@ export function isListed(
   return modeOf(snapshot, target, now) === 'public';
 }
 
-/** Every answer that hides a page: never cached anywhere, never indexed. */
+/**
+ * Every answer that hides a page: never cached anywhere, never indexed. A password gate and
+ * the page behind it carry it too, so no cache in front of the Worker can ever hold either.
+ */
 export const HIDDEN_CACHE_CONTROL = 'private, no-store';
