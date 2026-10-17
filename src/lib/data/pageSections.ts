@@ -10,6 +10,8 @@ import { supabaseConfigured } from '@/lib/supabase/client';
 import type { SectionData } from '@/lib/sections/types';
 import { parseRow, parseRows, reportLoadError } from './parse';
 import { contentClient } from './source';
+import { serviceClient } from '@/lib/supabase/server';
+import { pageAccess } from '@/lib/visibility/scope';
 
 // Public Tier-A read of CMS-authored page compositions (`pages` + `page_sections`,
 // authored at /admin/pages and /admin/sections). This is what makes the section engine
@@ -19,6 +21,20 @@ import { contentClient } from './source';
 // Anonymous reads of page_sections exist since migration 0016; before it, every call here
 // hit 42501 and fell back — which is why nothing composed in the CMS had ever reached a
 // visitor. The 0011 restrictive policy is the fence: visible sections of PUBLISHED pages.
+//
+// THE ONE SERVICE-ROLE READ BEHIND THIS SEAM (Admin v2 U14b). A page behind a password is
+// fenced from anon in the database (page_sections_password_fence, 0061), so the anon read
+// above returns none of its sections — by design, and so that the edge gate failing open
+// leaks nothing. A visitor who HAS typed the password is served by the middleware inside
+// `withPageAccess`, and only then, and only for that one page, does this loader read the
+// sections through `public.page_sections_unlocked` as the service role. That function
+// returns exactly the rows and columns anon would have read without the fence (a visible
+// section of a published page; type, content, visible, sort_order), and the images those
+// sections name come back the same way (public.page_media_unlocked, sectionMedia.ts), so an
+// unlocked page renders what a public one would and nothing more. The scope is read BEFORE any query is
+// awaited: workerd does not carry an AsyncLocalStorage scope into a thenable's then(), and
+// a supabase-js builder is a thenable (src/lib/data/source.ts has the whole rule).
+// tests/lib/contentSource.spec.ts pins this read, by file and by reason.
 //
 // getPageComposition returns:
 //   null                    Supabase unconfigured/unreachable, or the page is not published
@@ -70,6 +86,8 @@ function toSection(row: z.infer<typeof PageSectionRowSchema>): SectionData | nul
 
 export async function getPageComposition(pageSlug: string): Promise<PageComposition | null> {
   if (!supabaseConfigured()) return null;
+  // Read first, before any query is awaited (see the note above).
+  const access = pageAccess();
   try {
     const { data: pageData, error: pageError } = await contentClient()
       .from('pages')
@@ -85,11 +103,21 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
     if (!page) return null;
     const pageRef = { id: page.id, slug: page.slug, title: page.title, updatedAt: page.updated_at };
 
-    const { data, error } = await contentClient()
-      .from('page_sections')
-      .select('type,content,visible,sort_order')
-      .eq('page_id', page.id)
-      .order('sort_order', { ascending: true });
+    const unlocked =
+      access !== undefined && access.pageId === page.id && access.tenantId.length > 0
+        ? access
+        : null;
+    const { data, error } =
+      unlocked === null
+        ? await contentClient()
+            .from('page_sections')
+            .select('type,content,visible,sort_order')
+            .eq('page_id', page.id)
+            .order('sort_order', { ascending: true })
+        : await serviceClient().rpc('page_sections_unlocked', {
+            p_tenant: unlocked.tenantId,
+            p_page_id: page.id,
+          });
     if (error) {
       reportLoadError('page_section', error);
       return { page: pageRef, sections: [] };

@@ -171,7 +171,15 @@ describe('the union of fields is the SQL allowlist', () => {
   // Never staged: the apply stamps a first publish, and a release is what gets scheduled.
   const NEVER = new Set(['published_at', 'scheduled_for']);
   // In the SQL allowlist although no payload key writes it (see registry.ts, Extra).
-  const RESTORE_ONLY: Record<string, string[]> = { page_section: ['style'] };
+  // page_visibility's `note` is the password gate's message: staged like the rest, but
+  // written by the password door, which has its own schema (Admin v2 U14b).
+  const RESTORE_ONLY: Record<string, string[]> = {
+    page_section: ['style'],
+    page_visibility: ['note'],
+  };
+  // Immediate columns the DATABASE writes, so no payload key names them either. The rest
+  // are written by a legacy PATCH and must still be in `fields` (the loop below).
+  const DB_ONLY_IMMEDIATE: Record<string, string[]> = { page_visibility: ['password_version'] };
 
   for (const row of registryRows()) {
     it(row.entityType, () => {
@@ -182,8 +190,13 @@ describe('the union of fields is the SQL allowlist', () => {
       expect(sorted([...declared, ...(RESTORE_ONLY[row.entityType] ?? [])])).toEqual(
         sorted(row.columns),
       );
-      // The immediate columns are in fields (the legacy PATCH writes them) and exempt in SQL.
-      for (const column of entry.immediateColumns) {
+      // The immediate columns are in fields (the legacy PATCH writes them) and exempt in
+      // SQL, unless the database is what writes them.
+      const dbOnly = DB_ONLY_IMMEDIATE[row.entityType] ?? [];
+      expect(sorted(entry.immediateColumns.filter((c) => dbOnly.includes(c)))).toEqual(
+        sorted(dbOnly),
+      );
+      for (const column of entry.immediateColumns.filter((c) => !dbOnly.includes(c))) {
         expect(union(entry.fields, Object.keys(entry.fields)).has(column)).toBe(true);
       }
     });

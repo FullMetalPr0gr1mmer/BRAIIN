@@ -154,16 +154,20 @@ select is(
   (select string_agg(t.tgname::text, ',' order by t.tgname collate "C")
      from pg_trigger t
     where t.tgrelid = 'public.page_visibility'::regclass and not t.tgisinternal),
-  'page_visibility_actor,page_visibility_guard,page_visibility_release_capture,'
-  'page_visibility_snapshot,page_visibility_updated_at,page_visibility_version',
-  'the actor, guard, stamp and version triggers, history and release capture');
+  'page_visibility_actor,page_visibility_guard,page_visibility_password,'
+  'page_visibility_release_capture,page_visibility_snapshot,page_visibility_updated_at,'
+  'page_visibility_version',
+  'the actor, guard, stamp and version triggers, history, release capture and (0061) the '
+  'password sync');
 select ok(
   exists (select 1 from app.release_entities
            where entity_type = 'page_visibility' and table_name = 'page_visibility'
              and area = 'settings' and author_roles = array['admin', 'developer']
              and delete_roles = '{}'::text[] and apply_order = 85
-             and columns = array['page_id', 'template', 'mode', 'redirect_page_id', 'hide_from', 'show_on']),
-  'the registry row: Admin and Developer stage it, no release removes one, after pages');
+             and columns = array['page_id', 'template', 'mode', 'redirect_page_id', 'hide_from',
+                                 'show_on', 'note']),
+  'the registry row: Admin and Developer stage it, no release removes one, after pages '
+  '(0061 added the password gate''s message to it)');
 select ok(
   exists (select 1 from pg_constraint
            where conrelid = 'public.pages'::regclass and conname = 'pages_tenant_id_id'
