@@ -6,8 +6,9 @@ import { blindIndex } from './blindIndex';
 
 // The filter the lead readers send to the database (public.leads_list / leads_board /
 // lead_summary, migration 0036; restated by 0063, C4a, with the assignee, star, unread,
-// source, channel and discipline keys, which pass through as they are). One rule matters more than the rest: a search that is a
-// whole e-mail address or phone number becomes a blind-index lookup, so the address itself
+// source, channel and discipline keys, which pass through as they are). One rule matters
+// more than the rest: a search that is a whole e-mail address or phone number becomes a
+// blind-index lookup, so the address itself
 // never reaches the database, its logs or a URL (Admin v2 verification D9/D10). A term that
 // looks like one (it has an @, or it is a phone-shaped run of 7+ digits) but cannot be read
 // as one is refused with a 422, never sent as text: the database refuses it too
@@ -81,8 +82,8 @@ export interface FilterInput {
 /**
  * The RPC filter for a validated query: snake_case keys (`perStage` is the one camelCase
  * key; the rest, C4a's included, are one word and pass as they are), and `q` replaced by a
- * blind index
- * when it is a whole address or number (a ValidationError when it only looks like one).
+ * blind index when it is a whole address or number (a ValidationError when it only looks
+ * like one).
  * `country` reads local phone numbers.
  */
 export async function toRpcFilter(
