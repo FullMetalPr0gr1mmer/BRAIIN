@@ -5,6 +5,10 @@ import { relationParams, type RelationDef } from '@/lib/admin/uiSchema';
 // Options for a relation field, loaded from the related resource's own admin API — so
 // the list a user can pick from is exactly the rows their role may read (RLS + assertCap
 // on that endpoint), never a client-side guess.
+//
+// An option's VALUE is what the field stores: the row's id, or its slug where the content
+// schema holds slugs (`relation.valueKey: 'slug'`, the `slugRelation` kind, F5b). A row
+// whose key is missing is left out rather than offered as an empty option.
 
 export interface Option {
   value: string;
@@ -45,7 +49,12 @@ export function useOptions(relation: RelationDef | undefined): {
     )
       .then(({ rows }) =>
         setOptions(
-          rows.map((r) => ({ value: String(r['id']), label: labelOf(r, relation.labelKey) })),
+          rows
+            .map((r) => ({
+              value: String(r[relation.valueKey ?? 'id'] ?? ''),
+              label: labelOf(r, relation.labelKey),
+            }))
+            .filter((option) => option.value !== ''),
         ),
       )
       .catch((err: unknown) => {

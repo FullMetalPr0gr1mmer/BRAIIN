@@ -21,7 +21,25 @@ const tag: FieldDef = {
   kind: 'bilingual',
 };
 const heading: FieldDef = { name: 'heading', label: 'Heading', kind: 'bilingual' };
-const accentHelp = 'Word number (0 = first) where the accent colour starts.';
+
+/**
+ * Which words of a sibling heading carry the brand colour (Admin v2 F5b). A word RANGE
+ * per language, never stored markup (Pillar 1): `accent` writes its own key
+ * (AccentSchema), `accentFrom` writes the two numbers beside the heading (the hero and
+ * the slogan band: accentFromEn / accentFromAr, "from word N to the end").
+ */
+const accent = (of: string, name = 'accent', label = 'Highlighted words'): FieldDef => ({
+  name,
+  label,
+  kind: 'accent',
+  accent: { of, mode: 'range' },
+});
+const accentFrom = (of: string): FieldDef => ({
+  name: 'accentFrom',
+  label: 'Highlighted words',
+  kind: 'accent',
+  accent: { of, mode: 'from', keys: { en: 'accentFromEn', ar: 'accentFromAr' } },
+});
 
 export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
   hero: [
@@ -31,8 +49,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       kind: 'bilingual',
       help: 'At most 10 words of 14 characters each — the entrance animation has that many steps.',
     },
-    { name: 'accentFromEn', label: 'Accent from word (English)', kind: 'number', help: accentHelp },
-    { name: 'accentFromAr', label: 'Accent from word (Arabic)', kind: 'number', help: accentHelp },
+    accentFrom('headline'),
     { name: 'sub', label: 'Sub-line', kind: 'bilingual' },
     { name: 'ctaLabel', label: 'Button label', kind: 'bilingual' },
     {
@@ -57,16 +74,13 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       ],
     },
   ],
-  slogan: [
-    { name: 'text', label: 'Slogan', kind: 'bilingual' },
-    { name: 'accentFromEn', label: 'Accent from word (English)', kind: 'number', help: accentHelp },
-    { name: 'accentFromAr', label: 'Accent from word (Arabic)', kind: 'number', help: accentHelp },
-  ],
+  slogan: [{ name: 'text', label: 'Slogan', kind: 'bilingual' }, accentFrom('text')],
   clientsMarquee: [tag, heading, { name: 'note', label: 'Note', kind: 'bilingual' }],
   // Round 2: the discipline cards (the disciplines themselves are under Disciplines).
   servicesOverview: [
     tag,
     heading,
+    accent('heading'),
     { name: 'sub', label: 'Sub-line', kind: 'bilingual' },
     {
       name: 'hint',
@@ -93,6 +107,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     },
     tag,
     heading,
+    accent('heading'),
     { name: 'text', label: 'Text beside the heading (Klein band only)', kind: 'bilingual' },
     {
       name: 'links',
@@ -109,6 +124,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
   cta: [
     tag,
     heading,
+    accent('heading'),
     { name: 'text', label: 'Text', kind: 'bilingual' },
     { name: 'buttonLabel', label: 'Button label', kind: 'bilingual' },
     {
@@ -145,6 +161,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     },
     { ...tag, label: 'Tag (small label above the heading; Band, Reach and Proof only)' },
     heading,
+    accent('heading'),
     { name: 'text', label: 'Text beside the heading (Band and Reach only)', kind: 'bilingual' },
     {
       name: 'line',
@@ -152,6 +169,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       kind: 'bilingual',
       help: 'Default: "Five disciplines. One team. Zero handoffs."',
     },
+    accent('line', 'lineAccent', 'Highlighted words in the statement'),
     {
       name: 'rating',
       label: 'Rating line under the statement (Services proof only)',
@@ -177,6 +195,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
   selectedWork: [
     tag,
     heading,
+    accent('heading'),
     {
       name: 'lines',
       label: 'Numbered lines beside the heading',
@@ -191,6 +210,25 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       help: 'Optional. One of the projects marked Featured; default: the first featured project by sort order.',
     },
     { name: 'featuredLinkLabel', label: 'Featured project link label', kind: 'bilingual' },
+    {
+      name: 'cardSlugs',
+      label: 'The two cards beside it',
+      kind: 'slugRelation',
+      maxItems: 2,
+      relation: {
+        resource: 'portfolio',
+        labelKey: 'title',
+        valueKey: 'slug',
+        filter: { is_featured: 'true', status: 'published' },
+      },
+      help: 'Optional. Leave empty to show the next two featured projects in order.',
+    },
+    {
+      name: 'button',
+      label: 'Closing button',
+      kind: 'link',
+      help: 'Optional. Default: “See all our work”, to Our Work.',
+    },
   ],
   testimonials: [
     {
@@ -214,12 +252,21 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     },
     tag,
     heading,
+    accent('heading'),
     { name: 'limit', label: 'At most this many quotes (1–8)', kind: 'number' },
+    {
+      name: 'intervalMs',
+      label: 'Next quote after',
+      kind: 'range',
+      range: { min: 4000, max: 15000, step: 500, suffix: ' ms' },
+      help: 'How long each quote stays. Leave it alone to keep the design’s own timing.',
+    },
   ],
   // UI v2 PR9 (contact)
   contactInquiry: [
     tag,
     heading,
+    accent('heading'),
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
     { name: 'note', label: 'Note beside the send button', kind: 'bilingual' },
     {
@@ -233,6 +280,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
   contactChannels: [
     tag,
     heading,
+    accent('heading'),
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
     { name: 'emailLabel', label: 'Email card label', kind: 'bilingual' },
     { name: 'emailNote', label: 'Email card note', kind: 'bilingual' },
@@ -244,12 +292,13 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     },
     { name: 'whatsappNote', label: 'WhatsApp card note', kind: 'bilingual' },
   ],
-  faq: [tag, heading],
+  faq: [tag, heading, accent('heading')],
   // Round 2: "Say hello" — the inquiry block closing the services pages. The form itself is
   // code (its fields are the LeadInputSchema contract).
   hello: [
     tag,
     heading,
+    accent('heading'),
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
     {
       name: 'points',
@@ -279,6 +328,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       help: 'Default: "Why %brand%". Write %brand% for the studio name (Public identity).',
     },
     heading,
+    accent('heading'),
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
     {
       name: 'items',
@@ -294,6 +344,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
   joinSteps: [
     tag,
     heading,
+    accent('heading'),
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
     {
       name: 'items',
@@ -315,6 +366,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
   joinApply: [
     tag,
     heading,
+    accent('heading'),
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
     { name: 'groupAbout', label: 'Group title: "About you"', kind: 'bilingual' },
     { name: 'groupRole', label: 'Group title: "The role"', kind: 'bilingual' },
@@ -342,6 +394,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       label: 'Heading (the page title)',
       help: 'At most 16 words of 24 characters each — the entrance animation has that many steps.',
     },
+    accent('heading'),
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
     {
       name: 'paragraphs',
@@ -361,7 +414,12 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     },
     { name: 'clip', label: 'Clip over the poster (plays while on screen)', kind: 'clip' },
   ],
-  leadership: [tag, heading, { name: 'text', label: 'Text beside the heading', kind: 'bilingual' }],
+  leadership: [
+    tag,
+    heading,
+    accent('heading'),
+    { name: 'text', label: 'Text beside the heading', kind: 'bilingual' },
+  ],
   // UI v2 PR10 — Our Work and All projects (projectCatalog is table-backed: no editor)
   workHero: [
     { ...tag, label: 'Caption tag ("Latest project")' },
@@ -376,6 +434,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     { name: 'statsTag', label: 'Numbers tag ("In numbers")', kind: 'bilingual' },
     { name: 'quotesTag', label: 'Testimonials tag', kind: 'bilingual' },
     { name: 'quotesHeading', label: 'Testimonials heading', kind: 'bilingual' },
+    accent('quotesHeading', 'quotesAccent', 'Highlighted words in the testimonials heading'),
     {
       name: 'quotesLimit',
       label: 'Most quotes shown',
@@ -414,6 +473,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
   ],
   pageHead: [
     heading,
+    accent('heading'),
     { name: 'lead', label: 'Lead', kind: 'bilingual' },
     { name: 'backLabel', label: 'Back link label', kind: 'bilingual' },
     {
@@ -427,34 +487,9 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
 
 /** Content keys an editor must set through "Advanced (JSON)" — see the header. */
 export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[]>> = {
+  // The only one left (Admin v2 F5b): every accent is a typed word range now, the card
+  // picks are a slug list, the closing button a link and the carousel interval a slider.
   hero: ['intro'],
-  // A per-locale word range ({en: {from, to}, ar: {…}}) — no typed field kind for it yet.
-  // Round 2: the Services proof's statement accent is the same kind of range. (Round 3
-  // gave the rating line a typed `object` field; there is still no accent kind.)
-  statistics: ['accent', 'lineAccent'],
-  // UI v2 PR7: the accent range as above; the card picks (a list of featured-project slugs)
-  // and the closing button ({label, href}) have no typed field kind yet either — both fall
-  // back to the design's defaults when unset. The carousel interval is a design constant.
-  selectedWork: ['accent', 'cardSlugs', 'button'],
-  testimonials: ['accent', 'intervalMs'],
-  social: ['accent'],
-  aboutWho: ['accent'],
-  leadership: ['accent'],
-  cta: ['accent'],
-  proof: ['quotesAccent'],
-  pageHead: ['accent'],
-  // UI v2 PR9: the accent word ranges, as above. The FAQ's questions are code-owned (they
-  // are also its JSON-LD), so the faq section's only content is its heading.
-  contactInquiry: ['accent'],
-  contactChannels: ['accent'],
-  faq: ['accent'],
-  // Round 2: the accent word ranges, as above.
-  servicesOverview: ['accent'],
-  hello: ['accent'],
-  // Join: the accent word ranges, as above.
-  joinWhy: ['accent'],
-  joinSteps: ['accent'],
-  joinApply: ['accent'],
 };
 
 /** The fields for one section type, or null when it takes no content (table-backed). */

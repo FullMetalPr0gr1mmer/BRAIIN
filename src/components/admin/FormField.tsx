@@ -15,9 +15,12 @@ import ObjectField from './fields/ObjectField';
 import ClipField from './fields/ClipField';
 import SectionContentField from './fields/SectionContentField';
 import UploadField from './fields/UploadField';
+import AccentField from './fields/AccentField';
 import BilingualField from './fields/BilingualField';
 import SwitchField from './fields/SwitchField';
 import ColorField from './fields/ColorField';
+import LinkField from './fields/LinkField';
+import SlugRelationField from './fields/SlugRelationField';
 import RangeField from './fields/RangeField';
 import ChipsField from './fields/ChipsField';
 import FieldShell, { describedBy } from './fields/FieldShell';
@@ -69,7 +72,7 @@ export function Field({
   const error = errors?.[id];
 
   /** Renders a nested field (repeater items, section content) with this same renderer. */
-  const renderField: RenderField = (sub, subValue, subChange, subPrefix) => (
+  const renderField: RenderField = (sub, subValue, subChange, subPrefix, context) => (
     <Field
       key={sub.name}
       field={sub}
@@ -78,9 +81,11 @@ export function Field({
       idPrefix={subPrefix}
       errors={errors}
       canAdvanced={canAdvanced}
+      {...(context?.values ? { values: context.values as Row } : {})}
+      {...(context && 'builtIn' in context ? { builtIn: context.builtIn } : {})}
     />
   );
-  const common = { field, value, onChange, idPrefix, errors, builtIn };
+  const common = { field, value, onChange, idPrefix, errors, builtIn, values };
 
   // ── composite and referencing kinds ──────────────────────────────────────────
   if (field.kind === 'relation' || field.kind === 'multiRelation') {
@@ -150,6 +155,12 @@ export function Field({
   if (field.kind === 'color') return <ColorField {...common} />;
   if (field.kind === 'range') return <RangeField {...common} />;
   if (field.kind === 'chips' || field.kind === 'tags') return <ChipsField {...common} />;
+
+  // ── the rest of the kit (F5b) ────────────────────────────────────────────────
+  if (field.kind === 'accent') return <AccentField {...common} />;
+  if (field.kind === 'link') return <LinkField {...common} />;
+  if (field.kind === 'slugRelation') return <SlugRelationField {...common} />;
+
   if (field.kind === 'richtext') return <RichTextField {...common} />;
 
   if (field.kind === 'multiSelect') {

@@ -36,7 +36,7 @@ const ADMIN_KIT_SCREEN =
 // path rule also matches an island's entry module, so either would pull the field kit
 // back into admin-ui (tests/lib/adminBundle.spec.ts checks both).
 const ADMIN_FIELDS =
-  /[\\/]src[\\/](components[\\/]admin[\\/](FormField\.tsx$|fields[\\/]|screens[\\/](resources[\\/]ResourceForm|singleton[\\/]SingletonForm)\.tsx$)|lib[\\/]admin[\\/](formPayload|sectionUi|fieldErrors|fieldValues|entitySave|useEntitySave|saveMode|contrast)\.ts$)/;
+  /[\\/]src[\\/](components[\\/]admin[\\/](FormField\.tsx$|fields[\\/]|screens[\\/](resources[\\/]ResourceForm|singleton[\\/]SingletonForm)\.tsx$)|lib[\\/]admin[\\/](formPayload|sectionUi|fieldErrors|fieldValues|entitySave|useEntitySave|saveMode|contrast|accentWords|linkables)\.ts$)/;
 // The islands that hydrate an editor: their entry chunks import admin-fields.
 const ADMIN_EDITOR_ISLANDS =
   /[\\/]src[\\/]components[\\/]admin[\\/]islands[\\/]Admin(ResourceForm|SingletonForm)\.tsx$/;

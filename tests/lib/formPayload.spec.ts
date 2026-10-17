@@ -7,6 +7,7 @@ import {
   leaveAdvanced,
   objectToForm,
   objectToPayload,
+  omitBuiltIn,
   type SectionContentState,
 } from '@/lib/admin/formPayload';
 import { SeoDefaultsSchema } from '@schemas/admin';
@@ -357,6 +358,179 @@ describe('the field kit v2 kinds (Admin v2 F5a)', () => {
     expect(objectToPayload({ keywords: { en: [], ar: [] } }, [chips])).toEqual({});
     expect(objectToPayload({ keywords: { en: ['x'], ar: [] } }, [chips])).toEqual({
       keywords: { en: ['x'], ar: [] },
+    });
+  });
+});
+
+describe('the rest of the field kit (Admin v2 F5b)', () => {
+  const heading: FieldDef = { name: 'heading', label: 'Heading', kind: 'bilingual' };
+  const accent: FieldDef = {
+    name: 'accent',
+    label: 'Highlighted words',
+    kind: 'accent',
+    accent: { of: 'heading', mode: 'range' },
+  };
+  const accentFrom: FieldDef = {
+    name: 'accentFrom',
+    label: 'Highlighted words',
+    kind: 'accent',
+    accent: { of: 'heading', mode: 'from', keys: { en: 'accentFromEn', ar: 'accentFromAr' } },
+  };
+  const fields = [heading, accent];
+  const fromFields = [heading, accentFrom];
+  const text = { en: 'Ideas that leave the brain', ar: 'أفكار تغادر العقل الآن' };
+
+  it('accent (range): a stored range round-trips through the form', () => {
+    const stored = { heading: text, accent: { en: { from: 2, to: 4 }, ar: { from: 1 } } };
+    const form = objectToForm(stored, fields);
+    expect(form['accent']).toEqual({ en: { from: 2, to: 4 }, ar: { from: 1, to: null } });
+    expect(objectToPayload(form, fields)['accent']).toEqual({
+      en: { from: 2, to: 4 },
+      ar: { from: 1 },
+    });
+  });
+
+  it('accent (from): the two numbers beside the heading are one field', () => {
+    const stored = { heading: text, accentFromEn: 2, accentFromAr: 1 };
+    const form = objectToForm(stored, fromFields);
+    expect(form['accentFrom']).toEqual({ en: { from: 2, to: null }, ar: { from: 1, to: null } });
+    // It writes its PARENT's keys, never one of its own.
+    expect(objectToPayload(form, fromFields)).toEqual({
+      heading: text,
+      accentFromEn: 2,
+      accentFromAr: 1,
+    });
+  });
+
+  it('a range past the end of the heading is held to the words that are left', () => {
+    const form = {
+      heading: { en: 'Two words', ar: 'كلمتان اثنتان' },
+      accent: { en: { from: 7, to: 9 }, ar: { from: null, to: null } },
+    };
+    expect(objectToPayload(form, fields)['accent']).toEqual({ en: { from: 1, to: 2 } });
+    const fromForm = {
+      heading: { en: 'Two words', ar: 'كلمتان اثنتان' },
+      accentFrom: { en: { from: 7, to: null }, ar: { from: null, to: null } },
+    };
+    expect(objectToPayload(fromForm, fromFields)['accentFromEn']).toBe(1);
+  });
+
+  it('no highlight, or no heading, stores nothing', () => {
+    const none = {
+      heading: text,
+      accent: { en: { from: null, to: null }, ar: { from: null, to: null } },
+    };
+    expect(objectToPayload(none, fields)).toEqual({ heading: text });
+    // A language whose heading is now empty cannot have a range either.
+    const gone = {
+      heading: { en: '', ar: '' },
+      accent: { en: { from: 0, to: 1 }, ar: { from: 0 } },
+    };
+    expect(objectToPayload(gone, fields)).toEqual({});
+    const blankFrom = {
+      accentFrom: { en: { from: null, to: null }, ar: { from: null, to: null } },
+    };
+    expect(objectToPayload(blankFrom, fromFields)).toEqual({});
+  });
+
+  it('link: blank is omitted, what is written is sent', () => {
+    const button: FieldDef = { name: 'button', label: 'Closing button', kind: 'link' };
+    expect(objectToPayload({ button: { label: { en: '', ar: '' }, href: '' } }, [button])).toEqual(
+      {},
+    );
+    const full = { button: { label: { en: 'See all', ar: 'شاهد الكل' }, href: ' /portfolio ' } };
+    expect(objectToPayload(full, [button])['button']).toEqual({
+      label: { en: 'See all', ar: 'شاهد الكل' },
+      href: '/portfolio',
+    });
+    // One half: the other part keeps the built-in, so the key is simply left out.
+    expect(
+      objectToPayload({ button: { label: { en: '', ar: '' }, href: '#apply' } }, [button]),
+    ).toEqual({ button: { href: '#apply' } });
+    expect(objectToForm({ button: { href: '/about' } }, [button])['button']).toEqual({
+      label: { en: '', ar: '' },
+      href: '/about',
+    });
+  });
+
+  it('slugRelation: an ordered, deduped list of slugs; empty is omitted', () => {
+    const cards: FieldDef = {
+      name: 'cardSlugs',
+      label: 'Cards',
+      kind: 'slugRelation',
+      relation: { resource: 'portfolio', labelKey: 'title', valueKey: 'slug' },
+    };
+    expect(objectToForm({ cardSlugs: ['b', 'a'] }, [cards])['cardSlugs']).toEqual(['b', 'a']);
+    expect(objectToPayload({ cardSlugs: ['b', 'a', 'b', ' '] }, [cards])['cardSlugs']).toEqual([
+      'b',
+      'a',
+    ]);
+    expect(objectToPayload({ cardSlugs: [] }, [cards])).toEqual({});
+  });
+});
+
+describe('omitBuiltIn (Admin v2 F5b)', () => {
+  const fields: FieldDef[] = [
+    { name: 'tag', label: 'Tag', kind: 'bilingual' },
+    { name: 'heading', label: 'Heading', kind: 'bilingual' },
+    {
+      name: 'accent',
+      label: 'Highlighted words',
+      kind: 'accent',
+      accent: { of: 'heading', mode: 'range' },
+    },
+    {
+      name: 'items',
+      label: 'Item',
+      kind: 'repeater',
+      itemFields: [{ name: 'text', label: 'Text', kind: 'bilingual' }],
+    },
+  ];
+  const builtIn = {
+    tag: { en: 'Our work', ar: 'أعمالنا' },
+    heading: { en: 'Selected work', ar: 'مختارات' },
+    accent: { en: { from: 1 } },
+    items: [{ text: { en: 'One', ar: 'واحد' } }],
+  };
+
+  it('drops every key that is what the page already shows', () => {
+    expect(omitBuiltIn({ ...builtIn }, builtIn, fields)).toEqual({});
+  });
+
+  it('keeps a key that differs, deep, bilingual and in lists', () => {
+    expect(
+      omitBuiltIn({ ...builtIn, tag: { en: 'Our work', ar: 'شغلنا' } }, builtIn, fields),
+    ).toEqual({ tag: { en: 'Our work', ar: 'شغلنا' } });
+    expect(
+      omitBuiltIn({ ...builtIn, items: [{ text: { en: 'Two', ar: 'واحد' } }] }, builtIn, fields),
+    ).toEqual({ items: [{ text: { en: 'Two', ar: 'واحد' } }] });
+    // A list of a different length is a difference, not a longer equal one.
+    expect(Object.keys(omitBuiltIn({ ...builtIn, items: [] }, builtIn, fields))).toEqual(['items']);
+  });
+
+  it('a group the type reads together is stored whole', () => {
+    const together = [['heading', 'accent']];
+    const changed = { ...builtIn, heading: { en: 'Our best work', ar: 'مختارات' } };
+    expect(omitBuiltIn(changed, builtIn, fields, together)).toEqual({
+      heading: { en: 'Our best work', ar: 'مختارات' },
+      accent: { en: { from: 1 } },
+    });
+    // The accent alone pulls its heading along, for the same reason.
+    const moved = { ...builtIn, accent: { en: { from: 2 } } };
+    expect(Object.keys(omitBuiltIn(moved, builtIn, fields, together)).sort()).toEqual([
+      'accent',
+      'heading',
+    ]);
+  });
+
+  it('a key no field edits is never dropped (hero.intro rides in `extra`)', () => {
+    const content = { ...builtIn, intro: true };
+    expect(omitBuiltIn(content, { ...builtIn, intro: true }, fields)).toEqual({ intro: true });
+  });
+
+  it('with no built-in to compare against, nothing is dropped', () => {
+    expect(omitBuiltIn({ tag: { en: 'x', ar: 'س' } }, undefined, fields)).toEqual({
+      tag: { en: 'x', ar: 'س' },
     });
   });
 });

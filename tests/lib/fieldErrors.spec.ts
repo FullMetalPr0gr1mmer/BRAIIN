@@ -250,3 +250,76 @@ describe('badInputErrors (review M2)', () => {
     });
   });
 });
+
+describe('the rest of the field kit (Admin v2 F5b)', () => {
+  const fields: FieldDef[] = [
+    { name: 'heading', label: 'Heading', kind: 'bilingual' },
+    {
+      name: 'accent',
+      label: 'Highlighted words',
+      kind: 'accent',
+      accent: { of: 'heading', mode: 'range' },
+    },
+    { name: 'button', label: 'Closing button', kind: 'link' },
+    {
+      name: 'cardSlugs',
+      label: 'The two cards beside it',
+      kind: 'slugRelation',
+      relation: { resource: 'portfolio', labelKey: 'title', valueKey: 'slug' },
+    },
+  ];
+
+  it('an accent lands on the picker its path names', () => {
+    expect(mapIssues([{ path: 'accent.en.from', message: 'Out of range.' }], fields)).toEqual({
+      byId: { 'f-accent-en-from': 'Out of range.' },
+      summary: [{ id: 'f-accent-en-from', message: 'Highlighted words (English): Out of range.' }],
+    });
+    expect(mapIssues([{ path: 'accent.ar.to', message: 'Too far.' }], fields).byId).toEqual({
+      'f-accent-ar-to': 'Too far.',
+    });
+    // The whole accent: its group, which carries the id.
+    expect(mapIssues([{ path: 'accent', message: 'Bad range.' }], fields).byId).toEqual({
+      'f-accent': 'Bad range.',
+    });
+  });
+
+  it('a link lands on its words or on where it goes', () => {
+    expect(
+      mapIssues([{ path: 'button.href', message: 'must be #anchor or /path' }], fields),
+    ).toEqual({
+      byId: { 'f-button-href': 'must be #anchor or /path' },
+      summary: [
+        {
+          id: 'f-button-href',
+          message: 'Closing button, where it goes: must be #anchor or /path',
+        },
+      ],
+    });
+    expect(mapIssues([{ path: 'button.label.ar', message: 'Required' }], fields).summary).toEqual([
+      {
+        id: 'f-button-label-ar',
+        message: 'Closing button, words on the link (Arabic): Required',
+      },
+    ]);
+  });
+
+  it('a slug list lands on its group', () => {
+    expect(mapIssues([{ path: 'cardSlugs.1', message: 'Not a slug.' }], fields).byId).toEqual({
+      'f-cardSlugs': 'Not a slug.',
+    });
+  });
+
+  it('a section content accent stored as two numbers finds its one field', () => {
+    const content = RESOURCE_UI['sections']!.fields.find((f) => f.kind === 'sectionContent')!;
+    const mapped = mapIssues(
+      [{ path: 'content.accentFromEn', message: 'Number must be less than or equal to 30' }],
+      [{ name: 'type', label: 'Type', kind: 'select' }, content],
+      'f',
+      { type: 'hero' },
+    );
+    expect(mapped.byId).toEqual({
+      'f-content-accentFrom-en-from': 'Number must be less than or equal to 30',
+    });
+    expect(mapped.summary[0]?.message).toContain('Highlighted words (English)');
+  });
+});

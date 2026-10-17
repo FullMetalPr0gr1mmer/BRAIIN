@@ -542,3 +542,141 @@ describe('every field shows its own error (F5a review L5, L6, L12)', () => {
     expect(html).toContain('<p id="f-steps-error" class="field-error f__err">At most 4.</p>');
   });
 });
+
+describe('the rest of the field kit (Admin v2 F5b)', () => {
+  const headline = { en: 'Ideas that leave the brain', ar: 'أفكار تغادر العقل الآن' };
+  const accentRange = f({
+    name: 'accent',
+    label: 'Highlighted words',
+    kind: 'accent',
+    accent: { of: 'heading', mode: 'range' },
+  });
+  const accentFrom = f({
+    name: 'accentFrom',
+    label: 'Highlighted words',
+    kind: 'accent',
+    accent: { of: 'headline', mode: 'from', keys: { en: 'accentFromEn', ar: 'accentFromAr' } },
+  });
+
+  it('accent: a word picker per language, counted from 1, with a preview', () => {
+    const html = render(
+      accentRange,
+      { en: { from: 2, to: 4 }, ar: { from: null, to: null } },
+      { heading: headline },
+    );
+    expect(html).toContain('id="f-accent-en-from"');
+    expect(html).toContain('id="f-accent-en-to"');
+    // Words are numbered for a reader, and are the renderer's own tokens.
+    expect(html).toContain('>1. Ideas</option>');
+    expect(html).toContain('>5. brain</option>');
+    expect(html).toContain('>No highlight</option>');
+    // The preview marks exactly the chosen words.
+    expect(html).toContain('<mark class="accentf__on">leave the</mark>');
+    // The Arabic half is in the DOM, hidden, RTL, with no range chosen.
+    expect(html).toContain('id="f-accent-ar-from"');
+    expect(html).toContain('dir="rtl"');
+    expect(html).not.toContain('id="f-accent-ar-to"'); // no start, no end picker
+    expectUniqueIds(html);
+    expect(html).not.toContain('style=');
+  });
+
+  it('accent: “from word N to the end” has no second picker', () => {
+    const html = render(
+      accentFrom,
+      { en: { from: 1, to: null }, ar: { from: null, to: null } },
+      { headline },
+    );
+    expect(html).toContain('id="f-accentFrom-en-from"');
+    expect(html).not.toContain('id="f-accentFrom-en-to"');
+    expect(html).toContain('<mark class="accentf__on">that leave the brain</mark>');
+  });
+
+  it('accent: no words yet, no picker — just what to do', () => {
+    const html = render(accentRange, null, { heading: { en: '', ar: '' } });
+    expect(html).toContain('Write the English words first');
+    expect(html).not.toContain('<select');
+  });
+
+  it('accent: an error lands on the picker it names', () => {
+    const html = renderToStaticMarkup(
+      createElement(Field, {
+        field: accentRange,
+        value: { en: { from: 40, to: null }, ar: { from: null, to: null } },
+        values: { heading: headline },
+        onChange: noop,
+        errors: { 'f-accent-en-from': 'Pick a word that is in the heading.' },
+      }),
+    );
+    expect(html).toMatch(/id="f-accent-en-from"[^>]*aria-invalid="true"/);
+    expect(html).toContain('English: Pick a word that is in the heading.');
+  });
+
+  it('link: the words in both languages and a picker for where it goes', () => {
+    const link = f({ name: 'button', label: 'Closing button', kind: 'link' });
+    const html = render(link, { label: { en: 'See all', ar: 'شاهد الكل' }, href: '' });
+    expect(html).toContain('id="f-button-label-en"');
+    expect(html).toContain('id="f-button-label-ar"');
+    expect(html).toContain('Where it goes');
+    // The options load in the browser; the server renders the empty picker beside the
+    // box that always holds the value.
+    expect(html).toContain('id="f-button-target"');
+    expect(html).toContain('id="f-button-href"');
+    expect(html).toContain('Loading the pages…');
+    expectUniqueIds(html);
+    expect(html).not.toContain('style=');
+  });
+
+  it('link: an href the schema would refuse is marked, and said in words', () => {
+    const link = f({ name: 'button', label: 'Closing button', kind: 'link' });
+    const bad = render(link, { label: { en: '', ar: '' }, href: 'https://example.com' });
+    expect(bad).toContain('value="https://example.com"');
+    expect(bad).toMatch(/id="f-button-href"[^>]*aria-invalid="true"/);
+    expect(bad).toContain('Use a page of this site');
+    // Where the schema takes an external link, https is fine.
+    const external = f({
+      name: 'button',
+      label: 'Closing button',
+      kind: 'link',
+      link: { external: true },
+    });
+    const ok = render(external, { label: { en: '', ar: '' }, href: 'https://example.com' });
+    expect(ok).not.toMatch(/id="f-button-href"[^>]*aria-invalid="true"/);
+  });
+
+  it('link: an error lands on the box or the language it names', () => {
+    const link = f({ name: 'button', label: 'Closing button', kind: 'link' });
+    const html = renderToStaticMarkup(
+      createElement(Field, {
+        field: link,
+        value: { label: { en: 'See all', ar: '' }, href: '/portfolio' },
+        onChange: noop,
+        errors: {
+          'f-button-label-ar': 'Write it in Arabic too.',
+          'f-button-href': 'Not a page of this site.',
+        },
+      }),
+    );
+    expect(html).toContain('Arabic: Write it in Arabic too.');
+    expect(html).toContain('Not a page of this site.');
+  });
+
+  it('slugRelation: the chosen order, each with its slug, and move/remove that say what they do', () => {
+    const cards = f({
+      name: 'cardSlugs',
+      label: 'The two cards beside it',
+      kind: 'slugRelation',
+      maxItems: 2,
+      relation: { resource: 'portfolio', labelKey: 'title', valueKey: 'slug' },
+    });
+    const html = render(cards, ['hilton-rebrand', 'noon-campaign']);
+    expect(html).toContain('<legend class="field-legend">The two cards beside it</legend>');
+    expect(html).toContain('2 of 2');
+    // No options loaded under renderToStaticMarkup: the slug stands in for the name.
+    expect(html).toMatch(/aria-label="Move hilton-rebrand down"/);
+    expect(html).toMatch(/aria-label="Remove noon-campaign"/);
+    expect(html).toContain('At most 2');
+    expect(render(cards, [])).toContain('None chosen yet.');
+    expectUniqueIds(html);
+    expect(html).not.toContain('style=');
+  });
+});
