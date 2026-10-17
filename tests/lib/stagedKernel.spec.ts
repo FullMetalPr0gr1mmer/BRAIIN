@@ -996,6 +996,32 @@ describe('releases on: reorder', () => {
 
 // ── Releases on: reads ────────────────────────────────────────────────────────────────────
 
+describe('releases on: reorder judges the whole pending change', () => {
+  it('a Content Creator moving a row an Admin staged for archiving is 403, nothing written', async () => {
+    drafts().push(
+      draft({
+        entity_id: S2,
+        payload: { status: 'archived' },
+        base: { status: 'draft' },
+        base_version: 1,
+      }),
+    );
+    const res = await call(services.REORDER, 'POST', {
+      body: {
+        items: [
+          { id: S1, sortOrder: 1 },
+          { id: S2, sortOrder: 2 },
+        ],
+      },
+      role: 'content_creator',
+    });
+    expect([res.status, res.body['capability']]).toEqual([403, 'content.archiveDelete']);
+    expect(db.calls.filter((c) => c.name === 'write_drafts')).toEqual([]);
+    expect(drafts()).toHaveLength(1);
+    expect(audits()).toEqual([]);
+  });
+});
+
 describe('releases on: reads lay the pending change over live', () => {
   it('GET item: an edit, a create, a removal, a conflict and a row removed under its change', async () => {
     const GET = services.GET;
