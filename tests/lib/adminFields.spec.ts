@@ -680,3 +680,51 @@ describe('the rest of the field kit (Admin v2 F5b)', () => {
     expect(html).not.toContain('style=');
   });
 });
+
+describe('clip v2 (Admin v2 F5b)', () => {
+  const clip = f({ name: 'clip', label: 'Hero clip', kind: 'clip', pathOnly: true });
+  const state = (patch: Record<string, string>) => ({
+    source: 'path',
+    streamUid: '',
+    path: '/media/showreel.mp4',
+    startS: '',
+    endS: '',
+    ...patch,
+  });
+
+  it('the site file is picked from the registry, with its length', () => {
+    const html = render(clip, state({}));
+    expect(html).toContain('<select id="f-clip-path"');
+    expect(html).toContain('showreel.mp4 (18.4 s)');
+    // No Stream for a table with no Stream column (0028).
+    expect(html).not.toContain('Stream UID');
+    expectUniqueIds(html);
+    expect(html).not.toContain('style=');
+  });
+
+  it('a window reads as what it is, drawn with SVG geometry', () => {
+    const html = render(clip, state({ startS: '6.2', endS: '7.9' }));
+    expect(html).toContain('6.2 s to 7.9 s of showreel.mp4 (18.4 s)');
+    expect(html).toContain('<svg class="clipf__line"');
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toMatch(/<rect class="clipf__win" x="33\.\d+"/);
+    // No window: the whole file, said in words.
+    expect(render(clip, state({}))).toContain('The whole of showreel.mp4 (18.4 s)');
+  });
+
+  it('a window the schema would refuse is said before the save is', () => {
+    expect(render(clip, state({ startS: '0', endS: '40' }))).toContain(
+      'A clip plays at most 30 seconds.',
+    );
+    expect(render(clip, state({ startS: '17', endS: '19' }))).toContain(
+      'The video ends at 18.4 s, so the end is past it.',
+    );
+  });
+
+  it('a stored path the site no longer has stays visible', () => {
+    const html = render(clip, state({ path: '/media/gone.mp4' }));
+    expect(html).toContain('/media/gone.mp4');
+    // Nothing is claimed about a file whose length we do not know.
+    expect(html).not.toContain('clipf__says');
+  });
+});
