@@ -27,6 +27,16 @@ export function accentRange(
 }
 
 /**
+ * The words of `text` and the whitespace between them, in order: the ONE tokenising step
+ * a word number counts with. `splitAccent` builds its runs from it, and the admin's accent
+ * field counts the same words with it (src/lib/admin/accentWords.ts), so a range an editor
+ * picks means on the page exactly what it meant in the form.
+ */
+export function accentTokens(text: string): string[] {
+  return text.split(/(\s+)/).filter((t) => t !== '');
+}
+
+/**
  * Splits `text` into runs, marking the words in `range` as accented. Whitespace is kept
  * verbatim: the spaces BETWEEN accented words belong to the accent, the ones at its edges
  * do not. A trailing "*" on the last accented word (the hero's footnote mark) stays
@@ -34,7 +44,7 @@ export function accentRange(
  */
 export function splitAccent(text: string, range: AccentRange | undefined): TextRun[] {
   if (!range) return text ? [{ text, accent: false }] : [];
-  const tokens = text.split(/(\s+)/).filter((t) => t !== '');
+  const tokens = accentTokens(text);
   const words = tokens.filter((t) => !/^\s+$/.test(t)).length;
   const inRange = (i: number) => i >= range.from && (range.to === undefined || i < range.to);
   const lastAccented = Math.min(range.to ?? words, words) - 1;
