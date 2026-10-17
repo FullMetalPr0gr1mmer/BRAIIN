@@ -283,12 +283,38 @@ const ACCENT_TYPES = Object.entries(SECTION_UI)
   )
   .map(([type]) => type);
 
-async function accentSection(page: Page): Promise<{ id: string; type: string } | null> {
+interface AccentSection {
+  id: string;
+  type: string;
+  /** The stored English heading, '' when the section keeps the built-in one. */
+  heading: string;
+}
+
+/**
+ * A seeded section of an ACCENT_TYPES type, chosen deterministically (F5b review M2): the
+ * first, by type then id, whose stored content has an English heading, because only a
+ * heading gives the field words to pick from. Without one the field shows its cue, so the
+ * fallback is a section storing neither a heading nor an accent; null when there is none.
+ */
+async function accentSection(page: Page): Promise<AccentSection | null> {
   const res = await page.request.get('/api/admin/sections?limit=100');
   expect(res.status(), await res.text()).toBe(200);
   const body = (await res.json()) as { data?: { rows?: unknown[] }; rows?: unknown[] };
-  const rows = (body.data?.rows ?? body.rows ?? []) as { id: string; type: string }[];
-  return rows.find((row) => ACCENT_TYPES.includes(row.type)) ?? null;
+  const rows = ((body.data?.rows ?? body.rows ?? []) as { id: string; type: string }[])
+    .filter((row) => ACCENT_TYPES.includes(row.type))
+    .sort((a, b) => a.type.localeCompare(b.type) || a.id.localeCompare(b.id));
+  let bare: AccentSection | null = null;
+  for (const row of rows) {
+    const detail = await page.request.get(`/api/admin/sections/${row.id}`);
+    expect(detail.status(), await detail.text()).toBe(200);
+    type Row = { content?: { heading?: { en?: unknown }; accent?: unknown } | null };
+    const json = (await detail.json()) as Row & { data?: Row };
+    const content = (json.data ?? json).content ?? {};
+    const heading = typeof content.heading?.en === 'string' ? content.heading.en.trim() : '';
+    if (heading !== '') return { ...row, heading };
+    if (bare === null && content.accent === undefined) bare = { ...row, heading: '' };
+  }
+  return bare;
 }
 
 async function openSection(page: Page, id: string) {
@@ -308,13 +334,17 @@ for (const role of ['admin', 'content_creator'] as const satisfies readonly Role
 
       // The accent is picked by word, never written as HTML (Pillar 1).
       const from = page.locator('#f-content-accent-en-from');
-      await expect(from).toBeVisible();
-      await expect(from.locator('option').first()).toHaveText('No highlight');
-      // Its words are the heading's own: the first option after "No highlight" is word 1.
-      const heading = (await page.locator('#f-content-heading-en').inputValue()).trim();
-      if (heading !== '') {
-        const first = heading.split(/\s+/)[0];
+      if (section!.heading !== '') {
+        await expect(page.locator('#f-content-heading-en')).toHaveValue(section!.heading);
+        await expect(from).toBeVisible();
+        await expect(from.locator('option').first()).toHaveText('No highlight');
+        // Its words are the heading's own: the first option after "No highlight" is word 1.
+        const first = section!.heading.split(/\s+/)[0];
         await expect(from.locator('option').nth(1)).toHaveText(`1. ${first}`);
+      } else {
+        // No words to pick from yet: the field says what to do instead of a picker.
+        await expect(page.getByText('Write the English words first')).toBeVisible();
+        await expect(from).toHaveCount(0);
       }
 
       const advanced = page.getByText('Advanced (JSON)', { exact: true });
