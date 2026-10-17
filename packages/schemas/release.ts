@@ -400,3 +400,124 @@ export const DryRunReportSchema = z
   })
   .strict();
 export type DryRunReport = z.infer<typeof DryRunReportSchema>;
+
+// ---- Staged writes (public.write_drafts, migration 0062, R3a) -------------------------------
+// The Worker builds the draft writer's arguments with WriteDraftsOpsSchema and reads its answer
+// with WriteDraftsResultSchema; BR409's detail arrives as JSON text (DraftConflictDetailSchema).
+// The database re-checks every cap here (tests/schemas/release.spec.ts holds the two equal).
+
+/** Changes in one write_drafts call (a reorder's 200 rows fit in one). */
+export const WRITE_DRAFTS_MAX_OPS = 200;
+/** A draft's display label (the content_drafts CHECK, pg_column_size). */
+export const DRAFT_LABEL_MAX_BYTES = 4096;
+/** Each language of a label, in characters. */
+export const DRAFT_LABEL_TEXT_MAX = 200;
+
+/**
+ * The pending change a save edits, as a PATCH names it: both or neither. Without it a save
+ * is checked against the live row's `version`; with it, against the draft's.
+ */
+export const DraftRefFieldsSchema = z
+  .object({
+    draftId: z.string().uuid().optional(),
+    draftVersion: z.number().int().min(1).max(DRAFT_VERSION_MAX).optional(),
+  })
+  .refine((ref) => (ref.draftId === undefined) === (ref.draftVersion === undefined), {
+    message: 'a pending change is named by its id and version together',
+    path: ['draftVersion'],
+  });
+export type DraftRefFields = z.infer<typeof DraftRefFieldsSchema>;
+
+/** A list's label for a pending change: `{en, ar?}`, display only. */
+export const DraftLabelSchema = z
+  .object({
+    en: z.string().max(DRAFT_LABEL_TEXT_MAX),
+    ar: z.string().max(DRAFT_LABEL_TEXT_MAX).optional(),
+  })
+  .strict()
+  .refine((label) => jsonBytes(label) <= DRAFT_LABEL_MAX_BYTES, 'too-large');
+export type DraftLabel = z.infer<typeof DraftLabelSchema>;
+
+const DraftFieldsSchema = z.array(z.string().regex(DRAFT_FIELD_NAME)).max(DRAFT_FIELDS_MAX);
+const DraftVersionSchema = z.number().int().min(1).max(DRAFT_VERSION_MAX);
+
+/** One put: a new draft (no draft_id), or an edit of one at the version read. */
+export const WriteDraftsPutSchema = z
+  .object({
+    action: z.literal('put'),
+    entity_type: ReleaseEntityTypeSchema,
+    entity_id: Uuid,
+    op: DraftOpSchema,
+    payload: DraftPayloadSchema,
+    fields: DraftFieldsSchema,
+    base: DraftPayloadSchema,
+    base_version: DraftVersionSchema.nullable(),
+    label: DraftLabelSchema.nullable(),
+    draft_id: Uuid.optional(),
+    expected_version: DraftVersionSchema.optional(),
+  })
+  .strict()
+  .superRefine((op, ctx) => {
+    if ((op.draft_id === undefined) !== (op.expected_version === undefined)) {
+      ctx.addIssue({ code: 'custom', path: ['expected_version'], message: 'both or neither' });
+    }
+    if (op.op === 'delete' && Object.keys(op.payload).length > 0) {
+      ctx.addIssue({ code: 'custom', path: ['payload'], message: 'a removal carries no payload' });
+    }
+    if (op.op === 'create' && op.base_version !== null) {
+      ctx.addIssue({ code: 'custom', path: ['base_version'], message: 'a create has no base' });
+    }
+  });
+
+/** One discard, at the version read (never blind). */
+export const WriteDraftsDiscardSchema = z
+  .object({
+    action: z.literal('discard'),
+    draft_id: Uuid,
+    expected_version: DraftVersionSchema,
+    entity_type: ReleaseEntityTypeSchema.optional(),
+    entity_id: Uuid.optional(),
+  })
+  .strict();
+
+export const WriteDraftsOpSchema = z.union([WriteDraftsPutSchema, WriteDraftsDiscardSchema]);
+export type WriteDraftsOp = z.infer<typeof WriteDraftsOpSchema>;
+export const WriteDraftsOpsSchema = z.array(WriteDraftsOpSchema).min(1).max(WRITE_DRAFTS_MAX_OPS);
+
+/** What write_drafts answers: one entry per change, in the order it ran them. */
+export const WriteDraftsResultSchema = z.array(
+  z
+    .object({
+      action: z.enum(['put', 'discard']),
+      draft_id: Uuid,
+      entity_type: ReleaseEntityTypeSchema,
+      entity_id: Uuid,
+      version: DraftVersionSchema.nullable(),
+    })
+    .strict(),
+);
+export type WriteDraftsResult = z.infer<typeof WriteDraftsResultSchema>;
+
+/** BR409's detail from write_drafts: which draft, and why. */
+export const DraftConflictDetailSchema = z
+  .object({
+    code: z.enum(['draft-conflict', 'scheduled']),
+    draft_id: Uuid.nullable().optional(),
+    entity_type: z.string().nullable().optional(),
+    entity_id: Uuid.nullable().optional(),
+  })
+  .strict();
+
+/**
+ * Why a staged save was refused with 409 (releases.md §3, §4.5): the pending change moved on
+ * (`draft-conflict`), was published or thrown away since the form read it, is claimed by a
+ * scheduled release, or (a bulk discard, R3b) several moved at once.
+ */
+export const DRAFT_CONFLICT_CODES = [
+  'draft-conflict',
+  'draft-published',
+  'draft-discarded',
+  'scheduled',
+  'pending-changed',
+] as const;
+export type DraftConflictCode = (typeof DRAFT_CONFLICT_CODES)[number];

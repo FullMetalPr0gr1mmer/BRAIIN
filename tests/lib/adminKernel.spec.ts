@@ -99,7 +99,8 @@ function stubDb(stored: Record<string, unknown>) {
   // Awaiting the builder itself is how a list (and deleteRow's `.select('id')`) resolves.
   builder['then'] = (resolve: (value: unknown) => unknown) =>
     Promise.resolve(resolve({ data: [{ id: ID, version: 1, ...stored }], error: null, count: 1 }));
-  return { from: () => builder };
+  // Releases off: the kernel asks the flag first on a release-managed route (Admin v2 R3).
+  return { from: () => builder, rpc: async () => ({ data: false, error: null }) };
 }
 
 function ctx(role: Role, method: string, body: unknown, stored: Record<string, unknown> = {}) {

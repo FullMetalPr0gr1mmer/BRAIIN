@@ -38,6 +38,8 @@ function stubDb() {
   return {
     from: (table: string) => make(table),
     rpc: async (fn: string, args: Record<string, unknown>) => {
+      // Releases off: the kernel's flag read (Admin v2 R3), not one of the calls under test.
+      if (fn === 'releases_enabled') return { data: false, error: null };
       rpcCalls.push({ fn, args });
       return rpcResult;
     },

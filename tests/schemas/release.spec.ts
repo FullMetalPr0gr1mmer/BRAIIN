@@ -9,7 +9,18 @@ import {
   ApplyRequestSchema,
   ApplyResultSchema,
   ContentDraftRowSchema,
+  DRAFT_CONFLICT_CODES,
+  DRAFT_LABEL_MAX_BYTES,
+  DRAFT_LABEL_TEXT_MAX,
+  DraftConflictDetailSchema,
+  DraftLabelSchema,
+  DraftRefFieldsSchema,
   DryRunReportSchema,
+  WRITE_DRAFTS_MAX_OPS,
+  WriteDraftsDiscardSchema,
+  WriteDraftsOpsSchema,
+  WriteDraftsPutSchema,
+  WriteDraftsResultSchema,
   PUBLISHER_ROLES,
   RELEASE_CHILD_MEDIA_MAX,
   ContentReleaseRowSchema,
@@ -508,5 +519,162 @@ describe('the apply shapes equal migration 0051', () => {
     expect(APPLY_SQL).toContain(`jsonb_array_length(p_media) > ${RELEASE_CHILD_MEDIA_MAX}`);
     const purge = /p_status not in \(([^)]*)\)/.exec(APPLY_SQL)?.[1] ?? '';
     expect(quoted(purge)).toEqual([...PURGE_STATUSES].sort());
+  });
+});
+
+// ---- Staged writes (migration 0062, R3a) -----------------------------------------------------
+
+const DRAFTS_SQL = readFileSync(
+  join(process.cwd(), 'supabase', 'migrations', '0062_release_drafts_write.sql'),
+  'utf8',
+).replace(/--[^\n]*/g, '');
+
+const putOp = (over: Record<string, unknown> = {}) => ({
+  action: 'put',
+  entity_type: 'service',
+  entity_id: uuid(1),
+  op: 'update',
+  payload: { title: { en: 'Logo' } },
+  fields: ['title'],
+  base: { title: { en: 'Old' } },
+  base_version: 3,
+  label: { en: 'Logo', ar: 'شعار' },
+  ...over,
+});
+
+describe('DraftRefFieldsSchema', () => {
+  it('names a pending change by its id and version together, or not at all', () => {
+    expect(DraftRefFieldsSchema.safeParse({}).success).toBe(true);
+    expect(DraftRefFieldsSchema.safeParse({ draftId: uuid(1), draftVersion: 2 }).success).toBe(
+      true,
+    );
+    expect(DraftRefFieldsSchema.safeParse({ draftId: uuid(1) }).success).toBe(false);
+    expect(DraftRefFieldsSchema.safeParse({ draftVersion: 2 }).success).toBe(false);
+    expect(DraftRefFieldsSchema.safeParse({ draftId: 'x', draftVersion: 2 }).success).toBe(false);
+    expect(DraftRefFieldsSchema.safeParse({ draftId: uuid(1), draftVersion: 0 }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe('DraftLabelSchema', () => {
+  it('is {en, ar?}, each at most 200 characters', () => {
+    expect(DraftLabelSchema.safeParse({ en: 'Logo', ar: 'شعار' }).success).toBe(true);
+    expect(DraftLabelSchema.safeParse({ en: 'a'.repeat(DRAFT_LABEL_TEXT_MAX) }).success).toBe(true);
+    expect(DraftLabelSchema.safeParse({ en: 'a'.repeat(DRAFT_LABEL_TEXT_MAX + 1) }).success).toBe(
+      false,
+    );
+    expect(DraftLabelSchema.safeParse({ en: 'x', fr: 'y' }).success).toBe(false);
+  });
+});
+
+describe('WriteDraftsOpsSchema', () => {
+  it('a new draft, an edit at a version, a discard at a version', () => {
+    expect(WriteDraftsOpsSchema.safeParse([putOp()]).success).toBe(true);
+    expect(
+      WriteDraftsOpsSchema.safeParse([putOp({ draft_id: uuid(2), expected_version: 4 })]).success,
+    ).toBe(true);
+    expect(
+      WriteDraftsOpsSchema.safeParse([
+        { action: 'discard', draft_id: uuid(2), expected_version: 4 },
+      ]).success,
+    ).toBe(true);
+  });
+
+  it('refuses a draft id without its version, a blind discard, an unknown key', () => {
+    expect(WriteDraftsOpsSchema.safeParse([putOp({ draft_id: uuid(2) })]).success).toBe(false);
+    expect(WriteDraftsOpsSchema.safeParse([{ action: 'discard', draft_id: uuid(2) }]).success).toBe(
+      false,
+    );
+    expect(WriteDraftsOpsSchema.safeParse([putOp({ tenant_id: uuid(9) })]).success).toBe(false);
+  });
+
+  it('the shapes the CHECKs require: a removal carries no payload, a create no base version', () => {
+    expect(WriteDraftsOpsSchema.safeParse([putOp({ op: 'delete' })]).success).toBe(false);
+    expect(
+      WriteDraftsOpsSchema.safeParse([putOp({ op: 'delete', payload: {}, fields: [], base: {} })])
+        .success,
+    ).toBe(true);
+    expect(WriteDraftsOpsSchema.safeParse([putOp({ op: 'create' })]).success).toBe(false);
+  });
+
+  it('caps: 1 to 200 changes; payload and base 512 KB; fields as the CHECK reads them', () => {
+    expect(WriteDraftsOpsSchema.safeParse([]).success).toBe(false);
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => putOp({ entity_id: uuid(100 + i) }));
+    expect(WriteDraftsOpsSchema.safeParse(many(WRITE_DRAFTS_MAX_OPS)).success).toBe(true);
+    expect(WriteDraftsOpsSchema.safeParse(many(WRITE_DRAFTS_MAX_OPS + 1)).success).toBe(false);
+    const big = { body: 'x'.repeat(DRAFT_PAYLOAD_MAX_BYTES) };
+    expect(WriteDraftsOpsSchema.safeParse([putOp({ payload: big })]).success).toBe(false);
+    expect(WriteDraftsOpsSchema.safeParse([putOp({ base: big })]).success).toBe(false);
+    expect(WriteDraftsOpsSchema.safeParse([putOp({ fields: ['a long, free text'] })]).success).toBe(
+      false,
+    );
+  });
+
+  it('reads what the writer answers and BR409’s detail', () => {
+    expect(
+      WriteDraftsResultSchema.safeParse([
+        {
+          action: 'put',
+          draft_id: uuid(1),
+          entity_type: 'service',
+          entity_id: uuid(2),
+          version: 1,
+        },
+        {
+          action: 'discard',
+          draft_id: uuid(3),
+          entity_type: 'page',
+          entity_id: uuid(4),
+          version: null,
+        },
+      ]).success,
+    ).toBe(true);
+    expect(
+      DraftConflictDetailSchema.safeParse({
+        code: 'scheduled',
+        draft_id: uuid(1),
+        entity_type: 'service',
+        entity_id: uuid(2),
+      }).success,
+    ).toBe(true);
+    expect(DraftConflictDetailSchema.safeParse({ code: 'other' }).success).toBe(false);
+  });
+});
+
+describe('the staged-write shapes equal migration 0062', () => {
+  const quoted = (literal: string) =>
+    [...literal.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!).sort();
+
+  it('the op cap is WRITE_DRAFTS_MAX_OPS, the version cap the apply’s', () => {
+    expect(Number(/c_max_ops constant int := (\d+);/.exec(DRAFTS_SQL)?.[1])).toBe(
+      WRITE_DRAFTS_MAX_OPS,
+    );
+    expect(DRAFTS_SQL).toContain(String.raw`c_version constant text := '^[1-9][0-9]{0,8}$'`);
+  });
+
+  it('a put and a discard have exactly the keys the Zod shapes read', () => {
+    const lists = [...DRAFTS_SQL.matchAll(/k\.key <> all \(array\[([^\]]*)\]\)/g)].map((m) =>
+      quoted(m[1] ?? ''),
+    );
+    expect(lists).toEqual([
+      Object.keys(WriteDraftsPutSchema.innerType().shape).sort(),
+      Object.keys(WriteDraftsDiscardSchema.shape).sort(),
+    ]);
+  });
+
+  it('the label cap is the content_drafts CHECK’s (0038)', () => {
+    expect(RELEASE_LEDGER_SQL).toContain(`pg_column_size(label) <= ${DRAFT_LABEL_MAX_BYTES}`);
+  });
+
+  it('BR409 names exactly the codes DraftConflictDetailSchema reads', () => {
+    const codes = [...DRAFTS_SQL.matchAll(/'code', '([a-z-]+)'/g)].map((m) => m[1]);
+    expect([...new Set(codes)].sort()).toEqual(
+      [...DraftConflictDetailSchema.shape.code.options].sort(),
+    );
+    for (const code of DraftConflictDetailSchema.shape.code.options) {
+      expect(DRAFT_CONFLICT_CODES).toContain(code);
+    }
   });
 });

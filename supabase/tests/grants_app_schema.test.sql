@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(61);
+select plan(63);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -311,6 +311,22 @@ select ok(has_function_privilege('service_role', 'app.releases_enabled(uuid)', '
           and not has_function_privilege('authenticated', 'app.releases_enabled(uuid)', 'execute')
           and not has_function_privilege('anon', 'app.releases_enabled(uuid)', 'execute'),
   'app.releases_enabled(uuid) is executable by the service role only');
+
+-- ---- 13. Releases (0062): staged writes -----------------------------------------------
+-- The RESTRICTIVE draft policies evaluate app.draft_key_ok and public.releases_enabled as
+-- the querying staff member, so authenticated must hold EXECUTE (or every draft save
+-- 42501s); anon never evaluates them, and the service role is not bound by them.
+select ok(has_function_privilege('authenticated', 'app.draft_key_ok(text, uuid, uuid)', 'execute')
+          and not has_function_privilege('anon', 'app.draft_key_ok(text, uuid, uuid)', 'execute')
+          and not has_function_privilege('service_role', 'app.draft_key_ok(text, uuid, uuid)', 'execute'),
+  'app.draft_key_ok is executable by authenticated only');
+select ok(has_function_privilege('authenticated', 'public.releases_enabled(uuid)', 'execute')
+          and has_function_privilege('authenticated', 'public.write_drafts(uuid, jsonb)', 'execute')
+          and not has_function_privilege('anon', 'public.releases_enabled(uuid)', 'execute')
+          and not has_function_privilege('anon', 'public.write_drafts(uuid, jsonb)', 'execute')
+          and not has_function_privilege('service_role', 'public.releases_enabled(uuid)', 'execute')
+          and not has_function_privilege('service_role', 'public.write_drafts(uuid, jsonb)', 'execute'),
+  'the staff flag reader and the draft writer are executable by authenticated only');
 
 select * from finish();
 rollback;
