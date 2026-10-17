@@ -154,6 +154,44 @@ describe('POST /api/page-access', () => {
     expect(rpcCalls).toEqual([]);
   });
 
+  it('refuses a streamed body with no Content-Length once it passes the cap', async () => {
+    const bytes = new TextEncoder().encode(
+      `${new URLSearchParams(good).toString()}&x=${'a'.repeat(64 * 1024)}`,
+    );
+    let pulled = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pulled >= bytes.length) return controller.close();
+        const chunk = bytes.slice(pulled, pulled + 1024);
+        pulled += chunk.length;
+        controller.enqueue(chunk);
+      },
+    });
+    const request = new Request('https://www.braiinstation.com/api/page-access', {
+      method: 'POST',
+      headers: {
+        host: 'www.braiinstation.com',
+        origin: 'https://www.braiinstation.com',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+    expect(request.headers.get('content-length')).toBeNull();
+    const res = await (POST as unknown as (c: { request: Request }) => Promise<Response>)({
+      request,
+    });
+    expect(res.status).toBe(413);
+    expect(res.headers.get('set-cookie')).toBeNull();
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it('refuses a Content-Length that is not a number, before reading the body', async () => {
+    const res = await send(good, { headers: { 'content-length': 'abc' } });
+    expect(res.status).toBe(413);
+    expect(rpcCalls).toEqual([]);
+  });
+
   it('refuses a page that is not behind a password, and one the route map does not know', async () => {
     snapshot('public');
     expect((await send(good)).status).toBe(400);

@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { PAGE_ACCESS_FIELDS } from '@schemas/visibility';
+import { bodyWithinLimit } from '@/lib/auth/bodyLimit';
 import { isSameOrigin } from '@/lib/http/csrf';
 import { clientIp } from '@/lib/http/maintenance';
 import { checkPublicLimits, ipLimitValue } from '@/lib/http/publicRateLimit';
@@ -20,7 +21,7 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 // path, after the contact form and Join, and the only one whose body is a secret.
 //
 // The order is the point; each step refuses before the next costs anything:
-//   origin → Content-Length → the snapshot (is this page behind a password at all?) →
+//   origin → the 2 KB body cap → the snapshot (is this page behind a password at all?) →
 //   the limits (FAIL CLOSED) → the bcrypt check in the database → the cookie.
 //
 // What never happens here: the password is not logged, not audited, not put in a URL, not
@@ -65,8 +66,9 @@ export const POST: APIRoute = async ({ request }) => {
   if (!isSameOrigin(request.headers.get('origin'), request.headers.get('host'))) {
     return refuse(403);
   }
-  const declared = Number(request.headers.get('content-length') ?? '0');
-  if (Number.isFinite(declared) && declared > BODY_MAX_BYTES) return refuse(413);
+  // A declared length decides without a read (one that is not a number is refused); a
+  // chunked body, with none declared, is read from a copy up to the cap and no further.
+  if (!(await bodyWithinLimit(request, BODY_MAX_BYTES))) return refuse(413);
 
   let form: FormData;
   try {
