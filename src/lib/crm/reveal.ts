@@ -37,9 +37,28 @@ export const DECRYPTED_FIELDS = {
   timeline: 'timeline_text_enc',
 } as const;
 
-/** Gated columns that are not encrypted, returned as stored when a caller asks for them. */
-export const PLAIN_GATED_FIELDS = ['timeline_band', 'internal_notes', 'ip_inet'] as const;
+/**
+ * Gated columns that are not encrypted, returned as stored when a caller asks for them.
+ * `score_signals` (C4a): the score's reasons, which the CRM's reveal returns (decision D7).
+ */
+export const PLAIN_GATED_FIELDS = [
+  'timeline_band',
+  'internal_notes',
+  'ip_inet',
+  'score_signals',
+] as const;
 export type PlainGatedField = (typeof PLAIN_GATED_FIELDS)[number];
+
+/**
+ * What the legacy panel's reveal (GET /api/admin/leads/[id]?pii=1) returns besides the
+ * decrypted four: its shape before C4a, exactly. It never gained the score's reasons; the
+ * panel has no use for them and C14 removes the route.
+ */
+export const LEGACY_REVEAL_FIELDS = [
+  'timeline_band',
+  'internal_notes',
+  'ip_inet',
+] as const satisfies readonly PlainGatedField[];
 
 export interface Reveal {
   /** The safe columns, as the caller's own client read them. */

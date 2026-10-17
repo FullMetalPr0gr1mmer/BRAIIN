@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { budgetBandLabel } from '@schemas/lead';
+import { interestOf as leadInterestOf, type LeadInterest } from '@/lib/crm/leadView';
 
 // Leads list + detail, including the one control in this CMS that reveals personal data.
 //
@@ -58,20 +59,11 @@ export interface LeadsPanelProps {
 const PAGE_SIZE = 25;
 
 /**
- * What the visitor asked about: a service, or a discipline they want help choosing in.
- * The server's label is preferred; the raw slug is what an older API answer carries.
+ * What the visitor asked about. The rule moved to src/lib/crm/leadView.ts (C4a), which the
+ * leads screens share; this panel keeps its own mark for a lead that named neither.
  */
-export function interestOf(row: {
-  service_of_interest: string | null;
-  discipline_of_interest?: string | null | undefined;
-  service_label?: { en: string; ar: string } | null | undefined;
-  discipline_label?: { en: string; ar: string } | null | undefined;
-}): string {
-  if (row.service_of_interest) return row.service_label?.en || row.service_of_interest;
-  if (row.discipline_of_interest) {
-    return `${row.discipline_label?.en || row.discipline_of_interest} (help me choose)`;
-  }
-  return '—';
+export function interestOf(row: LeadInterest): string {
+  return leadInterestOf(row, '—');
 }
 
 /**
