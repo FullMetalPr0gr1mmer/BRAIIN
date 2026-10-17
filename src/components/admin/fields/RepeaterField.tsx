@@ -25,6 +25,8 @@ export type RenderField = (
   value: unknown,
   onChange: (name: string, value: unknown) => void,
   idPrefix: string,
+  /** F5b: the object the field sits in, and the built-in value under it. */
+  context?: { values?: Readonly<Record<string, unknown>>; builtIn?: unknown },
 ) => ReactNode;
 
 interface Props {
@@ -202,6 +204,7 @@ export default function RepeaterField({
                     item[sub.name],
                     (n, v) => setItem(index, n, v),
                     `${base}-${index}`,
+                    { values: item },
                   ),
                 )}
               </div>
