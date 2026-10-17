@@ -82,7 +82,10 @@ const STYLE = [
   'color:#0b0b0f;background:#e8e8ea;border:0;border-radius:8px;cursor:pointer}',
   'button:focus-visible{outline:2px solid #8ab4ff;outline-offset:2px}',
   '.err{color:#ffb4b4;opacity:1}',
-  'a{color:#8ab4ff}',
+  // The homepage link is the one inline target, right under the button: 24 px tall and set
+  // a line apart, so it meets WCAG 2.2's target size (2.5.8) on its own, not by spacing.
+  'form+p{margin-top:1rem}',
+  'a{color:#8ab4ff;display:inline-block;min-height:24px;line-height:24px}',
 ].join('');
 
 /**

@@ -139,6 +139,19 @@ describe('the password box', () => {
     expect(html).not.toContain('<script>alert(1)');
   });
 
+  it('every target is at least 24 px (WCAG 2.2, 2.5.8): the homepage link is too', async () => {
+    const html = await gate().text();
+    // The input and the button are padded well past it; the link under the button is the
+    // one inline target, so it is a 24 px block of its own, set a line below the form.
+    expect(html).toMatch(/<p><a href="\/">/);
+    const style = /<style[^>]*>([\s\S]*?)<\/style>/.exec(html)?.[1] ?? '';
+    const rule = (selector: string) =>
+      new RegExp(`(?:^|})${selector.replace(/[+]/g, '\\+')}\\{([^}]*)\\}`).exec(style)?.[1] ?? '';
+    expect(rule('a')).toContain('display:inline-block');
+    expect(rule('a')).toContain('min-height:24px');
+    expect(rule('form+p')).toContain('margin-top:1rem');
+  });
+
   it('nonce: only the base64 alphabet reaches the attribute', async () => {
     const html = await gate({ nonce: 'abc"><script>x</script>' }).text();
     expect(html).toContain('<style nonce="abcscriptx/script">');
