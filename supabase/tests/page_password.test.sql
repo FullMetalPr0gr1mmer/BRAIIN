@@ -357,7 +357,7 @@ select is(
   (select string_agg(u.type || ':' || (u.content -> 'body' ->> 'en'), ' | ' order by u.sort_order)
      from public.page_sections_unlocked('61000000-0000-0000-0000-000000000001',
                                         '61000000-0000-0000-0000-00000000a002') u),
-  'richText:secret words',
+  'slogan:secret words',
   'the unlocked reader returns the visible sections of the published page, and no hidden one');
 reset role;
 
