@@ -93,7 +93,17 @@ const STYLE = [
 export function pageAccessGate(options: PageAccessGateOptions): Response {
   const copy = COPY[options.locale];
   const safeNonce = options.nonce.replace(/[^A-Za-z0-9+/=]/g, '');
-  const note = options.note?.[options.locale] ?? options.note?.en ?? options.note?.ar ?? null;
+  // The page's own language first. When only the other one is written, it is shown in that
+  // language's lang and dir (WCAG 3.1.2): Arabic on the English gate stays right to left
+  // and is read by an Arabic voice, and the reverse.
+  const own = options.note?.[options.locale];
+  const otherLocale = options.locale === 'ar' ? 'en' : 'ar';
+  const other = options.note?.[otherLocale];
+  const note = own ?? other ?? null;
+  const noteAttrs =
+    own === undefined && other !== undefined
+      ? ` lang="${COPY[otherLocale].lang}" dir="${COPY[otherLocale].dir}"`
+      : '';
   const home = options.locale === 'ar' ? '/ar' : '/';
   const html =
     `<!doctype html><html lang="${copy.lang}" dir="${copy.dir}"><head><meta charset="utf-8">` +
@@ -103,7 +113,9 @@ export function pageAccessGate(options: PageAccessGateOptions): Response {
     `<style nonce="${safeNonce}">${STYLE}</style></head>` +
     '<body><main>' +
     `<h1>${escapeHtml(copy.heading)}</h1>` +
-    (note === null ? `<p>${escapeHtml(copy.intro)}</p>` : `<p>${escapeHtml(note)}</p>`) +
+    (note === null
+      ? `<p>${escapeHtml(copy.intro)}</p>`
+      : `<p${noteAttrs}>${escapeHtml(note)}</p>`) +
     (options.wrong ? `<p class="err" role="alert">${escapeHtml(copy.wrong)}</p>` : '') +
     '<form method="post" action="/api/page-access">' +
     `<input type="hidden" name="${PAGE_ACCESS_FIELDS.page}" value="${escapeHtml(options.page)}">` +

@@ -154,8 +154,13 @@ describe('the password box', () => {
     expect(ar).toContain('<html lang="ar" dir="rtl">');
     expect(ar).toContain('اطلب كلمة المرور من الاستوديو.');
     expect(ar).toContain('value="/ar/about"');
+    // Its own language needs no attribute: the page's lang and dir already say it.
+    expect(ar).toContain('<p>اطلب كلمة المرور من الاستوديو.</p>');
     const enOnly = await gate({ locale: 'ar', note: { en: 'Ask the studio.' } }).text();
-    expect(enOnly).toContain('Ask the studio.');
+    expect(enOnly).toContain('<p lang="en" dir="ltr">Ask the studio.</p>');
+    const arOnly = await gate({ locale: 'en', note: { ar: 'اطلب كلمة المرور.' } }).text();
+    expect(arOnly).toContain('<html lang="en" dir="ltr">');
+    expect(arOnly).toContain('<p lang="ar" dir="rtl">اطلب كلمة المرور.</p>');
     const none = await gate({ locale: 'ar', note: null }).text();
     expect(none).toContain('اكتب كلمة المرور');
   });
