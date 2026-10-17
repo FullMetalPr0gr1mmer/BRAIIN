@@ -66,12 +66,25 @@ describe('the mirror against the pgTAP literals', () => {
     expect(literal).toEqual(CREATE_DEFAULTS);
   });
 
-  it('MIRRORED_POLICIES equals _anon_policies(), for every preview table', () => {
-    const rows = [...body('_anon_policies').matchAll(/\('([a-z_]+)', '([a-z_,]+)'\)/g)].map(
-      ([, table, names]) => [table!, names!.split(',')] as const,
+  it('MIRRORED_POLICIES equals _anon_policies() (name, kind, USING md5), for every preview table', () => {
+    const rows = [...body('_anon_policies').matchAll(/\('([a-z_]+)', '([a-zA-Z0-9_:,]+)'\)/g)].map(
+      ([, table, pins]) =>
+        [
+          table!,
+          Object.fromEntries(
+            pins!.split(',').map((pin) => {
+              const [name, kind, md5] = pin.split(':');
+              return [name!, `${kind}:${md5}`];
+            }),
+          ),
+        ] as const,
     );
     expect(rows.map(([table]) => table).sort()).toEqual([...PREVIEW_TABLES].sort());
     expect(Object.fromEntries(rows)).toEqual(MIRRORED_POLICIES);
+    for (const pins of Object.values(MIRRORED_POLICIES)) {
+      for (const pin of Object.values(pins))
+        expect(pin).toMatch(/^(PERMISSIVE|RESTRICTIVE):[0-9a-f]{32}$/);
+    }
   });
 
   it('the pgTAP plan counts its assertions', () => {

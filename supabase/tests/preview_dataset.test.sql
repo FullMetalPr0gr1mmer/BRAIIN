@@ -114,27 +114,27 @@ $$;
 
 create function _anon_policies() returns table (tbl text, policies text) language sql immutable as $$
   values
-    ('blog_posts', 'blog_read'),
-    ('categories', 'categories_read,categories_write'),
-    ('certifications', 'certifications_read,certifications_write'),
-    ('clients', 'clients_read,clients_write'),
-    ('disciplines', 'disciplines_read,disciplines_write'),
-    ('entity_seo', 'entity_seo_published_only,entity_seo_read,entity_seo_write'),
-    ('media_assets', 'media_assets_public_read,media_read,media_write'),
-    ('navigation', 'navigation_read,navigation_visible_only,navigation_write'),
-    ('page_sections', 'page_sections_published_only,page_sections_read,page_sections_write'),
-    ('pages', 'pages_read,pages_write'),
-    ('portfolio', 'portfolio_read,portfolio_write'),
-    ('portfolio_media', 'portfolio_media_read,portfolio_media_write'),
-    ('portfolio_services', 'portfolio_services_published_only,portfolio_services_read,portfolio_services_write'),
-    ('sectors', 'sectors_read,sectors_write'),
-    ('seo_defaults', 'seo_defaults_read,seo_defaults_write'),
-    ('service_cases', 'service_cases_published_parent,service_cases_read,service_cases_write'),
-    ('services', 'services_discipline_in_tenant,services_discipline_published,services_read'),
-    ('site_profile', 'site_profile_read'),
-    ('statistics', 'statistics_read,statistics_write'),
-    ('team_members', 'team_members_read,team_members_write'),
-    ('testimonials', 'testimonials_read,testimonials_write')
+    ('blog_posts', 'blog_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c'),
+    ('categories', 'categories_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,categories_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('certifications', 'certifications_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,certifications_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('clients', 'clients_read:PERMISSIVE:db9934fa0ab3f173e346a67310b57bac,clients_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('disciplines', 'disciplines_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,disciplines_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('entity_seo', 'entity_seo_published_only:RESTRICTIVE:df5c9a7d7588fed51b9e8704523bf0a3,entity_seo_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,entity_seo_write:PERMISSIVE:763c5ebb7d12ee38b8e17d30ad1570df'),
+    ('media_assets', 'media_assets_public_read:PERMISSIVE:88fb58b63c6cf01b1652b4f3959970a6,media_read:PERMISSIVE:392446073406bce5902ebbac287245a1,media_write:PERMISSIVE:4f9223ffe3d088ba7a0a4098c7d190d6'),
+    ('navigation', 'navigation_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,navigation_visible_only:RESTRICTIVE:d3e6a42adad1d6a81062627de227ba33,navigation_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('page_sections', 'page_sections_published_only:RESTRICTIVE:1f97d3d1084c993ca178204580b8d11d,page_sections_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,page_sections_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('pages', 'pages_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,pages_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('portfolio', 'portfolio_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,portfolio_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('portfolio_media', 'portfolio_media_read:PERMISSIVE:89df8ca10e4d24f57e626287d4263bdb,portfolio_media_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('portfolio_services', 'portfolio_services_published_only:RESTRICTIVE:ebe8eb7b2d30d7fa86ce01cf9d110773,portfolio_services_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,portfolio_services_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('sectors', 'sectors_read:PERMISSIVE:db9934fa0ab3f173e346a67310b57bac,sectors_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('seo_defaults', 'seo_defaults_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,seo_defaults_write:PERMISSIVE:763c5ebb7d12ee38b8e17d30ad1570df'),
+    ('service_cases', 'service_cases_published_parent:RESTRICTIVE:5ec4bd1be2ede2fd328e9818b89a640d,service_cases_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,service_cases_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('services', 'services_discipline_in_tenant:RESTRICTIVE:b326b5062b2f0e69046810717534cb09,services_discipline_published:RESTRICTIVE:c37eff0d6d10d79117aab9034276c0fa,services_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c'),
+    ('site_profile', 'site_profile_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54'),
+    ('statistics', 'statistics_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,statistics_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('team_members', 'team_members_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,team_members_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('testimonials', 'testimonials_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,testimonials_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060')
 $$;
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ──────────────────────────
@@ -398,21 +398,29 @@ select is(
   'every column default CREATE_DEFAULTS copies is the database''s');
 
 -- ── 5. The policies an anon SELECT goes through ────────────────────────────────────────
+-- Name, kind and the md5 of the USING expression as PostgreSQL prints it, so a policy
+-- recreated under the same name with another USING fails too. Printed with a fixed
+-- search_path (a function SET clause), as relation names are qualified by it.
+create function _anon_policy_pins() returns text language sql stable
+  set search_path = public, pg_catalog as $$
+  select string_agg(format('%s: %s', s.tablename, s.pins), E'\n' order by s.tablename::text collate "C")
+    from (select p.tablename,
+                 string_agg(format('%s:%s:%s', p.policyname, p.permissive, md5(coalesce(p.qual, ''))),
+                            ',' order by p.policyname::text collate "C") as pins
+            from pg_catalog.pg_policies p
+           where p.schemaname = 'public'
+             and p.tablename in (select tbl from _anon_policies())
+             and p.cmd in ('SELECT', 'ALL')
+             and p.roles && array['public', 'anon']::name[]
+           group by p.tablename) s
+$$;
 select is(
-  (select string_agg(format('%s: %s', s.tablename, s.names), E'\n' order by s.tablename::text collate "C")
-     from (select p.tablename,
-                  string_agg(p.policyname::text, ',' order by p.policyname::text collate "C") as names
-             from pg_policies p
-            where p.schemaname = 'public'
-              and p.tablename in (select tbl from _anon_policies())
-              and p.cmd in ('SELECT', 'ALL')
-              and p.roles && array['public', 'anon']::name[]
-            group by p.tablename) s),
+  _anon_policy_pins(),
   (select string_agg(format('%s: %s', tbl,
             (select string_agg(x, ',' order by x collate "C") from unnest(string_to_array(policies, ',')) x)),
           E'\n' order by tbl collate "C")
      from _anon_policies()),
-  'the policies on an anon SELECT of each preview table are the ones the mirror copies');
+  'the policies on an anon SELECT of each preview table, with their kind and USING, are the ones the mirror copies');
 
 -- ── 6. Page visibility is no row security ──────────────────────────────────────────────
 select ok(
