@@ -449,9 +449,14 @@ describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () 
       expect.arrayContaining(['audit_people', 'disciplines', 'services']),
     );
     // Measured: recorded in docs/admin-v2/as-built/U1.md (the page, its own read, the shell;
-    // then the middleware's session check and identity row, 3, must still leave room).
-    expect(page).toBeLessThanOrEqual(MEASURED.loadDashboard);
-    expect(own + page + shell + MIDDLEWARE).toBeLessThanOrEqual(MEASURED.total);
+    // then the middleware's session check and identity row, 3, must still leave room). The
+    // message names every read, so a failure says which one is new instead of only by how much.
+    const reads = `page ${page} [${byName(0, page).join(' ')}] + own ${own} + shell ${shell} [${byName(
+      page,
+      calls.length,
+    ).join(' ')}] + middleware ${MIDDLEWARE}`;
+    expect(page, reads).toBeLessThanOrEqual(MEASURED.loadDashboard);
+    expect(own + page + shell + MIDDLEWARE, reads).toBeLessThanOrEqual(MEASURED.total);
     expect(MEASURED.total).toBeLessThanOrEqual(40);
   });
 });
