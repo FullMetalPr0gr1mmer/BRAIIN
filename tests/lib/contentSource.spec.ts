@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { contentClient } from '@/lib/data/source';
@@ -18,8 +18,13 @@ import {
 // has ONE place to swap in its overlay. A loader that reached the anon client another way
 // would render live rows inside a preview and could not be caught by looking at the page.
 //
-// Today the seam is a pass-through: contentClient() is the anon client, the same instance,
-// so every public query (and with it Tier A output, caching and RLS) is what it was.
+// Outside a preview scope contentClient() is the anon client, the same instance, so every
+// public query (and with it Tier A output, caching and RLS) is what it was. R8 added the
+// scope (withContentSource) and the preview behind it (src/lib/preview); the last block of
+// rules below keeps the two apart: only the listed entry points open a scope, the seam and
+// the data modules import nothing of the preview, the preview reads through nothing but the
+// person's own client, and none of them keeps state that could carry a preview's rows into
+// a visitor's request. tests/lib/contentScope.spec.ts drives the scope itself.
 //
 // The rules read code, never comments: ./sourceScan.ts parses each file with TypeScript.
 
@@ -180,6 +185,158 @@ function builderCallbacks(ast: ts.SourceFile): number[] {
     .map(lineOf);
 }
 
+/**
+ * The only files that may enter a preview scope (`withContentSource`), and why. Exact. Empty
+ * until R9 adds the `/admin/preview` branch of src/middleware.ts, after its auth gate.
+ */
+const SCOPE_ENTRIES: Record<string, string> = {};
+
+/** Names src/lib/preview/** never uses: it reads only through the person's own client. */
+const PREVIEW_FORBIDDEN_NAMES = [
+  'anonClient',
+  'serviceClient',
+  'contentClient',
+  'withContentSource',
+  ...FACTORY_NAMES,
+];
+
+/**
+ * Module-level values the seam, the loaders and the preview may create, and why: none holds a
+ * request's data. Exact. Anything else at module level that is a `let`, a `var`, a `new …()`
+ * or a constant something mutates fails, because a preview's overlaid rows kept there could
+ * be served to a visitor from the same isolate. A new entry is a security review item.
+ */
+const MODULE_STATE_ALLOWED: Record<string, string> = {
+  'src/lib/data/source.ts:scope': 'the AsyncLocalStorage instance the scope runs in',
+  'src/lib/data/source.ts:openScopes': 'the sources open right now, each removed as its scope ends',
+  'src/lib/preview/select.ts:memo': 'parse trees keyed by the select string alone (code constants)',
+  'src/lib/data/pageSections.ts:KNOWN': 'the section type names, a constant set only read',
+};
+
+/**
+ * Module-level values a NON-ADMIN module that reaches a loader through its imports may
+ * create, and why (the seam, the loaders and the preview are the list above). A memo in a
+ * loader's caller (identity, a page composer, the head builder) would carry a preview's
+ * rows into a visitor's render just as one in a loader would. Exact; a new entry is a
+ * security review item. Admin modules (src/lib/admin, src/components/admin, src/pages/admin,
+ * src/pages/api/admin) never render a public page.
+ */
+const CALLER_STATE_ALLOWED: Record<string, string> = {
+  'src/lib/legal/render.ts:TOKEN':
+    'a global RegExp of the legal-notice tokens: no data (replace and matchAll reset lastIndex)',
+};
+
+/** Paths of admin code, which never renders a public page. */
+const ADMIN_CODE = /^src\/(?:lib\/admin|components\/admin|pages\/admin|pages\/api\/admin)\//;
+
+const MUTATORS = new Set([
+  'push',
+  'pop',
+  'shift',
+  'unshift',
+  'splice',
+  'sort',
+  'reverse',
+  'fill',
+  'copyWithin',
+  'set',
+  'add',
+  'delete',
+  'clear',
+]);
+
+/** The identifier a member chain starts at (`a` for `a.b[c].d`), or null. */
+function memberRoot(expr: ts.Expression): string | null {
+  let e = expr;
+  while (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e)) e = e.expression;
+  return ts.isIdentifier(e) ? e.text : null;
+}
+
+/** Module-level state a file creates: `let`/`var`, `new …()`, or a mutated constant. */
+function moduleState(ast: ts.SourceFile): string[] {
+  const found: string[] = [];
+  const consts = new Set<string>();
+  for (const statement of ast.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    const isConst = (statement.declarationList.flags & ts.NodeFlags.Const) !== 0;
+    for (const decl of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(decl.name)) {
+        found.push('a destructured module-level binding');
+        continue;
+      }
+      const name = decl.name.text;
+      if (!isConst) {
+        found.push(name);
+        continue;
+      }
+      let init = decl.initializer;
+      while (
+        init &&
+        (ts.isAsExpression(init) ||
+          ts.isSatisfiesExpression(init) ||
+          ts.isParenthesizedExpression(init))
+      ) {
+        init = init.expression;
+      }
+      if (init && ts.isNewExpression(init)) found.push(name);
+      else consts.add(name);
+    }
+  }
+  for (const node of nodesOf(ast)) {
+    let target: ts.Expression | null = null;
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      (ts.isPropertyAccessExpression(node.left) || ts.isElementAccessExpression(node.left))
+    ) {
+      target = node.left;
+    } else if (ts.isDeleteExpression(node)) {
+      target = node.expression;
+    } else if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      MUTATORS.has(node.expression.name.text)
+    ) {
+      target = node.expression.expression;
+    } else if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'Object' &&
+      node.expression.name.text === 'assign' &&
+      node.arguments[0]
+    ) {
+      target = node.arguments[0];
+    }
+    const root = target ? memberRoot(target) : null;
+    if (root && consts.has(root) && !found.includes(root)) found.push(root);
+  }
+  return found;
+}
+
+/** A file's import and export specifiers (type-only too), as repo paths where they are ours. */
+function importsOf(path: string, ast: ts.SourceFile): string[] {
+  const specs: string[] = [];
+  for (const node of nodesOf(ast)) {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) {
+      if (ts.isStringLiteral(node.moduleSpecifier)) specs.push(node.moduleSpecifier.text);
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments[0] &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      specs.push(node.arguments[0].text);
+    }
+  }
+  return specs.map((spec) =>
+    spec.startsWith('.')
+      ? posix.normalize(posix.join(dirname(path).split('\\').join('/'), spec))
+      : spec.replace(/^@\//, 'src/'),
+  );
+}
+
 const parsed = (list: ScannedFile[]) =>
   list.flatMap((f) => (f.ast ? [{ path: f.path, ast: f.ast }] : []));
 const where = (path: string, lines: number[]) => lines.map((line) => `${path}:${line}`);
@@ -303,5 +460,142 @@ describe('the scan behind these rules (tests/lib/sourceScan.ts)', () => {
     expect(offSeam(ast!)).toEqual([4, 5]);
     expect(atModuleLoad(ast!)).toEqual([1]);
     expect(builderCallbacks(ast!)).toEqual([9, 10]);
+  });
+});
+
+describe('the preview scope (R8)', () => {
+  const preview = files.filter((f) => f.path.startsWith('src/lib/preview/'));
+
+  it('is entered only where listed (nowhere until R9 adds the middleware branch)', () => {
+    expect(naming('withContentSource')).toEqual(
+      ['src/lib/data/source.ts', ...Object.keys(SCOPE_ENTRIES)].sort(),
+    );
+  });
+
+  it('the seam and every data module import nothing of the preview', () => {
+    const reaching = parsed(dataFiles).flatMap((f) =>
+      importsOf(f.path, f.ast)
+        .filter((spec) => spec.startsWith('src/lib/preview'))
+        .map((spec) => `${f.path} -> ${spec}`),
+    );
+    expect(reaching).toEqual([]);
+  });
+
+  it('the preview names no client factory, no anon key, neither the anon nor the service client', () => {
+    expect(preview.length).toBeGreaterThanOrEqual(6);
+    const named = preview.flatMap((f) =>
+      PREVIEW_FORBIDDEN_NAMES.filter((name) => f.names.has(name)).map(
+        (name) => `${f.path}: ${name}`,
+      ),
+    );
+    expect(named).toEqual([]);
+    const clients = parsed(preview).flatMap((f) =>
+      importsOf(f.path, f.ast)
+        .filter((spec) => spec.startsWith('src/lib/supabase') || spec === 'src/lib/auth/session')
+        .map((spec) => `${f.path} -> ${spec}`),
+    );
+    expect(clients).toEqual([]);
+  });
+
+  it('keeps no cross-request state in the seam, the loaders or the preview', () => {
+    const scanned = parsed(
+      files.filter(
+        (f) =>
+          CONTENT_LOADERS.includes(f.path) ||
+          f.path === 'src/lib/data/source.ts' ||
+          f.path.startsWith('src/lib/preview/'),
+      ),
+    );
+    expect(scanned).toHaveLength(CONTENT_LOADERS.length + 1 + preview.length);
+    const state = scanned.flatMap((f) => moduleState(f.ast).map((name) => `${f.path}:${name}`));
+    expect(state.sort()).toEqual(Object.keys(MODULE_STATE_ALLOWED).sort());
+  });
+
+  it('the state scan finds let, var, new and a mutated constant; the import scan every form', () => {
+    const { ast } = scanSource(
+      'src/lib/preview/fixture.ts',
+      [
+        'let a = 1;',
+        'var b = 2;',
+        'const c = new Map();',
+        'const d: string[] = [];',
+        'const e = { n: 0 };',
+        'const f = [1, 2] as const;',
+        'const g = { list: [] as number[] };',
+        'const h = {};',
+        'export function run(i: number) {',
+        '  const local = new Set();',
+        '  local.add(i);',
+        '  d.push(String(i));',
+        '  e.n += 1;',
+        '  g.list.push(i);',
+        '  Object.assign(h, { i });',
+        '  return f.map((x) => x + i);',
+        '}',
+      ].join('\n'),
+    );
+    expect(moduleState(ast!).sort()).toEqual(['a', 'b', 'c', 'd', 'e', 'g', 'h']);
+    const imports = scanSource(
+      'src/lib/data/x.ts',
+      [
+        "import { a } from '../preview/client';",
+        "import type { B } from '@/lib/preview/report';",
+        "export { c } from './parse';",
+        "const d = () => import('../preview/dataset');",
+      ].join('\n'),
+    );
+    expect(importsOf('src/lib/data/x.ts', imports.ast!)).toEqual([
+      'src/lib/preview/client',
+      'src/lib/preview/report',
+      'src/lib/data/parse',
+      'src/lib/preview/dataset',
+    ]);
+  });
+
+  it('keeps no cross-request state in any non-admin module that reaches a loader', () => {
+    const code = parsed(files.filter((f) => /\.(?:[cm]?[jt]sx?)$/.test(f.path)));
+    const byPath = new Map(code.map((f) => [f.path, f]));
+    const resolveSpec = (spec: string): string | null => {
+      for (const ext of ['', '.ts', '.tsx', '.mts', '.mjs', '.js', '/index.ts']) {
+        if (byPath.has(spec + ext)) return spec + ext;
+      }
+      return null;
+    };
+    const imports = new Map(
+      code.map((f) => [
+        f.path,
+        importsOf(f.path, f.ast).flatMap((spec) => resolveSpec(spec) ?? []),
+      ]),
+    );
+    // Every module that imports a loader, directly or through other modules.
+    const reaching = new Set<string>(CONTENT_LOADERS);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const [path, deps] of imports) {
+        if (!reaching.has(path) && deps.some((d) => reaching.has(d))) {
+          reaching.add(path);
+          grew = true;
+        }
+      }
+    }
+    const callers = [...reaching].filter(
+      (path) =>
+        !CONTENT_LOADERS.includes(path) &&
+        !path.startsWith('src/lib/preview/') &&
+        path !== 'src/lib/data/source.ts' &&
+        !ADMIN_CODE.test(path),
+    );
+    // The composers the review named are among them (the scan is not vacuous).
+    expect(callers).toEqual(
+      expect.arrayContaining([
+        'src/lib/seo/head.ts',
+        'src/lib/services/page.ts',
+        'src/lib/portfolio/casePage.ts',
+      ]),
+    );
+    const state = callers.flatMap((path) =>
+      moduleState(byPath.get(path)!.ast).map((name) => `${path}:${name}`),
+    );
+    expect(state.sort()).toEqual(Object.keys(CALLER_STATE_ALLOWED).sort());
   });
 });
