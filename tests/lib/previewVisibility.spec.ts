@@ -130,6 +130,14 @@ describe('mediaIdsInContent mirrors `lax $.**.mediaId ? (@ == $id)`', () => {
     [{ a: { mediaId: [['x']] } }, true],
     ['x', false],
     [{ mediaId: 1 }, false],
+    // lax mode unwraps at most two array levels under the key
+    [{ mediaId: [[['x']]] }, false],
+    [{ a: { mediaId: [[['x']]] } }, false],
+    [{ mediaId: [['y', ['x']]] }, false],
+    [{ mediaId: [[[['x']]]] }, false],
+    [{ mediaId: ['y', 'x'] }, true],
+    [{ mediaId: [[{ mediaId: 'x' }]] }, true],
+    [[[[{ mediaId: 'x' }]]], true],
   ])('%j holds x: %s', (content, holds) => {
     const ids = mediaIdsInContent(content);
     expect(ids.has('x') || ids.has('1')).toBe(holds);

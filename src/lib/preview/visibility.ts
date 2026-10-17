@@ -216,15 +216,19 @@ const flagged = (row: Row): boolean => row['visible'] === true;
 
 /**
  * Every id 0024/0045's `lax $.**.mediaId ? (@ == $id)` finds in a section's content: the
- * value of a `mediaId` key at any depth, under objects and arrays, when it is a string or
- * an array (of arrays) holding strings, as lax mode unwraps arrays. A number never matches
- * the text id. (Checked against PostgreSQL's jsonpath: tests/lib/previewVisibility.spec.ts.)
+ * value of a `mediaId` key at any depth, under objects and arrays, when it is a string, an
+ * array of strings or an array of arrays of strings: lax mode unwraps two array levels there
+ * and no more (a string three arrays down does not match). A number never matches the text
+ * id. (Checked case by case against PostgreSQL 18's jsonpath:
+ * tests/lib/previewVisibility.spec.ts.)
  */
 export function mediaIdsInContent(content: unknown): Set<string> {
   const out = new Set<string>();
-  const strings = (value: unknown): void => {
+  const strings = (value: unknown, arrays = 0): void => {
     if (typeof value === 'string') out.add(value);
-    else if (Array.isArray(value)) for (const item of value) strings(item);
+    else if (Array.isArray(value) && arrays < 2) {
+      for (const item of value) strings(item, arrays + 1);
+    }
   };
   const walk = (node: unknown): void => {
     if (Array.isArray(node)) {
