@@ -687,7 +687,7 @@ test.describe('the field kit, as admin', () => {
     const ar = fields(page).locator('#f-title-ar');
     await expect(ar).toBeHidden();
     await fields(page).getByRole('button', { name: 'Check the sample fields' }).click();
-    const summary = fields(page).getByRole('alert', { name: 'Fix 3 problems to save' });
+    const summary = fields(page).getByRole('alert', { name: 'Fix 4 problems to save' });
     await expect(summary).toBeFocused();
     await expect(ar).toHaveAttribute('aria-invalid', 'true');
     await summary
@@ -788,5 +788,127 @@ test.describe('the field kit, as admin', () => {
     await expect(page.getByRole('dialog', { name: 'Add a link' })).toBeVisible();
     const withDialog = await new AxeBuilder({ page }).withTags(WCAG).analyze();
     expect(withDialog.violations, 'axe with the link dialog open').toEqual([]);
+  });
+});
+
+// ---- The rest of the field kit (Admin v2 F5b) on /admin/kit ---------------------------
+// The accent, link, slug-list and clip fields on made-up values. The screen still reads
+// nothing until something is reached: only the link picker asks for anything, and only
+// once it is focused (this suite runs as admin, which may read the list).
+
+test.describe('the rest of the field kit, as admin', () => {
+  test.use({ storageState: authFile('admin') });
+  test.beforeEach(async ({ page }) => {
+    await open(page);
+  });
+  const fields = (page: Page) => page.getByRole('region', { name: 'Fields', exact: true });
+
+  test('accent: the words are the heading’s, and the preview follows the pick', async ({
+    page,
+  }) => {
+    const from = fields(page).locator('#f-accent-en-from');
+    const to = fields(page).locator('#f-accent-en-to');
+    // The sample name is "Sample entry": word 2 is highlighted.
+    await expect(from).toHaveValue('1');
+    await expect(fields(page).locator('.accentf__on')).toHaveText('entry');
+
+    // Moving the start keeps an end that is still after it.
+    await from.selectOption('0');
+    await expect(to).toHaveValue('2');
+    await expect(fields(page).locator('.accentf__on')).toHaveText('Sample entry');
+
+    // Changing the heading changes the words on offer.
+    await fields(page).locator('#f-title-en').fill('One two three four');
+    await expect(from.locator('option')).toHaveCount(5); // "No highlight" + four words
+    await expect(from.locator('option', { hasText: '4. four' })).toHaveCount(1);
+
+    await from.selectOption('');
+    await expect(fields(page).locator('.accentf__on')).toHaveCount(0);
+    await expect(to).toHaveCount(0);
+  });
+
+  test('link: the picker fills the words and the address, and keeps words already written', async ({
+    page,
+  }) => {
+    const href = fields(page).locator('#f-button-href');
+    const target = fields(page).locator('#f-button-target');
+    await expect(href).toHaveValue('/portfolio');
+
+    // The pages are asked for only when the picker is reached.
+    const asked = page.waitForResponse((res) => res.url().includes('/api/admin/linkables'));
+    await target.focus();
+    await asked;
+    await expect(target.locator('option', { hasText: '(/about)' })).toHaveCount(1);
+
+    // Words already written are kept; only the address moves.
+    await target.selectOption('/about');
+    await expect(href).toHaveValue('/about');
+    await expect(fields(page).locator('#f-button-label-en')).toHaveValue('See the samples');
+
+    // An address this site cannot have is said in words, on the box.
+    await href.fill('https://example.com');
+    await expect(href).toHaveAttribute('aria-invalid', 'true');
+    await expect(fields(page).getByText('Use a page of this site (/about)')).toBeVisible();
+    await href.fill('#apply');
+    await expect(href).not.toHaveAttribute('aria-invalid', 'true');
+  });
+
+  test('link: with both labels empty, picking a page fills them in both languages', async ({
+    page,
+  }) => {
+    await fields(page).locator('#f-button-label-en').fill('');
+    await fields(page)
+      .getByRole('group', { name: 'Sample button language' })
+      .getByRole('radio', { name: 'Arabic' })
+      .check();
+    await fields(page).locator('#f-button-label-ar').fill('');
+    const asked = page.waitForResponse((res) => res.url().includes('/api/admin/linkables'));
+    await fields(page).locator('#f-button-target').focus();
+    await asked;
+    await fields(page).locator('#f-button-target').selectOption('/contact');
+    await expect(fields(page).locator('#f-button-label-ar')).not.toHaveValue('');
+    await fields(page)
+      .getByRole('group', { name: 'Sample button language' })
+      .getByRole('radio', { name: 'English' })
+      .check();
+    await expect(fields(page).locator('#f-button-label-en')).not.toHaveValue('');
+  });
+
+  test('clip: the window reads in words and draws, and a window too long says so', async ({
+    page,
+  }) => {
+    await expect(fields(page).getByText('6.2 s to 7.9 s of showreel.mp4 (18.4 s)')).toBeVisible();
+    await expect(fields(page).locator('svg.clipf__line')).toHaveAttribute('aria-hidden', 'true');
+    await fields(page).locator('#f-clip-end').fill('17');
+    await expect(fields(page).getByText('A clip plays at most 30 seconds.')).toHaveCount(0);
+    await fields(page).locator('#f-clip-start').fill('0');
+    await fields(page).locator('#f-clip-end').fill('40');
+    await expect(fields(page).getByText(/A clip plays at most 30 seconds\./)).toBeVisible();
+    await expect(
+      fields(page).getByText('The video ends at 18.4 s, so the end is past it.'),
+    ).toBeVisible();
+  });
+
+  test('a slug list keeps its order and names its buttons', async ({ page }) => {
+    const list = fields(page).getByRole('group', { name: 'Sample projects beside it' });
+    await expect(list.getByText('sample-one')).toBeVisible();
+    await expect(list.getByText('2 of 2')).toBeVisible();
+    await list.getByRole('button', { name: 'Move sample-two up' }).click();
+    await expect(list.getByRole('button', { name: 'Move sample-two up' })).toBeDisabled();
+    await list.getByRole('button', { name: 'Remove sample-one' }).click();
+    await expect(list.getByText('sample-one')).toHaveCount(0);
+    await expect(list.getByText('1 of 2')).toBeVisible();
+  });
+
+  test('axe: the new fields, in Both, with the link picker loaded', async ({ page }) => {
+    await fields(page)
+      .getByRole('group', { name: 'Editing language' })
+      .getByRole('radio', { name: 'Both' })
+      .check();
+    const asked = page.waitForResponse((res) => res.url().includes('/api/admin/linkables'));
+    await fields(page).locator('#f-button-target').focus();
+    await asked;
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+    expect(results.violations, 'axe over the accent, link, slug list and clip').toEqual([]);
   });
 });

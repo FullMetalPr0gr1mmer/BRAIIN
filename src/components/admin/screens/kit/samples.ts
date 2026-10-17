@@ -54,7 +54,11 @@ export const KIT_ROWS: readonly KitRow[] = Array.from({ length: 60 }, (_, i) => 
   views: (i + 1) * 137,
 }));
 
-// ---- The field kit v2 (Admin v2 F5a): every field kind on made-up values ----
+// ---- The field kit v2 (Admin v2 F5a, F5b): every field kind on made-up values ----
+//
+// The screen READS NOTHING (tests/admin/routes.ts): a sample field never names a resource
+// to load options from, and the link picker asks for its pages only when it is reached, so
+// the per-role sweep opens this page without a single API call whatever the role.
 
 /** The sample editor's fields: every kind the field kit draws, as an editor declares them. */
 export const KIT_FIELDS: readonly FieldDef[] = [
@@ -109,6 +113,22 @@ export const KIT_FIELDS: readonly FieldDef[] = [
       { name: 'text', label: 'Text', kind: 'prose' },
     ],
   },
+  // F5b.
+  {
+    name: 'accent',
+    label: 'Highlighted words',
+    kind: 'accent',
+    accent: { of: 'title', mode: 'range' },
+  },
+  { name: 'button', label: 'Sample button', kind: 'link' },
+  {
+    name: 'cardSlugs',
+    label: 'Sample projects beside it',
+    kind: 'slugRelation',
+    maxItems: 2,
+    help: 'A made-up list: this screen loads nothing, so there is nothing to add from.',
+  },
+  { name: 'clip', label: 'Sample loop', kind: 'clip', pathOnly: true },
   { name: 'posterMediaId', label: 'Sample poster', kind: 'media' },
   { name: 'body', label: 'Sample body', kind: 'richtext' },
   {
@@ -142,6 +162,16 @@ export const KIT_FIELD_VALUES: Readonly<Record<string, unknown>> = {
     { title: { en: 'Sketch', ar: 'الرسم' } },
     { title: { en: 'Deliver', ar: 'التسليم' } },
   ],
+  accent: { en: { from: 1, to: 2 }, ar: { from: null, to: null } },
+  button: { label: { en: 'See the samples', ar: 'شاهد النماذج' }, href: '/portfolio' },
+  cardSlugs: ['sample-one', 'sample-two'],
+  clip: {
+    source: 'path',
+    streamUid: '',
+    path: '/media/showreel.mp4',
+    startS: '6.2',
+    endS: '7.9',
+  },
   posterMediaId: '',
   body: { en: paragraph('A rich text sample.'), ar: paragraph('نص منسق للعرض.') },
   status: 'draft',
@@ -152,4 +182,5 @@ export const KIT_FIELD_ISSUES = [
   { path: 'title.ar', message: 'Write the name in Arabic too.' },
   { path: 'steps.1.title.en', message: 'Keep it under 40 characters.' },
   { path: 'tint', message: 'Pick a colour white text can sit on.' },
+  { path: 'button.href', message: 'Use a page of this site.' },
 ] as const;

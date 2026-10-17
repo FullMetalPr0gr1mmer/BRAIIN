@@ -1755,6 +1755,105 @@ input.in--mono[type='text'] {
   outline: none;
 }
 
+/* Accent (AccentField, Admin v2 F5b): two word pickers per language and a line showing
+   which words carry the colour. The highlight is the brand colour on the card, never a
+   <mark>'s default yellow ground. */
+.accentf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 12px;
+}
+
+.accentf__pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-inline-size: 0;
+  flex: 1 1 12rem;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ad-dim2);
+}
+
+.accentf__preview {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-xs);
+  background: var(--ad-bg);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.accentf__on {
+  background: none;
+  color: var(--ad-primary);
+  font-weight: 700;
+}
+
+/* Link (LinkField, F5b): the picker writes into the box beside it, and both stay in view. */
+.linkf {
+  display: grid;
+  gap: 4px;
+}
+
+.linkf__where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.linkf__where select,
+.linkf__where input[type='text'] {
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+}
+
+/* Clip (ClipField, F5b): the file's length as a bar, the window inside it. The drawing is
+   aria-hidden; .clipf__says carries the same thing in words. */
+.clipf {
+  margin-top: 10px;
+}
+
+.clipf__line {
+  display: block;
+  inline-size: 100%;
+  block-size: 14px;
+}
+
+.clipf__all {
+  fill: var(--ad-line-2);
+}
+
+.clipf__win {
+  fill: var(--ad-primary);
+}
+
+.clipf__says {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A slug under the name it belongs to (SlugRelationField, F5b). */
+.item-slug {
+  color: var(--ad-dim2);
+  font-family: var(--ad-mono);
+  font-size: 12px;
+}
+
+/* The line under a section's typed fields, and the button that puts them back (F5b). */
+.sectionf__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
 /* ---- Messages (inline; errors never only in a toast) ---- */
 
 .msg {
@@ -4267,6 +4366,16 @@ dialog.drw[data-size='wide'] {
 
   .bar-fill {
     background: Highlight;
+  }
+
+  /* The clip window and the accent's highlighted words are the only cue in their
+     drawing and their line, so both take a system colour (F5b). */
+  .clipf__win {
+    fill: Highlight;
+  }
+
+  .accentf__on {
+    color: Highlight;
   }
 
   /* Chart paint in one system colour, whatever the browser does to SVG; the series
