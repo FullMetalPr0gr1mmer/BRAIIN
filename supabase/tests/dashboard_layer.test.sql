@@ -171,7 +171,7 @@ select is(
       and ((slug = 'your-dashboard' and screens = '{/admin}')
            or (slug = 'finding-your-way' and screens = '{/admin/search,/admin/help}'))),
   2, 'a new tenant holds your-dashboard on /admin, and finding-your-way without it');
-select is(jsonb_array_length(app.help_article_set()), 13, 'the help set holds 13 guides');
+select is(jsonb_array_length(app.help_article_set()), 15, 'the help set holds 15 guides');
 
 -- ── 2. the presets: who reads ─────────────────────────────────────────────────
 set local role authenticated;

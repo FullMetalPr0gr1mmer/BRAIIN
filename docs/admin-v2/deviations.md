@@ -64,14 +64,16 @@
   - "No cookie banner needed" is corrected (§7).
 - **Backups**: leads are never in admin backups (DR via the runbook, §7/§10).
 - **Activity log**: kept permanently and tamper-evident, not "12 months" or "90 days" (§3); exportable under the export lockdown, with no titles in the file (U13).
-- **Invites** expire per Supabase Auth (≤ 24 h, with Resend) instead of 7 days, until L6 brings transactional email (O-22).
+- **Invites** expire per Supabase Auth instead of 7 days, until L6 brings transactional email (O-22). As built (U12b, decision D1): **one hour, with Resend**, because Supabase has one e-mail link expiry (`otp_expiry`) for invite and reset links, so a longer invite would make reset links live as long; the owner may choose longer (up to 24 h) for both.
 - **Health**: no in-Worker uptime checker; uptime comes from the external monitor (§10).
 - **Help** (U16):
   - guides only for features that are built (nine of the prototype's fifteen described later-phase screens; "roles" promised per-person exceptions §5 does not have);
   - no editing yet: the migrations write the guides until an editor and its capability exist (§5, TDD phase 7);
   - no "Get connected" or "Ask us" in the drawer (A1 later phase; no support channel exists).
+- **Page visibility** (U14a): four modes in the prototype, three in U14a ("Behind a password" is U14b); the KV snapshot is its own key, `site:visibility`, not part of `site:maintenance` as AV-13 said (two writers on one value would race); no anon read of the table (D3); templates are public or hidden only (D1).
 - **Copy corrected** where untrue:
   - maintenance "…after you publish";
+  - page visibility "Takes effect when you publish" / "Hidden from the site after you publish" → "Applies to the live site within a few minutes" until releases switch on (U14a, D7);
   - "Kept for 90 days";
   - "Backups cover everything, including leads";
   - "nothing is saved until you publish" → "nothing goes live until you publish";

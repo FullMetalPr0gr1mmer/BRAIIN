@@ -19,6 +19,7 @@ export const ADMIN_STYLESHEETS = [
   'search.css',
   'stats.css',
   'users.css',
+  'visibility.css',
 ] as const;
 
 export type AdminStylesheet = (typeof ADMIN_STYLESHEETS)[number];

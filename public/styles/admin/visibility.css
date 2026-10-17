@@ -1,0 +1,125 @@
+/* Screen stylesheet: page visibility, /admin/visibility (Admin v2 U14a). Linked only through
+   AdminLayout's `styles` prop (styles={['visibility.css']}), after admin.css. Its rows, badges,
+   notes, drawer and modal are the kit's (admin.css); only the screen's layout and the
+   prototype's option rows restyled as real radio labels are here. It uses admin.css's tokens
+   and declares none, and holds no colour literal (tests/lib/adminStyles.spec.ts,
+   scripts/contrast-audit.mjs). */
+
+/* The live site's status and "Sync to edge", wrapping on a narrow screen. */
+.vis-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 0 0 16px;
+}
+
+.vis-bar__line {
+  flex: 1 1 18rem;
+  min-inline-size: 0;
+  margin: 0;
+}
+
+.vis .note + .vis-list,
+.vis-bar + .note {
+  margin-block-start: 0;
+}
+
+.vis-bar + .note {
+  margin-block-end: 16px;
+}
+
+/* A row: icon, title and path, the state, the button; the state and the button drop under
+   the title when the row is narrow. */
+.vis-row {
+  flex-wrap: wrap;
+}
+
+.vis-row .li__main {
+  flex: 1 1 12rem;
+}
+
+.vis-row__state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.vis-row__window {
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+/* The drawer's options: the prototype's .li rows, each a label around its radio. The radio
+   stays visible (a real control, its own focus ring); the checked row is marked by its border
+   and background, never by colour alone (the radio's own dot says it too). */
+.vis-drawer > * + * {
+  margin-block-start: 14px;
+}
+
+.vis-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.vis-opt {
+  cursor: pointer;
+  align-items: flex-start;
+}
+
+.vis-opt > input[type='radio'] {
+  flex: none;
+  margin-block-start: 10px;
+}
+
+.vis-opt:has(> input:checked) {
+  border-color: var(--ad-primary);
+  background: var(--ad-primary-soft);
+}
+
+.vis-opt:has(> input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.vis-opt .li__t,
+.vis-opt .li__s {
+  display: block;
+}
+
+.vis-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ad-ink);
+}
+
+/* The two dates side by side while each has 11rem, else stacked. */
+.vis-dates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 0 12px;
+}
+
+.vis-extra .field {
+  margin-bottom: 12px;
+}
+
+.vis-extra > .admin-sub {
+  margin: 0 0 12px;
+  font-size: 12px;
+}
+
+@media (forced-colors: active) {
+  .vis-opt:has(> input:checked) {
+    border-width: 2px;
+    border-color: Highlight;
+  }
+}

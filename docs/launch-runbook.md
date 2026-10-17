@@ -149,7 +149,8 @@ below).
    SPF and DKIM on the sender domain. The built-in sender only reaches the project's own
    team and is rate-limited to a handful an hour.
 2. **Site URL and redirect.** Dashboard → **Authentication → URL Configuration**: Site URL =
-   the site's origin (`PUBLIC_SITE_URL`); add `<origin>/admin/reset` to the Redirect URLs.
+   the site's origin (`PUBLIC_SITE_URL`); add `<origin>/admin/reset` and `<origin>/admin/invite`
+   (the invites below) to the Redirect URLs.
 3. **The recovery template.** Dashboard → **Authentication → Emails → Templates → Reset
    Password**: the link must carry the token hash to our page, which verifies it on the
    server (the default `{{ .ConfirmationURL }}` puts a session in the URL's `#` fragment,
@@ -207,6 +208,34 @@ and `select created_at, detail from system_logs where source = 'auth.reset' orde
 limit 5;` names the status and code (never the password); report it before step 5. A
 completed reset is GoTrue's `user_updated_password` too: an alert built on §2a's suggestion
 matches it to the `auth.password_reset` row.
+
+**Invites (Admin v2 U12b, owner item O-22).** The same switch turns on "Invite someone" and
+Resend on the users screen; until then both say **Not set up** and the invite API answers 503
+`not-set-up` (Pending invites and Cancel work either way). They need steps 1, 2 and 4 above,
+and one more template, set on staging first, then production, before step 5:
+
+- **The invite template.** Dashboard → **Authentication → Emails → Templates → Invite user**:
+  subject "You are invited to the admin", and a body whose link carries the token hash to our
+  page (the local stack's `supabase/templates/invite.html` is the whole text to paste; never
+  the default `{{ .ConfirmationURL }}`, for the reason step 3 gives):
+
+  ```html
+  <a href="{{ .SiteURL }}/admin/invite?token_hash={{ .TokenHash }}&type=invite">Set your password</a>
+  ```
+
+  The inviting Admin's optional note travels as `{{ .Data.invite_message }}` (plain text, at
+  most 300 characters, escaped by the template engine, cleared when the invite is accepted).
+- **An invite link lasts one hour** (decision D1). It is step 4's setting: Supabase has one
+  e-mail link expiry for invites and resets, so a longer invite would make reset links live as
+  long. The screen says "The link works for one hour. Resend it if it runs out."
+
+**What to check**, after the deploy that carries step 5: invite a throwaway address of your
+own, open the link, set a password, sign in with it (the role is the one chosen), then switch
+the account off (Remove access). Resend a second invite (the old link stops working) and Cancel
+it (the account is gone). Each leaves an `audit_log` row: `user.invite`, `user.invite_resend`,
+`user.invite_cancel`, and `auth.invite_accepted` against the account (none of them carries the
+address or the message). A link spent without a password set is in `select created_at, detail
+from system_logs where source = 'auth.invite' order by id desc limit 5;`.
 
 ### 2c. Session limits (Admin v2 F7, owner item O-24)
 
@@ -1233,6 +1262,45 @@ was removed and stops being served within two hours. Shortening that needs Supab
 (Pro plan) and a purge of the `/_image` URLs (O-3); it is recorded in the Admin v2 deviations
 register. The Supabase dashboard's Storage browser removes an object by hand, with the same
 window.
+
+### 6j. Page visibility — first edge snapshot after deploy (migration 0057, Admin v2 U14a)
+
+Migration 0057 adds `page_visibility`: who can see each CMS page (visible to everyone, hidden
+with a 302 to another page or a 404, or only people with the link) and whether the service
+page or the case study page template is hidden. **No row is public**, so applying it changes
+nothing on the site. Every save rebuilds the whole snapshot into KV `site:visibility`, which
+the middleware reads after the maintenance check (through a one-minute isolate memo over KV's
+own one-minute edge cache and its propagation, so a change is live everywhere within about
+three minutes), and the
+daily Worker cron rebuilds it again. Apply 0057 before merging the PR that carries it (§1, the
+deploy guard); then, **once after the deploy** (and after any KV incident), as Admin or
+Developer:
+
+1. Admin → **Settings › General › Page visibility**. The line above the list reads "Every
+   page is visible, and the live site agrees" (nothing set yet), or says the live site has no
+   copy yet.
+2. Click **Sync to edge**. The toast says the live site has the latest settings, and the audit
+   log gains a `page_visibility.sync` row with `kvSynced: true`. A red "did not take the
+   settings" means KV refused the write: Site health's Errors tab has the reason
+   (`admin:page_visibility.sync`); fix, then click again. Or wait for the next morning's cron
+   (`cron:visibility` in the same tab).
+3. Verify from outside, after hiding a test page (allow a few minutes):
+
+   ```bash
+   curl -sI $BASE/<hidden-page> | grep -i '^HTTP\|^location\|^cache-control\|^x-robots-tag'
+   # 302 (or 404) · location: <target> · cache-control: private, no-store · x-robots-tag: noindex
+   curl -sI $BASE/ar/<hidden-page> | grep -i '^location'      # the Arabic twin of the target
+   curl -s $BASE/sitemap.xml | grep -c '<hidden-page>'        # 0
+   ```
+
+   Then set the page back to **Visible to everyone**.
+
+The homepage cannot be hidden (the database refuses it for every writer, the service role
+included): to take the whole site down, use maintenance mode (§5). A page hidden from the
+sitemap may stay in a crawler's copy for up to an hour (`max-age=3600`). Nothing caches Tier A
+in front of the Worker yet; when a cache arrives (L9, KAN-20), a page that leaves public must
+also be purged (the save answers the tags: `page:<slug>` or `services:all`/`portfolio:all`,
+`nav:all`, `route:sitemap`, `route:llms`), which R7 wires.
 
 ---
 

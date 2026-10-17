@@ -10,6 +10,15 @@ import {
 } from '@/lib/http/securityHeaders';
 import { getMaintenanceState, clientIp, maintenanceResponse } from '@/lib/http/maintenance';
 import { getRedirectMap, lookupRedirect, redirectResponse } from '@/lib/http/redirects';
+import {
+  HIDDEN_CACHE_CONTROL,
+  PASS,
+  decide,
+  getVisibilitySnapshot,
+  type VisibilityGate,
+} from '@/lib/http/visibility';
+import { localizedPagePath, targetForRoute } from '@/lib/visibility/routes';
+import { localeFromPath } from '@/lib/i18n';
 import { checkImageRequest, imageGuardResponse, isImageEndpoint } from '@/lib/http/imageGuard';
 import {
   isSameOrigin,
@@ -24,8 +33,9 @@ import { resolveAuthContext } from '@/lib/auth/context';
 import { expiredSignInForm, tooLargeSignInForm } from '@/lib/auth/expiredForm';
 import { PRIVATE_FORM_BODY_LIMIT, bodyWithinLimit } from '@/lib/auth/bodyLimit';
 
-// The PRIMARY enforcement point for: maintenance pre-cache check → per-request CSP nonce →
-// strict security headers → admin session + CSRF → render → authored redirects on a 404.
+// The PRIMARY enforcement point for: maintenance pre-cache check → page visibility →
+// per-request CSP nonce → strict security headers → admin session + CSRF → render →
+// authored redirects on a 404.
 // (CLAUDE.md §8.) src/worker.ts backstops what Astro answers before this runs and what
 // the ASSETS binding passes through (`ensureSecurityHeaders`); public/_headers covers the
 // static files the asset worker serves without the Worker. The CSP's Report-Only switch is
@@ -39,6 +49,28 @@ import { PRIVATE_FORM_BODY_LIMIT, bodyWithinLimit } from '@/lib/auth/bodyLimit';
 // renders. The 404 page itself is `private, no-store` (src/pages/404.astro) so a rule
 // authored later is never hidden behind an edge-cached 404.
 
+// Page visibility (Admin v2 U14a; src/lib/http/visibility.ts) runs right after the
+// maintenance 503 and before anything renders: a hidden page answers a 302 to another page
+// or the 404 page, `private, no-store` and `noindex`, before any database read and before
+// any cache the Worker could consult; a link-only page renders as usual (Tier A: its content
+// is public to anyone with the link) with `X-Robots-Tag: noindex`. It is keyed on the route
+// Astro matched (src/lib/visibility/routes.ts), never on the path, for the reason the next
+// paragraph gives. Every method is gated: a hidden page answers nothing. The snapshot is
+// read through a one-minute isolate memo, so this costs about one KV read per isolate per
+// minute, not one per request, and it fails open (decision D6, as maintenance does).
+
+/**
+ * A hidden page's answer, as it leaves: never stored by any cache, never indexed, and no
+ * cache tag a purge could mistake for the page's.
+ */
+function hiddenAnswer(response: Response): Response {
+  const out = new Response(response.body, response);
+  out.headers.set('Cache-Control', HIDDEN_CACHE_CONTROL);
+  out.headers.delete('Cache-Tag');
+  out.headers.set('X-Robots-Tag', 'noindex');
+  return out;
+}
+
 /** Tier C (CLAUDE.md §2): the admin and its API are never cached, anywhere. */
 const PRIVATE_CACHE = 'private, no-store, max-age=0, must-revalidate';
 
@@ -48,19 +80,22 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const REDIRECTABLE_METHODS = new Set(['GET', 'HEAD']);
 
 /**
- * The only private paths reachable without a session: the three sign-in screens (sign
- * in, forgot password, reset password: Admin v2 F7) and the endpoints their forms post
- * to. All six still get the CSRF check and `no-store`; what they skip is the
- * authentication gate, which they obviously cannot satisfy.
+ * The only private paths reachable without a session: the four sign-in screens (sign in,
+ * forgot password, reset password: Admin v2 F7; accepting an invite: U12b) and the
+ * endpoints their forms post to. All eight still get the CSRF check, the pre-auth body
+ * limit and `no-store`; what they skip is the authentication gate, which they obviously
+ * cannot satisfy.
  */
 const LOGIN_PATH = '/admin/login';
 const PRE_AUTH_PATHS: ReadonlySet<string> = new Set([
   LOGIN_PATH,
   '/admin/forgot',
   '/admin/reset',
+  '/admin/invite',
   '/api/admin/auth/login',
   '/api/admin/auth/forgot',
   '/api/admin/auth/reset',
+  '/api/admin/auth/invite',
 ]);
 
 /**
@@ -204,6 +239,31 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
+  // 1a) Page visibility, after the maintenance 503 and before the render (see the header).
+  //     The snapshot rides `locals` to the menus, the sitemap and llms.txt, so the request
+  //     reads it once.
+  let gate: VisibilityGate = PASS;
+  if (!isAdmin && !isApi && !isHealth && !isImage) {
+    const snapshot = await getVisibilitySnapshot(env);
+    locals.visibility = snapshot;
+    const target = targetForRoute(context.routePattern);
+    if (target) gate = decide(snapshot, target, Date.now());
+    if (gate.action === 'hide') {
+      // The route's language, not the path's: the route is what rendered.
+      const locale = localeFromPath(context.routePattern ?? url.pathname);
+      const answer = gate.to
+        ? // 302, never 301: a hidden page comes back (decision D2).
+          new Response(null, {
+            status: 302,
+            headers: { Location: localizedPagePath(gate.to, locale) },
+          })
+        : // A rewrite to the 404 page: it renders with its own status, and the middleware
+          // does not run again for it.
+          await next(locale === 'ar' ? '/ar/404' : '/404');
+      return secured(hiddenAnswer(answer));
+    }
+  }
+
   // 1b) Image transforms answer only the URLs our own markup emits. Every other
   //     combination of width, height and format would be a new "unique transformation"
   //     against the Images free-plan quota (src/lib/http/imageGuard.ts). The endpoint runs
@@ -246,7 +306,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Authentication gate. Authorization (which capability, which role) is the API
     // kernel's job — this only answers "is there a verified session at all".
     const route = routeKey(url.pathname);
-    // Both the path and the route Astro matched must be one of the six: a path that reads as
+    // Both the path and the route Astro matched must be one of the eight: a path that reads as
     // the sign-in endpoint but routes to a lead's is not pre-auth (see "What a request is").
     const preAuth = PRE_AUTH_PATHS.has(route) && PRE_AUTH_PATHS.has(matched);
     const unauthenticated = (): Response => {
@@ -311,6 +371,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (rule) return secured(redirectResponse(rule, url));
   }
 
-  // 5) Apply the same headers to the rendered response.
-  return secured(rendered);
+  // 5) Apply the same headers to the rendered response; a link-only page is not indexed.
+  const out = await secured(rendered);
+  if (gate.action === 'noindex') out.headers.set('X-Robots-Tag', 'noindex');
+  return out;
 });

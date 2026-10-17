@@ -2,7 +2,7 @@
 import AuthLayout from '@/layouts/AuthLayout.astro';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
 import { safeNext } from '@/lib/auth/next';
-import { LOGIN_MESSAGES, RESET_DONE, messageFor } from '@/lib/auth/messages';
+import { INVITE_READY, LOGIN_MESSAGES, RESET_DONE, messageFor } from '@/lib/auth/messages';
 
 export const prerender = false;
 
@@ -17,7 +17,14 @@ const next = safeNext(Astro.url.searchParams.get('next') ?? '/admin');
 if (Astro.locals.session) return Astro.redirect(next, 302);
 
 const error = messageFor(LOGIN_MESSAGES, Astro.url.searchParams.get('error'));
-const notice = !error && Astro.url.searchParams.get('reset') === 'done' ? RESET_DONE : null;
+// A finished reset (F7) or an accepted invite (U12b) says so; neither ever names the account.
+const notice = error
+  ? null
+  : Astro.url.searchParams.get('reset') === 'done'
+    ? RESET_DONE
+    : Astro.url.searchParams.get('invite') === 'ready'
+      ? INVITE_READY
+      : null;
 const csrfToken = Astro.locals.csrfToken;
 ---
 

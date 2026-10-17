@@ -108,6 +108,17 @@ export const RELEASE_ENTITY_META: Readonly<Record<ReleaseEntityType, ReleaseEnti
     hasStatus: false,
     publishFlag: null,
   },
+  // Page visibility (Admin v2 U14a, 0057): §5 "Maintenance / hidden pages / page visibility"
+  // (P-2). After pages, whose ids it names; never removed by a release ("public" is a mode).
+  page_visibility: {
+    area: 'settings',
+    authorCaps: ['maintenance.manage'],
+    removeCap: null,
+    key: 'id',
+    applyOrder: 85,
+    hasStatus: false,
+    publishFlag: null,
+  },
 };
 
 /** The areas whose changes are content (write capability + `content.publish`). */

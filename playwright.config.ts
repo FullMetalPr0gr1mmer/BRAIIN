@@ -14,6 +14,8 @@ import { defineConfig, devices } from '@playwright/test';
 // preview are loopback, the service key is exported, and the build in dist/ names that same
 // Supabase (tests/admin/staff.ts); in CI the setup fails instead of skipping.
 const ADMIN_SPECS = /[\\/]tests[\\/]admin[\\/]/;
+// Page visibility (Admin v2 U14a) hides real pages: its own project, run last (below).
+const VISIBILITY_SPEC = /[\\/]tests[\\/]admin[\\/]visibility\.e2e\.ts$/;
 
 export default defineConfig({
   testDir: './tests',
@@ -37,8 +39,19 @@ export default defineConfig({
     {
       name: 'admin',
       testDir: './tests/admin',
+      testIgnore: VISIBILITY_SPEC,
       use: { ...devices['Desktop Chrome'] },
       dependencies: ['admin-setup'],
+    },
+    {
+      // Page visibility (Admin v2 U14a) hides real pages on the one preview every spec
+      // shares, so it runs alone, after the public and the admin specs (and restores every
+      // page to public when it ends).
+      name: 'visibility',
+      testDir: './tests/admin',
+      testMatch: VISIBILITY_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['chromium', 'admin'],
     },
   ],
 });

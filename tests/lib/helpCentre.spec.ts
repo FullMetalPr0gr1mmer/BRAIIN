@@ -339,6 +339,59 @@ describe('the guides say only what the admin does', () => {
     expect(guide('maintenance-mode', 'ar')).toContain('خلال دقيقة تقريبًا');
   });
 
+  it('page visibility is described as the gate, the menus and the admin do it (U14a)', () => {
+    // A few minutes: the isolate memo over KV's edge cache and propagation (about three at
+    // worst, src/lib/http/visibility.ts); Riyadh days, [from, until); the homepage
+    // refused with these words; templates hidden whole; link only unlisted, not private;
+    // a crawler's sitemap copy up to an hour (max-age=3600).
+    expect(source('src/lib/http/visibility.ts')).toContain('VISIBILITY_MEMO_MS = 60_000');
+    expect(source('packages/schemas/visibility.ts')).toContain('T00:00:00+03:00');
+    expect(source('src/lib/admin/visibilityCopy.ts')).toContain(
+      "'The homepage cannot be hidden. Use maintenance mode instead.'",
+    );
+    expect(source('src/pages/sitemap.xml.ts')).toContain("'cache-control': 'public, max-age=3600'");
+    expect(source('src/lib/admin/visibilityCopy.ts')).toContain("badge: 'Link only'");
+    const en = guide('page-visibility', 'en');
+    expect(en).toContain('applies to the live site within a few minutes');
+    expect(en).not.toMatch(/within a minute/);
+    expect(en).toContain('Riyadh time');
+    expect(en).toContain('unlisted, not private');
+    // Hiding is not deleting, and a hidden page's form stays open (/api is never gated).
+    expect(source('src/middleware.ts')).toMatch(/\/api/);
+    expect(en).toContain("Hiding is not deleting: the page's words stay published.");
+    expect(en).toContain('still takes what its form sends');
+    expect(en).toContain('Accepting job applications');
+    expect(en).toContain('The homepage is always visible');
+    expect(en).toContain('up to an hour');
+    expect(en).toContain('Sync to edge');
+    expect(en).not.toMatch(/password/i);
+    const ar = guide('page-visibility', 'ar');
+    expect(ar).toContain('خلال بضع دقائق');
+    expect(ar).not.toContain('خلال دقيقة');
+    expect(ar).toContain('بتوقيت الرياض');
+    expect(ar).toContain('غير مدرجة وليست خاصة');
+    expect(ar).toContain('الإخفاء ليس حذفًا');
+    expect(ar).toContain('Accepting job applications');
+  });
+
+  it('U14a (0057) restates U12b’s set (0056) and only adds the page-visibility guide', () => {
+    // Production applies 0056 before 0057, so 0057's set must carry every guide 0056 seeds
+    // (U12a's roles guide, U12b's invites guide) as 0056 left it, or it would revert them.
+    const setOf = (file: string) => {
+      const sql = source(`${MIGRATIONS}/${file}`);
+      return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
+    };
+    const u12b = setOf('0056_invites.sql');
+    const u14 = setOf('0057_page_visibility.sql');
+    expect(u14.filter((a) => a.slug !== 'page-visibility')).toEqual(u12b);
+    const added = u14.find((a) => a.slug === 'page-visibility')!;
+    expect(added.caps).toEqual(['maintenance.manage']);
+    expect(added.screens).toEqual(['/admin/visibility']);
+    // Listed after maintenance mode.
+    const maintenance = u14.find((a) => a.slug === 'maintenance-mode')!;
+    expect(added.sort_order).toBeGreaterThan(maintenance.sort_order);
+  });
+
   it('scheduling is described as the editors and the job do it', () => {
     // The job runs every five minutes (0010) over app.publish_scheduled()'s tables, which are
     // exactly the editors with a Scheduled for field.
@@ -530,28 +583,55 @@ describe('the guides say only what the admin does', () => {
     expect(guide('site-health-and-logs', 'ar')).toContain('400 يوم');
   });
 
-  it('U1 (0060) restates U12a’s set (0055): adds your-dashboard, takes /admin off finding-your-way', () => {
-    // Production applies 0055 then 0060, so 0060's set must carry the guides as 0055 left
-    // them: every guide but finding-your-way byte for byte, that one with only its screens
-    // changed (the dashboard has its own guide now), and your-dashboard after it.
+  it('U12b (0056) restates U12a’s set (0055) and only adds the invites guide', () => {
+    // Production applies 0055, then 0056: every guide 0055 seeds stays byte for byte, and the
+    // one new guide sits after the roles guide, for Admin alone, on the users screen.
     const setOf = (file: string) => {
       const sql = source(`${MIGRATIONS}/${file}`);
       return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
     };
     const u12a = setOf('0055_users_v2.sql');
+    const u12b = setOf('0056_invites.sql');
+    expect(u12b.filter((a) => a.slug !== 'inviting-people')).toEqual(u12a);
+    const at = u12b.findIndex((a) => a.slug === 'inviting-people');
+    expect(u12b[at - 1]?.slug).toBe('roles-and-access');
+    const invites = u12b[at]!;
+    expect(invites.caps).toEqual(['users.manage']);
+    expect(invites.screens).toEqual(['/admin/users']);
+    expect(ROLES.filter((role) => mayRead(role, invites.caps))).toEqual(['admin']);
+    // The users screen's head keeps the roles guide, which every member may read.
+    expect(pageGuideFor('/admin/users', 'admin')).toBe('roles-and-access');
+    // Cancel works while the invite is pending (isPendingInvite: never confirmed, never
+    // signed in), and a spent link confirms the address whether or not a password was set:
+    // so the guide ties Cancel to accepting the invite, not to setting a password.
+    const cancelLine = textsOf(invites, 'en').join('\n');
+    expect(cancelLine).toContain('Until they have accepted the invite, you can Cancel it');
+    expect(cancelLine).not.toContain('set a password, you can Cancel');
+    expect(textsOf(invites, 'ar').join('\n')).toContain('ما دام لم يقبل الدعوة بعد');
+  });
+
+  it('U1 (0060) restates U14a’s set (0057): adds your-dashboard, takes /admin off finding-your-way', () => {
+    // Production applies 0057 then 0060, so 0060's set must carry the guides as 0057 left
+    // them (0055's twelve, U12b's invites guide and U14a's page-visibility guide): every guide but finding-your-way byte for byte, that one with only its screens
+    // changed (the dashboard has its own guide now), and your-dashboard after it.
+    const setOf = (file: string) => {
+      const sql = source(`${MIGRATIONS}/${file}`);
+      return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
+    };
+    const base = setOf('0057_page_visibility.sql');
     const u1 = setOf('0060_dashboard_layer.sql');
     expect(u1.map((a) => a.slug)).toEqual([
       'finding-your-way',
       'your-dashboard',
-      ...u12a.map((a) => a.slug).filter((slug) => slug !== 'finding-your-way'),
+      ...base.map((a) => a.slug).filter((slug) => slug !== 'finding-your-way'),
     ]);
-    for (const article of u12a.filter((a) => a.slug !== 'finding-your-way')) {
+    for (const article of base.filter((a) => a.slug !== 'finding-your-way')) {
       expect(
         u1.find((a) => a.slug === article.slug),
         article.slug,
       ).toEqual(article);
     }
-    const before = u12a.find((a) => a.slug === 'finding-your-way')!;
+    const before = base.find((a) => a.slug === 'finding-your-way')!;
     const after = u1.find((a) => a.slug === 'finding-your-way')!;
     expect({ ...after, screens: null }).toEqual({ ...before, screens: null });
     expect(after.screens).toEqual(before.screens.filter((s) => s !== '/admin'));
@@ -766,6 +846,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'finding-your-way',
       'maintenance-mode',
       'media-library',
+      'page-visibility',
       'personal-data',
       'roles-and-access',
       'site-health-and-logs',

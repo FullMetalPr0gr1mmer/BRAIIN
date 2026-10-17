@@ -8,9 +8,9 @@ the program applies it. No URL, credential or project reference belongs here.
 
 ## Applied
 
-Production has applied 0001 to 0038, 0041, 0044, 0045, 0046, 0048, 0050, 0051, 0052, 0054 and
-0055, the files `main` holds once #70 merges (0039, 0040, 0042, 0043, 0047 and 0049 were released unused; gaps are
-allowed).
+Production has applied 0001 to 0038, 0041, 0044, 0045, 0046, 0048, 0050, 0051, 0052, 0054, 0055,
+0056, 0057 and 0060, the files `main` holds once #75 merges (0039, 0040, 0042, 0043, 0047, 0049
+and 0053 were released unused; gaps are allowed).
 
 | Migration | What | PR |
 |---|---|---|
@@ -34,6 +34,9 @@ allowed).
 | 0052 | `0052_stats_health_rollups.sql`: stats and health: `rollup_daily_vitals`, the invoker readers, whole-day page views (`app.rollup_pageviews` restated), the help set restated (U2). Applied before #72 merged | #72 |
 | 0054 | `0054_activity_log.sql`: the activity log v2: `app.role_views_audit`, the RESTRICTIVE live read on `audit_log` (`audit_log_live_read`), the person and day filter indexes, `public.audit_people` (the people directory's audit door, former members included), the help set restated from 0052's with the activity log's guide text (the actor binding is H10's, 0050) (U13). Applied before #71 merges | #71 |
 | 0055 | `0055_users_v2.sql`: users v2 and the session posture: `profiles_revoke_sessions` (every session of a person whose role, activity or tenant changes is deleted; the postconditions refuse the push unless the owner can DELETE `auth.sessions`/`auth.refresh_tokens`), the RESTRICTIVE live read on `profiles` (`profiles_live_read`), the account owner (`profiles.is_owner`, `profiles_one_owner`, `app.tg_profiles_owner_guard`, `public.transfer_ownership`), `admin_security_settings`, `public.staff_accounts`, the help set restated from 0054's with the roles guide rewritten (U12a). Applied before #70 merges | #70 |
+| 0056 | `0056_invites.sql`: the invites guide, `inviting-people`, added to the help set restated from 0055's, and every tenant re-seeded; no schema change (U12b). Applied before #73 merges | #73 |
+| 0057 | `0057_page_visibility.sql`: page visibility, without the password mode: `public.page_visibility` (one row per CMS page or template: public, hidden with an optional redirect, or link-only, with a hide-from/show-on window; RLS ENABLE + FORCE, CMS roles read, Admin and Developer write through the JWT role and a RESTRICTIVE live check, no DELETE, no anon access; the homepage is always public), `pages_tenant_id_id`, `app.role_manages_visibility`, the `pages_route_slug_fixed` trigger, its release-registry row (immediate until R14), and the help set restated from 0056's with `page-visibility` added (U14a). Applied before #74 merges | #74 |
+| 0060 | `0060_dashboard_layer.sql`: the dashboard layer: `admin_role_defaults` (a role's preset layout and quick actions, written by `app.role_manages_users(app.live_role())`), `admin_user_prefs.dashboard`, `team_notes` with `public.save_team_notes()` and `app.expire_team_notes()` (blanked 180 days after the last edit, daily by pg_cron `team-notes-retention`), and the help set restated from 0057's with `your-dashboard` added and `/admin` taken off `finding-your-way` (U1). Applied before #75 merges | #75 |
 
 Each slice's file under [as-built/](as-built/) has the detail.
 
@@ -54,11 +57,8 @@ the row is true when the PR lands and nothing here is edited after a merge.
 | 0047 | (released) | unused: U16 (0046) and then H9 (0048) merge before C13, and once 0048 is on `main` a 0047 would sort below its highest, so C13 moved to 0049 | 1 |
 | 0049 | (released) | unused: H10 (0050) merges before C13, and once 0050 is on `main` a 0049 would sort below its highest (rule 1), so C13 moved to 0059 | 1 |
 | 0053 | (released) | unused: U13 (0054) merged before U1, and once 0054 is on `main` a 0053 would sort below its highest (rule 1), so U1 moved to 0060, the lowest number above `main` that no other slice holds | 2 |
-| 0056 | U12b | invites: the help guide | 2 |
-| 0057 | U14a | page visibility | 2 |
 | 0058 | U14b | the page password | 2 |
 | 0059 | C13 | lead attribution capture (built, held for the privacy notice, O-11); moved from 0047, then from 0049 | 1 |
-| 0060 | U1 | the dashboard: presets and team notes; moved from 0053 | 2 |
 
 ## Rules
 

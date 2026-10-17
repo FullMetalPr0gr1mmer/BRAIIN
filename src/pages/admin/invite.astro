@@ -1,0 +1,105 @@
+---
+import AuthLayout from '@/layouts/AuthLayout.astro';
+import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
+import { PASSWORD_MAX_BYTES, PASSWORD_MIN } from '@schemas/adminPrefs';
+import {
+  INVITE_LINK_SPENT,
+  INVITE_MESSAGES,
+  INVITE_REOPEN,
+  INVITE_TOO_LARGE,
+  messageFor,
+} from '@/lib/auth/messages';
+import { FORM_TOO_LARGE } from '@/lib/auth/expiredForm';
+import {
+  INVITE_TOKEN_COOKIE,
+  dropInviteTokenOptions,
+  inviteTokenFrom,
+} from '@/lib/auth/inviteToken';
+
+export const prerender = false;
+
+// Accept an invite: choose your first password (Admin v2 U12b, the reset page's pattern,
+// src/pages/admin/reset.astro). Opened from the invite e-mail's link,
+// `/admin/invite?token_hash=…&type=invite` (supabase/templates/invite.html; the hosted
+// template, launch runbook §2b). This page does NOT verify the token: mail scanners fetch
+// links, and a GET that spent it would leave the person with a dead link. It only checks the
+// token's shape and carries it, in a hidden field, to /api/admin/auth/invite, which verifies
+// it, sets the password and signs the account out everywhere, all on the server. A plain
+// form, no script.
+//
+// After a form post that left the link unspent, the endpoint comes back here with only an
+// `error` code in the URL and the token in a cookie scoped to this page
+// (src/lib/auth/inviteToken.ts), and the page's own requests send the origin alone as their
+// Referer, never this URL with the e-mail's token in it.
+
+const params = Astro.url.searchParams;
+const kept = Astro.cookies.get(INVITE_TOKEN_COOKIE)?.value;
+const token = inviteTokenFrom(params, kept);
+// Dropped with this very response once its token is in the form below, so the link is not
+// offered again to whoever uses this browser next.
+if (kept !== undefined) Astro.cookies.delete(INVITE_TOKEN_COOKIE, dropInviteTokenOptions());
+const code = params.get('error');
+const message = messageFor(INVITE_MESSAGES, code);
+// No usable link: none in the URL or the cookie, or the endpoint said it is spent or refused.
+const spent = token === null || (code !== null && INVITE_LINK_SPENT.has(code));
+// A failure that kept the link, with the link no longer here (a reload, or the cookie's 15
+// minutes): it is not spent, only gone from this page, so say to open it again.
+const reopen = token === null && message !== null && code !== null && !INVITE_LINK_SPENT.has(code);
+const reopenWith = code === FORM_TOO_LARGE ? INVITE_TOO_LARGE : INVITE_REOPEN;
+const shown = reopen ? reopenWith : (message ?? (spent ? INVITE_MESSAGES.expired : null));
+const csrfToken = Astro.locals.csrfToken;
+---
+
+<AuthLayout title="Set your password" styles={['login.css']} referrer="strict-origin">
+  <h1>Set your password</h1>
+
+  {
+    shown && (
+      <p class="msg" data-kind={shown.kind} role="alert">
+        {shown.text}
+      </p>
+    )
+  }
+
+  {
+    !spent && (
+      <>
+        <p class="login__lead">
+          Welcome. Choose a password to finish joining. Use at least {PASSWORD_MIN} characters. A
+          short sentence you will remember works well.
+        </p>
+        <form class="login__form" method="post" action="/api/admin/auth/invite">
+          <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+          <input type="hidden" name="token_hash" value={token} />
+          <label class="field">
+            <span>Password</span>
+            <input
+              type="password"
+              name="password"
+              autocomplete="new-password"
+              required
+              minlength={PASSWORD_MIN}
+              maxlength={PASSWORD_MAX_BYTES}
+            />
+          </label>
+          <label class="field">
+            <span>Confirm password</span>
+            <input
+              type="password"
+              name="confirm"
+              autocomplete="new-password"
+              required
+              minlength={PASSWORD_MIN}
+              maxlength={PASSWORD_MAX_BYTES}
+            />
+          </label>
+          <button type="submit" data-variant="primary">
+            Set password
+          </button>
+        </form>
+      </>
+    )
+  }
+
+  <p class="login__back"><a class="login__link" href="/admin/login">Back to sign in</a></p>
+</AuthLayout>

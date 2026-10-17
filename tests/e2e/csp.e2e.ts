@@ -39,6 +39,8 @@ const ROUTES = [
   // Sign-in v2 (Admin v2 F7): the other two screens a visitor without a session reaches
   '/admin/forgot',
   '/admin/reset?token_hash=a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4&type=recovery',
+  // Accepting an invite (Admin v2 U12b): the fourth screen reached without a session
+  '/admin/invite?token_hash=a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4&type=invite',
   '/about',
   '/ar/about',
   // Join — the application form and its dropzone are module scripts
@@ -102,7 +104,7 @@ for (const route of [
   });
 }
 
-for (const route of ['/admin/login', '/admin/forgot', '/admin/reset']) {
+for (const route of ['/admin/login', '/admin/forgot', '/admin/reset', '/admin/invite']) {
   test(`${route} carries no inline style attributes`, async ({ page }) => {
     // `style-src` has no 'unsafe-inline', so a `style="…"` attribute is dead markup: it is
     // silently ignored and the element renders unstyled. React's `style={{…}}` prop emits

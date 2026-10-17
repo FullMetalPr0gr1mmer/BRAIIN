@@ -1,7 +1,8 @@
 import { UUID, VALID_BILINGUAL, type Case } from '../harness';
 
-// Pages and their sections (§5 "Pages & sections — edit/reorder/style"), and the page
-// visibility switch (§5 "Maintenance / hidden pages / page visibility").
+// Pages and their sections (§5 "Pages & sections — edit/reorder/style"), and the legacy
+// page visibility switch (§5 "Maintenance / hidden pages / page visibility"), an alias over
+// page_visibility since Admin v2 U14a (the screen's own routes are in ./visibility.ts).
 
 export const cases: readonly Case[] = [
   {
@@ -44,11 +45,12 @@ export const cases: readonly Case[] = [
     allow: ['admin'],
   },
   {
-    name: 'page visibility toggle',
+    name: 'page visibility toggle (alias over page_visibility)',
     load: () => import('@/pages/api/admin/pages/visibility/[id]'),
     method: 'PATCH',
     url: `/api/admin/pages/visibility/${UUID}`,
     body: { navVisible: false, version: 1 },
+    // RLS agrees since 0057: page_visibility is Admin + Developer in both layers.
     allow: ['admin', 'developer'],
   },
   {

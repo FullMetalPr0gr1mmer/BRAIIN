@@ -3,22 +3,25 @@ import { csrfHeaderToken } from '@/lib/http/csrf';
 import { seeOther } from './body';
 import { DEFAULT_NEXT, safeNext } from './next';
 import { keepResetToken } from './resetToken';
+import { keepInviteToken } from './inviteToken';
 
 // A sign-in screen's form post that fails the CSRF check (Admin v2 F7 review).
 //
-// The three sign-in screens are zero-JS forms, so what a browser shows for a refused post
+// The sign-in screens (sign in, forgot, reset, and since Admin v2 U12b the invite page) are
+// zero-JS forms, so what a browser shows for a refused post
 // is the response itself. The middleware's refusal is a JSON 403, which a person's browser
 // renders as `{"ok":false,"error":"csrf"}`: a dead end. And a person meets it in ordinary
 // use, because `__Host-csrf` is a session cookie: close the browser with the sign-in page
 // open, let it restore the tab, and the token the page carries matches nothing.
 //
-// So a urlencoded post to one of the three endpoints that fails the token check goes back
+// So a urlencoded post to one of their endpoints that fails the token check goes back
 // to its page with a fixed code, and the page's GET mints a fresh token. Nothing in the post
 // is acted on: the handler never runs. What travels back is only what the page already had:
-// `next` on the sign-in page (held to /admin by safeNext), in the URL, and the reset link's
-// token (its shape checked), in the reset page's cookie, never the URL, as the reset
-// endpoint keeps it for a failure that leaves it unspent (src/lib/auth/resetToken.ts). A
-// JSON caller, or anything carrying the token header, keeps the JSON 403.
+// `next` on the sign-in page (held to /admin by safeNext), in the URL, and the reset or
+// invite link's token (its shape checked), in that page's own cookie, never the URL, as its
+// endpoint keeps it for a failure that leaves it unspent (src/lib/auth/resetToken.ts,
+// src/lib/auth/inviteToken.ts). A JSON caller, or anything carrying the token header, keeps
+// the JSON 403.
 //
 // Only the token check: a cross-site form post never gets this far (Astro's checkOrigin
 // answers it first), and a mismatched Origin stays the middleware's JSON 403.
@@ -39,6 +42,7 @@ const SIGN_IN_FORMS: ReadonlyMap<string, { page: string; key: 'error' | 'status'
   ['/api/admin/auth/login', { page: '/admin/login', key: 'error' }],
   ['/api/admin/auth/forgot', { page: '/admin/forgot', key: 'status' }],
   ['/api/admin/auth/reset', { page: '/admin/reset', key: 'error' }],
+  ['/api/admin/auth/invite', { page: '/admin/invite', key: 'error' }],
 ]);
 
 /** Where a sign-in form post that failed the token check goes back to, or null. */
@@ -54,15 +58,22 @@ export function expiredFormLocation(endpoint: string, fields: URLSearchParams): 
   return `${form.page}?${params}`;
 }
 
-/** The reset link's token a form post carried, when it has the right shape. */
-function postedResetToken(endpoint: string, fields: URLSearchParams): string | null {
-  if (endpoint !== '/api/admin/auth/reset') return null;
+/** The page cookie that keeps a link's token, per endpoint whose form carries one. */
+const KEEP_TOKEN: ReadonlyMap<string, (token: string) => string> = new Map([
+  ['/api/admin/auth/reset', keepResetToken],
+  ['/api/admin/auth/invite', keepInviteToken],
+]);
+
+/** The Set-Cookie that keeps the link's token a form post carried, when it has the right shape. */
+function keptLinkToken(endpoint: string, fields: URLSearchParams): string | null {
+  const keep = KEEP_TOKEN.get(endpoint);
+  if (!keep) return null;
   const token = fields.get('token_hash');
-  return token !== null && RECOVERY_TOKEN_PATTERN.test(token) ? token : null;
+  return token !== null && RECOVERY_TOKEN_PATTERN.test(token) ? keep(token) : null;
 }
 
 /**
- * True for a sign-in screen's own form post: one of the three endpoints, urlencoded, and no
+ * True for a sign-in screen's own form post: one of their endpoints, urlencoded, and no
  * token header (a script sends one; a form cannot), as the middleware reads "no token header"
  * (`csrfHeaderToken`: an empty one is none). Reads nothing of the body.
  */
@@ -100,7 +111,7 @@ export async function expiredSignInForm(
   const location = expiredFormLocation(pathname, fields);
   if (location === null) return null;
   const res = seeOther(location);
-  const token = postedResetToken(pathname, fields);
-  if (token !== null) res.headers.append('set-cookie', keepResetToken(token));
+  const kept = keptLinkToken(pathname, fields);
+  if (kept !== null) res.headers.append('set-cookie', kept);
   return res;
 }

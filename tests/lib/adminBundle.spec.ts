@@ -99,6 +99,7 @@ describe('the checks', () => {
     for (const name of [
       'forgot.astro_astro_type_script_index_0_lang.Z1.js',
       'reset.astro_astro_type_script_index_0_lang.Z1.js',
+      'invite.astro_astro_type_script_index_0_lang.Z1.js',
       'AuthLayout.astro_astro_type_script_index_0_lang.Z1.js',
     ]) {
       const result = check(build({ ...GOOD, [name]: big }));
@@ -116,7 +117,7 @@ describe('the checks', () => {
       report: [string, number][];
     };
     expect(problems).toEqual([]);
-    expect(report).toContainEqual(['sign-in screens script (login, forgot, reset)', 0]);
+    expect(report).toContainEqual(['sign-in screens script (login, forgot, reset, invite)', 0]);
   });
 
   it('reports each admin entry with its eager size', () => {
@@ -126,7 +127,7 @@ describe('the checks', () => {
       expect.arrayContaining([
         'AdminResourceForm',
         'AdminChrome',
-        'sign-in screens script (login, forgot, reset)',
+        'sign-in screens script (login, forgot, reset, invite)',
       ]),
     );
   });

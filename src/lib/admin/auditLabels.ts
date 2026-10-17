@@ -263,6 +263,10 @@ const EXACT: Readonly<Record<string, Label>> = {
     verb: 'Handed the account ownership to',
     noun: 'a member',
   },
+  // Admin v2 U12b: invites sent again and cancelled, and an invite accepted (written by the
+  // service role against the account that accepted it).
+  'user.invite_resend': { kind: 'users', verb: 'Sent the invite again to', noun: 'a new member' },
+  'user.invite_cancel': { kind: 'users', verb: 'Cancelled the invite of', noun: 'a new member' },
   'profile.update': { kind: 'users', verb: 'Changed their display name', noun: null },
   'auth.login': { kind: 'users', verb: 'Signed in', noun: null },
   'auth.logout': { kind: 'users', verb: 'Signed out', noun: null },
@@ -278,10 +282,29 @@ const EXACT: Readonly<Record<string, Label>> = {
     noun: null,
   },
   'auth.password_reset': { kind: 'users', verb: 'Reset their password', noun: null },
+  'auth.invite_accepted': { kind: 'users', verb: 'Accepted their invite', noun: null },
 
   // Settings
   'maintenance.enable': { kind: 'settings', verb: 'Switched on', noun: 'maintenance mode' },
   'maintenance.disable': { kind: 'settings', verb: 'Switched off', noun: 'maintenance mode' },
+  // Page visibility (U14a): the page is titled; a template is named by its kind.
+  'page_visibility.update': {
+    kind: 'settings',
+    verb: (detail) =>
+      detail['mode'] === 'hidden'
+        ? 'Hid from the site'
+        : detail['mode'] === 'link'
+          ? 'Made link only'
+          : 'Made visible to everyone',
+    noun: (detail) =>
+      detail['template'] === 'service'
+        ? 'every service page'
+        : detail['template'] === 'case_study'
+          ? 'every case study page'
+          : 'the page',
+    titled: true,
+  },
+  'page_visibility.sync': { kind: 'settings', verb: 'Refreshed', noun: 'the live page visibility' },
   'logs.clear': { kind: 'settings', verb: 'Cleared', noun: 'old error logs' },
   'export.backup.attempt': { kind: 'settings', verb: 'Started downloading', noun: 'a backup' },
   'export.backup.outcome': {

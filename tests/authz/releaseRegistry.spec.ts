@@ -19,7 +19,11 @@ const ROUTE_CAPS: Record<string, Capability> = {
   site_profile: 'settings.general', // src/lib/admin/singletons/siteProfile.ts
   seo_defaults: 'seo.globalDefaults', // src/lib/admin/singletons/seoDefaults.ts
   entity_seo: 'seo.entityMeta', // src/lib/admin/entitySeo.ts
+  page_visibility: 'maintenance.manage', // src/pages/api/admin/page-visibility/index.ts
 };
+
+/** Route-edited entities keyed by their own `id` (the rest are per-tenant singletons). */
+const ID_KEYED_ROUTE_ENTITIES = new Set(['entity_seo', 'page_visibility']);
 
 const holders = (cap: Capability) => ROLES.filter((role) => ROLE_CAPS[role][cap] === 'full').sort();
 
@@ -29,9 +33,9 @@ const configOf = (row: RegistryRow) =>
 describe('the release registry (app.release_entities) equals ROLE_CAPS', () => {
   const rows = registryRows();
 
-  it('parses the twenty rows the migration seeds', () => {
-    expect(rows).toHaveLength(20);
-    expect(new Set(rows.map((r) => r.entityType)).size).toBe(20);
+  it('parses the twenty-one rows the migrations seed (0038, and 0057 page visibility)', () => {
+    expect(rows).toHaveLength(21);
+    expect(new Set(rows.map((r) => r.entityType)).size).toBe(21);
   });
 
   it('every entity type is a resource config or a route with a stated capability', () => {
@@ -48,7 +52,10 @@ describe('the release registry (app.release_entities) equals ROLE_CAPS', () => {
 
       it(`is the table its editor writes (${row.table})`, () => {
         if (config) expect(config.table).toBe(row.table);
-        else expect(row.keyColumn === 'tenant_id' || row.entityType === 'entity_seo').toBe(true);
+        else
+          expect(row.keyColumn === 'tenant_id' || ID_KEYED_ROUTE_ENTITIES.has(row.entityType)).toBe(
+            true,
+          );
       });
 
       it(`author_roles = the holders of ${writeCap}`, () => {

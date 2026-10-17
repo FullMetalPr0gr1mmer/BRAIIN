@@ -28,6 +28,7 @@ const state = vi.hoisted(() => ({
   notifyMisses: 0 as unknown,
   failNotifyCheck: false,
   removed: [] as { bucket: string; keys: string[] }[],
+  visibilityRows: [] as Record<string, unknown>[],
 }));
 
 /** A PostgREST-ish builder: every awaited query is one subrequest, recorded in order. */
@@ -39,7 +40,7 @@ function builder(table: string) {
     req.op = 'delete';
     return b;
   };
-  for (const m of ['eq', 'lt', 'is', 'in', 'order']) {
+  for (const m of ['eq', 'neq', 'lt', 'is', 'in', 'order']) {
     b[m] = (column: string, value: unknown) => {
       req.filters.push(`${m}:${column}=${String(value)}`);
       return b;
@@ -52,6 +53,7 @@ function builder(table: string) {
     if (table === 'leads' && state.failLeadSelect)
       return { data: null, error: { message: 'statement timeout' } };
     if (table === 'leads') return { data: state.leads, error: null };
+    if (table === 'page_visibility') return { data: state.visibilityRows, error: null };
     if (table === 'job_applications' && req.op === 'select')
       return {
         data: state.worstCaseRetention ? [{ id: 'a1', cv_path: 't/a1/x.pdf' }] : [],
@@ -59,9 +61,17 @@ function builder(table: string) {
       };
     return { data: [], error: null, count: 0 };
   };
-  b['limit'] = async () => answer();
+  // Awaited as a list, or followed by maybeSingle() for one row (the launch tenant lookup).
+  b['limit'] = () => ({
+    then: (ok: (v: unknown) => unknown, fail?: (e: unknown) => unknown) =>
+      Promise.resolve()
+        .then(() => answer())
+        .then(ok, fail),
+    maybeSingle: b['maybeSingle'],
+  });
   b['maybeSingle'] = async () => {
     state.requests.push(req);
+    if (table === 'tenants') return { data: { id: 'tenant-1' }, error: null };
     return { data: table === 'site_profile' ? { address_country: 'SA' } : null, error: null };
   };
   b['then'] = (ok: (v: unknown) => unknown) => Promise.resolve(answer()).then(ok);
@@ -129,6 +139,9 @@ const { EXPORT_LIMITS, MEDIA_UPLOAD_LIMITS, PII_REVEAL_LIMITS } =
 const { encryptPII } = await import('@/lib/crypto/pii');
 const { LEAD_PII_ENC_KEY } = await import('astro:env/server');
 
+const { __kv } = await import('../stubs/cloudflare-workers');
+const { VISIBILITY_KV_KEY } = await import('@/lib/http/visibility');
+
 const NOW = new Date('2026-10-07T03:23:00Z');
 
 async function leads(n: number) {
@@ -168,6 +181,8 @@ beforeEach(async () => {
   state.notifyMisses = 0;
   state.failNotifyCheck = false;
   state.removed = [];
+  state.visibilityRows = [];
+  __kv.clear();
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -339,6 +354,83 @@ describe('runDailyJobs', () => {
   });
 });
 
+describe('the page-visibility re-sync (Admin v2 U14a)', () => {
+  it('rebuilds the launch tenant’s snapshot into KV, after the lead check, before the indexing', async () => {
+    state.visibilityRows = [
+      {
+        mode: 'hidden',
+        template: null,
+        hide_from: null,
+        show_on: null,
+        page: { slug: 'about' },
+        redirect: { slug: 'contact' },
+      },
+      {
+        mode: 'hidden',
+        template: 'service',
+        hide_from: null,
+        show_on: null,
+        page: null,
+        redirect: null,
+      },
+      {
+        mode: 'public',
+        template: null,
+        hide_from: null,
+        show_on: null,
+        page: { slug: 'join' },
+        redirect: null,
+      },
+    ];
+    await runDailyJobs();
+    const read = state.requests.find((r) => r.table === 'page_visibility')!;
+    expect(read.filters).toEqual([
+      'eq:tenant_id=tenant-1',
+      'neq:mode=public',
+      'order:id=[object Object]',
+    ]);
+    const order = tables();
+    expect(order.indexOf('page_visibility:select')).toBeGreaterThan(
+      order.indexOf('lead_notify_misses:rpc'),
+    );
+    expect(order.indexOf('page_visibility:select')).toBeLessThan(order.indexOf('leads:select'));
+    const snapshot = JSON.parse(__kv.get(VISIBILITY_KV_KEY)!);
+    expect(snapshot.pages).toEqual({ about: { mode: 'hidden', target: 'contact' } });
+    expect(snapshot.templates).toEqual({ service: { mode: 'hidden', target: null } });
+    const line = state.logs.find((l) => l.source === 'cron:visibility')!;
+    expect(line).toEqual({
+      level: 'info',
+      source: 'cron:visibility',
+      message: 'page visibility re-sync ran',
+      detail: { restricted: 2, kvSynced: true },
+    });
+  });
+
+  it('a failed read is logged under its name, and the jobs after it still run', async () => {
+    const original = svc.from;
+    svc.from = (table: string) => {
+      if (table !== 'page_visibility') return original(table);
+      const b = original(table);
+      b['limit'] = () => ({
+        then: (ok: (v: unknown) => unknown) =>
+          Promise.resolve({ data: null, error: { message: 'relation missing' } }).then(ok),
+      });
+      return b;
+    };
+    try {
+      await runDailyJobs();
+    } finally {
+      svc.from = original;
+    }
+    expect(state.logs.find((l) => l.source === 'cron:visibility')).toMatchObject({
+      level: 'error',
+      message: 'read page_visibility: relation missing',
+    });
+    expect(indexLine()).toBeDefined();
+    expect(__kv.has(VISIBILITY_KV_KEY)).toBe(false);
+  });
+});
+
 describe('the job registry (src/lib/cron/jobs.ts)', () => {
   it('runs these jobs, in this order: the purges before the lead indexing', () => {
     expect(DAILY_JOBS.map((job) => job.name)).toEqual([
@@ -346,6 +438,7 @@ describe('the job registry (src/lib/cron/jobs.ts)', () => {
       'retention',
       'media-orphans',
       'lead-notify',
+      'visibility',
       'crm-index',
     ]);
   });

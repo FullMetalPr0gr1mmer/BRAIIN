@@ -4,7 +4,8 @@
 -- 0031 (the audit chain's trigger), 0033 (app.live_role), 0044 (admin_user_prefs, whose
 -- dashboard and quick_actions columns the per-person layout fills), 0046 (the help centre),
 -- 0050 (app.role_manages_users, H10: users.manage), 0052 (app.role_analytics_read, U2:
--- analytics.read) and 0055 (U12a: the guides as it left them, U13's 0054 included).
+-- analytics.read) and 0057 (U14a: the guides as it left them, U12a's 0055, U12b's 0056 and
+-- U13's 0054 included).
 --
 -- /admin becomes a server-rendered board of widgets, each loaded only for a role whose
 -- capabilities show it. A person's own layout and quick actions live in admin_user_prefs
@@ -36,17 +37,17 @@
 --   • app.expire_team_notes(): a note left 180 days without an edit is blanked (version + 1,
 --     audited with no actor), daily by pg_cron (team-notes-retention, 03:25 UTC). Not the
 --     Worker's daily cron: that one is near the Free plan's 50 subrequests.
---   • app.help_article_set() restated from 0055's text (U12a, the set on main before this one)
+--   • app.help_article_set() restated from 0057's text (U14a, the set on main before this one)
 --     and seeded into every tenant: one new guide, your-dashboard, and finding-your-way no
---     longer names /admin (the dashboard has its own guide now). Every other guide is 0055's,
+--     longer names /admin (the dashboard has its own guide now). Every other guide is 0057's,
 --     byte for byte.
 --
 -- No new capability (§5 unchanged): presets are users.manage's, team notes analytics.read's,
 -- through the helpers 0050 and 0052 define.
 --
 -- Production as of 2026-10-16: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046,
--- 0048, 0050, 0051, 0052, 0054 and 0055. Grants are stated for both Supabase privilege regimes
--- (README P-14). CLAUDE.md §3 (Pillar 1), §5, §7, §8, §10.
+-- 0048, 0050, 0051, 0052, 0054, 0055, 0056 and 0057. Grants are stated for both Supabase
+-- privilege regimes (README P-14). CLAUDE.md §3 (Pillar 1), §5, §7, §8, §10.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- A busy table fails the push instead of queueing (as in 0038 to 0055). The new tables'
@@ -359,8 +360,8 @@ begin
 end $$;
 
 -- ---- 5. The guides --------------------------------------------------------------------------
--- The set as 0055 (U12a) left it, with the your-dashboard guide added and /admin taken off
--- finding-your-way's screens; every other guide is 0055's, byte for byte. A later slice that
+-- The set as 0057 (U14a) left it, with the your-dashboard guide added and /admin taken off
+-- finding-your-way's screens; every other guide is 0057's, byte for byte. A later slice that
 -- changes a guide restates the set from this text (U16's rule).
 create or replace function app.help_article_set() returns jsonb
   language sql immutable set search_path = '' as $fn$
@@ -725,6 +726,78 @@ create or replace function app.help_article_set() returns jsonb
         {
           "t": "tip",
           "x": "الأدوار ثابتة، ولا استثناءات لشخص بعينه. من يحتاج إلى صلاحيات أكثر يحتاج إلى دور مختلف."
+        }
+      ]
+    }
+  },
+  {
+    "slug": "inviting-people",
+    "sort_order": 35,
+    "minutes": 2,
+    "tags": [
+      "team"
+    ],
+    "screens": [
+      "/admin/users"
+    ],
+    "caps": [
+      "users.manage"
+    ],
+    "title": "Inviting people",
+    "title_ar": "دعوة الأشخاص",
+    "body": {
+      "en": [
+        {
+          "t": "p",
+          "x": "Only an Admin can invite people. In Settings › Users & roles, choose Invite someone, enter their email and role, and if you like their name and a short message (up to 300 characters) that appears in the email."
+        },
+        {
+          "t": "ol",
+          "x": [
+            "They get an email with a link to set their password. The link works for one hour. If it runs out, choose Resend on their row under Pending invites.",
+            "They choose a password of at least 10 characters, then sign in with their email and that password. Their role is the one you chose.",
+            "Until they have accepted the invite, you can Cancel it: the link stops working and the account is removed. After that, use Remove access instead.",
+            "When an allowed email domain is set in Security, invites and resends go only to addresses at exactly that domain."
+          ]
+        },
+        {
+          "t": "h",
+          "x": "Before email is set up"
+        },
+        {
+          "t": "p",
+          "x": "Invites need the site to send email. Until that is connected, Invite someone and Resend say Not set up and send nothing. Pending invites, Cancel and the rest of the screen still work."
+        },
+        {
+          "t": "tip",
+          "x": "Every invite, resend, cancelled invite and accepted invite is recorded in the activity log, without their email or your message."
+        }
+      ],
+      "ar": [
+        {
+          "t": "p",
+          "x": "يستطيع المسؤول (Admin) وحده دعوة الأشخاص. من Settings › Users & roles اختر Invite someone، وأدخل البريد الإلكتروني للشخص ودوره، ويمكنك إضافة اسمه ورسالة قصيرة (حتى 300 حرف) تظهر في الرسالة الإلكترونية."
+        },
+        {
+          "t": "ol",
+          "x": [
+            "تصله رسالة بريد إلكتروني فيها رابط لاختيار كلمة المرور. يعمل الرابط ساعة واحدة، وإذا انتهت مدته فاختر Resend في صفه ضمن Pending invites.",
+            "يختار كلمة مرور من 10 أحرف على الأقل، ثم يسجّل الدخول ببريده الإلكتروني وكلمة المرور تلك، ويحصل على الدور الذي اخترته.",
+            "ما دام لم يقبل الدعوة بعد، يمكنك إلغاءها بزر Cancel: يتوقف الرابط عن العمل ويُحذف الحساب. وبعد ذلك استخدم Remove access بدلًا منه.",
+            "إذا حُدّد نطاق بريد مسموح به في بطاقة Security، فلا تُرسل الدعوات ولا يُعاد إرسالها إلا إلى عناوين ذلك النطاق بالضبط."
+          ]
+        },
+        {
+          "t": "h",
+          "x": "قبل إعداد البريد الإلكتروني"
+        },
+        {
+          "t": "p",
+          "x": "تحتاج الدعوات إلى أن يرسل الموقع رسائل بريد إلكتروني. وإلى أن يُربط ذلك، يظهر Not set up على Invite someone وResend ولا يُرسل شيء. أما Pending invites وCancel وبقية الشاشة فتعمل كالمعتاد."
+        },
+        {
+          "t": "tip",
+          "x": "تُسجَّل في سجل النشاط كل دعوة وكل إعادة إرسال وكل دعوة أُلغيت أو قُبلت، دون بريد الشخص الإلكتروني أو رسالتك."
         }
       ]
     }
@@ -1212,6 +1285,70 @@ create or replace function app.help_article_set() returns jsonb
     }
   },
   {
+    "slug": "page-visibility",
+    "sort_order": 105,
+    "minutes": 2,
+    "tags": [
+      "site"
+    ],
+    "screens": [
+      "/admin/visibility"
+    ],
+    "caps": [
+      "maintenance.manage"
+    ],
+    "title": "Page visibility",
+    "title_ar": "ظهور الصفحات",
+    "body": {
+      "en": [
+        {
+          "t": "p",
+          "x": "Page visibility decides who can see each page of the public site. A change applies to the live site within a few minutes, and the admin keeps working as usual."
+        },
+        {
+          "t": "ol",
+          "x": [
+            "Visible to everyone is the normal setting: the page is in the menus and in search engines, and open to all.",
+            "Hidden from the site takes the page out of the menus, the sitemap and search engines. Anyone who opens its link is sent to the page you choose, or sees a page not found screen.",
+            "Hiding is not deleting: the page's words stay published. Unpublish it, or keep confidential details off it. A hidden Join or Contact page still takes what its form sends: to stop job applications, turn off Accepting job applications in General settings.",
+            "To hide a page for a while, give it a Hide from day, a Show again on day, or both. It is hidden from the start of the first day until the start of the second, Riyadh time. Leave both empty to hide it until you show it again.",
+            "Only people with the link keeps the page out of the menus, the sitemap and search engines, but the link still works. It is unlisted, not private: anyone who has the link can open it, so keep anything confidential off it.",
+            "The service page and the case study page are templates. Hiding one hides every service page, or every project page, at once. To hide a single service or project, unpublish that item instead.",
+            "The homepage is always visible. To take the whole site down for a while, use maintenance mode.",
+            "If a save says the live site has not picked it up, press Sync to edge. The line above the list says whether the live site has the settings."
+          ]
+        },
+        {
+          "t": "tip",
+          "x": "Search engines and AI tools that fetched the sitemap just before a change may keep the old list for up to an hour."
+        }
+      ],
+      "ar": [
+        {
+          "t": "p",
+          "x": "يحدد ظهور الصفحات من يستطيع رؤية كل صفحة من صفحات الموقع العام. يسري التغيير على الموقع المباشر خلال بضع دقائق، وتستمر لوحة الإدارة في العمل كالمعتاد."
+        },
+        {
+          "t": "ol",
+          "x": [
+            "الخيار المعتاد هو Visible to everyone: تظهر الصفحة في القوائم وفي محركات البحث، ويستطيع الجميع فتحها.",
+            "يُخرج خيار Hidden from the site الصفحة من القوائم وخريطة الموقع ومحركات البحث. ومن يفتح رابطها يُنقل إلى الصفحة التي تختارها، أو تظهر له صفحة تقول إن الصفحة غير موجودة.",
+            "الإخفاء ليس حذفًا: يبقى نص الصفحة منشورًا. ألغِ نشرها، أو لا تضع عليها أي معلومات سرية. وتظل صفحة Join أو Contact المخفية تستقبل ما يُرسَل عبر نموذجها: لإيقاف طلبات التوظيف، أوقف خيار Accepting job applications في General settings.",
+            "لإخفاء صفحة مدة محددة، حدّد لها يوم Hide from أو يوم Show again on أو كليهما. تبقى مخفية من بداية اليوم الأول حتى بداية اليوم الثاني بتوقيت الرياض. اترك الحقلين فارغين لإخفائها حتى تعيد إظهارها.",
+            "يُبقي خيار Only people with the link الصفحة خارج القوائم وخريطة الموقع ومحركات البحث، لكن رابطها يظل يعمل. فهي غير مدرجة وليست خاصة: يستطيع فتحها كل من لديه الرابط، فلا تضع عليها أي معلومات سرية.",
+            "صفحة الخدمة وصفحة دراسة الحالة قالبان، وإخفاء أحدهما يخفي كل صفحات الخدمات أو كل صفحات المشاريع دفعة واحدة. ولإخفاء خدمة واحدة أو مشروع واحد، ألغِ نشر ذلك العنصر بدلًا من ذلك.",
+            "تظهر الصفحة الرئيسية دائمًا. ولإيقاف الموقع كله مؤقتًا استخدم وضع الصيانة.",
+            "إذا ذكر الحفظ أن الموقع المباشر لم يستلم التغيير، فاضغط Sync to edge. ويذكر السطر أعلى القائمة إن كان الموقع المباشر قد استلم الإعدادات."
+          ]
+        },
+        {
+          "t": "tip",
+          "x": "قد تحتفظ محركات البحث وأدوات الذكاء الاصطناعي التي جلبت خريطة الموقع قبيل التغيير بالقائمة القديمة مدة تصل إلى ساعة."
+        }
+      ]
+    }
+  },
+  {
     "slug": "website-stats",
     "sort_order": 110,
     "minutes": 2,
@@ -1675,8 +1812,8 @@ begin
   -- finding-your-way no longer names /admin, no API role reads the set, and every tenant
   -- holds both guides as the set states them.
   v_set := app.help_article_set();
-  if jsonb_typeof(v_set) <> 'array' or jsonb_array_length(v_set) <> 13 then
-    raise exception '0060: app.help_article_set() must hold 13 guides';
+  if jsonb_typeof(v_set) <> 'array' or jsonb_array_length(v_set) <> 15 then
+    raise exception '0060: app.help_article_set() must hold 15 guides';
   end if;
   if not exists (select 1 from jsonb_array_elements(v_set) a
                   where a ->> 'slug' = 'your-dashboard'

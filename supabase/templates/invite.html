@@ -1,0 +1,26 @@
+<!--
+  The invite e-mail (Admin v2 U12b), for the LOCAL stack (supabase/config.toml
+  [auth.email.template.invite]). Hosted projects paste the same link into Dashboard >
+  Authentication > Emails > Templates > Invite user (launch runbook §2b).
+
+  The link carries the token hash to /admin/invite, which verifies it on the server when the
+  person submits their new password (src/pages/api/admin/auth/invite.ts). Never the default
+  ConfirmationURL: it would put a session in the URL's # fragment, which no server
+  reads. The message is the inviting Admin's optional note (user metadata, invite_message,
+  at most 300 characters of plain text, packages/schemas/users.ts); Go's html/template
+  escapes it, and the acceptance clears it. The link lasts one hour (otp_expiry, decision D1).
+  No brand name: GoTrue cannot read site_profile, and a hardcoded one would go stale.
+-->
+<h2>You are invited</h2>
+<p>You have been invited to help run the website's admin. Choose a password to finish joining.</p>
+{{ if .Data.invite_message }}
+<p>A note from the person who invited you:</p>
+<blockquote>{{ .Data.invite_message }}</blockquote>
+{{ end }}
+<p>
+  <a href="{{ .SiteURL }}/admin/invite?token_hash={{ .TokenHash }}&type=invite"
+    >Set your password</a
+  >
+</p>
+<p>The link works for one hour. If it runs out, ask the person who invited you to send it again.</p>
+<p>If you were not expecting this, you can ignore this email.</p>

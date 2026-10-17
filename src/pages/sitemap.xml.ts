@@ -4,6 +4,7 @@ import { localizedPath } from '@/lib/i18n';
 import { getPublishedServices } from '@/lib/data/services';
 import { getCaseStudyIndex } from '@/lib/data/portfolio';
 import { getPublishedPosts } from '@/lib/data/blog';
+import { isListedPath } from '@/lib/visibility/listing';
 
 // Bilingual sitemap with reciprocal hreflang + truthful <lastmod> (CLAUDE.md Pillar 3).
 //
@@ -39,8 +40,13 @@ function lastmod(iso: string | null): string {
   return `<lastmod>${d.toISOString().slice(0, 10)}</lastmod>`;
 }
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async (context) => {
   const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+  // Page visibility (Admin v2 U14a): only a public page is listed, never a link-only or a
+  // hidden one, nor the children of a hidden template. The snapshot is the middleware's
+  // (`locals`); a crawler's copy may list a page up to an hour after it is hidden (max-age).
+  const visibility = context?.locals?.visibility;
+  const now = Date.now();
   const [services, portfolio, posts] = await Promise.all([
     getPublishedServices(),
     // The case-study page's own loader + schema (never a URL the page would 404 on).
@@ -48,7 +54,7 @@ export const GET: APIRoute = async () => {
     getPublishedPosts(),
   ]);
 
-  const entries: { path: string; updated: string | null }[] = [
+  const all: { path: string; updated: string | null }[] = [
     ...STATIC_PATHS.map((path) => ({ path, updated: null })),
     // Every PUBLISHED service — the rule its page answers 200 by (status + RLS, which also
     // hides one whose discipline is unpublished). Round 1’s retired slugs are
@@ -57,6 +63,7 @@ export const GET: APIRoute = async () => {
     ...portfolio.map((p) => ({ path: `/portfolio/${p.slug}`, updated: p.updatedAt })),
     ...posts.map((p) => ({ path: `/creative-knowledge/${p.slug}`, updated: p.updated_at })),
   ];
+  const entries = all.filter(({ path }) => isListedPath(visibility, path, now));
 
   const urls = entries.flatMap(({ path, updated }) =>
     (['en', 'ar'] as const).map((loc) => {

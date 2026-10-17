@@ -37,9 +37,59 @@ export function userStatus(
 ): UserStatus {
   if (!row.isActive) return 'removed';
   if (row.lockedUntil !== null && Date.parse(row.lockedUntil) > now) return 'locked';
-  if (row.invitedAt !== null && !row.confirmed && row.lastSignInAt === null) return 'invited';
+  if (isPendingInvite(row)) return 'invited';
   return 'active';
 }
+
+// ── Invites (Admin v2 U12b) ───────────────────────────────────────────────────────────
+
+/**
+ * An invite nobody has accepted yet: the account was invited, its e-mail is not confirmed
+ * and it has never signed in. Only such an account can be sent its invite again (Resend) or
+ * cancelled (decision D7: refused once the person has joined, or for the owner).
+ */
+export function isPendingInvite(row: {
+  invitedAt: string | null;
+  confirmed: boolean;
+  lastSignInAt: string | null;
+}): boolean {
+  return row.invitedAt !== null && !row.confirmed && row.lastSignInAt === null;
+}
+
+/** Cancel is refused for anyone who has joined, and for the account owner. */
+export function canCancelInvite(
+  row: Pick<UserRow, 'invitedAt' | 'confirmed' | 'lastSignInAt' | 'isOwner'>,
+): boolean {
+  return isPendingInvite(row) && !row.isOwner;
+}
+
+/** Resend, besides: the account can sign in (a switched-off one could not accept). */
+export function canResendInvite(
+  row: Pick<UserRow, 'invitedAt' | 'confirmed' | 'lastSignInAt' | 'isOwner' | 'isActive'>,
+): boolean {
+  return canCancelInvite(row) && row.isActive;
+}
+
+/** What the invite controls say while the site cannot send e-mail (owner items O-2, O-22). */
+export const INVITES_NOT_SET_UP = {
+  title: 'Not set up',
+  text: 'Email delivery is not connected yet, so invites cannot be sent. Pending invites can still be cancelled.',
+} as const;
+
+/** How long an invite link works (decision D1: GoTrue's otp_expiry, shared with reset links). */
+export const INVITE_LINK_LIFETIME = 'The link works for one hour. Resend it if it runs out.';
+
+/** Resend or Cancel refused: the person has joined since the list was read. */
+export const INVITE_ALREADY_JOINED =
+  'They have already joined, so there is no invite to resend or cancel. Use Remove access instead.';
+
+/** Resend refused: the account is switched off. */
+export const INVITE_SWITCHED_OFF =
+  'Their access is switched off. Switch Can sign in back on before resending the invite.';
+
+/** An invite to an address that already has an account here. */
+export const INVITE_EXISTS =
+  'That address already has an account here. If they have not joined yet, use Resend in Pending invites.';
 
 /** What a person is called on screen: their name, else their e-mail, else a short id. */
 export function personName(row: Pick<UserRow, 'displayName' | 'email' | 'id'>): string {
