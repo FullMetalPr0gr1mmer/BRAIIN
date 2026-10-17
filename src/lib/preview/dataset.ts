@@ -357,6 +357,9 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
     }
   }
 
+  /** Drafts the overlay laid over their own table (a project's links follow only these). */
+  const applied = new Set<string>();
+
   /** A table's live rows with its kept drafts, the deletes' cascades and a project's links. */
   function overlay(table: PreviewTable, live: Row[]): Row[] {
     let rows = live.map((row) => ({ ...row }));
@@ -414,6 +417,7 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
         stamp(table, null, next, change.patch);
         rows.push(next);
       }
+      applied.add(draft.id);
       report.overlaid += 1;
     }
 
@@ -442,7 +446,10 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
     // sort_order is the position, from 0).
     if (table === 'portfolio_services' || table === 'portfolio_media') {
       for (const draft of draftsByTable.get('portfolio') ?? []) {
-        if (draft.op === 'delete') continue;
+        // Only a change the project's own overlay showed (loadTable reads the project
+        // first): an invalid create over a live project, or an edit of a gone one, sets no
+        // links, as its apply would set none.
+        if (draft.op === 'delete' || !applied.has(draft.id)) continue;
         const change = derive(draft);
         if (!change) continue;
         const project = draft.entity_id;
@@ -484,7 +491,22 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
   const loaded = new Map<PreviewTable, Loaded>();
   const loading = new Map<PreviewTable, Promise<PreviewError | null>>();
 
+  /** One table, loaded and overlaid once per request. */
+  function load(name: PreviewTable): Promise<PreviewError | null> {
+    let pending = loading.get(name);
+    if (!pending) {
+      pending = loadTable(name);
+      loading.set(name, pending);
+    }
+    return pending;
+  }
+
   async function loadTable(table: PreviewTable): Promise<PreviewError | null> {
+    // A project's link sets follow its own overlay, so the project is laid over first.
+    if (table === 'portfolio_services' || table === 'portfolio_media') {
+      const parent = await load('portfolio');
+      if (parent) return parent;
+    }
     const granted = ANON_COLUMNS[table];
     const cap = table === 'media_assets' ? PREVIEW_MEDIA_ROW_CAP : PREVIEW_ROW_CAP;
     const read = await readAll(table, granted ? granted.join(',') : '*', TABLE_KEYS[table], cap);
@@ -515,16 +537,7 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
       draftsLoaded ??= loadDrafts();
       const draftError = await draftsLoaded;
       if (draftError) return draftError;
-      const errors = await Promise.all(
-        [...visibilityClosure(tables)].map((name) => {
-          let pending = loading.get(name);
-          if (!pending) {
-            pending = loadTable(name);
-            loading.set(name, pending);
-          }
-          return pending;
-        }),
-      );
+      const errors = await Promise.all([...visibilityClosure(tables)].map(load));
       return errors.find((e) => e !== null) ?? null;
     },
     rows: (name) => table(name)?.rows ?? [],

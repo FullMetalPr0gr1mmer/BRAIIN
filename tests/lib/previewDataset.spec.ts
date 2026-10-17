@@ -327,6 +327,40 @@ describe('review fixes', () => {
   });
 });
 
+describe("a project's link sets follow only a change that was shown", () => {
+  it('an invalid create over a live project leaves its links as they are', async () => {
+    const { db, report } = source(fixtureTables(), [
+      draft('portfolio', 'create', ID.pPub, {
+        slug: 'again',
+        title: BI('Again', 'مجددا'),
+        serviceIds: [ID.sNoDisc],
+        media: [{ role: 'hero', kind: 'image', mediaId: ID.mPoster }],
+      }),
+    ]);
+    // Links read first: the project is read with them, whatever the order.
+    expect(await read(db, 'portfolio_services', 'portfolio_id,service_id')).toEqual([
+      { portfolio_id: ID.pPub, service_id: ID.sPub },
+      { portfolio_id: ID.pPub, service_id: ID.sDraft },
+    ]);
+    expect(await read(db, 'portfolio_media', 'id')).toEqual([{ id: ID.pmPub }]);
+    expect(report.invalid).toEqual([
+      expect.objectContaining({ entityId: ID.pPub, reason: 'invalid' }),
+    ]);
+  });
+
+  it('an edit of a project that is gone sets no links', async () => {
+    const { db, report } = source(fixtureTables(), [
+      draft('portfolio', 'update', id(992), { serviceIds: [ID.sPub] }),
+    ]);
+    await read(db, 'portfolio_services', 'portfolio_id');
+    expect(report.invalid).toEqual([
+      expect.objectContaining({ entityId: id(992), reason: 'live-missing' }),
+    ]);
+    const links = await read(db, 'portfolio_services', 'portfolio_id');
+    expect(links.map((r) => r['portfolio_id'])).not.toContain(id(992));
+  });
+});
+
 describe('the foreign keys a pending delete follows', () => {
   it("cascades only into tables no other key references (a parent's own drafts are the whole set)", () => {
     const cascaded = new Set(
