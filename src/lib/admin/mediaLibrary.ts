@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { MediaLibraryQuerySchema, type MediaLibraryQuery } from '@schemas/media';
 import type { AuthContext } from '@/lib/auth/types';
-import { can } from '@/lib/authz/matrix';
+import { can, ROLE_CAPS } from '@/lib/authz/matrix';
 import { MEDIA_STORAGE_QUOTA_BYTES } from '@/lib/media/storage';
 import {
   viewFromUrl,
@@ -124,11 +124,21 @@ export function usageScreensFor(role: Role): string[] {
 
 /** What the screen's buttons offer the role (ROLE_CAPS; every route checks again). */
 export function mediaPermissionsFor(role: Role): MediaPermissions {
+  if (!(role in ROLE_CAPS)) return { write: false, hardDelete: false, opens: [] };
   return {
     write: can(role, 'media.write') === 'full',
     hardDelete: can(role, 'media.hardDelete') === 'full',
     opens: usageScreensFor(role),
   };
+}
+
+/**
+ * A role's access to the library, 'none' for a role ROLE_CAPS does not know (a later
+ * principal, such as C10a's Sales, reaches no data here rather than an exception).
+ */
+function libraryAccess(auth: AuthContext | null): string {
+  if (!auth || !(auth.role in ROLE_CAPS)) return 'none';
+  return can(auth.role, 'media.write');
 }
 
 export interface MediaScreen {
@@ -174,7 +184,7 @@ export async function loadMediaScreen(
     subtitle: MEDIA_SCREEN_SUB,
     canUpload: false,
   };
-  const access = auth ? can(auth.role, 'media.write') : 'none';
+  const access = libraryAccess(auth);
   if (!sb || !auth || (access !== 'full' && access !== 'meta')) {
     return { ...empty, initialError: 'Your role does not allow that.' };
   }
