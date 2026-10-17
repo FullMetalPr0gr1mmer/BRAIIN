@@ -270,9 +270,17 @@ test.describe('as admin, Ctrl+S on a page with two editors (review L8)', () => {
  *              the same section is offered the typed fields and not the JSON box.
  */
 
-/** The section types whose content carries an accent the editor can pick (F5b). */
+/**
+ * The section types whose content carries an accent over a field called `heading`, so the
+ * element ids below are the same whichever seeded section this finds (the hero's accent is
+ * two numbers under its own name, over `headline`: its own case, unit-tested).
+ */
 const ACCENT_TYPES = Object.entries(SECTION_UI)
-  .filter(([, fields]) => (fields ?? []).some((f) => f.kind === 'accent'))
+  .filter(([, fields]) =>
+    (fields ?? []).some(
+      (f) => f.kind === 'accent' && f.name === 'accent' && f.accent?.of === 'heading',
+    ),
+  )
   .map(([type]) => type);
 
 async function accentSection(page: Page): Promise<{ id: string; type: string } | null> {

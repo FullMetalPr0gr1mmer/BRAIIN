@@ -810,10 +810,11 @@ test.describe('the rest of the field kit, as admin', () => {
     const to = fields(page).locator('#f-accent-en-to');
     // The sample name is "Sample entry": word 2 is highlighted.
     await expect(from).toHaveValue('1');
-    await expect(fields(page).getByText('entry', { exact: true })).toBeVisible();
+    await expect(fields(page).locator('.accentf__on')).toHaveText('entry');
 
+    // Moving the start keeps an end that is still after it.
     await from.selectOption('0');
-    await expect(to).toHaveValue('');
+    await expect(to).toHaveValue('2');
     await expect(fields(page).locator('.accentf__on')).toHaveText('Sample entry');
 
     // Changing the heading changes the words on offer.
