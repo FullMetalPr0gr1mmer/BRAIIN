@@ -141,6 +141,29 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<PreviewTable, Readonly<Row
   testimonials: { status: 'draft', sort_order: 0, placements: [], is_placeholder: false },
 };
 
+/**
+ * Columns the dataset reads for its own checks on a column-granted table, beyond anon's
+ * grant: never answered to a loader (the emulator still says 42501 for them, as PostgREST
+ * does for a visitor). A quote's consent record, for 0028's testimonials_consent_gate.
+ * Pinned (staff read them) by supabase/tests/preview_dataset.test.sql.
+ */
+export const DATASET_ONLY_COLUMNS: Readonly<Partial<Record<PreviewTable, readonly string[]>>> = {
+  testimonials: ['consent_obtained_at', 'is_placeholder'],
+};
+
+/**
+ * 0028's testimonials_consent_gate CHECK: a published or scheduled quote has its consent
+ * recorded, or is a flagged design sample. A change that breaks it would be refused at
+ * publish, so the preview reports it instead of showing it.
+ */
+function consentHolds(row: Readonly<Row>): boolean {
+  return (
+    !['published', 'scheduled'].includes(String(row['status'])) ||
+    (row['consent_obtained_at'] !== null && row['consent_obtained_at'] !== undefined) ||
+    row['is_placeholder'] === true
+  );
+}
+
 /** Tables with a `published_at` a first publish stamps (R4's `has_published_at`). */
 const PUBLISHED_AT_TABLES: readonly PreviewTable[] = [
   'blog_posts',
@@ -403,6 +426,10 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
           [entry.key]: current[entry.key],
           tenant_id: current['tenant_id'],
         };
+        if (table === 'testimonials' && !consentHolds(next)) {
+          invalid(draft, 'invalid');
+          continue;
+        }
         // A change to a project's link sets alone has no column patch: R4 runs no UPDATE
         // then (0051), so the row and its updated_at stay as they are.
         if (Object.keys(change.patch).length > 0) {
@@ -421,6 +448,10 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
           tenant_id: tenantId,
           created_at: now(),
         };
+        if (table === 'testimonials' && !consentHolds(next)) {
+          invalid(draft, 'invalid');
+          continue;
+        }
         stamp(table, null, next, change.patch);
         rows.push(next);
       }
@@ -518,7 +549,13 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
     }
     const granted = ANON_COLUMNS[table];
     const cap = table === 'media_assets' ? PREVIEW_MEDIA_ROW_CAP : PREVIEW_ROW_CAP;
-    const read = await readAll(table, granted ? granted.join(',') : '*', TABLE_KEYS[table], cap);
+    const projection = granted ? [...granted, ...(DATASET_ONLY_COLUMNS[table] ?? [])] : null;
+    const read = await readAll(
+      table,
+      projection ? projection.join(',') : '*',
+      TABLE_KEYS[table],
+      cap,
+    );
     if (read.error) {
       noteOnce(report.failedTables, table);
       return read.error;

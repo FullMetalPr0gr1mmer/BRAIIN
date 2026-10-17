@@ -417,6 +417,49 @@ describe('stamps, as one release applies them', () => {
   });
 });
 
+describe("a quote's consent (0028 testimonials_consent_gate)", () => {
+  it('a change that would publish a quote without recorded consent is reported, not shown', async () => {
+    const { db, report } = source(fixtureTables(), [
+      draft('testimonial', 'update', ID.tDraft, { status: 'published' }),
+      draft('testimonial', 'create', id(994), {
+        slug: 'new-quote',
+        quote: BI('Q', 'ق'),
+        authorName: BI('N', 'ن'),
+        status: 'published',
+      }),
+    ]);
+    const shown = (await read(db, 'testimonials', 'id')).map((r) => r['id']);
+    expect(shown).not.toContain(ID.tDraft);
+    expect(shown).not.toContain(id(994));
+    expect(report.invalid.map((i) => [i.entityId, i.reason]).sort()).toEqual(
+      [
+        [ID.tDraft, 'invalid'],
+        [id(994), 'invalid'],
+      ].sort(),
+    );
+  });
+
+  it('with consent recorded in the change, or already on the row, it is shown', async () => {
+    const tables = fixtureTables();
+    tables['testimonials']!.find((t) => t['id'] === ID.tDraft)!['consent_obtained_at'] =
+      '2026-01-01T00:00:00+00:00';
+    const { db, report } = source(tables, [
+      draft('testimonial', 'update', ID.tDraft, { status: 'published' }),
+    ]);
+    expect((await read(db, 'testimonials', 'id')).map((r) => r['id'])).toContain(ID.tDraft);
+    expect(report.invalid).toEqual([]);
+  });
+
+  it('reads the consent columns for itself, never for a loader (still 42501)', async () => {
+    const { fake, db } = source(fixtureTables());
+    const { error } = await db.from('testimonials').select('id,consent_obtained_at');
+    expect(error).toMatchObject({ code: '42501' });
+    expect(fake.selects['testimonials']![0]!.columns).toMatch(
+      /,consent_obtained_at,is_placeholder$/,
+    );
+  });
+});
+
 describe('the foreign keys a pending delete follows', () => {
   it("cascades only into tables no other key references (a parent's own drafts are the whole set)", () => {
     const cascaded = new Set(

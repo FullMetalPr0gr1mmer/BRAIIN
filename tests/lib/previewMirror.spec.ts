@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CREATE_DEFAULTS } from '@/lib/preview/dataset';
+import { CREATE_DEFAULTS, DATASET_ONLY_COLUMNS } from '@/lib/preview/dataset';
 import { PREVIEW_TABLES } from '@/lib/preview/relations';
 import { ANON_COLUMNS, MIRRORED_POLICIES } from '@/lib/preview/visibility';
 
@@ -46,6 +46,14 @@ describe('the mirror against the pgTAP literals', () => {
     );
     expect(rows).toHaveLength(4);
     expect(Object.fromEntries(rows)).toEqual(ANON_COLUMNS);
+  });
+
+  it('DATASET_ONLY_COLUMNS equals _dataset_only_columns()', () => {
+    const rows = [...body('_dataset_only_columns').matchAll(/\('([a-z_]+)', '([a-z_,]+)'\)/g)].map(
+      ([, table, cols]) => [table!, cols!.split(',')] as const,
+    );
+    expect(rows).toHaveLength(1);
+    expect(Object.fromEntries(rows)).toEqual(DATASET_ONLY_COLUMNS);
   });
 
   it('CREATE_DEFAULTS equals _create_defaults()', () => {

@@ -11,13 +11,13 @@
 --      and another tenant read none, and anon holds no privilege;
 --   3. anon's column grants on testimonials, media_assets, disciplines and service_cases
 --      equal the literal in _anon_columns() below, and the other 17 tables are granted to
---      anon whole;
+--      anon whole; staff also read _dataset_only_columns() (a quote's consent record);
 --   4. the column defaults a pending create starts from equal _create_defaults() below;
 --   5. the policies that apply to an anon SELECT on each table equal _anon_policies() below,
 --      so a migration that adds, drops or renames one (U14b's page_sections_password_fence,
 --      0061) fails here until the mirror (src/lib/preview/visibility.ts) gains its rule;
 --   6. page visibility (0057) is no row security: anon holds nothing on page_visibility.
--- The three literals are held equal to ANON_COLUMNS, CREATE_DEFAULTS and MIRRORED_POLICIES
+-- The literals are held equal to ANON_COLUMNS, DATASET_ONLY_COLUMNS, CREATE_DEFAULTS and MIRRORED_POLICIES
 -- by tests/lib/previewMirror.spec.ts, which parses this file: a grant, default or policy
 -- that moves fails one side until the other follows.
 --
@@ -39,6 +39,13 @@ create function _anon_columns() returns table (tbl text, cols text) language sql
     ('media_assets', 'id,tenant_id,kind,provider,storage_path,width,height,alt,stream_uid,mime_type,updated_at'),
     ('service_cases', 'id,tenant_id,service_id,portfolio_id,title,context,problems,results,status,published_at,updated_at'),
     ('testimonials', 'id,tenant_id,slug,quote,author_name,author_role,client_id,portfolio_id,avatar_media_id,placements,status,sort_order,published_at,updated_at')
+$$;
+
+-- Columns the dataset also reads for its own checks (a quote's consent record), never
+-- answered to a loader: staff read them; anon's grant (above) does not hold them.
+create function _dataset_only_columns() returns table (tbl text, cols text) language sql immutable as $$
+  values
+    ('testimonials', 'consent_obtained_at,is_placeholder')
 $$;
 
 create function _create_defaults() returns table (tbl text, col text, dflt text) language sql immutable as $$
@@ -262,7 +269,8 @@ create function _as_other() returns void language sql as $$
 $$;
 
 -- What the caller reads of the fixtures, table by table, with the DATASET's projection:
--- anon's columns on the four column-granted tables, `*` on the rest (src/lib/preview/dataset.ts).
+-- anon's columns on the four column-granted tables (plus the dataset-only columns for a
+-- staff token), `*` on the rest (src/lib/preview/dataset.ts). Anon reads anon's columns.
 create function _seen() returns text language plpgsql as $$
 declare
   t text;
@@ -276,6 +284,9 @@ begin
     'portfolio_media', 'portfolio_services', 'sectors', 'seo_defaults', 'service_cases',
     'services', 'site_profile', 'statistics', 'team_members', 'testimonials'] loop
     select a.cols into cols from _anon_columns() a where a.tbl = t;
+    if current_user <> 'anon' and exists (select 1 from _dataset_only_columns() d where d.tbl = t) then
+      cols := cols || ',' || (select d.cols from _dataset_only_columns() d where d.tbl = t);
+    end if;
     pred := case
       when t in ('site_profile', 'seo_defaults') then format('tenant_id::text = %L', current_setting('pv.launch'))
       when t = 'portfolio_services' then $p$portfolio_id::text like '8a000000-%'$p$

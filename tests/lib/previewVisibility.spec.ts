@@ -233,7 +233,10 @@ describe('pending changes flip each fence (edge case 24)', () => {
 
   it('a pending publish of a testimonial and a team member shows their media', async () => {
     const { ids } = await visible(fixtureTables(), [
-      draft('testimonial', 'update', ID.tDraft, { status: 'published' }),
+      draft('testimonial', 'update', ID.tDraft, {
+        status: 'published',
+        consentObtainedAt: '2026-02-01T00:00:00.000Z',
+      }),
       draft('team_member', 'update', ID.tmDraft, { status: 'published' }),
     ]);
     expect(ids['testimonials']).toContain(ID.tDraft);
