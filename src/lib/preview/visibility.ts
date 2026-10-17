@@ -140,12 +140,7 @@ export const MIRRORED_POLICIES: Readonly<Record<PreviewTable, readonly string[]>
 };
 
 /** The providers 0045's media_assets_public_read admits (an `external` URL never). */
-export const HOSTED_PROVIDERS: ReadonlySet<string> = new Set([
-  'static',
-  'cf_images',
-  'stream',
-  'storage',
-]);
+export const HOSTED_PROVIDERS: readonly string[] = ['static', 'cf_images', 'stream', 'storage'];
 
 /** entity_seo.entity_type → the parent table 0011's entity_seo_published_only checks. */
 const SEO_PARENTS: Readonly<Record<string, PreviewTable>> = {
@@ -356,7 +351,7 @@ export function createMirror(data: MirrorData): Mirror {
       case 'media_assets':
         return (
           typeof row['provider'] === 'string' &&
-          HOSTED_PROVIDERS.has(row['provider']) &&
+          HOSTED_PROVIDERS.includes(row['provider']) &&
           typeof row['id'] === 'string' &&
           referencedMedia().has(row['id'])
         );

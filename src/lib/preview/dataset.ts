@@ -142,7 +142,7 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<PreviewTable, Readonly<Row
 };
 
 /** Tables with a `published_at` a first publish stamps (R4's `has_published_at`). */
-const PUBLISHED_AT_TABLES: ReadonlySet<PreviewTable> = new Set([
+const PUBLISHED_AT_TABLES: readonly PreviewTable[] = [
   'blog_posts',
   'disciplines',
   'pages',
@@ -150,9 +150,9 @@ const PUBLISHED_AT_TABLES: ReadonlySet<PreviewTable> = new Set([
   'service_cases',
   'services',
   'testimonials',
-]);
+];
 /** The one preview table without `updated_at`. */
-const NO_UPDATED_AT: ReadonlySet<PreviewTable> = new Set(['portfolio_services']);
+const NO_UPDATED_AT: readonly PreviewTable[] = ['portfolio_services'];
 
 /** Whether a role reads an entity in the admin: any of its readCaps at one of its levels. */
 export function readsEntity(role: Role, entry: RegistryEntry): boolean {
@@ -347,9 +347,9 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
   /** R4's stamps: updated_at on a changed row; published_at on a first publish only. */
   function stamp(table: PreviewTable, live: Row | null, next: Row, patch: Row): void {
     const at = now();
-    if (!NO_UPDATED_AT.has(table)) next['updated_at'] = at;
+    if (!NO_UPDATED_AT.includes(table)) next['updated_at'] = at;
     if (
-      PUBLISHED_AT_TABLES.has(table) &&
+      PUBLISHED_AT_TABLES.includes(table) &&
       patch['status'] === 'published' &&
       (live?.['published_at'] ?? null) === null
     ) {

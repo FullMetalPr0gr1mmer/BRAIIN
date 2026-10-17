@@ -32,10 +32,8 @@ export const PREVIEW_TABLES = [
 ] as const;
 export type PreviewTable = (typeof PREVIEW_TABLES)[number];
 
-const TABLES: ReadonlySet<string> = new Set(PREVIEW_TABLES);
-
 export function isPreviewTable(table: string): table is PreviewTable {
-  return TABLES.has(table);
+  return (PREVIEW_TABLES as readonly string[]).includes(table);
 }
 
 /**

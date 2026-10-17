@@ -90,7 +90,7 @@ interface Result {
   statusText: string;
 }
 
-const BUILDER_METHODS = new Set([
+const BUILDER_METHODS: readonly string[] = [
   'select',
   'eq',
   'in',
@@ -99,7 +99,7 @@ const BUILDER_METHODS = new Set([
   'limit',
   'maybeSingle',
   'then',
-]);
+];
 const COLUMN = /^[a-z_][a-z0-9_]*$/;
 const ISO_INSTANT =
   /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?$/;
@@ -399,7 +399,7 @@ export function createOverlayClient(data: OverlayData, report: PreviewReport): S
     const proxy: object = new Proxy(methods, {
       get(target, prop) {
         if (typeof prop === 'symbol') return undefined;
-        if (BUILDER_METHODS.has(prop)) return target[prop];
+        if (BUILDER_METHODS.includes(prop)) return target[prop];
         return refuse(`${table}.${prop}`);
       },
       set() {
