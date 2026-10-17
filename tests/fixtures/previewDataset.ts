@@ -84,6 +84,7 @@ export const ID = {
   nVis: id(521),
   nHidden: id(522),
   nChild: id(523),
+  nGrandchild: id(524),
   // SEO
   esSvc: id(601),
   esSvcDraft: id(602),
@@ -652,6 +653,17 @@ export function fixtureTables(): Record<string, Row[]> {
         is_key: false,
         visible: true,
       }),
+      // A third level: a pending delete of the top link takes it too (0009's cascade).
+      T({
+        id: ID.nGrandchild,
+        location: 'header',
+        parent_id: ID.nChild,
+        label: BI('Archive', 'الأرشيف'),
+        href: '/portfolio/all#archive',
+        sort_order: 1,
+        is_key: false,
+        visible: true,
+      }),
     ],
     site_profile: [
       {
@@ -721,7 +733,7 @@ export const VISIBLE: Readonly<Record<string, readonly string[]>> = {
   blog_posts: [ID.bPub, ID.bUndated, ID.bOld],
   pages: [ID.pgHome],
   page_sections: [ID.psVis],
-  navigation: [ID.nVis, ID.nChild],
+  navigation: [ID.nVis, ID.nChild, ID.nGrandchild],
   entity_seo: [ID.esSvc, ID.esBlog, ID.esProject, ID.esPage],
 };
 
