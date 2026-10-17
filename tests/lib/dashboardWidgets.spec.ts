@@ -434,6 +434,7 @@ describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () 
       { maintenance: null, displayName: 'Amal' },
     );
     const shell = calls.length - page;
+    console.log('SPLIT', JSON.stringify({ page, shell, pageNames: calls.slice(0, page).map((c) => c.name).sort(), shellNames: calls.slice(page).map((c) => c.name) }));
     // The page's own read beside loadDashboard (src/pages/admin/index.astro): the greeting's
     // display name, one `sb.from(` there; the maintenance snapshot is a KV read, not a fetch.
     const indexPage = readFileSync('src/pages/admin/index.astro', 'utf8');
