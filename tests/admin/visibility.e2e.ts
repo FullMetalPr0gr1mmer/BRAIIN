@@ -108,6 +108,33 @@ async function until(request: APIRequestContext, path: string, status: number) {
     .toBe(status);
 }
 
+const ENTITIES: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&nbsp;': ' ',
+};
+
+/**
+ * A page's words as a reader gets them: scripts, styles and tags gone, the common entities
+ * decoded, and every space removed, because a split heading (SplitHeading) puts each word in
+ * an element of its own and where the spaces fall between them is markup, not text.
+ */
+function wordsOf(html: string): string {
+  return html
+    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, (e) => ENTITIES[e] ?? e)
+    .replace(/\s+/g, '');
+}
+
+/** The words of a page's <h1>, however its markup splits them; '' with no heading. */
+function headingWords(html: string): string {
+  return wordsOf(/<h1\b[^>]*>([\s\S]*?)<\/h1>/.exec(html)?.[1] ?? '');
+}
+
 /** The hrefs of the header and the footer, nothing else of the page. */
 function menuLinks(html: string): string[] {
   const parts = [
@@ -362,10 +389,11 @@ test.describe('behind a password (U14b)', () => {
     expect(gate.body).toContain(NOTE.en);
     expect(gate.body).toContain('<form method="post" action="/api/page-access">');
     expect(gate.body).not.toContain(PASSWORD);
-    // 2. None of the page's own words are in it. A sentence only the real page carries.
-    const sentence = /<h1[^>]*>([^<]{12,})<\/h1>/.exec(openHtml)?.[1]?.trim();
-    expect(sentence, 'the open page has a heading to compare with').toBeTruthy();
-    expect(gate.body).not.toContain(sentence!);
+    // 2. None of the page's own words are in it. Its heading, which only the real page
+    //    carries: compared as text, so a gate that leaked the page's markup would fail here.
+    const sentence = headingWords(openHtml);
+    expect(sentence.length, 'the open page has a heading to compare with').toBeGreaterThan(12);
+    expect(wordsOf(gate.body)).not.toContain(sentence);
     // 3. The Arabic twin gets the Arabic gate.
     const ar = await answer(request, '/ar/about');
     expect(ar.status).toBe(403);
@@ -412,7 +440,7 @@ test.describe('behind a password (U14b)', () => {
       const unlocked = await answer(visit, '/about');
       expect(unlocked.status).toBe(200);
       // The page renders its own words again, and no cache may keep them.
-      expect(unlocked.body).toContain(sentence!);
+      expect(wordsOf(unlocked.body)).toContain(sentence);
       // And its images: a section's still is read through the unlocked media reader (0061),
       // so every image the open page showed is on the unlocked one too.
       const images = (html: string) =>
@@ -440,7 +468,7 @@ test.describe('behind a password (U14b)', () => {
     // 9. Back to everyone, and the page is itself again.
     await setVisibility(page, { slug: 'about' }, 'public');
     await until(request, '/about', 200);
-    expect((await answer(request, '/about')).body).toContain(sentence!);
+    expect(wordsOf((await answer(request, '/about')).body)).toContain(sentence);
   });
 
   test('the gate has no axe violation, in English and in Arabic', async ({
