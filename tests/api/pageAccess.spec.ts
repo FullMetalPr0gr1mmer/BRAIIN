@@ -234,15 +234,35 @@ describe('POST /api/page-access', () => {
     for (const call of limiter) expect(call.args['p_key_hash']).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('over either limit: 429, no bcrypt call, and one line with counts only', async () => {
+  it('over either limit: 429 and no bcrypt call', async () => {
     hits = [PAGE_ACCESS_LIMITS.perIp.max + 1, 1];
-    const res = await send(good);
-    expect(res.status).toBe(429);
-    expect(rpcCalls.some((c) => c.fn === 'page_password_check')).toBe(false);
-    expect(logs).toHaveLength(1);
-    expect(JSON.stringify(logs)).not.toContain('letmein22');
+    expect((await send(good)).status).toBe(429);
     hits = [1, PAGE_ACCESS_LIMITS.perPage.max + 1];
     expect((await send(good)).status).toBe(429);
+    expect(rpcCalls.some((c) => c.fn === 'page_password_check')).toBe(false);
+  });
+
+  it('the per-address limit logs nothing, however often it refuses', async () => {
+    for (let i = 1; i <= 5; i += 1) {
+      hits = [PAGE_ACCESS_LIMITS.perIp.max + i, 1];
+      expect((await send(good)).status).toBe(429);
+    }
+    expect(logs).toEqual([]);
+  });
+
+  it('the per-page limit logs once, on the attempt that first passes it, naming the rule', async () => {
+    const max = PAGE_ACCESS_LIMITS.perPage.max;
+    for (const count of [max + 1, max + 2, max + 3]) {
+      hits = [1, count];
+      expect((await send(good)).status).toBe(429);
+    }
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      level: 'warn',
+      source: 'page-access',
+      detail: { page: 'about', rule: 'page-access:page', max, windowSeconds: 3600 },
+    });
+    expect(JSON.stringify(logs)).not.toContain('letmein22');
   });
 
   it('an unreachable limiter FAILS CLOSED: no unlimited guessing at a password', async () => {

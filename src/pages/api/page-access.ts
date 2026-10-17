@@ -5,7 +5,7 @@ import { PAGE_ACCESS_FIELDS } from '@schemas/visibility';
 import { bodyWithinLimit } from '@/lib/auth/bodyLimit';
 import { isSameOrigin } from '@/lib/http/csrf';
 import { clientIp } from '@/lib/http/maintenance';
-import { checkPublicLimits, ipLimitValue } from '@/lib/http/publicRateLimit';
+import { countPublicLimits, ipLimitValue } from '@/lib/http/publicRateLimit';
 import { HIDDEN_CACHE_CONTROL, decide, getVisibilitySnapshot } from '@/lib/http/visibility';
 import { pageAccessSetCookie } from '@/lib/visibility/access';
 import {
@@ -33,7 +33,10 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 // The limits are the EXC-004 counter (one Postgres row per window, src/lib/http/
 // publicRateLimit.ts) and they FAIL CLOSED: a limiter we cannot reach must not become an
 // unlimited bcrypt oracle. Two rules: per address, so one visitor cannot grind; per page,
-// so a botnet cannot either. Reaching the per-page ceiling is logged once, as a count.
+// so a botnet cannot either. The attempt that first passes the per-page ceiling in its
+// window is logged once, naming the rule (a page guessed at from many addresses is worth an
+// owner's look); every later refusal in that window, and every per-address refusal, logs
+// nothing, as /api/contact and /api/apply log nothing on a limit.
 export const prerender = false;
 
 /** 10 tries every 15 minutes per address, 60 an hour for one page. */
@@ -105,7 +108,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   const sb = serviceClient();
   const tenantId = snapshot.tenant;
-  const outcome = await checkPublicLimits(sb, tenantId, LEAD_PII_ENC_KEY, [
+  const { outcome, counts } = await countPublicLimits(sb, tenantId, LEAD_PII_ENC_KEY, [
     {
       scope: 'page-access:ip',
       value: ipLimitValue(clientIp(request)),
@@ -114,17 +117,18 @@ export const POST: APIRoute = async ({ request }) => {
     { scope: 'page-access:page', value: page, ...PAGE_ACCESS_LIMITS.perPage },
   ]);
   if (outcome !== 'ok') {
-    if (outcome === 'limited') {
-      // Counts only, never an address and never a password: enough for Site health to show
-      // that a page is being guessed at.
+    // Once per window: the counter answers max + 1 exactly once, on the attempt that passed
+    // it. The rule and its limit only, never an address and never a password.
+    if (outcome === 'limited' && counts[1] === PAGE_ACCESS_LIMITS.perPage.max + 1) {
       void writeSystemLog({
         level: 'warn',
         source: 'page-access',
-        message: 'a page behind a password reached its unlock limit',
+        message: 'a page behind a password passed its per-page unlock limit',
         detail: {
           page,
-          perIp: PAGE_ACCESS_LIMITS.perIp.max,
-          perPage: PAGE_ACCESS_LIMITS.perPage.max,
+          rule: 'page-access:page',
+          max: PAGE_ACCESS_LIMITS.perPage.max,
+          windowSeconds: PAGE_ACCESS_LIMITS.perPage.windowSeconds,
         },
       });
     }
