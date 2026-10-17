@@ -109,7 +109,8 @@ export const KIT_FIELDS: readonly FieldDef[] = [
       { name: 'text', label: 'Text', kind: 'prose' },
     ],
   },
-  { name: 'posterMediaId', label: 'Sample poster', kind: 'media' },
+  // U4 (risk R9): the kit never writes, so its picker offers no Upload in place.
+  { name: 'posterMediaId', label: 'Sample poster', kind: 'media', media: { upload: false } },
   { name: 'body', label: 'Sample body', kind: 'richtext' },
   {
     name: 'status',

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi } from 'vitest';
 import { createElement, Fragment } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -80,13 +81,48 @@ describe('admin field kinds render', () => {
     expect(html.match(/checked=""/g)).toHaveLength(1);
   });
 
-  it('media: a choose button and a native <dialog> picker', () => {
+  it('media: a choose button; the picker is mounted on the first Choose (Admin v2 U4)', () => {
     const html = render(f({ name: 'posterId', label: 'Poster', kind: 'media' }), '');
     expect(html).toContain('No image chosen');
-    expect(html).toContain('<dialog');
-    expect(html).toContain('aria-label="Poster: choose"');
+    expect(html).toContain('Choose…');
     // The buttons take the field's name from the group ("Poster, group, Choose…").
     expect(html).toContain('<legend class="field-legend">Poster</legend>');
+    // The picker's dialog is not in the form's server HTML: it opens at the end of <body>
+    // (BodyPortal), so Enter in its search box can never submit the form around it.
+    expect(html).not.toContain('<dialog');
+  });
+
+  it('media: the picker is a native <dialog> named "<Label>: choose", with Use image', async () => {
+    const { default: MediaPicker } = await import('@/components/admin/fields/media/MediaPicker');
+    const html = renderToStaticMarkup(
+      createElement(MediaPicker, {
+        open: true,
+        onClose: noop,
+        onPick: noop,
+        title: 'Poster: choose',
+      }),
+    );
+    expect(html).toContain('<dialog');
+    const titleId = /<h2 id="([^"]+)">Poster: choose<\/h2>/.exec(html)?.[1];
+    expect(titleId).toBeTruthy();
+    expect(html).toContain(`aria-labelledby="${titleId}"`);
+    expect(html).toContain('Use image');
+    expect(html).toContain('Search media');
+    // Upload in place waits for the stats route to say the role and the Worker can take a
+    // file; it is never in the first render, and `media.upload: false` keeps it off.
+    expect(html).not.toContain('type="file"');
+    expect(html).not.toMatch(/\sstyle=/);
+  });
+
+  it('media: `media.upload: false` reaches the picker, which then never offers Upload', () => {
+    const field = readFileSync('src/components/admin/fields/MediaField.tsx', 'utf8');
+    expect(field).toContain('upload={field.media?.upload !== false}');
+    const picker = readFileSync('src/components/admin/fields/media/MediaPicker.tsx', 'utf8');
+    expect(picker).toContain('const showUpload = upload && canUpload;');
+    expect(picker).toMatch(/if \(!open \|\| !upload\) return;/);
+    // The kit's sample field never writes (risk R9).
+    const kit = readFileSync('src/components/admin/screens/kit/samples.ts', 'utf8');
+    expect(kit).toContain("kind: 'media', media: { upload: false }");
   });
 
   it('repeater: nested fields with ids unique per item', () => {
