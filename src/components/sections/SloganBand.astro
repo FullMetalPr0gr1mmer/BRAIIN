@@ -3,6 +3,7 @@ import type { Locale } from '@schemas/primitives';
 import type { SloganSectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
 import { SLOGAN_COPY } from '@/lib/sections/copy/slogan';
+import { accentWordsOf } from '@/lib/text/accent';
 
 // Pinned slogan band — the ONLY overlaid section in the design. The word-by-word
 // reveal is a CSS scroll-driven animation (compositor-only, zero JS) behind
@@ -23,7 +24,10 @@ const sloganText = text ? pickLocale(text, locale) : SLOGAN_COPY.text[locale];
 const accentFrom =
   (locale === 'ar' ? accentFromAr : accentFromEn) ??
   (locale === 'ar' ? SLOGAN_COPY.accentFromAr : SLOGAN_COPY.accentFromEn);
-const words = sloganText.split(/\s+/);
+// The words the admin's accent field counts (the one tokeniser, src/lib/text/accent.ts):
+// a leading space makes no empty first word, so "from word N" colours the word the form
+// previewed.
+const words = accentWordsOf(sloganText);
 ---
 
 <section class="slogan">

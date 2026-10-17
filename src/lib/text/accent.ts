@@ -27,6 +27,28 @@ export function accentRange(
 }
 
 /**
+ * The words of `text` and the whitespace between them, in order: the ONE tokenising step
+ * a word number counts with. `splitAccent` builds its runs from it, the hero and the
+ * slogan band count their per-word spans with `accentWordsOf` below, and the admin's
+ * accent field counts the same words (src/lib/admin/accentWords.ts), so a word number an
+ * editor picks means on the page exactly what it meant in the form.
+ */
+export function accentTokens(text: string): string[] {
+  return text.split(/(\s+)/).filter((t) => t !== '');
+}
+
+const isSpace = (token: string): boolean => /^\s+$/.test(token);
+
+/**
+ * The words alone, in order: what an accent's numbers count. Leading, trailing and
+ * repeated whitespace makes no word (a raw `split(/\s+/)` made an empty first word of a
+ * leading space, so "from word 1" coloured a different word than the form previewed).
+ */
+export function accentWordsOf(text: string): string[] {
+  return accentTokens(text).filter((token) => !isSpace(token));
+}
+
+/**
  * Splits `text` into runs, marking the words in `range` as accented. Whitespace is kept
  * verbatim: the spaces BETWEEN accented words belong to the accent, the ones at its edges
  * do not. A trailing "*" on the last accented word (the hero's footnote mark) stays
@@ -34,8 +56,8 @@ export function accentRange(
  */
 export function splitAccent(text: string, range: AccentRange | undefined): TextRun[] {
   if (!range) return text ? [{ text, accent: false }] : [];
-  const tokens = text.split(/(\s+)/).filter((t) => t !== '');
-  const words = tokens.filter((t) => !/^\s+$/.test(t)).length;
+  const tokens = accentTokens(text);
+  const words = tokens.filter((t) => !isSpace(t)).length;
   const inRange = (i: number) => i >= range.from && (range.to === undefined || i < range.to);
   const lastAccented = Math.min(range.to ?? words, words) - 1;
 
@@ -49,7 +71,7 @@ export function splitAccent(text: string, range: AccentRange | undefined): TextR
 
   let word = -1;
   for (const token of tokens) {
-    if (/^\s+$/.test(token)) {
+    if (isSpace(token)) {
       // A space is accented only when the words on both sides of it are.
       push(token, word + 1 < words && inRange(word) && inRange(word + 1));
       continue;

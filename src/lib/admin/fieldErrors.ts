@@ -44,6 +44,24 @@ const CLIP_INPUTS: Record<string, string> = {
   endS: 'end',
 };
 
+/**
+ * An accent field that writes two numbers into its parent (AccentDef mode 'from', the
+ * hero's accentFromEn / accentFromAr): the payload names one of those keys, the form has
+ * one field under its own name. Finds the field and which language the key is.
+ */
+function accentFromField(
+  key: string,
+  fields: readonly FieldDef[],
+): { field: FieldDef; lang: 'en' | 'ar' } | undefined {
+  for (const field of fields) {
+    const accent = field.accent;
+    if (field.kind !== 'accent' || accent?.mode !== 'from') continue;
+    if (accent.keys.en === key) return { field, lang: 'en' };
+    if (accent.keys.ar === key) return { field, lang: 'ar' };
+  }
+  return undefined;
+}
+
 /** Every field a section type's content can hold: its type's, else any type's by name. */
 function sectionField(name: string, type: unknown): FieldDef | undefined {
   const own = sectionFields(type)?.find((f) => f.name === name);
@@ -121,6 +139,15 @@ function resolve(
 
   if (field.kind === 'sectionContent') {
     const type = values?.[field.typeField ?? 'type'];
+    // An accent stored as two numbers is one field under its own name (F5b).
+    const own = sectionFields(type) ?? [];
+    const fromAccent = rest[0] === undefined ? undefined : accentFromField(rest[0], own);
+    if (fromAccent) {
+      return {
+        id: `${id}-${fromAccent.field.name}-${fromAccent.lang}-from`,
+        name: `${field.label}, ${fromAccent.field.label} (${LANGUAGE[fromAccent.lang]})`,
+      };
+    }
     const sub = rest[0] === undefined ? undefined : sectionField(rest[0], type);
     if (!sub) return { id, name: field.label };
     const state = asRow(value) as Partial<SectionContentState> | undefined;
@@ -129,6 +156,29 @@ function resolve(
       id: inner.id ?? id,
       name: inner.name ? `${field.label}, ${inner.name}` : field.label,
     };
+  }
+
+  if (field.kind === 'accent') {
+    // AccentField's two pickers per language (fields/AccentField.tsx).
+    const lang = rest[0] === 'en' || rest[0] === 'ar' ? rest[0] : null;
+    if (!lang) return { id, name: field.label };
+    const edge = rest[1] === 'to' ? 'to' : 'from';
+    return { id: `${id}-${lang}-${edge}`, name: `${field.label} (${LANGUAGE[lang]})` };
+  }
+
+  if (field.kind === 'link') {
+    // LinkField's boxes: the words, per language, and where it goes.
+    if (rest[0] === 'href') return { id: `${id}-href`, name: `${field.label}, where it goes` };
+    if (rest[0] === 'label') {
+      const lang = rest[1] === 'en' || rest[1] === 'ar' ? rest[1] : null;
+      return lang
+        ? {
+            id: `${id}-label-${lang}`,
+            name: `${field.label}, words on the link (${LANGUAGE[lang]})`,
+          }
+        : { id, name: field.label };
+    }
+    return { id, name: field.label };
   }
 
   if (field.kind === 'clip') {

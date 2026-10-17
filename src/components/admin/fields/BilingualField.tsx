@@ -29,6 +29,7 @@ export default function BilingualField({
   onChange,
   idPrefix,
   errors,
+  builtIn,
 }: FieldComponentProps) {
   const id = `${idPrefix}-${field.name}`;
   const ids: Record<Lang, string> = { en: `${id}-en`, ar: `${id}-ar` };
@@ -43,6 +44,19 @@ export default function BilingualField({
   const arabicRequired = field.kind === 'bilingual' && (field.required === true || english);
   const missing = arabicRequired && arabicEmpty;
   const lagging = field.kind === 'prose' && english && arabicEmpty;
+  // The stale-translation note (F5b, ui.md §2.6): the English has been written over the
+  // built-in copy while the Arabic is still the built-in's own words, so a visitor reading
+  // Arabic sees the old line. Only where a built-in is known (section content).
+  const defaults = (builtIn && typeof builtIn === 'object' ? builtIn : {}) as Record<
+    string,
+    unknown
+  >;
+  const stale =
+    typeof defaults['en'] === 'string' &&
+    typeof defaults['ar'] === 'string' &&
+    text.en.trim() !== '' &&
+    text.en !== defaults['en'] &&
+    text.ar === defaults['ar'];
 
   useArabicGap(ids.ar, missing);
   const { shown, choose } = useFieldLanguage(ids);
@@ -119,6 +133,7 @@ export default function BilingualField({
         {half('ar')}
       </div>
       {lagging && <p className="f__cue">Arabic not written yet</p>}
+      {stale && <p className="f__cue">Arabic still shows the built-in text.</p>}
       {(['en', 'ar'] as const).map((lang) => {
         const error = errors?.[ids[lang]];
         return error ? (

@@ -1,11 +1,14 @@
-// The site's own video files, with their lengths (Admin v2 U4; the shape F5b's clip v2 field
-// defines, created here because U4 merged first: brief D14, whichever merges second
-// resolves). Video is served from the site itself until Stream lands (EXC-009, KAN-20), so
-// these files are not media_assets rows: the library's Videos tab lists them, read-only, and
-// a clip field stores a window of one of them.
+// The site's own video files, with their lengths (Admin v2 F5b, ui.md §2.6 "clip v2").
 //
-// Code-owned, not a table: the files ship in `public/media/`. Small and dependency-free: it
-// ships in the admin bundle.
+// A clip field stores a WINDOW of one of these (`/media/….mp4` plus a start and an end,
+// EXC-009 until Stream lands — KAN-20), and an editor can only pick a sensible window if
+// the form knows how long the file is. Code-owned, not a table: these files ship in
+// `public/media/`, so a row could name one that is not there and a file could arrive with
+// no row. tests/lib/siteClips.spec.ts reads each file's `mvhd` box and holds `durationS`
+// to the file itself, so a replaced showreel that nobody re-measured fails CI rather than
+// offering windows past the end of the video.
+//
+// Small and dependency-free on purpose: it ships in the admin bundle (admin-fields).
 
 export interface SiteClip {
   /** The path stored in a clip's `path` (VideoClipSchema's StaticVideoPathSchema). */

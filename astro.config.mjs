@@ -36,7 +36,7 @@ const ADMIN_KIT_SCREEN =
 // path rule also matches an island's entry module, so either would pull the field kit
 // back into admin-ui (tests/lib/adminBundle.spec.ts checks both).
 const ADMIN_FIELDS =
-  /[\\/]src[\\/](components[\\/]admin[\\/](FormField\.tsx$|fields[\\/]|screens[\\/](resources[\\/]ResourceForm|singleton[\\/]SingletonForm)\.tsx$)|lib[\\/]admin[\\/](formPayload|sectionUi|fieldErrors|fieldValues|entitySave|useEntitySave|saveMode|contrast)\.ts$)/;
+  /[\\/]src[\\/](components[\\/]admin[\\/](FormField\.tsx$|fields[\\/]|screens[\\/](resources[\\/]ResourceForm|singleton[\\/]SingletonForm)\.tsx$)|lib[\\/]admin[\\/](formPayload|sectionUi|fieldErrors|fieldValues|entitySave|useEntitySave|saveMode|contrast|accentWords|linkables)\.ts$)/;
 // The dashboard (Admin v2 U1): its island's eager code (Dashboard.tsx) stays in the island's
 // `AdminDashboard` entry chunk, and what it loads on first use (the Customize binder, the
 // drawers and modals) is the admin-dashboard group. Claimed by admin-ui's path rule, they and

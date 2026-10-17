@@ -192,7 +192,19 @@ describe('admin field kinds render', () => {
       { type: 'cta' },
     );
     expect(typed).toContain('Button label');
-    expect(typed).toContain('Advanced (JSON)');
+    // "Advanced (JSON)" is Admin-only since F5b (decision D5).
+    expect(typed).not.toContain('Advanced (JSON)');
+    expect(
+      renderToStaticMarkup(
+        createElement(Field, {
+          field,
+          value: { values: {}, json: null },
+          values: { type: 'cta' },
+          onChange: noop,
+          canAdvanced: true,
+        }),
+      ),
+    ).toContain('Advanced (JSON)');
     expectUniqueIds(typed);
 
     const json = render(field, { values: {}, json: '{"intro":true}' }, { type: 'hero' });
@@ -389,6 +401,18 @@ describe('the field kit v2 (Admin v2 F5a)', () => {
       /<input id="f-intervalMs" type="range" min="2000" max="12000" step="500"[^>]*value="6000"/,
     );
     expect(html).toContain('<output for="f-intervalMs">6000 ms</output>');
+    // A stored value off the step is read out as stored, not as the step it is near.
+    expect(
+      render(
+        f({
+          name: 'intervalMs',
+          label: 'Interval',
+          kind: 'range',
+          range: { min: 2000, max: 12000, step: 500, suffix: ' ms' },
+        }),
+        7250,
+      ),
+    ).toContain('<output for="f-intervalMs">7250 ms</output>');
   });
 
   it('tags and chips: each chip removable by name; at the most, the box is disabled', () => {
@@ -576,5 +600,346 @@ describe('every field shows its own error (F5a review L5, L6, L12)', () => {
     );
     expect(html).toMatch(/<fieldset id="f-steps" tabindex="-1"/);
     expect(html).toContain('<p id="f-steps-error" class="field-error f__err">At most 4.</p>');
+  });
+});
+
+describe('the rest of the field kit (Admin v2 F5b)', () => {
+  const headline = { en: 'Ideas that leave the brain', ar: 'أفكار تغادر العقل الآن' };
+  const accentRange = f({
+    name: 'accent',
+    label: 'Highlighted words',
+    kind: 'accent',
+    accent: { of: 'heading', mode: 'range' },
+  });
+  const accentFrom = f({
+    name: 'accentFrom',
+    label: 'Highlighted words',
+    kind: 'accent',
+    accent: { of: 'headline', mode: 'from', keys: { en: 'accentFromEn', ar: 'accentFromAr' } },
+  });
+
+  it('accent: a word picker per language, counted from 1, with a preview', () => {
+    const html = render(
+      accentRange,
+      { en: { from: 2, to: 4 }, ar: { from: null, to: null } },
+      { heading: headline },
+    );
+    expect(html).toContain('id="f-accent-en-from"');
+    expect(html).toContain('id="f-accent-en-to"');
+    // Words are numbered for a reader, and are the renderer's own tokens.
+    expect(html).toContain('>1. Ideas</option>');
+    expect(html).toContain('>5. brain</option>');
+    expect(html).toContain('>No highlight</option>');
+    // The preview marks exactly the chosen words.
+    expect(html).toContain('<mark class="accentf__on">leave the</mark>');
+    // The Arabic half is in the DOM, hidden, RTL, with no range chosen.
+    expect(html).toContain('id="f-accent-ar-from"');
+    expect(html).toContain('dir="rtl"');
+    expect(html).not.toContain('id="f-accent-ar-to"'); // no start, no end picker
+    expectUniqueIds(html);
+    expect(html).not.toContain('style=');
+  });
+
+  it('accent: “from word N to the end” has no second picker', () => {
+    const html = render(
+      accentFrom,
+      { en: { from: 1, to: null }, ar: { from: null, to: null } },
+      { headline },
+    );
+    expect(html).toContain('id="f-accentFrom-en-from"');
+    expect(html).not.toContain('id="f-accentFrom-en-to"');
+    expect(html).toContain('<mark class="accentf__on">that leave the brain</mark>');
+  });
+
+  it('accent: no words yet, no picker — just what to do', () => {
+    const html = render(accentRange, null, { heading: { en: '', ar: '' } });
+    expect(html).toContain('Write the English words first');
+    expect(html).not.toContain('<select');
+  });
+
+  it('accent: one stored without its heading is shown, kept, and removable (review H1)', () => {
+    const sections = RESOURCE_UI['sections']!.fields;
+    const content = sections.find((x) => x.kind === 'sectionContent')!;
+    const slogan = rowToForm({ type: 'slogan', content: { accentFromEn: 2 } }, sections);
+    const html = render(content, slogan['content'], { type: 'slogan' });
+    const text = html.replace(/<[^>]*>/g, '');
+    expect(text).toContain(
+      'The colour is kept on from word 3 to the end of the heading the page shows now.',
+    );
+    expect(text).toContain('Remove the English highlight');
+    expect(html).not.toContain('id="f-content-accentFrom-en-from"');
+    // Nothing stored in Arabic: the usual cue.
+    expect(text).toContain('Write the Arabic words first');
+
+    const cta = rowToForm(
+      { type: 'cta', content: { accent: { en: { from: 1, to: 3 } } } },
+      sections,
+    );
+    expect(render(content, cta['content'], { type: 'cta' }).replace(/<[^>]*>/g, '')).toContain(
+      'The colour is kept on words 2 to 3 of the heading the page shows now.',
+    );
+  });
+
+  it('accent: the preview shows what the page shows, a kept range past the end included', () => {
+    const value = rowToForm(
+      { heading: { en: 'One two', ar: 'واحد اثنان' }, accent: { en: { from: 5 } } },
+      [f({ name: 'heading', kind: 'bilingual' }), accentRange],
+    )['accent'];
+    const html = render(accentRange, value, { heading: { en: 'One two', ar: 'واحد اثنان' } });
+    expect(html).not.toContain('accentf__on');
+  });
+
+  it('accent: an error lands on the picker it names', () => {
+    const html = renderToStaticMarkup(
+      createElement(Field, {
+        field: accentRange,
+        value: { en: { from: 40, to: null }, ar: { from: null, to: null } },
+        values: { heading: headline },
+        onChange: noop,
+        errors: { 'f-accent-en-from': 'Pick a word that is in the heading.' },
+      }),
+    );
+    expect(html).toMatch(/id="f-accent-en-from"[^>]*aria-invalid="true"/);
+    expect(html).toContain('English: Pick a word that is in the heading.');
+  });
+
+  it('link: the words in both languages and a picker for where it goes', () => {
+    const link = f({ name: 'button', label: 'Closing button', kind: 'link' });
+    const html = render(link, { label: { en: 'See all', ar: 'شاهد الكل' }, href: '' });
+    expect(html).toContain('id="f-button-label-en"');
+    expect(html).toContain('id="f-button-label-ar"');
+    expect(html).toContain('Where it goes');
+    // The pages are asked for only when the picker is reached (the kit screen reads
+    // nothing), so the server renders the empty picker beside the box that always holds
+    // the value.
+    expect(html).toContain('id="f-button-target"');
+    expect(html).toContain('id="f-button-href"');
+    expect(html).toContain('Pick a page…');
+    expectUniqueIds(html);
+    expect(html).not.toContain('style=');
+  });
+
+  it('link: an href the schema would refuse is marked, and said in words', () => {
+    const link = f({ name: 'button', label: 'Closing button', kind: 'link' });
+    const bad = render(link, { label: { en: '', ar: '' }, href: 'https://example.com' });
+    expect(bad).toContain('value="https://example.com"');
+    expect(bad).toMatch(/id="f-button-href"[^>]*aria-invalid="true"/);
+    expect(bad).toContain('Use a page of this site');
+    // Where the schema takes an external link, https is fine.
+    const external = f({
+      name: 'button',
+      label: 'Closing button',
+      kind: 'link',
+      link: { external: true },
+    });
+    const ok = render(external, { label: { en: '', ar: '' }, href: 'https://example.com' });
+    expect(ok).not.toMatch(/id="f-button-href"[^>]*aria-invalid="true"/);
+  });
+
+  it('link: an error lands on the box or the language it names', () => {
+    const link = f({ name: 'button', label: 'Closing button', kind: 'link' });
+    const html = renderToStaticMarkup(
+      createElement(Field, {
+        field: link,
+        value: { label: { en: 'See all', ar: '' }, href: '/portfolio' },
+        onChange: noop,
+        errors: {
+          'f-button-label-ar': 'Write it in Arabic too.',
+          'f-button-href': 'Not a page of this site.',
+        },
+      }),
+    );
+    expect(html).toContain('Arabic: Write it in Arabic too.');
+    expect(html).toContain('Not a page of this site.');
+  });
+
+  it('slugRelation: the chosen order, each with its slug, and move/remove that say what they do', () => {
+    const cards = f({
+      name: 'cardSlugs',
+      label: 'The two cards beside it',
+      kind: 'slugRelation',
+      maxItems: 2,
+      relation: { resource: 'portfolio', labelKey: 'title', valueKey: 'slug' },
+    });
+    const html = render(cards, ['hilton-rebrand', 'noon-campaign']);
+    expect(html).toContain('<legend class="field-legend">The two cards beside it</legend>');
+    expect(html).toContain('2 of 2');
+    // No options loaded under renderToStaticMarkup: the slug stands in for the name.
+    expect(html).toMatch(/aria-label="Move hilton-rebrand down"/);
+    expect(html).toMatch(/aria-label="Remove noon-campaign"/);
+    // ...and is then said once, not twice (a repeated slug is noise to a screen reader,
+    // and two identical texts break a getByText in the kit e2e).
+    expect(html.match(/>hilton-rebrand</g)).toHaveLength(1);
+    expect(html).not.toContain('item-slug');
+    expect(html).toContain('At most 2');
+    expect(render(cards, [])).toContain('None chosen yet.');
+    expectUniqueIds(html);
+    expect(html).not.toContain('style=');
+  });
+});
+
+describe('clip v2 (Admin v2 F5b)', () => {
+  const clip = f({ name: 'clip', label: 'Hero clip', kind: 'clip', pathOnly: true });
+  const state = (patch: Record<string, string>) => ({
+    source: 'path',
+    streamUid: '',
+    path: '/media/showreel.mp4',
+    startS: '',
+    endS: '',
+    ...patch,
+  });
+
+  it('the site file is picked from the registry, with its length', () => {
+    const html = render(clip, state({}));
+    expect(html).toContain('<select id="f-clip-path"');
+    expect(html).toContain('showreel.mp4 (18.4 s)');
+    // No Stream for a table with no Stream column (0028).
+    expect(html).not.toContain('Stream UID');
+    expectUniqueIds(html);
+    expect(html).not.toContain('style=');
+  });
+
+  it('a window reads as what it is, drawn with SVG geometry', () => {
+    const html = render(clip, state({ startS: '6.2', endS: '7.9' }));
+    expect(html).toContain('6.2 s to 7.9 s of showreel.mp4 (18.4 s)');
+    expect(html).toContain('<svg class="clipf__line"');
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toMatch(/<rect class="clipf__win" x="33\.\d+"/);
+    // No window: the whole file, said in words.
+    expect(render(clip, state({}))).toContain('The whole of showreel.mp4 (18.4 s)');
+  });
+
+  it('a window the schema would refuse is said before the save is', () => {
+    expect(render(clip, state({ startS: '0', endS: '40' }))).toContain(
+      'A clip plays at most 30 seconds.',
+    );
+    expect(render(clip, state({ startS: '17', endS: '19' }))).toContain(
+      'The video ends at 18.4 s, so the end is past it.',
+    );
+  });
+
+  it('the hint says it in plain words, without a dash (P-12)', () => {
+    const text = render(clip, state({})).replace(/<[^>]*>/g, ' ');
+    expect(text).toContain(
+      'A window plays that part of the video on a loop, for at most 30 seconds.',
+    );
+    expect(text).not.toMatch(/[–—]/);
+  });
+
+  it('a stored path the site no longer has stays visible', () => {
+    const html = render(clip, state({ path: '/media/gone.mp4' }));
+    expect(html).toContain('/media/gone.mp4');
+    // Nothing is claimed about a file whose length we do not know.
+    expect(html).not.toContain('clipf__says');
+  });
+});
+
+describe('section content prefilled with the built-in copy (Admin v2 F5b)', () => {
+  const field = RESOURCE_UI['sections']!.fields.find((x) => x.kind === 'sectionContent')!;
+  const builtIn = {
+    tag: { en: 'Get in touch', ar: 'تواصل معنا' },
+    heading: { en: 'Say hello', ar: 'قل مرحبا' },
+    text: { en: 'We read everything.', ar: 'نقرأ كل شيء.' },
+    buttonLabel: { en: 'Start a project', ar: 'ابدأ مشروعا' },
+  };
+  const render = (value: unknown, props: Record<string, unknown> = {}) =>
+    renderToStaticMarkup(
+      createElement(Field, {
+        field,
+        value,
+        values: { type: 'cta' },
+        onChange: noop,
+        builtIn,
+        ...props,
+      }),
+    );
+
+  it('a field with nothing of its own shows the words the page shows', () => {
+    const html = render({ values: {}, json: null });
+    expect(html).toContain('value="Say hello"');
+    expect(html).toContain('value="Get in touch"');
+    expect(html).toContain('Change one to make it yours');
+    // Nothing to put back yet.
+    expect(html).not.toContain('Reset to the built-in copy');
+  });
+
+  it('a field the editor wrote keeps their words, and Reset appears', () => {
+    const html = render({
+      values: { heading: { en: 'Our own words', ar: 'كلماتنا' } },
+      json: null,
+    });
+    expect(html).toContain('value="Our own words"');
+    // The others still show the built-in.
+    expect(html).toContain('value="Get in touch"');
+    expect(html).toContain('Reset to the built-in copy');
+  });
+
+  it('the Arabic left at the built-in under a changed English is said', () => {
+    const html = render({
+      values: { heading: { en: 'Our own words', ar: 'قل مرحبا' } },
+      json: null,
+    });
+    expect(html).toContain('Arabic still shows the built-in text.');
+    // Both changed: nothing to say.
+    expect(
+      render({ values: { heading: { en: 'Our own words', ar: 'كلماتنا' } }, json: null }),
+    ).not.toContain('Arabic still shows the built-in text.');
+  });
+
+  it('an accent beside a prefilled heading counts its words (review M4)', () => {
+    const html = render(
+      { values: {}, json: null },
+      {
+        builtIn: {
+          ...builtIn,
+          heading: { en: 'Say hello there', ar: 'قل مرحبا هنا' },
+          accent: { en: { from: 1 }, ar: { from: 1 } },
+        },
+      },
+    );
+    expect(html).toContain('value="Say hello there"');
+    expect(html).toContain('id="f-content-accent-en-from"');
+    expect(html).toContain('<mark class="accentf__on">hello there</mark>');
+    expect(html).not.toContain('Write the English words first');
+  });
+
+  it('its notes say it without a dash (P-12)', () => {
+    const sections = RESOURCE_UI['sections']!.fields;
+    const plain = (html: string) => html.replace(/<[^>]*>/g, ' ');
+    const notes = [
+      render({ values: {}, json: null }),
+      renderToStaticMarkup(
+        createElement(Field, {
+          field,
+          value: { values: {}, json: null },
+          values: { type: 'cta' },
+          onChange: noop,
+        }),
+      ),
+      renderToStaticMarkup(
+        createElement(Field, {
+          field,
+          value: rowToForm({ type: 'team', content: {} }, sections)['content'],
+          values: { type: 'team' },
+          onChange: noop,
+        }),
+      ),
+    ].map(plain);
+    expect(notes[1]).toContain('Every field is optional. Leave one empty');
+    expect(notes[2]).toContain('so there is nothing to override here.');
+    for (const text of notes) expect(text).not.toMatch(/[–—]/);
+  });
+
+  it('with no built-in known, the field reads as it did before', () => {
+    const html = renderToStaticMarkup(
+      createElement(Field, {
+        field,
+        value: { values: {}, json: null },
+        values: { type: 'cta' },
+        onChange: noop,
+      }),
+    );
+    expect(html).toContain('Leave one empty to keep the built-in copy');
+    expect(html).not.toContain('Reset to the built-in copy');
   });
 });
