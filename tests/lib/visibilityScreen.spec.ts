@@ -221,7 +221,7 @@ describe('the drawer', () => {
     expect(html).toMatch(/type="password"[^>]*value=""/);
     // Not the admin's own sign-in: a browser offers to save or replace that credential for
     // a field it takes for a login, and ignores "off" on a password field.
-    expect(html).toMatch(/type="password"[^>]*autocomplete="new-password"/);
+    expect(html).toMatch(/type="password"[^>]*autocomplete="new-password"/i);
     expect(html).toContain(PASSWORD_HINT);
     expect(html).toContain(PASSWORD_NOTE);
     expect(html).toContain(PASSWORD_REQUIRED);
