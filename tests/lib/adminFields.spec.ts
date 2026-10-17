@@ -687,6 +687,10 @@ describe('the rest of the field kit (Admin v2 F5b)', () => {
     // No options loaded under renderToStaticMarkup: the slug stands in for the name.
     expect(html).toMatch(/aria-label="Move hilton-rebrand down"/);
     expect(html).toMatch(/aria-label="Remove noon-campaign"/);
+    // ...and is then said once, not twice (a repeated slug is noise to a screen reader,
+    // and two identical texts break a getByText in the kit e2e).
+    expect(html.match(/>hilton-rebrand</g)).toHaveLength(1);
+    expect(html).not.toContain('item-slug');
     expect(html).toContain('At most 2');
     expect(render(cards, [])).toContain('None chosen yet.');
     expectUniqueIds(html);

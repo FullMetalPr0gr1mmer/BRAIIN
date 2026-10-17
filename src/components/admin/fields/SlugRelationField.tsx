@@ -58,7 +58,9 @@ export default function SlugRelationField({
           {chosen.map((slug, index) => (
             <li key={slug} className="item-row">
               <span className="item-label">{nameOf(slug)}</span>
-              <span className="item-slug">{slug}</span>
+              {/* The slug only when it says something the name does not: with no options
+                  loaded yet the name IS the slug, and saying it twice is noise. */}
+              {nameOf(slug) !== slug && <span className="item-slug">{slug}</span>}
               <button
                 type="button"
                 className="btn"
