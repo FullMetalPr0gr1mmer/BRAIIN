@@ -1,4 +1,4 @@
-import { accentTokens, type AccentRange } from '@/lib/text/accent';
+import { accentWordsOf, type AccentRange } from '@/lib/text/accent';
 
 // The words an accent range counts, for the `accent` field (Admin v2 F5b, ui.md §2.6).
 //
@@ -6,13 +6,13 @@ import { accentTokens, type AccentRange } from '@/lib/text/accent';
 // editor picks "from word 2 to word 4" and the server renders the runs. So the admin must
 // count words exactly as the public side does, or a range picked here would highlight
 // something else on the page — which is why the tokenising step itself lives in
-// src/lib/text/accent.ts (`accentTokens`) and both sides call it.
+// src/lib/text/accent.ts (`accentTokens`, `accentWordsOf`) and both sides call it.
 //
 // Pure, Zod-free and DOM-free: unit-tested in node (tests/lib/accentWords.spec.ts).
 
 /** The words of a heading, in order — what an accent's numbers count. */
 export function accentWords(text: string): string[] {
-  return accentTokens(text).filter((token) => !/^\s+$/.test(token));
+  return accentWordsOf(text);
 }
 
 // AccentSchema's own bounds (packages/schemas/media.ts): a range past them is refused by
