@@ -10,11 +10,14 @@
 ## What was built
 
 - **One tokeniser for the page and the form.** `accentTokens` in `src/lib/text/accent.ts`
-  is now the single step that turns a heading into words; `splitAccent` builds its runs
-  from it and `src/lib/admin/accentWords.ts` counts, clamps and previews with it, so "from
-  word 3" means the same word in the editor and on the page. `clampAccent` holds a stored
-  range inside a heading that has shrunk and inside `AccentSchema`'s own bounds, so the
-  field never offers a range the server would refuse.
+  is now the single step that turns a heading into words, and `accentWordsOf` the words
+  alone; `splitAccent` builds its runs from the first, the hero and the slogan band count
+  their per-word spans with the second (the slogan band used a raw whitespace split, which
+  made an empty first word of a leading space), and `src/lib/admin/accentWords.ts` counts,
+  clamps and previews with it, so "from word 3" means the same word in the editor and on
+  the page. `clampAccent` holds a range the editor changes inside a heading that has
+  shrunk and inside `AccentSchema`'s own bounds, so the field never offers a range the
+  server would refuse.
 - **`accent`** (`fields/AccentField.tsx`): per language, "Highlight from [word] up to
   [word]", with "No highlight" and a live preview of the result. One control set for both
   ways of storing it — its own key (`AccentSchema`) or the two numbers beside the heading
@@ -22,6 +25,17 @@
   `from`) — and the payload is a word range, never markup (Pillar 1). The mode-`from`
   field is the one kind whose payload is a SPREAD into its parent's keys, in
   `objectToPayload` and `formToPayload`.
+- **A save never rewrites what the editor did not change.** The accent's form state
+  remembers what was stored and the text it was stored over (`AccentFormState.loaded`); a
+  half left as loaded, over a text left as loaded, is saved exactly as stored. That keeps
+  an accent stored WITHOUT its heading (it colours the built-in or a page preset's words:
+  the slogan band, `withHeroPreset`, ContactInquiry), and a stored accent the page reads
+  as "nothing" (from word 6 of two) is not moved onto the last word. Such a kept highlight
+  is said in words ("The colour is kept on from word 3 to the end of the heading the page
+  shows now.") with a Remove button, and the preview reads the range the save would store
+  the way the page reads it. A slider value goes back held to its bounds only, not snapped
+  onto its step (`clampToRange`): the slider snaps what the editor moves, and a stored
+  interval of 7250 is read out and saved as 7250.
 - **`link`** (`fields/LinkField.tsx`): the words in both languages plus where it goes. A
   picker of the pages this site HAS writes into a box that always shows the value, so a
   target the list does not hold (an anchor, a page since unpublished) is visible rather
@@ -48,10 +62,16 @@
   `aria-hidden` SVG timeline, and a window past the end of the video or past the 30 s rule
   is said in words before the save is refused.
 - **Section content as differences** (`fields/SectionContentField.tsx`,
-  `omitBuiltIn` in `formPayload.ts`): with the section's built-in copy in hand, a field
-  shows those words under anything stored, nothing is stored for a field left at them, and
-  a key group the renderer reads together — an accent and the heading whose words it
-  counts — is stored whole or not at all. The groups are DERIVED from the fields
+  `shownSectionValues` and `omitBuiltIn` in `formPayload.ts`; plumbing only until E1, see
+  D4): with the section's built-in copy in hand, a field shows those words under anything
+  stored, nothing is stored for a field left at them, and a key group the renderer reads
+  together (an accent and the heading whose words it counts) is stored whole or not at
+  all. `shownSectionValues` is the one view of a section, each field's own value once
+  written, else the built-in, texts settled before the accents that count them: the
+  fields are drawn from it and read their siblings from it (an accent beside a prefilled
+  heading counts the words on screen), and the save and Advanced (JSON) send it, less what
+  equals the built-in. A kept group's member the content lacks is taken from the
+  built-in, an accent held to the words it will be stored with. The groups are DERIVED from the fields
   (`accentGroups` in `sectionUi.ts`), because the built-in COPY must not ship in the admin
   bundle (F6); `tests/lib/sectionUi.spec.ts` holds them against F6's own `together`. One
   button puts every field back. A bilingual field whose English was changed while its
@@ -72,11 +92,15 @@
 
 As the brief's §4, with these additions (nothing in it was removed or renamed):
 
-- `formPayload.ts`: `AccentFormState` and `LinkFormState` (the two form shapes),
-  `accentState`, `linkState`, `linkIsBlank`, `linkHrefOk` (what a link field accepts, so
-  the component and the payload cannot disagree), `accentToRanges`, `accentFromKeys`, and
-  `omitBuiltIn(content, builtIn, fields, together?)` — the fourth argument is the groups
-  (see the departure below).
+- `formPayload.ts`: `AccentFormState` (with its optional `loaded`, and
+  `LoadedAccentHalf`) and `LinkFormState` (the two form shapes), `accentState`,
+  `accentText`, `linkState`, `linkIsBlank`, `linkHrefOk` (what a link field accepts, so
+  the component and the payload cannot disagree), `accentToRanges`, `accentFromKeys`,
+  `shownSectionValues(values, fields, builtIn)` and
+  `omitBuiltIn(content, builtIn, fields, together?)` (the fourth argument is the groups,
+  see the departure below).
+- `fieldValues.ts`: `clampToRange` (bounds only; `clampToStep` stays the slider's).
+- `src/lib/text/accent.ts`: `accentWordsOf(text)`, the words an accent counts.
 - `SectionContentState` gains `builtIn?: Row` and `together?`: the built-in copy travels
   with the state, written on the first change the field makes, so the payload can drop
   what equals it without a render ever marking a form dirty.
@@ -146,6 +170,34 @@ As the brief's §4, with these additions (nothing in it was removed or renamed):
   audits (9.83 and 10.61). Forced colours give each a system colour, because in the preview
   and the timeline the colour IS the cue.
 
+## Pre-merge review fixes
+
+The correctness and security review found one high, three medium and five low issues;
+each is fixed at the root with a test that fails without it:
+
+1. **High: a save dropped an accent stored without its heading** (it was held against
+   zero words). Kept as loaded now (`AccentFormState.loaded`), shown in words with a
+   Remove button.
+2. **Medium: the seeded-section e2e** took the first accent-type row by `sort_order`,
+   which stores no heading, so the field showed its cue. It now reads candidates in
+   type, id order and picks one whose stored content has an English heading (seeded:
+   cta), else asserts the cue.
+3. **Medium: the kit e2e's `getByText('sample-one')`** matched the name and the slug.
+   The slug span renders only when it differs from the name.
+4. **Medium: the built-in plumbing** counted an accent against the raw state and saved a
+   heading without the accent the form showed. `shownSectionValues` (above), and
+   `omitBuiltIn` fills a kept group from the built-in.
+5. **Low: an unrelated save clamped or snapped** values nobody changed (a hero accent
+   past its headline, an interval off the step). The loaded accent passes through, and
+   the payload holds a slider value to its bounds only.
+6. **Low: `omitBuiltIn` compared field names**, so the hero's and slogan's two accent
+   numbers were never dropped at their built-in value. It compares `contentKeysOf`.
+7. **Low: "one tokeniser" was not true** of the hero and the slogan band. Both use
+   `accentWordsOf`; public HTML unchanged.
+8. **Low: em dashes in admin copy** (the clip hint, two section-content notes). P-12.
+9. **Low: CLAUDE.md said content IS stored as differences.** It says the plumbing is in
+   place and E1 wires it.
+
 ## The bundle (P-10)
 
 `accentWords` and `linkables` joined the `admin-fields` group (`astro.config.mjs`), so the
@@ -182,7 +234,16 @@ Four field kinds, a code registry and the built-in plumbing for +5.4 KB on an ed
   seeded section and checks, per role, that the accent is word pickers counting the
   heading's own words and that "Advanced (JSON)" is the Admin's — read-only, because those
   rows are the public pages'.
-- Render: F6's byte snapshots unchanged (the tokeniser moved; the output did not).
+- Round trip: `tests/lib/sectionContentRoundTrip.spec.ts` loads every seeded
+  `page_sections` row through `rowToForm` and saves it through `formToPayload` untouched
+  (byte-equal), plus accents stored without their heading (hero, slogan, cta), values the
+  editor did not change (a hero accent past its headline, a range accent's `to` past its
+  heading, an interval off the step), and the built-in path with the state the field's
+  `set()` leaves (a heading edited keeps its highlight, an accent moved brings its
+  heading).
+- Render: F6's byte snapshots unchanged (the hero and the slogan band now split with
+  `accentWordsOf`; the output did not move), and `tests/render/accentWords.spec.ts` holds
+  both to the admin's word count on a text with leading and doubled spaces.
 
 ## Help guide
 
