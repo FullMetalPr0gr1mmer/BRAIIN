@@ -305,6 +305,14 @@ const EXACT: Readonly<Record<string, Label>> = {
     titled: true,
   },
   'page_visibility.sync': { kind: 'settings', verb: 'Refreshed', noun: 'the live page visibility' },
+  // Written by public.set_page_password itself (0061), in the transaction that sets the
+  // password, so a change whose audit row cannot be chained does not happen. The row names
+  // the page and the new version; it never names the password or the message.
+  'page_visibility.password_set': {
+    kind: 'settings',
+    verb: 'Set a password on',
+    noun: 'a page',
+  },
   'logs.clear': { kind: 'settings', verb: 'Cleared', noun: 'old error logs' },
   'export.backup.attempt': { kind: 'settings', verb: 'Started downloading', noun: 'a backup' },
   'export.backup.outcome': {

@@ -91,7 +91,29 @@ export async function checkPublicLimits(
   rootKey: string,
   rules: readonly PublicLimitRule[],
 ): Promise<LimitOutcome> {
+  return (await countPublicLimits(sb, tenantId, rootKey, rules)).outcome;
+}
+
+/** The outcome, and each rule's count in this window after this attempt (rule order). */
+export interface PublicLimitCounts {
+  outcome: LimitOutcome;
+  /** Empty when the outcome is `unavailable`. */
+  counts: readonly number[];
+}
+
+/**
+ * checkPublicLimits, keeping each rule's count: for a caller that reacts to WHICH rule
+ * tripped, and to the attempt that first passed it (the page password logs that one, U14b).
+ */
+export async function countPublicLimits(
+  sb: SupabaseClient,
+  tenantId: string,
+  rootKey: string,
+  rules: readonly PublicLimitRule[],
+): Promise<PublicLimitCounts> {
+  const unavailable: PublicLimitCounts = { outcome: 'unavailable', counts: [] };
   let outcome: LimitOutcome = 'ok';
+  const counts: number[] = [];
   for (const rule of rules) {
     try {
       const { data, error } = await sb.rpc('public_write_hit', {
@@ -100,11 +122,12 @@ export async function checkPublicLimits(
         p_key_hash: await limitKey(rootKey, rule.scope, rule.value),
         p_window_seconds: rule.windowSeconds,
       });
-      if (error || typeof data !== 'number') return 'unavailable';
+      if (error || typeof data !== 'number') return unavailable;
+      counts.push(data);
       if (data > rule.max) outcome = 'limited';
     } catch {
-      return 'unavailable';
+      return unavailable;
     }
   }
-  return outcome;
+  return { outcome, counts };
 }

@@ -4,6 +4,8 @@ import {
   PageVisibilityWriteSchema,
   riyadhDayOf,
   riyadhMidnight,
+  type PageNote,
+  type PagePasswordWrite,
   type PageVisibilityWrite,
 } from '@schemas/visibility';
 import {
@@ -13,6 +15,7 @@ import {
   type VisibilityPageSlug,
   type VisibilityTemplate,
 } from '@/lib/visibility/routes';
+import { AuthorizationError } from '@/lib/authz/errors';
 import { NotFoundError, OptimisticLockError, ValidationError } from './errors';
 import { HOME_REFUSAL } from './visibilityCopy';
 import { translateWriteError, updateRow, type ConstraintFields } from './crud';
@@ -59,6 +62,18 @@ export const PAGE_VISIBILITY = {
     target: ['page_id', 'template'],
     ...Object.fromEntries(Object.entries(MODE_KEYS).map(([key, column]) => [key, [column]])),
   } as Readonly<Record<string, readonly string[]>>,
+  /**
+   * Columns a release may carry that no payload key of this schema writes. `note`, the
+   * password gate's message, is written by the password door (`savePagePassword`, which has
+   * its own schema) because setting it is setting a password; a release still stages it,
+   * as 0061's registry row says.
+   */
+  restoreOnlyColumns: ['note'] as readonly string[],
+  /**
+   * Written by the database alone, and never staged (0061's exempt set): the version a
+   * password was set with. A secret is immediate (P-3), so the number that ends one is too.
+   */
+  immediateColumns: ['password_version'] as readonly string[],
 } as const;
 
 export { HOME_REFUSAL } from './visibilityCopy';
@@ -98,15 +113,22 @@ export const VISIBILITY_CONSTRAINTS: ConstraintFields = {
 };
 
 const ROW_COLUMNS =
-  'id,page_id,template,mode,redirect_page_id,hide_from,show_on,version,updated_at';
+  'id,page_id,template,mode,redirect_page_id,hide_from,show_on,note,password_version,version,updated_at';
 
 /** A setting as the screen reads it: the dates as Riyadh days. */
 export interface VisibilitySetting {
   id: string;
-  mode: 'public' | 'hidden' | 'link';
+  mode: 'public' | 'hidden' | 'link' | 'password';
   redirectPageId: string | null;
   hideFrom: string | null;
   showOn: string | null;
+  /**
+   * A password page's message above the box. The password itself is never here: nothing
+   * returns it, and the screen asks for it again to change anything about it (0061).
+   */
+  note: PageNote | null;
+  /** How many times a password has been set. Shown as "set", never the password. */
+  passwordVersion: number;
   version: number;
   updatedAt: string | null;
 }
@@ -135,15 +157,29 @@ type Row = Record<string, unknown>;
 const dayOf = (value: unknown): string | null =>
   typeof value === 'string' ? riyadhDayOf(value) : null;
 
+/** The stored message, as the drawer edits it: {en, ar}, either side absent. */
+function noteOf(value: unknown): PageNote | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Row;
+  const out: PageNote = {};
+  for (const lang of ['en', 'ar'] as const) {
+    const line = raw[lang];
+    if (typeof line === 'string' && line.trim().length > 0) out[lang] = line;
+  }
+  return out.en === undefined && out.ar === undefined ? null : out;
+}
+
 function settingOf(row: Row | undefined): VisibilitySetting | null {
   if (!row || typeof row['id'] !== 'string') return null;
   const mode = row['mode'];
   return {
     id: row['id'],
-    mode: mode === 'hidden' || mode === 'link' ? mode : 'public',
+    mode: mode === 'hidden' || mode === 'link' || mode === 'password' ? mode : 'public',
     redirectPageId: typeof row['redirect_page_id'] === 'string' ? row['redirect_page_id'] : null,
     hideFrom: dayOf(row['hide_from']),
     showOn: dayOf(row['show_on']),
+    note: noteOf(row['note']),
+    passwordVersion: typeof row['password_version'] === 'number' ? row['password_version'] : 0,
     version: typeof row['version'] === 'number' ? row['version'] : 1,
     updatedAt: typeof row['updated_at'] === 'string' ? row['updated_at'] : null,
   };
@@ -327,3 +363,61 @@ export async function saveVisibility(
 
 /** A saved row, as the screen reads it. */
 export const settingOfRow = settingOf;
+
+/**
+ * Puts one page behind a password (Admin v2 U14b). The Worker never sees the secret twice:
+ * it hands it straight to `public.set_page_password`, which checks the live role, hashes it
+ * with bcrypt, writes the mode, the message and the new version, and chains its own audit
+ * row — all in one transaction, so a page is never in password mode without a password.
+ * Nothing about the password is returned, logged or kept here.
+ *
+ * The version the drawer read is checked first, as the ordinary save checks it: a page
+ * someone else changed in the meantime is a 409, not a silent overwrite. The homepage and a
+ * page of another tenant are refused by the function as well.
+ */
+export async function savePagePassword(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  input: PagePasswordWrite,
+): Promise<{ setting: VisibilitySetting; slug: VisibilityPageSlug; pageId: string }> {
+  const pages = await readVisibilityPages(sb, auth);
+  const page = pages.find((p) => p.id === input.pageId);
+  if (!page) throw new NotFoundError('page');
+  if (page.slug === HOME_SLUG) throw new ValidationError(HOME_REFUSAL, 'mode');
+
+  const existing = await sb
+    .from('page_visibility')
+    .select(ROW_COLUMNS)
+    .eq('tenant_id', auth.tenantId)
+    .eq('page_id', page.id)
+    .maybeSingle();
+  if (existing.error) throw new Error(`read page_visibility: ${existing.error.message}`);
+  const before = settingOf((existing.data ?? undefined) as Row | undefined);
+  if ((before?.version ?? 0) !== input.version) throw new OptimisticLockError('page_visibility');
+
+  const { error } = await sb.rpc('set_page_password', {
+    p_tenant: auth.tenantId,
+    p_page_id: page.id,
+    p_password: input.password,
+    p_note: input.note,
+  });
+  if (error) {
+    // 42501 is the function's own live check (a demoted token), 22023 its argument checks.
+    if (error.code === '42501') throw new AuthorizationError('maintenance.manage', 'live check');
+    if (error.code === '22023') {
+      throw new ValidationError('That password is too short or too long.', 'password');
+    }
+    throw translateWriteError(error, 'page_visibility', 'write', VISIBILITY_CONSTRAINTS);
+  }
+
+  const after = await sb
+    .from('page_visibility')
+    .select(ROW_COLUMNS)
+    .eq('tenant_id', auth.tenantId)
+    .eq('page_id', page.id)
+    .maybeSingle();
+  if (after.error) throw new Error(`read page_visibility: ${after.error.message}`);
+  const setting = settingOf((after.data ?? undefined) as Row | undefined);
+  if (!setting) throw new NotFoundError('page_visibility');
+  return { setting, slug: page.slug, pageId: page.id };
+}
