@@ -32,7 +32,7 @@ import { serviceClient } from '@/lib/supabase/server';
 // the replace still finds its image until then. `removePrevious: true` in the details deletes
 // it at once instead, for an image that must come off the web now (a portrait whose subject
 // asked); the audit row records which object went, and the response how it went. The audit
-// row always names the previous path (\`previousPath\`), removed or not. A still
+// row always names the previous path (`previousPath`), removed or not. A still
 // shipped with the site (`static`) or a legacy row can be replaced too; it becomes an
 // uploaded image (and has no object to remove).
 
