@@ -26,6 +26,12 @@ interface StubOptions {
   row?: Record<string, unknown>;
   rows?: Record<string, unknown>[];
   count?: number;
+  /**
+   * Releases on for the caller's tenant (Admin v2 R3): `rpc('releases_enabled')` answers true,
+   * so a release-managed route takes its staged branch. Off by default (every rpc answers
+   * `{ data: null }`), as production stands until R14.
+   */
+  releases?: boolean;
 }
 
 /**
@@ -82,8 +88,9 @@ export function makeStubClient(options: StubOptions = {}) {
     from: () => builder,
     // An RPC that takes the tenant from the Worker (`p_tenant`) is a scoped read as much as
     // an `.eq('tenant_id', …)` is, so the scoping assertions see it too.
-    rpc: async (_fn: string, args?: Record<string, unknown>) => {
+    rpc: async (fn: string, args?: Record<string, unknown>) => {
       if (typeof args?.['p_tenant'] === 'string') observedTenantFilters.push(args['p_tenant']);
+      if (fn === 'releases_enabled' && options.releases) return { data: true, error: null };
       return { data: null, error: null };
     },
     auth: {
@@ -182,6 +189,7 @@ export function makeContext(
   body?: unknown,
   method = 'GET',
   params: Readonly<Record<string, string>> = {},
+  stub: Pick<Case, 'releases' | 'row'> = {},
 ) {
   observedTenantFilters = [];
   const session = sessionFor(principal);
@@ -202,7 +210,10 @@ export function makeContext(
     params: { id: UUID, ...params },
     locals: {
       session,
-      supabase: makeStubClient(),
+      supabase: makeStubClient({
+        ...(stub.row ? { row: stub.row } : {}),
+        ...(stub.releases ? { releases: true } : {}),
+      }),
       cspNonce: 'test',
       csrfToken: 'test',
     },
@@ -233,6 +244,13 @@ export interface Case {
   allow: Role[];
   /** A read sent as a POST (its search stays out of URLs): checked for scoping like a GET. */
   read?: true;
+  /**
+   * Releases on for the caller's tenant (Admin v2 R3): the route takes its staged branch. A
+   * flag-on twin of a row proves the gate does not move when a save is staged.
+   */
+  releases?: true;
+  /** The stub's row (every table answers it), when a case needs a particular one. */
+  row?: Record<string, unknown>;
 }
 
 export const VALID_BILINGUAL = { en: 'Example', ar: 'مثال' };
