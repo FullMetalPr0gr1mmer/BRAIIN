@@ -96,7 +96,7 @@ export default function AccentField({
           {arabic ? 'العربية' : 'English'}
         </p>
         {words.length === 0 && from !== null ? (
-          <div className="accentf__kept">
+          <>
             <p className="f__cue">
               {keptSays(from, def?.mode === 'range' ? range.to : null)} Write the{' '}
               {LANGUAGE_NAME[lang]} words here to choose others.
@@ -108,7 +108,7 @@ export default function AccentField({
             >
               Remove the {LANGUAGE_NAME[lang]} highlight
             </button>
-          </div>
+          </>
         ) : words.length === 0 ? (
           <p className="f__cue">
             Write the {LANGUAGE_NAME[lang]} words first, then choose which of them carry the colour.
