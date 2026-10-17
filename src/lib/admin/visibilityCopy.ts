@@ -55,14 +55,14 @@ export const PASSWORD_MESSAGE_LABEL = 'Message above the password box';
 export const PASSWORD_REQUIRED =
   'Type the password to apply. Setting it again is the only way to change the message too.';
 
+/** The badge and the drawer need every mode, including the one the PUT route refuses. */
+export type VisibilityModeKey = keyof typeof MODE_COPY;
+
 /**
  * What hiding does not do: the page's words stay published (the public data the site reads is
  * still readable), and its form still takes submissions (/api is never gated). Shown with the
  * hidden option, and said in the guide.
  */
-/** The badge and the drawer need every mode, including the one the PUT route refuses. */
-export type VisibilityModeKey = keyof typeof MODE_COPY;
-
 export const HIDDEN_NOTE =
   'Hiding is not deleting: the page’s words stay published. Unpublish it, or keep confidential details off it. A hidden Join or Contact page still takes what its form sends: to stop job applications, turn off Accepting job applications in General settings.';
 

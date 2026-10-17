@@ -58,7 +58,7 @@ the row is true when the PR lands and nothing here is edited after a merge.
 | 0049 | (released) | unused: H10 (0050) merges before C13, and once 0050 is on `main` a 0049 would sort below its highest (rule 1), so C13 moved to 0059 | 1 |
 | 0053 | (released) | unused: U13 (0054) merged before U1, and once 0054 is on `main` a 0053 would sort below its highest (rule 1), so U1 moved to 0060, the lowest number above `main` that no other slice holds | 2 |
 | 0059 | C13 | lead attribution capture (built, held for the privacy notice, O-11); moved from 0047, then from 0049 | 1 |
-| 0061 | U14b | the page password: `page_passwords`, `set_page_password`, `page_password_check`, the `page_sections` fence and `page_sections_unlocked`; renumbered from the reserved 0058, which would sort below `main`’s highest once U1’s 0060 merged (rule 1) | 2 |
+| 0061 | U14b | the page password: `page_passwords`, `set_page_password`, `page_password_check`, the `page_sections` fence, `page_sections_unlocked` and `page_media_unlocked`; renumbered from the reserved 0058, which would sort below `main`’s highest once U1’s 0060 merged (rule 1) | 2 |
 
 ## Rules
 
