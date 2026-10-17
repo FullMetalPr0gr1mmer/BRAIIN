@@ -6,6 +6,7 @@ import {
   PREVIEW_MEDIA_ROW_CAP,
   PREVIEW_ROW_CAP,
 } from '@/lib/preview/dataset';
+import { FOREIGN_KEYS } from '@/lib/preview/relations';
 import {
   BI,
   draft,
@@ -297,6 +298,27 @@ describe('laying the drafts over', () => {
     expect(await read(db, 'seo_defaults', 'robots_directives')).toEqual([
       { robots_directives: 'noindex' },
     ]);
+  });
+});
+
+describe('the foreign keys a pending delete follows', () => {
+  it("cascades only into tables no other key references (a parent's own drafts are the whole set)", () => {
+    const cascaded = new Set(
+      FOREIGN_KEYS.filter((fk) => fk.onDelete === 'cascade').map((fk) => fk.table),
+    );
+    const referenced = FOREIGN_KEYS.filter(
+      (fk) => fk.onDelete !== 'restrict' && cascaded.has(fk.target) && fk.target !== fk.table,
+    );
+    expect(referenced).toEqual([]);
+    expect([...cascaded].sort()).toEqual(
+      [
+        'navigation',
+        'page_sections',
+        'portfolio_media',
+        'portfolio_services',
+        'service_cases',
+      ].sort(),
+    );
   });
 });
 
