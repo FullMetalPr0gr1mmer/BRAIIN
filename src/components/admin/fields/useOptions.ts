@@ -40,7 +40,12 @@ export function useOptions(relation: RelationDef | undefined): {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!relation) return;
+    // No resource named (the component kit's sample fields): nothing to load, and the
+    // control must not sit at "Loading…" for ever.
+    if (!relation) {
+      setLoading(false);
+      return;
+    }
     const controller = new AbortController();
     const params = relationParams(relation, LIMIT);
     adminFetch<{ rows: Record<string, unknown>[] }>(

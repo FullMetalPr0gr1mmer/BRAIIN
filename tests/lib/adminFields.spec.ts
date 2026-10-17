@@ -629,11 +629,12 @@ describe('the rest of the field kit (Admin v2 F5b)', () => {
     expect(html).toContain('id="f-button-label-en"');
     expect(html).toContain('id="f-button-label-ar"');
     expect(html).toContain('Where it goes');
-    // The options load in the browser; the server renders the empty picker beside the
-    // box that always holds the value.
+    // The pages are asked for only when the picker is reached (the kit screen reads
+    // nothing), so the server renders the empty picker beside the box that always holds
+    // the value.
     expect(html).toContain('id="f-button-target"');
     expect(html).toContain('id="f-button-href"');
-    expect(html).toContain('Loading the pages…');
+    expect(html).toContain('Pick a page…');
     expectUniqueIds(html);
     expect(html).not.toContain('style=');
   });

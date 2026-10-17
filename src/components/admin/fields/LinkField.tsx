@@ -30,13 +30,26 @@ const GROUP_NAMES: Record<Linkable['group'], string> = {
 };
 const GROUP_ORDER: readonly Linkable['group'][] = ['page', 'service', 'project', 'anchor', 'legal'];
 
-/** The link targets, asked for once per screen the first time a link field is shown. */
-function useLinkables(): { links: Linkable[]; error: string; loading: boolean } {
+/**
+ * The link targets, asked for when the picker is first reached — not on mount. A form may
+ * hold several link fields and a screen that only reads one never spends a subrequest on
+ * them (the Worker's Free plan allows 50); and the component kit's reference screen, which
+ * reads nothing, stays that way for every role.
+ */
+function useLinkables(): {
+  links: Linkable[];
+  error: string;
+  loading: boolean;
+  ask: () => void;
+} {
   const [links, setLinks] = useState<Linkable[]>([]);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [asked, setAsked] = useState(false);
+  const [loading, setLoading] = useState(false);
   useEffect(() => {
+    if (!asked) return;
     const controller = new AbortController();
+    setLoading(true);
     adminFetch<{ links: Linkable[] }>('/api/admin/linkables', { signal: controller.signal })
       .then((answer) => setLinks(answer.links ?? []))
       .catch((err: unknown) => {
@@ -44,8 +57,8 @@ function useLinkables(): { links: Linkable[]; error: string; loading: boolean } 
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, []);
-  return { links, error, loading };
+  }, [asked]);
+  return { links, error, loading, ask: () => setAsked(true) };
 }
 
 type Lang = 'en' | 'ar';
@@ -61,7 +74,7 @@ export default function LinkField({
   const id = `${idPrefix}-${field.name}`;
   const ids: Record<Lang, string> = { en: `${id}-label-en`, ar: `${id}-label-ar` };
   const hrefId = `${id}-href`;
-  const { links, error: loadError, loading } = useLinkables();
+  const { links, error: loadError, loading, ask } = useLinkables();
   const { shown, choose } = useFieldLanguage(ids);
   const both = shown === 'both';
   const link = linkState(value);
@@ -165,7 +178,8 @@ export default function LinkField({
               id={`${id}-target`}
               aria-label={`${field.label}: pick a page`}
               value={known ? link.href : ''}
-              disabled={loading}
+              onFocus={ask}
+              onPointerDown={ask}
               onChange={(e) => {
                 if (e.target.value !== '') pick(e.target.value);
               }}
@@ -217,11 +231,9 @@ export default function LinkField({
             Pick a page, or write where it goes: a page of this site starts with “/”, a place on the
             page it is on starts with “#”.
           </p>
-          {loadError && (
-            <p className="field-error f__err" role="alert">
-              The pages could not be loaded: {loadError} You can still write where it goes.
-            </p>
-          )}
+          {/* A role that may not read the list (SEO: §5 gives it no field holding a link)
+              is not an error on this screen — the box still works, so this is a note. */}
+          {loadError && <p className="f__hint">The page list is not available here. {loadError}</p>}
         </div>
       </div>
     </FieldShell>
