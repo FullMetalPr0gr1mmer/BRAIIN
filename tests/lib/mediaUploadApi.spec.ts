@@ -558,6 +558,26 @@ describe('POST /api/admin/media/[id]/replace', () => {
     expect(state.removed).toEqual([]);
     expect(state.audits[0]).toMatchObject({ action: 'media_asset.replace' });
     expect(state.audits[0]?.detail).not.toHaveProperty('previousFile');
+    // U4 review sec-1: media_assets keeps no history, so the audit row is the one record of
+    // which file the picture showed before, whether or not that file was removed at once.
+    expect(state.audits[0]?.detail).toMatchObject({ previousPath: OLD_KEY, from: 'storage' });
+  });
+
+  it('a replaced still is recorded by its path too (U4 review sec-1)', async () => {
+    state.stored = {
+      id: ASSET,
+      kind: 'image',
+      provider: 'static',
+      storage_path: 'stills/work/p0.jpg',
+      version: 1,
+    };
+    const { status } = await call(REPLACE, replaceRequest(await photo(64, 48), 1));
+    expect(status).toBe(200);
+    expect(state.audits[0]?.detail).toMatchObject({
+      from: 'static',
+      previousPath: 'stills/work/p0.jpg',
+    });
+    expect(state.audits[0]?.detail).not.toHaveProperty('previousKey');
   });
 
   const removingRequest = (file: Uint8Array) =>
