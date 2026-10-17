@@ -61,11 +61,11 @@ insert into public.pages (id, tenant_id, slug, title, status) values
 -- Two sections on About (one hidden: anon never reads it, locked or not) and one on Contact.
 insert into public.page_sections (id, tenant_id, page_id, type, content, visible, sort_order) values
   ('61000000-0000-0000-0000-0000000051a1', '61000000-0000-0000-0000-000000000001',
-   '61000000-0000-0000-0000-00000000a002', 'richText', '{"body":{"en":"secret words"}}', true, 10),
+   '61000000-0000-0000-0000-00000000a002', 'slogan', '{"body":{"en":"secret words"}}', true, 10),
   ('61000000-0000-0000-0000-0000000051a2', '61000000-0000-0000-0000-000000000001',
-   '61000000-0000-0000-0000-00000000a002', 'richText', '{"body":{"en":"draft words"}}', false, 20),
+   '61000000-0000-0000-0000-00000000a002', 'slogan', '{"body":{"en":"draft words"}}', false, 20),
   ('61000000-0000-0000-0000-0000000051a3', '61000000-0000-0000-0000-000000000001',
-   '61000000-0000-0000-0000-00000000a003', 'richText', '{"body":{"en":"open words"}}', true, 10);
+   '61000000-0000-0000-0000-00000000a003', 'slogan', '{"body":{"en":"open words"}}', true, 10);
 
 create function _as(p_sub text, p_role text, p_tid text) returns void language sql as $$
   select set_config(

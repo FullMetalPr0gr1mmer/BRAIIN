@@ -133,17 +133,18 @@ beforeEach(() => {
  * name it rather than asking the database again). */
 const TENANT = '61000000-0000-0000-0000-0000000000b1';
 
-describe('buildVisibilitySnapshot', () => {
-  const row = (over: Record<string, unknown>) => ({
-    mode: 'public',
-    template: null,
-    hide_from: null,
-    show_on: null,
-    page: null,
-    redirect: null,
-    ...over,
-  });
+/** One `page_visibility` row as the snapshot query returns it. */
+const row = (over: Record<string, unknown>) => ({
+  mode: 'public',
+  template: null,
+  hide_from: null,
+  show_on: null,
+  page: null,
+  redirect: null,
+  ...over,
+});
 
+describe('buildVisibilitySnapshot', () => {
   it('keeps what is not public, by slug, the redirect by its target’s slug', () => {
     const snap = buildVisibilitySnapshot(
       [
@@ -453,5 +454,88 @@ describe('saveVisibility', () => {
       show_on: null,
     });
     expect(update.filters).toContain(`eq:tenant_id=${AUTH.tenantId}`);
+  });
+});
+
+describe('the snapshot a page behind a password gets (U14b)', () => {
+  const PAGE_ID = '3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
+
+  it('carries the page’s id, its version and the message, and never a hash', () => {
+    const snap = buildVisibilitySnapshot(
+      [
+        row({
+          id: 'r-about',
+          version: 4,
+          mode: 'password',
+          page_id: PAGE_ID,
+          password_version: 2,
+          note: { en: 'Ask the studio.', ar: 'اسأل الاستوديو.' },
+          page: { slug: 'about' },
+        }),
+      ],
+      TENANT,
+    );
+    expect(snap.pages.about).toEqual({
+      mode: 'password',
+      id: PAGE_ID,
+      pv: 2,
+      note: { en: 'Ask the studio.', ar: 'اسأل الاستوديو.' },
+    });
+    expect(snap.tenant).toBe(TENANT);
+    expect(JSON.stringify(snap)).not.toMatch(/\$2[aby]\$/);
+    expect(JSON.stringify(snap)).not.toContain('password_hash');
+    expect(snap.rev).toBe('r-about:4');
+  });
+
+  it('leaves out a row that could not be unlocked, rather than publishing the page', () => {
+    for (const over of [{ password_version: 0 }, { password_version: null }, { page_id: null }]) {
+      const snap = buildVisibilitySnapshot(
+        [
+          row({
+            id: 'r-about',
+            version: 1,
+            mode: 'password',
+            page_id: PAGE_ID,
+            password_version: 1,
+            page: { slug: 'about' },
+            ...over,
+          }),
+        ],
+        TENANT,
+      );
+      expect(snap.pages, JSON.stringify(over)).toEqual({});
+      expect(snap.rev).toBe('');
+    }
+  });
+
+  it('keeps only a plain message, in the languages the gate renders', () => {
+    const note = (value: unknown) =>
+      buildVisibilitySnapshot(
+        [
+          row({
+            id: 'r',
+            version: 1,
+            mode: 'password',
+            page_id: PAGE_ID,
+            password_version: 1,
+            note: value,
+            page: { slug: 'about' },
+          }),
+        ],
+        TENANT,
+      ).pages.about?.note;
+    expect(note({ en: ' Ask. ' })).toEqual({ en: 'Ask.' });
+    expect(note({ en: '', ar: 'اسأل.' })).toEqual({ ar: 'اسأل.' });
+    expect(note({ fr: 'ouvrez' })).toBeUndefined();
+    expect(note(null)).toBeUndefined();
+    expect(note('a string')).toBeUndefined();
+  });
+
+  it('reads the columns the entry needs, and no column of the secret', () => {
+    for (const column of ['page_id', 'note', 'password_version']) {
+      expect(VISIBILITY_SNAPSHOT_SELECT).toContain(column);
+    }
+    expect(VISIBILITY_SNAPSHOT_SELECT).not.toContain('password_hash');
+    expect(VISIBILITY_SNAPSHOT_SELECT).not.toContain('page_passwords');
   });
 });

@@ -9,6 +9,7 @@ import {
   getVisibilitySnapshot,
   hasRestrictions,
   isListed,
+  modeOf,
   parseVisibilitySnapshot,
   visibilityRevision,
   putVisibilitySnapshot,
@@ -20,7 +21,16 @@ import {
   listedSearchHits,
   logicalPathOfHref,
 } from '@/lib/visibility/listing';
-import { riyadhDayOf, riyadhMidnight, PageVisibilityWriteSchema } from '@schemas/visibility';
+import {
+  PAGE_NOTE_MAX,
+  PagePasswordWriteSchema,
+  PageVisibilityWriteSchema,
+  VISIBILITY_MODES,
+  VISIBILITY_WRITE_MODES,
+  passwordBytes,
+  riyadhDayOf,
+  riyadhMidnight,
+} from '@schemas/visibility';
 import { env as stubEnv, __kv } from '../stubs/cloudflare-workers';
 
 /** The stub, typed as the binding the module reads (it implements the methods used). */
@@ -32,6 +42,8 @@ const env = stubEnv as unknown as { SESSION: KVNamespace };
 const FROM = '2026-11-01T00:00:00+03:00';
 const UNTIL = '2026-11-08T00:00:00+03:00';
 const at = (iso: string) => Date.parse(iso);
+/** A moment outside every window these tests use. */
+const NOW = at('2026-10-17T09:00:00+03:00');
 
 const snap = (over: Partial<VisibilitySnapshot> = {}): VisibilitySnapshot => ({
   v: 1,
@@ -400,5 +412,187 @@ describe('the drawer’s schema (packages/schemas/visibility.ts)', () => {
     ]) {
       expect(PageVisibilityWriteSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
     }
+  });
+});
+
+describe('a page behind a password (U14b)', () => {
+  const PAGE_ID = '3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
+  const locked = (over: Record<string, unknown> = {}) => ({
+    v: 1 as const,
+    builtAt: null,
+    pages: { about: { mode: 'password' as const, id: PAGE_ID, pv: 2, ...over } },
+    templates: {},
+  });
+
+  it('decide answers the gate with what the box needs, and never a secret', () => {
+    const snap = locked({ note: { en: 'Ask the studio.', ar: 'اسأل الاستوديو.' } });
+    const gate = decide(snap, { kind: 'page', slug: 'about' }, NOW);
+    expect(gate).toEqual({
+      action: 'password',
+      id: PAGE_ID,
+      pv: 2,
+      note: { en: 'Ask the studio.', ar: 'اسأل الاستوديو.' },
+    });
+  });
+
+  it('a password page is never listed, and never public', () => {
+    const snap = locked();
+    expect(modeOf(snap, { kind: 'page', slug: 'about' }, NOW)).toBe('password');
+    expect(isListed(snap, { kind: 'page', slug: 'about' }, NOW)).toBe(false);
+    // No window: the dates belong to `hidden` alone (0057's CHECK).
+    expect(effectiveMode(snap.pages.about, NOW + 10 * 365 * 24 * 3600 * 1000)).toBe('password');
+  });
+
+  it('a hidden page may be sent to a password page: a working link, never a chain', () => {
+    const snap = {
+      v: 1 as const,
+      builtAt: null,
+      pages: {
+        join: { mode: 'hidden' as const, target: 'about' as const },
+        about: { mode: 'password' as const, id: PAGE_ID, pv: 1 },
+      },
+      templates: {},
+    };
+    expect(decide(snap, { kind: 'page', slug: 'join' }, NOW)).toEqual({
+      action: 'hide',
+      to: 'about',
+    });
+  });
+
+  it('reads a stored entry back whole: the id, the version and a plain message', () => {
+    const snap = parseVisibilitySnapshot(
+      JSON.stringify({
+        v: 1,
+        builtAt: null,
+        tenant: '11111111-1111-4111-8111-111111111111',
+        pages: { about: { mode: 'password', id: PAGE_ID, pv: 9, note: { en: 'Ask.' } } },
+        templates: {},
+      }),
+    );
+    expect(snap.tenant).toBe('11111111-1111-4111-8111-111111111111');
+    expect(snap.pages.about).toEqual({
+      mode: 'password',
+      id: PAGE_ID,
+      pv: 9,
+      note: { en: 'Ask.' },
+    });
+  });
+
+  it('a message that is markup, blank or too long is dropped, never rendered', () => {
+    const note = (value: unknown) =>
+      parseVisibilitySnapshot(
+        JSON.stringify({
+          v: 1,
+          builtAt: null,
+          pages: { about: { mode: 'password', id: PAGE_ID, pv: 1, note: value } },
+          templates: {},
+        }),
+      ).pages.about?.note;
+    expect(note({ en: '<b>hi</b>' })).toBeUndefined();
+    expect(note({ en: '   ' })).toBeUndefined();
+    expect(note({ en: 'a'.repeat(141) })).toBeUndefined();
+    expect(note({ en: 'ok', ar: '<i>x</i>' })).toEqual({ en: 'ok' });
+    expect(note('a string')).toBeUndefined();
+  });
+
+  it('an entry that cannot be unlocked becomes a 404, never a public page', () => {
+    for (const broken of [
+      { mode: 'password' },
+      { mode: 'password', id: PAGE_ID },
+      { mode: 'password', id: 'not-a-uuid', pv: 1 },
+      { mode: 'password', id: PAGE_ID, pv: 0 },
+      { mode: 'password', id: PAGE_ID, pv: 'two' },
+    ]) {
+      const snap = parseVisibilitySnapshot(
+        JSON.stringify({ v: 1, builtAt: null, pages: { about: broken }, templates: {} }),
+      );
+      expect(snap.pages.about, JSON.stringify(broken)).toEqual({ mode: 'hidden', target: null });
+      expect(decide(snap, { kind: 'page', slug: 'about' }, NOW)).toEqual({
+        action: 'hide',
+        to: null,
+      });
+    }
+  });
+
+  it('a template is never a password page, whatever a snapshot says', () => {
+    const snap = parseVisibilitySnapshot(
+      JSON.stringify({
+        v: 1,
+        builtAt: null,
+        pages: {},
+        templates: { service: { mode: 'password', id: PAGE_ID, pv: 1 } },
+      }),
+    );
+    expect(snap.templates).toEqual({});
+  });
+
+  it('a tenant that is not a uuid is left out, so nothing binds to it', () => {
+    const snap = parseVisibilitySnapshot(
+      JSON.stringify({ v: 1, builtAt: null, tenant: 'nope', pages: {}, templates: {} }),
+    );
+    expect(snap.tenant).toBeUndefined();
+  });
+});
+
+describe('the password door’s schema (packages/schemas/visibility.ts)', () => {
+  const base = {
+    pageId: '3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+    password: 'letmein22',
+    note: null,
+    version: 0,
+  };
+
+  it('takes a page, a password and an optional message in either language', () => {
+    expect(PagePasswordWriteSchema.safeParse(base).success).toBe(true);
+    expect(
+      PagePasswordWriteSchema.safeParse({ ...base, note: { en: 'Ask the studio.' } }).success,
+    ).toBe(true);
+    expect(PagePasswordWriteSchema.safeParse({ ...base, note: { ar: 'اسأل.' } }).success).toBe(
+      true,
+    );
+  });
+
+  it('measures the password in bytes, as bcrypt reads it', () => {
+    expect(passwordBytes('letmein22')).toBe(9);
+    expect(passwordBytes('ا'.repeat(37))).toBe(74);
+    expect(PagePasswordWriteSchema.safeParse({ ...base, password: 'short7' }).success).toBe(false);
+    expect(PagePasswordWriteSchema.safeParse({ ...base, password: 'ا'.repeat(37) }).success).toBe(
+      false,
+    );
+    expect(PagePasswordWriteSchema.safeParse({ ...base, password: 'ا'.repeat(36) }).success).toBe(
+      true,
+    );
+  });
+
+  it('refuses a message that is markup, blank, too long, empty or in another language', () => {
+    for (const note of [
+      { en: '<b>hi</b>' },
+      { en: '   ' },
+      { en: 'a'.repeat(PAGE_NOTE_MAX + 1) },
+      {},
+      { fr: 'ouvrez' },
+      'a string',
+    ]) {
+      expect(PagePasswordWriteSchema.safeParse({ ...base, note }).success, String(note)).toBe(
+        false,
+      );
+    }
+  });
+
+  it('refuses an unknown key and a missing version', () => {
+    expect(PagePasswordWriteSchema.safeParse({ ...base, mode: 'password' }).success).toBe(false);
+    expect(PagePasswordWriteSchema.safeParse({ ...base, version: undefined }).success).toBe(false);
+  });
+
+  it('the list’s save takes no password mode: it has no password to set', () => {
+    expect(
+      PageVisibilityWriteSchema.safeParse({
+        target: { pageId: base.pageId },
+        mode: 'password',
+        version: 0,
+      }).success,
+    ).toBe(false);
+    expect(VISIBILITY_WRITE_MODES).toEqual(['public', 'hidden', 'link']);
+    expect(VISIBILITY_MODES).toEqual(['public', 'hidden', 'link', 'password']);
   });
 });
