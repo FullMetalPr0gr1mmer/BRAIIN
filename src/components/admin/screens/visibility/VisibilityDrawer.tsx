@@ -251,7 +251,7 @@ export default function VisibilityDrawer({
                     id={ids.password}
                     type={shown ? 'text' : 'password'}
                     value={draft.password}
-                    autoComplete="off"
+                    autoComplete="new-password"
                     spellCheck={false}
                     maxLength={200}
                     aria-describedby={ids.passwordHint}
