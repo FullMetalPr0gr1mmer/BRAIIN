@@ -9,8 +9,8 @@ the program applies it. No URL, credential or project reference belongs here.
 ## Applied
 
 Production has applied 0001 to 0038, 0041, 0044, 0045, 0046, 0048, 0050, 0051, 0052, 0054, 0055,
-0056, 0057 and 0060, the files `main` holds once #75 merges (0039, 0040, 0042, 0043, 0047, 0049
-and 0053 were released unused; gaps are allowed).
+0056, 0057, 0060, 0061 and 0062, the files `main` holds once #80 merges (0039, 0040, 0042, 0043,
+0047, 0049, 0053 and 0058 were released unused; gaps are allowed).
 
 | Migration | What | PR |
 |---|---|---|
@@ -37,6 +37,8 @@ and 0053 were released unused; gaps are allowed).
 | 0056 | `0056_invites.sql`: the invites guide, `inviting-people`, added to the help set restated from 0055's, and every tenant re-seeded; no schema change (U12b). Applied before #73 merges | #73 |
 | 0057 | `0057_page_visibility.sql`: page visibility, without the password mode: `public.page_visibility` (one row per CMS page or template: public, hidden with an optional redirect, or link-only, with a hide-from/show-on window; RLS ENABLE + FORCE, CMS roles read, Admin and Developer write through the JWT role and a RESTRICTIVE live check, no DELETE, no anon access; the homepage is always public), `pages_tenant_id_id`, `app.role_manages_visibility`, the `pages_route_slug_fixed` trigger, its release-registry row (immediate until R14), and the help set restated from 0056's with `page-visibility` added (U14a). Applied before #74 merges | #74 |
 | 0060 | `0060_dashboard_layer.sql`: the dashboard layer: `admin_role_defaults` (a role's preset layout and quick actions, written by `app.role_manages_users(app.live_role())`), `admin_user_prefs.dashboard`, `team_notes` with `public.save_team_notes()` and `app.expire_team_notes()` (blanked 180 days after the last edit, daily by pg_cron `team-notes-retention`), and the help set restated from 0057's with `your-dashboard` added and `/admin` taken off `finding-your-way` (U1). Applied before #75 merges | #75 |
+| 0061 | `0061_page_password.sql`: the page password: `page_passwords`, `set_page_password`, `page_password_check`, the `page_sections` fence, `page_sections_unlocked` and `page_media_unlocked`; renumbered from the reserved 0058, which would sort below `main`’s highest once U1’s 0060 merged (rule 1). Applied before #78 merges | #78 |
+| 0062 | `0062_release_drafts_write.sql`: staff draft writes on `content_drafts` (grants stated), RESTRICTIVE live, releases-on and singleton-key policies, `public.releases_enabled`, `public.write_drafts` (the one draft writer), `app.draft_key_ok` (expand, inert until R14) (R3a). Applied before #80 merges | #80 |
 
 Each slice's file under [as-built/](as-built/) has the detail.
 
@@ -61,8 +63,6 @@ every PR moves only its own row.
 | 0053 | (released) | unused: U13 (0054) merged before U1, and once 0054 is on `main` a 0053 would sort below its highest (rule 1), so U1 moved to 0060, the lowest number above `main` that no other slice holds | 2 |
 | 0058 | (released) | unused: U1 (0060) merged before U14b, and once 0060 is on `main` a 0058 would sort below its highest (rule 1), so U14b moved to 0061 | 2 |
 | 0059 | C13 | lead attribution capture (built, held for the privacy notice, O-11); moved from 0047, then from 0049. Below Wave 3's numbers: when released it renumbers to the lowest free number above `main`'s highest (rule 3), the wave's slack first | 1 |
-| 0061 | U14b | `0061_page_password.sql`: the page password (moved from 0058) | 2 |
-| 0062 | R3a | `0062_release_drafts_write.sql`: staff draft writes on `content_drafts` (grants stated), RESTRICTIVE live, releases-on and singleton-key policies, `public.releases_enabled`, `public.write_drafts` (the one draft writer), `app.draft_key_ok` (expand, inert until R14) | 3 |
 | 0063 | C4a | `0063_crm_leads_readers_v2.sql`: `app.lead_filter` and `leads_list`, `leads_board`, `lead_summary` restated with assignee (`me` in SQL), star, unread, source, channel, discipline, a starred-first sort, the SLA flag and the won value (0036's keys unchanged); `public.lead_neighbours` | 3 |
 | 0064 | U4 | `0064_media_library.sql`: `public.media_library` (the library's search and paging: SECURITY INVOKER, staff only, the tenant named and checked, Arabic folded, `%` and `_` escaped), the help set restated with the media guide | 3 |
 | 0065 | C4b | `0065_help_leads_v2.sql`: the help set restated with `working-with-leads` rewritten for the leads screens | 3 |

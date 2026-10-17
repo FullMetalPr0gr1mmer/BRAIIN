@@ -4,23 +4,25 @@ import { formatDate } from '@/lib/admin/relTime';
 import { MODE_COPY } from '@/lib/admin/visibilityCopy';
 import type { IconName } from '@/lib/admin/icons';
 import type { BadgeTone } from '@/lib/admin/tones';
-import type { VisibilityItem } from './types';
+import type { VisibilityItem, VisibilityMode } from './types';
 
 // The list of /admin/visibility (Admin v2 U14a): every CMS page, then the two templates, each
 // a row with its state in words (Visible, Hidden, Link only, and the window's day), and one
 // button that opens "Who can see <page>?". The row is a list item, not a link: the button is
 // the one thing to press, named for its page.
 
-const TONE: Record<'public' | 'hidden' | 'link', BadgeTone> = {
+const TONE: Record<VisibilityMode, BadgeTone> = {
   public: 'ok',
   hidden: 'gray',
   link: 'sky',
+  password: 'klein',
 };
 
-const ICON: Record<'public' | 'hidden' | 'link', IconName> = {
+const ICON: Record<VisibilityMode, IconName> = {
   public: 'globe',
   hidden: 'eyeoff',
   link: 'link',
+  password: 'lock',
 };
 
 /** "until 8 Nov", "from 1 Nov", "1 Nov to 8 Nov": the window as the admin reads it. */
