@@ -157,7 +157,12 @@ stay live writes until their slice:
 11. **Four specs' fake clients gained an `rpc`** that answers the flag as off
     (`adminKernel`, `contentResources`, `serviceResources`, `redirectResource`): the
     kernel now asks the flag on every release-managed route. Their assertions are unchanged.
-12. **`grants_app_schema.test.sql` gains rows, not an allowlist entry.** Its exhaustive
+12. **The status rule also judges the merged pending change** (PATCH and reorder), not only
+    the request: a Content Creator's title edit to an item an Admin staged for archiving would
+    re-save that archive, so it is 403 `content.archiveDelete` in the Worker, as RLS (0038's
+    archive term) would refuse it anyway. Found in the self-review; the legacy save checks only
+    the request because there is nothing pending to inherit.
+13. **`grants_app_schema.test.sql` gains rows, not an allowlist entry.** Its exhaustive
     allowlist is anon's; `app.draft_key_ok` is not anon's, so it gets its own rows (section
     13, with the two public functions).
 

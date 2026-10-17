@@ -357,6 +357,9 @@ export async function stagedUpdate(
 
   const op: DraftOp = draft?.op === 'create' ? 'create' : 'update';
   let stored = mergePayload(draft?.payload, payload, entry);
+  // The status rule over the whole pending change: re-saving someone else's staged archive or
+  // publish is staging it too (RLS refuses an archive draft from a non-Admin as well).
+  stageTransition(auth, config, stored);
   let derived = derivePatch(entry, op, stored);
   if (op === 'update') {
     const remaining = dropNoOps(derived.patch, live!, draft?.base);
@@ -523,6 +526,7 @@ export async function stagedReorder(
     if (!live && draft?.op !== 'create') continue; // not this tenant's row: nothing to move
     const op: DraftOp = draft?.op === 'create' ? 'create' : 'update';
     let stored = mergePayload(draft?.payload, { sortOrder }, entry);
+    stageTransition(auth, config, stored);
     let derived = derivePatch(entry, op, stored);
     if (op === 'update') {
       const remaining = dropNoOps(derived.patch, live!, draft?.base);

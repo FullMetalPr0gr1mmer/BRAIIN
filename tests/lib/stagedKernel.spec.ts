@@ -819,6 +819,29 @@ describe('releases on: PATCH stages an edit', () => {
     expect([cc.status, cc.body['capability']]).toEqual([403, 'content.archiveDelete']);
   });
 
+  it('the status rule judges the whole pending change, not only this save', async () => {
+    // An Admin staged an archive; a Content Creator's title edit would re-save it.
+    const d = draft({
+      payload: { status: 'archived' },
+      base: { status: 'draft' },
+      fields: ['status'],
+    });
+    drafts().push(d);
+    const res = await call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: { ...title('Logos'), version: 3, ...editRef(d) },
+      role: 'content_creator',
+    });
+    expect([res.status, res.body['capability']]).toEqual([403, 'content.archiveDelete']);
+    expect(drafts()[0]!['version']).toBe(1);
+    const moved = await call(services.REORDER, 'POST', {
+      body: { items: [{ id: S1, sortOrder: 1 }] },
+      role: 'content_creator',
+    });
+    expect(moved.status).toBe(403);
+    expect(drafts()[0]!['version']).toBe(1);
+  });
+
   it('a pending create is edited in place: its payload stays a full create', async () => {
     await call(services.POST, 'POST', {
       body: { slug: 'motion', title: { en: 'Motion', ar: 'موشن' } },
