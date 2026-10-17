@@ -1247,7 +1247,7 @@ row goes, then its object, unless another row still names that file (it stays, a
 says `fileKept`). A replace leaves the old object for the next daily sweep (objects older than
 an hour that no row names, and only those the Worker wrote: a file put in the bucket by hand, or
 one it held before 0045, is never swept, and goes only by hand), unless it is sent with `removePrevious: true` in its details (the
-the library's Replace file offers it since U4: "Remove the old file from the web now"), which deletes the old object at once. A file
+library's Replace file offers it since U4: "Remove the old file from the web now"), which deletes the old object at once. A file
 whose removal failed and an upload whose row was never written also go at the sweep.
 
 **How long a removed file stays on the web (the real window, PDPL erasure included).** Removing

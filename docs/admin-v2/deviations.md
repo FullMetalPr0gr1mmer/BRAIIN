@@ -41,6 +41,7 @@
   - a picture's file name is read-only in the drawer, set at upload or replace: `update_media_meta()` has no write path for it (D7, U4);
   - a tile's name and size sit on a solid midnight band, not the prototype's transparent-to-70% gradient, whose contrast depends on the photo and cannot be proven AA (D15, U4);
   - the storage meter counts the media bucket only, against the plan's 1 GB that the CV bucket shares (D13, U4; the quota figure is the owner's to confirm);
+  - the storage meter speaks binary units ("214 MB of 1 GB": 1 MB = 1,048,576 B, as the Supabase plan counts its quota), where P-10 counts KB as 1,000 B; a tile's size badge keeps P-10's units (U4 review);
 - **Theme**:
   - no Google/Adobe font links or raw font uploads; the curated self-hosted catalogue replaces them (CSP, PDPL, font budget);
   - no Custom CSS;
