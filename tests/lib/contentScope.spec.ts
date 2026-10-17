@@ -123,6 +123,38 @@ describe('withContentSource()', () => {
     expect(source.anon).toBe(2);
   });
 
+  it('buffers a streamed Response inside the scope, so a lookup while it streams sees it', async () => {
+    const source = fakeSource('stream');
+    const encoder = new TextEncoder();
+    // As Astro streams a page: the body is made in the render and each chunk is produced
+    // when it is read (highWaterMark 0: nothing is pulled until then), by a component that
+    // looks the client up at that moment.
+    const res = await withContentSource(source, async () => {
+      const body = new ReadableStream<Uint8Array>(
+        {
+          pull(controller) {
+            const name = (contentClient() as unknown as { name?: string }).name ?? 'anon';
+            controller.enqueue(encoder.encode(name));
+            controller.close();
+          },
+        },
+        { highWaterMark: 0 },
+      );
+      return new Response(body, { status: 201, headers: { 'x-test': 'kept' } });
+    });
+    expect(await res.text()).toBe('stream');
+    expect(res.status).toBe(201);
+    expect(res.headers.get('x-test')).toBe('kept');
+    expect(source.anon).toBe(0);
+  });
+
+  it('passes a body-less Response and any other value through as they are', async () => {
+    const source = fakeSource('plain');
+    const empty = new Response(null, { status: 204 });
+    expect(await withContentSource(source, async () => empty)).toBe(empty);
+    expect(await withContentSource(source, async () => 'text')).toBe('text');
+  });
+
   it('leaves the open set when fn throws', async () => {
     const source = fakeSource('throws');
     await expect(
