@@ -63,6 +63,8 @@ function stubDb() {
   return {
     from: (table: string) => make(table),
     rpc: async (fn: string, args: Record<string, unknown>) => {
+      // Releases off: the kernel's flag read (Admin v2 R3), not one of the calls under test.
+      if (fn === 'releases_enabled') return { data: false, error: null };
       rpcCalls.push({ fn, args });
       return { data: [{ id: ID, version: 2 }], error: null };
     },
@@ -457,6 +459,7 @@ describe('links must name a row of the caller’s own tenant (checked before the
     const c = ctx('admin', 'DELETE');
     // the DELETE is refused by services.discipline_id (on delete restrict)
     (c.locals as unknown as { supabase: unknown }).supabase = {
+      rpc: async () => ({ data: false, error: null }), // releases off (Admin v2 R3)
       from: () => {
         const b: Record<string, unknown> = {};
         for (const m of ['select', 'eq', 'delete']) b[m] = () => b;
