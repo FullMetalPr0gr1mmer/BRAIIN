@@ -37,6 +37,15 @@ const ADMIN_KIT_SCREEN =
 // back into admin-ui (tests/lib/adminBundle.spec.ts checks both).
 const ADMIN_FIELDS =
   /[\\/]src[\\/](components[\\/]admin[\\/](FormField\.tsx$|fields[\\/]|screens[\\/](resources[\\/]ResourceForm|singleton[\\/]SingletonForm)\.tsx$)|lib[\\/]admin[\\/](formPayload|sectionUi|fieldErrors|fieldValues|entitySave|useEntitySave|saveMode|contrast|accentWords|linkables)\.ts$)/;
+// The dashboard (Admin v2 U1): its island's eager code (Dashboard.tsx) stays in the island's
+// `AdminDashboard` entry chunk, and what it loads on first use (the Customize binder, the
+// drawers and modals) is the admin-dashboard group. Claimed by admin-ui's path rule, they and
+// the kit pieces they draw with rode on every admin screen (about 10 KB gz each, measured in
+// U1).
+const ADMIN_DASHBOARD_SCREEN =
+  /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]dashboard[\\/]|islands[\\/]AdminDashboard\.tsx$)/;
+const ADMIN_DASHBOARD_LAZY =
+  /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]dashboard[\\/](AddWidgetDrawer|QuickActionsDrawer|RoleDefaultsModal|ResetModal|customize)\.tsx?$/;
 // The islands that hydrate an editor: their entry chunks import admin-fields.
 const ADMIN_EDITOR_ISLANDS =
   /[\\/]src[\\/]components[\\/]admin[\\/]islands[\\/]Admin(ResourceForm|SingletonForm)\.tsx$/;
@@ -149,6 +158,7 @@ export default defineConfig({
                   /[\\/]src[\\/](components|lib)[\\/]admin[\\/]/.test(id) &&
                   !ADMIN_KIT.test(id) &&
                   !ADMIN_KIT_SCREEN.test(id) &&
+                  !ADMIN_DASHBOARD_SCREEN.test(id) &&
                   !ADMIN_FIELDS.test(id) &&
                   !ADMIN_EDITOR_ISLANDS.test(id),
                 priority: 20,
@@ -161,6 +171,14 @@ export default defineConfig({
                 name: 'admin-fields',
                 test: ADMIN_FIELDS,
                 priority: 15,
+              },
+              {
+                // The dashboard's editing pieces (U1), reached only through import():
+                // below the field kit, so the kit pieces both use (Modal, the Sortable
+                // core) stay in admin-fields and this chunk imports them from there.
+                name: 'admin-dashboard',
+                test: ADMIN_DASHBOARD_LAZY,
+                priority: 12,
               },
               {
                 // The lowest admin group (Admin v2 F4b review): the kit modules admin-ui

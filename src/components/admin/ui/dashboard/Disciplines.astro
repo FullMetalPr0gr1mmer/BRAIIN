@@ -1,0 +1,32 @@
+---
+import EmptyState from '../EmptyState.astro';
+import Donut from '../charts/Donut.astro';
+import { formatNumber } from '@/lib/admin/charts';
+import type { WidgetDataMap } from '@/lib/admin/dashboard/loaders';
+
+// Leads by discipline (Admin v2 U1, `disciplines`, lead roles only): the discipline each
+// non-spam lead of the last 90 days asked about, counted in the Worker (the newest 1,000 at
+// most, said when the cap is reached).
+
+interface Props {
+  data: WidgetDataMap['disciplines'];
+}
+
+const { data } = Astro.props;
+---
+
+{
+  data.total === 0 ? (
+    <EmptyState icon="inbox" title="No inquiries in the last 90 days." />
+  ) : (
+    <Donut
+      id="dash-disciplines"
+      caption={`Leads by discipline, the last 90 days${data.capped ? ' (the newest 1,000)' : ''}`}
+      captionVisible={false}
+      data={data.items}
+      center={formatNumber(data.total)}
+      labelHeading="Discipline"
+      valueHeading="Leads"
+    />
+  )
+}

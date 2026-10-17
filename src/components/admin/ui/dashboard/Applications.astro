@@ -1,0 +1,15 @@
+---
+// New job applications (Admin v2 U1, `applications`, Admin only: owner decision J6): how many
+// are still new, and the way to them. Never a name or a detail.
+
+interface Props {
+  count: number;
+}
+
+const { count } = Astro.props;
+---
+
+<p class="stat">{count.toLocaleString('en-GB')}</p>
+<p class="stat-label">
+  {count === 1 ? 'new application waiting' : 'new applications waiting'}
+</p>

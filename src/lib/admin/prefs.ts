@@ -48,39 +48,119 @@ export async function readMyPrefs(sb: SupabaseClient, auth: AuthContext): Promis
 
 const UNIQUE_VIOLATION = '23505';
 
+// ── The dashboard's part (Admin v2 U1) ─────────────────────────────────────────────────
+
+const DASHBOARD_COLUMNS = 'dashboard,quick_actions,version';
+
+export interface MyDashboardPrefs {
+  /** 0 when there is no row yet. */
+  version: number;
+  /** The stored layout, raw: src/lib/admin/dashboard/layout.ts reads it leniently. */
+  dashboard: unknown;
+  /** The stored quick actions, raw (readQuickActions reads them). */
+  quickActions: unknown;
+}
+
+interface DashboardRow {
+  dashboard: unknown;
+  quick_actions: unknown;
+  version: number;
+}
+
+const toDashboardPrefs = (row: DashboardRow | null): MyDashboardPrefs => ({
+  version: row?.version ?? 0,
+  dashboard: row?.dashboard ?? {},
+  quickActions: row?.quick_actions ?? [],
+});
+
 /**
- * Saves the notification preferences under the optimistic lock: `version` is the row's as
- * the person last read it (0 for no row). A stale version is a 409, never a silent
- * overwrite of a save made in another tab.
+ * The dashboard's layout and quick actions: read by /admin alone (the shell's per-render read
+ * stays the bell's three columns, readMyPrefs).
  */
+export async function readMyDashboardPrefs(
+  sb: SupabaseClient,
+  auth: AuthContext,
+): Promise<MyDashboardPrefs> {
+  const { data, error } = await sb
+    .from('admin_user_prefs')
+    .select(DASHBOARD_COLUMNS)
+    .eq('tenant_id', auth.tenantId)
+    .eq('user_id', auth.userId)
+    .maybeSingle<DashboardRow>();
+  if (error) throw new Error(`read dashboard preferences: ${error.message}`);
+  return toDashboardPrefs(data);
+}
+
+/** What a save may change: any of the three preferences (columns), already validated. */
+export interface PrefsPatch {
+  notifications?: NotificationPrefs | undefined;
+  dashboard?: object | undefined;
+  quickActions?: readonly unknown[] | undefined;
+}
+
+export type SavedPrefs = MyPrefs & Omit<MyDashboardPrefs, 'version'>;
+
+interface FullRow extends PrefsRow, DashboardRow {}
+const ALL_COLUMNS = 'notifications,notifications_seen_at,dashboard,quick_actions,version';
+
+/**
+ * Saves the preferences a patch names, under the optimistic lock: `version` is the row's as
+ * the person last read it (0 for no row). A stale version is a 409, never a silent overwrite
+ * of a save made in another tab; a column the patch leaves out is left as it is.
+ */
+export async function saveMyPrefs(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  version: number,
+  patch: PrefsPatch,
+): Promise<SavedPrefs> {
+  const values: Record<string, unknown> = {};
+  if (patch.notifications !== undefined) values['notifications'] = patch.notifications;
+  if (patch.dashboard !== undefined) values['dashboard'] = patch.dashboard;
+  if (patch.quickActions !== undefined) values['quick_actions'] = patch.quickActions;
+  const toSaved = (row: FullRow | null): SavedPrefs => ({
+    ...toPrefs(row),
+    dashboard: row?.dashboard ?? {},
+    quickActions: row?.quick_actions ?? [],
+  });
+
+  if (version === 0) {
+    const { data, error } = await sb
+      .from('admin_user_prefs')
+      .insert({ tenant_id: auth.tenantId, user_id: auth.userId, ...values })
+      .select(ALL_COLUMNS)
+      .maybeSingle<FullRow>();
+    // A row appeared since the person read "none": someone saved first, in another tab.
+    if (error?.code === UNIQUE_VIOLATION) throw new OptimisticLockError('admin_user_prefs');
+    if (error) throw new Error(`create preferences: ${error.message}`);
+    return toSaved(data);
+  }
+  const { data, error } = await sb
+    .from('admin_user_prefs')
+    .update(values)
+    .eq('tenant_id', auth.tenantId)
+    .eq('user_id', auth.userId)
+    .eq('version', version)
+    .select(ALL_COLUMNS)
+    .maybeSingle<FullRow>();
+  if (error) throw new Error(`save preferences: ${error.message}`);
+  if (!data) throw new OptimisticLockError('admin_user_prefs');
+  return toSaved(data);
+}
+
+/** Saves the notification preferences alone (F8's call, kept for its callers). */
 export async function saveMyNotificationPrefs(
   sb: SupabaseClient,
   auth: AuthContext,
   version: number,
   notifications: NotificationPrefs,
 ): Promise<MyPrefs> {
-  if (version === 0) {
-    const { data, error } = await sb
-      .from('admin_user_prefs')
-      .insert({ tenant_id: auth.tenantId, user_id: auth.userId, notifications })
-      .select(COLUMNS)
-      .maybeSingle<PrefsRow>();
-    // A row appeared since the person read "none": someone saved first, in another tab.
-    if (error?.code === UNIQUE_VIOLATION) throw new OptimisticLockError('admin_user_prefs');
-    if (error) throw new Error(`create preferences: ${error.message}`);
-    return toPrefs(data);
-  }
-  const { data, error } = await sb
-    .from('admin_user_prefs')
-    .update({ notifications })
-    .eq('tenant_id', auth.tenantId)
-    .eq('user_id', auth.userId)
-    .eq('version', version)
-    .select(COLUMNS)
-    .maybeSingle<PrefsRow>();
-  if (error) throw new Error(`save preferences: ${error.message}`);
-  if (!data) throw new OptimisticLockError('admin_user_prefs');
-  return toPrefs(data);
+  const saved = await saveMyPrefs(sb, auth, version, { notifications });
+  return {
+    version: saved.version,
+    notifications: saved.notifications,
+    notificationsSeenAt: saved.notificationsSeenAt,
+  };
 }
 
 /**

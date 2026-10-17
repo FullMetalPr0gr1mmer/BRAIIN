@@ -129,6 +129,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
     // Pinned, not derived: a sheet dropped from the list must fail, not go unchecked.
     expect([...ADMIN_STYLESHEETS].sort()).toEqual([
       'activity.css',
+      'dashboard.css',
       'health.css',
       'help.css',
       'kit.css',
@@ -430,7 +431,11 @@ describe('admin.css keeps the hooks the markup renders', () => {
         'src/pages/admin/analytics/index.astro',
         'src/pages/admin/analytics/search.astro',
       ]);
-      expect(pagesFor('health.css')).toEqual(['src/pages/admin/site-health.astro']);
+      // The dashboard's health widget (U1) draws site health's summary with its classes.
+      expect(pagesFor('health.css')).toEqual([
+        'src/pages/admin/index.astro',
+        'src/pages/admin/site-health.astro',
+      ]);
       // And on an island's code: through its entry to the page hydrating it.
       expect(pagesOf('src/components/admin/screens/logs/ClearLogs.tsx')).toEqual([
         'src/pages/admin/site-health.astro',

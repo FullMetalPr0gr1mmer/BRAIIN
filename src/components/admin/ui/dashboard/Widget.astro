@@ -1,0 +1,114 @@
+---
+import Icon from '../Icon.astro';
+import Activity from './Activity.astro';
+import Applications from './Applications.astro';
+import Attention from './Attention.astro';
+import Disciplines from './Disciplines.astro';
+import Health from './Health.astro';
+import Kpis from './Kpis.astro';
+import Leads from './Leads.astro';
+import Notes from './Notes.astro';
+import Pages from './Pages.astro';
+import Quick from './Quick.astro';
+import Views from './Views.astro';
+import WidgetFrame from './WidgetFrame.astro';
+import type { DashColumn, WidgetId } from '@schemas/dashboard';
+import type { WidgetResult, WidgetResults } from '@/lib/admin/dashboard/loaders';
+import { WIDGETS } from '@/lib/admin/dashboard/widgets';
+
+// One widget: its frame (title, the way to its screen, the edit controls) around its partial
+// (Admin v2 U1). The registry names it; the loader's result fills it, or says it failed.
+
+interface Props {
+  id: WidgetId;
+  column: DashColumn;
+  results: WidgetResults;
+  now?: number | undefined;
+}
+
+const { id, column, results, now = Date.now() } = Astro.props;
+const result = results[id] as WidgetResult | undefined;
+const failed = !result || !result.ok;
+const def = WIDGETS[id];
+
+// Each widget's own words: its title in the frame, the line under it, the way to its screen.
+const SUB: Partial<Record<WidgetId, string>> = {
+  views: 'From visitors who accepted analytics cookies',
+  pages: 'Page views, the last 7 days',
+  disciplines: 'The last 90 days',
+  leads: 'Name, interest and stage only',
+};
+const OPEN: Partial<Record<WidgetId, { href: string; label: string }>> = {
+  views: { href: '/admin/analytics', label: 'Open stats' },
+  leads: { href: '/admin/leads', label: 'All leads' },
+  health: { href: '/admin/site-health', label: 'Open site health' },
+  activity: { href: '/admin/audit', label: 'All activity' },
+  applications: { href: '/admin/applications', label: 'Open applications' },
+  pages: { href: '/admin/analytics?tab=pages', label: 'All pages' },
+};
+const open = OPEN[id];
+const title = id === 'views' ? 'Page views, last 30 days' : def.label;
+const data = result && result.ok ? (result.data as never) : null;
+---
+
+<WidgetFrame
+  id={id}
+  title={title}
+  sub={SUB[id]}
+  column={column}
+  bare={id === 'kpis'}
+  flush={false}
+  failed={failed}
+>
+  {
+    open && (
+      <a slot="actions" class="btn" data-variant="ghost" data-size="sm" href={open.href}>
+        {open.label}
+        <Icon name="arrow" size={14} />
+      </a>
+    )
+  }
+  {
+    id === 'quick' && (
+      <button
+        slot="actions"
+        type="button"
+        class="btn"
+        data-variant="ghost"
+        data-size="sm"
+        data-quick-edit
+        hidden
+      >
+        <Icon name="settings" size={14} />
+        Customize<span class="visually-hidden"> quick actions</span>
+      </button>
+    )
+  }
+  {
+    id === 'notes' && (
+      <button
+        slot="actions"
+        type="button"
+        class="btn"
+        data-variant="ghost"
+        data-size="sm"
+        data-notes-edit
+        hidden
+      >
+        <Icon name="edit" size={14} />
+        Edit notes
+      </button>
+    )
+  }
+  {data && id === 'kpis' && <Kpis cards={data} />}
+  {data && id === 'quick' && <Quick items={data} />}
+  {data && id === 'views' && <Views data={data} />}
+  {data && id === 'leads' && <Leads data={data} now={now} />}
+  {data && id === 'attention' && <Attention data={data} />}
+  {data && id === 'health' && <Health data={data} />}
+  {data && id === 'activity' && <Activity items={data} now={now} />}
+  {data && id === 'applications' && <Applications count={(data as { count: number }).count} />}
+  {data && id === 'pages' && <Pages items={data} />}
+  {data && id === 'disciplines' && <Disciplines data={data} />}
+  {data && id === 'notes' && <Notes notes={data} now={now} />}
+</WidgetFrame>
