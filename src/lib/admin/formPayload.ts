@@ -1,5 +1,5 @@
 import { columnOf, type FieldDef } from '@/lib/admin/uiSchema';
-import { sectionFields } from '@/lib/admin/sectionUi';
+import { contentKeysOf, sectionFields } from '@/lib/admin/sectionUi';
 import { clampToStep, cleanChips, normalizeHex } from '@/lib/admin/fieldValues';
 import { accentWords, clampAccent } from '@/lib/admin/accentWords';
 import { isHttpsHref, isSiteHref } from '@/lib/admin/linkables';
@@ -440,7 +440,9 @@ export function omitBuiltIn(
   together: readonly (readonly string[])[] = [],
 ): Row {
   if (!builtIn) return content;
-  const edited = new Set(fields.map((f) => f.name));
+  // By the KEYS the fields write, not their names: an accent stored as two numbers
+  // (accentFromEn / accentFromAr) has no key of its own name (F5b review L6).
+  const edited = new Set(fields.flatMap(contentKeysOf));
   const differs = (key: string): boolean =>
     // A key no field edits (hero.intro, carried in `extra`) is never dropped: nothing in
     // the form could have put the built-in there, so it was stored on purpose.

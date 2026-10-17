@@ -10,6 +10,7 @@ import {
   omitBuiltIn,
   type SectionContentState,
 } from '@/lib/admin/formPayload';
+import { sectionFields } from '@/lib/admin/sectionUi';
 import { SeoDefaultsSchema } from '@schemas/admin';
 import { SiteProfileSchema } from '@schemas/siteProfile';
 
@@ -521,6 +522,19 @@ describe('omitBuiltIn (Admin v2 F5b)', () => {
       'accent',
       'heading',
     ]);
+  });
+
+  it('an accent stored as two numbers is compared by the keys it writes', () => {
+    const heroFields = sectionFields('hero')!;
+    const heroBuiltIn = {
+      headline: { en: 'A b c d', ar: 'ا ب ج' },
+      accentFromEn: 3,
+      accentFromAr: 2,
+    };
+    expect(omitBuiltIn({ accentFromEn: 3, accentFromAr: 2 }, heroBuiltIn, heroFields)).toEqual({});
+    expect(omitBuiltIn({ accentFromEn: 1, accentFromAr: 2 }, heroBuiltIn, heroFields)).toEqual({
+      accentFromEn: 1,
+    });
   });
 
   it('a key no field edits is never dropped (hero.intro rides in `extra`)', () => {
