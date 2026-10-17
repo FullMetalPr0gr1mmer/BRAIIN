@@ -40,18 +40,24 @@ export function clampAccent(
   return to > from ? { from, to } : { from };
 }
 
-/** The words a range covers, for the field's live preview line. */
+/**
+ * The words a range covers, for the field's live preview line: read the way the PAGE
+ * reads it (splitAccent), not held, so the preview of a stored range is what the page
+ * shows. A range the field would save is already held (formPayload's accentToRanges); one
+ * kept exactly as stored may start past the last word, and then nothing is coloured.
+ */
 export function accentPreview(
   text: string,
   range: AccentRange | undefined,
 ): { before: string; accented: string; after: string } {
   const words = accentWords(text);
-  const held = clampAccent(range, words.length);
-  if (!held) return { before: text, accented: '', after: '' };
-  const end = held.to ?? words.length;
+  const from = range ? Math.max(Math.trunc(range.from), 0) : NaN;
+  if (!range || !(from < words.length)) return { before: text, accented: '', after: '' };
+  const end = Math.min(range.to ?? words.length, words.length);
+  if (!(end > from)) return { before: text, accented: '', after: '' };
   return {
-    before: words.slice(0, held.from).join(' '),
-    accented: words.slice(held.from, end).join(' '),
+    before: words.slice(0, from).join(' '),
+    accented: words.slice(from, end).join(' '),
     after: words.slice(end).join(' '),
   };
 }

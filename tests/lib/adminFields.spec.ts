@@ -609,6 +609,38 @@ describe('the rest of the field kit (Admin v2 F5b)', () => {
     expect(html).not.toContain('<select');
   });
 
+  it('accent: one stored without its heading is shown, kept, and removable (review H1)', () => {
+    const sections = RESOURCE_UI['sections']!.fields;
+    const content = sections.find((x) => x.kind === 'sectionContent')!;
+    const slogan = rowToForm({ type: 'slogan', content: { accentFromEn: 2 } }, sections);
+    const html = render(content, slogan['content'], { type: 'slogan' });
+    const text = html.replace(/<[^>]*>/g, '');
+    expect(text).toContain(
+      'The colour is kept on from word 3 to the end of the heading the page shows now.',
+    );
+    expect(text).toContain('Remove the English highlight');
+    expect(html).not.toContain('id="f-content-accentFrom-en-from"');
+    // Nothing stored in Arabic: the usual cue.
+    expect(text).toContain('Write the Arabic words first');
+
+    const cta = rowToForm(
+      { type: 'cta', content: { accent: { en: { from: 1, to: 3 } } } },
+      sections,
+    );
+    expect(render(content, cta['content'], { type: 'cta' }).replace(/<[^>]*>/g, '')).toContain(
+      'The colour is kept on words 2 to 3 of the heading the page shows now.',
+    );
+  });
+
+  it('accent: the preview shows what the page shows, a kept range past the end included', () => {
+    const value = rowToForm(
+      { heading: { en: 'One two', ar: 'واحد اثنان' }, accent: { en: { from: 5 } } },
+      [f({ name: 'heading', kind: 'bilingual' }), accentRange],
+    )['accent'];
+    const html = render(accentRange, value, { heading: { en: 'One two', ar: 'واحد اثنان' } });
+    expect(html).not.toContain('accentf__on');
+  });
+
   it('accent: an error lands on the picker it names', () => {
     const html = renderToStaticMarkup(
       createElement(Field, {

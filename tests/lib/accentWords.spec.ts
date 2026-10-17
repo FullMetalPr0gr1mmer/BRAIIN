@@ -100,6 +100,17 @@ describe('accentPreview', () => {
       accented: 'two three',
       after: '',
     });
+    // Read as the page reads it: a range starting past the last word colours nothing.
+    expect(accentPreview('one two', { from: 5 })).toEqual({
+      before: 'one two',
+      accented: '',
+      after: '',
+    });
+    expect(accentPreview('one two three', { from: 1, to: 9 })).toEqual({
+      before: 'one',
+      accented: 'two three',
+      after: '',
+    });
     expect(accentPreview('one two three', undefined)).toEqual({
       before: 'one two three',
       accented: '',

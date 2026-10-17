@@ -51,6 +51,23 @@ export interface SectionContentState {
 export interface AccentFormState {
   en: { from: number | null; to: number | null };
   ar: { from: number | null; to: number | null };
+  /**
+   * What was stored when the form loaded, per language, with the text it counted then
+   * (F5b review H1, L5). A half the editor has not changed, over a text that has not
+   * changed either, is saved EXACTLY as stored: an accent stored without its heading (it
+   * colours the built-in or a preset's words) has no words here to be held inside, and a
+   * save that only toggles `visible` must not rewrite a highlight nobody touched. Only
+   * present when something was stored.
+   */
+  loaded?: { en: LoadedAccentHalf; ar: LoadedAccentHalf };
+}
+
+/** One language of an accent as loaded: its range and the words it was stored over. */
+export interface LoadedAccentHalf {
+  from: number | null;
+  to: number | null;
+  /** The sibling text as stored ('' when the heading was not stored). */
+  text: string;
 }
 
 /** Form state of a `link` field (F5b): the label in both languages and where it goes. */
@@ -97,17 +114,30 @@ const rangeToForm = (raw: unknown): { from: number | null; to: number | null } =
 
 const NO_ACCENT: AccentFormState = { en: { from: null, to: null }, ar: { from: null, to: null } };
 
-/** Whatever an accent field holds, as its form state. */
+/** Whatever an accent field holds, as its form state (what it loaded with included). */
 export function accentState(value: unknown): AccentFormState {
   const state = (value && typeof value === 'object' ? value : {}) as Partial<AccentFormState>;
   return {
     en: { ...NO_ACCENT.en, ...(state.en ?? {}) },
     ar: { ...NO_ACCENT.ar, ...(state.ar ?? {}) },
+    ...(state.loaded ? { loaded: state.loaded } : {}),
+  };
+}
+
+/** A stored accent → its form state, remembering what was stored and over which words. */
+function loadedAccent(
+  halves: Pick<AccentFormState, 'en' | 'ar'>,
+  text: { en: string; ar: string },
+): AccentFormState {
+  if (halves.en.from === null && halves.ar.from === null) return halves;
+  return {
+    ...halves,
+    loaded: { en: { ...halves.en, text: text.en }, ar: { ...halves.ar, text: text.ar } },
   };
 }
 
 /** The text an accent highlights, per language: its sibling bilingual field's value. */
-function accentText(field: FieldDef, siblings: Row): { en: string; ar: string } {
+export function accentText(field: FieldDef, siblings: Row): { en: string; ar: string } {
   const raw = (siblings[field.accent?.of ?? ''] ?? {}) as Row;
   return {
     en: typeof raw['en'] === 'string' ? raw['en'] : '',
@@ -118,7 +148,9 @@ function accentText(field: FieldDef, siblings: Row): { en: string; ar: string } 
 /**
  * An accent's ranges as the schema takes them, each held inside the words its heading
  * still has (ui.md §10: the range clamps when the text shrinks). A language with no
- * highlight, or whose heading is now empty, is simply absent.
+ * highlight, or whose heading is now empty, is simply absent. The one exception is a half
+ * exactly as it loaded, over the text it loaded with: that is passed through untouched
+ * (AccentFormState.loaded), so a save never drops or moves a highlight nobody changed.
  */
 export function accentToRanges(
   value: unknown,
@@ -131,6 +163,11 @@ export function accentToRanges(
   for (const lang of ['en', 'ar'] as const) {
     const half = state[lang];
     if (half.from === null) continue;
+    const was = state.loaded?.[lang];
+    if (was && was.from === half.from && was.to === half.to && was.text === text[lang]) {
+      out[lang] = { from: half.from, ...(half.to === null ? {} : { to: half.to }) };
+      continue;
+    }
     const held = clampAccent(
       { from: half.from, ...(half.to === null ? {} : { to: half.to }) },
       accentWords(text[lang]).length,
@@ -248,14 +285,18 @@ function valueToForm(raw: unknown, field: FieldDef, siblings: Row): unknown {
     // key (AccentSchema) or the two numbers beside it (the hero's accentFromEn / Ar).
     case 'accent': {
       const accent = field.accent;
+      const text = accentText(field, siblings);
       if (accent?.mode === 'from') {
-        return {
-          en: { from: numberOrNull(siblings[accent.keys.en]), to: null },
-          ar: { from: numberOrNull(siblings[accent.keys.ar]), to: null },
-        } satisfies AccentFormState;
+        return loadedAccent(
+          {
+            en: { from: numberOrNull(siblings[accent.keys.en]), to: null },
+            ar: { from: numberOrNull(siblings[accent.keys.ar]), to: null },
+          },
+          text,
+        );
       }
       const stored = (raw && typeof raw === 'object' ? raw : {}) as Row;
-      return { en: rangeToForm(stored['en']), ar: rangeToForm(stored['ar']) };
+      return loadedAccent({ en: rangeToForm(stored['en']), ar: rangeToForm(stored['ar']) }, text);
     }
     case 'link':
       return linkState(raw);

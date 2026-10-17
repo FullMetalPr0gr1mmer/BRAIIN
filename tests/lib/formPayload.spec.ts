@@ -384,7 +384,7 @@ describe('the rest of the field kit (Admin v2 F5b)', () => {
   it('accent (range): a stored range round-trips through the form', () => {
     const stored = { heading: text, accent: { en: { from: 2, to: 4 }, ar: { from: 1 } } };
     const form = objectToForm(stored, fields);
-    expect(form['accent']).toEqual({ en: { from: 2, to: 4 }, ar: { from: 1, to: null } });
+    expect(form['accent']).toMatchObject({ en: { from: 2, to: 4 }, ar: { from: 1, to: null } });
     expect(objectToPayload(form, fields)['accent']).toEqual({
       en: { from: 2, to: 4 },
       ar: { from: 1 },
@@ -394,7 +394,10 @@ describe('the rest of the field kit (Admin v2 F5b)', () => {
   it('accent (from): the two numbers beside the heading are one field', () => {
     const stored = { heading: text, accentFromEn: 2, accentFromAr: 1 };
     const form = objectToForm(stored, fromFields);
-    expect(form['accentFrom']).toEqual({ en: { from: 2, to: null }, ar: { from: 1, to: null } });
+    expect(form['accentFrom']).toMatchObject({
+      en: { from: 2, to: null },
+      ar: { from: 1, to: null },
+    });
     // It writes its PARENT's keys, never one of its own.
     expect(objectToPayload(form, fromFields)).toEqual({
       heading: text,
@@ -414,6 +417,16 @@ describe('the rest of the field kit (Admin v2 F5b)', () => {
       accentFrom: { en: { from: 7, to: null }, ar: { from: null, to: null } },
     };
     expect(objectToPayload(fromForm, fromFields)['accentFromEn']).toBe(1);
+  });
+
+  it('a loaded range is held again once its heading changes', () => {
+    const form = objectToForm({ heading: text, accent: { en: { from: 3, to: 5 } } }, fields);
+    expect(objectToPayload(form, fields)['accent']).toEqual({ en: { from: 3, to: 5 } });
+    const shorter = { ...form, heading: { ...text, en: 'Ideas that leave' } };
+    expect(objectToPayload(shorter, fields)['accent']).toEqual({ en: { from: 2, to: 3 } });
+    // Its heading cleared: nothing left to colour, so nothing is stored.
+    const cleared = { ...form, heading: { en: '', ar: '' } };
+    expect(objectToPayload(cleared, fields)).toEqual({});
   });
 
   it('no highlight, or no heading, stores nothing', () => {

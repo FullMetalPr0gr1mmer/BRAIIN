@@ -1,6 +1,6 @@
 import Segmented from '@/components/admin/kit/Segmented';
 import { accentPreview, accentWords } from '@/lib/admin/accentWords';
-import { accentState, type AccentFormState } from '@/lib/admin/formPayload';
+import { accentState, accentToRanges, type AccentFormState } from '@/lib/admin/formPayload';
 import FieldShell from './FieldShell';
 import { useFieldLanguage } from './editorLanguage';
 import type { FieldComponentProps } from './types';
@@ -17,8 +17,11 @@ import type { FieldComponentProps } from './types';
 //   mode 'from'   "from word N to the end", the two numbers beside the heading (the hero
 //                 and the slogan band: accentFromEn / accentFromAr).
 //
-// A stored range is held inside the words that are left (formPayload's accentToRanges),
-// so shortening a heading can never leave a range pointing past its end.
+// A range the editor picks is held inside the words that are left (formPayload's
+// accentToRanges), so shortening a heading can never leave a range pointing past its end.
+// One nobody touched is kept exactly as stored, even with no heading stored beside it
+// (it then colours the built-in words): the field says so in words, with a way to remove
+// it, instead of a picker with nothing to pick from (F5b review H1).
 
 type Lang = 'en' | 'ar';
 const LANGUAGE_NAME: Record<Lang, string> = { en: 'English', ar: 'Arabic' };
@@ -29,6 +32,20 @@ function wordOptions(words: readonly string[], from: number): { value: number; l
     value: from + index,
     label: `${from + index + 1}. ${word}`,
   }));
+}
+
+/**
+ * A highlight kept from what was stored, said in words: the heading it colours is the
+ * built-in one (or the page preset's), which this form does not show.
+ */
+function keptSays(from: number, to: number | null): string {
+  const where =
+    to === null || to <= from + 1
+      ? to === null
+        ? `from word ${from + 1} to the end`
+        : `word ${from + 1}`
+      : `words ${from + 1} to ${to}`;
+  return `The colour is kept on ${where} of the heading the page shows now.`;
 }
 
 export default function AccentField({
@@ -50,15 +67,15 @@ export default function AccentField({
   const set = (lang: Lang, patch: Partial<AccentFormState['en']>) =>
     onChange(field.name, { ...state, [lang]: { ...state[lang], ...patch } });
 
+  // What a save would store, so the preview shows what the page will show.
+  const saved = def ? accentToRanges(state, field, values ?? {}) : {};
+
   const half = (lang: Lang) => {
     const text = typeof sibling[lang] === 'string' ? (sibling[lang] as string) : '';
     const words = accentWords(text);
     const range = state[lang];
     const from = range.from;
-    const preview = accentPreview(
-      text,
-      from === null ? undefined : { from, ...(range.to === null ? {} : { to: range.to }) },
-    );
+    const preview = accentPreview(text, saved[lang]);
     const fromId = `${ids[lang]}-from`;
     const toId = `${ids[lang]}-to`;
     const fromError = errors?.[fromId];
@@ -73,7 +90,21 @@ export default function AccentField({
         >
           {arabic ? 'العربية' : 'English'}
         </p>
-        {words.length === 0 ? (
+        {words.length === 0 && from !== null ? (
+          <div className="accentf__kept">
+            <p className="f__cue">
+              {keptSays(from, def?.mode === 'range' ? range.to : null)} Write the{' '}
+              {LANGUAGE_NAME[lang]} words here to choose others.
+            </p>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => set(lang, { from: null, to: null })}
+            >
+              Remove the {LANGUAGE_NAME[lang]} highlight
+            </button>
+          </div>
+        ) : words.length === 0 ? (
           <p className="f__cue">
             Write the {LANGUAGE_NAME[lang]} words first, then choose which of them carry the colour.
           </p>
