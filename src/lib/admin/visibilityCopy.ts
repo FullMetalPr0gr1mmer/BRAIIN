@@ -31,13 +31,38 @@ export const MODE_COPY = {
     text: 'Not in the menu or search engines, but the link works. Good for proposals and previews.',
     badge: 'Link only',
   },
+  password: {
+    title: 'Behind a password',
+    text: 'Visitors type a password before the page opens. Not in the menu or search engines, and its words stay closed until someone types it.',
+    badge: 'Password',
+  },
 } as const;
+
+/** The password field's help, the prototype's words. */
+export const PASSWORD_HINT = 'Something short you can share, on WhatsApp for example.';
+
+/**
+ * What setting a password does, said plainly: it is stored scrambled, so it cannot be read
+ * back, and a new one closes the page again for everyone who typed the old one.
+ */
+export const PASSWORD_NOTE =
+  'The password is stored scrambled, so nobody can read it back, not even you. To change it, set a new one. That also closes the page again for everyone who had typed the old one.';
+
+/** Above the message fields, the prototype's label. */
+export const PASSWORD_MESSAGE_LABEL = 'Message above the password box';
+
+/** A page already behind a password: Apply needs the password again. */
+export const PASSWORD_REQUIRED =
+  'Type the password to apply. Setting it again is the only way to change the message too.';
 
 /**
  * What hiding does not do: the page's words stay published (the public data the site reads is
  * still readable), and its form still takes submissions (/api is never gated). Shown with the
  * hidden option, and said in the guide.
  */
+/** The badge and the drawer need every mode, including the one the PUT route refuses. */
+export type VisibilityModeKey = keyof typeof MODE_COPY;
+
 export const HIDDEN_NOTE =
   'Hiding is not deleting: the page’s words stay published. Unpublish it, or keep confidential details off it. A hidden Join or Contact page still takes what its form sends: to stop job applications, turn off Accepting job applications in General settings.';
 

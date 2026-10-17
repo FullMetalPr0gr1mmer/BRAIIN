@@ -364,7 +364,12 @@ describe('the guides say only what the admin does', () => {
     expect(en).toContain('The homepage is always visible');
     expect(en).toContain('up to an hour');
     expect(en).toContain('Sync to edge');
-    expect(en).not.toMatch(/password/i);
+    // U14b: the fourth mode, and what the admin must know about it — a password cannot be
+    // read back, a new one closes the page again, and the words are closed too.
+    expect(en).toContain('Behind a password');
+    expect(en).toContain('stored scrambled');
+    expect(en).toContain('not readable through the site');
+    expect(source('src/lib/admin/visibilityCopy.ts')).toContain("badge: 'Password'");
     const ar = guide('page-visibility', 'ar');
     expect(ar).toContain('خلال بضع دقائق');
     expect(ar).not.toContain('خلال دقيقة');
@@ -372,6 +377,8 @@ describe('the guides say only what the admin does', () => {
     expect(ar).toContain('غير مدرجة وليست خاصة');
     expect(ar).toContain('الإخفاء ليس حذفًا');
     expect(ar).toContain('Accepting job applications');
+    expect(ar).toContain('Behind a password');
+    expect(ar).toContain('مشفّرة');
   });
 
   it('U14a (0057) restates U12b’s set (0056) and only adds the page-visibility guide', () => {

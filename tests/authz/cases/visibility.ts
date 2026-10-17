@@ -23,6 +23,22 @@ export const cases: readonly Case[] = [
     allow: ['admin', 'developer'],
   },
   {
+    // The password's own door: the list's PUT takes the three modes that need no secret.
+    // The password goes straight to public.set_page_password, which checks the live role
+    // again inside the database (0061).
+    name: 'page visibility set a password',
+    load: () => import('@/pages/api/admin/page-visibility/password'),
+    method: 'POST',
+    url: '/api/admin/page-visibility/password',
+    body: {
+      pageId: '00000000-0000-4000-8000-0000000000a2',
+      password: 'a-test-password',
+      note: null,
+      version: 1,
+    },
+    allow: ['admin', 'developer'],
+  },
+  {
     name: 'page visibility sync to edge',
     load: () => import('@/pages/api/admin/page-visibility/sync'),
     method: 'POST',

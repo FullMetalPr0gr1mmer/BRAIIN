@@ -18,6 +18,12 @@ export const RATE_LIMIT_LABEL = 'ratelimit/v1';
  * compute v2 beside v1 (from the ciphertext, in a cron) and then switch.
  */
 export const CRM_INDEX_LABEL = 'crm-index/v1';
+/**
+ * The page-access cookie (src/lib/visibility/access.ts, Admin v2 U14b): the signature that
+ * says a browser typed a page's password. Its own label, so the key that signs an unlock
+ * can decrypt nothing and stand in for no other.
+ */
+export const PAGE_ACCESS_LABEL = 'page-access/v1';
 
 /** `base` + NUL + `label`. NUL cannot occur in an env secret, so labels cannot collide. */
 export function labelledKeyMaterial(base: string, label: string): string {

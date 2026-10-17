@@ -202,5 +202,6 @@ export const CASE_MANIFEST: readonly string[] = [
   'users: user update',
   'visibility: page visibility list',
   'visibility: page visibility save',
+  'visibility: page visibility set a password',
   'visibility: page visibility sync to edge',
 ];

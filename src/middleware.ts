@@ -18,6 +18,10 @@ import {
   type VisibilityGate,
 } from '@/lib/http/visibility';
 import { localizedPagePath, targetForRoute } from '@/lib/visibility/routes';
+import { pageAccessCookieName, verifyAccessCookie } from '@/lib/visibility/access';
+import { pageAccessGate } from '@/lib/visibility/gate';
+import { withPageAccess } from '@/lib/visibility/scope';
+import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { localeFromPath } from '@/lib/i18n';
 import { checkImageRequest, imageGuardResponse, isImageEndpoint } from '@/lib/http/imageGuard';
 import {
@@ -58,6 +62,12 @@ import { PRIVATE_FORM_BODY_LIMIT, bodyWithinLimit } from '@/lib/auth/bodyLimit';
 // paragraph gives. Every method is gated: a hidden page answers nothing. The snapshot is
 // read through a one-minute isolate memo, so this costs about one KV read per isolate per
 // minute, not one per request, and it fails open (decision D6, as maintenance does).
+//
+// A page BEHIND A PASSWORD (U14b) answers the gate below — a plain form, 403, `private,
+// no-store`, noindex — unless the request carries a cookie this Worker signed for that page
+// at that password version (src/lib/visibility/access.ts). With a valid cookie the page
+// renders inside `withPageAccess`, which is how its sections are read at all: anon reads
+// none of them (the RLS fence, 0061), so a gate that fails open still leaks nothing.
 
 /**
  * A hidden page's answer, as it leaves: never stored by any cache, never indexed, and no
@@ -243,11 +253,37 @@ export const onRequest = defineMiddleware(async (context, next) => {
   //     The snapshot rides `locals` to the menus, the sitemap and llms.txt, so the request
   //     reads it once.
   let gate: VisibilityGate = PASS;
+  /** The page this request unlocked, when it did: the render runs inside its scope. */
+  let unlocked: { pageId: string; tenantId: string } | null = null;
   if (!isAdmin && !isApi && !isHealth && !isImage) {
     const snapshot = await getVisibilitySnapshot(env);
     locals.visibility = snapshot;
     const target = targetForRoute(context.routePattern);
     if (target) gate = decide(snapshot, target, Date.now());
+    if (gate.action === 'password' && target?.kind === 'page') {
+      // The route's language, as below: the route is what would render.
+      const locale = localeFromPath(context.routePattern ?? url.pathname);
+      const cookie = cookies.get(pageAccessCookieName(gate.id))?.value ?? null;
+      const ok = await verifyAccessCookie(LEAD_PII_ENC_KEY, cookie, {
+        pageId: gate.id,
+        pv: gate.pv,
+      });
+      if (!ok) {
+        // Nothing typed is echoed: `?pa=wrong` is the only thing the unlock route sends
+        // back, and it says only that the last try was refused.
+        return secured(
+          pageAccessGate({
+            nonce,
+            locale,
+            page: target.slug,
+            next: localizedPagePath(target.slug, locale),
+            note: gate.note,
+            wrong: url.searchParams.get('pa') === 'wrong',
+          }),
+        );
+      }
+      unlocked = { pageId: gate.id, tenantId: snapshot.tenant ?? '' };
+    }
     if (gate.action === 'hide') {
       // The route's language, not the path's: the route is what rendered.
       const locale = localeFromPath(context.routePattern ?? url.pathname);
@@ -352,8 +388,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (!ctx && !preAuth) return secured(unauthenticated());
   }
 
-  // 3) Render.
-  const rendered = await next();
+  // 3) Render. A page whose password this request answered renders inside the page-access
+  //    scope, which is the only thing that lets its sections be read (src/lib/data/
+  //    pageSections.ts reads them as the service role, for that one page).
+  const rendered = unlocked === null ? await next() : await withPageAccess(unlocked, () => next());
 
   // 4) Authored redirects (301/302/308), only where the render answered 404 — see the
   //    precedence note in the header. Public paths only: the table is authored by the
@@ -371,8 +409,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (rule) return secured(redirectResponse(rule, url));
   }
 
-  // 5) Apply the same headers to the rendered response; a link-only page is not indexed.
+  // 5) Apply the same headers to the rendered response; a link-only page is not indexed,
+  //    and an unlocked page is private: never stored by any cache, never indexed, and
+  //    carrying no cache tag a purge could mistake for a public page's.
   const out = await secured(rendered);
   if (gate.action === 'noindex') out.headers.set('X-Robots-Tag', 'noindex');
+  if (unlocked !== null) {
+    out.headers.set('Cache-Control', HIDDEN_CACHE_CONTROL);
+    out.headers.delete('Cache-Tag');
+    out.headers.set('X-Robots-Tag', 'noindex');
+  }
   return out;
 });

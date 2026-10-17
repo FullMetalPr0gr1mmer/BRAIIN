@@ -129,6 +129,10 @@ beforeEach(() => {
   logs.length = 0;
 });
 
+/** The launch tenant, as the snapshot now records it (0061: the password paths
+ * name it rather than asking the database again). */
+const TENANT = '61000000-0000-0000-0000-0000000000b1';
+
 describe('buildVisibilitySnapshot', () => {
   const row = (over: Record<string, unknown>) => ({
     mode: 'public',
@@ -156,11 +160,13 @@ describe('buildVisibilitySnapshot', () => {
         row({ id: 'r-contact', version: 2, mode: 'public', page: { slug: 'contact' } }),
         row({ id: 'r-case', version: 5, mode: 'hidden', template: 'case_study' }),
       ],
+      TENANT,
       new Date('2026-10-16T09:00:00Z'),
     );
     expect(snap).toEqual({
       v: 1,
       builtAt: '2026-10-16T09:00:00.000Z',
+      tenant: TENANT,
       rev: 'r-about:3,r-case:5,r-join:1',
       pages: {
         about: {
@@ -182,24 +188,28 @@ describe('buildVisibilitySnapshot', () => {
       row({ id: 'r-careers', version: 1, mode: 'link', page: { slug: 'careers' } }),
       row({ id: 'r-svc', version: 4, mode: 'link', template: 'service' }),
     ];
-    expect(buildVisibilitySnapshot(rows).rev).toBe('r-about:2');
+    expect(buildVisibilitySnapshot(rows, TENANT).rev).toBe('r-about:2');
     // A save moves the version, so the same count with another setting is another revision.
-    const moved = buildVisibilitySnapshot([
-      row({ id: 'r-about', version: 3, mode: 'link', page: { slug: 'about' } }),
-    ]);
+    const moved = buildVisibilitySnapshot(
+      [row({ id: 'r-about', version: 3, mode: 'link', page: { slug: 'about' } })],
+      TENANT,
+    );
     expect(Object.keys(moved.pages)).toHaveLength(1);
     expect(moved.rev).toBe('r-about:3');
   });
 
   it('drops the homepage, a page the route map does not know, a redirect to one, and bad modes', () => {
-    const snap = buildVisibilitySnapshot([
-      row({ mode: 'hidden', page: { slug: 'home' } }),
-      row({ mode: 'hidden', page: { slug: 'careers' } }),
-      row({ mode: 'hidden', page: { slug: 'about' }, redirect: { slug: 'careers' } }),
-      row({ mode: 'secret', page: { slug: 'join' } }),
-      row({ mode: 'link', template: 'service' }),
-      row({ mode: 'hidden', page: null }),
-    ]);
+    const snap = buildVisibilitySnapshot(
+      [
+        row({ mode: 'hidden', page: { slug: 'home' } }),
+        row({ mode: 'hidden', page: { slug: 'careers' } }),
+        row({ mode: 'hidden', page: { slug: 'about' }, redirect: { slug: 'careers' } }),
+        row({ mode: 'secret', page: { slug: 'join' } }),
+        row({ mode: 'link', template: 'service' }),
+        row({ mode: 'hidden', page: null }),
+      ],
+      TENANT,
+    );
     expect(snap.pages).toEqual({ about: { mode: 'hidden', target: null } });
     expect(snap.templates).toEqual({});
   });

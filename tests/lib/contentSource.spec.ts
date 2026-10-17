@@ -90,11 +90,29 @@ const SERVICE_ROLE_SINKS: Record<string, string> = {
   'src/lib/data/tenant.ts': 'the anon tenant fence: which tenant a public write lands in',
 };
 
+/**
+ * The loaders that ALSO query as the service role, and why. Each is a public content loader
+ * that stays behind the seam for everything a visitor may read, and reaches past it for one
+ * named thing the seam cannot serve. Exact, like the lists above: a stale entry fails too.
+ */
+const SERVICE_ROLE_IN_LOADERS: Record<string, string> = {
+  'src/lib/data/pageSections.ts':
+    'the page password (Admin v2 U14b): a page behind a password is fenced from anon at RLS ' +
+    '(0061), so a request that typed the password reads its sections through ' +
+    'public.page_sections_unlocked, inside the page-access scope and for that page alone',
+};
+
 /** `contentClient()` itself. */
 const isSeamCall = (node: ts.Node): boolean =>
   ts.isCallExpression(node) &&
   ts.isIdentifier(node.expression) &&
   node.expression.text === 'contentClient';
+
+/** `serviceClient()`: the one other client a loader may name, for a listed reason. */
+const isServiceCall = (node: ts.Node): boolean =>
+  ts.isCallExpression(node) &&
+  ts.isIdentifier(node.expression) &&
+  node.expression.text === 'serviceClient';
 
 /** A Supabase query starts at a client's .from() / .rpc() / .schema() / .channel() … */
 const QUERY_CALLS = new Set(['from', 'rpc', 'schema', 'channel']);
@@ -123,10 +141,20 @@ function queries(ast: ts.SourceFile): { line: number; root: ts.Expression }[] {
   });
 }
 
-/** Lines where a query is built on something other than contentClient() itself. */
-const offSeam = (ast: ts.SourceFile): number[] =>
+/**
+ * Lines where a query is built on something other than contentClient() itself. A loader
+ * listed in SERVICE_ROLE_IN_LOADERS may also build one on serviceClient(), and must: the
+ * count is asserted, so a listing left behind fails.
+ */
+const offSeam = (ast: ts.SourceFile, allowService = false): number[] =>
   queries(ast)
-    .filter((q) => !isSeamCall(q.root))
+    .filter((q) => !isSeamCall(q.root) && !(allowService && isServiceCall(q.root)))
+    .map((q) => q.line);
+
+/** Lines where a query is built on serviceClient(). */
+const onService = (ast: ts.SourceFile): number[] =>
+  queries(ast)
+    .filter((q) => isServiceCall(q.root))
     .map((q) => q.line);
 
 /** Lines where contentClient() runs as its module loads, so one client would be kept. */
@@ -211,10 +239,25 @@ describe('the content seam', () => {
       .map((f) => f.path)
       .sort();
     expect(querying).toEqual([...CONTENT_LOADERS, ...Object.keys(SERVICE_ROLE_SINKS)].sort());
+    // A loader that reaches past the seam is a loader first: it is on the list above.
+    for (const path of Object.keys(SERVICE_ROLE_IN_LOADERS)) {
+      expect(CONTENT_LOADERS).toContain(path);
+    }
     // A loader builds every query on contentClient() itself, never on a client of its own.
     const loaders = parsed(files.filter((f) => CONTENT_LOADERS.includes(f.path)));
     expect(loaders).toHaveLength(CONTENT_LOADERS.length);
-    expect(loaders.flatMap((f) => where(f.path, offSeam(f.ast)))).toEqual([]);
+    expect(
+      loaders.flatMap((f) => where(f.path, offSeam(f.ast, f.path in SERVICE_ROLE_IN_LOADERS))),
+    ).toEqual([]);
+    // Exactly the listed loaders reach past the seam, each with exactly one such query.
+    const reaching = loaders
+      .filter((f) => onService(f.ast).length > 0)
+      .map((f) => f.path)
+      .sort();
+    expect(reaching).toEqual(Object.keys(SERVICE_ROLE_IN_LOADERS).sort());
+    for (const f of loaders.filter((f) => f.path in SERVICE_ROLE_IN_LOADERS)) {
+      expect(where(f.path, onService(f.ast))).toHaveLength(1);
+    }
   });
 
   it('leaves the service role under src/lib/data/ to the named sinks only', () => {
@@ -222,7 +265,9 @@ describe('the content seam', () => {
       .filter((f) => f.names.has('serviceClient'))
       .map((f) => f.path)
       .sort();
-    expect(serviceRole).toEqual(Object.keys(SERVICE_ROLE_SINKS).sort());
+    expect(serviceRole).toEqual(
+      [...Object.keys(SERVICE_ROLE_SINKS), ...Object.keys(SERVICE_ROLE_IN_LOADERS)].sort(),
+    );
   });
 
   it('is looked up as each query is built: never at module load, never in a builder callback', () => {
