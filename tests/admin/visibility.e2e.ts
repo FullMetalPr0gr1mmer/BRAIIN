@@ -492,9 +492,11 @@ test.describe('behind a password (U14b)', () => {
   test('the drawer asks for a password, keeps it out of the markup, and refuses the homepage', async ({
     page,
   }) => {
+    // The page's title is the seeded "Contact us" (supabase/seed-data/20-pages.json), and the
+    // row button, the drawer and the toast all name it whole.
     await page.goto('/admin/visibility', { waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: 'Change who can see Contact', exact: true }).click();
-    const drawer = page.getByRole('dialog', { name: 'Who can see Contact?' });
+    await page.getByRole('button', { name: 'Change who can see Contact us', exact: true }).click();
+    const drawer = page.getByRole('dialog', { name: 'Who can see Contact us?' });
     await expect(drawer).toBeVisible();
     const apply = drawer.getByRole('button', { name: 'Apply', exact: true });
 
@@ -523,10 +525,12 @@ test.describe('behind a password (U14b)', () => {
       .getByRole('dialog', { name: 'Behind a password?' })
       .getByRole('button', { name: 'Apply change' })
       .click();
-    await expect(page.locator('#admin-toasts')).toContainText('Contact now asks for a password.');
+    await expect(page.locator('#admin-toasts')).toContainText(
+      'Contact us now asks for a password.',
+    );
     await expect(page.locator('.vis-row', { hasText: 'Contact' })).toContainText('Password');
     // Reopened, the field is empty again: nothing can read a password back (0061).
-    await page.getByRole('button', { name: 'Change who can see Contact', exact: true }).click();
+    await page.getByRole('button', { name: 'Change who can see Contact us', exact: true }).click();
     await expect(drawer.getByLabel('Password', { exact: true })).toHaveValue('');
     await expect(drawer.getByLabel('English (optional)')).toHaveValue(NOTE.en);
     await expect(drawer).toContainText('Setting it again is the only way');
@@ -541,7 +545,7 @@ test.describe('behind a password (U14b)', () => {
     await home.getByRole('button', { name: 'Cancel' }).click();
 
     // And back to everyone.
-    await page.getByRole('button', { name: 'Change who can see Contact', exact: true }).click();
+    await page.getByRole('button', { name: 'Change who can see Contact us', exact: true }).click();
     await drawer.getByRole('radio', { name: /Visible to everyone/ }).check();
     await drawer.getByRole('button', { name: 'Apply', exact: true }).click();
     await page
