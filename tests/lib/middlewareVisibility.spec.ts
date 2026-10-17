@@ -3,6 +3,7 @@ import { MAINTENANCE_KV_KEY } from '@/lib/http/maintenance';
 import {
   VISIBILITY_KV_KEY,
   clearVisibilityMemo,
+  isListed,
   type VisibilitySnapshot,
 } from '@/lib/http/visibility';
 import {
@@ -11,6 +12,8 @@ import {
   VISIBILITY_TEMPLATES,
   targetForRoute,
 } from '@/lib/visibility/routes';
+import { mintAccessCookie, pageAccessCookieName } from '@/lib/visibility/access';
+import { pageAccess } from '@/lib/visibility/scope';
 import { env, __kv } from '../stubs/cloudflare-workers';
 
 // The middleware's page-visibility gate (Admin v2 U14a). A hidden page answers before the
@@ -41,14 +44,23 @@ const run = onRequest as unknown as Handler;
 const HTML = { 'content-type': 'text/html; charset=utf-8' };
 const TIER_A = 'public, s-maxage=31536000, stale-while-revalidate=86400';
 
-function context(path: string, routePattern: string | undefined, method = 'GET') {
+function context(
+  path: string,
+  routePattern: string | undefined,
+  method = 'GET',
+  cookie?: { name: string; value: string },
+) {
   const url = new URL(`https://www.example.test${path}`);
   return {
     request: new Request(url, { method }),
     url,
     routePattern,
     locals: {} as Record<string, unknown>,
-    cookies: { get: () => undefined, set: () => undefined, delete: () => undefined },
+    cookies: {
+      get: (name: string) => (cookie && cookie.name === name ? { value: cookie.value } : undefined),
+      set: () => undefined,
+      delete: () => undefined,
+    },
     redirect: (to: string, status = 302) =>
       new Response(null, { status, headers: { Location: to } }),
   };
@@ -76,10 +88,22 @@ function page(status = 200) {
 function setSnapshot(
   pages: VisibilitySnapshot['pages'],
   templates: VisibilitySnapshot['templates'] = {},
+  tenant: string | undefined = TENANT,
 ) {
-  __kv.set(VISIBILITY_KV_KEY, JSON.stringify({ v: 1, builtAt: null, pages, templates }));
+  __kv.set(
+    VISIBILITY_KV_KEY,
+    JSON.stringify({ v: 1, builtAt: null, pages, templates, ...(tenant ? { tenant } : {}) }),
+  );
   clearVisibilityMemo();
 }
+
+/** The tenant and page a password entry names, as a save would write them (U14b). */
+const TENANT = '11111111-1111-4111-8111-111111111111';
+const PAGE_ID = '3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
+const ROOT_KEY = 'test-dummy-lead-pii-enc-key';
+const locked = (over: Record<string, unknown> = {}) => ({
+  about: { mode: 'password' as const, id: PAGE_ID, pv: 3, ...over },
+});
 
 beforeEach(() => {
   __kv.clear();
@@ -294,5 +318,114 @@ describe('middleware: every gated route stays public with no rows, and with unre
     for (const route of GATED_ROUTES.filter((r) => !r.endsWith('/portfolio/[slug]'))) {
       expect(await renderOnce(pathOf(route), route), route).toEqual(baseline.get(route));
     }
+  });
+});
+
+describe('middleware: a page behind a password (U14b)', () => {
+  it('answers the gate before the render: 403, private, no-store, noindex, no cache tag', async () => {
+    setSnapshot(locked({ note: { en: 'Ask the studio.' } }));
+    const { next, calls } = page();
+    const res = await run(context('/about', '/about'), next);
+    expect(res.status).toBe(403);
+    expect(calls).toEqual([]);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(res.headers.get('x-robots-tag')).toBe('noindex');
+    expect(res.headers.get('cache-tag')).toBeNull();
+    // Secured like every other answer: the nonce in the CSP is the one the page carries.
+    const csp = res.headers.get('content-security-policy') ?? '';
+    expect(csp).toContain('nonce-');
+    const html = await res.text();
+    expect(html).toContain('Ask the studio.');
+    const nonce = /nonce-([A-Za-z0-9+/=]+)/.exec(csp)?.[1];
+    expect(html).toContain(`<style nonce="${nonce}">`);
+  });
+
+  it('the Arabic twin gets the Arabic gate, by the route that matched', async () => {
+    setSnapshot(locked());
+    const res = await run(context('/ar/about', '/ar/about'), page().next);
+    const html = await res.text();
+    expect(html).toContain('<html lang="ar" dir="rtl">');
+    expect(html).toContain('value="/ar/about"');
+  });
+
+  it('with the page’s own cookie it renders, private, no-store, noindex, inside the scope', async () => {
+    setSnapshot(locked());
+    const value = await mintAccessCookie(ROOT_KEY, { pageId: PAGE_ID, pv: 3 });
+    const seen: (string | undefined)[] = [];
+    const next = async () => {
+      seen.push(pageAccess()?.pageId, pageAccess()?.tenantId);
+      return new Response('<html><body>page</body></html>', {
+        status: 200,
+        headers: { ...HTML, 'cache-control': TIER_A, 'cache-tag': 'route:about' },
+      });
+    };
+    const res = await run(
+      context('/about', '/about', 'GET', { name: pageAccessCookieName(PAGE_ID), value }),
+      next as never,
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('page');
+    // The render saw which page it was allowed to read, and for which tenant.
+    expect(seen).toEqual([PAGE_ID, TENANT]);
+    // And the answer is never cached and never indexed.
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(res.headers.get('x-robots-tag')).toBe('noindex');
+    expect(res.headers.get('cache-tag')).toBeNull();
+  });
+
+  it('another page’s cookie, an older version and a forged one all get the gate', async () => {
+    setSnapshot(locked());
+    const name = pageAccessCookieName(PAGE_ID);
+    const other = await mintAccessCookie(ROOT_KEY, { pageId: PAGE_ID, pv: 2 });
+    for (const value of [other, 'not-a-cookie', `${other}x`]) {
+      const res = await run(context('/about', '/about', 'GET', { name, value }), page().next);
+      expect(res.status, value.slice(0, 12)).toBe(403);
+    }
+  });
+
+  it('gates every method, not only GET: a closed page answers nothing', async () => {
+    setSnapshot(locked());
+    for (const method of ['GET', 'HEAD', 'POST']) {
+      const { next, calls } = page();
+      const res = await run(context('/about', '/about', method), next);
+      expect(res.status, method).toBe(403);
+      expect(calls).toEqual([]);
+    }
+  });
+
+  it('says a try failed when the unlock route sent the visitor back, echoing nothing', async () => {
+    setSnapshot(locked());
+    const res = await run(context('/about?pa=wrong', '/about'), page().next);
+    const html = await res.text();
+    expect(html).toContain('That password did not work.');
+    const clean = await (await run(context('/about', '/about'), page().next)).text();
+    expect(clean).not.toContain('That password did not work.');
+  });
+
+  it('a password entry whose id or version cannot be read 404s: never a public page', async () => {
+    const { next, calls } = page();
+    setSnapshot({ about: { mode: 'password' } } as never);
+    const res = await run(context('/about', '/about'), next);
+    expect(res.status).toBe(404);
+    expect(calls).toEqual(['/404']);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('maintenance still wins: the 503 comes before the password box', async () => {
+    __kv.set(MAINTENANCE_KV_KEY, JSON.stringify({ active: true, allowlist: [] }));
+    setSnapshot(locked());
+    const res = await run(context('/about', '/about'), page().next);
+    expect(res.status).toBe(503);
+  });
+
+  it('a password page is not listed anywhere a public one is', () => {
+    const snap = {
+      v: 1 as const,
+      builtAt: null,
+      pages: locked(),
+      templates: {},
+    };
+    expect(targetForRoute('/about')).toEqual({ kind: 'page', slug: 'about' });
+    expect(isListed(snap, targetForRoute('/about'), Date.now())).toBe(false);
   });
 });

@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { checkPublicLimits, ipLimitValue, limitKey } from '@/lib/http/publicRateLimit';
+import {
+  checkPublicLimits,
+  countPublicLimits,
+  ipLimitValue,
+  limitKey,
+} from '@/lib/http/publicRateLimit';
 
 // The public write limiter (EXC-004) — what it counts and how it answers. The endpoint
 // suites (tests/api/apply.spec.ts, tests/api/contactLimit.spec.ts) prove each caller's
@@ -94,5 +99,16 @@ describe('checkPublicLimits', () => {
     expect(await checkPublicLimits(sb([new Error('x')]).client, 't', 'root', rules)).toBe(
       'unavailable',
     );
+  });
+
+  it('countPublicLimits keeps each count, in rule order, and none when unavailable', async () => {
+    expect(await countPublicLimits(sb([6, 2]).client, 't', 'root', rules)).toEqual({
+      outcome: 'limited',
+      counts: [6, 2],
+    });
+    expect(await countPublicLimits(sb([1, 'error']).client, 't', 'root', rules)).toEqual({
+      outcome: 'unavailable',
+      counts: [],
+    });
   });
 });
