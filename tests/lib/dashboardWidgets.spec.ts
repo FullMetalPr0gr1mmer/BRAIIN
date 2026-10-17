@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { WIDGET_IDS, type WidgetId } from '@schemas/dashboard';
 import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
@@ -373,7 +373,17 @@ const MIDDLEWARE = 3;
 const MEASURED = { loadDashboard: 24, total: 34 };
 
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
+  // A real request has one clock: the dashboard's "Going live today" and the bell both ask
+  // goingLiveToday(), which memoises its two reads per request client and Riyadh day, so they
+  // are read once. The fixtures are dated, so the test must hold the clock there as well;
+  // with the real clock the memo misses from the day after these fixtures onwards and the
+  // shell pays those two reads again (the budget then measures 36, not 34).
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('Admin with every widget, page and shell together, stays well inside it', async () => {
+    vi.setSystemTime(NOW);
     // Every table answers a row, so the reads that run only when there is data run too: the
     // activity's people lookup (audit_people), the disciplines' and the latest leads' labels
     // (services, disciplines), the scheduled items. An empty fake skips them and undercounts.
@@ -448,6 +458,10 @@ describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () 
     expect(byName(0, page)).toEqual(
       expect.arrayContaining(['audit_people', 'disciplines', 'services']),
     );
+    // The bell shares the dashboard's pair of "going live today" reads (the memo above), so
+    // the shell asks neither table again.
+    expect(byName(page, calls.length)).not.toContain('services');
+    expect(byName(page, calls.length)).not.toContain('blog_posts');
     // Measured: recorded in docs/admin-v2/as-built/U1.md (the page, its own read, the shell;
     // then the middleware's session check and identity row, 3, must still leave room). The
     // message names every read, so a failure says which one is new instead of only by how much.
