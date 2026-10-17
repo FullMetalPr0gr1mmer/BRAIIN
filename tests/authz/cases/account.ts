@@ -38,6 +38,20 @@ export const cases: readonly Case[] = [
     allow: EVERY_ROLE,
   },
   {
+    // The dashboard's layout and quick actions (U1) on the same route: every member arranges
+    // their own; ids the role may not use are refused inside (422), never a 403.
+    name: 'my dashboard layout save',
+    load: () => import('@/pages/api/admin/me/preferences'),
+    method: 'PUT',
+    url: '/api/admin/me/preferences',
+    body: {
+      version: 1,
+      dashboard: { top: ['kpis'], left: ['quick'], right: [], hidden: [] },
+      quickActions: [{ id: 'view-site' }],
+    },
+    allow: EVERY_ROLE,
+  },
+  {
     name: 'my preferences save',
     load: () => import('@/pages/api/admin/me/preferences'),
     method: 'PUT',

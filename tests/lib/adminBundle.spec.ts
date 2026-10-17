@@ -197,8 +197,9 @@ describe('the chunk plan in astro.config.mjs', () => {
           ? [join(dir, entry.name)]
           : [],
     );
+  // The dashboard's island code (U1) stays in its AdminDashboard entry, as the kit screen's.
   const SELF_NAMED =
-    /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]Admin\w*\.tsx$|screens[\\/]kit[\\/])/;
+    /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]Admin\w*\.tsx$|screens[\\/]kit[\\/]|screens[\\/]dashboard[\\/](Dashboard\.tsx|types\.ts)$)/;
 
   it('names a group for each kind of admin module, the kit last', () => {
     const at = (path: string) => claim(join(process.cwd(), path));
@@ -215,6 +216,12 @@ describe('the chunk plan in astro.config.mjs', () => {
     expect(at('src/lib/admin/avatar.ts')).toBe('admin-kit');
     expect(at('src/lib/admin/initials.ts')).toBe('admin-ui');
     expect(at('src/lib/admin/relTime.ts')).toBe('admin-ui');
+    // The dashboard's editing pieces load on first use, never on another screen (U1).
+    expect(at('src/components/admin/screens/dashboard/QuickActionsDrawer.tsx')).toBe(
+      'admin-dashboard',
+    );
+    expect(at('src/components/admin/screens/dashboard/customize.ts')).toBe('admin-dashboard');
+    expect(at('src/components/admin/screens/dashboard/Dashboard.tsx')).toBeUndefined();
     expect(groups.find((g) => g.name === 'admin-kit')?.priority).toBe(
       Math.min(...groups.filter((g) => g.name.startsWith('admin-')).map((g) => g.priority)),
     );

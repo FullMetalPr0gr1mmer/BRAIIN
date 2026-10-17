@@ -44,11 +44,15 @@ async function settle<T>(work: () => PromiseLike<T>): Promise<T | null> {
 /**
  * What a page already read for itself, so the shell does not read it a second time:
  * /admin/notifications loads the bell's whole feed (with labels) and the maintenance
- * snapshot it was built from, and the shell's unread count and badge come from those.
+ * snapshot it was built from, and the shell's unread count and badge come from those. The
+ * dashboard (U1) reads the snapshot for its banner and the person's name for its greeting,
+ * and leaves the feed to the shell.
  */
 export interface ShellPreload {
-  feed: NotificationFeed;
+  feed?: NotificationFeed | undefined;
   maintenance: MaintenanceState | null;
+  /** The signed-in person's display name as the page read it (null: none set). */
+  displayName?: string | null | undefined;
 }
 
 export async function loadShellState(
@@ -70,17 +74,20 @@ export async function loadShellState(
     ? Promise.resolve(preload.maintenance)
     : settle(() => getMaintenanceState(env));
 
+  const preloadedName = preload && preload.displayName !== undefined;
   const [profile, maintenance, environment, feed, ...counts] = await Promise.all([
-    settle(() =>
-      sb
-        .from('profiles')
-        .select('display_name')
-        .eq('id', auth.userId)
-        .maybeSingle<{ display_name: string | null }>(),
-    ),
+    preloadedName
+      ? Promise.resolve({ data: { display_name: preload?.displayName ?? null } })
+      : settle(() =>
+          sb
+            .from('profiles')
+            .select('display_name')
+            .eq('id', auth.userId)
+            .maybeSingle<{ display_name: string | null }>(),
+        ),
     maintenanceRead,
     settle(() => adminEnvironment(sb, auth.tenantId)),
-    preload
+    preload?.feed
       ? Promise.resolve(preload.feed)
       : settle(() => loadNotifications(sb, auth, { maintenance: () => maintenanceRead })),
     ...wanted.map((key) => settle(() => COUNTERS[key](sb, auth.tenantId))),

@@ -1,0 +1,60 @@
+---
+import EmptyState from '../EmptyState.astro';
+import Widget from './Widget.astro';
+import { DASH_COLUMNS, type DashboardLayout } from '@schemas/dashboard';
+import type { WidgetResults } from '@/lib/admin/dashboard/loaders';
+
+// The dashboard's board (Admin v2 U1; the prototype's .dash): a full-width top row and two
+// columns under it, each a list the Sortable core binds (data-sortable-list), each widget a
+// direct child it can move (data-sortable-id). Server-rendered and complete without JS;
+// Customize (the island) only rearranges it, and saves. `[data-dash-bar]` is where the
+// island puts its editing bar.
+
+interface Props {
+  layout: DashboardLayout;
+  results: WidgetResults;
+  now?: number | undefined;
+}
+
+const { layout, results, now } = Astro.props;
+const LABEL = { top: 'Top row', left: 'Left column', right: 'Right column' } as const;
+const empty = DASH_COLUMNS.every((column) => layout[column].length === 0);
+---
+
+<div class="dash" data-dash>
+  <div class="dash__bar-slot" data-dash-bar></div>
+  {
+    empty && (
+      <div class="card">
+        <EmptyState
+          icon="grid"
+          title={
+            layout.hidden.length > 0
+              ? 'Every widget is hidden.'
+              : 'Your role has no dashboard widgets.'
+          }
+          text={
+            layout.hidden.length > 0
+              ? 'Use Customize, then Add widget, to bring them back.'
+              : 'The menu on the left has the screens your role can use.'
+          }
+        />
+      </div>
+    )
+  }
+  <div
+    class="dash__col dash__col--top"
+    data-sortable-list="top"
+    data-sortable-list-label={LABEL.top}
+  >
+    {layout.top.map((id) => <Widget id={id} column="top" results={results} now={now} />)}
+  </div>
+  <div class="dash__cols">
+    <div class="dash__col" data-sortable-list="left" data-sortable-list-label={LABEL.left}>
+      {layout.left.map((id) => <Widget id={id} column="left" results={results} now={now} />)}
+    </div>
+    <div class="dash__col" data-sortable-list="right" data-sortable-list-label={LABEL.right}>
+      {layout.right.map((id) => <Widget id={id} column="right" results={results} now={now} />)}
+    </div>
+  </div>
+</div>

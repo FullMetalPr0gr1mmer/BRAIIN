@@ -5,7 +5,8 @@
 -- triggers), 0011 (page_sections_published_only, the RESTRICTIVE published-parent fence),
 -- 0012 (pgcrypto in schema extensions), 0016 (anon's SELECT on page_sections), 0033
 -- (app.live_role), 0038 (the release registry), 0046 (the help centre), 0050 (the audit
--- actor trigger), 0051 (app.tg_release_capture) and 0057 (page_visibility, U14a).
+-- actor trigger), 0051 (app.tg_release_capture), 0057 (page_visibility, U14a) and 0060
+-- (the guides as U1 left them).
 --
 -- U14a shipped public / hidden / link only. This adds the fourth mode: a page a visitor opens
 -- only after typing a password. It is numbered 0061, not the 0058 the Wave 2 ledger reserved:
@@ -378,8 +379,9 @@ on conflict (entity_type) do update
       publish_flag = excluded.publish_flag;
 
 -- ---- 8. The guides --------------------------------------------------------------------------
--- The set as 0057 (U14a) left it, with the page-visibility guide gaining its password
--- section. A later slice that changes a guide restates the set from this text (U16's rule);
+-- The set as 0060 (U1) left it, with the page-visibility guide gaining its password
+-- section (restated from 0057's and re-based onto 0060's when U1 merged first). A later
+-- slice that changes a guide restates the set from this text (U16's rule);
 -- scratchpad/hs_rebase.py re-bases a restatement onto a newer set.
 create or replace function app.help_article_set() returns jsonb
   language sql immutable set search_path = '' as $fn$
@@ -393,7 +395,6 @@ create or replace function app.help_article_set() returns jsonb
       "basics"
     ],
     "screens": [
-      "/admin",
       "/admin/search",
       "/admin/help"
     ],
@@ -447,6 +448,100 @@ create or replace function app.help_article_set() returns jsonb
         {
           "t": "tip",
           "x": "لا يعرض البحث العملاء المحتملين ولا طلبات التوظيف أبدًا، لأنها تحتوي على بيانات شخصية، فلها شاشاتها الخاصة، وكل اطلاع على بيانات التواصل يُسجَّل."
+        }
+      ]
+    }
+  },
+  {
+    "slug": "your-dashboard",
+    "sort_order": 15,
+    "minutes": 3,
+    "tags": [
+      "basics"
+    ],
+    "screens": [
+      "/admin"
+    ],
+    "caps": [],
+    "title": "Your dashboard",
+    "title_ar": "لوحة التحكم الخاصة بك",
+    "body": {
+      "en": [
+        {
+          "t": "p",
+          "x": "The dashboard is the first screen after you sign in. Its widgets follow your role: each shows only what your role may see, so leads and job applications appear on it only for the roles that handle them."
+        },
+        {
+          "t": "h",
+          "x": "Arranging it your way"
+        },
+        {
+          "t": "ol",
+          "x": [
+            "Press Customize at the top. Drag a widget by its handle, or use its Move buttons, to change its place or move it to another column.",
+            "Hide takes a widget off your dashboard. Add widget brings a hidden one back, on the left or on the right.",
+            "Reset puts your dashboard back to your role’s layout, after asking. Done ends customizing. Every change is saved as you make it.",
+            "Your layout is yours alone. An Admin can save a layout and a set of quick actions as the default for a role; people in that role who have not arranged their own dashboard see it."
+          ]
+        },
+        {
+          "t": "h",
+          "x": "Quick actions"
+        },
+        {
+          "t": "p",
+          "x": "Quick actions are shortcuts to the screens you use most. Customize on the Quick actions widget lets you pick them from the list your role may use, put them in order, and add up to 8 links of your own: an admin screen, starting with /admin, or an outside address starting with https://. You can have 12 in all."
+        },
+        {
+          "t": "h",
+          "x": "Team notes"
+        },
+        {
+          "t": "p",
+          "x": "Team notes is one note shared by everyone who sees the dashboard. Edit notes opens it, and Save team notes keeps your change; if someone saved first, reload their version and make your change again. A note is cleared 180 days after its last edit. It refuses anything that looks like an e-mail address or a phone number: any run of 8 or more digits, even with spaces, dots, hyphens or brackets between them. Keep client details in leads, where they are protected."
+        },
+        {
+          "t": "tip",
+          "x": "Everyone who sees the dashboard reads the team notes, so write nothing there you would not say to the whole team."
+        }
+      ],
+      "ar": [
+        {
+          "t": "p",
+          "x": "لوحة التحكم هي أول شاشة تراها بعد تسجيل الدخول، وتتبع عناصرها دورك: يعرض كل عنصر ما يتيحه دورك فقط، فلا يظهر فيها العملاء المحتملون وطلبات التوظيف إلا للأدوار التي تتولاها."
+        },
+        {
+          "t": "h",
+          "x": "رتّبها على طريقتك"
+        },
+        {
+          "t": "ol",
+          "x": [
+            "اضغط Customize في الأعلى، ثم اسحب العنصر من مقبضه، أو استخدم أزرار النقل، لتغيير مكانه أو نقله إلى عمود آخر.",
+            "يزيل Hide العنصر من لوحة التحكم، ويعيد Add widget عنصرًا مخفيًا إلى اليسار أو اليمين.",
+            "يعيد Reset لوحة التحكم إلى تخطيط دورك بعد أن يطلب تأكيدك، وينهي Done التخصيص. ويُحفظ كل تغيير فور إجرائه.",
+            "تخطيطك خاص بك وحدك. ويستطيع المسؤول (Admin) حفظ تخطيط ومجموعة من الإجراءات السريعة كإعداد افتراضي لدور ما، فيراه أصحاب ذلك الدور ممن لم يرتّبوا لوحتهم بأنفسهم."
+          ]
+        },
+        {
+          "t": "h",
+          "x": "الإجراءات السريعة"
+        },
+        {
+          "t": "p",
+          "x": "الإجراءات السريعة اختصارات إلى الشاشات التي تستخدمها أكثر من غيرها. ويتيح لك Customize في عنصر Quick actions اختيارها من القائمة التي يسمح بها دورك، وترتيبها، وإضافة حتى 8 روابط خاصة بك: شاشة إدارة تبدأ بـ /admin، أو عنوان خارجي يبدأ بـ https://. ويمكنك الاحتفاظ بـ 12 إجراءً في المجموع."
+        },
+        {
+          "t": "h",
+          "x": "ملاحظات الفريق"
+        },
+        {
+          "t": "p",
+          "x": "ملاحظات الفريق ملاحظة واحدة يشترك فيها كل من يرى لوحة التحكم. يفتحها Edit notes، ويحفظ Save team notes تغييرك، وإذا حفظ أحد قبلك فأعد تحميل نسخته ثم أعد تغييرك. وتُمسح الملاحظة بعد 180 يومًا من آخر تعديل. وهي ترفض كل ما يشبه عنوان بريد إلكتروني أو رقم هاتف: أي سلسلة من 8 أرقام أو أكثر، حتى لو فصلت بينها مسافات أو نقاط أو شرطات أو أقواس. فاحتفظ ببيانات العملاء في شاشة العملاء المحتملين حيث تكون محمية."
+        },
+        {
+          "t": "tip",
+          "x": "يقرأ ملاحظات الفريق كل من يرى لوحة التحكم، فلا تكتب فيها ما لا تقوله للفريق كله."
         }
       ]
     }

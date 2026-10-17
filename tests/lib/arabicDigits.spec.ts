@@ -195,6 +195,10 @@ const ALLOWED: Record<string, string> = {
     'reads a searched term as a phone number (digits of either script) for the blind-index lookup',
   'src/lib/admin/palette.ts':
     'NFKD folds the command palette’s query and labels for matching; nothing is stored or shown',
+  // Not a fold: a test that refuses a team note holding a phone number in any digit set
+  // (Admin v2 U1, D5); a note is stored exactly as typed, or not at all.
+  'packages/schemas/dashboard.ts':
+    'finds a phone number in either Arabic digit set to refuse a team note; nothing is changed',
 };
 
 /** U+0660-0669, U+06F0-06F9, as characters or as \u escapes. */

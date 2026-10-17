@@ -2,6 +2,8 @@ import type { ActivityKind } from '@schemas/audit';
 import { RESOURCES } from '@/lib/admin/resources';
 import { columnOf, RESOURCE_UI, SINGLETON_UI, type FieldDef } from '@/lib/admin/ui';
 import type { BadgeTone } from '@/lib/admin/tones';
+import { isRole } from '@/lib/auth/types';
+import { ROLE_LABELS } from '@/lib/authz/capLabels';
 import { hasTitleSource } from './auditTitles';
 
 // The activity log in plain words (Admin v2 U13, docs/admin-v2/ui.md AV-22): one registry
@@ -165,6 +167,12 @@ function nounOf(type: string | null): string | null {
   return KERNEL_ENTITIES.get(type)?.noun ?? null;
 }
 
+/** "the SEO role": a preset's role, from its detail (one of the four, else plainly "a role"). */
+function roleNoun(detail: Detail): string {
+  const role = detail['role'];
+  return isRole(role) ? `the ${ROLE_LABELS[role]} role` : 'a role';
+}
+
 // ── Every other action, by its exact key ──────────────────────────────────────────────────
 
 const EXACT: Readonly<Record<string, Label>> = {
@@ -193,6 +201,15 @@ const EXACT: Readonly<Record<string, Label>> = {
     verb: 'Updated the details of',
     noun: 'the asset',
     titled: true,
+  },
+
+  // The dashboard (U1): the shared note (its length only is recorded, never its words) and
+  // the owner's presets per role.
+  'dashboard.notes.update': { kind: 'edits', verb: 'Updated', noun: 'the team notes' },
+  'dashboard.notes.expire': {
+    kind: 'edits',
+    verb: 'Cleared',
+    noun: 'the team notes, 180 days after their last edit',
   },
 
   // Leads
@@ -312,6 +329,16 @@ const EXACT: Readonly<Record<string, Label>> = {
     kind: 'settings',
     verb: outcome('Exported', 'Could not export'),
     noun: 'the activity log',
+  },
+  'dashboard.defaults.update': {
+    kind: 'settings',
+    verb: 'Set the default dashboard of',
+    noun: (detail) => roleNoun(detail),
+  },
+  'dashboard.defaults.reset': {
+    kind: 'settings',
+    verb: 'Reset the default dashboard of',
+    noun: (detail) => roleNoun(detail),
   },
   'placeholder_override.grant': {
     kind: 'settings',

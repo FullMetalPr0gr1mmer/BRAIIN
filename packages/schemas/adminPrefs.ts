@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DashboardPrefSchema, QuickActionsSchema } from './dashboard';
 
 // The personal layer (Admin v2 F8, docs/admin-v2/ui.md AV-05): what a signed-in person
 // changes about themselves. Preferences live in `admin_user_prefs` (0044, self only);
@@ -44,15 +45,26 @@ export function readNotificationPrefs(raw: unknown): NotificationPrefs {
 
 /**
  * PUT /api/admin/me/preferences. `version` is the row's (0 when there is no row yet), the
- * optimistic lock of CLAUDE.md Pillar 4. The dashboard's layout and quick actions join this
- * schema with the dashboard slice (U1); until then a body naming them is refused.
+ * optimistic lock of CLAUDE.md Pillar 4. Any of the three preferences, at least one: the
+ * bell's (the account drawer sends `notifications` alone), the dashboard's layout and its
+ * quick actions (U1). The route refuses widget and library ids the role may not use (422);
+ * a preference never grants access.
  */
 export const AdminPrefsPutSchema = z
   .object({
     version: z.number().int().min(0),
-    notifications: NotificationPrefsSchema,
+    notifications: NotificationPrefsSchema.optional(),
+    dashboard: DashboardPrefSchema.optional(),
+    quickActions: QuickActionsSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) =>
+      value.notifications !== undefined ||
+      value.dashboard !== undefined ||
+      value.quickActions !== undefined,
+    { message: 'Send at least one preference.' },
+  );
 export type AdminPrefsPut = z.infer<typeof AdminPrefsPutSchema>;
 
 /**

@@ -1,0 +1,30 @@
+---
+import Kpi from '../Kpi.astro';
+import type { KpiCard } from '@/lib/admin/dashboard/loaders';
+
+// The KPI row (Admin v2 U1, `kpis`): page views over 7 days and the Arabic share, then, for
+// lead roles, the leads waiting in the first stage, and for the rest, the pages and services
+// live. A change shows only against a previous week the rollups hold (F4b: no made-up trend).
+
+interface Props {
+  cards: readonly KpiCard[];
+}
+
+const { cards } = Astro.props;
+---
+
+<div class:list={['grid', cards.length >= 4 ? 'grid--4' : 'grid--3']}>
+  {
+    cards.map((card) => (
+      <Kpi
+        label={card.label}
+        value={card.value}
+        delta={card.delta}
+        deltaUnit={card.deltaUnit ?? 'percent'}
+        period={card.period}
+        spark={card.spark}
+        series={card.series ?? 0}
+      />
+    ))
+  }
+</div>
