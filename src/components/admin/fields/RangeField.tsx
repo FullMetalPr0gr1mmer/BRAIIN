@@ -1,4 +1,4 @@
-import { clampToStep } from '@/lib/admin/fieldValues';
+import { clampToRange, clampToStep } from '@/lib/admin/fieldValues';
 import FieldShell, { describedBy } from './FieldShell';
 import type { FieldComponentProps } from './types';
 
@@ -21,7 +21,10 @@ export default function RangeField({
   const range = field.range ?? { min: 0, max: 100, step: 1 };
   const set = typeof value === 'number' && Number.isFinite(value);
   const fallback = typeof field.defaultValue === 'number' ? field.defaultValue : range.min;
-  const shown = clampToStep(set ? value : fallback, range);
+  // Read out as stored (held to the bounds only): a stored 7250 under a 500 step says
+  // 7250, which is what the page uses and what a save keeps (F5b review L5). The slider
+  // snaps the values the editor moves.
+  const shown = set ? clampToRange(value, range) : clampToStep(fallback, range);
   const suffix = field.range?.suffix ?? '';
   return (
     <FieldShell

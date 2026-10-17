@@ -14,4 +14,11 @@ export interface FieldComponentProps {
   errors?: FieldErrors | undefined;
   /** F5b: the value this field shows when nothing is stored (sectionContent built-ins). */
   builtIn?: unknown;
+  /**
+   * F5b: the object this field sits in, by field name — for a field that reads a sibling
+   * (an `accent` counts the words of the bilingual field its `accent.of` names). The whole
+   * form's values at the top level, a section's content inside the section editor, one
+   * item inside a repeater.
+   */
+  values?: Readonly<Record<string, unknown>> | undefined;
 }
