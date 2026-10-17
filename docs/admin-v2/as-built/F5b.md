@@ -217,6 +217,11 @@ machine (gzip, KB = 1,000 B):
 Four field kinds, a code registry and the built-in plumbing for +5.4 KB on an editor and
 +0.1 KB on every other screen; 146.1 KB against P-10's proposed 300 KB per screen.
 
+Measured again after the review fixes, on main `15b02c1` (U1's dashboard merged in):
+editors 148.2 KB, `/admin/kit` 153.1 KB, every screen without an editor 120.0 to 120.1 KB
+(the Dashboard 123.2 KB), `admin-rich` 122.6 KB, the size-limit admin sum 280.46 KB and
+public 25.51 KB, all inside their limits.
+
 ## Tests
 
 - Unit: `accentWords.spec.ts` (the words are the renderer's own, including Arabic digits
