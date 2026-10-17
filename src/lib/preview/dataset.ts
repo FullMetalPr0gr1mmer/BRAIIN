@@ -364,7 +364,12 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
       const entry = RELEASE_REGISTRY[draft.entity_type];
       const at = rows.findIndex((row) => row[entry.key] === draft.entity_id);
       if (draft.op === 'delete') {
-        if (at !== -1) rows.splice(at, 1);
+        // A row already gone is the live-missing case (offer Discard), not a change shown.
+        if (at === -1) {
+          invalid(draft, 'live-missing');
+          continue;
+        }
+        rows.splice(at, 1);
         report.overlaid += 1;
         continue;
       }
@@ -384,7 +389,14 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
           invalid(draft, 'target-changed');
           continue;
         }
-        const next: Row = { ...current, ...change.patch };
+        // The key and the tenant stay the live row's, whatever the patch holds (the
+        // registry's allowlist keeps both out; this does not rely on it).
+        const next: Row = {
+          ...current,
+          ...change.patch,
+          [entry.key]: current[entry.key],
+          tenant_id: current['tenant_id'],
+        };
         stamp(table, current, next, change.patch);
         rows[at] = next;
       } else {

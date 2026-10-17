@@ -301,6 +301,32 @@ describe('laying the drafts over', () => {
   });
 });
 
+describe('review fixes', () => {
+  it("an update never moves a row's key or tenant, whatever its patch holds", async () => {
+    vi.mocked(overlay.derivePatch).mockImplementationOnce(() => ({
+      patch: { slug: 'moved', id: id(990), tenant_id: OTHER_TENANT },
+      children: {},
+      exempt: {},
+    }));
+    const { db, report } = source(fixtureTables(), [
+      draft('sector', 'update', ID.secVis, { slug: 'moved' }),
+    ]);
+    expect(await read(db, 'sectors', 'id,tenant_id,slug')).toEqual([
+      { id: ID.secVis, tenant_id: TENANT, slug: 'moved' },
+    ]);
+    expect(report.overlaid).toBe(1);
+  });
+
+  it('a delete of a row that is already gone is reported, not counted as shown', async () => {
+    const { db, report } = source(fixtureTables(), [draft('sector', 'delete', id(991))]);
+    expect(await read(db, 'sectors', 'id')).toEqual([{ id: ID.secVis }]);
+    expect(report.overlaid).toBe(0);
+    expect(report.invalid).toEqual([
+      expect.objectContaining({ entityId: id(991), reason: 'live-missing' }),
+    ]);
+  });
+});
+
 describe('the foreign keys a pending delete follows', () => {
   it("cascades only into tables no other key references (a parent's own drafts are the whole set)", () => {
     const cascaded = new Set(
