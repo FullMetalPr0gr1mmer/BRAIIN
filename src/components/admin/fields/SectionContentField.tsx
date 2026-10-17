@@ -114,7 +114,7 @@ export default function SectionContentField({
         <p className="field-legend">{field.label}</p>
         <p className="admin-sub">
           {sectionType
-            ? 'This section takes its content from its own table (team, certifications…) — there is nothing to override here.'
+            ? 'This section takes its content from its own table (team, certifications…), so there is nothing to override here.'
             : 'Choose a section type to edit its content.'}
         </p>
         <FieldErrorText id={id} message={error} />
@@ -198,7 +198,7 @@ export default function SectionContentField({
           <p className="admin-sub">
             {builtInForm
               ? 'Every field starts as the words the page already shows. Change one to make it yours; leave it and the built-in copy stays, even when it is improved later.'
-              : 'Every field is optional — leave one empty to keep the built-in copy.'}
+              : 'Every field is optional. Leave one empty to keep the built-in copy.'}
           </p>
           {builtInForm && Object.keys(written).length > 0 && (
             <button

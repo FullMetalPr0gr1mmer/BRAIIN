@@ -734,6 +734,14 @@ describe('clip v2 (Admin v2 F5b)', () => {
     );
   });
 
+  it('the hint says it in plain words, without a dash (P-12)', () => {
+    const text = render(clip, state({})).replace(/<[^>]*>/g, ' ');
+    expect(text).toContain(
+      'A window plays that part of the video on a loop, for at most 30 seconds.',
+    );
+    expect(text).not.toMatch(/[–—]/);
+  });
+
   it('a stored path the site no longer has stays visible', () => {
     const html = render(clip, state({ path: '/media/gone.mp4' }));
     expect(html).toContain('/media/gone.mp4');
@@ -794,6 +802,33 @@ describe('section content prefilled with the built-in copy (Admin v2 F5b)', () =
     ).not.toContain('Arabic still shows the built-in text.');
   });
 
+  it('its notes say it without a dash (P-12)', () => {
+    const sections = RESOURCE_UI['sections']!.fields;
+    const plain = (html: string) => html.replace(/<[^>]*>/g, ' ');
+    const notes = [
+      render({ values: {}, json: null }),
+      renderToStaticMarkup(
+        createElement(Field, {
+          field,
+          value: { values: {}, json: null },
+          values: { type: 'cta' },
+          onChange: noop,
+        }),
+      ),
+      renderToStaticMarkup(
+        createElement(Field, {
+          field,
+          value: rowToForm({ type: 'team', content: {} }, sections)['content'],
+          values: { type: 'team' },
+          onChange: noop,
+        }),
+      ),
+    ].map(plain);
+    expect(notes[1]).toContain('Every field is optional. Leave one empty');
+    expect(notes[2]).toContain('so there is nothing to override here.');
+    for (const text of notes) expect(text).not.toMatch(/[–—]/);
+  });
+
   it('with no built-in known, the field reads as it did before', () => {
     const html = renderToStaticMarkup(
       createElement(Field, {
@@ -803,7 +838,7 @@ describe('section content prefilled with the built-in copy (Admin v2 F5b)', () =
         onChange: noop,
       }),
     );
-    expect(html).toContain('leave one empty to keep the built-in copy');
+    expect(html).toContain('Leave one empty to keep the built-in copy');
     expect(html).not.toContain('Reset to the built-in copy');
   });
 });

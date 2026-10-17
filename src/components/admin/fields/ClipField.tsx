@@ -82,7 +82,7 @@ export default function ClipField({ field, value, onChange, idPrefix, errors }: 
       label={field.label}
       hint={
         field.help ??
-        `A window plays that part of the video on a loop — at most ${MAX_CLIP_SECONDS} seconds. Leave both empty for the whole video.`
+        `A window plays that part of the video on a loop, for at most ${MAX_CLIP_SECONDS} seconds. Leave both empty for the whole video.`
       }
       error={error}
     >
