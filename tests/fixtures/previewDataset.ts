@@ -314,6 +314,7 @@ export function fixtureTables(): Record<string, Row[]> {
         name: BI('Retail', 'التجزئة'),
         visible: true,
         sort_order: 1,
+        updated_at: '2026-01-01T00:00:00+00:00',
       }),
       T({
         id: ID.secHidden,
@@ -321,6 +322,7 @@ export function fixtureTables(): Record<string, Row[]> {
         name: BI('Secret', 'سري'),
         visible: false,
         sort_order: 2,
+        updated_at: '2026-01-01T00:00:00+00:00',
       }),
     ],
     clients: [
