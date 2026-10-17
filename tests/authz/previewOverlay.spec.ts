@@ -60,7 +60,9 @@ const N: Outcome = 'not shown';
  * writes meta for, read only: categories, sectors, clients, team, disciplines, services,
  * projects, posts, pages) plus entity SEO and SEO defaults, and redirects (not previewed).
  * Developer: pages (through maintenance.manage) and identity; theme and page visibility
- * are readable but not previewed.
+ * are readable but not previewed. A page-visibility change stays "not previewed" even
+ * though the dataset reads the live rows for 0061's password fence (the fence follows the
+ * live mode; docs/admin-v2/as-built/R8.md says why).
  */
 const EXPECTED: Record<Role, Record<ReleaseEntityType, Outcome>> = {
   admin: {

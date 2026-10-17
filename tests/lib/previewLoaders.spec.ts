@@ -131,6 +131,10 @@ const CASES: Record<string, () => Promise<void>> = {
     expect(value?.page.id).toBe(ID.pgHome);
     expect(value?.sections.map((s) => s.type)).toEqual(['cta']);
     expect((await inPreview(() => pageSections.getPageComposition('about'))).value).toBeNull();
+    // Behind a password (0061): the page, and none of its sections, as a visitor reads it.
+    const locked = await inPreview(() => pageSections.getPageComposition('join'));
+    expect(locked.value).toEqual(expect.objectContaining({ sections: [] }));
+    expect(locked.value?.page.id).toBe(ID.pgLocked);
     clean(report);
   },
   'pageSections.getPageSections': async () => {
@@ -185,7 +189,7 @@ const CASES: Record<string, () => Promise<void>> = {
   },
   'sectionMedia.getSectionImages': async () => {
     const { value, report } = await inPreview(() =>
-      sectionMedia.getSectionImages([ID.mSection, ID.mHiddenSection, ID.mUnref]),
+      sectionMedia.getSectionImages([ID.mSection, ID.mHiddenSection, ID.mUnref, ID.mLockedSection]),
     );
     expect([...value.keys()]).toEqual([ID.mSection]);
     clean(report);

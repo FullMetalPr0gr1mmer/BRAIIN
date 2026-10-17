@@ -580,7 +580,7 @@ describe('drafts left out', () => {
       { role: 'developer' },
     );
     expect((await read(db, 'pages', 'id')).map((r) => r['id']).sort()).toEqual(
-      [ID.pgHome, ID.pgDraft].sort(),
+      [ID.pgHome, ID.pgDraft, ID.pgLocked].sort(),
     );
     expect((await read(db, 'services', 'id')).map((r) => r['id'])).not.toContain(ID.sDraft);
     expect(report.draftsNotShown).toBe(2);

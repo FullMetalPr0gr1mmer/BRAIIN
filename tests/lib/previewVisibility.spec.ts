@@ -112,7 +112,7 @@ describe('the mirror over the fixture tenant', () => {
       'service_cases',
       'services',
     ]);
-    expect(visibilityClosure(['media_assets']).size).toBe(10);
+    expect(visibilityClosure(['media_assets']).size).toBe(11);
     for (const table of PREVIEW_TABLES)
       expect(VISIBILITY_DEPS[table as PreviewTable]).toBeDefined();
   });
@@ -141,6 +141,40 @@ describe('mediaIdsInContent mirrors `lax $.**.mediaId ? (@ == $id)`', () => {
   ])('%j holds x: %s', (content, holds) => {
     const ids = mediaIdsInContent(content);
     expect(ids.has('x') || ids.has('1')).toBe(holds);
+  });
+});
+
+describe('the password fence (0061 page_sections_password_fence)', () => {
+  it('hides every section of a page behind a password, and media only they hold (branch 6)', async () => {
+    const { ids } = await visible(fixtureTables());
+    expect(ids['pages']).toContain(ID.pgLocked);
+    expect(ids['page_sections']).not.toContain(ID.psLocked);
+    expect(ids['media_assets']).not.toContain(ID.mLockedSection);
+  });
+
+  it('shows them when the live visibility row is in another mode', async () => {
+    const tables = fixtureTables();
+    tables['page_visibility']!.find((v) => v['id'] === ID.pvLocked)!['mode'] = 'link';
+    const { ids } = await visible(tables);
+    expect(ids['page_sections']).toContain(ID.psLocked);
+    expect(ids['media_assets']).toContain(ID.mLockedSection);
+  });
+
+  it('follows the live row: a pending visibility change is not previewed', async () => {
+    const { ids, report } = await visible(fixtureTables(), [
+      draft('page_visibility', 'update', ID.pvLocked, { mode: 'public' }),
+    ]);
+    expect(ids['page_sections']).not.toContain(ID.psLocked);
+    expect(report.notPreviewed).toEqual(['page_visibility']);
+  });
+
+  it("page_visibility is the mirror's alone: the emulator refuses it to a loader", () => {
+    const source = createPreviewSource({
+      supabase: fakeStaffClient(fixtureTables()).client,
+      session: session('admin'),
+    });
+    expect(() => source.client().from('page_visibility')).toThrow();
+    expect(source.report().unsupported).toEqual(['from page_visibility']);
   });
 });
 

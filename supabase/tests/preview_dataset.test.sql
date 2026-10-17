@@ -13,10 +13,14 @@
 --      equal the literal in _anon_columns() below, and the other 17 tables are granted to
 --      anon whole; staff also read _dataset_only_columns() (a quote's consent record);
 --   4. the column defaults a pending create starts from equal _create_defaults() below;
---   5. the policies that apply to an anon SELECT on each table equal _anon_policies() below,
---      so a migration that adds, drops or renames one (U14b's page_sections_password_fence,
---      0061) fails here until the mirror (src/lib/preview/visibility.ts) gains its rule;
---   6. page visibility (0057) is no row security: anon holds nothing on page_visibility.
+--   5. the policies that apply to an anon SELECT on each table equal _anon_policies() below
+--      (name, kind and USING), so a migration that adds, drops, renames or rewrites one fails
+--      here until the mirror (src/lib/preview/visibility.ts) follows; 0061's
+--      page_sections_password_fence is listed and mirrored, and a section of a page behind a
+--      password (with the image only it holds, media branch 6) is read by staff and by
+--      neither a sales claim nor anon;
+--   6. page visibility (0057) is no row security: anon holds nothing on page_visibility, which
+--      the CMS roles read (the dataset reads it for the fence alone) and a sales claim does not.
 -- The literals are held equal to ANON_COLUMNS, DATASET_ONLY_COLUMNS, CREATE_DEFAULTS and MIRRORED_POLICIES
 -- by tests/lib/previewMirror.spec.ts, which parses this file: a grant, default or policy
 -- that moves fails one side until the other follows.
@@ -122,7 +126,7 @@ create function _anon_policies() returns table (tbl text, policies text) languag
     ('entity_seo', 'entity_seo_published_only:RESTRICTIVE:df5c9a7d7588fed51b9e8704523bf0a3,entity_seo_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,entity_seo_write:PERMISSIVE:763c5ebb7d12ee38b8e17d30ad1570df'),
     ('media_assets', 'media_assets_public_read:PERMISSIVE:88fb58b63c6cf01b1652b4f3959970a6,media_read:PERMISSIVE:392446073406bce5902ebbac287245a1,media_write:PERMISSIVE:4f9223ffe3d088ba7a0a4098c7d190d6'),
     ('navigation', 'navigation_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,navigation_visible_only:RESTRICTIVE:d3e6a42adad1d6a81062627de227ba33,navigation_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
-    ('page_sections', 'page_sections_published_only:RESTRICTIVE:1f97d3d1084c993ca178204580b8d11d,page_sections_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,page_sections_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('page_sections', 'page_sections_password_fence:RESTRICTIVE:288466d0b0045b81ef63d2e215c90e8e,page_sections_published_only:RESTRICTIVE:1f97d3d1084c993ca178204580b8d11d,page_sections_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,page_sections_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('pages', 'pages_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,pages_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('portfolio', 'portfolio_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,portfolio_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('portfolio_media', 'portfolio_media_read:PERMISSIVE:89df8ca10e4d24f57e626287d4263bdb,portfolio_media_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
@@ -146,7 +150,9 @@ insert into public.tenants (id, name) values ('8b000000-0000-4000-8000-000000000
 
 insert into public.media_assets (id, tenant_id, kind, provider, storage_path) values
   ('8a000000-0000-4000-8000-000000000101', app.default_tenant_id(), 'image', 'static', 'stills/work/p0.jpg'),
-  ('8a000000-0000-4000-8000-000000000102', app.default_tenant_id(), 'image', 'static', 'stills/work/p1.jpg');
+  ('8a000000-0000-4000-8000-000000000102', app.default_tenant_id(), 'image', 'static', 'stills/work/p1.jpg'),
+  -- only in a section of the page behind a password: hidden from anon (0061, through 0045's branch 6)
+  ('8a000000-0000-4000-8000-000000000103', app.default_tenant_id(), 'image', 'static', 'stills/work/p2.jpg');
 
 insert into public.disciplines (id, tenant_id, slug, name, status) values
   ('8a000000-0000-4000-8000-000000000201', app.default_tenant_id(), 'pv-disc-pub', '{"en":"P","ar":"ب"}', 'published'),
@@ -222,12 +228,25 @@ insert into public.navigation (id, tenant_id, location, label, href, visible) va
 insert into public.pages (id, tenant_id, slug, title, status) values
   ('8a000000-0000-4000-8000-000000000501', app.default_tenant_id(), 'pv-page-pub', '{"en":"P","ar":"ب"}', 'published'),
   ('8a000000-0000-4000-8000-000000000502', app.default_tenant_id(), 'pv-page-draft', '{"en":"D","ar":"د"}', 'draft'),
-  ('8a000000-0000-4000-8000-000000000503', app.default_tenant_id(), 'pv-page-arch', '{"en":"A","ar":"أ"}', 'archived');
+  ('8a000000-0000-4000-8000-000000000503', app.default_tenant_id(), 'pv-page-arch', '{"en":"A","ar":"أ"}', 'archived'),
+  ('8a000000-0000-4000-8000-000000000504', app.default_tenant_id(), 'pv-page-locked', '{"en":"L","ar":"ل"}', 'published');
 
 insert into public.page_sections (id, tenant_id, page_id, type, visible) values
   ('8a000000-0000-4000-8000-000000000511', app.default_tenant_id(), '8a000000-0000-4000-8000-000000000501', 'cta', true),
   ('8a000000-0000-4000-8000-000000000512', app.default_tenant_id(), '8a000000-0000-4000-8000-000000000501', 'cta', false),
   ('8a000000-0000-4000-8000-000000000513', app.default_tenant_id(), '8a000000-0000-4000-8000-000000000502', 'cta', true);
+insert into public.page_sections (id, tenant_id, page_id, type, visible, content) values
+  ('8a000000-0000-4000-8000-000000000514', app.default_tenant_id(), '8a000000-0000-4000-8000-000000000504', 'cta', true,
+   '{"frames":[{"mediaId":"8a000000-0000-4000-8000-000000000103"}]}');
+
+-- The published page goes behind a password (0061: the secret first, as set_page_password
+-- writes it; then its visibility row).
+insert into public.page_passwords (tenant_id, page_id, password_hash)
+values (app.default_tenant_id(), '8a000000-0000-4000-8000-000000000504',
+        extensions.crypt('pgtap-preview', extensions.gen_salt('bf', 4)));
+insert into public.page_visibility (id, tenant_id, page_id, mode, password_version)
+values ('8a000000-0000-4000-8000-000000000531', app.default_tenant_id(),
+        '8a000000-0000-4000-8000-000000000504', 'password', 1);
 
 insert into public.entity_seo (id, tenant_id, entity_type, entity_id) values
   ('8a000000-0000-4000-8000-000000000601', app.default_tenant_id(), 'service', '8a000000-0000-4000-8000-000000000211'),
@@ -296,6 +315,12 @@ begin
                    coalesce(cols, '*'), t, pred) into n;
     out := out || format('%s=%s ', t, n);
   end loop;
+  -- The mirror's own table: staff read it whole (the dataset's `*`); anon holds nothing on it.
+  if current_user <> 'anon' then
+    select count(*)::int into n
+      from (select * from public.page_visibility where id::text like '8a000000-%') s;
+    out := out || format('page_visibility=%s ', n);
+  end if;
   return rtrim(out);
 end $$;
 
@@ -309,33 +334,33 @@ $$;
 set local role authenticated;
 select _as('admin');
 select is(_seen(),
-  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=2 navigation=2 page_sections=3 pages=3 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3',
+  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
   'admin reads every fixture row of the 21 tables, whatever its status or visible flag');
 select _as('content_creator');
 select is(_seen(),
-  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=2 navigation=2 page_sections=3 pages=3 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3',
+  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
   'content_creator reads every fixture row of the 21 tables');
 select _as('seo');
 select is(_seen(),
-  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=2 navigation=2 page_sections=3 pages=3 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3',
+  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
   'seo reads every fixture row of the 21 tables');
 select _as('developer');
 select is(_seen(),
-  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=2 navigation=2 page_sections=3 pages=3 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3',
+  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
   'developer reads every fixture row of the 21 tables');
 select _as('sales');
 select is(_seen(),
-  'blog_posts=1 categories=1 certifications=1 clients=1 disciplines=1 entity_seo=1 media_assets=1 navigation=1 page_sections=1 pages=1 portfolio=1 portfolio_media=1 portfolio_services=1 sectors=1 seo_defaults=1 service_cases=1 services=1 site_profile=1 statistics=1 team_members=1 testimonials=1',
+  'blog_posts=1 categories=1 certifications=1 clients=1 disciplines=1 entity_seo=1 media_assets=1 navigation=1 page_sections=1 pages=2 portfolio=1 portfolio_media=1 portfolio_services=1 sectors=1 seo_defaults=1 service_cases=1 services=1 site_profile=1 statistics=1 team_members=1 testimonials=1 page_visibility=0',
   'a sales claim reads only the public fixture rows (no draft, archived or hidden row)');
 select _as_other();
 select is(_seen(),
-  'blog_posts=0 categories=0 certifications=0 clients=0 disciplines=0 entity_seo=0 media_assets=0 navigation=0 page_sections=0 pages=0 portfolio=0 portfolio_media=0 portfolio_services=0 sectors=0 seo_defaults=0 service_cases=0 services=0 site_profile=0 statistics=0 team_members=0 testimonials=0',
+  'blog_posts=0 categories=0 certifications=0 clients=0 disciplines=0 entity_seo=0 media_assets=0 navigation=0 page_sections=0 pages=0 portfolio=0 portfolio_media=0 portfolio_services=0 sectors=0 seo_defaults=0 service_cases=0 services=0 site_profile=0 statistics=0 team_members=0 testimonials=0 page_visibility=0',
   'other_tenant reads no row of the launch tenant');
 reset role;
 set local role anon;
 select _as(null);
 select is(_seen(),
-  'blog_posts=1 categories=1 certifications=1 clients=1 disciplines=1 entity_seo=1 media_assets=1 navigation=1 page_sections=1 pages=1 portfolio=1 portfolio_media=1 portfolio_services=1 sectors=1 seo_defaults=1 service_cases=1 services=1 site_profile=1 statistics=1 team_members=1 testimonials=1',
+  'blog_posts=1 categories=1 certifications=1 clients=1 disciplines=1 entity_seo=1 media_assets=1 navigation=1 page_sections=1 pages=2 portfolio=1 portfolio_media=1 portfolio_services=1 sectors=1 seo_defaults=1 service_cases=1 services=1 site_profile=1 statistics=1 team_members=1 testimonials=1',
   'anon reads only the public fixture rows, with the dataset''s projection');
 
 -- ── 2. Pending changes ─────────────────────────────────────────────────────────────────

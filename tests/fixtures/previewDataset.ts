@@ -40,6 +40,7 @@ export const ID = {
   mSvcHiddenPoster: id(115),
   mExternal: id(116),
   mUnref: id(117),
+  mLockedSection: id(118),
   // disciplines, services, cases
   dPub: id(201),
   dDraft: id(202),
@@ -78,9 +79,13 @@ export const ID = {
   // pages, sections, menus
   pgHome: id(501),
   pgDraft: id(502),
+  pgLocked: id(503),
   psVis: id(511),
   psHidden: id(512),
   psOfDraft: id(513),
+  psLocked: id(514),
+  pvLocked: id(531),
+  pvHome: id(532),
   nVis: id(521),
   nHidden: id(522),
   nChild: id(523),
@@ -213,6 +218,7 @@ export function fixtureTables(): Record<string, Row[]> {
       media(ID.mSvcHiddenPoster), // sHiddenByDisc's poster (service hidden by its discipline): hidden
       media(ID.mExternal, 'external'), // pPub2's poster, but not a hosted provider: hidden
       media(ID.mUnref), // referenced by nothing: hidden
+      media(ID.mLockedSection), // only in a section of a page behind a password: hidden (0061)
     ],
     disciplines: [
       T({
@@ -595,6 +601,22 @@ export function fixtureTables(): Record<string, Row[]> {
         updated_at: '2026-01-01T00:00:00+00:00',
         published_at: null,
       }),
+      // Published, behind a password (page_visibility below): the page row is public, its
+      // sections are not (0061 page_sections_password_fence).
+      T({
+        id: ID.pgLocked,
+        slug: 'join',
+        title: BI('Join', 'انضم'),
+        status: 'published',
+        nav_visible: true,
+        updated_at: '2026-01-01T00:00:00+00:00',
+        published_at: '2026-01-01T00:00:00+00:00',
+      }),
+    ],
+    // Staff read it (0057); anon never. The mirror reads it for the fence alone.
+    page_visibility: [
+      T({ id: ID.pvLocked, page_id: ID.pgLocked, template: null, mode: 'password' }),
+      T({ id: ID.pvHome, page_id: ID.pgHome, template: null, mode: 'public' }),
     ],
     page_sections: [
       T({
@@ -618,6 +640,14 @@ export function fixtureTables(): Record<string, Row[]> {
         page_id: ID.pgDraft,
         type: 'cta',
         content: { mediaId: ID.mDraftSection },
+        visible: true,
+        sort_order: 1,
+      }),
+      T({
+        id: ID.psLocked,
+        page_id: ID.pgLocked,
+        type: 'cta',
+        content: { mediaId: ID.mLockedSection },
         visible: true,
         sort_order: 1,
       }),
@@ -731,7 +761,7 @@ export const VISIBLE: Readonly<Record<string, readonly string[]>> = {
   certifications: [ID.cePub],
   categories: [ID.cat1],
   blog_posts: [ID.bPub, ID.bUndated, ID.bOld],
-  pages: [ID.pgHome],
+  pages: [ID.pgHome, ID.pgLocked],
   page_sections: [ID.psVis],
   navigation: [ID.nVis, ID.nChild, ID.nGrandchild],
   entity_seo: [ID.esSvc, ID.esBlog, ID.esProject, ID.esPage],

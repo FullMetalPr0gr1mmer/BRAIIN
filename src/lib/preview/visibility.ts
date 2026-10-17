@@ -1,4 +1,4 @@
-import type { PreviewTable } from './relations';
+import type { DatasetTable, PreviewTable } from './relations';
 
 // The anon RLS a visitor reads through, mirrored in TypeScript for the preview (Admin v2
 // R8; releases.md §6.3 item 4, plan B7 item 11: a TS mirror held honest by R9's parity e2e
@@ -25,11 +25,11 @@ import type { PreviewTable } from './relations';
 // public.page_visibility, no policy reads it, and a hidden page is answered at the edge
 // (src/middleware.ts, from the KV snapshot) before any loader runs. So it adds no rule
 // here, and its pending changes are "not previewed" at the data layer (dataset.ts). The
-// password mode (U14b, 0061) IS row security: it adds page_sections_password_fence, a
-// RESTRICTIVE SELECT TO anon hiding every section of a page whose visibility row is in
-// password mode. When 0061 is on main, the pgTAP pin below fails until page_sections gains
-// that rule here (read page_visibility rows through the person's client and hide the
-// sections of a page in password mode).
+// password mode (U14b, 0061) IS row security: page_sections_password_fence, a RESTRICTIVE
+// SELECT TO anon and authenticated that staff pass, hides every section of a page whose
+// visibility row is in password mode. The dataset reads page_visibility through the
+// person's own client (every CMS role reads it, 0057) for that rule alone; no loader
+// reads it and the emulator refuses it (a mirror-only table, relations.ts).
 
 type Row = Readonly<Record<string, unknown>>;
 
@@ -38,7 +38,7 @@ type Row = Readonly<Record<string, unknown>>;
  * granted to anon whole). The dataset reads these tables with exactly these columns, and
  * the emulator answers 42501 for any other, as PostgREST does for a visitor.
  */
-export const ANON_COLUMNS: Readonly<Partial<Record<PreviewTable, readonly string[]>>> = {
+export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string[]>>> = {
   // 0021: never the consent record, the schedule or the placeholder flag.
   testimonials: [
     'id',
@@ -151,6 +151,7 @@ export const MIRRORED_POLICIES: Readonly<
     navigation_write: 'PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060',
   },
   page_sections: {
+    page_sections_password_fence: 'RESTRICTIVE:288466d0b0045b81ef63d2e215c90e8e',
     page_sections_published_only: 'RESTRICTIVE:1f97d3d1084c993ca178204580b8d11d',
     page_sections_read: 'PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54',
     page_sections_write: 'PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060',
@@ -222,7 +223,7 @@ const SEO_PARENTS: Readonly<Record<string, PreviewTable>> = {
  * The tables a table's rule reads, directly (the dataset loads their closure before it
  * answers a query, so the rule never asks for a table it has not read).
  */
-export const VISIBILITY_DEPS: Readonly<Record<PreviewTable, readonly PreviewTable[]>> = {
+export const VISIBILITY_DEPS: Readonly<Record<DatasetTable, readonly DatasetTable[]>> = {
   blog_posts: [],
   categories: [],
   certifications: [],
@@ -240,7 +241,8 @@ export const VISIBILITY_DEPS: Readonly<Record<PreviewTable, readonly PreviewTabl
     'services',
   ],
   navigation: [],
-  page_sections: ['pages'],
+  page_sections: ['pages', 'page_visibility'],
+  page_visibility: [],
   pages: [],
   portfolio: [],
   portfolio_media: ['portfolio'],
@@ -256,9 +258,9 @@ export const VISIBILITY_DEPS: Readonly<Record<PreviewTable, readonly PreviewTabl
 };
 
 /** A table and every table its rule reaches, transitively. */
-export function visibilityClosure(tables: Iterable<PreviewTable>): Set<PreviewTable> {
-  const out = new Set<PreviewTable>();
-  const visit = (table: PreviewTable): void => {
+export function visibilityClosure(tables: Iterable<DatasetTable>): Set<DatasetTable> {
+  const out = new Set<DatasetTable>();
+  const visit = (table: DatasetTable): void => {
     if (out.has(table)) return;
     out.add(table);
     for (const dep of VISIBILITY_DEPS[table]) visit(dep);
@@ -269,14 +271,14 @@ export function visibilityClosure(tables: Iterable<PreviewTable>): Set<PreviewTa
 
 /** What the mirror reads: the overlaid rows of the person's tenant. */
 export interface MirrorData {
-  rows(table: PreviewTable): readonly Row[];
+  rows(table: DatasetTable): readonly Row[];
   /** The row whose `id` is `id`, or undefined. */
-  byId(table: PreviewTable, id: unknown): Row | undefined;
+  byId(table: DatasetTable, id: unknown): Row | undefined;
 }
 
 export interface Mirror {
   /** Whether a visitor would read this row once the pending changes are live. */
-  isVisible(table: PreviewTable, row: Row): boolean;
+  isVisible(table: DatasetTable, row: Row): boolean;
 }
 
 const published = (row: Row): boolean => row['status'] === 'published';
@@ -317,10 +319,22 @@ export function createMirror(data: MirrorData): Mirror {
   const memo = new WeakMap<Row, boolean>();
   let mediaRefs: Set<string> | null = null;
 
-  const visibleById = (table: PreviewTable, id: unknown): boolean => {
+  const visibleById = (table: DatasetTable, id: unknown): boolean => {
     if (id === null || id === undefined) return false;
     const row = data.byId(table, id);
     return row !== undefined && isVisible(table, row);
+  };
+
+  let locked: Set<string> | null = null;
+  /** 0061 app.page_is_password_locked: the pages whose visibility row is in password mode. */
+  const passwordLocked = (): Set<string> => {
+    if (locked) return locked;
+    const pages = new Set<string>();
+    for (const v of data.rows('page_visibility')) {
+      if (v['mode'] === 'password' && typeof v['page_id'] === 'string') pages.add(v['page_id']);
+    }
+    locked = pages;
+    return pages;
   };
 
   /** 0045 media_assets_public_read: the eight branches, each under anon's RLS. */
@@ -347,7 +361,8 @@ export function createMirror(data: MirrorData): Mirror {
     each('testimonials', 'avatar_media_id');
     // 5. a published team member's portrait
     each('team_members', 'portrait_media_id');
-    // 6. a `mediaId` anywhere in a visible section of a published page
+    // 6. a `mediaId` anywhere in a visible section of a published page; the subquery runs
+    //    under anon's RLS on page_sections, so 0061's password fence applies here too
     for (const row of data.rows('page_sections')) {
       if (isVisible('page_sections', row) && visibleById('pages', row['page_id'])) {
         for (const id of mediaIdsInContent(row['content'])) refs.add(id);
@@ -361,7 +376,7 @@ export function createMirror(data: MirrorData): Mirror {
     return refs;
   };
 
-  function rule(table: PreviewTable, row: Row): boolean {
+  function rule(table: DatasetTable, row: Row): boolean {
     switch (table) {
       // 0001 services_read (published) AND 0028 services_discipline_published (RESTRICTIVE:
       // no discipline, or a published one).
@@ -396,9 +411,21 @@ export function createMirror(data: MirrorData): Mirror {
       case 'portfolio_media':
         return visibleById('portfolio', row['portfolio_id']);
       // 0001 page_sections_read (tenant) AND 0011 page_sections_published_only
-      // (RESTRICTIVE: visible, and its page published). 0016 grants anon SELECT.
+      // (RESTRICTIVE: visible, and its page published) AND 0061 page_sections_password_fence
+      // (RESTRICTIVE, TO anon and authenticated, staff pass: not a page whose
+      // page_visibility row is in password mode, app.page_is_password_locked). 0016 grants
+      // anon SELECT. The fence reads the LIVE page_visibility rows: a pending visibility
+      // change is not previewed (dataset.ts).
       case 'page_sections':
-        return flagged(row) && visibleById('pages', row['page_id']);
+        return (
+          flagged(row) &&
+          visibleById('pages', row['page_id']) &&
+          !passwordLocked().has(String(row['page_id']))
+        );
+      // 0057: anon holds no privilege on page_visibility and no policy admits it; the
+      // dataset reads it (staff do) only for the fence above.
+      case 'page_visibility':
+        return false;
       // 0009 navigation_read (tenant) AND 0011 navigation_visible_only (RESTRICTIVE).
       case 'navigation':
         return flagged(row);
@@ -430,7 +457,7 @@ export function createMirror(data: MirrorData): Mirror {
     }
   }
 
-  function isVisible(table: PreviewTable, row: Row): boolean {
+  function isVisible(table: DatasetTable, row: Row): boolean {
     const known = memo.get(row);
     if (known !== undefined) return known;
     const visible = rule(table, row);

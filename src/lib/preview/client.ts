@@ -1,6 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { matchesQuery } from '@/lib/release/overlay';
-import { isPreviewTable, resolveEmbed, type EmbedRelation, type PreviewTable } from './relations';
+import {
+  isPreviewTable,
+  resolveEmbed,
+  type DatasetTable,
+  type EmbedRelation,
+  type PreviewTable,
+} from './relations';
 import { noteOnce, type PreviewReport } from './report';
 import { parseSelect, PreviewUnsupportedError, type SelectItem } from './select';
 import { ANON_COLUMNS, type Mirror } from './visibility';
@@ -52,15 +58,15 @@ export interface OverlayData {
    * Loads, once per request, each table and every table its anon rule reads, with the
    * pending changes laid over them. Resolves to the first read's error, or null.
    */
-  ensure(tables: readonly PreviewTable[]): Promise<PreviewError | null>;
+  ensure(tables: readonly DatasetTable[]): Promise<PreviewError | null>;
   /** The overlaid rows of a loaded table, in key order. */
-  rows(table: PreviewTable): readonly Row[];
+  rows(table: DatasetTable): readonly Row[];
   /** The row of a loaded table whose `id` is `id`. */
-  byId(table: PreviewTable, id: unknown): Row | undefined;
+  byId(table: DatasetTable, id: unknown): Row | undefined;
   /** The rows of a loaded table whose `column` equals `id`, in key order. */
-  childrenOf(table: PreviewTable, column: string, id: unknown): readonly Row[];
+  childrenOf(table: DatasetTable, column: string, id: unknown): readonly Row[];
   /** The columns the table's rows carry, or null when it has no live row to tell. */
-  columns(table: PreviewTable): ReadonlySet<string> | null;
+  columns(table: DatasetTable): ReadonlySet<string> | null;
   /** The anon-RLS mirror over the same rows. */
   readonly mirror: Mirror;
 }

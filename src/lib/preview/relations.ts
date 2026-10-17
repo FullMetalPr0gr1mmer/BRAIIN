@@ -32,6 +32,15 @@ export const PREVIEW_TABLES = [
 ] as const;
 export type PreviewTable = (typeof PREVIEW_TABLES)[number];
 
+/**
+ * Tables the dataset reads for the anon-RLS mirror alone: no loader reads them and the
+ * emulator refuses them (`from()` takes a PreviewTable only). `page_visibility` (0057,
+ * staff-read) is how 0061's password fence on page_sections is decided.
+ */
+export const MIRROR_ONLY_TABLES = ['page_visibility'] as const;
+/** Every table the dataset reads: the loaders' 21 and the mirror's own. */
+export type DatasetTable = PreviewTable | (typeof MIRROR_ONLY_TABLES)[number];
+
 export function isPreviewTable(table: string): table is PreviewTable {
   return (PREVIEW_TABLES as readonly string[]).includes(table);
 }
@@ -41,7 +50,7 @@ export function isPreviewTable(table: string): table is PreviewTable {
  * unique order). The singletons are keyed by their tenant (0009, 0019); a case study's
  * service links by the pair (0001's primary key).
  */
-export const TABLE_KEYS: Readonly<Record<PreviewTable, readonly string[]>> = {
+export const TABLE_KEYS: Readonly<Record<DatasetTable, readonly string[]>> = {
   blog_posts: ['id'],
   categories: ['id'],
   certifications: ['id'],
@@ -52,6 +61,7 @@ export const TABLE_KEYS: Readonly<Record<PreviewTable, readonly string[]>> = {
   navigation: ['id'],
   page_sections: ['id'],
   pages: ['id'],
+  page_visibility: ['id'],
   portfolio: ['id'],
   portfolio_media: ['id'],
   portfolio_services: ['portfolio_id', 'service_id'],

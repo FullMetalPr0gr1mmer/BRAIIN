@@ -19,6 +19,7 @@ import {
   isPreviewTable,
   PREVIEW_TABLES,
   TABLE_KEYS,
+  type DatasetTable,
   type PreviewTable,
 } from './relations';
 import { createReport, noteOnce, type InvalidDraft, type PreviewReport } from './report';
@@ -95,7 +96,7 @@ export const NOT_PREVIEWED_TYPES: readonly ReleaseEntityType[] = [
  * default, pinned against the database by supabase/tests/preview_dataset.test.sql (the
  * literal tests/lib/previewMirror.spec.ts holds equal to this map).
  */
-export const CREATE_DEFAULTS: Readonly<Partial<Record<PreviewTable, Readonly<Row>>>> = {
+export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row>>>> = {
   blog_posts: { status: 'draft' },
   certifications: { status: 'draft', sort_order: 0 },
   clients: { show_in_marquee: false, visible: false, is_placeholder: false, sort_order: 0 },
@@ -147,7 +148,7 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<PreviewTable, Readonly<Row
  * does for a visitor). A quote's consent record, for 0028's testimonials_consent_gate.
  * Pinned (staff read them) by supabase/tests/preview_dataset.test.sql.
  */
-export const DATASET_ONLY_COLUMNS: Readonly<Partial<Record<PreviewTable, readonly string[]>>> = {
+export const DATASET_ONLY_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string[]>>> = {
   testimonials: ['consent_obtained_at', 'is_placeholder'],
 };
 
@@ -165,7 +166,7 @@ function consentHolds(row: Readonly<Row>): boolean {
 }
 
 /** Tables with a `published_at` a first publish stamps (R4's `has_published_at`). */
-const PUBLISHED_AT_TABLES: readonly PreviewTable[] = [
+const PUBLISHED_AT_TABLES: readonly DatasetTable[] = [
   'blog_posts',
   'disciplines',
   'pages',
@@ -175,7 +176,7 @@ const PUBLISHED_AT_TABLES: readonly PreviewTable[] = [
   'testimonials',
 ];
 /** The one preview table without `updated_at`. */
-const NO_UPDATED_AT: readonly PreviewTable[] = ['portfolio_services'];
+const NO_UPDATED_AT: readonly DatasetTable[] = ['portfolio_services'];
 
 /** Whether a role reads an entity in the admin: any of its readCaps at one of its levels. */
 export function readsEntity(role: Role, entry: RegistryEntry): boolean {
@@ -286,9 +287,9 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
   // ---- pending changes -----------------------------------------------------------------------
 
   /** Kept drafts by the table they change, in the order they were last saved. */
-  const draftsByTable = new Map<PreviewTable, Draft[]>();
+  const draftsByTable = new Map<DatasetTable, Draft[]>();
   /** Entity ids a kept delete removes, by table. */
-  const deletedIds = new Map<PreviewTable, Set<string>>();
+  const deletedIds = new Map<DatasetTable, Set<string>>();
   let draftsLoaded: Promise<PreviewError | null> | null = null;
 
   async function loadDrafts(): Promise<PreviewError | null> {
@@ -371,7 +372,7 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
   }
 
   /** R4's stamps: updated_at on a changed row; published_at on a first publish only. */
-  function stamp(table: PreviewTable, live: Row | null, next: Row, patch: Row): void {
+  function stamp(table: DatasetTable, live: Row | null, next: Row, patch: Row): void {
     const at = now();
     if (!NO_UPDATED_AT.includes(table)) next['updated_at'] = at;
     if (
@@ -387,7 +388,7 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
   const applied = new Set<string>();
 
   /** A table's live rows with its kept drafts, the deletes' cascades and a project's links. */
-  function overlay(table: PreviewTable, live: Row[]): Row[] {
+  function overlay(table: DatasetTable, live: Row[]): Row[] {
     let rows = live.map((row) => ({ ...row }));
     for (const draft of draftsByTable.get(table) ?? []) {
       const entry = RELEASE_REGISTRY[draft.entity_type];
@@ -528,11 +529,11 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
     byId: Map<string, Row> | null;
     children: Map<string, Map<string, Row[]>>;
   }
-  const loaded = new Map<PreviewTable, Loaded>();
-  const loading = new Map<PreviewTable, Promise<PreviewError | null>>();
+  const loaded = new Map<DatasetTable, Loaded>();
+  const loading = new Map<DatasetTable, Promise<PreviewError | null>>();
 
   /** One table, loaded and overlaid once per request. */
-  function load(name: PreviewTable): Promise<PreviewError | null> {
+  function load(name: DatasetTable): Promise<PreviewError | null> {
     let pending = loading.get(name);
     if (!pending) {
       pending = loadTable(name);
@@ -541,7 +542,7 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
     return pending;
   }
 
-  async function loadTable(table: PreviewTable): Promise<PreviewError | null> {
+  async function loadTable(table: DatasetTable): Promise<PreviewError | null> {
     // A project's link sets follow its own overlay, so the project is laid over first.
     if (table === 'portfolio_services' || table === 'portfolio_media') {
       const parent = await load('portfolio');
@@ -567,7 +568,7 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
     return null;
   }
 
-  function table(name: PreviewTable): Loaded | null {
+  function table(name: DatasetTable): Loaded | null {
     const t = loaded.get(name);
     if (!t) {
       // A rule or an embed reached a table the closure did not load: a mirror bug, shown
