@@ -187,8 +187,12 @@ stay live writes until their slice:
   `rls_releases.test.sql` stays `plan(111)`: section 0 now proves R3's grant exists and that
   nothing is written while releases are off; the fixtures gain live profiles for every staff
   claim; the flag goes on at the end of section 0 instead of in section 9.
-  `grants_app_schema.test.sql` `plan(61)` → `plan(63)`. The three files and
-  `release_apply.test.sql` pass on the PGlite replay; CI is the authority.
+  `grants_app_schema.test.sql` `plan(61)` → `plan(63)` (section 13, the two 0062 rows).
+  On the PGlite replay `release_drafts.test.sql`, `rls_releases.test.sql` and
+  `release_apply.test.sql` pass whole, and the two new section 13 assertions of
+  `grants_app_schema.test.sql` pass run alone; that file as a whole stops at its existing
+  section 12 there (a harness gap: the replay has no `pgtap` schema, on `main` too), so it is
+  CI's to prove. CI is the authority for all four.
 - **Vitest**: `tests/lib/stagedKernel.spec.ts` (the real route factories over an in-memory
   PostgREST with `write_drafts` emulated: releases off call for call with `content_drafts`
   untouched and `persist`/`afterWrite`/`afterDelete` still running; releases on for every
