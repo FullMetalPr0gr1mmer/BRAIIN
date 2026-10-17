@@ -399,30 +399,43 @@ test.describe('behind a password (U14b)', () => {
       'That password did not work.',
     );
 
-    // 7. The right one, in a context of its own so the cookie is this test's.
+    // 7. The right one, in a context of its own so the cookie is this test's. It stays open
+    //    through step 8: that step is about THIS visitor's cookie.
     const visitor = await browser.newContext({ baseURL: baseURL! });
-    const visit = visitor.request;
-    const opened = await unlock(visit, origin, '/about', PASSWORD);
-    expect(opened.status).toBe(303);
-    expect(opened.headers['location']).toBe('/about');
-    expect(opened.headers['set-cookie']).toContain('__Host-braiin-pa-');
-    expect(opened.headers['set-cookie']).toContain('HttpOnly');
-    const unlocked = await answer(visit, '/about');
-    expect(unlocked.status).toBe(200);
-    // The page renders its own words again, and no cache may keep them.
-    expect(unlocked.body).toContain(sentence!);
-    expect(unlocked.headers['cache-control']).toBe('private, no-store');
-    expect(unlocked.headers['x-robots-tag']).toBe('noindex');
-    expect(unlocked.headers['cache-tag']).toBeUndefined();
-    // The cookie is this page's: another page is unaffected either way.
-    expect((await answer(visit, '/contact')).status).toBe(200);
-    await visitor.close();
+    try {
+      const visit = visitor.request;
+      const opened = await unlock(visit, origin, '/about', PASSWORD);
+      expect(opened.status).toBe(303);
+      expect(opened.headers['location']).toBe('/about');
+      expect(opened.headers['set-cookie']).toContain('__Host-braiin-pa-');
+      expect(opened.headers['set-cookie']).toContain('HttpOnly');
+      const unlocked = await answer(visit, '/about');
+      expect(unlocked.status).toBe(200);
+      // The page renders its own words again, and no cache may keep them.
+      expect(unlocked.body).toContain(sentence!);
+      // And its images: a section's still is read through the unlocked media reader (0061),
+      // so every image the open page showed is on the unlocked one too.
+      const images = (html: string) =>
+        [...html.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]!);
+      expect(images(unlocked.body)).toEqual(expect.arrayContaining(images(openHtml)));
+      expect(unlocked.headers['cache-control']).toBe('private, no-store');
+      expect(unlocked.headers['x-robots-tag']).toBe('noindex');
+      expect(unlocked.headers['cache-tag']).toBeUndefined();
+      // The cookie is this page's: another page is unaffected either way.
+      expect((await answer(visit, '/contact')).status).toBe(200);
 
-    // 8. A new password ends the old unlock.
-    await setPassword(page, 'about', 'another-password-9');
-    await expect
-      .poll(async () => (await answer(request, '/about')).status, { timeout: 75_000 })
-      .toBe(403);
+      // 8. A new password ends the old unlock: the visitor who still holds the cookie minted
+      //    under the old version is shown the gate again once the edge has the new one.
+      await setPassword(page, 'about', 'another-password-9');
+      await expect
+        .poll(async () => (await answer(visit, '/about')).status, {
+          message: 'the old cookie stops opening the page',
+          timeout: 75_000,
+        })
+        .toBe(403);
+    } finally {
+      await visitor.close();
+    }
 
     // 9. Back to everyone, and the page is itself again.
     await setVisibility(page, { slug: 'about' }, 'public');
