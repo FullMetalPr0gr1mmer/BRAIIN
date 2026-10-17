@@ -203,13 +203,17 @@ revoke all on function app.page_is_password_locked(uuid) from public, anon, auth
 grant execute on function app.page_is_password_locked(uuid) to anon, authenticated;
 
 -- RESTRICTIVE, so it cuts what 0001's page_sections_read and 0011's
--- page_sections_published_only already allow, and TO anon, so staff keep editing the page.
--- The tenant predicate first, as every policy states it.
+-- page_sections_published_only already allow. TO anon and authenticated, with staff passing
+-- it, so the editors keep editing the page while any other signed-in token is fenced as
+-- anon is: page_sections_read is TO public, and 0011's fence lets a non-staff token read
+-- what anon reads, so a fifth role (the planned Sales role, which app.is_staff() leaves out
+-- by design, P-6) would otherwise read a locked page's words. The tenant predicate first,
+-- as every policy states it.
 drop policy if exists page_sections_password_fence on public.page_sections;
 create policy page_sections_password_fence on public.page_sections
-  as restrictive for select to anon
+  as restrictive for select to anon, authenticated
   using (tenant_id = app.effective_tenant_id()
-         and not app.page_is_password_locked(page_id));
+         and (app.is_staff() or not app.page_is_password_locked(page_id)));
 
 -- What a visitor who HAS typed the password reads: exactly the rows and columns anon would
 -- have read without the fence (0001's tenant match, 0011's "visible section of a published
@@ -1672,14 +1676,15 @@ begin
     raise exception '0061: page_passwords is not keyed on (tenant_id, page_id)';
   end if;
 
-  -- ---- The page_sections fence: exactly one new policy, RESTRICTIVE, FOR SELECT, TO anon,
-  -- the tenant predicate first, and 0011's published-parent fence still beside it.
+  -- ---- The page_sections fence: exactly one new policy, RESTRICTIVE, FOR SELECT, TO anon
+  -- and authenticated, the tenant predicate first, staff through, and 0011's published-parent
+  -- fence still beside it.
   select coalesce(array_agg(e order by e), '{}') into v_have
     from (select format('%s %s %s %s', policyname, cmd, permissive, roles) as e
             from pg_policies
            where schemaname = 'public' and tablename = 'page_sections') s;
   if v_have is distinct from array['page_sections_delete_admin DELETE RESTRICTIVE {public}',
-                                   'page_sections_password_fence SELECT RESTRICTIVE {anon}',
+                                   'page_sections_password_fence SELECT RESTRICTIVE {anon,authenticated}',
                                    'page_sections_published_only SELECT RESTRICTIVE {public}',
                                    'page_sections_read SELECT PERMISSIVE {public}',
                                    'page_sections_write ALL PERMISSIVE {public}'] then
@@ -1688,9 +1693,9 @@ begin
   if not exists (select 1 from pg_policies
                   where schemaname = 'public' and tablename = 'page_sections'
                     and policyname = 'page_sections_password_fence'
-                    and qual ~ ('^\(' || v_tenant || ' AND \(NOT (app\.)?page_is_password_locked\(page_id\)\)\)$')
+                    and qual ~ ('^\(' || v_tenant || ' AND \((app\.)?is_staff\(\) OR \(NOT (app\.)?page_is_password_locked\(page_id\)\)\)\)$')
                     and with_check is null) then
-    raise exception '0061: page_sections_password_fence is not "the tenant, then not locked"';
+    raise exception '0061: page_sections_password_fence is not "the tenant, then staff or not locked"';
   end if;
   -- anon still reads page_sections (0016) and still writes nothing.
   if not has_table_privilege('anon', 'public.page_sections', 'select')

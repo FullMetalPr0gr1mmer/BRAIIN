@@ -14,14 +14,15 @@
 --   • checking one: public.page_password_check is the service role's alone, answers the
 --     page's password_version on a match and null on a wrong password, a page with no secret
 --     and another tenant's page alike;
---   • the fence: anon reads no section of a page behind a password and every section of a
---     public one, staff are untouched, and public.page_sections_unlocked (service role)
---     returns exactly what anon would read without the fence;
+--   • the fence: anon, and a signed-in token that is not staff, read no section of a page
+--     behind a password and every section of a public one, staff are untouched, and
+--     public.page_sections_unlocked (service role) returns exactly what anon would read
+--     without the fence;
 --   • leaving password mode deletes the secret, clears the message and moves the version, and
 --     no writer can put a page into password mode without one.
 
 begin;
-select plan(53);
+select plan(55);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -146,17 +147,17 @@ select is(
                               order by policyname), '')
      from pg_policies where schemaname = 'public' and tablename = 'page_sections'),
   'page_sections_delete_admin DELETE RESTRICTIVE {public}, '
-  'page_sections_password_fence SELECT RESTRICTIVE {anon}, '
+  'page_sections_password_fence SELECT RESTRICTIVE {anon,authenticated}, '
   'page_sections_published_only SELECT RESTRICTIVE {public}, '
   'page_sections_read SELECT PERMISSIVE {public}, '
   'page_sections_write ALL PERMISSIVE {public}',
-  'the fence is one more RESTRICTIVE SELECT policy, for anon alone; staff keep editing');
+  'the fence is one more RESTRICTIVE SELECT policy, for anon and every signed-in token');
 select is(
   (select qual from pg_policies
     where schemaname = 'public' and tablename = 'page_sections'
       and policyname = 'page_sections_password_fence'),
-  '((tenant_id = app.effective_tenant_id()) AND (NOT app.page_is_password_locked(page_id)))',
-  'the fence names the tenant first, then the lock');
+  '((tenant_id = app.effective_tenant_id()) AND (app.is_staff() OR (NOT app.page_is_password_locked(page_id))))',
+  'the fence names the tenant first, then lets staff through and holds everyone else to the lock');
 select is(
   (select coalesce(string_agg(format('%s %s', f.fn, who.r), ', ' order by f.fn, who.r), '')
      from (values ('public.set_page_password(uuid,uuid,text,jsonb)', 'authenticated'),
@@ -348,6 +349,15 @@ set local role authenticated;
 select _as('61000000-0000-0000-0000-0000000000c1', 'content_creator', '61000000-0000-0000-0000-000000000001');
 select is(_about_sections(), 'secret words | draft words',
   'staff are untouched by the fence: the editor still sees the page it is writing');
+select _as('61000000-0000-0000-0000-0000000000e1', 'seo', '61000000-0000-0000-0000-000000000001');
+select is(_about_sections(), 'secret words | draft words',
+  'so is every staff role, one that writes no content included (seo)');
+-- A signed-in role that is not one of the four (the planned Sales role, which app.is_staff()
+-- leaves out by design, P-6): page_sections_read is TO public and 0011's fence lets it read
+-- what anon reads, so without the fence covering authenticated it would read the page.
+select _as('61000000-0000-0000-0000-0000000000b9', 'sales', '61000000-0000-0000-0000-000000000001');
+select is(_about_sections(), '',
+  'a signed-in token that is not staff reads no section of a page behind a password');
 reset role;
 
 -- What a visitor who typed the password gets, against what anon reads once the page is
