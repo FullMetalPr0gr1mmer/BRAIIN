@@ -42,7 +42,7 @@ Each slice's file under [as-built/](as-built/) has the detail.
 ## Reserved
 
 Wave 2's migrations (with hotfix H10) and Wave 1's held one (C13) are reserved below; the next
-free number after them is **0060**. Before a wave's slices branch, each migration the wave plans gets a row here,
+free number after them is **0062**: U1 took 0060 and U14b 0061, so Wave 3 starts at 0062. Before a wave's slices branch, each migration the wave plans gets a row here,
 numbered in the wave's planned merge order. The slice's own PR moves its row to "Applied" once
 production has applied the migration, before the PR merges (Pushing to production, step 5), so
 the row is true when the PR lands and nothing here is edited after a merge.
@@ -56,8 +56,8 @@ the row is true when the PR lands and nothing here is edited after a merge.
 | 0047 | (released) | unused: U16 (0046) and then H9 (0048) merge before C13, and once 0048 is on `main` a 0047 would sort below its highest, so C13 moved to 0049 | 1 |
 | 0049 | (released) | unused: H10 (0050) merges before C13, and once 0050 is on `main` a 0049 would sort below its highest (rule 1), so C13 moved to 0059 | 1 |
 | 0053 | U1 | the dashboard: presets and team notes | 2 |
-| 0058 | U14b | the page password | 2 |
 | 0059 | C13 | lead attribution capture (built, held for the privacy notice, O-11); moved from 0047, then from 0049 | 1 |
+| 0061 | U14b | the page password: `page_passwords`, `set_page_password`, `page_password_check`, the `page_sections` fence and `page_sections_unlocked`; renumbered from the reserved 0058, which would sort below `main`’s highest once U1’s 0060 merged (rule 1) | 2 |
 
 ## Rules
 
