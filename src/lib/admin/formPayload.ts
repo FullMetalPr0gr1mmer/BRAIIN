@@ -1,6 +1,6 @@
 import { columnOf, type FieldDef } from '@/lib/admin/uiSchema';
 import { contentKeysOf, sectionFields } from '@/lib/admin/sectionUi';
-import { clampToStep, cleanChips, normalizeHex } from '@/lib/admin/fieldValues';
+import { clampToRange, cleanChips, normalizeHex } from '@/lib/admin/fieldValues';
 import { accentWords, clampAccent } from '@/lib/admin/accentWords';
 import { isHttpsHref, isSiteHref } from '@/lib/admin/linkables';
 import type { AccentRange } from '@/lib/text/accent';
@@ -625,12 +625,13 @@ function valueToPayload(value: unknown, field: FieldDef, siblings: Row): unknown
     case 'slugRelation':
       return cleanChips(value);
     // F5a. An invalid colour is sent as typed (trimmed), so the server's refusal names the
-    // field; a slider's number is held to its range and step.
+    // field; a slider's number is held to its range (the step is the slider's to keep, on
+    // the values the editor moves: a stored one nobody touched is not snapped, F5b L5).
     case 'color':
       return normalizeHex(value) ?? (isBlank(value) ? null : String(value).trim());
     case 'range':
       if (value === null || value === undefined || value === '') return null;
-      return field.range ? clampToStep(value, field.range) : Number(value);
+      return field.range ? clampToRange(value, field.range) : Number(value);
     case 'chips':
     case 'tags': {
       if (field.chips?.bilingual) {

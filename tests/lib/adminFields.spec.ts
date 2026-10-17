@@ -365,6 +365,18 @@ describe('the field kit v2 (Admin v2 F5a)', () => {
       /<input id="f-intervalMs" type="range" min="2000" max="12000" step="500"[^>]*value="6000"/,
     );
     expect(html).toContain('<output for="f-intervalMs">6000 ms</output>');
+    // A stored value off the step is read out as stored, not as the step it is near.
+    expect(
+      render(
+        f({
+          name: 'intervalMs',
+          label: 'Interval',
+          kind: 'range',
+          range: { min: 2000, max: 12000, step: 500, suffix: ' ms' },
+        }),
+        7250,
+      ),
+    ).toContain('<output for="f-intervalMs">7250 ms</output>');
   });
 
   it('tags and chips: each chip removable by name; at the most, the box is disabled', () => {

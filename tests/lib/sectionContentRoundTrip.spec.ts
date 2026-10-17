@@ -39,6 +39,31 @@ describe('every seeded page section saves back unchanged', () => {
   }
 });
 
+describe('a save keeps values the editor did not change (review L5)', () => {
+  it('a hero accent past the end of its headline is not moved onto the last word', () => {
+    // From word 6 of two: the page colours nothing, and an unrelated save must not
+    // start colouring the last word.
+    const content = {
+      headline: { en: 'One two', ar: 'واحد اثنان' },
+      accentFromEn: 5,
+      accentFromAr: 1,
+    };
+    expect(trip('hero', content)).toEqual(content);
+  });
+
+  it('a range accent running past its heading is not shortened', () => {
+    const content = {
+      heading: { en: 'One two three', ar: 'واحد اثنان' },
+      accent: { en: { from: 1, to: 9 } },
+    };
+    expect(trip('cta', content)).toEqual(content);
+  });
+
+  it('a testimonials interval off the slider step is not snapped', () => {
+    expect(trip('testimonials', { intervalMs: 7250 })).toEqual({ intervalMs: 7250 });
+  });
+});
+
 describe('an accent stored without its heading is kept (review H1)', () => {
   // Each colours words the form does not show: the built-in heading, or a page preset's
   // (withHeroPreset puts the preset headline under an authored accent).

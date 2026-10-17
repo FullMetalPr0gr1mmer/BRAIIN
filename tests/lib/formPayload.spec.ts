@@ -331,10 +331,11 @@ describe('the field kit v2 kinds (Admin v2 F5a)', () => {
     expect(formToPayload({ tint: ' #12345 ' }, [color])['tint']).toBe('#12345');
   });
 
-  it('a range round-trips as a number held to its bounds and step', () => {
+  it('a range round-trips as a number held to its bounds, not moved onto the step', () => {
     expect(rowToForm({ interval_ms: 6000 }, [range])['intervalMs']).toBe(6000);
     expect(rowToForm({ interval_ms: null }, [range])['intervalMs']).toBeNull();
-    expect(formToPayload({ intervalMs: 6200 }, [range])['intervalMs']).toBe(6000);
+    // A stored 6200 nobody touched goes back as 6200 (the slider snaps what is moved).
+    expect(formToPayload({ intervalMs: 6200 }, [range])['intervalMs']).toBe(6200);
     expect(formToPayload({ intervalMs: 99999 }, [range])['intervalMs']).toBe(12000);
     expect(formToPayload({ intervalMs: 10 }, [range])['intervalMs']).toBe(2000);
     expect(formToPayload({ intervalMs: null }, [range])['intervalMs']).toBeNull();
