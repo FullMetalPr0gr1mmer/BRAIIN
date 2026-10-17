@@ -45,6 +45,7 @@ interface Call {
   name: string;
   op?: string;
   values?: unknown;
+  columns?: string;
 }
 
 interface Db {
@@ -109,7 +110,7 @@ function query(db: Db, table: string) {
   const filters: Filter[] = [];
 
   const run = (): { data: Row[] | null; error: unknown; count?: number } => {
-    db.calls.push({ kind: 'from', name: table, op, ...(values ? { values } : {}) });
+    db.calls.push({ kind: 'from', name: table, op, columns, ...(values ? { values } : {}) });
     const rows = (db.tables[table] ??= []);
     if (op === 'insert') {
       const row = { id: freshId(), version: 1, ...values! };
@@ -995,6 +996,64 @@ describe('releases on: reorder', () => {
 });
 
 // ── Releases on: reads ────────────────────────────────────────────────────────────────────
+
+describe('releases on: reorder, the as-built departures', () => {
+  const selects = () =>
+    db.calls.filter((c) => c.name === 'services' && c.op === 'select').map((c) => c.columns);
+
+  it('a moved row claimed by a scheduled release refuses the whole reorder (409 scheduled)', async () => {
+    drafts().push(
+      draft({
+        entity_id: S2,
+        payload: { slug: 'x' },
+        base: { slug: 'cards' },
+        release_id: RELEASE,
+      }),
+    );
+    const res = await call(services.REORDER, 'POST', {
+      body: {
+        items: [
+          { id: S1, sortOrder: 1 },
+          { id: S2, sortOrder: 2 },
+        ],
+      },
+    });
+    expect([res.status, res.body['error']]).toEqual([409, 'scheduled']);
+    expect(db.calls.filter((c) => c.name === 'write_drafts')).toEqual([]);
+    expect(drafts()).toHaveLength(1);
+  });
+
+  it('with no draft on a moved row the live read is the sort order and version alone', async () => {
+    await call(services.REORDER, 'POST', { body: { items: [{ id: S1, sortOrder: 1 }] } });
+    expect(selects()).toEqual(['id,sort_order,version']);
+  });
+
+  it('with a draft on a moved row it widens to the allowlist, so a missing base is read, not null', async () => {
+    // A draft written around the API, with no base for the column it changes.
+    drafts().push(
+      draft({ entity_id: S2, payload: { slug: 'cards-2' }, base: {}, base_version: 1 }),
+    );
+    const res = await call(services.REORDER, 'POST', {
+      body: { items: [{ id: S2, sortOrder: 5 }] },
+    });
+    expect(res.status).toBe(200);
+    const [select] = selects();
+    for (const column of ['slug', 'title', 'status', 'sort_order', 'version']) {
+      expect(select!.split(','), column).toContain(column);
+    }
+    expect(drafts()[0]!['base']).toEqual({ slug: 'cards', sort_order: 20 });
+  });
+});
+
+describe('releases on: GET item over a draft that no longer parses', () => {
+  it('answers live, with the draft marked invalid', async () => {
+    drafts().push(draft({ entity_id: S1, payload: { slug: 42 }, base: { slug: 'logo' } }));
+    const res = await call(services.GET, 'GET', { id: S1 });
+    expect(res.status).toBe(200);
+    expect(res.data).toMatchObject({ id: S1, slug: 'logo', version: 3 });
+    expect(res.data['draft']).toMatchObject({ op: 'update', fields: [], invalid: true });
+  });
+});
 
 describe('releases on: reorder judges the whole pending change', () => {
   it('a Content Creator moving a row an Admin staged for archiving is 403, nothing written', async () => {
