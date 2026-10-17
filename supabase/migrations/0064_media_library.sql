@@ -2,8 +2,8 @@
 -- 0064 — The media library's list (Admin v2 U4, AV-12). Forward-only, expand only.
 -- Depends on 0001 (media_assets, app.is_staff), 0006 (app.normalize_ar_q), 0011 (the app
 -- schema's grants: authenticated executes both helpers), 0045 (U3: display_name, the
--- `storage` provider, mime_type and size_bytes), 0046 (the help centre) and 0060 (U1: the
--- guides as it left them, every earlier restatement included).
+-- `storage` provider, mime_type and size_bytes), 0046 (the help centre) and 0061 (U14b: the
+-- guides as it left them, U1's 0060 and every earlier restatement included).
 --
 -- /admin/media becomes one island: a grid of pictures with a real search, an Images |
 -- Videos switch, a "Needs alt text" filter and server paging. The kernel's list (GET
@@ -27,10 +27,10 @@
 --     stream_uid. 22023 for a query, a kind, a limit or an offset out of bounds.
 --     Computed per row, no stored column: a library holds hundreds of rows, and the 500 ms
 --     statement timeout is the bound. A stored search_text is a later expand if it grows.
---   • app.help_article_set() restated from 0060's text (U1, the set on main before this one)
+--   • app.help_article_set() restated from 0061's text (U14b, the set on main before this one)
 --     and seeded into every tenant: the media-library guide rewritten for the library as it
 --     now is (upload, describe, replace, Used in, the filter, the videos). Every other guide
---     is 0060's, byte for byte.
+--     is 0061's, byte for byte.
 --
 -- P-14: the function's EXECUTE is revoked from PUBLIC, anon, authenticated and the service
 -- role, then granted to authenticated alone (the Worker calls it with the editor's own
@@ -38,12 +38,12 @@
 -- capability (§5 "Media — upload / edit metadata" already decides who reads the library),
 -- and no grant on media_assets changes. Media is immediate (P-3): no release registry row.
 --
--- Production as of 2026-10-17: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046,
--- 0048, 0050-0052, 0054-0057 and 0060. Grants are stated for both Supabase privilege regimes
--- (README P-14). CLAUDE.md §3 (Pillar 1), §5, §8.
+-- Production as of 2026-10-18: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046,
+-- 0048, 0050-0052, 0054-0057, 0060 and 0061 (0062, R3a, and 0063, C4a, restate no guide).
+-- Grants are stated for both Supabase privilege regimes (README P-14). CLAUDE.md §3 (Pillar 1), §5, §8.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- A busy table fails the push instead of queueing (as in 0038 to 0060): the reseed writes
+-- A busy table fails the push instead of queueing (as in 0038 to 0061): the reseed writes
 -- public.help_articles. A statement below that waits more than five seconds for a lock
 -- raises instead, the whole migration rolls back, and the push is retried later.
 -- Transaction-local: it ends with this migration.
@@ -142,8 +142,8 @@ grant execute on function public.media_library(uuid, text, text, boolean, int, i
   to authenticated;
 
 -- ---- 2. The guides --------------------------------------------------------------------------
--- The set as 0060 (U1) left it, with the media-library guide rewritten; every other guide is
--- 0060's, byte for byte. A later slice that changes a guide restates the set from this text
+-- The set as 0061 (U14b) left it, with the media-library guide rewritten; every other guide is
+-- 0061's, byte for byte. A later slice that changes a guide restates the set from this text
 -- (U16's rule).
 create or replace function app.help_article_set() returns jsonb
   language sql immutable set search_path = '' as $fn$
@@ -1117,7 +1117,7 @@ create or replace function app.help_article_set() returns jsonb
   {
     "slug": "page-visibility",
     "sort_order": 105,
-    "minutes": 2,
+    "minutes": 3,
     "tags": [
       "site"
     ],
@@ -1143,6 +1143,9 @@ create or replace function app.help_article_set() returns jsonb
             "Hiding is not deleting: the page's words stay published. Unpublish it, or keep confidential details off it. A hidden Join or Contact page still takes what its form sends: to stop job applications, turn off Accepting job applications in General settings.",
             "To hide a page for a while, give it a Hide from day, a Show again on day, or both. It is hidden from the start of the first day until the start of the second, Riyadh time. Leave both empty to hide it until you show it again.",
             "Only people with the link keeps the page out of the menus, the sitemap and search engines, but the link still works. It is unlisted, not private: anyone who has the link can open it, so keep anything confidential off it.",
+            "Behind a password asks for a password before the page opens. Type something short you can share, such as on WhatsApp, and, if you like, a line to show above the box in English, Arabic or both.",
+            "The password is stored scrambled, so nobody can read it back, not even an Admin and not the people who run the database. To change it, set a new one. Setting a new password closes the page again for everyone who had typed the old one.",
+            "A page behind a password is out of the menus, the sitemap and search engines, it is never kept by any cache, and its text is not readable through the site’s data either until someone types the password. Visitors get a few tries every quarter of an hour; after that the page stops answering them for a while.",
             "The service page and the case study page are templates. Hiding one hides every service page, or every project page, at once. To hide a single service or project, unpublish that item instead.",
             "The homepage is always visible. To take the whole site down for a while, use maintenance mode.",
             "If a save says the live site has not picked it up, press Sync to edge. The line above the list says whether the live site has the settings."
@@ -1166,6 +1169,9 @@ create or replace function app.help_article_set() returns jsonb
             "الإخفاء ليس حذفًا: يبقى نص الصفحة منشورًا. ألغِ نشرها، أو لا تضع عليها أي معلومات سرية. وتظل صفحة Join أو Contact المخفية تستقبل ما يُرسَل عبر نموذجها: لإيقاف طلبات التوظيف، أوقف خيار Accepting job applications في General settings.",
             "لإخفاء صفحة مدة محددة، حدّد لها يوم Hide from أو يوم Show again on أو كليهما. تبقى مخفية من بداية اليوم الأول حتى بداية اليوم الثاني بتوقيت الرياض. اترك الحقلين فارغين لإخفائها حتى تعيد إظهارها.",
             "يُبقي خيار Only people with the link الصفحة خارج القوائم وخريطة الموقع ومحركات البحث، لكن رابطها يظل يعمل. فهي غير مدرجة وليست خاصة: يستطيع فتحها كل من لديه الرابط، فلا تضع عليها أي معلومات سرية.",
+            "يطلب خيار Behind a password كلمة مرور قبل فتح الصفحة. اكتب كلمة قصيرة يسهل مشاركتها، عبر واتساب مثلًا، وإن شئت سطرًا يظهر فوق الحقل بالإنجليزية أو العربية أو بكلتيهما.",
+            "تُحفظ كلمة المرور مشفّرة، فلا يستطيع أحد قراءتها، ولا حتى المسؤولون (Admin) ولا من يدير قاعدة البيانات. ولتغييرها ضع كلمة جديدة، وهذا يغلق الصفحة من جديد أمام كل من أدخل الكلمة القديمة.",
+            "الصفحة المحمية بكلمة مرور خارج القوائم وخريطة الموقع ومحركات البحث، ولا تُحفظ في أي ذاكرة مؤقتة، ولا يُقرأ نصّها عبر بيانات الموقع أيضًا حتى يُدخل أحد كلمة المرور. وللزائر محاولات معدودة كل ربع ساعة، وبعدها تتوقف الصفحة عن الاستجابة له مدة من الوقت.",
             "صفحة الخدمة وصفحة دراسة الحالة قالبان، وإخفاء أحدهما يخفي كل صفحات الخدمات أو كل صفحات المشاريع دفعة واحدة. ولإخفاء خدمة واحدة أو مشروع واحد، ألغِ نشر ذلك العنصر بدلًا من ذلك.",
             "تظهر الصفحة الرئيسية دائمًا. ولإيقاف الموقع كله مؤقتًا استخدم وضع الصيانة.",
             "إذا ذكر الحفظ أن الموقع المباشر لم يستلم التغيير، فاضغط Sync to edge. ويذكر السطر أعلى القائمة إن كان الموقع المباشر قد استلم الإعدادات."

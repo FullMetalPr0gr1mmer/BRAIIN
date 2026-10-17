@@ -684,14 +684,14 @@ describe('the guides say only what the admin does', () => {
     expect(dash.caps).toEqual([]);
   });
 
-  it('U4 (0064) restates U1’s set (0060) and changes only the media-library guide', () => {
-    // Production applies 0060 then 0064, so 0064's set must carry every guide 0060 seeds,
+  it('U4 (0064) restates U14b’s set (0061) and changes only the media-library guide', () => {
+    // Production applies 0061 then 0064, so 0064's set must carry every guide 0061 seeds,
     // byte for byte, but the one U4 rewrote (the library as it now is), in the same place.
     const setOf = (file: string) => {
       const sql = source(`${MIGRATIONS}/${file}`);
       return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
     };
-    const base = setOf('0060_dashboard_layer.sql');
+    const base = setOf('0061_page_password.sql');
     const u4 = setOf('0064_media_library.sql');
     expect(u4.map((a) => a.slug)).toEqual(base.map((a) => a.slug));
     for (const article of base.filter((a) => a.slug !== 'media-library')) {
