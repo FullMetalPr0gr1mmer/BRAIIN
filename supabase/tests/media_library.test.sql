@@ -71,6 +71,14 @@ insert into public.media_assets
    'static', 'stills/p5.jpg', '50%_off', '{"en": "Sale card", "ar": "بطاقة التخفيض"}', '{}',
    1600, 1200, null, null, '2026-01-08T00:00:00Z');
 
+-- A visible client of A whose logo is a6: media_assets_public_read (0028, 0045) shows a6 to
+-- any principal that can read the client, a non-staff authenticated one included, so the
+-- non-staff checks below can fail: only 0064's `not app.is_staff()` belt keeps them at zero.
+insert into public.clients (tenant_id, slug, name, visible, logo_media_id) values
+  ('64000000-0000-4000-8000-00000000000a', 'u4-visible-client',
+   '{"en": "U4 visible client", "ar": "عميل ظاهر"}', true,
+   '64a00000-0000-4000-8000-000000000006');
+
 -- Tenant B: two rows, one of them as findable as A's ("dunes").
 insert into public.media_assets
   (id, tenant_id, kind, provider, storage_path, display_name, alt, tags, width, height,
