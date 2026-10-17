@@ -108,6 +108,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'leadsWrite: leads bulk change',
   'media: media download (the stored file)',
   'media: media hard delete (media.hardDelete — Admin only)',
+  'media: media library (search and paging)',
   'media: media list',
   'media: media metadata (SEO "meta only" path)',
   'media: media read one',

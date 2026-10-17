@@ -697,6 +697,13 @@ describe('GET /api/admin/media/[id]/download and /stats', () => {
 
   it("storage used, against the plan's quota", async () => {
     const { body } = await call(STATS, ctx('GET', '/api/admin/media/stats'));
-    expect(body?.['data']).toEqual({ assets: 3, bytes: 4567, quotaBytes: 1_073_741_824 });
+    expect(body?.['data']).toEqual({
+      assets: 3,
+      bytes: 4567,
+      quotaBytes: 1_073_741_824,
+      // Admin v2 U4: what the library's Upload buttons are offered on.
+      uploadsReady: true,
+      canUpload: true,
+    });
   });
 });
