@@ -375,6 +375,48 @@ describe("a project's link sets follow only a change that was shown", () => {
   });
 });
 
+describe('stamps, as one release applies them', () => {
+  it('a set-null bumps the child row as the database trigger does', async () => {
+    const { db } = source(fixtureTables(), [draft('team_member', 'delete', ID.tmPub)]);
+    expect(await read(db, 'blog_posts', 'slug,author_id,updated_at')).toContainEqual({
+      slug: 'new',
+      author_id: null,
+      updated_at: NOW.toISOString(),
+    });
+    // A row the delete does not touch keeps its own.
+    expect(await read(db, 'blog_posts', 'slug,updated_at')).toContainEqual({
+      slug: 'old',
+      updated_at: null,
+    });
+  });
+
+  it('every stamp of one preview is one instant (posts published together tie)', async () => {
+    let tick = 0;
+    const preview = createPreviewSource({
+      supabase: fakeStaffClient({
+        ...fixtureTables(),
+        content_drafts: [
+          draft('blog_post', 'update', ID.bDraft, { status: 'published' }),
+          draft('blog_post', 'create', id(993), {
+            slug: 'np',
+            title: BI('P', 'م'),
+            status: 'published',
+          }),
+        ],
+      }).client,
+      session: session('admin'),
+      now: () => new Date(Date.UTC(2030, 0, 1) + 1000 * tick++),
+    });
+    const { data } = await preview.client().from('blog_posts').select('id,published_at,updated_at');
+    const rows = (data as unknown as Row[]).filter(
+      (r) => r['id'] === ID.bDraft || r['id'] === id(993),
+    );
+    expect(new Set(rows.flatMap((r) => [r['published_at'], r['updated_at']]))).toEqual(
+      new Set(['2030-01-01T00:00:00.000Z']),
+    );
+  });
+});
+
 describe('the foreign keys a pending delete follows', () => {
   it("cascades only into tables no other key references (a parent's own drafts are the whole set)", () => {
     const cascaded = new Set(

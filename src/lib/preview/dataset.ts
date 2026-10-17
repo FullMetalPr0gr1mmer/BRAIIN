@@ -218,7 +218,10 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
   const tenantId = session.tenantId;
   const role = session.role;
   const only = opts.only ? new Set(opts.only) : null;
-  const now = () => (opts.now ?? (() => new Date()))().toISOString();
+  // One instant for every stamp of this preview: a release applies in one transaction,
+  // whose now() is one value (posts published together tie on published_at).
+  let instant: string | null = null;
+  const now = () => (instant ??= (opts.now ?? (() => new Date()))().toISOString());
   const report = createReport();
 
   // ---- reading -----------------------------------------------------------------------------
@@ -431,8 +434,10 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
       const removed = new Set(deletedIds.get(fk.target) ?? []);
       if (removed.size === 0) continue;
       if (fk.onDelete === 'set null') {
+        // The database's referential UPDATE fires app.tg_set_updated_at on the child too.
+        const bump = NO_UPDATED_AT.includes(table) ? {} : { updated_at: now() };
         rows = rows.map((row) =>
-          removed.has(String(row[fk.column])) ? { ...row, [fk.column]: null } : row,
+          removed.has(String(row[fk.column])) ? { ...row, [fk.column]: null, ...bump } : row,
         );
         continue;
       }
