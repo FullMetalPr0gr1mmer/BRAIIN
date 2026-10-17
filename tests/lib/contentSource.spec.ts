@@ -213,6 +213,22 @@ const MODULE_STATE_ALLOWED: Record<string, string> = {
   'src/lib/data/pageSections.ts:KNOWN': 'the section type names, a constant set only read',
 };
 
+/**
+ * Module-level values a NON-ADMIN module that reaches a loader through its imports may
+ * create, and why (the seam, the loaders and the preview are the list above). A memo in a
+ * loader's caller (identity, a page composer, the head builder) would carry a preview's
+ * rows into a visitor's render just as one in a loader would. Exact; a new entry is a
+ * security review item. Admin modules (src/lib/admin, src/components/admin, src/pages/admin,
+ * src/pages/api/admin) never render a public page.
+ */
+const CALLER_STATE_ALLOWED: Record<string, string> = {
+  'src/lib/legal/render.ts:TOKEN':
+    'a global RegExp of the legal-notice tokens: no data (replace and matchAll reset lastIndex)',
+};
+
+/** Paths of admin code, which never renders a public page. */
+const ADMIN_CODE = /^src\/(?:lib\/admin|components\/admin|pages\/admin|pages\/api\/admin)\//;
+
 const MUTATORS = new Set([
   'push',
   'pop',
@@ -534,5 +550,52 @@ describe('the preview scope (R8)', () => {
       'src/lib/data/parse',
       'src/lib/preview/dataset',
     ]);
+  });
+
+  it('keeps no cross-request state in any non-admin module that reaches a loader', () => {
+    const code = parsed(files.filter((f) => /\.(?:[cm]?[jt]sx?)$/.test(f.path)));
+    const byPath = new Map(code.map((f) => [f.path, f]));
+    const resolveSpec = (spec: string): string | null => {
+      for (const ext of ['', '.ts', '.tsx', '.mts', '.mjs', '.js', '/index.ts']) {
+        if (byPath.has(spec + ext)) return spec + ext;
+      }
+      return null;
+    };
+    const imports = new Map(
+      code.map((f) => [
+        f.path,
+        importsOf(f.path, f.ast).flatMap((spec) => resolveSpec(spec) ?? []),
+      ]),
+    );
+    // Every module that imports a loader, directly or through other modules.
+    const reaching = new Set<string>(CONTENT_LOADERS);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const [path, deps] of imports) {
+        if (!reaching.has(path) && deps.some((d) => reaching.has(d))) {
+          reaching.add(path);
+          grew = true;
+        }
+      }
+    }
+    const callers = [...reaching].filter(
+      (path) =>
+        !CONTENT_LOADERS.includes(path) &&
+        !path.startsWith('src/lib/preview/') &&
+        path !== 'src/lib/data/source.ts' &&
+        !ADMIN_CODE.test(path),
+    );
+    // The composers the review named are among them (the scan is not vacuous).
+    expect(callers).toEqual(
+      expect.arrayContaining([
+        'src/lib/seo/head.ts',
+        'src/lib/services/page.ts',
+        'src/lib/portfolio/casePage.ts',
+      ]),
+    );
+    const state = callers.flatMap((path) =>
+      moduleState(byPath.get(path)!.ast).map((name) => `${path}:${name}`),
+    );
+    expect(state.sort()).toEqual(Object.keys(CALLER_STATE_ALLOWED).sort());
   });
 });
