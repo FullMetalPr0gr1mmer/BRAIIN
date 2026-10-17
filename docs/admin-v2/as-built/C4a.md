@@ -24,7 +24,11 @@
   (`created_at desc, id`), so U1's "latest leads" widget does not move.
 - **`app.lead_over_sla(...)`**: the one SLA rule, for the list's `over_sla` and the summary's
   `sla_breached`: a web-form lead, not spam, in the initial stage, never answered, older than
-  `crm_settings.sla_hours` (read as the caller; 24 when it cannot be read).
+  `crm_settings.sla_hours` (read as the caller; 24 when it cannot be read). Its search_path is
+  pinned (`set search_path = ''`, `pg_catalog.now()` and `pg_catalog.make_interval` named in
+  full; a postcondition checks it), so the Supabase advisor's `function_search_path_mutable`
+  does not apply. The cost is that a SET clause stops the planner inlining the function: one
+  function call a row, microseconds at the 10^4 leads these readers serve (review, low 1).
 - **`public.leads_list`** restated (same signature): rows add `assigned_to`, `value_sar`,
   `is_starred`, `read_at`, `last_contact_at`, `last_contact_channel` and `over_sla`. No tags,
   score reason, index or ciphertext.

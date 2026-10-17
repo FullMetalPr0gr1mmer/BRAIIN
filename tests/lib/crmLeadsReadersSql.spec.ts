@@ -171,6 +171,13 @@ describe('one ordering for the list, the board and Previous/Next (D14)', () => {
     expect(body('public.leads_list')).toContain('app.lead_over_sla(');
     expect(body('public.lead_summary')).toContain('app.lead_over_sla(');
     expect(body('app.lead_over_sla')).toContain('not p_spam');
+    // Its path is pinned, and every name in it is qualified (the advisor's
+    // function_search_path_mutable).
+    expect(SQL).toMatch(
+      /function app\.lead_over_sla\([^$]*language sql stable set search_path = '' as \$\$/,
+    );
+    expect(body('app.lead_over_sla')).toMatch(/pg_catalog\.now\(\)/);
+    expect(body('app.lead_over_sla')).toMatch(/pg_catalog\.make_interval\(/);
   });
 });
 

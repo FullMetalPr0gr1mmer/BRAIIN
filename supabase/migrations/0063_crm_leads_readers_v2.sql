@@ -184,14 +184,18 @@ grant execute on function app.lead_filter(jsonb, boolean) to authenticated;
 -- ---- 2. The SLA rule -------------------------------------------------------------------------
 -- A web-form lead waiting longer than the tenant's response time: still in the initial
 -- stage, never answered, not spam. One definition for the list's flag and the summary's
--- count (crm.md §9 "SLA breach"). An inlinable SQL function, so it costs a comparison.
+-- count (crm.md §9 "SLA breach"). Its search_path is pinned (empty, the built-ins named
+-- through pg_catalog), so no caller's path can change what it calls. A SET clause stops
+-- the planner inlining an SQL function, which costs one function call a row: at the scale
+-- these readers serve (about 10^4 leads, crm.md §9) that is microseconds.
 create or replace function app.lead_over_sla(
   p_source text, p_initial boolean, p_first_response_at timestamptz,
   p_created_at timestamptz, p_spam boolean, p_sla_hours int)
-  returns boolean language sql stable as $$
+  returns boolean language sql stable set search_path = '' as $$
   select coalesce(p_source = 'web_form' and p_initial and not p_spam
                   and p_first_response_at is null
-                  and p_created_at < now() - make_interval(hours => p_sla_hours), false)
+                  and p_created_at < pg_catalog.now()
+                                     - pg_catalog.make_interval(hours => p_sla_hours), false)
 $$;
 revoke all on function app.lead_over_sla(text, boolean, timestamptz, timestamptz, boolean, int)
   from public, anon, authenticated, service_role;
@@ -488,6 +492,12 @@ begin
      <> 'TABLE(stage_id uuid, total bigint, leads jsonb, value_sum numeric)' then
     raise exception '0063: leads_board returns %',
       pg_get_function_result('public.leads_board(uuid, jsonb)'::regprocedure);
+  end if;
+  -- The SLA rule's path is pinned (no caller's search_path reaches it).
+  if not exists (select 1 from pg_proc
+                  where oid = 'app.lead_over_sla(text, boolean, timestamp with time zone, timestamp with time zone, boolean, integer)'::regprocedure
+                    and proconfig @> array['search_path=""']) then
+    raise exception '0063: app.lead_over_sla must pin search_path to empty';
   end if;
   -- One filter: no overload of an older shape left behind.
   if (select count(*) from pg_proc
