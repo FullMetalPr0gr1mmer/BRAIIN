@@ -1,7 +1,13 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { formToPayload, rowToForm } from '@/lib/admin/formPayload';
+import {
+  formToPayload,
+  rowToForm,
+  shownSectionValues,
+  type SectionContentState,
+} from '@/lib/admin/formPayload';
+import { accentGroups, sectionFields } from '@/lib/admin/sectionUi';
 import { RESOURCE_UI } from '@/lib/admin/uiSchema';
 import { sectionContentIssues, type SectionType } from '@schemas/sections';
 
@@ -83,5 +89,63 @@ describe('an accent stored without its heading is kept (review H1)', () => {
   it('beside a heading in the other language only, each half keeps its own rule', () => {
     const content = { heading: { en: 'One two', ar: '' }, accent: { ar: { from: 2 } } };
     expect(trip('cta', content)).toEqual(content);
+  });
+});
+
+describe('built-in copy through the real form path (review M4)', () => {
+  // A cta section with nothing stored, its built-in copy known (what E1 will pass): the
+  // state is built the way SectionContentField's `set` leaves it after an edit.
+  const ctaFields = sectionFields('cta')!;
+  const builtIn = {
+    tag: { en: 'Get in touch', ar: 'تواصل معنا' },
+    heading: { en: 'Say hello there', ar: 'قل مرحبا هنا' },
+    accent: { en: { from: 1 }, ar: { from: 1 } },
+  };
+  const edited = (patch: Record<string, unknown>) => {
+    const loaded = rowToForm({ type: 'cta', content: {}, page_id: 'p' }, fields);
+    const content = loaded['content'] as SectionContentState;
+    const state: SectionContentState = {
+      ...content,
+      builtIn,
+      together: accentGroups(ctaFields),
+      values: { ...content.values, ...patch },
+    };
+    return formToPayload({ ...loaded, content: state }, fields)['content'];
+  };
+  /** The accent as the field shows it before the editor touches it. */
+  const shownAccent = () =>
+    shownSectionValues({}, ctaFields, builtIn).values['accent'] as Record<string, unknown>;
+
+  it('a form nobody changed stores nothing', () => {
+    expect(edited({})).toEqual({});
+  });
+
+  it('a heading edited keeps the highlight the form shows, held to the new words', () => {
+    expect(edited({ heading: { en: 'Say hi there', ar: 'قل مرحبا هنا' } })).toEqual({
+      heading: { en: 'Say hi there', ar: 'قل مرحبا هنا' },
+      accent: { en: { from: 1 }, ar: { from: 1 } },
+    });
+    // One word left in English: the highlight moves onto it rather than vanishing.
+    expect(edited({ heading: { en: 'Hello', ar: 'قل مرحبا هنا' } })).toEqual({
+      heading: { en: 'Hello', ar: 'قل مرحبا هنا' },
+      accent: { en: { from: 0 }, ar: { from: 1 } },
+    });
+  });
+
+  it('the accent alone moved stores the heading it counts with it', () => {
+    expect(edited({ accent: { ...shownAccent(), en: { from: 2, to: null } } })).toEqual({
+      heading: builtIn.heading,
+      accent: { en: { from: 2 }, ar: { from: 1 } },
+    });
+  });
+
+  it('beside a prefilled heading, the accent counts the words on screen', () => {
+    const { values, own } = shownSectionValues({}, ctaFields, builtIn);
+    expect(values['heading']).toEqual(builtIn.heading);
+    expect(values['accent']).toMatchObject({
+      en: { from: 1, to: null },
+      ar: { from: 1, to: null },
+    });
+    expect(own.size).toBe(0);
   });
 });

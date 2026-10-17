@@ -538,6 +538,26 @@ describe('omitBuiltIn (Admin v2 F5b)', () => {
     ]);
   });
 
+  it('a kept group lacking a member takes it from the built-in, held to the new words', () => {
+    const together = [['heading', 'accent']];
+    const builtInThree = {
+      ...builtIn,
+      heading: { en: 'Our selected work', ar: 'مختارات' },
+      accent: { en: { from: 2 } },
+    };
+    expect(
+      omitBuiltIn({ heading: { en: 'Work', ar: 'مختارات' } }, builtInThree, fields, together),
+    ).toEqual({
+      heading: { en: 'Work', ar: 'مختارات' },
+      accent: { en: { from: 0 } },
+    });
+    // ...and the other way round: an accent alone brings the built-in heading.
+    expect(omitBuiltIn({ accent: { en: { from: 1 } } }, builtInThree, fields, together)).toEqual({
+      accent: { en: { from: 1 } },
+      heading: builtInThree.heading,
+    });
+  });
+
   it('an accent stored as two numbers is compared by the keys it writes', () => {
     const heroFields = sectionFields('hero')!;
     const heroBuiltIn = {

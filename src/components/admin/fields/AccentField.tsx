@@ -75,7 +75,12 @@ export default function AccentField({
     const words = accentWords(text);
     const range = state[lang];
     const from = range.from;
-    const preview = accentPreview(text, saved[lang]);
+    const held = saved[lang];
+    const preview = accentPreview(text, held);
+    // The pickers show what a save would store: a range held to a heading that has since
+    // changed shows where it now lands, not where it was.
+    const fromShown = held ? held.from : from;
+    const toShown = held ? (held.to ?? null) : range.to;
     const fromId = `${ids[lang]}-from`;
     const toId = `${ids[lang]}-to`;
     const fromError = errors?.[fromId];
@@ -116,7 +121,7 @@ export default function AccentField({
                 id={fromId}
                 lang={arabic ? 'ar' : undefined}
                 dir={arabic ? 'rtl' : undefined}
-                value={from === null ? '' : String(from)}
+                value={fromShown === null ? '' : String(fromShown)}
                 aria-invalid={fromError ? true : undefined}
                 onChange={(e) => {
                   if (e.target.value === '') return set(lang, { from: null, to: null });
@@ -136,14 +141,14 @@ export default function AccentField({
                 ))}
               </select>
             </label>
-            {def?.mode === 'range' && from !== null && (
+            {def?.mode === 'range' && fromShown !== null && (
               <label className="accentf__pick" htmlFor={toId}>
                 <span>up to</span>
                 <select
                   id={toId}
                   lang={arabic ? 'ar' : undefined}
                   dir={arabic ? 'rtl' : undefined}
-                  value={range.to === null ? '' : String(range.to)}
+                  value={toShown === null ? '' : String(toShown)}
                   aria-invalid={toError ? true : undefined}
                   onChange={(e) =>
                     set(lang, { to: e.target.value === '' ? null : Number(e.target.value) })
@@ -151,7 +156,7 @@ export default function AccentField({
                 >
                   <option value="">the last word</option>
                   {/* `to` is exclusive: the option for word N ends the highlight after it. */}
-                  {wordOptions(words, from).map((option) => (
+                  {wordOptions(words, fromShown).map((option) => (
                     <option key={option.value} value={option.value + 1}>
                       {option.label}
                     </option>

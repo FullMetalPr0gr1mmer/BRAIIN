@@ -850,6 +850,23 @@ describe('section content prefilled with the built-in copy (Admin v2 F5b)', () =
     ).not.toContain('Arabic still shows the built-in text.');
   });
 
+  it('an accent beside a prefilled heading counts its words (review M4)', () => {
+    const html = render(
+      { values: {}, json: null },
+      {
+        builtIn: {
+          ...builtIn,
+          heading: { en: 'Say hello there', ar: 'قل مرحبا هنا' },
+          accent: { en: { from: 1 }, ar: { from: 1 } },
+        },
+      },
+    );
+    expect(html).toContain('value="Say hello there"');
+    expect(html).toContain('id="f-content-accent-en-from"');
+    expect(html).toContain('<mark class="accentf__on">hello there</mark>');
+    expect(html).not.toContain('Write the English words first');
+  });
+
   it('its notes say it without a dash (P-12)', () => {
     const sections = RESOURCE_UI['sections']!.fields;
     const plain = (html: string) => html.replace(/<[^>]*>/g, ' ');

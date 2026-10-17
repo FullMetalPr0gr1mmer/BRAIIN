@@ -3,10 +3,10 @@ import {
   enterAdvanced,
   leaveAdvanced,
   objectToForm,
-  objectToPayload,
+  shownSectionValues,
   type SectionContentState,
 } from '@/lib/admin/formPayload';
-import { accentGroups, contentKeysOf, sectionFields } from '@/lib/admin/sectionUi';
+import { accentGroups, sectionFields } from '@/lib/admin/sectionUi';
 import type { FieldErrors } from '@/lib/admin/fieldErrors';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import { FieldErrorText, describedBy } from './FieldShell';
@@ -124,20 +124,11 @@ export default function SectionContentField({
 
   const advanced = state.json !== null;
   const fields = typed ?? [];
-  // The built-in copy in FORM shape, and which fields the editor has written something of
-  // their own into: computed with every sibling present, so an accent is judged against
-  // the heading it counts.
-  const builtInForm = builtInRow ? objectToForm(builtInRow, fields) : undefined;
-  const written = objectToPayload(state.values, fields);
-  const hasBuiltIn = (sub: FieldDef): boolean =>
-    // By the KEYS a field writes, not its name: an accent stored as two numbers has no
-    // key of its own (AccentDef mode 'from'), and would never be prefilled otherwise.
-    builtInRow !== undefined && contentKeysOf(sub).some((key) => key in builtInRow);
-  const shownValue = (sub: FieldDef): unknown => {
-    const own = state.values[sub.name];
-    if (!builtInForm || !hasBuiltIn(sub)) return own;
-    return contentKeysOf(sub).some((key) => key in written) ? own : builtInForm[sub.name];
-  };
+  // What the editor SEES: each field's own words once it has some, else the built-in copy
+  // (formPayload's shownSectionValues, which the save sends too). The fields are drawn
+  // from it AND read their siblings from it, so an accent counts the heading on screen,
+  // not the empty box behind a prefilled one (F5b review M4).
+  const shown = shownSectionValues(state.values, fields, builtInRow);
 
   return (
     <fieldset
@@ -182,11 +173,11 @@ export default function SectionContentField({
         fields.map((sub) =>
           renderField(
             sub,
-            shownValue(sub),
+            shown.values[sub.name],
             (name, v) => set({ values: { ...state.values, [name]: v } }),
             id,
             {
-              values: state.values,
+              values: shown.values,
               ...(builtInRow && sub.name in builtInRow ? { builtIn: builtInRow[sub.name] } : {}),
               // (an accent's built-in is read from its parent's keys, above)
             },
@@ -196,11 +187,11 @@ export default function SectionContentField({
       {!advanced && (
         <div className="sectionf__foot">
           <p className="admin-sub">
-            {builtInForm
+            {builtInRow
               ? 'Every field starts as the words the page already shows. Change one to make it yours; leave it and the built-in copy stays, even when it is improved later.'
               : 'Every field is optional. Leave one empty to keep the built-in copy.'}
           </p>
-          {builtInForm && Object.keys(written).length > 0 && (
+          {builtInRow && shown.own.size > 0 && (
             <button
               type="button"
               data-variant="ghost"

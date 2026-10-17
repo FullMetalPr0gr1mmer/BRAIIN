@@ -365,9 +365,8 @@ export function sectionStateFromObject(obj: unknown, type: unknown): SectionCont
 /** Typed editor → Advanced (JSON): everything that would be saved, extras included. */
 export function enterAdvanced(state: SectionContentState, type: unknown): SectionContentState {
   const typed = sectionFields(type) ?? [];
-  const content = { ...sectionExtra(state, type), ...objectToPayload(state.values, typed) };
   // What would be SAVED, so the box shows the row, not the words the page renders anyway.
-  const stored = omitBuiltIn(content, state.builtIn, typed, state.together ?? []);
+  const stored = sectionContentPayload(state, type, typed);
   return { ...state, json: JSON.stringify(stored, null, 2) };
 }
 
@@ -463,6 +462,81 @@ function sameValue(a: unknown, b: unknown): boolean {
 }
 
 /**
+ * A section's values as the editor SEES them (F5b review M4): each field's own value
+ * once the editor has written something into it, else the built-in copy it is prefilled
+ * with. `own` names the fields holding the editor's own words. The field draws these and
+ * the save sends these, so an accent is counted against the heading on screen (its own or
+ * the built-in) and the page keeps the highlight the form shows. Text fields are settled
+ * first, because an accent's own words depend on the heading it counts.
+ */
+export function shownSectionValues(
+  values: Row,
+  fields: readonly FieldDef[],
+  builtIn: Row | undefined,
+): { values: Row; own: Set<string> } {
+  const shown: Row = { ...values };
+  const own = new Set<string>();
+  const builtInForm = builtIn ? objectToForm(builtIn, fields) : undefined;
+  const isAccent = (f: FieldDef) => f.kind === 'accent';
+  for (const field of [...fields.filter((f) => !isAccent(f)), ...fields.filter(isAccent)]) {
+    const written = objectToPayload({ ...shown, [field.name]: values[field.name] }, [field]);
+    if (Object.keys(written).length > 0) {
+      own.add(field.name);
+      shown[field.name] = values[field.name];
+    } else if (builtInForm && contentKeysOf(field).some((key) => key in builtIn!)) {
+      shown[field.name] = builtInForm[field.name];
+    }
+  }
+  return { values: shown, own };
+}
+
+/** What a typed section editor saves: its shown values, less what the built-in says. */
+function sectionContentPayload(
+  state: SectionContentState,
+  type: unknown,
+  typed: readonly FieldDef[],
+): Row {
+  const { values } = shownSectionValues(state.values, typed, state.builtIn);
+  const shaped = { ...sectionExtra(state, type), ...objectToPayload(values, typed) };
+  return omitBuiltIn(shaped, state.builtIn, typed, state.together ?? []);
+}
+
+/**
+ * A group member missing from the content, taken from the built-in so the group is stored
+ * whole; an accent is held to the words of the heading it will be stored with.
+ */
+function builtInMember(
+  key: string,
+  content: Row,
+  builtIn: Row,
+  fields: readonly FieldDef[],
+): unknown {
+  const value = builtIn[key];
+  const accent = fields.find((f) => f.kind === 'accent' && contentKeysOf(f).includes(key));
+  if (!accent?.accent) return value;
+  const text = accentText(accent, {
+    [accent.accent.of]: content[accent.accent.of] ?? builtIn[accent.accent.of],
+  });
+  if (accent.accent.mode === 'from') {
+    const lang = key === accent.accent.keys.en ? 'en' : 'ar';
+    const from = numberOrNull(value);
+    return from === null ? undefined : clampAccent({ from }, accentWords(text[lang]).length)?.from;
+  }
+  const ranges = (value && typeof value === 'object' ? value : {}) as Row;
+  const out: Row = {};
+  for (const lang of ['en', 'ar'] as const) {
+    const range = rangeToForm(ranges[lang]);
+    if (range.from === null) continue;
+    const held = clampAccent(
+      { from: range.from, ...(range.to === null ? {} : { to: range.to }) },
+      accentWords(text[lang]).length,
+    );
+    if (held) out[lang] = held;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
  * Section content as DIFFERENCES from the built-in copy (F5b, ui.md §2.6
  * "sectionContent"): a key whose value is what the section already renders is not stored
  * at all, so the built-in stays the source and a later change to it reaches every page
@@ -471,8 +545,8 @@ function sameValue(a: unknown, b: unknown): boolean {
  *
  * `together` are the key groups the type reads only as a whole (an accent counts the
  * words of its own heading, so a stored accent without its heading would highlight the
- * built-in's words): when any key of a group is kept, every key of it that the editor
- * saves is kept with it.
+ * built-in's words): when any key of a group is kept, every key of it is kept with it,
+ * taken from the built-in when the content lacks it.
  */
 export function omitBuiltIn(
   content: Row,
@@ -489,10 +563,17 @@ export function omitBuiltIn(
     // the form could have put the built-in there, so it was stored on purpose.
     !edited.has(key) || !sameValue(content[key], builtIn[key]);
   const keep = new Set(Object.keys(content).filter(differs));
+  const filled: Row = {};
   for (const group of together) {
     if (group.some((key) => keep.has(key))) {
       for (const key of group) {
         if (key in content) keep.add(key);
+        else if (key in builtIn) {
+          // A member the content lacks comes from the built-in, so what is stored is
+          // what the form showed (F5b review M4); an accent is held to the new words.
+          const member = builtInMember(key, content, builtIn, fields);
+          if (member !== undefined) filled[key] = member;
+        }
       }
     }
   }
@@ -500,7 +581,7 @@ export function omitBuiltIn(
   for (const [key, value] of Object.entries(content)) {
     if (keep.has(key)) out[key] = value;
   }
-  return out;
+  return { ...out, ...filled };
 }
 
 /** The untouched stored keys to keep on save: only under the type they belong to. */
@@ -647,8 +728,7 @@ function valueToPayload(value: unknown, field: FieldDef, siblings: Row): unknown
       const type = siblings[field.typeField ?? 'type'];
       const typed = sectionFields(type);
       if (!typed) return {};
-      const shaped = { ...sectionExtra(state, type), ...objectToPayload(state.values, typed) };
-      return omitBuiltIn(shaped, state.builtIn, typed, state.together ?? []);
+      return sectionContentPayload(state, type, typed);
     }
     default:
       return value;
