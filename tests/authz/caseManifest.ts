@@ -100,6 +100,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'leadsWrite: lead note delete (crm.erase, Admin only)',
   'leadsWrite: lead pipeline change (versioned PATCH)',
   'leadsWrite: leads bulk change',
+  'linkables: link targets (the link field’s picker)',
   'media: media download (the stored file)',
   'media: media hard delete (media.hardDelete — Admin only)',
   'media: media list',
