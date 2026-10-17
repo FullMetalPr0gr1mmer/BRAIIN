@@ -46,7 +46,7 @@ export default function ObjectField({
         {field.label}
         {field.required ? ' *' : ''}
       </legend>
-      {itemFields.map((sub) => renderField(sub, item[sub.name], setItem, id))}
+      {itemFields.map((sub) => renderField(sub, item[sub.name], setItem, id, { values: item }))}
       {field.help && <p className="admin-sub">{field.help}</p>}
       <FieldErrorText id={id} message={error} />
     </fieldset>

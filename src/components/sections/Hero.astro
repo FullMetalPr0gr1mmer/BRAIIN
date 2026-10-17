@@ -3,7 +3,7 @@ import { Picture } from 'astro:assets';
 import type { Locale } from '@schemas/primitives';
 import type { HeroSectionContent } from '@schemas/sections';
 import { localizedHref, pickLocale } from '@/lib/i18n';
-import { splitTrailingMark } from '@/lib/text/accent';
+import { accentWordsOf, splitTrailingMark } from '@/lib/text/accent';
 import { heroText, splitBold, type HeroText } from '@/lib/text/heroLinks';
 import { HERO_COPY, HERO_LABELS } from '@/lib/sections/copy/hero';
 import Cta from '@/components/ui/Cta.astro';
@@ -84,7 +84,8 @@ const {
 const BUILT_IN = HERO_COPY.default;
 
 type Word = { text: string; accent: boolean };
-// The headline is split on whitespace; the accent starts at the per-locale word index (no
+// The headline is split into words by the one accent tokeniser (accentWordsOf, the same
+// words the admin's accent field counts); the accent starts at the per-locale word index (no
 // accent when omitted). The built-in headline brings its own index, and an authored one
 // takes only an authored index. The accent never carries the footnote asterisk
 // ("performs*": the mark stays white, as in the design's `<em>performs</em>*`), so an
@@ -97,10 +98,10 @@ const accentFrom = headline
   : locale === 'ar'
     ? BUILT_IN.accentFromAr
     : BUILT_IN.accentFromEn;
-const words: Word[] = headlineText
-  .split(/\s+/)
-  .filter(Boolean)
-  .map((text, i) => ({ text, accent: accentFrom !== undefined && i >= accentFrom }));
+const words: Word[] = accentWordsOf(headlineText).map((text, i) => ({
+  text,
+  accent: accentFrom !== undefined && i >= accentFrom,
+}));
 // A given sub wins; without one, the built-in slogan — unless the route says the page has
 // no sub (a service page's is its own tagline: the home slogan under "Logo Design" would be
 // unrelated copy).

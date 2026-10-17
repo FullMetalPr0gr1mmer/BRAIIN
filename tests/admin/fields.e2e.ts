@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Role } from '@/lib/auth/types';
+import { SECTION_UI } from '@/lib/admin/sectionUi';
 import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 /*
@@ -258,3 +259,102 @@ test.describe('as admin, Ctrl+S on a page with two editors (review L8)', () => {
     expect(sent).toBe(0);
   });
 });
+
+/*
+ * The rest of the field kit on a real editor (Admin v2 F5b): a seeded page section, whose
+ * content the typed editor draws. Nothing is saved here — these rows are the public
+ * pages', and the other suites read them — so every check is a read.
+ *
+ *   accent     the word pickers are there, counting the words of the heading beside them;
+ *   advanced   "Advanced (JSON)" is an Admin's (decision D5): a Content Creator editing
+ *              the same section is offered the typed fields and not the JSON box.
+ */
+
+/**
+ * The section types whose content carries an accent over a field called `heading`, so the
+ * element ids below are the same whichever seeded section this finds (the hero's accent is
+ * two numbers under its own name, over `headline`: its own case, unit-tested).
+ */
+const ACCENT_TYPES = Object.entries(SECTION_UI)
+  .filter(([, fields]) =>
+    (fields ?? []).some(
+      (f) => f.kind === 'accent' && f.name === 'accent' && f.accent?.of === 'heading',
+    ),
+  )
+  .map(([type]) => type);
+
+interface AccentSection {
+  id: string;
+  type: string;
+  /** The stored English heading, '' when the section keeps the built-in one. */
+  heading: string;
+}
+
+/**
+ * A seeded section of an ACCENT_TYPES type, chosen deterministically (F5b review M2): the
+ * first, by type then id, whose stored content has an English heading, because only a
+ * heading gives the field words to pick from. Without one the field shows its cue, so the
+ * fallback is a section storing neither a heading nor an accent; null when there is none.
+ */
+async function accentSection(page: Page): Promise<AccentSection | null> {
+  const res = await page.request.get('/api/admin/sections?limit=100');
+  expect(res.status(), await res.text()).toBe(200);
+  const body = (await res.json()) as { data?: { rows?: unknown[] }; rows?: unknown[] };
+  const rows = ((body.data?.rows ?? body.rows ?? []) as { id: string; type: string }[])
+    .filter((row) => ACCENT_TYPES.includes(row.type))
+    .sort((a, b) => a.type.localeCompare(b.type) || a.id.localeCompare(b.id));
+  let bare: AccentSection | null = null;
+  for (const row of rows) {
+    const detail = await page.request.get(`/api/admin/sections/${row.id}`);
+    expect(detail.status(), await detail.text()).toBe(200);
+    type Row = { content?: { heading?: { en?: unknown }; accent?: unknown } | null };
+    const json = (await detail.json()) as Row & { data?: Row };
+    const content = (json.data ?? json).content ?? {};
+    const heading = typeof content.heading?.en === 'string' ? content.heading.en.trim() : '';
+    if (heading !== '') return { ...row, heading };
+    if (bare === null && content.accent === undefined) bare = { ...row, heading: '' };
+  }
+  return bare;
+}
+
+async function openSection(page: Page, id: string) {
+  await page.goto(`/admin/sections/${id}`, { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
+  await expect(page.locator('#f-content')).toBeVisible();
+}
+
+for (const role of ['admin', 'content_creator'] as const satisfies readonly Role[]) {
+  test.describe(`a page section as ${role}`, () => {
+    test.use({ storageState: authFile(role) });
+
+    test('the accent is word pickers, and "Advanced (JSON)" is the Admin’s', async ({ page }) => {
+      const section = await accentSection(page);
+      test.skip(section === null, 'no seeded section of a type that carries an accent');
+      await openSection(page, section!.id);
+
+      // The accent is picked by word, never written as HTML (Pillar 1).
+      const from = page.locator('#f-content-accent-en-from');
+      if (section!.heading !== '') {
+        await expect(page.locator('#f-content-heading-en')).toHaveValue(section!.heading);
+        await expect(from).toBeVisible();
+        await expect(from.locator('option').first()).toHaveText('No highlight');
+        // Its words are the heading's own: the first option after "No highlight" is word 1.
+        const first = section!.heading.split(/\s+/)[0];
+        await expect(from.locator('option').nth(1)).toHaveText(`1. ${first}`);
+      } else {
+        // No words to pick from yet: the field says what to do instead of a picker.
+        await expect(page.getByText('Write the English words first')).toBeVisible();
+        await expect(from).toHaveCount(0);
+      }
+
+      const advanced = page.getByText('Advanced (JSON)', { exact: true });
+      if (role === 'admin') {
+        await expect(advanced).toBeVisible();
+      } else {
+        await expect(advanced).toHaveCount(0);
+        // ...and the typed fields are there instead, so nothing is out of reach.
+        await expect(page.locator('#f-content-heading-en')).toBeVisible();
+      }
+    });
+  });
+}

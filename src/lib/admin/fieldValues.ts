@@ -35,6 +35,18 @@ export function clampToStep(value: unknown, range: RangeDef): number {
   return Number(snapped.toFixed(places(range.step)));
 }
 
+/**
+ * A number held inside [min, max] only, NOT moved onto the step grid (F5b review L5). What
+ * a save sends and what the field reads out: the slider snaps a value the editor moves
+ * (clampToStep), but a stored value nobody touched, such as an interval of 7250 under a
+ * 500 step, is valid for the schema and goes back exactly as it came.
+ */
+export function clampToRange(value: unknown, range: RangeDef): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return range.min;
+  return Math.min(range.max, Math.max(range.min, n));
+}
+
 /** A chip list as sent: each trimmed, blanks dropped, the first of each duplicate kept. */
 export function cleanChips(value: unknown): string[] {
   if (!Array.isArray(value)) return [];

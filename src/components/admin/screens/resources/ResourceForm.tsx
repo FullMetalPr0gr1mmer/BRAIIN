@@ -23,9 +23,15 @@ export interface ResourceFormProps {
   resource: string;
   /** Row id, or `null` to create. */
   id: string | null;
+  /**
+   * F5b: "Advanced (JSON)" on a section's content is offered (decision D5 — the UX half
+   * of `content.archiveDelete`, so no screen writes `role === 'admin'`). The page reads
+   * it from the session; the server validates every save whatever this says.
+   */
+  canAdvanced?: boolean | undefined;
 }
 
-export default function ResourceForm({ resource, id }: ResourceFormProps) {
+export default function ResourceForm({ resource, id, canAdvanced }: ResourceFormProps) {
   const ui = uiFor(resource);
   const target = { kind: 'resource', slug: ui.slug } as const;
   const save = useEntitySave(target, id, { fields: ui.fields, mode: saveModeFor(target) });
@@ -36,6 +42,7 @@ export default function ResourceForm({ resource, id }: ResourceFormProps) {
       fields={ui.fields}
       submitLabel={save.isNew ? `Create ${ui.singular.toLowerCase()}` : 'Save changes'}
       back={{ href: `/admin/${ui.slug}`, label: `Back to ${ui.title.toLowerCase()}` }}
+      canAdvanced={canAdvanced}
     >
       {/* A resource with an edge snapshot (redirects) reports `kvSynced` on every write.
           False is a committed row the public request path does not see yet, said with
