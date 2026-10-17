@@ -86,7 +86,10 @@ export function afterFilter(after: ExportCursor): string {
  * leads, or a lead of one of its services. Every slug is SlugSchema-shaped (the link's by
  * LeadExportQuerySchema, the services' checked by the export as it reads them), so none can
  * carry PostgREST's reserved characters. A discipline with no service is its own leads only.
- * PostgREST ANDs this with the keyset's own `or` on a later page (two `or` parameters).
+ * Every page after the first carries it beside the keyset's own `or` (readPaged asks for a
+ * second page whenever the first comes back with any rows short of the cap, so most
+ * exports do): postgrest-js appends both `or` parameters and PostgREST ANDs them
+ * (tests/lib/leadExport.spec.ts checks page 2 carries both).
  */
 export function disciplineFilter(discipline: string, services: readonly string[]): string {
   const own = `discipline_of_interest.eq.${discipline}`;

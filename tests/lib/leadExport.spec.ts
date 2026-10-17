@@ -317,6 +317,12 @@ describe('the lead export (C3): filters', () => {
     expect(onPage(0, 'or').map((c) => c.args[0])).toEqual([
       'discipline_of_interest.eq.branding,service_of_interest.in.(logo,motion-graphics)',
     ]);
+    // Page 2 (asked for because page 1 came back short of the cap) carries the discipline
+    // AND the keyset: two `or` parameters, which PostgREST ANDs.
+    expect(onPage(1, 'or').map((c) => c.args[0])).toEqual([
+      'discipline_of_interest.eq.branding,service_of_interest.in.(logo,motion-graphics)',
+      `created_at.lt."${ROW.created_at}",and(created_at.eq."${ROW.created_at}",id.gt.${LEAD})`,
+    ]);
     // A discipline the tenant does not have: its own slug only.
     disciplineExists = false;
     calls.length = 0;

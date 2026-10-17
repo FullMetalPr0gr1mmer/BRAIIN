@@ -109,9 +109,11 @@ So every route the old Worker serves answers byte for byte what it answered befo
 5. **The export's discipline filter reads twice** (the discipline's id, then its services), not
    once through an embedded relationship: two plain reads, once per export, with nothing for
    PostgREST to resolve. A service slug that is not `SlugSchema`-shaped is dropped before it is
-   put in the `or` filter. On a second keyset page the export sends two `or` parameters, which
-   PostgREST ANDs; with the caps (80 and 300 rows, pages of 1,000) a second page comes only
-   when the server's row limit is below a page.
+   put in the `or` filter. Every page after the first sends two `or` parameters, this one and
+   the keyset's, which postgrest-js appends side by side and PostgREST ANDs. That is most
+   exports: `readPaged` asks for a second page whenever the first comes back with any rows
+   short of the cap, and stops at an empty one (`leadExport.spec` checks page 2 carries both
+   filters; corrected after review, low 3).
 6. **`interestOf` moved with a `none` argument.** Its default is "Not given" (P-12, no dash);
    the legacy panel passes its old "—", so the panel is unchanged until C4b deletes it.
 7. **`crm_queries.test.sql` changed in two assertions**: the 0036 summary assertions compare the
