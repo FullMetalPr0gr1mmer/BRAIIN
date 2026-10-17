@@ -1,0 +1,22 @@
+---
+import BarList from '../BarList.astro';
+import EmptyState from '../EmptyState.astro';
+import type { BarDatum } from '@/lib/admin/dashboard/loaders';
+
+// Top pages (Admin v2 U1, `pages`, analytics.read): the 6 most viewed pages of the last 7
+// days, from U2's page-view rollup.
+
+interface Props {
+  items: readonly BarDatum[];
+}
+
+const { items } = Astro.props;
+---
+
+{
+  items.length === 0 ? (
+    <EmptyState icon="chart" title="No visits counted in the last 7 days." />
+  ) : (
+    <BarList label="Page views per page, the last 7 days" items={items} />
+  )
+}

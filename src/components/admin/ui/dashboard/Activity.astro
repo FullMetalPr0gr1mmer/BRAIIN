@@ -1,0 +1,28 @@
+---
+import EmptyState from '../EmptyState.astro';
+import Timeline from '../Timeline.astro';
+import type { ActivityItem } from '@/lib/admin/dashboard/loaders';
+
+// Recent activity (Admin v2 U1, `activity`, audit.view): the 5 latest entries of the activity
+// log, who did what in the log's own plain words (src/lib/admin/auditLabels.ts): the names of
+// the fields a save changed, never their values.
+
+interface Props {
+  items: readonly ActivityItem[];
+  now?: number | undefined;
+}
+
+const { items, now } = Astro.props;
+---
+
+{
+  items.length === 0 ? (
+    <EmptyState icon="history" title="Nothing logged yet." />
+  ) : (
+    <Timeline
+      label="The latest activity"
+      items={items.map((item) => ({ title: item.who, text: item.what, at: item.at }))}
+      now={now}
+    />
+  )
+}

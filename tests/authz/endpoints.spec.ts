@@ -62,7 +62,13 @@ describe('admin endpoints — {principal × capability} matrix', () => {
           const route = module[testCase.method] as APIRoute | undefined;
           expect(route, `${testCase.name} has no ${testCase.method} export`).toBeTypeOf('function');
 
-          const ctx = makeContext(principal, testCase.url, testCase.body, testCase.method);
+          const ctx = makeContext(
+            principal,
+            testCase.url,
+            testCase.body,
+            testCase.method,
+            testCase.params,
+          );
           const status = await statusOf(route as APIRoute, ctx);
 
           if (shouldAllow) {
@@ -94,7 +100,13 @@ describe('admin endpoints — {principal × capability} matrix', () => {
     for (const testCase of CASES) {
       const module = await testCase.load();
       const route = module[testCase.method] as APIRoute;
-      const ctx = makeContext('other_tenant', testCase.url, testCase.body, testCase.method);
+      const ctx = makeContext(
+        'other_tenant',
+        testCase.url,
+        testCase.body,
+        testCase.method,
+        testCase.params,
+      );
       await statusOf(route, ctx);
 
       const leaked = observedTenantFilters.filter((tenant) => tenant !== OTHER_TENANT);
@@ -112,7 +124,13 @@ describe('admin endpoints — {principal × capability} matrix', () => {
     for (const testCase of listCases) {
       const module = await testCase.load();
       const route = module[testCase.method] as APIRoute;
-      const ctx = makeContext('admin', testCase.url, testCase.body, testCase.method);
+      const ctx = makeContext(
+        'admin',
+        testCase.url,
+        testCase.body,
+        testCase.method,
+        testCase.params,
+      );
       await statusOf(route, ctx);
       expect(
         observedTenantFilters.length,
@@ -125,7 +143,13 @@ describe('admin endpoints — {principal × capability} matrix', () => {
     for (const testCase of CASES) {
       const module = await testCase.load();
       const route = module[testCase.method] as APIRoute;
-      const ctx = makeContext('anon', testCase.url, testCase.body, testCase.method);
+      const ctx = makeContext(
+        'anon',
+        testCase.url,
+        testCase.body,
+        testCase.method,
+        testCase.params,
+      );
       const status = await statusOf(route, ctx);
       expect([401, 403]).toContain(status);
     }

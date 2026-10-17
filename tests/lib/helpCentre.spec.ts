@@ -610,6 +610,66 @@ describe('the guides say only what the admin does', () => {
     expect(textsOf(invites, 'ar').join('\n')).toContain('ما دام لم يقبل الدعوة بعد');
   });
 
+  it('U1 (0060) restates U14a’s set (0057): adds your-dashboard, takes /admin off finding-your-way', () => {
+    // Production applies 0057 then 0060, so 0060's set must carry the guides as 0057 left
+    // them (0055's twelve, U12b's invites guide and U14a's page-visibility guide): every guide but finding-your-way byte for byte, that one with only its screens
+    // changed (the dashboard has its own guide now), and your-dashboard after it.
+    const setOf = (file: string) => {
+      const sql = source(`${MIGRATIONS}/${file}`);
+      return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
+    };
+    const base = setOf('0057_page_visibility.sql');
+    const u1 = setOf('0060_dashboard_layer.sql');
+    expect(u1.map((a) => a.slug)).toEqual([
+      'finding-your-way',
+      'your-dashboard',
+      ...base.map((a) => a.slug).filter((slug) => slug !== 'finding-your-way'),
+    ]);
+    for (const article of base.filter((a) => a.slug !== 'finding-your-way')) {
+      expect(
+        u1.find((a) => a.slug === article.slug),
+        article.slug,
+      ).toEqual(article);
+    }
+    const before = base.find((a) => a.slug === 'finding-your-way')!;
+    const after = u1.find((a) => a.slug === 'finding-your-way')!;
+    expect({ ...after, screens: null }).toEqual({ ...before, screens: null });
+    expect(after.screens).toEqual(before.screens.filter((s) => s !== '/admin'));
+    const dash = u1.find((a) => a.slug === 'your-dashboard')!;
+    expect(dash.screens).toEqual(['/admin']);
+    expect(dash.caps).toEqual([]);
+  });
+
+  it('the dashboard guide says what the dashboard does (U1)', async () => {
+    const schema = await import('@schemas/dashboard');
+    const sql = source(`${MIGRATIONS}/0060_dashboard_layer.sql`);
+    expect(sql).toContain(
+      "cron.schedule('team-notes-retention', '25 3 * * *', $job$ select app.expire_team_notes() $job$)",
+    );
+    expect(sql).toContain("n.updated_at < pg_catalog.now() - interval '180 days'");
+    expect(schema.TEAM_NOTES_RETENTION_DAYS).toBe(180);
+    expect(schema.QUICK_MAX).toBe(12);
+    expect(schema.QUICK_CUSTOM_MAX).toBe(8);
+    expect(schema.TEAM_NOTE_PHONE.source).toContain('{8,}');
+    // The Customize bar and the editors name these controls.
+    const island = source('src/components/admin/screens/dashboard/Dashboard.tsx');
+    for (const label of ['Add widget', 'Reset', 'Done', 'Customize'])
+      expect(island).toContain(label);
+    expect(source('src/components/admin/ui/dashboard/Widget.astro')).toContain('Edit notes');
+    expect(source('src/lib/admin/ui/teamNotes.ts')).toContain("title: 'Team notes'");
+    const en = guide('your-dashboard', 'en');
+    expect(en).toContain('Every change is saved as you make it');
+    expect(en).toContain('add up to 8 links of your own');
+    expect(en).toContain('You can have 12 in all');
+    expect(en).toContain('A note is cleared 180 days after its last edit');
+    expect(en).toContain('any run of 8 or more digits');
+    expect(en).toContain('Save team notes');
+    expect(en).toContain('An Admin can save a layout and a set of quick actions as the default');
+    const ar = guide('your-dashboard', 'ar');
+    expect(ar).toContain('180 يومًا');
+    expect(ar).toContain('8 أرقام');
+  });
+
   it('the Arabic says what it means', () => {
     expect(everything('ar')).not.toContain('شوركت');
     expect(guide('seo-and-redirects', 'ar')).toContain('الروابط التي تمت مشاركتها');
@@ -732,7 +792,8 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
     expect(pageGuideFor('/admin/pages/new', 'admin')).toBe('saving-and-publishing');
     expect(pageGuideFor('/admin/analytics/search', 'seo')).toBe('website-stats');
     expect(pageGuideFor('/admin/redirects/9', 'seo')).toBe('seo-and-redirects');
-    expect(pageGuideFor('/admin', 'developer')).toBe('finding-your-way');
+    expect(pageGuideFor('/admin', 'developer')).toBe('your-dashboard');
+    expect(pageGuideFor('/admin/search', 'developer')).toBe('finding-your-way');
     expect(pageGuideFor('/admin/themes', 'admin')).toBeNull();
     expect(pageGuideFor('/admin/help', 'admin')).toBeNull();
   });
@@ -764,6 +825,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'saving-and-publishing',
       'website-stats',
       'your-account',
+      'your-dashboard',
     ]);
   });
 
@@ -775,6 +837,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'seo-and-redirects',
       'website-stats',
       'your-account',
+      'your-dashboard',
     ]);
   });
 
@@ -790,6 +853,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'website-stats',
       'working-with-leads',
       'your-account',
+      'your-dashboard',
     ]);
   });
 

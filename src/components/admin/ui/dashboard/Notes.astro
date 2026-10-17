@@ -1,0 +1,43 @@
+---
+import { relTime } from '@/lib/admin/relTime';
+import type { TeamNotes } from '@/lib/admin/dashboard/teamNotes';
+
+// Team notes (Admin v2 U1, `notes`, analytics.read): one note shared by everyone who sees the
+// dashboard. Without JS it reads as text; Edit notes (the island shows it) opens the field
+// kit's editor in place, with an explicit Save (P-5). The line under it says what the note
+// refuses and when it is cleared (README U1 D5, D6).
+
+interface Props {
+  notes: TeamNotes;
+  now?: number | undefined;
+}
+
+const { notes, now = Date.now() } = Astro.props;
+const lines = notes.body.split('\n');
+---
+
+<div data-notes>
+  <div data-notes-view>
+    {
+      notes.body.trim() ? (
+        <p class="notes__text" dir="auto">
+          {lines.map((line, i) => (
+            <>
+              {i > 0 && <br />}
+              {line}
+            </>
+          ))}
+        </p>
+      ) : (
+        <p class="dash__empty-line">No notes yet.</p>
+      )
+    }
+    {notes.updatedAt && <p class="notes__m">Last changed {relTime(notes.updatedAt, now)}.</p>}
+  </div>
+  <div data-notes-editor></div>
+  <p class="notes__rule">
+    {
+      `For the team. Do not paste client e-mail addresses or phone numbers here. Notes clear ${notes.retentionDays} days after the last edit.`
+    }
+  </p>
+</div>

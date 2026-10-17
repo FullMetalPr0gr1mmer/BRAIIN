@@ -1,0 +1,43 @@
+---
+import Icon from '../Icon.astro';
+import type { QuickLink } from '@/lib/admin/dashboard/loaders';
+
+// The quick actions (Admin v2 U1, `quick`): the person's shortcuts, as links (they navigate,
+// never execute: the screen checks the capability again on save). A link that leaves the
+// admin (the public site, a person's own https link) opens in a new tab, says so, and gives
+// the page it opens no handle on this one (rel="noopener noreferrer").
+
+interface Props {
+  items: readonly QuickLink[];
+}
+
+const { items } = Astro.props;
+---
+
+{
+  items.length === 0 ? (
+    <p class="dash__empty-line">No quick actions yet. Use Customize on this widget to add some.</p>
+  ) : (
+    <ul class="qa">
+      {items.map((item) => (
+        <li>
+          <a
+            class="li qa__a"
+            href={item.href}
+            target={item.external ? '_blank' : undefined}
+            rel={item.external ? 'noopener noreferrer' : undefined}
+            data-quick={item.id}
+          >
+            <span class="li__ico">
+              <Icon name={item.icon} size={17} />
+            </span>
+            <span class="li__t" dir="auto">
+              {item.label}
+              {item.external && <span class="visually-hidden"> (opens in a new tab)</span>}
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  )
+}

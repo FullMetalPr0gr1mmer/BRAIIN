@@ -171,7 +171,18 @@ function sessionFor(principal: Principal): AuthContext | null {
 
 // ── Requests ────────────────────────────────────────────────────────────────────
 
-export function makeContext(principal: Principal, url: string, body?: unknown, method = 'GET') {
+/**
+ * The context a route handler is invoked with. Its path parameters are `{ id: UUID }` plus
+ * the case's own (`params`), so a route whose segment is not `[id]` (`[role]`, `[noteId]`)
+ * reaches its handler instead of answering 404 for every principal.
+ */
+export function makeContext(
+  principal: Principal,
+  url: string,
+  body?: unknown,
+  method = 'GET',
+  params: Readonly<Record<string, string>> = {},
+) {
   observedTenantFilters = [];
   const session = sessionFor(principal);
   currentPrincipal = {
@@ -188,7 +199,7 @@ export function makeContext(principal: Principal, url: string, body?: unknown, m
   return {
     request,
     url: full,
-    params: { id: UUID },
+    params: { id: UUID, ...params },
     locals: {
       session,
       supabase: makeStubClient(),
@@ -213,6 +224,11 @@ export interface Case {
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   url: string;
   body?: unknown;
+  /**
+   * Path parameters beyond `{ id }`, as Astro would pass them for `url`: a route whose
+   * segment is named otherwise (`[role]`) reads it from here.
+   */
+  params?: Readonly<Record<string, string>>;
   /** Roles that must NOT get 403. Everyone else must. */
   allow: Role[];
   /** A read sent as a POST (its search stays out of URLs): checked for scoping like a GET. */

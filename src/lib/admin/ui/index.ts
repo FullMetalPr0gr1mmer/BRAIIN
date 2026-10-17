@@ -20,6 +20,7 @@ import { serviceCasesUi } from './serviceCases';
 import { servicesUi } from './services';
 import { settingsUi } from './settings';
 import { statisticsUi } from './statistics';
+import { teamNotesUi } from './teamNotes';
 import { teamUi } from './team';
 import { testimonialsUi } from './testimonials';
 import { themesUi } from './themes';
@@ -103,6 +104,7 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
   profile: profileUi,
   seo: seoUi,
   settings: settingsUi,
+  'team-notes': teamNotesUi,
 };
 
 export function singletonFor(key: string): SingletonUi {

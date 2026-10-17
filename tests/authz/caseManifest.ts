@@ -5,6 +5,7 @@
 // commit; one line per case, in sorted order, so parallel changes rarely meet.
 
 export const CASE_MANIFEST: readonly string[] = [
+  'account: my dashboard layout save',
   'account: my name',
   'account: my password',
   'account: my preferences read',
@@ -74,6 +75,11 @@ export const CASE_MANIFEST: readonly string[] = [
   'crm: CRM people (assignees)',
   'crm: CRM stages',
   'dashboard: dashboard',
+  'dashboard: role defaults read',
+  'dashboard: role defaults reset',
+  'dashboard: role defaults save',
+  'dashboard: team notes read',
+  'dashboard: team notes save',
   'health: site health',
   'health: system logs clear',
   'health: system logs read',
