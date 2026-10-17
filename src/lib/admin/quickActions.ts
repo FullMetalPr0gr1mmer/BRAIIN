@@ -84,7 +84,8 @@ export const QUICK_LIBRARY: readonly LibraryAction[] = [
   {
     id: 'upload',
     label: 'Upload media',
-    href: '/admin/media/new',
+    // U4: the library with "Choose images" in focus (/admin/media/new redirects there too).
+    href: '/admin/media?upload=1',
     icon: 'upload',
     cap: 'media.write',
     palette: { label: 'Upload media', icon: 'upload' },
