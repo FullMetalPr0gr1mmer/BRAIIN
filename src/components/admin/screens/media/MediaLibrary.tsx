@@ -9,6 +9,7 @@ import type { MediaRow } from '@/components/admin/fields/media/format';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { pageInfo, rangeText } from '@/lib/admin/pager';
 import {
+  cleanQuery,
   libraryQuery,
   viewHref,
   type LibraryTab,
@@ -104,9 +105,9 @@ export default function MediaLibrary({
 
   // The search box settles for a moment before it searches.
   useEffect(() => {
-    if (text === view.q) return;
+    if (cleanQuery(text) === view.q) return;
     const timer = window.setTimeout(
-      () => setView((v) => ({ ...v, q: text.slice(0, 64), offset: 0 })),
+      () => setView((v) => ({ ...v, q: cleanQuery(text), offset: 0 })),
       SEARCH_DELAY_MS,
     );
     return () => window.clearTimeout(timer);
@@ -195,6 +196,7 @@ export default function MediaLibrary({
   }
 
   function openPicture(row: MediaRow) {
+    setFocusId(null);
     setDrawer({ row, open: true });
     setView((v) => ({ ...v, openId: String(row['id']) }));
   }

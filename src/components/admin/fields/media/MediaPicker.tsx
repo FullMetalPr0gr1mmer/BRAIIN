@@ -5,7 +5,7 @@ import Pager from '@/components/admin/kit/Pager';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { pageInfo, rangeText } from '@/lib/admin/pager';
 import BodyPortal from './BodyPortal';
-import type { MediaRow } from './format';
+import { cleanQuery, type MediaRow } from './format';
 import MediaGrid from './MediaGrid';
 import UploadDialog from './UploadDialog';
 
@@ -83,7 +83,7 @@ export default function MediaPicker({
   // The page: debounced while typing, and a newer request aborts the older one.
   const load = useCallback((q: string, from: number, signal: AbortSignal) => {
     const params = new URLSearchParams({ limit: String(LIMIT), offset: String(from) });
-    if (q.trim()) params.set('q', q.trim().slice(0, 64));
+    if (cleanQuery(q).trim()) params.set('q', cleanQuery(q).trim());
     return adminFetch<Page>(`/api/admin/media/library?${params}`, { signal })
       .then((next) => {
         // A page emptied past the end steps back to the last one that exists.

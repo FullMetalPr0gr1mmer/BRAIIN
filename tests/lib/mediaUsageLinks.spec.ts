@@ -6,6 +6,7 @@ import { barBucket } from '@/lib/admin/charts';
 import { mediaPermissionsFor, usageScreensFor } from '@/lib/admin/mediaLibrary';
 import { reachableHrefs } from '@/lib/admin/nav';
 import {
+  cleanQuery,
   meterBucket,
   storageText,
   viewFromUrl,
@@ -106,6 +107,16 @@ describe('the view and its address', () => {
     expect(viewFromUrl(new URLSearchParams(`q=${'a'.repeat(80)}`)).q).toHaveLength(64);
     expect(viewFromUrl(new URLSearchParams('q=a%07b')).q).toBe('ab');
     expect(viewFromUrl(new URLSearchParams(), 'not-a-uuid').openId).toBeNull();
+  });
+
+  it('a search cut at 64 never splits a character in two (self-review)', () => {
+    // 63 letters and an emoji (two UTF-16 units): cut at 64 units, a lone high surrogate was
+    // left, which no text column or URL can carry. The cut drops it instead, and stays within
+    // the route's 64 (MediaLibraryQuerySchema counts units).
+    const emoji = String.fromCodePoint(0x1f600);
+    const q = cleanQuery(`${'a'.repeat(63)}${emoji}`);
+    expect(q).toBe('a'.repeat(63));
+    expect(cleanQuery(`${'a'.repeat(62)}${emoji}`)).toBe(`${'a'.repeat(62)}${emoji}`);
   });
 
   it('writes the address back without ?upload=1, the drawer in the path', () => {

@@ -1,4 +1,7 @@
-import { MEDIA_LIBRARY_PAGE_SIZE, MEDIA_LIBRARY_QUERY_MAX } from '@schemas/media';
+import { MEDIA_LIBRARY_PAGE_SIZE } from '@schemas/media';
+import { cleanQuery } from '@/components/admin/fields/media/format';
+
+export { cleanQuery };
 
 // Where the media library stands, and its address (Admin v2 U4). The page reads it from the
 // URL on the server (the first page is server-rendered), the island keeps the URL equal to
@@ -21,13 +24,6 @@ export interface LibraryView {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
-
-/** A search as the route will take it: control characters dropped, cut to 64. */
-export function cleanQuery(value: string | null | undefined): string {
-  return (value ?? '').replace(CONTROL, '').slice(0, MEDIA_LIBRARY_QUERY_MAX);
-}
-
 /** The view a URL asks for, every value held to what the library takes. */
 export function viewFromUrl(params: URLSearchParams, openId: string | null = null): LibraryView {
   const page = Number(params.get('page'));

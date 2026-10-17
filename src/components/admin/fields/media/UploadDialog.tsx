@@ -47,7 +47,10 @@ export default function UploadDialog({ files, onClose, onUploaded, single }: Upl
   // Moves when a send settles, so the runner below looks for the next file even when the
   // queue's next item is the same object it was (nothing else re-runs the effect then).
   const [settled, setSettled] = useState(0);
-  const open = files.length > 0;
+  // Whether the dialog is up. It closes itself (shown false: the native dialog closes and
+  // focus goes back to what opened it), and only then tells the parent (onClose), which drops
+  // the files; unmounting a dialog that is still open would drop focus to <body>.
+  const [shown, setShown] = useState(false);
 
   // A new set of files is a new batch.
   useEffect(() => {
@@ -67,6 +70,7 @@ export default function UploadDialog({ files, onClose, onUploaded, single }: Upl
     for (const { key, file } of chosen) {
       void fileFacts(file).then((facts) => dispatch({ type: 'checked', key, facts }));
     }
+    setShown(true);
   }, [files, single]);
 
   // One file at a time: when none is in flight, send the next queued one.
@@ -138,8 +142,8 @@ export default function UploadDialog({ files, onClose, onUploaded, single }: Upl
       toast(`${picturesText(stored.length)} uploaded`, 'ok');
       onUploaded(stored);
     }
-    if (summary.problems === 0 && summary.sendable === 0) onClose();
-  }, [summary.busy, summary.problems, summary.sendable, onClose, onUploaded]);
+    if (summary.problems === 0 && summary.sendable === 0) setShown(false);
+  }, [summary.busy, summary.problems, summary.sendable, onUploaded]);
 
   // Leaving while a file is on its way asks first.
   useEffect(() => {
@@ -170,13 +174,26 @@ export default function UploadDialog({ files, onClose, onUploaded, single }: Upl
     if (missing.length === 0) dispatch({ type: 'submit' });
   }
 
+  /** Stops the file in flight and puts every queued one back: nothing stays pending. */
+  function stop() {
+    inFlight.current?.abort();
+    inFlight.current = null;
+    dispatch({ type: 'cancel' });
+  }
+
+  /** Cancel (or Stop uploading): stops a batch in flight, else closes the dialog. */
   function cancel() {
     if (summary.busy) {
-      inFlight.current?.abort();
-      inFlight.current = null;
-      dispatch({ type: 'cancel' });
+      stop();
       return;
     }
+    setShown(false);
+  }
+
+  /** The dialog closed, however (Escape, Close, Cancel, the batch done): nothing is left sending. */
+  function closed() {
+    if (inFlight.current || summary.busy) stop();
+    setShown(false);
     onClose();
   }
 
@@ -184,12 +201,12 @@ export default function UploadDialog({ files, onClose, onUploaded, single }: Upl
   const uploadLabel =
     single || sendable <= 1 ? 'Upload picture' : `Upload ${picturesText(sendable)}`;
 
-  if (!open) return null;
+  if (files.length === 0) return null;
   return (
     <BodyPortal>
       <Modal
-        open={open}
-        onClose={cancel}
+        open={shown}
+        onClose={closed}
         title="Describe your images"
         sub="Alt text in English and Arabic is required for every picture."
         size="lg"

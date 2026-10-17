@@ -2,7 +2,19 @@
 // the upload dialog and the picker say it the same way. Pure; en-GB digits (P-12: an Arabic
 // digit is never produced, and none is transformed); KB is 1,000 bytes (P-10's unit).
 
+import { MEDIA_LIBRARY_QUERY_MAX } from '@schemas/media';
+
 export type MediaRow = Record<string, unknown>;
+
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
+
+/** A search as the route will take it: control characters dropped, cut to 64. */
+export function cleanQuery(value: string | null | undefined): string {
+  const cut = (value ?? '').replace(CONTROL, '').slice(0, MEDIA_LIBRARY_QUERY_MAX);
+  // A cut between the two halves of a character (an emoji) would leave half of it, which no
+  // URL or text column can carry: drop the half. The route counts UTF-16 units, so the cut does.
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+}
 
 /**
  * What a picture's alt text lacks, in words, or null when both languages have it (Admin v2

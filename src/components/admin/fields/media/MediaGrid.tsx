@@ -85,13 +85,15 @@ export default function MediaGrid({
     setActive(Math.max(0, chosen ? now.indexOf(chosen) : 0));
   }, [signature]);
 
+  // Only a new focusId moves focus: a later reload of the list (an upload, a save) must never
+  // pull focus out of the search box to the tile a drawer once closed on.
   useEffect(() => {
     if (!focusId) return;
     const index = latest.current.ids.indexOf(focusId);
     if (index < 0) return;
     setActive(index);
     buttons.current[index]?.focus();
-  }, [focusId, signature]);
+  }, [focusId]);
 
   function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const rtl = (event.currentTarget.closest('[dir]')?.getAttribute('dir') ?? 'ltr') === 'rtl';
