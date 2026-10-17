@@ -348,6 +348,20 @@ describe("a project's link sets follow only a change that was shown", () => {
     ]);
   });
 
+  it("a links-only change keeps the project's updated_at (R4 runs no UPDATE for it)", async () => {
+    const { db, report } = source(fixtureTables(), [
+      draft('portfolio', 'update', ID.pPub, { serviceIds: [ID.sNoDisc] }),
+    ]);
+    expect(await read(db, 'portfolio', 'id,updated_at')).toContainEqual({
+      id: ID.pPub,
+      updated_at: '2026-01-01T00:00:00+00:00',
+    });
+    expect(await read(db, 'portfolio_services', 'portfolio_id,service_id')).toEqual([
+      { portfolio_id: ID.pPub, service_id: ID.sNoDisc },
+    ]);
+    expect(report.overlaid).toBe(1);
+  });
+
   it('an edit of a project that is gone sets no links', async () => {
     const { db, report } = source(fixtureTables(), [
       draft('portfolio', 'update', id(992), { serviceIds: [ID.sPub] }),

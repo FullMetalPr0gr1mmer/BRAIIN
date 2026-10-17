@@ -400,8 +400,12 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
           [entry.key]: current[entry.key],
           tenant_id: current['tenant_id'],
         };
-        stamp(table, current, next, change.patch);
-        rows[at] = next;
+        // A change to a project's link sets alone has no column patch: R4 runs no UPDATE
+        // then (0051), so the row and its updated_at stay as they are.
+        if (Object.keys(change.patch).length > 0) {
+          stamp(table, current, next, change.patch);
+          rows[at] = next;
+        }
       } else {
         if (at !== -1) {
           invalid(draft, 'invalid');
