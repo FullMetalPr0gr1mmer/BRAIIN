@@ -100,6 +100,11 @@ const SERVICE_ROLE_IN_LOADERS: Record<string, string> = {
     'the page password (Admin v2 U14b): a page behind a password is fenced from anon at RLS ' +
     '(0061), so a request that typed the password reads its sections through ' +
     'public.page_sections_unlocked, inside the page-access scope and for that page alone',
+  'src/lib/data/sectionMedia.ts':
+    "the page password (Admin v2 U14b): the media policy reads page_sections under anon's " +
+    'RLS, which the fence (0061) now covers, so a request that typed the password reads the ' +
+    "images its page's visible sections name through public.page_media_unlocked, inside the " +
+    'page-access scope and for that page alone',
 };
 
 /** `contentClient()` itself. */

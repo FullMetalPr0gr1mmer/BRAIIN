@@ -17,12 +17,13 @@
 --   • the fence: anon, and a signed-in token that is not staff, read no section of a page
 --     behind a password and every section of a public one, staff are untouched, and
 --     public.page_sections_unlocked (service role) returns exactly what anon would read
---     without the fence;
+--     without the fence, and public.page_media_unlocked (service role) the images its
+--     visible sections name, which the fence takes from anon too;
 --   • leaving password mode deletes the secret, clears the message and moves the version, and
 --     no writer can put a page into password mode without one.
 
 begin;
-select plan(55);
+select plan(61);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -58,15 +59,35 @@ insert into public.pages (id, tenant_id, slug, title, status) values
   ('61000000-0000-0000-0000-00000000a003', '61000000-0000-0000-0000-000000000001', 'contact',
    '{"en":"Contact","ar":"تواصل"}', 'published'),
   ('61000000-0000-0000-0000-00000000f002', '61000000-0000-0000-0000-0000000000ff', 'about',
-   '{"en":"About","ar":"من نحن"}', 'published');
--- Two sections on About (one hidden: anon never reads it, locked or not) and one on Contact.
+   '{"en":"About","ar":"من نحن"}', 'published'),
+  ('61000000-0000-0000-0000-00000000a004', '61000000-0000-0000-0000-000000000001', 'u14b-draft',
+   '{"en":"Draft","ar":"مسودة"}', 'draft');
+-- Four stills, each named by nothing but the sections below: About's visible section (m1),
+-- About's hidden one (m2), nothing at all (m3) and a visible section of a draft page (m4).
+insert into public.media_assets (id, tenant_id, kind, provider, storage_path, mime_type, width,
+                                 height, folder, alt) values
+  ('61000000-0000-4000-8000-000000000001', '61000000-0000-0000-0000-000000000001', 'image', 'static',
+   'stills/work/u14b-1.jpg', 'image/jpeg', 1280, 720, 'stills', '{"en":"one","ar":"واحد"}'),
+  ('61000000-0000-4000-8000-000000000002', '61000000-0000-0000-0000-000000000001', 'image', 'static',
+   'stills/work/u14b-2.jpg', 'image/jpeg', 1280, 720, 'stills', '{"en":"two","ar":"اثنان"}'),
+  ('61000000-0000-4000-8000-000000000003', '61000000-0000-0000-0000-000000000001', 'image', 'static',
+   'stills/work/u14b-3.jpg', 'image/jpeg', 1280, 720, 'stills', '{"en":"three","ar":"ثلاثة"}'),
+  ('61000000-0000-4000-8000-000000000004', '61000000-0000-0000-0000-000000000001', 'image', 'static',
+   'stills/work/u14b-4.jpg', 'image/jpeg', 1280, 720, 'stills', '{"en":"four","ar":"أربعة"}');
+-- Two sections on About (one hidden: anon never reads it, locked or not), one on Contact and
+-- one on the draft page.
 insert into public.page_sections (id, tenant_id, page_id, type, content, visible, sort_order) values
   ('61000000-0000-0000-0000-0000000051a1', '61000000-0000-0000-0000-000000000001',
-   '61000000-0000-0000-0000-00000000a002', 'slogan', '{"body":{"en":"secret words"}}', true, 10),
+   '61000000-0000-0000-0000-00000000a002', 'slogan',
+   '{"body":{"en":"secret words"},"mediaId":"61000000-0000-4000-8000-000000000001"}', true, 10),
   ('61000000-0000-0000-0000-0000000051a2', '61000000-0000-0000-0000-000000000001',
-   '61000000-0000-0000-0000-00000000a002', 'slogan', '{"body":{"en":"draft words"}}', false, 20),
+   '61000000-0000-0000-0000-00000000a002', 'slogan',
+   '{"body":{"en":"draft words"},"mediaId":"61000000-0000-4000-8000-000000000002"}', false, 20),
   ('61000000-0000-0000-0000-0000000051a3', '61000000-0000-0000-0000-000000000001',
-   '61000000-0000-0000-0000-00000000a003', 'slogan', '{"body":{"en":"open words"}}', true, 10);
+   '61000000-0000-0000-0000-00000000a003', 'slogan', '{"body":{"en":"open words"}}', true, 10),
+  ('61000000-0000-0000-0000-0000000051a4', '61000000-0000-0000-0000-000000000001',
+   '61000000-0000-0000-0000-00000000a004', 'slogan',
+   '{"body":{"en":"unpublished words"},"mediaId":"61000000-0000-4000-8000-000000000004"}', true, 10);
 
 create function _as(p_sub text, p_role text, p_tid text) returns void language sql as $$
   select set_config(
@@ -162,7 +183,8 @@ select is(
   (select coalesce(string_agg(format('%s %s', f.fn, who.r), ', ' order by f.fn, who.r), '')
      from (values ('public.set_page_password(uuid,uuid,text,jsonb)', 'authenticated'),
                   ('public.page_password_check(uuid,uuid,text)', 'service_role'),
-                  ('public.page_sections_unlocked(uuid,uuid)', 'service_role')) as f(fn, allowed)
+                  ('public.page_sections_unlocked(uuid,uuid)', 'service_role'),
+                  ('public.page_media_unlocked(uuid,uuid,uuid[])', 'service_role')) as f(fn, allowed)
      cross join unnest(array['public', 'anon', 'authenticated', 'service_role']) as who(r)
     where has_function_privilege(who.r, f.fn::regprocedure, 'execute') <> (who.r = f.allowed)),
   '', 'one API role each: authenticated sets, the service role checks and reads unlocked');
@@ -174,6 +196,7 @@ select ok(
     where oid in ('public.set_page_password(uuid,uuid,text,jsonb)'::regprocedure,
                   'public.page_password_check(uuid,uuid,text)'::regprocedure,
                   'public.page_sections_unlocked(uuid,uuid)'::regprocedure,
+                  'public.page_media_unlocked(uuid,uuid,uuid[])'::regprocedure,
                   'app.page_is_password_locked(uuid)'::regprocedure,
                   'app.tg_page_password_sync()'::regprocedure))
     and not has_function_privilege('anon', 'app.tg_page_password_sync()', 'execute')
@@ -308,6 +331,10 @@ select is(_val($$ select public.page_password_check('61000000-0000-0000-0000-000
 select is(_val($$ select type from public.page_sections_unlocked(
                     '61000000-0000-0000-0000-000000000001', '61000000-0000-0000-0000-00000000a002') $$),
   '42501', 'nor read a locked page''s sections through the unlocked reader');
+select is(_val($$ select count(*)::text from public.page_media_unlocked(
+                    '61000000-0000-0000-0000-000000000001', '61000000-0000-0000-0000-00000000a002',
+                    array['61000000-0000-4000-8000-000000000001']::uuid[]) $$),
+  '42501', 'nor its images through the unlocked media reader');
 reset role;
 
 -- ── 3. checking a password (the service role) ─────────────────────────────────
@@ -340,6 +367,14 @@ select is(
 select is(_val($$ select type from public.page_sections_unlocked(
                     '61000000-0000-0000-0000-000000000001', '61000000-0000-0000-0000-00000000a002') $$),
   '42501', 'and cannot reach the unlocked reader');
+select is(_val($$ select count(*)::text from public.page_media_unlocked(
+                    '61000000-0000-0000-0000-000000000001', '61000000-0000-0000-0000-00000000a002',
+                    array['61000000-0000-4000-8000-000000000001']::uuid[]) $$),
+  '42501', 'nor the unlocked media reader');
+-- Why that reader exists: 0045's media policy asks page_sections under anon's own RLS, the
+-- fence included, so a still that only the locked page names is no longer anon's to read.
+select is((select count(*)::int from public.media_assets where id = '61000000-0000-4000-8000-000000000001'), 0,
+  'the fence takes the locked page''s own images from anon too');
 select is(_val($$ select mode from public.page_visibility
                    where page_id = '61000000-0000-0000-0000-00000000a002' $$),
   '42501', 'nor page_visibility, which would list every page that is not public (D3)');
@@ -369,6 +404,25 @@ select is(
                                         '61000000-0000-0000-0000-00000000a002') u),
   'slogan:secret words',
   'the unlocked reader returns the visible sections of the published page, and no hidden one');
+select is(
+  (select coalesce(string_agg(format('%s %s %s %s %s', m.id, m.provider, m.storage_path,
+                                     m.width, m.alt ->> 'en'), ' | ' order by m.id), '')
+     from public.page_media_unlocked('61000000-0000-0000-0000-000000000001',
+                                     '61000000-0000-0000-0000-00000000a002',
+                                     array['61000000-0000-4000-8000-000000000001', '61000000-0000-4000-8000-000000000002', '61000000-0000-4000-8000-000000000003']::uuid[]) m),
+  '61000000-0000-4000-8000-000000000001 static stills/work/u14b-1.jpg 1280 one',
+  'the media reader answers what a visible section of the unlocked page names, and nothing a '
+  'hidden section or no section names');
+select is(
+  (select count(*)::int from public.page_media_unlocked('61000000-0000-0000-0000-000000000001',
+                                                       '61000000-0000-0000-0000-00000000a004',
+                                                       array['61000000-0000-4000-8000-000000000004']::uuid[])),
+  0, 'nothing for a page that is not published');
+select is(
+  (select count(*)::int from public.page_media_unlocked('61000000-0000-0000-0000-0000000000ff',
+                                                       '61000000-0000-0000-0000-00000000a002',
+                                                       array['61000000-0000-4000-8000-000000000001']::uuid[])),
+  0, 'other_tenant: nothing under another tenant''s id');
 reset role;
 
 -- ── 5. leaving password mode ───────────────────────────────────────────────────

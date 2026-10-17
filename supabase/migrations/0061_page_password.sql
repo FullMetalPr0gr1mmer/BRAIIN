@@ -36,10 +36,13 @@
 --      password page's text would still be one anonymous request away at
 --      /rest/v1/page_sections?page_id=eq.<id> with the public anon key — the
 --      CSP-'unsafe-inline' kind of claim CLAUDE.md §3 forbids. page_sections_password_fence is
---      a RESTRICTIVE SELECT policy TO anon, and an unlocked request reads the page's sections
---      through public.page_sections_unlocked (service role only), which returns exactly the
---      rows and columns anon would have read without the fence. So the edge gate failing open
---      (decision D6, a KV error) still leaks nothing.
+--      a RESTRICTIVE SELECT policy TO anon and authenticated that only staff pass (a signed-in
+--      role that is not one of the four, such as the planned Sales role, reads no more than
+--      anon), and an unlocked request reads the page's sections through
+--      public.page_sections_unlocked and their images through public.page_media_unlocked
+--      (service role only), which return exactly the rows and columns anon would have read
+--      without the fence. So the edge gate failing open (decision D6, a KV error) still leaks
+--      nothing, and an unlocked page renders what a public one would.
 --
 -- What this file adds:
 --   • page_visibility.mode gains 'password' (templates still take public or hidden only, and
@@ -49,7 +52,8 @@
 --     app.help_text_ok) — and page_visibility.password_version int, which every password
 --     change moves, ending every cookie minted under the old one.
 --   • public.page_passwords, public.set_page_password (Admin and Developer, live-checked),
---     public.page_password_check and public.page_sections_unlocked (service role),
+--     public.page_password_check, public.page_sections_unlocked and
+--     public.page_media_unlocked (service role),
 --     app.page_is_password_locked (the fence's predicate) and the trigger
 --     app.tg_page_password_sync, which refuses password mode without a secret and deletes the
 --     secret, clears the note and moves the version when a page leaves password mode.
@@ -234,6 +238,39 @@ returns table (type text, content jsonb, visible boolean, sort_order int)
 $$;
 revoke all on function public.page_sections_unlocked(uuid, uuid) from public, anon, authenticated, service_role;
 grant execute on function public.page_sections_unlocked(uuid, uuid) to service_role;
+
+-- The images those sections name. anon reads a media row only while something public
+-- references it (0045's media_assets_public_read), and that policy's page_sections branch
+-- runs under anon's own RLS, the fence included: a still used only by a locked page (About's
+-- "who we are" poster, Our Work's intro frames) is anon-readable while the page is public
+-- and gone once it is locked, unlocked visitor or not. This answers, for the page a request
+-- unlocked, what that branch would answer were the page public: the rows among p_ids that a
+-- VISIBLE section of that PUBLISHED page names by `mediaId` (0024's `$.**.mediaId` key), of a
+-- provider the public may render, in PUBLIC_MEDIA_COLUMNS (packages/schemas/content.ts) and
+-- nothing else. An id no such section names, a hidden section's, a draft page's and another
+-- tenant's answer nothing. Service role only, called inside the page-access scope
+-- (src/lib/data/sectionMedia.ts).
+create or replace function public.page_media_unlocked(p_tenant uuid, p_page_id uuid, p_ids uuid[])
+returns table (id uuid, kind text, provider text, storage_path text, width int, height int,
+               alt jsonb, stream_uid text)
+  language sql stable security definer set search_path = '' as $$
+  select m.id, m.kind, m.provider, m.storage_path, m.width, m.height, m.alt, m.stream_uid
+    from public.media_assets m
+   where m.tenant_id = p_tenant
+     and m.id = any (p_ids)
+     and m.provider in ('static', 'cf_images', 'stream', 'storage')
+     and exists (select 1
+                   from public.page_sections s
+                   join public.pages pg on pg.tenant_id = s.tenant_id and pg.id = s.page_id
+                  where s.tenant_id = p_tenant
+                    and s.page_id = p_page_id
+                    and s.visible
+                    and pg.status = 'published'
+                    and jsonb_path_exists(s.content, 'lax $.**.mediaId ? (@ == $id)',
+                                          jsonb_build_object('id', m.id::text)))
+$$;
+revoke all on function public.page_media_unlocked(uuid, uuid, uuid[]) from public, anon, authenticated, service_role;
+grant execute on function public.page_media_unlocked(uuid, uuid, uuid[]) to service_role;
 
 -- ---- 5. Setting a password ------------------------------------------------------------------
 -- The one door. Admin and Developer (maintenance.manage), checked against the LIVE profile as
@@ -1724,7 +1761,8 @@ begin
       -- the function, and the ONE API role that may call it
       ('public.set_page_password(uuid,uuid,text,jsonb)', 'authenticated'),
       ('public.page_password_check(uuid,uuid,text)', 'service_role'),
-      ('public.page_sections_unlocked(uuid,uuid)', 'service_role')) as f(fn, allowed)
+      ('public.page_sections_unlocked(uuid,uuid)', 'service_role'),
+      ('public.page_media_unlocked(uuid,uuid,uuid[])', 'service_role')) as f(fn, allowed)
     cross join unnest(array['public', 'anon', 'authenticated', 'service_role']) as who(r)
    where has_function_privilege(who.r, f.fn::regprocedure, 'execute') <> (who.r = f.allowed);
   if v_bad is not null then
@@ -1739,6 +1777,7 @@ begin
               where oid in ('public.set_page_password(uuid,uuid,text,jsonb)'::regprocedure,
                             'public.page_password_check(uuid,uuid,text)'::regprocedure,
                             'public.page_sections_unlocked(uuid,uuid)'::regprocedure,
+                            'public.page_media_unlocked(uuid,uuid,uuid[])'::regprocedure,
                             'app.tg_page_password_sync()'::regprocedure,
                             'app.page_is_password_locked(uuid)'::regprocedure)
                 and not (prosecdef
@@ -1746,10 +1785,14 @@ begin
                                       where c in ('search_path=""', 'search_path=')))) then
     raise exception '0061: every password function must be SECURITY DEFINER with an empty search_path';
   end if;
-  -- Nothing returns the hash: page_sections_unlocked answers the four section columns, and
-  -- the other two answer a jsonb summary and an int.
+  -- Nothing returns the hash: page_sections_unlocked answers the four section columns,
+  -- page_media_unlocked PUBLIC_MEDIA_COLUMNS, and the other two a jsonb summary and an int.
   if (select pg_get_function_result('public.page_sections_unlocked(uuid,uuid)'::regprocedure))
        <> 'TABLE(type text, content jsonb, visible boolean, sort_order integer)'
+     or (select pg_get_function_result('public.page_media_unlocked(uuid,uuid,uuid[])'::regprocedure))
+       <> 'TABLE(id uuid, kind text, provider text, storage_path text, width integer, height integer, alt jsonb, stream_uid text)'
+     or (select provolatile from pg_proc
+          where oid = 'public.page_media_unlocked(uuid,uuid,uuid[])'::regprocedure) <> 's'
      or (select pg_get_function_result('public.page_password_check(uuid,uuid,text)'::regprocedure)) <> 'integer'
      or (select pg_get_function_result('public.set_page_password(uuid,uuid,text,jsonb)'::regprocedure)) <> 'jsonb' then
     raise exception '0061: a password function returns something other than its stated shape';

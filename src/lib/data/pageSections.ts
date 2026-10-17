@@ -29,8 +29,9 @@ import { pageAccess } from '@/lib/visibility/scope';
 // `withPageAccess`, and only then, and only for that one page, does this loader read the
 // sections through `public.page_sections_unlocked` as the service role. That function
 // returns exactly the rows and columns anon would have read without the fence (a visible
-// section of a published page; type, content, visible, sort_order), so an unlocked page
-// renders what a public one would and nothing more. The scope is read BEFORE any query is
+// section of a published page; type, content, visible, sort_order), and the images those
+// sections name come back the same way (public.page_media_unlocked, sectionMedia.ts), so an
+// unlocked page renders what a public one would and nothing more. The scope is read BEFORE any query is
 // awaited: workerd does not carry an AsyncLocalStorage scope into a thenable's then(), and
 // a supabase-js builder is a thenable (src/lib/data/source.ts has the whole rule).
 // tests/lib/contentSource.spec.ts pins this read, by file and by reason.
