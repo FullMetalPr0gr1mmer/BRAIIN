@@ -22,6 +22,8 @@ interface Query {
   table: string;
   /** A HEAD count (`select(…, { head: true })`): no row leaves the database. */
   head: boolean;
+  /** What it selected (an embedded table joins it). */
+  columns?: string;
   filters: [string, unknown][];
 }
 
@@ -35,8 +37,9 @@ function fakeSupabase(results: Record<string, Result>, rpc: Record<string, unkno
       queries.push(query);
       const result = results[table] ?? {};
       const builder: Record<string, unknown> = {
-        select: (_columns?: string, options?: { head?: boolean }) => {
+        select: (columns?: string, options?: { head?: boolean }) => {
           query.head = options?.head === true;
+          query.columns = columns ?? '';
           return builder;
         },
         eq: (column: string, value: unknown) => {
@@ -95,17 +98,29 @@ describe('loadShellState', () => {
       job_applications: { count: 2 },
     });
     await loadShellState(sb, auth('admin'), visibleNav('admin'), kv(null));
-    for (const table of ['leads', 'job_applications']) {
-      expect(headFilters(table), table).toEqual([
-        [
-          ['tenant_id', 't-1'],
-          ['status', 'new'],
-        ],
-      ]);
-    }
+    // Leads (C4a): the pipeline's first stage, spam left out, the rule of the dashboard's
+    // "New leads waiting" (lead_summary.new), not the legacy status.
+    expect(headFilters('leads')).toEqual([
+      [
+        ['tenant_id', 't-1'],
+        ['is_spam', false],
+        ['lead_stages.is_initial', true],
+      ],
+    ]);
+    expect(headFilters('job_applications')).toEqual([
+      [
+        ['tenant_id', 't-1'],
+        ['status', 'new'],
+      ],
+    ]);
     expect(queries.filter((q) => q.table === 'profiles').map((q) => q.filters)).toEqual([
       [['id', 'u-1']],
     ]);
+    // The stage is joined, inner, through the composite key (an outer join would count every
+    // lead, whatever its stage).
+    expect(queries.find((q) => q.table === 'leads' && q.head)?.columns).toBe(
+      'id,lead_stages!inner(is_initial)',
+    );
   });
 
   it('never queries a count a role has no link for', async () => {

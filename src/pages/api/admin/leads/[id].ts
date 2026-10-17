@@ -4,15 +4,10 @@ import { defineAdminRoute } from '@/lib/admin/route';
 import { NotFoundError, ValidationError } from '@/lib/admin/errors';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { getRow, updateRow } from '@/lib/admin/crud';
-import {
-  LEAD_WRITE_COLUMNS,
-  SAFE_LEAD_COLUMNS,
-  canSeeLeadPii,
-  stripSensitive,
-} from '@/lib/admin/leadFields';
+import { LEAD_WRITE_COLUMNS, canSeeLeadPii, stripSensitive } from '@/lib/admin/leadFields';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { LEAD_CONSTRAINTS, leadPatchValues, leadWriteError } from '@/lib/crm/leadWrite';
-import { PLAIN_GATED_FIELDS, revealLead } from '@/lib/crm/reveal';
+import { LEGACY_REVEAL_FIELDS, revealLead } from '@/lib/crm/reveal';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 
 // A single lead. With `?pii=1` this is the legacy panel's contact-details reveal; the CRM
@@ -47,7 +42,10 @@ export const GET = defineAdminRoute({
     const wantsPii = url.searchParams.get('pii') === '1' && canSeeLeadPii(auth.role);
 
     if (!wantsPii) {
-      const row = await getRow<Record<string, unknown>>(sb, 'leads', auth, id, SAFE_LEAD_COLUMNS);
+      // The safe columns and the pipeline's (C4a): the assignee, value, star, read mark,
+      // tags and logged contact the lead page shows. Additive: the legacy panel reads the
+      // keys it knows and ignores the rest. Never a gated column (0033's grant refuses them).
+      const row = await getRow<Record<string, unknown>>(sb, 'leads', auth, id, LEAD_WRITE_COLUMNS);
       // Readable labels for the interest slugs (Round 3) — derived, never columns.
       const labels = await resolveLeadInterests(sb, auth.tenantId, [row]);
       audit({ action: 'lead.view', entityType: 'lead', entityId: id, detail: { pii: false } });
@@ -55,8 +53,9 @@ export const GET = defineAdminRoute({
     }
 
     // The legacy shape: the safe row, the gated-but-plain fields (timeline_band,
-    // internal_notes, ip_inet) and the decrypted ones. Never a ciphertext column.
-    const { row, plain, decrypted } = await revealLead(auth, sb, id, PLAIN_GATED_FIELDS);
+    // internal_notes, ip_inet; not the score's reasons, which only the CRM's reveal returns)
+    // and the decrypted ones. Never a ciphertext column.
+    const { row, plain, decrypted } = await revealLead(auth, sb, id, LEGACY_REVEAL_FIELDS);
     const labels = await resolveLeadInterests(sb, auth.tenantId, [row]);
     return { ...withInterestLabels(row, labels), ...plain, ...decrypted };
   },

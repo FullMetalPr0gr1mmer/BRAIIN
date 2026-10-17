@@ -9,7 +9,8 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 // a log line or the browser history (verification D9/D10). The filter runs as the caller
 // through public.leads_list (SECURITY INVOKER) for the caller's tenant: RLS, the live check
 // and the column grants decide what comes back, and the rows are cut to the safe fields
-// again here. The total is counted apart from the page, so a page past the end still says
+// again here (LEAD_LIST_FIELDS: since C4a, 0063, the assignee, value, star, read mark, last
+// logged contact and the SLA flag too; never tags or the score's reasons). The total is counted apart from the page, so a page past the end still says
 // how many leads match.
 
 export const prerender = false;

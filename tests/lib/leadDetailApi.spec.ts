@@ -22,6 +22,8 @@ const audits: { action: string; detail?: Record<string, unknown> }[] = [];
 const claimedLimits: unknown[] = [];
 const inserts: { table: string; row: Record<string, unknown> }[] = [];
 const filters: Record<string, unknown>[] = [];
+/** The columns each service-role lead read asked for. */
+const gatedSelects: string[] = [];
 
 /** Three timeline rows, newest first; 12 and 11 share one instant (one statement). */
 const T2 = '2026-10-05T09:00:00.123456+00:00';
@@ -71,6 +73,8 @@ const GATED = {
   timeline_band: null,
   internal_notes: 'old note',
   ip_inet: null,
+  // The score's reasons (C4a): stored keys, an unknown one among them.
+  score_signals: ['company_named', 'budget_given', 'not_a_signal'],
 };
 
 /** The timeline a PostgREST `or` keyset filter leaves (the two forms the route may send). */
@@ -90,7 +94,10 @@ function applyCursor(f: Record<string, unknown>) {
 function builder(table: string, owner: 'svc' | 'rls') {
   const f: Record<string, unknown> = {};
   const b: Record<string, unknown> = {};
-  b['select'] = () => b;
+  b['select'] = (columns?: string) => {
+    if (owner === 'svc' && table === 'leads') gatedSelects.push(String(columns));
+    return b;
+  };
   b['order'] = () => b;
   b['limit'] = (n: number) => {
     f['limit'] = n;
@@ -188,6 +195,7 @@ beforeEach(() => {
   claimedLimits.length = 0;
   inserts.length = 0;
   filters.length = 0;
+  gatedSelects.length = 0;
 });
 
 describe('POST /[id]/reveal', () => {
@@ -208,11 +216,42 @@ describe('POST /[id]/reveal', () => {
       budget: 'gt_200k',
       timeline: 'Before Ramadan',
       timeline_band: null,
+      // C4a (D7): the score's reasons, known keys only, in the scoring's order.
+      score_reasons: ['budget_given', 'company_named'],
     });
-    // The audit row names every field the response carries, and no other.
-    expect([...(audits[0]!.detail!['fields'] as string[])].sort()).toEqual(
-      Object.keys(body.data).sort(),
+    // The audit row names every field the response carries, and no other: the reasons are
+    // the stored score_signals column.
+    const disclosed = Object.keys(body.data).map((key) =>
+      key === 'score_reasons' ? 'score_signals' : key,
     );
+    expect([...(audits[0]!.detail!['fields'] as string[])].sort()).toEqual(disclosed.sort());
+  });
+
+  it('reads only the columns it returns: the contact details and the reasons, never the notes', async () => {
+    await reveal.POST(ctx(`/api/admin/leads/${LEAD}/reveal`, 'POST'));
+    expect(gatedSelects).toHaveLength(1);
+    expect(gatedSelects[0]!.split(',').sort()).toEqual(
+      [
+        'email_enc',
+        'phone_enc',
+        'budget_enc',
+        'timeline_text_enc',
+        'timeline_band',
+        'score_signals',
+      ].sort(),
+    );
+  });
+
+  it('returns no reasons for a lead that scored nothing', async () => {
+    const saved = GATED.score_signals;
+    (GATED as Record<string, unknown>)['score_signals'] = [];
+    try {
+      const res = await reveal.POST(ctx(`/api/admin/leads/${LEAD}/reveal`, 'POST'));
+      const body = (await res.json()) as { data: Record<string, unknown> };
+      expect(body.data['score_reasons']).toEqual([]);
+    } finally {
+      (GATED as Record<string, unknown>)['score_signals'] = saved;
+    }
   });
 
   it('spends a slot of the REVEAL limit (60 an hour), not the export one', async () => {
@@ -232,10 +271,12 @@ describe('POST /[id]/reveal', () => {
     expect(events).toEqual(['svc:profiles', 'ops:pii-reveal']);
   });
 
-  it('no audit row: 403 and nothing gated read', async () => {
+  it('no audit row: 403 and nothing gated read, the reasons included', async () => {
     auditOk = false;
-    expect((await reveal.POST(ctx(`/api/admin/leads/${LEAD}/reveal`, 'POST'))).status).toBe(403);
+    const res = await reveal.POST(ctx(`/api/admin/leads/${LEAD}/reveal`, 'POST'));
+    expect(res.status).toBe(403);
     expect(events).not.toContain('svc:leads');
+    expect(JSON.stringify(await res.json())).not.toMatch(/budget_given|score_reasons/);
   });
 });
 
