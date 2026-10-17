@@ -492,6 +492,32 @@ export const SECTION_ADVANCED_ONLY: Partial<Record<SectionType, readonly string[
   hero: ['intro'],
 };
 
+/**
+ * The content keys a field writes: its own name, or, for an accent stored as two numbers
+ * (AccentDef mode 'from'), the two keys it writes into its parent.
+ */
+export function contentKeysOf(field: FieldDef): string[] {
+  return field.kind === 'accent' && field.accent?.mode === 'from'
+    ? [field.accent.keys.en, field.accent.keys.ar]
+    : [field.name];
+}
+
+/**
+ * The key groups a type reads only TOGETHER, derived from the fields themselves: an
+ * accent counts the words of its own heading, so a stored accent beside a built-in
+ * heading would colour the wrong words (and a stored heading beside a built-in accent
+ * would colour nothing). Each accent field names its text in `accent.of`, so the groups
+ * are exactly the accents and their texts — the same list F6 declares as `together` in
+ * src/lib/sections/copy/index.ts, which tests/lib/sectionUi.spec.ts holds this equal to.
+ * Derived rather than imported: that module is the built-in COPY, which must not ship in
+ * the admin bundle (F6).
+ */
+export function accentGroups(fields: readonly FieldDef[]): string[][] {
+  return fields
+    .filter((f) => f.kind === 'accent' && f.accent !== undefined)
+    .map((f) => [f.accent!.of, ...contentKeysOf(f)]);
+}
+
 /** The fields for one section type, or null when it takes no content (table-backed). */
 export function sectionFields(type: unknown): readonly FieldDef[] | null {
   return typeof type === 'string' && type in SECTION_UI

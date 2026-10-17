@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { SECTION_CONTENT_SCHEMAS, type SectionType } from '@schemas/sections';
-import { SECTION_UI, SECTION_ADVANCED_ONLY, sectionFields } from '@/lib/admin/sectionUi';
+import {
+  SECTION_UI,
+  SECTION_ADVANCED_ONLY,
+  accentGroups,
+  sectionFields,
+} from '@/lib/admin/sectionUi';
+import { SECTION_COPY } from '@/lib/sections/copy';
 import { objectToPayload } from '@/lib/admin/formPayload';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 
@@ -183,6 +189,40 @@ describe('SECTION_UI agrees with SECTION_CONTENT_SCHEMAS', () => {
     const interval = SECTION_UI.testimonials!.find((f) => f.name === 'intervalMs')!;
     expect(interval.kind).toBe('range');
     expect(interval.range).toEqual({ min: 4000, max: 15000, step: 500, suffix: ' ms' });
+  });
+
+  it('the editor stores whole every group F6 declares (F5b)', () => {
+    // omitBuiltIn keeps a group whole; the admin derives the groups from its own fields
+    // (an accent and the text it counts) rather than importing the built-in COPY, which
+    // must not ship in the admin bundle. Every group F6 declares must be one of them, or
+    // the editor would store less than the renderer reads together.
+    const key = (group: readonly string[]) => [...group].sort().join('+');
+    for (const type of TYPES) {
+      const copy = SECTION_COPY[type as keyof typeof SECTION_COPY];
+      const derived = new Set(accentGroups(SECTION_UI[type] ?? []).map(key));
+      for (const group of copy.together)
+        expect([...derived], `${type}: ${key(group)}`).toContain(key(group));
+    }
+  });
+
+  it('it stores one group F6 does not: the slogan band’s (F5b)', () => {
+    // The derived list is an accent and its text, every time. F6 declares a group only
+    // where storing one of them ALONE AT ITS BUILT-IN value already changes the page
+    // (most types read an accent only beside an authored heading); the slogan band reads
+    // its accent either way, so F6 needs no group there. The editor still stores the two
+    // together: the range it shows is the built-in's, counted against a text the editor
+    // may have changed, and storing what is shown is the honest save. Nothing else
+    // differs — a difference here is a drift between the two lists, not a new case.
+    const extra: string[] = [];
+    for (const type of TYPES) {
+      const copy = SECTION_COPY[type as keyof typeof SECTION_COPY];
+      const declared = new Set(copy.together.map((g) => [...g].sort().join('+')));
+      for (const group of accentGroups(SECTION_UI[type] ?? [])) {
+        const key = [...group].sort().join('+');
+        if (!declared.has(key)) extra.push(`${type}: ${key}`);
+      }
+    }
+    expect(extra).toEqual(['slogan: accentFromAr+accentFromEn+text']);
   });
 
   it('table-backed and unknown types have no editor', () => {

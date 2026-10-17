@@ -156,7 +156,19 @@ describe('admin field kinds render', () => {
       { type: 'cta' },
     );
     expect(typed).toContain('Button label');
-    expect(typed).toContain('Advanced (JSON)');
+    // "Advanced (JSON)" is Admin-only since F5b (decision D5).
+    expect(typed).not.toContain('Advanced (JSON)');
+    expect(
+      renderToStaticMarkup(
+        createElement(Field, {
+          field,
+          value: { values: {}, json: null },
+          values: { type: 'cta' },
+          onChange: noop,
+          canAdvanced: true,
+        }),
+      ),
+    ).toContain('Advanced (JSON)');
     expectUniqueIds(typed);
 
     const json = render(field, { values: {}, json: '{"intro":true}' }, { type: 'hero' });
@@ -726,5 +738,71 @@ describe('clip v2 (Admin v2 F5b)', () => {
     expect(html).toContain('/media/gone.mp4');
     // Nothing is claimed about a file whose length we do not know.
     expect(html).not.toContain('clipf__says');
+  });
+});
+
+describe('section content prefilled with the built-in copy (Admin v2 F5b)', () => {
+  const field = RESOURCE_UI['sections']!.fields.find((x) => x.kind === 'sectionContent')!;
+  const builtIn = {
+    tag: { en: 'Get in touch', ar: 'تواصل معنا' },
+    heading: { en: 'Say hello', ar: 'قل مرحبا' },
+    text: { en: 'We read everything.', ar: 'نقرأ كل شيء.' },
+    buttonLabel: { en: 'Start a project', ar: 'ابدأ مشروعا' },
+  };
+  const render = (value: unknown, props: Record<string, unknown> = {}) =>
+    renderToStaticMarkup(
+      createElement(Field, {
+        field,
+        value,
+        values: { type: 'cta' },
+        onChange: noop,
+        builtIn,
+        ...props,
+      }),
+    );
+
+  it('a field with nothing of its own shows the words the page shows', () => {
+    const html = render({ values: {}, json: null });
+    expect(html).toContain('value="Say hello"');
+    expect(html).toContain('value="Get in touch"');
+    expect(html).toContain('Change one to make it yours');
+    // Nothing to put back yet.
+    expect(html).not.toContain('Reset to the built-in copy');
+  });
+
+  it('a field the editor wrote keeps their words, and Reset appears', () => {
+    const html = render({
+      values: { heading: { en: 'Our own words', ar: 'كلماتنا' } },
+      json: null,
+    });
+    expect(html).toContain('value="Our own words"');
+    // The others still show the built-in.
+    expect(html).toContain('value="Get in touch"');
+    expect(html).toContain('Reset to the built-in copy');
+  });
+
+  it('the Arabic left at the built-in under a changed English is said', () => {
+    const html = render({
+      values: { heading: { en: 'Our own words', ar: 'قل مرحبا' } },
+      json: null,
+    });
+    expect(html).toContain('Arabic still shows the built-in text.');
+    // Both changed: nothing to say.
+    expect(
+      render({ values: { heading: { en: 'Our own words', ar: 'كلماتنا' } }, json: null }),
+    ).not.toContain('Arabic still shows the built-in text.');
+  });
+
+  it('with no built-in known, the field reads as it did before', () => {
+    const html = renderToStaticMarkup(
+      createElement(Field, {
+        field,
+        value: { values: {}, json: null },
+        values: { type: 'cta' },
+        onChange: noop,
+      }),
+    );
+    expect(html).toContain('leave one empty to keep the built-in copy');
+    expect(html).not.toContain('Reset to the built-in copy');
   });
 });

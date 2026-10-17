@@ -134,6 +134,8 @@ export function Field({
         renderField={renderField}
         idPrefix={idPrefix}
         errors={errors}
+        builtIn={builtIn}
+        canAdvanced={canAdvanced}
       />
     );
   }
