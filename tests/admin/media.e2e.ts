@@ -32,7 +32,11 @@ test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const VIEWPORTS = [320, 390, 1280];
-/** The seeded still the first published project uses as its poster (05-media-stills.json). */
+/**
+ * The seeded still the first published project uses as its poster (05-media-stills.json).
+ * Opened through a search: with CI's uploads first, the 44 stills fill page 1 and this one can
+ * sit on its last row or past it.
+ */
 const USED_STILL = 'A person in a black head wrap';
 
 async function jpeg(width: number, height: number, tint: number): Promise<Buffer> {
@@ -97,7 +101,8 @@ test.describe('as admin', () => {
     await expect(page.locator('.admin-header .admin-sub')).toContainText(
       'Images are resized and compressed automatically for every screen.',
     );
-    await expect(tile(page, USED_STILL)).toBeVisible();
+    // The seeded still may sit on any page once uploads land: the grid shows the newest first.
+    await expect(grid(page).getByRole('button').first()).toBeVisible();
     await expect(page.getByText(/^Storage used: .+ of 1 GB$/)).toBeVisible();
     await expectNoAxe(page, 'the grid');
 
@@ -124,7 +129,8 @@ test.describe('as admin', () => {
     await search(page, 'zzzz-nothing');
     await expect(page.getByText('No pictures match "zzzz-nothing".')).toBeVisible();
     await page.getByRole('button', { name: 'Clear search' }).click();
-    await expect(tile(page, USED_STILL)).toBeVisible();
+    await expect(grid(page).getByRole('button').first()).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/media$/);
 
     await page.getByRole('button', { name: 'Needs alt text' }).click();
     await expect(page.getByRole('button', { name: 'Needs alt text' })).toHaveAttribute(
@@ -247,7 +253,7 @@ for (const role of ['content_creator', 'developer'] as const) {
     test.use({ storageState: authFile(role) });
 
     test('Upload and Replace, never Delete', async ({ page }) => {
-      await openLibrary(page);
+      await openLibrary(page, '?q=head%20wrap');
       await expect(page.getByRole('link', { name: 'Upload' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Choose images' })).toBeVisible();
       await tile(page, USED_STILL).click();
@@ -262,7 +268,7 @@ test.describe('as seo', () => {
   test.use({ storageState: authFile('seo') });
 
   test('no Upload, Replace or Delete; a picture’s words still save', async ({ page }) => {
-    await openLibrary(page);
+    await openLibrary(page, '?q=head%20wrap');
     await expect(page.getByRole('link', { name: 'Upload' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Choose images' })).toHaveCount(0);
     await tile(page, USED_STILL).click();
