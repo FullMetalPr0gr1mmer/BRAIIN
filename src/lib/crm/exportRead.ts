@@ -81,6 +81,21 @@ export function afterFilter(after: ExportCursor): string {
   return `created_at.lt."${after.at}",and(created_at.eq."${after.at}",id.gt.${after.id})`;
 }
 
+/**
+ * The PostgREST filter for a discipline (C4a, as app.lead_filter's): its "help me choose"
+ * leads, or a lead of one of its services. Every slug is SlugSchema-shaped (the link's by
+ * LeadExportQuerySchema, the services' checked by the export as it reads them), so none can
+ * carry PostgREST's reserved characters. A discipline with no service is its own leads only.
+ * Every page after the first carries it beside the keyset's own `or` (readPaged asks for a
+ * second page whenever the first comes back with any rows short of the cap, so most
+ * exports do): postgrest-js appends both `or` parameters and PostgREST ANDs them
+ * (tests/lib/leadExport.spec.ts checks page 2 carries both).
+ */
+export function disciplineFilter(discipline: string, services: readonly string[]): string {
+  const own = `discipline_of_interest.eq.${discipline}`;
+  return services.length > 0 ? `${own},service_of_interest.in.(${services.join(',')})` : own;
+}
+
 /** Is the export asking for spam? Only when it says so, as on the list. */
 export function exportsSpam(input: LeadExportQuery): boolean {
   if (input.spam !== undefined) return input.spam === 'true';

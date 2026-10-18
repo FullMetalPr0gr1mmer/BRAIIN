@@ -19,11 +19,26 @@ const audits: { action: string; detail?: Record<string, unknown> }[] = [];
 const systemLogs: { level: string; message: string; detail?: Record<string, unknown> }[] = [];
 let pages: Record<string, unknown>[][] = [];
 let leadReads = 0;
+let disciplineExists = true;
+const DISCIPLINE = '88888888-8888-4888-8888-888888888888';
 
 function recorder(owner: string, table: string) {
   const b: Record<string, unknown> = {};
   const page = table === 'leads' ? leadReads++ : -1;
-  for (const m of ['select', 'eq', 'gte', 'lte', 'lt', 'or', 'in', 'order', 'limit', 'range']) {
+  for (const m of [
+    'select',
+    'eq',
+    'gte',
+    'lte',
+    'lt',
+    'or',
+    'in',
+    'is',
+    'not',
+    'order',
+    'limit',
+    'range',
+  ]) {
     b[m] = (...args: unknown[]) => {
       calls.push({ owner, table, method: m, args, page });
       return b;
@@ -33,7 +48,17 @@ function recorder(owner: string, table: string) {
     let data: unknown = [];
     if (table === 'leads') data = pages.shift() ?? [];
     if (table === 'lead_stages') data = [{ id: STAGE, label: 'Proposal sent' }];
+    // A discipline's services (C4a): one with a slug PostgREST could misread is dropped.
+    if (table === 'services')
+      data = [{ slug: 'logo' }, { slug: 'motion-graphics' }, { slug: 'a,b' }];
     return Promise.resolve({ data, error: null }).then(ok);
+  };
+  b['maybeSingle'] = async () => {
+    calls.push({ owner, table, method: 'maybeSingle', args: [], page });
+    return {
+      data: table === 'disciplines' && disciplineExists ? { id: DISCIPLINE } : null,
+      error: null,
+    };
   };
   return b;
 }
@@ -160,6 +185,7 @@ beforeEach(() => {
   decryptKeys.length = 0;
   keyImportFails = false;
   leadReads = 0;
+  disciplineExists = true;
   pages = [[ROW]];
 });
 
@@ -231,6 +257,107 @@ describe('the lead export (C3): filters', () => {
     expect(await spamFilter('?spam=true')).toEqual([true]);
     // A legacy link filtered on the spam status asks for spam too.
     expect(await spamFilter('?status=spam')).toEqual([true]);
+  });
+
+  // C4a: the list's other filters a link may carry.
+  it('assigned: the session\'s user for "me", none, or a person', async () => {
+    const assigned = async (query: string) => {
+      calls.length = 0;
+      leadReads = 0;
+      expect((await call(query)).status, query).toBe(200);
+      return onPage(0, 'eq')
+        .concat(onPage(0, 'is'))
+        .filter((c) => c.args[0] === 'assigned_to')
+        .map((c) => `${c.method}:${String(c.args[1])}`);
+    };
+    // "me" is the session's user, never a value in the link.
+    expect(await assigned('?assigned=me')).toEqual([`eq:${USER}`]);
+    expect(await assigned('?assigned=none')).toEqual(['is:null']);
+    expect(await assigned(`?assigned=${PERSON}`)).toEqual([`eq:${PERSON}`]);
+    expect(await assigned('')).toEqual([]);
+    expect((await call('?assigned=someone')).status).toBe(422);
+  });
+
+  it('source, channel, star and read mark become PostgREST filters on the read', async () => {
+    await call('?source=manual&channel=phone&starred=true&unread=true');
+    const filters = onPage(0, 'eq').concat(onPage(0, 'is'));
+    for (const expected of [
+      ['eq', ['source', 'manual']],
+      ['eq', ['channel', 'phone']],
+      ['eq', ['is_starred', true]],
+      ['is', ['read_at', null]],
+    ] as const) {
+      expect(filters).toContainEqual(
+        expect.objectContaining({ owner: 'svc', method: expected[0], args: expected[1] }),
+      );
+    }
+    calls.length = 0;
+    leadReads = 0;
+    await call('?starred=false&unread=false');
+    expect(onPage(0, 'eq')).toContainEqual(
+      expect.objectContaining({ args: ['is_starred', false] }),
+    );
+    expect(onPage(0, 'not')).toEqual([expect.objectContaining({ args: ['read_at', 'is', null] })]);
+    for (const bad of ['?source=web', '?channel=fax', '?starred=yes', '?unread=1']) {
+      expect((await call(bad)).status, bad).toBe(422);
+    }
+  });
+
+  it('a discipline: its "help me choose" leads or its services\' leads, read once', async () => {
+    await call('?discipline=branding');
+    // The discipline and its services, read as the caller, once for the export.
+    expect(calls.filter((c) => c.table === 'disciplines' && c.method === 'eq')).toEqual([
+      expect.objectContaining({ owner: 'rls', args: ['tenant_id', TENANT] }),
+      expect.objectContaining({ owner: 'rls', args: ['slug', 'branding'] }),
+    ]);
+    expect(calls.filter((c) => c.table === 'services' && c.method === 'eq')).toEqual([
+      expect.objectContaining({ owner: 'rls', args: ['tenant_id', TENANT] }),
+      expect.objectContaining({ owner: 'rls', args: ['discipline_id', DISCIPLINE] }),
+    ]);
+    expect(onPage(0, 'or').map((c) => c.args[0])).toEqual([
+      'discipline_of_interest.eq.branding,service_of_interest.in.(logo,motion-graphics)',
+    ]);
+    // Page 2 (asked for because page 1 came back short of the cap) carries the discipline
+    // AND the keyset: two `or` parameters, which PostgREST ANDs.
+    expect(onPage(1, 'or').map((c) => c.args[0])).toEqual([
+      'discipline_of_interest.eq.branding,service_of_interest.in.(logo,motion-graphics)',
+      `created_at.lt."${ROW.created_at}",and(created_at.eq."${ROW.created_at}",id.gt.${LEAD})`,
+    ]);
+    // A discipline the tenant does not have: its own slug only.
+    disciplineExists = false;
+    calls.length = 0;
+    leadReads = 0;
+    await call('?discipline=events');
+    expect(calls.filter((c) => c.table === 'services')).toEqual([]);
+    expect(onPage(0, 'or').map((c) => c.args[0])).toEqual(['discipline_of_interest.eq.events']);
+    for (const bad of [
+      '?discipline=Bad%20Slug',
+      '?discipline=a,b',
+      `?discipline=${'a'.repeat(65)}`,
+    ]) {
+      expect((await call(bad)).status, bad).toBe(422);
+    }
+  });
+
+  it('the attempt row names every filter the link carried', async () => {
+    await call(
+      `?assigned=me&source=manual&channel=phone&discipline=branding&starred=true&unread=false`,
+    );
+    const attempt = audits.find((a) => a.action === 'export.csv.attempt')!.detail!;
+    expect(attempt).toMatchObject({
+      assigned: 'me',
+      source: 'manual',
+      channel: 'phone',
+      discipline: 'branding',
+      starred: 'true',
+      unread: 'false',
+    });
+  });
+
+  it("never reads the score's reasons (they leave only through the one-lead reveal, D7)", async () => {
+    await call();
+    const select = leadCalls().find((c) => c.method === 'select')!;
+    expect(String(select.args[0]).split(',')).not.toContain('score_signals');
   });
 
   it('refuses a search term in the link (it would sit in history and logs)', async () => {
