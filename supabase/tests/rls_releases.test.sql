@@ -1,4 +1,4 @@
--- pgTAP: the release ledger (migrations 0038 and 0062, Admin v2 R1 and R3a).
+-- pgTAP: the release ledger (migrations 0038, 0062 and 0066, Admin v2 R1, R3a and R5).
 --
 -- That staff hold the draft writes R3 granted (0062) and still write nothing while their
 -- tenant's releases are off; who may stage a pending change (content_drafts) once they are
@@ -8,8 +8,10 @@
 -- by a scheduled release is out of reach of every staff token (RLS and the lock, each on
 -- its own); the shape and size caps of a draft; that the site versions (content_releases)
 -- and their items are read-only to every API role but the service role, and append-only
--- even for it; the registry and the switch-on flag; and the custom_themes delete gate the
--- registry contract needed. Rows run over admin, content_creator, seo, developer, a `sales`
+-- even for it (since 0066 a system item, written outside a release, has no release and no
+-- draft); the registry and the switch-on flag; and the custom_themes delete gate the
+-- registry contract needed (with releases off again: 0066's guard refuses every staff write
+-- to live content outside a release while they are on; release_guard.test.sql). Rows run over admin, content_creator, seo, developer, a `sales`
 -- claim (the role arrives with C10; the policies read the role from the claim, so the
 -- denial is provable now), anon and other_tenant (CLAUDE.md §9). Since 0062 a draft write
 -- needs a live profile (RESTRICTIVE, app.live_role()), so every staff claim below has one;
@@ -18,7 +20,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
 begin;
-select plan(111);
+select plan(115);
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────
 insert into public.tenants (id, name) values
@@ -546,6 +548,18 @@ select throws_ok(
              'service', gen_random_uuid(), 'update', '{}') $$,
   '23514', 'new row for relation "content_release_items" violates check constraint "content_release_items_shape"',
   'an update item carries both images');
+-- 0066: a system item (a write outside a release, recorded for a tenant with releases on)
+-- has no release and no draft; an item with a draft must name its release.
+select lives_ok(
+  $$ insert into public.content_release_items (tenant_id, release_id, entity_type, entity_id, op, after)
+     values ('38000000-0000-0000-0000-00000000000a', null, 'service', gen_random_uuid(), 'create', '{}') $$,
+  'a system item has no release (release_id is nullable since 0066)');
+select throws_ok(
+  $$ insert into public.content_release_items (tenant_id, release_id, entity_type, entity_id, op, after, draft_id)
+     values ('38000000-0000-0000-0000-00000000000a', null, 'service', gen_random_uuid(), 'create', '{}',
+             gen_random_uuid()) $$,
+  '23514', 'new row for relation "content_release_items" violates check constraint "content_release_items_system_shape"',
+  'an item with a draft but no release is refused (content_release_items_system_shape)');
 select throws_ok($$ delete from public.content_releases $$, '42501', null,
   'the service role CANNOT delete a release');
 select throws_ok($$ update public.content_release_items set after = '{}' $$, '42501', null,
@@ -558,6 +572,16 @@ select throws_ok(
      values ('38000000-0000-0000-0000-00000000000a', '38000000-0000-0000-0000-0000000001b1',
              'service', gen_random_uuid(), 'delete', '{}') $$,
   '23503', null, 'an item cannot name another tenant''s release (tenant-fenced key)');
+
+-- Who writes items: the capture inside a release (0038) and, outside one, the system capture
+-- (0066), both as the snapshot functions' owner; staff only read them.
+select is(
+  (select string_agg(format('%s %s %s', policyname, cmd, permissive), ', ' order by policyname)
+     from pg_policies where schemaname = 'public' and tablename = 'content_release_items'),
+  'content_release_items_insert_capture INSERT PERMISSIVE, '
+  'content_release_items_insert_system INSERT PERMISSIVE, '
+  'content_release_items_read SELECT PERMISSIVE',
+  'the items'' policies are exactly the read, the release capture and the system capture');
 
 -- ── 9. The registry and the switch-on flag ──────────────────────────────────────
 set local role authenticated;
@@ -594,6 +618,15 @@ select is(app.releases_enabled('38000000-0000-0000-0000-00000000000b'), false,
 select ok(app.releases_enabled('38000000-0000-0000-0000-00000000000a')
           and not app.releases_enabled('38000000-0000-0000-0000-00000000000b'),
   'the flag is per tenant: on for A (section 0 switched it on), still off for B');
+
+-- While A's releases are on, even its admin's delete is refused outside a release (0066's
+-- guard). Section 10 is the registry contract's gate, so it runs with releases off again.
+set local role authenticated;
+select _as('admin', '38000000-0000-0000-0000-0000000000a1');
+select throws_ok($$ select _delete_theme() $$, '42501', 'Live content changes only through a release.',
+  'releases on: admin CANNOT delete a theme outside a release (the guard, 0066)');
+reset role;
+delete from app.release_tenants where tenant_id = '38000000-0000-0000-0000-00000000000a';
 
 -- ── 10. Removing a theme is Admin's (registry contract #2) ──────────────────────
 set local role authenticated;
