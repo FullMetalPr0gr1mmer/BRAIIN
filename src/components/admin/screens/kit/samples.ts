@@ -129,7 +129,8 @@ export const KIT_FIELDS: readonly FieldDef[] = [
     help: 'A made-up list: this screen loads nothing, so there is nothing to add from.',
   },
   { name: 'clip', label: 'Sample loop', kind: 'clip', pathOnly: true },
-  { name: 'posterMediaId', label: 'Sample poster', kind: 'media' },
+  // U4 (risk R9): the kit never writes, so its picker offers no Upload in place.
+  { name: 'posterMediaId', label: 'Sample poster', kind: 'media', media: { upload: false } },
   { name: 'body', label: 'Sample body', kind: 'richtext' },
   {
     name: 'status',

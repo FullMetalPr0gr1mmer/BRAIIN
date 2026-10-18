@@ -133,7 +133,9 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'health.css',
       'help.css',
       'kit.css',
+      'leads.css',
       'login.css',
+      'media.css',
       'personal.css',
       'search.css',
       'stats.css',
@@ -404,6 +406,11 @@ describe('admin.css keeps the hooks the markup renders', () => {
       expect(pagesFor('activity.css')).toEqual(['src/pages/admin/audit.astro']);
       expect(pagesFor('help.css')).toEqual(['src/pages/admin/help.astro']);
       expect(pagesFor('kit.css')).toEqual(['src/pages/admin/kit.astro']);
+      // The leads screens (C4b): their three pages, and no other.
+      expect(pagesFor('leads.css')).toEqual([
+        'src/pages/admin/leads/[id].astro',
+        'src/pages/admin/leads/index.astro',
+      ]);
       // The sign-in screens (F7) render login.css's classes in their pages and in the shell
       // they share, src/layouts/AuthLayout.astro, which the walk traces to all four (the
       // invite page joined in U12b).
@@ -420,6 +427,11 @@ describe('admin.css keeps the hooks the markup renders', () => {
         'src/pages/admin/reset.astro',
       ]);
       expect(pagesFor('search.css')).toEqual(['src/pages/admin/search.astro']);
+      // The media library (U4): through its island's entry to the two pages hydrating it.
+      expect(pagesFor('media.css')).toEqual([
+        'src/pages/admin/media/[id].astro',
+        'src/pages/admin/media/index.astro',
+      ]);
       expect(pagesFor('users.css')).toEqual(['src/pages/admin/users.astro']);
       expect(pagesFor('personal.css')).toEqual([
         'src/pages/admin/account.astro',

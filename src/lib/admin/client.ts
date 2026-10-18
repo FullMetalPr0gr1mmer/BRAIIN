@@ -18,7 +18,14 @@ export interface ApiError {
 }
 
 export class AdminApiError extends Error {
-  constructor(readonly info: ApiError) {
+  /**
+   * `body` is the whole JSON answer, for a refusal that carries more than the envelope: the
+   * manual add's possible duplicates (`matches`, Admin v2 C4b). Never shown as it is.
+   */
+  constructor(
+    readonly info: ApiError,
+    readonly body: Readonly<Record<string, unknown>> = {},
+  ) {
     super(info.detail ?? info.error);
     this.name = 'AdminApiError';
   }
@@ -74,15 +81,18 @@ async function unwrap<T>(response: Response): Promise<T> {
   }
 
   if (!response.ok || payload['ok'] === false) {
-    throw new AdminApiError({
-      error: String(payload['error'] ?? 'request-failed'),
-      status: response.status,
-      detail: typeof payload['detail'] === 'string' ? payload['detail'] : undefined,
-      field: typeof payload['field'] === 'string' ? payload['field'] : undefined,
-      issues: Array.isArray(payload['issues'])
-        ? (payload['issues'] as { path: string; message: string }[])
-        : undefined,
-    });
+    throw new AdminApiError(
+      {
+        error: String(payload['error'] ?? 'request-failed'),
+        status: response.status,
+        detail: typeof payload['detail'] === 'string' ? payload['detail'] : undefined,
+        field: typeof payload['field'] === 'string' ? payload['field'] : undefined,
+        issues: Array.isArray(payload['issues'])
+          ? (payload['issues'] as { path: string; message: string }[])
+          : undefined,
+      },
+      payload,
+    );
   }
 
   return (payload['data'] ?? payload) as T;

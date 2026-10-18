@@ -201,11 +201,20 @@ const TEXT = /^[^\p{Cc}\p{Cs}\u2028\u2029]*$/u;
 const text = (max: number) =>
   z.string().trim().min(1).max(max).regex(TEXT, 'no control characters');
 
-/** Alt text an upload must carry: both languages, as for every image (DoD #4). */
-const UploadAltSchema = z.object({
+/**
+ * Alt text an image must carry: both languages, as for every image (DoD #4). What the upload
+ * takes, and (Admin v2 U4) what the library's drawer may save over it, so neither can store
+ * what the other refuses.
+ */
+export const MediaAltSchema = z.object({
   en: text(MEDIA_META_LIMITS.alt),
   ar: text(MEDIA_META_LIMITS.alt),
 });
+const UploadAltSchema = MediaAltSchema;
+
+/** One tag of an image, and a folder: the upload's rules, shared with the drawer (U4). */
+export const MediaTagSchema = text(MEDIA_META_LIMITS.tag);
+export const MediaFolderSchema = text(MEDIA_META_LIMITS.folder);
 
 /**
  * The name the library shows for a file: its own name, as the editor's computer had it,
@@ -223,8 +232,8 @@ export const MediaUploadMetaSchema = z
   .object({
     alt: UploadAltSchema,
     displayName: MediaDisplayNameSchema.optional(),
-    tags: z.array(text(MEDIA_META_LIMITS.tag)).max(MEDIA_META_LIMITS.tags).default([]),
-    folder: text(MEDIA_META_LIMITS.folder).optional(),
+    tags: z.array(MediaTagSchema).max(MEDIA_META_LIMITS.tags).default([]),
+    folder: MediaFolderSchema.optional(),
   })
   .strict();
 export type MediaUploadMeta = z.infer<typeof MediaUploadMetaSchema>;
@@ -274,6 +283,32 @@ export function decodeMediaMeta(value: string | null): unknown {
     return undefined;
   }
 }
+
+// ── The library (Admin v2 U4, migration 0064) ───────────────────────────────────
+
+/** Pictures on one page of the library: four columns of twelve at 1,280 px (D10). */
+export const MEDIA_LIBRARY_PAGE_SIZE = 48;
+
+/** The library's search: what `public.media_library` takes (0064 refuses the rest, 22023). */
+export const MEDIA_LIBRARY_QUERY_MAX = 64;
+
+/**
+ * `GET /api/admin/media/library`: a search (at most 64 characters, no C0 or C1 control
+ * character, the class 0064 refuses), the images only (a video is a site file, not a row,
+ * until Stream: EXC-009), the "Needs alt text" filter, and a page.
+ */
+export const MediaLibraryQuerySchema = z.object({
+  q: z
+    .string()
+    .max(MEDIA_LIBRARY_QUERY_MAX)
+    .regex(/^[^\u0000-\u001f\u007f-\u009f]*$/, 'no control characters')
+    .optional(),
+  tab: z.literal('image').default('image'),
+  alt: z.literal('missing').optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(MEDIA_LIBRARY_PAGE_SIZE),
+  offset: z.coerce.number().int().min(0).max(10_000).default(0),
+});
+export type MediaLibraryQuery = z.infer<typeof MediaLibraryQuerySchema>;
 
 /** A reference to a media_assets row, with an optional per-use alt override. */
 export const MediaRefSchema = z.object({

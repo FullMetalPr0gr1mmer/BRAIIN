@@ -28,6 +28,11 @@ import type { AdminStylesheet } from '@/lib/admin/stylesheets';
 
 interface Props {
   title: string;
+  /** The h1 when it differs from the title (C4b): a lead's page is titled "Lead" while its h1
+      is the person's name, so names stay out of tab titles and history (crm.md §11). */
+  heading?: string | undefined;
+  /** `auto` for an h1 that is a person's words (a name), read in its own direction. */
+  headingDir?: 'auto' | undefined;
   // `| undefined` on both: under exactOptionalPropertyTypes a caller computing
   // `subtitle` from an optional value passes an explicit undefined, which `?:` alone
   // rejects.
@@ -45,7 +50,7 @@ interface Props {
   preload?: ShellPreload | undefined;
 }
 
-const { title, subtitle, layout = 'app', styles = [], preload } = Astro.props;
+const { title, heading, headingDir, subtitle, layout = 'app', styles = [], preload } = Astro.props;
 const session = Astro.locals.session;
 const supabase = Astro.locals.supabase;
 const nav = session ? visibleNav(session.role) : [];
@@ -128,6 +133,8 @@ const account = session ? accountViewFor(session, shell.displayName) : null;
         app ? (
           <PageHead
             title={title}
+            heading={heading}
+            headingDir={headingDir}
             subtitle={subtitle}
             tabs={section?.tabs}
             currentTab={tab}

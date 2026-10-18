@@ -6,11 +6,13 @@ import AvatarAstro from '@/components/admin/ui/Avatar.astro';
 import BadgeAstro from '@/components/admin/ui/Badge.astro';
 import EmptyStateAstro from '@/components/admin/ui/EmptyState.astro';
 import IconAstro from '@/components/admin/ui/Icon.astro';
+import KpiAstro from '@/components/admin/ui/Kpi.astro';
 import ListRowAstro from '@/components/admin/ui/ListRow.astro';
 import NoteAstro from '@/components/admin/ui/Note.astro';
 import AvatarReact from '@/components/admin/kit/Avatar';
 import EmptyStateReact from '@/components/admin/kit/EmptyState';
 import IconReact from '@/components/admin/kit/Icon';
+import KpiReact from '@/components/admin/kit/Kpi';
 import ListRowReact from '@/components/admin/kit/ListRow';
 import NoteReact from '@/components/admin/kit/Note';
 import { Badge as BadgeReact } from '@/components/admin/kit/StatusBadge';
@@ -116,5 +118,33 @@ describe('server primitives and their React twins render the same markup', () =>
     expect(await astro(ListRowAstro, linked)).toBe(react(ListRowReact, linked));
     const hidden = { title: 'Clients', hidden: true, current: true };
     expect(await astro(ListRowAstro, hidden)).toBe(react(ListRowReact, hidden));
+  });
+
+  it('Kpi: a figure, a unit, the change pill with its spoken words, and none (C4b)', async () => {
+    const plain = { label: 'New', value: 1234 };
+    expect(await astro(KpiAstro, plain)).toBe(react(KpiReact, plain));
+    const full = {
+      label: 'Won',
+      value: 3,
+      unit: '50,000 SAR',
+      delta: 25,
+      period: 'the previous 7 days',
+    };
+    expect(await astro(KpiAstro, full)).toBe(react(KpiReact, full));
+    expect(react(KpiReact, full)).toContain('Up 25% vs the previous 7 days');
+    const down = {
+      label: 'Average first response',
+      value: '3 h 40 min',
+      delta: -12,
+      good: 'down' as const,
+    };
+    expect(await astro(KpiAstro, down)).toBe(react(KpiReact, down));
+    const points = {
+      label: 'Won of all leads',
+      value: '20%',
+      delta: 4,
+      deltaUnit: 'points' as const,
+    };
+    expect(await astro(KpiAstro, points)).toBe(react(KpiReact, points));
   });
 });

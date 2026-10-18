@@ -190,7 +190,7 @@ export const MAX_LEAD_VALUE_SAR = 10_000_000;
 
 const LeadVersionSchema = z.number().int().min(1);
 
-/** The legacy panel's status, accepted until C4 moves it to the pipeline (C14 drops it). */
+/** The legacy status, still accepted from an old tab until C14 drops it (C4b removed its panel). */
 const LegacyLeadStatusSchema = z.enum(['new', 'in_progress', 'done', 'spam']);
 
 /** The PATCH fields that move a lead's version, so they need the version the caller read. */
@@ -202,12 +202,18 @@ export const VERSIONED_LEAD_FIELDS = [
   'tags',
 ] as const;
 
+/** What a PATCH that still sends the legacy notes field is told (C4b, decision D4's fix). */
+export const NOTES_ARE_A_THREAD = 'Notes are a thread now. Add a note instead.';
+
 /**
  * PATCH /api/admin/leads/[id]. The pipeline fields need the `version` the caller read (a
  * 409 when it moved on); a star, a read mark and a logged contact do not, because they
- * never move it. `status` and `internalNotes` are the legacy panel's (the expand window:
- * C4 moves the panel to the pipeline and the notes thread), and a legacy status cannot be
- * sent with a stage or a spam flag, which it would contradict.
+ * never move it. `status` is the legacy panel's (the expand window: C14 drops it), and a
+ * legacy status cannot be sent with a stage or a spam flag, which it would contradict.
+ *
+ * `internalNotes` is refused (C4b): the notes are a thread now (POST …/[id]/notes, audited),
+ * and a PATCH that rewrote the legacy field could blank what a colleague wrote there. The key
+ * stays known, so the 422 names the field and says what to do, rather than "unknown key".
  */
 export const LeadPatchSchema = z
   .object({
@@ -224,9 +230,13 @@ export const LeadPatchSchema = z
       .strict()
       .optional(),
     status: LegacyLeadStatusSchema.optional(),
-    internalNotes: z.string().max(5000).nullish(),
+    internalNotes: z.unknown().optional(),
   })
   .strict()
+  .refine((patch) => patch.internalNotes === undefined, {
+    message: NOTES_ARE_A_THREAD,
+    path: ['internalNotes'],
+  })
   .refine(
     (patch) =>
       Object.entries(patch).some(([field, value]) => field !== 'version' && value !== undefined),

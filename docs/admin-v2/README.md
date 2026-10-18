@@ -489,11 +489,10 @@ design or the register names the old place, the new one wins:
 | steps in `src/lib/cron/daily.ts` | entries in `src/lib/cron/jobs.ts` |
 | a public loader calling `anonClient()` | `contentClient()` (`src/lib/data/source.ts`) |
 
-**Open: the F0 harness extension.** Planned for Wave 0, built by no slice. The per-role sweep
-opens an edit screen on the first row of `GET /api/admin/<segment>`, and
-`tests/lib/adminRoutes.spec.ts` requires that segment to be a resource config. An edit screen
-with no resource config (C4's `/admin/leads/[id]`, the page editor) therefore needs a declared
-way to find a sample id, and the first slice that adds one builds it.
+**The F0 harness extension (built by C4b).** An edit screen with no resource config (C4b's
+`/admin/leads/[id]`, later the page editor) declares how the sweep finds a row in
+`EDIT_SAMPLES` (`tests/admin/routes.ts`: its POST list, the capability, and the route that adds
+a row), and `tests/admin/samples.setup.ts` adds one as the admin when the list is empty.
 
 ## Remaining deviations
 
@@ -643,10 +642,10 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
 - **Product confirmations**
   - **O-13** Approve the remaining-deviations register, including the header's always-visible language switch.
   - **O-14** The logo stays a code asset (it is the home LCP element); who owns the FAQ content; "Keep me signed in" on by default; Content Creator keeps the intro on/off switch while style and timing go to `theme.edit`.
-  - **O-15** Admin bundle budget: the eager graph per admin route ≤ 300 KB gz (recommended), or keep the 300 KB sum, or raise the number.
+  - **O-15** Admin bundle budget: the eager graph per admin route ≤ 300 KB gz (recommended), or keep the 300 KB sum, or raise the number. *Decided by the approved plan's default on 2026-10-18 (C4b): the per-screen eager graph is the gate, the sum a coarse 400 KB tripwire (CLAUDE.md §2, the F4 amendment).*
   - **O-22** Invites expire in ≤ 24 h (Supabase limit), with Resend, instead of 7 days until L6.
 - **Ops checks**
-  - **O-16** Workers plan: measure CPU and subrequests for publish/validate, preview SSR, `/_image`, `theme.css` and the lead CSV export at its cap (`GET /api/admin/leads/export` carrying 80 leads with contact details, `EXPORT_ROW_CAP.pii`: its rows were measured at up to 6 ms, the rest of the request was not, [C3](as-built/C3.md)) on staging. The Free plan allows 10 ms/request. Workers Paid ($5/mo) may be needed.
+  - **O-16** Workers plan: measure CPU and subrequests for publish/validate, preview SSR, `/_image`, `theme.css` and the lead CSV export at its cap (`GET /api/admin/leads/export` carrying 80 leads with contact details, `EXPORT_ROW_CAP.pii`: its rows were measured at up to 6 ms, the rest of the request was not, [C3](as-built/C3.md)), and the leads pages' server render (`/admin/leads?range=30`: 9 round trips, two summaries; `/admin/leads/<id>`: 9; [C4b](as-built/C4b.md)) on staging. The Free plan allows 10 ms/request. Workers Paid ($5/mo) may be needed.
   - **O-23** Production checks: Postgres major ≥ 15, leads grants (H2), and whether the pg_cron role bypasses RLS (retention).
   - **O-24** Supabase Auth on staging and production (launch runbook §2a, F8): require the current password to change one, minimum password length 10, Secure password change on; and accept what remains (a direct call at the auth server counts no lockout, and a direct change is audited only in GoTrue's own log, as `user_updated_password`, never in the app's hash-chained `audit_log`). Until then a session token alone changes its owner's password at the auth server, and GoTrue signs out every other session of that user, the owner's own devices included ([deviations.md](deviations.md), residual risks, which also names a compensating alert the owner may choose). And for F7 (runbook §2c): a session inactivity timeout of 7 days, the session cookie's own, and optionally a time-box, so a copied session cookie stops working too (a paid-plan setting); until then the residual CLAUDE.md §3 states stands.
 
@@ -696,6 +695,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [U1](as-built/U1.md): the dashboard: a server widget registry that loads only the role's widgets, per-person layout and quick actions, Admin's role presets (library actions only), team notes without contact details cleared after 180 days by pg_cron, "Going live today" on the Riyadh day, 0060 (PR number at review)
 - [U2](as-built/U2.md): website stats and site health on the rollups, server-rendered: `rollup_daily_vitals`, the invoker readers, whole-day page views, the health checklist, `/admin/logs` retired, 0052 (PR number at review)
 - [U3](as-built/U3.md): media uploads (A5): the storage provider, the upload, replace and download routes, delivery through `/_image`, 0045 (PR number at review)
+- [U4](as-built/U4.md): the media library and the picker with upload: search, Images | Videos, the storage meter, describe-then-upload with progress, the drawer (alt, tags, Used in, Download, Replace, Delete), Upload in place in every picture field, the shared `admin-screens` chunk group, `media_library`, 0064 (PR number at review)
 - [U13](as-built/U13.md): the activity log v2: names, kind, person and day filters, plain language, the export under the lockdown, the live read on `audit_log`, 0054
 - [U14a](as-built/U14a.md): page visibility without the password mode: `page_visibility`, the middleware gate on the matched route, KV `site:visibility` through a 60 s isolate memo, the menus, sitemap, llms.txt and search filtered, `/admin/visibility`, the `nav_visible` alias, the registry row, 0057 (PR number at review)
 - [U14b](as-built/U14b.md): the password mode: `page_passwords` (bcrypt, no policy and no API-role privilege), `set_page_password` and `page_password_check`, the signed per-page cookie and `/api/page-access` with a limiter that fails closed, the gate page, and the `page_sections` fence with `page_sections_unlocked` and `page_media_unlocked` for an unlocked request, 0061 (PR number at review)
@@ -708,6 +708,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [R2](as-built/R2.md): the release registry, caps and overlay core in TypeScript, `fields` on every release-managed config, the §5 relabel and the derived release publish matrix, no migration (#68)
 - [R3a](as-built/R3a.md): staged writes in the database and the resource kernel, behind the release flag: the draft writes, `public.write_drafts`, the staged branch of every kernel handler, inert, 0062
 - [R4](as-built/R4.md): applying a release as the publisher, change capture, the shared link-set helper, the purge record, inert, 0051 (#69)
+- [R8](as-built/R8.md): the preview data seam: the scoped `contentClient()`, the narrowed PostgREST emulator, the anon-RLS mirror, the `range()`-paged dataset with drafts overlaid per role, the fail-closed report, no migration (PR number at review)
 - [R5](as-built/R5.md): the release guard on every registry and link table (no depth exemption), system items and link-set capture with cascades, TRUNCATE closed, `media_usage` v4 (pending changes) and `dashboard_attention` v4 (release kinds), `publish_scheduled` skips tenants with releases on, inert, 0066 (PR number at review)
 
 **CRM**
@@ -717,7 +718,8 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [C2a](as-built/C2a.md): reading the pipeline, 0036 (#47, folded into #45)
 - [C2b](as-built/C2b.md): one lead: the reveal, the notes thread, the timeline (#48, folded into #45)
 - [C3](as-built/C3.md): the leads write API: versioned PATCH, bulk, manual add, erase, export filters, 0041
-- [C4a](as-built/C4a.md): the leads readers v2: assignee, star, unread, source, channel and discipline filters, the SLA flag, the board's values, the summary's figures, Previous/Next in the list's own order, the score's reasons behind the reveal, 0063 (PR number at review)
+- [C4a](as-built/C4a.md): the leads readers v2: assignee, star, unread, source, channel and discipline filters, the SLA flag, the board's values, the summary's figures, Previous/Next in the list's own order, the score's reasons behind the reveal, 0063 (#79)
+- [C4b](as-built/C4b.md): the leads screens: the list with its KPIs, chips, filters in the address and bulk bar, a lead's page (the audited reveal, the notes thread, the status card, Move to…, the timeline, Erase), the lazy add drawer, the `internalNotes` 422, the F0 harness extension, the `admin-leads` chunk groups and O-15 by the plan's default, 0065 (the help guide only; PR number at review)
 
 **Hotfixes**
 - [H5](as-built/H5.md): the audit chain is serialized, 0031 (#36)

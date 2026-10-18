@@ -1,16 +1,59 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
+import AdminMediaLibrary from '@/components/admin/islands/AdminMediaLibrary';
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
+import { loadMediaScreen } from '@/lib/admin/mediaLibrary';
 
 export const prerender = false;
 
-// Astro resolves the static `new.astro` before this dynamic route, so /admin/media/new
-// reaches the create form rather than being read as an id.
-const ui = uiFor('media');
-const id = Astro.params.id ?? null;
+// A picture of the media library (Admin v2 U4, D3): the library with that picture's drawer
+// open, so the palette, the dashboard, site health and an old link land on it. A path that
+// is not one of this tenant's pictures is a 404. Astro resolves the static `new.astro`
+// before this dynamic route, so /admin/media/new keeps its redirect.
+
+const session = Astro.locals.session;
+const screen = await loadMediaScreen(
+  Astro.locals.supabase,
+  session,
+  Astro.url,
+  Astro.params.id ?? '',
+);
+if (screen.notFound) Astro.response.status = 404;
 ---
 
-<AdminLayout title={`Edit ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="media" id={id} />
+<AdminLayout title="Media library" subtitle={screen.subtitle} styles={['media.css']}>
+  {
+    screen.canUpload && !screen.notFound && (
+      <a
+        slot="actions"
+        class="btn"
+        data-variant="primary"
+        href="/admin/media?upload=1"
+        data-media-upload
+      >
+        <Icon name="upload" size={16} />
+        Upload
+      </a>
+    )
+  }
+  {
+    screen.notFound ? (
+      <EmptyState icon="image" title="That picture is not in the library.">
+        <a class="btn" href="/admin/media">
+          Back to the media library
+        </a>
+      </EmptyState>
+    ) : (
+      <AdminMediaLibrary
+        client:load
+        permissions={screen.permissions}
+        view={screen.view}
+        initial={screen.initial}
+        initialError={screen.initialError}
+        stats={screen.stats}
+        openRow={screen.openRow}
+      />
+    )
+  }
 </AdminLayout>
