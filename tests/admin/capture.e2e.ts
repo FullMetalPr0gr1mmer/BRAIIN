@@ -1,8 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test } from '@playwright/test';
+import { test, type Page } from '@playwright/test';
 import { STAFF_ROLES, authFile, staffEnv } from './staff';
-import { CAPTURE_VIEWPORTS, captureName, captureRoutes } from './routes';
+import { CAPTURE_VIEWPORTS, captureName, captureRoutes, editRowRequest } from './routes';
 
 // Admin design capture (Admin v2 F0), not an assertion suite: full-page screenshots of
 // every admin screen, for the side-by-side comparison with the client's prototype that
@@ -17,6 +17,14 @@ import { CAPTURE_VIEWPORTS, captureName, captureRoutes } from './routes';
 // CAPTURE_VIEWPORTS, captureName), where tests/lib/adminRoutes.spec.ts holds every name
 // unique: a repeated title fails there, not when Playwright collects the e2e job.
 const DIR = process.env.CAPTURE_DIR;
+
+/** The double-submit token the admin's own fetches send (the `__Host-csrf` cookie). */
+async function csrf(page: Page): Promise<string> {
+  const find = async () =>
+    (await page.context().cookies()).find((c) => c.name === '__Host-csrf')?.value ?? '';
+  if (!(await find())) await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+  return find();
+}
 
 test.describe('admin design capture', () => {
   test.skip(!DIR || !staffEnv(), 'CAPTURE_DIR not set, or no local staff harness');
@@ -34,8 +42,17 @@ test.describe('admin design capture', () => {
           });
           const page = await context.newPage();
           let path = route.path;
-          if (route.kind === 'edit') {
-            const res = await page.request.get(`${route.listApi}?limit=1`);
+          // The row an edit screen opens, found as the sweep finds it: a resource's GET list,
+          // or a sample's POST for a screen with no resource config (the lead's page, C4b).
+          const request = editRowRequest(route);
+          if (request) {
+            const res =
+              request.method === 'POST'
+                ? await page.request.post(request.url, {
+                    headers: { 'x-csrf-token': await csrf(page) },
+                    data: request.body,
+                  })
+                : await page.request.get(request.url);
             const body = res.ok()
               ? ((await res.json()) as { data?: { rows?: { id?: unknown }[] } })
               : {};
