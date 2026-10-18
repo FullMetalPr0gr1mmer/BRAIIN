@@ -3,7 +3,7 @@ import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
 import { visibleNav } from '@/lib/admin/nav';
 import { RESOURCES } from '@/lib/admin/resources';
-import { uiFor } from '@/lib/admin/uiSchema';
+import { uiFor, type FieldDef } from '@/lib/admin/uiSchema';
 import { collectionScreen } from '@/lib/admin/collectionScreen';
 import {
   clip,
@@ -240,7 +240,7 @@ describe('Duplicate', () => {
 });
 
 describe('the drawer’s fields', () => {
-  const statusOptions = (fields: { name: string; options?: { value: string }[] }[]) =>
+  const statusOptions = (fields: readonly FieldDef[]) =>
     fields.find((f) => f.name === 'status')?.options?.map((o) => o.value);
   const base = { isNew: false, status: 'draft', sample: 'none' as const };
 

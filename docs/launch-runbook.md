@@ -1358,6 +1358,42 @@ The account allows 5 cron triggers on the Free plan; this makes 2.
 Measure once after the key is set (O-16): Workers Logs for a `*/10` invocation shows its CPU
 time (expected under 3 ms: one JSON of 10 to 30 KB) and its subrequests (at most 11).
 
+### 6l. The FAQ moves into the database (migration 0070, Admin v2 U7)
+
+The Contact page's ten questions were code (`contactFaq.ts`); from U7 they are
+`public.faq_items`, edited at Admin → Content → FAQ. The PR that ships the new Worker deletes
+the code copy, and there is no fallback (a copy in code would drift from what editors
+publish), so **the rows must be in production before the merge**. A deploy before step 2 drops
+the FAQ band AND the FAQPage from `/contact` and `/ar/contact` together (never one without the
+other); running step 2 then is the whole recovery (Tier A is not edge-cached today). The
+migration's number is assigned at merge (`scripts/renumber-migration.mjs`): read 0070 below as
+whatever it became.
+
+1. **Push the migration** (the PR branch with `main` merged in): `npx supabase db push
+   --dry-run` lists exactly the U7 migration; push it; `npx supabase migration list`; read it
+   back (RLS forced, the four policies, anon's six columns, the `faq_item` registry row, the
+   release guard first among its triggers, `publish_scheduled` naming the table, the
+   collections-and-faq guide in the tenant). Expand only: the deployed Worker never reads the
+   table until the merge.
+2. **The delta seed, before the merge.** Generate it from the repository:
+   `node scripts/gen-seeds.mjs --only 56-faq.json > faq-delta.sql` (ten inserts in one block,
+   run only while the tenant holds **no** FAQ row; each by its fixed id, `on conflict do
+   nothing`; published, never placeholders), review it, and run it as the owner:
+   `psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f faq-delta.sql` (or `npx supabase db query
+   --linked -f faq-delta.sql`). Check: `select count(*) from faq_items where status =
+   'published'` is 10. Safe to run again: a second run, or a run after an editor deleted a
+   question, writes nothing. Same on staging.
+3. **Merge** (= deploy). Move the migration's row to Applied in `docs/admin-v2/migrations.md`
+   on the branch first.
+4. **Smoke**: `/contact` and `/ar/contact` each show ten questions, and the page's one
+   `FAQPage` block names exactly the visible questions (`tests/e2e/contact-page.e2e.ts` asserts
+   the same in CI).
+
+Rollback: the table and its rows stay if the Worker is rolled back (the old Worker reads
+the code copy and never this table). Releases are off; once they are on, FAQ edits are staged
+like any other content (P-3) and a scheduled question goes live through
+`app.publish_scheduled()` only in a tenant with releases off.
+
 ---
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)
