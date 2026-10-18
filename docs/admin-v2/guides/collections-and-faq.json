@@ -1,0 +1,85 @@
+{
+  "slug": "collections-and-faq",
+  "sort_order": 45,
+  "minutes": 3,
+  "tags": ["content"],
+  "screens": [
+    "/admin/faq",
+    "/admin/testimonials",
+    "/admin/clients",
+    "/admin/team",
+    "/admin/statistics",
+    "/admin/certifications"
+  ],
+  "caps": ["pages.write", "portfolio.write", "blog.write", "services.write"],
+  "title": "Collections and the FAQ",
+  "title_ar": "المجموعات والأسئلة الشائعة",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Collections are the lists the site draws from in several places: quotes, client names, the team, the numbers, certifications and the questions on the Contact page. Each has its own screen under Content: the list in the site's order, and a panel to add or edit one item."
+      },
+      {
+        "t": "p",
+        "x": "To change the order, drag a row by its handle, or use the up and down arrows beside it. The new order is saved at once, and the site follows it. Duplicate makes a draft copy right after the original; team members and design samples are not copied."
+      },
+      { "t": "h", "x": "The FAQ" },
+      {
+        "t": "p",
+        "x": "The questions appear on the Contact page and, word for word, in the page's FAQ markup that search engines and answer engines read. Write the answer first, in 40 to 60 words, as one paragraph, in both languages."
+      },
+      {
+        "t": "p",
+        "x": "While no question is published, the Contact page shows no FAQ at all."
+      },
+      { "t": "h", "x": "Quotes need consent" },
+      {
+        "t": "p",
+        "x": "A quote can be published or scheduled only once you record when the person agreed to be quoted. Note where that agreement is kept as well. Neither is ever shown on the site."
+      },
+      { "t": "h", "x": "Clients stay unnamed until they agree" },
+      {
+        "t": "p",
+        "x": "A client's name appears on the site only when Visible on the site is switched on. Switch it on only when the client has agreed to be named."
+      },
+      {
+        "t": "tip",
+        "x": "An item marked Sample came with the design delivery. A sample quote is made real in one save: switch on Make this quote real, write the real words, record consent, then save."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "المجموعات هي القوائم التي يأخذ منها الموقع في أكثر من مكان: الاقتباسات، وأسماء العملاء، والفريق، والأرقام، والشهادات، والأسئلة في صفحة Contact. لكل منها شاشتها تحت Content: القائمة بترتيب الموقع، ولوحة لإضافة عنصر أو تعديله."
+      },
+      {
+        "t": "p",
+        "x": "لتغيير الترتيب، اسحب الصف من مقبضه، أو استخدم سهمَي الأعلى والأسفل بجانبه. يُحفظ الترتيب الجديد فورًا ويتبعه الموقع. ينشئ Duplicate نسخة مسودة بعد الأصل مباشرة، ولا تُنسخ بيانات أعضاء الفريق ولا عينات التصميم."
+      },
+      { "t": "h", "x": "الأسئلة الشائعة (FAQ)" },
+      {
+        "t": "p",
+        "x": "تظهر الأسئلة في صفحة Contact، وتظهر بنصها نفسه في بيانات FAQ التي تقرؤها محركات البحث ومحركات الإجابة. اكتب الإجابة أولًا في 40 إلى 60 كلمة، في فقرة واحدة، وباللغتين."
+      },
+      {
+        "t": "p",
+        "x": "ما دام لا يوجد سؤال منشور، لا تعرض صفحة Contact أي أسئلة شائعة."
+      },
+      { "t": "h", "x": "الاقتباسات تحتاج إلى موافقة" },
+      {
+        "t": "p",
+        "x": "لا يمكن نشر الاقتباس أو جدولته إلا بعد أن تسجّل متى وافق صاحبه على اقتباس كلامه. واكتب أيضًا أين تُحفظ هذه الموافقة. ولا يظهر أي منهما على الموقع."
+      },
+      { "t": "h", "x": "العملاء بلا أسماء حتى يوافقوا" },
+      {
+        "t": "p",
+        "x": "لا يظهر اسم العميل على الموقع إلا عند تفعيل Visible on the site. لا تفعّله إلا بعد موافقة العميل على ذكر اسمه."
+      },
+      {
+        "t": "tip",
+        "x": "العنصر المعلَّم بـ Sample جاء مع تسليم التصميم. يتحول اقتباس العينة إلى اقتباس حقيقي بحفظة واحدة: فعّل Make this quote real، واكتب الكلمات الحقيقية، وسجّل الموافقة، ثم احفظ."
+      }
+    ]
+  }
+}

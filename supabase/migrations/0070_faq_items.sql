@@ -34,9 +34,9 @@
 --   6. The release registry row (registry contract #4): staged once releases switch on (P-3).
 --   7. app.publish_scheduled() restated: 0066's body with faq_items added (D16), skipping a
 --      tenant with releases on exactly as 0066 does.
---   8. THE HELP GUIDE: not here yet (see the TODO in section 8). H11's catalog gives
---      app.put_help_guide(jsonb); this slice's guide is docs/admin-v2/guides/
---      collections-and-faq.json and is wired with one call once H11 is on main.
+--   8. THE HELP GUIDE: not here yet (see the TODO in section 8). H11's catalog gives one
+--      call per guide (app.put_help_guide); this slice's guide is
+--      docs/admin-v2/guides/collections-and-faq.json and is wired once H11 is on main.
 --
 -- No live check (app.live_role) on faq_items: public content, no PII, the same posture as
 -- every content table; a demoted token's last hour is the general stale-token gap
@@ -221,19 +221,18 @@ end $$;
 revoke all on function app.publish_scheduled() from public, anon, authenticated, service_role;
 
 -- ═══ 8. The help guide ═══════════════════════════════════════════════════════════════════
--- TODO(H11): this slice's guide, collections-and-faq, is written but not seeded yet. H11's
--- catalog (app.put_help_guide(jsonb), one guide, every tenant) is landing first; once it is
--- on main, replace this comment with the one call below, its argument the JSON of
--- docs/admin-v2/guides/collections-and-faq.json as a dollar-quoted literal, and add the
--- guide's postcondition (every tenant holds collections-and-faq):
---   select app.put_help_guide($guide$ { ...docs/admin-v2/guides/collections-and-faq.json... } $guide$::jsonb);
--- Nobody restates app.help_article_set() any more (H11 retired that rule).
+-- TODO(H11): WIRE THE GUIDE HERE. This slice's guide, collections-and-faq (sort_order 45),
+-- is written but not seeded yet. Once H11's catalog (0069) is on main, replace this comment
+-- with H11's one top-level put of a new guide (revision 0), at the start of a line and
+-- outside any DO block, its argument the JSON of docs/admin-v2/guides/collections-and-faq.json
+-- verbatim as a dollar-quoted jsonb literal; then add a postcondition that every tenant holds
+-- the guide, and drop the pending-guide note in tests/lib/helpCentre.spec.ts's FILED reader
+-- if H11's reader replaces it. No restatement of app.help_article_set() (H11 retired that).
 
 -- ═══ Postconditions ═══════════════════════════════════════════════════════════════════════
 -- Each block says what it checks. Expressions are read as pg_get_expr prints them.
 do $$
 declare
-  v_owner oid;
   v_bad text;
   v_want text[];
   v_got text[];
@@ -242,8 +241,6 @@ declare
   r text;
   pr text;
 begin
-  select proowner into v_owner from pg_proc where oid = 'app.tg_snapshot_version()'::regprocedure;
-
   -- ---- 1. RLS enabled and forced --------------------------------------------------------
   if not (select relrowsecurity and relforcerowsecurity from pg_class
            where oid = 'public.faq_items'::regclass) then

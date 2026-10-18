@@ -1,7 +1,8 @@
 import { PLACEHOLDER_FIELD, SCHEDULED_FIELD, SORT_FIELD, STATUS_FIELD } from './fields';
 import type { ResourceUi } from './types';
 
-// Testimonials: the list and the form at /admin/testimonials.
+// Testimonials: the form in the collection screen's drawer at /admin/testimonials (Admin v2
+// U7b). A design sample's words are read-only there until "Make this quote real".
 export const testimonialsUi: ResourceUi = {
   slug: 'testimonials',
   title: 'Testimonials',
@@ -20,13 +21,14 @@ export const testimonialsUi: ResourceUi = {
       name: 'quote',
       label: 'Quote',
       kind: 'bilingual',
+      multiline: true,
       required: true,
       help: 'At most 600 characters per language.',
     },
     { name: 'authorName', label: 'Author', kind: 'bilingual', required: true },
     {
       name: 'authorRole',
-      label: 'Title, company',
+      label: 'Role, company',
       kind: 'bilingual',
       nullable: true,
       help: 'Written as it should appear: “Marketing Director, Company”.',
@@ -58,7 +60,7 @@ export const testimonialsUi: ResourceUi = {
       name: 'consentObtainedAt',
       label: 'Consent obtained',
       kind: 'datetime',
-      help: 'When the person agreed to be quoted. Required to publish or schedule — the database refuses otherwise.',
+      help: 'When the person agreed to be quoted. A quote cannot be published or scheduled without it.',
     },
     {
       name: 'consentReference',

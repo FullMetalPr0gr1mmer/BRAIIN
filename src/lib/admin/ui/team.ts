@@ -1,7 +1,7 @@
 import { PLACEHOLDER_FIELD, SORT_FIELD, STATUS_FIELD } from './fields';
 import type { ResourceUi } from './types';
 
-// Team & authors: the list and the form at /admin/team.
+// Team & authors: the form in the collection screen's drawer at /admin/team (Admin v2 U7b).
 export const teamUi: ResourceUi = {
   slug: 'team',
   title: 'Team & authors',
@@ -20,16 +20,16 @@ export const teamUi: ResourceUi = {
     { name: 'role', label: 'Job title', kind: 'bilingual', nullable: true },
     {
       name: 'isLeadership',
-      label: 'Leadership',
+      label: 'Show in the leadership slider',
       kind: 'checkbox',
-      help: 'Shown in the About page leadership slider.',
+      help: 'The slider on the About page.',
     },
     { name: 'portraitMediaId', label: 'Portrait', kind: 'media' },
     {
       name: 'linkedinUrl',
       label: 'LinkedIn',
       kind: 'url',
-      help: 'https://linkedin.com/in/… — the slider links it only when set.',
+      help: 'A https://linkedin.com/in/ address. The slider links it only when set.',
     },
     { name: 'bio', label: 'Bio', kind: 'prose' },
     { name: 'avatarUrl', label: 'Avatar URL', kind: 'url' },

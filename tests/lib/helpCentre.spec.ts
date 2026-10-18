@@ -36,6 +36,10 @@ import {
 } from '@/lib/admin/help';
 import HelpArticleBody from '@/components/admin/screens/help/HelpArticleBody';
 import HelpGuideList from '@/components/admin/screens/help/HelpGuideList';
+import { COLLECTIONS } from '@/components/admin/screens/collection/collections';
+import { clientsUi } from '@/lib/admin/ui/clients';
+import { faqUi } from '@/lib/admin/ui/faq';
+import { faqShown } from '@/lib/sections/contact';
 import { EXTRA_LINKS, pageFileFor } from '../admin/routes';
 
 const { logs } = vi.hoisted(() => ({ logs: [] as unknown[] }));
@@ -84,7 +88,27 @@ const { file: SET_FILE, set: RAW_SET } = articleSet();
  * when it merges. Re-based with scratchpad/hs_rebase.py when a sibling restates it first.
  */
 const G2_PREVIOUS_SET = '0065_help_leads_v2.sql';
-const SET: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
+
+/**
+ * Guides written as files and not yet seeded by a migration (docs/admin-v2/guides/<slug>.json).
+ * Admin v2 U7 wrote collections-and-faq before H11's catalog (app.put_help_guide) reached
+ * main; its migration carries a TODO where the put goes. Until then the file is held to every
+ * rule below as if seeded, so PAGE_GUIDES can already name it; once a migration seeds the
+ * slug, the file must equal what the migration seeds (`filed guides` below).
+ */
+const GUIDE_FILES = 'docs/admin-v2/guides';
+const FILED: { file: string; raw: { slug?: unknown } }[] = readdirSync(GUIDE_FILES)
+  .filter((f) => f.endsWith('.json'))
+  .sort()
+  .map((file) => ({
+    file,
+    raw: JSON.parse(readFileSync(`${GUIDE_FILES}/${file}`, 'utf8')) as { slug?: unknown },
+  }));
+const seededSlugs = new Set(RAW_SET.map((raw) => (raw as { slug?: unknown }).slug));
+const PENDING_RAW: unknown[] = FILED.filter((f) => !seededSlugs.has(f.raw.slug)).map((f) => f.raw);
+const SET: HelpArticleRow[] = [...RAW_SET, ...PENDING_RAW]
+  .map((raw) => HelpArticleSeedSchema.parse(raw))
+  .sort((a, b) => a.sort_order - b.sort_order || a.slug.localeCompare(b.slug));
 
 /** Every text of a guide, in one language or both. */
 function textsOf(article: HelpArticleRow, lang?: 'en' | 'ar'): string[] {
@@ -125,7 +149,9 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
   });
 
   it('every guide keeps the schema the Worker reads with (strict: no unknown key)', () => {
-    for (const raw of RAW_SET) expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
+    for (const raw of [...RAW_SET, ...PENDING_RAW]) {
+      expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
+    }
   });
 
   it('slugs and places in the list are unique', () => {
@@ -1052,10 +1078,73 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
     expect(pageGuideFor('/admin/help', 'admin')).toBeNull();
   });
 
+  it('the collection screens open the collections guide (U7), FAQ included', () => {
+    expect(pageGuideFor('/admin/faq', 'content_creator')).toBe('collections-and-faq');
+    expect(pageGuideFor('/admin/testimonials/1234', 'admin')).toBe('collections-and-faq');
+    expect(pageGuideFor('/admin/statistics/new', 'content_creator')).toBe('collections-and-faq');
+    expect(pageGuideFor('/admin/faq', 'seo')).toBeNull();
+    expect(pageGuideFor('/admin/faq', 'developer')).toBeNull();
+  });
+
   it('SEO opens Pages and Posts without the content guide, which is for the writers', () => {
     expect(pageGuideFor('/admin/pages', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/blog/1', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/pages', 'content_creator')).toBe('saving-and-publishing');
+  });
+});
+
+// ── 1c. Guides filed before the catalog seeds them (U7) ──────────────────────────────────
+
+describe('filed guides (docs/admin-v2/guides): collections-and-faq (U7)', () => {
+  const article = () => SET.find((a) => a.slug === 'collections-and-faq')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+
+  it('each file is named after its slug, and equals what a migration seeds once one does', () => {
+    for (const { file, raw } of FILED) {
+      expect(file).toBe(`${String(raw.slug)}.json`);
+      const seeded = RAW_SET.find((r) => (r as { slug?: unknown }).slug === raw.slug);
+      if (seeded) expect(seeded, `${file}: the seeded text differs from the file`).toEqual(raw);
+    }
+  });
+
+  it('takes the free place 45 (between saving 40 and media 50), for the content writers', () => {
+    expect(article().sort_order).toBe(45);
+    expect(article().tags).toEqual(['content']);
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual(['admin', 'content_creator']);
+  });
+
+  it('says what the screens do, in the words they use', () => {
+    const en = text('en');
+    const ar = text('ar');
+    // The FAQ: the form's hint, and the route that drops band and FAQPage together.
+    expect(faqUi.fields.find((f) => f.name === 'answer')?.help).toContain('40 to 60 words');
+    expect(en).toContain('in 40 to 60 words, as one paragraph, in both languages');
+    expect(en).toContain('While no question is published, the Contact page shows no FAQ at all.');
+    expect(faqShown([{ type: 'faq' }], [])).toBe(false);
+    // Consent: the date is the gate (the CHECK, assertPublishable); the record is advice.
+    expect(en).toContain('only once you record when the person agreed to be quoted');
+    expect(source('src/lib/admin/resources/testimonials.ts')).toContain(
+      "if (!row['consent_obtained_at'])",
+    );
+    // The switches and the sample flow, by their labels.
+    expect(clientsUi.fields.find((f) => f.name === 'visible')?.label).toBe('Visible on the site');
+    for (const label of ['Visible on the site', 'Make this quote real']) {
+      expect(en).toContain(label);
+      expect(ar).toContain(label);
+    }
+    expect(source('src/components/admin/screens/collection/CollectionDrawer.tsx')).toContain(
+      'label="Make this quote real"',
+    );
+    expect(en).toContain('An item marked Sample');
+    expect(source('src/components/admin/screens/collection/collections.ts')).toContain(
+      "const SAMPLE: CollectionBadge = { label: 'Sample'",
+    );
+    // Duplicate: a draft right after the original; never a team member or a sample.
+    expect(en).toContain('team members and design samples are not copied');
+    expect(COLLECTIONS['team']?.copy).toBeUndefined();
+    expect(COLLECTIONS['testimonials']?.copy?.({ is_placeholder: true })).toBeNull();
+    expect(COLLECTIONS['clients']?.copy?.({ is_placeholder: true })).toBeNull();
   });
 });
 
@@ -1073,6 +1162,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
 
   it('Content Creator: the basics, content, media and stats; no leads, PII, hiring, settings or SEO', () => {
     expect(shown('content_creator')).toEqual([
+      'collections-and-faq',
       'finding-your-way',
       'media-library',
       'roles-and-access',

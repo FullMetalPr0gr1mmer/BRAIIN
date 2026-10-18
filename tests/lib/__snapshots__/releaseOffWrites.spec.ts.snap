@@ -1035,12 +1035,32 @@ exports[`resource configs: toRow is what it was before R2 > disciplines 2`] = `
 exports[`resource configs: toRow is what it was before R2 > faq 1`] = `
 {
   "full": {
+    "answer": {
+      "ar": "إجابة تجريبية.",
+      "en": "A sample answer.",
+    },
     "published_at": "2026-06-01T08:00:00.000Z",
+    "question": {
+      "ar": "سؤال تجريبي؟",
+      "en": "A sample question?",
+    },
     "scheduled_for": "2027-01-01T09:00:00.000Z",
     "sort_order": 7,
     "status": "published",
   },
   "keys": {
+    "answer": {
+      "answer": {
+        "ar": "إجابة تجريبية.",
+        "en": "A sample answer.",
+      },
+    },
+    "question": {
+      "question": {
+        "ar": "سؤال تجريبي؟",
+        "en": "A sample question?",
+      },
+    },
     "scheduledFor": {
       "scheduled_for": "2027-01-01T09:00:00.000Z",
     },
@@ -1053,6 +1073,12 @@ exports[`resource configs: toRow is what it was before R2 > faq 1`] = `
     },
   },
   "nulls": {
+    "answer": {
+      "answer": null,
+    },
+    "question": {
+      "question": null,
+    },
     "scheduledFor": {
       "scheduled_for": null,
     },
@@ -1069,12 +1095,20 @@ exports[`resource configs: toRow is what it was before R2 > faq 1`] = `
 exports[`resource configs: toRow is what it was before R2 > faq 2`] = `
 {
   "full": [
+    "question",
+    "answer",
     "status",
     "sort_order",
     "scheduled_for",
     "published_at",
   ],
   "keys": {
+    "answer": [
+      "answer",
+    ],
+    "question": [
+      "question",
+    ],
     "scheduledFor": [
       "scheduled_for",
     ],
@@ -1087,6 +1121,12 @@ exports[`resource configs: toRow is what it was before R2 > faq 2`] = `
     ],
   },
   "nulls": {
+    "answer": [
+      "answer",
+    ],
+    "question": [
+      "question",
+    ],
     "scheduledFor": [
       "scheduled_for",
     ],

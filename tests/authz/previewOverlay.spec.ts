@@ -205,8 +205,8 @@ describe('pending changes a preview shows, per role and entity type', () => {
     });
   }
 
-  it('admin previews all 18 previewable types', () => {
-    expect(Object.values(EXPECTED.admin).filter((o) => o === O)).toHaveLength(18);
+  it('admin previews all 19 previewable types', () => {
+    expect(Object.values(EXPECTED.admin).filter((o) => o === O)).toHaveLength(19);
   });
 });
 

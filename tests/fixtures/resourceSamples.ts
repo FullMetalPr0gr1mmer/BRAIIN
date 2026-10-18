@@ -147,6 +147,9 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   brandName: BI('Sample Studio', 'استوديو تجريبي'),
   legalName: BI('Sample Studio LLC', 'استوديو تجريبي ذ.م.م'),
   contactEmail: 'hello@example.test',
+  // the FAQ (Admin v2 U7)
+  question: BI('A sample question?', 'سؤال تجريبي؟'),
+  answer: BI('A sample answer.', 'إجابة تجريبية.'),
   whatsappE164: '+966500000000',
   whatsappDisplay: '050 000 0000',
   addressLocality: BI('Riyadh', 'الرياض'),

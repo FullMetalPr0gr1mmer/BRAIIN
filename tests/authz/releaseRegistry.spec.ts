@@ -33,9 +33,9 @@ const configOf = (row: RegistryRow) =>
 describe('the release registry (app.release_entities) equals ROLE_CAPS', () => {
   const rows = registryRows();
 
-  it('parses the twenty-one rows the migrations seed (0038, and 0057 page visibility)', () => {
-    expect(rows).toHaveLength(21);
-    expect(new Set(rows.map((r) => r.entityType)).size).toBe(21);
+  it('parses the twenty-two rows the migrations seed (0038, 0057 page visibility, 0070 the FAQ)', () => {
+    expect(rows).toHaveLength(22);
+    expect(new Set(rows.map((r) => r.entityType)).size).toBe(22);
   });
 
   it('every entity type is a resource config or a route with a stated capability', () => {
