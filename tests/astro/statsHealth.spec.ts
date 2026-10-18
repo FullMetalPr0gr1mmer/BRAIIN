@@ -420,6 +420,7 @@ describe('UptimeCard (G2)', () => {
       },
     ],
     responseTimes: [
+      { at: '2026-10-14T09:00:00Z', ms: 230 },
       { at: '2026-10-15T09:00:00Z', ms: 210 },
       { at: '2026-10-15T10:00:00Z', ms: 190.4 },
     ],
@@ -498,11 +499,20 @@ describe('UptimeCard (G2)', () => {
     // An outage: its reason as text, never markup.
     expect(html).toContain('&lt;b&gt;Timeout&lt;/b&gt;');
     expect(html).toContain('22 min');
-    // The response chart's table is its data.
+    // The response chart's table is its data, each hour with its day: over 48 hours every
+    // hour comes twice, so the hour alone would leave two rows saying the same thing.
     expect(tableCells(figure(html, 'uptime-response'))).toEqual([
-      ['12:00', '210'],
-      ['13:00', '190'],
+      ['14 Oct, 12:00', '230'],
+      ['15 Oct, 12:00', '210'],
+      ['15 Oct, 13:00', '190'],
     ]);
+    // The axis keeps the short hour, so its labels fit under the line.
+    const axis = [
+      ...figure(html, 'uptime-response').matchAll(
+        /<text class="ch-axis"[^>]*text-anchor="middle"[^>]*>([^<]*)</g,
+      ),
+    ].map((m) => m[1]!.trim());
+    expect(axis).toEqual(['12:00', '12:00', '13:00']);
     // The monitors, and the standard's path nobody watches.
     expect(html).toContain('/ · /ar/ · Partner (another address) (paused)');
     expect(html).toContain(

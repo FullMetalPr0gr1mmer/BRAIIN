@@ -123,9 +123,10 @@ const monitorWord = (m: { path: string | null; name: string; status: string }) =
           caption="Response time, last 48 hours, in milliseconds"
           captionVisible={false}
           series={[{ name: 'Response time (ms)', data: points.map((p) => Math.round(p.ms)) }]}
-          labels={points.map((p) => formatTime(p.at))}
+          labels={points.map((p) => `${formatDate(p.at, { now })}, ${formatTime(p.at)}`)}
+          axisLabels={points.map((p) => formatTime(p.at))}
           height={180}
-          labelHeading="Hour"
+          labelHeading="Time"
         />
 
         <h3 class="upc__h">Monitors</h3>
