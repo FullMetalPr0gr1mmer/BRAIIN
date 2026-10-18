@@ -1,11 +1,13 @@
 import type { Monitor, UptimeDay } from '@schemas/healthProbe';
 import type { ChartTable } from '../charts';
-import { formatDate } from '../relTime';
-import { formatRatio } from './probes';
+import { THRESHOLDS } from '@/lib/health/thresholds';
+import { formatDate, relTime } from '../relTime';
+import { formatRatio, type ProbeView } from './probes';
 
 // The Uptime card's pure parts (Admin v2 G2): the 90-day strip's day states, its table
 // alternative and one-line summary (one dataset, so the words never drift from the bars),
-// the monitors' interval in words, and the paths the standard asks the monitor to watch.
+// the monitors' interval in words, the paths the standard asks the monitor to watch, and
+// the card's words for a probe with no reading or whose last read failed.
 
 /** A day on the strip: up all day, down a few minutes, down longer, or no reading. */
 export type DayState = 'ok' | 'dip' | 'down' | 'none';
@@ -82,4 +84,42 @@ export function unwatched(monitors: readonly Monitor[]): string[] {
 export function listWords(items: readonly string[]): string {
   if (items.length <= 1) return items.join('');
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+/**
+ * The most hours between two tries once a probe is stale: the backoff's cap with its jitter
+ * (6 hours, +20%), plus up to one run of the 10-minute schedule. tests/lib/uptimeLines.spec.ts
+ * holds it to the runner's TIMING, so the card never promises a retry sooner than it comes.
+ */
+export const STALE_RETRY_HOURS = 8;
+
+type ProbeAttempts = Pick<ProbeView, 'failures' | 'readOk' | 'okAt'>;
+
+const tries = (n: number) => (n === 1 ? 'the last try' : `the last ${n} tries`);
+
+/** How often the next tries come: the schedule's pace until stale, then the backoff. */
+const pace = (failures: number) =>
+  failures >= THRESHOLDS.staleAfter
+    ? `It is asked less often now, at least once every ${STALE_RETRY_HOURS} hours; Check now asks at once.`
+    : 'It is asked again every 10 minutes.';
+
+/**
+ * The Uptime card's line when there is no reading to show (never read, or a reading that
+ * does not parse): true for every state, so it counts the tries rather than claiming an
+ * hour (Check now can make six in minutes) and gives the backoff's real bound.
+ */
+export function noReadingLine(probe: ProbeAttempts | null): string {
+  if (!probe || probe.failures === 0) {
+    return probe?.readOk
+      ? 'The last reading could not be shown. Readings arrive every 10 minutes.'
+      : 'Not checked yet. Readings arrive every 10 minutes.';
+  }
+  return `No reading yet: the monitor did not answer ${tries(probe.failures)}. ${pace(probe.failures)}`;
+}
+
+/** The note above an older reading when the last try failed; null when it did not. */
+export function failedReadLine(probe: ProbeAttempts | null, now: number): string | null {
+  if (!probe || probe.readOk || probe.failures === 0) return null;
+  const last = probe.okAt ? ` Last reading ${relTime(probe.okAt, now)}.` : '';
+  return `The monitor did not answer ${tries(probe.failures)}. ${pace(probe.failures)}${last}`;
 }

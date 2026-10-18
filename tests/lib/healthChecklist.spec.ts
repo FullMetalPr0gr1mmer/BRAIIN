@@ -874,6 +874,20 @@ describe('loadHealthReport with readings (G2)', () => {
     expect(r.score.formula).toContain('Uptime could not be read just now.');
   });
 
+  it('the tile: no reading yet once tried, not reported when the monitor omits it', async () => {
+    const tile = async (r: unknown) =>
+      (await loadHealthReport(probeStub([r]).sb, authOf('admin'), NOW)).tiles.find(
+        (t) => t.label === 'Uptime, 30 days',
+      )?.value;
+    // Never read: the row exists because a run tried, so "Not checked yet" would be untrue.
+    for (const failures of [1, 6]) {
+      expect(
+        await tile({ ...row('uptime', 'unknown', {}), read_ok: false, failures, ok_at: null }),
+      ).toBe('No reading yet');
+    }
+    expect(await tile(row('uptime', 'ok', { ...uptimeFacts, ratio30: null }))).toBe('Not reported');
+  });
+
   it('a failed read is logged; the tile says so and the score leaves uptime out', async () => {
     logs.length = 0;
     const { sb } = probeStub(null);

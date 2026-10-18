@@ -442,32 +442,54 @@ describe('UptimeCard (G2)', () => {
   });
 
   it('never checked, the monitor not answering, the readings unreadable', async () => {
-    expect(await render(UptimeCard, { probe: probe('unknown', null), failed: false })).toContain(
+    const card = (over: Record<string, unknown>) =>
+      render(UptimeCard, { probe: probe('unknown', null, over), failed: false, now: NOW });
+    // A run that tried nothing yet, and a reading that came in but does not parse.
+    expect(await card({ readOk: false, okAt: null })).toContain(
       'Not checked yet. Readings arrive every 10 minutes.',
     );
-    expect(
-      await render(UptimeCard, {
-        probe: probe('unknown', null, { failures: 2, readOk: false }),
-        failed: false,
-      }),
-    ).toContain('The monitor did not answer just now. The next reading is due within 10 minutes.');
-    // Six failed reads (an hour): the probe is stale and backs off, so "within 10 minutes"
-    // would no longer be true.
-    const quiet = await render(UptimeCard, {
-      probe: probe('unknown', null, { failures: 6, readOk: false, okAt: null }),
-      failed: false,
-    });
-    expect(quiet).toContain('The monitor has not answered for an hour.');
-    expect(quiet).not.toContain('within 10 minutes');
+    expect(await card({})).toContain(
+      'The last reading could not be shown. Readings arrive every 10 minutes.',
+    );
+    // Never read, failing: the tries are counted, never "an hour" (Check now can make six in
+    // minutes), and asked again on the schedule's pace.
+    const failing = await card({ failures: 2, readOk: false, okAt: null });
+    expect(failing).toContain(
+      'No reading yet: the monitor did not answer the last 2 tries. It is asked again every 10 minutes.',
+    );
+    // Never read and stale (unknown): the backoff is 6 hours with jitter plus a run of the
+    // schedule, so the card says at least once every 8 hours, not at most every 6.
+    const quiet = await card({ failures: 6, readOk: false, okAt: null });
+    expect(quiet).toContain(
+      'No reading yet: the monitor did not answer the last 6 tries. It is asked less often now, at least once every 8 hours; Check now asks at once.',
+    );
+    for (const html of [failing, quiet]) {
+      expect(html).not.toContain('for an hour');
+      expect(html).not.toContain('at most every 6 hours');
+      expect(html).not.toContain('within 10 minutes');
+    }
     expect(await render(UptimeCard, { probe: null, failed: true })).toContain(
       'The uptime readings could not be read just now.',
     );
-    const stale = await render(UptimeCard, {
+    const behind = await render(UptimeCard, {
       probe: probe('ok', FACTS, { readOk: false, failures: 2, okAt: '2026-10-15T11:00:00Z' }),
       failed: false,
       now: NOW,
     });
-    expect(stale).toContain('The monitor did not answer just now. Last reading 1 h ago.');
+    expect(behind).toContain(
+      'The monitor did not answer the last 2 tries. It is asked again every 10 minutes. Last reading 1 h ago.',
+    );
+    expect(behind).toContain('class="up"');
+    // Stale over an older reading: the same bound, and no "just now" for tries hours apart.
+    const stale = await render(UptimeCard, {
+      probe: probe('unknown', FACTS, { readOk: false, failures: 8, okAt: '2026-10-15T04:00:00Z' }),
+      failed: false,
+      now: NOW,
+    });
+    expect(stale).toContain(
+      'The monitor did not answer the last 8 tries. It is asked less often now, at least once every 8 hours; Check now asks at once. Last reading 8 h ago.',
+    );
+    expect(stale).not.toContain('did not answer just now');
     expect(stale).toContain('class="up"');
   });
 

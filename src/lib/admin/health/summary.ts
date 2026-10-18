@@ -140,7 +140,9 @@ function uptimeTile(view: UptimeView | null): HealthTile {
   const note = 'From the monitor';
   if (!view) return { label, value: 'Could not be read', note };
   if (view.status === 'off') return { label, value: 'Not set up', note };
-  if (view.ratio30 === null) return { label, value: 'Not checked yet', note };
+  // A row with no reading has been tried (a row is written by a run), so not "not checked".
+  if (view.status === 'unchecked') return { label, value: 'No reading yet', note };
+  if (view.ratio30 === null) return { label, value: 'Not reported', note };
   return { label, value: formatRatio(view.ratio30), note };
 }
 

@@ -6,14 +6,20 @@ import StatRows from '@/components/admin/ui/StatRows.astro';
 import Line from '@/components/admin/ui/charts/Line.astro';
 import UptimeStrip from './UptimeStrip.astro';
 import { formatRatio, type ProbeView } from '@/lib/admin/health/probes';
-import { intervalWords, listWords, unwatched } from '@/lib/admin/health/uptime';
-import { formatDate, formatDateTime, formatTime, relTime } from '@/lib/admin/relTime';
-import { THRESHOLDS } from '@/lib/health/thresholds';
+import {
+  failedReadLine,
+  intervalWords,
+  listWords,
+  noReadingLine,
+  unwatched,
+} from '@/lib/admin/health/uptime';
+import { formatDate, formatDateTime, formatTime } from '@/lib/admin/relTime';
 
 // The Uptime card (Admin v2 G2; the prototype's uptime card in screens_health.js): what the
 // external monitor sees, read every 10 minutes by the Worker's health schedule. Server-
 // rendered, zero JS. States: the readings could not be read; not set up (no key: the score
-// leaves uptime out); not checked yet; the monitor did not answer just now; a reading (the
+// leaves uptime out); not checked yet; the monitor did not answer (the tries counted and how
+// often it is asked now, `noReadingLine` / `failedReadLine`); a reading (the
 // figures, the 90-day strip with its table, the outages, the response time over 48 hours
 // with its table, and the monitors). The sub-line says the monitors' real interval; the
 // prototype's "every minute from three regions" is not ported unless it is true.
@@ -41,6 +47,7 @@ const nowWord = anyDown
     ? 'Paused'
     : 'Up';
 const missing = facts ? unwatched(facts.monitors) : [];
+const failedLine = failedReadLine(probe, now);
 const points = facts?.responseTimes ?? [];
 const minutes = (seconds: number) => Math.max(1, Math.round(seconds / 60));
 const monitorWord = (m: { path: string | null; name: string; status: string }) => {
@@ -63,21 +70,12 @@ const monitorWord = (m: { path: string | null; name: string; status: string }) =
         </p>
       </Note>
     ) : !facts ? (
-      <p class="upc__none">
-        {probe && probe.failures >= THRESHOLDS.staleAfter
-          ? 'The monitor has not answered for an hour. It is asked less often now, at most every 6 hours; Check now asks at once.'
-          : probe && probe.failures > 0
-            ? 'The monitor did not answer just now. The next reading is due within 10 minutes.'
-            : 'Not checked yet. Readings arrive every 10 minutes.'}
-      </p>
+      <p class="upc__none">{noReadingLine(probe)}</p>
     ) : (
       <>
-        {probe && !probe.readOk && (
+        {failedLine && (
           <Note tone="warn">
-            <p>
-              The monitor did not answer just now.
-              {probe.okAt ? ` Last reading ${relTime(probe.okAt, now)}.` : ''}
-            </p>
+            <p>{failedLine}</p>
           </Note>
         )}
         <StatRows
