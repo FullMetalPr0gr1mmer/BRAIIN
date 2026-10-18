@@ -272,6 +272,21 @@ describe('the board', () => {
     expect(source).toContain('focusTargetAfterMove(document, after.id, after.from)?.focus();');
   });
 
+  it('reads again after a move when a filter or search read was already in flight', () => {
+    // A read that started before the PATCH answers with the card in its old column and old
+    // version; let it land and the next move is a needless 409. The move asks again instead
+    // (the re-run aborts the stale read), and only the latest read clears the marker.
+    const source = readFileSync('src/components/admin/screens/leads/LeadsBoard.tsx', 'utf8');
+    expect(source).toMatch(
+      /const controller = new AbortController\(\);\n\s*reading\.current = controller;/,
+    );
+    expect(source).toContain('if (reading.current === controller) reading.current = null;');
+    expect(source).toMatch(
+      /setColumns\(\(list\) => moved\(list, card, to, answer\)\);\n(?:[^\n]*\n){1,4}\s*if \(reading\.current\) setReload\(\(n\) => n \+ 1\);/,
+    );
+    expect(source).toContain('}, [filters, q, reload]);');
+  });
+
   it('reads the address through boardFilters on the server too', () => {
     const page = readFileSync('src/pages/admin/leads/board.astro', 'utf8');
     expect(page).toContain('boardFilters(parseLeadFilters(Astro.url.searchParams))');

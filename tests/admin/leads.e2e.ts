@@ -255,6 +255,9 @@ test.describe('as admin', () => {
     const search = page.getByRole('searchbox', { name: 'Search the pipeline' });
     await search.fill(lead.name);
     await search.press('Enter');
+    // The search's answer first: a move made while it is in flight is re-read, but the test
+    // means to move the one card the search found.
+    await expect(page.locator('.kb .kcard')).toHaveCount(1);
     const move = page.getByRole('button', { name: `Move to… ${lead.name}` });
     await move.focus();
     await page.keyboard.press('Enter');

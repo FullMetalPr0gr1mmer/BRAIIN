@@ -135,6 +135,9 @@ export default function LeadsBoard({
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(() => Date.parse(renderedAt));
   const focusAfter = useRef<{ id: string; from: string } | null>(null);
+  // The board read in flight, if any: one that started before a move answers with the card
+  // where it was, so a move asks again rather than let that answer redraw it there.
+  const reading = useRef<AbortController | null>(null);
   const addLead = useAddLead(permissions.canSeePii, disciplines);
 
   useEffect(() => {
@@ -149,6 +152,7 @@ export default function LeadsBoard({
       return;
     }
     const controller = new AbortController();
+    reading.current = controller;
     adminFetch<{ columns: BoardColumn[] }>('/api/admin/leads/board', {
       method: 'POST',
       body: { ...boardQueryOf(filters, new Date()), ...(q ? { q } : {}) },
@@ -168,6 +172,9 @@ export default function LeadsBoard({
           return;
         }
         setError(describeError(err));
+      })
+      .finally(() => {
+        if (reading.current === controller) reading.current = null;
       });
     return () => controller.abort();
   }, [filters, q, reload]);
@@ -194,6 +201,9 @@ export default function LeadsBoard({
       focusAfter.current = { id: card.id, from: String(card.stage_id) };
       setColumns((list) => moved(list, card, to, answer));
       setSaid(`Moved ${name} to ${to.label}.`);
+      // A filter or search read that started before this move would redraw the card in its
+      // old column with its old version (the next move then a needless 409): read again.
+      if (reading.current) setReload((n) => n + 1);
     } catch (err) {
       if (err instanceof AdminApiError && err.info.status === 409) {
         setSaid(`Someone else changed ${name}. Refreshed.`);
