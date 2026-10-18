@@ -6,8 +6,13 @@ import { SKIP_REASON, STAFF_ROLES, authFile, staffEnv } from './staff';
 // Website stats v2 (Admin v2 G1) in a real browser, signed in, past what the view sweep in
 // stats-health.e2e.ts already checks (every tab, every role, axe and no overflow at 320, 390
 // and 1280px):
-//   - Conversions: the funnel is drawn in words, and "Inquiries received" shows only to the
-//     roles that work with leads (Admin, Developer);
+//   - Conversions: the funnel is drawn in words (or its empty state), and the goal controls
+//     show only to goal setters. Which roles see "Inquiries received" is held below the
+//     browser: the stats leads reader returns null for a role without leads.manage
+//     (tests/lib/statsReaders.spec.ts) and the funnel card draws the row only for a number
+//     (tests/astro/statsHealth.spec.ts). Here it could only be checked with visits in the
+//     rollup, which CI never has (no pg_cron), and the label is also a goal metric option in
+//     the Drawer, so a page-wide text match would count that too;
 //   - Realtime: the island asks again once a minute, Pause stops it (counted on the route, on
 //     a fake clock), Resume asks at once and goes on;
 //   - Goals: Admin adds, edits and deletes one through the kit's Drawer and Modal, SEO adds
@@ -32,16 +37,13 @@ async function csrfOf(page: Page): Promise<string> {
   return token!;
 }
 
-const worksLeads = (role: Role) => ROLE_CAPS[role]['leads.manage'] === 'full';
 const setsGoals = (role: Role) => ROLE_CAPS[role]['analytics.goals'] === 'full';
 
 for (const role of STAFF_ROLES) {
   test.describe(`Conversions as ${role}`, () => {
     test.use({ storageState: authFile(role) });
 
-    test('the funnel in words; inquiries only for lead roles; goal controls only for goal setters', async ({
-      page,
-    }) => {
+    test('the funnel in words; goal controls only for goal setters', async ({ page }) => {
       const res = await open(page, '/admin/analytics?tab=conversions&range=90');
       expect(res?.status()).toBe(200);
       const funnel = page.getByRole('heading', { name: 'Funnel' });
@@ -54,9 +56,6 @@ for (const role of STAFF_ROLES) {
         await expect(steps).toHaveCount(3);
         await expect(steps.nth(0)).toContainText('Visited the site');
         await expect(steps.nth(2)).toContainText('Reached an inquiry form');
-        await expect(page.getByText('Inquiries received', { exact: true })).toHaveCount(
-          worksLeads(role) ? 1 : 0,
-        );
       }
       await expect(page.getByRole('button', { name: 'Add goal' })).toHaveCount(
         setsGoals(role) ? 1 : 0,
