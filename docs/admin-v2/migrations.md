@@ -79,6 +79,7 @@ every PR moves only its own row.
 | 0076 | U11 | `0076_integrations_typed.sql`: typed CHECKed integration columns, `app.role_manages_integrations`, Admin and SEO read with a RESTRICTIVE live check, anon's one column (`search_console_token`), the help set | 3 |
 | 0077 | U9b | `0077_maintenance_v2_help.sql`: the help set restated with `maintenance-mode` rewritten | 3 |
 | 0078 | G1c | `0078_stats_goals.sql`: `app.role_analytics_goals` (`analytics.goals`, §5), `analytics_goals` (immediate, live-checked), `goal_progress`, the help set | 3 |
+| (at merge) | H11 | `0069_help_catalog.sql` as built: `app.help_guide_catalog` (one row per guide, global, RLS forced with no policy and no API-role privilege), `app.help_article_set()` read from it, `app.put_help_guide` and `app.drop_help_guide` (Rules 7). Restates no guide: filled from the set as the database holds it, so it applies after any restatement (0067, 0068). Its number is assigned at merge with `scripts/renumber-migration.mjs` | 3 |
 | 0079 to 0081 | (slack) | Wave 3 slack: a mid-wave hotfix, U9c, C13's release or a slice that slips; the first to need one takes 0079 | 3 |
 
 ## Rules
@@ -109,6 +110,24 @@ every PR moves only its own row.
    share a PR: first the code that stops using it (merge, deploy), then the migration alone
    (apply, merge). Before the guard, 0033 shipped code first inside #43. A contraction also
    moves the Worker rollback floor (launch runbook §10).
+7. **A help guide is one row; nobody restates the set.** Since H11 (`0069_help_catalog.sql`,
+   numbered at merge) the guides are rows of `app.help_guide_catalog`, and
+   `app.help_article_set()` renders them. A slice adds or changes only its own guide with one
+   top-level statement at the start of a line, outside any DO block:
+   `select app.put_help_guide($guide$ {…} $guide$::jsonb, N);` (exactly the nine keys the set
+   carries: slug, sort_order, minutes, tags, screens, caps, title, title_ar, body), and
+   retires one with `select app.drop_help_guide('slug', N);`. N is the guide's revision as
+   `main` leaves it: 0 for a new guide; every guide starts at 1 and a put that changes it
+   moves it by one (`tests/fixtures/helpSet.ts` says which, and the failing test names the
+   number to use). It takes a free `sort_order` (a taken one is refused, 23505). It never
+   restates `app.help_article_set()`, never writes a `$help$` literal and never writes the
+   catalog another way: `tests/lib/helpCentre.spec.ts` fails if it does. Its postconditions
+   and pgTAP check its own guide, and a count of guides is a floor (`>= n`), never an exact
+   number, so the next slice that adds one edits nothing of yours. Two slices that edit
+   different guides need no re-base; two that edit the same guide are serial: the second
+   names a revision the guide has left and fails in CI and at the push (55000) until it is
+   rebuilt on the first's text and names the new revision. Pre-push gate: no newer put or
+   drop of your guide on `main` than the revision you name.
 
 ## Pushing to production
 
