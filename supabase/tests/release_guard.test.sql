@@ -14,8 +14,8 @@
 --   • releases on (tenant A): every role RLS admits is refused, across the areas; the roles
 --     RLS refuses (seo, developer, a sales claim, anon, another tenant) still meet RLS first,
 --     and a row naming another tenant meets one refusal whatever that tenant's switch says;
---     a stale token, a switched role with no claims (through a definer) and the migration
---     role carrying a staff claim are refused too;
+--     a stale token, a switched role with no claims (through a definer), and the migration
+--     role and the service role carrying a staff claim are refused too;
 --   • the immediate column (accepting_applications) and its own 0019 guard;
 --   • the token, inside a release (apply_release, publish and dry run) and outside;
 --   • the allow paths really land (a BEFORE trigger that returned null would skip the row);
@@ -26,7 +26,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(58);
+select plan(59);
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────────
 insert into app.deployment (env) values ('staging')
@@ -323,7 +323,7 @@ select is(_state($$ insert into public.services (tenant_id, slug, title)
   '42501', 'anon: no privilege to write a service at all');
 reset role;
 
--- ── 5. Stale tokens, a switched role with no claims, the migration role with a claim ──
+-- ── 5. Stale tokens, a switched role with no claims, bypassing roles with a claim ─────
 set local role authenticated;
 select _a('66000000-0000-0000-0000-0000000000a9', 'admin');
 select is(_try($$ update public.services set sort_order = 1 where id = '66000000-0000-0000-0001-000000000001' $$),
@@ -338,6 +338,12 @@ select _a('66000000-0000-0000-0000-0000000000a1', 'admin');
 select is(_try($$ update public.services set sort_order = 1 where id = '66000000-0000-0000-0001-000000000001' $$),
   '42501: Live content changes only through a release.',
   'the migration role carrying a staff claim is refused (a staff claim is an API request)');
+set local role service_role;
+select _a('66000000-0000-0000-0000-0000000000a1', 'admin');
+select is(_try($$ update public.services set sort_order = 1 where id = '66000000-0000-0000-0001-000000000001' $$),
+  '42501: Live content changes only through a release.',
+  'the service role carrying a staff claim is refused (D1: only the service role with no staff claim is out of band)');
+reset role;
 select _as(null, null, null);
 
 -- ── 6. The immediate column (accepting_applications) ──────────────────────────────────
