@@ -90,7 +90,7 @@
 - **Activity log**: kept permanently and tamper-evident, not "12 months" or "90 days" (§3); exportable under the export lockdown, with no titles in the file (U13).
 - **Invites** expire per Supabase Auth instead of 7 days, until L6 brings transactional email (O-22). As built (U12b, decision D1): **one hour, with Resend**, because Supabase has one e-mail link expiry (`otp_expiry`) for invite and reset links, so a longer invite would make reset links live as long; the owner may choose longer (up to 24 h) for both.
 - **Bundle** (O-15, decided by the approved plan's default on 2026-10-18; C4b): the admin bundle's gate is each admin screen's eager graph, at most 300 KB gz (`scripts/admin-bundle.mjs`), with its own caps on the lazy chunks and the sign-in script; the size-limit sum of every admin file, lazy ones included, is a coarse 400 KB tripwire, no longer the budget (it was 300 KB, and the leads screens took it past that).
-- **Health**: no in-Worker uptime checker; uptime comes from the external monitor (§10).
+- **Health**: uptime from the external monitor's read-only API (G2); no in-Worker checker (§10); certificate expiry only where the monitor reports it (RDAP carries the domain's registration, not the certificate); no Alerts drawer or external channels (A1); the bell instead, for siteHealth.view roles.
 - **Help** (U16):
   - guides only for features that are built (nine of the prototype's fifteen described later-phase screens; "roles" promised per-person exceptions §5 does not have);
   - no editing yet: the migrations write the guides until an editor and its capability exist (§5, TDD phase 7);
@@ -241,6 +241,28 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     2026-12-31. *Closes when* every policy admitting an `authenticated` write has a
     RESTRICTIVE live companion, checked over the catalog.
 
+- **Team members are guarded but not captured: an R14 blocker** (Admin v2 R5, 0066; owner
+  item **O-12**).
+  - *The gap.* R5 puts the release guard on every registry table, `team_members` included, so
+    once a tenant's releases are on a staff edit of a team member outside a release is
+    refused (42501) like any other, and team-member changes go through a release (R4 applies
+    them). But `team_members` keeps no history (0038) and has no capture trigger (0051, R5):
+    a release that changes a team member records no item (R4 returns a minimal one), and an
+    out-of-band write the guard lets through (the runbook, the service role, Auth setting a
+    removed account's link to null) records no system item. A restore (R10) therefore cannot
+    put a team member back, and R10 refuses team members ("History isn't kept for team members
+    yet", R4 D2). Inert today: `app.release_tenants` is empty.
+  - *Why not excluded from the guard.* Excluding `team_members` would let staff edit team
+    members live while every other registry table goes through releases, which R3a's kernel
+    (it stages team-member edits) and the registry contract do not allow. The guard stays; the
+    missing history is O-12's (PDPL: staff names and bios kept after an erasure).
+  - *What closes it.* The owner decides O-12 (history redaction, R16): either team members get
+    history and capture (a snapshot and a capture trigger, with R16's redaction), or the owner
+    accepts that a release cannot restore a team member, and R14's runbook says so.
+  - *Owner:* Kareem (O-12). *Expiry:* R14's switch-on. *Closes when* O-12 is decided and
+    R14's checklist records the outcome (pgTAP `snapshot_coverage.test.sql` names the
+    exemption).
+
 ## The client's TDD, row by row
 
 Checked by the coverage reviewer against the three designs on 2026-10-03
@@ -363,7 +385,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §14 | Events, funnel, goals, realtime, sessions | covered | built (G1, 0071) | AV-10 (later) | On consented first-party data: visits per tab and UTC day, clicks and explorer interest, a three-step funnel, busiest hours in Riyadh time, goals (Admin and SEO, §5 `analytics.goals`), realtime from a 1-minute rollup (Pillar 4). See Stats above for what stays out. |
 | §14 | Sources, countries, devices, browsers, unique visitors, cities | deviated-ok | deviation (standard or owner decision) | AV-10 (later) | Consent-gated capture + notice change (PDPL, O4); a persistent visitor id needs legal; cities never. |
 | §14 | GA4 numbers via the Data API (/stats/ga) | deviated-challenge | built under A6 | none |  |
-| §14 | 10-minute health worker (uptime, TTFB, weight, errors, broken links, SSL/domain, headers, SEO, synthetic form, backup, storage), score, alerts | deviated-challenge | built under A6 | AV-10 v1 | Vitals, errors, checklist, security, SEO, backup, storage now. Uptime must come from the external monitor (§10): integrate its API. |
+| §14 | 10-minute health worker (uptime, TTFB, weight, errors, broken links, SSL/domain, headers, SEO, synthetic form, backup, storage), score, alerts | deviated-challenge | built under A6 | AV-10 v1; G2 (0067) | Vitals, errors, checklist, security, SEO, backup, storage (U2); uptime, domain and certificate built (G2): the monitor's read-only API every 10 minutes, the domain's RDAP record about daily, the certificate where the monitor reports it, failures in the bell. No broken-link crawl (L8), no lab weight, no alert channels (A1). |
 | §14 | Health visible to every 'stats' role | deviated-ok | deviation (standard or owner decision) | AV-10 (siteHealth.view) | §5: Admin + Developer. |
 | §15 | Twelve widgets, per-user layout, Customize across three columns | covered | covered | AV-09 | Team notes built in U1; Right now (realtime) built in G1b, off the board by default as the prototype's DASH_DEFAULT, figures as of the page's load (the stats' Realtime tab keeps them current). |
 | §15 | Users: invite with role, deactivate, reset 2FA, editable matrix, personal access | covered | covered | AV-21 | Read-only matrix and no personal access (binding); reset 2FA missing. |

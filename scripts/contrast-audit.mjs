@@ -363,6 +363,10 @@ const ADMIN_PAIRS = [
   ['err-text', 'card', 3.0, "the bell's unread dot (F8)"],
   ['primary', 'bg', 3.0, 'a list row icon on its ground (.li__ico, F8)'],
   ['ok-text', 'card', 3.0, 'the score ring at 90 and up (Ring, F4b)'],
+  // The uptime strip's bars on a card (G2): up all day, down a few minutes, down longer.
+  ['ok-text', 'card', 3.0, 'an uptime strip day up all day (G2)'],
+  ['warn-text', 'card', 3.0, 'an uptime strip day down a few minutes (G2)'],
+  ['err-text', 'card', 3.0, 'an uptime strip day down longer (G2)'],
   ['warn-text', 'bg', 3.0, 'the "Arabic (missing)" dot on an EN | AR segment (F5a)'],
   ['warn-text', 'card', 3.0, 'the "Arabic (missing)" dot on the chosen segment (F5a)'],
   ['card', 'control', 3.0, "a switch's knob on its off track (F5a)"],

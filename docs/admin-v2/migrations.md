@@ -9,7 +9,7 @@ the program applies it. No URL, credential or project reference belongs here.
 ## Applied
 
 Production has applied 0001 to 0038, 0041, 0044, 0045, 0046, 0048, 0050, 0051, 0052, 0054, 0055,
-0056, 0057, 0060, 0061, 0062, 0063, 0064 and 0065, the files `main` holds once C4b's PR merges (0039, 0040, 0042, 0043,
+0056, 0057, 0060, 0061, 0062, 0063, 0064, 0065, 0066 and 0067, the files `main` holds once #86 merges (0039, 0040, 0042, 0043,
 0047, 0049, 0053 and 0058 were released unused; gaps are allowed).
 
 | Migration | What | PR |
@@ -41,7 +41,9 @@ Production has applied 0001 to 0038, 0041, 0044, 0045, 0046, 0048, 0050, 0051, 0
 | 0062 | `0062_release_drafts_write.sql`: staff draft writes on `content_drafts` (grants stated), RESTRICTIVE live, releases-on and singleton-key policies, `public.releases_enabled`, `public.write_drafts` (the one draft writer), `app.draft_key_ok` (expand, inert until R14) (R3a). Applied before #80 merges | #80 |
 | 0063 | `0063_crm_leads_readers_v2.sql`: `app.lead_filter` and `leads_list`, `leads_board`, `lead_summary` restated with assignee (`me` in SQL), star, unread, source, channel, discipline, a starred-first sort, the SLA flag and the won value (0036's keys unchanged); `public.lead_neighbours`; the shared predicate set and order `app.leads_matching` and the one SLA rule `app.lead_over_sla` (C4a). Applied before #79 merges | #79 |
 | 0064 | `0064_media_library.sql`: `public.media_library` (the library's search and paging: SECURITY INVOKER, staff only, the tenant named and checked, Arabic folded, `%` and `_` escaped), the help set restated with the media guide (U4; the help set restated from 0061's). Applied before #82 merges | #82 |
-| 0065 | `0065_help_leads_v2.sql`: the help set restated with `working-with-leads` rewritten for the leads screens (C4b; the help set restated from 0064's). Applied before C4b's PR merges | C4b |
+| 0065 | `0065_help_leads_v2.sql`: the help set restated with `working-with-leads` rewritten for the leads screens (C4b; the help set restated from 0064's). Applied before #85 merged | #85 |
+| 0066 | `0066_release_guard.sql`: `<table>__release_guard` on every registry table and both case-study link tables (no depth exemption), system items and link-set capture (the sets kept per statement in `app.release_link_pending`), `media_usage` v4 (pending changes), `dashboard_attention` v4, `app.publish_scheduled()` skips tenants with releases on, TRUNCATE closed on guarded tables (expand, inert) (R5). Applied before #84 merges | #84 |
+| 0067 | `0067_health_probes.sql`: `health_probes` (service role writes, Admin and Developer read), its stamps trigger, the help set restated with the site health guide (from 0065's) (G2). Applied before #86 merges | #86 |
 
 Each slice's file under [as-built/](as-built/) has the detail.
 
@@ -66,8 +68,6 @@ every PR moves only its own row.
 | 0053 | (released) | unused: U13 (0054) merged before U1, and once 0054 is on `main` a 0053 would sort below its highest (rule 1), so U1 moved to 0060, the lowest number above `main` that no other slice holds | 2 |
 | 0058 | (released) | unused: U1 (0060) merged before U14b, and once 0060 is on `main` a 0058 would sort below its highest (rule 1), so U14b moved to 0061 | 2 |
 | 0059 | C13 | lead attribution capture (built, held for the privacy notice, O-11); moved from 0047, then from 0049. Below Wave 3's numbers: when released it renumbers to the lowest free number above `main`'s highest (rule 3), the wave's slack first | 1 |
-| 0066 | R5 | `0066_release_guard.sql`: `<table>__release_guard` on every registry table and both case-study link tables (no depth exemption), system items and link-set capture, `media_usage` v4 (pending changes), `dashboard_attention` v4, `app.publish_scheduled()` skips tenants with releases on, TRUNCATE closed on guarded tables (expand, inert) | 3 |
-| 0067 | G2 | `0067_health_probes.sql`: `health_probes` (service role writes, Admin and Developer read), its stamps trigger, the help set restated with the site health guide | 3 |
 | 0068 | U7a | `0068_faq_items.sql`: `faq_items` (RLS, anon column grant, registry row, snapshot, capture and guard triggers), `app.faq_text_ok`, `app.publish_scheduled()` restated with it, the help set with `collections-and-faq`. The production delta seed runs before the merge | 3 |
 | 0069 | U10a | `0069_seo_share_images.sql`: `entity_seo.og_media_id` and `seo_defaults.default_og_media_id` (composite keys to `media_assets (tenant_id, id)`), `media_assets_public_read` and `media_usage` (v5) restated, the two registry rows restated | 3 |
 | 0070 | G1 (folded: G1a, G1b, G1c) | one file for the three halves, built as `0071_stats_v2.sql` (its number is assigned at merge with `scripts/renumber-migration.mjs`): the `analytics_events (occurred_at)` index, raw telemetry read by the service role only, `rollup_daily_visits`, `rollup_daily_events`, `rollup_hourly_pageviews`, `rollup_minute_activity`, `app.rollup_visits` (every 15 minutes) and `app.rollup_realtime` (every minute), the cron history purge, `app.role_analytics_goals` (`analytics.goals`, §5), `analytics_goals`, the invoker readers; no help set (its guide waits for H11's put) | 3 |

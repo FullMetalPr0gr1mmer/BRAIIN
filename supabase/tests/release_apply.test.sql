@@ -20,7 +20,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(100);
+select plan(101);
 
 -- ── 0. The catalog, before this file creates any function ─────────────────────────────
 -- (Its helpers below call set_config, and would show up here.)
@@ -787,15 +787,26 @@ select is(
 reset role;
 
 -- ── 13. What is not captured ─────────────────────────────────────────────────────────
-create table _n as select count(*) as items from public.content_release_items;
+create table _n as select count(*) as items, coalesce(max(id), 0) as top from public.content_release_items;
 grant select on _n to service_role;
 set local role authenticated;
 select set_config('request.jwt.claims', json_build_object('sub', '51000000-0000-0000-0000-0000000000c1',
   'app_metadata', json_build_object('role', 'content_creator', 'tenant_id', '51000000-0000-0000-0000-00000000000a'))::text, true);
-update public.services set sort_order = 5 where id = '51000000-0000-0000-0001-000000000005';
+select throws_ok($$ update public.services set sort_order = 5 where id = '51000000-0000-0000-0001-000000000005' $$,
+  '42501', 'Live content changes only through a release.',
+  'a staff write outside a release, releases on, is refused by the guard (0066)');
 reset role;
-select is((select count(*) from public.content_release_items) - (select items from _n), 0::bigint,
-  'a staff write outside a release records no item');
+-- A write with no staff claim and no switched role (the runbook, a cron) is let through and
+-- recorded as a system item: no release, no draft, no actor (0066).
+select set_config('request.jwt.claims', '', true);
+update public.services set sort_order = 5 where id = '51000000-0000-0000-0001-000000000005';
+select is(
+  (select format('%s %s %s %s %s %s', count(*), bool_and(i.release_id is null), bool_and(i.draft_id is null),
+                 bool_and(i.actor_id is null), min(i.op), min(i.after ->> 'sort_order'))
+     from public.content_release_items i
+    where i.id > (select top from _n)),
+  '1 t t t update 5',
+  'a claimless write outside a release records one system item, and the refused one none');
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 -- Upper-case ids are the same ids: one draft listed in both spellings is listed twice, and

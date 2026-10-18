@@ -16,6 +16,11 @@ import {
   DraftLabelSchema,
   DraftRefFieldsSchema,
   DryRunReportSchema,
+  DRAFT_STALE_DAYS,
+  LedgerItemRowSchema,
+  RELEASE_ATTENTION_KINDS,
+  RELEASE_ATTENTION_WINDOW_DAYS,
+  RELEASE_OVERDUE_MINUTES,
   WRITE_DRAFTS_MAX_OPS,
   WriteDraftsDiscardSchema,
   WriteDraftsOpsSchema,
@@ -676,5 +681,68 @@ describe('the staged-write shapes equal migration 0062', () => {
     for (const code of DraftConflictDetailSchema.shape.code.options) {
       expect(DRAFT_CONFLICT_CODES).toContain(code);
     }
+  });
+});
+
+// ---- The guard and complete capture (migration 0066, R5) -------------------------------------
+
+const GUARD_SQL = readFileSync(
+  join(process.cwd(), 'supabase', 'migrations', '0066_release_guard.sql'),
+  'utf8',
+).replace(/--[^\n]*/g, '');
+
+describe('LedgerItemRowSchema (system items, 0066)', () => {
+  const at = '2026-10-18T08:00:00+00:00';
+  const item = {
+    id: 9,
+    tenant_id: uuid(2),
+    release_id: uuid(1),
+    entity_type: 'service',
+    entity_id: uuid(5),
+    op: 'update',
+    before: { sort_order: 1 },
+    after: { sort_order: 2 },
+    draft_id: uuid(7),
+    actor_id: uuid(4),
+    created_at: at,
+  };
+
+  it('reads a release item and a system item (no release, no draft)', () => {
+    expect(LedgerItemRowSchema.parse(item).release_id).toBe(uuid(1));
+    const system = { ...item, release_id: null, draft_id: null, actor_id: null };
+    expect(LedgerItemRowSchema.parse(system).release_id).toBeNull();
+  });
+
+  it('a system item never names a draft (content_release_items_system_shape)', () => {
+    expect(LedgerItemRowSchema.safeParse({ ...item, release_id: null }).success).toBe(false);
+    expect(GUARD_SQL).toContain('check (release_id is not null or draft_id is null)');
+  });
+
+  it("a release's own items still name it (ApplyResultSchema reads ReleaseItemRowSchema)", () => {
+    expect(ReleaseItemRowSchema.safeParse({ ...item, release_id: null }).success).toBe(false);
+  });
+});
+
+describe('the attention kinds and thresholds equal migration 0066', () => {
+  const view = GUARD_SQL.slice(
+    GUARD_SQL.indexOf('create or replace view public.dashboard_attention'),
+    GUARD_SQL.indexOf('revoke all on public.dashboard_attention'),
+  );
+  const v4 = view.slice(view.indexOf("select 'release_scheduled_today'"));
+
+  it('the view emits exactly RELEASE_ATTENTION_KINDS after its 0028 kinds', () => {
+    const kinds = [...v4.matchAll(/select '([a-z_]+)'/g)].map((m) => m[1]);
+    expect(kinds).toEqual([...RELEASE_ATTENTION_KINDS]);
+  });
+
+  it('late is RELEASE_OVERDUE_MINUTES, stale DRAFT_STALE_DAYS, failures RELEASE_ATTENTION_WINDOW_DAYS', () => {
+    const minutes = [...v4.matchAll(/interval '(\d+) minutes'/g)].map((m) => Number(m[1]));
+    const days = [...v4.matchAll(/interval '(\d+) days'/g)].map((m) => Number(m[1]));
+    expect(minutes).toEqual([RELEASE_OVERDUE_MINUTES, RELEASE_OVERDUE_MINUTES]);
+    expect(days).toEqual([
+      RELEASE_ATTENTION_WINDOW_DAYS,
+      RELEASE_ATTENTION_WINDOW_DAYS,
+      DRAFT_STALE_DAYS,
+    ]);
   });
 });

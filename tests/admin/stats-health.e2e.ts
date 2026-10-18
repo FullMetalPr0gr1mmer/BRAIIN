@@ -59,6 +59,7 @@ const HEALTH = [
   '/admin/site-health?tab=speed',
   '/admin/site-health?tab=errors',
   '/admin/site-health?tab=seo',
+  '/admin/site-health?tab=security',
 ];
 
 const VIEWS: Record<Role, string[]> = {

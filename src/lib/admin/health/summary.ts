@@ -10,7 +10,8 @@ import {
   type CheckResult,
   type ContentHealth,
 } from './checklist';
-import { healthScore, scoreLabel, type HealthScore } from './score';
+import { formatRatio, loadProbes, uptimeView, type ProbeReport, type UptimeView } from './probes';
+import { healthScore, scoreLabel, type HealthScore, type UptimeInput } from './score';
 import {
   BUDGETED,
   HEALTH_WINDOW_DAYS,
@@ -25,10 +26,11 @@ import {
 } from './vitals';
 
 // Site health, read once for a screen (Admin v2 U2): the field vitals of the last 28 days
-// (rollup_daily_vitals), the checklist's counts, the errors of the last 7 days and the last
-// backup export, each read only when the role holds the capability its rows need (the
-// checklist's rule, README D4), all at once (at most four reads). The site health screen
-// shows all of it; the dashboard's health widget (U1) shows loadHealthSummary's part.
+// (rollup_daily_vitals), the checklist's counts, the errors of the last 7 days, the last
+// backup export and (G2) the uptime, domain and certificate readings (health_probes), each
+// read only when the role holds the capability its rows need (the checklist's rule, README
+// D4), all at once (at most five reads). The site health screen shows all of it; the
+// dashboard's health widget (U1) shows loadHealthSummary's part.
 //
 // A read that fails is logged (system_logs) and its rows say "could not be read" rather than
 // failing the screen: site health must still render when one source is down.
@@ -52,6 +54,13 @@ export interface HealthReport {
   tiles: HealthTile[];
   /** Errors in the last 7 days, or null when not read. */
   errors7d: number | null;
+  /**
+   * The uptime, domain and certificate readings (G2): null when not read (the role lacks
+   * siteHealth.view) or when the read failed.
+   */
+  probes: ProbeReport | null;
+  /** The uptime figure (G2), or null when the readings were not read. */
+  uptime: UptimeView | null;
 }
 
 export interface HealthSummary {
@@ -62,6 +71,8 @@ export interface HealthSummary {
   failing: CheckResult[];
   /** How many rows fail in all. */
   failingCount: number;
+  /** The uptime figure (G2, additive), or null when not read. */
+  uptime: UptimeView | null;
 }
 
 /**
@@ -123,6 +134,27 @@ async function loadLastBackup(sb: SupabaseClient, auth: AuthContext): Promise<Ba
   };
 }
 
+/** The "Uptime, 30 days" tile (G2), after the CLS one. */
+function uptimeTile(view: UptimeView | null): HealthTile {
+  const label = 'Uptime, 30 days';
+  const note = 'From the monitor';
+  if (!view) return { label, value: 'Could not be read', note };
+  if (view.status === 'off') return { label, value: 'Not set up', note };
+  // A row with no reading has been tried (a row is written by a run), so not "not checked".
+  if (view.status === 'unchecked') return { label, value: 'No reading yet', note };
+  if (view.ratio30 === null) return { label, value: 'Not reported', note };
+  return { label, value: formatRatio(view.ratio30), note };
+}
+
+/** Uptime as the score takes it: the reading, or why there is none. */
+function uptimeInput(view: UptimeView | null): UptimeInput {
+  if (!view) return 'unknown';
+  if (view.status === 'off') return 'off';
+  // A stale reading (six failed reads) is not scored; neither is one never read.
+  if (view.ratio30 === null || view.state === 'unknown') return 'unknown';
+  return { ratio30: view.ratio30 };
+}
+
 function vitalTile(report: VitalsReport | null, metric: VitalMetric): HealthTile {
   const label = VITAL_NAMES[metric];
   const row = report ? siteVital(report, metric) : null;
@@ -143,12 +175,15 @@ export async function loadHealthReport(
   now: number = Date.now(),
 ): Promise<HealthReport> {
   const may = (cap: Parameters<typeof can>[1]) => can(auth.role, cap) === 'full';
-  const [vitals, content, errors7d, lastBackup] = await Promise.all([
-    may('siteHealth.view') ? settle(() => loadVitals(sb, auth, HEALTH_WINDOW_DAYS), null) : null,
+  const mayHealth = may('siteHealth.view');
+  const [vitals, content, errors7d, lastBackup, probes] = await Promise.all([
+    mayHealth ? settle(() => loadVitals(sb, auth, HEALTH_WINDOW_DAYS), null) : null,
     settle(() => loadContentHealth(sb, auth), null),
     may('logs.view') ? settle(() => loadErrorCount(sb, auth, now), null) : null,
     // undefined: not read (no audit.view, or the read failed); null: none recorded.
     may('audit.view') ? settle(() => loadLastBackup(sb, auth), undefined) : undefined,
+    // undefined: not read (no siteHealth.view); null: the read failed.
+    mayHealth ? settle(() => loadProbes(sb, auth), null) : undefined,
   ]);
   const checks = runChecklist({
     role: auth.role,
@@ -156,22 +191,35 @@ export async function loadHealthReport(
     content,
     errors7d,
     lastBackup,
+    probes,
     now,
   });
+  const uptime = probes === undefined ? null : uptimeView(probes);
   const score = healthScore({
     vitals: BUDGETED.map((metric) => judged(vitals ? siteVital(vitals, metric) : null)),
     checks,
+    uptime: mayHealth ? uptimeInput(uptime) : 'off',
   });
   const { ok, judged: judgedRows } = tally(checks);
   const tiles: HealthTile[] = [
     ...BUDGETED.map((metric) => vitalTile(vitals, metric)),
+    ...(mayHealth ? [uptimeTile(uptime)] : []),
     {
       label: `Errors, ${ERROR_WINDOW_DAYS} days`,
       value: errors7d === null ? 'Not checked' : errors7d.toLocaleString('en-GB'),
     },
     { label: 'Checklist', value: `${ok} / ${judgedRows}`, note: 'rows passing' },
   ];
-  return { vitals, checks, score, scoreLabel: scoreLabel(score.total), tiles, errors7d };
+  return {
+    vitals,
+    checks,
+    score,
+    scoreLabel: scoreLabel(score.total),
+    tiles,
+    errors7d,
+    probes: probes ?? null,
+    uptime,
+  };
 }
 
 /** The dashboard's part (U1's health widget): the ring, the tiles, the first failing rows. */
@@ -188,5 +236,6 @@ export async function loadHealthSummary(
     tiles: report.tiles,
     failing: failing.slice(0, 4),
     failingCount: failing.length,
+    uptime: report.uptime,
   };
 }

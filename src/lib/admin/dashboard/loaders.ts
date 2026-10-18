@@ -42,9 +42,10 @@ import { readTeamNotes, type TeamNotes } from './teamNotes';
 // Subrequests, at most (README P-15: 50 on the Workers Free plan), for an Admin with every
 // widget on the board: the preferences and the preset (2), the homepage's id (1), the page
 // views over 30 and 7 days (2), the lead summary (1), the leads of 30 days (1), the latest
-// leads with their stages and interests (4), the attention list (1, plus the bell's two),
-// site health (4), the activity and its names (2), the applications (1), the disciplines and
-// their labels (3), the note (1): 24, plus what the shell reads (tests/lib/dashboardWidgets.spec.ts
+// leads with their stages and interests (4), the attention list and its stale pending
+// changes (2, plus the bell's two; R5 split the second out), site health (4), the activity
+// and its names (2), the applications (1), the disciplines and their labels (3), the note
+// (1): 25, plus what the shell reads (tests/lib/dashboardWidgets.spec.ts
 // counts both; docs/admin-v2/as-built/U1.md has the measured total).
 
 const SOURCE = 'admin:dashboard';
@@ -170,16 +171,31 @@ export interface DashboardContext {
   siteUrl: string;
 }
 
-// ── The attention list's words (0028's kinds) ──────────────────────────────────────────
+// ── The attention list's words (0028's kinds, and 0066's release kinds) ────────────────
 
-const KIND_LABEL: Readonly<Record<string, string>> = {
+/** Every kind the attention view emits but the UTC "scheduled today" (read around, U1 D9). */
+export const KIND_LABEL: Readonly<Record<string, string>> = {
   stale: 'Not updated in 180 days',
   missing_image: 'Published without a cover image',
   placeholder_live: 'Placeholder content is live',
   placeholder_pending: 'Placeholders awaiting real content',
   missing_alt: 'Published project images without alt text',
   consent_missing: 'Quotes on a page without recorded consent',
+  // Releases (0066, R5): no row exists until R3, R7 or R11 writes one.
+  release_scheduled_today: 'Release going live today',
+  release_overdue: 'Release late to go live',
+  release_failed: 'Release that could not go live',
+  purge_failed: 'Website cache not refreshed after a release',
+  draft_stale: 'Pending changes untouched for 30 days',
 };
+
+/**
+ * Pending changes can be many once releases are on, and the list's read is capped (below), so
+ * they are read on their own, with an exact count: they never crowd the content kinds out.
+ */
+export const STALE_DRAFT_KIND = 'draft_stale';
+/** The most attention rows one read takes (PostgREST answers 1,000 at most). */
+export const ATTENTION_READ_CAP = 500;
 
 /** The view's entity_type to the editor that opens it; one this map does not know is text. */
 const RESOURCE_OF: Readonly<Record<string, string>> = {
@@ -204,6 +220,7 @@ const TYPE_LABEL: Readonly<Record<string, string>> = {
   client: 'Client',
   page_section: 'Page section',
   service_case: 'Service case',
+  release: 'Release',
 };
 
 interface AttentionRow {
@@ -260,6 +277,15 @@ const titleOf = (value: unknown, fallback: string): string => {
   return fallback;
 };
 
+/** What a row is called when it has no title of its own: its slug, else a plain name. */
+function fallbackTitle(row: AttentionRow): string {
+  if (row.entity_type === 'release') {
+    return row.slug ? `Version ${row.slug.replace(/^v/, '')}` : 'A scheduled release';
+  }
+  if (row.slug) return row.slug;
+  return row.kind === STALE_DRAFT_KIND ? 'A pending change' : 'Untitled';
+}
+
 function memo<T>(work: () => Promise<T>): () => Promise<T> {
   let cached: Promise<T> | null = null;
   return () => (cached ??= work());
@@ -303,15 +329,30 @@ export function createDashboardReads(ctx: DashboardContext) {
   });
 
   const attentionRows = memo(async () => {
-    // A security_invoker view (0028): RLS decides; a role with no content access sees none.
-    // "Going live today" is not read from it: its day is UTC's (README U1 D9).
+    // A security_invoker view (0028, 0066): RLS decides; a role with no content access sees
+    // none. "Going live today" is not read from it: its day is UTC's (README U1 D9). Stale
+    // pending changes are read on their own (staleDrafts), so they never fill the cap.
     const { data, error } = await sb
       .from('dashboard_attention')
       .select('kind,entity_type,id,slug,title,at')
       .neq('kind', 'scheduled_today')
-      .limit(500);
+      .neq('kind', STALE_DRAFT_KIND)
+      .limit(ATTENTION_READ_CAP);
     if (error) throw new Error(`attention: ${error.code ?? error.message}`);
     return (data ?? []) as AttentionRow[];
+  });
+
+  /** The oldest stale pending changes the widget shows, and how many there are (0066). */
+  const staleDrafts = memo(async () => {
+    const { data, error, count } = await sb
+      .from('dashboard_attention')
+      .select('kind,entity_type,id,slug,title,at', { count: 'exact' })
+      .eq('kind', STALE_DRAFT_KIND)
+      .order('at', { ascending: true })
+      .limit(ATTENTION_ROWS);
+    if (error) throw new Error(`stale drafts: ${error.code ?? error.message}`);
+    const rows = (data ?? []) as AttentionRow[];
+    return { rows, count: count ?? rows.length };
   });
 
   const homeId = memo(async () => {
@@ -342,6 +383,7 @@ export function createDashboardReads(ctx: DashboardContext) {
     newLeads,
     leads30,
     attentionRows,
+    staleDrafts,
     homeId,
     headCount,
   };
@@ -527,8 +569,11 @@ export function widgetLoaders(
 
     async attention() {
       const mayContent = ATTENTION_CAPS.some((cap) => reads.may(cap));
-      const [rows, live] = await Promise.all([
+      const [rows, stale, live] = await Promise.all([
         mayContent ? reads.attentionRows() : Promise.resolve([] as AttentionRow[]),
+        mayContent
+          ? reads.staleDrafts()
+          : Promise.resolve({ rows: [] as AttentionRow[], count: 0 }),
         reads.may('services.write') || reads.may('blog.write')
           ? goingLiveToday(sb, auth, now)
           : Promise.resolve([]),
@@ -543,6 +588,11 @@ export function widgetLoaders(
         if (row.kind === 'consent_missing' && samples.has(row.id)) continue;
         byKind.set(row.kind, [...(byKind.get(row.kind) ?? []), row]);
       }
+      const counts = new Map([...byKind.entries()].map(([kind, list]) => [kind, list.length]));
+      if (stale.count > 0) {
+        byKind.set(STALE_DRAFT_KIND, stale.rows);
+        counts.set(STALE_DRAFT_KIND, stale.count);
+      }
       return {
         goingLive: live.map((item) => ({
           title: item.title ?? 'An item',
@@ -552,14 +602,18 @@ export function widgetLoaders(
         groups: [...byKind.entries()].map(([kind, list]) => ({
           kind,
           label: KIND_LABEL[kind] ?? kind.replaceAll('_', ' '),
-          count: list.length,
+          count: counts.get(kind) ?? list.length,
           rows: list.slice(0, ATTENTION_ROWS).map((row) => ({
-            title: titleOf(row.title, row.slug),
+            title: titleOf(row.title, fallbackTitle(row)),
             type: TYPE_LABEL[row.entity_type] ?? row.entity_type.replaceAll('_', ' '),
             href: RESOURCE_OF[row.entity_type]
               ? `/admin/${RESOURCE_OF[row.entity_type]}/${row.id}`
               : null,
-            where: row.entity_type === 'page_section' ? `On the ${row.slug} page` : null,
+            // A pending change's slug is its own (a section's draft has none): no page line.
+            where:
+              row.entity_type === 'page_section' && row.kind !== STALE_DRAFT_KIND
+                ? `On the ${row.slug} page`
+                : null,
             at: row.at,
           })),
         })),

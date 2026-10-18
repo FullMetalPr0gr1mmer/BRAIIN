@@ -41,6 +41,8 @@ const state = vi.hoisted(() => ({
   inserts: [] as Record<string, unknown>[],
   updates: [] as Record<string, unknown>[],
   audits: [] as { action: string; detail?: Record<string, unknown> }[],
+  // What media_usage answers (v4, 0066: a fourth column, `pending`).
+  usage: [] as Record<string, unknown>[],
 }));
 
 vi.mock('cloudflare:workers', () => ({
@@ -186,7 +188,7 @@ function userClient() {
       return b;
     },
     rpc: async (fn: string) => {
-      if (fn === 'media_usage') return { data: [], error: null };
+      if (fn === 'media_usage') return { data: state.usage, error: null };
       if (fn === 'media_storage_stats') return { data: [{ assets: 3, bytes: 4567 }], error: null };
       return { data: null, error: null };
     },
@@ -246,6 +248,7 @@ const { POST: REPLACE } = await import('@/pages/api/admin/media/[id]/replace');
 const { GET: DOWNLOAD } = await import('@/pages/api/admin/media/[id]/download');
 const { DELETE } = await import('@/pages/api/admin/media/[id]');
 const { GET: STATS } = await import('@/pages/api/admin/media/stats');
+const { GET: USAGE } = await import('@/pages/api/admin/media/[id]/usage');
 
 beforeEach(() => {
   state.configured = true;
@@ -265,6 +268,7 @@ beforeEach(() => {
   state.inserts = [];
   state.updates = [];
   state.audits = [];
+  state.usage = [];
 });
 
 describe('POST /api/admin/media/upload', () => {
@@ -674,6 +678,74 @@ describe('DELETE /api/admin/media/[id] (an uploaded image)', () => {
     state.stored = { id: ASSET, provider: 'static', storage_path: 'stills/work/p0.jpg' };
     await call(DELETE, ctx('DELETE', `/api/admin/media/${ASSET}`));
     expect(state.removed).toEqual([]);
+  });
+});
+
+describe('media_usage v4: pending changes are references (0066, Admin v2 R5)', () => {
+  const live = { entity_type: 'service', entity_id: OTHER, label: 'logo', pending: false };
+  const pending = {
+    entity_type: 'page_section',
+    entity_id: USER,
+    label: 'Home hero',
+    pending: true,
+  };
+
+  it('the usage answer passes `pending` through', async () => {
+    state.stored = { id: ASSET, provider: 'static', storage_path: 'stills/work/p0.jpg' };
+    state.usage = [live, pending];
+    const { status, body } = await call(USAGE, ctx('GET', `/api/admin/media/${ASSET}/usage`));
+    expect(status).toBe(200);
+    expect(body?.['data']).toEqual({
+      id: ASSET,
+      inUse: true,
+      usage: [
+        { entityType: 'service', entityId: OTHER, label: 'logo', pending: false },
+        { entityType: 'page_section', entityId: USER, label: 'Home hero', pending: true },
+      ],
+    });
+  });
+
+  it('a row without `pending` (a database before v4) reads as live; an unknown column is ignored', async () => {
+    state.stored = { id: ASSET, provider: 'static', storage_path: 'stills/work/p0.jpg' };
+    state.usage = [{ entity_type: 'client', entity_id: OTHER, label: 'acme', later: 'x' }];
+    const { body } = await call(USAGE, ctx('GET', `/api/admin/media/${ASSET}/usage`));
+    expect(body?.['data']?.['usage']).toEqual([
+      { entityType: 'client', entityId: OTHER, label: 'acme', pending: false },
+    ]);
+  });
+
+  it('a hard delete waits for a pending change, and says it is one', async () => {
+    state.stored = { id: ASSET, provider: 'static', storage_path: 'stills/work/p0.jpg' };
+    state.usage = [pending];
+    const { status, body } = await call(DELETE, ctx('DELETE', `/api/admin/media/${ASSET}`));
+    expect(status).toBe(409);
+    expect(JSON.stringify(body)).toContain(
+      'still used by 1 item(s): Pending change to page section: Home hero. Replace it there first.',
+    );
+    expect(state.audits).toEqual([]);
+  });
+
+  it('a live reference keeps its plain words', async () => {
+    state.stored = { id: ASSET, provider: 'static', storage_path: 'stills/work/p0.jpg' };
+    state.usage = [live];
+    const { status, body } = await call(DELETE, ctx('DELETE', `/api/admin/media/${ASSET}`));
+    expect(status).toBe(409);
+    expect(JSON.stringify(body)).toContain('still used by 1 item(s): Service: logo.');
+    expect(JSON.stringify(body)).not.toContain('pending');
+  });
+
+  it('the refusal follows the admin copy rule: no em or en dash (P-12)', async () => {
+    state.stored = { id: ASSET, provider: 'static', storage_path: 'stills/work/p0.jpg' };
+    state.usage = [live, pending];
+    const { status, body } = await call(DELETE, ctx('DELETE', `/api/admin/media/${ASSET}`));
+    expect(status).toBe(409);
+    const words = JSON.stringify(body);
+    expect(words).toContain('. Replace it there first.');
+    // The drawer's words for each (usageWords), a semicolon between them.
+    expect(words).toContain(
+      'still used by 2 item(s): Service: logo; Pending change to page section: Home hero.',
+    );
+    expect(words).not.toMatch(/[\u2013\u2014]/);
   });
 });
 
