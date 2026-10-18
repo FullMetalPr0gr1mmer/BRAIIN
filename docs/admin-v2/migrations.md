@@ -46,7 +46,7 @@ Each slice's file under [as-built/](as-built/) has the detail.
 ## Reserved
 
 Wave 3's migrations, Wave 2's open one (U14b) and Wave 1's held one (C13) are reserved below; 0079
-to 0081 are the wave's slack, and the next free number after them is **0082**. Before a wave's
+went to C4c, 0080 and 0081 are the wave's slack, and the next free number after them is **0082**. Before a wave's
 slices branch, each migration the wave plans gets a row here, numbered in the wave's planned merge
 order. The slice's own PR moves its row to "Applied" once production has applied the migration,
 before the PR merges (Pushing to production, step 5), so the row is true when the PR lands and
@@ -79,7 +79,8 @@ every PR moves only its own row.
 | 0076 | U11 | `0076_integrations_typed.sql`: typed CHECKed integration columns, `app.role_manages_integrations`, Admin and SEO read with a RESTRICTIVE live check, anon's one column (`search_console_token`), the help set | 3 |
 | 0077 | U9b | `0077_maintenance_v2_help.sql`: the help set restated with `maintenance-mode` rewritten | 3 |
 | 0078 | G1c | `0078_stats_goals.sql`: `app.role_analytics_goals` (`analytics.goals`, §5), `analytics_goals` (immediate, live-checked), `goal_progress`, the help set | 3 |
-| 0079 to 0081 | (slack) | Wave 3 slack: a mid-wave hotfix, U9c, C13's release or a slice that slips; the first to need one takes 0079 | 3 |
+| 0079 | C4c | `0079_help_leads_board.sql`: the help set restated from C4b's 0065 with the Pipeline board's line in `working-with-leads` (the board was carved out of C4b by size; the first slack number) | 3 |
+| 0080 to 0081 | (slack) | Wave 3 slack: a mid-wave hotfix, U9c, C13's release or a slice that slips; the next to need one takes 0080 | 3 |
 
 ## Rules
 
