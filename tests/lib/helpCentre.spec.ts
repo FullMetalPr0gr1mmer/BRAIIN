@@ -1067,6 +1067,13 @@ describe('website-stats as G1 rewrites it (docs/admin-v2/guides/website-stats.js
   it('0071 leaves the marked place where the put goes once H11 is on main', () => {
     expect(MIGRATION).toContain('TODO(H11)');
     expect(MIGRATION).toContain('docs/admin-v2/guides/website-stats.json');
+    // The call the TODO names is the one H11 defines: put_help_guide(p_guide, p_revision),
+    // which refuses a stale revision (55000); a one-argument call would not resolve.
+    expect(MIGRATION).toMatch(/--\s+select app\.put_help_guide\(<[^>]+>,\s*<revision[^>]*>\);/);
+    // And it does not claim 0065's guide is still true: it describes the Overview chart
+    // Audience now draws, and none of the new tabs, so the put is a merge blocker.
+    expect(MIGRATION).not.toContain('true of every number it states');
+    expect(MIGRATION).toMatch(/must not merge before the put lands/);
     // No restatement of the set, and no put yet (the catalog is not on main).
     expect(MIGRATION).not.toMatch(/create or replace function app\.help_article_set\(\)/);
     expect(MIGRATION).not.toMatch(/^select app\.put_help_guide/m);

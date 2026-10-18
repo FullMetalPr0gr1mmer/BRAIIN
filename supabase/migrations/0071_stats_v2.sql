@@ -813,11 +813,15 @@ grant execute on function public.realtime_summary(uuid) to authenticated;
 grant execute on function public.goal_progress(uuid) to authenticated;
 
 -- ---- 12. The help guide ----------------------------------------------------------------------------
--- TODO(H11): once the help-guide catalog (H11) is on main, replace this comment with
---   select app.put_help_guide(<docs/admin-v2/guides/website-stats.json as a $guide$ literal>);
+-- TODO(H11): once the help-guide catalog (H11) is on main, merge main and replace this
+-- comment with
+--   select app.put_help_guide(<docs/admin-v2/guides/website-stats.json as a $guide$ literal>, <revision main holds>);
+-- (H11's put takes the guide and the revision it replaces, and refuses a stale one, 55000).
 -- That file is this slice's website-stats guide (EN and AR, block for block); no slice
--- restates app.help_article_set() any more. Until then the guide as C4b (0065) left it stays
--- seeded, and it is true of every number it states.
+-- restates app.help_article_set() any more. The guide C4b (0065) seeded is out of date with
+-- these screens: it says Overview draws English and Arabic views day by day (Audience does
+-- now) and says nothing of Conversions, Audience, Realtime or Goals. So this migration
+-- must not merge before the put lands here.
 
 -- ---- Postconditions ---------------------------------------------------------------------
 -- Expressions are read as pg_get_expr prints them (each operator in parentheses, each AND list
