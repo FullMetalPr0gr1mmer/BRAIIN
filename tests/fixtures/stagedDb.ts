@@ -172,6 +172,7 @@ function query(db: Db, table: string) {
     },
     single: async () => {
       const r = run();
+      if (r.error) return { data: null, error: r.error };
       return r.data?.[0]
         ? { data: r.data[0], error: null }
         : { data: null, error: { code: 'PGRST116', message: 'no row' } };
