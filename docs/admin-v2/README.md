@@ -707,6 +707,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 **Releases**
 - [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)
 - [R2](as-built/R2.md): the release registry, caps and overlay core in TypeScript, `fields` on every release-managed config, the §5 relabel and the derived release publish matrix, no migration (#68)
+- [R3a](as-built/R3a.md): staged writes in the database and the resource kernel, behind the release flag: the draft writes, `public.write_drafts`, the staged branch of every kernel handler, inert, 0062
 - [R4](as-built/R4.md): applying a release as the publisher, change capture, the shared link-set helper, the purge record, inert, 0051 (#69)
 
 **CRM**
@@ -716,6 +717,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [C2a](as-built/C2a.md): reading the pipeline, 0036 (#47, folded into #45)
 - [C2b](as-built/C2b.md): one lead: the reveal, the notes thread, the timeline (#48, folded into #45)
 - [C3](as-built/C3.md): the leads write API: versioned PATCH, bulk, manual add, erase, export filters, 0041
+- [C4a](as-built/C4a.md): the leads readers v2: assignee, star, unread, source, channel and discipline filters, the SLA flag, the board's values, the summary's figures, Previous/Next in the list's own order, the score's reasons behind the reveal, 0063 (PR number at review)
 
 **Hotfixes**
 - [H5](as-built/H5.md): the audit chain is serialized, 0031 (#36)

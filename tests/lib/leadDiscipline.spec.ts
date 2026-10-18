@@ -196,16 +196,23 @@ describe('where a lead is read', () => {
   });
 
   it('the panel shows the discipline when no service was picked', async () => {
-    const { interestOf } = await import('@/components/admin/screens/leads/LeadsPanel');
+    // Moved to src/lib/crm/leadView.ts in C4a; the legacy panel keeps its own mark for none.
+    const { interestOf } = await import('@/lib/crm/leadView');
+    const panel = await import('@/components/admin/screens/leads/LeadsPanel');
     expect(interestOf({ service_of_interest: 'logo', discipline_of_interest: null })).toBe('logo');
     expect(interestOf({ service_of_interest: null, discipline_of_interest: 'events' })).toBe(
       'events (help me choose)',
     );
-    expect(interestOf({ service_of_interest: null })).toBe('—');
+    // The leads screens' words (no dash, P-12); the legacy panel's mark is unchanged.
+    expect(interestOf({ service_of_interest: null })).toBe('Not given');
+    expect(panel.interestOf({ service_of_interest: null })).toBe('—');
+    expect(panel.interestOf({ service_of_interest: null, discipline_of_interest: 'events' })).toBe(
+      'events (help me choose)',
+    );
   });
 
   it('the panel prefers the server’s label over the raw slug (Round 3)', async () => {
-    const { interestOf } = await import('@/components/admin/screens/leads/LeadsPanel');
+    const { interestOf } = await import('@/lib/crm/leadView');
     expect(
       interestOf({
         service_of_interest: 'videography',

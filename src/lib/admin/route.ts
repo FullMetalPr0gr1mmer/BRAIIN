@@ -5,6 +5,7 @@ import type { AuthContext } from '@/lib/auth/types';
 import { assertAnyCap, assertCap, type Access, type Capability } from '@/lib/authz/matrix';
 import { AuthorizationError } from '@/lib/authz/errors';
 import {
+  DraftConflictError,
   InUseError,
   NotFoundError,
   OptimisticLockError,
@@ -43,6 +44,12 @@ export interface AdminRouteContext<TInput> {
   readonly params: Record<string, string | undefined>;
   /** Queue an audit row; written after the handler returns successfully. */
   audit(entry: AuditEntry): void;
+  /**
+   * Are site-wide releases on for the caller's tenant (Admin v2 R3)? Read once per request,
+   * on first call, through `public.releases_enabled(p_tenant)`; an error throws (a 500), never
+   * a guess at "off". Only release-managed routes ask, so other routes pay nothing.
+   */
+  releasesEnabled(): Promise<boolean>;
 }
 
 export interface AdminRouteOptions<TSchema extends z.ZodTypeAny | undefined> {
@@ -96,6 +103,18 @@ function queryToObject(url: URL): Record<string, string> {
  * Developer role can read it.
  */
 function mapError(err: unknown): { status: number; body: Record<string, unknown> } {
+  if (err instanceof DraftConflictError) {
+    return {
+      status: 409,
+      body: {
+        ok: false,
+        error: err.code,
+        entity: err.entity,
+        ...(err.live ? { live: err.live } : {}),
+        ...(err.detail ? { detail: err.detail } : {}),
+      },
+    };
+  }
   if (err instanceof AuthorizationError) {
     return { status: 403, body: { ok: false, error: 'forbidden', capability: err.capability } };
   }
@@ -163,6 +182,7 @@ export function defineAdminRoute<TSchema extends z.ZodTypeAny | undefined = unde
         input = opts.input.parse(raw);
       }
 
+      let releases: Promise<boolean> | undefined;
       const result = await opts.handler({
         auth,
         sb,
@@ -171,6 +191,7 @@ export function defineAdminRoute<TSchema extends z.ZodTypeAny | undefined = unde
         url,
         params,
         audit: (entry) => pending.push(entry),
+        releasesEnabled: () => (releases ??= readReleasesFlag(sb, auth)),
       });
 
       // Audit AFTER the operation succeeded, so the log records what happened rather
@@ -194,6 +215,17 @@ export function defineAdminRoute<TSchema extends z.ZodTypeAny | undefined = unde
       return json(body, status);
     }
   };
+}
+
+/**
+ * The release flag for the caller's own tenant. `true` only when the database says so; an RPC
+ * error is thrown (the kernel answers 500 and logs it), because guessing "off" would write
+ * live while releases are on, and guessing "on" would stage while they are off.
+ */
+async function readReleasesFlag(sb: SupabaseClient, auth: AuthContext): Promise<boolean> {
+  const { data, error } = await sb.rpc('releases_enabled', { p_tenant: auth.tenantId });
+  if (error) throw new Error(`releases_enabled: ${error.message}`);
+  return data === true;
 }
 
 async function readJsonBody(request: Request): Promise<unknown> {

@@ -148,8 +148,27 @@ export const KERNEL_ENTITIES: ReadonlyMap<string, EntityInfo> = new Map(
   }),
 );
 
-/** The kernel's actions for one entity, as resource.ts writes them. */
-export const KERNEL_VERBS = ['create', 'update', 'delete', 'reorder'] as const;
+/**
+ * The kernel's actions for one entity, as resource.ts writes them, and the staged branch's
+ * (src/lib/release/staged.ts, Admin v2 R3) while releases are on: a pending change saved or
+ * thrown away.
+ */
+export const KERNEL_VERBS = [
+  'create',
+  'update',
+  'delete',
+  'reorder',
+  'draft_save',
+  'draft_discard',
+] as const;
+
+/** A pending change saved: its op says what it will do once published. */
+function draftSaveVerb(detail: Detail): string {
+  const op = str(detail['op']);
+  if (op === 'delete') return 'Saved an unpublished removal of';
+  if (op === 'reorder') return 'Saved an unpublished new order for';
+  return 'Saved unpublished changes to';
+}
 
 /** The per-tenant settings rows (src/lib/admin/singleton.ts) and their editors. */
 const SINGLETONS: Readonly<Record<string, { noun: string; ui: string }>> = {
@@ -391,6 +410,19 @@ const KERNEL: ReadonlyMap<string, Label> = new Map(
       // A deleted item has no row left to title.
       [`${entity}.delete`, { kind: 'edits', verb: 'Deleted', noun: info.noun }],
       [`${entity}.reorder`, { kind: 'edits', verb: 'Changed the order of', noun: info.list }],
+      [
+        `${entity}.draft_save`,
+        {
+          kind: 'edits',
+          verb: draftSaveVerb,
+          noun: (detail: Detail) => (str(detail['op']) === 'reorder' ? info.list : info.noun),
+          titled,
+        },
+      ],
+      [
+        `${entity}.draft_discard`,
+        { kind: 'edits', verb: 'Threw away unpublished changes to', noun: info.noun, titled },
+      ],
     ] as [string, Label][];
   }),
 );

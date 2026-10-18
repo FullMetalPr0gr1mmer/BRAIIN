@@ -9,8 +9,8 @@ the program applies it. No URL, credential or project reference belongs here.
 ## Applied
 
 Production has applied 0001 to 0038, 0041, 0044, 0045, 0046, 0048, 0050, 0051, 0052, 0054, 0055,
-0056, 0057 and 0060, the files `main` holds once #75 merges (0039, 0040, 0042, 0043, 0047, 0049
-and 0053 were released unused; gaps are allowed).
+0056, 0057, 0060, 0061, 0062 and 0063, the files `main` holds once #79 merges (0039, 0040, 0042, 0043,
+0047, 0049, 0053 and 0058 were released unused; gaps are allowed).
 
 | Migration | What | PR |
 |---|---|---|
@@ -37,16 +37,21 @@ and 0053 were released unused; gaps are allowed).
 | 0056 | `0056_invites.sql`: the invites guide, `inviting-people`, added to the help set restated from 0055's, and every tenant re-seeded; no schema change (U12b). Applied before #73 merges | #73 |
 | 0057 | `0057_page_visibility.sql`: page visibility, without the password mode: `public.page_visibility` (one row per CMS page or template: public, hidden with an optional redirect, or link-only, with a hide-from/show-on window; RLS ENABLE + FORCE, CMS roles read, Admin and Developer write through the JWT role and a RESTRICTIVE live check, no DELETE, no anon access; the homepage is always public), `pages_tenant_id_id`, `app.role_manages_visibility`, the `pages_route_slug_fixed` trigger, its release-registry row (immediate until R14), and the help set restated from 0056's with `page-visibility` added (U14a). Applied before #74 merges | #74 |
 | 0060 | `0060_dashboard_layer.sql`: the dashboard layer: `admin_role_defaults` (a role's preset layout and quick actions, written by `app.role_manages_users(app.live_role())`), `admin_user_prefs.dashboard`, `team_notes` with `public.save_team_notes()` and `app.expire_team_notes()` (blanked 180 days after the last edit, daily by pg_cron `team-notes-retention`), and the help set restated from 0057's with `your-dashboard` added and `/admin` taken off `finding-your-way` (U1). Applied before #75 merges | #75 |
+| 0061 | `0061_page_password.sql`: the page password: `page_passwords`, `set_page_password`, `page_password_check`, the `page_sections` fence, `page_sections_unlocked` and `page_media_unlocked`; renumbered from the reserved 0058, which would sort below `main`’s highest once U1’s 0060 merged (rule 1). Applied before #78 merges | #78 |
+| 0062 | `0062_release_drafts_write.sql`: staff draft writes on `content_drafts` (grants stated), RESTRICTIVE live, releases-on and singleton-key policies, `public.releases_enabled`, `public.write_drafts` (the one draft writer), `app.draft_key_ok` (expand, inert until R14) (R3a). Applied before #80 merges | #80 |
+| 0063 | `0063_crm_leads_readers_v2.sql`: `app.lead_filter` and `leads_list`, `leads_board`, `lead_summary` restated with assignee (`me` in SQL), star, unread, source, channel, discipline, a starred-first sort, the SLA flag and the won value (0036's keys unchanged); `public.lead_neighbours`; the shared predicate set and order `app.leads_matching` and the one SLA rule `app.lead_over_sla` (C4a). Applied before #79 merges | #79 |
 
 Each slice's file under [as-built/](as-built/) has the detail.
 
 ## Reserved
 
-Wave 2's migrations (with hotfix H10) and Wave 1's held one (C13) are reserved below; the next
-free number after them is **0062**: U1 took 0060 and U14b 0061, so Wave 3 starts at 0062. Before a wave's slices branch, each migration the wave plans gets a row here,
-numbered in the wave's planned merge order. The slice's own PR moves its row to "Applied" once
-production has applied the migration, before the PR merges (Pushing to production, step 5), so
-the row is true when the PR lands and nothing here is edited after a merge.
+Wave 3's migrations, Wave 2's open one (U14b) and Wave 1's held one (C13) are reserved below; 0079
+to 0081 are the wave's slack, and the next free number after them is **0082**. Before a wave's
+slices branch, each migration the wave plans gets a row here, numbered in the wave's planned merge
+order. The slice's own PR moves its row to "Applied" once production has applied the migration,
+before the PR merges (Pushing to production, step 5), so the row is true when the PR lands and
+nothing here is edited after a merge. From R3a (the first Wave 3 PR, which pasted this table) on,
+every PR moves only its own row.
 
 | Number | Slice | What | Wave |
 |---|---|---|---|
@@ -57,8 +62,24 @@ the row is true when the PR lands and nothing here is edited after a merge.
 | 0047 | (released) | unused: U16 (0046) and then H9 (0048) merge before C13, and once 0048 is on `main` a 0047 would sort below its highest, so C13 moved to 0049 | 1 |
 | 0049 | (released) | unused: H10 (0050) merges before C13, and once 0050 is on `main` a 0049 would sort below its highest (rule 1), so C13 moved to 0059 | 1 |
 | 0053 | (released) | unused: U13 (0054) merged before U1, and once 0054 is on `main` a 0053 would sort below its highest (rule 1), so U1 moved to 0060, the lowest number above `main` that no other slice holds | 2 |
-| 0059 | C13 | lead attribution capture (built, held for the privacy notice, O-11); moved from 0047, then from 0049 | 1 |
-| 0061 | U14b | the page password: `page_passwords`, `set_page_password`, `page_password_check`, the `page_sections` fence, `page_sections_unlocked` and `page_media_unlocked`; renumbered from the reserved 0058, which would sort below `main`’s highest once U1’s 0060 merged (rule 1) | 2 |
+| 0058 | (released) | unused: U1 (0060) merged before U14b, and once 0060 is on `main` a 0058 would sort below its highest (rule 1), so U14b moved to 0061 | 2 |
+| 0059 | C13 | lead attribution capture (built, held for the privacy notice, O-11); moved from 0047, then from 0049. Below Wave 3's numbers: when released it renumbers to the lowest free number above `main`'s highest (rule 3), the wave's slack first | 1 |
+| 0064 | U4 | `0064_media_library.sql`: `public.media_library` (the library's search and paging: SECURITY INVOKER, staff only, the tenant named and checked, Arabic folded, `%` and `_` escaped), the help set restated with the media guide | 3 |
+| 0065 | C4b | `0065_help_leads_v2.sql`: the help set restated with `working-with-leads` rewritten for the leads screens | 3 |
+| 0066 | R5 | `0066_release_guard.sql`: `<table>__release_guard` on every registry table and both case-study link tables (no depth exemption), system items and link-set capture, `media_usage` v4 (pending changes), `dashboard_attention` v4, `app.publish_scheduled()` skips tenants with releases on, TRUNCATE closed on guarded tables (expand, inert) | 3 |
+| 0067 | G2 | `0067_health_probes.sql`: `health_probes` (service role writes, Admin and Developer read), its stamps trigger, the help set restated with the site health guide | 3 |
+| 0068 | U7a | `0068_faq_items.sql`: `faq_items` (RLS, anon column grant, registry row, snapshot, capture and guard triggers), `app.faq_text_ok`, `app.publish_scheduled()` restated with it, the help set with `collections-and-faq`. The production delta seed runs before the merge | 3 |
+| 0069 | U10a | `0069_seo_share_images.sql`: `entity_seo.og_media_id` and `seo_defaults.default_og_media_id` (composite keys to `media_assets (tenant_id, id)`), `media_assets_public_read` and `media_usage` (v5) restated, the two registry rows restated | 3 |
+| 0070 | G1a | `0070_stats_visits_events.sql`: the `analytics_events (occurred_at)` index, raw telemetry read revoked from staff, `rollup_daily_visits`, `rollup_daily_events`, `rollup_hourly_pageviews`, `app.rollup_visits`, the invoker readers, the help set | 3 |
+| 0071 | U17 | `0071_two_step_sign_in.sql`: `admin_security_settings.require_mfa`, `app.mfa_required`, the access-token hook restated (role only at the required level), `public.reset_two_step`, `staff_accounts.two_step`, the help set | 3 |
+| 0072 | U10b | `0072_seo_help_guide.sql`: the help set restated with `seo-and-redirects` for the SEO screen | 3 |
+| 0073 | U8a | `0073_u8_guides.sql`: the help set restated with `style-finder` added and `job-applications` reworded | 3 |
+| 0074 | U9a | `0074_general_settings_v2.sql`: `site_profile` v2 columns (tagline, phone, map link, favicon and app icon, the footer settings) and the icon trigger, `site_settings.timezone` (closed list, copied from `crm_settings`), `app.role_general_settings`, RESTRICTIVE live writes on `site_profile` and `site_settings`, `app.studio_time_zone`, `media_assets_public_read` and `media_usage` (v6) restated, the `site_profile` registry row restated, the help set | 3 |
+| 0075 | G1b | `0075_stats_realtime.sql`: `rollup_minute_activity`, `app.rollup_realtime` (every minute), `realtime_summary`, the cron history purge, the help set | 3 |
+| 0076 | U11 | `0076_integrations_typed.sql`: typed CHECKed integration columns, `app.role_manages_integrations`, Admin and SEO read with a RESTRICTIVE live check, anon's one column (`search_console_token`), the help set | 3 |
+| 0077 | U9b | `0077_maintenance_v2_help.sql`: the help set restated with `maintenance-mode` rewritten | 3 |
+| 0078 | G1c | `0078_stats_goals.sql`: `app.role_analytics_goals` (`analytics.goals`, §5), `analytics_goals` (immediate, live-checked), `goal_progress`, the help set | 3 |
+| 0079 to 0081 | (slack) | Wave 3 slack: a mid-wave hotfix, U9c, C13's release or a slice that slips; the first to need one takes 0079 | 3 |
 
 ## Rules
 

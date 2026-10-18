@@ -46,6 +46,8 @@ type Filter = { op: string; column: string; value: unknown };
 /** A PostgREST stand-in that evaluates the filters the resource actually applies. */
 function fakeDb(state: Fake) {
   return {
+    // Releases off: the kernel asks the flag first on a release-managed route (Admin v2 R3).
+    rpc: async () => ({ data: false, error: null }),
     from(table: string) {
       const filters: Filter[] = [];
       let written: Record<string, unknown> | null = null;
