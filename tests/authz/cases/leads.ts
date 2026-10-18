@@ -19,22 +19,14 @@ export const cases: readonly Case[] = [
     url: `/api/admin/leads/${UUID}`,
     allow: ['admin', 'developer'],
   },
-  // The legacy panel's save: a status needs leads.manage; internal notes are a leads.pii
-  // column, so writing them adds that capability and a live recheck.
+  // The legacy panel's status save, kept for an old tab until C14: leads.manage. The legacy
+  // notes field is refused (422) for every role since C4b (tests/lib/leadsWrite.spec.ts).
   {
     name: 'lead status (legacy panel)',
     load: () => import('@/pages/api/admin/leads/[id]'),
     method: 'PATCH',
     url: `/api/admin/leads/${UUID}`,
     body: { status: 'in_progress' },
-    allow: ['admin', 'developer'],
-  },
-  {
-    name: 'lead internal notes (legacy panel, leads.pii)',
-    load: () => import('@/pages/api/admin/leads/[id]'),
-    method: 'PATCH',
-    url: `/api/admin/leads/${UUID}`,
-    body: { internalNotes: 'Called back' },
     allow: ['admin', 'developer'],
   },
   {

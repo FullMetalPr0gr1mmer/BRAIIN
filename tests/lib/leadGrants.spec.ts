@@ -60,7 +60,10 @@ describe('the leads UPDATE grant (0030, 0041)', () => {
   });
 
   it('covers every column the PATCH route writes, and nothing the CRM keeps to itself', () => {
-    // Every field a PATCH can send, so leadPatchValues names every column it can write.
+    // Every field a PATCH can send, so leadPatchValues names every column it can write. The
+    // legacy notes field is not one since C4b (the schema refuses it, notes are a thread),
+    // but 0030's grant still names it, for a live Admin or Developer token writing it
+    // directly until C10a revokes it or C14 drops the field (CLAUDE.md §3).
     const written = Object.keys(
       leadPatchValues(
         {
@@ -79,8 +82,9 @@ describe('the leads UPDATE grant (0030, 0041)', () => {
         new Date(),
       ),
     );
+    expect(written).not.toContain('internal_notes');
     for (const column of written) expect(granted, column).toContain(column);
-    expect([...granted].sort()).toEqual([...written].sort());
+    expect([...granted].sort()).toEqual([...written, 'internal_notes'].sort());
     for (const column of [
       ...GATED_LEAD_COLUMNS.split(',').filter((c) => c !== 'internal_notes'),
       'retention_delete_after',
