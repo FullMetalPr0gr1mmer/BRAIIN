@@ -4,6 +4,7 @@ import { NOTIFICATION_KINDS, type NotificationKind } from '@schemas/adminPrefs';
 import type { MaintenanceState } from '@/lib/http/maintenance';
 import { readMyPrefs, type MyPrefs } from '../prefs';
 import { applications } from './applications';
+import { health } from './health';
 import { leads } from './leads';
 import { maintenance } from './maintenance';
 import { scheduled } from './scheduled';
@@ -27,6 +28,7 @@ export const NOTIFICATION_SOURCES: Readonly<Record<NotificationKind, Notificatio
   applications,
   scheduled,
   maintenance,
+  health,
 };
 
 export interface NotificationFeed {

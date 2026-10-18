@@ -1,5 +1,7 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import AdminHealthCheck from '@/components/admin/islands/AdminHealthCheck';
 import AdminLogsClear from '@/components/admin/islands/AdminLogsClear';
 import Card from '@/components/admin/ui/Card.astro';
 import Icon from '@/components/admin/ui/Icon.astro';
@@ -11,6 +13,7 @@ import ErrorsTable from '@/components/admin/screens/health/ErrorsTable.astro';
 import HealthChecklist from '@/components/admin/screens/health/HealthChecklist.astro';
 import HealthSummary from '@/components/admin/screens/health/HealthSummary.astro';
 import SpeedTable from '@/components/admin/screens/health/SpeedTable.astro';
+import UptimeCard from '@/components/admin/screens/health/UptimeCard.astro';
 import { can } from '@/lib/authz/matrix';
 import { pageParam } from '@/lib/admin/pager';
 import { relTime } from '@/lib/admin/relTime';
@@ -28,18 +31,21 @@ import { statsHref } from '@/lib/admin/stats/range';
 
 export const prerender = false;
 
-// Site health (Admin v2 U2, docs/admin-v2/ui.md "Site health v1"): server-rendered, with one
-// island (Clear logs, for logs.clear holders). siteHealth.view (Admin, Developer); a role
-// without it gets the layout with the refusal and a 403, and nothing is read.
-//   summary   the score ring (field vitals half, checklist half, the formula printed) and the
-//             tiles, on every tab;
-//   tabs      Overview (the checklist, grouped, with fix links), Speed (each page's field p75
-//             from the vitals rollup; lab scores run in CI), Errors (system_logs, logs.view;
-//             /admin/logs redirects here), SEO (the readiness rows).
+// Site health (Admin v2 U2, docs/admin-v2/ui.md "Site health v1"; v2 by G2): server-rendered,
+// with two islands (Check now, for every role that sees the screen; Clear logs, for
+// logs.clear holders). siteHealth.view (Admin, Developer); a role without it gets the layout
+// with the refusal and a 403, and nothing is read.
+//   summary   the score ring (speed, checklist and, once the monitor is set up, uptime: 40 /
+//             40 / 20; the formula printed) and the tiles, on every tab;
+//   tabs      Overview (the Uptime card beside the checklist, grouped, with fix links),
+//             Speed (each page's field p75 from the vitals rollup; lab scores run in CI),
+//             Errors (system_logs, logs.view; /admin/logs redirects here), SEO (the
+//             readiness rows), Security (the security rows: the site's protections, its
+//             domain and its certificate).
 // Every read is the person's own (RLS decides), through src/lib/admin/health.
 
 const PATH = '/admin/site-health';
-type Tab = 'overview' | 'speed' | 'errors' | 'seo';
+type Tab = 'overview' | 'speed' | 'errors' | 'seo' | 'security';
 
 const session = Astro.locals.session;
 const sb = Astro.locals.supabase;
@@ -51,7 +57,9 @@ const mayErrors = Boolean(session && can(session.role, 'logs.view') === 'full');
 const canClear = Boolean(session && can(session.role, 'logs.clear') === 'full');
 const asked = url.searchParams.get('tab');
 const tab: Tab =
-  asked === 'speed' || asked === 'seo' || (asked === 'errors' && mayErrors) ? asked : 'overview';
+  asked === 'speed' || asked === 'seo' || asked === 'security' || (asked === 'errors' && mayErrors)
+    ? asked
+    : 'overview';
 const level = levelParam(url.searchParams.get('level'));
 
 let report: HealthReport | null = null;
@@ -77,15 +85,25 @@ const tabs = [
   { label: 'Speed', href: tabHref('speed') },
   ...(mayErrors ? [{ label: 'Errors', href: tabHref('errors') }] : []),
   { label: 'SEO', href: tabHref('seo') },
+  { label: 'Security', href: tabHref('security') },
 ];
 const rolledUp = report?.vitals?.rolledUpAt ?? null;
+
+// The subtitle names the site's host, and when the monitor was last read well.
+let host = PUBLIC_SITE_URL;
+try {
+  host = new URL(PUBLIC_SITE_URL).host;
+} catch {
+  // An unparsable URL is printed as it is.
+}
+const uptimeRead = report?.uptime?.status === 'read' ? report.uptime.checkedAt : null;
+const subtitle = allowed
+  ? `Uptime, speed, errors, SEO and security for ${host}.${uptimeRead ? ` Uptime checked ${relTime(uptimeRead)}.` : ''}`
+  : 'How fast the site is for real visitors, and a checklist of what is worth fixing.';
 ---
 
-<AdminLayout
-  title="Site health"
-  subtitle="How fast the site is for real visitors, and a checklist of what is worth fixing."
-  styles={['health.css']}
->
+<AdminLayout title="Site health" subtitle={subtitle} styles={['health.css']}>
+  <Fragment slot="actions">{allowed && report && <AdminHealthCheck client:load />}</Fragment>
   {
     !allowed || !report ? (
       <Refused />
@@ -95,9 +113,12 @@ const rolledUp = report?.vitals?.rolledUpAt ?? null;
         <LinkTabs label="Site health views" current={tabHref(tab)} tabs={tabs} />
 
         {tab === 'overview' && (
-          <Card title="Checklist" sub="What should be right, before and after launch">
-            <HealthChecklist checks={report.checks} />
-          </Card>
+          <div class="grid grid--3-2 hs__cols">
+            <UptimeCard probe={report.probes?.uptime ?? null} failed={report.probes === null} />
+            <Card title="Checklist" sub="What should be right, before and after launch">
+              <HealthChecklist checks={report.checks} />
+            </Card>
+          </div>
         )}
 
         {tab === 'speed' && (
@@ -146,6 +167,12 @@ const rolledUp = report?.vitals?.rolledUpAt ?? null;
             )}
             {logs && <ErrorsTable logs={logs} url={url} />}
           </>
+        )}
+
+        {tab === 'security' && (
+          <Card title="Website" sub="How the site is protected, its domain and its certificate">
+            <HealthChecklist checks={report.checks} groups={['Security']} />
+          </Card>
         )}
 
         {tab === 'seo' && (

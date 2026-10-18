@@ -3,12 +3,13 @@
 -- v2 H11). Forward-only, expand only. Depends on 0046 (the help centre: public.help_articles,
 -- its CHECK helpers app.help_text_ok, app.help_keys_ok and app.help_body_ok,
 -- app.help_article_set(), app.seed_help_articles() and the tenants trigger) and on the last
--- migration that restated app.help_article_set() before this one (0065 on main today; G2's
--- 0067 and C4c's 0068 if they are pushed first). It restates no guide: the catalog is filled
--- from the set as the database holds it when this runs, so it is right after any of them.
+-- migration that restated app.help_article_set() before this one (G2's 0067 on main today;
+-- C4c's 0068 if it is pushed first). It restates no guide: the catalog is filled from the set
+-- as the database holds it when this runs, so it is right after any of them.
 --
 -- Until now app.help_article_set() was one JSON literal, and every slice that added or edited
--- a guide restated the whole set (0046, 0052, 0054, 0055, 0056, 0057, 0060, 0061, 0064, 0065).
+-- a guide restated the whole set (0046, 0052, 0054, 0055, 0056, 0057, 0060, 0061, 0064, 0065,
+-- 0067).
 -- A slice built from an older set silently reverted a sibling's guide unless it was re-based
 -- before every push. From here on a guide is a row:
 --

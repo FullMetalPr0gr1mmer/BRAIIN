@@ -430,6 +430,8 @@ TypeScript strict; Zod single source. **The authz matrix (§9.3)** is byte-for-b
 ### 9.6 Observability
 Operational telemetry (Sentry same-origin tunnel + `system_logs`, synthetics, `/healthz`) is legitimate-interest, PII-scrubbed, consent-independent. **Field web-vitals (RUM) is consent-gated** (carries `session_id`, `analytics` category) — client checks before `sendBeacon`, the same-origin Worker endpoint re-checks server-side (§4.12).
 
+The external uptime monitor's readings reach the admin without an in-Worker check (Admin v2 G2): a second Worker cron, `*/10 * * * *` (dispatched with the daily one by `src/lib/cron/schedules.ts`, each within 50 subrequests), reads its API with a read-only key into `health_probes`, and the domain's RDAP record about daily; Site health and the bell (Admin + Developer) show them.
+
 ### 9.7 DR
 PITR (RPO ≤ 2 min, 28-day, RTO ≤ 1 hr) + off-platform `pg_dump` → separate-account encrypted R2 + nightly media mirror → object-locked R2 (also the audit-chain anchor target, §4.8). Quarterly timed restore drills.
 

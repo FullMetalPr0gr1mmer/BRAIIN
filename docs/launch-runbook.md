@@ -328,6 +328,7 @@ npx wrangler secret put LEAD_PII_ENC_KEY        # openssl rand -hex 32
 npx wrangler secret put AUDIT_HMAC_KEY          # unused by the Worker; see note
 npx wrangler secret put NOTIFY_LEAD_SECRET      # openssl rand -hex 32; Vault's notify_lead_secret gets the same value (§5)
 npx wrangler secret put ANTHROPIC_API_KEY       # optional — Style-Finder is a 501 stub
+npx wrangler secret put UPTIME_MONITOR_API_KEY  # optional — the uptime monitor's READ-ONLY key (§6k)
 ```
 
 `LEAD_PII_ENC_KEY` is the one that cannot be rotated casually: it decrypts every stored
@@ -1312,6 +1313,50 @@ sitemap may stay in a crawler's copy for up to an hour (`max-age=3600`). Nothing
 in front of the Worker yet; when a cache arrives (L9, KAN-20), a page that leaves public must
 also be purged (the save answers the tags: `page:<slug>` or `services:all`/`portfolio:all`,
 `nav:all`, `route:sitemap`, `route:llms`), which R7 wires.
+
+### 6k. Uptime monitor: site health's readings (migration 0067, Admin v2 G2, owner item O-20)
+
+Migration 0067 adds `health_probes`, and the Worker gains a second cron trigger,
+`*/10 * * * *` (wrangler.jsonc; the daily one is unchanged). Every 10 minutes the Worker reads
+the external uptime monitor's API with a **read-only** key, and about once a day the studio
+domain's public registration record (RDAP); it never checks the site itself (CLAUDE.md §10).
+With no key, Site health says **Not set up** for uptime and the score leaves uptime out, so
+applying 0067 and deploying changes nothing visible but the Security tab and its domain row.
+The account allows 5 cron triggers on the Free plan; this makes 2.
+
+1. **The one-*i* domain first** (§6h, item 3): run its compare-and-set, or the domain row
+   truthfully says "No registration found for braiinstation.com" and the bell rings for Admin
+   and Developer. The row always names the domain it checked.
+2. **Monitors** (UptimeRobot, decision D1; another provider is one adapter file): create
+   HTTP(S) monitors for `/`, `/ar/` and `/healthz` on the production origin (and on the custom
+   domain after the cutover, KAN-20/O-3). The card prints each monitor's real interval; the
+   standard's "every 60 s from MENA" needs a paid plan or another provider (O-20 decides).
+   Turn on SSL monitoring where the plan offers it: the certificate's expiry is read from it
+   (otherwise the row says Cloudflare issues and renews the certificates).
+3. **The read-only key**: UptimeRobot → Integrations & API → API → **Read-only API key**
+   (never the main key: it can write). Put it in `.env` as `UPTIME_MONITOR_API_KEY` and push it
+   with `npm run cf:secrets` (or `npx wrangler secret put UPTIME_MONITOR_API_KEY`).
+4. **Optionally, the monitor ids** (one to five, joined by `-`, e.g. `777001-777002`):
+   `npx wrangler secret put UPTIME_MONITOR_IDS`. Not a secret, but a Worker secret survives
+   every `wrangler deploy`, which dashboard variables do not. Unset, the account's first five
+   monitors are read. A malformed value is refused and logged ("config"), never sent.
+5. **Alert contacts** are the monitor's own (its e-mail, set in UptimeRobot): that is the
+   provider's channel, not an outbound send of ours. The admin's bell carries the same events
+   for Admin and Developer.
+6. **Verify**: Admin → Site health → **Check now** (up to 6 an hour per person). The Uptime card
+   shows the 30- and 90-day figures, the 90-day strip and the response time; "Uptime checked
+   just now" sits under the title; the Security tab shows the domain's renewal date. A failed
+   read is a `warn` line in Site health's Errors tab (`admin:health` or
+   `cron:health-probes`) with a reason code only (`http 403` is a wrong key).
+7. **Rotation**: create a new read-only key, push it as in step 3, then Check now; delete the
+   old key in UptimeRobot.
+8. **Rollback**: `npx wrangler secret delete UPTIME_MONITOR_API_KEY`. Within 10 minutes the
+   card returns to "Not set up" and the score to half speed, half checklist. To stop the
+   schedule altogether, remove `"*/10 * * * *"` from `wrangler.jsonc` and deploy (the rows
+   stay, read as they were last written).
+
+Measure once after the key is set (O-16): Workers Logs for a `*/10` invocation shows its CPU
+time (expected under 3 ms: one JSON of 10 to 30 KB) and its subrequests (at most 11).
 
 ---
 
