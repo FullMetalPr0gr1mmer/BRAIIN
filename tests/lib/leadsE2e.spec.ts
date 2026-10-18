@@ -25,10 +25,10 @@ describe('tests/admin/leads.e2e.ts', () => {
 
   it('waits for the islands after every page it opens', () => {
     // The leads pages are server-rendered first (C4b): their controls are on screen before
-    // React listens. Every navigation goes through open(), which waits for hydration; the
+    // React listens. Every navigation goes through visit(), which waits for hydration; the
     // one bare goto is csrf()'s, which only fetches the cookie and acts on nothing.
-    const from = source.indexOf('async function open(');
-    expect(from, 'the open() helper').toBeGreaterThan(-1);
+    const from = source.indexOf('async function visit(');
+    expect(from, 'the visit() helper').toBeGreaterThan(-1);
     const helper = source.slice(from, source.indexOf('\n}\n', from));
     expect(helper).toContain(
       "page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null)",
@@ -41,6 +41,6 @@ describe('tests/admin/leads.e2e.ts', () => {
       "if (!(await find())) await page.goto('/admin', { waitUntil: 'domcontentloaded' });",
       'const res = await page.goto(path, options);',
     ]);
-    expect(source.match(/await open\(page, /g)?.length ?? 0).toBeGreaterThanOrEqual(8);
+    expect(source.match(/await visit\(page, /g)?.length ?? 0).toBeGreaterThanOrEqual(8);
   });
 });

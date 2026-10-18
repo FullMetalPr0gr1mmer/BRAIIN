@@ -64,7 +64,7 @@ async function csrf(page: Page): Promise<string> {
  * Enter in the search submits the bare <form role="search"> instead. Astro hydrates through
  * import(), which the load event goto waits for does not hold back.
  */
-async function open(page: Page, path: string, options?: Parameters<Page['goto']>[1]) {
+async function visit(page: Page, path: string, options?: Parameters<Page['goto']>[1]) {
   const res = await page.goto(path, options);
   await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
   return res;
@@ -151,7 +151,7 @@ test.describe('as admin', () => {
     page,
     browser,
   }) => {
-    await open(page, '/admin/leads');
+    await visit(page, '/admin/leads');
     const badge = page.locator('nav.admin-sidebar a[href="/admin/leads"] .cnt');
     const before = (await badge.count())
       ? Number.parseInt((await badge.innerText()) || '0', 10)
@@ -191,7 +191,7 @@ test.describe('as admin', () => {
   }) => {
     const one = await addLead(page, 'bulk-a');
     const two = await addLead(page, 'bulk-b');
-    await open(page, '/admin/leads');
+    await visit(page, '/admin/leads');
     await page.getByLabel('Range').selectOption('30');
     await expect(page).toHaveURL(/[?&]range=30/);
 
@@ -229,7 +229,7 @@ test.describe('as admin', () => {
   }) => {
     const lead = await addLead(page, 'stale');
     const all = await stages(page.request);
-    await open(page, '/admin/leads');
+    await visit(page, '/admin/leads');
     const search = page.getByRole('searchbox', { name: 'Search leads' });
     await search.fill(lead.name);
     await search.press('Enter');
@@ -251,7 +251,7 @@ test.describe('as admin', () => {
       const lead = await addLead(page, `narrow-${width}`);
       await page.setViewportSize({ width, height: 800 });
       for (const path of ['/admin/leads', `/admin/leads/${lead.id}`]) {
-        await open(page, path, { waitUntil: 'networkidle' });
+        await visit(page, path, { waitUntil: 'networkidle' });
         const over = await page.evaluate(
           () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
         );
@@ -268,7 +268,7 @@ test.describe('as admin', () => {
     const rows = (await query(page, { ...filter, limit: 100 })).rows.map((r) => String(r['id']));
     expect(rows.length).toBeGreaterThanOrEqual(3);
     const middle = rows[1]!;
-    await open(page, `/admin/leads/${middle}?source=manual&channel=event`);
+    await visit(page, `/admin/leads/${middle}?source=manual&channel=event`);
     await expect(page.getByRole('link', { name: /^Previous/ })).toHaveAttribute(
       'href',
       `/admin/leads/${rows[0]}?source=manual&channel=event`,
@@ -289,7 +289,7 @@ test.describe('as admin', () => {
     page,
   }) => {
     const lead = await addLead(page, 'detail', { email: `detail-${RUN}@example.invalid` });
-    await open(page, `/admin/leads/${lead.id}`, { waitUntil: 'networkidle' });
+    await visit(page, `/admin/leads/${lead.id}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { level: 1, name: lead.name })).toBeVisible();
     expect(await page.content()).not.toContain(lead.email!);
 
@@ -339,7 +339,7 @@ test.describe('as admin', () => {
 
   test('a lead: an Admin erases it, and it is gone', async ({ page }) => {
     const lead = await addLead(page, 'erase');
-    await open(page, `/admin/leads/${lead.id}`, { waitUntil: 'networkidle' });
+    await visit(page, `/admin/leads/${lead.id}`, { waitUntil: 'networkidle' });
     await page.getByText('More actions').click();
     await page.getByRole('button', { name: 'Erase this lead…' }).click();
     const dialog = page.getByRole('dialog', { name: 'Erase this lead' });
@@ -358,7 +358,7 @@ test.describe('as admin', () => {
   test('the drawer: a lead added by hand, and a phone that wrote before', async ({ page }) => {
     const phone = `+9665${String(Date.now()).slice(-8)}`;
     await addLead(page, 'first-phone', { phone });
-    await open(page, '/admin/leads');
+    await visit(page, '/admin/leads');
     const open = page.getByRole('button', { name: 'Add lead manually' });
     await expect(open).toBeVisible();
     await open.click();
@@ -394,7 +394,7 @@ for (const role of ['content_creator', 'seo'] as const) {
     test('every leads page is refused by the server, naming no lead', async ({ page }) => {
       const probe = '00000000-0000-4000-8000-000000000000';
       for (const path of ['/admin/leads', `/admin/leads/${probe}`]) {
-        const res = await open(page, path);
+        const res = await visit(page, path);
         expect(res?.status(), path).toBe(403);
         await expect(page.locator('main .msg[data-kind="error"]').first()).toContainText(
           'Your role does not allow that.',
