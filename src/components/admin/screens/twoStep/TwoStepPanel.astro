@@ -30,12 +30,12 @@ const H = inShell ? 'h2' : 'h1';
 const pendingStep = !inShell;
 ---
 
-<div class="two-step" data-mode={view.mode}>
+<div class="two-step" data-mode={view.mode} data-frame={inShell ? 'admin' : 'auth'}>
   {
     view.mode === 'challenge' && (
       <>
         <H>Enter your code</H>
-        <p class="login__lead">
+        <p class="two-step__lead">
           Open your authenticator app and type the 6-digit code for this account.
         </p>
       </>
@@ -45,7 +45,7 @@ const pendingStep = !inShell;
     view.mode === 'enrol' && (
       <>
         <H>Set up 2FA</H>
-        <p class="login__lead">
+        <p class="two-step__lead">
           Your team asks everyone to use two factor authentication. You need an authenticator app on
           your phone.
         </p>
@@ -117,7 +117,7 @@ const pendingStep = !inShell;
 
   {
     view.mode === 'challenge' && (
-      <form class="login__form two-step__form" method="post" action={TWO_STEP_PATH}>
+      <form class="two-step__form" method="post" action={TWO_STEP_PATH}>
         <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
         <input type="hidden" name="intent" value="verify" />
         <input type="hidden" name="next" value={next} />
@@ -142,7 +142,7 @@ const pendingStep = !inShell;
   }
   {
     (view.mode === 'enrol' || view.mode === 'intro') && (
-      <form class="login__form two-step__form" method="post" action={TWO_STEP_PATH}>
+      <form class="two-step__form" method="post" action={TWO_STEP_PATH}>
         <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
         <input type="hidden" name="intent" value="start" />
         <input type="hidden" name="next" value={next} />
@@ -154,7 +154,7 @@ const pendingStep = !inShell;
   }
   {
     view.mode === 'setup' && (
-      <form class="login__form two-step__form" method="post" action={TWO_STEP_PATH}>
+      <form class="two-step__form" method="post" action={TWO_STEP_PATH}>
         <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
         <input type="hidden" name="intent" value="confirm" />
         <input type="hidden" name="next" value={next} />
@@ -181,7 +181,7 @@ const pendingStep = !inShell;
   }
   {
     view.mode === 'manage' && !view.required && (
-      <form class="login__form two-step__form" method="post" action={TWO_STEP_PATH}>
+      <form class="two-step__form" method="post" action={TWO_STEP_PATH}>
         <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
         <input type="hidden" name="intent" value="off" />
         <input type="hidden" name="next" value={next} />

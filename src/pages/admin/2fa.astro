@@ -68,17 +68,7 @@ const csrfToken = Astro.locals.csrfToken;
 ---
 
 {
-  session ? (
-    <AdminLayout
-      title={title}
-      subtitle="A code from your phone, asked for after your password."
-      styles={['personal.css', 'two-step.css']}
-    >
-      <div class="card two-step-page">
-        <TwoStepPanel view={view} message={message} csrfToken={csrfToken} next={next} inShell />
-      </div>
-    </AdminLayout>
-  ) : (
+  !session ? (
     <AuthLayout title={title} styles={['login.css', 'two-step.css']}>
       <TwoStepPanel
         view={view}
@@ -88,5 +78,15 @@ const csrfToken = Astro.locals.csrfToken;
         inShell={false}
       />
     </AuthLayout>
+  ) : (
+    <AdminLayout
+      title={title}
+      subtitle="A code from your phone, asked for after your password."
+      styles={['two-step.css']}
+    >
+      <div class="card two-step-page">
+        <TwoStepPanel view={view} message={message} csrfToken={csrfToken} next={next} inShell />
+      </div>
+    </AdminLayout>
   )
 }

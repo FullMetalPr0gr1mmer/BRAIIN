@@ -2,7 +2,9 @@
    `styles` prop of the page's frame: the sign-in shell (AuthLayout, beside login.css) for a
    session still owing its code or its setup, the admin shell (AdminLayout, beside
    personal.css) for a full session. It uses admin.css's tokens and declares none, and holds
-   no colour literal (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+   no colour literal (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs), and none of
+   login.css's classes (a class only one sheet styles renders only where that sheet is
+   linked). */
 
 .two-step {
   display: grid;
@@ -14,8 +16,7 @@
   margin: 0;
 }
 
-.two-step__lead,
-.two-step .login__lead {
+.two-step__lead {
   margin: 0;
   color: var(--ad-dim);
 }
@@ -88,8 +89,11 @@
   justify-self: start;
 }
 
-.login__box .two-step__form button[type='submit'] {
+/* In the sign-in shell the button is as wide as the form, as on the sign-in page. Its own
+   rule, not login.css's form class: this sheet styles both frames. */
+.two-step[data-frame='auth'] .two-step__form button[type='submit'] {
   justify-self: stretch;
+  padding: 12px;
 }
 
 .two-step__signout {
