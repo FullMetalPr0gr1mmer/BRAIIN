@@ -110,6 +110,27 @@ export async function getRow<T>(
   return data as T;
 }
 
+/**
+ * `getRow` that answers null instead of 404: for a staged save (Admin v2 R3), where a missing
+ * live row is a state (a pending create, a row removed under a pending change), not an error.
+ */
+export async function getRowOrNull<T>(
+  sb: SupabaseClient,
+  table: string,
+  ctx: AuthContext,
+  id: string,
+  columns: string,
+): Promise<T | null> {
+  const { data, error } = await sb
+    .from(table)
+    .select(columns)
+    .eq('tenant_id', ctx.tenantId)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(`get ${table}: ${error.message}`);
+  return (data as T | null) ?? null;
+}
+
 export async function insertRow<T>(
   sb: SupabaseClient,
   table: string,

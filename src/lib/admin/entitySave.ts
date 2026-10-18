@@ -25,9 +25,16 @@ type Row = Record<string, unknown>;
 /** How an editor saves: explicit Save with version/409 (`live`), or drafts (R12). */
 export type SaveMode = 'live' | 'draft';
 
-/** What an editor saves: one row of a collection, or a per-tenant singleton. */
+/**
+ * What an editor saves: one row of a collection, or a per-tenant singleton. A collection
+ * row may save somewhere other than where it loads from (Admin v2 U4, additive): `saveUrl`
+ * names the PATCH's address (the media drawer's alt text and tags go through
+ * /api/admin/media/meta/<id>, the one door every role that reads the library may write
+ * through); the load and a create are unchanged.
+ */
 export type SaveTarget =
-  { kind: 'resource'; slug: string } | { kind: 'singleton'; endpoint: string };
+  | { kind: 'resource'; slug: string; saveUrl?: ((id: string) => string) | undefined }
+  | { kind: 'singleton'; endpoint: string };
 
 export interface EntitySaveState {
   values: Row;
@@ -229,7 +236,11 @@ export function buildSaveRequest(
       delete body[field.name];
     }
   }
-  return { url: loadUrl(target, id), method: 'PATCH', body: { ...body, version: state.version } };
+  const url =
+    target.kind === 'resource' && target.saveUrl && id !== null
+      ? target.saveUrl(id)
+      : loadUrl(target, id);
+  return { url, method: 'PATCH', body: { ...body, version: state.version } };
 }
 
 /** Where a created record opens: its edit screen, saying so when the edge missed it. */

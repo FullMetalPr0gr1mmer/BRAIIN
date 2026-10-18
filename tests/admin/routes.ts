@@ -135,7 +135,37 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   { href: '/admin/site-health?tab=speed', label: 'Site health speed', caps: ['siteHealth.view'] },
   { href: '/admin/site-health?tab=errors', label: 'Site health errors', caps: ['logs.view'] },
   { href: '/admin/site-health?tab=seo', label: 'Site health SEO', caps: ['siteHealth.view'] },
+  // The media library's in-page states (Admin v2 U4): the Videos tab, the "Needs alt text"
+  // filter and a search with no match (the empty state), for every role that opens it.
+  {
+    href: '/admin/media?tab=videos',
+    label: 'Media videos',
+    caps: ['media.write'],
+    access: ['full', 'meta'],
+  },
+  {
+    href: '/admin/media?alt=missing',
+    label: 'Media needing alt text',
+    caps: ['media.write'],
+    access: ['full', 'meta'],
+  },
+  {
+    href: '/admin/media?q=zzzz',
+    label: 'Media, no match',
+    caps: ['media.write'],
+    access: ['full', 'meta'],
+  },
 ];
+
+/**
+ * Pages that only redirect (a 302 to another screen), so the sweep, which asks each page for
+ * its own 200, does not open them as screens. Each is checked by tests/lib/adminRoutes.spec.ts
+ * to redirect where it says, and by its screen's e2e. /admin/media/new: adding a picture is
+ * an upload now (U4, D4).
+ */
+export const REDIRECT_PAGES: Readonly<Record<string, string>> = {
+  '/admin/media/new': '/admin/media?upload=1',
+};
 
 /** Every screen of the menu: sidebar links, then their tabs, each once. */
 export function menuScreens(): NavTab[] {
@@ -170,6 +200,9 @@ export function pageFileFor(href: string, exists: Exists = existsSync): string {
 export function sweepRoutes(role: Role, exists: Exists = existsSync): SweepRoute[] {
   const links = [...menuScreens(), ...EXTRA_LINKS];
   const routes: SweepRoute[] = [];
+  // A filtered view of a screen (an extra such as /admin/media?tab=videos) derives the same
+  // create and edit screens as the screen itself: each is swept once.
+  const derived = new Set<string>();
   for (const link of links) {
     if (link.caps.length > 0 && !isVisible(role, link)) continue;
     pageFileFor(link.href, exists);
@@ -177,10 +210,19 @@ export function sweepRoutes(role: Role, exists: Exists = existsSync): SweepRoute
     routes.push({ path: link.href, pattern: base, kind: 'screen' });
 
     const author = link.caps[0];
-    if (author && ROLE_CAPS[role][author] === 'full' && hasPage(`${base}/new`, exists)) {
-      routes.push({ path: `${base}/new`, pattern: `${base}/new`, kind: 'create' });
+    const create = `${base}/new`;
+    if (
+      author &&
+      ROLE_CAPS[role][author] === 'full' &&
+      hasPage(create, exists) &&
+      !(create in REDIRECT_PAGES) &&
+      !derived.has(create)
+    ) {
+      derived.add(create);
+      routes.push({ path: create, pattern: create, kind: 'create' });
     }
-    if (hasPage(`${base}/[id]`, exists)) {
+    if (hasPage(`${base}/[id]`, exists) && !derived.has(`${base}/[id]`)) {
+      derived.add(`${base}/[id]`);
       routes.push({
         path: `${base}/[id]`,
         pattern: `${base}/[id]`,

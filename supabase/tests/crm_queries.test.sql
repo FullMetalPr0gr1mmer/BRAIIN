@@ -77,6 +77,12 @@ create function _board_leads(p jsonb) returns text language sql as $$
     from public.leads_board(app.effective_tenant_id(), p) b
 $$;
 
+-- The summary keys 0063 (C4a) added beside 0036's.
+create function _c4a_keys() returns text[] language sql as $$
+  select array['in_progress', 'won_value', 'unread', 'starred', 'per_stage', 'sla_breached',
+               'web_response_hours', 'web_response_n']
+$$;
+
 -- The leads one blind index finds, as the CURRENT role (the definer itself, not a reader).
 create function _contact(p_hmac text) returns text language sql as $$
   select coalesce(string_agg(right(x::text, 2), ',' order by x), '')
@@ -222,11 +228,14 @@ select is((select string_agg(s.key || ':' || b.total || ':' || jsonb_array_lengt
 select throws_ok($$ select * from public.leads_board('00000000-0000-0000-0000-000000000001',
                                                      '{"stage": "00000000-0000-0000-0000-000000000000"}') $$,
   '22023', null, 'the board takes no stage');
-select is(public.lead_summary('00000000-0000-0000-0000-000000000001', '{}')::text,
+-- 0036's keys, exactly: 0063 (C4a) adds keys beside them and changes none
+-- (crm_leads_readers_v2.test.sql tests the new ones).
+select is((public.lead_summary('00000000-0000-0000-0000-000000000001', '{}') - _c4a_keys())::text,
   '{"new": 2, "won": 0, "lost": 0, "open": 3, "spam": 1, "total": 3, "avg_first_response_hours": 1.0}',
   'the KPIs (Lina was answered an hour after she wrote)');
-select is(public.lead_summary('00000000-0000-0000-0000-000000000001',
-            jsonb_build_object('from', now() - interval '3 hours', 'to', now() - interval '1 hour'))::text,
+select is((public.lead_summary('00000000-0000-0000-0000-000000000001',
+            jsonb_build_object('from', now() - interval '3 hours', 'to', now() - interval '1 hour'))
+           - _c4a_keys())::text,
   '{"new": 1, "won": 0, "lost": 0, "open": 1, "spam": 1, "total": 1, "avg_first_response_hours": null}',
   'the KPIs for a date range: its start in, its end out');
 select throws_ok($$ select public.lead_summary('00000000-0000-0000-0000-000000000001', '{"q": "acme"}') $$,

@@ -696,6 +696,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [U1](as-built/U1.md): the dashboard: a server widget registry that loads only the role's widgets, per-person layout and quick actions, Admin's role presets (library actions only), team notes without contact details cleared after 180 days by pg_cron, "Going live today" on the Riyadh day, 0060 (PR number at review)
 - [U2](as-built/U2.md): website stats and site health on the rollups, server-rendered: `rollup_daily_vitals`, the invoker readers, whole-day page views, the health checklist, `/admin/logs` retired, 0052 (PR number at review)
 - [U3](as-built/U3.md): media uploads (A5): the storage provider, the upload, replace and download routes, delivery through `/_image`, 0045 (PR number at review)
+- [U4](as-built/U4.md): the media library and the picker with upload: search, Images | Videos, the storage meter, describe-then-upload with progress, the drawer (alt, tags, Used in, Download, Replace, Delete), Upload in place in every picture field, the shared `admin-screens` chunk group, `media_library`, 0064 (PR number at review)
 - [U13](as-built/U13.md): the activity log v2: names, kind, person and day filters, plain language, the export under the lockdown, the live read on `audit_log`, 0054
 - [U14a](as-built/U14a.md): page visibility without the password mode: `page_visibility`, the middleware gate on the matched route, KV `site:visibility` through a 60 s isolate memo, the menus, sitemap, llms.txt and search filtered, `/admin/visibility`, the `nav_visible` alias, the registry row, 0057 (PR number at review)
 - [U14b](as-built/U14b.md): the password mode: `page_passwords` (bcrypt, no policy and no API-role privilege), `set_page_password` and `page_password_check`, the signed per-page cookie and `/api/page-access` with a limiter that fails closed, the gate page, and the `page_sections` fence with `page_sections_unlocked` and `page_media_unlocked` for an unlocked request, 0061 (PR number at review)
@@ -706,6 +707,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 **Releases**
 - [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)
 - [R2](as-built/R2.md): the release registry, caps and overlay core in TypeScript, `fields` on every release-managed config, the §5 relabel and the derived release publish matrix, no migration (#68)
+- [R3a](as-built/R3a.md): staged writes in the database and the resource kernel, behind the release flag: the draft writes, `public.write_drafts`, the staged branch of every kernel handler, inert, 0062
 - [R4](as-built/R4.md): applying a release as the publisher, change capture, the shared link-set helper, the purge record, inert, 0051 (#69)
 - [R8](as-built/R8.md): the preview data seam: the scoped `contentClient()`, the narrowed PostgREST emulator, the anon-RLS mirror, the `range()`-paged dataset with drafts overlaid per role, the fail-closed report, no migration (PR number at review)
 
@@ -716,6 +718,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [C2a](as-built/C2a.md): reading the pipeline, 0036 (#47, folded into #45)
 - [C2b](as-built/C2b.md): one lead: the reveal, the notes thread, the timeline (#48, folded into #45)
 - [C3](as-built/C3.md): the leads write API: versioned PATCH, bulk, manual add, erase, export filters, 0041
+- [C4a](as-built/C4a.md): the leads readers v2: assignee, star, unread, source, channel and discipline filters, the SLA flag, the board's values, the summary's figures, Previous/Next in the list's own order, the score's reasons behind the reveal, 0063 (PR number at review)
 
 **Hotfixes**
 - [H5](as-built/H5.md): the audit chain is serialized, 0031 (#36)

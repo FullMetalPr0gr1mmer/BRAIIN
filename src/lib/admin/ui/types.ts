@@ -115,6 +115,11 @@ export interface FieldDef {
   accent?: AccentDef;
   /** `link` (F5b): external https links only where the target schema accepts them. */
   link?: { external?: boolean };
+  /**
+   * `media` (Admin v2 U4): `upload: false` hides Upload in place in the picker (a field that
+   * must only ever take a picture already in the library). Default true.
+   */
+  media?: { upload?: boolean };
 }
 
 export interface ColumnDef {

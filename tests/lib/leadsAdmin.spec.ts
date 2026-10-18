@@ -54,6 +54,23 @@ const row: Record<string, unknown> = {
   timeline_text_enc: 'enc:Before Ramadan',
   internal_notes: 'Called back on Monday',
   ip_inet: null,
+  // The pipeline (0034 to 0041), which the detail GET answers since C4a.
+  lead_number: 12,
+  stage_id: '33333333-3333-4333-8333-333333333333',
+  is_spam: false,
+  version: 3,
+  score: 40,
+  source: 'web_form',
+  channel: 'unknown',
+  assigned_to: USER,
+  value_sar: 50000,
+  is_starred: true,
+  read_at: null,
+  tags: ['VIP'],
+  last_contact_at: null,
+  last_contact_channel: null,
+  // Gated (0035): the legacy reveal never returns it.
+  score_signals: ['budget_given'],
 };
 
 const project = (select: string) =>
@@ -216,6 +233,9 @@ describe('lead contact details (?pii=1)', () => {
     for (const ciphertext of ['email_enc', 'phone_enc', 'budget_enc', 'timeline_text_enc']) {
       expect(body.data[ciphertext], ciphertext).toBeUndefined();
     }
+    // Its shape before C4a: the score's reasons are the CRM reveal's only.
+    expect(body.data['score_signals']).toBeUndefined();
+    expect(body.data['score_reasons']).toBeUndefined();
   });
 
   it("reads the gated columns for this one lead in the caller's tenant only", async () => {
@@ -302,9 +322,32 @@ describe('lead detail without the reveal', () => {
     expect(res.status).toBe(200);
     expect(events).toEqual(['rls:select', 'audit:lead.view']);
     expect(body.data['name']).toBe('Sara');
-    for (const hidden of ['email_enc', 'phone_enc', 'budget_enc', 'internal_notes', 'ip_inet']) {
+    for (const hidden of [
+      'email_enc',
+      'phone_enc',
+      'budget_enc',
+      'internal_notes',
+      'ip_inet',
+      'score_signals',
+    ]) {
       expect(body.data[hidden], hidden).toBeUndefined();
     }
+  });
+
+  it('answers the pipeline columns too (C4a), through the column grant', async () => {
+    const res = await detail.GET(ctx(`/api/admin/leads/${LEAD}`));
+    const body = (await res.json()) as { data: Record<string, unknown> };
+    expect(res.status).toBe(200);
+    expect(events.some((e) => e.startsWith('rls:refused'))).toBe(false);
+    expect(body.data).toMatchObject({
+      lead_number: 12,
+      version: 3,
+      assigned_to: USER,
+      value_sar: 50000,
+      is_starred: true,
+      tags: ['VIP'],
+      source: 'web_form',
+    });
   });
 });
 

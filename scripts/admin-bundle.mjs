@@ -11,7 +11,15 @@
 //      excludes admin-* by name, so such an import would hide admin weight from it);
 //   3. each admin screen's eager graph stays within ROUTE_BUDGET, and the sign-in
 //      screens' scripts within LOGIN_BUDGET (since F7 they have none: 0 B, reported so);
-//   4. the chunks hold what their names say (admin-ui carries no ProseMirror).
+//   4. the chunks hold what their names say (admin-ui carries no ProseMirror), and the
+//      shared admin-ui chunk statically imports none of the groups meant to stay off the
+//      screens that do not need them (admin-fields, admin-screens, admin-dashboard): a
+//      group takes its modules' static dependencies, so such an import would put the field
+//      kit, or another screen's code, on every admin screen (Admin v2 U4, Wave 3's rule);
+//   5. no admin code hides under another name: a chunk that only admin chunks load, by a
+//      static or a lazy import, is named admin-* or Admin* (a module no group claims
+//      becomes a module-named chunk, which size-limit weighs as public JavaScript). The
+//      bundler's own runtime helpers, shared by every graph, are the exception by name.
 // Sizes are gzip bytes; KB means 1,000 B.
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
@@ -61,6 +69,14 @@ export function closure(entry, read) {
 // that appears is weighed against LOGIN_BUDGET.
 const SIGN_IN_FILE = /^(?:login|forgot|reset|invite|AuthLayout)\.astro_/;
 
+// The bundler's runtime helpers: shared by public and admin graphs alike (preload-helper is
+// its own neutral group in astro.config.mjs; rolldown-runtime is Rolldown's), so neither is
+// admin code whoever happens to load it in a given build.
+const RUNTIME_FILE = /^(?:preload-helper|rolldown-runtime)\./;
+
+// The groups admin-ui must never import statically (check 4).
+const OFF_SCREEN_GROUPS = ['admin-fields.', 'admin-screens.', 'admin-dashboard.'];
+
 // Every admin chunk is `admin-*` (the groups in astro.config.mjs) or an island entry named
 // `Admin*` (src/components/admin/islands), plus a sign-in screen's script. A chunk named
 // otherwise is public, whatever it holds.
@@ -90,6 +106,33 @@ export function check(dir) {
   }
   if (rich && gz(rich) > RICH_BUDGET) {
     problems.push(`admin-rich is ${gz(rich)} B gz, over its ${RICH_BUDGET} B cap`);
+  }
+  if (ui) {
+    const pulled = staticImports(read(ui)).filter((d) =>
+      OFF_SCREEN_GROUPS.some((group) => d.startsWith(group)),
+    );
+    if (pulled.length) {
+      problems.push(
+        `admin-ui imports ${pulled.join(', ')} statically: it would load on every screen`,
+      );
+    }
+  }
+
+  // 5. A chunk only admin code loads is admin code, whatever Rolldown named it.
+  const loaders = new Map();
+  for (const f of files) {
+    for (const d of [...staticImports(read(f)), ...dynamicImports(read(f))]) {
+      loaders.set(d, [...(loaders.get(d) ?? []), f]);
+    }
+  }
+  for (const f of files) {
+    if (ADMIN_FILE.test(f) || RUNTIME_FILE.test(f) || /^client\./.test(f)) continue;
+    const by = loaders.get(f) ?? [];
+    if (by.length > 0 && by.every((loader) => ADMIN_FILE.test(loader))) {
+      problems.push(
+        `${f} is loaded only by admin chunks (${by.join(', ')}) but is not named admin-*: size-limit weighs it as public JavaScript`,
+      );
+    }
   }
 
   // 2. Public chunks never import admin ones.

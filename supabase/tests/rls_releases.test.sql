@@ -1,8 +1,8 @@
--- pgTAP: the release ledger (migration 0038, Admin v2 R1).
+-- pgTAP: the release ledger (migrations 0038 and 0062, Admin v2 R1 and R3a).
 --
--- That staff write no draft yet (R3 grants the writes); who may stage a pending change
--- (content_drafts) once it does, per area and role, with the grant restored inside this
--- rolled-back transaction; that removals and archives are staged only by the roles allowed
+-- That staff hold the draft writes R3 granted (0062) and still write nothing while their
+-- tenant's releases are off; who may stage a pending change (content_drafts) once they are
+-- on, per area and role; that removals and archives are staged only by the roles allowed
 -- to make them; the draft lock (a draft's id, version and author are the database's, so a
 -- {draftId, draftVersion} a publisher saw never names other content); that a draft claimed
 -- by a scheduled release is out of reach of every staff token (RLS and the lock, each on
@@ -11,8 +11,9 @@
 -- even for it; the registry and the switch-on flag; and the custom_themes delete gate the
 -- registry contract needed. Rows run over admin, content_creator, seo, developer, a `sales`
 -- claim (the role arrives with C10; the policies read the role from the claim, so the
--- denial is provable now), anon and other_tenant (CLAUDE.md §9). No definer here relies on
--- app.live_role(), so no stale-token row.
+-- denial is provable now), anon and other_tenant (CLAUDE.md §9). Since 0062 a draft write
+-- needs a live profile (RESTRICTIVE, app.live_role()), so every staff claim below has one;
+-- the stale tokens (demoted, deactivated, locked) are proven in release_drafts.test.sql.
 --
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
@@ -23,6 +24,21 @@ select plan(111);
 insert into public.tenants (id, name) values
   ('38000000-0000-0000-0000-00000000000a', 'RelA'),
   ('38000000-0000-0000-0000-00000000000b', 'RelB');
+
+-- The staff the claims below name, each live (0062's RESTRICTIVE draft writes read the
+-- profile). The sales sub has none: the role does not exist yet (C10).
+insert into auth.users (id, email) values
+  ('38000000-0000-0000-0000-0000000000a1', 'r1-admin@example.test'),
+  ('38000000-0000-0000-0000-0000000000c1', 'r1-creator@example.test'),
+  ('38000000-0000-0000-0000-0000000000e1', 'r1-seo@example.test'),
+  ('38000000-0000-0000-0000-0000000000d1', 'r1-developer@example.test'),
+  ('38000000-0000-0000-0000-0000000000f1', 'r1-other-admin@example.test');
+insert into public.profiles (id, tenant_id, role, is_active, display_name) values
+  ('38000000-0000-0000-0000-0000000000a1', '38000000-0000-0000-0000-00000000000a', 'admin', true, 'Amal'),
+  ('38000000-0000-0000-0000-0000000000c1', '38000000-0000-0000-0000-00000000000a', 'content_creator', true, 'Cyrus'),
+  ('38000000-0000-0000-0000-0000000000e1', '38000000-0000-0000-0000-00000000000a', 'seo', true, 'Eli'),
+  ('38000000-0000-0000-0000-0000000000d1', '38000000-0000-0000-0000-00000000000a', 'developer', true, 'Dana'),
+  ('38000000-0000-0000-0000-0000000000f1', '38000000-0000-0000-0000-00000000000b', 'admin', true, 'Faris');
 
 -- Tenant A: the baseline v1 and a scheduled release; tenant B: its own v1.
 insert into public.content_releases (id, tenant_id, number, kind, status, published_at) values
@@ -84,10 +100,14 @@ create function _as_other() returns void language sql as $$
     true)
 $$;
 
--- Stage a change in tenant A.
+-- Stage a change in tenant A (a singleton's draft is keyed by the tenant, 0062).
 create function _stage(p_type text, p_op text, p_payload jsonb) returns void language sql as $$
   insert into public.content_drafts (tenant_id, entity_type, entity_id, op, payload)
-  values ('38000000-0000-0000-0000-00000000000a', p_type, gen_random_uuid(), p_op, p_payload)
+  values ('38000000-0000-0000-0000-00000000000a', p_type,
+          case when p_type in ('site_profile', 'seo_defaults')
+               then '38000000-0000-0000-0000-00000000000a'::uuid
+               else gen_random_uuid() end,
+          p_op, p_payload)
 $$;
 
 -- Rows a statement actually affected: a USING filter refuses silently.
@@ -116,42 +136,40 @@ create function _blob(p_chars int) returns text language sql as $$
   select left(string_agg(md5(g::text), ''), p_chars) from generate_series(1, p_chars / 32 + 1) g
 $$;
 
--- ── 0. Staff write no draft until R3 grants it ──────────────────────────────────
--- 0038 grants authenticated SELECT only; the GRANT layer refuses every write, whatever
--- the role or the area.
+-- ── 0. R3's grant exists, and writes nothing while releases are off ─────────────
+-- 0062 grants authenticated INSERT, UPDATE and DELETE. With no app.release_tenants row
+-- the RESTRICTIVE policies refuse every insert and update, whatever the role or the area.
+select ok(has_table_privilege('authenticated', 'public.content_drafts', 'select')
+          and has_table_privilege('authenticated', 'public.content_drafts', 'insert')
+          and has_table_privilege('authenticated', 'public.content_drafts', 'update')
+          and has_table_privilege('authenticated', 'public.content_drafts', 'delete'),
+  'R3''s grant exists: staff hold select, insert, update and delete on content_drafts (0062)');
 set local role authenticated;
 select _as('admin', '38000000-0000-0000-0000-0000000000a1');
 select throws_ok($$ select _stage('service', 'update', '{"title":{"en":"A"}}') $$, '42501',
-  'permission denied for table content_drafts',
-  'without R3''s grant, admin CANNOT stage a change (no INSERT on content_drafts)');
-select throws_ok(
-  $$ update public.content_drafts set fields = '{title}'
-      where id = '38000000-0000-0000-0000-000000000d02' $$,
-  '42501', 'permission denied for table content_drafts',
-  'without R3''s grant, admin CANNOT edit a draft (no UPDATE)');
-select throws_ok(
-  $$ delete from public.content_drafts where id = '38000000-0000-0000-0000-000000000d02' $$,
-  '42501', 'permission denied for table content_drafts',
-  'without R3''s grant, admin CANNOT discard a draft (no DELETE)');
+  'new row violates row-level security policy "content_drafts_live_insert" for table "content_drafts"',
+  'releases off: admin CANNOT stage a change (content_drafts_live_insert)');
+select is(_touch_draft('38000000-0000-0000-0000-000000000d02'), 0,
+  'releases off: admin CANNOT edit a draft (content_drafts_live_update)');
 select _as('content_creator', '38000000-0000-0000-0000-0000000000c1');
 select throws_ok($$ select _stage('service', 'update', '{"title":{"en":"C"}}') $$, '42501',
-  'permission denied for table content_drafts',
-  'without R3''s grant, content creator CANNOT stage a change');
+  'new row violates row-level security policy "content_drafts_live_insert" for table "content_drafts"',
+  'releases off: content creator CANNOT stage a change');
 select _as('seo', '38000000-0000-0000-0000-0000000000e1');
 select throws_ok($$ select _stage('entity_seo', 'update', '{"robots":"noindex"}') $$, '42501',
-  'permission denied for table content_drafts',
-  'without R3''s grant, seo CANNOT stage a change');
+  'new row violates row-level security policy "content_drafts_live_insert" for table "content_drafts"',
+  'releases off: seo CANNOT stage a change');
 select _as('developer', '38000000-0000-0000-0000-0000000000d1');
 select throws_ok($$ select _stage('site_profile', 'update', '{"brandName":{"en":"X"}}') $$, '42501',
-  'permission denied for table content_drafts',
-  'without R3''s grant, developer CANNOT stage a change');
+  'new row violates row-level security policy "content_drafts_live_insert" for table "content_drafts"',
+  'releases off: developer CANNOT stage a change');
 select is((select count(*)::int from public.content_drafts), _drafts_in_a(),
   'staff still read their tenant''s drafts (SELECT is granted)');
 reset role;
 
--- From here on, R3's grant, restored inside this rolled-back transaction: what follows is
--- RLS and the draft lock on their own.
-grant insert, update, delete on public.content_drafts to authenticated;
+-- From here on, tenant A has releases on (inside this rolled-back transaction): what
+-- follows is 0038's policies and the draft lock, with 0062's live check satisfied.
+insert into app.release_tenants (tenant_id) values ('38000000-0000-0000-0000-00000000000a');
 
 -- ── 1. Who may stage a change, per area ──────────────────────────────────────────
 set local role authenticated;
@@ -571,12 +589,11 @@ select throws_ok($$ select count(*) from app.release_tenants $$, '42501', null,
   'the service role CANNOT read the switch-on flag table either');
 reset role;
 
-select is(app.releases_enabled('38000000-0000-0000-0000-00000000000a'), false,
+select is(app.releases_enabled('38000000-0000-0000-0000-00000000000b'), false,
   'releases are off for a tenant with no flag row');
-insert into app.release_tenants (tenant_id) values ('38000000-0000-0000-0000-00000000000a');
 select ok(app.releases_enabled('38000000-0000-0000-0000-00000000000a')
           and not app.releases_enabled('38000000-0000-0000-0000-00000000000b'),
-  'the flag is per tenant: on for A, still off for B');
+  'the flag is per tenant: on for A (section 0 switched it on), still off for B');
 
 -- ── 10. Removing a theme is Admin's (registry contract #2) ──────────────────────
 set local role authenticated;
