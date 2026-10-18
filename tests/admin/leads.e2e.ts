@@ -128,6 +128,11 @@ async function moveBehindTheScreen(page: Page, id: string, stageId: string) {
 
 test.describe('as admin', () => {
   test.use({ storageState: authFile('admin') });
+  // One at a time: the round trip reads the sidebar's New-leads count before and after, and
+  // the other tests here move or erase New leads (a bulk move, a stale move, a stage move,
+  // an erase). Side by side (fullyParallel), the count could stay put or drop and the round
+  // trip fail; a retry would only hide that.
+  test.describe.configure({ mode: 'serial' });
 
   test('round trip: a contact form lead lands in the list, with no contact detail', async ({
     page,
