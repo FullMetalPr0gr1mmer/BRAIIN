@@ -7,6 +7,7 @@ import * as resources from '@/lib/admin/resources';
 import type { ResourceConfig } from '@/lib/admin/resource';
 import {
   CAPTURE_VIEWPORTS,
+  EDIT_SAMPLES,
   EXTRA_LINKS,
   LOCKED_SCREENS,
   REDIRECT_PAGES,
@@ -70,6 +71,8 @@ const SEGMENTS = [
 ];
 
 const segmentOf = (pattern: string) => pattern.split('/')[2] ?? '';
+/** An edit screen with no resource config, opened through its declared sample (C4b). */
+const sampled = (pattern: string) => pattern in EDIT_SAMPLES;
 const holds = (role: Role, cap: Capability, access: readonly string[]) =>
   access.includes(ROLE_CAPS[role][cap]);
 
@@ -87,7 +90,9 @@ describe('the sweep route map', () => {
   });
 
   it('every create and edit screen belongs to a known resource whose API uses that config', () => {
-    for (const route of sweepRoutes('admin').filter((r) => r.kind !== 'screen')) {
+    for (const route of sweepRoutes('admin').filter(
+      (r) => r.kind !== 'screen' && !sampled(r.pattern),
+    )) {
       const segment = segmentOf(route.pattern);
       const entry = RESOURCE_BY_SEGMENT[segment];
       expect(entry, `no resource mapped for ${route.pattern}`).toBeDefined();
@@ -112,6 +117,12 @@ describe('the sweep route map', () => {
     // it: any read capability, at the resource's own read access.
     for (const role of ROLES) {
       for (const route of sweepRoutes(role).filter((r) => r.kind === 'edit')) {
+        const sample = EDIT_SAMPLES[route.pattern];
+        if (sample) {
+          // Its sample's list is a route with a capability of its own (C4b).
+          expect(holds(role, sample.cap, ['full']), `${role} ${route.path}`).toBe(true);
+          continue;
+        }
         const { config } = RESOURCE_BY_SEGMENT[segmentOf(route.pattern)]!;
         const readCaps = config.readCaps ?? [config.writeCap];
         const access = config.readAccess ?? ['full', 'view', 'meta'];
@@ -138,7 +149,10 @@ describe('the sweep route map', () => {
       ).toContain(listApi);
     }
     // And every other edit screen's table has seed rows, so an empty list there is a defect.
-    for (const route of edits.filter((r) => !((r.listApi ?? '') in UNSEEDED_LISTS))) {
+    // An edit screen with no resource config has its row made by samples.setup.ts instead.
+    for (const route of edits.filter(
+      (r) => !((r.listApi ?? '') in UNSEEDED_LISTS) && !sampled(r.pattern),
+    )) {
       const { table } = RESOURCE_BY_SEGMENT[segmentOf(route.pattern)]!.config;
       expect(seeds(table), `${route.pattern}: seed.sql inserts no ${table} row`).toBe(true);
     }
@@ -147,7 +161,9 @@ describe('the sweep route map', () => {
   it('a role that may author a resource it sees is sent to its create screen', () => {
     for (const role of ROLES) {
       const routes = new Set(sweepRoutes(role).map((r) => r.path));
-      for (const route of sweepRoutes(role).filter((r) => r.kind === 'edit')) {
+      for (const route of sweepRoutes(role).filter(
+        (r) => r.kind === 'edit' && !sampled(r.pattern),
+      )) {
         const segment = segmentOf(route.pattern);
         const { config } = RESOURCE_BY_SEGMENT[segment]!;
         let hasNew = true;
@@ -178,6 +194,35 @@ describe('the sweep route map', () => {
         ).not.toContain(page);
       }
     }
+  });
+
+  it('opens an edit screen with no resource config through its declared sample (C4b)', () => {
+    expect(Object.keys(EDIT_SAMPLES)).toEqual(['/admin/leads/[id]']);
+    const setup = readFileSync('tests/admin/samples.setup.ts', 'utf8');
+    expect(setup).toContain("import { EDIT_SAMPLES } from './routes'");
+    for (const [pattern, sample] of Object.entries(EDIT_SAMPLES)) {
+      expect(() => pageFileFor(pattern), pattern).not.toThrow();
+      // The list and the create route exist and ask for the capability the sample names.
+      for (const api of [sample.api, sample.create.api]) {
+        const file = existsSync(`src/pages${api}.ts`)
+          ? `src/pages${api}.ts`
+          : `src/pages${api}/index.ts`;
+        expect(existsSync(file), file).toBe(true);
+        expect(readFileSync(file, 'utf8'), file).toContain(`cap: '${sample.cap}'`);
+      }
+      // Every role swept on it gets its id from that list, never from a resource's GET.
+      for (const role of ROLES) {
+        const route = sweepRoutes(role).find((r) => r.pattern === pattern);
+        if (!route) continue;
+        expect(route.listApi, role).toBe(sample.api);
+        expect(route.sample, role).toBe(sample);
+        expect(holds(role, sample.cap, ['full']), role).toBe(true);
+      }
+    }
+    // The leads detail is swept for exactly the roles that work leads.
+    expect(
+      ROLES.filter((role) => sweepRoutes(role).some((r) => r.pattern === '/admin/leads/[id]')),
+    ).toEqual(ROLES.filter((role) => ROLE_CAPS[role]['leads.manage'] === 'full'));
   });
 
   it('Admin is swept on every sidebar link and tab, and the extras', () => {
@@ -252,6 +297,8 @@ describe('the locked screens the refusals e2e opens', () => {
     expect(server.map((s) => s.href).sort()).toEqual([
       '/admin/analytics/search',
       '/admin/audit',
+      '/admin/leads',
+      '/admin/leads/board',
       '/admin/site-health',
     ]);
     for (const screen of server) {

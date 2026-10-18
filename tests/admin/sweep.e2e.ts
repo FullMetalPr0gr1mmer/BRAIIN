@@ -36,15 +36,30 @@ test.skip(!staffEnv(), SKIP_REASON);
 // Every element in its final state, as the public axe suite does (tests/a11y/axe.e2e.ts).
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
+/** The double-submit token the admin's own fetches send (the `__Host-csrf` cookie). */
+async function csrf(page: Page): Promise<string> {
+  const find = async () =>
+    (await page.context().cookies()).find((c) => c.name === '__Host-csrf')?.value ?? '';
+  if (!(await find())) await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+  return find();
+}
+
 /**
  * The URL to open: an edit screen takes the first row its role's own list API returns.
  * Null only for a list the seed leaves empty (UNSEEDED_LISTS). A refused or failing list,
- * or an empty one the seed fills, fails the test: the role's menu offers that screen.
+ * or an empty one the seed fills, fails the test: the role's menu offers that screen. An
+ * edit screen with no resource config posts its sample's body instead (EDIT_SAMPLES, the F0
+ * harness extension; its row is made by tests/admin/samples.setup.ts).
  */
 async function resolvePath(page: Page, route: SweepRoute): Promise<string | null> {
   if (route.kind !== 'edit') return route.path;
   const listApi = route.listApi ?? '';
-  const res = await page.request.get(`${listApi}?limit=1`);
+  const res = route.sample
+    ? await page.request.post(route.sample.api, {
+        headers: { 'x-csrf-token': await csrf(page) },
+        data: route.sample.body,
+      })
+    : await page.request.get(`${listApi}?limit=1`);
   expect(res.status(), `${listApi} answers the signed-in role`).toBe(200);
   const body = (await res.json()) as { data?: { rows?: { id?: unknown }[] } };
   const id = body.data?.rows?.[0]?.id;

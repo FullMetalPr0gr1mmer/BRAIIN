@@ -26,7 +26,50 @@ export interface SweepRoute {
   kind: 'screen' | 'create' | 'edit';
   /** Edit screens: the list API whose first row supplies the id. */
   listApi?: string;
+  /**
+   * Edit screens with no resource config (EDIT_SAMPLES): the list API is a POST with this
+   * body (and the CSRF header), its first row supplying the id.
+   */
+  sample?: EditSample;
 }
+
+/**
+ * Edit screens with no resource config (the F0 harness extension, Admin v2 C4b): how the sweep
+ * finds a row to open. A resource's edit screen opens the first row of its GET list; these
+ * have no such list, so each names the POST that answers `data.rows[0].id`, the capability
+ * that route asks for, and a row the admin-setup project makes sure exists
+ * (tests/admin/samples.setup.ts). Never the legacy GET /api/admin/leads, which C14a removes.
+ */
+export interface EditSample {
+  api: string;
+  method: 'POST';
+  body: Readonly<Record<string, unknown>>;
+  cap: Capability;
+  /**
+   * How tests/admin/samples.setup.ts adds a row when the list answers none, as the admin: a
+   * POST through the real route (never a seed row: supabase/seed.sql also runs on staging,
+   * and a lead's contact details need ciphertext under the real key).
+   */
+  create: { api: string; body: Readonly<Record<string, unknown>> };
+}
+
+export const EDIT_SAMPLES: Readonly<Record<string, EditSample>> = {
+  '/admin/leads/[id]': {
+    api: '/api/admin/leads/query',
+    method: 'POST',
+    body: { limit: 1 },
+    cap: 'leads.manage',
+    create: {
+      api: '/api/admin/leads',
+      body: {
+        name: 'Sample lead',
+        email: 'sample.lead@example.invalid',
+        message: 'A sample inquiry for the admin sweep.',
+        channel: 'unknown',
+      },
+    },
+  },
+};
 
 /**
  * The edit screens' lists the seed leaves EMPTY (supabase/seed.sql inserts no row into these
@@ -63,7 +106,16 @@ export interface LockedScreen {
 export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/users', api: '/api/admin/users', cap: 'users.manage' },
   { href: '/admin/applications', api: '/api/admin/applications', cap: 'applications.manage' },
-  { href: '/admin/leads', api: '/api/admin/leads', cap: 'leads.manage' },
+  // Admin v2 C4b: the leads screens render their first view on the server, so they refuse
+  // themselves (a 403 and Refused.astro). The board's twin is the stages read (a GET with the
+  // same capability); its own data route is a POST.
+  { href: '/admin/leads', api: '/api/admin/leads', cap: 'leads.manage', render: 'server' },
+  {
+    href: '/admin/leads/board',
+    api: '/api/admin/crm/stages',
+    cap: 'leads.manage',
+    render: 'server',
+  },
   { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view', render: 'server' },
   {
     href: '/admin/site-health',
@@ -155,6 +207,15 @@ export const EXTRA_LINKS: readonly NavTab[] = [
     caps: ['media.write'],
     access: ['full', 'meta'],
   },
+  // The leads list's states (Admin v2 C4b): the spam view (its chip pressed, the empty state,
+  // "Not spam" in the bulk bar), and a range with a filter (the KPIs' changes, the sub-line's
+  // "in the last 30 days").
+  { href: '/admin/leads?stage=spam', label: 'Leads, spam', caps: ['leads.manage'] },
+  {
+    href: '/admin/leads?range=30&assigned=none',
+    label: 'Leads, filtered',
+    caps: ['leads.manage'],
+  },
 ];
 
 /**
@@ -223,11 +284,13 @@ export function sweepRoutes(role: Role, exists: Exists = existsSync): SweepRoute
     }
     if (hasPage(`${base}/[id]`, exists) && !derived.has(`${base}/[id]`)) {
       derived.add(`${base}/[id]`);
+      const sample = EDIT_SAMPLES[`${base}/[id]`];
       routes.push({
         path: `${base}/[id]`,
         pattern: `${base}/[id]`,
         kind: 'edit',
-        listApi: `/api${base}`,
+        listApi: sample ? sample.api : `/api${base}`,
+        ...(sample ? { sample } : {}),
       });
     }
   }
