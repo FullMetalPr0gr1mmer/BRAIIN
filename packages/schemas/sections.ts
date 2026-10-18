@@ -324,9 +324,10 @@ export const ContactChannelsSectionContentSchema = z
   .strict();
 
 /**
- * The FAQ band's heading only. The questions and answers stay code-owned
- * (src/lib/content/contactFaq.ts): they are also the page's FAQPage JSON-LD, and an
- * editable answer beside a fixed JSON-LD would be a structured-data mismatch.
+ * The FAQ band's heading only. The questions and answers are not section content: they
+ * are also the page's FAQPage JSON-LD, so they are one collection, public.faq_items
+ * (Admin v2 U7), which the route reads once for both (src/lib/data/faq.ts); an answer
+ * stored here beside the JSON-LD's would be a structured-data mismatch.
  */
 export const FaqSectionContentSchema = z
   .object({

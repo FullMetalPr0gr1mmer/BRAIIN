@@ -292,7 +292,17 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
     },
     { name: 'whatsappNote', label: 'WhatsApp card note', kind: 'bilingual' },
   ],
-  faq: [tag, heading, accent('heading')],
+  // The questions are the FAQ collection (Admin v2 U7, Content > FAQ), not section content:
+  // the route reads them once for the band and its FAQPage JSON-LD. Only the contact route
+  // loads them, so this band shows nothing on another page.
+  faq: [
+    tag,
+    {
+      ...heading,
+      help: 'The questions are edited under Content, FAQ. They show on the Contact page only.',
+    },
+    accent('heading'),
+  ],
   // Round 2: "Say hello" — the inquiry block closing the services pages. The form itself is
   // code (its fields are the LeadInputSchema contract).
   hello: [
