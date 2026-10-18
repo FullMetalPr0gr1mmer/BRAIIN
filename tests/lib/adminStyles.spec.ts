@@ -134,6 +134,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'help.css',
       'kit.css',
       'login.css',
+      'media.css',
       'personal.css',
       'search.css',
       'stats.css',
@@ -420,6 +421,11 @@ describe('admin.css keeps the hooks the markup renders', () => {
         'src/pages/admin/reset.astro',
       ]);
       expect(pagesFor('search.css')).toEqual(['src/pages/admin/search.astro']);
+      // The media library (U4): through its island's entry to the two pages hydrating it.
+      expect(pagesFor('media.css')).toEqual([
+        'src/pages/admin/media/[id].astro',
+        'src/pages/admin/media/index.astro',
+      ]);
       expect(pagesFor('users.css')).toEqual(['src/pages/admin/users.astro']);
       expect(pagesFor('personal.css')).toEqual([
         'src/pages/admin/account.astro',

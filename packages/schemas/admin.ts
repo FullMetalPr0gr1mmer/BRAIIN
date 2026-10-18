@@ -26,7 +26,15 @@ import {
 import { LocalizedDocSchema } from './tiptap';
 import { DisplayNameValueSchema, PASSWORD_MAX_BYTES, PASSWORD_MIN, utf8Bytes } from './adminPrefs';
 import { SectionTypeSchema, sectionContentIssues, type SectionType } from './sections';
-import { MediaDisplayNameSchema, StaticMediaKeySchema, VideoClipSchema } from './media';
+import {
+  MEDIA_META_LIMITS,
+  MediaAltSchema,
+  MediaDisplayNameSchema,
+  MediaFolderSchema,
+  MediaTagSchema,
+  StaticMediaKeySchema,
+  VideoClipSchema,
+} from './media';
 
 // Every admin write goes through a schema in this file. CLAUDE.md §8: "Zod is the
 // single content boundary."
@@ -783,11 +791,17 @@ function checkProvider(
 export const MediaWriteSchema = MediaWriteBase.superRefine(checkProvider);
 export const MediaUpdateSchema = updatable(MediaWriteBase).superRefine(checkProvider);
 
-/** SEO holds `media.write: 'meta'` — metadata only, never the binary or its path. */
+/**
+ * SEO holds `media.write: 'meta'` — metadata only, never the binary or its path. Since
+ * Admin v2 U4 every role saves the library drawer's alt text, tags and folder through it, held
+ * to the upload's own rules (D6): alt text in both languages, never cleared, at most 300
+ * characters each and no control character; tags and folder as an upload's. What an upload
+ * was allowed to store, the drawer may save again; nothing the upload would refuse.
+ */
 export const MediaMetaOnlySchema = z.object({
-  alt: BilingualTextSchema.nullish(),
-  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
-  folder: z.string().trim().max(200).nullish(),
+  alt: MediaAltSchema.optional(),
+  tags: z.array(MediaTagSchema).max(MEDIA_META_LIMITS.tags).optional(),
+  folder: MediaFolderSchema.nullish(),
   version: VersionSchema,
 });
 

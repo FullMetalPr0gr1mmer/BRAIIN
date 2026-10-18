@@ -9,6 +9,7 @@ import {
   CAPTURE_VIEWPORTS,
   EXTRA_LINKS,
   LOCKED_SCREENS,
+  REDIRECT_PAGES,
   UNSEEDED_LISTS,
   captureName,
   captureRoutes,
@@ -155,9 +156,26 @@ describe('the sweep route map', () => {
         } catch {
           hasNew = false;
         }
-        if (hasNew && holds(role, config.writeCap, ['full'])) {
+        if (
+          hasNew &&
+          holds(role, config.writeCap, ['full']) &&
+          !(`/admin/${segment}/new` in REDIRECT_PAGES)
+        ) {
           expect(routes, `${role} /admin/${segment}/new`).toContain(`/admin/${segment}/new`);
         }
+      }
+    }
+  });
+
+  it('a page that only redirects is not swept, and redirects where it says (U4)', () => {
+    for (const [page, target] of Object.entries(REDIRECT_PAGES)) {
+      const source = readFileSync(pageFileFor(page), 'utf8');
+      expect(source, page).toContain(`return Astro.redirect('${target}', 302);`);
+      for (const role of ROLES) {
+        expect(
+          sweepRoutes(role).map((r) => r.path),
+          `${role} ${page}`,
+        ).not.toContain(page);
       }
     }
   });

@@ -15,6 +15,7 @@ export const ADMIN_STYLESHEETS = [
   'help.css',
   'kit.css',
   'login.css',
+  'media.css',
   'personal.css',
   'search.css',
   'stats.css',
