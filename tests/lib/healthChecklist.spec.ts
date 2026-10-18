@@ -577,7 +577,7 @@ function probe<K extends ProbeKind>(
   kind: K,
   state: ProbeView['state'],
   facts: unknown,
-  extra: Partial<ProbeView> = {},
+  extra: Partial<Omit<ProbeView, 'facts'>> = {},
 ): ProbeView<K> {
   return {
     state,
