@@ -1,10 +1,9 @@
 /* Screen stylesheet: /admin/2fa, two-step sign-in (Admin v2 U17). Linked only through the
    `styles` prop of the page's frame: the sign-in shell (AuthLayout, beside login.css) for a
-   session still owing its code or its setup, the admin shell (AdminLayout, beside
-   personal.css) for a full session. It uses admin.css's tokens and declares none, and holds
-   no colour literal (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs), and none of
-   login.css's classes (a class only one sheet styles renders only where that sheet is
-   linked). */
+   session still owing its code or its setup, the admin shell (AdminLayout) for a full
+   session. It uses admin.css's tokens and declares none, and holds no colour literal
+   (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs), and none of login.css's
+   classes (a class only one sheet styles renders only where that sheet is linked). */
 
 .two-step {
   display: grid;
