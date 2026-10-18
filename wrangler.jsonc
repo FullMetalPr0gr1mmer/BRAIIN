@@ -26,14 +26,20 @@
   "observability": {
     "enabled": true,
   },
-  // The daily jobs (src/worker.ts `scheduled` → src/lib/cron/daily.ts, which runs the
-  // ordered registry in src/lib/cron/jobs.ts): the privileged-op ledger purge, the Join
-  // retention run — expired CVs out of the private Storage bucket, then their rows — with the
-  // public write limiter's old counters, the sweep of uploaded images no row names any more
-  // (the public `media` bucket), and the CRM lead index backfill. Cron triggers are free on
-  // every Workers plan.
+  // Two schedules (src/worker.ts `scheduled` dispatches on the cron through
+  // src/lib/cron/schedules.ts, whose keys tests/lib/cronSchedules.spec.ts holds equal to
+  // this list; each fire is its own invocation with its own 50 subrequests):
+  //   "23 3 * * *"    the daily jobs (src/lib/cron/jobs.ts, in order): the privileged-op
+  //                   ledger purge, the Join retention run — expired CVs out of the private
+  //                   Storage bucket, then their rows — with the public write limiter's old
+  //                   counters, the sweep of uploaded images no row names any more (the
+  //                   public `media` bucket), the lead notification check, the page
+  //                   visibility re-sync and the CRM lead index backfill;
+  //   "*/10 * * * *"  site health's readings (Admin v2 G2, src/lib/cron/health.ts): the
+  //                   uptime monitor's API, and the domain's registration record about daily.
+  // Cron triggers are free on every Workers plan; the Free plan allows 5 per account.
   "triggers": {
-    "crons": ["23 3 * * *"],
+    "crons": ["23 3 * * *", "*/10 * * * *"],
   },
   // ⚠ NO `PUBLIC_*` ENTRIES HERE — THEY OVERRIDE THE BUILD ENVIRONMENT.
   //
@@ -79,6 +85,7 @@
     },
   ],
   // NOTE: secrets (SUPABASE_SERVICE_ROLE_KEY, LEAD_PII_ENC_KEY, AUDIT_HMAC_KEY,
-  // NOTIFY_LEAD_SECRET, ANTHROPIC_API_KEY) are set via `wrangler secret put <NAME>`
+  // NOTIFY_LEAD_SECRET, ANTHROPIC_API_KEY, UPTIME_MONITOR_API_KEY) are set via
+  // `npm run cf:secrets` (scripts/push-secrets.mjs) or `wrangler secret put <NAME>`
   // or the Cloudflare dashboard — NEVER committed here.
 }

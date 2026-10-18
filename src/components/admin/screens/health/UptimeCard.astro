@@ -1,0 +1,147 @@
+---
+import Card from '@/components/admin/ui/Card.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Note from '@/components/admin/ui/Note.astro';
+import StatRows from '@/components/admin/ui/StatRows.astro';
+import Line from '@/components/admin/ui/charts/Line.astro';
+import UptimeStrip from './UptimeStrip.astro';
+import { formatRatio, type ProbeView } from '@/lib/admin/health/probes';
+import {
+  failedReadLine,
+  intervalWords,
+  listWords,
+  noReadingLine,
+  unwatched,
+} from '@/lib/admin/health/uptime';
+import { formatDate, formatDateTime, formatTime } from '@/lib/admin/relTime';
+
+// The Uptime card (Admin v2 G2; the prototype's uptime card in screens_health.js): what the
+// external monitor sees, read every 10 minutes by the Worker's health schedule. Server-
+// rendered, zero JS. States: the readings could not be read; not set up (no key: the score
+// leaves uptime out); not checked yet; the monitor did not answer (the tries counted and how
+// often it is asked now, `noReadingLine` / `failedReadLine`); a reading (the
+// figures, the 90-day strip with its table, the outages, the response time over 48 hours
+// with its table, and the monitors). The sub-line says the monitors' real interval; the
+// prototype's "every minute from three regions" is not ported unless it is true.
+
+interface Props {
+  probe: ProbeView<'uptime'> | null;
+  /** True when the readings could not be read at all. */
+  failed: boolean;
+  now?: number;
+}
+
+const { probe, failed, now = Date.now() } = Astro.props;
+const facts = probe?.facts ?? null;
+const off = !failed && (!probe || probe.state === 'off');
+const every = facts ? intervalWords(facts.monitors) : null;
+const sub = every ? `Checked ${every} from outside our hosting` : 'From the uptime monitor';
+const anyDown = facts?.monitors.some((m) => m.status === 'down' || m.status === 'seems-down');
+const allPaused =
+  facts !== null && facts.monitors.length > 0 && facts.monitors.every((m) => m.status === 'paused');
+const nowWord = anyDown
+  ? facts?.downSince
+    ? `Down since ${formatDateTime(facts.downSince)}`
+    : 'Down'
+  : allPaused
+    ? 'Paused'
+    : 'Up';
+const missing = facts ? unwatched(facts.monitors) : [];
+const failedLine = failedReadLine(probe, now);
+const points = facts?.responseTimes ?? [];
+const minutes = (seconds: number) => Math.max(1, Math.round(seconds / 60));
+const monitorWord = (m: { path: string | null; name: string; status: string }) => {
+  const where = m.path ?? `${m.name || 'A monitor'} (another address)`;
+  return m.status === 'paused' ? `${where} (paused)` : where;
+};
+---
+
+<Card title="Uptime" sub={facts ? sub : undefined} class="upc">
+  {
+    failed ? (
+      <Note tone="warn">
+        <p>The uptime readings could not be read just now. The system log has the detail.</p>
+      </Note>
+    ) : off ? (
+      <Note>
+        <p>
+          Not set up. Uptime comes from an external monitor: a developer adds its read-only key to
+          the site's Cloudflare settings (launch runbook). Until then the score leaves uptime out.
+        </p>
+      </Note>
+    ) : !facts ? (
+      <p class="upc__none">{noReadingLine(probe)}</p>
+    ) : (
+      <>
+        {failedLine && (
+          <Note tone="warn">
+            <p>{failedLine}</p>
+          </Note>
+        )}
+        <StatRows
+          rows={[
+            {
+              label: '30 days',
+              value: facts.ratio30 === null ? 'Not reported' : formatRatio(facts.ratio30),
+            },
+            {
+              label: '90 days',
+              value: facts.ratio90 === null ? 'Not reported' : formatRatio(facts.ratio90),
+            },
+            { label: 'Now', value: nowWord },
+          ]}
+        />
+        <UptimeStrip days={facts.days} />
+
+        <h3 class="upc__h">Outages, last 90 days</h3>
+        {facts.incidents.length === 0 ? (
+          <p class="upc__none">No outages in the last 90 days.</p>
+        ) : (
+          <ul class="hc__list">
+            {facts.incidents.map((incident) => (
+              <li class="hsrow" data-state="fail">
+                <span class="st" data-tone="warn" aria-hidden="true">
+                  <Icon name="clock" size={12} />
+                </span>
+                <div class="hsrow__main">
+                  <span class="hsrow__t">{incident.reason}</span>
+                  <small class="hsrow__s">
+                    {formatDate(incident.start)}, {formatTime(incident.start)} ·{' '}
+                    {minutes(incident.durationSec)} min
+                  </small>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <h3 class="upc__h">Response time, last 48 hours</h3>
+        <Line
+          id="uptime-response"
+          caption="Response time, last 48 hours, in milliseconds"
+          captionVisible={false}
+          series={[{ name: 'Response time (ms)', data: points.map((p) => Math.round(p.ms)) }]}
+          labels={points.map((p) => `${formatDate(p.at, { now })}, ${formatTime(p.at)}`)}
+          axisLabels={points.map((p) => formatTime(p.at))}
+          height={180}
+          labelHeading="Time"
+        />
+
+        <h3 class="upc__h">Monitors</h3>
+        <p class="upc__mon">
+          {facts.monitors.length === 0
+            ? 'The monitor watches nothing on this site yet.'
+            : facts.monitors.map(monitorWord).join(' · ')}
+        </p>
+        {missing.length > 0 && (
+          <Note>
+            <p>
+              The standard asks the monitor to watch /, /ar/ and /healthz; {listWords(missing)}{' '}
+              {missing.length === 1 ? 'is' : 'are'} not watched.
+            </p>
+          </Note>
+        )}
+      </>
+    )
+  }
+</Card>
