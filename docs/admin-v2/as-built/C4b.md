@@ -205,10 +205,10 @@ nothing different. The new Worker needs nothing 0065 adds.
 ## Tests
 
 - Vitest: `leadUrl.spec` (the allow-list, the round trip, never `q`, every body valid for its
-  API schema), `leadsScreens.spec` (21: no style, no PII or contact link before the reveal,
+  API schema), `leadsScreens.spec` (24: no style, no PII or contact link before the reveal,
   "Unread" and "Over response time" in words, the star's name, the KPIs, the chips, the
   labels, the masked rows, the reasons behind the reveal, the links after it, no storage, the
-  drawer's body and checks), `leadPage.spec` (tenant-scoped reads, safe columns, a 404 before
+  drawer's body and checks, "Move to…" focus), `leadPage.spec` (tenant-scoped reads, safe columns, a 404 before
   any audit, the neighbours' filter), `leadView.spec` and `leadKpis.spec` (the comparison,
   `leadsSubline`), `leadsWrite.spec` (the 422), `leadGrants.spec` (the PATCH no longer writes
   `internal_notes`; 0030's grant still names it), `kitParity.spec` (React `Kpi` = `Kpi.astro`),
