@@ -96,7 +96,7 @@ function fakeDb(answers: Answers = {}) {
 const EVERYTHING = {
   top: ['kpis'],
   left: ['quick', 'views', 'leads', 'attention', 'health'],
-  right: ['activity', 'applications', 'pages', 'disciplines', 'notes'],
+  right: ['activity', 'applications', 'pages', 'disciplines', 'notes', 'realtime'],
   hidden: [],
 };
 
@@ -115,11 +115,22 @@ describe('the registry follows ROLE_CAPS', () => {
 
   it.each([
     ['admin', [...WIDGET_IDS]],
-    ['content_creator', ['kpis', 'quick', 'views', 'attention', 'pages', 'notes']],
-    ['seo', ['kpis', 'quick', 'views', 'attention', 'pages', 'notes']],
+    ['content_creator', ['kpis', 'quick', 'views', 'attention', 'pages', 'notes', 'realtime']],
+    ['seo', ['kpis', 'quick', 'views', 'attention', 'pages', 'notes', 'realtime']],
     [
       'developer',
-      ['kpis', 'quick', 'views', 'leads', 'health', 'activity', 'pages', 'disciplines', 'notes'],
+      [
+        'kpis',
+        'quick',
+        'views',
+        'leads',
+        'health',
+        'activity',
+        'pages',
+        'disciplines',
+        'notes',
+        'realtime',
+      ],
     ],
   ] as [Role, WidgetId[]][])('%s', (role, widgets) => {
     expect(widgetsFor(role)).toEqual(widgets);
@@ -370,7 +381,8 @@ describe('the loaders read only what the role sees', () => {
  *  it is held to, and the identity row the layout renders. */
 const MIDDLEWARE = 3;
 /** What the budget test measures; docs/admin-v2/as-built/U1.md records the same figures. */
-const MEASURED = { loadDashboard: 24, total: 34 };
+// U1 measured 24 and 34; G1b's "Right now" (realtime_summary, one read) makes 25 and 35.
+const MEASURED = { loadDashboard: 25, total: 35 };
 
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
   // A real request has one clock: the dashboard's "Going live today" and the bell both ask
