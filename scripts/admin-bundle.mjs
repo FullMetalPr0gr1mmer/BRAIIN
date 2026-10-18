@@ -19,7 +19,16 @@
 //   5. no admin code hides under another name: a chunk that only admin chunks load, by a
 //      static or a lazy import, is named admin-* or Admin* (a module no group claims
 //      becomes a module-named chunk, which size-limit weighs as public JavaScript). The
-//      bundler's own runtime helpers, shared by every graph, are the exception by name.
+//      bundler's own runtime helpers, shared by every graph, are the exception by name;
+//   6. a screen family's own group stays on its own screens (Admin v2 C4b, the leads): only
+//      its islands and its lazy pieces import admin-leads statically, admin-leads imports
+//      neither the field kit nor its lazy pieces statically, and nothing imports the lazy
+//      pieces (admin-leads-lazy: Add a lead, Erase) but through import().
+//
+// Since C4b (owner item O-15, decided by the approved plan's default on 2026-10-18) check 3,
+// each admin screen's eager graph within ROUTE_BUDGET, is THE admin bundle gate; the
+// size-limit sum in .size-limit.json (every admin-* file, lazy ones included) is a coarse
+// 400 KB tripwire beside it, no longer the budget.
 // Sizes are gzip bytes; KB means 1,000 B.
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
@@ -75,7 +84,20 @@ const SIGN_IN_FILE = /^(?:login|forgot|reset|invite|AuthLayout)\.astro_/;
 const RUNTIME_FILE = /^(?:preload-helper|rolldown-runtime)\./;
 
 // The groups admin-ui must never import statically (check 4).
-const OFF_SCREEN_GROUPS = ['admin-fields.', 'admin-screens.', 'admin-dashboard.'];
+const OFF_SCREEN_GROUPS = [
+  'admin-fields.',
+  'admin-screens.',
+  'admin-dashboard.',
+  'admin-leads.',
+  'admin-leads-lazy.',
+];
+
+// A screen family's group and the chunks allowed to import it statically (check 6).
+const FAMILY_GROUPS = [{ group: 'admin-leads.', importers: /^(?:AdminLead|admin-leads-lazy\.)/ }];
+// What a family's group must never import statically: the field kit, and its own lazy part.
+const FAMILY_NEVER = { 'admin-leads.': ['admin-fields.', 'admin-leads-lazy.'] };
+// Groups reached only through import() (check 6).
+const LAZY_ONLY_GROUPS = ['admin-leads-lazy.'];
 
 // Every admin chunk is `admin-*` (the groups in astro.config.mjs) or an island entry named
 // `Admin*` (src/components/admin/islands), plus a sign-in screen's script. A chunk named
@@ -114,6 +136,34 @@ export function check(dir) {
     if (pulled.length) {
       problems.push(
         `admin-ui imports ${pulled.join(', ')} statically: it would load on every screen`,
+      );
+    }
+  }
+
+  // 6. A screen family's group stays on its own screens; its lazy pieces stay lazy.
+  for (const { group, importers } of FAMILY_GROUPS) {
+    const chunk = find(group);
+    if (!chunk) continue;
+    for (const f of files) {
+      if (f === chunk || importers.test(f)) continue;
+      if (staticImports(read(f)).includes(chunk)) {
+        problems.push(`${f} imports ${chunk} statically: another screen would load it`);
+      }
+    }
+    const never = (FAMILY_NEVER[group] ?? []).filter((prefix) =>
+      staticImports(read(chunk)).some((d) => d.startsWith(prefix)),
+    );
+    if (never.length) {
+      problems.push(`${chunk} imports ${never.join(', ')} statically: it would load eagerly`);
+    }
+  }
+  for (const prefix of LAZY_ONLY_GROUPS) {
+    const chunk = find(prefix);
+    if (!chunk) continue;
+    const eager = files.filter((f) => staticImports(read(f)).includes(chunk));
+    if (eager.length) {
+      problems.push(
+        `${eager.join(', ')} import ${chunk} statically: it is meant for import() only`,
       );
     }
   }
