@@ -99,6 +99,8 @@ as $$
 declare
   v_role text;
   v_staff text;
+  v_tid uuid;
+  v_foreign boolean;
   v_on boolean;
   v_allowed text[];
   v_changed text[];
@@ -125,7 +127,24 @@ begin
   end if;
 
   -- 4. Releases off for the row's tenant (both images of an UPDATE): today's behaviour.
+  -- This runs before RLS's WITH CHECK, so for a role RLS binds (authenticated, anon) a row
+  -- naming a tenant other than the caller's is refused here, whatever either tenant's switch
+  -- says: reading that tenant's switch would let the refusal's words tell another tenant
+  -- whether its releases are on (the guard's message when on, RLS's when off). RLS refuses
+  -- such a row anyway; a definer that bypasses RLS and writes across tenants on an API
+  -- request is refused too, fail-closed. The bypassing roles (the service role, no switched
+  -- role) may read the switch directly, so for them the row's own tenant decides, as before.
+  v_tid := app.effective_tenant_id();
   if tg_op = 'INSERT' then
+    v_foreign := new.tenant_id is distinct from v_tid;
+  elsif tg_op = 'DELETE' then
+    v_foreign := old.tenant_id is distinct from v_tid;
+  else
+    v_foreign := old.tenant_id is distinct from v_tid or new.tenant_id is distinct from v_tid;
+  end if;
+  if v_foreign and v_role in ('authenticated', 'anon') then
+    v_on := true;
+  elsif tg_op = 'INSERT' then
     v_on := app.releases_enabled(new.tenant_id);
   elsif tg_op = 'DELETE' then
     v_on := app.releases_enabled(old.tenant_id);

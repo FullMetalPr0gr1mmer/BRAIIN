@@ -80,6 +80,18 @@ describe('migration 0066: the release guard', () => {
     expect(body('app.tg_release_links_stash')).not.toMatch(/return null/);
   });
 
+  it('never reads another tenant’s switch for a role RLS binds', () => {
+    // The guard runs before RLS's WITH CHECK: a row naming another tenant is refused before
+    // any switch is read, so the refusal's words cannot tell whether that tenant is armed.
+    const guard = body('app.tg_release_guard');
+    const fence = guard.indexOf(
+      "if v_foreign and v_role in ('authenticated', 'anon') then\n    v_on := true;",
+    );
+    expect(fence).toBeGreaterThan(0);
+    expect(guard.indexOf('app.releases_enabled(')).toBeGreaterThan(fence);
+    expect(guard).toContain('v_tid := app.effective_tenant_id();');
+  });
+
   it('refuses with 42501 and the words staff see', () => {
     const guard = body('app.tg_release_guard');
     expect(guard).toContain("raise exception 'Live content changes only through a release.'");

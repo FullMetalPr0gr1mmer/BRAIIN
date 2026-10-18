@@ -12,7 +12,8 @@
 --     depth exemption, no TRUNCATE for any API role;
 --   • releases off (tenant B): writes land as before;
 --   • releases on (tenant A): every role RLS admits is refused, across the areas; the roles
---     RLS refuses (seo, developer, a sales claim, anon, another tenant) still meet RLS first;
+--     RLS refuses (seo, developer, a sales claim, anon, another tenant) still meet RLS first,
+--     and a row naming another tenant meets one refusal whatever that tenant's switch says;
 --     a stale token, a switched role with no claims (through a definer) and the migration
 --     role carrying a staff claim are refused too;
 --   • the immediate column (accepting_applications) and its own 0019 guard;
@@ -25,14 +26,15 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(57);
+select plan(58);
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────────
 insert into app.deployment (env) values ('staging')
   on conflict (singleton) do update set env = excluded.env;
 insert into public.tenants (id, name) values
   ('66000000-0000-0000-0000-00000000000a', 'GuardA'),
-  ('66000000-0000-0000-0000-00000000000b', 'GuardB');
+  ('66000000-0000-0000-0000-00000000000b', 'GuardB'),
+  ('66000000-0000-0000-0000-00000000000c', 'GuardC');
 insert into auth.users (id, email) values
   ('66000000-0000-0000-0000-0000000000a1', 'r5-admin@example.test'),
   ('66000000-0000-0000-0000-0000000000c1', 'r5-creator@example.test'),
@@ -303,6 +305,16 @@ select is(_try($$ update public.services set sort_order = 1 where id = '66000000
 select _as('66000000-0000-0000-0000-0000000000b1', 'admin', '66000000-0000-0000-0000-00000000000b');
 select is(_try($$ update public.services set sort_order = 1 where id = '66000000-0000-0000-0001-000000000001' $$),
   'ok:0', 'other_tenant: another tenant''s admin updates no row of tenant A');
+-- The guard runs before RLS's WITH CHECK: a row naming another tenant must meet the same
+-- refusal whether that tenant's releases are on (A) or off (C), or the words would tell.
+select is(
+  _try($$ insert into public.services (tenant_id, slug, title)
+          values ('66000000-0000-0000-0000-00000000000a', 'r5-cross-a', '{"en":"X","ar":"س"}') $$)
+  || ' | ' ||
+  _try($$ insert into public.services (tenant_id, slug, title)
+          values ('66000000-0000-0000-0000-00000000000c', 'r5-cross-c', '{"en":"X","ar":"س"}') $$),
+  '42501: Live content changes only through a release. | 42501: Live content changes only through a release.',
+  'other_tenant: an insert naming tenant A (releases on) or C (off) meets the same refusal, so it reveals neither switch');
 reset role;
 set local role anon;
 select _as(null, null, null);
