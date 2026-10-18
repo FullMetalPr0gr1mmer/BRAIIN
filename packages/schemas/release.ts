@@ -556,3 +556,78 @@ export const DRAFT_CONFLICT_CODES = [
   'pending-changed',
 ] as const;
 export type DraftConflictCode = (typeof DRAFT_CONFLICT_CODES)[number];
+
+// ---- The draft endpoints and the intake switch (Admin v2 R3b) -------------------------------
+// `POST /api/admin/drafts/discard`, `POST /api/admin/drafts/[id]/resolve`,
+// `PATCH /api/admin/site-profile/intake` and the answer of `GET /api/admin/releases/pending`.
+
+/** Throwing pending changes away in one go: all of mine, or the ones the person selected. */
+export const DiscardRequestSchema = z.union([
+  z.object({ scope: z.literal('mine') }).strict(),
+  z
+    .object({
+      items: z
+        .array(DraftRefSchema)
+        .min(1)
+        .max(WRITE_DRAFTS_MAX_OPS)
+        .refine((items) => new Set(items.map((i) => i.draftId)).size === items.length, {
+          message: 'a change is listed twice',
+        }),
+    })
+    .strict(),
+]);
+export type DiscardRequest = z.infer<typeof DiscardRequestSchema>;
+
+const ColumnListSchema = z
+  .array(z.string().regex(DRAFT_FIELD_NAME))
+  .max(DRAFT_FIELDS_MAX)
+  .refine((list) => new Set(list).size === list.length, { message: 'a column is listed twice' });
+
+/**
+ * Settling a pending change the live site moved under (releases.md §4.5): per column, "Keep
+ * mine" (the change now starts from what live holds) or "Use the live version" (the change
+ * stops writing it). At least one column; never both for one column.
+ */
+export const ResolveRequestSchema = z
+  .object({
+    version: DraftVersionSchema,
+    keepMine: ColumnListSchema.default([]),
+    useLive: ColumnListSchema.default([]),
+  })
+  .strict()
+  .refine((r) => r.keepMine.length + r.useLive.length > 0, {
+    message: 'name at least one column',
+    path: ['keepMine'],
+  })
+  .refine((r) => !r.keepMine.some((column) => r.useLive.includes(column)), {
+    message: 'a column is either kept or taken from live, not both',
+    path: ['useLive'],
+  });
+export type ResolveRequest = z.infer<typeof ResolveRequestSchema>;
+
+/** Opening or closing job applications: one boolean, written at once whatever the flag. */
+export const IntakeRequestSchema = z.object({ acceptingApplications: z.boolean() }).strict();
+export type IntakeRequest = z.infer<typeof IntakeRequestSchema>;
+
+/** One pending change as the summary lists it (stored metadata only, never the payload). */
+export const PendingItemSchema = z
+  .object({
+    draftId: Uuid,
+    draftVersion: DraftVersionSchema,
+    entityType: ReleaseEntityTypeSchema,
+    entityId: Uuid,
+    op: DraftOpSchema,
+    area: ReleaseAreaSchema,
+    label: z.record(z.string(), z.unknown()).nullable(),
+    fields: z.array(z.string()),
+    updatedBy: Uuid.nullable(),
+    updatedByName: z.string().nullable(),
+    updatedAt: Timestamp,
+    scheduled: z.boolean(),
+    mine: z.boolean(),
+    publishableByMe: z.boolean(),
+    requiredCaps: z.array(z.string()).nullable(),
+    waitingFor: z.array(z.string()),
+  })
+  .strict();
+export type PendingItem = z.infer<typeof PendingItemSchema>;
