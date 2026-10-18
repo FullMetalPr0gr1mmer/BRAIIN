@@ -147,7 +147,11 @@ test('a sample quote is made real in one save, consent first', async ({ page }) 
   await drawer.locator('#f-scheduledFor').fill('2099-01-01T09:00');
   await drawer.getByRole('button', { name: 'Save changes', exact: true }).click();
   // No consent recorded: refused, on the consent field, and nothing stored.
-  await expect(drawer.getByText(/agreed to be quoted|consent was obtained/i).first()).toBeVisible();
+  // The refusal's own words (the field's hint also says "agreed to be quoted"): the
+  // Worker's assertPublishable, or the CHECK's mapped message.
+  await expect(
+    drawer.getByText(/record when (the person agreed|consent was obtained)/i).first(),
+  ).toBeVisible();
   expect((await serviceRow('testimonials', slug('sample')))['is_placeholder']).toBe(true);
 
   await drawer.locator('#f-consentObtainedAt').fill('2026-10-01T10:00');

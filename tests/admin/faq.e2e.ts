@@ -75,7 +75,8 @@ async function showBoth(page: Page) {
 }
 
 async function openRow(page: Page, text: string) {
-  await row(page, text).locator('a.li__t').click();
+  // The first such row: after Duplicate the original and its copy share the question.
+  await row(page, text).first().locator('a.li__t').click();
   await expect(dialog(page).getByRole('heading', { name: 'Edit question' })).toBeVisible();
   await expect(dialog(page).locator('#f-question-en')).toHaveValue(/\S/);
 }
