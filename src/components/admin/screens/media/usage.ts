@@ -5,11 +5,20 @@
 // src/lib/admin/mediaLibrary.ts: isVisible over ADMIN_NAV) and handed to the island, so the
 // menu's registry never ships in the browser. An entity type this map does not know (R5,
 // U10a and U9a add some) is said in its own words, with no link, and never breaks the list.
+//
+// Since media_usage v4 (0066, Admin v2 R5) a row may be a pending change (`pending`): a draft
+// that names the picture, not yet live. It is said as one ("Pending change to service: logo")
+// and never linked, because the screen behind the link shows the live entity, which does not
+// use the picture (and a pending new entity has no page yet). The hard delete's refusal
+// (DELETE /api/admin/media/<id>) words each reference with `usageWords`, so the drawer and the
+// refusal say the same thing.
 
 export interface UsageRow {
   entityType: string;
   entityId: string;
   label: string | null;
+  /** A pending change, not a live reference (media_usage v4, 0066). Absent: live. */
+  pending?: boolean;
 }
 
 export interface UsageEntry {
@@ -21,33 +30,72 @@ export interface UsageEntry {
 interface Kind {
   /** The screen that edits it: the list's address, the entity's id after it. */
   screen: string;
+  /** What it is, in lower case, for a pending change's words. */
+  noun: string;
   words: (label: string | null) => string;
 }
 
 const named = (noun: string) => (label: string | null) => (label ? `${noun}: ${label}` : noun);
 
 export const USAGE_KINDS: Readonly<Record<string, Kind>> = {
-  portfolio: { screen: '/admin/portfolio', words: named('Project') },
+  portfolio: { screen: '/admin/portfolio', noun: 'project', words: named('Project') },
   // The entity is the project; the label is the picture's role in it (hero, gallery…).
   portfolio_media: {
     screen: '/admin/portfolio',
+    noun: 'project',
     words: (label) => (label ? `Project (${label})` : 'Project (media)'),
   },
-  client: { screen: '/admin/clients', words: named('Client') },
-  testimonial: { screen: '/admin/testimonials', words: named('Testimonial') },
-  team_member: { screen: '/admin/team', words: named('Team') },
+  client: { screen: '/admin/clients', noun: 'client', words: named('Client') },
+  testimonial: { screen: '/admin/testimonials', noun: 'testimonial', words: named('Testimonial') },
+  team_member: { screen: '/admin/team', noun: 'team member', words: named('Team') },
   page_section: {
     screen: '/admin/sections',
+    noun: 'page section',
     words: (label) => (label ? `Page section (${label})` : 'Page section'),
   },
-  discipline: { screen: '/admin/disciplines', words: named('Discipline') },
-  service: { screen: '/admin/services', words: named('Service') },
+  discipline: { screen: '/admin/disciplines', noun: 'discipline', words: named('Discipline') },
+  service: { screen: '/admin/services', noun: 'service', words: named('Service') },
 };
 
 /** Every screen a "Used in" entry may link to. */
 export const USAGE_SCREENS: readonly string[] = [
   ...new Set(Object.values(USAGE_KINDS).map((kind) => kind.screen)),
 ];
+
+/**
+ * The label media_usage v4 gives a pending change with no English label and no slug (0066's
+ * ninth branch). It says nothing the words do not already say, so it is dropped.
+ */
+export const PENDING_FALLBACK_LABEL = 'pending change';
+
+/** The drawer's reason the Delete button is off: every reference is live. */
+export const IN_USE_TEXT = 'This file is in use. Remove it from those places first.';
+/** The same, when at least one reference is a pending change. */
+export const IN_USE_PENDING_TEXT =
+  'This file is in use or in a pending change. Remove it from those places first.';
+
+/** An entity type no kind names, in its own words: `entity_seo` is "entity seo". */
+const nounOfType = (entityType: string) => entityType.replace(/_/g, ' ');
+
+/** One reference in words: "Service: logo", or "Pending change to service: logo". */
+export function usageWords(row: UsageRow): string {
+  const kind = USAGE_KINDS[row.entityType];
+  if (row.pending) {
+    const noun = kind ? kind.noun : nounOfType(row.entityType);
+    const label = row.label && row.label !== PENDING_FALLBACK_LABEL ? row.label : null;
+    return label ? `Pending change to ${noun}: ${label}` : `Pending change to ${noun}`;
+  }
+  if (kind) return kind.words(row.label);
+  const noun = nounOfType(row.entityType);
+  const words = noun.charAt(0).toUpperCase() + noun.slice(1);
+  return row.label ? `${words}: ${row.label}` : words;
+}
+
+/** Why the drawer's Delete is off while the picture has references (null: it has none). */
+export function inUseText(usage: readonly UsageRow[]): string | null {
+  if (usage.length === 0) return null;
+  return usage.some((row) => row.pending) ? IN_USE_PENDING_TEXT : IN_USE_TEXT;
+}
 
 export function usageEntries(
   opens: ReadonlySet<string> | readonly string[],
@@ -56,15 +104,11 @@ export function usageEntries(
   const open = opens instanceof Set ? opens : new Set(opens as readonly string[]);
   return usage.map((row, index) => {
     const kind = USAGE_KINDS[row.entityType];
-    const key = `${row.entityType}-${row.entityId}-${index}`;
-    if (!kind) {
-      const noun = row.entityType.replace(/_/g, ' ');
-      const words = noun.charAt(0).toUpperCase() + noun.slice(1);
-      return { key, words: row.label ? `${words}: ${row.label}` : words, href: null };
-    }
-    const href = open.has(kind.screen)
-      ? `${kind.screen}/${encodeURIComponent(row.entityId)}`
-      : null;
-    return { key, words: kind.words(row.label), href };
+    const key = `${row.pending ? 'pending' : 'live'}-${row.entityType}-${row.entityId}-${index}`;
+    const href =
+      kind && !row.pending && open.has(kind.screen)
+        ? `${kind.screen}/${encodeURIComponent(row.entityId)}`
+        : null;
+    return { key, words: usageWords(row), href };
   });
 }

@@ -23,7 +23,7 @@ import { toast } from '@/lib/admin/toast';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
 import type { MediaPermissions } from './libraryState';
-import { usageEntries, type UsageRow } from './usage';
+import { inUseText, usageEntries, type UsageRow } from './usage';
 
 // A picture's drawer (Admin v2 U4, the prototype's mediaDetail): the preview, the facts, the
 // words (alt text in both languages, tags, folder), where it is used, and what the role may
@@ -68,8 +68,6 @@ export const MEDIA_META_FIELDS: readonly FieldDef[] = [
   { name: 'tags', label: 'Tags', kind: 'tags', maxItems: 20, chips: { maxLength: 40 } },
   { name: 'folder', label: 'Folder', kind: 'text', maxLength: 200 },
 ];
-
-export const IN_USE_TEXT = 'This file is in use. Remove it from those places first.';
 
 type ReplaceStep =
   | { step: 'idle' }
@@ -138,9 +136,7 @@ export default function MediaDrawer({
       ? 'We could not check where this picture is used, so it cannot be deleted now.'
       : usage === null
         ? 'Checking where this picture is used…'
-        : usage.length > 0
-          ? IN_USE_TEXT
-          : null;
+        : inUseText(usage);
 
   async function remove() {
     setDeleteError('');

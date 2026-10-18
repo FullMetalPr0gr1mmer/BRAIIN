@@ -212,10 +212,11 @@ select is(
   (select string_agg(t.tgname::text, ',' order by t.tgname collate "C")
      from pg_trigger t
     where t.tgrelid = 'public.page_visibility'::regclass and not t.tgisinternal),
-  'page_visibility_actor,page_visibility_guard,page_visibility_password,'
-  'page_visibility_release_capture,page_visibility_snapshot,page_visibility_updated_at,'
-  'page_visibility_version',
-  '0057''s six triggers and the password sync, which sorts after the guard');
+  'page_visibility__release_guard,page_visibility_actor,page_visibility_guard,'
+  'page_visibility_password,page_visibility_release_capture,page_visibility_snapshot,'
+  'page_visibility_updated_at,page_visibility_version',
+  '0057''s six triggers, the password sync (which sorts after the guard) and 0066''s release '
+  'guard, which sorts first');
 select ok(
   not has_column_privilege('authenticated', 'public.page_visibility', 'note', 'insert')
     and not has_column_privilege('authenticated', 'public.page_visibility', 'note', 'update')
