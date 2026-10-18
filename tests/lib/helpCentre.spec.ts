@@ -37,6 +37,7 @@ import {
 import HelpArticleBody from '@/components/admin/screens/help/HelpArticleBody';
 import HelpGuideList from '@/components/admin/screens/help/HelpGuideList';
 import { EXTRA_LINKS, pageFileFor } from '../admin/routes';
+import { pendingGuides, withPendingGuides } from '../fixtures/pendingGuides';
 
 const { logs } = vi.hoisted(() => ({ logs: [] as unknown[] }));
 vi.mock('@/lib/data/systemLog', () => ({
@@ -84,7 +85,16 @@ const { file: SET_FILE, set: RAW_SET } = articleSet();
  * when it merges. Re-based with scratchpad/hs_rebase.py when a sibling restates it first.
  */
 const G2_PREVIOUS_SET = '0065_help_leads_v2.sql';
-const SET: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
+/**
+ * Guides written ahead of H11's app.put_help_guide (docs/admin-v2/guides/*.json, U17 first):
+ * the set below is the migrations' set with them in place, the set as it will be once their
+ * puts are wired (tests/fixtures/pendingGuides.ts).
+ */
+const PENDING = pendingGuides();
+const SET: HelpArticleRow[] = withPendingGuides(
+  RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw)),
+  PENDING.map(({ guide }) => HelpArticleSeedSchema.parse(guide)),
+);
 
 /** Every text of a guide, in one language or both. */
 function textsOf(article: HelpArticleRow, lang?: 'en' | 'ar'): string[] {
@@ -126,6 +136,22 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
 
   it('every guide keeps the schema the Worker reads with (strict: no unknown key)', () => {
     for (const raw of RAW_SET) expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
+    for (const { file, guide } of PENDING) {
+      expect(() => HelpArticleSeedSchema.parse(guide), file).not.toThrow();
+    }
+  });
+
+  it('a pending guide is named by its file, and a migration marks where its put goes (H11)', () => {
+    const migrations = readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith('.sql'))
+      .map((f) => readFileSync(`${MIGRATIONS}/${f}`, 'utf8'))
+      .join('\n');
+    for (const { file, guide } of PENDING) {
+      expect(file).toBe(`docs/admin-v2/guides/${HelpArticleSeedSchema.parse(guide).slug}.json`);
+      expect(migrations, file).toMatch(
+        new RegExp(`TODO\\(U\\d+, H11\\)[\\s\\S]*?${file.replaceAll('.', '\\.')}`),
+      );
+    }
   });
 
   it('slugs and places in the list are unique', () => {
@@ -258,6 +284,103 @@ describe('the guides say only what the admin does', () => {
       .map((f) => f.replaceAll('\\', '/'))
       .filter((f) => /\.(ts|tsx|astro)$/.test(f))
       .map((f) => `${dir}/${f}`);
+
+  it('two factor authentication (U17): the guides say what /admin/2fa and Users & roles do', () => {
+    const en = guide('your-account', 'en');
+    const panel = source('src/components/admin/screens/twoStep/TwoStepPanel.astro');
+    const account = source('src/components/admin/screens/chrome/AccountPanel.tsx');
+    // The row in the account, its two links, and the setup step's words.
+    expect(account).toContain('<span className="li__t">Two factor authentication</span>');
+    expect(account).toContain("{view.twoStep.on ? 'Manage' : 'Set up'}");
+    expect(en).toContain('open Two factor authentication in your account and choose Set up');
+    expect(en).toContain('choose Manage and type a current code');
+    for (const words of ['Add it to the app', 'Turn on 2FA', 'Set up']) {
+      expect(panel, words).toContain(words);
+      expect(en, words).toContain(words);
+    }
+    // The setup step shows a key and a link, never a QR code (as-built U17): the guide too.
+    expect(panel).not.toContain('<svg');
+    expect(en).toContain('type the key the page shows');
+    expect(en).not.toMatch(/\bQR\b|scan/i);
+    // Wrong codes count as wrong passwords do (src/lib/auth/twoStepFlow.ts, lockout.ts).
+    const lockout = source('src/lib/auth/lockout.ts');
+    expect(lockout).toContain('LOCKOUT_THRESHOLD = 5;');
+    expect(lockout).toContain('LOCKOUT_WINDOW_MINUTES = 15;');
+    expect(lockout).toContain('LOCKOUT_DURATION_MINUTES = 15;');
+    expect(source('src/lib/auth/twoStepFlow.ts')).toContain('registerFailure(email, input.ip)');
+    expect(en).toContain(
+      'Five wrong codes within 15 minutes lock your account for 15 minutes, as wrong passwords do.',
+    );
+    // Turning it off is refused while the team requires it.
+    expect(panel).toContain("view.mode === 'manage' && !view.required");
+    expect(en).toContain('If your team requires 2FA, it stays on.');
+    // A lost phone: an Admin's Reset 2FA, which signs the person out everywhere (0072).
+    expect(en).toContain('Ask an Admin to reset your 2FA in Users & roles');
+    const migration = source(`${MIGRATIONS}/0072_two_step_sign_in.sql`);
+    expect(migration).toContain('delete from auth.sessions where user_id = p_user;');
+    const roles = guide('roles-and-access', 'en');
+    const card = source('src/components/admin/screens/users/SecurityCard.tsx');
+    expect(card).toContain('Require 2FA for everyone');
+    expect(card).toContain('People without it are asked to set it up at their next click.');
+    expect(roles).toContain('Require 2FA for everyone, on the same card, asks everyone');
+    expect(roles).toContain('to set it up at their next click');
+    expect(source('src/lib/admin/userModel.ts')).toContain(
+      "REQUIRE_MFA_SELF_FIRST = 'Turn on 2FA for your own account first.'",
+    );
+    expect(roles).toContain('Turn on 2FA for your own account first');
+    expect(source('src/components/admin/screens/users/EditUserDrawer.tsx')).toContain('Reset 2FA');
+    expect(roles).toContain('chooses Reset 2FA');
+    expect(roles).toContain('they are signed out on every device');
+    expect(migration).toContain("message = 'owner_protected'");
+    expect(migration).toContain("message = 'self'");
+    expect(roles).toContain("nor the account owner's");
+    // Both languages say it: the Arabic names the same screens and buttons.
+    for (const words of ['Two factor authentication', 'Set up', 'Turn on 2FA', 'Manage']) {
+      expect(guide('your-account', 'ar'), words).toContain(words);
+    }
+    for (const words of ['Require 2FA for everyone', 'Reset 2FA', 'Users & roles']) {
+      expect(guide('roles-and-access', 'ar'), words).toContain(words);
+    }
+  });
+
+  it('U17 changes only its two guides, and keeps their place, title, caps and tags', () => {
+    expect(PENDING.map((p) => p.file)).toEqual(
+      expect.arrayContaining([
+        'docs/admin-v2/guides/roles-and-access.json',
+        'docs/admin-v2/guides/your-account.json',
+      ]),
+    );
+    const base = new Map(
+      RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw)).map((a) => [a.slug, a]),
+    );
+    for (const slug of ['your-account', 'roles-and-access']) {
+      const before = base.get(slug)!;
+      const after = SET.find((a) => a.slug === slug)!;
+      const keep = ({ slug: s, sort_order, title, title_ar, caps, tags }: HelpArticleRow) => ({
+        s,
+        sort_order,
+        title,
+        title_ar,
+        caps,
+        tags,
+      });
+      expect(keep(after), slug).toEqual(keep(before));
+      // Only blocks added: every block the guide had stays, in order.
+      for (const lang of ['en', 'ar'] as const) {
+        const kept = after.body[lang].filter((block) =>
+          before.body[lang].some((b) => JSON.stringify(b) === JSON.stringify(block)),
+        );
+        expect(kept, `${slug} ${lang}`).toEqual(before.body[lang]);
+      }
+    }
+    // /admin/2fa is your-account's screen (corrections rule 4), offered by its page head.
+    expect(SET.find((a) => a.slug === 'your-account')?.screens).toEqual([
+      '/admin/account',
+      '/admin/notifications',
+      '/admin/2fa',
+    ]);
+    expect(pageGuideFor('/admin/2fa', 'seo')).toBe('your-account');
+  });
 
   it('the activity log names who acted, filters and exports: the guide says what the screen does', () => {
     // Since U13 (0054) the screen names the person (public.audit_people, former members

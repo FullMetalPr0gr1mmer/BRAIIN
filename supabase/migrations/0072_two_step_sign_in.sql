@@ -55,7 +55,7 @@
 --
 -- Production as of 2026-10-18: PostgreSQL 17.6; the ledger holds every migration through
 -- 0065. Grants are stated for both Supabase privilege regimes (README P-14). The help guides
--- this slice rewrites are added through H11's app.put_help_guide (see the TODO at the end).
+-- this slice rewrites are added through H11's app.put_help_guide (section 6's TODO).
 -- CLAUDE.md §2 (session invalidation), §3 (Pillar 1, 2FA), §8, §9.
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -233,12 +233,18 @@ revoke all on function public.staff_accounts(uuid) from public, anon, authentica
 grant execute on function public.staff_accounts(uuid) to authenticated;
 
 -- ---- 6. The guides ----------------------------------------------------------------------------
--- TODO(U17, H11): once H11 (the help-guide catalog) merges, add here, for each guide this slice
--- rewrites, one call:
---   select app.put_help_guide($guide$<docs/admin-v2/guides/your-account.json>$guide$::jsonb);
---   select app.put_help_guide($guide$<docs/admin-v2/guides/roles-and-access.json>$guide$::jsonb);
--- (the JSON files are the guides as they will be seeded; tests/lib/helpCentre.spec.ts holds
--- them to the set's rules today). Until then this migration leaves the help set alone.
+-- TODO(U17, H11): wire these once H11 (the help-guide catalog, app.put_help_guide) is on main.
+-- This slice rewrites two guides; their full text, the nine keys exactly as a put takes them,
+-- is kept in the repository until then:
+--   docs/admin-v2/guides/your-account.json      (a 2FA section; /admin/2fa among its screens)
+--   docs/admin-v2/guides/roles-and-access.json  (Require 2FA for everyone; Reset 2FA)
+-- The wiring replaces this comment with one top-level line per guide, outside any DO block,
+-- N being the guide's revision on main when this merges (1 unless a sibling put it first;
+-- tests/fixtures/helpSet.ts names it), then deletes both files:
+--   select app.put_help_guide($guide$ <your-account.json> $guide$::jsonb, N);
+--   select app.put_help_guide($guide$ <roles-and-access.json> $guide$::jsonb, N);
+-- tests/lib/helpCentre.spec.ts holds the files to every rule of the set today
+-- (tests/fixtures/pendingGuides.ts). Until the wiring, this migration leaves the help set alone.
 
 -- ---- Postconditions ---------------------------------------------------------------------------
 -- The first block is the one the push depends on: if the owner of the definers cannot read
