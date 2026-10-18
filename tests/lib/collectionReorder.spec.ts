@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   ORDER_STEP,
+  duplicateChanges,
   orderChanges,
-  placeAfter,
+  type OrderChange,
+  type Positioned,
 } from '@/components/admin/screens/collection/reorder';
 
 // The collection screen's order (Admin v2 U7, D10): a move renumbers the list in tens and
@@ -52,25 +54,88 @@ describe('orderChanges: the rows a move changes, numbered in tens', () => {
   });
 });
 
-describe('placeAfter: a duplicate goes right after its original', () => {
-  it('after the original, wherever the copy was', () => {
-    expect(placeAfter(['a', 'b', 'c', 'copy'], 'a', 'copy')).toEqual(['a', 'copy', 'b', 'c']);
-    expect(placeAfter(['a', 'b', 'c', 'copy'], 'c', 'copy')).toEqual(['a', 'b', 'c', 'copy']);
+// The reorder route applies the updates one at a time (resource.ts), and a public page can
+// render between two of them: the ids in display order after each step, ties kept in list
+// order as a stable sort keeps them.
+function steps(list: readonly Positioned[], changes: readonly OrderChange[]): string[][] {
+  const at = new Map(list.map((row) => [row.id, row.sort_order]));
+  const show = () =>
+    list
+      .map((row, index) => ({ id: row.id, n: at.get(row.id)!, index }))
+      .sort((a, b) => a.n - b.n || a.index - b.index)
+      .map((row) => row.id);
+  return changes.map((change) => {
+    at.set(change.id, change.sortOrder);
+    return show();
+  });
+}
+
+describe('duplicateChanges: a duplicate goes right after its original (D9)', () => {
+  it('a duplicate of one of many costs the copy and the rows after it, not the list', () => {
+    const list = Array.from({ length: 20 }, (_, i) => ({ id: `r${i}`, sort_order: (i + 1) * 10 }));
+    const changes = duplicateChanges(list, 'r17', { id: 'copy', sort_order: 180 });
+    // r18 and r19 move down one place; the copy takes r18's. The last row goes first.
+    expect(changes).toEqual([
+      { id: 'r19', sortOrder: 210 },
+      { id: 'r18', sortOrder: 200 },
+      { id: 'copy', sortOrder: 190 },
+    ]);
+  });
+
+  it('nothing above the original moves, however the seed numbered it', () => {
+    // A seed's tied numbers (two sets of 1, 2, 3...): duplicating the second row renumbers
+    // only what follows it.
+    const list = [
+      { id: 'a', sort_order: 1 },
+      { id: 'b', sort_order: 1 },
+      { id: 'c', sort_order: 2 },
+      { id: 'd', sort_order: 2 },
+      { id: 'e', sort_order: 3 },
+    ];
+    const changes = duplicateChanges(list, 'b', { id: 'copy', sort_order: 1 });
+    expect(changes.map((c) => c.id).sort()).toEqual(['c', 'copy', 'd', 'e']);
+    expect(Object.fromEntries(changes.map((c) => [c.id, c.sortOrder]))).toEqual({
+      copy: 11,
+      c: 21,
+      d: 31,
+      e: 41,
+    });
+  });
+
+  it('a duplicate of the last row moves the copy alone', () => {
+    expect(duplicateChanges(rows(1, 2, 9990), 'r3', { id: 'copy', sort_order: 9990 })).toEqual([
+      { id: 'copy', sortOrder: 10000 },
+    ]);
+  });
+
+  it('no row passes another while the updates land one at a time', () => {
+    // Rows the copy pushes down, rows whose number falls (a gap above them), both.
+    const cases: [Positioned[], string][] = [
+      [rows(1, 2, 3, 4, 5, 6), 'r2'],
+      [rows(10, 20, 30, 40), 'r1'],
+      [rows(1, 5, 100, 120, 125), 'r1'],
+      [rows(0, 0, 0, 0), 'r1'],
+    ];
+    for (const [list, original] of cases) {
+      const copy = { id: 'copy', sort_order: list.find((r) => r.id === original)!.sort_order };
+      const changes = duplicateChanges(list, original, copy);
+      const others = list.map((row) => row.id);
+      const settled = [
+        ...others.slice(0, others.indexOf(original) + 1),
+        'copy',
+        ...others.slice(others.indexOf(original) + 1),
+      ];
+      for (const shown of steps([...list, copy], changes)) {
+        // Every listed row keeps its place relative to the others; only the copy travels.
+        expect(shown.filter((id) => id !== 'copy')).toEqual(others);
+      }
+      expect(steps([...list, copy], changes).at(-1)).toEqual(settled);
+    }
   });
 
   it('last when the original is gone', () => {
-    expect(placeAfter(['a', 'copy', 'b'], 'gone', 'copy')).toEqual(['a', 'b', 'copy']);
-  });
-
-  it('a duplicate of the first of many costs the rows after it, not the list', () => {
-    const list = Array.from({ length: 20 }, (_, i) => ({ id: `r${i}`, sort_order: (i + 1) * 10 }));
-    const order = placeAfter([...list.map((r) => r.id), 'copy'], 'r17', 'copy');
-    const changes = orderChanges([...list, { id: 'copy', sort_order: 180 }], order);
-    // r18 and r19 move down one place; the copy takes r18's.
-    expect(changes).toEqual([
-      { id: 'copy', sortOrder: 190 },
-      { id: 'r18', sortOrder: 200 },
-      { id: 'r19', sortOrder: 210 },
+    expect(duplicateChanges(rows(10, 20), 'gone', { id: 'copy', sort_order: 0 })).toEqual([
+      { id: 'copy', sortOrder: 30 },
     ]);
   });
 });

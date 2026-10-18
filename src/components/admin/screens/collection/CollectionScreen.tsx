@@ -10,7 +10,7 @@ import { copyPayload } from './copy';
 import CollectionDrawer from './CollectionDrawer';
 import CollectionList from './CollectionList';
 import type { CollectionPermissions } from './fields';
-import { ORDER_STEP, orderChanges, placeAfter } from './reorder';
+import { ORDER_STEP, duplicateChanges, orderChanges } from './reorder';
 
 // One collection's screen (Admin v2 U7, the prototype's route('/collections/:kind')): the
 // AdminCollection island at /admin/<slug>. The page head (server) holds the title, the line
@@ -121,7 +121,6 @@ export default function CollectionScreen({ collection, open, permissions }: Coll
     setDrawer({ id, key: opened.current });
   }
 
-  const ids = (rows ?? []).map((row) => row.id);
   const canSort = permissions.write && ui.reorder === true && (rows?.length ?? 0) > 1;
 
   async function commitOrder(order: readonly string[]) {
@@ -163,14 +162,11 @@ export default function CollectionScreen({ collection, open, permissions }: Coll
         body: payload,
       });
       const newId = String(created['id']);
-      // Right after the original: the list renumbered from it on.
-      const order = placeAfter([...ids, newId], row.id, newId);
-      const changes = orderChanges(
-        [
-          ...rows.map((r) => ({ id: r.id, sort_order: Number(r['sort_order'] ?? 0) })),
-          { id: newId, sort_order: Number(created['sort_order'] ?? 0) },
-        ],
-        order,
+      // Right after the original: the copy and the rows after it renumbered, nothing above.
+      const changes = duplicateChanges(
+        rows.map((r) => ({ id: r.id, sort_order: Number(r['sort_order'] ?? 0) })),
+        row.id,
+        { id: newId, sort_order: Number(created['sort_order'] ?? 0) },
       );
       if (changes.length > 0) {
         await adminFetch(`/api/admin/${def.slug}/reorder`, {

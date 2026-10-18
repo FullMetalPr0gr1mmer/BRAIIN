@@ -39,10 +39,37 @@ export function orderChanges(rows: readonly Positioned[], order: readonly string
   return changes;
 }
 
-/** `order` with `id` placed right after `after` (a duplicate's place), or last. */
-export function placeAfter(order: readonly string[], after: string, id: string): string[] {
-  const rest = order.filter((each) => each !== id);
-  const at = rest.indexOf(after);
-  if (at === -1) return [...rest, id];
-  return [...rest.slice(0, at + 1), id, ...rest.slice(at + 1)];
+/**
+ * The updates that place a duplicate right after its original (brief D9): the copy and the
+ * rows after the original are renumbered in tens from the original's number, and nothing
+ * before the original moves, so a copy near the end of a list costs the rows after it, not
+ * the list (a seed's tied 1, 2, 3 above the original stay as they are).
+ *
+ * `rows` is the list as shown (by `sort_order`), without the copy. The reorder route
+ * applies the updates one row at a time, and a public page can render between two of them,
+ * so they come in an order that never lets one row pass another on the way: the rows whose
+ * number falls first, front to back, then the rows whose number rises, back to front. When
+ * the original is gone the copy goes last.
+ */
+export function duplicateChanges(
+  rows: readonly Positioned[],
+  originalId: string,
+  copy: Positioned,
+): OrderChange[] {
+  const listed = rows.filter((row) => row.id !== copy.id);
+  const at = listed.findIndex((row) => row.id === originalId);
+  const base =
+    at === -1
+      ? listed.reduce((max, row) => Math.max(max, row.sort_order), 0)
+      : listed[at]!.sort_order;
+  const moved = [copy, ...(at === -1 ? [] : listed.slice(at + 1))]
+    .map((row, index) => ({
+      id: row.id,
+      from: row.sort_order,
+      sortOrder: base + (index + 1) * ORDER_STEP,
+    }))
+    .filter((change) => change.from !== change.sortOrder);
+  const falling = moved.filter((change) => change.sortOrder < change.from);
+  const rising = moved.filter((change) => change.sortOrder > change.from).reverse();
+  return [...falling, ...rising].map(({ id, sortOrder }) => ({ id, sortOrder }));
 }
