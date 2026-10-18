@@ -222,6 +222,12 @@ const EXACT: Readonly<Record<string, Label>> = {
     titled: true,
   },
 
+  // Website stats goals (G1c): immediate, not in RESOURCES, so their kernel actions are
+  // named here. A goal's name is admin text; only the act is described.
+  'analytics_goal.create': { kind: 'settings', verb: 'Added', noun: 'a website stats goal' },
+  'analytics_goal.update': { kind: 'settings', verb: 'Updated', noun: 'a website stats goal' },
+  'analytics_goal.delete': { kind: 'settings', verb: 'Deleted', noun: 'a website stats goal' },
+
   // The dashboard (U1): the shared note (its length only is recorded, never its words) and
   // the owner's presets per role.
   'dashboard.notes.update': { kind: 'edits', verb: 'Updated', noun: 'the team notes' },
