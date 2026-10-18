@@ -265,7 +265,16 @@ function writeDraftsRpc(db: Db, args: Row) {
       continue;
     }
     const d = find();
-    if (!d || d['release_id'] || d['version'] !== op['expected_version']) {
+    // 0062: an edit matches the draft's entity_type AND entity_id; a discard matches them when it
+    // names them. A draft found by id under another entity touches no row → draft-conflict.
+    const given = (k: string) => op[k] !== undefined && op[k] !== null;
+    const sameEntity =
+      !!d &&
+      (op['action'] === 'put'
+        ? d['entity_type'] === op['entity_type'] && d['entity_id'] === op['entity_id']
+        : (!given('entity_type') || d['entity_type'] === op['entity_type']) &&
+          (!given('entity_id') || d['entity_id'] === op['entity_id']));
+    if (!d || d['release_id'] || d['version'] !== op['expected_version'] || !sameEntity) {
       return br409(d?.['release_id'] ? 'scheduled' : 'draft-conflict');
     }
     if (op['action'] === 'put') {
