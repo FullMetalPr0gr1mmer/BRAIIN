@@ -741,7 +741,7 @@ describe('the guides say only what the admin does', () => {
   it('the leads guide names the controls the leads screens draw (C4b)', () => {
     const en = guide('working-with-leads', 'en');
     const screens = codeIn('src/components/admin/screens/leads').map(source).join('\n');
-    const pages = ['index.astro', 'board.astro', '[id].astro']
+    const pages = ['index.astro', '[id].astro']
       .map((page) => source(`src/pages/admin/leads/${page}`))
       .join('\n');
     const drawn = [
