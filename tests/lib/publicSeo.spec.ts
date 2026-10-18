@@ -260,6 +260,38 @@ describe('analytics ingest bounds', () => {
       AnalyticsEventSchema.safeParse({ type: 'pageview', sessionId: '<script>' }).success,
     ).toBe(false);
   });
+
+  // Admin v2 G1: each type carries exactly the props its rollup reads.
+  const ok = (event: unknown) => AnalyticsEventSchema.safeParse(event).success;
+
+  it('a page view carries no props', () => {
+    expect(ok({ type: 'pageview', path: '/', props: {} })).toBe(false);
+    expect(ok({ type: 'pageview', path: '/', extra: 1 })).toBe(false);
+  });
+
+  it('a click names one id of the closed vocabulary, and nothing else', () => {
+    expect(ok({ type: 'cta_click', path: '/contact', props: { cta: 'whatsapp' } })).toBe(true);
+    expect(ok({ type: 'cta_click', path: '/', props: { cta: 'telegram' } })).toBe(false);
+    expect(ok({ type: 'cta_click', path: '/', props: { cta: 'email', x: '1' } })).toBe(false);
+    expect(ok({ type: 'cta_click', path: '/' })).toBe(false);
+    expect(ok({ type: 'cta_click', path: '/', props: { cta: 'email' }, extra: true })).toBe(false);
+  });
+
+  it('interest names exactly one of a discipline or a service, by slug', () => {
+    expect(ok({ type: 'service_interest', props: { discipline: 'branding' } })).toBe(true);
+    expect(ok({ type: 'service_interest', props: { service: 'logo-design' } })).toBe(true);
+    expect(
+      ok({ type: 'service_interest', props: { discipline: 'branding', service: 'logo' } }),
+    ).toBe(false);
+    expect(ok({ type: 'service_interest', props: {} })).toBe(false);
+    expect(ok({ type: 'service_interest', props: { service: 'Logo Design' } })).toBe(false);
+    expect(ok({ type: 'service_interest', props: { service: 'x'.repeat(65) } })).toBe(false);
+  });
+
+  it('search stays in the closed set, with no props', () => {
+    expect(ok({ type: 'search', path: '/search' })).toBe(true);
+    expect(ok({ type: 'search', path: '/search', props: { q: 'logo' } })).toBe(false);
+  });
 });
 
 describe('consent record', () => {
