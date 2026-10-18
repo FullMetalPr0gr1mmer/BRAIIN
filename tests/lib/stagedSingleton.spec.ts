@@ -453,17 +453,33 @@ describe('PATCH /api/admin/site-profile/intake: immediate, Admin only, releases 
 // ── Not release-managed ───────────────────────────────────────────────────────────────────
 
 describe('singletons outside the registry never ask the flag', () => {
-  it('general settings, integrations and the Style-Finder config', async () => {
+  it('general settings, integrations and the Style-Finder config: read and save', async () => {
     db.tables['site_settings'] = [];
     db.tables['site_integrations'] = [];
     db.tables['ai_config'] = [];
-    for (const [load, path, role] of [
-      [() => import('@/pages/api/admin/settings/index'), '/api/admin/settings', 'admin'],
-      [() => import('@/pages/api/admin/integrations'), '/api/admin/integrations', 'admin'],
-      [() => import('@/pages/api/admin/ai-config'), '/api/admin/ai-config', 'admin'],
+    // Releases on: were the flag asked, these would still be live writes, so only the call log
+    // can tell — no rpc at all, and nothing touches content_drafts, on the read or the save.
+    db.flag = true;
+    for (const [load, path, role, table] of [
+      [
+        () => import('@/pages/api/admin/settings/index'),
+        '/api/admin/settings',
+        'admin',
+        'site_settings',
+      ],
+      [
+        () => import('@/pages/api/admin/integrations'),
+        '/api/admin/integrations',
+        'admin',
+        'site_integrations',
+      ],
+      [() => import('@/pages/api/admin/ai-config'), '/api/admin/ai-config', 'admin', 'ai_config'],
     ] as const) {
-      const { GET } = (await load()) as Routes;
+      const { GET, PATCH } = (await load()) as Routes;
       expect((await callRoute(db, GET, 'GET', path, { role })).status, path).toBe(200);
+      const saved = await callRoute(db, PATCH, 'PATCH', path, { role, body: { version: 0 } });
+      expect(saved.status, `${path} ${JSON.stringify(saved.body)}`).toBe(200);
+      expect(db.tables[table], path).toHaveLength(1);
     }
     expect(db.calls.filter((c) => c.kind === 'rpc')).toEqual([]);
     expect(draftTouchesOf(db)).toEqual([]);
