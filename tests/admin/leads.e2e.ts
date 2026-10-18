@@ -251,7 +251,7 @@ test.describe('as admin', () => {
 
   test('the board, by keyboard: Move to…, announced, focus on the moved card', async ({ page }) => {
     const lead = await addLead(page, 'board');
-    await page.goto('/admin/leads/board');
+    await visit(page, '/admin/leads/board');
     const search = page.getByRole('searchbox', { name: 'Search the pipeline' });
     await search.fill(lead.name);
     await search.press('Enter');
@@ -283,7 +283,7 @@ test.describe('as admin', () => {
   for (const width of [320, 390]) {
     test(`the board at ${width} px scrolls in its region, never the page`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
-      await page.goto('/admin/leads/board', { waitUntil: 'networkidle' });
+      await visit(page, '/admin/leads/board', { waitUntil: 'networkidle' });
       const overflow = await page.evaluate(() => {
         const root = document.documentElement;
         const board = document.querySelector('.kb') as HTMLElement;
