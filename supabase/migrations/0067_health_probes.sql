@@ -1,8 +1,9 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 -- 0067 — Site health v2: the uptime, domain and certificate readings (Admin v2 G2). Forward-
 -- only, expand only. Depends on 0001 (tenants, app.current_role, app.effective_tenant_id),
--- 0046 (the help centre and app.seed_help_articles), 0052 (app.role_site_health, U2) and 0061
--- (the guides as U14b left them).
+-- 0046 (the help centre and app.seed_help_articles), 0052 (app.role_site_health, U2) and 0065
+-- (the guides as C4b left them, every earlier restatement included: U4's 0064 and U14b's 0061
+-- among them).
 --
 -- An external uptime monitor watches the site from outside Cloudflare (CLAUDE.md §10; owner
 -- item O-20). Its readings reach the admin through the Worker, never through a check of our
@@ -39,8 +40,8 @@
 --
 -- Grants are stated for both Supabase privilege regimes (README P-14). Production as of
 -- 2026-10-18: PostgreSQL 17.6; the ledger holds 0001-0038, 0041, 0044-0046, 0048, 0050-0052,
--- 0054-0057, 0060-0062 (and, before this file, C4a's 0063, U4's 0064, C4b's 0065 and R5's
--- 0066 in merge order). CLAUDE.md §3 (Pillars 1 and 4), §5, §8, §10.
+-- 0054-0057, 0060-0065, and R5's 0066 may be pushed before this one. CLAUDE.md §3 (Pillars
+-- 1 and 4), §5, §8, §10.
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 
 -- A busy table fails the push instead of queueing: the reseed writes public.help_articles.
@@ -118,7 +119,7 @@ grant select on public.health_probes to authenticated;
 grant select, insert, update on public.health_probes to service_role;
 
 -- ---- 4. The guides --------------------------------------------------------------------------
--- The set as 0061 (U14b) left it, with only the site-health-and-logs guide rewritten: the
+-- The set as 0065 (C4b) left it, with only the site-health-and-logs guide rewritten: the
 -- score's weighting as src/lib/admin/health/score.ts prints it, the Uptime card, the
 -- Security tab's domain and certificate, and what rings the bell. A later slice that changes
 -- a guide restates the set from this text (U16's rule); scratchpad/hs_rebase.py re-bases a
@@ -688,7 +689,7 @@ create or replace function app.help_article_set() returns jsonb
   {
     "slug": "media-library",
     "sort_order": 50,
-    "minutes": 2,
+    "minutes": 3,
     "tags": [
       "content",
       "media"
@@ -705,37 +706,85 @@ create or replace function app.help_article_set() returns jsonb
       "en": [
         {
           "t": "p",
-          "x": "The media library lists the images, videos and files the site uses. Each keeps its alt text: the short description screen readers read aloud and search engines index."
+          "x": "The media library holds the pictures the site shows. Every picture has alt text in English and Arabic: the short description screen readers read aloud and search engines index."
+        },
+        {
+          "t": "h",
+          "x": "Adding pictures"
         },
         {
           "t": "ol",
           "x": [
-            "Every image needs alt text in English and Arabic. Say what the image shows in a sentence, not the file name.",
-            "Folders and tags help you find things here. Visitors never see them.",
-            "Only an Admin can delete an asset for good, and only once nothing on the site uses it."
+            "Choose Upload, or drop pictures on the page. JPEG, PNG and WebP work, up to 20 MB each. SVG, GIF, HEIC and AVIF files are refused.",
+            "Before anything is sent, describe each picture in English and Arabic. Say what it shows in a sentence, not the file name.",
+            "Each picture is resized to at most 2,560 pixels and saved as WebP. Location and camera details are removed.",
+            "You can upload or replace 50 pictures a day, and the whole team 100.",
+            "From any picture field, Choose opens the same library, with Upload there too.",
+            "Uploading, replacing and deleting depend on your role. If you do not see Upload, you can still change alt text and tags."
           ]
         },
         {
+          "t": "h",
+          "x": "Changing a picture"
+        },
+        {
+          "t": "ol",
+          "x": [
+            "Open a picture to change its alt text or tags. They change on the site at once.",
+            "Replace file puts a new picture in the same place everywhere it is used.",
+            "Used in lists every place that shows the picture.",
+            "Needs alt text shows the pictures still missing a description in either language."
+          ]
+        },
+        {
+          "t": "p",
+          "x": "Only an Admin can delete a picture, and only once nothing on the site uses it. A deleted or replaced picture can stay reachable for about two hours before it leaves the web."
+        },
+        {
           "t": "tip",
-          "x": "Good alt text helps twice: people using a screen reader hear it, and search engines read it."
+          "x": "Videos are served from the site itself until video hosting is set up, so they are listed under Videos and cannot be uploaded here yet."
         }
       ],
       "ar": [
         {
           "t": "p",
-          "x": "تعرض مكتبة الوسائط الصور والفيديوهات والملفات التي يستخدمها الموقع، ولكل منها نص بديل: وصف قصير تقرؤه برامج قراءة الشاشة بصوت عالٍ وتفهرسه محركات البحث."
+          "x": "تحفظ مكتبة الوسائط الصور التي يعرضها الموقع. لكل صورة نص بديل بالإنجليزية والعربية: الوصف القصير الذي تقرؤه برامج قراءة الشاشة بصوت عالٍ وتفهرسه محركات البحث."
+        },
+        {
+          "t": "h",
+          "x": "إضافة الصور"
         },
         {
           "t": "ol",
           "x": [
-            "تحتاج كل صورة إلى نص بديل بالإنجليزية والعربية. صف ما تُظهره الصورة في جملة، لا اسم الملف.",
-            "تساعدك المجلدات والوسوم على إيجاد الملفات هنا، ولا يراها الزوار أبدًا.",
-            "حذف الملف نهائيًا للمسؤول (Admin) فقط، وفقط حين لا يستخدمه أي جزء من الموقع."
+            "اختر Upload أو أفلت الصور على الصفحة. تُقبل صور JPEG وPNG وWebP حتى 20 MB لكل صورة، وتُرفض ملفات SVG وGIF وHEIC وAVIF.",
+            "قبل إرسال أي شيء، صف كل صورة بالإنجليزية والعربية. قل ما تُظهره الصورة في جملة، لا اسم الملف.",
+            "تُصغَّر كل صورة إلى 2,560 بكسل على الأكثر وتُحفظ بصيغة WebP، وتُحذف منها بيانات الموقع والكاميرا.",
+            "يمكنك رفع 50 صورة أو استبدالها في اليوم، وللفريق كله 100.",
+            "من أي حقل صورة، يفتح Choose المكتبة نفسها، وفيها Upload أيضًا.",
+            "الرفع والاستبدال والحذف بحسب دورك. إن لم ترَ Upload، فما زال بإمكانك تغيير النص البديل والوسوم."
           ]
         },
         {
+          "t": "h",
+          "x": "تغيير صورة"
+        },
+        {
+          "t": "ol",
+          "x": [
+            "افتح صورة لتغيير نصها البديل أو وسومها. يتغيّر ذلك على الموقع فورًا.",
+            "يضع Replace file صورة جديدة في المكان نفسه أينما استُخدمت الصورة.",
+            "تعرض Used in كل مكان يُظهر الصورة.",
+            "يعرض Needs alt text الصور التي ما زال ينقصها وصف بإحدى اللغتين."
+          ]
+        },
+        {
+          "t": "p",
+          "x": "حذف الصورة للمسؤول (Admin) فقط، وفقط حين لا يستخدمها أي جزء من الموقع. قد تبقى الصورة المحذوفة أو المستبدلة متاحة نحو ساعتين قبل أن تختفي من الويب."
+        },
+        {
           "t": "tip",
-          "x": "النص البديل الجيد يفيد مرتين: يسمعه من يستخدم قارئ الشاشة، وتقرؤه محركات البحث."
+          "x": "تُعرض الفيديوهات من الموقع نفسه إلى أن تُجهَّز استضافة الفيديو، لذا تظهر تحت Videos ولا يمكن رفعها هنا بعد."
         }
       ]
     }
@@ -817,7 +866,7 @@ create or replace function app.help_article_set() returns jsonb
   {
     "slug": "working-with-leads",
     "sort_order": 70,
-    "minutes": 3,
+    "minutes": 4,
     "tags": [
       "leads"
     ],
@@ -833,39 +882,75 @@ create or replace function app.help_article_set() returns jsonb
       "en": [
         {
           "t": "p",
-          "x": "Every inquiry sent through the site's contact forms arrives here as a lead. The list shows when it came in, the person's name and what they asked about. Contact details stay hidden until you ask for them."
+          "x": "Every inquiry from the site's forms arrives here as a lead, in the first stage, New. The list shows who wrote, what they asked about, where it came from, its stage, who has it and when it arrived. A lead that has waited longer than your response time says Over response time. Contact details stay hidden until you ask for them."
+        },
+        {
+          "t": "h",
+          "x": "Working the list"
         },
         {
           "t": "ol",
           "x": [
-            "Set each lead's status as you work on it: new, in progress, done or spam. The filter above the list shows one status at a time.",
-            "View opens the message. Reveal contact details and notes shows the e-mail, phone, budget and timeline. Each reveal is logged against your account, up to 60 an hour.",
-            "Internal notes appear after a reveal, for the roles that may see contact details.",
-            "Export CSV downloads the leads as a file, at most three times an hour. Every export is logged."
+            "Work a lead by moving it through the stages. The chips above the list show each stage with its count, then Unread and Spam; the filters narrow it by discipline, source, who has it and how recent it is.",
+            "Search finds a name, a company or words from the message. A whole e-mail address or phone number finds that person too, and the address itself is never saved anywhere.",
+            "Tick leads and use the bar at the bottom to assign them, move them to a stage, mark them read, star them or mark them as spam. When someone else changed one of them first, the list says so and shows the latest."
+          ]
+        },
+        {
+          "t": "h",
+          "x": "One lead"
+        },
+        {
+          "t": "ol",
+          "x": [
+            "Open a lead to see the message and its details. Previous and Next step through the list as you filtered it.",
+            "On a lead's page, Move to… changes its stage, and the Status card sets who has it, its value in SAR, its star and its tags. When someone else changed the lead first, the page says so and shows the latest.",
+            "Reveal contact details shows the e-mail, phone, budget and timeline, with Email, Call and WhatsApp links, and why the lead scores what it scores. Each reveal is logged against your account, up to 60 an hour.",
+            "Notes are a thread only your team sees. Reading them is logged too. Use Log contact after a call or a message, so the timeline shows it.",
+            "Add lead manually is for calls, walk-ins and WhatsApp messages. A phone number that matches an earlier lead asks before adding, and an e-mail that wrote before is named on the new lead's page.",
+            "Export CSV downloads the leads the filters show, three times an hour at most, and every export is logged. A file holds at most 80 leads with contact details."
           ]
         },
         {
           "t": "tip",
-          "x": "A lead marked as spam is deleted sooner: after 30 days by default, instead of 24 months."
+          "x": "Spam is deleted after 30 days instead of 24 months. Only an Admin can erase a lead, from More actions on its page, and the erase is logged."
         }
       ],
       "ar": [
         {
           "t": "p",
-          "x": "يصل هنا كل استفسار يُرسل عبر نماذج التواصل في الموقع على هيئة عميل محتمل. تعرض القائمة وقت وصوله واسم صاحبه وما سأل عنه، وتبقى بيانات التواصل مخفية حتى تطلبها."
+          "x": "يصل هنا كل استفسار يُرسل عبر نماذج الموقع على هيئة عميل محتمل في المرحلة الأولى New. تعرض القائمة من كتب وما سأل عنه ومن أين جاء ومرحلته ومن يتولاه ووقت وصوله. ويظهر Over response time على العميل المحتمل الذي انتظر أطول من وقت الرد المحدد. وتبقى بيانات التواصل مخفية حتى تطلبها."
+        },
+        {
+          "t": "h",
+          "x": "العمل على القائمة"
         },
         {
           "t": "ol",
           "x": [
-            "حدّد حالة كل عميل محتمل أثناء العمل عليه: new أو in progress أو done أو spam. ويعرض المرشّح أعلى القائمة حالة واحدة في كل مرة.",
-            "يفتح View الرسالة، ويُظهر Reveal contact details and notes البريد الإلكتروني والهاتف والميزانية والمدة الزمنية. يُسجَّل كل كشف باسم حسابك، بحد أقصى 60 مرة في الساعة.",
-            "تظهر الملاحظات الداخلية بعد الكشف، للأدوار المخوّلة برؤية بيانات التواصل.",
-            "ينزّل Export CSV العملاء المحتملين في ملف، بحد أقصى ثلاث مرات في الساعة، ويُسجَّل كل تصدير."
+            "انقل العميل المحتمل عبر المراحل وأنت تعمل عليه. تعرض الأزرار أعلى القائمة كل مرحلة مع عددها، ثم Unread وSpam، وتضيّق المرشحات القائمة حسب التخصص والمصدر ومن يتولاه ومدى حداثته.",
+            "يجد البحث الاسم أو الشركة أو كلمات من الرسالة. ويجد عنوان البريد الإلكتروني الكامل أو رقم الهاتف الكامل صاحبه أيضًا، ولا يُحفظ العنوان نفسه في أي مكان.",
+            "حدّد عملاء محتملين واستخدم الشريط أسفل الصفحة لإسنادهم أو نقلهم إلى مرحلة أو تعليمهم كمقروءين أو تمييزهم بنجمة أو تعليمهم كرسائل مزعجة. وإذا غيّر أحد زملائك أحدهم قبلك، تذكر القائمة ذلك وتعرض أحدث نسخة."
+          ]
+        },
+        {
+          "t": "h",
+          "x": "عميل محتمل واحد"
+        },
+        {
+          "t": "ol",
+          "x": [
+            "افتح العميل المحتمل لترى الرسالة وتفاصيلها. ويتنقّل Previous وNext عبر القائمة كما رشّحتها.",
+            "في صفحة العميل المحتمل، يغيّر Move to… مرحلته، وتحدد بطاقة Status من يتولاه وقيمته بالريال ونجمته ووسومه. وإذا غيّر أحد زملائك العميل المحتمل قبلك، تذكر الصفحة ذلك وتعرض أحدث نسخة.",
+            "يُظهر Reveal contact details البريد الإلكتروني والهاتف والميزانية والمدة الزمنية، مع روابط Email وCall وWhatsApp، وسبب الدرجة التي حصل عليها العميل المحتمل. يُسجَّل كل كشف باسم حسابك، بحد أقصى 60 مرة في الساعة.",
+            "الملاحظات سلسلة لا يراها إلا فريقك، وتُسجَّل قراءتها أيضًا. استخدم Log contact بعد كل مكالمة أو رسالة حتى يظهر ذلك في السجل الزمني.",
+            "يُستخدم Add lead manually للمكالمات والزيارات ورسائل WhatsApp. وإذا طابق رقم الهاتف عميلًا محتملًا سابقًا يُسأل قبل الإضافة، وتذكر صفحة العميل الجديد أي عميل سابق كتب من البريد الإلكتروني نفسه.",
+            "ينزّل Export CSV العملاء المحتملين الذين تعرضهم المرشحات، بحد أقصى ثلاث مرات في الساعة، ويُسجَّل كل تصدير. ويضم الملف 80 عميلًا محتملًا على الأكثر مع بيانات التواصل."
           ]
         },
         {
           "t": "tip",
-          "x": "العميل المحتمل المعلَّم كرسالة مزعجة (spam) يُحذف أسرع: بعد 30 يومًا افتراضيًا بدلًا من 24 شهرًا."
+          "x": "تُحذف الرسائل المزعجة (spam) بعد 30 يومًا بدلًا من 24 شهرًا. ولا يستطيع محو العميل المحتمل إلا المسؤول (Admin)، من More actions في صفحته، ويُسجَّل المحو."
         }
       ]
     }
@@ -1385,7 +1470,7 @@ begin
     raise exception '0067: health_probes is not empty after the migration';
   end if;
 
-  -- ---- The guides: the set parses, its fifteen guides are 0061's, no API role reads it,
+  -- ---- The guides: the set parses, its fifteen guides are 0065's, no API role reads it,
   -- and every tenant holds every guide as the set states it.
   v_set := app.help_article_set();
   select coalesce(array_agg(a.slug order by a.slug), '{}') into v_have
@@ -1395,7 +1480,18 @@ begin
                                    'personal-data', 'roles-and-access', 'saving-and-publishing',
                                    'seo-and-redirects', 'site-health-and-logs', 'website-stats',
                                    'working-with-leads', 'your-account', 'your-dashboard'] then
-    raise exception '0067: the help set holds %, expected 0061''s fifteen guides', v_have;
+    raise exception '0067: the help set holds %, expected 0065''s fifteen guides', v_have;
+  end if;
+  -- The guides the slices before this one rewrote survive it: U4's media library (0064) and
+  -- C4b's leads screens (0065), not the texts 0061 left.
+  if not exists (select 1 from jsonb_array_elements(v_set) a
+                  where a ->> 'slug' = 'media-library'
+                    and position('Needs alt text' in (a -> 'body' ->> 'en')) > 0)
+     or not exists (select 1 from jsonb_array_elements(v_set) a
+                     where a ->> 'slug' = 'working-with-leads'
+                       and position('Move to…' in (a -> 'body' ->> 'en')) > 0
+                       and position('Reveal contact details and notes' in (a -> 'body' ->> 'en')) = 0) then
+    raise exception '0067: the help set lost U4''s media-library or C4b''s working-with-leads guide';
   end if;
   if not exists (select 1 from jsonb_array_elements(v_set) a
                   where a ->> 'slug' = 'site-health-and-logs'
