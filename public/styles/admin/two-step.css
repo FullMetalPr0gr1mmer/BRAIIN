@@ -1,0 +1,102 @@
+/* Screen stylesheet: /admin/2fa, two-step sign-in (Admin v2 U17). Linked only through the
+   `styles` prop of the page's frame: the sign-in shell (AuthLayout, beside login.css) for a
+   session still owing its code or its setup, the admin shell (AdminLayout, beside
+   personal.css) for a full session. It uses admin.css's tokens and declares none, and holds
+   no colour literal (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+.two-step {
+  display: grid;
+  gap: 14px;
+}
+
+.two-step h1,
+.two-step h2 {
+  margin: 0;
+}
+
+.two-step__lead,
+.two-step .login__lead {
+  margin: 0;
+  color: var(--ad-dim);
+}
+
+.two-step__steps {
+  margin: 0;
+  padding-inline-start: 20px;
+  display: grid;
+  gap: 6px;
+}
+
+.two-step__keybox {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.two-step__keylabel {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ad-dim);
+}
+
+/* The key, grouped in fours, readable at 320px: it wraps between groups, never off-screen. */
+.two-step__key {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--ad-line);
+  border-radius: 10px;
+  background: var(--ad-surface-2);
+  color: var(--ad-ink);
+  font-family: var(--ad-mono);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.two-step__alt,
+.two-step__hint,
+.two-step__back {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ad-dim);
+}
+
+.two-step__link {
+  color: var(--ad-primary);
+  font-weight: 600;
+}
+
+.two-step__form {
+  display: grid;
+  gap: 12px;
+}
+
+.two-step__form .field {
+  margin: 0;
+}
+
+/* Wide enough for "123 456", no wider than the panel. */
+.two-step__code {
+  max-inline-size: 12rem;
+  font-family: var(--ad-mono);
+  font-size: 18px;
+  letter-spacing: 0.12em;
+}
+
+.two-step__form button[type='submit'] {
+  justify-self: start;
+}
+
+.login__box .two-step__form button[type='submit'] {
+  justify-self: stretch;
+}
+
+.two-step__signout {
+  margin: 0;
+}
+
+/* Inside the admin shell: one card, the account page's width. */
+.two-step-page {
+  max-inline-size: 44rem;
+}
