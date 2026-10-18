@@ -177,7 +177,8 @@ export const HEALTH_RULES: readonly HealthRule[] = [
     group: 'Content',
     title: 'Alt text on published projects',
     needs: [],
-    fix: '/admin/media',
+    // U4: the library filtered to the pictures that still lack alt text in a language.
+    fix: '/admin/media?alt=missing',
     evaluate: ({ content }) => {
       if (!content) return unread('Alt text');
       const n = content.missingAlt;

@@ -41,6 +41,16 @@ export function imagesBinding(): ImagesLike | undefined {
   return images && typeof images.input === 'function' ? images : undefined;
 }
 
+/**
+ * Whether this Worker can take an upload at all: the Images binding and Supabase (Admin v2
+ * U4). The one test, used by acceptImage (NOT_SET_UP, 503) and by GET
+ * /api/admin/media/stats (`uploadsReady`), so the library never offers an Upload button the
+ * route would refuse as "Not set up", and never hides one it would take.
+ */
+export function uploadsConfigured(): boolean {
+  return imagesBinding() !== undefined && supabaseConfigured();
+}
+
 /** An upload's details from its header, before Zod: missing, too long or unreadable is a 422. */
 export function readMediaMeta(request: Request): unknown {
   const header = request.headers.get(MEDIA_META_HEADER);
@@ -92,7 +102,7 @@ export async function acceptImage(
   if (isRefusal(length)) return length;
 
   const images = imagesBinding();
-  if (!images || !supabaseConfigured()) return NOT_SET_UP;
+  if (!images || !uploadsConfigured()) return NOT_SET_UP;
 
   await liveRecheck(auth);
 

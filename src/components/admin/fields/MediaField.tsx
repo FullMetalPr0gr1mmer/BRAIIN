@@ -1,42 +1,36 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Icon from '@/components/admin/kit/Icon';
-import { adminFetch, describeError } from '@/lib/admin/client';
+import { adminFetch } from '@/lib/admin/client';
 import FieldShell from './FieldShell';
 import type { FieldComponentProps } from './types';
-import { labelOf } from './useOptions';
+import { altGap, caption, type MediaRow } from './media/format';
+import MediaPicker from './media/MediaPicker';
 
-// One media asset, chosen in a native <dialog> (showModal gives the focus trap, Escape
-// and the inert background for free — the same primitive as the shell's confirm()).
-// The field stores the asset's id; the page resolves it to an image server-side.
-//
-// Thumbnails show when the media API returns a `thumb_url` (resolved per provider in
-// UI v2 PR4a); until then an asset is identified by its alt text and path.
+// One media asset, chosen in the media library's picker. The field stores the asset's id;
+// the page resolves it to an image server-side.
 //
 // v2 (Admin v2 F5a, ui.md §2.6, the prototype's .imgf): the choice is a tile, its thumbnail
 // beside its name, Choose (or Change) and Remove, and a badge when its alt text is missing
 // ("No alt text", "No Arabic alt"): the picture is chosen here, its words are written in
-// the media library. The picker keeps its grid; uploading from it is U4's.
+// the media library.
+//
+// U4: Choose opens the library's own grid (fields/media/MediaPicker.tsx: a search over
+// names, alt text and tags, pages, Enter or a double click to choose) with Upload in place
+// for the roles and Workers that can take a file (`media.upload: false` on the field hides
+// it). The picker is mounted on the first Choose, so a form's server HTML holds the tile
+// only, and its dialog lives at the end of <body>, outside the edit form.
+//
+// Frozen since F5a (U5 and U6 build on it): the default export and its props, `altGap`, the
+// tile's markup, and the picker's name, "<Label>: choose".
 
-type MediaRow = Record<string, unknown>;
+export { altGap };
 
-/** What the chosen asset's alt text lacks, in words, or null when both languages have it. */
-export function altGap(row: MediaRow | null): string | null {
-  if (!row || !('alt' in row)) return null;
-  const alt = (row['alt'] && typeof row['alt'] === 'object' ? row['alt'] : {}) as MediaRow;
-  const has = (lang: string) =>
-    typeof alt[lang] === 'string' && (alt[lang] as string).trim() !== '';
-  if (!has('en') && !has('ar')) return 'No alt text';
-  if (!has('ar')) return 'No Arabic alt';
-  if (!has('en')) return 'No English alt';
-  return null;
-}
-
-const LIMIT = 100;
-
-function caption(row: MediaRow): string {
-  const alt = labelOf(row, 'alt');
-  const path = typeof row['storage_path'] === 'string' ? row['storage_path'] : '';
-  return alt && alt !== row['id'] ? alt : path || String(row['id'] ?? '');
+/** The tile's words: the picture's name, its id when it could not be read, or none chosen. */
+function tileCaption(current: MediaRow | null): string {
+  if (!current) return 'No image chosen';
+  // A read that failed keeps only the id (the asset was deleted, or the role cannot read it).
+  if (Object.keys(current).length === 1) return String(current['id'] ?? '');
+  return caption(current);
 }
 
 export default function MediaField({
@@ -47,11 +41,9 @@ export default function MediaField({
   errors,
 }: FieldComponentProps) {
   const id = `${idPrefix}-${field.name}`;
-  const dialog = useRef<HTMLDialogElement>(null);
-  const [rows, setRows] = useState<MediaRow[] | null>(null);
   const [current, setCurrent] = useState<MediaRow | null>(null);
-  const [query, setQuery] = useState('');
-  const [error, setError] = useState('');
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const selectedId = typeof value === 'string' ? value : '';
 
   // Describe the stored selection (it may not be on the first page of the picker).
@@ -67,26 +59,10 @@ export default function MediaField({
     return () => controller.abort();
   }, [selectedId]);
 
-  async function open() {
-    setError('');
-    dialog.current?.showModal();
-    if (rows !== null) return;
-    try {
-      const params = new URLSearchParams({ limit: String(LIMIT), kind: 'image' });
-      const { rows: list } = await adminFetch<{ rows: MediaRow[] }>(`/api/admin/media?${params}`);
-      setRows(list);
-    } catch (err) {
-      setError(describeError(err));
-    }
+  function choose() {
+    setMounted(true);
+    setOpen(true);
   }
-
-  function choose(id: string) {
-    onChange(field.name, id);
-    dialog.current?.close();
-  }
-
-  const needle = query.trim().toLowerCase();
-  const visible = (rows ?? []).filter((r) => !needle || caption(r).toLowerCase().includes(needle));
 
   const gap = altGap(current);
   return (
@@ -109,14 +85,14 @@ export default function MediaField({
           )}
         </div>
         <div className="imgf__body">
-          <span className="item-label">{current ? caption(current) : 'No image chosen'}</span>
+          <span className="item-label">{tileCaption(current)}</span>
           {gap && (
             <span className="badge" data-tone="warn">
               {gap}
             </span>
           )}
           <span className="imgf__acts">
-            <button type="button" className="btn" onClick={() => void open()}>
+            <button type="button" className="btn" onClick={choose}>
               <Icon name="image" size={14} />
               {selectedId ? 'Change…' : 'Choose…'}
             </button>
@@ -134,64 +110,19 @@ export default function MediaField({
         </div>
       </div>
 
-      <dialog
-        ref={dialog}
-        className="admin-dialog media-dialog"
-        aria-label={`${field.label}: choose`}
-      >
-        <div className="toolbar">
-          <input
-            type="search"
-            placeholder="Filter by alt text or path"
-            aria-label="Filter media"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              // The dialog sits INSIDE the edit <form> in the DOM, so Enter here would
-              // implicitly submit it (inert does not count as disabled).
-              if (e.key === 'Enter') e.preventDefault();
-            }}
-          />
-          <button type="button" className="btn" onClick={() => dialog.current?.close()}>
-            Close
-          </button>
-        </div>
-        {error && (
-          <p className="msg" data-kind="error" role="alert">
-            {error}
-          </p>
-        )}
-        {rows === null && !error ? <p>Loading…</p> : null}
-        {rows !== null && visible.length === 0 ? (
-          <p className="admin-sub">No images match.</p>
-        ) : null}
-        <ul className="media-grid">
-          {visible.map((row) => {
-            const rowId = String(row['id']);
-            return (
-              <li key={rowId}>
-                <button
-                  type="button"
-                  className="media-pick"
-                  aria-pressed={rowId === selectedId}
-                  onClick={() => choose(rowId)}
-                >
-                  {typeof row['thumb_url'] === 'string' ? (
-                    <img
-                      className="media-thumb"
-                      src={row['thumb_url']}
-                      alt=""
-                      width="160"
-                      height="107"
-                    />
-                  ) : null}
-                  <span>{caption(row)}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </dialog>
+      {mounted && (
+        <MediaPicker
+          open={open}
+          onClose={() => setOpen(false)}
+          onPick={(row) => {
+            setCurrent(row);
+            onChange(field.name, String(row['id']));
+          }}
+          title={`${field.label}: choose`}
+          selectedId={selectedId || null}
+          upload={field.media?.upload !== false}
+        />
+      )}
     </FieldShell>
   );
 }

@@ -1,6 +1,6 @@
 import { MediaUpdateSchema, MediaWriteSchema } from '@schemas/admin';
 import { isStaticMediaKey, staticImage } from '@/lib/media/static';
-import { storageThumbUrl } from '@/lib/media/storageUrl';
+import { PREVIEW_WIDTH, storageThumbUrl } from '@/lib/media/storageUrl';
 import { getRow } from '../crud';
 import { ValidationError } from '../errors';
 import type { ResourceConfig } from '../resource';
@@ -115,14 +115,17 @@ export const mediaResource: ResourceConfig = {
   },
   // The picker shows thumbnails: a static still's built asset URL (the admin is exempt from
   // the public image budget, and these frames are ≤ 70 KB), or an upload through `/_image`
-  // (img-src has no Supabase origin; the `/_image` guard admits the bucket's keys).
-  fromRow: (row) => ({
-    ...row,
-    thumb_url:
-      row['provider'] === 'static'
-        ? (staticImage(String(row['storage_path']))?.src ?? null)
-        : row['provider'] === 'storage'
-          ? storageThumbUrl(String(row['storage_path']))
-          : null,
-  }),
+  // (img-src has no Supabase origin; the `/_image` guard admits the bucket's keys). The
+  // library's drawer (Admin v2 U4) shows a larger preview: the same still, or the upload at
+  // PREVIEW_WIDTH (640 px, D8).
+  fromRow: (row) => {
+    const path = String(row['storage_path']);
+    const still = row['provider'] === 'static' ? (staticImage(path)?.src ?? null) : null;
+    const upload = row['provider'] === 'storage';
+    return {
+      ...row,
+      thumb_url: upload ? storageThumbUrl(path) : still,
+      preview_url: upload ? storageThumbUrl(path, undefined, PREVIEW_WIDTH) : still,
+    };
+  },
 };

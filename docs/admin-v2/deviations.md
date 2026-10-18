@@ -36,6 +36,12 @@
   - no upload more than 100 times as long as it is wide, either way (`MEDIA_MAX_ASPECT`): thinner, every width the site renders it at rounds its height to 0 and `/_image` admits no URL for it (U3 review);
   - a deleted or replaced upload stays reachable for up to about two hours after its file is removed, not "at once": Supabase's CDN copy and the `/_image` derivative live an hour each, the Free plan cannot purge the first, and purging the second needs the zone's purge token; pages cached before the change keep the old image URL until purged (owner: O-3 for the purge token, the Supabase plan for Smart CDN; runbook §6i; U3 review);
   - no local blob previews (CSP).
+  - the picker lists images only, with no Videos segment: no picture field stores a video row, and a site clip is chosen in the clip field (D2, U4); the library keeps Images | Videos, the Videos tab read-only (EXC-009);
+  - registering an external or built-in file by its path is gone from the screens: `/admin/media/new` is a 302 to the library's upload (`?upload=1`), and the `POST /api/admin/media` route and its case stay (D4, U4);
+  - a picture's file name is read-only in the drawer, set at upload or replace: `update_media_meta()` has no write path for it (D7, U4);
+  - a tile's name and size sit on a solid midnight band, not the prototype's transparent-to-70% gradient, whose contrast depends on the photo and cannot be proven AA (D15, U4);
+  - the storage meter counts the media bucket only, against the plan's 1 GB that the CV bucket shares (D13, U4; the quota figure is the owner's to confirm);
+  - the storage meter speaks binary units ("214 MB of 1 GB": 1 MB = 1,048,576 B, as the Supabase plan counts its quota), where P-10 counts KB as 1,000 B; a tile's size badge keeps P-10's units (U4 review);
 - **Theme**:
   - no Google/Adobe font links or raw font uploads; the curated self-hosted catalogue replaces them (CSP, PDPL, font budget);
   - no Custom CSS;

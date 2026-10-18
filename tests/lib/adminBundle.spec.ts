@@ -132,6 +132,59 @@ describe('the checks', () => {
     );
   });
 
+  it('fail when admin-ui imports a group meant for some screens only (Admin v2 U4)', () => {
+    for (const group of ['admin-fields.F2.js', 'admin-screens.S2.js', 'admin-dashboard.D2.js']) {
+      const dir = build({
+        ...GOOD,
+        'admin-ui.U1.js': `import"./${group}";const L=()=>import("./admin-rich.X1.js");`,
+        [group]: 'export const x=1;',
+      });
+      expect(check(dir).problems.join('\n'), group).toMatch(
+        new RegExp(`admin-ui imports ${group.replace(/\./g, '\.')} statically`),
+      );
+    }
+    // Lazily, it may: that is how a screen's editing pieces load on first use.
+    const lazy = build({
+      ...GOOD,
+      'admin-ui.U1.js':
+        'const L=()=>import(`./admin-rich.X1.js`);const M=()=>import("./admin-dashboard.D2.js");',
+      'admin-dashboard.D2.js': 'export const x=1;',
+    });
+    expect(check(lazy).problems).toEqual([]);
+  });
+
+  it('catch admin code under a module name: a chunk only admin chunks load (Wave 3 rule 7)', () => {
+    // A screen module no group claims, reached through import(), becomes `usage-<hash>.js`:
+    // size-limit weighs it as public JavaScript, and nothing imports admin code from it, so
+    // check 2 alone would not see it.
+    const loose = build({
+      ...GOOD,
+      'admin-screens.S1.js': 'import"./admin-ui.U1.js";const U=()=>import("./usage.Q1.js");',
+      'AdminMediaLibrary.M1.js': 'import"./admin-screens.S1.js";',
+      'usage.Q1.js': 'export const u=1;',
+    });
+    expect(check(loose).problems.join('\n')).toMatch(
+      /usage\.Q1\.js is loaded only by admin chunks \(admin-screens\.S1\.js\) but is not named admin-\*/,
+    );
+    // Claimed by a group, it is admin code by name; shared with a public chunk, it is not
+    // admin code at all; the bundler's runtime helpers are neither.
+    const claimed = build({
+      ...GOOD,
+      'admin-screens.S1.js': 'import"./admin-ui.U1.js";',
+      'AdminMediaLibrary.M1.js': 'import"./admin-screens.S1.js";',
+    });
+    expect(check(claimed).problems).toEqual([]);
+    const shared = build({
+      ...GOOD,
+      'admin-ui.U1.js': 'import"./shared.Z1.js";const L=()=>import(`./admin-rich.X1.js`);',
+      'Hero.astro_astro_type_script_index_0_lang.P1.js': 'import"./shared.Z1.js";',
+      'shared.Z1.js': 'export const z=1;',
+      'rolldown-runtime.R1.js': 'export const r=1;',
+      'admin-vendor.V1.js': 'import"./rolldown-runtime.R1.js";export const a=1;',
+    });
+    expect(check(shared).problems).toEqual([]);
+  });
+
   it('accept a lazily loaded kit module in admin-kit, and catch it under its own name', () => {
     // An enhancer AdminLayout's script lazy-loads, importing the shared admin code. In the
     // admin-kit chunk (astro.config.mjs) it is admin JavaScript and no island; named after
@@ -236,6 +289,82 @@ describe('the chunk plan in astro.config.mjs', () => {
       .filter((id) => !claim(id)?.startsWith('admin-'))
       .map((id) => id.slice(process.cwd().length + 1));
     expect(loose).toEqual([]);
+  });
+});
+
+describe('the screens admin-ui leaves share one admin-screens group (Admin v2 U4)', () => {
+  interface Group {
+    name: string;
+    test: RegExp | ((id: string) => boolean);
+    priority: number;
+  }
+  let groups: Group[] = [];
+  beforeAll(async () => {
+    const config = (await import('../../astro.config.mjs')).default as {
+      vite: { build: { rollupOptions: { output: { codeSplitting: { groups: Group[] } } } } };
+    };
+    groups = [...config.vite.build.rollupOptions.output.codeSplitting.groups].sort(
+      (a, b) => b.priority - a.priority,
+    );
+  });
+  const claim = (path: string) => {
+    const id = join(process.cwd(), path);
+    return groups.find((g) => (typeof g.test === 'function' ? g.test(id) : g.test.test(id)))?.name;
+  };
+
+  it('claims the media library island and its screen code, by path', () => {
+    for (const path of [
+      'src/components/admin/islands/AdminMediaLibrary.tsx',
+      'src/components/admin/screens/media/MediaLibrary.tsx',
+      'src/components/admin/screens/media/MediaDrawer.tsx',
+      'src/components/admin/screens/media/usage.ts',
+      // A module a later change adds there, lazily loaded or not, joins with no config edit.
+      'src/components/admin/screens/media/NotWrittenYet.tsx',
+    ]) {
+      expect(claim(path), path).toBe('admin-screens');
+    }
+    // The picker, the grid and the upload dialog are the field kit's (every editor).
+    expect(claim('src/components/admin/fields/media/MediaPicker.tsx')).toBe('admin-fields');
+    expect(claim('src/components/admin/fields/media/UploadDialog.tsx')).toBe('admin-fields');
+  });
+
+  it('leaves every other screen where it was', () => {
+    expect(claim('src/components/admin/screens/users/UsersPanel.tsx')).toBe('admin-ui');
+    expect(claim('src/components/admin/islands/AdminUsers.tsx')).toBe('admin-ui');
+    expect(claim('src/components/admin/islands/AdminResourceForm.tsx')).toBeUndefined();
+    expect(claim('src/components/admin/islands/AdminSingletonForm.tsx')).toBeUndefined();
+    expect(claim('src/components/admin/islands/AdminKit.tsx')).toBeUndefined();
+    expect(claim('src/components/admin/islands/AdminDashboard.tsx')).toBeUndefined();
+    expect(claim('src/components/admin/screens/dashboard/QuickActionsDrawer.tsx')).toBe(
+      'admin-dashboard',
+    );
+  });
+
+  it('sits below the field kit, so what both use stays in admin-fields', () => {
+    const priority = (name: string) => groups.find((g) => g.name === name)!.priority;
+    expect(priority('admin-screens')).toBeLessThan(priority('admin-fields'));
+    expect(priority('admin-screens')).toBeGreaterThan(priority('admin-kit'));
+  });
+
+  it('names the editor islands and screen directories one a line, sorted', () => {
+    const config = readFileSync(join(process.cwd(), 'astro.config.mjs'), 'utf8').replace(
+      /\r\n/g,
+      '\n',
+    );
+    for (const name of ['ADMIN_EDITOR_ISLAND_NAMES', 'ADMIN_EDITOR_SCREEN_DIRS']) {
+      const start = config.indexOf(`const ${name} = [\n`);
+      const body =
+        start < 0
+          ? undefined
+          : config.slice(start + `const ${name} = [\n`.length, config.indexOf('\n];', start));
+      expect(body, name).toBeDefined();
+      const lines = body!.split('\n');
+      expect(
+        lines.every((line) => /^ {2}'[A-Za-z]+',$/.test(line)),
+        name,
+      ).toBe(true);
+      expect([...lines].sort(), name).toEqual(lines);
+    }
   });
 });
 

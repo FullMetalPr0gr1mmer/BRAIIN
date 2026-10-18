@@ -73,19 +73,31 @@ export function uploadFallbackFormat(src: ImageMetadata): 'webp' | undefined {
 export const THUMB_WIDTH = 320;
 
 /**
+ * The media library drawer's preview width (Admin v2 U4, D8): also a width `/_image` serves,
+ * so one more transformation per viewed upload, cached an hour like the thumbnail.
+ */
+export const PREVIEW_WIDTH = 640;
+
+/**
  * A thumbnail of an uploaded image through `/_image`: 320 px wide (or the image's own width
- * when it is narrower), WebP, at the stored aspect, so the `/_image` guard accepts it. The
+ * when it is narrower; U4's drawer asks for PREVIEW_WIDTH, 640), WebP, at the stored aspect,
+ * so the `/_image` guard accepts it. The width asked for must be one TRANSFORM_WIDTHS lists
+ * (tests/lib/mediaDelivery.spec.ts holds both to the guard). The
  * four parameters `getImage()` would emit, written here so the media resource (an API
  * module) needs no `astro:assets`; tests/lib/mediaDelivery.spec.ts holds it to the guard.
  * The height is the exact one rounded, never floored up to a pixel: a key past
  * MEDIA_MAX_ASPECT does not parse, so the rounding is at least 1 (3 at 320 px wide), and a
  * floor would only ask for a height the guard's half-pixel window refuses.
  */
-export function storageThumbUrl(key: string, base: string = PUBLIC_SUPABASE_URL): string | null {
+export function storageThumbUrl(
+  key: string,
+  base: string = PUBLIC_SUPABASE_URL,
+  width: number = THUMB_WIDTH,
+): string | null {
   const parsed = parseStorageKey(key);
   const href = mediaPublicUrl(key, base);
   if (!parsed || href === null) return null;
-  const w = Math.min(THUMB_WIDTH, parsed.width);
+  const w = Math.min(width, parsed.width);
   const h = Math.round((w * parsed.height) / parsed.width);
   return `/_image?${new URLSearchParams({ href, w: String(w), h: String(h), f: 'webp' })}`;
 }
