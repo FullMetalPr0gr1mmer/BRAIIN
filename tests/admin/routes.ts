@@ -180,6 +180,22 @@ export const EXTRA_LINKS: readonly NavTab[] = [
     label: 'Website stats pages',
     caps: ['analytics.read'],
   },
+  // G1: the Conversions (funnel, events, goals), Audience (busiest hours) and Realtime tabs.
+  {
+    href: '/admin/analytics?tab=conversions&range=7',
+    label: 'Website stats conversions',
+    caps: ['analytics.read'],
+  },
+  {
+    href: '/admin/analytics?tab=audience&range=90',
+    label: 'Website stats audience',
+    caps: ['analytics.read'],
+  },
+  {
+    href: '/admin/analytics?tab=realtime',
+    label: 'Website stats realtime',
+    caps: ['analytics.read'],
+  },
   { href: '/admin/site-health?tab=speed', label: 'Site health speed', caps: ['siteHealth.view'] },
   { href: '/admin/site-health?tab=errors', label: 'Site health errors', caps: ['logs.view'] },
   { href: '/admin/site-health?tab=seo', label: 'Site health SEO', caps: ['siteHealth.view'] },
