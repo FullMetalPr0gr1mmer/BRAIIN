@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import LeadsList, { hoursText } from '@/components/admin/screens/leads/LeadsList';
-import LeadsBoard from '@/components/admin/screens/leads/LeadsBoard';
+import LeadsBoard, { cardTakesFocus } from '@/components/admin/screens/leads/LeadsBoard';
 import LeadDetail from '@/components/admin/screens/leads/LeadDetail';
 import LeadContactCard, { whatsappHref } from '@/components/admin/screens/leads/LeadContactCard';
 import { reasonsSentence } from '@/components/admin/screens/leads/LeadStatusCard';
@@ -225,6 +225,23 @@ describe('the board', () => {
     });
     expect(pasted).toContain(`href="/admin/leads/${LEAD}?range=30"`);
     expect(pasted).not.toMatch(/href="\/admin\/leads\/[^"]*(stage=spam|sort=|page=)/);
+  });
+
+  it('gives focus to the moved card only when focus was lost with its old place', () => {
+    // C4b's "Move to…" rule on the board: the card's link takes focus after a move (its
+    // button left for another column) or a conflict's refresh that moved it, never from where
+    // the person went meanwhile, nor from its own button that stayed put.
+    const body = { tag: 'body' } as unknown as Element;
+    const field = { tag: 'input' } as unknown as Element;
+    expect(cardTakesFocus(body, body)).toBe(true);
+    expect(cardTakesFocus(null, body)).toBe(true);
+    expect(cardTakesFocus(field, body)).toBe(false);
+    const source = readFileSync('src/components/admin/screens/leads/LeadsBoard.tsx', 'utf8');
+    expect(source).toContain('if (!cardTakesFocus(document.activeElement, document.body)) return;');
+    // A conflict's refresh follows the card too.
+    expect(source).toMatch(
+      /status === 409\) \{\n[^\n]*\n[^\n]*\n\s*focusAfter\.current = card\.id;/,
+    );
   });
 
   it('reads the address through boardFilters on the server too', () => {

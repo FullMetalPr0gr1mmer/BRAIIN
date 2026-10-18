@@ -84,6 +84,16 @@ function moved(columns: Column[], card: Card, to: StageView, answer: Record<stri
   });
 }
 
+/**
+ * Whether the moved card's link takes focus after the board is redrawn: only when focus was
+ * lost (nothing, or the body: the card's "Move to…" left with it for another column). Never
+ * taken from where the person went while the move was saved, nor from the card's own button
+ * when a refresh left it where it was (MoveTo gives focus back to it; C4b's WCAG 2.4.3 fix).
+ */
+export function cardTakesFocus(active: Element | null, body: Element | null): boolean {
+  return active === null || active === body;
+}
+
 export default function LeadsBoard({
   frame,
   initial,
@@ -133,6 +143,7 @@ export default function LeadsBoard({
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
+        focusAfter.current = null;
         if (err instanceof AdminApiError && err.info.status === 422 && q) {
           setSearchError(err.info.detail ?? describeError(err));
           return;
@@ -142,11 +153,13 @@ export default function LeadsBoard({
     return () => controller.abort();
   }, [filters, q, reload]);
 
-  // After a move, focus goes to the card in its new column.
+  // After a move, or the refresh a conflict asks for, focus goes to the card wherever it now
+  // is, if focus was lost with its old place (cardTakesFocus).
   useEffect(() => {
     const id = focusAfter.current;
     if (!id) return;
     focusAfter.current = null;
+    if (!cardTakesFocus(document.activeElement, document.body)) return;
     document.querySelector<HTMLElement>(`[data-lead-card="${id}"] .kcard__n`)?.focus();
   }, [columns]);
 
@@ -165,6 +178,8 @@ export default function LeadsBoard({
     } catch (err) {
       if (err instanceof AdminApiError && err.info.status === 409) {
         setSaid(`Someone else changed ${name}. Refreshed.`);
+        // The refresh may put the card in another column, taking its focused button with it.
+        focusAfter.current = card.id;
         setReload((n) => n + 1);
       } else {
         setError(`${name} could not be moved. ${describeError(err)}`);
