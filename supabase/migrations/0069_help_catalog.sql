@@ -24,18 +24,26 @@
 --     guide by guide, in the same order (sort_order, then slug), now read from the catalog. It
 --     is STABLE instead of IMMUTABLE because it reads a table. app.seed_help_articles(), the
 --     tenants trigger and every caller and test keep working unchanged.
---   • app.put_help_guide(p_guide jsonb): a migration's one way to add or change a guide. The
---     guide is exactly the nine keys, each of its type; the catalog's CHECKs then hold it to
---     the rules help_articles holds (22023 for a shape, 23514 for a rule, 23505 for a place
---     another guide holds). It upserts that one catalog row and re-seeds that one slug into
---     every tenant: inserted where a tenant lacks it, brought to the catalog's text where it
---     differs (the guard moves its version once), and no other guide touched.
---   • app.drop_help_guide(p_slug text): retires a guide: its catalog row and every tenant's
---     copy. A slug the catalog does not hold is refused (P0002), so a typo fails the push.
+--   • Each catalog row carries a `revision`: 1 as this migration fills it, moved by one each
+--     time a put changes the guide. A slice names the revision it wrote its text against, so
+--     two slices that edit one guide cannot silently overwrite each other (what
+--     scratchpad/hs_rebase.py refused before): the one that lands second is refused at the
+--     push (55000) and in CI (tests/fixtures/helpSet.ts), and re-bases its text on the first.
+--   • app.put_help_guide(p_guide jsonb, p_revision int): a migration's one way to add or
+--     change a guide (p_revision 0 for a new one). The guide is exactly the nine keys, each of
+--     its type; the catalog's CHECKs then hold it to the rules help_articles holds (22023 for
+--     a shape, 23514 for a rule, 23505 for a place another guide holds, 55000 for a stale
+--     revision). It upserts that one catalog row and re-seeds that one slug into every
+--     tenant: inserted where a tenant lacks it, brought to the catalog's text where it differs
+--     (the guard moves its version once), and no other guide touched.
+--   • app.drop_help_guide(p_slug text, p_revision int): retires a guide: its catalog row and
+--     every tenant's copy. A slug the catalog does not hold is refused (P0002), so a typo
+--     fails the push, and so is a stale revision (55000).
 --
 -- The rule (CLAUDE.md §8 U16, docs/admin-v2/migrations.md Rules): a slice adds or changes only
--- its own guide, with one top-level `select app.put_help_guide($guide$ {...} $guide$::jsonb);`
--- (or `select app.drop_help_guide('slug');`); nobody restates the set, and no later migration
+-- its own guide, with one top-level `select app.put_help_guide($guide$ {...} $guide$::jsonb, N);`
+-- (or `select app.drop_help_guide('slug', N);`), N the guide's revision as main holds it (0 for
+-- a new guide); nobody restates the set, and no later migration
 -- replaces app.help_article_set() (tests/lib/helpCentre.spec.ts refuses both, and reads the
 -- set as the last restatement before this file plus every later put and drop, in order).
 --
@@ -82,6 +90,8 @@ create table if not exists app.help_guide_catalog (
   title text not null,
   title_ar text not null,
   body jsonb not null,
+  -- 1 as filled; one more each time a put changes the guide (app.put_help_guide).
+  revision int not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   -- The list's order: two guides never share a place.
@@ -97,7 +107,8 @@ create table if not exists app.help_guide_catalog (
     cardinality(screens) >= 1 and app.help_keys_ok(screens, '^/admin(/[a-z0-9-]+)*$', 16)),
   constraint help_guide_catalog_caps_ok check (
     app.help_keys_ok(caps, '^[a-z][a-zA-Z]*\.[a-z][a-zA-Z]*$', 12)),
-  constraint help_guide_catalog_body_ok check (app.help_body_ok(body))
+  constraint help_guide_catalog_body_ok check (app.help_body_ok(body)),
+  constraint help_guide_catalog_revision_positive check (revision >= 1)
 );
 alter table app.help_guide_catalog enable row level security;
 alter table app.help_guide_catalog force row level security;
@@ -138,18 +149,22 @@ $$;
 
 -- ---- 4. Adding, changing and retiring one guide ----------------------------------------------
 -- For migrations, run as their role (postgres): invoker, never a definer, and no API role
--- executes either. A guide is exactly the nine keys the set carries, each of its JSON type
--- (22023 otherwise, before anything is written); the catalog's CHECKs then refuse what
+-- executes either. p_revision is the guide's revision the migration was written against (0
+-- for a guide the catalog does not hold); any other is refused (55000) before anything is
+-- written, so a slice built on an older text of a guide a sibling has since changed fails
+-- instead of reverting it. A guide is exactly the nine keys the set carries, each of its JSON
+-- type (22023 otherwise, before anything is written); the catalog's CHECKs then refuse what
 -- help_articles would (23514), and its unique place refuses a sort_order another guide holds
 -- (23505). Then that one slug is re-seeded into every tenant, as app.seed_help_articles does
 -- for the whole set: inserted, or brought to the catalog's text where it differs (the guard,
 -- 0046, moves the version only then). No other guide is read or written.
-create or replace function app.put_help_guide(p_guide jsonb) returns void
+create or replace function app.put_help_guide(p_guide jsonb, p_revision int) returns void
   language plpgsql set search_path = '' as $$
 declare
   v_keys constant text[] := array['body', 'caps', 'minutes', 'screens', 'slug', 'sort_order',
                                   'tags', 'title', 'title_ar'];
   v_slug text;
+  v_have int;
 begin
   if p_guide is null or jsonb_typeof(p_guide) <> 'object'
      or (select array_agg(k order by k collate "C") from jsonb_object_keys(p_guide) k)
@@ -177,6 +192,13 @@ begin
   end if;
 
   v_slug := p_guide ->> 'slug';
+  select c.revision into v_have from app.help_guide_catalog c where c.slug = v_slug for update;
+  if p_revision is null or p_revision is distinct from coalesce(v_have, 0) then
+    raise exception using errcode = '55000',
+      message = format('put_help_guide: %s is at revision %s in the catalog, the migration names %s',
+                       v_slug, coalesce(v_have, 0), coalesce(p_revision::text, 'none')),
+      hint = 'Merge main, write the guide on its current text, and name that revision (0 for a new guide).';
+  end if;
   insert into app.help_guide_catalog as c
     (slug, sort_order, minutes, tags, screens, caps, title, title_ar, body)
   values (v_slug,
@@ -191,7 +213,8 @@ begin
   on conflict (slug) do update
      set sort_order = excluded.sort_order, minutes = excluded.minutes, tags = excluded.tags,
          screens = excluded.screens, caps = excluded.caps, title = excluded.title,
-         title_ar = excluded.title_ar, body = excluded.body, updated_at = now()
+         title_ar = excluded.title_ar, body = excluded.body, revision = c.revision + 1,
+         updated_at = now()
    where row(c.sort_order, c.minutes, c.tags, c.screens, c.caps, c.title, c.title_ar, c.body)
          is distinct from row(excluded.sort_order, excluded.minutes, excluded.tags,
                               excluded.screens, excluded.caps, excluded.title,
@@ -214,14 +237,23 @@ begin
                               excluded.sort_order);
 end $$;
 
-create or replace function app.drop_help_guide(p_slug text) returns void
+create or replace function app.drop_help_guide(p_slug text, p_revision int) returns void
   language plpgsql set search_path = '' as $$
+declare
+  v_have int;
 begin
-  delete from app.help_guide_catalog where slug = p_slug;
+  select c.revision into v_have from app.help_guide_catalog c where c.slug = p_slug for update;
   if not found then
     raise exception using errcode = 'P0002',
       message = format('drop_help_guide: the catalog holds no guide %L', p_slug);
   end if;
+  if p_revision is distinct from v_have then
+    raise exception using errcode = '55000',
+      message = format('drop_help_guide: %s is at revision %s in the catalog, the migration names %s',
+                       p_slug, v_have, coalesce(p_revision::text, 'none')),
+      hint = 'Merge main: a sibling changed the guide since this migration was written.';
+  end if;
+  delete from app.help_guide_catalog where slug = p_slug;
   delete from public.help_articles where slug = p_slug;
 end $$;
 
@@ -229,8 +261,8 @@ end $$;
 -- No API role reads the catalog or calls any of the three; the migrations (postgres) and the
 -- definer seed (owned by postgres) need no grant.
 revoke all on function app.help_article_set() from public, anon, authenticated, service_role;
-revoke all on function app.put_help_guide(jsonb) from public, anon, authenticated, service_role;
-revoke all on function app.drop_help_guide(text) from public, anon, authenticated, service_role;
+revoke all on function app.put_help_guide(jsonb, integer) from public, anon, authenticated, service_role;
+revoke all on function app.drop_help_guide(text, integer) from public, anon, authenticated, service_role;
 
 -- ---- 6. Every tenant holds the set ---------------------------------------------------------
 -- A no-op where a tenant already matches (the seed updates only what differs); it restores a
@@ -325,6 +357,7 @@ begin
    where conrelid = 'app.help_guide_catalog'::regclass and contype::text <> 'n';
   v_want := array['help_guide_catalog_body_ok c', 'help_guide_catalog_caps_ok c',
                   'help_guide_catalog_minutes_range c', 'help_guide_catalog_pkey p',
+                  'help_guide_catalog_revision_positive c',
                   'help_guide_catalog_screens_ok c', 'help_guide_catalog_slug_shape c',
                   'help_guide_catalog_sort_order u', 'help_guide_catalog_tags_ok c',
                   'help_guide_catalog_titles_ok c'];
@@ -342,8 +375,8 @@ begin
 
   -- ---- The functions: no API role executes any of them; each an invoker with an empty
   -- search path; the set STABLE (it reads a table).
-  foreach p in array array['app.help_article_set()', 'app.put_help_guide(jsonb)',
-                           'app.drop_help_guide(text)', 'app.seed_help_articles(uuid)'] loop
+  foreach p in array array['app.help_article_set()', 'app.put_help_guide(jsonb, integer)',
+                           'app.drop_help_guide(text, integer)', 'app.seed_help_articles(uuid)'] loop
     if has_function_privilege('public', p, 'execute')
        or has_function_privilege('anon', p, 'execute')
        or has_function_privilege('authenticated', p, 'execute')
@@ -351,8 +384,8 @@ begin
       raise exception '0069: % is executable by an API role', p;
     end if;
   end loop;
-  foreach p in array array['app.help_article_set()', 'app.put_help_guide(jsonb)',
-                           'app.drop_help_guide(text)'] loop
+  foreach p in array array['app.help_article_set()', 'app.put_help_guide(jsonb, integer)',
+                           'app.drop_help_guide(text, integer)'] loop
     if not exists (select 1 from pg_proc
                     where oid = p::regprocedure and not prosecdef
                       and exists (select 1 from unnest(coalesce(proconfig, '{}'::text[])) c
@@ -377,25 +410,39 @@ begin
       -- A place that is not a whole number.
       '{"slug": "x", "sort_order": 1.5, "minutes": 1, "tags": [], "screens": ["/admin"], "caps": [], "title": "X", "title_ar": "س", "body": {"en": [{"t": "p", "x": "a"}], "ar": [{"t": "p", "x": "ب"}]}}'] loop
     begin
-      perform app.put_help_guide(p::jsonb);
+      perform app.put_help_guide(p::jsonb, 0);
       raise exception '0069: app.put_help_guide accepted %', p;
     exception when sqlstate '22023' then
       null;
     end;
   end loop;
   begin
-    perform app.put_help_guide('{"slug": "x", "sort_order": 1, "minutes": 1, "tags": [], "screens": ["/admin"], "caps": [], "title": "<b>X</b>", "title_ar": "س", "body": {"en": [{"t": "p", "x": "a"}], "ar": [{"t": "p", "x": "ب"}]}}'::jsonb);
+    perform app.put_help_guide('{"slug": "x", "sort_order": 1, "minutes": 1, "tags": [], "screens": ["/admin"], "caps": [], "title": "<b>X</b>", "title_ar": "س", "body": {"en": [{"t": "p", "x": "a"}], "ar": [{"t": "p", "x": "ب"}]}}'::jsonb, 0);
     raise exception '0069: app.put_help_guide accepted markup in a title';
   exception when check_violation then
     null;
   end;
   begin
-    perform app.drop_help_guide('no-such-guide-0069');
+    perform app.drop_help_guide('no-such-guide-0069', 1);
     raise exception '0069: app.drop_help_guide accepted a slug the catalog does not hold';
   exception when no_data_found then
     null;
   end;
-  if exists (select 1 from app.help_guide_catalog where slug = 'x') then
+  -- A stale revision: putting or dropping a guide named at a revision it is not at.
+  begin
+    perform app.put_help_guide(app.help_article_set() -> 0, 0);
+    raise exception '0069: app.put_help_guide accepted a stale revision';
+  exception when object_not_in_prerequisite_state then
+    null;
+  end;
+  begin
+    perform app.drop_help_guide(app.help_article_set() -> 0 ->> 'slug', 2);
+    raise exception '0069: app.drop_help_guide accepted a stale revision';
+  exception when object_not_in_prerequisite_state then
+    null;
+  end;
+  if exists (select 1 from app.help_guide_catalog where slug = 'x')
+     or exists (select 1 from app.help_guide_catalog where revision <> 1) then
     raise exception '0069: a refused guide reached the catalog';
   end if;
 

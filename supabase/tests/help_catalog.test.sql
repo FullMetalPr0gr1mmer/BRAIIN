@@ -9,19 +9,21 @@
 --      text did not move, byte for byte, is the migration's own postcondition: an md5 of the
 --      set before the function was replaced, compared after. Only the migration sees both.)
 --   3. app.put_help_guide: putting a guide unchanged changes nothing (the set's text, every
---      tenant's versions); changing one changes that guide alone, in every tenant, its version
---      moved once; a new guide reaches every tenant and each new one; bad shapes are refused
---      (22023), so are the rules' breaches (23514) and a place another guide holds (23505),
---      and nothing reaches the catalog or a tenant.
+--      tenant's versions, the guide's revision); changing one changes that guide alone, in
+--      every tenant, its version and its revision moved once; a new guide reaches every tenant
+--      and each new one; bad shapes are refused (22023), so are the rules' breaches (23514), a
+--      place another guide holds (23505) and a revision the guide is not at (55000: the
+--      sibling-overwrite guard), and nothing reaches the catalog or a tenant.
 --   4. app.drop_help_guide: retires one guide everywhere and touches no other; the set's text
---      is then what it was before the guide was put; a slug the catalog lacks is refused.
+--      is then what it was before the guide was put; a slug the catalog lacks is refused, and
+--      so is a revision the guide is not at.
 --   5. No API role may call put, drop or the set.
 --
 -- Fixtures are two tenants of this file's own, each seeded by the tenants trigger (0046); the
 -- launch tenant seed.sql creates holds the guides too, and every "every tenant" check counts it.
 
 begin;
-select plan(72);
+select plan(83);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -66,6 +68,10 @@ create function _moved(p_except text) returns int language sql as $$
      except
      select tenant_id, slug, version, updated_at, body, title from _snap where slug <> p_except)) d
 $$;
+-- A guide's revision in the catalog (0 for none).
+create function _rev(p_slug text) returns int language sql as $$
+  select coalesce((select revision from app.help_guide_catalog where slug = p_slug), 0)
+$$;
 -- A valid new guide, with one field replaced.
 create function _new(p_key text, p_value jsonb) returns jsonb language sql as $$
   select jsonb_build_object(
@@ -89,7 +95,8 @@ select is((select count(*)::int from pg_policies
 select is(
   (select array_agg(replace(conname::text, 'help_guide_catalog_', '') || ' ' || pg_get_constraintdef(oid)
                     order by conname::text collate "C")
-     from pg_constraint where conrelid = 'app.help_guide_catalog'::regclass and contype = 'c'),
+     from pg_constraint where conrelid = 'app.help_guide_catalog'::regclass and contype = 'c'
+      and conname <> 'help_guide_catalog_revision_positive'),
   (select array_agg(replace(conname::text, 'help_articles_', '') || ' ' || pg_get_constraintdef(oid)
                     order by conname::text collate "C")
      from pg_constraint where conrelid = 'public.help_articles'::regclass and contype = 'c'),
@@ -104,12 +111,14 @@ select is(
 select is(
   (select coalesce(string_agg(format('%s %s', w.who, f.fn), ', ' order by w.who, f.fn), '')
      from unnest(array['public', 'anon', 'authenticated', 'service_role']) w(who)
-     cross join unnest(array['app.help_article_set()', 'app.put_help_guide(jsonb)',
-                             'app.drop_help_guide(text)']) f(fn)
+     cross join unnest(array['app.help_article_set()', 'app.put_help_guide(jsonb, integer)',
+                             'app.drop_help_guide(text, integer)']) f(fn)
     where has_function_privilege(w.who, f.fn, 'execute')),
   '', 'no API role may call the set, put or drop');
 
 -- ---- 2. the set is the catalog, rendered ---------------------------------------------------
+select is((select count(*)::int from app.help_guide_catalog where revision < 1), 0,
+  'every catalog guide has a revision, 1 or more');
 select ok((select count(*) from app.help_guide_catalog) >= 15
           and (select count(*) from app.help_guide_catalog)
               = jsonb_array_length(app.help_article_set()),
@@ -149,15 +158,33 @@ select is((select count(*)::int from public.help_articles
 insert into _snap select * from _copies();
 insert into _before select app.help_article_set(), _set_md5();
 
-select lives_ok($$ select app.put_help_guide(_guide('website-stats')) $$,
+create temp table _rev0 as select _rev('website-stats') as r;
+select lives_ok($$ select app.put_help_guide(_guide('website-stats'), _rev('website-stats')) $$,
   'putting a guide exactly as it stands is accepted');
+select is(_rev('website-stats'), (select r from _rev0), 'and keeps its revision');
 select is(_set_md5(), (select md5 from _before),
   'and leaves the set''s text as it was, byte for byte');
 select is(_moved(''), 0, 'and no tenant''s copy of any guide (version and stamp included)');
 
+select throws_ok(
+  $$ select app.put_help_guide(_guide('website-stats') || '{"title": "Stale"}'::jsonb,
+                               _rev('website-stats') - 1) $$,
+  '55000', null, 'a change written against an older revision is refused (a sibling changed it first)');
+select throws_ok(
+  $$ select app.put_help_guide(_guide('website-stats') || '{"title": "Fresh"}'::jsonb, 0) $$,
+  '55000', null, 'so is one that takes an existing guide for a new one');
+select throws_ok(
+  $$ select app.put_help_guide(_guide('website-stats') || '{"title": "None"}'::jsonb, null) $$,
+  '55000', null, 'and one that names no revision');
+select is(_guide('website-stats') ->> 'title', (select set_json from _before) -> (
+            select (n - 1)::int from jsonb_array_elements((select set_json from _before))
+              with ordinality s(a, n) where a ->> 'slug' = 'website-stats') ->> 'title',
+  'a refused change leaves the guide as it was');
 select lives_ok(
-  $$ select app.put_help_guide(_guide('website-stats') || '{"title": "Website stats, read"}'::jsonb) $$,
-  'a changed guide is accepted');
+  $$ select app.put_help_guide(_guide('website-stats') || '{"title": "Website stats, read"}'::jsonb,
+                               _rev('website-stats')) $$,
+  'a changed guide, named at its revision, is accepted');
+select is(_rev('website-stats'), (select r + 1 from _rev0), 'its revision moves by one');
 select is(_guide('website-stats') ->> 'title', 'Website stats, read', 'the set has the new text');
 select is(
   (select jsonb_agg(a order by n) from jsonb_array_elements(app.help_article_set())
@@ -171,17 +198,22 @@ select is((select count(*)::int from public.help_articles h join _snap s using (
   _tenants(), 'every tenant gets the change, its version moved once');
 select is(_moved('website-stats'), 0, 'no other guide of any tenant moves');
 select lives_ok(
-  $$ select app.put_help_guide(_guide('website-stats') || '{"title": "Website stats, read"}'::jsonb) $$,
+  $$ select app.put_help_guide(_guide('website-stats') || '{"title": "Website stats, read"}'::jsonb,
+                               _rev('website-stats')) $$,
   'putting it again is accepted');
 select is((select count(*)::int from public.help_articles h join _snap s using (tenant_id, slug)
             where h.slug = 'website-stats' and h.version = s.version + 1),
   _tenants(), 'and moves no version again');
+select is(_rev('website-stats'), (select r + 1 from _rev0), 'nor the revision');
 
 -- A new guide, in a place no guide holds.
 truncate _snap;
 insert into _snap select * from _copies();
 update _before set set_json = app.help_article_set(), md5 = _set_md5();
-select lives_ok($$ select app.put_help_guide(_new(null, null)) $$, 'a new guide is accepted');
+select throws_ok($$ select app.put_help_guide(_new(null, null), 1) $$, '55000', null,
+  'a new guide named at a revision it does not have is refused');
+select lives_ok($$ select app.put_help_guide(_new(null, null), 0) $$, 'a new guide, at 0, is accepted');
+select is(_rev('h11-test-guide'), 1, 'and starts at revision 1');
 select is((select count(*)::int from public.help_articles
             where slug = 'h11-test-guide' and version = 1 and title = 'A test guide'),
   _tenants(), 'every tenant gets it, at version 1');
@@ -199,33 +231,35 @@ truncate _snap;
 insert into _snap select * from _copies();
 
 -- ---- 3b. what put refuses (nothing reaches the catalog or a tenant) ----------------------------
-select throws_ok($$ select app.put_help_guide(null) $$, '22023', null, 'no guide at all is refused');
-select throws_ok($$ select app.put_help_guide('[]'::jsonb) $$, '22023', null, 'a list is not a guide');
-select throws_ok($$ select app.put_help_guide(_new(null, null) - 'caps') $$, '22023', null,
+-- The rules' breaches name h11-test-guide at its revision (1), so the rule, not the revision,
+-- is what refuses them.
+select throws_ok($$ select app.put_help_guide(null, 0) $$, '22023', null, 'no guide at all is refused');
+select throws_ok($$ select app.put_help_guide('[]'::jsonb, 0) $$, '22023', null, 'a list is not a guide');
+select throws_ok($$ select app.put_help_guide(_new(null, null) - 'caps', 0) $$, '22023', null,
   'a guide missing a key is refused');
-select throws_ok($$ select app.put_help_guide(_new('extra', '1')) $$, '22023', null,
+select throws_ok($$ select app.put_help_guide(_new('extra', '1'), 0) $$, '22023', null,
   'a guide with a key the set does not know is refused');
-select throws_ok($$ select app.put_help_guide(_new('tags', '[1]')) $$, '22023', null,
+select throws_ok($$ select app.put_help_guide(_new('tags', '[1]'), 0) $$, '22023', null,
   'a number where a tag belongs is refused, never cast');
-select throws_ok($$ select app.put_help_guide(_new('sort_order', '1.5')) $$, '22023', null,
+select throws_ok($$ select app.put_help_guide(_new('sort_order', '1.5'), 0) $$, '22023', null,
   'a place that is not a whole number is refused');
-select throws_ok($$ select app.put_help_guide(_new('minutes', '"3"')) $$, '22023', null,
+select throws_ok($$ select app.put_help_guide(_new('minutes', '"3"'), 0) $$, '22023', null,
   'minutes as text is refused');
-select throws_ok($$ select app.put_help_guide(_new('body', '[]')) $$, '22023', null,
+select throws_ok($$ select app.put_help_guide(_new('body', '[]'), 0) $$, '22023', null,
   'a body that is not an object is refused');
-select throws_ok($$ select app.put_help_guide(_new('title', '"<b>Bold</b>"')) $$, '23514', null,
+select throws_ok($$ select app.put_help_guide(_new('title', '"<b>Bold</b>"'), 1) $$, '23514', null,
   'markup in a title is refused (help_text_ok)');
-select throws_ok($$ select app.put_help_guide(_new('body', '{"en": [{"t": "p", "x": "a"}]}')) $$,
+select throws_ok($$ select app.put_help_guide(_new('body', '{"en": [{"t": "p", "x": "a"}]}'), 1) $$,
   '23514', null, 'a body without its Arabic is refused (help_body_ok)');
-select throws_ok($$ select app.put_help_guide(_new('screens', '["/public/page"]')) $$, '23514', null,
+select throws_ok($$ select app.put_help_guide(_new('screens', '["/public/page"]'), 1) $$, '23514', null,
   'a screen outside /admin is refused (help_keys_ok)');
-select throws_ok($$ select app.put_help_guide(_new('tags', '["leads", "leads"]')) $$, '23514', null,
+select throws_ok($$ select app.put_help_guide(_new('tags', '["leads", "leads"]'), 1) $$, '23514', null,
   'a repeated tag is refused');
-select throws_ok($$ select app.put_help_guide(_new('slug', '"X-Upper"')) $$, '23514', null,
+select throws_ok($$ select app.put_help_guide(_new('slug', '"X-Upper"'), 0) $$, '23514', null,
   'a slug with an upper-case letter is refused');
-select throws_ok($$ select app.put_help_guide(_new('minutes', '0')) $$, '23514', null,
+select throws_ok($$ select app.put_help_guide(_new('minutes', '0'), 1) $$, '23514', null,
   'a guide read in no minutes is refused');
-select throws_ok($$ select app.put_help_guide(_new('slug', '"h11-other"') || '{"sort_order": 10}'::jsonb) $$,
+select throws_ok($$ select app.put_help_guide(_new('slug', '"h11-other"') || '{"sort_order": 10}'::jsonb, 0) $$,
   '23505', null, 'a place another guide holds is refused');
 select is((select count(*)::int from app.help_guide_catalog where slug in ('X-Upper', 'h11-other')),
   0, 'no refused guide reached the catalog');
@@ -235,7 +269,9 @@ select is((select title from app.help_guide_catalog where slug = 'h11-test-guide
   'and the guide the refused puts named is as it was');
 
 -- ---- 4. drop ---------------------------------------------------------------------------------
-select lives_ok($$ select app.drop_help_guide('h11-test-guide') $$, 'a guide is retired');
+select throws_ok($$ select app.drop_help_guide('h11-test-guide', 2) $$, '55000', null,
+  'a drop written against another revision is refused');
+select lives_ok($$ select app.drop_help_guide('h11-test-guide', 1) $$, 'a guide is retired');
 select is((select count(*)::int from public.help_articles where slug = 'h11-test-guide'), 0,
   'from every tenant');
 select is((select count(*)::int from app.help_guide_catalog where slug = 'h11-test-guide'), 0,
@@ -243,44 +279,44 @@ select is((select count(*)::int from app.help_guide_catalog where slug = 'h11-te
 select is(_set_md5(), (select md5 from _before),
   'the set''s text is again what it was before the guide was put, byte for byte');
 select is(_moved('h11-test-guide'), 0, 'no other guide of any tenant moves');
-select throws_ok($$ select app.drop_help_guide('h11-test-guide') $$, 'P0002', null,
+select throws_ok($$ select app.drop_help_guide('h11-test-guide', 1) $$, 'P0002', null,
   'a slug the catalog does not hold is refused');
-select throws_ok($$ select app.drop_help_guide(null) $$, 'P0002', null, 'so is no slug');
+select throws_ok($$ select app.drop_help_guide(null, 1) $$, 'P0002', null, 'so is no slug');
 
 -- ---- 5. who may read or call it: nobody but the migration role ---------------------------------
 set local role authenticated;
 select _as('admin', '69000000-0000-4000-8000-00000000000a');
 select throws_ok($$ select count(*) from app.help_guide_catalog $$, '42501', null,
   'admin cannot read the catalog');
-select throws_ok($$ select app.put_help_guide('{}'::jsonb) $$, '42501', null,
+select throws_ok($$ select app.put_help_guide('{}'::jsonb, 0) $$, '42501', null,
   'admin cannot put a guide');
-select throws_ok($$ select app.drop_help_guide('website-stats') $$, '42501', null,
+select throws_ok($$ select app.drop_help_guide('website-stats', 1) $$, '42501', null,
   'admin cannot drop a guide');
 select _as('content_creator', '69000000-0000-4000-8000-00000000000a');
 select throws_ok($$ select count(*) from app.help_guide_catalog $$, '42501', null,
   'content_creator cannot read the catalog');
-select throws_ok($$ select app.put_help_guide('{}'::jsonb) $$, '42501', null,
+select throws_ok($$ select app.put_help_guide('{}'::jsonb, 0) $$, '42501', null,
   'content_creator cannot put a guide');
-select throws_ok($$ select app.drop_help_guide('website-stats') $$, '42501', null,
+select throws_ok($$ select app.drop_help_guide('website-stats', 1) $$, '42501', null,
   'content_creator cannot drop a guide');
 select _as('seo', '69000000-0000-4000-8000-00000000000a');
 select throws_ok($$ select count(*) from app.help_guide_catalog $$, '42501', null,
   'seo cannot read the catalog');
-select throws_ok($$ select app.put_help_guide('{}'::jsonb) $$, '42501', null,
+select throws_ok($$ select app.put_help_guide('{}'::jsonb, 0) $$, '42501', null,
   'seo cannot put a guide');
-select throws_ok($$ select app.drop_help_guide('website-stats') $$, '42501', null,
+select throws_ok($$ select app.drop_help_guide('website-stats', 1) $$, '42501', null,
   'seo cannot drop a guide');
 select _as('developer', '69000000-0000-4000-8000-00000000000a');
 select throws_ok($$ select count(*) from app.help_guide_catalog $$, '42501', null,
   'developer cannot read the catalog');
-select throws_ok($$ select app.put_help_guide('{}'::jsonb) $$, '42501', null,
+select throws_ok($$ select app.put_help_guide('{}'::jsonb, 0) $$, '42501', null,
   'developer cannot put a guide');
 select throws_ok($$ select app.help_article_set() $$, '42501', null,
   'developer cannot read the set itself');
 select _as('admin', '69000000-0000-4000-8000-0000000000ff');
 select throws_ok($$ select count(*) from app.help_guide_catalog $$, '42501', null,
   'another tenant''s admin cannot read the catalog');
-select throws_ok($$ select app.drop_help_guide('website-stats') $$, '42501', null,
+select throws_ok($$ select app.drop_help_guide('website-stats', 1) $$, '42501', null,
   'another tenant''s admin cannot drop a guide');
 reset role;
 
@@ -288,7 +324,7 @@ set local role anon;
 select _as(null, null);
 select throws_ok($$ select count(*) from app.help_guide_catalog $$, '42501', null,
   'anon cannot read the catalog');
-select throws_ok($$ select app.put_help_guide('{}'::jsonb) $$, '42501', null,
+select throws_ok($$ select app.put_help_guide('{}'::jsonb, 0) $$, '42501', null,
   'anon cannot put a guide');
 reset role;
 
@@ -296,9 +332,9 @@ set local role service_role;
 select _as(null, null);
 select throws_ok($$ select count(*) from app.help_guide_catalog $$, '42501', null,
   'the service role cannot read the catalog (it writes help_articles, never the catalog)');
-select throws_ok($$ select app.put_help_guide('{}'::jsonb) $$, '42501', null,
+select throws_ok($$ select app.put_help_guide('{}'::jsonb, 0) $$, '42501', null,
   'the service role cannot put a guide');
-select throws_ok($$ select app.drop_help_guide('website-stats') $$, '42501', null,
+select throws_ok($$ select app.drop_help_guide('website-stats', 1) $$, '42501', null,
   'the service role cannot drop a guide');
 reset role;
 

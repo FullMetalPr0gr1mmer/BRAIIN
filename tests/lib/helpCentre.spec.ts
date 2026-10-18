@@ -233,8 +233,9 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
 // ── 1b. The catalog (H11): a slice puts its own guide; nobody restates the set ────────────
 // 0069 (numbered at merge) moved the guides into app.help_guide_catalog, filled from the set
 // as the database held it. A later migration adds or changes one guide with a top-level
-// `select app.put_help_guide($guide$ {...} $guide$::jsonb);` and retires one with
-// `select app.drop_help_guide('slug');`. The reader (tests/fixtures/helpSet.ts) is held here.
+// `select app.put_help_guide($guide$ {...} $guide$::jsonb, N);` and retires one with
+// `select app.drop_help_guide('slug', N);`, N the guide's revision (0 for a new guide). The
+// reader (tests/fixtures/helpSet.ts) is held here.
 
 describe('the help-guide catalog (H11)', () => {
   const restatement = (name: string, guides: object[]) => ({
@@ -254,16 +255,19 @@ describe('the help-guide catalog (H11)', () => {
     sql: [
       'create table if not exists app.help_guide_catalog (slug text primary key);',
       'create or replace function app.help_article_set() returns jsonb language sql stable as $$ select 1 $$;',
-      'create or replace function app.put_help_guide(p_guide jsonb) returns void as $$ $$;',
-      "  perform app.put_help_guide('{}'::jsonb);",
+      'create or replace function app.put_help_guide(p_guide jsonb, p_revision int) returns void as $$ $$;',
+      "  perform app.put_help_guide('{}'::jsonb, 0);",
       '',
     ].join('\n'),
   };
   const guide = (slug: string, sort_order: number, title = slug) => ({ slug, sort_order, title });
-  const put = (g: object) =>
-    ['select app.put_help_guide($guide$', JSON.stringify(g, null, 2), '$guide$::jsonb);', ''].join(
-      '\n',
-    );
+  const put = (g: object, revision: number) =>
+    [
+      'select app.put_help_guide($guide$',
+      JSON.stringify(g, null, 2),
+      `$guide$::jsonb, ${revision});`,
+      '',
+    ].join('\n');
   const fileNamed = (name: string | null) => {
     const file = MIGRATION_FILES.find((f) => f.name === name);
     if (!file) throw new Error(`no migration ${String(name)}`);
@@ -316,22 +320,32 @@ describe('the help-guide catalog (H11)', () => {
       restatement('0001_a.sql', [guide('alpha', 10), guide('beta', 20), guide('gamma', 30)]),
       restatement('0002_b.sql', [guide('alpha', 10), guide('beta', 20, 'Beta 2')]),
       catalog,
-      { name: '0004_c.sql', sql: put(guide('delta', 15)) + put(guide('alpha', 10, 'Alpha 2')) },
+      {
+        name: '0004_c.sql',
+        // A new guide at 0; alpha changed at 1, then put again unchanged at 2.
+        sql:
+          put(guide('delta', 15), 0) +
+          put(guide('alpha', 10, 'Alpha 2'), 1) +
+          put(guide('alpha', 10, 'Alpha 2'), 2),
+      },
       {
         name: '0005_d.sql',
-        sql: "-- select app.drop_help_guide('alpha');\nselect app.drop_help_guide('beta');\n",
+        sql: "-- select app.drop_help_guide('alpha', 9);\nselect app.drop_help_guide('beta', 1);\n",
       },
-      { name: '0006_e.sql', sql: put(guide('beta', 25, 'Beta 3')) },
+      // Back after its drop: a new guide again, at 0.
+      { name: '0006_e.sql', sql: put(guide('beta', 25, 'Beta 3'), 0) },
     ];
     const read = helpSet(files);
     expect(read.base).toBe('0002_b.sql');
     expect(read.catalog).toBe('0003_help_catalog.sql');
     expect(read.edits).toEqual([
-      { file: '0004_c.sql', op: 'put', slug: 'delta' },
-      { file: '0004_c.sql', op: 'put', slug: 'alpha' },
-      { file: '0005_d.sql', op: 'drop', slug: 'beta' },
-      { file: '0006_e.sql', op: 'put', slug: 'beta' },
+      { file: '0004_c.sql', op: 'put', slug: 'delta', revision: 0 },
+      { file: '0004_c.sql', op: 'put', slug: 'alpha', revision: 1 },
+      { file: '0004_c.sql', op: 'put', slug: 'alpha', revision: 2 },
+      { file: '0005_d.sql', op: 'drop', slug: 'beta', revision: 1 },
+      { file: '0006_e.sql', op: 'put', slug: 'beta', revision: 0 },
     ]);
+    expect(Object.fromEntries(read.revisions)).toEqual({ alpha: 2, delta: 1, beta: 1 });
     expect(read.set).toEqual([
       guide('alpha', 10, 'Alpha 2'),
       guide('delta', 15),
@@ -350,9 +364,46 @@ describe('the help-guide catalog (H11)', () => {
     const files = [
       restatement('0001_a.sql', [guide('alpha', 10)]),
       catalog,
-      { name: '0004_c.sql', sql: "select app.drop_help_guide('beta');\n" },
+      { name: '0004_c.sql', sql: "select app.drop_help_guide('beta', 1);\n" },
     ];
     expect(() => helpSet(files)).toThrow(/drops beta/);
+  });
+
+  it('two slices that edit one guide: the second names a revision the guide has left, and fails (55000)', () => {
+    // What scratchpad/hs_rebase.py refused before the catalog: a slice built on a guide's
+    // older text would otherwise revert the sibling's edit that landed first.
+    const base = [restatement('0001_a.sql', [guide('alpha', 10)]), catalog];
+    const first = { name: '0004_first.sql', sql: put(guide('alpha', 10, 'First'), 1) };
+    const second = { name: '0005_second.sql', sql: put(guide('alpha', 10, 'Second'), 1) };
+    expect(() => helpSet([...base, first, second])).toThrow(
+      /0005_second\.sql: puts alpha at revision 1, but the migrations before it leave it at 2/,
+    );
+    // Re-based on the first (its text, revision 2), it lands.
+    const rebased = {
+      name: '0005_second.sql',
+      sql: put(guide('alpha', 10, 'First, then second'), 2),
+    };
+    expect(helpSet([...base, first, rebased]).set).toEqual([
+      guide('alpha', 10, 'First, then second'),
+    ]);
+    // A new guide must be new (0), and a drop names the revision it retires.
+    expect(() =>
+      helpSet([...base, { name: '0004_x.sql', sql: put(guide('alpha', 20), 0) }]),
+    ).toThrow(/puts alpha at revision 0/);
+    expect(() =>
+      helpSet([
+        ...base,
+        first,
+        { name: '0005_x.sql', sql: "select app.drop_help_guide('alpha', 1);\n" },
+      ]),
+    ).toThrow(/drops alpha at revision 1/);
+  });
+
+  it('every guide is at the revision the catalog holds it at, and the next edit of it must name', () => {
+    for (const article of SET) {
+      expect(HELP.revisions.get(article.slug), article.slug).toBeGreaterThanOrEqual(1);
+    }
+    expect(HELP.revisions.size).toBe(SET.length);
   });
 
   it('what the reader cannot follow is named, never skipped', () => {
@@ -365,12 +416,13 @@ describe('the help-guide catalog (H11)', () => {
         sql: [
           '-- A comment may name app.put_help_guide( freely.',
           'do $$ begin',
-          `  perform app.put_help_guide('{"slug": "x"}'::jsonb);`,
+          `  perform app.put_help_guide('{"slug": "x"}'::jsonb, 0);`,
           'end $$;',
-          "  select app.drop_help_guide('alpha');",
+          "  select app.drop_help_guide('alpha', 1);",
           "insert into app.help_guide_catalog (slug) values ('x');",
           "update app.help_guide_catalog set title = 'y';",
           "select app.drop_help_guide('alpha');",
+          "select app.drop_help_guide('alpha', 1);",
         ].join('\n'),
       },
     ];
@@ -381,6 +433,8 @@ describe('the help-guide catalog (H11)', () => {
       '0005_shapes.sql:5: calls put/drop in a shape the reader cannot follow',
       '0005_shapes.sql:6: writes app.help_guide_catalog other than through put/drop',
       '0005_shapes.sql:7: writes app.help_guide_catalog other than through put/drop',
+      // A drop without its revision is not read as one.
+      '0005_shapes.sql:8: calls put/drop in a shape the reader cannot follow',
     ]);
   });
 });
