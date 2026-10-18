@@ -212,6 +212,39 @@ export const ReleaseItemRowSchema = z.object({
 });
 export type ReleaseItemRow = z.infer<typeof ReleaseItemRowSchema>;
 
+// ---- The ledger as a whole (migration 0066, R5) ---------------------------------------------
+// Since R5 the ledger also holds SYSTEM ITEMS: a write outside a release (the runbook, a cron,
+// the Worker's service-role client) to a tenant with releases on is recorded with no release
+// and no draft, so a restore (R10) sees every change since a version. A release's own items
+// (ApplyResultSchema) always name it: ReleaseItemRowSchema stays as it is.
+
+/** Any row of content_release_items: a release's item, or a system item (no release, no draft). */
+export const LedgerItemRowSchema = ReleaseItemRowSchema.extend({
+  release_id: Uuid.nullable(),
+}).refine((row) => row.release_id !== null || row.draft_id === null, {
+  message: 'a system item names no draft',
+  path: ['draft_id'],
+});
+export type LedgerItemRow = z.infer<typeof LedgerItemRowSchema>;
+
+// ---- What the dashboard lists (public.dashboard_attention v4, migration 0066, R5) ------------
+// The release kinds the attention list can emit, and the thresholds the view's SQL holds as
+// literals (tests/lib/attentionKinds.spec.ts and tests/schemas/release.spec.ts compare them).
+export const RELEASE_ATTENTION_KINDS = [
+  'release_scheduled_today',
+  'release_overdue',
+  'release_failed',
+  'purge_failed',
+  'draft_stale',
+] as const;
+export type ReleaseAttentionKind = (typeof RELEASE_ATTENTION_KINDS)[number];
+/** A pending change nobody has touched for this many days is listed. */
+export const DRAFT_STALE_DAYS = 30;
+/** A scheduled release this many minutes past its time is late, not "today". */
+export const RELEASE_OVERDUE_MINUTES = 5;
+/** A failed release, or a failed purge, is listed for this many days. */
+export const RELEASE_ATTENTION_WINDOW_DAYS = 7;
+
 // ---- Applying a release (public.apply_release, migration 0051, R4) --------------------------
 // R6 builds the RPC's arguments with ApplyRequestSchema and parses what comes back with
 // ApplyResultSchema (publish) or DryRunReportSchema (dry run); the error details of BR403,

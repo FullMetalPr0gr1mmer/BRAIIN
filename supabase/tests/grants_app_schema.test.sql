@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(63);
+select plan(66);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -331,6 +331,32 @@ select ok(has_function_privilege('authenticated', 'public.releases_enabled(uuid)
           and not has_function_privilege('service_role', 'public.releases_enabled(uuid)', 'execute')
           and not has_function_privilege('service_role', 'public.write_drafts(uuid, jsonb)', 'execute'),
   'the staff flag reader and the draft writer are executable by authenticated only');
+
+-- ---- 14. Releases (0066): the guard and complete capture -------------------------------
+-- The guard and the capture triggers are fired, never called; the link-set image builder is
+-- theirs; the scratch table that keeps a case study's sets within a statement is reached by
+-- those definers only. media_usage was dropped and created (v4): staff only, as before.
+select ok(not has_function_privilege('anon', 'app.tg_release_guard()', 'execute')
+          and not has_function_privilege('authenticated', 'app.tg_release_guard()', 'execute')
+          and not has_function_privilege('service_role', 'app.tg_release_guard()', 'execute')
+          and not has_function_privilege('anon', 'app.tg_release_links_stash()', 'execute')
+          and not has_function_privilege('authenticated', 'app.tg_release_links_stash()', 'execute')
+          and not has_function_privilege('service_role', 'app.tg_release_links_stash()', 'execute')
+          and not has_function_privilege('anon', 'app.tg_release_links_capture()', 'execute')
+          and not has_function_privilege('authenticated', 'app.tg_release_links_capture()', 'execute')
+          and not has_function_privilege('service_role', 'app.tg_release_links_capture()', 'execute')
+          and not has_function_privilege('anon', 'app.portfolio_link_sets(uuid, uuid)', 'execute')
+          and not has_function_privilege('authenticated', 'app.portfolio_link_sets(uuid, uuid)', 'execute')
+          and not has_function_privilege('service_role', 'app.portfolio_link_sets(uuid, uuid)', 'execute'),
+  'the release guard, the link capture and app.portfolio_link_sets are executable by no API role');
+select ok(not has_table_privilege('anon', 'app.release_link_pending', 'select, insert, update, delete, truncate')
+          and not has_table_privilege('authenticated', 'app.release_link_pending', 'select, insert, update, delete, truncate')
+          and not has_table_privilege('service_role', 'app.release_link_pending', 'select, insert, update, delete, truncate'),
+  'the link-set scratch table is unreachable by every API role');
+select ok(has_function_privilege('authenticated', 'public.media_usage(uuid)', 'execute')
+          and not has_function_privilege('anon', 'public.media_usage(uuid)', 'execute')
+          and not has_function_privilege('service_role', 'public.media_usage(uuid)', 'execute'),
+  'media_usage v4 is executable by authenticated only');
 
 select * from finish();
 rollback;

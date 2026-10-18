@@ -11,9 +11,14 @@
 --
 -- 0028 adds two references: a published discipline's poster and a published service's
 -- poster — the service's read runs under anon's RLS, so its discipline must be published too.
+--
+-- 0066 (Admin v2 R5, media_usage v4) adds pending changes: a draft (not a removal, claimed
+-- or not) whose payload holds the asset's id as a string anywhere, in any spelling uuid_in
+-- reads, is a reference marked `pending`; the live branches answer `pending` false. The base
+-- (live values) is never read; the drafts' own RLS decides who sees them (CMS staff).
 
 begin;
-select plan(29);
+select plan(44);
 
 -- ── fixtures in the LAUNCH tenant (the one anon is fenced to) ───────────────
 insert into public.media_assets (id, tenant_id, kind, provider, storage_path, folder) values
@@ -68,6 +73,44 @@ insert into public.services (tenant_id, slug, title, status, poster_media_id, di
   (app.default_tenant_id(), 'pgtap-mp-svc-draft', '{"en":"S","ar":"خ"}', 'draft', '65000000-0000-0000-0000-0000000000e4', null),
   (app.default_tenant_id(), 'pgtap-mp-svc-hidden', '{"en":"S","ar":"خ"}', 'published', '65000000-0000-0000-0000-0000000000e5',
    '65000000-0000-0000-0000-0000000000f2');
+
+-- 0066: pending changes in the launch tenant (the draft lock keeps these ids: no claims).
+insert into public.content_releases (id, tenant_id, kind, status, scheduled_for, scheduled_by, payload) values
+  ('65000000-0000-0000-0000-000000000c99', app.default_tenant_id(), 'publish', 'scheduled',
+   now() + interval '1 day', '65000000-0000-0000-0000-0000000000aa', '[]');
+insert into public.content_drafts (tenant_id, entity_type, entity_id, op, payload, base, label, release_id) values
+  -- a poster, by its camelCase key, with a label
+  (app.default_tenant_id(), 'service', gen_random_uuid(), 'update',
+   '{"posterMediaId":"65000000-0000-0000-0000-000000000d01"}', '{}', '{"en":"Poster swap","ar":"تبديل"}', null),
+  -- nested in a section's content, with a slug and no label
+  (app.default_tenant_id(), 'page_section', gen_random_uuid(), 'update',
+   '{"slug":"pg-sec","content":{"items":[{"mediaId":"65000000-0000-0000-0000-000000000d02"}]}}', '{}', null, null),
+  -- an element of an array, with neither label nor slug
+  (app.default_tenant_id(), 'portfolio', gen_random_uuid(), 'update',
+   '{"gallery":["x","65000000-0000-0000-0000-000000000d03"]}', '{}', null, null),
+  -- upper case, no hyphens, braces: the spellings uuid_in reads
+  (app.default_tenant_id(), 'client', gen_random_uuid(), 'update',
+   '{"logoMediaId":"65000000-0000-0000-0000-000000000D0A"}', '{}', null, null),
+  (app.default_tenant_id(), 'testimonial', gen_random_uuid(), 'update',
+   '{"avatarMediaId":"65000000000000000000000000000d05"}', '{}', null, null),
+  (app.default_tenant_id(), 'discipline', gen_random_uuid(), 'update',
+   '{"posterMediaId":"{65000000-0000-0000-0000-000000000d06}"}', '{}', null, null),
+  -- only in the base (a live value): not a pending reference
+  (app.default_tenant_id(), 'service', gen_random_uuid(), 'update',
+   '{"title":{"en":"T","ar":"ت"}}', '{"poster_media_id":"65000000-0000-0000-0000-000000000d07"}', null, null),
+  -- a removal (its payload is empty by its shape): nothing pending to show
+  (app.default_tenant_id(), 'service', gen_random_uuid(), 'delete',
+   '{}', '{"poster_media_id":"65000000-0000-0000-0000-000000000d08"}', null, null),
+  -- claimed by a scheduled release: still pending
+  (app.default_tenant_id(), 'sector', gen_random_uuid(), 'update',
+   '{"posterMediaId":"65000000-0000-0000-0000-000000000d09"}', '{}', null, '65000000-0000-0000-0000-000000000c99'),
+  -- another tenant's
+  ('65000000-0000-0000-0000-000000000002', 'service', gen_random_uuid(), 'update',
+   '{"posterMediaId":"65000000-0000-0000-0000-000000000d10"}', '{}', null, null),
+  -- a label longer than the list shows, naming a live poster too (e1)
+  (app.default_tenant_id(), 'statistic', gen_random_uuid(), 'update',
+   '{"posterMediaId":"65000000-0000-0000-0000-0000000000e1"}', '{}',
+   jsonb_build_object('en', repeat('x', 200), 'ar', 'ع'), null);
 
 create function _claims(p_role text, p_tid text) returns void language sql as $$
   select set_config(
@@ -129,6 +172,53 @@ select is(
 select is(
   (select entity_type || ':' || label from public.media_usage('65000000-0000-0000-0000-0000000000e4')),
   'service:pgtap-mp-svc-draft', 'media_usage finds a service poster (0028)');
+
+-- 0066: pending changes are references too.
+select is(
+  (select format('%s %s %s', entity_type, label, pending) from public.media_usage('65000000-0000-0000-0000-000000000d01')),
+  'service Poster swap t', 'v4: a pending change naming the asset is a reference, marked pending, labelled');
+select is(
+  (select format('%s %s %s', entity_type, label, pending) from public.media_usage('65000000-0000-0000-0000-000000000d02')),
+  'page_section pg-sec t', 'v4: nested anywhere in the payload (a section''s items); its slug when it has no label');
+select is(
+  (select format('%s %s', entity_type, label) from public.media_usage('65000000-0000-0000-0000-000000000d03')),
+  'portfolio pending change', 'v4: an element of an array; "pending change" when it has neither label nor slug');
+select is((select entity_type from public.media_usage('65000000-0000-0000-0000-000000000d0a')),
+  'client', 'v4: the id in upper case is the same id');
+select is((select entity_type from public.media_usage('65000000-0000-0000-0000-000000000d05')),
+  'testimonial', 'v4: the id with no hyphens is the same id');
+select is((select entity_type from public.media_usage('65000000-0000-0000-0000-000000000d06')),
+  'discipline', 'v4: the id in braces is the same id');
+select is((select count(*)::int from public.media_usage('65000000-0000-0000-0000-000000000d07')),
+  0, 'v4: an id only in a draft''s base (a live value) is not a pending reference');
+select is((select count(*)::int from public.media_usage('65000000-0000-0000-0000-000000000d08')),
+  0, 'v4: a pending removal is not a reference');
+select is((select format('%s %s', entity_type, pending) from public.media_usage('65000000-0000-0000-0000-000000000d09')),
+  'sector t', 'v4: a change a scheduled release has claimed is still pending, so still a reference');
+select is((select count(*)::int from public.media_usage('65000000-0000-0000-0000-000000000d10')),
+  0, 'v4: another tenant''s pending change is not listed');
+select is(
+  (select string_agg(format('%s %s %s', entity_type, pending, char_length(label)), ', ' order by pending, entity_type)
+     from public.media_usage('65000000-0000-0000-0000-0000000000e1')),
+  'discipline f 17, statistic t 120',
+  'v4: live references answer pending false; a pending label is cut at 120 characters');
+select _claims('seo', app.default_tenant_id()::text);
+select is((select format('%s %s', entity_type, pending) from public.media_usage('65000000-0000-0000-0000-000000000d01')),
+  'service t', 'v4: seo (media meta) sees pending references too');
+select _claims('sales', app.default_tenant_id()::text);
+select is((select count(*)::int from public.media_usage('65000000-0000-0000-0000-000000000d01')),
+  0, 'v4: a sales claim sees no pending change (drafts are CMS staff''s)');
+select _claims('admin', '65000000-0000-0000-0000-000000000002');
+select is((select count(*)::int from public.media_usage('65000000-0000-0000-0000-000000000d01')),
+  0, 'v4: other_tenant: another tenant''s admin sees none of the launch tenant''s pending changes');
+select _claims('content_creator', app.default_tenant_id()::text);
+reset role;
+select ok(
+  (select not prosecdef and proconfig = array['search_path=""']
+          and pg_get_function_result(oid) = 'TABLE(entity_type text, entity_id uuid, label text, pending boolean)'
+     from pg_proc where oid = 'public.media_usage(uuid)'::regprocedure),
+  'v4: media_usage is INVOKER, search_path pinned, and answers four columns');
+set local role authenticated;
 
 -- ── 3. update_media_meta(): SEO's metadata path ──────────────────────────────
 select _claims('seo', app.default_tenant_id()::text);
