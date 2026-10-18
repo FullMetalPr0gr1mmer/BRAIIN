@@ -24,13 +24,22 @@ interface Props {
   guide?: string | null | undefined;
 }
 
-const { title, subtitle, tabs = [], currentTab = null, area = title, guide } = Astro.props;
+const {
+  title,
+  heading,
+  headingDir,
+  subtitle,
+  tabs = [],
+  currentTab = null,
+  area = title,
+  guide,
+} = Astro.props;
 const screen = screenOf(Astro.url.pathname);
 ---
 
 <header class="admin-header">
   <div>
-    <h1>{title}</h1>
+    <h1 dir={headingDir}>{heading ?? title}</h1>
     {subtitle && <p class="admin-sub">{subtitle}</p>}
   </div>
   {

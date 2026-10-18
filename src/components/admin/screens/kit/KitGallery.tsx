@@ -12,6 +12,7 @@ import DataTable, { type DataColumn } from '@/components/admin/kit/DataTable';
 import Drawer from '@/components/admin/kit/Drawer';
 import ErrorSummary, { type FieldError } from '@/components/admin/kit/ErrorSummary';
 import Icon from '@/components/admin/kit/Icon';
+import Kpi from '@/components/admin/kit/Kpi';
 import ListRow from '@/components/admin/kit/ListRow';
 import Modal from '@/components/admin/kit/Modal';
 import SaveStatus, { type SaveState } from '@/components/admin/kit/SaveStatus';
@@ -60,6 +61,7 @@ type ShownState = Exclude<SaveState, 'idle'>;
 export default function KitGallery({ tab }: KitGalleryProps) {
   return (
     <div className="kit__stack">
+      <KpisDemo />
       <TableDemo />
       <div className="grid grid--2">
         <SortableDemo />
@@ -71,6 +73,18 @@ export default function KitGallery({ tab }: KitGalleryProps) {
       </div>
       <FormDemo />
       <FieldsDemo />
+    </div>
+  );
+}
+
+/** The KPI card as an island draws it (C4b): the same markup as ui/Kpi.astro. */
+function KpisDemo() {
+  return (
+    <div className="grid grid--4" aria-label="Sample figures, drawn by an island" role="group">
+      <Kpi label="New" value={12} delta={20} period="the previous 7 days" />
+      <Kpi label="Won" value={3} unit="50,000 SAR" />
+      <Kpi label="Average first response" value="3 h 40 min" delta={-12} good="down" />
+      <Kpi label="Won of all leads" value="Not enough data yet" />
     </div>
   );
 }
