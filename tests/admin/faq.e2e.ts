@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { expectCleanAtWidths } from './collectionLayout';
 import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 /*
@@ -13,7 +14,9 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *                       JSON-LD set); move it up with the keyboard and with its arrow (the
  *                       public order follows); duplicate it (a draft copy right after it,
  *                       not public); an answer with a line break is refused on the field and
- *                       nothing is saved; no Delete and no Archived for this role.
+ *                       nothing is saved; no Delete and no Archived for this role; the list,
+ *                       the add drawer and the edit drawer with zero axe WCAG 2.2 A/AA
+ *                       violations and no sideways scroll at 320, 390 and 1280 px.
  *   as admin            archive the question, then delete it and its copy.
  *
  * The questions are this run's own (a random marker), added at the END of the list and
@@ -112,6 +115,23 @@ test.describe('as content_creator', () => {
       expect(faq.visible.join('\n'), path).not.toContain(MARK);
       expect(faq.asked.join('\n'), path).not.toContain(MARK);
     }
+  });
+
+  test('the list and both drawers at 320, 390 and 1280 px: zero axe, no sideways scroll', async ({
+    page,
+  }) => {
+    await openScreen(page);
+    await expectCleanAtWidths(page, 'the FAQ list');
+
+    await page.locator('a[data-collection-add]').click();
+    await expect(dialog(page).getByRole('heading', { name: 'New question' })).toBeVisible();
+    await showBoth(page);
+    await expectCleanAtWidths(page, 'the add drawer');
+
+    await openScreen(page);
+    await openRow(page, Q.en);
+    await showBoth(page);
+    await expectCleanAtWidths(page, 'the edit drawer');
   });
 
   test('published, it is on both Contact pages and in both FAQPages, word for word', async ({

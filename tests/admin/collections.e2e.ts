@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
+import { expectCleanAtWidths } from './collectionLayout';
 import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 /*
@@ -17,7 +18,10 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *                     copy with its own slug, right after it; "Visible on the site" clears
  *                     it in one save;
  *   numbers           a keyboard move (handle, Space, ArrowUp, Space) reorders them;
- *   team              offers no Duplicate (people are not copied by accident).
+ *   team              offers no Duplicate (people are not copied by accident);
+ *   every width       each screen's list and add drawer, a client's edit drawer and the sample
+ *                     quote's drawer with zero axe WCAG 2.2 A/AA violations and no sideways
+ *                     scroll at 320, 390 and 1280 px.
  *
  * The rows are this run's own (a random marker in the slug), made by the service role and
  * removed by it afterwards, and none of them reaches a public page: the quote is scheduled
@@ -134,6 +138,7 @@ test('a sample quote is made real in one save, consent first', async ({ page }) 
     SAMPLE_WORDS.en,
   );
   await expect(drawer.locator('#f-quote-en')).toHaveCount(0);
+  await expectCleanAtWidths(page, 'the sample quote drawer');
 
   await drawer.getByRole('switch', { name: 'Make this quote real' }).click();
   await drawer
@@ -188,6 +193,7 @@ test('a client: hidden until cleared, copied hidden, cleared with one switch', a
   await row(page, CLIENT.en).first().locator('a.li__t').click();
   const drawer = dialog(page);
   await expect(drawer.getByRole('heading', { name: 'Edit client' })).toBeVisible();
+  await expectCleanAtWidths(page, 'the client drawer');
   const visible = drawer.getByRole('switch', { name: 'Visible on the site' });
   await expect(visible).toHaveAttribute('aria-checked', 'false');
   await visible.click();
@@ -223,3 +229,19 @@ test('team members are never duplicated', async ({ page }) => {
   await expect(page.getByRole('button', { name: /^Duplicate / })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Edit / }).first()).toBeVisible();
 });
+
+for (const [path, heading] of [
+  ['/admin/testimonials', 'New quote'],
+  ['/admin/clients', 'New client'],
+  ['/admin/team', 'New team member'],
+  ['/admin/statistics', 'New number'],
+  ['/admin/certifications', 'New certification'],
+] as const) {
+  test(`${path}: the list and the add drawer at 320, 390 and 1280 px`, async ({ page }) => {
+    await openScreen(page, path);
+    await expectCleanAtWidths(page, `${path} list`);
+    await page.locator('a[data-collection-add]').click();
+    await expect(dialog(page).getByRole('heading', { name: heading })).toBeVisible();
+    await expectCleanAtWidths(page, `${path} add drawer`);
+  });
+}
