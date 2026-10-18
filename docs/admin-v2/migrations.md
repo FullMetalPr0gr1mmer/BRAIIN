@@ -46,9 +46,10 @@ Each slice's file under [as-built/](as-built/) has the detail.
 
 ## Reserved
 
-Wave 3's migrations, Wave 2's open one (U14b) and Wave 1's held one (C13) are reserved below; 0079
-to 0081 are the wave's slack, and the next free number after them is **0082**. C4c's help
-restatement holds 0068 for now and takes its number at merge time (its row). Before a wave's
+Wave 3's migrations, Wave 2's open one (U14b) and Wave 1's held one (C13) are reserved below; 0080
+to 0082 are the wave's slack, and the next free number after them is **0083**. C4c (the pipeline
+board, carved out of C4b) merges after G2 and takes 0068, so every later Wave 3 reservation moved
+up by one on 2026-10-18 (U7a 0069 to G1c 0079, the slack 0080 to 0082). Before a wave's
 slices branch, each migration the wave plans gets a row here, numbered in the wave's planned merge
 order. The slice's own PR moves its row to "Applied" once production has applied the migration,
 before the PR merges (Pushing to production, step 5), so the row is true when the PR lands and
@@ -69,19 +70,19 @@ every PR moves only its own row.
 | 0065 | C4b | `0065_help_leads_v2.sql`: the help set restated with `working-with-leads` rewritten for the leads screens | 3 |
 | 0066 | R5 | `0066_release_guard.sql`: `<table>__release_guard` on every registry table and both case-study link tables (no depth exemption), system items and link-set capture, `media_usage` v4 (pending changes), `dashboard_attention` v4, `app.publish_scheduled()` skips tenants with releases on, TRUNCATE closed on guarded tables (expand, inert) | 3 |
 | 0067 | G2 | `0067_health_probes.sql`: `health_probes` (service role writes, Admin and Developer read), its stamps trigger, the help set restated with the site health guide | 3 |
-| 0068 | U7a | `0068_faq_items.sql`: `faq_items` (RLS, anon column grant, registry row, snapshot, capture and guard triggers), `app.faq_text_ok`, `app.publish_scheduled()` restated with it, the help set with `collections-and-faq`. The production delta seed runs before the merge | 3 |
-| 0068 (for now) | C4c | `0068_help_leads_board.sql`: the help set restated from C4b's 0065 with the Pipeline board's line in `working-with-leads` (the board was carved out of C4b by size). The number is decided at merge time: C4c merges after R5 (0066) and G2 (0067), re-bases its restatement onto G2's 0067, and takes the lowest free number above `main`'s highest then; U7a keeps its 0068 if it merges first | 3 |
-| 0069 | U10a | `0069_seo_share_images.sql`: `entity_seo.og_media_id` and `seo_defaults.default_og_media_id` (composite keys to `media_assets (tenant_id, id)`), `media_assets_public_read` and `media_usage` (v5) restated, the two registry rows restated | 3 |
-| 0070 | G1a | `0070_stats_visits_events.sql`: the `analytics_events (occurred_at)` index, raw telemetry read revoked from staff, `rollup_daily_visits`, `rollup_daily_events`, `rollup_hourly_pageviews`, `app.rollup_visits`, the invoker readers, the help set | 3 |
-| 0071 | U17 | `0071_two_step_sign_in.sql`: `admin_security_settings.require_mfa`, `app.mfa_required`, the access-token hook restated (role only at the required level), `public.reset_two_step`, `staff_accounts.two_step`, the help set | 3 |
-| 0072 | U10b | `0072_seo_help_guide.sql`: the help set restated with `seo-and-redirects` for the SEO screen | 3 |
-| 0073 | U8a | `0073_u8_guides.sql`: the help set restated with `style-finder` added and `job-applications` reworded | 3 |
-| 0074 | U9a | `0074_general_settings_v2.sql`: `site_profile` v2 columns (tagline, phone, map link, favicon and app icon, the footer settings) and the icon trigger, `site_settings.timezone` (closed list, copied from `crm_settings`), `app.role_general_settings`, RESTRICTIVE live writes on `site_profile` and `site_settings`, `app.studio_time_zone`, `media_assets_public_read` and `media_usage` (v6) restated, the `site_profile` registry row restated, the help set | 3 |
-| 0075 | G1b | `0075_stats_realtime.sql`: `rollup_minute_activity`, `app.rollup_realtime` (every minute), `realtime_summary`, the cron history purge, the help set | 3 |
-| 0076 | U11 | `0076_integrations_typed.sql`: typed CHECKed integration columns, `app.role_manages_integrations`, Admin and SEO read with a RESTRICTIVE live check, anon's one column (`search_console_token`), the help set | 3 |
-| 0077 | U9b | `0077_maintenance_v2_help.sql`: the help set restated with `maintenance-mode` rewritten | 3 |
-| 0078 | G1c | `0078_stats_goals.sql`: `app.role_analytics_goals` (`analytics.goals`, §5), `analytics_goals` (immediate, live-checked), `goal_progress`, the help set | 3 |
-| 0079 to 0081 | (slack) | Wave 3 slack: a mid-wave hotfix, U9c, C13's release or a slice that slips; the first to need one takes 0079 | 3 |
+| 0068 | C4c | `0068_help_leads_board.sql`: the help set restated with the Pipeline board's line in `working-with-leads` (the board was carved out of C4b by size). C4c merges after G2 (0067) and takes 0068; its restatement is re-based onto G2's 0067 before its push (as-built C4c). Every later Wave 3 reservation moved up by one for it (2026-10-18): U7a 0069, U10a 0070, G1a 0071, U17 0072, U10b 0073, U8a 0074, U9a 0075, G1b 0076, U11 0077, U9b 0078, G1c 0079; the slack is 0080 to 0082 | 3 |
+| 0069 | U7a | `0069_faq_items.sql`: `faq_items` (RLS, anon column grant, registry row, snapshot, capture and guard triggers), `app.faq_text_ok`, `app.publish_scheduled()` restated with it, the help set with `collections-and-faq`. The production delta seed runs before the merge; moved from 0068 for C4c | 3 |
+| 0070 | U10a | `0070_seo_share_images.sql`: `entity_seo.og_media_id` and `seo_defaults.default_og_media_id` (composite keys to `media_assets (tenant_id, id)`), `media_assets_public_read` and `media_usage` (v5) restated, the two registry rows restated | 3 |
+| 0071 | G1a | `0071_stats_visits_events.sql`: the `analytics_events (occurred_at)` index, raw telemetry read revoked from staff, `rollup_daily_visits`, `rollup_daily_events`, `rollup_hourly_pageviews`, `app.rollup_visits`, the invoker readers, the help set | 3 |
+| 0072 | U17 | `0072_two_step_sign_in.sql`: `admin_security_settings.require_mfa`, `app.mfa_required`, the access-token hook restated (role only at the required level), `public.reset_two_step`, `staff_accounts.two_step`, the help set | 3 |
+| 0073 | U10b | `0073_seo_help_guide.sql`: the help set restated with `seo-and-redirects` for the SEO screen | 3 |
+| 0074 | U8a | `0074_u8_guides.sql`: the help set restated with `style-finder` added and `job-applications` reworded | 3 |
+| 0075 | U9a | `0075_general_settings_v2.sql`: `site_profile` v2 columns (tagline, phone, map link, favicon and app icon, the footer settings) and the icon trigger, `site_settings.timezone` (closed list, copied from `crm_settings`), `app.role_general_settings`, RESTRICTIVE live writes on `site_profile` and `site_settings`, `app.studio_time_zone`, `media_assets_public_read` and `media_usage` (v6) restated, the `site_profile` registry row restated, the help set | 3 |
+| 0076 | G1b | `0076_stats_realtime.sql`: `rollup_minute_activity`, `app.rollup_realtime` (every minute), `realtime_summary`, the cron history purge, the help set | 3 |
+| 0077 | U11 | `0077_integrations_typed.sql`: typed CHECKed integration columns, `app.role_manages_integrations`, Admin and SEO read with a RESTRICTIVE live check, anon's one column (`search_console_token`), the help set | 3 |
+| 0078 | U9b | `0078_maintenance_v2_help.sql`: the help set restated with `maintenance-mode` rewritten | 3 |
+| 0079 | G1c | `0079_stats_goals.sql`: `app.role_analytics_goals` (`analytics.goals`, §5), `analytics_goals` (immediate, live-checked), `goal_progress`, the help set | 3 |
+| 0080 to 0082 | (slack) | Wave 3 slack: a mid-wave hotfix, U9c, C13's release or a slice that slips; the first to need one takes 0080 | 3 |
 
 ## Rules
 
