@@ -484,3 +484,193 @@ describe('the bell: read, muted, failed, capped', () => {
     expect([...times].sort((a, b) => b - a)).toEqual(times);
   });
 });
+
+// ── Site health in the bell (Admin v2 G2, decision D5) ──────────────────────────────────
+
+const probeRow = (
+  kind: string,
+  state: string,
+  facts: unknown,
+  over: Record<string, unknown> = {},
+) => ({
+  kind,
+  state,
+  facts,
+  read_ok: true,
+  failures: 0,
+  checked_at: ago(5),
+  ok_at: ago(5),
+  next_at: ago(-5),
+  state_since: ago(40),
+  ...over,
+});
+const UPTIME_DOWN = {
+  ratio30: 99.5,
+  ratio90: 99.8,
+  days: [],
+  incidents: [
+    { id: 'm-9', start: ago(40), durationSec: 1800, reason: 'Timeout', seenAt: ago(35) },
+    {
+      id: 'm-8',
+      start: ago(60 * 24 * 20),
+      durationSec: 600,
+      reason: 'Old',
+      seenAt: ago(60 * 24 * 20),
+    },
+  ],
+  responseTimes: [],
+  monitors: [
+    { name: 'Arabic', path: '/ar/', intervalSec: 300, status: 'down' },
+    { name: 'Home', path: '/', intervalSec: 300, status: 'up' },
+  ],
+  downSince: ago(40),
+};
+const HEALTH_FAIL: Record<string, TableAnswer> = {
+  ...FULL,
+  health_probes: {
+    rows: [
+      probeRow('uptime', 'fail', UPTIME_DOWN),
+      probeRow(
+        'domain',
+        'fail',
+        {
+          apex: 'braiinstation.com',
+          outcome: 'not-found',
+          expires: null,
+          registrar: null,
+          rdap: null,
+        },
+        { state_since: ago(60 * 24) },
+      ),
+      probeRow(
+        'certificate',
+        'fail',
+        {
+          source: 'monitor',
+          expires: new Date(NOW.getTime() + 10 * 86_400_000 + 3_600_000).toISOString(),
+          issuer: 'R11',
+        },
+        { state_since: ago(60 * 3) },
+      ),
+    ],
+  },
+};
+
+describe('the bell: site health (G2)', () => {
+  it('runs for siteHealth.view roles only: Content Creator and SEO never ask', async () => {
+    for (const role of ROLES) {
+      expect(NOTIFICATION_SOURCES.health.visible(role), role).toBe(
+        can(role, 'siteHealth.view') === 'full',
+      );
+      const { sb, queries } = fakeDb(HEALTH_FAIL);
+      const feed = await loadNotifications(sb, auth(role), {
+        maintenance: noMaintenance,
+        now: NOW,
+      });
+      const asked = queries.some((q) => q.table === 'health_probes');
+      const shown = feed.items.some((item) => item.kind === 'health');
+      const may = can(role, 'siteHealth.view') === 'full';
+      expect(asked, role).toBe(may);
+      expect(shown, role).toBe(may);
+    }
+  });
+
+  it('one read, for the tenant: down, the outage in the window, the domain, the certificate', async () => {
+    const { sb, queries } = fakeDb(HEALTH_FAIL);
+    const feed = await loadNotifications(sb, auth('developer'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    const reads = queries.filter((q) => q.table === 'health_probes');
+    expect(reads).toHaveLength(1);
+    expect(reads[0]!.filters).toEqual([['eq', 'tenant_id', TENANT]]);
+    const health = feed.items.filter((item) => item.kind === 'health');
+    expect(health.map((item) => [item.id, item.text, item.href])).toEqual([
+      [`health:incident:m-9`, 'The site was down for 30 minutes', '/admin/site-health'],
+      [`health:uptime:${ago(40)}`, 'The site is down', '/admin/site-health'],
+      [
+        `health:certificate:${ago(180)}`,
+        'The certificate expires in 10 days',
+        '/admin/site-health?tab=security',
+      ],
+      [
+        `health:domain:${ago(60 * 24)}`,
+        'No registration found for braiinstation.com',
+        '/admin/site-health?tab=security',
+      ],
+    ]);
+    expect(health.find((item) => item.text === 'The site is down')?.detail).toBe('Monitor: /ar/');
+  });
+
+  it('a slow month is not an item; a stale probe is, once, from when it went stale', async () => {
+    const { sb } = fakeDb({
+      ...FULL,
+      health_probes: {
+        rows: [
+          probeRow('uptime', 'warn', {
+            ...UPTIME_DOWN,
+            incidents: [],
+            monitors: [],
+            downSince: null,
+          }),
+          probeRow('domain', 'unknown', null, {
+            failures: 6,
+            read_ok: false,
+            ok_at: ago(70),
+            state_since: ago(10),
+          }),
+          probeRow('certificate', 'off', {}, { failures: 9 }),
+        ],
+      },
+    });
+    const feed = await loadNotifications(sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    const health = feed.items.filter((item) => item.kind === 'health');
+    expect(health).toHaveLength(1);
+    expect(health[0]).toMatchObject({
+      id: `health:stale:domain:${ago(70)}`,
+      at: ago(10),
+      href: '/admin/site-health',
+    });
+    expect(health[0]!.text).toMatch(/^The domain's registration record has not answered since /);
+  });
+
+  it('ids are stable across loads, and a new failure lights the dot after a look at the bell', async () => {
+    const first = await loadNotifications(fakeDb(HEALTH_FAIL).sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    const later = await loadNotifications(fakeDb(HEALTH_FAIL).sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: new Date(NOW.getTime() + 600_000),
+    });
+    const ids = (feed: typeof first) =>
+      feed.items.filter((i) => i.kind === 'health').map((i) => i.id);
+    expect(ids(later)).toEqual(ids(first));
+    // Read 20 minutes ago: the outage first seen 35 minutes ago is old news; the certificate
+    // and the domain, older still; the site going down 40 minutes ago too.
+    const { sb } = fakeDb({
+      ...HEALTH_FAIL,
+      admin_user_prefs: { row: { notifications_seen_at: ago(20), notifications: {} } },
+    });
+    const seen = await loadNotifications(sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(seen.items.filter((i) => i.kind === 'health' && i.unread)).toEqual([]);
+  });
+
+  it('muting health drops its items', async () => {
+    const { sb } = fakeDb({
+      ...HEALTH_FAIL,
+      admin_user_prefs: { row: { notifications: { muted: ['health'] } } },
+    });
+    const feed = await loadNotifications(sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(feed.items.filter((item) => item.kind === 'health')).toEqual([]);
+  });
+});
