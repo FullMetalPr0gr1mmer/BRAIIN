@@ -130,6 +130,8 @@ describe('lead field visibility', () => {
       timeline_band: '3-6m',
       internal_notes: 'private',
       ip_inet: '203.0.113.1',
+      // C4a: the score's reasons are gated too (D7).
+      score_signals: ['budget_given'],
     });
     expect(stripped).toEqual({ id: '1', name: 'A' });
   });

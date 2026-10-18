@@ -13,8 +13,14 @@ vi.mock('@/lib/leads/interestLabel', () => ({
   withInterestLabels: (r: Record<string, unknown>) => r,
 }));
 
-const { toRpcFilter, pick, LEAD_LIST_FIELDS, UNREADABLE_EMAIL, UNREADABLE_PHONE } =
-  await import('@/lib/crm/leadQuery');
+const {
+  toRpcFilter,
+  pick,
+  LEAD_CARD_FIELDS,
+  LEAD_LIST_FIELDS,
+  UNREADABLE_EMAIL,
+  UNREADABLE_PHONE,
+} = await import('@/lib/crm/leadQuery');
 const { blindIndex } = await import('@/lib/crm/blindIndex');
 const { LEAD_PII_ENC_KEY } = await import('astro:env/server');
 const query = await import('@/pages/api/admin/leads/query');
@@ -22,6 +28,9 @@ const board = await import('@/pages/api/admin/leads/board');
 const summary = await import('@/pages/api/admin/leads/summary');
 
 const KEY = 'test-root-key';
+const STAGE = '33333333-3333-4333-8333-333333333333';
+const OTHER_STAGE = '44444444-4444-4444-8444-444444444444';
+const PERSON = '22222222-2222-4222-8222-222222222222';
 const sa = async () => 'SA';
 
 /** Every key that must never leave the server in a CRM read response. */
@@ -39,6 +48,13 @@ const FORBIDDEN = [
   'search_text',
   'retention_delete_after',
   'retention_before_spam',
+  // C4a: nothing gated, no note and no tag leaves a read route (tags are the detail's).
+  'email',
+  'phone',
+  'budget',
+  'timeline',
+  'notes',
+  'tags',
 ];
 
 let rpcCalls: { fn: string; args: { p_tenant?: string; p_filter: Record<string, unknown> } }[] = [];
@@ -93,6 +109,21 @@ const leaky = {
   score_signals: ['budget_given'],
   search_text: 'sara acme we need a logo',
   internal_notes: 'Called back',
+  email: 'sara@acme.sa',
+  phone: '+966500000000',
+  budget: 'gt_200k',
+  timeline: 'soon',
+  notes: ['x'],
+  tags: ['VIP'],
+  phone_hmac: 'b'.repeat(64),
+  // C4a's pipeline fields, which the list and the board carry
+  assigned_to: '22222222-2222-4222-8222-222222222222',
+  value_sar: 50000,
+  is_starred: true,
+  read_at: null,
+  last_contact_at: null,
+  last_contact_channel: null,
+  over_sla: true,
 };
 
 beforeEach(() => {
@@ -167,6 +198,13 @@ describe('the read routes', () => {
     expect(res.status).toBe(200);
     expect(body.data.total).toBe(1);
     expect(Object.keys(body.data.rows[0]!).sort()).toEqual([...LEAD_LIST_FIELDS].sort());
+    // C4a: the pipeline fields come through, the SLA flag with them.
+    expect(body.data.rows[0]).toMatchObject({
+      assigned_to: PERSON,
+      value_sar: 50000,
+      is_starred: true,
+      over_sla: true,
+    });
     for (const key of FORBIDDEN) expect(JSON.stringify(body), key).not.toContain(`"${key}"`);
     // The search went as a blind index, for the caller's own tenant.
     expect(rpcCalls[0]!.fn).toBe('leads_list');
@@ -195,46 +233,182 @@ describe('the read routes', () => {
     expect(rpcCalls).toHaveLength(0);
   });
 
-  it('the board returns safe card fields only', async () => {
-    rpcResult = { data: [{ stage_id: 's1', total: 1, leads: [leaky] }], error: null };
+  it('the board returns safe card fields only, and each column value', async () => {
+    rpcResult = {
+      data: [{ stage_id: 's1', total: 1, leads: [leaky], value_sum: '50000', leak: 'x' }],
+      error: null,
+    };
     const res = await board.POST(ctx('/api/admin/leads/board', { perStage: 5 }));
     const body = (await res.json()) as {
-      data: { columns: { leads: Record<string, unknown>[] }[] };
+      data: { columns: Record<string, unknown>[] };
     };
     expect(res.status).toBe(200);
-    expect(body.data.columns[0]!.leads[0]!['name']).toBe('Sara');
-    for (const key of [...FORBIDDEN, 'message_preview', 'total']) {
-      expect(body.data.columns[0]!.leads[0]!, key).not.toHaveProperty(key);
+    const column = body.data.columns[0]!;
+    expect(Object.keys(column).sort()).toEqual(['leads', 'stage_id', 'total', 'value_sum']);
+    expect(column['value_sum']).toBe(50000);
+    const card = (column['leads'] as Record<string, unknown>[])[0]!;
+    expect(card['name']).toBe('Sara');
+    expect(Object.keys(card).sort()).toEqual([...LEAD_CARD_FIELDS].sort());
+    expect(card).toMatchObject({ value_sar: 50000, is_starred: true, assigned_to: PERSON });
+    for (const key of [...FORBIDDEN, 'message_preview', 'total', 'over_sla']) {
+      expect(card, key).not.toHaveProperty(key);
     }
+    for (const key of FORBIDDEN) expect(JSON.stringify(body), key).not.toContain(`"${key}"`);
     expect(rpcCalls[0]!.args).toEqual({ p_tenant: TENANT, p_filter: { per_stage: 5 } });
+  });
+
+  it('a column the database answered without a value reads 0', async () => {
+    rpcResult = { data: [{ stage_id: 's1', total: 0, leads: [] }], error: null };
+    const res = await board.POST(ctx('/api/admin/leads/board', {}));
+    const body = (await res.json()) as { data: { columns: Record<string, unknown>[] } };
+    expect(body.data.columns[0]!['value_sum']).toBe(0);
+  });
+
+  it("C4a's filters reach the readers as sent ('me' is the database's to resolve)", async () => {
+    rpcResult = { data: { total: 0, rows: [] }, error: null };
+    const listed = {
+      assigned: 'me',
+      starred: true,
+      unread: false,
+      source: 'manual',
+      channel: 'phone',
+      discipline: 'branding',
+      sort: 'starred',
+    };
+    expect((await query.POST(ctx('/api/admin/leads/query', listed))).status).toBe(200);
+    expect(rpcCalls[0]!.args).toEqual({ p_tenant: TENANT, p_filter: listed });
+    rpcCalls = [];
+    rpcResult = { data: [], error: null };
+    const boarded = {
+      assigned: PERSON,
+      source: 'web_form',
+      channel: 'unknown',
+      discipline: 'events',
+    };
+    expect((await board.POST(ctx('/api/admin/leads/board', boarded))).status).toBe(200);
+    expect(rpcCalls[0]!.args).toEqual({ p_tenant: TENANT, p_filter: boarded });
+    rpcCalls = [];
+    expect((await board.POST(ctx('/api/admin/leads/board', { assigned: 'none' }))).status).toBe(
+      200,
+    );
+    expect(rpcCalls[0]!.args).toEqual({ p_tenant: TENANT, p_filter: { assigned: 'none' } });
+  });
+
+  it('a filter value outside its list is a 422, and the database is never asked', async () => {
+    for (const body of [
+      { assigned: 'x' },
+      { assigned: 'ME' },
+      { source: 'web' },
+      { channel: 'fax' },
+      { discipline: 'Bad Slug' },
+      { discipline: 'a'.repeat(65) },
+      { sort: 'name' },
+      { starred: 'yes' },
+    ]) {
+      rpcCalls = [];
+      const res = await query.POST(ctx('/api/admin/leads/query', body));
+      expect(res.status, JSON.stringify(body)).toBe(422);
+      expect(rpcCalls).toHaveLength(0);
+    }
+    // The board takes no stage, spam flag, sort, page, star or read mark.
+    for (const body of [
+      { stage: STAGE },
+      { spam: true },
+      { sort: 'newest' },
+      { limit: 5 },
+      { starred: true },
+      { unread: true },
+    ]) {
+      rpcCalls = [];
+      const res = await board.POST(ctx('/api/admin/leads/board', body));
+      expect(res.status, JSON.stringify(body)).toBe(422);
+      expect(rpcCalls).toHaveLength(0);
+    }
   });
 
   it('the summary returns the counts and nothing else', async () => {
     rpcResult = {
       data: {
-        total: 3,
+        total: 4,
         new: 1,
         open: 2,
-        won: 0,
+        won: 1,
         lost: 1,
         spam: 4,
         avg_first_response_hours: null,
+        in_progress: 1,
+        won_value: 50000,
+        unread: 2,
+        starred: 1,
+        sla_breached: 1,
+        web_response_hours: 3.5,
+        web_response_n: 2,
+        per_stage: { [STAGE]: 3, 'not-a-stage': 9, [OTHER_STAGE]: 'x' },
         leak: 'x',
+        email: 'sara@acme.sa',
       },
       error: null,
     };
     const res = await summary.POST(ctx('/api/admin/leads/summary', {}));
     const body = (await res.json()) as { data: Record<string, unknown> };
     expect(body.data).toEqual({
-      total: 3,
+      total: 4,
       new: 1,
       open: 2,
-      won: 0,
+      won: 1,
       lost: 1,
       spam: 4,
       avg_first_response_hours: null,
+      // C4a (0063)
+      in_progress: 1,
+      won_value: 50000,
+      unread: 2,
+      starred: 1,
+      sla_breached: 1,
+      web_response_hours: 3.5,
+      web_response_n: 2,
+      conversion: 0.25,
+      per_stage: { [STAGE]: 3, [OTHER_STAGE]: 0 },
+      // No range, so nothing to compare with: no second read, no invented delta.
+      previous: null,
     });
+    expect(rpcCalls).toHaveLength(1);
     expect(rpcCalls[0]!.args).toEqual({ p_tenant: TENANT, p_filter: {} });
+  });
+
+  it('with a range, the summary reads the previous period of equal length too', async () => {
+    rpcResult = { data: { total: 2, won: 1, new: 1 }, error: null };
+    const res = await summary.POST(
+      ctx('/api/admin/leads/summary', {
+        from: '2026-10-08T21:00:00.000Z',
+        to: '2026-10-15T21:00:00.000Z',
+      }),
+    );
+    const body = (await res.json()) as { data: Record<string, unknown> };
+    expect(rpcCalls.map((c) => c.args)).toEqual([
+      {
+        p_tenant: TENANT,
+        p_filter: { from: '2026-10-08T21:00:00.000Z', to: '2026-10-15T21:00:00.000Z' },
+      },
+      {
+        p_tenant: TENANT,
+        p_filter: { from: '2026-10-01T21:00:00.000Z', to: '2026-10-08T21:00:00.000Z' },
+      },
+    ]);
+    expect(body.data['previous']).toMatchObject({ total: 2, won: 1, conversion: 0.5 });
+    expect(body.data['previous']).not.toHaveProperty('per_stage');
+    // An open range has no equal period before it: one read.
+    rpcCalls = [];
+    await summary.POST(ctx('/api/admin/leads/summary', { from: '2026-10-08T21:00:00.000Z' }));
+    expect(rpcCalls).toHaveLength(1);
+  });
+
+  it('the summary takes a date range only', async () => {
+    for (const body of [{ assigned: 'me' }, { starred: true }, { stage: STAGE }]) {
+      rpcCalls = [];
+      expect((await summary.POST(ctx('/api/admin/leads/summary', body))).status).toBe(422);
+      expect(rpcCalls).toHaveLength(0);
+    }
   });
 
   it('a filter the database refuses is a 422, and an unknown key never reaches it', async () => {

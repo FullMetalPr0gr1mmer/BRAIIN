@@ -147,6 +147,33 @@ describe('gated lead columns have a short, named list of readers', () => {
     ]);
   });
 
+  // The score's reasons (0035) were write-only until C4a: the ingest computes them, the
+  // database scores with them, and since C4a the CRM's reveal returns them, after the live
+  // recheck, the limiter and a fail-closed audit row naming `score_signals` (decision D7:
+  // three reasons disclose the budget band and the timeline). The export names the column
+  // only to leave it out.
+  it('only these files name the score reasons, and only the reveal returns them', () => {
+    const named = files
+      .filter((f) => /\bscore_signals\b/.test(f.code))
+      .map((f) => f.path)
+      .sort();
+    expect(named).toEqual([
+      'src/lib/admin/leadFields.ts',
+      // A lead added by hand: the signals computed from what staff typed.
+      'src/lib/crm/manualLead.ts',
+      // The reveal's gated read (it names the column in PLAIN_GATED_FIELDS).
+      'src/lib/crm/reveal.ts',
+      // The ingest (the public form and the manual add): computes and stores them.
+      'src/lib/data/leads.ts',
+      // POST /reveal: returns them as score_reasons.
+      'src/pages/api/admin/leads/[id]/reveal.ts',
+      // NOT_EXPORTED: named to be left out.
+      'src/pages/api/admin/leads/export.ts',
+    ]);
+    const exporter = files.find((f) => f.path === 'src/pages/api/admin/leads/export.ts')!;
+    expect(exporter.code).toMatch(/NOT_EXPORTED = new Set\(\[[^\]]*'score_signals'/);
+  });
+
   // lead_notes is service-role only (0034); this route is the Worker's one door to the
   // thread, for reading (an audit row first) and for adding (C2b). The legacy
   // internal_notes mirror is kept by a definer trigger, not by Worker code.

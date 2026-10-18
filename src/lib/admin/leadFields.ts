@@ -45,10 +45,13 @@ export const SAFE_LEAD_COLUMNS =
 /**
  * The ciphertext and the gated columns. `authenticated` cannot read any of them (0033):
  * only the service role can. A person sees them only after assertCap, a live recheck and a
- * fail-closed audit row (the reveal and the export).
+ * fail-closed audit row (the reveal and the export). `score_signals` (0035) joined in C4a:
+ * the score's reasons, three of which (budget_given, budget_200k_plus, timeline_given)
+ * disclose the budget band and the timeline, so they leave only through the audited reveal,
+ * named in its audit row (decision D7). The export does not carry them.
  */
 export const GATED_LEAD_COLUMNS =
-  'email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,internal_notes,ip_inet';
+  'email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,internal_notes,ip_inet,score_signals';
 
 /**
  * The pipeline's columns (0034 to 0041): readable by every lead worker, none of them
@@ -84,5 +87,6 @@ export function stripSensitive<T extends Record<string, unknown>>(row: T): Parti
   for (const column of SENSITIVE_LEAD_COLUMNS) delete out[column];
   delete out['email_enc'];
   delete out['phone_enc'];
+  delete out['score_signals'];
   return out as Partial<T>;
 }
