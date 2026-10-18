@@ -219,6 +219,15 @@ describe('two factor authentication on the users screen (Admin v2 U17)', () => {
     );
   });
 
+  it('a directory row with keys this Worker does not know still parses (corrections rule 5)', () => {
+    // 0072 reaches production before the Worker that reads two_step and is_active: the
+    // deployed Worker's StaffAccountRowSchema was a plain z.object, which drops unknown keys.
+    // This one must stay so for the next column too (never .strict()).
+    const row = account({ two_step: true, is_active: true, a_later_column: 'x' });
+    expect(row).not.toHaveProperty('a_later_column');
+    expect(row.two_step).toBe(true);
+  });
+
   it('counts the active members without 2FA across the directory; unknown before 0072', () => {
     expect(accountsWithoutTwoStep(null)).toBeNull();
     expect(accountsWithoutTwoStep([account({})])).toBeNull();
