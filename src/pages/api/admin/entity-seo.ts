@@ -1,6 +1,8 @@
+import { z } from 'zod';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { OptimisticLockError } from '@/lib/admin/errors';
 import { ENTITY_SEO } from '@/lib/admin/entitySeo';
+import { stagedEntitySeoRead, stagedEntitySeoWrite } from '@/lib/release/stagedEntitySeo';
 
 // Per-entity SEO metadata (`seo.entityMeta` — Admin + SEO write, Content Creator view).
 //
@@ -15,6 +17,10 @@ import { ENTITY_SEO } from '@/lib/admin/entitySeo';
 //
 // The columns, request shapes and payload → column mapping live in
 // src/lib/admin/entitySeo.ts (Admin v2 R2), where the release registry binds them too.
+//
+// With releases on for the caller's tenant (Admin v2 R3b) both handlers stage instead: one line
+// at the top of each hands the request to src/lib/release/stagedEntitySeo.ts, and the bodies
+// below are the legacy path, unchanged while releases are off.
 
 export const prerender = false;
 
@@ -26,7 +32,9 @@ export const GET = defineAdminRoute({
   // and the PUT below still refuses its writes.
   access: ['full', 'view'],
   input: LookupSchema,
-  handler: async ({ auth, sb, input }) => {
+  handler: async (ctx) => {
+    if (await ctx.releasesEnabled()) return stagedEntitySeoRead(ctx, ctx.input);
+    const { auth, sb, input } = ctx;
     const { data, error } = await sb
       .from('entity_seo')
       .select(COLUMNS)
@@ -44,8 +52,13 @@ export const GET = defineAdminRoute({
 export const PUT = defineAdminRoute({
   cap: 'seo.entityMeta',
   access: ['full'],
-  input: WriteSchema,
-  handler: async ({ auth, sb, input, audit }) => {
+  // Parsed in the handler: a staged save also reads `draftId`/`draftVersion`, which the schema
+  // would strip.
+  input: z.unknown(),
+  handler: async (ctx) => {
+    if (await ctx.releasesEnabled()) return stagedEntitySeoWrite(ctx, ctx.input);
+    const { auth, sb, audit } = ctx;
+    const input = WriteSchema.parse(ctx.input);
     ENTITY_SEO.assertBilingual(input);
     const values = ENTITY_SEO.toRow(input);
 

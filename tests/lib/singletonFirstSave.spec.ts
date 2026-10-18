@@ -16,9 +16,13 @@ const USER = '11111111-1111-4111-8111-111111111111';
 
 let inserts: string[] = [];
 
-/** A tenant with no singleton row yet: every read is empty, every insert succeeds. */
+/**
+ * A tenant with no singleton row yet: every read is empty, every insert succeeds. Releases are
+ * off (the release-managed singletons, site profile and SEO defaults, ask since Admin v2 R3b).
+ */
 function emptyTenantClient() {
   return {
+    rpc: async () => ({ data: false, error: null }),
     from: (table: string) => {
       const b: Record<string, unknown> = {};
       for (const m of ['select', 'eq', 'update', 'order', 'limit']) b[m] = () => b;
