@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(66);
+select plan(68);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -357,6 +357,20 @@ select ok(has_function_privilege('authenticated', 'public.media_usage(uuid)', 'e
           and not has_function_privilege('anon', 'public.media_usage(uuid)', 'execute')
           and not has_function_privilege('service_role', 'public.media_usage(uuid)', 'execute'),
   'media_usage v4 is executable by authenticated only');
+
+-- ---- 15. The FAQ (0070): a column-granted public table and its CHECK helper -----------------
+-- faq_items is read by anon through six columns only (so it is not in section 9's table-level
+-- list), and app.faq_text_ok is called by the CHECK as the writer: staff and the service role
+-- may call it, anon may not.
+select ok(not has_table_privilege('anon', 'public.faq_items', 'select')
+          and has_column_privilege('anon', 'public.faq_items', 'answer', 'select')
+          and not has_column_privilege('anon', 'public.faq_items', 'scheduled_for', 'select')
+          and not has_column_privilege('anon', 'public.faq_items', 'version', 'select'),
+  'anon reads faq_items through its column grant only, never the schedule or the version');
+select ok(has_function_privilege('authenticated', 'app.faq_text_ok(jsonb, int)', 'execute')
+          and has_function_privilege('service_role', 'app.faq_text_ok(jsonb, int)', 'execute')
+          and not has_function_privilege('anon', 'app.faq_text_ok(jsonb, int)', 'execute'),
+  'app.faq_text_ok is executable by the writers (authenticated, service_role), never anon');
 
 select * from finish();
 rollback;
