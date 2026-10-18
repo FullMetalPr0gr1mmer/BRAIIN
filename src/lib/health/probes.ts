@@ -37,9 +37,11 @@ import {
 //   domain       the registration record (RDAP), about once a day.
 //
 // The breaker is persisted: a failed read keeps the last facts and state, counts the failure
-// and sets `next_at` with exponential backoff (10 minutes doubling, at most 6 hours, ±20%
-// jitter); the cron skips the probe until then. Six failures in a row make it `unknown`
-// ("the monitor has not answered"), which the bell carries.
+// and is tried again on the next run of the 10-minute schedule, so six failures in a row, an
+// hour after the last good reading, make it `unknown` ("the monitor has not answered"), which
+// the bell carries. From then on `next_at` backs off exponentially (10 minutes doubling, at
+// most 6 hours, ±20% jitter) and the cron skips the probe until then. Backing off from the
+// first failure would push the sixth to four to seven hours (THRESHOLDS promises an hour).
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -52,7 +54,9 @@ export const TIMING = {
   domainEveryMs: 20 * HOUR,
   /** The IANA bootstrap entry is kept this long. */
   bootstrapTtlMs: 30 * DAY,
-  /** The first backoff, doubling with each failure in a row, up to the cap. */
+  /** A failed read before the probe is stale is tried again on the schedule's next run. */
+  retryMs: 5 * MINUTE,
+  /** The first backoff once stale, doubling with each failure after it, up to the cap. */
   backoffBaseMs: 10 * MINUTE,
   backoffCapMs: 6 * HOUR,
   /** ± this share of the backoff, so failing probes do not retry in step. */
@@ -77,7 +81,18 @@ export interface ProbeWrite {
   next_at: string | null;
 }
 
-/** The backoff after `failures` failed reads in a row, with its jitter. */
+/**
+ * The wait before the next attempt after `failures` failed reads in a row: the schedule's
+ * next run until the probe is stale (THRESHOLDS.staleAfter), then the backoff, starting
+ * over at its base with the read that made it stale.
+ */
+export function retryAfterMs(failures: number, random: () => number = Math.random): number {
+  return failures < THRESHOLDS.staleAfter
+    ? TIMING.retryMs
+    : backoffMs(failures - THRESHOLDS.staleAfter + 1, random);
+}
+
+/** The `n`th backoff in a row (1: the base), with its jitter. */
 export function backoffMs(failures: number, random: () => number = Math.random): number {
   const base = Math.min(TIMING.backoffBaseMs * 2 ** Math.max(0, failures - 1), TIMING.backoffCapMs);
   return Math.round(base * (1 + TIMING.backoffJitter * (2 * random() - 1)));
@@ -133,7 +148,7 @@ export function nextProbe(
     failures,
     checked_at: at,
     ok_at: prev?.ok_at ?? null,
-    next_at: new Date(now.getTime() + backoffMs(failures, random)).toISOString(),
+    next_at: new Date(now.getTime() + retryAfterMs(failures, random)).toISOString(),
   };
 }
 

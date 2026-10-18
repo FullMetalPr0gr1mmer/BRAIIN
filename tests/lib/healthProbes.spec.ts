@@ -19,6 +19,7 @@ const {
   certificateOutcome,
   domainState,
   nextProbe,
+  retryAfterMs,
   runHealthProbes,
   uptimeFacts,
   uptimeState,
@@ -95,7 +96,7 @@ describe('nextProbe', () => {
     });
   });
 
-  it('a failed read keeps the last facts and state, counts it and backs off', () => {
+  it('a failed read keeps the last facts and state, counts it and tries again on the next run', () => {
     const next = nextProbe(
       'uptime',
       row({ state: 'fail' }),
@@ -109,7 +110,7 @@ describe('nextProbe', () => {
       read_ok: false,
       failures: 1,
       ok_at: at(-10),
-      next_at: at(10),
+      next_at: at(5),
     });
   });
 
@@ -136,6 +137,16 @@ describe('nextProbe', () => {
     }
     expect(states).toEqual(['ok', 'ok', 'ok', 'ok', 'ok', 'unknown', 'unknown']);
     expect(prev.failures).toBe(7);
+  });
+
+  it('retries on the next run until stale, then backs off from there (retryAfterMs)', () => {
+    const mid = () => 0.5;
+    expect([1, 2, 3, 4, 5].map((n) => retryAfterMs(n, mid))).toEqual(Array(5).fill(TIMING.retryMs));
+    // The read that makes it stale starts the backoff at its base.
+    expect([6, 7, 8, 9].map((n) => retryAfterMs(n, mid) / 60_000)).toEqual([10, 20, 40, 80]);
+    expect(retryAfterMs(500, () => 1)).toBe(Math.round(TIMING.backoffCapMs * 1.2));
+    // Due again on the schedule's next run, never skipping one.
+    expect(TIMING.retryMs).toBeLessThan(10 * 60_000);
   });
 
   it('backs off from 10 minutes, doubling, to at most 6 hours, within ±20%', () => {
@@ -423,7 +434,7 @@ describe('runHealthProbes', () => {
     expect(db.upserts).toEqual([]);
   });
 
-  it('a failed read backs off, takes the certificate with it, and logs once: reason codes only', async () => {
+  it('a failed read is retried next run, takes the certificate with it, and logs once: reason codes only', async () => {
     const key = 'ro-key-should-never-leak';
     const p = provider(async () => {
       throw new OutboundError('http', 503);
@@ -441,7 +452,7 @@ describe('runHealthProbes', () => {
     ]);
     const written = db.upserts[0]!.rows;
     for (const r of written) {
-      expect(r).toMatchObject({ read_ok: false, failures: 1, state: 'unknown', next_at: at(10) });
+      expect(r).toMatchObject({ read_ok: false, failures: 1, state: 'unknown', next_at: at(5) });
     }
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({ level: 'warn', source: 'cron:health-probes' });
@@ -483,6 +494,52 @@ describe('runHealthProbes', () => {
     });
     expect(logs).toHaveLength(1);
     expect(logs[0]!['source']).toBe('admin:health');
+  });
+
+  it('goes stale an hour after the last good reading on the 10-minute schedule, whatever the jitter, then backs off', async () => {
+    // The cron fires every 10 minutes; each tick runs what is due and the next tick sees the
+    // row it wrote. The last good reading is at minute 0; the monitor never answers again.
+    const p = provider(async () => {
+      throw new OutboundError('timeout');
+    });
+    const MIN = 60_000;
+    for (const jitter of [0, 0.5, 1]) {
+      db.rows = [
+        row({ kind: 'uptime', checked_at: at(0), ok_at: at(0), next_at: at(5) }),
+        row({ kind: 'domain', next_at: at(100_000) }),
+      ];
+      const attempts: number[] = [];
+      let staleAt: number | null = null;
+      for (let minute = 10; minute <= 12 * 60; minute += 10) {
+        db.upserts = [];
+        await runHealthProbes(client(db), 't1', {
+          now: new Date(NOW.getTime() + minute * MIN),
+          source: 'cron:health-probes',
+          provider: p,
+          random: () => jitter,
+        });
+        const written = db.upserts[0]?.rows.find((r) => r['kind'] === 'uptime');
+        if (!written) continue;
+        attempts.push(minute);
+        db.rows = db.rows.map((r) =>
+          r.kind === 'uptime' ? ({ ...r, ...written } as ProbeRow) : r,
+        );
+        if (written['state'] === 'unknown' && staleAt === null) staleAt = minute;
+      }
+      // Six failed reads, one each tick: stale exactly an hour after the last good reading,
+      // as THRESHOLDS, the guide and the bell say.
+      expect(staleAt, `jitter ${jitter}`).toBe(60);
+      expect(attempts.slice(0, 6), `jitter ${jitter}`).toEqual([10, 20, 30, 40, 50, 60]);
+      // Then the breaker: the gaps grow (10 minutes doubling, at most 6 hours, with jitter),
+      // so a provider down for a day is not asked every 10 minutes.
+      const gaps = attempts
+        .slice(5)
+        .map((m, i, all) => (i === 0 ? 0 : m - all[i - 1]!))
+        .slice(1);
+      expect(gaps[0], `jitter ${jitter}`).toBeGreaterThanOrEqual(10);
+      for (let i = 1; i < gaps.length; i += 1) expect(gaps[i]).toBeGreaterThanOrEqual(gaps[i - 1]!);
+      expect(attempts.length, `jitter ${jitter}`).toBeLessThanOrEqual(12);
+    }
   });
 
   it('a read or a write the database refuses throws (the cron logs it under its name)', async () => {

@@ -8,6 +8,7 @@ import UptimeStrip from './UptimeStrip.astro';
 import { formatRatio, type ProbeView } from '@/lib/admin/health/probes';
 import { intervalWords, listWords, unwatched } from '@/lib/admin/health/uptime';
 import { formatDate, formatDateTime, formatTime, relTime } from '@/lib/admin/relTime';
+import { THRESHOLDS } from '@/lib/health/thresholds';
 
 // The Uptime card (Admin v2 G2; the prototype's uptime card in screens_health.js): what the
 // external monitor sees, read every 10 minutes by the Worker's health schedule. Server-
@@ -63,9 +64,11 @@ const monitorWord = (m: { path: string | null; name: string; status: string }) =
       </Note>
     ) : !facts ? (
       <p class="upc__none">
-        {probe && probe.failures > 0
-          ? 'The monitor did not answer just now. The next reading is due within 10 minutes.'
-          : 'Not checked yet. Readings arrive every 10 minutes.'}
+        {probe && probe.failures >= THRESHOLDS.staleAfter
+          ? 'The monitor has not answered for an hour. It is asked less often now, at most every 6 hours; Check now asks at once.'
+          : probe && probe.failures > 0
+            ? 'The monitor did not answer just now. The next reading is due within 10 minutes.'
+            : 'Not checked yet. Readings arrive every 10 minutes.'}
       </p>
     ) : (
       <>

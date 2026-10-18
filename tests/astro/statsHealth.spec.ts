@@ -449,7 +449,15 @@ describe('UptimeCard (G2)', () => {
         probe: probe('unknown', null, { failures: 2, readOk: false }),
         failed: false,
       }),
-    ).toContain('The monitor did not answer just now.');
+    ).toContain('The monitor did not answer just now. The next reading is due within 10 minutes.');
+    // Six failed reads (an hour): the probe is stale and backs off, so "within 10 minutes"
+    // would no longer be true.
+    const quiet = await render(UptimeCard, {
+      probe: probe('unknown', null, { failures: 6, readOk: false, okAt: null }),
+      failed: false,
+    });
+    expect(quiet).toContain('The monitor has not answered for an hour.');
+    expect(quiet).not.toContain('within 10 minutes');
     expect(await render(UptimeCard, { probe: null, failed: true })).toContain(
       'The uptime readings could not be read just now.',
     );
