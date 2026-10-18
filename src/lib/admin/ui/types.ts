@@ -103,6 +103,12 @@ export interface FieldDef {
    * the form shows one thing (an unticked box) while the server stores another.
    */
   defaultValue?: unknown;
+  /**
+   * `bilingual` (Admin v2 U7): a paragraph, not a line: a five-row textarea per language,
+   * both still required (unlike `prose`, whose Arabic may lag). Additive: unset, the field
+   * renders as before.
+   */
+  multiline?: boolean;
   /** Text kinds: the most characters; shows "n/max" in the label row and sets maxLength. */
   maxLength?: number;
   /** `color`: swatches to offer, and the text colour its contrast line is measured for. */

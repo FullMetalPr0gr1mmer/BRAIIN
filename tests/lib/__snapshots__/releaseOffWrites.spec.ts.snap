@@ -1032,6 +1032,74 @@ exports[`resource configs: toRow is what it was before R2 > disciplines 2`] = `
 }
 `;
 
+exports[`resource configs: toRow is what it was before R2 > faq 1`] = `
+{
+  "full": {
+    "published_at": "2026-06-01T08:00:00.000Z",
+    "scheduled_for": "2027-01-01T09:00:00.000Z",
+    "sort_order": 7,
+    "status": "published",
+  },
+  "keys": {
+    "scheduledFor": {
+      "scheduled_for": "2027-01-01T09:00:00.000Z",
+    },
+    "sortOrder": {
+      "sort_order": 7,
+    },
+    "status": {
+      "published_at": "2026-06-01T08:00:00.000Z",
+      "status": "published",
+    },
+  },
+  "nulls": {
+    "scheduledFor": {
+      "scheduled_for": null,
+    },
+    "sortOrder": {
+      "sort_order": null,
+    },
+    "status": {
+      "status": null,
+    },
+  },
+}
+`;
+
+exports[`resource configs: toRow is what it was before R2 > faq 2`] = `
+{
+  "full": [
+    "status",
+    "sort_order",
+    "scheduled_for",
+    "published_at",
+  ],
+  "keys": {
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+      "published_at",
+    ],
+  },
+  "nulls": {
+    "scheduledFor": [
+      "scheduled_for",
+    ],
+    "sortOrder": [
+      "sort_order",
+    ],
+    "status": [
+      "status",
+    ],
+  },
+}
+`;
+
 exports[`resource configs: toRow is what it was before R2 > media 1`] = `
 {
   "full": {

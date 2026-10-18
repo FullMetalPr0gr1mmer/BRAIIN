@@ -8,6 +8,7 @@ import { categoryResource } from '@/lib/admin/resources/categories';
 import { certificationResource } from '@/lib/admin/resources/certifications';
 import { clientResource } from '@/lib/admin/resources/clients';
 import { disciplineResource } from '@/lib/admin/resources/disciplines';
+import { faqResource } from '@/lib/admin/resources/faq';
 import { navigationResource } from '@/lib/admin/resources/navigation';
 import { pageResource } from '@/lib/admin/resources/pages';
 import { portfolioResource } from '@/lib/admin/resources/portfolio';
@@ -432,6 +433,12 @@ export const RELEASE_REGISTRY: Readonly<Record<ReleaseEntityType, RegistryEntry>
           ? ['portfolio:all', 'nav:all']
           : ['nav:all'],
     tagParent: { entityType: 'page', column: 'page_id' },
+  }),
+  // The FAQ (Admin v2 U7, 0070): the Contact page's band and its FAQPage, both tagged
+  // faq:all on the contact routes (CONTACT_CACHE_ENTITIES).
+  faq_item: fromResource('faq_item', faqResource, {
+    label: labelFrom(['question'], 'Question'),
+    entityTags: tags('faq:all'),
   }),
 };
 

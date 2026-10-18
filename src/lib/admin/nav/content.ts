@@ -66,6 +66,8 @@ export const content: NavArea = {
     },
     { href: '/admin/clients', label: 'Clients', icon: 'star', caps: ['portfolio.write'] },
     { href: '/admin/team', label: 'Team', icon: 'users', caps: ['blog.write'] },
+    // Admin v2 U7: the Contact page's questions (and its FAQPage markup).
+    { href: '/admin/faq', label: 'FAQ', icon: 'note', caps: ['pages.write'] },
     { href: '/admin/statistics', label: 'Numbers', icon: 'grid', caps: ['services.write'] },
     {
       href: '/admin/certifications',

@@ -47,6 +47,7 @@ const CHANGE: Record<ReleaseEntityType, () => Record<string, unknown>> = {
   seo_defaults: () => draft('seo_defaults', 'update', TENANT, { robotsDirectives: 'noindex' }),
   redirect: () => draft('redirect', 'delete', ID.foreign),
   page_visibility: () => draft('page_visibility', 'delete', ID.foreign),
+  faq_item: () => draft('faq_item', 'delete', ID.fqPub),
 };
 
 const O: Outcome = 'overlaid';
@@ -62,7 +63,8 @@ const N: Outcome = 'not shown';
  * Developer: pages (through maintenance.manage) and identity; theme and page visibility
  * are readable but not previewed. A page-visibility change stays "not previewed" even
  * though the dataset reads the live rows for 0061's password fence (the fence follows the
- * live mode; docs/admin-v2/as-built/R8.md says why).
+ * live mode; docs/admin-v2/as-built/R8.md says why). The FAQ (Admin v2 U7) is Contact-page
+ * content: Admin and Content Creator (pages.write) only.
  */
 const EXPECTED: Record<Role, Record<ReleaseEntityType, Outcome>> = {
   admin: {
@@ -87,6 +89,7 @@ const EXPECTED: Record<Role, Record<ReleaseEntityType, Outcome>> = {
     seo_defaults: O,
     redirect: P,
     page_visibility: P,
+    faq_item: O,
   },
   content_creator: {
     category: O,
@@ -110,6 +113,7 @@ const EXPECTED: Record<Role, Record<ReleaseEntityType, Outcome>> = {
     seo_defaults: N,
     redirect: N,
     page_visibility: N,
+    faq_item: O,
   },
   seo: {
     category: O,
@@ -133,6 +137,7 @@ const EXPECTED: Record<Role, Record<ReleaseEntityType, Outcome>> = {
     seo_defaults: O,
     redirect: P,
     page_visibility: N,
+    faq_item: N,
   },
   developer: {
     category: N,
@@ -156,6 +161,7 @@ const EXPECTED: Record<Role, Record<ReleaseEntityType, Outcome>> = {
     seo_defaults: N,
     redirect: N,
     page_visibility: P,
+    faq_item: N,
   },
 };
 

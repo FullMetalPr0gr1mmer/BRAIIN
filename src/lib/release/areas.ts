@@ -119,6 +119,8 @@ export const RELEASE_ENTITY_META: Readonly<Record<ReleaseEntityType, ReleaseEnti
     hasStatus: false,
     publishFlag: null,
   },
+  // The FAQ (Admin v2 U7, 0070): Contact-page content (pages.write, P-2).
+  faq_item: content('collections', 'pages.write', 10, true),
 };
 
 /** The areas whose changes are content (write capability + `content.publish`). */
