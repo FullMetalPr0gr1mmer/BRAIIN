@@ -219,7 +219,8 @@ test.describe('configured (fixture rows in the local Supabase)', () => {
     await expect(card.locator('.up .up__d')).toHaveCount(90);
     await expect(card.locator('.up .up__d[data-state="down"]')).toHaveCount(2);
     await expect(card.locator('.up .up__d[data-state="dip"]')).toHaveCount(1);
-    await expect(card.getByText('Up all day on 87 of 90 days.')).toBeVisible();
+    // By its class: the text alone also matches the figure's visually hidden summary.
+    await expect(card.locator('.up__sum')).toHaveText('Up all day on 87 of 90 days.');
     const strip = card.locator('#uptime-strip');
     await strip.getByText('View as table').click();
     await expect(strip.locator('tbody tr')).toHaveCount(3);

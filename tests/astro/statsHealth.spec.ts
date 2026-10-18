@@ -476,7 +476,12 @@ describe('UptimeCard (G2)', () => {
     expect(strip.match(/data-state="dip"/g)).toHaveLength(1);
     expect(strip.match(/data-state="down"/g)).toHaveLength(1);
     expect(strip.match(/data-state="none"/g)).toHaveLength(3);
-    expect(html).toContain('Up all day on 85 of 90 days; no reading on 3.');
+    // The summary is said once: the figure's hidden line is what a screen reader hears, so
+    // the visible copy under the bars is hidden from it (and an e2e finds the visible one by
+    // its class, never by its text, which matches both).
+    const said = 'Up all day on 85 of 90 days; no reading on 3.';
+    expect(html).toContain(`<p class="up__sum" aria-hidden="true">${said}</p>`);
+    expect(html.split(said).length - 1).toBe(2);
     // The table is the days with downtime, newest first, from the same data.
     expect(tableCells(figure(html, 'uptime-strip'))).toEqual([
       ['11 Oct 2026', '97.20%', 'Down for over 14 minutes'],

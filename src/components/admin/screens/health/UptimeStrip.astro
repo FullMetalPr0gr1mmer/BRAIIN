@@ -6,7 +6,9 @@ import { dayState, stripSummary, stripTable } from '@/lib/admin/health/uptime';
 // The 90-day uptime strip (Admin v2 G2; the prototype's .up): one bar per Riyadh day, oldest
 // first, coloured by its state through a data attribute (no style=). The bars are
 // decoration for sighted readers (aria-hidden); the figure's summary and its "View as table"
-// carry the same days in words, the days with downtime listed (one dataset).
+// carry the same days in words, the days with downtime listed (one dataset). The visible
+// summary under the bars repeats the figure's hidden one, so it is hidden from screen readers:
+// they hear it once.
 
 interface Props {
   days: readonly UptimeDay[];
@@ -33,6 +35,6 @@ const summary = stripSummary(days);
       <span>90 days ago</span>
       <span>Today</span>
     </p>
-    <p class="up__sum">{summary}</p>
+    <p class="up__sum" aria-hidden="true">{summary}</p>
   </div>
 </ChartFigure>
