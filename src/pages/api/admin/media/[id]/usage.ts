@@ -11,6 +11,12 @@ import { getRow } from '@/lib/admin/crud';
 // Readable by every role that may read the library (media.write full or meta). The
 // function is SECURITY INVOKER, so the list is exactly the references the caller's own RLS
 // lets them see — staff see their whole tenant.
+//
+// Since media_usage v4 (migration 0066, Admin v2 R5) a pending change that names the asset
+// (a draft's payload, in any spelling of the id) is a reference too, marked `pending`. The
+// row schema is not strict, so a row with a column it does not know parses (the deployed
+// Worker read v4's rows between the migration and this deploy); `pending` defaults to false
+// for a database without v4.
 
 export const prerender = false;
 
@@ -18,6 +24,7 @@ const UsageRowSchema = z.object({
   entity_type: z.string(),
   entity_id: z.string().uuid(),
   label: z.string().nullable(),
+  pending: z.boolean().default(false),
 });
 
 export const GET = defineAdminRoute({
@@ -39,6 +46,7 @@ export const GET = defineAdminRoute({
         entityType: u.entity_type,
         entityId: u.entity_id,
         label: u.label,
+        pending: u.pending,
       })),
     };
   },

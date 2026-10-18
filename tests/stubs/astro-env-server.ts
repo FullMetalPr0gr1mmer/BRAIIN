@@ -11,3 +11,7 @@ export const NOTIFY_LEAD_SECRET = 'test-dummy-notify-lead-secret';
 // Off, as a project without SMTP ships (owner item O-2). Tests of the "set up" path mock
 // src/lib/auth/recovery.ts's authEmailReady() instead of editing this.
 export const AUTH_EMAIL_READY = false;
+// Not set up, as a deployment without an uptime monitor ships (owner item O-20). Tests of the
+// "set up" path pass a config to src/lib/health/uptime's uptimeProvider() instead.
+export const UPTIME_MONITOR_API_KEY: string | undefined = undefined;
+export const UPTIME_MONITOR_IDS: string | undefined = undefined;

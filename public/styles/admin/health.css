@@ -2,9 +2,10 @@
    AdminLayout's `styles` prop (styles={['health.css']}), after admin.css. Ported from the
    prototype's screens_health.js: the summary band (.hs: the ring, its word and formula, the
    tiles), the checklist rows (.hsrow with their state dot, .st), the Speed and Errors
-   tables' cells. The ring, badges, tables, tabs and chips are admin.css's kit. Not ported:
-   the uptime strip and the gauge (nothing measures uptime yet, and the Speed tab says a
-   rating in words), and the Lighthouse score chips (.sc: no lab numbers are shown here).
+   tables' cells; since G2 the uptime strip (.up), the Uptime card's parts (.upc) and Check
+   now (.hcheck). The ring, badges, tables, tabs, chips and the two-column grid are
+   admin.css's kit. Not ported: the gauge (the Speed tab says a rating in words) and the
+   Lighthouse score chips (.sc: no lab numbers are shown here).
    The prototype's inline styles are classes; its tints are the badge tokens. It uses
    admin.css's tokens and declares none, and holds no colour literal
    (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
@@ -267,4 +268,108 @@
   font-size: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* ---- The Uptime card (Admin v2 G2) ---- */
+
+.hs__cols {
+  align-items: flex-start;
+}
+
+.upc__h {
+  margin: 18px 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.upc__none,
+.upc__mon {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ad-dim);
+}
+
+.upc__mon {
+  overflow-wrap: anywhere;
+}
+
+.upc .note {
+  margin-block: 0 12px;
+}
+
+.upc .note + .upc__h,
+.upc .upc__mon + .note {
+  margin-block-start: 12px;
+}
+
+/* The 90-day strip: one bar per Riyadh day, oldest first, its state a data attribute. One
+   row of 90 while each bar keeps at least 2px with its 1px gap; under 480px wide, three
+   rows of 30, so a phone never squeezes a day below a visible width. */
+.up-wrap {
+  margin-block-start: 14px;
+}
+
+.up {
+  display: grid;
+  grid-template-columns: repeat(90, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.up__d {
+  block-size: 34px;
+  border-radius: 2px;
+  background: var(--ad-gray-soft);
+}
+
+.up__d[data-state='ok'] {
+  background: var(--ad-ok-text);
+}
+
+.up__d[data-state='dip'] {
+  background: var(--ad-warn-text);
+}
+
+.up__d[data-state='down'] {
+  background: var(--ad-err-text);
+}
+
+@media (max-width: 479px) {
+  .up {
+    grid-template-columns: repeat(30, minmax(0, 1fr));
+    row-gap: 3px;
+  }
+
+  .up__d {
+    block-size: 14px;
+  }
+}
+
+.up__cap {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--ad-dim);
+}
+
+.up__sum {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ad-dim);
+}
+
+/* Check now: the button, and beside it what went wrong. */
+.hcheck {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.hcheck__msg {
+  margin: 0;
 }

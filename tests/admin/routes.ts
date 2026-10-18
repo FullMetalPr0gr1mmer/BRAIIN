@@ -190,6 +190,11 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   { href: '/admin/site-health?tab=speed', label: 'Site health speed', caps: ['siteHealth.view'] },
   { href: '/admin/site-health?tab=errors', label: 'Site health errors', caps: ['logs.view'] },
   { href: '/admin/site-health?tab=seo', label: 'Site health SEO', caps: ['siteHealth.view'] },
+  {
+    href: '/admin/site-health?tab=security',
+    label: 'Site health security',
+    caps: ['siteHealth.view'],
+  },
   // The media library's in-page states (Admin v2 U4): the Videos tab, the "Needs alt text"
   // filter and a search with no match (the empty state), for every role that opens it.
   {

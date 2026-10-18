@@ -1,7 +1,7 @@
 import { handle } from '@astrojs/cloudflare/handler';
 import { serveMedia } from './lib/http/media';
 import { ensureSecurityHeaders } from './lib/http/securityHeaders';
-import { runDailyJobs } from './lib/cron/daily';
+import { runSchedule } from './lib/cron/schedules';
 import { writeSystemLog } from './lib/data/systemLog';
 import { scrubPii } from './lib/log/scrub';
 
@@ -26,8 +26,10 @@ import { scrubPii } from './lib/log/scrub';
 // message), both scrubbed of PII — never the request. Under `astro dev` it is rethrown, so
 // the dev server's error overlay still shows the stack.
 //
-// `scheduled` is the daily cron (wrangler.jsonc `triggers.crons`): src/lib/cron/daily.ts runs
-// the jobs registered in src/lib/cron/jobs.ts, in their order, cheapest first. Importing the
+// `scheduled` dispatches on `controller.cron` (wrangler.jsonc `triggers.crons`) through
+// src/lib/cron/schedules.ts: the daily jobs (src/lib/cron/jobs.ts, in their order, cheapest
+// first) and the 10-minute health schedule (src/lib/cron/health.ts, Admin v2 G2), each its
+// own invocation within the Free plan's 50 subrequests. Importing the
 // adapter's handler above is what wires `astro:env` for this path too (it calls `setGetEnv`
 // at module load from `cloudflare:workers`' env), so the jobs use the same service client as
 // every endpoint.
@@ -56,7 +58,7 @@ export default {
       );
     }
   },
-  async scheduled(_controller, _env, ctx) {
-    ctx.waitUntil(runDailyJobs());
+  async scheduled(controller, _env, ctx) {
+    ctx.waitUntil(runSchedule(controller.cron));
   },
 } satisfies ExportedHandler<Env>;

@@ -454,7 +454,11 @@ for (const role of ['content_creator', 'seo'] as const) {
         await expect(page.locator('main .msg[data-kind="error"]').first()).toContainText(
           'Your role does not allow that.',
         );
-        expect(await page.content(), path).not.toContain(`E2E `);
+        // Every lead this file seeds carries the run's id; the signed-in account is named
+        // "E2E <role>", so the page as a whole is checked for the run's id, and the main
+        // region, where a lead would be shown, for any seeded name at all.
+        expect(await page.content(), path).not.toContain(RUN);
+        expect(await page.locator('main').innerText(), path).not.toContain('E2E ');
       }
       for (const [method, api] of [
         ['post', '/api/admin/leads/query'],

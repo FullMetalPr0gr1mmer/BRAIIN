@@ -699,6 +699,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [U13](as-built/U13.md): the activity log v2: names, kind, person and day filters, plain language, the export under the lockdown, the live read on `audit_log`, 0054
 - [U14a](as-built/U14a.md): page visibility without the password mode: `page_visibility`, the middleware gate on the matched route, KV `site:visibility` through a 60 s isolate memo, the menus, sitemap, llms.txt and search filtered, `/admin/visibility`, the `nav_visible` alias, the registry row, 0057 (PR number at review)
 - [U14b](as-built/U14b.md): the password mode: `page_passwords` (bcrypt, no policy and no API-role privilege), `set_page_password` and `page_password_check`, the signed per-page cookie and `/api/page-access` with a limiter that fails closed, the gate page, and the `page_sections` fence with `page_sections_unlocked` and `page_media_unlocked` for an unlocked request, 0061 (PR number at review)
+- [G2](as-built/G2.md): site health v2: uptime from the monitor's read-only API, the domain's RDAP expiry, the health schedule (`*/10`, the cron dispatcher), the Security tab, Check now, probe failures in the bell, 0067 (PR number at review)
 - [U16](as-built/U16.md): the help centre: guides as typed blocks in the database, the "?" drawer with search and this screen's guides, `/admin/help`, 0046 (#62)
 - [U12a](as-built/U12a.md): users v2 and the session posture: the token's own claims and the session length checked, sessions revoked on a role change, the live read of profiles, the account owner, the Security card, the read-only role matrix, 0055 (PR number at review)
 - [U12b](as-built/U12b.md): invites: the acceptance page `/admin/invite` (eight pre-auth paths), Pending invites with Resend and Cancel, the invite drawer and message, switched off ("Not set up") until SMTP, the invite e-mail template, no address in the invite audit rows, 0056 (the help guide; PR number at review)
@@ -709,6 +710,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [R3a](as-built/R3a.md): staged writes in the database and the resource kernel, behind the release flag: the draft writes, `public.write_drafts`, the staged branch of every kernel handler, inert, 0062
 - [R4](as-built/R4.md): applying a release as the publisher, change capture, the shared link-set helper, the purge record, inert, 0051 (#69)
 - [R8](as-built/R8.md): the preview data seam: the scoped `contentClient()`, the narrowed PostgREST emulator, the anon-RLS mirror, the `range()`-paged dataset with drafts overlaid per role, the fail-closed report, no migration (PR number at review)
+- [R5](as-built/R5.md): the release guard on every registry and link table (no depth exemption), system items and link-set capture with cascades, TRUNCATE closed, `media_usage` v4 (pending changes) and `dashboard_attention` v4 (release kinds), `publish_scheduled` skips tenants with releases on, inert, 0066 (PR number at review)
 
 **CRM**
 - [C1a-1](as-built/C1a-1.md): lead personal data at the database layer, 0033 (#43)

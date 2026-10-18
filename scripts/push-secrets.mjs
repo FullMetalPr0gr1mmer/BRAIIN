@@ -23,8 +23,14 @@ const SECRETS = [
   'NOTIFY_LEAD_SECRET',
 ];
 
-/** Optional — the AI proxy is a 501 stub, so a missing key is not an error. */
-const OPTIONAL = new Set(['ANTHROPIC_API_KEY', 'SUPABASE_DB_POOL_URL']);
+/**
+ * Optional — the AI proxy is a 501 stub, so a missing key is not an error; without the uptime
+ * monitor's read-only key (Admin v2 G2, owner item O-20) site health says "Not set up".
+ */
+const OPTIONAL = new Set(['ANTHROPIC_API_KEY', 'SUPABASE_DB_POOL_URL', 'UPTIME_MONITOR_API_KEY']);
+
+/** Optional secrets pushed only when .env names them. */
+const PUSHED_WHEN_SET = ['ANTHROPIC_API_KEY', 'UPTIME_MONITOR_API_KEY'];
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -49,7 +55,7 @@ function readEnv() {
 }
 
 const env = readEnv();
-const names = [...SECRETS, ...(env.has('ANTHROPIC_API_KEY') ? ['ANTHROPIC_API_KEY'] : [])];
+const names = [...SECRETS, ...PUSHED_WHEN_SET.filter((name) => env.has(name))];
 
 // Refuse the whole run if any value is still a placeholder. Pushing half the secrets
 // and failing on the rest leaves a Worker that boots and then 500s on its first
