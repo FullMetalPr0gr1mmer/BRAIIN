@@ -12,7 +12,15 @@ import {
   viewFromUrl,
   viewHref,
 } from '@/components/admin/screens/media/libraryState';
-import { USAGE_KINDS, USAGE_SCREENS, usageEntries } from '@/components/admin/screens/media/usage';
+import {
+  IN_USE_PENDING_TEXT,
+  IN_USE_TEXT,
+  USAGE_KINDS,
+  USAGE_SCREENS,
+  inUseText,
+  usageEntries,
+  usageWords,
+} from '@/components/admin/screens/media/usage';
 
 // The media library's screen logic (Admin v2 U4): "Used in" in words and links, decided per
 // role on the server (a link only where the role's sidebar opens the screen); the view and
@@ -81,6 +89,58 @@ describe('"Used in": words and links', () => {
       ['Entity seo: home', null],
       ['Site profile', null],
     ]);
+  });
+
+  it('a pending change (media_usage v4, 0066) says it is one, and is never a link', () => {
+    // Before R5 met U4 the drawer ignored `pending`: a draft naming the picture read
+    // "Service: logo" and linked to the live service, which does not use it.
+    const pending = (entityType: string, label: string | null) => ({
+      entityType,
+      entityId: ID,
+      label,
+      pending: true,
+    });
+    const entries = usageEntries(usageScreensFor('admin'), [
+      { entityType: 'service', entityId: ID, label: 'logo', pending: false },
+      pending('service', 'logo'),
+      pending('page_section', 'Home hero'),
+      pending('team_member', 'amal'),
+      pending('entity_seo', 'home'),
+      // 0066's label when the draft has no English label and no slug.
+      pending('site_profile', 'pending change'),
+      pending('service', null),
+    ]);
+    expect(entries.map((e) => [e.words, e.href])).toEqual([
+      ['Service: logo', `/admin/services/${ID}`],
+      ['Pending change to service: logo', null],
+      ['Pending change to page section: Home hero', null],
+      ['Pending change to team member: amal', null],
+      ['Pending change to entity seo: home', null],
+      ['Pending change to site profile', null],
+      ['Pending change to service', null],
+    ]);
+    // A live and a pending reference to one entity are two entries with two keys.
+    expect(new Set(entries.map((e) => e.key)).size).toBe(entries.length);
+    for (const entry of entries) expect(entry.words).not.toMatch(/[\u2013\u2014]/);
+  });
+
+  it('every kind words a pending change with its own noun', () => {
+    for (const [type, kind] of Object.entries(USAGE_KINDS)) {
+      expect(usageWords({ entityType: type, entityId: ID, label: 'x', pending: true })).toBe(
+        `Pending change to ${kind.noun}: x`,
+      );
+      expect(kind.noun).toBe(kind.noun.toLowerCase());
+    }
+  });
+
+  it('Delete’s reason says when a pending change holds the picture', () => {
+    const live = { entityType: 'service', entityId: ID, label: 'logo' };
+    expect(inUseText([])).toBeNull();
+    expect(inUseText([live])).toBe(IN_USE_TEXT);
+    expect(inUseText([{ ...live, pending: false }])).toBe(IN_USE_TEXT);
+    expect(inUseText([{ ...live, pending: true }])).toBe(IN_USE_PENDING_TEXT);
+    expect(inUseText([live, { ...live, pending: true }])).toBe(IN_USE_PENDING_TEXT);
+    expect(IN_USE_PENDING_TEXT).not.toMatch(/[\u2013\u2014]/);
   });
 
   it('what the buttons offer each role follows ROLE_CAPS', () => {

@@ -370,7 +370,9 @@ describe('the loaders read only what the role sees', () => {
  *  it is held to, and the identity row the layout renders. */
 const MIDDLEWARE = 3;
 /** What the budget test measures; docs/admin-v2/as-built/U1.md records the same figures. */
-const MEASURED = { loadDashboard: 24, total: 34 };
+// R5 (0066) added one: stale pending changes are read on their own, with an exact count, so
+// they never crowd the content kinds out of the attention list's capped read.
+const MEASURED = { loadDashboard: 25, total: 35 };
 
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
   // A real request has one clock: the dashboard's "Going live today" and the bell both ask
