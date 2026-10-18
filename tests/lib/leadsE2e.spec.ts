@@ -22,4 +22,25 @@ describe('tests/admin/leads.e2e.ts', () => {
     // tests move and erase New leads. fullyParallel would schedule them side by side.
     expect(adminDescribe()).toContain("test.describe.configure({ mode: 'serial' });");
   });
+
+  it('waits for the islands after every page it opens', () => {
+    // The leads pages are server-rendered first (C4b): their controls are on screen before
+    // React listens. Every navigation goes through open(), which waits for hydration; the
+    // one bare goto is csrf()'s, which only fetches the cookie and acts on nothing.
+    const from = source.indexOf('async function open(');
+    expect(from, 'the open() helper').toBeGreaterThan(-1);
+    const helper = source.slice(from, source.indexOf('\n}\n', from));
+    expect(helper).toContain(
+      "page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null)",
+    );
+    const gotos = source
+      .split('\n')
+      .filter((line) => line.includes('.goto('))
+      .map((line) => line.trim());
+    expect(gotos).toEqual([
+      "if (!(await find())) await page.goto('/admin', { waitUntil: 'domcontentloaded' });",
+      'const res = await page.goto(path, options);',
+    ]);
+    expect(source.match(/await open\(page, /g)?.length ?? 0).toBeGreaterThanOrEqual(8);
+  });
 });
