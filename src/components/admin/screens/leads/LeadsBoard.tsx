@@ -94,6 +94,25 @@ export function cardTakesFocus(active: Element | null, body: Element | null): bo
   return active === null || active === body;
 }
 
+/**
+ * What takes focus once the board is redrawn after a move or a conflict's refresh: the card's
+ * link wherever it now is; else, when the refresh no longer holds the card (a colleague marked
+ * it spam, which the board leaves out, or it now falls outside the filters), the heading of
+ * the column it left; else the board's region. Never nothing, so focus is not left on the
+ * page's body (WCAG 2.4.3).
+ */
+export function focusTargetAfterMove(
+  root: Pick<ParentNode, 'querySelector'>,
+  id: string,
+  from: string,
+): HTMLElement | null {
+  return (
+    root.querySelector<HTMLElement>(`[data-lead-card="${id}"] .kcard__n`) ??
+    root.querySelector<HTMLElement>(`[id="kb-${from}"]`) ??
+    root.querySelector<HTMLElement>('.kb')
+  );
+}
+
 export default function LeadsBoard({
   frame,
   initial,
@@ -115,7 +134,7 @@ export default function LeadsBoard({
   const [busy, setBusy] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(() => Date.parse(renderedAt));
-  const focusAfter = useRef<string | null>(null);
+  const focusAfter = useRef<{ id: string; from: string } | null>(null);
   const addLead = useAddLead(permissions.canSeePii, disciplines);
 
   useEffect(() => {
@@ -156,11 +175,11 @@ export default function LeadsBoard({
   // After a move, or the refresh a conflict asks for, focus goes to the card wherever it now
   // is, if focus was lost with its old place (cardTakesFocus).
   useEffect(() => {
-    const id = focusAfter.current;
-    if (!id) return;
+    const after = focusAfter.current;
+    if (!after) return;
     focusAfter.current = null;
     if (!cardTakesFocus(document.activeElement, document.body)) return;
-    document.querySelector<HTMLElement>(`[data-lead-card="${id}"] .kcard__n`)?.focus();
+    focusTargetAfterMove(document, after.id, after.from)?.focus();
   }, [columns]);
 
   async function move(card: Card, to: StageView) {
@@ -172,14 +191,14 @@ export default function LeadsBoard({
         method: 'PATCH',
         body: { version: Number(card.version) || 1, stageId: to.id },
       });
-      focusAfter.current = card.id;
+      focusAfter.current = { id: card.id, from: String(card.stage_id) };
       setColumns((list) => moved(list, card, to, answer));
       setSaid(`Moved ${name} to ${to.label}.`);
     } catch (err) {
       if (err instanceof AdminApiError && err.info.status === 409) {
         setSaid(`Someone else changed ${name}. Refreshed.`);
         // The refresh may put the card in another column, taking its focused button with it.
-        focusAfter.current = card.id;
+        focusAfter.current = { id: card.id, from: String(card.stage_id) };
         setReload((n) => n + 1);
       } else {
         setError(`${name} could not be moved. ${describeError(err)}`);
@@ -228,7 +247,7 @@ export default function LeadsBoard({
             <section key={column.stage.id} className="kb__col" aria-labelledby={headingId}>
               <div className="kb__h">
                 <span className="kb__dot" data-tone={column.stage.tone} aria-hidden="true" />
-                <h2 id={headingId} className="kb__t">
+                <h2 id={headingId} className="kb__t" tabIndex={-1}>
                   {column.stage.label}
                 </h2>
                 {column.stage.kind === 'won' && (

@@ -3,7 +3,10 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import LeadsList, { hoursText } from '@/components/admin/screens/leads/LeadsList';
-import LeadsBoard, { cardTakesFocus } from '@/components/admin/screens/leads/LeadsBoard';
+import LeadsBoard, {
+  cardTakesFocus,
+  focusTargetAfterMove,
+} from '@/components/admin/screens/leads/LeadsBoard';
 import LeadDetail from '@/components/admin/screens/leads/LeadDetail';
 import LeadContactCard, { whatsappHref } from '@/components/admin/screens/leads/LeadContactCard';
 import { reasonsSentence } from '@/components/admin/screens/leads/LeadStatusCard';
@@ -240,8 +243,33 @@ describe('the board', () => {
     expect(source).toContain('if (!cardTakesFocus(document.activeElement, document.body)) return;');
     // A conflict's refresh follows the card too.
     expect(source).toMatch(
-      /status === 409\) \{\n[^\n]*\n[^\n]*\n\s*focusAfter\.current = card\.id;/,
+      /status === 409\) \{\n[^\n]*\n[^\n]*\n\s*focusAfter\.current = \{ id: card\.id, from: String\(card\.stage_id\) \};/,
     );
+  });
+
+  it('gives focus to the column the card left when the refresh no longer holds it', () => {
+    // A conflict's refresh can drop the card: a colleague marked it spam (the board leaves
+    // spam out) or it now falls outside the filters. Its "Move to…" left with it, so focus
+    // goes to the heading of the column it left, else the board, never the body (WCAG 2.4.3).
+    const link = { tag: 'a' } as unknown as HTMLElement;
+    const heading = { tag: 'h2' } as unknown as HTMLElement;
+    const board = { tag: 'div.kb' } as unknown as HTMLElement;
+    const rootOf = (found: Record<string, HTMLElement>) => ({
+      querySelector: <E extends Element>(selector: string) => (found[selector] ?? null) as E | null,
+    });
+    const cardSel = `[data-lead-card="${LEAD}"] .kcard__n`;
+    const colSel = `[id="kb-${NEW}"]`;
+    expect(
+      focusTargetAfterMove(rootOf({ [cardSel]: link, [colSel]: heading, '.kb': board }), LEAD, NEW),
+    ).toBe(link);
+    expect(focusTargetAfterMove(rootOf({ [colSel]: heading, '.kb': board }), LEAD, NEW)).toBe(
+      heading,
+    );
+    expect(focusTargetAfterMove(rootOf({ '.kb': board }), LEAD, NEW)).toBe(board);
+    // The heading the selector names is the column's, and it can take focus.
+    expect(out).toContain(`<h2 id="kb-${NEW}" class="kb__t" tabindex="-1">`);
+    const source = readFileSync('src/components/admin/screens/leads/LeadsBoard.tsx', 'utf8');
+    expect(source).toContain('focusTargetAfterMove(document, after.id, after.from)?.focus();');
   });
 
   it('reads the address through boardFilters on the server too', () => {
