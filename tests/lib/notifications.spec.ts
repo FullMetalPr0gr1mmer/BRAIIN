@@ -662,6 +662,30 @@ describe('the bell: site health (G2)', () => {
     expect(seen.items.filter((i) => i.kind === 'health' && i.unread)).toEqual([]);
   });
 
+  it('a domain or certificate renewed since the last read rings nothing (judged again now)', async () => {
+    const later = new Date(NOW.getTime() + 400 * 86_400_000).toISOString();
+    const { sb } = fakeDb({
+      ...FULL,
+      health_probes: {
+        rows: [
+          probeRow('domain', 'fail', {
+            apex: 'braiinstatiion.com',
+            outcome: 'ok',
+            expires: later,
+            registrar: null,
+            rdap: null,
+          }),
+          probeRow('certificate', 'fail', { source: 'monitor', expires: later, issuer: null }),
+        ],
+      },
+    });
+    const feed = await loadNotifications(sb, auth('admin'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(feed.items.filter((item) => item.kind === 'health')).toEqual([]);
+  });
+
   it('muting health drops its items', async () => {
     const { sb } = fakeDb({
       ...HEALTH_FAIL,

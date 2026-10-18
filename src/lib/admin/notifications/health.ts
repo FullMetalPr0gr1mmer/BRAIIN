@@ -78,21 +78,25 @@ export const health: NotificationSource = {
     }
 
     const domain = report.domain;
-    if (domain?.state === 'fail' && domain.facts) {
-      const apex = domain.facts.apex ?? 'The domain';
-      const left = domain.facts.expires ? daysUntil(domain.facts.expires, now) : null;
+    const domainText = (facts: NonNullable<NonNullable<typeof domain>['facts']>): string | null => {
+      const apex = facts.apex ?? 'The domain';
+      if (facts.outcome === 'not-found') return `No registration found for ${apex}`;
+      if (facts.outcome === 'invalid') return `The site's domain, ${apex}, is not a domain name`;
+      if (facts.outcome !== 'ok' || !facts.expires) return null;
+      // Judged again now: a domain renewed since the last read rings nothing.
+      const left = daysUntil(facts.expires, now);
+      if (left > THRESHOLDS.domainFailDays) return null;
+      return left < 0
+        ? `${apex} has expired`
+        : `${apex} expires in ${left} ${plural(left, 'day', 'days')}`;
+    };
+    const domainLine = domain?.state === 'fail' && domain.facts ? domainText(domain.facts) : null;
+    if (domain && domainLine) {
       items.push({
         id: `health:domain:${domain.stateSince}`,
         kind: 'health',
         icon: 'warn',
-        text:
-          domain.facts.outcome === 'ok' && left !== null && left <= THRESHOLDS.domainFailDays
-            ? left < 0
-              ? `${apex} has expired`
-              : `${apex} expires in ${left} ${plural(left, 'day', 'days')}`
-            : domain.facts.outcome === 'invalid'
-              ? `The site's domain, ${apex}, is not a domain name`
-              : `No registration found for ${apex}`,
+        text: domainLine,
         detail: null,
         at: domain.stateSince,
         since: domain.stateSince,
@@ -101,8 +105,9 @@ export const health: NotificationSource = {
     }
 
     const cert = report.certificate;
-    if (cert?.state === 'fail' && cert.facts?.expires) {
-      const left = daysUntil(cert.facts.expires, now);
+    const certLeft = cert?.facts?.expires ? daysUntil(cert.facts.expires, now) : null;
+    if (cert?.state === 'fail' && certLeft !== null && certLeft <= THRESHOLDS.certificateFailDays) {
+      const left = certLeft;
       items.push({
         id: `health:certificate:${cert.stateSince}`,
         kind: 'health',
