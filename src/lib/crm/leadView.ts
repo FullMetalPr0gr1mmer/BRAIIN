@@ -236,7 +236,10 @@ export function eventSentence(event: LeadEvent, stages: StagesByKey, people: Peo
 export const LEAD_RANGES = ['7', '30', '90', 'all'] as const;
 export type LeadRange = (typeof LEAD_RANGES)[number];
 
-/** A range as lead_summary's half-open instants, and the period of equal length before it. */
+/**
+ * A range as lead_summary's half-open instants, and the period it is compared with (C4b): the
+ * same elapsed span one range earlier, ending at the same time of day.
+ */
 export interface RangeInstants {
   from: string;
   to: string;
@@ -270,19 +273,25 @@ function studioOffsetMinutes(at: Date): number {
 }
 
 /**
- * The last N days in the studio's calendar, today included: from midnight N-1 days ago to
- * midnight tonight (Asia/Riyadh), `to` exclusive as lead_summary and leads_list read it, and
- * the N days before that for the deltas. Null for all time (no range, so no deltas).
+ * The last N days in the studio's calendar, today included: from midnight N-1 days ago
+ * (Asia/Riyadh) to now, `to` exclusive as lead_summary and leads_list read it. Null for all
+ * time (no range, so no deltas).
+ *
+ * The comparison (C4b, settling what C4a left open): the same elapsed span N days earlier,
+ * from midnight to the same time of day. A range that ended at midnight tonight would set a
+ * part day against N whole days, and the deltas would lean down every morning; a range of
+ * whole days only would leave today's leads out of the KPIs. `previousPeriod`
+ * (src/lib/crm/leadKpis.ts) shifts the same way, so the route and the screen agree.
  */
 export function rangeToInstants(range: LeadRange, now: Date): RangeInstants | null {
   if (range === 'all') return null;
   const days = Number(range);
   const [y, m, d] = STUDIO_DATE.format(now).split('-').map(Number) as [number, number, number];
-  // Midnight tonight in the studio's zone: tomorrow's date at 00:00 there.
-  const tomorrowUtcMidnight = Date.UTC(y, m - 1, d + 1);
-  const to = tomorrowUtcMidnight - studioOffsetMinutes(new Date(tomorrowUtcMidnight)) * 60_000;
-  const from = to - days * DAY_MS;
-  const prevFrom = from - days * DAY_MS;
+  // Midnight starting the range in the studio's zone: N-1 days before today's date, 00:00.
+  const startUtcMidnight = Date.UTC(y, m - 1, d - (days - 1));
+  const from = startUtcMidnight - studioOffsetMinutes(new Date(startUtcMidnight)) * 60_000;
+  const to = now.getTime();
+  const shift = days * DAY_MS;
   const iso = (ms: number) => new Date(ms).toISOString();
-  return { from: iso(from), to: iso(to), prevFrom: iso(prevFrom), prevTo: iso(from) };
+  return { from: iso(from), to: iso(to), prevFrom: iso(from - shift), prevTo: iso(to - shift) };
 }
