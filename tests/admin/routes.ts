@@ -106,9 +106,16 @@ export interface LockedScreen {
 export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/users', api: '/api/admin/users', cap: 'users.manage' },
   { href: '/admin/applications', api: '/api/admin/applications', cap: 'applications.manage' },
-  // Admin v2 C4b: the leads list renders its first view on the server, so it refuses itself
-  // (a 403 and Refused.astro).
+  // Admin v2 C4b: the leads screens render their first view on the server, so they refuse
+  // themselves (a 403 and Refused.astro). The board's twin is the stages read (a GET with the
+  // same capability); its own data route is a POST.
   { href: '/admin/leads', api: '/api/admin/leads', cap: 'leads.manage', render: 'server' },
+  {
+    href: '/admin/leads/board',
+    api: '/api/admin/crm/stages',
+    cap: 'leads.manage',
+    render: 'server',
+  },
   { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view', render: 'server' },
   {
     href: '/admin/site-health',

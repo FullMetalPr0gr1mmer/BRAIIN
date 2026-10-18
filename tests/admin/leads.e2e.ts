@@ -11,12 +11,15 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *   the list    a filter writes the address and never the search; a whole e-mail finds its
  *               lead through the blind index and stays out of the address; the star; a bulk
  *               move; a stale version in a second tab gives the conflict words;
+ *   the board   keyboard only: Move to…, an arrow, Enter, the card in its new column with
+ *               focus on it and the status words; Escape returns focus; phone widths scroll
+ *               the board, never the page;
  *   a lead      Previous and Next in the list's filter; the reveal shows the values and
  *               writes one audit row; a note; a logged call; a stage move, then a conflict
  *               from another tab; an Admin's erase (a 404 after);
  *   the drawer  add by hand onto the lead's page; a phone-only duplicate asks, "Add as
  *               someone new" adds; focus returns to the button;
- *   refusals    Content Creator and SEO get a 403 page (and API) on both paths, with no
+ *   refusals    Content Creator and SEO get a 403 page (and API) on all three paths, with no
  *               lead's name in the HTML.
  * axe runs with each dialog and the move menu open. Every lead it adds is named with this
  * run's token and added through the real routes; nothing reads or writes the database
@@ -228,7 +231,56 @@ test.describe('as admin', () => {
     ).toContainText('1 lead was changed by someone else. Refreshed.');
   });
 
+  test('the board, by keyboard: Move to…, announced, focus on the moved card', async ({ page }) => {
+    const lead = await addLead(page, 'board');
+    await page.goto('/admin/leads/board');
+    const search = page.getByRole('searchbox', { name: 'Search the pipeline' });
+    await search.fill(lead.name);
+    await search.press('Enter');
+    const move = page.getByRole('button', { name: `Move to… ${lead.name}` });
+    await move.focus();
+    await page.keyboard.press('Enter');
+    await expect(move).toHaveAttribute('aria-expanded', 'true');
+    await axe(page, 'the board with the move menu open');
+    // Escape closes the list and returns focus.
+    await page.keyboard.press('Escape');
+    await expect(move).toHaveAttribute('aria-expanded', 'false');
+    await expect(move).toBeFocused();
+
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowDown');
+    const target = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? '');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('status').filter({ hasText: 'Moved' })).toHaveText(
+      `Moved ${lead.name} to ${target}.`,
+    );
+    const column = page.locator('section.kb__col', {
+      has: page.getByRole('heading', { name: target, exact: true }),
+    });
+    const link = column.getByRole('link', { name: lead.name });
+    await expect(link).toBeVisible();
+    await expect(link).toBeFocused();
+  });
+
   for (const width of [320, 390]) {
+    test(`the board at ${width} px scrolls in its region, never the page`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/admin/leads/board', { waitUntil: 'networkidle' });
+      const overflow = await page.evaluate(() => {
+        const root = document.documentElement;
+        const board = document.querySelector('.kb') as HTMLElement;
+        return {
+          page: root.scrollWidth - root.clientWidth,
+          board: board.scrollWidth - board.clientWidth,
+          focusable: board.tabIndex === 0,
+        };
+      });
+      expect(overflow.page).toBeLessThanOrEqual(2);
+      expect(overflow.board).toBeGreaterThan(0);
+      expect(overflow.focusable).toBe(true);
+      await axe(page, `the board at ${width} px`);
+    });
+
     test(`the list and a lead's page at ${width} px do not overflow`, async ({ page }) => {
       const lead = await addLead(page, `narrow-${width}`);
       await page.setViewportSize({ width, height: 800 });
@@ -362,7 +414,7 @@ for (const role of ['content_creator', 'seo'] as const) {
 
     test('every leads page is refused by the server, naming no lead', async ({ page }) => {
       const probe = '00000000-0000-4000-8000-000000000000';
-      for (const path of ['/admin/leads', `/admin/leads/${probe}`]) {
+      for (const path of ['/admin/leads', '/admin/leads/board', `/admin/leads/${probe}`]) {
         const res = await page.goto(path);
         expect(res?.status(), path).toBe(403);
         await expect(page.locator('main .msg[data-kind="error"]').first()).toContainText(

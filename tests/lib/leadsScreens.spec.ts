@@ -3,6 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import LeadsList, { hoursText } from '@/components/admin/screens/leads/LeadsList';
+import LeadsBoard from '@/components/admin/screens/leads/LeadsBoard';
 import LeadDetail from '@/components/admin/screens/leads/LeadDetail';
 import LeadContactCard, { whatsappHref } from '@/components/admin/screens/leads/LeadContactCard';
 import { reasonsSentence } from '@/components/admin/screens/leads/LeadStatusCard';
@@ -21,7 +22,7 @@ import { DEFAULT_LEAD_FILTERS } from '@/lib/crm/leadUrl';
 //     e-mail, phone, budget or note, no mailto/tel/WhatsApp link before the audited reveal;
 //   • states are words, never colour or weight alone: "Unread", "Over response time", the
 //     star's pressed state, the board's counts;
-//   • "Move to…" names its lead;
+//   • "Move to…" names its card; the board scrolls in its own focusable region;
 //   • the revealed values live in component state only (no storage, no address).
 
 const NOW = '2026-10-18T09:00:00.000Z';
@@ -164,6 +165,45 @@ describe('the list', () => {
     });
     expect(manual).toContain('How they reached us');
     expect(manual).toContain('No leads match');
+  });
+});
+
+describe('the board', () => {
+  const out = html(LeadsBoard, {
+    frame: FRAME,
+    initial: [
+      { stage_id: NEW, total: 60, value_sum: 0, leads: [row()] },
+      {
+        stage_id: WON,
+        total: 1,
+        value_sum: 75000,
+        leads: [row({ id: OLD, name: 'Omar', stage_id: WON, value_sar: 75000, read_at: NOW })],
+      },
+    ] as never,
+    filters: DEFAULT_LEAD_FILTERS,
+    permissions: PERMS,
+    now: NOW,
+  });
+
+  it('scrolls in its own labelled, focusable region; no style, no contact detail', () => {
+    expect(out).toContain('<div class="kb" role="region" aria-label="Pipeline" tabindex="0">');
+    expect(out).not.toMatch(/\sstyle=/);
+    expect(out).not.toMatch(PII);
+  });
+
+  it('gives every card a "Move to…" that names it, closed until pressed', () => {
+    expect(out).toContain('Move to…<span class="visually-hidden"> Nora Haddad</span>');
+    expect(out).toContain('Move to…<span class="visually-hidden"> Omar</span>');
+    expect(out).toMatch(/aria-haspopup="true" aria-expanded="false"/);
+    expect(out).not.toContain('moveto__m');
+  });
+
+  it('adds up the won column in SAR, counts each column, and links past the 50 shown', () => {
+    expect(out).toContain('<span class="kb__sum">75,000 SAR</span>');
+    expect(out).toContain('60<span class="visually-hidden"> leads</span>');
+    expect(out).toContain(`href="/admin/leads?stage=${NEW}"`);
+    expect(out).toContain('Show all 60 in the list');
+    expect(out).toContain('<span class="visually-hidden">Unread</span>');
   });
 });
 
