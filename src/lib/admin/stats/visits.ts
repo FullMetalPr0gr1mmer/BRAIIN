@@ -72,22 +72,25 @@ async function summaryOf(
 /**
  * The range's visits, and the previous period's when the visits rollup holds it (two reads
  * then, one otherwise). The previous period is judged on this rollup's own first day, not
- * the page views', which started counting earlier.
+ * the page views', which started counting earlier. `previous: false` skips it (the
+ * Conversions tab compares nothing).
  */
 export async function loadVisitSummary(
   sb: SupabaseClient,
   auth: AuthContext,
   range: DateRange,
+  options: { previous?: boolean } = {},
 ): Promise<VisitSummary> {
   const current = await summaryOf(sb, auth, range.from, range.to);
   const first = record(current)['first_day'];
   const firstDay = typeof first === 'string' ? first : null;
-  const previous = hasPreviousPeriod(firstDay, range)
-    ? visitTotalsOf(await summaryOf(sb, auth, range.prevFrom, range.prevTo), {
-        from: range.prevFrom,
-        to: range.prevTo,
-      })
-    : null;
+  const previous =
+    options.previous !== false && hasPreviousPeriod(firstDay, range)
+      ? visitTotalsOf(await summaryOf(sb, auth, range.prevFrom, range.prevTo), {
+          from: range.prevFrom,
+          to: range.prevTo,
+        })
+      : null;
   return { range, current: visitTotalsOf(current, range), previous, firstDay };
 }
 

@@ -1,6 +1,13 @@
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import StatsOverview from '@/components/admin/screens/stats/StatsOverview.astro';
+import StatsAudience from '@/components/admin/screens/stats/StatsAudience.astro';
+import StatsConversions from '@/components/admin/screens/stats/StatsConversions.astro';
+import StatsGoals from '@/components/admin/screens/stats/StatsGoals.astro';
+import StatsGoalsIsland from '@/components/admin/screens/goals/StatsGoals';
+import Funnel from '@/components/admin/ui/Funnel.astro';
 import StatsPages from '@/components/admin/screens/stats/StatsPages.astro';
 import StatsSearch from '@/components/admin/screens/stats/StatsSearch.astro';
 import HealthSummary from '@/components/admin/screens/health/HealthSummary.astro';
@@ -11,13 +18,18 @@ import Refused from '@/components/admin/ui/Refused.astro';
 import { formatNumber } from '@/lib/admin/charts';
 import { runChecklist } from '@/lib/admin/health/checklist';
 import { healthScore } from '@/lib/admin/health/score';
+import type { EventSummary } from '@/lib/admin/stats/events';
+import type { GoalView } from '@/lib/admin/stats/goals';
 import type { PageviewSummary, PageviewTotals } from '@/lib/admin/stats/pageviews';
+import type { VisitSummary, VisitTotals } from '@/lib/admin/stats/visits';
 import { dayLabel, rangeOfDays } from '@/lib/admin/stats/range';
 
-// Website stats and site health (Admin v2 U2), their server partials rendered with Astro's
-// container API on fixtures: the chart tables are the data, a KPI draws no change without a
-// previous period, the empty states say what is empty, the state of a checklist row is a
-// word, a log's detail is text, and nothing carries a style attribute (CSP).
+// Website stats and site health (Admin v2 U2, the stats tabs of G1), their server partials
+// rendered with Astro's container API on fixtures: the chart tables are the data, a KPI draws
+// no change without a previous period, the funnel's words are its numbers, the inquiries row
+// shows only with leads, the goals island draws the server list's words, the empty states say
+// what is empty, the state of a checklist row is a word, a log's detail is text, and nothing
+// carries a style attribute (CSP).
 
 let container: AstroContainer;
 beforeAll(async () => {
@@ -84,15 +96,41 @@ function summary(previous: PageviewTotals | null): PageviewSummary {
   return { range, current: totals(EN, AR), previous, firstDay: '2026-09-01' };
 }
 
+/** Visits for the range's days: one-page 40%, two page views a visit, a funnel's counts. */
+function visitTotals(perDay: number[]): VisitTotals {
+  const sum = perDay.reduce((a, b) => a + b, 0);
+  return {
+    visits: sum,
+    onePageVisits: Math.round(sum * 0.4),
+    visitViews: sum * 2,
+    serviceVisits: Math.round(sum * 0.5),
+    serviceInquiryVisits: Math.round(sum * 0.2),
+    inquiryVisits: Math.round(sum * 0.3),
+    byDay: perDay.map((visits, i) => ({
+      day: `2026-10-${String(9 + i).padStart(2, '0')}`,
+      visits,
+    })),
+  };
+}
+const VISITS = [5, 5, 5, 5, 5, 5, 5];
+
+function visitSummary(previous: VisitTotals | null): VisitSummary {
+  return { range, current: visitTotals(VISITS), previous, firstDay: '2026-09-20' };
+}
+
 describe('StatsOverview', () => {
-  it('draws the English and Arabic line from the days, its table cell for cell', async () => {
-    const html = await render(StatsOverview, { summary: summary(null), leads: null });
+  it('draws visits and page views day by day, its table cell for cell', async () => {
+    const html = await render(StatsOverview, {
+      summary: summary(null),
+      visits: visitSummary(null),
+      leads: null,
+    });
     const line = figure(html, 'stats-line');
     expect(tableCells(line)).toEqual(
       summary(null).current.byDay.map((d) => [
         dayLabel(d.day),
-        formatNumber(d.en),
-        formatNumber(d.ar),
+        formatNumber(5),
+        formatNumber(d.en + d.ar),
       ]),
     );
     const donut = figure(html, 'stats-donut');
@@ -104,9 +142,19 @@ describe('StatsOverview', () => {
   });
 
   it('shows the KPIs with no change when there is no previous period', async () => {
-    const html = await render(StatsOverview, { summary: summary(null), leads: null });
+    const html = await render(StatsOverview, {
+      summary: summary(null),
+      visits: visitSummary(null),
+      leads: null,
+    });
+    expect(html).toContain('Visits');
+    expect(html).toContain('<p class="stat">35</p>');
     expect(html).toContain('Page views');
     expect(html).toContain('<p class="stat">132</p>');
+    expect(html).toContain('Pages per visit');
+    expect(html).toContain('<p class="stat">2</p>'); // 70 views in 35 visits
+    expect(html).toContain('One-page visits');
+    expect(html).toContain('<p class="stat">40%</p>'); // 14 of 35
     expect(html).toContain('Arabic share');
     expect(html).toMatch(/<p class="stat">28\.8%<\/p>/); // 38 of 132
     expect(html).not.toContain('kpi__d');
@@ -118,10 +166,13 @@ describe('StatsOverview', () => {
   it('shows the change against the previous period when the rollups hold it', async () => {
     const html = await render(StatsOverview, {
       summary: summary(totals([5, 5, 5, 5, 5, 5, 6], [2, 2, 2, 2, 2, 2, 2])),
+      visits: visitSummary(visitTotals([10, 10, 10, 10, 10, 10, 10])),
       leads: { current: 6, previous: 3 },
     });
     // 132 against 50: up 164%.
     expect(html).toContain('Up 164% vs the previous 7 days');
+    // Visits: 35 against 70, down 50%.
+    expect(html).toContain('Down 50% vs the previous 7 days');
     // The Arabic share, 28.8% against 28% (14 of 50), is a change in points, not percent.
     expect(html).toContain('Up 1 point vs the previous 7 days');
     expect(html).not.toContain('Up 3% vs');
@@ -131,6 +182,19 @@ describe('StatsOverview', () => {
     expect(html).toMatch(/<p class="stat">45\.5<\/p>/); // 6 / 132 x 1000
   });
 
+  it('measures visits against their own rollup’s previous period, not the page views’', async () => {
+    // Page views reach back; visits started counting later (0071's backfill): no visits
+    // change is drawn, while page views still show theirs.
+    const html = await render(StatsOverview, {
+      summary: summary(totals([5, 5, 5, 5, 5, 5, 6], [2, 2, 2, 2, 2, 2, 2])),
+      visits: visitSummary(null),
+      leads: null,
+    });
+    expect(html).toContain('Up 164% vs the previous 7 days');
+    expect(html).not.toContain('Down 50%');
+    expect(html.match(/class="kpi__d/g)?.length).toBe(2); // page views and the Arabic share
+  });
+
   it('says there were no visits instead of drawing empty charts', async () => {
     const empty: PageviewSummary = {
       range,
@@ -138,11 +202,21 @@ describe('StatsOverview', () => {
       previous: null,
       firstDay: null,
     };
-    const html = await render(StatsOverview, { summary: empty, leads: null });
+    const html = await render(StatsOverview, {
+      summary: empty,
+      visits: {
+        range,
+        current: visitTotals([0, 0, 0, 0, 0, 0, 0]),
+        previous: null,
+        firstDay: null,
+      },
+      leads: null,
+    });
     expect(html).toContain('No visits counted yet.');
     expect(html).toContain('Visits arrive from visitors who accept analytics cookies.');
     expect(html).not.toContain('chart-fig');
     expect(html).toContain('No views yet');
+    expect(html).toContain('No visits yet');
   });
 });
 
@@ -154,9 +228,214 @@ it('says a share’s change in points: 10% to 20% is up 10 points, not up 100%',
     previous: before,
     firstDay: '2026-09-01',
   };
-  const html = await render(StatsOverview, { summary: now, leads: null });
+  const html = await render(StatsOverview, {
+    summary: now,
+    visits: visitSummary(null),
+    leads: null,
+  });
   expect(html).toContain('Up 10 points vs the previous 7 days');
   expect(html).not.toContain('Up 100%');
+});
+
+/** The words of each `<li class="…">` of a list, tags dropped. */
+function itemWords(html: string, cls: string): string[] {
+  return [...html.matchAll(new RegExp(`<li class="${cls}">([\\s\\S]*?)</li>`, 'g'))].map(([, li]) =>
+    (li ?? '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  );
+}
+
+describe('Funnel', () => {
+  it('says each step in words: visits, the share of the first step, the drop from the last', async () => {
+    const html = await render(Funnel, {
+      steps: [
+        { label: 'Visited the site', value: 200 },
+        { label: 'Opened a service page', value: 90 },
+        { label: 'Reached an inquiry form', value: 18 },
+      ],
+    });
+    expect(itemWords(html, 'fun')).toEqual([
+      'Visited the site 200 visits',
+      'Opened a service page 90 visits, 45% of visits, 55% drop off',
+      'Reached an inquiry form 18 visits, 9% of visits, 80% drop off',
+    ]);
+    // The bars are decoration in 5% buckets: kept 45%, lost 55% on the second step.
+    expect(html).toContain('<span class="fun__bar" aria-hidden="true">');
+    expect(html).toContain('data-width="45"');
+    expect(html).toContain('data-width="55"');
+    expect(html).toContain('data-width="10"'); // 9% kept, to its bucket
+  });
+
+  it('draws no share when the first step is empty, and never a drop from nothing', async () => {
+    const html = await render(Funnel, {
+      steps: [
+        { label: 'Visited the site', value: 0 },
+        { label: 'Opened a service page', value: 0 },
+      ],
+    });
+    expect(html).toContain('0 visits, 0% of visits');
+    expect(html).not.toContain('drop off');
+    expect(html).not.toContain('fun__lost');
+  });
+});
+
+const EVENTS: EventSummary = {
+  cta: [
+    { key: 'whatsapp', label: 'WhatsApp click', events: 40, visits: 31 },
+    { key: 'email', label: 'Email click', events: 9, visits: 9 },
+  ],
+  interest: [{ key: 'd:branding', label: 'Branding', events: 12, visits: 10 }],
+  ctaTotal: 49,
+  interestTotal: 12,
+};
+
+describe('StatsConversions', () => {
+  const conv = (inquiries: number | null) =>
+    render(StatsConversions, {
+      visits: {
+        ...visitTotals(VISITS),
+        serviceVisits: 20,
+        serviceInquiryVisits: 7,
+        inquiryVisits: 11,
+      },
+      events: EVENTS,
+      inquiries,
+      days: 7,
+    });
+
+  it('draws the funnel from the visits: each step a subset of the one before', async () => {
+    const html = await conv(null);
+    expect(itemWords(html, 'fun')).toEqual([
+      'Visited the site 35 visits',
+      'Opened a service page 20 visits, 57% of visits, 43% drop off',
+      'Reached an inquiry form 7 visits, 20% of visits, 65% drop off',
+    ]);
+    // The visits that reached an inquiry form with no service page, apart from the funnel.
+    expect(html).toMatch(/<dt>Reached an inquiry form without a service page<\/dt>\s*<dd>4<\/dd>/);
+  });
+
+  it('shows inquiries received only to a role that works with leads, and why they are apart', async () => {
+    const without = await conv(null);
+    expect(without).not.toContain('Inquiries received');
+    const withLeads = await conv(12);
+    expect(withLeads).toMatch(/<dt>Inquiries received<\/dt>\s*<dd>12<\/dd>/);
+    expect(withLeads).toContain('it is not a step of the funnel');
+  });
+
+  it('lists the events with their counts and visits, labels as text', async () => {
+    const html = await conv(null);
+    expect(tableCells(html)).toEqual([
+      ['WhatsApp click', '40', '31'],
+      ['Email click', '9', '9'],
+    ]);
+    expect(html).toContain('Branding');
+    expect(html).toContain('Devices, countries and sources are not collected.');
+  });
+
+  it('says there were no visits instead of an empty funnel', async () => {
+    const html = await render(StatsConversions, {
+      visits: visitTotals([0, 0, 0, 0, 0, 0, 0]),
+      events: { cta: [], interest: [], ctaTotal: 0, interestTotal: 0 },
+      inquiries: null,
+      days: 7,
+    });
+    expect(html).toContain('No visits counted in this period.');
+    expect(html).not.toContain('fun-list');
+    expect(html).toContain('No clicks counted in this period.');
+    expect(html).toContain('No interest counted in this period.');
+  });
+});
+
+describe('StatsAudience', () => {
+  const hours = Array.from({ length: 24 }, (_, h) => (h === 21 ? 50 : h === 14 ? 40 : h));
+
+  it('draws 24 hours, Riyadh time, its table hour for hour, and names the busiest', async () => {
+    const html = await render(StatsAudience, { summary: summary(null), hours });
+    const fig = figure(html, 'stats-hours');
+    expect(tableCells(fig)).toEqual(hours.map((v, h) => [String(h), formatNumber(v)]));
+    expect(html).toContain('Riyadh time. Good to know when to post and when to answer.');
+    // The four busiest, named in words (colour is not the only cue), in hour order.
+    expect(html).toContain('Busiest: 14:00, 21:00, 22:00, 23:00.');
+    // English and Arabic moved here from the Overview.
+    expect(tableCells(figure(html, 'stats-line'))).toEqual(
+      summary(null).current.byDay.map((d) => [
+        dayLabel(d.day),
+        formatNumber(d.en),
+        formatNumber(d.ar),
+      ]),
+    );
+    expect(html).toContain('Devices, countries, cities and sources are not collected');
+  });
+
+  it('says there were no visits instead of drawing empty charts', async () => {
+    const empty: PageviewSummary = {
+      range,
+      current: totals([0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0]),
+      previous: null,
+      firstDay: '2026-09-01',
+    };
+    const html = await render(StatsAudience, { summary: empty, hours: hours.map(() => 0) });
+    expect(html).toContain('No visits counted in this period.');
+    expect(html).not.toContain('chart-fig');
+  });
+});
+
+const GOALS: GoalView[] = [
+  {
+    id: '00000000-0000-4000-8000-000000000001',
+    name: 'WhatsApp clicks this month',
+    metric: 'cta',
+    cta: 'whatsapp',
+    target: 50,
+    version: 1,
+    done: 20,
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000002',
+    name: 'Inquiries',
+    metric: 'inquiries',
+    cta: null,
+    target: 10,
+    version: 3,
+    done: null,
+  },
+];
+
+/** A goal list's words, row by row, its controls left out. */
+function goalRows(html: string): string[] {
+  return itemWords(html.replace(/<div class="goal__acts">[\s\S]*?<\/div>/g, ''), 'goal');
+}
+
+describe('the goals card', () => {
+  it('lists each goal with what it counts and its progress; inquiries only for lead roles', async () => {
+    const html = await render(StatsGoals, { goals: GOALS });
+    expect(goalRows(html)).toEqual([
+      'WhatsApp clicks this month Clicks: WhatsApp click 20 of 50 40%',
+      'Inquiries Inquiries received Target 10. Progress shows to people who work with leads.',
+    ]);
+    expect(html).toContain('data-width="40"');
+    expect(html).not.toContain('<button');
+  });
+
+  it('the island draws the same list, with Edit and Delete for each goal, and Add goal', async () => {
+    const server = await render(StatsGoals, { goals: GOALS });
+    const island = renderToStaticMarkup(createElement(StatsGoalsIsland, { goals: GOALS }));
+    expect(island).not.toMatch(/\sstyle=/);
+    expect(goalRows(island)).toEqual(goalRows(server));
+    expect(island).toContain(
+      'Edit<span class="visually-hidden"> WhatsApp clicks this month</span>',
+    );
+    expect(island).toContain('Delete<span class="visually-hidden"> Inquiries</span>');
+    expect(island).toContain('Add goal');
+  });
+
+  it('says there are no goals yet, and who can add them', async () => {
+    const html = await render(StatsGoals, { goals: [] });
+    expect(html).toContain('No goals yet.');
+    expect(html).toContain('Admins and the SEO role can add goals.');
+  });
 });
 
 describe('StatsPages', () => {

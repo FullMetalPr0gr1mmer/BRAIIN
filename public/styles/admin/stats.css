@@ -1,5 +1,5 @@
 /* Screen stylesheet: website stats, /admin/analytics and /admin/analytics/search (Admin v2
-   U2). Linked only through AdminLayout's `styles` prop (styles={['stats.css']}), after
+   U2; the Conversions, Audience and Realtime tabs and the goals card since G1). Linked only through AdminLayout's `styles` prop (styles={['stats.css']}), after
    admin.css. The KPIs, charts, tables, tabs and chips are admin.css's kit; this is the
    screen's frame: the bar holding the in-page tabs and the range links, the gaps between
    rows, and the search tables' headings. It uses admin.css's tokens and declares none, and
@@ -37,4 +37,211 @@
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
+}
+
+/* ---- The funnel (G1a, ui/Funnel.astro; the prototype's .fun, screens_ops.js). Each step's
+   words on the inline start, the bar on the end; one column on a narrow screen. The bar's
+   two parts are .bar-fill[data-width] buckets (admin.css): the kept share in the primary
+   colour, what the step lost in a tint of the warning colour. Decoration only: the words
+   say every number. */
+.fun-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fun {
+  display: grid;
+  grid-template-columns: minmax(0, 230px) minmax(0, 1fr);
+  gap: 8px 14px;
+  align-items: center;
+  padding: 10px 0;
+  border-block-end: 1px solid var(--ad-line);
+}
+
+.fun:last-child {
+  border-block-end: 0;
+}
+
+.fun__t b {
+  display: block;
+  font-size: 13px;
+}
+
+.fun__t span {
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+.fun__bar {
+  display: flex;
+  block-size: 26px;
+  border-radius: 8px;
+  background: var(--ad-bg);
+  overflow: hidden;
+}
+
+.fun__bar > .bar-fill {
+  border-radius: 0;
+}
+
+.fun__bar > .fun__lost {
+  background: color-mix(in srgb, var(--ad-warn) 30%, transparent);
+}
+
+@media (max-width: 560px) {
+  .fun {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The figures under a card's chart or list: a sentence of the busiest hours, a note. */
+.stats__under {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--ad-dim);
+}
+
+/* ---- Realtime (G1b; the prototype's opsStatsRealtime). The big number with its live dot
+   and words, then the controls. The dot pulses three times (under five seconds, WCAG
+   2.2.2) each time the figures arrive, and not at all under reduced motion (admin.css's
+   motion block) or while updates are paused. */
+.rt {
+  min-inline-size: 0;
+}
+
+.rt__now {
+  padding: 12px 0;
+  text-align: center;
+}
+
+.rt__n {
+  display: block;
+  font-size: 64px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.rt__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+  margin-block-start: 10px;
+  color: var(--ad-dim);
+}
+
+.rt__sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+.ops-live {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: 50%;
+  background: var(--ad-ok);
+}
+
+.ops-live::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border: 2px solid var(--ad-ok);
+  border-radius: 50%;
+  opacity: 0;
+  animation: rt-pulse 1.6s ease-out 3;
+}
+
+.rt[data-paused] .ops-live {
+  background: var(--ad-dim2);
+}
+
+.rt[data-paused] .ops-live::after {
+  animation: none;
+}
+
+@keyframes rt-pulse {
+  0% {
+    transform: scale(0.5);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+.rt__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-block-end: 18px;
+}
+
+.rt__state {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ad-dim);
+}
+
+/* ---- Goals (G1c; the prototype's goals card). One row per goal: its name and what it
+   counts, the actions on the inline end, the progress (admin.css's .prog) under both. */
+.goal {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-block-end: 1px solid var(--ad-line);
+}
+
+.goal:last-child {
+  border-block-end: 0;
+}
+
+.goal__h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.goal__name {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.goal__counts {
+  display: block;
+  margin-block-start: 2px;
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+.goal__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.goals__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.goals__add {
+  margin: 14px 0 0;
 }
