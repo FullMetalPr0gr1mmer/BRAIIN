@@ -181,3 +181,84 @@ export function helpSetViolations(files: MigrationFile[]): string[] {
   }
   return out;
 }
+
+// ── pgTAP: a count of guides is a floor ─────────────────────────────────────────────────────
+// Rule 7 (docs/admin-v2/migrations.md): a slice that adds a guide edits nothing of another
+// slice's, so no pgTAP file may pin how many guides the set or the catalog holds. A test that
+// counts them says `ok(n >= 15, …)`, never `is(n, 15, …)`.
+
+/** Every pgTAP file (supabase/tests), by name. */
+export function readPgTapFiles(dir = join(process.cwd(), 'supabase', 'tests')): MigrationFile[] {
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .map((name) => ({ name, sql: readFileSync(join(dir, name), 'utf8') }));
+}
+
+/** What a whole-set count reads: the set, the catalog, or help_centre's `_set_size()` of it. */
+const COUNTS_GUIDES = /(?:\bapp\.help_article_set\(\)|\bapp\.help_guide_catalog\b|\b_set_size\(\))/;
+
+/**
+ * The arguments of the call whose "(" is at `open`, split at its top-level commas; null when it
+ * never closes. Quoted text ('…' with '' inside, $tag$…$tag$) and `--` comments are skipped.
+ */
+function callArgs(sql: string, open: number): string[] | null {
+  const args: string[] = [];
+  let depth = 0;
+  let start = open + 1;
+  for (let i = open; i < sql.length; i += 1) {
+    const c = sql[i];
+    if (c === "'") {
+      let j = i + 1;
+      for (;;) {
+        j = sql.indexOf("'", j);
+        if (j === -1) return null;
+        if (sql[j + 1] !== "'") break;
+        j += 2;
+      }
+      i = j;
+    } else if (c === '$' && /^\$[A-Za-z_]*\$/.test(sql.slice(i, i + 64))) {
+      const tag = /^\$[A-Za-z_]*\$/.exec(sql.slice(i, i + 64))![0];
+      const end = sql.indexOf(tag, i + tag.length);
+      if (end === -1) return null;
+      i = end + tag.length - 1;
+    } else if (c === '-' && sql[i + 1] === '-') {
+      const nl = sql.indexOf('\n', i);
+      i = nl === -1 ? sql.length : nl;
+    } else if (c === '(') depth += 1;
+    else if (c === ')') {
+      depth -= 1;
+      if (depth === 0) {
+        args.push(sql.slice(start, i));
+        return args;
+      }
+    } else if (c === ',' && depth === 1) {
+      args.push(sql.slice(start, i));
+      start = i + 1;
+    }
+  }
+  return null;
+}
+
+/**
+ * Each pgTAP `is(…)` that pins the number of guides, one line per pin (empty: none): its first
+ * argument counts the whole set or the whole catalog (no `where`), and its second is a number.
+ */
+export function pinnedGuideCounts(files: MigrationFile[]): string[] {
+  const out: string[] = [];
+  for (const file of files) {
+    const lines = file.sql.split('\n');
+    for (const m of file.sql.matchAll(/\bis\s*\(/g)) {
+      const line = file.sql.slice(0, m.index).split('\n').length;
+      if (isComment(lines[line - 1] ?? '')) continue;
+      const args = callArgs(file.sql, m.index + m[0].length - 1);
+      const [got, want] = args ?? [];
+      if (got === undefined || want === undefined) continue;
+      if (COUNTS_GUIDES.test(got) && !/\bwhere\b/i.test(got) && /^\s*\d+\s*$/.test(want))
+        out.push(
+          `${file.name}:${line}: pins the number of guides at ${want.trim()}; count them as a floor (>=)`,
+        );
+    }
+  }
+  return out;
+}

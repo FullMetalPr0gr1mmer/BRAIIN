@@ -37,7 +37,14 @@ import {
 import HelpArticleBody from '@/components/admin/screens/help/HelpArticleBody';
 import HelpGuideList from '@/components/admin/screens/help/HelpGuideList';
 import { EXTRA_LINKS, pageFileFor } from '../admin/routes';
-import { helpSet, helpSetViolations, literalSet, readMigrations } from '../fixtures/helpSet';
+import {
+  helpSet,
+  helpSetViolations,
+  literalSet,
+  pinnedGuideCounts,
+  readMigrations,
+  readPgTapFiles,
+} from '../fixtures/helpSet';
 
 const { logs } = vi.hoisted(() => ({ logs: [] as unknown[] }));
 vi.mock('@/lib/data/systemLog', () => ({
@@ -296,6 +303,36 @@ describe('the help-guide catalog (H11)', () => {
 
   it('no migration after it restates the set, or writes the catalog but through put and drop', () => {
     expect(helpSetViolations(MIGRATION_FILES)).toEqual([]);
+  });
+
+  it('no pgTAP file pins how many guides there are: a count is a floor (rule 7)', () => {
+    // A pinned count fails CI for the next slice that puts a guide (G2's health_probes did).
+    expect(pinnedGuideCounts(readPgTapFiles())).toEqual([]);
+    // What the scan sees, and what it leaves alone.
+    const files = [
+      {
+        name: 'a.test.sql',
+        sql: [
+          'select is((select count(*)::int from jsonb_array_elements(app.help_article_set())), 15,',
+          "  'the set holds 0061''s fifteen (guides)');",
+          'select is(jsonb_array_length(app.help_article_set()), 16, $$x, (y)$$);',
+          "select is(_set_size(), 15, 'a helper of the set');",
+          'select is((select count(*) from app.help_guide_catalog), 15, null);',
+          "-- select is(_set_size(), 15, 'a comment');",
+          "select ok(_set_size() >= 15, 'a floor');",
+          "select is(_set_size(), _seen(), 'a count against a count');",
+          "select is((select count(*)::int from app.help_guide_catalog where revision < 1), 0, 'x');",
+          "select is(app.help_article_set() -> -1 ->> 'slug', 'h11-test-guide', 'a slug');",
+          "select is(_rev('website-stats'), 1, 'a revision');",
+        ].join('\n'),
+      },
+    ];
+    expect(pinnedGuideCounts(files)).toEqual([
+      'a.test.sql:1: pins the number of guides at 15; count them as a floor (>=)',
+      'a.test.sql:3: pins the number of guides at 16; count them as a floor (>=)',
+      'a.test.sql:4: pins the number of guides at 15; count them as a floor (>=)',
+      'a.test.sql:5: pins the number of guides at 15; count them as a floor (>=)',
+    ]);
   });
 
   it('a guide no put or drop has named since is the base set’s, byte for byte', () => {

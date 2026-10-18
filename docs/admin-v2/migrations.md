@@ -122,7 +122,8 @@ every PR moves only its own row.
    restates `app.help_article_set()`, never writes a `$help$` literal and never writes the
    catalog another way: `tests/lib/helpCentre.spec.ts` fails if it does. Its postconditions
    and pgTAP check its own guide, and a count of guides is a floor (`>= n`), never an exact
-   number, so the next slice that adds one edits nothing of yours. Two slices that edit
+   number, so the next slice that adds one edits nothing of yours (`tests/lib/helpCentre.spec.ts`
+   fails on a pgTAP `is(…)` that pins the count). Two slices that edit
    different guides need no re-base; two that edit the same guide are serial: the second
    names a revision the guide has left and fails in CI and at the push (55000) until it is
    rebuilt on the first's text and names the new revision. Pre-push gate: no newer put or
