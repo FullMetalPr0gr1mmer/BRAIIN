@@ -144,8 +144,12 @@
 
 /* The board scrolls sideways inside its own region (focusable, so a keyboard can scroll it),
    never the page: five 230px columns do not fit a phone (WCAG 1.4.10, the region is the
-   exception it allows). */
+   exception it allows). Positioned, as admin.css's .table-wrap is: the visually hidden words
+   in a column head and on a card (" leads", "Starred", "Unread") are position: absolute, and
+   with no positioned box between them and the page their containing block was the page, so
+   the board's clip let them through and they widened the page by the board's whole width. */
 .kb {
+  position: relative;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(230px, 1fr);

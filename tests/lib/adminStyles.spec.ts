@@ -274,6 +274,22 @@ describe('admin.css: a table never widens the page (WCAG 1.4.10, F4b pre-merge r
     expect(ADMIN).toMatch(/\n\.table-wrap\s*\{[^}]*position:\s*relative;[^}]*overflow-x:\s*auto/);
   });
 
+  // The same trap, for every scroll container a stylesheet declares (C4c: the pipeline board
+  // widened the page by 879px at 320, its column heads' hidden " leads" escaping its clip).
+  it('every scroll container in the admin sheets is positioned', () => {
+    const sheets: Record<string, string> = { 'admin.css': ADMIN, ...SCREENS };
+    const scrollers: string[] = [];
+    for (const [name, css] of Object.entries(sheets)) {
+      for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        if (!/overflow(?:-x|-inline)?:\s*(?:auto|scroll)/.test(body ?? '')) continue;
+        const where = `${name} ${selector?.trim()}`;
+        scrollers.push(where);
+        expect(body, where).toMatch(/position:\s*(?:relative|absolute|fixed|sticky)/);
+      }
+    }
+    expect(scrollers).toEqual(expect.arrayContaining(['admin.css .table-wrap', 'leads.css .kb']));
+  });
+
   it('the kit page stack lets a wide card shrink to the page', () => {
     expect(SCREENS['kit.css']).toMatch(
       /\.kit__stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
