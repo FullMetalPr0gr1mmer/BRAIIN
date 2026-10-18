@@ -9,6 +9,7 @@ import { canSeeLeadPii, GATED_LEAD_COLUMNS, SAFE_LEAD_COLUMNS } from '@/lib/admi
 import { AuthorizationError } from '@/lib/authz/errors';
 import { decryptPII, importPIIKey } from '@/lib/crypto/pii';
 import { budgetBandLabel } from '@schemas/lead';
+import { SlugSchema } from '@schemas/primitives';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { isSameSiteGet } from '@/lib/http/csrf';
 import { toCsv } from '@/lib/admin/csv';
@@ -16,6 +17,7 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 import { serviceClient } from '@/lib/supabase/server';
 import {
   afterFilter,
+  disciplineFilter,
   EXPORT_ROW_CAP,
   exportsSpam,
   readPaged,
@@ -44,8 +46,9 @@ import {
 // leaves no trace — and those are exactly the shapes an exfiltration attempt has.
 //
 // Since Admin v2 C3 the export follows the list's filters a link may carry (stage, spam,
-// a date range; never the search, which would sit in the URL), with the list's defaults (no
-// spam unless asked, `to` exclusive), and carries the pipeline: the lead's number, stage,
+// a date range, and since C4a the assignee, source, channel, discipline, star and read
+// mark; never the search, which would sit in the URL), with the list's defaults (no spam
+// unless asked, `to` exclusive), and carries the pipeline: the lead's number, stage,
 // spam flag, assignee, value, tags, score, source and channel. Note BODIES are not exported,
 // only how many notes a lead has: bulk free text about named people is the riskiest thing a
 // file can hold (crm.md §9). The read is keyset-paged (src/lib/crm/exportRead.ts), so the
@@ -61,8 +64,11 @@ export const prerender = false;
 const PIPELINE_COLUMNS =
   'lead_number,stage_id,is_spam,assigned_to,value_sar,tags,score,source,channel';
 
-/** The gated columns a PII export decrypts or carries: never the notes, never the address. */
-const NOT_EXPORTED = new Set(['internal_notes', 'ip_inet']);
+/**
+ * The gated columns a PII export decrypts or carries: never the notes, never the address,
+ * never the score's reasons (C4a: they leave only through the one-lead reveal, D7).
+ */
+const NOT_EXPORTED = new Set(['internal_notes', 'ip_inet', 'score_signals']);
 const PII_COLUMNS = GATED_LEAD_COLUMNS.split(',')
   .filter((column) => !NOT_EXPORTED.has(column))
   .join(',');
@@ -103,16 +109,26 @@ const PII_HEADER = [
   'notes_count',
 ];
 
+/** What the filters need beyond the link: whose "me" is, and a discipline's services. */
+interface FilterContext {
+  /** The session's user: `assigned=me` is always the caller, never a value in the link. */
+  userId: string;
+  /** The discipline filter's service slugs (null when the link names no discipline). */
+  disciplineServices: string[] | null;
+}
+
 /**
  * One page of the leads matching the filters, newest first (src/lib/crm/exportRead.ts pages
  * through them). `tenantId` is the session's: for a PII export the reader is the service role,
  * which bypasses RLS, so this filter is the tenant fence (tests/lib/leadExportTenant.spec.ts).
+ * The filters are the list's (app.lead_filter, 0063), as PostgREST filters on each page.
  */
 function leadPage(
   reader: SupabaseClient,
   tenantId: string,
   columns: string,
   input: LeadExportQuery,
+  context: FilterContext,
 ): ExportPage {
   const spam = exportsSpam(input);
   return async (limit, after) => {
@@ -128,6 +144,18 @@ function leadPage(
     if (input.stage) query = query.eq('stage_id', input.stage);
     if (input.from) query = query.gte('created_at', input.from);
     if (input.to) query = query.lt('created_at', input.to);
+    // (C4a) whose, where from, marks, discipline
+    if (input.assigned === 'me') query = query.eq('assigned_to', context.userId);
+    else if (input.assigned === 'none') query = query.is('assigned_to', null);
+    else if (input.assigned) query = query.eq('assigned_to', input.assigned);
+    if (input.source) query = query.eq('source', input.source);
+    if (input.channel) query = query.eq('channel', input.channel);
+    if (input.starred) query = query.eq('is_starred', input.starred === 'true');
+    if (input.unread === 'true') query = query.is('read_at', null);
+    else if (input.unread === 'false') query = query.not('read_at', 'is', null);
+    if (input.discipline && context.disciplineServices) {
+      query = query.or(disciplineFilter(input.discipline, context.disciplineServices));
+    }
     if (after) query = query.or(afterFilter(after));
     const { data, error } = await query;
     if (error) throw new Error(`export leads: ${error.code ?? 'no code'}`);
@@ -135,6 +163,34 @@ function leadPage(
     // literal-string typings cannot follow.
     return (data ?? []) as unknown as Record<string, unknown>[];
   };
+}
+
+/**
+ * The slugs of a discipline's services, read as the caller (staff read every status, as the
+ * list's filter does in SQL). Two small reads, once per export, not per page.
+ */
+async function disciplineServices(
+  sb: SupabaseClient,
+  tenantId: string,
+  discipline: string,
+): Promise<string[]> {
+  const found = await sb
+    .from('disciplines')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('slug', discipline)
+    .maybeSingle<{ id: string }>();
+  if (found.error) throw new Error(`export discipline: ${found.error.code ?? 'no code'}`);
+  if (!found.data) return [];
+  const { data, error } = await sb
+    .from('services')
+    .select('slug')
+    .eq('tenant_id', tenantId)
+    .eq('discipline_id', found.data.id);
+  if (error) throw new Error(`export discipline services: ${error.code ?? 'no code'}`);
+  return ((data ?? []) as { slug: unknown }[])
+    .map((row) => row.slug)
+    .filter((slug): slug is string => SlugSchema.safeParse(slug).success);
 }
 
 export const GET = defineAdminRoute({
@@ -160,6 +216,12 @@ export const GET = defineAdminRoute({
         status: input.status ?? null,
         stage: input.stage ?? null,
         spam: input.spam ?? null,
+        assigned: input.assigned ?? null,
+        source: input.source ?? null,
+        channel: input.channel ?? null,
+        discipline: input.discipline ?? null,
+        starred: input.starred ?? null,
+        unread: input.unread ?? null,
       },
     });
     if (!attemptLogged) {
@@ -178,7 +240,13 @@ export const GET = defineAdminRoute({
       const svc = withPii ? serviceClient() : null;
       const reader = svc ?? sb;
       const columns = `${SAFE_LEAD_COLUMNS},${PIPELINE_COLUMNS}${withPii ? `,${PII_COLUMNS}` : ''}`;
-      const read = await readPaged(leadPage(reader, auth.tenantId, columns, input), cap);
+      const context: FilterContext = {
+        userId: auth.userId,
+        disciplineServices: input.discipline
+          ? await disciplineServices(sb, auth.tenantId, input.discipline)
+          : null,
+      };
+      const read = await readPaged(leadPage(reader, auth.tenantId, columns, input, context), cap);
       const records = await toRecords(sb, svc, auth.tenantId, read.rows);
       // Built before the outcome row, so an `ok` outcome means the file exists.
       csv = toCsv(withPii ? PII_HEADER : SAFE_HEADER, records);

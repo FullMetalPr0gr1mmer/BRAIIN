@@ -5,9 +5,11 @@ import { ValidationError } from '@/lib/admin/errors';
 import { LEAD_CARD_FIELDS, pick, tenantCountry, toRpcFilter } from '@/lib/crm/leadQuery';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 
-// The pipeline board (Admin v2 C2a): every stage of the caller's tenant with its count and
-// newest cards, spam excluded. `leads.manage`; runs as the caller (public.leads_board), for
-// the caller's tenant.
+// The pipeline board (Admin v2 C2a): every stage of the caller's tenant with its count, its
+// value in SAR (C4a, 0063: the matching non-spam leads' value_sar; the screen shows it on won
+// columns) and newest cards, spam excluded. Filters by assignee, source, channel and
+// discipline since 0063. `leads.manage`; runs as the caller (public.leads_board), for the
+// caller's tenant.
 
 export const prerender = false;
 
@@ -36,6 +38,7 @@ export const POST = defineAdminRoute({
       return {
         stage_id: column['stage_id'] ?? null,
         total: Number(column['total'] ?? 0),
+        value_sum: Number(column['value_sum'] ?? 0),
         leads: cards.map((card) => pick(card, LEAD_CARD_FIELDS)),
       };
     });

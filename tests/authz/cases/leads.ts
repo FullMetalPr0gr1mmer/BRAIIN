@@ -50,7 +50,8 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/leads/query'),
     method: 'POST',
     url: '/api/admin/leads/query',
-    body: { q: 'acme', sort: 'newest' },
+    // C4a's keys too (0063), so the matrix runs them: 'me' is resolved in SQL.
+    body: { q: 'acme', sort: 'newest', assigned: 'me', starred: true },
     allow: ['admin', 'developer'],
     read: true,
   },
@@ -59,7 +60,7 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/leads/board'),
     method: 'POST',
     url: '/api/admin/leads/board',
-    body: {},
+    body: { assigned: 'none' },
     allow: ['admin', 'developer'],
     read: true,
   },

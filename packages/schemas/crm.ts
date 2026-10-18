@@ -62,11 +62,25 @@ export const LEAD_CHANNELS = [
 ] as const;
 export type LeadChannel = (typeof LEAD_CHANNELS)[number];
 
-// ---- Reading the pipeline (Admin v2 C2a) --------------------------------------------------
+// ---- Reading the pipeline (Admin v2 C2a, C4a) ---------------------------------------------
 // The filter the lead list, board and summary accept. The database validates it again
-// (app.lead_filter, migration 0036): two layers, and a 22023 for anything outside them.
+// (app.lead_filter, migrations 0036 and 0063): two layers, and a 22023 for anything outside
+// them.
 
 const Instant = z.string().datetime({ offset: true });
+
+/**
+ * Whose leads (C4a): 'me' (the database reads the session's user, so a client never names
+ * itself), 'none' (nobody has them yet) or a person's id.
+ */
+export const LeadAssignedFilterSchema = z.union([z.enum(['me', 'none']), z.string().uuid()]);
+export type LeadAssignedFilter = z.infer<typeof LeadAssignedFilterSchema>;
+
+/** A discipline's slug, as app.lead_filter takes it (at most 64 characters). */
+const DisciplineFilterSchema = SlugSchema.max(64);
+
+/** The list's orders: starred first (then newest) is the screen's default (C4 D6). */
+export const LEAD_SORTS = ['newest', 'oldest', 'score', 'starred'] as const;
 
 export const LeadQuerySchema = z
   .object({
@@ -75,20 +89,35 @@ export const LeadQuerySchema = z
     q: z.string().max(64).optional(),
     from: Instant.optional(),
     to: Instant.optional(),
-    sort: z.enum(['newest', 'oldest', 'score']).optional(),
+    sort: z.enum(LEAD_SORTS).optional(),
     limit: z.number().int().min(1).max(100).optional(),
     offset: z.number().int().min(0).max(10000).optional(),
+    // (C4a) who has it, its marks, and where it came from
+    assigned: LeadAssignedFilterSchema.optional(),
+    starred: z.boolean().optional(),
+    unread: z.boolean().optional(),
+    source: z.enum(LEAD_SOURCES).optional(),
+    channel: z.enum(LEAD_CHANNELS).optional(),
+    discipline: DisciplineFilterSchema.optional(),
   })
   .strict();
 export type LeadQuery = z.infer<typeof LeadQuerySchema>;
 
-/** The board shows every stage and no spam, so it takes no stage, spam flag or page. */
+/**
+ * The board shows every stage and no spam, newest first, so it takes no stage, spam flag,
+ * sort or page (app.lead_filter refuses them too, since 0063).
+ */
 export const LeadBoardQuerySchema = z
   .object({
     q: z.string().max(64).optional(),
     from: Instant.optional(),
     to: Instant.optional(),
     perStage: z.number().int().min(1).max(50).optional(),
+    // (C4a)
+    assigned: LeadAssignedFilterSchema.optional(),
+    source: z.enum(LEAD_SOURCES).optional(),
+    channel: z.enum(LEAD_CHANNELS).optional(),
+    discipline: DisciplineFilterSchema.optional(),
   })
   .strict();
 export type LeadBoardQuery = z.infer<typeof LeadBoardQuerySchema>;
@@ -97,6 +126,17 @@ export type LeadBoardQuery = z.infer<typeof LeadBoardQuerySchema>;
 export const LeadSummaryQuerySchema = z
   .object({ from: Instant.optional(), to: Instant.optional() })
   .strict();
+
+/**
+ * Previous and Next on a lead's page (public.lead_neighbours, 0063): the list's filters a
+ * URL may carry, so no search and no page (C4 D8; a search never sits in a URL, D10).
+ */
+export const LeadNeighboursQuerySchema = LeadQuerySchema.omit({
+  q: true,
+  limit: true,
+  offset: true,
+});
+export type LeadNeighboursQuery = z.infer<typeof LeadNeighboursQuerySchema>;
 
 // ---- One lead (Admin v2 C2b) --------------------------------------------------------------
 
@@ -317,6 +357,13 @@ export const LeadExportQuerySchema = z
     status: LegacyLeadStatusSchema.optional(),
     stage: z.string().uuid().optional(),
     spam: z.enum(['true', 'false']).optional(),
+    // (C4a) the list's other filters, in a link's string form
+    assigned: LeadAssignedFilterSchema.optional(),
+    source: z.enum(LEAD_SOURCES).optional(),
+    channel: z.enum(LEAD_CHANNELS).optional(),
+    discipline: DisciplineFilterSchema.optional(),
+    starred: z.enum(['true', 'false']).optional(),
+    unread: z.enum(['true', 'false']).optional(),
   })
   .strict();
 export type LeadExportQuery = z.infer<typeof LeadExportQuerySchema>;
