@@ -4,14 +4,15 @@
 -- public.help_articles) and 0064 (U4: the guides as it left them, every earlier restatement
 -- included, 0061's U14b among them).
 --
--- C4b replaces the legacy leads panel with the list, the Pipeline board, a lead's own page and
--- the "Add a lead manually" drawer. The working-with-leads guide described the old panel (a
--- status select, "Reveal contact details and notes", a notes box), so it is rewritten for the
--- screens as they now are: the stages and chips, the search, the bulk bar, Move to… on the
--- board, the reveal and its score reasons, the notes thread, Log contact, the manual add and
--- the export. Its slug, place (70), tags, title, screens (/admin/leads, which covers the board
--- and a lead's page through the screen match) and capability (leads.manage) are unchanged; it
--- reads in four minutes instead of three. Every other guide is 0064's, byte for byte.
+-- C4b replaces the legacy leads panel with the list, a lead's own page and the "Add a lead
+-- manually" drawer (the Pipeline board is C4c's, which restates the set again). The
+-- working-with-leads guide described the old panel (a status select, "Reveal contact details
+-- and notes", a notes box), so it is rewritten for the screens as they now are: the stages and
+-- chips, the search, the bulk bar, Move to… and the Status card on a lead's page, the reveal
+-- and its score reasons, the notes thread, Log contact, the manual add and the export. Its
+-- slug, place (70), tags, title, screens (/admin/leads, which covers a lead's page through the
+-- screen match) and capability (leads.manage) are unchanged; it reads in four minutes instead
+-- of three. Every other guide is 0064's, byte for byte.
 --
 -- No table, column, policy, grant or capability changes (CLAUDE.md §5 is untouched). The
 -- reseed is app.seed_help_articles(), which inserts a guide a tenant lacks and updates one
@@ -801,8 +802,7 @@ create or replace function app.help_article_set() returns jsonb
           "x": [
             "Work a lead by moving it through the stages. The chips above the list show each stage with its count, then Unread and Spam; the filters narrow it by discipline, source, who has it and how recent it is.",
             "Search finds a name, a company or words from the message. A whole e-mail address or phone number finds that person too, and the address itself is never saved anywhere.",
-            "Tick leads and use the bar at the bottom to assign them, move them to a stage, mark them read, star them or mark them as spam. When someone else changed one of them first, the list says so and shows the latest.",
-            "On the Pipeline tab each stage is a column. Use Move to… on a card to change its stage. The Won column adds up its value in SAR."
+            "Tick leads and use the bar at the bottom to assign them, move them to a stage, mark them read, star them or mark them as spam. When someone else changed one of them first, the list says so and shows the latest."
           ]
         },
         {
@@ -813,6 +813,7 @@ create or replace function app.help_article_set() returns jsonb
           "t": "ol",
           "x": [
             "Open a lead to see the message and its details. Previous and Next step through the list as you filtered it.",
+            "On a lead's page, Move to… changes its stage, and the Status card sets who has it, its value in SAR, its star and its tags. When someone else changed the lead first, the page says so and shows the latest.",
             "Reveal contact details shows the e-mail, phone, budget and timeline, with Email, Call and WhatsApp links, and why the lead scores what it scores. Each reveal is logged against your account, up to 60 an hour.",
             "Notes are a thread only your team sees. Reading them is logged too. Use Log contact after a call or a message, so the timeline shows it.",
             "Add lead manually is for calls, walk-ins and WhatsApp messages. A phone number that matches an earlier lead asks before adding, and an e-mail that wrote before is named on the new lead's page.",
@@ -838,8 +839,7 @@ create or replace function app.help_article_set() returns jsonb
           "x": [
             "انقل العميل المحتمل عبر المراحل وأنت تعمل عليه. تعرض الأزرار أعلى القائمة كل مرحلة مع عددها، ثم Unread وSpam، وتضيّق المرشحات القائمة حسب التخصص والمصدر ومن يتولاه ومدى حداثته.",
             "يجد البحث الاسم أو الشركة أو كلمات من الرسالة. ويجد عنوان البريد الإلكتروني الكامل أو رقم الهاتف الكامل صاحبه أيضًا، ولا يُحفظ العنوان نفسه في أي مكان.",
-            "حدّد عملاء محتملين واستخدم الشريط أسفل الصفحة لإسنادهم أو نقلهم إلى مرحلة أو تعليمهم كمقروءين أو تمييزهم بنجمة أو تعليمهم كرسائل مزعجة. وإذا غيّر أحد زملائك أحدهم قبلك، تذكر القائمة ذلك وتعرض أحدث نسخة.",
-            "في تبويب Pipeline تكون كل مرحلة عمودًا. استخدم Move to… على البطاقة لتغيير مرحلتها، ويجمع عمود Won قيمته بالريال."
+            "حدّد عملاء محتملين واستخدم الشريط أسفل الصفحة لإسنادهم أو نقلهم إلى مرحلة أو تعليمهم كمقروءين أو تمييزهم بنجمة أو تعليمهم كرسائل مزعجة. وإذا غيّر أحد زملائك أحدهم قبلك، تذكر القائمة ذلك وتعرض أحدث نسخة."
           ]
         },
         {
@@ -850,6 +850,7 @@ create or replace function app.help_article_set() returns jsonb
           "t": "ol",
           "x": [
             "افتح العميل المحتمل لترى الرسالة وتفاصيلها. ويتنقّل Previous وNext عبر القائمة كما رشّحتها.",
+            "في صفحة العميل المحتمل، يغيّر Move to… مرحلته، وتحدد بطاقة Status من يتولاه وقيمته بالريال ونجمته ووسومه. وإذا غيّر أحد زملائك العميل المحتمل قبلك، تذكر الصفحة ذلك وتعرض أحدث نسخة.",
             "يُظهر Reveal contact details البريد الإلكتروني والهاتف والميزانية والمدة الزمنية، مع روابط Email وCall وWhatsApp، وسبب الدرجة التي حصل عليها العميل المحتمل. يُسجَّل كل كشف باسم حسابك، بحد أقصى 60 مرة في الساعة.",
             "الملاحظات سلسلة لا يراها إلا فريقك، وتُسجَّل قراءتها أيضًا. استخدم Log contact بعد كل مكالمة أو رسالة حتى يظهر ذلك في السجل الزمني.",
             "يُستخدم Add lead manually للمكالمات والزيارات ورسائل WhatsApp. وإذا طابق رقم الهاتف عميلًا محتملًا سابقًا يُسأل قبل الإضافة، وتذكر صفحة العميل الجديد أي عميل سابق كتب من البريد الإلكتروني نفسه.",
