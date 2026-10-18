@@ -25,7 +25,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(56);
+select plan(57);
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────────
 insert into app.deployment (env) values ('staging')
@@ -186,6 +186,19 @@ select is(
      cross join unnest(array['public', 'anon', 'authenticated', 'service_role']) as r
     where has_table_privilege(r::name, format('public.%I', x.t), 'truncate')),
   '', 'no API role may TRUNCATE a guarded table (TRUNCATE fires no row trigger)');
+-- The guard trusts the role setting: only apply_release switches role, in any schema (a
+-- column named role in an UPDATE, `set role = ...`, is not a switch).
+select is(
+  (select string_agg(n.nspname || '.' || f.proname, ', ' order by n.nspname, f.proname)
+     from pg_proc f join pg_namespace n on n.oid = f.pronamespace
+    where n.nspname not in ('pg_catalog', 'information_schema')
+      and (f.prosrc ~* 'set\s+(local|session)\s+role\M'
+           or f.prosrc ~* 'set\s+role\s+(?!=)'
+           or f.prosrc ~* 'set_config\s*\(\s*''role'''
+           or coalesce(array_to_string(f.proconfig, ','), '') ~* '(^|,)role=')
+      and not exists (select 1 from pg_depend d
+                       where d.classid = 'pg_proc'::regclass and d.objid = f.oid and d.deptype = 'e')),
+  'public.apply_release', 'only apply_release switches role (the guard reads the role setting)');
 
 -- ── 2. Releases off (tenant B): writes land as before ────────────────────────────────
 set local role authenticated;

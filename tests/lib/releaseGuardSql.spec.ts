@@ -143,4 +143,17 @@ describe('migration 0066: the release guard', () => {
   it('publish_scheduled skips a tenant with releases on', () => {
     expect(body('app.publish_scheduled')).toContain('and not app.releases_enabled(tenant_id)');
   });
+
+  it('asks for MAINTAIN only inside a CASE on the server version (CI runs PostgreSQL 15)', () => {
+    // PostgreSQL does not promise AND short-circuits, and the privilege functions refuse the
+    // word before 17: a version test ANDed with the call would fail the push on 15.
+    const asks = [...SQL.matchAll(/'maintain'/g)];
+    expect(asks.length).toBeGreaterThan(0);
+    for (const m of asks) {
+      const before = SQL.slice(Math.max(0, m.index! - 200), m.index!);
+      expect(before).toMatch(
+        /case when current_setting\('server_version_num'\)::int >= 170000\s+then [^;]*$/,
+      );
+    }
+  });
 });

@@ -111,7 +111,7 @@ begin
     return new;
   end if;
 
-  -- 2 and 3. Not an API request (no SET ROLE, no staff claim: migrations, seeds, the
+  -- 2 and 3. Not an API request (no switched role, no staff claim: migrations, seeds, the
   -- runbook, pg_cron, GoTrue), or the service role with no staff claim (out of band; the
   -- capture records it as a system item).
   v_role := coalesce(nullif(pg_catalog.current_setting('role', true), ''), 'none');
@@ -799,8 +799,11 @@ begin
     if has_table_privilege(r::name, 'app.release_link_pending',
                            'select, insert, update, delete, truncate, references, trigger')
        or has_any_column_privilege(r::name, 'app.release_link_pending', 'select, insert, update, references')
-       or (current_setting('server_version_num')::int >= 170000
-           and has_table_privilege(r::name, 'app.release_link_pending', 'maintain')) then
+       -- CASE, not AND: PostgreSQL does not promise AND short-circuits, and the privilege
+       -- functions refuse the word MAINTAIN before PostgreSQL 17 (CI runs 15).
+       or (case when current_setting('server_version_num')::int >= 170000
+                then has_table_privilege(r::name, 'app.release_link_pending', 'maintain')
+                else false end) then
       raise exception '0066: % holds a privilege on app.release_link_pending', r;
     end if;
   end loop;
@@ -929,6 +932,22 @@ begin
                       where d.classid = 'pg_proc'::regclass and d.objid = f.oid and d.deptype = 'e');
   if v_have is distinct from 'app.release_token_valid, public.apply_release' then
     raise exception '0066: functions naming the release token are %, expected app.release_token_valid and apply_release', v_have;
+  end if;
+  -- The guard also trusts the role setting (no switched role = not an API request): in any
+  -- schema, the only function that switches role (SET LOCAL or SESSION ROLE, SET ROLE to a
+  -- name, set_config('role', ...) or a SET role clause; an UPDATE's `set role = ...` is a
+  -- column) is apply_release, which switches to authenticated and back.
+  select string_agg(n.nspname || '.' || f.proname, ', ' order by n.nspname, f.proname) into v_have
+    from pg_proc f join pg_namespace n on n.oid = f.pronamespace
+   where n.nspname not in ('pg_catalog', 'information_schema')
+     and (f.prosrc ~* 'set\s+(local|session)\s+role\M'
+          or f.prosrc ~* 'set\s+role\s+(?!=)'
+          or f.prosrc ~* 'set_config\s*\(\s*''role'''
+          or coalesce(array_to_string(f.proconfig, ','), '') ~* '(^|,)role=')
+     and not exists (select 1 from pg_depend d
+                      where d.classid = 'pg_proc'::regclass and d.objid = f.oid and d.deptype = 'e');
+  if v_have is distinct from 'public.apply_release' then
+    raise exception '0066: functions switching role are %, expected apply_release only', v_have;
   end if;
   foreach p in array array['app.tg_release_guard()', 'app.tg_release_capture()',
                            'app.tg_release_links_stash()', 'app.tg_release_links_capture()',
