@@ -295,3 +295,22 @@ export function rangeToInstants(range: LeadRange, now: Date): RangeInstants | nu
   const iso = (ms: number) => new Date(ms).toISOString();
   return { from: iso(from), to: iso(to), prevFrom: iso(from - shift), prevTo: iso(to - shift) };
 }
+
+// ---- The list's head -------------------------------------------------------------------------
+
+const COUNT = /* @__PURE__ */ new Intl.NumberFormat('en-GB', { numberingSystem: 'latn' });
+
+/**
+ * The list's sub-line (crm.md §11): "12 inquiries. 3 new, 5 unread.", and "in the last 7 days"
+ * when a range is set (the KPIs and the chips follow the range only, decision D13). Spam is
+ * not an inquiry here (lead_summary's `total` leaves it out).
+ */
+export function leadsSubline(
+  counts: { total: number; new: number; unread: number },
+  range: LeadRange,
+): string {
+  const n = (value: number) => COUNT.format(value);
+  const inquiries = `${n(counts.total)} ${counts.total === 1 ? 'inquiry' : 'inquiries'}`;
+  const when = range === 'all' ? '' : ` in the last ${range} days`;
+  return `${inquiries}${when}. ${n(counts.new)} new, ${n(counts.unread)} unread.`;
+}

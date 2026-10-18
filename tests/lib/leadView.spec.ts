@@ -11,6 +11,7 @@ import {
   eventSentence,
   formatSar,
   interestOf,
+  leadsSubline,
   rangeToInstants,
   scoreBand,
   scoreBucket,
@@ -218,5 +219,20 @@ describe('the copy (P-12)', () => {
     }
     expect(interestOf({ service_of_interest: null })).not.toMatch(DASHES);
     expect(FORMER_MEMBER).not.toMatch(DASHES);
+  });
+});
+
+describe('leadsSubline (C4b)', () => {
+  it('counts inquiries, new and unread, and names the range when one is set', () => {
+    expect(leadsSubline({ total: 12, new: 3, unread: 5 }, 'all')).toBe(
+      '12 inquiries. 3 new, 5 unread.',
+    );
+    expect(leadsSubline({ total: 1, new: 1, unread: 0 }, '7')).toBe(
+      '1 inquiry in the last 7 days. 1 new, 0 unread.',
+    );
+    expect(leadsSubline({ total: 12345, new: 0, unread: 0 }, '90')).toBe(
+      '12,345 inquiries in the last 90 days. 0 new, 0 unread.',
+    );
+    expect(leadsSubline({ total: 2, new: 2, unread: 2 }, '30')).not.toMatch(DASHES);
   });
 });

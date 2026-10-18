@@ -1,0 +1,571 @@
+/* The leads screens (/admin/leads, /admin/leads/board, /admin/leads/[id], Admin v2 C4b):
+   what only they render. Ported from the client's prototype (screens_ops.js's style block:
+   .ops-star, .ops-bulk, .kb, .kcard, .ops-score, .ops-quote; app.css's .kb, .kcard and
+   .stat-row) onto the admin's hooks: the KPI card, the table, the chips, the bulk bar, the
+   badges, the timeline and the score bar itself stay in admin.css, shared. States are ARIA
+   or data attributes, never a style attribute. Tokens only (scripts/contrast-audit.mjs reads
+   admin.css; a screen sheet declares no --ad-* of its own). */
+
+/* ---- The list ------------------------------------------------------------------------ */
+
+.lead-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.lead-kpis > .card {
+  margin: 0;
+}
+
+.lead-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.lead-search__box {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.lead-search__box input {
+  inline-size: 100%;
+}
+
+.lead-search__box .msg {
+  margin: 0;
+}
+
+.lead-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  margin: 0 0 16px;
+}
+
+.lead-filters > .f {
+  margin: 0;
+  min-width: 0;
+}
+
+.lead-filters select {
+  inline-size: auto;
+  max-inline-size: 100%;
+}
+
+.lead-chips {
+  margin: 0 0 16px;
+}
+
+/* The ☆ button: above the row's stretched link (admin.css .dt a.data-link::after), a
+   24px target at least (WCAG 2.5.8), filled when pressed (the pressed state is also its
+   aria-pressed, heard). */
+.lead-star {
+  position: relative;
+  z-index: 1;
+  min-inline-size: 28px;
+  min-block-size: 28px;
+  padding: 2px;
+  color: var(--ad-dim2);
+}
+
+.lead-star[aria-pressed='true'] {
+  color: var(--ad-warn-text);
+}
+
+.lead-star[aria-pressed='true'] .ic {
+  fill: currentColor;
+}
+
+/* Unread: a dot beside the name and the name heavier; the words "Unread" are in the cell
+   for a screen reader, so neither weight nor colour is the only cue (1.4.1). */
+.lead-dot {
+  display: inline-block;
+  inline-size: 8px;
+  block-size: 8px;
+  margin-inline-start: 6px;
+  border-radius: 50%;
+  background: var(--ad-primary);
+  vertical-align: middle;
+}
+
+.dt tr:has(.lead-dot) a.data-link {
+  font-weight: 800;
+}
+
+.lead-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--ad-dim);
+  font-size: 12px;
+}
+
+/* "Over response time": words, in the warning tone, beside the age. */
+.lead-sla {
+  display: block;
+  margin-top: 2px;
+  color: var(--ad-warn-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lead-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The bulk bar's controls (the bar itself is admin.css's .bulkbar): a select and its
+   Apply, kept together, on the midnight bar. */
+.lead-bulk__g {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lead-bulk__g select {
+  inline-size: auto;
+  min-inline-size: 9rem;
+}
+
+.lead-note {
+  margin: 0 0 12px;
+}
+
+/* ---- The pipeline board (the prototype's .kb and .kcard) -------------------------------- */
+
+/* The board scrolls sideways inside its own region (focusable, so a keyboard can scroll it),
+   never the page: five 230px columns do not fit a phone (WCAG 1.4.10, the region is the
+   exception it allows). */
+.kb {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(230px, 1fr);
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  min-width: 0;
+}
+
+.kb:focus-visible {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: 4px;
+}
+
+.kb__col {
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
+  min-width: 0;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r);
+  background: var(--ad-bg);
+}
+
+.kb__h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 12px 14px;
+}
+
+.kb__t {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.kb__dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--ad-dim);
+}
+
+.kb__dot[data-tone='klein'] {
+  background: var(--ad-primary);
+}
+.kb__dot[data-tone='sky'] {
+  background: var(--ad-sky-text);
+}
+.kb__dot[data-tone='ok'] {
+  background: var(--ad-ok-text);
+}
+.kb__dot[data-tone='warn'] {
+  background: var(--ad-warn-text);
+}
+.kb__dot[data-tone='err'] {
+  background: var(--ad-err-text);
+}
+.kb__dot[data-tone='dark'] {
+  background: var(--ad-midnight);
+}
+
+.kb__sum {
+  color: var(--ad-dim);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.kb__cnt {
+  margin-inline-start: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-pill);
+  background: var(--ad-card);
+  color: var(--ad-dim);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.kb__b {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 10px 10px;
+  list-style: none;
+}
+
+.kb__empty {
+  margin: 0;
+  padding: 26px 0;
+  border: 1px dashed var(--ad-line-2);
+  border-radius: var(--ad-r-sm);
+  color: var(--ad-dim2);
+  font-size: 12px;
+  text-align: center;
+}
+
+.kb__more {
+  padding: 0 14px 12px;
+  font-size: 12.5px;
+}
+
+.kcard {
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+  box-shadow: var(--ad-shadow-sm);
+}
+
+.kcard:focus-within {
+  border-color: var(--ad-primary);
+}
+
+.kcard__n {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ad-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  overflow-wrap: anywhere;
+}
+
+.kcard__s {
+  margin: 0;
+  color: var(--ad-dim);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.kcard__f {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+.kcard__mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ad-warn-text);
+  font-weight: 700;
+}
+
+.kcard__mark .ic {
+  fill: currentColor;
+}
+
+.kcard__f .moveto {
+  margin-inline-start: auto;
+}
+
+/* ---- "Move to…" (MoveTo.tsx): a button that opens a short list of the other stages ---- */
+
+.moveto {
+  position: relative;
+}
+
+.moveto__m {
+  position: absolute;
+  inset-block-start: calc(100% + 4px);
+  inset-inline-end: 0;
+  z-index: 6;
+  display: grid;
+  gap: 2px;
+  min-inline-size: 12rem;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+  box-shadow: var(--ad-shadow);
+  list-style: none;
+}
+
+.moveto__m button {
+  inline-size: 100%;
+  min-block-size: 32px;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.moveto__m button:hover,
+.moveto__m button:focus-visible {
+  background: var(--ad-primary-soft);
+}
+
+/* The detail page's stage control: the badge, then the menu. */
+.moveto--stage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.moveto--stage .moveto__m {
+  inset-inline-end: auto;
+  inset-inline-start: 0;
+}
+
+/* ---- One lead ---------------------------------------------------------------------------- */
+
+.lead-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.lead-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lead-cols {
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.lead-stack {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.lead-stack > .card {
+  margin: 0;
+}
+
+/* The message, quoted (the prototype's .ops-quote). */
+.lead-quote {
+  margin: 0;
+  padding-inline-start: 16px;
+  border-inline-start: 3px solid var(--ad-primary);
+  color: var(--ad-ink);
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.lead-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.lead-masked {
+  color: var(--ad-dim2);
+  font-style: italic;
+}
+
+.lead-log {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.lead-log > .f {
+  margin: 0;
+}
+
+/* The score bar (the prototype's .ops-score): admin.css's .bar at full width, its fill in
+   the band's tone; "N / 100" and the reasons are words beside it. */
+.lead-score {
+  inline-size: 100%;
+  block-size: 10px;
+}
+
+.lead-score > .bar-fill[data-band='ok'] {
+  background: var(--ad-ok-text);
+}
+
+.lead-score > .bar-fill[data-band='klein'] {
+  background: var(--ad-primary);
+}
+
+.lead-score > .bar-fill[data-band='warn'] {
+  background: var(--ad-warn-text);
+}
+
+.lead-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lead-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 2px 2px 10px;
+  border-radius: var(--ad-r-pill);
+  background: var(--ad-gray-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.lead-tag button {
+  min-inline-size: 24px;
+  min-block-size: 24px;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.lead-tag-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lead-tag-add input {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.lead-notes {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.lead-notes__i {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+}
+
+.lead-notes__b {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.lead-notes__m {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  color: var(--ad-dim);
+  font-size: 12px;
+}
+
+.lead-notes__m button {
+  margin-inline-start: auto;
+}
+
+.lead-more {
+  margin-top: 4px;
+}
+
+.lead-more > summary {
+  inline-size: max-content;
+  min-block-size: 24px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.lead-more > button {
+  margin-top: 12px;
+}
+
+/* ---- Add a lead (AddLeadDrawer.tsx) ------------------------------------------------------- */
+
+.lead-add__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0 14px;
+}
+
+.lead-add__row > .f {
+  margin-bottom: 16px;
+}
+
+.lead-add input,
+.lead-add select,
+.lead-add textarea {
+  inline-size: 100%;
+}
+
+.lead-dupes {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Forced colours: the fill-only marks keep an edge (the words beside them carry the state). */
+@media (forced-colors: active) {
+  .lead-dot,
+  .kb__dot {
+    border: 1px solid CanvasText;
+  }
+}

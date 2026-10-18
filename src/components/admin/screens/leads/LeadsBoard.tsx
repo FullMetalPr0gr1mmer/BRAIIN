@@ -1,0 +1,315 @@
+import { useEffect, useRef, useState } from 'react';
+import Avatar from '@/components/admin/kit/Avatar';
+import Icon from '@/components/admin/kit/Icon';
+import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
+import { formatDateTime, isoOf, relTime } from '@/lib/admin/relTime';
+import type { LeadsFrame, StageView } from '@/lib/crm/leadPage';
+import type { BoardColumn, LeadCard } from '@/lib/crm/leadReads';
+import {
+  boardQueryOf,
+  withLeadFilters,
+  DEFAULT_LEAD_FILTERS,
+  type LeadFilters,
+} from '@/lib/crm/leadUrl';
+import { formatSar } from '@/lib/crm/leadView';
+import MoveTo from './MoveTo';
+import { LeadFilterSelects, LeadSearch } from './LeadsToolbar';
+import {
+  assigneeName,
+  interestText,
+  leadName,
+  text,
+  useAddLead,
+  type LeadsPermissions,
+} from './shared';
+
+// The pipeline board (Admin v2 C4b, crm.md §11 screen 2): a column per stage, non-spam leads
+// only, each with its count, the won column with its value in SAR, at most 50 cards a column
+// and "Show all in the list" past that. Every card has "Move to…" (MoveTo.tsx), the keyboard
+// and single-press way to change a stage; a move is one versioned PATCH, announced in the
+// island's status region ("Moved Sara to Proposal sent"), and focus follows the card to its
+// new column. A conflict (someone else changed the lead) re-reads the board and says so.
+// Pointer drag is not built (decision D5: optional; recorded in deviations.md).
+//
+// The board scrolls sideways inside its own focusable region at a phone's width, never the
+// page (risk R12). Cards carry the safe columns only: no budget, e-mail or phone.
+
+export interface LeadsBoardProps {
+  frame: LeadsFrame;
+  initial: BoardColumn[] | null;
+  filters: LeadFilters;
+  permissions: LeadsPermissions;
+  now: string;
+}
+
+type Card = LeadCard & { id: string };
+
+interface Column {
+  stage: StageView;
+  total: number;
+  value: number;
+  cards: Card[];
+}
+
+/** The board's columns in the stages' order: a stage the answer did not list is empty. */
+function columnsOf(stages: readonly StageView[], answer: BoardColumn[] | null): Column[] {
+  return stages.map((stage) => {
+    const found = answer?.find((column) => column.stage_id === stage.id);
+    return {
+      stage,
+      total: found?.total ?? 0,
+      value: found?.value_sum ?? 0,
+      cards: (found?.leads ?? []).filter((card): card is Card => typeof card.id === 'string'),
+    };
+  });
+}
+
+/** One move, applied to the columns as the server answered it (the card first in its new column). */
+function moved(columns: Column[], card: Card, to: StageView, answer: Record<string, unknown>) {
+  const value = Number(card.value_sar ?? 0) || 0;
+  const updated: Card = { ...card, stage_id: to.id, version: answer['version'] ?? card.version };
+  return columns.map((column) => {
+    if (column.stage.id === card.stage_id) {
+      return {
+        ...column,
+        total: Math.max(0, column.total - 1),
+        value: column.value - value,
+        cards: column.cards.filter((c) => c.id !== card.id),
+      };
+    }
+    if (column.stage.id === to.id) {
+      return {
+        ...column,
+        total: column.total + 1,
+        value: column.value + value,
+        cards: [updated, ...column.cards],
+      };
+    }
+    return column;
+  });
+}
+
+export default function LeadsBoard({
+  frame,
+  initial,
+  filters: start,
+  permissions,
+  now: renderedAt,
+}: LeadsBoardProps) {
+  const { stages, people, disciplines } = frame;
+  const [filters, setFilters] = useState<LeadFilters>(start);
+  const [q, setQ] = useState('');
+  const [columns, setColumns] = useState<Column[]>(() => columnsOf(stages, initial));
+  const [error, setError] = useState(
+    initial ? '' : 'The pipeline could not be loaded just now. Try again in a moment.',
+  );
+  const [searchError, setSearchError] = useState('');
+  const [said, setSaid] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+  const [now, setNow] = useState(() => Date.parse(renderedAt));
+  const focusAfter = useRef<string | null>(null);
+  const addLead = useAddLead(permissions.canSeePii, disciplines);
+
+  useEffect(() => {
+    const href = withLeadFilters('/admin/leads/board', { ...filters, sort: 'starred', page: 1 });
+    if (`${location.pathname}${location.search}` !== href) history.replaceState(null, '', href);
+  }, [filters]);
+
+  const loaded = useRef(initial !== null);
+  useEffect(() => {
+    if (loaded.current) {
+      loaded.current = false;
+      return;
+    }
+    const controller = new AbortController();
+    adminFetch<{ columns: BoardColumn[] }>('/api/admin/leads/board', {
+      method: 'POST',
+      body: { ...boardQueryOf(filters, new Date()), ...(q ? { q } : {}) },
+      signal: controller.signal,
+    })
+      .then((answer) => {
+        setColumns(columnsOf(stages, answer.columns));
+        setError('');
+        setSearchError('');
+        setNow(Date.now());
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        if (err instanceof AdminApiError && err.info.status === 422 && q) {
+          setSearchError(err.info.detail ?? describeError(err));
+          return;
+        }
+        setError(describeError(err));
+      });
+    return () => controller.abort();
+  }, [filters, q, reload]);
+
+  // After a move, focus goes to the card in its new column.
+  useEffect(() => {
+    const id = focusAfter.current;
+    if (!id) return;
+    focusAfter.current = null;
+    document.querySelector<HTMLElement>(`[data-lead-card="${id}"] .kcard__n`)?.focus();
+  }, [columns]);
+
+  async function move(card: Card, to: StageView) {
+    const name = leadName(card);
+    setBusy(card.id);
+    setError('');
+    try {
+      const answer = await adminFetch<Record<string, unknown>>(`/api/admin/leads/${card.id}`, {
+        method: 'PATCH',
+        body: { version: Number(card.version) || 1, stageId: to.id },
+      });
+      focusAfter.current = card.id;
+      setColumns((list) => moved(list, card, to, answer));
+      setSaid(`Moved ${name} to ${to.label}.`);
+    } catch (err) {
+      if (err instanceof AdminApiError && err.info.status === 409) {
+        setSaid(`Someone else changed ${name}. Refreshed.`);
+        setReload((n) => n + 1);
+      } else {
+        setError(`${name} could not be moved. ${describeError(err)}`);
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const listHref = (stage: StageView) =>
+    withLeadFilters('/admin/leads', { ...filters, chip: { kind: 'stage', id: stage.id }, page: 1 });
+
+  return (
+    <>
+      <div className="toolbar">
+        <LeadSearch
+          value={q}
+          label="Search the pipeline"
+          error={searchError}
+          onSearch={(term) => {
+            setQ(term);
+            setSearchError('');
+          }}
+        />
+      </div>
+      <LeadFilterSelects
+        filters={filters}
+        onChange={setFilters}
+        people={people}
+        disciplines={disciplines}
+        withSort={false}
+      />
+      {error && (
+        <p className="msg" data-kind="error" role="alert">
+          {error}
+        </p>
+      )}
+      <p className="visually-hidden" role="status">
+        {said}
+      </p>
+      {/* A region a keyboard can scroll: five columns are wider than a phone (risk R12). */}
+      <div className="kb" role="region" aria-label="Pipeline" tabIndex={0}>
+        {columns.map((column) => {
+          const headingId = `kb-${column.stage.id}`;
+          return (
+            <section key={column.stage.id} className="kb__col" aria-labelledby={headingId}>
+              <div className="kb__h">
+                <span className="kb__dot" data-tone={column.stage.tone} aria-hidden="true" />
+                <h2 id={headingId} className="kb__t">
+                  {column.stage.label}
+                </h2>
+                {column.stage.kind === 'won' && (
+                  <span className="kb__sum">{formatSar(column.value)}</span>
+                )}
+                <span className="kb__cnt">
+                  {column.total}
+                  <span className="visually-hidden">{column.total === 1 ? ' lead' : ' leads'}</span>
+                </span>
+              </div>
+              {column.cards.length === 0 ? (
+                <p className="kb__empty">No leads here</p>
+              ) : (
+                <ol className="kb__b">
+                  {column.cards.map((card) => {
+                    const name = leadName(card);
+                    const at = text(card.created_at);
+                    const who = assigneeName(card.assigned_to, people);
+                    const value = Number(card.value_sar);
+                    return (
+                      <li key={card.id}>
+                        <article className="kcard" data-lead-card={card.id}>
+                          <a
+                            className="kcard__n"
+                            dir="auto"
+                            href={withLeadFilters(`/admin/leads/${card.id}`, {
+                              ...DEFAULT_LEAD_FILTERS,
+                              ...filters,
+                              page: 1,
+                            })}
+                          >
+                            {name}
+                          </a>
+                          {text(card.company) && (
+                            <p className="kcard__s" dir="auto">
+                              {text(card.company)}
+                            </p>
+                          )}
+                          <p className="kcard__s">{interestText(card)}</p>
+                          {card.value_sar !== null && Number.isFinite(value) && (
+                            <p className="kcard__s">{formatSar(value)}</p>
+                          )}
+                          <div className="kcard__f">
+                            <time dateTime={isoOf(at)} title={formatDateTime(at)}>
+                              {relTime(at, now)}
+                            </time>
+                            {who && (
+                              <Avatar
+                                name={who}
+                                toneKey={String(card.assigned_to)}
+                                size="sm"
+                                label={`Assigned to ${who}`}
+                              />
+                            )}
+                            {card.is_starred === true && (
+                              <span className="kcard__mark">
+                                <Icon name="star" size={14} />
+                                <span className="visually-hidden">Starred</span>
+                              </span>
+                            )}
+                            {card.read_at === null && (
+                              <>
+                                <span className="lead-dot" aria-hidden="true" />
+                                <span className="visually-hidden">Unread</span>
+                              </>
+                            )}
+                            <MoveTo
+                              name={name}
+                              stages={stages}
+                              current={card.stage_id}
+                              disabled={busy !== null}
+                              onMove={(to) => void move(card, to)}
+                            />
+                          </div>
+                        </article>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+              {column.total > column.cards.length && (
+                <p className="kb__more">
+                  <a href={listHref(column.stage)}>
+                    Show all {column.total} in the list
+                    <span className="visually-hidden"> ({column.stage.label})</span>
+                  </a>
+                </p>
+              )}
+            </section>
+          );
+        })}
+      </div>
+      {addLead}
+    </>
+  );
+}
