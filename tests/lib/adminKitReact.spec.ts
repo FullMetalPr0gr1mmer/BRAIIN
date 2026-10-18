@@ -513,8 +513,9 @@ describe('the kit screen’s island', () => {
       expect(out).toContain(`aria-label="Reorder ${section.label}"`);
     expect(out).toContain('data-sortable-list="left"');
     expect(out).toContain('aria-label="Move Visits to the next list"');
-    // The modal, the two drawers, and (since F5a's Fields card) the media field's picker.
-    expect(out.match(/<dialog/g)).toHaveLength(4);
+    // The modal and the two drawers. The Fields card's media field mounts its picker on the
+    // first Choose, at the end of <body> (Admin v2 U4), so it is not in the server HTML.
+    expect(out.match(/<dialog/g)).toHaveLength(3);
     // Every sortable list's live region sits beside it, the drawer's inside its dialog
     // (the fourth is the Fields card's repeater, F5a).
     expect(out.match(/data-sortable-live=""/g)).toHaveLength(4);

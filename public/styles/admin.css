@@ -2136,10 +2136,6 @@ dialog.admin-dialog::backdrop {
   margin: 0;
 }
 
-dialog.media-dialog {
-  inline-size: min(960px, calc(100vw - 40px));
-}
-
 /* ---- Toasts: the prototype's midnight pills (success confirmations only) ---- */
 
 .toasts {
@@ -2890,54 +2886,195 @@ img.ProseMirror-separator {
   background: var(--ad-surface-2);
 }
 
-.media-thumb {
-  display: block;
-  object-fit: cover;
-  border-radius: var(--ad-r-xs);
-  background: var(--ad-bg);
-}
-
-.media-grid {
-  list-style: none;
+/* Media (Admin v2 U4, the prototype's .media and .mi): the picture grid the library and
+   every picker share, and the upload dialog's rows (fields/media/). A tile is a button: a 4:3
+   thumbnail, its size in the inline-end corner, the alt badge, and its name on a solid band
+   (D15: the prototype's gradient over the photo cannot be proven AA; a token band can).
+   Selected (the picker) and open (the library) are ARIA states, never a class. */
+.media {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 12px;
   margin: 12px 0 0;
   padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
-  max-height: 60vh;
-  overflow-y: auto;
+  list-style: none;
 }
 
-.media-pick {
-  width: 100%;
-  display: grid;
-  gap: 6px;
-  padding: 6px;
-  text-align: start;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  color: inherit;
-  white-space: normal;
-  background: var(--ad-card);
+.mi {
+  position: relative;
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  overflow: hidden;
   border: 2px solid transparent;
   border-radius: 12px;
+  background: var(--ad-midnight);
+  color: var(--ad-on-dark);
+  font-size: 12px;
+  text-align: start;
   box-shadow: none;
-  cursor: pointer;
 }
 
-.media-pick:hover {
+.mi:hover {
   border-color: var(--ad-line-2);
 }
 
-.media-pick[aria-pressed='true'] {
+.mi[aria-pressed='true'],
+.mi[aria-current] {
   border-color: var(--ad-primary);
 }
 
-.media-pick .media-thumb {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 4 / 3;
+.mi img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.mi__ph {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 100%;
+  background: var(--ad-preview);
+  color: var(--ad-dim2);
+}
+
+.mi__size,
+.mi__alt {
+  position: absolute;
+  inset-block-start: 6px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.mi__size {
+  inset-inline-end: 6px;
+  border-radius: 6px;
+  background: var(--ad-midnight);
+  color: var(--ad-on-dark);
+}
+
+.mi__alt {
+  inset-inline-start: 6px;
+  border-radius: var(--ad-r-pill);
+  background: var(--ad-warn-soft);
+  color: var(--ad-warn-text);
+}
+
+.mi__cap {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 6px 8px;
+  overflow: hidden;
+  background: var(--ad-midnight);
+  color: var(--ad-on-dark);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The picker's search row and footer. */
+.media-pick__bar {
+  align-items: center;
+}
+
+.media-pick__bar input[type='search'] {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.media-pick__bar .admin-sub {
+  margin: 0;
+}
+
+.media-pick__upload {
+  margin-inline-end: auto;
+}
+
+/* "Describe your images": one row per file, with its progress while it is sent. */
+.upl {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.upl__i {
+  padding: 12px 14px;
+  border: 1px solid var(--ad-line);
+  border-radius: 12px;
+  background: var(--ad-surface-2);
+}
+
+.upl__h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-block-end: 8px;
+}
+
+.upl__n {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ad-ink);
+  font-weight: 700;
+}
+
+.upl__f {
+  color: var(--ad-dim);
+  font-size: 12.5px;
+}
+
+.upl__b {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.upl__p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-start: 8px;
+  color: var(--ad-dim);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.upl__p progress {
+  flex: 1 1 auto;
+  min-width: 0;
+  block-size: 8px;
+  accent-color: var(--ad-primary);
+}
+
+.upl__ok {
+  margin: 8px 0 0;
+  color: var(--ad-ok-text);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.upl__err {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 8px;
+}
+
+.upl__err .msg {
+  margin: 0;
 }
 
 /* Repeater v2 (RepeaterField, Admin v2 F5a, the prototype's .repeat): item cards headed by
@@ -4332,7 +4469,8 @@ dialog.drw[data-size='wide'] {
   .admin-nav-group a[aria-current='page'],
   .tabs a[aria-current],
   .rich__bar button[aria-pressed='true'],
-  .media-pick[aria-pressed='true'],
+  .mi[aria-pressed='true'],
+  .mi[aria-current],
   .swatch[aria-pressed='true'],
   .tg,
   .cmd__i[aria-selected='true'],

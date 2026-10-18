@@ -10,7 +10,9 @@ import {
 } from '@/lib/http/imageGuard';
 import {
   mediaBucketPrefix,
+  PREVIEW_WIDTH,
   storageThumbUrl,
+  THUMB_WIDTH,
   uploadFallbackFormat,
   uploadedImage,
   uploadedImageSize,
@@ -113,6 +115,25 @@ describe('the /_image guard and uploaded images', () => {
     expect(small.searchParams.get('w')).toBe('200');
     expect(checkImageRequest(small.searchParams, new Map()).ok).toBe(true);
     expect(storageThumbUrl('stills/work/p0.jpg')).toBeNull();
+  });
+
+  it("the library drawer's 640 px preview is a URL the guard admits (Admin v2 U4, D8)", () => {
+    // Both admin widths are ones the guard lists: a width it does not list is never produced.
+    expect(TRANSFORM_WIDTHS.has(THUMB_WIDTH)).toBe(true);
+    expect(TRANSFORM_WIDTHS.has(PREVIEW_WIDTH)).toBe(true);
+    const preview = new URL(storageThumbUrl(KEY, undefined, PREVIEW_WIDTH)!, 'https://x.test');
+    expect(Object.fromEntries(preview.searchParams)).toEqual({
+      href: HREF,
+      w: '640',
+      h: '427',
+      f: 'webp',
+    });
+    expect(checkImageRequest(preview.searchParams, new Map()).ok).toBe(true);
+    // Narrower than 640: its own width, which the guard admits for an upload.
+    const narrow = `${TENANT}/55555555-5555-4555-8555-555555555555_500x300.webp`;
+    const small = new URL(storageThumbUrl(narrow, undefined, PREVIEW_WIDTH)!, 'https://x.test');
+    expect(small.searchParams.get('w')).toBe('500');
+    expect(checkImageRequest(small.searchParams, new Map()).ok).toBe(true);
   });
 
   it('a master too thin to render has no key, so no thumbnail the guard would refuse', () => {
@@ -233,6 +254,10 @@ describe('every /_image URL a page emits for an upload is one the guard admits',
       for (const format of ['avif', 'webp']) urls.push(...(await transforms(src!, format, widths)));
       urls.push(...(await transforms(src!, 'jpg', [])).slice(0, 1));
       urls.push(new URL(storageThumbUrl(key)!, 'https://admin.example.test').searchParams);
+      urls.push(
+        new URL(storageThumbUrl(key, undefined, PREVIEW_WIDTH)!, 'https://admin.example.test')
+          .searchParams,
+      );
       for (const params of urls) {
         expect(Number(params.get('h')), `${key} ${params}`).toBeGreaterThanOrEqual(1);
         expect(checkImageRequest(params, new Map()), `${key} ${params}`).toEqual({ ok: true });

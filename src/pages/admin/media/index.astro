@@ -1,18 +1,48 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceTable from '@/components/admin/islands/AdminResourceTable';
-import { uiFor } from '@/lib/admin/uiSchema';
+import AdminMediaLibrary from '@/components/admin/islands/AdminMediaLibrary';
+import Icon from '@/components/admin/ui/Icon.astro';
+import { loadMediaScreen } from '@/lib/admin/mediaLibrary';
 
 export const prerender = false;
 
-const ui = uiFor('media');
+// The media library (Admin v2 U4): one island, its first page server-rendered through the
+// same loader as GET /api/admin/media/library, with the view the address asks for (?q=,
+// ?tab=videos, ?alt=missing, ?page=). ?upload=1 (the dashboard's "Upload media", the old
+// /admin/media/new) puts focus on "Choose images". Every role that may read the library
+// opens it (media.write full or meta); what each may do is the island's and the routes'.
+
+const session = Astro.locals.session;
+const screen = await loadMediaScreen(Astro.locals.supabase, session, Astro.url);
 ---
 
-<AdminLayout title={ui.title}>
+<AdminLayout title="Media library" subtitle={screen.subtitle} styles={['media.css']}>
+  {
+    screen.canUpload && (
+      <a
+        slot="actions"
+        class="btn"
+        data-variant="primary"
+        href="/admin/media?upload=1"
+        data-media-upload
+      >
+        <Icon name="upload" size={16} />
+        Upload
+      </a>
+    )
+  }
   <!--
   `client:load` rather than `client:visible`: this island IS the page, so deferring it
-  to intersection just adds a blank frame. Public routes use visible/idle — /admin is
-  exempt from the CWV budgets (CLAUDE.md §6) and is gated on bundle size instead.
+  to intersection just adds a blank frame. /admin is exempt from the CWV budgets
+  (CLAUDE.md §6) and is gated on bundle size instead.
 -->
-  <AdminResourceTable client:load resource="media" />
+  <AdminMediaLibrary
+    client:load
+    permissions={screen.permissions}
+    view={screen.view}
+    initial={screen.initial}
+    initialError={screen.initialError}
+    stats={screen.stats}
+    startUpload={Astro.url.searchParams.get('upload') === '1'}
+  />
 </AdminLayout>

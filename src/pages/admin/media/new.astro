@@ -1,13 +1,9 @@
 ---
-import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
-
 export const prerender = false;
 
-const ui = uiFor('media');
+// Adding a picture is an upload now (Admin v2 U4, D4): the library opens with "Choose
+// images" in focus. The old form, which registered an external or built-in file by its path,
+// is gone from the screens (its API route stays). A 302, not a 301: an admin route is never
+// cached, and a later screen may take the address back. The library decides who may upload.
+return Astro.redirect('/admin/media?upload=1', 302);
 ---
-
-<AdminLayout title={`New ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="media" id={null} />
-</AdminLayout>
