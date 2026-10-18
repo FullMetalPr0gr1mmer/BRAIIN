@@ -5,23 +5,51 @@
   §13 ("If C4b's diff passes about 3,500 lines, carve out C4c: the board").
 - **PR:** the `feat/c4c-leads-board` branch, stacked on `feat/c4b-leads-screens` (C4b merges
   first; this branch then merges `main`).
-- **Migration:** `0068_help_leads_board.sql` **for now: the number is decided at merge time.**
-  The help set only, restated from C4b's 0065 (the latest restatement this branch can know of,
-  rebuilt with `hs_rebase.py`) with one line added to `working-with-leads`. It first took 0079,
-  the wave's first slack number, but a 0079 on `main` would block R5 (0066) and G2 (0067), which
-  merge before C4c; so it sits at 0068 until then and, at its merge, takes the lowest free number
-  above `main`'s highest (0068 if U7a has not merged, else the next; `renumber-migration.mjs`
-  only moves a file up). Before its push it is re-based again, onto G2's 0067 (`hs_rebase.py`
-  0065 → 0067), or onto whatever restatement is newest on `main` then (corrections rule 1:
-  the migration's "as 00NN left it" comments, its guide-count postcondition, `help_centre.test.sql`,
-  `helpCentre.spec`'s previous-file constant and per-role lists, this note and the read-back).
-  The ledger's Reserved table carries the row as "0068 (for now)"; 0079 to 0081 stay slack.
+- **Migration:** `0068_help_leads_board.sql`. The help set only, restated from C4b's 0065 (the
+  latest restatement this branch can know of, rebuilt with `hs_rebase.py`) with one line added to
+  `working-with-leads`. It first took 0079, the wave's first slack number, but a 0079 on `main`
+  would block R5 (0066) and G2 (0067), which merge before C4c. C4c therefore merges after G2 and
+  takes **0068**, and every later Wave 3 reservation moves up by one (2026-10-18): U7a 0069,
+  U10a 0070, G1a 0071, U17 0072, U10b 0073, U8a 0074, U9a 0075, G1b 0076, U11 0077, U9b 0078,
+  G1c 0079; the slack is 0080 to 0082 and the next free number 0083 (the ledger's Reserved
+  table). U7a cannot keep 0068 by merging first instead: C4c could then only move up to 0069,
+  and the numbers above it are held.
+- **The re-base onto G2, at merge time.** G2's 0067 rewrites `site-health-and-logs` and merges
+  first; 0068 is not yet re-based on it (G2 had not merged when C4c was finished). Until it is,
+  0068 cannot revert G2's guide: it keeps the set it finds (`_help_set_before_0068`, a temporary
+  table dropped at commit) and its postconditions refuse any guide but `working-with-leads` that
+  differs from it, so an un-re-based push (or CI's replay once G2 is merged in) fails with
+  "0068: the set changes guides it does not own (site-health-and-logs)". Replayed on the PGlite
+  harness with G2's 0067 (re-based onto 0065) before it: refused; with 0068 re-based on that
+  0067: applied, `help_leads_board.test.sql` 4 of 4, `help_leads_v2.test.sql` 10 of 10, and
+  the read-back matches but for the server version and the guide's version. After merging
+  `main` with G2 in it, the re-base updates exactly:
+  1. the set: `python -I hs_rebase.py 0065_help_leads_v2.sql 0067_health_probes.sql
+     0068_help_leads_board.sql --write` (OLD 0065, NEW 0067, from `main`). The dry run must
+     print "slice adds [] removes [] changes ['working-with-leads']" and "new base changed
+     ['site-health-and-logs']" (anything more means G2 was not re-based onto 0065 itself:
+     stop), and "15 guides in new base -> 15";
+  2. 0068's comments: "Depends on … 0065" and "The set as 0065 (C4b) left it … every other
+     guide is 0065's" become 0067 (G2), and the header's "Before its push the set is re-based
+     on G2's 0067 …" sentence is reduced to the guard's reason; "Production as of" names 0067
+     as pushed before it. The guard and the 15-guide postconditions stay as they are;
+  3. `tests/lib/helpCentre.spec.ts`: the base in "C4c (0068) restates C4b's set (0065)" and in
+     the guard's test (`setOf('0065_help_leads_v2.sql')`, twice) becomes
+     `0067_health_probes.sql`, the first test's title naming G2's set (0067); G2's own spec
+     test (its set against 0065) is left as G2 wrote it;
+  4. `supabase/tests/help_leads_board.test.sql`: its third assertion's message says 0067's
+     (the values do not change: G2 leaves `working-with-leads` alone);
+  5. the read-back (`readback_0068.sql` in the program's scratchpad): already expects 0067 in
+     the ledger and holds the canary `tenants_with_g2_health_guide = 1` (every tenant's
+     `site-health-and-logs` equals the set's and still says "The Uptime card"); re-check that
+     phrase against G2's merged guide, and nothing else changes;
+  6. this note: this bullet becomes one line saying the set is re-based on 0067.
 
 ## Why it is its own slice
 
 C4b came to about 6,000 lines without its migration's copied guides, past the brief's ~3,500.
 The brief names the board as the piece to carve out, with its tab and its help line, so the help
-set is restated twice (0065 without the board, 0068 for now with it). The board's code was written and
+set is restated twice (0065 without the board, 0068 with it). The board's code was written and
 tested inside C4b, carved out of it (C4b's commit "carve the pipeline board out of C4b into C4c"),
 and restored here in one commit; this branch adds about 800 lines to C4b.
 
@@ -57,16 +85,16 @@ and restored here in one commit; this branch adds about 800 lines to C4b.
 - **CSS:** `.kb`, `.kb__col`, `.kb__h`, `.kb__t`, `.kb__dot[data-tone]`, `.kb__sum`, `.kb__cnt`,
   `.kb__b`, `.kb__empty`, `.kb__more`, `.kcard` and its parts in `public/styles/admin/leads.css`,
   ported from the prototype's `.kb`/`.kcard` onto tokens.
-- **Help (0068 for now):** "On the Pipeline tab each stage is a column. Use Move to… on a card to change
+- **Help (0068):** "On the Pipeline tab each stage is a column. Use Move to… on a card to change
   its stage. The Won column adds up its value in SAR." (and its Arabic) added to the guide's
   first list; nothing else in the set moves.
 
 ## Bundle
 
-| (gzip, KB = 1,000 B) | C4b (as built) | C4c, after merging C4b at c76c2da |
-|---|---|---|
-| size-limit admin sum (tripwire 400) | 310.66 | 312.25 |
-| each leads screen, eager | 134.7 | 136.2 (`AdminLeadsList`, `AdminLeadsBoard`, `AdminLeadDetail`) |
+| (gzip, KB = 1,000 B) | C4b (as built) | C4c, after merging C4b at c76c2da | C4c at its pre-merge fixes, `main` merged (U4 #82, R8 #81) |
+|---|---|---|---|
+| size-limit admin sum (tripwire 400) | 310.66 | 312.25 | **312.34** (the figure CLAUDE.md's F4 amendment states) |
+| each leads screen, eager (limit 300) | 134.7 | 136.2 | 136.3 (`AdminLeadsList`, `AdminLeadsBoard`, `AdminLeadDetail`) |
 
 The board joins the `admin-leads` group by its path; check 6 of `scripts/admin-bundle.mjs`
 already allows any `AdminLead*` entry.
@@ -91,6 +119,25 @@ those that touch the board were applied to it too:
 - **Toasts said on the landing page** and **the sweep's oldest-lead sample** come with the merge:
   the board's "Add lead manually" is C4b's drawer (`?done=lead-added` on the lead's page), and
   the board has no edit sample or toast of its own.
+
+## C4c's pre-merge review fixes
+
+The correctness review confirmed five low findings:
+
+1. **The ledger row** now says C4c merges after G2 and takes 0068, and the Reserved table moves
+   every later Wave 3 reservation up by one (the Migration bullet above).
+2. **The help set before G2's re-base:** 0068's guard refuses to revert a guide it does not own,
+   and the read-back's `tenants_with_g2_health_guide` canary checks G2's guide survives; the
+   re-base itself waits for G2's merge (the steps above).
+3. **Focus after a conflict's refresh that drops the card** (a colleague marked it spam, which
+   the board leaves out, or it now falls outside the filters): its "Move to…" left with it and
+   focus fell to the body (WCAG 2.4.3). `focusTargetAfterMove` gives focus to the card's link,
+   else the heading of the column it left (`tabIndex=-1`), else the board's region.
+4. **A read already in flight when a move lands** (a filter or search started before the PATCH)
+   would redraw the card in its old column with its old version, and the next move would be a
+   needless 409. The board keeps the read in flight and, after a move, reads again (the re-run
+   aborts the stale read); the e2e waits for its search's answer before it opens "Move to…".
+5. **The bundle figure** in CLAUDE.md is the measured one (Bundle, above).
 
 ## Departures from the design, and why
 

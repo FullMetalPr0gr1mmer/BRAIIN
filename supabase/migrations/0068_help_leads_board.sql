@@ -10,11 +10,11 @@
 -- to its first list, in English and in Arabic ("On the Pipeline tab each stage is a column…").
 -- Its slug, place (70), tags, title, minutes (4), screens (/admin/leads, which covers the board
 -- through the screen match) and capability (leads.manage) are unchanged. Every other guide is
--- 0065's, byte for byte. The number is provisional: C4c merges after R5 (0066) and G2 (0067)
--- and takes the next free number above main's highest at its merge (docs/admin-v2/migrations.md).
--- Before its push the set is re-based on G2's 0067 (which rewrites site-health-and-logs);
--- until then the postconditions refuse to apply it over a set whose other guides differ from
--- this one's, so it can never put an older site-health-and-logs back.
+-- 0065's, byte for byte. C4c merges after R5 (0066) and G2 (0067) and takes 0068; every later
+-- Wave 3 reservation moved up by one for it (docs/admin-v2/migrations.md). Before its push the
+-- set is re-based on G2's 0067 (which rewrites site-health-and-logs; as-built C4c lists what
+-- the re-base updates); until then the postconditions refuse to apply it over a set whose
+-- other guides differ from this one's, so it can never put an older site-health-and-logs back.
 --
 -- No table, column, policy, grant or capability changes (CLAUDE.md §5 is untouched). The
 -- reseed is app.seed_help_articles(), which updates a guide only where it differs from the set,
