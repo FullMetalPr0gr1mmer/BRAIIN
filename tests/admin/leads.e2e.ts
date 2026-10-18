@@ -342,6 +342,9 @@ test.describe('as admin', () => {
     await dialog.getByLabel('Our decision').check();
     await dialog.getByRole('button', { name: 'Erase the lead' }).click();
     await page.waitForURL((url) => url.pathname === '/admin/leads');
+    // The confirmation rode in the address: shown on the list once, then taken out of it.
+    await expect(page.locator('#admin-toasts')).toContainText('Lead erased');
+    await expect(page).toHaveURL((url) => !url.searchParams.has('done'));
     const gone = await page.request.get(`/admin/leads/${lead.id}`);
     expect(gone.status()).toBe(404);
   });
@@ -367,7 +370,11 @@ test.describe('as admin', () => {
     await drawer.getByRole('button', { name: 'Add lead', exact: true }).click();
     await expect(drawer.getByText('This phone number is on an earlier lead.')).toBeVisible();
     await drawer.getByRole('button', { name: 'Add as someone new' }).click();
-    await page.waitForURL(/\/admin\/leads\/[0-9a-f-]{36}$/);
+    await page.waitForURL(/\/admin\/leads\/[0-9a-f-]{36}(\?|$)/);
+    // "Lead added" is said on the lead's page, where it can be seen, and the address loses
+    // the one-shot key.
+    await expect(page.locator('#admin-toasts')).toContainText('Lead added');
+    await expect(page).toHaveURL(/\/admin\/leads\/[0-9a-f-]{36}$/);
     await expect(
       page.getByRole('heading', { level: 1, name: `E2E second-phone ${RUN}` }),
     ).toBeVisible();
