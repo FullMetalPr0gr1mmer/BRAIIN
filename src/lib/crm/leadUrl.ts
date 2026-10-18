@@ -143,6 +143,16 @@ export function firstPage(filters: LeadFilters): LeadFilters {
   return { ...filters, page: 1 };
 }
 
+/**
+ * The filters the board's toolbar can show (C4c): whose, where from, which discipline, since
+ * when. The board has no chips, no sort and no pages, so an address's `stage`, `sort` or
+ * `page` (a list's link pasted onto the board) is dropped rather than kept in the board's
+ * address and carried into its cards' links with nothing on screen to show or clear it.
+ */
+export function boardFilters(filters: LeadFilters): LeadFilters {
+  return { ...filters, chip: { kind: 'all' }, sort: DEFAULT_LEAD_SORT, page: 1 };
+}
+
 /** When the range starts (lead_summary's and leads_list's `from`), or undefined: all time. */
 function rangeStart(filters: LeadFilters, now: Date): string | undefined {
   return rangeToInstants(filters.range, now)?.from;

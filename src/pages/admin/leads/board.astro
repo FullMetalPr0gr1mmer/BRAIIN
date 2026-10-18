@@ -5,7 +5,7 @@ import Icon from '@/components/admin/ui/Icon.astro';
 import Refused from '@/components/admin/ui/Refused.astro';
 import { can } from '@/lib/authz/matrix';
 import { readBoardInitial, readLeadsFrame } from '@/lib/crm/leadPage';
-import { parseLeadFilters } from '@/lib/crm/leadUrl';
+import { boardFilters, parseLeadFilters } from '@/lib/crm/leadUrl';
 
 export const prerender = false;
 
@@ -21,7 +21,8 @@ const sb = Astro.locals.supabase;
 const allowed = session !== null && can(session.role, 'leads.manage') === 'full';
 if (!allowed) Astro.response.status = 403;
 
-const filters = parseLeadFilters(Astro.url.searchParams);
+// Only what the board's toolbar shows (no chip, sort or page): see boardFilters.
+const filters = boardFilters(parseLeadFilters(Astro.url.searchParams));
 const now = new Date();
 const permissions = {
   canSeePii: allowed && can(session.role, 'leads.pii') === 'full',

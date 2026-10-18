@@ -206,6 +206,31 @@ describe('the board', () => {
     expect(out).toContain('Show all 60 in the list');
     expect(out).toContain('<span class="visually-hidden">Unread</span>');
   });
+
+  it('carries only the filters its toolbar shows into its cards (no chip, sort or page)', () => {
+    // A list's address pasted onto the board: the board shows no chip, sort or page, so its
+    // cards' links (and its own address) never carry them (boardFilters).
+    const pasted = html(LeadsBoard, {
+      frame: FRAME,
+      initial: [{ stage_id: NEW, total: 1, value_sum: 0, leads: [row()] }] as never,
+      filters: {
+        ...DEFAULT_LEAD_FILTERS,
+        chip: { kind: 'spam' },
+        sort: 'oldest',
+        page: 4,
+        range: '30',
+      },
+      permissions: PERMS,
+      now: NOW,
+    });
+    expect(pasted).toContain(`href="/admin/leads/${LEAD}?range=30"`);
+    expect(pasted).not.toMatch(/href="\/admin\/leads\/[^"]*(stage=spam|sort=|page=)/);
+  });
+
+  it('reads the address through boardFilters on the server too', () => {
+    const page = readFileSync('src/pages/admin/leads/board.astro', 'utf8');
+    expect(page).toContain('boardFilters(parseLeadFilters(Astro.url.searchParams))');
+  });
 });
 
 describe('a lead’s page', () => {

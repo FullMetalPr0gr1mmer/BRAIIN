@@ -5,12 +5,7 @@ import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { formatDateTime, isoOf, relTime } from '@/lib/admin/relTime';
 import type { LeadsFrame, StageView } from '@/lib/crm/leadPage';
 import type { BoardColumn, LeadCard } from '@/lib/crm/leadReads';
-import {
-  boardQueryOf,
-  withLeadFilters,
-  DEFAULT_LEAD_FILTERS,
-  type LeadFilters,
-} from '@/lib/crm/leadUrl';
+import { boardFilters, boardQueryOf, withLeadFilters, type LeadFilters } from '@/lib/crm/leadUrl';
 import { formatSar } from '@/lib/crm/leadView';
 import MoveTo from './MoveTo';
 import { LeadFilterSelects, LeadSearch } from './LeadsToolbar';
@@ -97,7 +92,9 @@ export default function LeadsBoard({
   now: renderedAt,
 }: LeadsBoardProps) {
   const { stages, people, disciplines } = frame;
-  const [filters, setFilters] = useState<LeadFilters>(start);
+  // Only what the toolbar shows: the address and the cards' links never carry a chip, sort or
+  // page the board has no control for (boardFilters).
+  const [filters, setFilters] = useState<LeadFilters>(() => boardFilters(start));
   const [q, setQ] = useState('');
   const [columns, setColumns] = useState<Column[]>(() => columnsOf(stages, initial));
   const [error, setError] = useState(
@@ -112,7 +109,7 @@ export default function LeadsBoard({
   const addLead = useAddLead(permissions.canSeePii, disciplines);
 
   useEffect(() => {
-    const href = withLeadFilters('/admin/leads/board', { ...filters, sort: 'starred', page: 1 });
+    const href = withLeadFilters('/admin/leads/board', boardFilters(filters));
     if (`${location.pathname}${location.search}` !== href) history.replaceState(null, '', href);
   }, [filters]);
 
@@ -242,11 +239,7 @@ export default function LeadsBoard({
                           <a
                             className="kcard__n"
                             dir="auto"
-                            href={withLeadFilters(`/admin/leads/${card.id}`, {
-                              ...DEFAULT_LEAD_FILTERS,
-                              ...filters,
-                              page: 1,
-                            })}
+                            href={withLeadFilters(`/admin/leads/${card.id}`, boardFilters(filters))}
                           >
                             {name}
                           </a>
