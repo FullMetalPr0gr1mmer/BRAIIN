@@ -1,26 +1,26 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 0068 — The leads guide names the Pipeline board (Admin v2 C4c). Forward-only.
 -- Depends on 0046 (the help centre: app.help_article_set(), app.seed_help_articles(),
--- public.help_articles) and 0065 (C4b: the guides as it left them, every earlier restatement
--- included, 0064's U4 among them).
+-- public.help_articles) and 0067 (G2: the guides as it left them, every earlier restatement
+-- included, C4b's 0065 and U4's 0064 among them).
 --
 -- C4c is the Pipeline board, carved out of C4b by size (the Wave 3 brief, §13): /admin/leads/board,
 -- a column per stage with "Move to…" on every card, and the Leads area's List | Pipeline tabs.
--- 0065 rewrote working-with-leads for the list and a lead's page; this adds the board's one line
--- to its first list, in English and in Arabic ("On the Pipeline tab each stage is a column…").
+-- C4b's 0065 rewrote working-with-leads for the list and a lead's page; this adds the board's
+-- one line to its first list, in English and in Arabic ("On the Pipeline tab each stage is a
+-- column…").
 -- Its slug, place (70), tags, title, minutes (4), screens (/admin/leads, which covers the board
 -- through the screen match) and capability (leads.manage) are unchanged. Every other guide is
--- 0065's, byte for byte. C4c merges after R5 (0066) and G2 (0067) and takes 0068; every later
--- Wave 3 reservation moved up by one for it (docs/admin-v2/migrations.md). Before its push the
--- set is re-based on G2's 0067 (which rewrites site-health-and-logs; as-built C4c lists what
--- the re-base updates); until then the postconditions refuse to apply it over a set whose
--- other guides differ from this one's, so it can never put an older site-health-and-logs back.
+-- 0067's, byte for byte. C4c merges after R5 (0066) and G2 (0067) and takes 0068; every later
+-- Wave 3 reservation moved up by one for it (docs/admin-v2/migrations.md). The postconditions
+-- refuse to apply it over a set whose other guides differ from this one's, so it can never
+-- put an older guide back over a restatement it was not re-based on.
 --
 -- No table, column, policy, grant or capability changes (CLAUDE.md §5 is untouched). The
 -- reseed is app.seed_help_articles(), which updates a guide only where it differs from the set,
 -- moving its version once; a second run changes nothing.
 --
--- Production as of 2026-10-18: PostgreSQL 17.6; 0065 (C4b) is pushed before this one.
+-- Production as of 2026-10-18: PostgreSQL 17.6; 0067 (G2) is pushed before this one.
 -- CLAUDE.md §8 (Admin v2 lanes, CRM).
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -32,17 +32,17 @@ set local lock_timeout = '5s';
 
 -- ---- The set this restates ----------------------------------------------------------------
 -- This migration owns one guide, working-with-leads; every other guide must stay as the set
--- the database holds now states it. A sibling slice that restated the set after 0065 and
--- reached production first (G2's 0067 rewrites site-health-and-logs) would otherwise be
--- reverted without a word, so the set before is kept here and the postconditions refuse any
--- other guide that changed: the push fails until this file is re-based on that restatement
--- (scratchpad hs_rebase.py, OLD 0065, NEW the sibling's file). Dropped at commit.
+-- the database holds now states it. A sibling slice that restated the set after 0067 and
+-- reached production first would otherwise be reverted without a word, so the set before is
+-- kept here and the postconditions refuse any other guide that changed: the push fails until
+-- this file is re-based on that restatement (scratchpad hs_rebase.py, OLD 0067, NEW the
+-- sibling's file). Dropped at commit.
 create temporary table _help_set_before_0068 on commit drop as
   select app.help_article_set() as guides;
 
 -- ---- The guides ------------------------------------------------------------------------------
--- The set as 0065 (C4b) left it, with the Pipeline line added to working-with-leads; every
--- other guide is 0065's, byte for byte. A later slice that changes a guide restates the set
+-- The set as 0067 (G2) left it, with the Pipeline line added to working-with-leads; every
+-- other guide is 0067's, byte for byte. A later slice that changes a guide restates the set
 -- from this text (U16's rule).
 create or replace function app.help_article_set() returns jsonb
   language sql immutable set search_path = '' as $fn$
@@ -1183,7 +1183,7 @@ create or replace function app.help_article_set() returns jsonb
   {
     "slug": "site-health-and-logs",
     "sort_order": 120,
-    "minutes": 3,
+    "minutes": 4,
     "tags": [
       "site"
     ],
@@ -1207,8 +1207,11 @@ create or replace function app.help_article_set() returns jsonb
         {
           "t": "ol",
           "x": [
-            "The score is half speed and half checklist. Speed comes from real visits over the last 28 days: each of LCP, INP and CLS counts in full when it is within budget, half when it needs work and not at all when it is poor. Uptime is not measured here yet.",
+            "Once the uptime monitor is set up, the score weighs speed 40%, the checklist 40% and uptime 20%; until then it is half speed and half checklist. Speed comes from real visits over the last 28 days: each of LCP, INP and CLS counts in full when it is within budget, half when it needs work and not at all when it is poor. Uptime over the last 30 days counts in full at 100% and not at all at 99% or less.",
             "The checklist groups what it checks: content, SEO, speed, errors, security and backups. A row that needs fixing links to the screen where you fix it, and a row your role cannot check says so.",
+            "The Uptime card shows what the uptime monitor sees: it checks the site from outside our hosting, and its readings arrive here every 10 minutes. Each of the last 90 days is a bar: green when the site was up all day, amber when it was down for a few minutes, red when it was down for more than 14 minutes, grey when there is no reading. Days run midnight to midnight in Riyadh, and View as table lists the days with downtime. Check now asks for a fresh reading at once, up to 6 times an hour. Until a developer adds the monitor's read-only key, the card says Not set up and the score leaves uptime out.",
+            "The Security tab lists how the site is protected, with its domain and its certificate. The domain's renewal date is read from its public registration record about once a day, and the row needs fixing when 30 days or fewer are left. The certificate's date comes from the uptime monitor when it reports one, and the row needs fixing when 14 days or fewer are left; otherwise the row says Cloudflare issues and renews the certificates.",
+            "The bell tells Admins and Developers when the site is down, when it was down for a while, when the domain or the certificate is about to expire, when no registration is found for the domain, and when the uptime monitor has not answered for an hour.",
             "Speed lists each page's figures from visitors' browsers, added up every hour and kept 400 days. Lab scores run in CI on every change, so none are shown here.",
             "Errors lists problems the site ran into. Every night, entries older than 30 days are deleted by themselves; an Admin can clear them sooner with Clear logs, choosing entries older than 7 days, older than 30 days, or all of them, and the clearing itself is recorded in the activity log.",
             "The activity log records saves, publishes, reveals of contact details, sign-ins and exports, each against the account that made it, with the time. The database itself writes who made an entry and when, so nobody can record something in someone else's name. Each entry names the person, former members included, and says what they did in plain words, with the names of the fields a save changed, never what they hold. Nobody can edit or delete an entry, not even an Admin, and the log is kept for good.",
@@ -1228,8 +1231,11 @@ create or replace function app.help_article_set() returns jsonb
         {
           "t": "ol",
           "x": [
-            "نصف الدرجة للسرعة ونصفها لقائمة التحقق. تأتي السرعة من زيارات حقيقية خلال آخر 28 يومًا: يُحتسب كل من LCP وINP وCLS كاملًا إذا كان ضمن الحد المستهدف، ونصفه إذا احتاج إلى تحسين، ولا يُحتسب إذا كان ضعيفًا. ولا يُقاس وقت التشغيل هنا بعد.",
+            "بعد إعداد مراقب وقت التشغيل، تُوزَّع الدرجة على 40% للسرعة و40% لقائمة التحقق و20% لوقت التشغيل، وحتى ذلك الحين يكون نصفها للسرعة ونصفها لقائمة التحقق. تأتي السرعة من زيارات حقيقية خلال آخر 28 يومًا: يُحتسب كل من LCP وINP وCLS كاملًا إذا كان ضمن الحد المستهدف، ونصفه إذا احتاج إلى تحسين، ولا يُحتسب إذا كان ضعيفًا. ويُحتسب وقت التشغيل خلال آخر 30 يومًا كاملًا عند 100%، ولا يُحتسب عند 99% أو أقل.",
             "تجمع قائمة التحقق ما تفحصه في مجموعات: المحتوى وSEO والسرعة والأخطاء والأمان والنسخ الاحتياطية. والبند الذي يحتاج إلى إصلاح يرتبط بالشاشة التي تصلحه منها، والبند الذي لا يستطيع دورك فحصه يذكر ذلك.",
+            "تعرض بطاقة Uptime ما يراه مراقب وقت التشغيل: فهو يفحص الموقع من خارج الاستضافة، وتصل قراءاته إلى هنا كل 10 دقائق. لكل يوم من آخر 90 يومًا شريط: أخضر إذا عمل الموقع طوال اليوم، وكهرماني إذا توقف بضع دقائق، وأحمر إذا توقف أكثر من 14 دقيقة، ورمادي إذا لم تتوفر قراءة. يبدأ اليوم وينتهي عند منتصف الليل بتوقيت الرياض، ويسرد زر View as table الأيام التي توقف فيها الموقع. ويطلب زر Check now قراءة جديدة فورًا، حتى 6 مرات في الساعة. وإلى أن يضيف المطوّر مفتاح القراءة فقط الخاص بالمراقب، تذكر البطاقة Not set up ولا تدخل وقت التشغيل في الدرجة.",
+            "يعرض تبويب Security كيف يُحمى الموقع، ومعه النطاق والشهادة. يُقرأ تاريخ تجديد النطاق من سجل تسجيله العام مرة في اليوم تقريبًا، ويحتاج البند إلى إصلاح عندما يبقى 30 يومًا أو أقل. ويأتي تاريخ الشهادة من مراقب وقت التشغيل إذا أبلغ عنه، ويحتاج البند إلى إصلاح عندما يبقى 14 يومًا أو أقل، وإلا فيذكر البند أن Cloudflare تُصدر الشهادات وتجددها.",
+            "يُنبّه الجرس المسؤول (Admin) والمطوّر (Developer) عندما يتوقف الموقع، وبعد أن يتوقف مدة، وعندما يقترب انتهاء النطاق أو الشهادة، وعندما لا يُعثر على تسجيل للنطاق، وعندما لا يجيب مراقب وقت التشغيل لمدة ساعة.",
             "يعرض تبويب Speed أرقام كل صفحة من متصفحات الزوار، تُجمع كل ساعة وتُحفظ 400 يوم. أما درجات المختبر فتُشغَّل في CI مع كل تغيير، لذا لا تظهر هنا.",
             "يعرض تبويب Errors المشكلات التي واجهها الموقع. تُحذف كل ليلة الإدخالات الأقدم من 30 يومًا تلقائيًا، ويستطيع المسؤول (Admin) مسحها قبل ذلك بزر Clear logs، فيختار الإدخالات الأقدم من 7 أيام أو الأقدم من 30 يومًا أو كلها، ويُسجَّل المسح نفسه في سجل النشاط.",
             "يسجّل سجل النشاط الحفظ والنشر وكشف بيانات التواصل وتسجيل الدخول والتصدير، كلًّا على الحساب الذي قام به مع وقته. وتكتب قاعدة البيانات بنفسها صاحب كل إدخال ووقته، فلا يستطيع أحد أن يسجّل شيئًا باسم غيره. ويذكر كل إدخال اسم الشخص، ومنهم من غادر الفريق، وما فعله بكلمات واضحة، مع أسماء الحقول التي غيّرها الحفظ دون محتواها. ولا يستطيع أحد تعديل أي إدخال أو حذفه، ولا حتى المسؤول (Admin)، ويُحتفظ بالسجل دائمًا.",

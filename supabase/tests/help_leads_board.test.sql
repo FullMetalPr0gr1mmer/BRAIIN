@@ -22,7 +22,7 @@ select ok(_guide() -> 'sort_order' = '70'::jsonb
           and _guide() -> 'minutes' = '4'::jsonb
           and _guide() -> 'screens' = '["/admin/leads"]'::jsonb
           and _guide() -> 'caps' = '["leads.manage"]'::jsonb,
-  'its place, minutes, screens and capability are 0065''s');
+  'its place, minutes, screens and capability are 0067''s');
 select ok(exists (select 1 from public.help_articles h
                    where h.tenant_id = '68000c4c-0000-4000-8000-00000000000a'
                      and h.slug = 'working-with-leads' and h.body = _guide() -> 'body'),

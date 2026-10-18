@@ -5,8 +5,8 @@
   §13 ("If C4b's diff passes about 3,500 lines, carve out C4c: the board").
 - **PR:** the `feat/c4c-leads-board` branch, stacked on `feat/c4b-leads-screens` (C4b merges
   first; this branch then merges `main`).
-- **Migration:** `0068_help_leads_board.sql`. The help set only, restated from C4b's 0065 (the
-  latest restatement this branch can know of, rebuilt with `hs_rebase.py`) with one line added to
+- **Migration:** `0068_help_leads_board.sql`. The help set only, restated from G2's 0067 (the
+  latest restatement on `main`, rebuilt with `hs_rebase.py`) with one line added to
   `working-with-leads`. It first took 0079, the wave's first slack number, but a 0079 on `main`
   would block R5 (0066) and G2 (0067), which merge before C4c. C4c therefore merges after G2 and
   takes **0068**, and every later Wave 3 reservation moves up by one (2026-10-18): U7a 0069,
@@ -14,36 +14,10 @@
   G1c 0079; the slack is 0080 to 0082 and the next free number 0083 (the ledger's Reserved
   table). U7a cannot keep 0068 by merging first instead: C4c could then only move up to 0069,
   and the numbers above it are held.
-- **The re-base onto G2, at merge time.** G2's 0067 rewrites `site-health-and-logs` and merges
-  first; 0068 is not yet re-based on it (G2 had not merged when C4c was finished). Until it is,
-  0068 cannot revert G2's guide: it keeps the set it finds (`_help_set_before_0068`, a temporary
-  table dropped at commit) and its postconditions refuse any guide but `working-with-leads` that
-  differs from it, so an un-re-based push (or CI's replay once G2 is merged in) fails with
-  "0068: the set changes guides it does not own (site-health-and-logs)". Replayed on the PGlite
-  harness with G2's 0067 (re-based onto 0065) before it: refused; with 0068 re-based on that
-  0067: applied, `help_leads_board.test.sql` 4 of 4, `help_leads_v2.test.sql` 10 of 10, and
-  the read-back matches but for the server version and the guide's version. After merging
-  `main` with G2 in it, the re-base updates exactly:
-  1. the set: `python -I hs_rebase.py 0065_help_leads_v2.sql 0067_health_probes.sql
-     0068_help_leads_board.sql --write` (OLD 0065, NEW 0067, from `main`). The dry run must
-     print "slice adds [] removes [] changes ['working-with-leads']" and "new base changed
-     ['site-health-and-logs']" (anything more means G2 was not re-based onto 0065 itself:
-     stop), and "15 guides in new base -> 15";
-  2. 0068's comments: "Depends on … 0065" and "The set as 0065 (C4b) left it … every other
-     guide is 0065's" become 0067 (G2), and the header's "Before its push the set is re-based
-     on G2's 0067 …" sentence is reduced to the guard's reason; "Production as of" names 0067
-     as pushed before it. The guard and the 15-guide postconditions stay as they are;
-  3. `tests/lib/helpCentre.spec.ts`: the base in "C4c (0068) restates C4b's set (0065)" and in
-     the guard's test (`setOf('0065_help_leads_v2.sql')`, twice) becomes
-     `0067_health_probes.sql`, the first test's title naming G2's set (0067); G2's own spec
-     test (its set against 0065) is left as G2 wrote it;
-  4. `supabase/tests/help_leads_board.test.sql`: its third assertion's message says 0067's
-     (the values do not change: G2 leaves `working-with-leads` alone);
-  5. the read-back (`readback_0068.sql` in the program's scratchpad): already expects 0067 in
-     the ledger and holds the canary `tenants_with_g2_health_guide = 1` (every tenant's
-     `site-health-and-logs` equals the set's and still says "The Uptime card"); re-check that
-     phrase against G2's merged guide, and nothing else changes;
-  6. this note: this bullet becomes one line saying the set is re-based on 0067.
+- **The re-base onto G2:** done after merging `main` with G2 in it: 0068's set is re-based on
+  G2's 0067 (`hs_rebase.py` 0065 to 0067: the slice changes only `working-with-leads`, the new
+  base only `site-health-and-logs`), and its guard still refuses any other guide that differs
+  from the set it finds.
 
 ## Why it is its own slice
 
@@ -128,7 +102,7 @@ The correctness review confirmed five low findings:
    every later Wave 3 reservation up by one (the Migration bullet above).
 2. **The help set before G2's re-base:** 0068's guard refuses to revert a guide it does not own,
    and the read-back's `tenants_with_g2_health_guide` canary checks G2's guide survives; the
-   re-base itself waits for G2's merge (the steps above).
+   re-base was made once G2 merged (the Migration bullets above).
 3. **Focus after a conflict's refresh that drops the card** (a colleague marked it spam, which
    the board leaves out, or it now falls outside the filters): its "Move to…" left with it and
    focus fell to the body (WCAG 2.4.3). `focusTargetAfterMove` gives focus to the card's link,
@@ -158,7 +132,7 @@ The correctness review confirmed five low findings:
   (the board's read: 50 a column, no chip, sort or page), `adminBundle.spec` (the board's island
   and screen claimed by `admin-leads`, a fixture with all three islands), `adminRoutes.spec`
   (the board as a server-rendered locked screen), `adminStyles.spec` (leads.css on the three
-  pages), `helpCentre.spec` (0068 against 0065: one line in each language; the guide's claims
+  pages), `helpCentre.spec` (0068 against 0067: one line in each language; the guide's claims
   include "Pipeline").
 - pgTAP `supabase/tests/help_leads_board.test.sql`, `plan(4)`; `help_leads_v2.test.sql`, run
   against the latest set, still holds. Replayed on the PGlite harness: 4 of 4 and 10 of 10.
