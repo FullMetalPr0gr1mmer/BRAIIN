@@ -199,14 +199,18 @@ begin
                        v_slug, coalesce(v_have, 0), coalesce(p_revision::text, 'none')),
       hint = 'Merge main, write the guide on its current text, and name that revision (0 for a new guide).';
   end if;
+  -- Lists keep the order they are written in (the CHECKs and the seed compare arrays whole).
   insert into app.help_guide_catalog as c
     (slug, sort_order, minutes, tags, screens, caps, title, title_ar, body)
   values (v_slug,
           (p_guide ->> 'sort_order')::int,
           (p_guide ->> 'minutes')::smallint,
-          array(select jsonb_array_elements_text(p_guide -> 'tags')),
-          array(select jsonb_array_elements_text(p_guide -> 'screens')),
-          array(select jsonb_array_elements_text(p_guide -> 'caps')),
+          array(select e from jsonb_array_elements_text(p_guide -> 'tags') with ordinality as l(e, n)
+                order by n),
+          array(select e from jsonb_array_elements_text(p_guide -> 'screens') with ordinality as l(e, n)
+                order by n),
+          array(select e from jsonb_array_elements_text(p_guide -> 'caps') with ordinality as l(e, n)
+                order by n),
           p_guide ->> 'title',
           p_guide ->> 'title_ar',
           p_guide -> 'body')
