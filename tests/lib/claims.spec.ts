@@ -56,7 +56,20 @@ describe('accessClaims', () => {
       role: 'seo',
       tenantId: BASE.app_metadata.tenant_id,
       amr: [{ method: 'password', timestamp: 1_799_990_000 }],
+      aal: null,
     });
+  });
+
+  it('reads the assurance level: aal1, aal2, and null for anything else (U17)', () => {
+    expect(accessClaims(token({ ...BASE, aal: 'aal1' }))?.aal).toBe('aal1');
+    expect(accessClaims(token({ ...BASE, aal: 'aal2' }))?.aal).toBe('aal2');
+    // Missing or junk never fails the token: it only counts as below aal2.
+    expect(accessClaims(token(BASE))?.aal).toBeNull();
+    for (const junk of ['aal3', 'AAL2', '', 2, null, ['aal2'], { aal: 'aal2' }]) {
+      const claims = accessClaims(token({ ...BASE, aal: junk }));
+      expect(claims).not.toBeNull();
+      expect(claims?.aal).toBeNull();
+    }
   });
 
   it.each([
@@ -80,6 +93,7 @@ describe('accessClaims', () => {
       role: undefined,
       tenantId: undefined,
       amr: null,
+      aal: null,
     });
     // app_metadata that is not an object fails the whole token: it is where the role lives.
     expect(accessClaims(token({ ...BASE, app_metadata: 'admin' }))).toBeNull();

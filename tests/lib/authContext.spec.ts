@@ -200,8 +200,17 @@ describe('resolveAuthContext: a valid, current session is never refused', () => 
     setProfile(profile(role));
     const result = await resolve(client({ token: jwt(claims({}, { role })) }));
     expect(result).toEqual({
-      ctx: { userId: USER, tenantId: TENANT, role, isActive: true, email: 'a@b.test' },
+      ctx: {
+        userId: USER,
+        tenantId: TENANT,
+        role,
+        isActive: true,
+        email: 'a@b.test',
+        // U17: no factor, the tenant not requiring it.
+        twoStep: { on: false, required: false, factorId: null },
+      },
       revoke: false,
+      pending: null,
     });
   });
 
@@ -211,7 +220,7 @@ describe('resolveAuthContext: a valid, current session is never refused', () => 
     expect(calls.getSession).toBe(1);
     expect(calls.getUser).toEqual([token]);
     expect(state.selects).toEqual([
-      'tenant_id,role,is_active,locked_until,tenant:tenants(security:admin_security_settings(session_max_days))',
+      'tenant_id,role,is_active,locked_until,tenant:tenants(security:admin_security_settings(session_max_days,require_mfa))',
     ]);
   });
 
@@ -302,7 +311,11 @@ describe('resolveAuthContext: a valid, current session is never refused', () => 
     });
     // ...and the 7-day default still ends an 8-day-old sign-in.
     const eightDays = jwt(claims({ amr: [{ method: 'password', timestamp: NOW_S - 8 * DAY }] }));
-    expect(await resolve(client({ token: eightDays }))).toEqual({ ctx: null, revoke: true });
+    expect(await resolve(client({ token: eightDays }))).toEqual({
+      ctx: null,
+      revoke: true,
+      pending: null,
+    });
   });
 
   it('an embed that answers without the tenant or its security key is logged as an error', async () => {
@@ -328,7 +341,7 @@ describe('resolveAuthContext: a valid, current session is never refused', () => 
     // tenants -> admin_security_settings by its primary key (one to one). A second foreign
     // key between either pair would make PostgREST refuse the embed as ambiguous.
     expect(PROFILE_WITH_SETTING).toBe(
-      'tenant_id,role,is_active,locked_until,tenant:tenants(security:admin_security_settings(session_max_days))',
+      'tenant_id,role,is_active,locked_until,tenant:tenants(security:admin_security_settings(session_max_days,require_mfa))',
     );
     const dir = 'supabase/migrations';
     const sql = readdirSync(dir)
@@ -378,7 +391,11 @@ describe('resolveAuthContext: a valid, current session is never refused', () => 
 
 describe('resolveAuthContext: no session is anonymous, not something to revoke', () => {
   it('no session in the cookie: the auth server is not even asked', async () => {
-    expect(await resolve(client({ token: null }))).toEqual({ ctx: null, revoke: false });
+    expect(await resolve(client({ token: null }))).toEqual({
+      ctx: null,
+      revoke: false,
+      pending: null,
+    });
     expect(calls.getUser).toEqual([]);
   });
 
@@ -386,14 +403,22 @@ describe('resolveAuthContext: no session is anonymous, not something to revoke',
     const result = await resolve(
       client({ userError: { name: 'AuthSessionMissingError', status: 403 }, user: null }),
     );
-    expect(result).toEqual({ ctx: null, revoke: false });
+    expect(result).toEqual({ ctx: null, revoke: false, pending: null });
   });
 
   it('a token with no role or no tenant claim (the hook did not stamp it)', async () => {
     const noRole = jwt(claims({}, { role: undefined }));
-    expect(await resolve(client({ token: noRole }))).toEqual({ ctx: null, revoke: false });
+    expect(await resolve(client({ token: noRole }))).toEqual({
+      ctx: null,
+      revoke: false,
+      pending: null,
+    });
     const noTenant = jwt(claims({}, { tenant_id: undefined }));
-    expect(await resolve(client({ token: noTenant }))).toEqual({ ctx: null, revoke: false });
+    expect(await resolve(client({ token: noTenant }))).toEqual({
+      ctx: null,
+      revoke: false,
+      pending: null,
+    });
   });
 
   it('a role only in user_metadata, which the user can write, is never honoured', async () => {
@@ -412,7 +437,7 @@ describe('resolveAuthContext: a stale or too-old session is REVOKED', () => {
     setProfile(profile(to));
     const result = await resolve(client({ token: jwt(claims({}, { role: from })) }));
     // Not "downgraded": denied. RLS would still enforce the token's role.
-    expect(result).toEqual({ ctx: null, revoke: true });
+    expect(result).toEqual({ ctx: null, revoke: true, pending: null });
   });
 
   it('even when the auth server’s current record already shows the new role', async () => {
@@ -425,17 +450,17 @@ describe('resolveAuthContext: a stale or too-old session is REVOKED', () => {
         user: { id: USER, email: 'a@b.test', app_metadata: { role: 'seo', tenant_id: TENANT } },
       }),
     );
-    expect(result).toEqual({ ctx: null, revoke: true });
+    expect(result).toEqual({ ctx: null, revoke: true, pending: null });
   });
 
   it('a token of another tenant than the profile', async () => {
     setProfile(profile('admin', { tenant: OTHER_TENANT }));
-    expect(await resolve(client())).toEqual({ ctx: null, revoke: true });
+    expect(await resolve(client())).toEqual({ ctx: null, revoke: true, pending: null });
   });
 
   it('a token that is not the verified user’s', async () => {
     const token = jwt(claims({ sub: '33333333-3333-4333-8333-333333333333' }));
-    expect(await resolve(client({ token }))).toEqual({ ctx: null, revoke: true });
+    expect(await resolve(client({ token }))).toEqual({ ctx: null, revoke: true, pending: null });
   });
 
   it.each([
@@ -447,18 +472,22 @@ describe('resolveAuthContext: a stale or too-old session is REVOKED', () => {
     ['no sub', jwt({ ...claims(), sub: undefined })],
     ['an exp that is text', jwt({ ...claims(), exp: String(NOW_S + HOUR) })],
   ])('a verified token that will not decode (%s)', async (_label, token) => {
-    expect(await resolve(client({ token }))).toEqual({ ctx: null, revoke: true });
+    expect(await resolve(client({ token }))).toEqual({ ctx: null, revoke: true, pending: null });
   });
 
   it('a token past its expiry by more than the clock allowance', async () => {
     const token = jwt(claims({ exp: NOW_S - CLOCK_SKEW_SECONDS - 1 }));
-    expect(await resolve(client({ token }))).toEqual({ ctx: null, revoke: true });
+    expect(await resolve(client({ token }))).toEqual({ ctx: null, revoke: true, pending: null });
   });
 
   it('a 1-day tenant ends a 2-day-old sign-in, and keeps a 23-hour-old one', async () => {
     setProfile(profile('admin', { days: 1 }));
     const twoDays = jwt(claims({ amr: [{ method: 'password', timestamp: NOW_S - 2 * DAY }] }));
-    expect(await resolve(client({ token: twoDays }))).toEqual({ ctx: null, revoke: true });
+    expect(await resolve(client({ token: twoDays }))).toEqual({
+      ctx: null,
+      revoke: true,
+      pending: null,
+    });
     const hours23 = jwt(claims({ amr: [{ method: 'password', timestamp: NOW_S - 23 * HOUR }] }));
     expect((await resolve(client({ token: hours23 }))).ctx).not.toBeNull();
   });
@@ -471,23 +500,24 @@ describe('resolveAuthContext: a stale or too-old session is REVOKED', () => {
     expect(await resolve(client({ token: at(DAY + CLOCK_SKEW_SECONDS + 1) }))).toEqual({
       ctx: null,
       revoke: true,
+      pending: null,
     });
   });
 
   it('a tenant with no setting ends a sign-in older than 7 days', async () => {
     setProfile(profile('admin', { days: null }));
     const token = jwt(claims({ amr: [{ method: 'password', timestamp: NOW_S - 8 * DAY }] }));
-    expect(await resolve(client({ token }))).toEqual({ ctx: null, revoke: true });
+    expect(await resolve(client({ token }))).toEqual({ ctx: null, revoke: true, pending: null });
   });
 
   it('a deactivated account', async () => {
     setProfile(profile('admin', { active: false }));
-    expect(await resolve(client())).toEqual({ ctx: null, revoke: true });
+    expect(await resolve(client())).toEqual({ ctx: null, revoke: true, pending: null });
   });
 
   it('a locked account', async () => {
     setProfile(profile('admin', { lockedUntil: new Date(NOW + 600_000).toISOString() }));
-    expect(await resolve(client())).toEqual({ ctx: null, revoke: true });
+    expect(await resolve(client())).toEqual({ ctx: null, revoke: true, pending: null });
   });
 
   it('FAILS CLOSED when the profile is unreadable, the setting and the plain read alike', async () => {
@@ -496,12 +526,12 @@ describe('resolveAuthContext: a stale or too-old session is REVOKED', () => {
     // account that had just been disabled.
     state.withSetting = { data: null, error: { message: 'connection refused' } };
     state.plain = { data: null, error: { message: 'connection refused' } };
-    expect(await resolve(client())).toEqual({ ctx: null, revoke: true });
+    expect(await resolve(client())).toEqual({ ctx: null, revoke: true, pending: null });
   });
 
   it('FAILS CLOSED when the profile row has vanished', async () => {
     setProfile({ data: null, error: null });
-    expect(await resolve(client())).toEqual({ ctx: null, revoke: true });
+    expect(await resolve(client())).toEqual({ ctx: null, revoke: true, pending: null });
   });
 });
 
@@ -541,5 +571,166 @@ describe('liveRecheck (privileged endpoints)', () => {
   it('throws — never passes — when the check itself fails', async () => {
     plain(null, { message: 'down' });
     await expect(liveRecheck(ctx)).rejects.toThrow(/unreadable/);
+  });
+});
+
+// ── Two-step sign-in (Admin v2 U17): fact 4 ─────────────────────────────────────────────
+// Below the level the account requires, a session gets no context, only a pending second
+// step; everyone who needs none is untouched (every case above). The rule's own table is
+// tests/lib/twoStep.spec.ts; these drive it through the session check.
+
+describe('resolveAuthContext: the second step (U17)', () => {
+  const FACTOR = '33333333-3333-4333-8333-333333333333';
+  const verified = { id: FACTOR, factor_type: 'totp', status: 'verified' };
+  const abandoned = {
+    id: '44444444-4444-4444-8444-444444444444',
+    factor_type: 'totp',
+    status: 'unverified',
+  };
+
+  /** The auth server's record of the user, with these factors. */
+  const userWith = (...factors: Record<string, unknown>[]) => ({
+    id: USER,
+    email: 'a@b.test',
+    app_metadata: { role: 'admin', tenant_id: TENANT },
+    factors,
+  });
+
+  /** The profile, its tenant requiring 2FA or not. */
+  function requiring(
+    requires: boolean,
+    { role = 'admin', active = true, lockedUntil = null as string | null } = {},
+  ): Read {
+    return {
+      data: {
+        tenant_id: TENANT,
+        role,
+        is_active: active,
+        locked_until: lockedUntil,
+        tenant: { security: { session_max_days: 7, require_mfa: requires } },
+      },
+      error: null,
+    };
+  }
+
+  /** A token the hook did not stamp (below the required level since 0072). */
+  const unstamped = (overrides: Record<string, unknown> = {}) => {
+    const base = claims(overrides) as Record<string, unknown>;
+    return jwt({ ...base, app_metadata: { provider: 'email', providers: ['email'] } });
+  };
+
+  const pending = (mode: 'challenge' | 'enrol', factorId: string | null = null) => ({
+    ctx: null,
+    revoke: false,
+    pending: { userId: USER, tenantId: TENANT, email: 'a@b.test', role: 'admin', mode, factorId },
+  });
+  const ended = { ctx: null, revoke: true, pending: null };
+  const anonymous = { ctx: null, revoke: false, pending: null };
+
+  it('a verified app and a password-only sign-in the hook stripped: the code is owed', async () => {
+    setProfile(requiring(false));
+    const result = await resolve(client({ token: unstamped(), user: userWith(verified) }));
+    expect(result).toEqual(pending('challenge', FACTOR));
+  });
+
+  it('a verified app and an aal1 token still carrying its role (minted before): held all the same', async () => {
+    setProfile(requiring(false));
+    const result = await resolve(client({ user: userWith(verified) }));
+    expect(result).toEqual(pending('challenge', FACTOR));
+  });
+
+  it('a verified app at aal2: a context, with 2FA on', async () => {
+    setProfile(requiring(false));
+    const result = await resolve(
+      client({ token: jwt(claims({ aal: 'aal2' })), user: userWith(verified, abandoned) }),
+    );
+    expect(result.ctx?.twoStep).toEqual({ on: true, required: false, factorId: FACTOR });
+    expect(result.pending).toBeNull();
+  });
+
+  it('the tenant requires 2FA and there is none: set it up, with the role claim or without', async () => {
+    setProfile(requiring(true));
+    expect(await resolve(client({ user: userWith() }))).toEqual(pending('enrol'));
+    expect(await resolve(client({ token: unstamped(), user: userWith() }))).toEqual(
+      pending('enrol'),
+    );
+  });
+
+  it('the tenant requires it, an app at aal2: a context, required', async () => {
+    setProfile(requiring(true));
+    const result = await resolve(
+      client({ token: jwt(claims({ aal: 'aal2' })), user: userWith(verified) }),
+    );
+    expect(result.ctx?.twoStep).toEqual({ on: true, required: true, factorId: FACTOR });
+  });
+
+  it('the tenant requires it and the app was reset mid-session (aal2, no factor): set it up again', async () => {
+    setProfile(requiring(true));
+    const result = await resolve(client({ token: jwt(claims({ aal: 'aal2' })), user: userWith() }));
+    expect(result).toEqual(pending('enrol'));
+  });
+
+  it('an abandoned (unverified) setup counts for nothing', async () => {
+    setProfile(requiring(false));
+    const result = await resolve(client({ user: userWith(abandoned) }));
+    expect(result.ctx?.twoStep).toEqual({ on: false, required: false, factorId: null });
+  });
+
+  it('a verified factor of another type counts (it must not weaken the rule): owed, no app to challenge', async () => {
+    setProfile(requiring(false));
+    const phone = { id: FACTOR, factor_type: 'phone', status: 'verified' };
+    expect(await resolve(client({ token: unstamped(), user: userWith(phone) }))).toEqual(
+      pending('challenge', null),
+    );
+  });
+
+  it('a misshapen setting is "not required" at the Worker, logged once (the hook holds the database)', async () => {
+    state.withSetting = {
+      data: { tenant_id: TENANT, role: 'admin', is_active: true, locked_until: null },
+      error: null,
+    };
+    expect((await resolve(client({ user: userWith() }))).ctx?.twoStep?.required).toBe(false);
+    expect((await resolve(client({ user: userWith() }))).ctx).not.toBeNull();
+    expect(logs).toEqual([{ level: 'error', source: 'auth:session', message: SETTING_MISSHAPEN }]);
+  });
+
+  it('a pending sign-in whose profile is locked (the fifth wrong code) or switched off is ended', async () => {
+    const future = new Date(NOW + 600_000).toISOString();
+    setProfile(requiring(false, { lockedUntil: future }));
+    expect(await resolve(client({ token: unstamped(), user: userWith(verified) }))).toEqual(ended);
+    setProfile(requiring(true, { active: false }));
+    expect(await resolve(client({ token: unstamped(), user: userWith() }))).toEqual(ended);
+  });
+
+  it('a stale role claim is ended before its second step is even considered', async () => {
+    setProfile(requiring(false, { role: 'seo' }));
+    expect(await resolve(client({ user: userWith(verified) }))).toEqual(ended);
+  });
+
+  it('a pending sign-in older than the session length is ended', async () => {
+    setProfile(requiring(false));
+    const old = unstamped({ amr: [{ method: 'password', timestamp: NOW_S - 8 * DAY }] });
+    expect(await resolve(client({ token: old, user: userWith(verified) }))).toEqual(ended);
+  });
+
+  it('no role claim and nothing owed (a switched-off account, no factor): anonymous, as before', async () => {
+    setProfile(requiring(false, { active: false }));
+    expect(await resolve(client({ token: unstamped(), user: userWith() }))).toEqual(anonymous);
+  });
+
+  it('no role claim at aal2: anonymous, and the profile is not even read', async () => {
+    const result = await resolve(
+      client({ token: unstamped({ aal: 'aal2' }), user: userWith(verified) }),
+    );
+    expect(result).toEqual(anonymous);
+    expect(state.selects).toEqual([]);
+  });
+
+  it('no role claim and an unreadable profile: anonymous (it never had access), not a revoke', async () => {
+    state.withSetting = { data: null, error: { message: 'down' } };
+    state.plain = { data: null, error: { message: 'down' } };
+    expect(await resolve(client({ token: unstamped(), user: userWith(verified) }))).toEqual(
+      anonymous,
+    );
   });
 });
