@@ -1,42 +1,58 @@
 import { z } from 'zod';
-import { EntitySeoWriteSchema } from '@schemas/admin';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { EntitySeoFieldsSchema, seoPairGap, seoPairIssues } from '@schemas/admin';
+import type { AuthContext } from '@/lib/auth/types';
+import { canonicalPath } from '@/lib/seo/canonical';
+import { entityPath, type SeoEntityType } from '@/lib/seo/entityPaths';
 import { ValidationError } from './errors';
 
 // Per-entity SEO metadata (`seo.entityMeta` — Admin + SEO write, Content Creator view):
 // the table, its columns, the request shapes and the payload → column mapping the
 // /api/admin/entity-seo route uses, moved out of the route file (Admin v2 R2) so the
-// release registry can bind them without importing a route. What the route writes is
-// unchanged (tests/lib/releaseOffWrites.spec.ts).
+// release registry can bind them without importing a route. What the route writes is held
+// by tests/lib/releaseOffWrites.spec.ts.
 //
 // The row is keyed by its target, (entity_type, entity_id), not by its own id: the caller
 // always knows what it is editing the meta for. The write is a full replace (PUT): every
 // optional column the payload leaves out is written as null.
+//
+// Admin v2 U10 (0073): the share image from the media library (`og_media_id`), the pair
+// rule (a title or description may be left to the page's default; one written needs both
+// languages), closed robots values, a canonical override that is a site path (equal to the
+// page's own path it is stored as null), and the SEO screen's list (`listEntitySeo`, below;
+// every read of the screen lives here, so the release overlay can wrap it).
 
 const COLUMNS =
-  'id,entity_type,entity_id,meta_title,meta_description,og_image,canonical_override,robots,schema_type,version,updated_at';
+  'id,entity_type,entity_id,meta_title,meta_description,og_image,og_media_id,canonical_override,robots,schema_type,version,updated_at';
+
+export const SEO_ENTITY_TYPES = ['service', 'blog_post', 'portfolio', 'page'] as const;
 
 const LookupSchema = z.object({
-  entityType: z.enum(['service', 'blog_post', 'portfolio', 'page']),
+  entityType: z.enum(SEO_ENTITY_TYPES),
   entityId: z.string().uuid(),
 });
 
-const WriteSchema = EntitySeoWriteSchema.extend({ version: z.number().int().min(0) });
+const WriteSchema = EntitySeoFieldsSchema.extend({ version: z.number().int().min(0) }).superRefine(
+  seoPairIssues,
+);
 
 const DEFAULTS = {
   meta_title: {},
   meta_description: {},
   og_image: null,
+  og_media_id: null,
   canonical_override: null,
   robots: null,
   schema_type: null,
   version: 0,
 };
 
-/** Payload key → column for the meta itself (every save writes all six). */
+/** Payload key → column for the meta itself (every save writes all seven). */
 const META_KEYS = {
   metaTitle: 'meta_title',
   metaDescription: 'meta_description',
   ogImage: 'og_image',
+  ogMediaId: 'og_media_id',
   canonicalOverride: 'canonical_override',
   robots: 'robots',
   schemaType: 'schema_type',
@@ -46,6 +62,20 @@ const META_KEYS = {
 const TARGET_KEYS = { entityType: 'entity_type', entityId: 'entity_id' } as const;
 
 type WriteInput = z.infer<typeof WriteSchema>;
+type Pair = { en?: string | undefined; ar?: string | undefined } | null | undefined;
+
+/** A pair as stored: `{}` when both halves are blank (the page's default), else both, trimmed. */
+function pairToColumn(pair: Pair): Record<string, string> {
+  const en = pair?.en?.trim() ?? '';
+  const ar = pair?.ar?.trim() ?? '';
+  return en || ar ? { en, ar } : {};
+}
+
+const blank = (value: unknown) =>
+  value === null ||
+  value === undefined ||
+  value === '' ||
+  (typeof value === 'object' && Object.keys(value as object).length === 0);
 
 export const ENTITY_SEO = {
   table: 'entity_seo',
@@ -57,10 +87,11 @@ export const ENTITY_SEO = {
   DEFAULTS,
   /** The meta columns of a save (a full replace: an optional field left out is null). */
   toRow: (input: Pick<WriteInput, keyof typeof META_KEYS>) => ({
-    meta_title: input.metaTitle,
-    meta_description: input.metaDescription,
-    og_image: input.ogImage ?? null,
-    canonical_override: input.canonicalOverride ?? null,
+    meta_title: pairToColumn(input.metaTitle),
+    meta_description: pairToColumn(input.metaDescription),
+    og_image: input.ogImage || null,
+    og_media_id: input.ogMediaId ?? null,
+    canonical_override: input.canonicalOverride || null,
     robots: input.robots ?? null,
     schema_type: input.schemaType ?? null,
   }),
@@ -76,13 +107,68 @@ export const ENTITY_SEO = {
     Object.entries({ ...META_KEYS, ...TARGET_KEYS }).map(([key, column]) => [key, [column]]),
   ) as Readonly<Record<string, readonly string[]>>,
   /**
-   * Both meta fields are bilingual-required by the schema. Restated as a domain check
-   * because CI blocks empty `meta_*_ar` (Pillar 3) and the error message an editor sees
-   * should name the problem, not read like a schema dump.
+   * The pair rule (U10 D4), restated as a domain check because CI blocks an empty
+   * `meta_*_ar` (Pillar 3) and the editor should be told which half is missing: each of the
+   * title and the description may be left blank (the page's default), but one written needs
+   * both languages. The name is R3b's (the staged path calls it too).
    */
-  assertBilingual: (input: Pick<WriteInput, 'metaTitle' | 'metaDescription'>) => {
-    if (!input.metaTitle.ar || !input.metaDescription.ar) {
-      throw new ValidationError('Arabic meta title and description are required', 'metaTitle.ar');
+  assertBilingual: (input: { metaTitle?: Pair; metaDescription?: Pair }) => {
+    for (const key of ['metaTitle', 'metaDescription'] as const) {
+      const gap = seoPairGap(input[key]);
+      if (gap) {
+        throw new ValidationError(
+          gap === 'ar'
+            ? 'Add the Arabic text too, or leave both empty to keep the default'
+            : 'Add the English text too, or leave both empty to keep the default',
+          `${key}.${gap}`,
+        );
+      }
     }
   },
+  /**
+   * True when a save sets nothing (every field the page's default): with no row yet it
+   * creates none (U10 D4), and answers the defaults.
+   */
+  isEmpty: (row: Record<string, unknown>) =>
+    Object.values(META_KEYS).every((column) => blank(row[column])),
 } as const;
+
+/** The table and columns a target type's own row is read from. */
+const TARGET_TABLES: Readonly<Record<SeoEntityType, { table: string; columns: string }>> = {
+  page: { table: 'pages', columns: 'id,slug,title,status' },
+  service: {
+    table: 'services',
+    columns: 'id,slug,title,status,blurb,discipline:discipline_id(name)',
+  },
+  portfolio: { table: 'portfolio', columns: 'id,slug,title,status,teaser,summary,project_type' },
+  blog_post: { table: 'blog_posts', columns: 'id,slug,title,status,excerpt' },
+};
+
+export function targetTable(type: SeoEntityType) {
+  return TARGET_TABLES[type];
+}
+
+/**
+ * The canonical override as stored (U10 D6): a site path, or null when it is blank or names
+ * the page's own path (no override at all, so the page stays self-canonical in each
+ * language). Reads the target's slug only when an override was sent.
+ */
+export async function normalizeCanonical(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  input: { entityType: SeoEntityType; entityId: string; canonicalOverride?: string | null | undefined },
+  base: string,
+): Promise<string | null> {
+  const path = canonicalPath(input.canonicalOverride, base);
+  if (path === null) return null;
+  const { table } = TARGET_TABLES[input.entityType];
+  const { data, error } = await sb
+    .from(table)
+    .select('slug')
+    .eq('tenant_id', auth.tenantId)
+    .eq('id', input.entityId)
+    .maybeSingle<{ slug: string }>();
+  if (error) throw new Error(`read ${table}: ${error.message}`);
+  const own = entityPath(input.entityType, data?.slug ?? null);
+  return own !== null && own === path ? null : path;
+}

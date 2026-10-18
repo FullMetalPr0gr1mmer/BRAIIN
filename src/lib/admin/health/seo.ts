@@ -12,13 +12,20 @@ export interface BuiltInFact {
 export const SEO_BUILT_IN: readonly BuiltInFact[] = [
   {
     id: 'sitemap',
-    text: "The sitemap lists the site's pages and every published service, project and post",
-    detail: 'In English and Arabic, read from what is published, with the date each last changed.',
+    text: "The sitemap lists the site's pages and every published service, project and post open to search engines",
+    detail:
+      'In English and Arabic, read from what is published, at most an hour behind, with the date each last changed. A page hidden from search, or pointing search engines at another address, is left out.',
   },
   {
     id: 'hreflang',
     text: 'English and Arabic pages point to each other',
     detail: 'Every page names its twin in the other language, with English as the default.',
+  },
+  {
+    id: 'canonical',
+    text: 'Each language names itself as the address to index',
+    detail:
+      'The English page points to itself and the Arabic page to itself. An address set under Advanced on the Pages tab is used in both languages, each in its own.',
   },
   {
     id: 'robots',

@@ -1,5 +1,4 @@
 ---
-import { getImage } from 'astro:assets';
 import type { Locale } from '@schemas/primitives';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import BaseLayout from '@/layouts/BaseLayout.astro';
@@ -7,6 +6,7 @@ import SectionBoundary from '@/components/SectionBoundary.astro';
 import LeadBand from '@/components/sections/LeadBand.astro';
 import { buildBreadcrumbSchema, buildCreativeWorkSchema, orgRef } from '@/lib/seo/jsonld';
 import { ogImageCandidates } from '@/lib/seo/ogImage';
+import { shareImageUrl } from '@/lib/seo/shareImage';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import { caseSchemaDescription, type CaseStudyPage } from '@/lib/portfolio/casePage';
@@ -58,18 +58,7 @@ const name = pickLocale(study.title, locale);
 // A shareable still for JSON-LD `image` and og:image: the banner frame as a 1200 px JPEG —
 // the format every crawler and link preview reads. It outranks the tenant's default share
 // image and yields only to the SEO role's per-page override (src/lib/seo/ogImage.ts).
-const shareImage = bannerImage
-  ? new URL(
-      (
-        await getImage({
-          src: bannerImage.src,
-          width: Math.min(1200, bannerImage.width),
-          format: 'jpg',
-        })
-      ).src,
-      `${base}/`,
-    ).href
-  : undefined;
+const shareImage = bannerImage ? await shareImageUrl(bannerImage, base) : undefined;
 
 const jsonLd = [
   buildCreativeWorkSchema({

@@ -343,6 +343,9 @@ export const HEALTH_RULES: readonly HealthRule[] = [
     group: 'SEO',
     title: 'Arabic search text',
     needs: [],
+    // Admin v2 U10: the SEO screen's Pages tab edits each page's search text (Admin, SEO).
+    fix: '/admin/seo?tab=pages',
+    fixCaps: ['seo.entityMeta'],
     evaluate: ({ content }) => {
       if (!content) return unread('Arabic search text');
       const n = content.missingArabic;
@@ -361,7 +364,8 @@ export const HEALTH_RULES: readonly HealthRule[] = [
     group: 'SEO',
     title: 'Default description',
     needs: [],
-    fix: '/admin/seo',
+    fix: '/admin/seo?tab=site',
+    fixCaps: ['seo.globalDefaults'],
     evaluate: ({ content }) => {
       if (!content) return unread('Default description');
       const missing = [

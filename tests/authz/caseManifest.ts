@@ -173,6 +173,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'releases: site profile write (releases on)',
   'releases: testimonials publish (releases on)',
   'search: admin search (the command palette)',
+  'seo: entity SEO list',
   'seo: entity SEO read',
   'seo: entity SEO write',
   'seo: global SEO defaults read',

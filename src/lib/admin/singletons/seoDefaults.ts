@@ -17,6 +17,8 @@ const SEO_DEFAULTS_KEYS = {
   defaultTitle: 'default_title',
   defaultDescription: 'default_description',
   defaultOgImage: 'default_og_image',
+  // Admin v2 U10 (0073): the default share image from the media library.
+  defaultOgMediaId: 'default_og_media_id',
   organization: 'organization',
   robotsDirectives: 'robots_directives',
 };
@@ -28,7 +30,7 @@ export const seoDefaultsSingleton: SingletonConfig = {
   readAccess: ['full'],
   writeCap: 'seo.globalDefaults',
   columns:
-    'tenant_id,title_template,default_title,default_description,default_og_image,organization,robots_directives,version,updated_at',
+    'tenant_id,title_template,default_title,default_description,default_og_image,default_og_media_id,organization,robots_directives,version,updated_at',
   schema: SeoDefaultsSchema,
   defaults: {
     title_template: {},

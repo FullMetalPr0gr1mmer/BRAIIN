@@ -658,30 +658,115 @@ export const NavItemUpdateSchema = updatable(NavItemWriteSchema);
 
 // ── SEO ─────────────────────────────────────────────────────────────────────────
 
+/** The longest title and description an SEO override may hold, per language (U10 D14). */
+export const SEO_TITLE_MAX = 120;
+export const SEO_DESCRIPTION_MAX = 320;
+
 /**
- * AR is REQUIRED on both meta fields. CLAUDE.md Pillar 3 makes Arabic metadata
- * first-class and CI blocks empty `meta_*_ar`; enforcing it at the write boundary is
- * what stops the CI gate from being the first place anyone finds out.
+ * A page's own robots value (U10 D5): `null` follows the site default; otherwise index or
+ * noindex, always "follow" (a page hidden from search still passes its links on). Closed so a
+ * typo can never reach `<meta name="robots">`. Legacy free text is read leniently (anything
+ * holding `noindex` counts as noindex: src/lib/seo/robots.ts) and written only as one of these.
  */
-export const EntitySeoWriteSchema = z.object({
+export const SEO_ROBOTS = ['index,follow', 'noindex,follow'] as const;
+/** The site default's robots value: the page values, plus hiding the links too. */
+export const SEO_DEFAULT_ROBOTS = ['index,follow', 'noindex,follow', 'noindex,nofollow'] as const;
+
+/**
+ * A canonical override (U10 D6): a path on this site, never another origin, a query or a
+ * fragment, never `//host` or a backslash (the URL standard reads `/\host` as `//host`), and
+ * never the Arabic twin's `/ar` path: SeoHead localizes it per language (`/x` → `/ar/x` on
+ * the Arabic page), so each language stays self-canonical (CLAUDE.md Pillar 3).
+ */
+export const CANONICAL_PATH_PATTERN = /^\/(?!\/)(?!ar(?:\/|$))[^\s?#\\]*$/;
+export const CanonicalPathSchema = z
+  .string()
+  .trim()
+  .max(2048)
+  .refine(
+    (v) => CANONICAL_PATH_PATTERN.test(v),
+    'a path on this site, such as /services/logo (no /ar: the Arabic page follows on its own)',
+  );
+
+/**
+ * One SEO text in both languages (U10 D4): both may be blank, which keeps the page's own
+ * default; one written needs the other (CLAUDE.md Pillar 3: CI blocks an empty `meta_*_ar`).
+ */
+const seoPair = (max: number) =>
+  z
+    .object({
+      en: z.string().trim().max(max).default(''),
+      ar: z.string().trim().max(max).default(''),
+    })
+    .nullish();
+
+/** The field and language a half-written pair is missing, or null when the pair is whole. */
+export function seoPairGap(
+  pair: { en?: string | undefined; ar?: string | undefined } | null | undefined,
+): 'en' | 'ar' | null {
+  const en = pair?.en?.trim() ?? '';
+  const ar = pair?.ar?.trim() ?? '';
+  if (en && !ar) return 'ar';
+  if (ar && !en) return 'en';
+  return null;
+}
+
+/**
+ * A page's SEO override (`entity_seo`, Admin + SEO; U10), its fields. Every field may be left
+ * as the page's default: a blank title or description pair inherits the page's own, a null
+ * share image, robots or canonical follows the defaults. What IS written is checked strictly.
+ * The pair rule is `seoPairIssues`, applied by EntitySeoWriteSchema (and by the route's schema,
+ * which extends these fields with the version).
+ */
+export const EntitySeoFieldsSchema = z.object({
   entityType: z.enum(['service', 'blog_post', 'portfolio', 'page']),
   entityId: UuidSchema,
-  metaTitle: BilingualTextSchema,
-  metaDescription: BilingualTextSchema,
+  metaTitle: seoPair(SEO_TITLE_MAX),
+  metaDescription: seoPair(SEO_DESCRIPTION_MAX),
+  /** The share image from the media library (0073); outranks `ogImage`. */
+  ogMediaId: UuidSchema.nullish(),
+  /** The legacy share-image link: kept and round-tripped, never offered for new values. */
   ogImage: ShareImageUrlSchema.nullish(),
-  canonicalOverride: UrlFieldSchema.nullish(),
-  robots: z.string().trim().max(120).nullish(),
+  canonicalOverride: CanonicalPathSchema.nullish(),
+  robots: z.enum(SEO_ROBOTS).nullish(),
+  /** Kept for old callers; JSON-LD types are code-owned (U10 D7) and the UI never sends it. */
   schemaType: z.string().trim().max(60).nullish(),
 });
-export const EntitySeoUpdateSchema = updatable(EntitySeoWriteSchema);
+
+/** The pair rule (U10 D4), as issues on `<field>.<missing language>`. */
+export function seoPairIssues(
+  input: {
+    metaTitle?: { en?: string | undefined; ar?: string | undefined } | null | undefined;
+    metaDescription?: { en?: string | undefined; ar?: string | undefined } | null | undefined;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  for (const key of ['metaTitle', 'metaDescription'] as const) {
+    const gap = seoPairGap(input[key]);
+    if (gap) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [key, gap],
+        message:
+          gap === 'ar'
+            ? 'Add the Arabic text too, or leave both empty to keep the default'
+            : 'Add the English text too, or leave both empty to keep the default',
+      });
+    }
+  }
+}
+
+export const EntitySeoWriteSchema = EntitySeoFieldsSchema.superRefine(seoPairIssues);
 
 export const SeoDefaultsSchema = z.object({
   titleTemplate: BilingualTextSchema.partial().optional(),
   defaultTitle: BilingualTextSchema.partial().optional(),
   defaultDescription: BilingualTextSchema.partial().optional(),
+  /** The default share image from the media library (0073); outranks `defaultOgImage`. */
+  defaultOgMediaId: UuidSchema.nullish(),
   defaultOgImage: ShareImageUrlSchema.nullish(),
   organization: z.record(z.string(), z.unknown()).optional(),
-  robotsDirectives: z.string().trim().max(120).optional(),
+  robotsDirectives: z.enum(SEO_DEFAULT_ROBOTS).optional(),
   version: SingletonVersionSchema,
 });
 

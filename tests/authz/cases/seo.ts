@@ -26,6 +26,15 @@ export const cases: readonly Case[] = [
     },
     allow: ['admin', 'seo'],
   },
+  // Admin v2 U10: the SEO screen's Pages list. Full access only: Content Creator's 'view'
+  // reads a page's meta inside its editor (the GET above), never this list.
+  {
+    name: 'entity SEO list',
+    load: () => import('@/pages/api/admin/entity-seo/list'),
+    method: 'GET',
+    url: '/api/admin/entity-seo/list?type=service&offset=0&limit=50',
+    allow: ['admin', 'seo'],
+  },
   {
     name: 'global SEO defaults read',
     load: () => import('@/pages/api/admin/seo-defaults'),

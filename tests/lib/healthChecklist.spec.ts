@@ -334,11 +334,27 @@ describe('fix links', () => {
       'content.placeholders': '/admin',
       'content.alt': '/admin/media?alt=missing',
       'content.consent': '/admin/testimonials',
-      'seo.default-description': '/admin/seo',
+      'seo.default-description': '/admin/seo?tab=site',
+      'seo.arabic': '/admin/seo?tab=pages',
       'speed.lcp': '/admin/site-health?tab=speed',
       'errors.recent': '/admin/site-health?tab=errors',
     });
-    expect(fixes['seo.arabic']).toBeNull(); // no per-page SEO screen yet
+  });
+
+  it('SEO fixes go to the SEO screen for the roles that edit there (U10)', () => {
+    for (const role of ['seo', 'admin'] as const) {
+      const fixes = Object.fromEntries(
+        runChecklist({ ...failing, role }).map((r) => [r.id, r.fix]),
+      );
+      expect(fixes['seo.arabic'], role).toBe('/admin/seo?tab=pages');
+      expect(fixes['seo.default-description'], role).toBe('/admin/seo?tab=site');
+    }
+    // Content Creator reads a page's meta in its editor, never on /admin/seo.
+    const creator = Object.fromEntries(
+      runChecklist({ ...failing, role: 'content_creator' }).map((r) => [r.id, r.fix]),
+    );
+    expect(creator['seo.arabic']).toBeNull();
+    expect(creator['seo.default-description']).toBeNull();
   });
 
   it('Developer is not sent to screens that do not show it the problem', () => {
@@ -394,11 +410,18 @@ describe('the facts are true of the code', () => {
 
   it('the SEO built-in rows name what the code does', () => {
     const ids = SEO_BUILT_IN.map((f) => f.id);
-    expect(ids).toEqual(['sitemap', 'hreflang', 'robots', 'schema']);
+    expect(ids).toEqual(['sitemap', 'hreflang', 'canonical', 'robots', 'schema']);
     const sitemap = source('src/pages/sitemap.xml.ts');
     for (const loader of ['getPublishedServices', 'getCaseStudyIndex', 'getPublishedPosts']) {
       expect(sitemap).toContain(loader);
     }
+    // "open to search engines", "at most an hour behind" (U10): the indexability filter, and
+    // the hour the sitemap may be cached for.
+    expect(sitemap).toContain('isIndexedPath(ix, path, base, ref ?? null)');
+    expect(sitemap).toContain("'cache-control': 'public, max-age=3600'");
+    expect(source('src/pages/llms.txt.ts')).toContain('isIndexedPath(ix, path, site, ref)');
+    // "each in its own": the override is localized per language (src/lib/seo/canonical.ts).
+    expect(source('src/components/SeoHead.astro')).toContain('localizedCanonical(');
     expect(source('src/components/SeoHead.astro')).toContain('hreflangAlternates');
     expect(source('src/pages/robots.txt.ts')).toContain("'Disallow: /admin'");
     expect(existsSync('tests/seo/jsonld.spec.ts')).toBe(true);
