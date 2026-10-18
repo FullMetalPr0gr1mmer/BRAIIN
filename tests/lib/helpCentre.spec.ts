@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -766,6 +767,40 @@ describe('the guides say only what the admin does', () => {
       expect(now[0]!.at(-1), lang).toContain('Pipeline');
       expect(now.slice(1), lang).toEqual(was.slice(1));
     }
+  });
+
+  it('C4c (0068) refuses to revert a guide it does not own: it keeps the set before and compares', () => {
+    // G2's 0067 rewrites site-health-and-logs and reaches production before C4c. A 0068 not
+    // yet re-based on it would put 0065's guide back; the migration keeps the set it found
+    // and its postcondition refuses any other guide that changed, so the push fails instead.
+    const sql = source(`${MIGRATIONS}/0068_help_leads_board.sql`);
+    const keep = sql.indexOf(
+      'create temporary table _help_set_before_0068 on commit drop as\n  select app.help_article_set() as guides;',
+    );
+    expect(keep).toBeGreaterThan(-1);
+    expect(keep).toBeLessThan(sql.indexOf('create or replace function app.help_article_set()'));
+    expect(sql).toContain('from _help_set_before_0068 h');
+    expect(sql).toContain("raise exception '0068: the set changes guides it does not own (%)");
+    // The one guide the guard lets change is the one the file changes against its base.
+    const setOf = (file: string) =>
+      JSON.parse(
+        /\$help\$([\s\S]*?)\$help\$/.exec(source(`${MIGRATIONS}/${file}`))![1]!,
+      ) as HelpArticleRow[];
+    const base = setOf('0065_help_leads_v2.sql');
+    const changed = setOf('0068_help_leads_board.sql')
+      .filter(
+        (a) =>
+          !isDeepStrictEqual(
+            a,
+            base.find((b) => b.slug === a.slug),
+          ),
+      )
+      .map((a) => a.slug);
+    const owned = [...sql.matchAll(/<> '([a-z-]+)'\n\s+and a\.g is distinct from b\.g;/g)].map(
+      (m) => m[1],
+    );
+    expect(owned).toEqual(changed);
+    expect(owned).toEqual(['working-with-leads']);
   });
 
   it('the leads guide names the controls the leads screens draw (C4b)', () => {

@@ -12,6 +12,9 @@
 -- through the screen match) and capability (leads.manage) are unchanged. Every other guide is
 -- 0065's, byte for byte. The number is provisional: C4c merges after R5 (0066) and G2 (0067)
 -- and takes the next free number above main's highest at its merge (docs/admin-v2/migrations.md).
+-- Before its push the set is re-based on G2's 0067 (which rewrites site-health-and-logs);
+-- until then the postconditions refuse to apply it over a set whose other guides differ from
+-- this one's, so it can never put an older site-health-and-logs back.
 --
 -- No table, column, policy, grant or capability changes (CLAUDE.md §5 is untouched). The
 -- reseed is app.seed_help_articles(), which updates a guide only where it differs from the set,
@@ -26,6 +29,16 @@
 -- raises instead, the whole migration rolls back, and the push is retried later.
 -- Transaction-local: it ends with this migration.
 set local lock_timeout = '5s';
+
+-- ---- The set this restates ----------------------------------------------------------------
+-- This migration owns one guide, working-with-leads; every other guide must stay as the set
+-- the database holds now states it. A sibling slice that restated the set after 0065 and
+-- reached production first (G2's 0067 rewrites site-health-and-logs) would otherwise be
+-- reverted without a word, so the set before is kept here and the postconditions refuse any
+-- other guide that changed: the push fails until this file is re-based on that restatement
+-- (scratchpad hs_rebase.py, OLD 0065, NEW the sibling's file). Dropped at commit.
+create temporary table _help_set_before_0068 on commit drop as
+  select app.help_article_set() as guides;
 
 -- ---- The guides ------------------------------------------------------------------------------
 -- The set as 0065 (C4b) left it, with the Pipeline line added to working-with-leads; every
@@ -1254,6 +1267,7 @@ declare
   v_set jsonb;
   v_guide jsonb;
   v_count int;
+  v_others text;
   p text;
 begin
   -- The set parses and still holds 15 guides; working-with-leads keeps its place, title, tags,
@@ -1279,6 +1293,20 @@ begin
      or position('Move to…' in (v_guide -> 'body' ->> 'en')) = 0
      or position('Reveal contact details and notes' in (v_guide -> 'body' ->> 'en')) > 0 then
     raise exception '0068: the working-with-leads guide does not name the Pipeline board';
+  end if;
+
+  -- Every other guide equals (as jsonb) the one the set before this migration held: a
+  -- sibling's restatement that reached production first is never reverted (see above).
+  select coalesce(string_agg(coalesce(a.g ->> 'slug', b.g ->> 'slug'), ', '
+                             order by coalesce(a.g ->> 'slug', b.g ->> 'slug')), '')
+    into v_others
+    from (select x.g from _help_set_before_0068 h
+            cross join jsonb_array_elements(h.guides) as x(g)) b
+    full join jsonb_array_elements(v_set) as a(g) on a.g ->> 'slug' = b.g ->> 'slug'
+   where coalesce(a.g ->> 'slug', b.g ->> 'slug') <> 'working-with-leads'
+     and a.g is distinct from b.g;
+  if v_others <> '' then
+    raise exception '0068: the set changes guides it does not own (%): re-base it on the restatement production holds', v_others;
   end if;
 
   -- No API role reads the set (0046).
