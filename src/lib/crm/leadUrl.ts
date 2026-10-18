@@ -1,7 +1,6 @@
 import {
-  LEAD_CHANNELS,
   LEAD_SORTS,
-  LEAD_SOURCES,
+  MANUAL_LEAD_CHANNELS,
   type LeadAssignedFilter,
   type LeadChannel,
   type LeadSource,
@@ -14,7 +13,10 @@ import { LEAD_RANGES, rangeToInstants, type LeadRange } from './leadView';
 //
 //   ?stage=<uuid>|unread|spam  the chip: a stage, the unread leads, or the spam view
 //   &assigned=me|none|<uuid>   whose leads ('me' is read in SQL as the session's user)
-//   &source=  &channel=        where they came from (a channel matters for "Added by hand")
+//   &source=web_form|manual    where they came from (the Source select's two choices)
+//   &channel=<manual channel>  how they reached us, read only with source=manual: the
+//                              select is drawn only then, so a filter it cannot show is
+//                              never applied
 //   &discipline=<slug>         a service in it, or "help me choose" in it
 //   &range=7|30|90             the last N days (all time when absent)
 //   &sort=newest|oldest|score  starred first when absent (decision D6)
@@ -49,6 +51,13 @@ export interface LeadFilters {
   /** 1-based. */
   page: number;
 }
+
+/**
+ * The sources the Source select offers, and so the only ones an address may carry: a source
+ * the screen has no choice for (an import, the Style-Finder) would narrow the list with
+ * nothing on screen to show or clear it.
+ */
+export const LEAD_FILTER_SOURCES = ['web_form', 'manual'] as const satisfies readonly LeadSource[];
 
 export const DEFAULT_LEAD_FILTERS: LeadFilters = {
   chip: { kind: 'all' },
@@ -93,11 +102,13 @@ export function parseLeadFilters(params: URLSearchParams): LeadFilters {
       : null;
   const pageRaw = params.get('page');
   const page = pageRaw !== null && /^\d{1,4}$/.test(pageRaw) ? Number(pageRaw) : 1;
+  const source = oneOf(LEAD_FILTER_SOURCES, params.get('source'));
   return {
     chip,
     assigned,
-    source: oneOf(LEAD_SOURCES, params.get('source')),
-    channel: oneOf(LEAD_CHANNELS, params.get('channel')),
+    source,
+    // How they reached us belongs to a lead added by hand, as the toolbar draws it.
+    channel: source === 'manual' ? oneOf(MANUAL_LEAD_CHANNELS, params.get('channel')) : null,
     discipline,
     range: oneOf(LEAD_RANGES, params.get('range')) ?? 'all',
     sort: oneOf(LEAD_SORTS, params.get('sort')) ?? DEFAULT_LEAD_SORT,

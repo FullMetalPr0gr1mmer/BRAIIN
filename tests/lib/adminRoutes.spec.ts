@@ -12,6 +12,7 @@ import {
   LOCKED_SCREENS,
   REDIRECT_PAGES,
   UNSEEDED_LISTS,
+  editRowRequest,
   captureName,
   captureRoutes,
   captureSlug,
@@ -202,6 +203,10 @@ describe('the sweep route map', () => {
     expect(setup).toContain("import { EDIT_SAMPLES } from './routes'");
     for (const [pattern, sample] of Object.entries(EDIT_SAMPLES)) {
       expect(() => pageFileFor(pattern), pattern).not.toThrow();
+      // A row no parallel test erases: the oldest, never the list's default (newest), which
+      // tests/admin/leads.e2e.ts's erase test removes while the sweep runs.
+      expect(sample.body['sort'], pattern).toBe('oldest');
+      expect(sample.body['limit'], pattern).toBe(1);
       // The list and the create route exist and ask for the capability the sample names.
       for (const api of [sample.api, sample.create.api]) {
         const file = existsSync(`src/pages${api}.ts`)
@@ -223,6 +228,32 @@ describe('the sweep route map', () => {
     expect(
       ROLES.filter((role) => sweepRoutes(role).some((r) => r.pattern === '/admin/leads/[id]')),
     ).toEqual(ROLES.filter((role) => ROLE_CAPS[role]['leads.manage'] === 'full'));
+  });
+
+  it('finds an edit screen’s row one way for the sweep and the capture (C4b)', () => {
+    // A resource's edit screen: its GET list. The lead's page: its sample's POST (the list
+    // route is POST only), never a GET that answers 405 and skips the screen.
+    for (const role of ROLES) {
+      for (const route of sweepRoutes(role)) {
+        const request = editRowRequest(route);
+        if (route.kind !== 'edit') {
+          expect(request, route.path).toBeNull();
+          continue;
+        }
+        const sample = EDIT_SAMPLES[route.pattern];
+        expect(request, route.path).toEqual(
+          sample
+            ? { method: 'POST', url: sample.api, body: sample.body }
+            : { method: 'GET', url: `${route.listApi}?limit=1` },
+        );
+      }
+    }
+    // Both specs that open an edit screen ask through it, so neither can drift back to a GET.
+    for (const spec of ['tests/admin/sweep.e2e.ts', 'tests/admin/capture.e2e.ts']) {
+      const source = readFileSync(spec, 'utf8');
+      expect(source, spec).toContain('editRowRequest(route)');
+      expect(source, spec).not.toMatch(/listApi\}\?limit=1/);
+    }
   });
 
   it('Admin is swept on every sidebar link and tab, and the extras', () => {

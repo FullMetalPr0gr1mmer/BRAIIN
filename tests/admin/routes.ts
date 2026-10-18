@@ -57,7 +57,10 @@ export const EDIT_SAMPLES: Readonly<Record<string, EditSample>> = {
   '/admin/leads/[id]': {
     api: '/api/admin/leads/query',
     method: 'POST',
-    body: { limit: 1 },
+    // The OLDEST lead, never the default newest: tests/admin/leads.e2e.ts adds leads and
+    // erases one while the sweep runs (fullyParallel), and its erased lead is the newest for a
+    // moment. The oldest is the sample row or a lead no test removes.
+    body: { limit: 1, sort: 'oldest' },
     cap: 'leads.manage',
     create: {
       api: '/api/admin/leads',
@@ -295,6 +298,24 @@ export function sweepRoutes(role: Role, exists: Exists = existsSync): SweepRoute
     }
   }
   return routes;
+}
+
+/** How a spec asks for the row an edit screen opens (see editRowRequest). */
+export type EditRowRequest =
+  | { method: 'GET'; url: string }
+  | { method: 'POST'; url: string; body: Readonly<Record<string, unknown>> };
+
+/**
+ * The one request that finds the row an edit screen opens, for every spec that opens one
+ * (sweep.e2e.ts, capture.e2e.ts): a resource's GET list with `?limit=1`, or, for an edit
+ * screen with no resource config, its sample's POST (EDIT_SAMPLES; the caller adds the CSRF
+ * header). Null for a screen that is not an edit screen. Its answer's `data.rows[0].id` is
+ * the row.
+ */
+export function editRowRequest(route: SweepRoute): EditRowRequest | null {
+  if (route.kind !== 'edit') return null;
+  if (route.sample) return { method: 'POST', url: route.sample.api, body: route.sample.body };
+  return { method: 'GET', url: `${route.listApi ?? ''}?limit=1` };
 }
 
 /**

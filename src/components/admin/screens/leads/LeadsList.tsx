@@ -5,6 +5,7 @@ import Icon from '@/components/admin/kit/Icon';
 import Kpi from '@/components/admin/kit/Kpi';
 import Note from '@/components/admin/kit/Note';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
+import { showFlash } from '@/lib/admin/flash';
 import { formatDateTime, isoOf, relTime } from '@/lib/admin/relTime';
 import { toast } from '@/lib/admin/toast';
 import { deltaOf, MIN_RESPONSE_SAMPLE, type LeadKpis } from '@/lib/crm/leadKpis';
@@ -170,6 +171,10 @@ export default function LeadsList({
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(() => Date.parse(renderedAt));
   const addLead = useAddLead(permissions.canSeePii, disciplines);
+
+  // A confirmation the last page sent here (a lead erased): shown once, then taken out of
+  // the address. First, before the address is rewritten from the filters.
+  useEffect(() => showFlash(), []);
 
   // The address follows the filters (never the search), and so does the page head's Export
   // link (the server's audited CSV, for the filters on screen; crm.md §11: no client CSV).

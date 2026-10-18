@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { MANUAL_LEAD_CHANNELS, type LeadAssignedFilter, type LeadChannel } from '@schemas/crm';
 import type { DisciplineView, PersonView } from '@/lib/crm/leadPage';
-import type { LeadFilters, LeadSort } from '@/lib/crm/leadUrl';
+import { LEAD_FILTER_SOURCES, type LeadFilters, type LeadSort } from '@/lib/crm/leadUrl';
 import { CHANNEL_LABELS, type LeadRange } from '@/lib/crm/leadView';
 
 // The leads list's and board's toolbar (Admin v2 C4b, crm.md §11): the search, and the
@@ -142,7 +142,9 @@ export function LeadFilterSelects({
         value={filters.source ?? ''}
         onChange={(value) =>
           set({
-            source: value === 'web_form' || value === 'manual' ? value : null,
+            source: (LEAD_FILTER_SOURCES as readonly string[]).includes(value)
+              ? (value as LeadFilters['source'])
+              : null,
             // How they reached us belongs to a lead added by hand.
             channel: value === 'manual' ? filters.channel : null,
           })

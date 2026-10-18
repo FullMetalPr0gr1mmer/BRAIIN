@@ -1,7 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { SKIP_REASON, STAFF_ROLES, authFile, staffEnv } from './staff';
-import { UNSEEDED_LISTS, expectedSidebar, routeKey, sweepRoutes, type SweepRoute } from './routes';
+import {
+  UNSEEDED_LISTS,
+  editRowRequest,
+  expectedSidebar,
+  routeKey,
+  sweepRoutes,
+  type SweepRoute,
+} from './routes';
 
 /*
  * The per-role admin sweep (Admin v2 F0): the client's adfull.mjs acceptance run on the
@@ -52,14 +59,16 @@ async function csrf(page: Page): Promise<string> {
  * harness extension; its row is made by tests/admin/samples.setup.ts).
  */
 async function resolvePath(page: Page, route: SweepRoute): Promise<string | null> {
-  if (route.kind !== 'edit') return route.path;
+  const request = editRowRequest(route);
+  if (!request) return route.path;
   const listApi = route.listApi ?? '';
-  const res = route.sample
-    ? await page.request.post(route.sample.api, {
-        headers: { 'x-csrf-token': await csrf(page) },
-        data: route.sample.body,
-      })
-    : await page.request.get(`${listApi}?limit=1`);
+  const res =
+    request.method === 'POST'
+      ? await page.request.post(request.url, {
+          headers: { 'x-csrf-token': await csrf(page) },
+          data: request.body,
+        })
+      : await page.request.get(request.url);
   expect(res.status(), `${listApi} answers the signed-in role`).toBe(200);
   const body = (await res.json()) as { data?: { rows?: { id?: unknown }[] } };
   const id = body.data?.rows?.[0]?.id;

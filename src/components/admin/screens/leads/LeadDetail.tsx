@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNod
 import { Badge } from '@/components/admin/kit/StatusBadge';
 import Note from '@/components/admin/kit/Note';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
+import { showFlash } from '@/lib/admin/flash';
 import { formatDateTime, relTime } from '@/lib/admin/relTime';
 import type {
   LeadDetailInitial,
@@ -140,6 +141,10 @@ export default function LeadDetail(props: LeadDetailProps) {
       setBusy(false);
     }
   }
+
+  // A confirmation the last page sent here (a lead added by hand): shown once, then taken
+  // out of the address.
+  useEffect(() => showFlash(), []);
 
   // Opening an unread lead marks it read, once (decision D4).
   useEffect(() => {

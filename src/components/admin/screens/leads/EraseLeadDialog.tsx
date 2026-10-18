@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import Modal from '@/components/admin/kit/Modal';
 import { adminFetch, describeError } from '@/lib/admin/client';
-import { toast } from '@/lib/admin/toast';
+import { withFlash } from '@/lib/admin/flash';
 
 // Erasing a lead (Admin v2 C4b, crm.md §11): an Admin's (`crm.erase`), behind "More actions"
 // on the lead's page, as a danger action. Loaded with import() on first use, so the kit's
@@ -30,8 +30,9 @@ export default function EraseLeadDialog({ leadId, open, onClose }: EraseLeadDial
     setError('');
     try {
       await adminFetch(`/api/admin/leads/${leadId}/erase`, { method: 'POST', body: { reason } });
-      toast('Lead erased', 'ok');
-      location.assign('/admin/leads');
+      // The confirmation rides to the list, which shows it (a toast here would go with this
+      // page, unseen).
+      location.assign(withFlash('/admin/leads', 'lead-erased'));
     } catch (err) {
       setError(describeError(err));
       setBusy(false);

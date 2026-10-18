@@ -11,6 +11,11 @@ import type { StageView } from '@/lib/crm/leadPage';
 //
 // Its name says whose card it is ("Move to… Sara"): the visible words come first, so the
 // spoken name starts with what is seen (WCAG 2.5.3).
+//
+// Choosing a stage closes the list, which held focus, and the caller usually disables the
+// button while the move is saved: a focused button that turns disabled drops focus to the
+// body (WCAG 2.4.3 Focus Order). So the button takes focus back once it is enabled again,
+// unless the person has gone somewhere else meanwhile (focusAfterMove).
 
 export interface MoveToProps {
   /** The lead's name, for the button's name. */
@@ -22,6 +27,22 @@ export interface MoveToProps {
   onMove: (stage: StageView) => void;
   disabled?: boolean;
   className?: string | undefined;
+}
+
+/**
+ * Whether the button takes focus back now: a stage was chosen here (`pending`), the button is
+ * enabled again, and focus is lost (nothing, or the body) or still on the button. Never taken
+ * from wherever the person went while the move was saved.
+ */
+export function focusAfterMove(
+  pending: boolean,
+  off: boolean,
+  active: Element | null,
+  button: Element | null,
+  body: Element | null,
+): boolean {
+  if (!pending || off || !button) return false;
+  return active === null || active === body || active === button;
 }
 
 export default function MoveTo({
@@ -38,6 +59,17 @@ export default function MoveTo({
   const box = useRef<HTMLDivElement>(null);
   const listId = useId();
   const targets = stages.filter((stage) => stage.id !== current);
+  const off = disabled || targets.length === 0;
+  // A stage was chosen here and focus has not been given back yet.
+  const pending = useRef(false);
+
+  // The move settled (the button is enabled again): focus returns to it (see above).
+  useEffect(() => {
+    if (off) return;
+    if (focusAfterMove(pending.current, off, document.activeElement, button.current, document.body))
+      button.current?.focus();
+    pending.current = false;
+  }, [off]);
 
   // Open: focus the first stage. A press anywhere outside closes the list.
   useEffect(() => {
@@ -83,7 +115,7 @@ export default function MoveTo({
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
-        disabled={disabled || targets.length === 0}
+        disabled={off}
         onClick={() => setOpen((was) => !was)}
       >
         Move to…<span className="visually-hidden"> {name}</span>
@@ -101,7 +133,10 @@ export default function MoveTo({
               <button
                 type="button"
                 onClick={() => {
-                  close(false);
+                  pending.current = true;
+                  // Focus goes back to the button at once; the effect above gives it back
+                  // again if the caller's save disables the button meanwhile.
+                  close(true);
                   onMove(stage);
                 }}
               >

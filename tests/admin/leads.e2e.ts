@@ -60,6 +60,19 @@ async function csrf(page: Page): Promise<string> {
   return find();
 }
 
+/**
+ * Opens an admin page and waits until every island has hydrated, as the other admin specs
+ * do. The leads pages draw their first view on the server (C4b), so the selects, the search
+ * and the buttons are on screen before React listens: a select changed then is lost, and
+ * Enter in the search submits the bare <form role="search"> instead. Astro hydrates through
+ * import(), which the load event goto waits for does not hold back.
+ */
+async function visit(page: Page, path: string, options?: Parameters<Page['goto']>[1]) {
+  const res = await page.goto(path, options);
+  await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
+  return res;
+}
+
 interface Added {
   id: string;
   name: string;
@@ -131,12 +144,17 @@ async function moveBehindTheScreen(page: Page, id: string, stageId: string) {
 
 test.describe('as admin', () => {
   test.use({ storageState: authFile('admin') });
+  // One at a time: the round trip reads the sidebar's New-leads count before and after, and
+  // the other tests here move or erase New leads (a bulk move, a stale move, a stage move,
+  // an erase). Side by side (fullyParallel), the count could stay put or drop and the round
+  // trip fail; a retry would only hide that.
+  test.describe.configure({ mode: 'serial' });
 
   test('round trip: a contact form lead lands in the list, with no contact detail', async ({
     page,
     browser,
   }) => {
-    await page.goto('/admin/leads');
+    await visit(page, '/admin/leads');
     const badge = page.locator('nav.admin-sidebar a[href="/admin/leads"] .cnt');
     const before = (await badge.count())
       ? Number.parseInt((await badge.innerText()) || '0', 10)
@@ -176,7 +194,7 @@ test.describe('as admin', () => {
   }) => {
     const one = await addLead(page, 'bulk-a');
     const two = await addLead(page, 'bulk-b');
-    await page.goto('/admin/leads');
+    await visit(page, '/admin/leads');
     await page.getByLabel('Range').selectOption('30');
     await expect(page).toHaveURL(/[?&]range=30/);
 
@@ -214,7 +232,7 @@ test.describe('as admin', () => {
   }) => {
     const lead = await addLead(page, 'stale');
     const all = await stages(page.request);
-    await page.goto('/admin/leads');
+    await visit(page, '/admin/leads');
     const search = page.getByRole('searchbox', { name: 'Search leads' });
     await search.fill(lead.name);
     await search.press('Enter');
@@ -285,7 +303,7 @@ test.describe('as admin', () => {
       const lead = await addLead(page, `narrow-${width}`);
       await page.setViewportSize({ width, height: 800 });
       for (const path of ['/admin/leads', `/admin/leads/${lead.id}`]) {
-        await page.goto(path, { waitUntil: 'networkidle' });
+        await visit(page, path, { waitUntil: 'networkidle' });
         const over = await page.evaluate(
           () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
         );
@@ -302,7 +320,7 @@ test.describe('as admin', () => {
     const rows = (await query(page, { ...filter, limit: 100 })).rows.map((r) => String(r['id']));
     expect(rows.length).toBeGreaterThanOrEqual(3);
     const middle = rows[1]!;
-    await page.goto(`/admin/leads/${middle}?source=manual&channel=event`);
+    await visit(page, `/admin/leads/${middle}?source=manual&channel=event`);
     await expect(page.getByRole('link', { name: /^Previous/ })).toHaveAttribute(
       'href',
       `/admin/leads/${rows[0]}?source=manual&channel=event`,
@@ -323,7 +341,7 @@ test.describe('as admin', () => {
     page,
   }) => {
     const lead = await addLead(page, 'detail', { email: `detail-${RUN}@example.invalid` });
-    await page.goto(`/admin/leads/${lead.id}`, { waitUntil: 'networkidle' });
+    await visit(page, `/admin/leads/${lead.id}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { level: 1, name: lead.name })).toBeVisible();
     expect(await page.content()).not.toContain(lead.email!);
 
@@ -351,10 +369,16 @@ test.describe('as admin', () => {
     await page.getByRole('button', { name: 'Log', exact: true }).click();
     await expect(page.locator('.tl__t', { hasText: 'Call logged' })).toBeVisible();
 
-    // The stage, through Move to…
-    await page.getByRole('button', { name: `Move to… ${lead.name}` }).click();
+    // The stage, through Move to…, with its menu open under axe; focus returns to the
+    // button once the move is saved (it is disabled meanwhile).
+    const moveTo = page.getByRole('button', { name: `Move to… ${lead.name}` });
+    await moveTo.click();
+    await expect(page.locator('.moveto__m')).toBeVisible();
+    await axe(page, 'the move menu on a lead’s page');
     await page.locator('.moveto__m').getByRole('button', { name: 'Contacted' }).click();
     await expect(page.getByText('Moved to Contacted.')).toBeVisible();
+    await expect(moveTo).toBeEnabled();
+    await expect(moveTo).toBeFocused();
 
     // Another tab moves it again: this page's version is stale, and it says so.
     const all = await stages(page.request);
@@ -367,7 +391,7 @@ test.describe('as admin', () => {
 
   test('a lead: an Admin erases it, and it is gone', async ({ page }) => {
     const lead = await addLead(page, 'erase');
-    await page.goto(`/admin/leads/${lead.id}`, { waitUntil: 'networkidle' });
+    await visit(page, `/admin/leads/${lead.id}`, { waitUntil: 'networkidle' });
     await page.getByText('More actions').click();
     await page.getByRole('button', { name: 'Erase this lead…' }).click();
     const dialog = page.getByRole('dialog', { name: 'Erase this lead' });
@@ -376,6 +400,9 @@ test.describe('as admin', () => {
     await dialog.getByLabel('Our decision').check();
     await dialog.getByRole('button', { name: 'Erase the lead' }).click();
     await page.waitForURL((url) => url.pathname === '/admin/leads');
+    // The confirmation rode in the address: shown on the list once, then taken out of it.
+    await expect(page.locator('#admin-toasts')).toContainText('Lead erased');
+    await expect(page).toHaveURL((url) => !url.searchParams.has('done'));
     const gone = await page.request.get(`/admin/leads/${lead.id}`);
     expect(gone.status()).toBe(404);
   });
@@ -383,7 +410,7 @@ test.describe('as admin', () => {
   test('the drawer: a lead added by hand, and a phone that wrote before', async ({ page }) => {
     const phone = `+9665${String(Date.now()).slice(-8)}`;
     await addLead(page, 'first-phone', { phone });
-    await page.goto('/admin/leads');
+    await visit(page, '/admin/leads');
     const open = page.getByRole('button', { name: 'Add lead manually' });
     await expect(open).toBeVisible();
     await open.click();
@@ -401,7 +428,11 @@ test.describe('as admin', () => {
     await drawer.getByRole('button', { name: 'Add lead', exact: true }).click();
     await expect(drawer.getByText('This phone number is on an earlier lead.')).toBeVisible();
     await drawer.getByRole('button', { name: 'Add as someone new' }).click();
-    await page.waitForURL(/\/admin\/leads\/[0-9a-f-]{36}$/);
+    await page.waitForURL(/\/admin\/leads\/[0-9a-f-]{36}(\?|$)/);
+    // "Lead added" is said on the lead's page, where it can be seen, and the address loses
+    // the one-shot key.
+    await expect(page.locator('#admin-toasts')).toContainText('Lead added');
+    await expect(page).toHaveURL(/\/admin\/leads\/[0-9a-f-]{36}$/);
     await expect(
       page.getByRole('heading', { level: 1, name: `E2E second-phone ${RUN}` }),
     ).toBeVisible();
@@ -415,7 +446,7 @@ for (const role of ['content_creator', 'seo'] as const) {
     test('every leads page is refused by the server, naming no lead', async ({ page }) => {
       const probe = '00000000-0000-4000-8000-000000000000';
       for (const path of ['/admin/leads', '/admin/leads/board', `/admin/leads/${probe}`]) {
-        const res = await page.goto(path);
+        const res = await visit(page, path);
         expect(res?.status(), path).toBe(403);
         await expect(page.locator('main .msg[data-kind="error"]').first()).toContainText(
           'Your role does not allow that.',

@@ -44,7 +44,15 @@
   a toast only for success, then the list is read again.
 
 The filters live in the address through `src/lib/crm/leadUrl.ts` (an allow-list; never the
-search, in either direction). The island keeps it in step with `history.replaceState`.
+search, in either direction). The island keeps it in step with `history.replaceState`. The
+address carries only what the toolbar can show: a source the Source select offers (the web
+form, "Added by hand") and a channel only with "Added by hand", so a shared link never narrows
+the list with nothing on screen to clear it.
+
+"Lead added" and "Lead erased" are said on the page each action lands on: the drawer and the
+erase dialog add a one-shot `?done=<key>` (`src/lib/admin/flash.ts`, a closed list of keys), and
+the lead's page or the list shows it once and takes it out of the address. A toast fired before
+`location.assign` went with the page, unseen.
 
 **A lead, `/admin/leads/[id]`** (`[id].astro`, the `AdminLeadDetail` island, `LeadDetail.tsx`,
 `LeadStatusCard.tsx`, `LeadContactCard.tsx`, `LeadNotes.tsx`, `LeadTimeline.tsx`, `MoveTo.tsx`):
@@ -179,6 +187,9 @@ nothing different. The new Worker needs nothing 0065 adds.
 9. **The add drawer's sub-line** is the body's first paragraph: the kit's Drawer has no `sub`.
 10. **The detail page's sub-line** omits empty parts and has no time (the Details card has the
     date and time).
+11. **"Move to…" gives focus back to its button** after a move: the lead's page disables it
+    while the move is saved, which dropped focus to the body (WCAG 2.4.3). It never takes focus
+    from where the person went meanwhile.
 
 ## Notes for later slices
 
@@ -194,10 +205,10 @@ nothing different. The new Worker needs nothing 0065 adds.
 ## Tests
 
 - Vitest: `leadUrl.spec` (the allow-list, the round trip, never `q`, every body valid for its
-  API schema), `leadsScreens.spec` (21: no style, no PII or contact link before the reveal,
+  API schema), `leadsScreens.spec` (24: no style, no PII or contact link before the reveal,
   "Unread" and "Over response time" in words, the star's name, the KPIs, the chips, the
   labels, the masked rows, the reasons behind the reveal, the links after it, no storage, the
-  drawer's body and checks), `leadPage.spec` (tenant-scoped reads, safe columns, a 404 before
+  drawer's body and checks, "Move to…" focus), `leadPage.spec` (tenant-scoped reads, safe columns, a 404 before
   any audit, the neighbours' filter), `leadView.spec` and `leadKpis.spec` (the comparison,
   `leadsSubline`), `leadsWrite.spec` (the 422), `leadGrants.spec` (the PATCH no longer writes
   `internal_notes`; 0030's grant still names it), `kitParity.spec` (React `Kpi` = `Kpi.astro`),
@@ -215,4 +226,8 @@ nothing different. The new Worker needs nothing 0065 adds.
   reveal and its audit row, a note, a logged call, a stage move and its conflict, the erase, the
   drawer and a phone duplicate) and as Content Creator and SEO (a 403 on both pages and the
   APIs); `help.e2e` follows the new text; the per-role sweep opens the list, its two extra views
-  and a lead's page.
+  and a lead's page. The admin tests run serially (the round trip reads the shared New-leads
+  count the others move), every page they open waits for hydration, and axe also runs with the
+  move menu open on a lead's page (`leadsE2e.spec` holds the first two). The sweep's and the
+  capture's lead sample is the OLDEST lead, found through one helper (`editRowRequest`), so
+  neither opens a lead a parallel test is erasing nor skips the screen on a GET.

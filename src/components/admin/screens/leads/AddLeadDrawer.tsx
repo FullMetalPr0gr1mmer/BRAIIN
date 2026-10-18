@@ -5,7 +5,7 @@ import Note from '@/components/admin/kit/Note';
 import { BUDGET_BANDS, BUDGET_BAND_LABELS } from '@schemas/lead';
 import { MANUAL_LEAD_CHANNELS, type LeadManualCreate } from '@schemas/crm';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
-import { toast } from '@/lib/admin/toast';
+import { withFlash } from '@/lib/admin/flash';
 import type { DisciplineView } from '@/lib/crm/leadPage';
 import { CHANNEL_LABELS } from '@/lib/crm/leadView';
 
@@ -137,12 +137,16 @@ export default function AddLeadDrawer({ open, onClose, disciplines }: AddLeadDra
         '/api/admin/leads',
         { method: 'POST', body: manualLeadBody(form, createNew) },
       );
-      toast('Lead added', 'ok');
       const same = added.sameEmail.map((lead) => lead.id).filter(Boolean);
+      // The confirmation rides to the lead's page, which shows it (a toast here would go
+      // with this page, unseen).
       location.assign(
-        same.length > 0
-          ? `/admin/leads/${added.id}?same=${same.map(encodeURIComponent).join(',')}`
-          : `/admin/leads/${added.id}`,
+        withFlash(
+          same.length > 0
+            ? `/admin/leads/${added.id}?same=${same.map(encodeURIComponent).join(',')}`
+            : `/admin/leads/${added.id}`,
+          'lead-added',
+        ),
       );
     } catch (err) {
       setBusy(false);
