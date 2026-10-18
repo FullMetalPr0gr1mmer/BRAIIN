@@ -130,7 +130,7 @@ test('a sample quote is made real in one save, consent first', async ({ page }) 
   await expect(drawer.getByRole('heading', { name: 'Edit quote' })).toBeVisible();
   await expect(drawer).toContainText('This is a design sample.');
   // The words are shown, not editable, until the switch is on.
-  await expect(drawer.getByRole('figure', { name: 'The sample’s words' })).toContainText(
+  await expect(drawer.getByRole('figure', { name: "The sample's words" })).toContainText(
     SAMPLE_WORDS.en,
   );
   await expect(drawer.locator('#f-quote-en')).toHaveCount(0);
