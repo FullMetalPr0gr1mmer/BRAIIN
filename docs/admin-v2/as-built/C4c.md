@@ -63,10 +63,10 @@ and restored here in one commit; this branch adds about 800 lines to C4b.
 
 ## Bundle
 
-| (gzip, KB = 1,000 B) | C4b | C4c |
+| (gzip, KB = 1,000 B) | C4b (as built) | C4c, after merging C4b at c76c2da |
 |---|---|---|
-| size-limit admin sum (tripwire 400) | 310.66 | 311.86 |
-| each leads screen, eager | 134.7 | 135.8 (`AdminLeadsList`, `AdminLeadsBoard`, `AdminLeadDetail`) |
+| size-limit admin sum (tripwire 400) | 310.66 | 312.25 |
+| each leads screen, eager | 134.7 | 136.2 (`AdminLeadsList`, `AdminLeadsBoard`, `AdminLeadDetail`) |
 
 The board joins the `admin-leads` group by its path; check 6 of `scripts/admin-bundle.mjs`
 already allows any `AdminLead*` entry.
