@@ -83,6 +83,40 @@ begin
   end loop;
 end $$;
 
+-- The check the postcondition below runs, kept as a function so pgTAP can prove it fires
+-- (it grants a privilege back inside a rolled-back transaction and expects a finding): every
+-- privilege PUBLIC, anon or authenticated holds on a raw telemetry parent or partition,
+-- table-wide or per column, and every policy left on a parent; null when there is none.
+create or replace function app.raw_telemetry_exposure() returns text
+  language sql stable set search_path = '' as $$
+  with rels as (
+    select 'public.analytics_events'::regclass::oid as oid
+    union all select 'public.web_vitals'::regclass::oid
+    union all select i.inhrelid from pg_catalog.pg_inherits i
+               where i.inhparent in ('public.analytics_events'::regclass, 'public.web_vitals'::regclass)
+  ),
+  privs as (
+    select unnest(array['select', 'insert', 'update', 'delete', 'truncate', 'references', 'trigger']
+                  || case when pg_catalog.current_setting('server_version_num')::int >= 170000
+                          then array['maintain'] else array[]::text[] end) as priv
+  ),
+  found as (
+    select pg_catalog.format('%s %s %s', x.who, pr.priv, r.oid::regclass) as f
+      from rels r
+      cross join (values ('public'), ('anon'), ('authenticated')) as x(who)
+      cross join privs pr
+     where pg_catalog.has_table_privilege(x.who::name, r.oid, pr.priv)
+        or (pr.priv in ('select', 'insert', 'update', 'references')
+            and pg_catalog.has_any_column_privilege(x.who::name, r.oid, pr.priv))
+    union all
+    select pg_catalog.format('policy %s.%s', pp.tablename, pp.policyname)
+      from pg_catalog.pg_policies pp
+     where pp.schemaname = 'public' and pp.tablename in ('analytics_events', 'web_vitals')
+  )
+  select pg_catalog.string_agg(f, ', ' order by f) from found
+$$;
+revoke all on function app.raw_telemetry_exposure() from public, anon, authenticated, service_role;
+
 -- ---- 3. One helper for the new capability (G1c) ------------------------------------------------
 -- analytics.goals: Admin and SEO (CLAUDE.md §5 "Analytics goals — set"). Held equal to
 -- ROLE_CAPS by tests/authz/sqlHelpers.spec.ts.
@@ -705,10 +739,10 @@ begin
                        on r.tenant_id = p_tenant and r.minute = g.m));
 end $$;
 
--- Goals (G1c): each goal with what it has counted this calendar month (UTC days, the first
--- of the month to today) from the rollups. Inquiries are leads that arrived this month and are
--- not spam, counted only for a role that works leads (null for the others; RLS and the live
--- check on leads still apply underneath).
+-- Goals (G1c), the oldest first, then by name: each goal with what it has counted this
+-- calendar month (UTC days, the first of the month to today) from the rollups. Inquiries are
+-- leads that arrived this month and are not spam, counted only for a role that works leads
+-- (null for the others; RLS and the live check on leads still apply underneath).
 create or replace function public.goal_progress(p_tenant uuid)
   returns jsonb
   language plpgsql stable security invoker set search_path = '' as $$
@@ -749,7 +783,7 @@ begin
                      where l.tenant_id = p_tenant and not l.is_spam
                        and l.created_at >= (v_month::timestamp at time zone 'UTC')) end
                end)
-             order by g.created_at, g.id)
+             order by g.created_at, g.name, g.id)
         from public.analytics_goals g
        where g.tenant_id = p_tenant), '[]'::jsonb));
 end $$;
@@ -813,28 +847,15 @@ begin
   -- ---- Raw telemetry: no policy on either parent; PUBLIC, anon and authenticated hold no
   -- privilege on a parent or a partition, table-wide or per column; the service role keeps
   -- SELECT, INSERT, UPDATE and DELETE on the parents.
-  select coalesce(array_agg(format('%s.%s', tablename, policyname) order by tablename, policyname), '{}')
-    into v_have
-    from pg_policies
-   where schemaname = 'public' and tablename in ('analytics_events', 'web_vitals');
-  if v_have <> '{}' then
-    raise exception '0071: raw telemetry still has policies: %', v_have;
-  end if;
-  select string_agg(format('%s %s %s', g.who, g.priv, g.rel), ', ' order by g.rel, g.who, g.priv)
-    into v_bad
-    from (select x.who, pr.priv, r.oid::regclass::text as rel
-            from (select 'public.analytics_events'::regclass::oid as oid
-                  union all select 'public.web_vitals'::regclass::oid
-                  union all select i.inhrelid from pg_inherits i
-                             where i.inhparent in ('public.analytics_events'::regclass,
-                                                   'public.web_vitals'::regclass)) r
-            cross join (values ('public'), ('anon'), ('authenticated')) as x(who)
-            cross join unnest(v_privs) as pr(priv)
-           where has_table_privilege(x.who::name, r.oid, pr.priv)
-              or (pr.priv in ('select', 'insert', 'update', 'references')
-                  and has_any_column_privilege(x.who::name, r.oid, pr.priv))) g;
+  v_bad := app.raw_telemetry_exposure();
   if v_bad is not null then
-    raise exception '0071: an API role still holds a privilege on raw telemetry: %', v_bad;
+    raise exception '0071: raw telemetry is still exposed: %', v_bad;
+  end if;
+  if has_function_privilege('public', 'app.raw_telemetry_exposure()', 'execute')
+     or has_function_privilege('anon', 'app.raw_telemetry_exposure()', 'execute')
+     or has_function_privilege('authenticated', 'app.raw_telemetry_exposure()', 'execute')
+     or has_function_privilege('service_role', 'app.raw_telemetry_exposure()', 'execute') then
+    raise exception '0071: an API role may execute app.raw_telemetry_exposure()';
   end if;
   foreach t in array array['public.analytics_events', 'public.web_vitals'] loop
     foreach p in array array['select', 'insert', 'update', 'delete'] loop
