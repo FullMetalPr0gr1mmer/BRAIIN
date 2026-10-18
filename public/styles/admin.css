@@ -2587,6 +2587,12 @@ a.li:hover {
   font-size: 12.5px;
 }
 
+/* "Set up" / "Manage" in the two factor row (U17): a link on the card, primary on card. */
+.acct__link {
+  color: var(--ad-primary);
+  font-weight: 600;
+}
+
 /* ---- The help centre (U16): the "?" drawer and /admin/help ----
    Ported from the prototype's help rules (screens_setup.js: .hc-q, .hc-art, .su-tip). The
    drawer renders on every page, so its content is here; only the page's frame is in

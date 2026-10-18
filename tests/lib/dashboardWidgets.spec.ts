@@ -374,9 +374,10 @@ const MIDDLEWARE = 3;
  * R5 (0066) added one read: stale pending changes are read on their own, with an exact count,
  * so they never crowd the content kinds out of the attention list's capped read. G2 added two:
  * the health widget's readings (health_probes, through loadHealthSummary) and the bell's health
- * source in the shell (docs/admin-v2/as-built/G2.md).
+ * source in the shell (docs/admin-v2/as-built/G2.md). U17 added one, for users.manage only:
+ * the health widget's two factor row reads the directory (staff_accounts).
  */
-const MEASURED = { loadDashboard: 26, total: 37 };
+const MEASURED = { loadDashboard: 27, total: 38 };
 
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
   // A real request has one clock: the dashboard's "Going live today" and the bell both ask

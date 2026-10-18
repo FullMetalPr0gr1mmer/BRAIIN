@@ -67,6 +67,7 @@ function ctx(overrides: Partial<HealthContext> = {}): HealthContext {
     content: CLEAN,
     errors7d: 0,
     lastBackup: null,
+    withoutTwoStep: 0,
     now: Date.parse('2026-10-15T12:00:00Z'),
     ...overrides,
   };
@@ -244,6 +245,30 @@ describe('each rule, state by state', () => {
     expect(outcome('backups.last', ctx({ lastBackup: undefined })).state).toBe('unknown');
   });
 
+  it('two factor sign in (U17): fails with how many lack it, ok for none, unknown unread', () => {
+    const some = outcome('security.two_step', ctx({ withoutTwoStep: 3 }));
+    expect(some).toMatchObject({
+      state: 'fail',
+      count: 3,
+      text: '3 team members without two factor sign in',
+    });
+    expect(outcome('security.two_step', ctx({ withoutTwoStep: 1 })).text).toBe(
+      '1 team member without two factor sign in',
+    );
+    expect(outcome('security.two_step', ctx({ withoutTwoStep: 0 }))).toMatchObject({
+      state: 'ok',
+      text: 'Everyone uses two factor sign in',
+    });
+    for (const withoutTwoStep of [null, undefined]) {
+      expect(outcome('security.two_step', ctx({ withoutTwoStep })).state).toBe('unknown');
+    }
+    // Checked for users.manage only (Admin): never a count another role's RLS would hide.
+    expect(rule('security.two_step').needs).toEqual(['users.manage']);
+    for (const role of ROLES) {
+      expect(mayCheck(role, rule('security.two_step')), role).toBe(role === 'admin');
+    }
+  });
+
   it('security facts pass on this build', () => {
     for (const id of ['security.csp', 'security.hsts', 'security.admin', 'security.crawlers']) {
       expect(outcome(id).state, id).toBe('ok');
@@ -290,13 +315,13 @@ describe('gated by capability (README D4)', () => {
     }
   });
 
-  it('Admin and Developer are checked on every rule', () => {
-    for (const role of ['admin', 'developer'] as Role[]) {
-      expect(
-        runChecklist(ctx({ role })).every((r) => r.checked),
-        role,
-      ).toBe(true);
-    }
+  it('Admin is checked on every rule; Developer on every rule but the team’s 2FA (U17)', () => {
+    expect(runChecklist(ctx({ role: 'admin' })).every((r) => r.checked)).toBe(true);
+    expect(
+      runChecklist(ctx({ role: 'developer' }))
+        .filter((r) => !r.checked)
+        .map((r) => r.id),
+    ).toEqual(['security.two_step']);
   });
 });
 
@@ -312,6 +337,7 @@ describe('fix links', () => {
     },
     vitals: vitalsWith(500, 9000, 900, 0.5),
     errors7d: 2,
+    withoutTwoStep: 2,
   });
 
   it('show only on a failing row', () => {
@@ -337,6 +363,7 @@ describe('fix links', () => {
       'seo.default-description': '/admin/seo',
       'speed.lcp': '/admin/site-health?tab=speed',
       'errors.recent': '/admin/site-health?tab=errors',
+      'security.two_step': '/admin/users',
     });
     expect(fixes['seo.arabic']).toBeNull(); // no per-page SEO screen yet
   });
@@ -424,6 +451,28 @@ function stub(fail: readonly string[] = []) {
       calls.push({ kind: 'rpc', name, args, filters: [] });
       const failed = answer(name);
       if (failed) return failed;
+      if (name === 'staff_accounts') {
+        // U17: the directory (0072), one active member with 2FA and one without, and a
+        // switched-off one, who is not counted.
+        const row = (id: string, twoStep: boolean, active: boolean) => ({
+          id,
+          email: null,
+          invited_at: null,
+          email_confirmed_at: null,
+          last_sign_in_at: null,
+          is_owner: false,
+          two_step: twoStep,
+          is_active: active,
+        });
+        return {
+          data: [
+            row('11111111-1111-4111-8111-111111111111', true, true),
+            row('22222222-2222-4222-8222-222222222222', false, true),
+            row('33333333-3333-4333-8333-333333333333', false, false),
+          ],
+          error: null,
+        };
+      }
       if (name === 'vitals_summary') {
         return {
           data: {
@@ -492,7 +541,7 @@ const authOf = (role: Role): AuthContext => ({
 });
 
 describe('loadHealthReport', () => {
-  it('Admin: reads vitals, the counts, the errors, the last backup and the readings, each for its tenant', async () => {
+  it('Admin: reads vitals, the counts, the errors, the last backup, the readings and the directory, each for its tenant', async () => {
     const { sb, calls } = stub();
     const report = await loadHealthReport(sb, authOf('admin'), Date.parse('2026-10-15T12:00:00Z'));
     expect(calls.map((c) => `${c.kind}:${c.name}`).sort()).toEqual([
@@ -500,8 +549,14 @@ describe('loadHealthReport', () => {
       'from:health_probes',
       'from:system_logs',
       'rpc:content_health',
+      'rpc:staff_accounts',
       'rpc:vitals_summary',
     ]);
+    expect(report.checks.find((c) => c.id === 'security.two_step')).toMatchObject({
+      state: 'fail',
+      count: 1,
+      fix: '/admin/users',
+    });
     for (const c of calls) {
       if (c.kind === 'rpc') expect(c.args).toMatchObject({ p_tenant: 't1' });
       else expect(c.filters).toContainEqual(['tenant_id', 't1']);
@@ -543,6 +598,8 @@ describe('loadHealthReport', () => {
     const { sb } = stub(['vitals_summary', 'system_logs']);
     const report = await loadHealthReport(sb, authOf('developer'));
     expect(report.vitals).toBeNull();
+    // No users.manage: the directory is not read for a Developer (U17).
+    expect(report.checks.find((c) => c.id === 'security.two_step')?.checked).toBe(false);
     // The readings were read (the stub's rows are not probe rows, so none parse: not set up).
     expect(report.uptime).toMatchObject({ status: 'off' });
     expect(report.checks.find((c) => c.id === 'speed.lcp')?.text).toBe(
@@ -564,6 +621,7 @@ describe('loadHealthReport', () => {
       'content.placeholders',
       'speed.cls',
       'errors.recent',
+      'security.two_step',
     ]);
   });
 });
@@ -800,6 +858,8 @@ describe('the G2 rules, gated and unlinked', () => {
       'security.crawlers',
       'security.domain',
       'security.certificate',
+      // U17: the team's sign-in, after the website's rows (the prototype's second card).
+      'security.two_step',
     ]);
   });
 });
