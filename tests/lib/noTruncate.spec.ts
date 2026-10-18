@@ -12,6 +12,11 @@ import { describe, expect, it } from 'vitest';
 
 const ROOTS = ['src', 'scripts', join('supabase', 'functions')];
 const TEXT = /\.(ts|tsx|js|mjs|cjs|astro|sql|sh|ps1|json|md)$/;
+/** The statement (any spelling: TABLE, ONLY, IF EXISTS, a quoted name), and an RPC naming it. */
+const TRUNCATES = [
+  /\btruncate\s+(table\s+)?(only\s+)?(if\s+exists\s+)?["a-z_]/i,
+  /\brpc\(\s*['"`][^'"`]*truncate/i,
+];
 
 function files(dir: string): string[] {
   if (!existsSync(dir)) return [];
@@ -28,17 +33,30 @@ describe('no code truncates a table (0066 revoked TRUNCATE from every API role)'
     expect(files('scripts').length).toBeGreaterThan(5);
   });
 
-  it('none of them says TRUNCATE (as SQL, an RPC or a word)', () => {
+  it('none of them runs TRUNCATE, as a statement or through an RPC', () => {
     const found: string[] = [];
     for (const root of ROOTS) {
       for (const file of files(root)) {
         const text = readFileSync(file, 'utf8');
         text.split('\n').forEach((line, index) => {
-          // `truncated` (a flag several readers return) is not the statement.
-          if (/\btruncate\b/i.test(line)) found.push(`${relative('.', file)}:${index + 1}`);
+          if (TRUNCATES.some((re) => re.test(line))) {
+            found.push(`${relative('.', file)}:${index + 1}`);
+          }
         });
       }
     }
     expect(found).toEqual([]);
+  });
+
+  it('the patterns catch every way of writing it, and not a privilege check or `truncated`', () => {
+    const hits = (line: string) => TRUNCATES.some((re) => re.test(line));
+    expect(hits('truncate public.services;')).toBe(true);
+    expect(hits('  TRUNCATE TABLE ONLY public.redirects CASCADE')).toBe(true);
+    expect(hits('truncate table if exists "portfolio_media"')).toBe(true);
+    expect(hits("await sb.rpc('truncate_services')")).toBe(true);
+    expect(
+      hits("has_table_privilege(r.oid, 'app.deployment', 'insert,update,delete,truncate')"),
+    ).toBe(false);
+    expect(hits('return { rows, truncated: true };')).toBe(false);
   });
 });
