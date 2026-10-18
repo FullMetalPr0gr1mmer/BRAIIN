@@ -53,7 +53,9 @@
 -- production's volume; push at a quiet hour.
 --
 -- Production as of 2026-10-18: PostgreSQL 17.6; the ledger holds 0001-0038, 0041,
--- 0044-0046, 0048, 0050-0052, 0054-0057, 0060-0065. Grants are stated for both Supabase
+-- 0044-0046, 0048, 0050-0052, 0054-0057, 0060-0067 (C4c and H11 may land first: nothing
+-- here depends on either; H11's catalog only changes how this slice's guide ships, the TODO
+-- in section 12). Grants are stated for both Supabase
 -- privilege regimes (README P-14). CLAUDE.md §3 (Pillars 1 and 4), §5, §8, §9.
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -522,14 +524,19 @@ alter table public.analytics_goals enable row level security;
 alter table public.analytics_goals force row level security;
 
 -- At most 20 per tenant, counted under a per-tenant transaction lock so two saves at once
--- cannot both pass. A definer, so the count sees every goal of the tenant whatever the caller
--- reads; the refusal names a constraint, as a CHECK's does (crud.ts maps it to a message).
+-- cannot both pass (the second waits for the first to commit, then counts it: each statement
+-- of a volatile function reads a fresh snapshot under READ COMMITTED). A definer, so the
+-- count sees every goal of the tenant whatever the caller reads; the refusal names a
+-- constraint, as a CHECK's does (crud.ts maps it to a message). AFTER INSERT, so it runs
+-- only once RLS's WITH CHECK has accepted the row: as a BEFORE trigger it answered another
+-- tenant's admin naming this tenant with 23514 at 20 goals and 42501 below, telling it how
+-- many goals this tenant has (the G1 self-review; supabase/tests/stats_goals.test.sql).
 create or replace function app.tg_analytics_goals_limit() returns trigger
   language plpgsql security definer set search_path = '' as $$
 begin
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended('analytics_goals:' || new.tenant_id::text, 0));
-  if (select count(*) from public.analytics_goals g where g.tenant_id = new.tenant_id) >= 20 then
+  if (select count(*) from public.analytics_goals g where g.tenant_id = new.tenant_id) > 20 then
     raise exception using
       errcode = '23514',
       message = 'new row for relation "analytics_goals" violates check constraint "analytics_goals_limit"',
@@ -537,16 +544,17 @@ begin
       table = 'analytics_goals',
       schema = 'public';
   end if;
-  return new;
+  return null;
 end $$;
 revoke all on function app.tg_analytics_goals_limit() from public, anon, authenticated, service_role;
 
--- BEFORE triggers fire in name order: the actor, the limit, the timestamp, the version.
+-- BEFORE triggers fire in name order: the actor, the timestamp, the version; the limit is
+-- the one AFTER trigger (above).
 drop trigger if exists analytics_goals_actor on public.analytics_goals;
 create trigger analytics_goals_actor before insert or update on public.analytics_goals
   for each row execute function app.tg_set_actor();
 drop trigger if exists analytics_goals_limit on public.analytics_goals;
-create trigger analytics_goals_limit before insert on public.analytics_goals
+create trigger analytics_goals_limit after insert on public.analytics_goals
   for each row execute function app.tg_analytics_goals_limit();
 drop trigger if exists analytics_goals_updated_at on public.analytics_goals;
 create trigger analytics_goals_updated_at before update on public.analytics_goals
@@ -1012,6 +1020,13 @@ begin
   if v_have is distinct from array['analytics_goals_actor', 'analytics_goals_limit',
                                    'analytics_goals_updated_at', 'analytics_goals_version'] then
     raise exception '0071: analytics_goals triggers are %', v_have;
+  end if;
+  -- The limit counts after RLS accepted the row (AFTER INSERT, FOR EACH ROW): see above.
+  if not exists (select 1 from pg_trigger tg
+                  where tg.tgrelid = 'public.analytics_goals'::regclass
+                    and tg.tgname = 'analytics_goals_limit'
+                    and pg_get_triggerdef(tg.oid) ~ 'AFTER INSERT ON public\.analytics_goals FOR EACH ROW') then
+    raise exception '0071: analytics_goals_limit must be an AFTER INSERT row trigger';
   end if;
 
   -- ---- Functions: the rollups and the limit are definers with an empty search path that no

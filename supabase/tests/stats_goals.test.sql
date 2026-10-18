@@ -17,7 +17,7 @@
 -- Fixtures are two tenants of this file's own.
 
 begin;
-select plan(43);
+select plan(44);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -214,6 +214,15 @@ select throws_ok(
      values ('71c00000-0000-0000-0000-000000000001', 'One too many', 'visits', 1) $$,
   '23514', 'new row for relation "analytics_goals" violates check constraint "analytics_goals_limit"',
   'the 21st is refused, naming analytics_goals_limit');
+-- The limit is counted only after RLS has accepted the row (an AFTER trigger): another
+-- tenant's admin naming this full tenant hears the WITH CHECK refusal, never the limit's,
+-- which would tell it whether this tenant has 20 goals.
+select _as('71c00000-0000-0000-0000-0000000000f1', 'admin', '71c00000-0000-0000-0000-0000000000ff');
+select throws_ok(
+  $$ insert into public.analytics_goals (tenant_id, name, metric, target)
+     values ('71c00000-0000-0000-0000-000000000001', 'Probe', 'visits', 1) $$,
+  '42501', null, 'another tenant learns nothing from the limit (42501, not 23514, at 20 goals)');
+select _as('71c00000-0000-0000-0000-0000000000a1', 'admin', '71c00000-0000-0000-0000-000000000001');
 delete from public.analytics_goals where name like 'Goal %';
 
 -- ── 5. goal_progress ────────────────────────────────────────────────────────────────
