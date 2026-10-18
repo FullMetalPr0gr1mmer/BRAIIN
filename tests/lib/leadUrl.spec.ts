@@ -70,6 +70,28 @@ describe('parseLeadFilters', () => {
     expect(parse('page=9999').page).toBeLessThanOrEqual(668);
   });
 
+  it('reads only the filters the toolbar can show (no hidden filter from a link)', () => {
+    // The Source select offers the web form and "Added by hand"; an import or the
+    // Style-Finder has no choice there, so it is never applied from an address.
+    expect(parse('source=import').source).toBeNull();
+    expect(parse('source=style_finder').source).toBeNull();
+    // "How they reached us" is drawn only for "Added by hand", with its own channels.
+    expect(parse('channel=phone')).toEqual(DEFAULT_LEAD_FILTERS);
+    expect(parse('source=web_form&channel=phone')).toEqual({
+      ...DEFAULT_LEAD_FILTERS,
+      source: 'web_form',
+    });
+    expect(parse('source=manual&channel=organic')).toEqual({
+      ...DEFAULT_LEAD_FILTERS,
+      source: 'manual',
+    });
+    expect(parse('source=manual&channel=walk_in').channel).toBe('walk_in');
+    // So the list's query never carries one either.
+    expect(listQueryOf(parse('channel=phone&source=import'), new Date())).not.toHaveProperty(
+      'channel',
+    );
+  });
+
   it('never reads a search from the address', () => {
     const filters = parse('q=sara%40example.com&search=acme');
     expect(filters).toEqual(DEFAULT_LEAD_FILTERS);
