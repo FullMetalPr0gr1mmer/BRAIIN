@@ -408,7 +408,7 @@ describe('runHealthProbes', () => {
   });
 
   it('no key: uptime and certificate are off, written once, and the monitor is never called', async () => {
-    db.domain = 'braiin-station.braiin.workers.dev';
+    db.domain = 'example-site.example.workers.dev';
     await runHealthProbes(client(db), 't1', {
       now: NOW,
       source: 'cron:health-probes',

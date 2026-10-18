@@ -666,7 +666,7 @@ describe('security.domain (G2)', () => {
             'domain',
             'info',
             domainFacts({
-              apex: 'braiin-station.braiin.workers.dev',
+              apex: 'example-site.example.workers.dev',
               outcome: 'not-applicable',
               expires: null,
               registrar: null,

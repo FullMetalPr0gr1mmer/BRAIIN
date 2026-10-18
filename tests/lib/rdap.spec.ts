@@ -197,9 +197,9 @@ describe('apexOf', () => {
   });
 
   it('a Cloudflare address, localhost or nothing is not ours to renew', () => {
-    expect(apexOf('braiin-station.braiin.workers.dev')).toEqual({
+    expect(apexOf('example-site.example.workers.dev')).toEqual({
       kind: 'not-applicable',
-      host: 'braiin-station.braiin.workers.dev',
+      host: 'example-site.example.workers.dev',
     });
     expect(apexOf('site.pages.dev').kind).toBe('not-applicable');
     expect(apexOf('localhost').kind).toBe('not-applicable');
