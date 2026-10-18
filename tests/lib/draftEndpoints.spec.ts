@@ -617,10 +617,30 @@ describe('settling a conflict', () => {
       payload: { entityType: 'service', entityId: S1, metaTitle: MOVED, metaDescription: MINE },
     });
     expect((drafts()[0]!['base'] as Row)['meta_title']).toEqual(MOVED);
+    // The pending list names only what still differs from live.
+    expect(drafts()[0]!['fields']).toEqual(['meta_description']);
     expect(auditRowsOf(db)[0]).toMatchObject({
       action: 'entity_seo.draft_resolve',
       entity_id: S1,
       detail: { target: 'service' },
     });
+  });
+
+  it('page visibility (a full replace with derived dates): use live is refused in words', async () => {
+    db.tables['page_visibility'] = [
+      { id: SEO_ROW, tenant_id: T, page_id: S1, template: null, mode: 'public', version: 2 },
+    ];
+    db.tables['content_drafts'] = [
+      draftRow({
+        id: id(7),
+        entity_type: 'page_visibility',
+        entity_id: SEO_ROW,
+        payload: { target: { pageId: S1 }, mode: 'hidden' },
+        base: { mode: 'link' },
+      }),
+    ];
+    const res = await settle({ version: 1, useLive: ['mode'] }, 'developer', id(7));
+    expect([res.status, res.body['field']]).toEqual([422, 'useLive']);
+    expect(drafts()[0]!['version']).toBe(1);
   });
 });

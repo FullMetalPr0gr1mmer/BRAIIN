@@ -480,6 +480,13 @@ export async function resolveDraft(
       if (key) payload[key] = live[column] ?? null;
       base[column] = live[column] ?? null;
     }
+  } else if (entry.kind === 'pageVisibility' && input.useLive.length > 0) {
+    // Also a full replace, but its dates are stored as Riyadh midnights, so a live column does
+    // not map back onto the payload: keeping mine still works, taking live means discarding.
+    throw new ValidationError(
+      'This setting cannot take the live value of one field. Keep yours, or discard the change.',
+      'useLive',
+    );
   } else {
     const useLive = new Set(input.useLive);
     for (const [key, cols] of Object.entries(entry.fields)) {
@@ -497,9 +504,12 @@ export async function resolveDraft(
   }
   const target = writeTarget(type);
   const { entityId, detail } = auditTarget(draft);
+  // A full replace (entity SEO) writes every column whatever it holds: it is empty when all
+  // of them equal live and the base; and its `fields` (display) name the ones that differ.
+  const differing = entry.kind === 'entitySeo' ? dropNoOps(next.patch, live, base) : next.patch;
   const empty =
     entry.kind === 'entitySeo'
-      ? dropNoOps(next.patch, live, base) === null
+      ? differing === null
       : Object.keys(next.patch).length === 0 && Object.keys(next.children).length === 0;
   if (empty) {
     await writeDrafts(
@@ -532,7 +542,7 @@ export async function resolveDraft(
     entity_id: draft.entity_id,
     op: 'update',
     payload,
-    fields: draftFields(next),
+    fields: draftFields({ ...next, patch: differing ?? {} }),
     base: pick(base, Object.keys(next.patch)),
     base_version: draft.base_version ?? (live['version'] as number),
     label: label.success ? label.data : null,
