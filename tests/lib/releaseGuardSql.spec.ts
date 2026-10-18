@@ -140,6 +140,25 @@ describe('migration 0066: the release guard', () => {
     }
   });
 
+  it('scans for role switches only in the schemas this project owns', () => {
+    // Supabase's realtime.apply_rls calls set_config('role', ...) and is no extension's
+    // member: a scan of every schema would raise in postcondition 10 and fail the push on a
+    // hosted project (the PGlite replay and CI's pgTAP cannot show it). The same scan is a
+    // pgTAP row, so both are held to the same scope.
+    const TEST = readFileSync(
+      join(process.cwd(), 'supabase', 'tests', 'release_guard.test.sql'),
+      'utf8',
+    ).replace(/--[^\n]*/g, '');
+    for (const [name, text] of [
+      ['migration', SQL],
+      ['release_guard.test.sql', TEST],
+    ] as const) {
+      const scans = [...text.matchAll(/where ([^\n]*)\n\s+and \(f\.prosrc ~\* 'set\\s\+\(local/g)];
+      expect(scans, name).toHaveLength(1);
+      expect(scans[0]![1], name).toBe("n.nspname in ('public', 'graphql_public', 'app')");
+    }
+  });
+
   it('publish_scheduled skips a tenant with releases on', () => {
     expect(body('app.publish_scheduled')).toContain('and not app.releases_enabled(tenant_id)');
   });

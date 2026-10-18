@@ -186,19 +186,28 @@ select is(
      cross join unnest(array['public', 'anon', 'authenticated', 'service_role']) as r
     where has_table_privilege(r::name, format('public.%I', x.t), 'truncate')),
   '', 'no API role may TRUNCATE a guarded table (TRUNCATE fires no row trigger)');
--- The guard trusts the role setting: only apply_release switches role, in any schema (a
--- column named role in an UPDATE, `set role = ...`, is not a switch).
+-- The guard trusts the role setting: in the schemas this project owns (public,
+-- graphql_public, app) only apply_release switches role (a column named role in an UPDATE,
+-- `set role = ...`, is not a switch). Supabase's own schemas are out of scope: Realtime's
+-- realtime.apply_rls sets the role and is no extension's member. A stand-in for it, in a
+-- schema of its own, must not change the answer.
+create schema r5_vendor;
+create function r5_vendor.apply_rls() returns void language plpgsql as $f$
+begin
+  perform set_config('role', 'authenticated', true);
+end $f$;
 select is(
   (select string_agg(n.nspname || '.' || f.proname, ', ' order by n.nspname, f.proname)
      from pg_proc f join pg_namespace n on n.oid = f.pronamespace
-    where n.nspname not in ('pg_catalog', 'information_schema')
+    where n.nspname in ('public', 'graphql_public', 'app')
       and (f.prosrc ~* 'set\s+(local|session)\s+role\M'
            or f.prosrc ~* 'set\s+role\s+(?!=)'
            or f.prosrc ~* 'set_config\s*\(\s*''role'''
            or coalesce(array_to_string(f.proconfig, ','), '') ~* '(^|,)role=')
       and not exists (select 1 from pg_depend d
                        where d.classid = 'pg_proc'::regclass and d.objid = f.oid and d.deptype = 'e')),
-  'public.apply_release', 'only apply_release switches role (the guard reads the role setting)');
+  'public.apply_release',
+  'only apply_release switches role in this project''s schemas (a vendor schema''s switch is out of scope)');
 
 -- ── 2. Releases off (tenant B): writes land as before ────────────────────────────────
 set local role authenticated;

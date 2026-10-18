@@ -933,13 +933,16 @@ begin
   if v_have is distinct from 'app.release_token_valid, public.apply_release' then
     raise exception '0066: functions naming the release token are %, expected app.release_token_valid and apply_release', v_have;
   end if;
-  -- The guard also trusts the role setting (no switched role = not an API request): in any
-  -- schema, the only function that switches role (SET LOCAL or SESSION ROLE, SET ROLE to a
-  -- name, set_config('role', ...) or a SET role clause; an UPDATE's `set role = ...` is a
-  -- column) is apply_release, which switches to authenticated and back.
+  -- The guard also trusts the role setting (no switched role = not an API request): in the
+  -- schemas this project owns (public, graphql_public, app), the only function that switches
+  -- role (SET LOCAL or SESSION ROLE, SET ROLE to a name, set_config('role', ...) or a SET role
+  -- clause; an UPDATE's `set role = ...` is a column) is apply_release, which switches to
+  -- authenticated and back. Supabase's own schemas are not ours to judge: Realtime's
+  -- realtime.apply_rls sets the role for every Postgres Changes check, and is no extension's
+  -- member, so a scan of every schema would fail this push on a hosted project.
   select string_agg(n.nspname || '.' || f.proname, ', ' order by n.nspname, f.proname) into v_have
     from pg_proc f join pg_namespace n on n.oid = f.pronamespace
-   where n.nspname not in ('pg_catalog', 'information_schema')
+   where n.nspname in ('public', 'graphql_public', 'app')
      and (f.prosrc ~* 'set\s+(local|session)\s+role\M'
           or f.prosrc ~* 'set\s+role\s+(?!=)'
           or f.prosrc ~* 'set_config\s*\(\s*''role'''
