@@ -216,6 +216,28 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     2026-12-31. *Closes when* every policy admitting an `authenticated` write has a
     RESTRICTIVE live companion, checked over the catalog.
 
+- **Team members are guarded but not captured: an R14 blocker** (Admin v2 R5, 0066; owner
+  item **O-12**).
+  - *The gap.* R5 puts the release guard on every registry table, `team_members` included, so
+    once a tenant's releases are on a staff edit of a team member outside a release is
+    refused (42501) like any other, and team-member changes go through a release (R4 applies
+    them). But `team_members` keeps no history (0038) and has no capture trigger (0051, R5):
+    a release that changes a team member records no item (R4 returns a minimal one), and an
+    out-of-band write the guard lets through (the runbook, the service role, Auth setting a
+    removed account's link to null) records no system item. A restore (R10) therefore cannot
+    put a team member back, and R10 refuses team members ("History isn't kept for team members
+    yet", R4 D2). Inert today: `app.release_tenants` is empty.
+  - *Why not excluded from the guard.* Excluding `team_members` would let staff edit team
+    members live while every other registry table goes through releases, which R3a's kernel
+    (it stages team-member edits) and the registry contract do not allow. The guard stays; the
+    missing history is O-12's (PDPL: staff names and bios kept after an erasure).
+  - *What closes it.* The owner decides O-12 (history redaction, R16): either team members get
+    history and capture (a snapshot and a capture trigger, with R16's redaction), or the owner
+    accepts that a release cannot restore a team member, and R14's runbook says so.
+  - *Owner:* Kareem (O-12). *Expiry:* R14's switch-on. *Closes when* O-12 is decided and
+    R14's checklist records the outcome (pgTAP `snapshot_coverage.test.sql` names the
+    exemption).
+
 ## The client's TDD, row by row
 
 Checked by the coverage reviewer against the three designs on 2026-10-03

@@ -708,6 +708,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [R2](as-built/R2.md): the release registry, caps and overlay core in TypeScript, `fields` on every release-managed config, the §5 relabel and the derived release publish matrix, no migration (#68)
 - [R3a](as-built/R3a.md): staged writes in the database and the resource kernel, behind the release flag: the draft writes, `public.write_drafts`, the staged branch of every kernel handler, inert, 0062
 - [R4](as-built/R4.md): applying a release as the publisher, change capture, the shared link-set helper, the purge record, inert, 0051 (#69)
+- [R5](as-built/R5.md): the release guard on every registry and link table (no depth exemption), system items and link-set capture with cascades, TRUNCATE closed, `media_usage` v4 (pending changes) and `dashboard_attention` v4 (release kinds), `publish_scheduled` skips tenants with releases on, inert, 0066 (PR number at review)
 
 **CRM**
 - [C1a-1](as-built/C1a-1.md): lead personal data at the database layer, 0033 (#43)
