@@ -1,4 +1,5 @@
 import { defineAdminRoute } from '@/lib/admin/route';
+import { probeJson } from '@/lib/admin/health/probeJson';
 import { loadHealthReport } from '@/lib/admin/health/summary';
 import {
   BUDGETS,
@@ -29,7 +30,11 @@ import {
 //   samples     every site-wide sample of the five metrics, as before (the beacons counted);
 //   errorCount  errors in the last 7 days (it followed `?days=`, 7 by default);
 //   new         rolledUpAt, score, scoreLabel, tiles and checks: the screen's, gated as there
-//               by the caller's capabilities.
+//               by the caller's capabilities;
+//   G2          (additive) uptime, domain and certificate: each reading's state, checkedAt,
+//               okAt and parsed facts (or null: never checked, or the readings could not be
+//               read); score gains uptimePart, tiles the "Uptime, 30 days" tile, checks the
+//               security.domain and security.certificate rows.
 
 export const prerender = false;
 
@@ -61,6 +66,9 @@ export const GET = defineAdminRoute({
       scoreLabel: report.scoreLabel,
       tiles: report.tiles,
       checks: report.checks,
+      uptime: probeJson(report.probes?.uptime ?? null),
+      domain: probeJson(report.probes?.domain ?? null),
+      certificate: probeJson(report.probes?.certificate ?? null),
     };
   },
 });

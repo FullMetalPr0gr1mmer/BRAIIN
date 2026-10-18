@@ -371,6 +371,10 @@ export default defineConfig({
       // dashboard, and the recovery template linking to /admin/reset, runbook §2b). Off,
       // "Forgot password?" says "Not set up" instead of pretending to send.
       AUTH_EMAIL_READY: envField.boolean({ context: 'server', access: 'public', default: false }),
+      // Admin v2 G2: the uptime monitor's ids to read, "123-456" (at most five, joined by "-";
+      // src/lib/health/uptime/uptimeRobot.ts checks the grammar). Unset: the account's first
+      // five monitors. Not a secret: an id reads nothing without the key below.
+      UPTIME_MONITOR_IDS: envField.string({ context: 'server', access: 'public', optional: true }),
 
       // ---- Server SECRETS (never client-bundled) ----
       SUPABASE_DB_POOL_URL: envField.string({ context: 'server', access: 'secret' }), // Supavisor :6543, pgbouncer=true
@@ -379,6 +383,13 @@ export default defineConfig({
       AUDIT_HMAC_KEY: envField.string({ context: 'server', access: 'secret' }),
       NOTIFY_LEAD_SECRET: envField.string({ context: 'server', access: 'secret' }),
       ANTHROPIC_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
+      // Admin v2 G2: the external uptime monitor's READ-ONLY API key (owner item O-20). Unset,
+      // site health says "Not set up" and the score leaves uptime out.
+      UPTIME_MONITOR_API_KEY: envField.string({
+        context: 'server',
+        access: 'secret',
+        optional: true,
+      }),
     },
   },
 });

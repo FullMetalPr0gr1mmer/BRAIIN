@@ -13,7 +13,14 @@ import { DashboardPrefSchema, QuickActionsSchema } from './dashboard';
  * (tests/lib/notifications.spec.ts holds the two lists equal). A kind is visible only to
  * the roles its source names; a preference can mute one, never add one.
  */
-export const NOTIFICATION_KINDS = ['leads', 'applications', 'scheduled', 'maintenance'] as const;
+export const NOTIFICATION_KINDS = [
+  'leads',
+  'applications',
+  'scheduled',
+  'maintenance',
+  // Site health (Admin v2 G2): siteHealth.view roles only.
+  'health',
+] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
 const isKind = (value: unknown): value is NotificationKind =>
