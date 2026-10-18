@@ -24,17 +24,18 @@ export const ORDER_STEP = 10;
 /**
  * The updates that give `order` (every row's id, in the new order) as `sort_order`s: the
  * list numbered in tens from 10, keeping only the rows whose number changes. Ids `order`
- * does not hold are left alone; an id `order` holds that `rows` does not is skipped.
+ * does not hold are left alone; an id `order` holds that `rows` does not is skipped and
+ * takes no place.
  */
 export function orderChanges(rows: readonly Positioned[], order: readonly string[]): OrderChange[] {
   const current = new Map(rows.map((row) => [row.id, row.sort_order]));
   const changes: OrderChange[] = [];
-  order.forEach((id, index) => {
-    const now = current.get(id);
-    if (now === undefined) return;
-    const next = (index + 1) * ORDER_STEP;
-    if (now !== next) changes.push({ id, sortOrder: next });
-  });
+  order
+    .filter((id) => current.has(id))
+    .forEach((id, index) => {
+      const next = (index + 1) * ORDER_STEP;
+      if (current.get(id) !== next) changes.push({ id, sortOrder: next });
+    });
   return changes;
 }
 

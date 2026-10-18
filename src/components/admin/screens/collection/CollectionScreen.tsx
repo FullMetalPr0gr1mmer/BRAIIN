@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react
 import EmptyState from '@/components/admin/kit/EmptyState';
 import Icon from '@/components/admin/kit/Icon';
 import Note from '@/components/admin/kit/Note';
-import { rowToForm, formToPayload } from '@/lib/admin/formPayload';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { toast } from '@/lib/admin/toast';
 import { uiFor } from '@/lib/admin/uiSchema';
-import { collectionOf, copySlug, type CollectionDef } from './collections';
+import { collectionOf, type CollectionDef } from './collections';
+import { copyPayload } from './copy';
 import CollectionDrawer from './CollectionDrawer';
 import CollectionList from './CollectionList';
 import type { CollectionPermissions } from './fields';
@@ -150,24 +150,14 @@ export default function CollectionScreen({ collection, open, permissions }: Coll
   }
 
   async function duplicate(row: Row) {
-    const overrides = def.copy?.(row);
-    if (!overrides || !rows) return;
+    if (!def.copy?.(row) || !rows) return;
     setWorking(true);
     setError('');
     try {
       const full = await adminFetch<Record<string, unknown>>(`/api/admin/${def.slug}/${row.id}`);
-      const payload: Record<string, unknown> = {
-        ...formToPayload(rowToForm(full, ui.fields), ui.fields),
-        ...overrides,
-        status: 'draft',
-      };
-      delete payload['scheduledFor'];
-      if ('isPlaceholder' in payload) payload['isPlaceholder'] = false;
-      if (typeof payload['slug'] === 'string') {
-        const taken = new Set(rows.map((r) => String(r['slug'] ?? '')));
-        payload['slug'] = copySlug(payload['slug'], taken);
-      }
-      payload['sortOrder'] = Number(row['sort_order'] ?? 0);
+      const taken = new Set(rows.map((r) => String(r['slug'] ?? '')));
+      const payload = copyPayload(def, ui, full, taken);
+      if (!payload) return;
       const created = await adminFetch<Record<string, unknown>>(`/api/admin/${def.slug}`, {
         method: 'POST',
         body: payload,
