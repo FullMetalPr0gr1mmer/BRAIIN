@@ -208,7 +208,7 @@ Generated `search_en`/`search_ar` tsvector + GIN. English=`'english'`; Arabic no
 `UNION ALL` over services + portfolio + blog behind the single `search_content` accessor, each branch projecting `(entity_type, id, slug, title, snippet, ts_rank(...) as rank)`, ordered by `rank` with `LIMIT`. No materialised cross-entity index in v1 (a materialised view is a behind-the-accessor escalation). Did-you-mean/suggestions via `pg_trgm` similarity on zero/low-result queries.
 
 ### 2.9 Telemetry tables (partitioned, retention-bounded)
-`analytics_events` (range-partitioned by `occurred_at`). All telemetry is **consent-gated** at the write boundary by the single `hasConsent(req,'analytics')` gate in **§4.12** — no row without analytics consent. Dashboards read only `rollup_*` tables. Raw retention is the single named constant `RAW_TELEMETRY_RETENTION` (value/SQL in §8.3); `system_logs` 30 days; `audit_log` never auto-dropped.
+`analytics_events` (range-partitioned by `occurred_at`). All telemetry is **consent-gated** at the write boundary by the single `hasConsent(req,'analytics')` gate in **§4.12** — no row without analytics consent. Dashboards read only `rollup_*` tables; since Admin v2 G1 (0071) raw `analytics_events` and `web_vitals` are read and written by the service role only (no staff grant or policy), and the stats' visits, events, busiest hours and realtime come from `rollup_daily_visits`, `rollup_daily_events`, `rollup_hourly_pageviews` and `rollup_minute_activity`. Raw retention is the single named constant `RAW_TELEMETRY_RETENTION` (value/SQL in §8.3); `system_logs` 30 days; `audit_log` never auto-dropped.
 
 ### 2.10 Requirements closed
 #3 (RBAC schema half + `login_attempts`/lockout columns), #6 (redirects v1), #10 (analytics canonical + retention with the single `RAW_TELEMETRY_RETENTION` constant), #12 (tenancy); supports #2, #9 (`consent_log` + leads `consent_marketing`; full store/gate is §4.12), #13. Also models `team_members`, `certifications`, `statistics`, `media_assets.folder`/`tags`; dashboard banners are derived views.
@@ -413,7 +413,7 @@ update partman.part_config
        retention_keep_table = false
  where parent_table = 'public.analytics_events';
 ```
-`web_vitals` 90d; `system_logs` 30d; `audit_log` indefinite. Rollups idempotent (`on conflict … do update`); rollup schema must lead dashboard requirements (R45).
+`web_vitals` 90d; `system_logs` 30d; `audit_log` indefinite. Rollups idempotent (`on conflict … do update`); rollup schema must lead dashboard requirements (R45). Raw telemetry is readable by the service role only (0071, Admin v2 G1); the stats' daily and hourly rollups keep 400 days, the realtime minute rollup 48 hours (docs/retention.md).
 
 ### 8.4 Schema-wide tenancy; 8.5 build time stays flat
 Tenant predicate first in every policy and composite index. **§8.5 freshness mechanism:** the authoritative, guaranteed mechanism is the explicit edge tag purge (§1.4(b)/§1.6) on cache-backed-SSR Tier-A routes; `Astro.cache.set` dependency-tracing is an optional optimisation enabled only after staging verification (R43, launch-blocking; fallback `POST /api/revalidate`).

@@ -70,15 +70,15 @@ every PR moves only its own row.
 | 0067 | G2 | `0067_health_probes.sql`: `health_probes` (service role writes, Admin and Developer read), its stamps trigger, the help set restated with the site health guide | 3 |
 | 0068 | U7a | `0068_faq_items.sql`: `faq_items` (RLS, anon column grant, registry row, snapshot, capture and guard triggers), `app.faq_text_ok`, `app.publish_scheduled()` restated with it, the help set with `collections-and-faq`. The production delta seed runs before the merge | 3 |
 | 0069 | U10a | `0069_seo_share_images.sql`: `entity_seo.og_media_id` and `seo_defaults.default_og_media_id` (composite keys to `media_assets (tenant_id, id)`), `media_assets_public_read` and `media_usage` (v5) restated, the two registry rows restated | 3 |
-| 0070 | G1a | `0070_stats_visits_events.sql`: the `analytics_events (occurred_at)` index, raw telemetry read revoked from staff, `rollup_daily_visits`, `rollup_daily_events`, `rollup_hourly_pageviews`, `app.rollup_visits`, the invoker readers, the help set | 3 |
+| 0070 | G1 (folded: G1a, G1b, G1c) | one file for the three halves, built as `0071_stats_v2.sql` (its number is assigned at merge with `scripts/renumber-migration.mjs`): the `analytics_events (occurred_at)` index, raw telemetry read by the service role only, `rollup_daily_visits`, `rollup_daily_events`, `rollup_hourly_pageviews`, `rollup_minute_activity`, `app.rollup_visits` (every 15 minutes) and `app.rollup_realtime` (every minute), the cron history purge, `app.role_analytics_goals` (`analytics.goals`, §5), `analytics_goals`, the invoker readers; no help set (its guide waits for H11's put) | 3 |
 | 0071 | U17 | `0071_two_step_sign_in.sql`: `admin_security_settings.require_mfa`, `app.mfa_required`, the access-token hook restated (role only at the required level), `public.reset_two_step`, `staff_accounts.two_step`, the help set | 3 |
 | 0072 | U10b | `0072_seo_help_guide.sql`: the help set restated with `seo-and-redirects` for the SEO screen | 3 |
 | 0073 | U8a | `0073_u8_guides.sql`: the help set restated with `style-finder` added and `job-applications` reworded | 3 |
 | 0074 | U9a | `0074_general_settings_v2.sql`: `site_profile` v2 columns (tagline, phone, map link, favicon and app icon, the footer settings) and the icon trigger, `site_settings.timezone` (closed list, copied from `crm_settings`), `app.role_general_settings`, RESTRICTIVE live writes on `site_profile` and `site_settings`, `app.studio_time_zone`, `media_assets_public_read` and `media_usage` (v6) restated, the `site_profile` registry row restated, the help set | 3 |
-| 0075 | G1b | `0075_stats_realtime.sql`: `rollup_minute_activity`, `app.rollup_realtime` (every minute), `realtime_summary`, the cron history purge, the help set | 3 |
+| 0075 | (released) | G1b folded into G1 (the 0070 row) | 3 |
 | 0076 | U11 | `0076_integrations_typed.sql`: typed CHECKed integration columns, `app.role_manages_integrations`, Admin and SEO read with a RESTRICTIVE live check, anon's one column (`search_console_token`), the help set | 3 |
 | 0077 | U9b | `0077_maintenance_v2_help.sql`: the help set restated with `maintenance-mode` rewritten | 3 |
-| 0078 | G1c | `0078_stats_goals.sql`: `app.role_analytics_goals` (`analytics.goals`, §5), `analytics_goals` (immediate, live-checked), `goal_progress`, the help set | 3 |
+| 0078 | (released) | G1c folded into G1 (the 0070 row) | 3 |
 | 0079 to 0081 | (slack) | Wave 3 slack: a mid-wave hotfix, U9c, C13's release or a slice that slips; the first to need one takes 0079 | 3 |
 
 ## Rules

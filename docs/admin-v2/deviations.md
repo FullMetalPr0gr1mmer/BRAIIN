@@ -84,6 +84,8 @@
   - no "Video played" event (the loops play by themselves; there is no play action to count);
   - realtime is the people active in the last five minutes, their pages and page views per minute, from a one-minute rollup; no live feed of single page views with country and device (raw rows on a screen; L5) (G1b);
   - raw `analytics_events` and `web_vitals` are read by the service role only; every staff screen reads rollups (G1 D6).
+  - the goals card saves through its own small form in the kit's Drawer (POST/PATCH/DELETE, then a reload with a confirmation), not `EditorForm` + `useEntitySave`: a goal is four fields saved at once, with no autosave or draft (P-3), the C4b manual-lead pattern (G1c);
+  - the busiest hours are drawn in the admin's series colours (the four busiest strong, the rest in the second series) and named in a sentence under the chart, not the prototype's two shades of Klein.
 - **Backups**: leads are never in admin backups (DR via the runbook, §7/§10).
 - **Activity log**: kept permanently and tamper-evident, not "12 months" or "90 days" (§3); exportable under the export lockdown, with no titles in the file (U13).
 - **Invites** expire per Supabase Auth instead of 7 days, until L6 brings transactional email (O-22). As built (U12b, decision D1): **one hour, with Resend**, because Supabase has one e-mail link expiry (`otp_expiry`) for invite and reset links, so a longer invite would make reset links live as long; the owner may choose longer (up to 24 h) for both.
@@ -363,7 +365,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §14 | GA4 numbers via the Data API (/stats/ga) | deviated-challenge | built under A6 | none |  |
 | §14 | 10-minute health worker (uptime, TTFB, weight, errors, broken links, SSL/domain, headers, SEO, synthetic form, backup, storage), score, alerts | deviated-challenge | built under A6 | AV-10 v1 | Vitals, errors, checklist, security, SEO, backup, storage now. Uptime must come from the external monitor (§10): integrate its API. |
 | §14 | Health visible to every 'stats' role | deviated-ok | deviation (standard or owner decision) | AV-10 (siteHealth.view) | §5: Admin + Developer. |
-| §15 | Twelve widgets, per-user layout, Customize across three columns | covered | covered | AV-09 | Realtime and Team notes omitted (challenged). |
+| §15 | Twelve widgets, per-user layout, Customize across three columns | covered | covered | AV-09 | Team notes built in U1; Right now (realtime) built in G1b, off the board by default as the prototype's DASH_DEFAULT, figures as of the page's load (the stats' Realtime tab keeps them current). |
 | §15 | Users: invite with role, deactivate, reset 2FA, editable matrix, personal access | covered | covered | AV-21 | Read-only matrix and no personal access (binding); reset 2FA missing. |
 | §15 | Activity log filterable by person, action and date; exportable | covered | covered | AV-22, U13 (kind chips, person, Riyadh days; CSV under the export lockdown) | No free-text search (U13 D1): the sentences are composed in code. The file names items by type and id, not title (D5). |
 | §15 | Publish versions list with restore | covered | covered | R10, R13, AV-24 |  |
