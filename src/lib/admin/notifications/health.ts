@@ -139,8 +139,9 @@ export const health: NotificationSource = {
         icon: 'warn',
         text: when ? `${what} has not answered since ${when}` : `${what} has not answered yet`,
         detail: null,
-        // When it went stale: the sixth failed read turns the state `unknown`, so the
-        // state's start is that moment (stable while it stays stale).
+        // When it went stale: the stamps trigger (0067) moves state_since at the sixth failed
+        // read in a row, whether it turns the state `unknown` or finds it so already (a probe
+        // never read), and keeps it while the probe stays stale.
         at: probe.stateSince,
         since: probe.stateSince,
         href: HEALTH,

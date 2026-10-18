@@ -413,11 +413,15 @@ export async function runHealthProbes(
 
   const after = new Map(prev);
   for (const w of writes) {
+    const before = prev.get(w.kind);
+    // What the stamps trigger does: a new state starts now, and so does going stale (a probe
+    // never read is `unknown` from its first failure); otherwise the state keeps its start.
+    const wentStale =
+      (before?.failures ?? 0) < THRESHOLDS.staleAfter && w.failures >= THRESHOLDS.staleAfter;
     after.set(w.kind, {
       ...w,
-      // What the trigger does: a new state starts now, a kept one keeps its start.
       state_since:
-        prev.get(w.kind)?.state === w.state ? prev.get(w.kind)!.state_since : now.toISOString(),
+        before && before.state === w.state && !wentStale ? before.state_since : now.toISOString(),
     });
   }
   return {

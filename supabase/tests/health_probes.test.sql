@@ -9,7 +9,9 @@
 --   • who writes: no staff role inserts, updates or deletes (no privilege); the service role
 --     inserts and updates, and cannot delete (rows go with their tenant).
 --   • the trigger: state_since set on insert, kept on an update that keeps the state, moved
---     when the state changes; a supplied state_since or updated_at is ignored.
+--     when the state changes, and moved when the probe goes stale (its sixth failed read in a
+--     row) even if the state stays `unknown` (a probe never read); a supplied state_since or
+--     updated_at is ignored.
 --   • the CHECKs (kind, state, facts an object of at most 16 KB), the key, the tenant's
 --     cascade, and the grants as the migration's postconditions state them.
 --   • the guides: every tenant holds the rewritten site health guide, and the set's count is
@@ -18,7 +20,7 @@
 -- Fixtures are two tenants of this file's own; every count is scoped to them.
 
 begin;
-select plan(43);
+select plan(46);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -98,6 +100,40 @@ update public.health_probes set state = 'fail'
 reset role;
 select is((_probe('67000000-0000-0000-0000-000000000001', 'uptime')).state_since, now(),
   'a change of state moves state_since');
+
+-- A probe never read is `unknown` from its first failure; its sixth failure (stale: the
+-- bell's "has not answered" item) must still move state_since, or the item's `since` would
+-- be the first failure and a person who opened the bell in between would get no dot.
+alter table public.health_probes disable trigger health_probes_stamps;
+update public.health_probes
+   set state = 'unknown', facts = '{}', read_ok = false, failures = 4,
+       state_since = '2001-01-01T00:00:00Z'
+ where tenant_id = '67000000-0000-0000-0000-000000000001' and kind = 'certificate';
+alter table public.health_probes enable trigger health_probes_stamps;
+set local role service_role;
+update public.health_probes set failures = 5
+ where tenant_id = '67000000-0000-0000-0000-000000000001' and kind = 'certificate';
+reset role;
+select is((_probe('67000000-0000-0000-0000-000000000001', 'certificate')).state_since,
+  '2001-01-01T00:00:00Z'::timestamptz,
+  'a fifth failure that keeps the state keeps state_since');
+set local role service_role;
+update public.health_probes set failures = 6
+ where tenant_id = '67000000-0000-0000-0000-000000000001' and kind = 'certificate';
+reset role;
+select is((_probe('67000000-0000-0000-0000-000000000001', 'certificate')).state_since, now(),
+  'the sixth failure in a row (stale) moves state_since, though the state stays unknown');
+alter table public.health_probes disable trigger health_probes_stamps;
+update public.health_probes set state_since = '2001-01-01T00:00:00Z'
+ where tenant_id = '67000000-0000-0000-0000-000000000001' and kind = 'certificate';
+alter table public.health_probes enable trigger health_probes_stamps;
+set local role service_role;
+update public.health_probes set failures = 7
+ where tenant_id = '67000000-0000-0000-0000-000000000001' and kind = 'certificate';
+reset role;
+select is((_probe('67000000-0000-0000-0000-000000000001', 'certificate')).state_since,
+  '2001-01-01T00:00:00Z'::timestamptz,
+  'and a seventh, still stale, keeps it');
 
 -- ── 2. the rules ─────────────────────────────────────────────────────────────
 set local role service_role;

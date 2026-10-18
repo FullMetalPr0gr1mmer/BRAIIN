@@ -21,8 +21,9 @@
 --     person writes a row; nobody deletes one (rows go with their tenant, ON DELETE
 --     CASCADE).
 --   • app.tg_health_probe_stamps(), its one trigger (BEFORE INSERT OR UPDATE): updated_at is
---     the database's now(), and state_since moves only when the state does, so a writer
---     cannot forge when a state began (the bell's "since").
+--     the database's now(), and state_since moves only when the state does or the probe goes
+--     stale (its sixth failed read in a row), so a writer cannot forge when a state began
+--     (the bell's "since").
 --   • app.help_article_set() restated with only the site-health-and-logs guide rewritten
 --     (the score's weighting, the Uptime card, the Security tab, the bell), reseeded into
 --     every tenant.
@@ -81,13 +82,18 @@ alter table public.health_probes force row level security;
 -- ---- 2. The stamps -------------------------------------------------------------------------
 -- updated_at is the database's clock, and state_since moves only when the state does: on an
 -- INSERT it is now(), on an UPDATE that keeps the state it is the stored one, whatever the
--- writer sent. INVOKER (a trigger needs no privilege of its own); search_path '' with
--- qualified names. The table's only trigger, so its order is moot.
+-- writer sent. It also moves when the probe goes stale: the failure count reaching 6
+-- (THRESHOLDS.staleAfter in src/lib/health/thresholds.ts; tests/lib/healthProbes.spec.ts
+-- holds the two equal). A probe never read is `unknown` from its first failure, so without
+-- this its stale moment would leave no trace and the bell's "has not answered" item would
+-- date from the first failure. INVOKER (a trigger needs no privilege of its own);
+-- search_path '' with qualified names. The table's only trigger, so its order is moot.
 create or replace function app.tg_health_probe_stamps() returns trigger
   language plpgsql set search_path = '' as $$
 begin
   new.updated_at := pg_catalog.now();
-  if tg_op = 'INSERT' or new.state is distinct from old.state then
+  if tg_op = 'INSERT' or new.state is distinct from old.state
+     or (old.failures < 6 and new.failures >= 6) then
     new.state_since := pg_catalog.now();
   else
     new.state_since := old.state_since;

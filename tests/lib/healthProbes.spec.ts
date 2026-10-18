@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ProbeRow } from '@schemas/healthProbe';
@@ -540,6 +542,53 @@ describe('runHealthProbes', () => {
       for (let i = 1; i < gaps.length; i += 1) expect(gaps[i]).toBeGreaterThanOrEqual(gaps[i - 1]!);
       expect(attempts.length, `jitter ${jitter}`).toBeLessThanOrEqual(12);
     }
+  });
+
+  it('a probe never read that goes stale starts its state then, as the stamps trigger does', async () => {
+    // Never read: `unknown` from its first failure. The sixth (stale) moves state_since in
+    // the database (0067's trigger); the rows a run hands back (Check now's answer) agree.
+    const p = provider(async () => {
+      throw new OutboundError('timeout');
+    });
+    const since = at(-50);
+    for (const [failures, moved] of [
+      [4, false],
+      [5, true],
+      [6, false],
+    ] as const) {
+      db.rows = [
+        row({
+          kind: 'uptime',
+          state: 'unknown',
+          facts: {},
+          read_ok: false,
+          ok_at: null,
+          failures,
+          state_since: since,
+        }),
+        row({ kind: 'domain', next_at: at(600) }),
+      ];
+      const result = await runHealthProbes(client(db), 't1', {
+        now: NOW,
+        source: 'cron:health-probes',
+        provider: p,
+      });
+      const up = result.rows.find((r) => r.kind === 'uptime')!;
+      expect(up.failures).toBe(failures + 1);
+      expect(up.state_since, `failure ${failures + 1}`).toBe(moved ? NOW.toISOString() : since);
+    }
+  });
+
+  it("the stamps trigger's stale count is THRESHOLDS.staleAfter", () => {
+    const sql = readFileSync(
+      fileURLToPath(new URL('../../supabase/migrations/0067_health_probes.sql', import.meta.url)),
+      'utf8',
+    );
+    const body = sql.split('create or replace function app.tg_health_probe_stamps()')[1]!;
+    const m = /old\.failures < (\d+) and new\.failures >= (\d+)/.exec(body.split('end $$;')[0]!);
+    expect(m, 'the trigger moves state_since when a probe goes stale').not.toBeNull();
+    expect(Number(m![1])).toBe(THRESHOLDS.staleAfter);
+    expect(Number(m![2])).toBe(THRESHOLDS.staleAfter);
   });
 
   it('a read or a write the database refuses throws (the cron logs it under its name)', async () => {
