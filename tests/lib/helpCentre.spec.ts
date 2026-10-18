@@ -1058,7 +1058,8 @@ describe('website-stats as G1 rewrites it (docs/admin-v2/guides/website-stats.js
       "v_month date := date_trunc('month', (pg_catalog.now() at time zone 'UTC'))::date;",
     );
     expect(MAX_GOALS).toBe(20);
-    expect(MIGRATION).toMatch(/g\.tenant_id = new\.tenant_id\) >= 20 then/);
+    // Counted after the row is in (an AFTER trigger), so more than 20 is the refusal.
+    expect(MIGRATION).toMatch(/g\.tenant_id = new\.tenant_id\) > 20 then/);
     expect(en).toContain('You can keep up to 20 goals.');
     expect(ar).toContain('20 هدفًا');
   });
