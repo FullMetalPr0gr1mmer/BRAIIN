@@ -65,7 +65,7 @@
 - **Backups**: leads are never in admin backups (DR via the runbook, §7/§10).
 - **Activity log**: kept permanently and tamper-evident, not "12 months" or "90 days" (§3); exportable under the export lockdown, with no titles in the file (U13).
 - **Invites** expire per Supabase Auth instead of 7 days, until L6 brings transactional email (O-22). As built (U12b, decision D1): **one hour, with Resend**, because Supabase has one e-mail link expiry (`otp_expiry`) for invite and reset links, so a longer invite would make reset links live as long; the owner may choose longer (up to 24 h) for both.
-- **Health**: no in-Worker uptime checker; uptime comes from the external monitor (§10).
+- **Health**: uptime from the external monitor's read-only API (G2); no in-Worker checker (§10); certificate expiry only where the monitor reports it (RDAP carries the domain's registration, not the certificate); no Alerts drawer or external channels (A1); the bell instead, for siteHealth.view roles.
 - **Help** (U16):
   - guides only for features that are built (nine of the prototype's fifteen described later-phase screens; "roles" promised per-person exceptions §5 does not have);
   - no editing yet: the migrations write the guides until an editor and its capability exist (§5, TDD phase 7);
@@ -338,7 +338,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §14 | Events, funnel, goals, realtime, sessions | deviated-challenge | built under A6 | AV-10 (later) | Feasible on consented data; realtime needs a 1-minute rollup (Pillar 4). |
 | §14 | Sources, countries, devices, browsers, unique visitors, cities | deviated-ok | deviation (standard or owner decision) | AV-10 (later) | Consent-gated capture + notice change (PDPL, O4); a persistent visitor id needs legal; cities never. |
 | §14 | GA4 numbers via the Data API (/stats/ga) | deviated-challenge | built under A6 | none |  |
-| §14 | 10-minute health worker (uptime, TTFB, weight, errors, broken links, SSL/domain, headers, SEO, synthetic form, backup, storage), score, alerts | deviated-challenge | built under A6 | AV-10 v1 | Vitals, errors, checklist, security, SEO, backup, storage now. Uptime must come from the external monitor (§10): integrate its API. |
+| §14 | 10-minute health worker (uptime, TTFB, weight, errors, broken links, SSL/domain, headers, SEO, synthetic form, backup, storage), score, alerts | deviated-challenge | built under A6 | AV-10 v1; G2 (0067) | Vitals, errors, checklist, security, SEO, backup, storage (U2); uptime, domain and certificate built (G2): the monitor's read-only API every 10 minutes, the domain's RDAP record about daily, the certificate where the monitor reports it, failures in the bell. No broken-link crawl (L8), no lab weight, no alert channels (A1). |
 | §14 | Health visible to every 'stats' role | deviated-ok | deviation (standard or owner decision) | AV-10 (siteHealth.view) | §5: Admin + Developer. |
 | §15 | Twelve widgets, per-user layout, Customize across three columns | covered | covered | AV-09 | Realtime and Team notes omitted (challenged). |
 | §15 | Users: invite with role, deactivate, reset 2FA, editable matrix, personal access | covered | covered | AV-21 | Read-only matrix and no personal access (binding); reset 2FA missing. |
