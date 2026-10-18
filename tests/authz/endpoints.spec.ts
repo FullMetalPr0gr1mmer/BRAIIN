@@ -206,7 +206,8 @@ describe('singleton writes — database refusals map to client errors', () => {
       ++calls === 1
         ? { data: { version: 1, accepting_applications: false }, error: null }
         : { data: null, error: { code, message: 'refused' } };
-    return { from: () => builder };
+    // Releases off: the site profile asks the flag since Admin v2 R3b.
+    return { from: () => builder, rpc: async () => ({ data: false, error: null }) };
   }
 
   for (const [code, expected] of [
