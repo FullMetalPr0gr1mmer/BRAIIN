@@ -711,6 +711,77 @@ describe('the guides say only what the admin does', () => {
     expect(after.minutes).toBe(3);
   });
 
+  it('C4b (0065) restates U4’s set (0064) and changes only the working-with-leads guide', () => {
+    // Production applies 0064 then 0065, so 0065's set must carry every guide 0064 seeds,
+    // byte for byte, but the one C4b rewrote (the leads screens), in the same place.
+    const setOf = (file: string) => {
+      const sql = source(`${MIGRATIONS}/${file}`);
+      return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
+    };
+    const base = setOf('0064_media_library.sql');
+    const c4b = setOf('0065_help_leads_v2.sql');
+    expect(c4b.map((a) => a.slug)).toEqual(base.map((a) => a.slug));
+    for (const article of base.filter((a) => a.slug !== 'working-with-leads')) {
+      expect(
+        c4b.find((a) => a.slug === article.slug),
+        article.slug,
+      ).toEqual(article);
+    }
+    const before = base.find((a) => a.slug === 'working-with-leads')!;
+    const after = c4b.find((a) => a.slug === 'working-with-leads')!;
+    expect(after.body).not.toEqual(before.body);
+    expect({ ...after, body: null, minutes: null }).toEqual({
+      ...before,
+      body: null,
+      minutes: null,
+    });
+    expect(after.minutes).toBe(4);
+  });
+
+  it('the leads guide names the controls the leads screens draw (C4b)', () => {
+    const en = guide('working-with-leads', 'en');
+    const screens = codeIn('src/components/admin/screens/leads').map(source).join('\n');
+    const pages = ['index.astro', 'board.astro', '[id].astro']
+      .map((page) => source(`src/pages/admin/leads/${page}`))
+      .join('\n');
+    const drawn = [
+      screens,
+      pages,
+      source('src/lib/admin/nav/crm.ts'),
+      source('src/lib/crm/leadView.ts'),
+    ].join('\n');
+    for (const control of [
+      'Over response time',
+      'Unread',
+      'Spam',
+      'Pipeline',
+      'Move to…',
+      'Previous',
+      'Next',
+      'Reveal contact details',
+      'Email',
+      'Call',
+      'WhatsApp',
+      'Log contact',
+      'Add lead manually',
+      'Export CSV',
+      'More actions',
+    ]) {
+      expect(en, control).toContain(control);
+      expect(drawn, control).toContain(control);
+    }
+    // The over-response words are the list's own (leadView.ts), and the limits are the routes'.
+    expect(source('src/lib/crm/leadView.ts')).toContain("SLA_LABEL = 'Over response time'");
+    expect(en).toContain('up to 60 an hour');
+    expect(source('src/lib/admin/rateLimit.ts')).toMatch(/PII_REVEAL_LIMITS[^}]*perUser: 60,/);
+    expect(en).toContain('at most 80 leads with contact details');
+    expect(source('src/lib/crm/exportRead.ts')).toContain('EXPORT_ROW_CAP = { pii: 80,');
+    // Not the old panel's words any more, in either language.
+    expect(en).not.toContain('Reveal contact details and notes');
+    expect(guide('working-with-leads', 'ar')).not.toContain('Reveal contact details and notes');
+    expect(guide('working-with-leads', 'ar')).toContain('Move to…');
+  });
+
   it('the dashboard guide says what the dashboard does (U1)', async () => {
     const schema = await import('@schemas/dashboard');
     const sql = source(`${MIGRATIONS}/0060_dashboard_layer.sql`);

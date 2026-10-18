@@ -99,7 +99,7 @@ test.describe('as developer', () => {
     await onScreen.getByRole('link', { name: /Working with leads/ }).click();
     const heading = drawer.getByRole('heading', { level: 3, name: 'Working with leads' });
     await expect(heading).toBeFocused();
-    await expect(drawer.locator('.hc-art')).toContainText('Reveal contact details and notes');
+    await expect(drawer.locator('.hc-art')).toContainText('Reveal contact details shows the e-mail');
     await expect(page).toHaveURL(/\/admin\/leads$/);
 
     // The Arabic text, marked as Arabic and right to left.
