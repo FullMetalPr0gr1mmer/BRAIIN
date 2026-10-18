@@ -35,7 +35,9 @@ import { totp, untilNextStep } from './totp';
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-test.describe.configure({ mode: 'serial' });
+// freshCode() may wait out a whole 30 s step before a test's real work starts: Playwright's
+// default timeout (30 s) would end the test inside that wait (tests/lib/twoStepE2e.spec.ts).
+test.describe.configure({ mode: 'serial', timeout: 120_000 });
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
