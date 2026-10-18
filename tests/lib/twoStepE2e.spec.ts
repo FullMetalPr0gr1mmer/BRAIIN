@@ -26,4 +26,26 @@ describe('tests/admin/twoStep.e2e.ts', () => {
     expect(Number(timeout![1]!.replace(/_/g, ''))).toBeGreaterThanOrEqual(STEP_WAIT_MS + WORK_MS);
     expect(source).not.toMatch(/test\.setTimeout\(/);
   });
+
+  it('asks GoTrue itself to add or remove a factor with the password alone, and expects no', () => {
+    // Both layers stand on GoTrue's AAL rule: the hook (0072) stamps the role whenever no
+    // verified factor is required, so if an aal1 token could unenrol the factor (or enrol a
+    // second one and verify it), a stolen password would pass both. The spec calls GoTrue's
+    // own endpoints with the token minted before the code, while the factor is verified.
+    const step = source.slice(
+      source.indexOf("test('signing in asks for the code"),
+      source.indexOf("test('an Admin resets it"),
+    );
+    expect(step).toContain('const aal1 = await accessTokenOf(context);');
+    expect(step).toMatch(/gotrue\(context, 'POST', '\/factors', aal1,/);
+    expect(step).toMatch(/gotrue\(context, 'DELETE', `\/factors\/\$\{factorId\}`, aal1\)/);
+    expect(step.match(/\.toBe\('insufficient_aal'\)/g)?.length ?? 0).toBe(2);
+    // And the factor is still there, the only one, verified (asked of the service role).
+    const after = step.indexOf("gotrue(context, 'DELETE'");
+    expect(step.indexOf('await factorsOfAccount()', after)).toBeGreaterThan(after);
+    // Before the code: the refusals are checked ahead of the right code being typed.
+    expect(step.indexOf("gotrue(context, 'DELETE'")).toBeLessThan(
+      step.indexOf("getByRole('button', { name: 'Verify' })"),
+    );
+  });
 });

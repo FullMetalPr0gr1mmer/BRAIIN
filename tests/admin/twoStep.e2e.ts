@@ -22,8 +22,9 @@ import { totp, untilNextStep } from './totp';
  *      back there and the admin API answers 401 two-step-required; a wrong code says so; the
  *      right one finishes the sign-in at `next`;
  *   3. the database layer: before the code, the access token carries no role (the hook,
- *      0072) and reads nothing a role is needed for straight from PostgREST; after it, aal2
- *      and the role, and the same read answers;
+ *      0072) and reads nothing a role is needed for straight from PostgREST, and GoTrue
+ *      refuses it both adding a factor and removing the verified one (insufficient_aal);
+ *      after the code, aal2 and the role, and the same read answers;
  *   4. the shared Admin resets its 2FA on Users & roles: its session ends at its next
  *      request, its next sign-in goes straight in, and the activity log says so;
  *   5. every /admin/2fa step and the account row: axe (WCAG 2.2 A/AA), no sideways scroll at
@@ -165,17 +166,51 @@ function claimsOf(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Record<string, unknown>;
 }
 
-/** This account's activity log rows, read straight from PostgREST with a token. */
-async function auditRowsWith(context: BrowserContext, token: string): Promise<unknown[]> {
+/** The local Supabase the e2e job names, and its anon key. */
+function localSupabase(): { supabase: string; anon: string } {
   const supabase = (process.env['PUBLIC_SUPABASE_URL'] ?? '').replace(/\/$/, '');
   const anon = process.env['PUBLIC_SUPABASE_ANON_KEY'] ?? '';
   expect(supabase && anon, 'the e2e job names a local Supabase and its anon key').toBeTruthy();
+  return { supabase, anon };
+}
+
+/** This account's activity log rows, read straight from PostgREST with a token. */
+async function auditRowsWith(context: BrowserContext, token: string): Promise<unknown[]> {
+  const { supabase, anon } = localSupabase();
   const res = await context.request.get(
     `${supabase}/rest/v1/audit_log?select=id&actor_id=eq.${ACCOUNT.id}&limit=5`,
     { headers: { apikey: anon, authorization: `Bearer ${token}` } },
   );
   if (res.status() !== 200) return [];
   return (await res.json()) as unknown[];
+}
+
+/**
+ * GoTrue's own factor endpoints, called with a token as the account's browser could call them
+ * (supabase-js's mfa.enroll / mfa.unenroll): the status and GoTrue's error code.
+ */
+async function gotrue(
+  context: BrowserContext,
+  method: 'POST' | 'DELETE',
+  path: string,
+  token: string,
+  body?: Record<string, unknown>,
+): Promise<{ status: number; code: unknown }> {
+  const { supabase, anon } = localSupabase();
+  const res = await context.request.fetch(`${supabase}/auth/v1${path}`, {
+    method,
+    headers: { apikey: anon, authorization: `Bearer ${token}` },
+    ...(body ? { data: body } : {}),
+  });
+  const json = (await res.json().catch(() => ({}))) as { error_code?: unknown };
+  return { status: res.status(), code: json.error_code };
+}
+
+/** Every factor the account has, verified or not, as the service role sees them. */
+async function factorsOfAccount(): Promise<{ id: string; status: string }[]> {
+  const { data, error } = await service().auth.admin.mfa.listFactors({ userId: ACCOUNT.id });
+  expect(error, 'the service role lists the factors').toBeNull();
+  return (data?.factors ?? []).map((f) => ({ id: f.id, status: f.status }));
 }
 
 test('sets 2FA up from the account: the key, a code, and the row says On', async ({ browser }) => {
@@ -259,6 +294,27 @@ test('signing in asks for the code: nothing else answers until it is typed', asy
   expect(before['app_metadata']).not.toHaveProperty('role');
   expect(before['app_metadata']).not.toHaveProperty('tenant_id');
   expect(await auditRowsWith(context, aal1), 'aal1 reads no activity').toEqual([]);
+
+  // GoTrue's AAL rule, which both layers stand on: the hook stamps the role whenever no
+  // verified factor is required, so the password alone must neither remove the factor nor add
+  // a second one (which it could then verify). GoTrue answers insufficient_aal to both (403
+  // or 422 by endpoint and version; the code is what it promises) and the factor stands.
+  const factors = await factorsOfAccount();
+  expect(factors, 'one factor, verified, set up in the first test').toHaveLength(1);
+  expect(factors[0]!.status).toBe('verified');
+  const factorId = factors[0]!.id;
+  const enrol = await gotrue(context, 'POST', '/factors', aal1, {
+    factor_type: 'totp',
+    friendly_name: 'A second app',
+  });
+  expect([403, 422], 'enrolling a second app at aal1 is refused').toContain(enrol.status);
+  expect(enrol.code).toBe('insufficient_aal');
+  const unenrol = await gotrue(context, 'DELETE', `/factors/${factorId}`, aal1);
+  expect([403, 422], 'removing the verified factor at aal1 is refused').toContain(unenrol.status);
+  expect(unenrol.code).toBe('insufficient_aal');
+  expect(await factorsOfAccount(), 'the factor stands, and no other was added').toEqual([
+    { id: factorId, status: 'verified' },
+  ]);
 
   // A wrong code says so, and keeps the page.
   await page.getByLabel('6-digit code').fill(wrongCode());
