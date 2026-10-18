@@ -17,7 +17,10 @@ import { serviceClient } from '@/lib/supabase/server';
 // still shows the asset. `media_usage()` (migration 0024) lists every reference — a
 // poster, a case-study item, a client logo, a quote's avatar, a portrait, a section
 // image — so the editor is told where it is used instead of breaking a live page. The
-// foreign keys (on delete restrict) are the backstop for the structured references.
+// foreign keys (on delete restrict) are the backstop for the structured references. Since
+// v4 (migration 0066, Admin v2 R5) a pending change that names the asset counts too, and the
+// refusal says so ("a pending change to service logo"): publishing it would otherwise point
+// live content at a deleted file.
 //
 // An uploaded image (`storage`, Admin v2 U3) also has a file in the public bucket: once the
 // row is gone, the file is removed too (the service role; nothing references the asset, so
@@ -30,9 +33,21 @@ export const prerender = false;
 
 export const { GET, PATCH } = itemRoutes(mediaResource);
 
+// Not strict: v4's `pending` column (0066) parses, and defaults to false before it.
 const UsageSchema = z.array(
-  z.object({ entity_type: z.string(), entity_id: z.string(), label: z.string().nullable() }),
+  z.object({
+    entity_type: z.string(),
+    entity_id: z.string(),
+    label: z.string().nullable(),
+    pending: z.boolean().default(false),
+  }),
 );
+
+/** How the refusal names one reference: "service logo", "a pending change to service logo". */
+function usageWords(u: z.infer<typeof UsageSchema>[number]): string {
+  const what = `${u.entity_type.replace('_', ' ')} ${u.label ?? u.entity_id}`;
+  return u.pending ? `a pending change to ${what}` : what;
+}
 
 export const DELETE = defineAdminRoute({
   cap: 'media.hardDelete',
@@ -54,10 +69,7 @@ export const DELETE = defineAdminRoute({
     if (error) throw new Error(`media_usage: ${error.code ?? 'error'}`);
     const usage = UsageSchema.parse(data ?? []);
     if (usage.length > 0) {
-      const where = usage
-        .slice(0, 5)
-        .map((u) => `${u.entity_type.replace('_', ' ')} ${u.label ?? u.entity_id}`)
-        .join(', ');
+      const where = usage.slice(0, 5).map(usageWords).join(', ');
       throw new InUseError(
         `still used by ${usage.length} item(s): ${where}${usage.length > 5 ? ', …' : ''} — replace it there first`,
       );
