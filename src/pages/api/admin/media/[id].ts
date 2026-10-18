@@ -5,6 +5,7 @@ import { defineAdminRoute } from '@/lib/admin/route';
 import { mediaResource } from '@/lib/admin/resources/media';
 import { deleteRow, getRow } from '@/lib/admin/crud';
 import { InUseError, NotFoundError } from '@/lib/admin/errors';
+import { usageWords } from '@/components/admin/screens/media/usage';
 import { assertCap } from '@/lib/authz/matrix';
 import { removeObjectIfUnnamed } from '@/lib/media/storage';
 import { serviceClient } from '@/lib/supabase/server';
@@ -19,8 +20,9 @@ import { serviceClient } from '@/lib/supabase/server';
 // image — so the editor is told where it is used instead of breaking a live page. The
 // foreign keys (on delete restrict) are the backstop for the structured references. Since
 // v4 (migration 0066, Admin v2 R5) a pending change that names the asset counts too, and the
-// refusal says so ("a pending change to service logo"): publishing it would otherwise point
-// live content at a deleted file.
+// refusal says so ("Pending change to service: logo"): publishing it would otherwise point
+// live content at a deleted file. Each reference is worded by the media drawer's own
+// `usageWords`, so the refusal and the drawer's "Used in" list say the same thing.
 //
 // An uploaded image (`storage`, Admin v2 U3) also has a file in the public bucket: once the
 // row is gone, the file is removed too (the service role; nothing references the asset, so
@@ -43,12 +45,6 @@ const UsageSchema = z.array(
   }),
 );
 
-/** How the refusal names one reference: "service logo", "a pending change to service logo". */
-function usageWords(u: z.infer<typeof UsageSchema>[number]): string {
-  const what = `${u.entity_type.replace('_', ' ')} ${u.label ?? u.entity_id}`;
-  return u.pending ? `a pending change to ${what}` : what;
-}
-
 export const DELETE = defineAdminRoute({
   cap: 'media.hardDelete',
   handler: async ({ auth, sb, params, audit }) => {
@@ -69,9 +65,21 @@ export const DELETE = defineAdminRoute({
     if (error) throw new Error(`media_usage: ${error.code ?? 'error'}`);
     const usage = UsageSchema.parse(data ?? []);
     if (usage.length > 0) {
-      const where = usage.slice(0, 5).map(usageWords).join(', ');
+      // "Service: logo; Pending change to page section: Home hero": the drawer's words, so a
+      // semicolon between them (each may hold a colon).
+      const where = usage
+        .slice(0, 5)
+        .map((u) =>
+          usageWords({
+            entityType: u.entity_type,
+            entityId: u.entity_id,
+            label: u.label,
+            pending: u.pending,
+          }),
+        )
+        .join('; ');
       throw new InUseError(
-        `still used by ${usage.length} item(s): ${where}${usage.length > 5 ? ', …' : ''}. Replace it there first.`,
+        `still used by ${usage.length} item(s): ${where}${usage.length > 5 ? '; …' : ''}. Replace it there first.`,
       );
     }
 

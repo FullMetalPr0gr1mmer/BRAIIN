@@ -719,7 +719,9 @@ describe('media_usage v4: pending changes are references (0066, Admin v2 R5)', (
     state.usage = [pending];
     const { status, body } = await call(DELETE, ctx('DELETE', `/api/admin/media/${ASSET}`));
     expect(status).toBe(409);
-    expect(JSON.stringify(body)).toContain('a pending change to page section Home hero');
+    expect(JSON.stringify(body)).toContain(
+      'still used by 1 item(s): Pending change to page section: Home hero. Replace it there first.',
+    );
     expect(state.audits).toEqual([]);
   });
 
@@ -728,7 +730,7 @@ describe('media_usage v4: pending changes are references (0066, Admin v2 R5)', (
     state.usage = [live];
     const { status, body } = await call(DELETE, ctx('DELETE', `/api/admin/media/${ASSET}`));
     expect(status).toBe(409);
-    expect(JSON.stringify(body)).toContain('still used by 1 item(s): service logo');
+    expect(JSON.stringify(body)).toContain('still used by 1 item(s): Service: logo.');
     expect(JSON.stringify(body)).not.toContain('pending');
   });
 
@@ -739,6 +741,10 @@ describe('media_usage v4: pending changes are references (0066, Admin v2 R5)', (
     expect(status).toBe(409);
     const words = JSON.stringify(body);
     expect(words).toContain('. Replace it there first.');
+    // The drawer's words for each (usageWords), a semicolon between them.
+    expect(words).toContain(
+      'still used by 2 item(s): Service: logo; Pending change to page section: Home hero.',
+    );
     expect(words).not.toMatch(/[\u2013\u2014]/);
   });
 });
