@@ -151,9 +151,16 @@ function blockSql(block, mode) {
       if (!slices.has(key)) slices.set(key, []);
       slices.get(key).push(r);
     }
-    const tenant = scoped ? `tenant_id = ${quote(TENANT_ID)} and ` : '';
+    // The slice may be the whole tenant (`"unlessAuthored": ["tenant_id"]`, the FAQ: the
+    // rows go in only while the tenant holds none at all); the tenant is then named once.
+    const sliceColumns = scoped
+      ? block.unlessAuthored.filter((c) => c !== 'tenant_id')
+      : block.unlessAuthored;
+    const tenant = scoped
+      ? `tenant_id = ${quote(TENANT_ID)}${sliceColumns.length > 0 ? ' and ' : ''}`
+      : '';
     const stmts = [...slices.values()].map((slice) => {
-      const match = block.unlessAuthored.map((c) => `${c} = ${literal(slice[0][c])}`).join(' and ');
+      const match = sliceColumns.map((c) => `${c} = ${literal(slice[0][c])}`).join(' and ');
       const values = slice.map((r) => `      (${tuple(r)})`).join(',\n');
       return (
         `do $seed$ begin\n` +
