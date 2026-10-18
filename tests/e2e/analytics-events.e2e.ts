@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Request } from '@playwright/test';
+import { consentCookieHeader } from './consentCookie';
 
 /*
  * The public site's first-party analytics events (Admin v2 G1: src/lib/client/analytics.ts),
@@ -170,7 +171,8 @@ test('the ingest refuses an event outside the vocabulary (422) and drops one wit
     data: { type: 'cta_click', path: '/', locale: 'en', props: { cta: 'whatsapp' } },
   });
   expect(dropped.status()).toBe(204);
-  const consent = `__Host-consent=${encodeURIComponent(JSON.stringify({ analytics: true }))}`;
+  // Analytics consent in the banner's own shape: a partial cookie reads as no consent (204).
+  const consent = consentCookieHeader({ analytics: true });
   const refused = await request.post('/api/analytics', {
     headers: { ...headers, cookie: consent },
     data: { type: 'cta_click', path: '/', locale: 'en', props: { cta: 'made_up' } },
