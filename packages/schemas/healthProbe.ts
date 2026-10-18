@@ -145,6 +145,10 @@ export interface ProbeFactsOf {
   certificate: CertificateFacts;
 }
 
+/** The columns a run reads and a screen reads (never `updated_at` or the tenant). */
+export const PROBE_COLUMNS =
+  'kind,state,facts,read_ok,failures,checked_at,ok_at,next_at,state_since';
+
 /** A stored row, as the service role and the readers select it. */
 export const ProbeRowSchema = z.object({
   kind: z.enum(PROBE_KINDS),

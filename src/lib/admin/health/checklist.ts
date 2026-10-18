@@ -2,6 +2,8 @@ import type { Role } from '@/lib/auth/types';
 import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
 import { reachableHrefs } from '../nav';
 import { formatDate } from '../relTime';
+import { THRESHOLDS, daysUntil } from '@/lib/health/thresholds';
+import type { ProbeReport } from './probes';
 import { securityFacts } from './security';
 import {
   BUDGETS,
@@ -73,6 +75,11 @@ export interface HealthContext {
   errors7d: number | null;
   /** The last backup export; null when there is none; undefined when not read. */
   lastBackup?: BackupFact | null | undefined;
+  /**
+   * The uptime, domain and certificate readings (Admin v2 G2, health_probes); null when the
+   * read failed; undefined when not read (the role lacks siteHealth.view).
+   */
+  probes?: ProbeReport | null | undefined;
   now: number;
 }
 
@@ -142,6 +149,126 @@ function speedRule(metric: VitalMetric): HealthRule {
           };
     },
   };
+}
+
+const days = (n: number) => `${n} ${plural(n, 'day', 'days')}`;
+
+/**
+ * The domain's renewal (Admin v2 G2): from its public registration record (RDAP), read by
+ * the health schedule about once a day. The domain is always named, so a misspelt one is
+ * visible. No fix link: renewal is at the registrar, not in this admin.
+ */
+function domainRule(ctx: HealthContext): CheckOutcome {
+  if (!ctx.probes) return unread('Domain renewal');
+  const probe = ctx.probes.domain;
+  if (!probe) {
+    return {
+      state: 'unknown',
+      text: 'Domain renewal: not checked yet',
+      detail: 'The registration record is read about once a day.',
+    };
+  }
+  const facts = probe.facts;
+  if (!facts || (probe.state === 'unknown' && !probe.readOk)) return unread('Domain renewal');
+  const apex = facts.apex ?? 'the domain';
+  const who = facts.registrar ? ` (${facts.registrar})` : '';
+  switch (facts.outcome) {
+    case 'ok': {
+      if (!facts.expires) break;
+      const left = daysUntil(facts.expires, new Date(ctx.now));
+      if (left > THRESHOLDS.domainFailDays) {
+        return {
+          state: 'ok',
+          text: `${apex} renews in ${days(left)}`,
+          detail: `Registered until ${formatDate(facts.expires, { year: 'always' })}${facts.registrar ? `, with ${facts.registrar}` : ''}.`,
+        };
+      }
+      return {
+        state: 'fail',
+        text:
+          left < 0
+            ? `${apex} expired on ${formatDate(facts.expires, { year: 'always' })}`
+            : `${apex} expires in ${days(left)}`,
+        detail: `Renew it at the registrar${who}, or ask whoever manages the domain.`,
+      };
+    }
+    case 'not-found':
+      return {
+        state: 'fail',
+        text: `No registration found for ${apex}`,
+        detail:
+          "Check that the site's domain is spelt right; whoever runs the site can correct it.",
+      };
+    case 'invalid':
+      return {
+        state: 'fail',
+        text: `The site's domain, ${apex}, is not a domain name`,
+        detail: 'Whoever runs the site can correct it.',
+      };
+    case 'not-applicable':
+      return facts.apex
+        ? {
+            state: 'info',
+            text: 'Domain renewal: not checked: the site is on a Cloudflare address',
+            detail: 'Its own domain is checked once the site moves to it.',
+          }
+        : {
+            state: 'info',
+            text: 'Domain renewal: not checked: no domain is recorded for the site',
+            detail: 'Whoever runs the site can record it.',
+          };
+    default:
+      break;
+  }
+  return {
+    state: 'info',
+    text: facts.rdap
+      ? `${apex}: its registration record gives no renewal date`
+      : `${apex}: no public registration record covers this domain`,
+    detail: 'Check the renewal date at the registrar.',
+  };
+}
+
+/**
+ * The TLS certificate (Admin v2 G2, decision D3): its expiry when the uptime monitor reports
+ * one; otherwise Cloudflare issues and renews it, and the row says so rather than guess.
+ */
+function certificateRule(ctx: HealthContext): CheckOutcome {
+  if (!ctx.probes) return unread('Certificate');
+  const probe = ctx.probes.certificate;
+  const byCloudflare = 'Certificates are issued and renewed by Cloudflare';
+  if (!probe || probe.state === 'off') {
+    return {
+      state: 'info',
+      text: byCloudflare,
+      detail: 'Once the uptime monitor is set up, its expiry date shows here.',
+    };
+  }
+  const facts = probe.facts;
+  if (!facts || (probe.state === 'unknown' && !probe.readOk)) return unread('Certificate');
+  if (facts.source === 'cloudflare' || !facts.expires) {
+    return {
+      state: 'info',
+      text: byCloudflare,
+      detail: 'The uptime monitor reports no expiry date for this site.',
+    };
+  }
+  const left = daysUntil(facts.expires, new Date(ctx.now));
+  const issuer = facts.issuer ? `Issued by ${facts.issuer}. ` : '';
+  return left > THRESHOLDS.certificateFailDays
+    ? {
+        state: 'ok',
+        text: `Certificate renews in ${days(left)}`,
+        detail: `${issuer}Cloudflare renews it about 30 days before it expires.`,
+      }
+    : {
+        state: 'fail',
+        text:
+          left < 0
+            ? `The certificate expired on ${formatDate(facts.expires, { year: 'always' })}`
+            : `Certificate expires in ${days(left)}`,
+        detail: `${issuer}Cloudflare renews certificates about 30 days before they expire, so this one is stuck: tell whoever runs the site.`,
+      };
 }
 
 function backupLine(fact: BackupFact): string {
@@ -295,6 +422,21 @@ export const HEALTH_RULES: readonly HealthRule[] = [
     needs: [],
     evaluate: () => ({ state: fact.ok ? 'ok' : 'fail', text: fact.text, detail: fact.detail }),
   })),
+  // ---- Security, read from outside (health_probes, Admin v2 G2) ----
+  {
+    id: 'security.domain',
+    group: 'Security',
+    title: 'Domain renewal',
+    needs: ['siteHealth.view'],
+    evaluate: domainRule,
+  },
+  {
+    id: 'security.certificate',
+    group: 'Security',
+    title: 'Certificate',
+    needs: ['siteHealth.view'],
+    evaluate: certificateRule,
+  },
   // ---- Backups (audit_log) ----
   // Information only until backups are scheduled (R17): a row that could only fail until
   // then would drag the score for ever (README D5).

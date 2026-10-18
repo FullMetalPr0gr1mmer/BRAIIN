@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  PROBE_COLUMNS,
   ProbeRowSchema,
   probeFacts,
   type CertificateFacts,
@@ -13,6 +14,9 @@ import {
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { OutboundError } from '@/lib/http/outbound';
 import { apexOf } from './domain';
+import { THRESHOLDS, daysUntil } from './thresholds';
+
+export { THRESHOLDS, daysUntil } from './thresholds';
 import { fetchRdapBase, readDomainExpiry } from './rdap';
 import {
   uptimeProvider,
@@ -37,18 +41,6 @@ import {
 // jitter); the cron skips the probe until then. Six failures in a row make it `unknown`
 // ("the monitor has not answered"), which the bell carries.
 
-/** The thresholds (decision D10): the guide and the spec quote these. */
-export const THRESHOLDS = {
-  /** The domain row fails with this many days or fewer left. */
-  domainFailDays: 30,
-  /** The certificate row fails with this many days or fewer left. */
-  certificateFailDays: 14,
-  /** Uptime over 30 days below this percentage warns (on the screen only). */
-  uptimeWarnRatio: 99.9,
-  /** Failed reads in a row after which a probe reads `unknown` (an hour at 10 minutes). */
-  staleAfter: 6,
-} as const;
-
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
@@ -66,10 +58,6 @@ export const TIMING = {
   /** ± this share of the backoff, so failing probes do not retry in step. */
   backoffJitter: 0.2,
 } as const;
-
-/** The columns a run reads and a screen reads. */
-export const PROBE_COLUMNS =
-  'kind,state,facts,read_ok,failures,checked_at,ok_at,next_at,state_since';
 
 /** What a probe's attempt produced. */
 export type ProbeOutcome =
@@ -153,11 +141,6 @@ const record = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-
-/** Whole days from now until an instant (negative once it has passed). */
-export function daysUntil(at: string, now: Date): number {
-  return Math.floor((Date.parse(at) - now.getTime()) / DAY);
-}
 
 /** The uptime state of a reading: down fails, under 99.9% warns. */
 export function uptimeState(reading: Pick<UptimeReading, 'monitors' | 'ratio30'>): ProbeState {
