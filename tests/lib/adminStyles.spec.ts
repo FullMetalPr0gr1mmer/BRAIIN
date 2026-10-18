@@ -409,7 +409,6 @@ describe('admin.css keeps the hooks the markup renders', () => {
       // The leads screens (C4b): their three pages, and no other.
       expect(pagesFor('leads.css')).toEqual([
         'src/pages/admin/leads/[id].astro',
-        'src/pages/admin/leads/board.astro',
         'src/pages/admin/leads/index.astro',
       ]);
       // The sign-in screens (F7) render login.css's classes in their pages and in the shell

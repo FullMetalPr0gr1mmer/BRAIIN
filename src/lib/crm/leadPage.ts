@@ -5,25 +5,12 @@ import { getRow } from '@/lib/admin/crud';
 import { writeAudit } from '@/lib/admin/audit';
 import { LEAD_WRITE_COLUMNS, stripSensitive } from '@/lib/admin/leadFields';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
-import {
-  readLeadBoard,
-  readLeadList,
-  readLeadSummary,
-  type BoardColumn,
-  type LeadPage,
-  type LeadSummaryAnswer,
-} from './leadReads';
-import {
-  boardQueryOf,
-  listQueryOf,
-  neighboursQueryOf,
-  summaryQueryOf,
-  type LeadFilters,
-} from './leadUrl';
+import { readLeadList, readLeadSummary, type LeadPage, type LeadSummaryAnswer } from './leadReads';
+import { listQueryOf, neighboursQueryOf, summaryQueryOf, type LeadFilters } from './leadUrl';
 import { stageTone, type LeadEvent } from './leadView';
 
-// The leads pages' server render (Admin v2 C4b): what /admin/leads, /admin/leads/board and
-// /admin/leads/[id] read before their islands hydrate, so each page is complete without
+// The leads pages' server render (Admin v2 C4b): what /admin/leads and /admin/leads/[id] read
+// before their islands hydrate (the board, C4c, adds its own), so each page is complete without
 // JavaScript and the island starts from it. The page has already refused any role without
 // `leads.manage` (and read nothing then); everything here runs as the caller, for the
 // caller's tenant, so RLS, the live check and the column grants decide again.
@@ -32,7 +19,6 @@ import { stageTone, type LeadEvent } from './leadView';
 // count of round trips on top of the layout's shell:
 //   list     frame 4 (stages, people, disciplines, services) + summary 1, 2 when ranged
 //            + list 1 + its interest labels up to 2               = 8, 9 ranged
-//   board    frame 4 + board 1 + its labels up to 2               = 7
 //   detail   stages, people, the lead, its labels up to 2, the neighbours, the first events,
 //            the service's id (services.write holders), the view's audit row = 9
 // Never a gated column, a note, a score reason or a decrypted value: the contact details and
@@ -208,17 +194,6 @@ export async function readLeadsListInitial(
     readLeadList(sb, auth.tenantId, listQueryOf(filters, now)).catch(() => null),
   ]);
   return { summary, page };
-}
-
-/** The board's first view for the address's filters (no search: the island posts that). */
-export async function readBoardInitial(
-  sb: SupabaseClient,
-  auth: AuthContext,
-  filters: LeadFilters,
-  now: Date,
-): Promise<BoardColumn[] | null> {
-  const { perStage, ...rest } = boardQueryOf(filters, now);
-  return readLeadBoard(sb, auth.tenantId, { ...rest, per_stage: perStage }).catch(() => null);
 }
 
 /** Previous and Next in the list's order and filter (public.lead_neighbours, decision D8). */

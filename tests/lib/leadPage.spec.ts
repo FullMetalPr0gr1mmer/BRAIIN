@@ -20,8 +20,7 @@ vi.mock('@/lib/admin/audit', () => ({
 }));
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 
-const { readLeadDetail, readLeadsListInitial, readLeadsFrame, readBoardInitial } =
-  await import('@/lib/crm/leadPage');
+const { readLeadDetail, readLeadsListInitial, readLeadsFrame } = await import('@/lib/crm/leadPage');
 const { DEFAULT_LEAD_FILTERS } = await import('@/lib/crm/leadUrl');
 
 const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -158,7 +157,7 @@ describe('a lead’s page', () => {
   });
 });
 
-describe('the list and the board', () => {
+describe('the list', () => {
   it('the list reads the KPIs for the range and page 1 for the filters, safe fields only', async () => {
     const rec = fresh();
     const initial = await readLeadsListInitial(
@@ -178,19 +177,6 @@ describe('the list and the board', () => {
     // A whole range: the range and the same span before it.
     expect(rec.rpcs.filter((r) => r.fn === 'lead_summary')).toHaveLength(2);
     expect(initial.page?.rows[0]).not.toHaveProperty('email');
-  });
-
-  it('the board asks for 50 a column and no chip, sort or page', async () => {
-    const rec = fresh();
-    await readBoardInitial(
-      stub(rec),
-      auth,
-      { ...DEFAULT_LEAD_FILTERS, chip: { kind: 'spam' } },
-      NOW,
-    );
-    expect(rec.rpcs.find((r) => r.fn === 'leads_board')!.args['p_filter']).toEqual({
-      per_stage: 50,
-    });
   });
 
   it('the frame reads stages, people and the published disciplines and services', async () => {

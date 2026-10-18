@@ -754,7 +754,6 @@ describe('the guides say only what the admin does', () => {
       'Over response time',
       'Unread',
       'Spam',
-      'Pipeline',
       'Move to…',
       'Previous',
       'Next',
