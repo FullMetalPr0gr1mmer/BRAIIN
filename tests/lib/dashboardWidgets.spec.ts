@@ -369,8 +369,12 @@ describe('the loaders read only what the role sees', () => {
 /** The middleware's reads before the page runs: the session check (getUser), the profile row
  *  it is held to, and the identity row the layout renders. */
 const MIDDLEWARE = 3;
-/** What the budget test measures; docs/admin-v2/as-built/U1.md records the same figures. */
-const MEASURED = { loadDashboard: 24, total: 34 };
+/**
+ * What the budget test measures; docs/admin-v2/as-built/U1.md records U1's figures (24, 34)
+ * and docs/admin-v2/as-built/G2.md the two reads G2 added: the health widget's readings
+ * (health_probes, through loadHealthSummary) and the bell's health source in the shell.
+ */
+const MEASURED = { loadDashboard: 25, total: 36 };
 
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
   // A real request has one clock: the dashboard's "Going live today" and the bell both ask

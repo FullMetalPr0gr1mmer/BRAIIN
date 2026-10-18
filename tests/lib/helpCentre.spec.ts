@@ -78,6 +78,12 @@ function articleSet(): { file: string; set: unknown[] } {
 }
 
 const { file: SET_FILE, set: RAW_SET } = articleSet();
+
+/**
+ * The restatement G2's 0067 was built from (w3 corrections rule 1): the latest set on main
+ * when it merges. Re-based with scratchpad/hs_rebase.py when a sibling restates it first.
+ */
+const G2_PREVIOUS_SET = '0061_page_password.sql';
 const SET: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
 
 /** Every text of a guide, in one language or both. */
@@ -495,16 +501,17 @@ describe('the guides say only what the admin does', () => {
     expect(guide('website-stats', 'ar')).toContain('كل 15 دقيقة');
   });
 
-  it('site health is described as the score, the rollup and the tabs do it (U2)', () => {
+  it('site health is described as the score, the rollup and the tabs do it (U2, G2)', () => {
     expect(source('src/lib/admin/health/vitals.ts')).toContain('HEALTH_WINDOW_DAYS = 28');
-    expect(source('src/lib/admin/health/score.ts')).toContain('Uptime is not measured here yet.');
+    // U2's "Uptime is not measured here yet." left with G2: the score says why uptime is out.
+    expect(source('src/lib/admin/health/score.ts')).not.toContain('Uptime is not measured');
+    expect(everything('en')).not.toContain('Uptime is not measured here yet.');
     const migration = source('supabase/migrations/0052_stats_health_rollups.sql');
     expect(migration).toContain("cron.schedule('rollup-vitals', '7 * * * *'");
     expect(migration).toMatch(/v\.day < \(pg_catalog\.now\(\) at time zone 'UTC'\)::date - 400;/);
     const en = guide('site-health-and-logs', 'en');
-    expect(en).toContain('The score is half speed and half checklist');
+    expect(en).toContain('until then it is half speed and half checklist');
     expect(en).toContain('real visits over the last 28 days');
-    expect(en).toContain('Uptime is not measured here yet.');
     expect(en).toContain('added up every hour and kept 400 days');
     expect(en).toContain('Lab scores run in CI on every change');
     expect(guide('site-health-and-logs', 'ar')).toContain('آخر 28 يومًا');
@@ -544,7 +551,7 @@ describe('the guides say only what the admin does', () => {
       expect(tip1!.t).toBe('tip');
     }
     expect(guide('site-health-and-logs', 'en')).toContain(
-      'The score is half speed and half checklist',
+      'until then it is half speed and half checklist',
     );
     expect(guide('site-health-and-logs', 'en')).toContain(
       'names the person, former members included',
@@ -582,7 +589,7 @@ describe('the guides say only what the admin does', () => {
     expect(guide('website-stats', 'en')).toContain('Pick 7, 30 or 90 days at the top');
     expect(guide('website-stats', 'en')).toContain('Raw visit records are kept 90 days');
     expect(guide('site-health-and-logs', 'en')).toContain(
-      'The score is half speed and half checklist',
+      'until then it is half speed and half checklist',
     );
     expect(guide('site-health-and-logs', 'en')).toContain(
       'names the person, former members included',
@@ -645,6 +652,112 @@ describe('the guides say only what the admin does', () => {
     const dash = u1.find((a) => a.slug === 'your-dashboard')!;
     expect(dash.screens).toEqual(['/admin']);
     expect(dash.caps).toEqual([]);
+  });
+
+  it('G2 (0067) restates U14b’s set (0061) and changes only site-health-and-logs', () => {
+    // Production applies 0061 then 0067, so 0067's set must carry every other guide as 0061
+    // left it, byte for byte; the site health guide keeps its slug, title, caps and screens.
+    const setOf = (file: string) => {
+      const sql = source(`${MIGRATIONS}/${file}`);
+      return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
+    };
+    const base = setOf(G2_PREVIOUS_SET);
+    const g2 = setOf('0067_health_probes.sql');
+    expect(g2.map((a) => a.slug)).toEqual(base.map((a) => a.slug));
+    for (const article of base.filter((a) => a.slug !== 'site-health-and-logs')) {
+      expect(
+        g2.find((a) => a.slug === article.slug),
+        article.slug,
+      ).toEqual(article);
+    }
+    const before = base.find((a) => a.slug === 'site-health-and-logs')!;
+    const after = g2.find((a) => a.slug === 'site-health-and-logs')!;
+    expect({ ...after, body: null, minutes: null }).toEqual({
+      ...before,
+      body: null,
+      minutes: null,
+    });
+    expect(after.caps).toEqual(['siteHealth.view', 'logs.view', 'audit.view']);
+    expect(after.screens).toEqual(['/admin/site-health', '/admin/audit']);
+    for (const lang of ['en', 'ar'] as const) {
+      const [p0, ol0, tip0] = before.body[lang];
+      const [p1, ol1, tip1] = after.body[lang];
+      expect(p1, lang).toEqual(p0);
+      expect(tip1, lang).toEqual(tip0);
+      const items0 = ol0!.x as string[];
+      const items1 = ol1!.x as string[];
+      // The score's item rewritten, the checklist's kept; then the Uptime card, the Security
+      // tab and the bell; then Speed, Errors and the activity log's two, as 0061 left them.
+      expect(items1).toHaveLength(9);
+      expect(items1[1], lang).toBe(items0[1]);
+      expect(items1.slice(5), lang).toEqual(items0.slice(2));
+      expect(items1[0], lang).not.toBe(items0[0]);
+    }
+  });
+
+  it('site health v2 is described as the score, the schedule and the probes do it (G2)', async () => {
+    const { SCORE_WEIGHTS, uptimePoints } = await import('@/lib/admin/health/score');
+    const { THRESHOLDS } = await import('@/lib/health/thresholds');
+    const { TIMING } = await import('@/lib/health/probes');
+    const { SCHEDULES } = await import('@/lib/cron/schedules');
+    const { HEALTH_JOBS } = await import('@/lib/cron/health');
+    const { HEALTH_CHECK_LIMITS } = await import('@/lib/admin/rateLimit');
+    const { dayState } = await import('@/lib/admin/health/uptime');
+    expect(SCORE_WEIGHTS).toEqual({ speed: 40, checks: 40, uptime: 20 });
+    expect(uptimePoints(100)).toBe(100);
+    expect(uptimePoints(99)).toBe(0);
+    expect(SCHEDULES['*/10 * * * *']).toBe(HEALTH_JOBS);
+    expect(THRESHOLDS.domainFailDays).toBe(30);
+    expect(THRESHOLDS.certificateFailDays).toBe(14);
+    // Six failed reads at 10 minutes: an hour.
+    expect(THRESHOLDS.staleAfter * 10).toBe(60);
+    expect(TIMING.domainEveryMs).toBeLessThanOrEqual(24 * 3_600_000);
+    expect(HEALTH_CHECK_LIMITS).toMatchObject({ perUser: 6, windowMinutes: 60 });
+    // The strip: up all day, down a few minutes (at most 1% of a day, 14.4 minutes), longer.
+    expect([dayState(100), dayState(99), dayState(98.99), dayState(null)]).toEqual([
+      'ok',
+      'dip',
+      'down',
+      'none',
+    ]);
+    const css = source('public/styles/admin/health.css');
+    expect(css).toMatch(/\.up__d\[data-state='ok'\] \{\s*background: var\(--ad-ok-text\)/);
+    expect(css).toMatch(/\.up__d\[data-state='dip'\] \{\s*background: var\(--ad-warn-text\)/);
+    expect(css).toMatch(/\.up__d\[data-state='down'\] \{\s*background: var\(--ad-err-text\)/);
+    // The screen's words the guide names.
+    expect(source('src/components/admin/screens/health/CheckNow.tsx')).toContain("'Check now'");
+    expect(source('src/components/admin/screens/health/UptimeCard.astro')).toContain(
+      'Card title="Uptime"',
+    );
+    expect(source('src/components/admin/ui/charts/ChartFigure.astro')).toContain('View as table');
+    expect(source('src/pages/admin/site-health.astro')).toContain("label: 'Security'");
+    expect(source('src/components/admin/screens/health/UptimeCard.astro')).toContain('Not set up.');
+    const en = guide('site-health-and-logs', 'en');
+    expect(en).toContain('the score weighs speed 40%, the checklist 40% and uptime 20%');
+    expect(en).toContain('counts in full at 100% and not at all at 99% or less');
+    expect(en).toContain('its readings arrive here every 10 minutes');
+    expect(en).toContain('green when the site was up all day');
+    expect(en).toContain('red when it was down for more than 14 minutes');
+    expect(en).toContain('Days run midnight to midnight in Riyadh');
+    expect(en).toContain('Check now asks for a fresh reading at once, up to 6 times an hour');
+    expect(en).toContain('the card says Not set up and the score leaves uptime out');
+    expect(en).toContain('about once a day');
+    expect(en).toContain('when 30 days or fewer are left');
+    expect(en).toContain('when 14 days or fewer are left');
+    expect(en).toContain('has not answered for an hour');
+    const ar = guide('site-health-and-logs', 'ar');
+    for (const fact of [
+      '40%',
+      '20%',
+      '10 دقائق',
+      '90 يومًا',
+      '14 دقيقة',
+      '6 مرات',
+      '30 يومًا',
+      '14 يومًا',
+    ])
+      expect(ar, fact).toContain(fact);
+    expect(ar).toContain('بتوقيت الرياض');
   });
 
   it('the dashboard guide says what the dashboard does (U1)', async () => {

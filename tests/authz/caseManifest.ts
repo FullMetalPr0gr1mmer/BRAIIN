@@ -81,6 +81,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'dashboard: team notes read',
   'dashboard: team notes save',
   'health: site health',
+  'health: site health check',
   'health: system logs clear',
   'health: system logs read',
   'help: help guide',

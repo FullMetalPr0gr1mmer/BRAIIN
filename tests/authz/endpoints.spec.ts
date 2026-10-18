@@ -44,6 +44,18 @@ vi.mock('@/lib/data/systemLog', () => ({
   writeSystemLog: async () => true,
 }));
 
+// Site health's Check now (Admin v2 G2) runs the probes for the launch tenant only: the stub
+// names the matrix's tenant, so allowed roles reach the runner (another tenant's admin gets
+// its 409 before any query). No test may reach the network: every outbound fetch rejects,
+// and the runner records the failed read instead.
+vi.mock('@/lib/data/tenant', async () => {
+  const { TENANT } = await import('./harness');
+  return { resolveLaunchTenantId: async () => TENANT };
+});
+vi.stubGlobal('fetch', async () => {
+  throw new TypeError('no network in the authz suite');
+});
+
 // ── The matrix ──────────────────────────────────────────────────────────────────
 
 describe('admin endpoints — {principal × capability} matrix', () => {
