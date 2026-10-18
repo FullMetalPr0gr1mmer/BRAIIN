@@ -251,6 +251,7 @@ Legend: ● full · ◐ limited/own · ○ none.
 | **Redirects & canonicals** | ● | ○ | ● | ○ |
 | Analytics — read dashboards | ● | ● | ● | ● |
 | Search analytics | ● | ○ | ● | ● |
+| Analytics goals — set | ● | ○ | ● | ○ |
 | AI Style-Finder — questions/styles editor | ● | ● | ○ | ○ |
 | AI Style-Finder — results/logic config | ● | ○ | ○ | ○ |
 | Exports — `export-csv` (leads/analytics/activity) | ● | ○ | ○ | ● |
@@ -273,13 +274,13 @@ Legend: ● full · ◐ limited/own · ○ none.
 // src/lib/authz/matrix.ts
 export const CAPS = ['content.read','content.write','content.publish','content.delete',
   'users.manage','settings.write','maintenance.write','integrations.write','seo.meta',
-  'redirects.write','analytics.read','search.analytics','exports.leads','exports.backup',
+  'redirects.write','analytics.read','search.analytics','analytics.goals','exports.leads','exports.backup',
   'leads.manage','leads.sensitive','media.write','media.delete','theme.write','logs.view',
   'logs.clear','audit.view','sitehealth.view','crm.erase'] as const;
 export const ROLE_CAPS: Record<AppRole, ReadonlySet<Cap>> = {
   admin: new Set(CAPS),
   content_creator: new Set(['content.read','content.write','content.publish','seo.meta','media.write','analytics.read']),
-  seo: new Set(['content.read','seo.meta','redirects.write','integrations.write','analytics.read','search.analytics','media.write']),
+  seo: new Set(['content.read','seo.meta','redirects.write','integrations.write','analytics.read','search.analytics','analytics.goals','media.write']),
   developer: new Set(['settings.write','maintenance.write','theme.write','analytics.read','search.analytics','media.write',
     'exports.leads','exports.backup','leads.manage','leads.sensitive','logs.view','audit.view','sitehealth.view']),
 };
@@ -425,7 +426,7 @@ Tenant predicate first in every policy and composite index. **§8.5 freshness me
 ## 9. CI/CD, Testing, Observability, DR & Notifications
 
 ### 9.1–9.5 Type safety, testing pyramid, per-role authz, CI/CD, a11y
-TypeScript strict; Zod single source. **The authz matrix (§9.3)** is byte-for-byte consistent with §3.4 and CLAUDE.md §5: `service.publish` = Admin+Content Creator; `read lead.budget/timeline` = Admin+Developer; `content.write` = Admin+Content Creator; `settings.write/export-backup` = Admin+Developer; `integrations.write/seo_meta/redirects.write` = Admin+SEO; `crm.erase` (erasing a lead, then a person's data) = Admin only; `audit_log.delete` = deny all. Plus the targeted regression tests: anon tenant fence, live-recheck, lead-PII, notify-lead 401, search safety, role-matrix snapshot, AI limits, audit chain. CI gate order mirrors pillars. Three isolated Supabase projects; no preview deployments — a PR builds the production Worker and dry-runs `wrangler deploy` (`deploy-preflight`), and the browser suites run against the built Worker under `wrangler dev`; only `main` deploys, from CI, after every gate (CLAUDE.md §2, deploys amendment). WCAG 2.2 AA blocking (axe + 4 targeted checks).
+TypeScript strict; Zod single source. **The authz matrix (§9.3)** is byte-for-byte consistent with §3.4 and CLAUDE.md §5: `service.publish` = Admin+Content Creator; `read lead.budget/timeline` = Admin+Developer; `content.write` = Admin+Content Creator; `settings.write/export-backup` = Admin+Developer; `integrations.write/seo_meta/redirects.write` = Admin+SEO; `crm.erase` (erasing a lead, then a person's data) = Admin only; `analytics.goals` (setting the website stats' goals) = Admin+SEO; `audit_log.delete` = deny all. Plus the targeted regression tests: anon tenant fence, live-recheck, lead-PII, notify-lead 401, search safety, role-matrix snapshot, AI limits, audit chain. CI gate order mirrors pillars. Three isolated Supabase projects; no preview deployments — a PR builds the production Worker and dry-runs `wrangler deploy` (`deploy-preflight`), and the browser suites run against the built Worker under `wrangler dev`; only `main` deploys, from CI, after every gate (CLAUDE.md §2, deploys amendment). WCAG 2.2 AA blocking (axe + 4 targeted checks).
 
 ### 9.6 Observability
 Operational telemetry (Sentry same-origin tunnel + `system_logs`, synthetics, `/healthz`) is legitimate-interest, PII-scrubbed, consent-independent. **Field web-vitals (RUM) is consent-gated** (carries `session_id`, `analytics` category) — client checks before `sendBeacon`, the same-origin Worker endpoint re-checks server-side (§4.12).
