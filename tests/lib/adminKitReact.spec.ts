@@ -509,12 +509,16 @@ describe('the kit screen’s island', () => {
     expect(out).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>.*SEO/s);
     expect(out).toContain('1 to 25 of 60');
     expect(out).toContain(KIT_ROWS[0]!.title);
+    // The island's KPI card (C4b): its figure, unit and the change pill's spoken words.
+    expect(out).toContain('<span class="stat-unit">50,000 SAR</span>');
+    expect(out).toContain('Up 20% vs the previous 7 days');
     for (const section of KIT_SECTIONS)
       expect(out).toContain(`aria-label="Reorder ${section.label}"`);
     expect(out).toContain('data-sortable-list="left"');
     expect(out).toContain('aria-label="Move Visits to the next list"');
-    // The modal, the two drawers, and (since F5a's Fields card) the media field's picker.
-    expect(out.match(/<dialog/g)).toHaveLength(4);
+    // The modal and the two drawers. The Fields card's media field mounts its picker on the
+    // first Choose, at the end of <body> (Admin v2 U4), so it is not in the server HTML.
+    expect(out.match(/<dialog/g)).toHaveLength(3);
     // Every sortable list's live region sits beside it, the drawer's inside its dialog
     // (the fourth is the Fields card's repeater, F5a).
     expect(out.match(/data-sortable-live=""/g)).toHaveLength(4);

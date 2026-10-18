@@ -26,7 +26,53 @@ export interface SweepRoute {
   kind: 'screen' | 'create' | 'edit';
   /** Edit screens: the list API whose first row supplies the id. */
   listApi?: string;
+  /**
+   * Edit screens with no resource config (EDIT_SAMPLES): the list API is a POST with this
+   * body (and the CSRF header), its first row supplying the id.
+   */
+  sample?: EditSample;
 }
+
+/**
+ * Edit screens with no resource config (the F0 harness extension, Admin v2 C4b): how the sweep
+ * finds a row to open. A resource's edit screen opens the first row of its GET list; these
+ * have no such list, so each names the POST that answers `data.rows[0].id`, the capability
+ * that route asks for, and a row the admin-setup project makes sure exists
+ * (tests/admin/samples.setup.ts). Never the legacy GET /api/admin/leads, which C14a removes.
+ */
+export interface EditSample {
+  api: string;
+  method: 'POST';
+  body: Readonly<Record<string, unknown>>;
+  cap: Capability;
+  /**
+   * How tests/admin/samples.setup.ts adds a row when the list answers none, as the admin: a
+   * POST through the real route (never a seed row: supabase/seed.sql also runs on staging,
+   * and a lead's contact details need ciphertext under the real key).
+   */
+  create: { api: string; body: Readonly<Record<string, unknown>> };
+}
+
+export const EDIT_SAMPLES: Readonly<Record<string, EditSample>> = {
+  '/admin/leads/[id]': {
+    api: '/api/admin/leads/query',
+    method: 'POST',
+    // The OLDEST lead, never the default newest: tests/admin/leads.e2e.ts adds leads and
+    // erases one while the sweep runs (fullyParallel), and its erased lead is the newest for a
+    // moment. The oldest is the sample row or a lead no test removes.
+    body: { limit: 1, sort: 'oldest' },
+    cap: 'leads.manage',
+    create: {
+      api: '/api/admin/leads',
+      body: {
+        name: 'Sample lead',
+        email: 'sample.lead@example.invalid',
+        message: 'A sample inquiry for the admin sweep.',
+        channel: 'unknown',
+      },
+    },
+  },
+};
 
 /**
  * The edit screens' lists the seed leaves EMPTY (supabase/seed.sql inserts no row into these
@@ -63,7 +109,9 @@ export interface LockedScreen {
 export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/users', api: '/api/admin/users', cap: 'users.manage' },
   { href: '/admin/applications', api: '/api/admin/applications', cap: 'applications.manage' },
-  { href: '/admin/leads', api: '/api/admin/leads', cap: 'leads.manage' },
+  // Admin v2 C4b: the leads list renders its first view on the server, so it refuses itself
+  // (a 403 and Refused.astro).
+  { href: '/admin/leads', api: '/api/admin/leads', cap: 'leads.manage', render: 'server' },
   { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view', render: 'server' },
   {
     href: '/admin/site-health',
@@ -140,7 +188,46 @@ export const EXTRA_LINKS: readonly NavTab[] = [
     label: 'Site health security',
     caps: ['siteHealth.view'],
   },
+  // The media library's in-page states (Admin v2 U4): the Videos tab, the "Needs alt text"
+  // filter and a search with no match (the empty state), for every role that opens it.
+  {
+    href: '/admin/media?tab=videos',
+    label: 'Media videos',
+    caps: ['media.write'],
+    access: ['full', 'meta'],
+  },
+  {
+    href: '/admin/media?alt=missing',
+    label: 'Media needing alt text',
+    caps: ['media.write'],
+    access: ['full', 'meta'],
+  },
+  {
+    href: '/admin/media?q=zzzz',
+    label: 'Media, no match',
+    caps: ['media.write'],
+    access: ['full', 'meta'],
+  },
+  // The leads list's states (Admin v2 C4b): the spam view (its chip pressed, the empty state,
+  // "Not spam" in the bulk bar), and a range with a filter (the KPIs' changes, the sub-line's
+  // "in the last 30 days").
+  { href: '/admin/leads?stage=spam', label: 'Leads, spam', caps: ['leads.manage'] },
+  {
+    href: '/admin/leads?range=30&assigned=none',
+    label: 'Leads, filtered',
+    caps: ['leads.manage'],
+  },
 ];
+
+/**
+ * Pages that only redirect (a 302 to another screen), so the sweep, which asks each page for
+ * its own 200, does not open them as screens. Each is checked by tests/lib/adminRoutes.spec.ts
+ * to redirect where it says, and by its screen's e2e. /admin/media/new: adding a picture is
+ * an upload now (U4, D4).
+ */
+export const REDIRECT_PAGES: Readonly<Record<string, string>> = {
+  '/admin/media/new': '/admin/media?upload=1',
+};
 
 /** Every screen of the menu: sidebar links, then their tabs, each once. */
 export function menuScreens(): NavTab[] {
@@ -175,6 +262,9 @@ export function pageFileFor(href: string, exists: Exists = existsSync): string {
 export function sweepRoutes(role: Role, exists: Exists = existsSync): SweepRoute[] {
   const links = [...menuScreens(), ...EXTRA_LINKS];
   const routes: SweepRoute[] = [];
+  // A filtered view of a screen (an extra such as /admin/media?tab=videos) derives the same
+  // create and edit screens as the screen itself: each is swept once.
+  const derived = new Set<string>();
   for (const link of links) {
     if (link.caps.length > 0 && !isVisible(role, link)) continue;
     pageFileFor(link.href, exists);
@@ -182,19 +272,48 @@ export function sweepRoutes(role: Role, exists: Exists = existsSync): SweepRoute
     routes.push({ path: link.href, pattern: base, kind: 'screen' });
 
     const author = link.caps[0];
-    if (author && ROLE_CAPS[role][author] === 'full' && hasPage(`${base}/new`, exists)) {
-      routes.push({ path: `${base}/new`, pattern: `${base}/new`, kind: 'create' });
+    const create = `${base}/new`;
+    if (
+      author &&
+      ROLE_CAPS[role][author] === 'full' &&
+      hasPage(create, exists) &&
+      !(create in REDIRECT_PAGES) &&
+      !derived.has(create)
+    ) {
+      derived.add(create);
+      routes.push({ path: create, pattern: create, kind: 'create' });
     }
-    if (hasPage(`${base}/[id]`, exists)) {
+    if (hasPage(`${base}/[id]`, exists) && !derived.has(`${base}/[id]`)) {
+      derived.add(`${base}/[id]`);
+      const sample = EDIT_SAMPLES[`${base}/[id]`];
       routes.push({
         path: `${base}/[id]`,
         pattern: `${base}/[id]`,
         kind: 'edit',
-        listApi: `/api${base}`,
+        listApi: sample ? sample.api : `/api${base}`,
+        ...(sample ? { sample } : {}),
       });
     }
   }
   return routes;
+}
+
+/** How a spec asks for the row an edit screen opens (see editRowRequest). */
+export type EditRowRequest =
+  | { method: 'GET'; url: string }
+  | { method: 'POST'; url: string; body: Readonly<Record<string, unknown>> };
+
+/**
+ * The one request that finds the row an edit screen opens, for every spec that opens one
+ * (sweep.e2e.ts, capture.e2e.ts): a resource's GET list with `?limit=1`, or, for an edit
+ * screen with no resource config, its sample's POST (EDIT_SAMPLES; the caller adds the CSRF
+ * header). Null for a screen that is not an edit screen. Its answer's `data.rows[0].id` is
+ * the row.
+ */
+export function editRowRequest(route: SweepRoute): EditRowRequest | null {
+  if (route.kind !== 'edit') return null;
+  if (route.sample) return { method: 'POST', url: route.sample.api, body: route.sample.body };
+  return { method: 'GET', url: `${route.listApi ?? ''}?limit=1` };
 }
 
 /**

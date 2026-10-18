@@ -83,7 +83,7 @@ const { file: SET_FILE, set: RAW_SET } = articleSet();
  * The restatement G2's 0067 was built from (w3 corrections rule 1): the latest set on main
  * when it merges. Re-based with scratchpad/hs_rebase.py when a sibling restates it first.
  */
-const G2_PREVIOUS_SET = '0061_page_password.sql';
+const G2_PREVIOUS_SET = '0065_help_leads_v2.sql';
 const SET: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
 
 /** Every text of a guide, in one language or both. */
@@ -288,16 +288,53 @@ describe('the guides say only what the admin does', () => {
     expect(route).toContain("action: 'export.activity.attempt'");
   });
 
-  it('SEO is not told it edits media details: the media editor needs media.write at full', () => {
+  it('media: every role edits alt text and tags; uploading, replacing and deleting depend on the role (U4)', () => {
+    // SEO holds media.write at 'meta': since U4 the library's drawer saves through the meta
+    // door for every role, and only the drawer calls it.
     expect(ROLE_CAPS.seo['media.write']).toBe('meta');
-    expect(source('src/lib/admin/resources/media.ts')).toContain("writeCap: 'media.write'");
-    // The meta-only route (/api/admin/media/meta/[id]) has no screen calling it yet.
-    for (const file of [...codeIn('src/components'), ...codeIn('src/lib/admin')]) {
-      expect(source(file), file).not.toMatch(/media\/meta/);
+    const callers = [...codeIn('src/components'), ...codeIn('src/lib/admin')].filter((file) =>
+      /`\/api\/admin\/media\/meta\/\$\{/.test(source(file)),
+    );
+    expect(callers).toEqual(['src/components/admin/screens/media/MediaDrawer.tsx']);
+    expect(source('src/pages/api/admin/media/meta/[id].ts')).toContain("access: ['full', 'meta']");
+    const en = guide('media-library', 'en');
+    expect(en).toContain('If you do not see Upload, you can still change alt text and tags.');
+    expect(en).toContain('Uploading, replacing and deleting depend on your role.');
+    expect(en).toContain('Only an Admin can delete a picture');
+    expect(ROLES.filter((role) => ROLE_CAPS[role]['media.hardDelete'] === 'full')).toEqual([
+      'admin',
+    ]);
+    expect(guide('media-library', 'ar')).toContain('الرفع والاستبدال والحذف بحسب دورك');
+  });
+
+  it('media: the numbers the guide gives are the code’s (U4)', async () => {
+    const media = await import('@schemas/media');
+    const { MEDIA_UPLOAD_LIMITS } = await import('@/lib/admin/rateLimit');
+    const en = guide('media-library', 'en');
+    const ar = guide('media-library', 'ar');
+    expect(media.MEDIA_UPLOAD_MAX_BYTES).toBe(20_000_000);
+    expect(en).toContain('up to 20 MB each');
+    expect(ar).toContain('حتى 20 MB');
+    expect(media.MEDIA_LONG_EDGE_PX).toBe(2560);
+    expect(en).toContain('at most 2,560 pixels');
+    expect(ar).toContain('2,560 بكسل');
+    expect([MEDIA_UPLOAD_LIMITS.perUser, MEDIA_UPLOAD_LIMITS.perTenant]).toEqual([50, 100]);
+    expect(MEDIA_UPLOAD_LIMITS.windowMinutes).toBe(24 * 60);
+    expect(en).toContain('50 pictures a day, and the whole team 100');
+    expect(ar).toContain('50 صورة');
+    // The refusals the guide names are the sniffer's (src/lib/media/sniff.ts).
+    for (const kind of ['SVG', 'GIF', 'HEIC', 'AVIF']) expect(en).toContain(kind);
+    // The labels it names are the screen's.
+    const screen = [
+      source('src/components/admin/screens/media/MediaLibrary.tsx'),
+      source('src/components/admin/screens/media/MediaDrawer.tsx'),
+      source('src/components/admin/fields/MediaField.tsx'),
+      source('src/pages/admin/media/index.astro'),
+    ].join('\n');
+    for (const label of ['Upload', 'Replace file', 'Used in', 'Needs alt text', 'Choose…']) {
+      expect(screen, label).toContain(label);
     }
-    expect(everything('en')).not.toMatch(/edit media details|SEO role can change an asset/i);
-    expect(everything('ar')).not.toContain('وتعديل بيانات الوسائط');
-    expect(everything('ar')).not.toContain('يستطيع دور SEO تغيير بيانات الملف');
+    expect(en).toContain('about two hours');
   });
 
   it('the help button is drawn as an i in a circle, and the guides call it that', () => {
@@ -654,8 +691,105 @@ describe('the guides say only what the admin does', () => {
     expect(dash.caps).toEqual([]);
   });
 
-  it('G2 (0067) restates U14b’s set (0061) and changes only site-health-and-logs', () => {
-    // Production applies 0061 then 0067, so 0067's set must carry every other guide as 0061
+  it('U4 (0064) restates U14b’s set (0061) and changes only the media-library guide', () => {
+    // Production applies 0061 then 0064, so 0064's set must carry every guide 0061 seeds,
+    // byte for byte, but the one U4 rewrote (the library as it now is), in the same place.
+    const setOf = (file: string) => {
+      const sql = source(`${MIGRATIONS}/${file}`);
+      return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
+    };
+    const base = setOf('0061_page_password.sql');
+    const u4 = setOf('0064_media_library.sql');
+    expect(u4.map((a) => a.slug)).toEqual(base.map((a) => a.slug));
+    for (const article of base.filter((a) => a.slug !== 'media-library')) {
+      expect(
+        u4.find((a) => a.slug === article.slug),
+        article.slug,
+      ).toEqual(article);
+    }
+    const before = base.find((a) => a.slug === 'media-library')!;
+    const after = u4.find((a) => a.slug === 'media-library')!;
+    expect(after.body).not.toEqual(before.body);
+    expect({ ...after, body: null, minutes: null }).toEqual({
+      ...before,
+      body: null,
+      minutes: null,
+    });
+    expect(after.minutes).toBe(3);
+  });
+
+  it('C4b (0065) restates U4’s set (0064) and changes only the working-with-leads guide', () => {
+    // Production applies 0064 then 0065, so 0065's set must carry every guide 0064 seeds,
+    // byte for byte, but the one C4b rewrote (the leads screens), in the same place.
+    const setOf = (file: string) => {
+      const sql = source(`${MIGRATIONS}/${file}`);
+      return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
+    };
+    const base = setOf('0064_media_library.sql');
+    const c4b = setOf('0065_help_leads_v2.sql');
+    expect(c4b.map((a) => a.slug)).toEqual(base.map((a) => a.slug));
+    for (const article of base.filter((a) => a.slug !== 'working-with-leads')) {
+      expect(
+        c4b.find((a) => a.slug === article.slug),
+        article.slug,
+      ).toEqual(article);
+    }
+    const before = base.find((a) => a.slug === 'working-with-leads')!;
+    const after = c4b.find((a) => a.slug === 'working-with-leads')!;
+    expect(after.body).not.toEqual(before.body);
+    expect({ ...after, body: null, minutes: null }).toEqual({
+      ...before,
+      body: null,
+      minutes: null,
+    });
+    expect(after.minutes).toBe(4);
+  });
+
+  it('the leads guide names the controls the leads screens draw (C4b)', () => {
+    const en = guide('working-with-leads', 'en');
+    const screens = codeIn('src/components/admin/screens/leads').map(source).join('\n');
+    const pages = ['index.astro', '[id].astro']
+      .map((page) => source(`src/pages/admin/leads/${page}`))
+      .join('\n');
+    const drawn = [
+      screens,
+      pages,
+      source('src/lib/admin/nav/crm.ts'),
+      source('src/lib/crm/leadView.ts'),
+    ].join('\n');
+    for (const control of [
+      'Over response time',
+      'Unread',
+      'Spam',
+      'Move to…',
+      'Previous',
+      'Next',
+      'Reveal contact details',
+      'Email',
+      'Call',
+      'WhatsApp',
+      'Log contact',
+      'Add lead manually',
+      'Export CSV',
+      'More actions',
+    ]) {
+      expect(en, control).toContain(control);
+      expect(drawn, control).toContain(control);
+    }
+    // The over-response words are the list's own (leadView.ts), and the limits are the routes'.
+    expect(source('src/lib/crm/leadView.ts')).toContain("SLA_LABEL = 'Over response time'");
+    expect(en).toContain('up to 60 an hour');
+    expect(source('src/lib/admin/rateLimit.ts')).toMatch(/PII_REVEAL_LIMITS[^}]*perUser: 60,/);
+    expect(en).toContain('at most 80 leads with contact details');
+    expect(source('src/lib/crm/exportRead.ts')).toContain('EXPORT_ROW_CAP = { pii: 80,');
+    // Not the old panel's words any more, in either language.
+    expect(en).not.toContain('Reveal contact details and notes');
+    expect(guide('working-with-leads', 'ar')).not.toContain('Reveal contact details and notes');
+    expect(guide('working-with-leads', 'ar')).toContain('Move to…');
+  });
+
+  it('G2 (0067) restates C4b’s set (0065) and changes only site-health-and-logs', () => {
+    // Production applies 0065 then 0067, so 0067's set must carry every other guide as 0065
     // left it, byte for byte; the site health guide keeps its slug, title, caps and screens.
     const setOf = (file: string) => {
       const sql = source(`${MIGRATIONS}/${file}`);
@@ -687,7 +821,7 @@ describe('the guides say only what the admin does', () => {
       const items0 = ol0!.x as string[];
       const items1 = ol1!.x as string[];
       // The score's item rewritten, the checklist's kept; then the Uptime card, the Security
-      // tab and the bell; then Speed, Errors and the activity log's two, as 0061 left them.
+      // tab and the bell; then Speed, Errors and the activity log's two, as 0065 left them.
       expect(items1).toHaveLength(9);
       expect(items1[1], lang).toBe(items0[1]);
       expect(items1.slice(5), lang).toEqual(items0.slice(2));

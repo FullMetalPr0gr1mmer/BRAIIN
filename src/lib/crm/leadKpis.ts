@@ -5,8 +5,8 @@
 // Counts and sums only, never a lead. Two rules from the design:
 //   • Conversion ("Won of all leads") is won ÷ all leads in the range, worked out here,
 //     and null when there are no leads (no invented 0%).
-//   • Deltas are measured against the previous period of equal length, and only when a
-//     range is set: the route reads that period with a second call, and without a range
+//   • Deltas are measured against the same elapsed span one range earlier (C4b), and only
+//     when a range is set: the route reads that period with a second call, and without a range
 //     there is no `previous` at all.
 
 /** The counts lead_summary answers, 0036's first. Anything else it sends is dropped. */
@@ -88,15 +88,21 @@ export function readPerStage(raw: unknown): Record<string, number> {
   return out;
 }
 
+const DAY_MS = 86_400_000;
+
 /**
- * The period of equal length just before [from, to): its end is `from`, so the two never
- * share a lead (lead_summary's `to` is exclusive). Null when the range is not a range.
+ * The period [from, to) is compared with: the same span moved back by its length in whole
+ * days, so a range that runs from midnight to now meets the same stretch of the days before
+ * it, ending at the same time of day (C4b; a whole-day range meets the days just before it).
+ * The two never share a lead (lead_summary's `to` is exclusive). Null when the range is not
+ * a range.
  */
 export function previousPeriod(from: string, to: string): { from: string; to: string } | null {
   const start = Date.parse(from);
   const end = Date.parse(to);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
-  return { from: new Date(start - (end - start)).toISOString(), to: new Date(start).toISOString() };
+  const shift = Math.ceil((end - start) / DAY_MS) * DAY_MS;
+  return { from: new Date(start - shift).toISOString(), to: new Date(end - shift).toISOString() };
 }
 
 /**

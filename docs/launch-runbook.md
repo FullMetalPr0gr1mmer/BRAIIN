@@ -1248,7 +1248,7 @@ row goes, then its object, unless another row still names that file (it stays, a
 says `fileKept`). A replace leaves the old object for the next daily sweep (objects older than
 an hour that no row names, and only those the Worker wrote: a file put in the bucket by hand, or
 one it held before 0045, is never swept, and goes only by hand), unless it is sent with `removePrevious: true` in its details (the
-API today; U4's library dialog will offer it), which deletes the old object at once. A file
+library's Replace file offers it since U4: "Remove the old file from the web now"), which deletes the old object at once. A file
 whose removal failed and an upload whose row was never written also go at the sweep.
 
 **How long a removed file stays on the web (the real window, PDPL erasure included).** Removing
@@ -1263,6 +1263,17 @@ was removed and stops being served within two hours. Shortening that needs Supab
 (Pro plan) and a purge of the `/_image` URLs (O-3); it is recorded in the Admin v2 deviations
 register. The Supabase dashboard's Storage browser removes an object by hand, with the same
 window.
+
+**The library (migration 0064, Admin v2 U4).** `/admin/media` lists through
+`public.media_library` (SECURITY INVOKER, `authenticated` only) and restates the help set with
+the media guide rewritten. Expand only: push 0064 (`--dry-run` first; only 0064 listed), then
+merge. Its postconditions refuse a push that left the function a definer, without its
+`search_path` or 500 ms timeout, callable by anon, PUBLIC or the service role, or a tenant
+without the rewritten guide. Read-back: the function's grants and config, the empty answer
+without a JWT, and every tenant's `media-library` guide. **Cost to watch:** the drawer shows an
+uploaded picture at 640 px (`PREVIEW_WIDTH`, a width `/_image` already admits), one more
+transformation per picture opened, cached an hour; the grid's 320 px thumbnails were already
+counted above.
 
 ### 6j. Page visibility — first edge snapshot after deploy (migration 0057, Admin v2 U14a)
 

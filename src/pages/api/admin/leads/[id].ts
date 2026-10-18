@@ -2,10 +2,8 @@ import { z } from 'zod';
 import { LeadPatchSchema, VERSIONED_LEAD_FIELDS } from '@schemas/crm';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { NotFoundError, ValidationError } from '@/lib/admin/errors';
-import { AuthorizationError } from '@/lib/authz/errors';
 import { getRow, updateRow } from '@/lib/admin/crud';
 import { LEAD_WRITE_COLUMNS, canSeeLeadPii, stripSensitive } from '@/lib/admin/leadFields';
-import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { LEAD_CONSTRAINTS, leadPatchValues, leadWriteError } from '@/lib/crm/leadWrite';
 import { LEGACY_REVEAL_FIELDS, revealLead } from '@/lib/crm/reveal';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
@@ -71,29 +69,19 @@ export const GET = defineAdminRoute({
 //   • isStarred, read and logContact never move it (a star or a read mark must not turn
 //     every open lead into a conflict); the database stamps the read mark and the contact
 //     with its own clock and the session's person.
-//   • status and internalNotes are the legacy panel's, kept until C4 moves it to the
-//     pipeline and the notes thread. internal_notes is a leads.pii column, so writing it
-//     adds that capability and a live recheck.
+//   • status is the legacy panel's, kept for an old tab until C14. internalNotes is refused
+//     by the schema since C4b (a 422 naming the field): notes are a thread, written through
+//     POST /api/admin/leads/[id]/notes, audited, never by rewriting the legacy field.
 export const PATCH = defineAdminRoute({
   cap: 'leads.manage',
   input: LeadPatchSchema,
   handler: async ({ auth, sb, input, params, audit }) => {
     const id = requireId(params);
-
-    if (input.internalNotes !== undefined) {
-      // `leads.manage` alone moves a lead; it does not write the private commentary
-      // attached to a named person.
-      await liveRecheck(auth);
-      if (!canSeeLeadPii(auth.role)) {
-        throw new AuthorizationError('leads.pii', `role '${auth.role}' cannot write notes`);
-      }
-    }
-
     const values = leadPatchValues(input, new Date());
     const versioned = VERSIONED_LEAD_FIELDS.some((field) => input[field] !== undefined);
 
     // The row comes back with the safe and pipeline columns only, whoever asks: the
-    // caller's client cannot read the gated ones (0033), and writing notes needs no read.
+    // caller's client cannot read the gated ones (0033).
     // `as unknown as` below because the select list is a shared constant, and PostgREST's
     // typings parse that string at the TYPE level: a non-literal degrades to an error type.
     let row: Record<string, unknown>;
@@ -124,7 +112,7 @@ export const PATCH = defineAdminRoute({
       row = data as unknown as Record<string, unknown>;
     }
 
-    // Field names, the legacy status and the stage id: never notes, tags or values.
+    // Field names, the legacy status and the stage id: never tags or values.
     audit({
       action: 'lead.update',
       entityType: 'lead',

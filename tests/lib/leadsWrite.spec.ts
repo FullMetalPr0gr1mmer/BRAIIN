@@ -273,16 +273,36 @@ describe('PATCH /api/admin/leads/[id]', () => {
     expect(updates).toEqual([]);
   });
 
-  it('the legacy panel still saves a status and its notes (the expand window)', async () => {
-    const res = await patch({ status: 'in_progress', internalNotes: 'Sent the proposal' });
+  it('a legacy status from an old tab is still saved (the expand window, until C14)', async () => {
+    const res = await patch({ status: 'in_progress' });
     expect(res.status).toBe(200);
-    expect(updates[0]!.values).toEqual({
-      status: 'in_progress',
-      internal_notes: 'Sent the proposal',
-    });
-    // Notes are a leads.pii column: the profile is rechecked first.
-    expect(events.indexOf('svc:profiles')).toBeLessThan(events.indexOf('rls:update:leads'));
+    expect(updates[0]!.values).toEqual({ status: 'in_progress' });
   });
+
+  it.each(['admin', 'developer'] as const)(
+    'refuses the legacy notes field for %s with a 422 naming it, and writes nothing (C4b)',
+    async (role) => {
+      liveProfile = { role, is_active: true, locked_until: null };
+      for (const body of [
+        { internalNotes: 'Sent the proposal' },
+        { status: 'in_progress', internalNotes: 'Sent the proposal' },
+        { internalNotes: null },
+        { version: 3, stageId: STAGE, internalNotes: '' },
+      ]) {
+        const res = await patch(body, role);
+        expect(res.status, JSON.stringify(body)).toBe(422);
+        const answer = (await res.json()) as { issues?: { path: string; message: string }[] };
+        expect(answer.issues).toContainEqual({
+          path: 'internalNotes',
+          message: 'Notes are a thread now. Add a note instead.',
+        });
+      }
+      // Nothing was written, read again or audited.
+      expect(updates).toEqual([]);
+      expect(audits).toEqual([]);
+      expect(events.filter((e) => e.startsWith('rls:update'))).toEqual([]);
+    },
+  );
 });
 
 describe('POST /api/admin/leads/bulk', () => {

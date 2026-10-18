@@ -81,6 +81,12 @@ describe('conversion and deltas', () => {
       from: '2026-10-03T21:00:00.000Z',
       to: '2026-10-10T21:00:00.000Z',
     });
+    // A range that runs to now (C4b): moved back by its whole days, so the earlier one ends
+    // at the same time of day and is exactly as long.
+    expect(previousPeriod('2026-10-10T21:00:00.000Z', '2026-10-17T12:00:00.000Z')).toEqual({
+      from: '2026-10-03T21:00:00.000Z',
+      to: '2026-10-10T12:00:00.000Z',
+    });
     expect(previousPeriod('2026-10-17T21:00:00Z', '2026-10-10T21:00:00Z')).toBeNull();
     expect(previousPeriod('nope', '2026-10-10T21:00:00Z')).toBeNull();
   });

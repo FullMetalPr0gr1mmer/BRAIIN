@@ -36,6 +36,12 @@
   - no upload more than 100 times as long as it is wide, either way (`MEDIA_MAX_ASPECT`): thinner, every width the site renders it at rounds its height to 0 and `/_image` admits no URL for it (U3 review);
   - a deleted or replaced upload stays reachable for up to about two hours after its file is removed, not "at once": Supabase's CDN copy and the `/_image` derivative live an hour each, the Free plan cannot purge the first, and purging the second needs the zone's purge token; pages cached before the change keep the old image URL until purged (owner: O-3 for the purge token, the Supabase plan for Smart CDN; runbook §6i; U3 review);
   - no local blob previews (CSP).
+  - the picker lists images only, with no Videos segment: no picture field stores a video row, and a site clip is chosen in the clip field (D2, U4); the library keeps Images | Videos, the Videos tab read-only (EXC-009);
+  - registering an external or built-in file by its path is gone from the screens: `/admin/media/new` is a 302 to the library's upload (`?upload=1`), and the `POST /api/admin/media` route and its case stay (D4, U4);
+  - a picture's file name is read-only in the drawer, set at upload or replace: `update_media_meta()` has no write path for it (D7, U4);
+  - a tile's name and size sit on a solid midnight band, not the prototype's transparent-to-70% gradient, whose contrast depends on the photo and cannot be proven AA (D15, U4);
+  - the storage meter counts the media bucket only, against the plan's 1 GB that the CV bucket shares (D13, U4; the quota figure is the owner's to confirm);
+  - the storage meter speaks binary units ("214 MB of 1 GB": 1 MB = 1,048,576 B, as the Supabase plan counts its quota), where P-10 counts KB as 1,000 B; a tile's size badge keeps P-10's units (U4 review);
 - **Theme**:
   - no Google/Adobe font links or raw font uploads; the curated self-hosted catalogue replaces them (CSP, PDPL, font budget);
   - no Custom CSS;
@@ -56,6 +62,14 @@
   - contact details behind an audited reveal; no budget in lists;
   - a lead's score shows as a number until the reveal: its reasons come with the contact details, through the audited reveal, because three of them (a budget given, a budget over 200k, a timeline given) name the budget band and the timeline (C4a, D7). The number itself is readable by every lead worker (all of whom hold `leads.pii`) and, with the scoring points, can imply the band: with the default points any score above 65 includes a budget over 200k;
   - the list's default order is starred first, then newest; "Newest" stays newest only, so the dashboard's latest leads do not move (C4a, D6);
+  - a lead's stage changes through "Move to…", a short list of the other stages, never a native select (Windows browsers fire `change` on each arrow key, which would move a lead by accident), on a lead's page and, with C4c, on every board card (C4b, D11);
+  - "Move to…" is named "Move to… {name}", the visible words first, not crm.md's "Move {name} to…": a spoken name that starts with what is seen (WCAG 2.5.3, Label in Name; C4b);
+  - a lead's tags are a short chip list with Add tag and a remove button per tag, saved as one versioned PATCH each, not the field kit's tags field, so a lead's page never loads the field kit (C4b, D12);
+  - "Add lead manually" is hidden until the page's script is up: with no JavaScript there is no drawer to open (C4b, D9); the list, a lead's page and their links all work without it;
+  - a ranged KPI's change compares the same elapsed span one range earlier (the last 7 days so far against the same days and hours a week before), never a part day against whole ones (C4b; C4a left it open);
+  - a role without `leads.manage` that opens a leads page by its address gets the admin's one refusal, "Your role does not allow that." (`Refused.astro`, a 403, nothing read), not crm.md's "You do not have access to this / Ask an admin if you need it" (C4b, the U2 pattern);
+  - "Agreed to be contacted about this inquiry" shows the public form's checkbox for a web-form lead, and "Added by hand" for a lead added by hand, whose column records no such answer (C4b, D10);
+  - until C4c merges, the Leads area has no List | Pipeline tabs and no board: the board was carved out of C4b by size (the brief's §13), and ships with its tab, its help line and its tests in C4c;
   - no client-side CSV;
   - Mark as spam + Admin-only Erase instead of delete;
   - no keystroke autosave;
@@ -67,6 +81,7 @@
 - **Backups**: leads are never in admin backups (DR via the runbook, §7/§10).
 - **Activity log**: kept permanently and tamper-evident, not "12 months" or "90 days" (§3); exportable under the export lockdown, with no titles in the file (U13).
 - **Invites** expire per Supabase Auth instead of 7 days, until L6 brings transactional email (O-22). As built (U12b, decision D1): **one hour, with Resend**, because Supabase has one e-mail link expiry (`otp_expiry`) for invite and reset links, so a longer invite would make reset links live as long; the owner may choose longer (up to 24 h) for both.
+- **Bundle** (O-15, decided by the approved plan's default on 2026-10-18; C4b): the admin bundle's gate is each admin screen's eager graph, at most 300 KB gz (`scripts/admin-bundle.mjs`), with its own caps on the lazy chunks and the sign-in script; the size-limit sum of every admin file, lazy ones included, is a coarse 400 KB tripwire, no longer the budget (it was 300 KB, and the leads screens took it past that).
 - **Health**: uptime from the external monitor's read-only API (G2); no in-Worker checker (§10); certificate expiry only where the monitor reports it (RDAP carries the domain's registration, not the certificate); no Alerts drawer or external channels (A1); the bell instead, for siteHealth.view roles.
 - **Help** (U16):
   - guides only for features that are built (nine of the prototype's fifteen described later-phase screens; "roles" promised per-person exceptions §5 does not have);

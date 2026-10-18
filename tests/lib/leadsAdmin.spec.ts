@@ -194,8 +194,6 @@ function ctx(path: string, role = 'admin', init?: { method: string; body: unknow
 }
 
 const detail = await import('@/pages/api/admin/leads/[id]');
-const { afterSave, saveLead, showNotesEditor } =
-  await import('@/components/admin/screens/leads/LeadsPanel');
 const { PII_REVEAL_LIMITS } = await import('@/lib/admin/rateLimit');
 
 beforeEach(() => {
@@ -352,11 +350,11 @@ describe('lead detail without the reveal', () => {
 });
 
 describe('saving a lead', () => {
-  it('writes notes without reading them back: the safe columns return, nothing gated', async () => {
+  it('a legacy status save reads nothing back but the safe columns, nothing gated', async () => {
     const res = await detail.PATCH(
       ctx(`/api/admin/leads/${LEAD}`, 'admin', {
         method: 'PATCH',
-        body: { status: 'in_progress', internalNotes: 'Sent the proposal' },
+        body: { status: 'in_progress' },
       }),
     );
     const body = (await res.json()) as { data: Record<string, unknown> };
@@ -377,92 +375,5 @@ describe('saving a lead', () => {
     expect(res.status).toBe(200);
     expect(events.some((e) => e.startsWith('rls:refused'))).toBe(false);
     expect(events).not.toContain('svc:leads');
-  });
-});
-
-describe('the notes editor', () => {
-  it('appears only after the audited reveal, so a save can never blank the real notes', () => {
-    expect(showNotesEditor(true, false)).toBe(false);
-    expect(showNotesEditor(true, true)).toBe(true);
-    expect(showNotesEditor(false, true)).toBe(false);
-    expect(showNotesEditor(false, false)).toBe(false);
-  });
-});
-
-describe('after a save, the panel', () => {
-  const open = {
-    id: LEAD,
-    name: 'Sara',
-    status: 'new',
-    service_of_interest: 'logo',
-    locale: 'en',
-    created_at: '2026-10-01T10:00:00Z',
-    message: 'Hello',
-    email: 'sara@example.com',
-    phone: '+966500000000',
-    internal_notes: 'Called back on Monday',
-  };
-  // What PATCH answers: the safe columns only.
-  const answer = {
-    id: LEAD,
-    name: 'Sara',
-    status: 'in_progress',
-    service_of_interest: 'logo',
-    locale: 'en',
-    created_at: '2026-10-01T10:00:00Z',
-    message: 'Hello',
-  };
-
-  it('keeps the details it already revealed and shows the saved notes: no second reveal', () => {
-    const next = afterSave(
-      open,
-      LEAD,
-      { status: 'in_progress', name: 'Sara' },
-      {
-        internalNotes: 'Sent the proposal',
-      },
-    );
-    expect(next).toMatchObject({
-      status: 'in_progress',
-      email: 'sara@example.com',
-      phone: '+966500000000',
-      internal_notes: 'Sent the proposal',
-    });
-    expect(afterSave(open, 'another-lead', { status: 'done' }, {})).toBe(open);
-    expect(afterSave(null, LEAD, { status: 'done' }, {})).toBeNull();
-  });
-
-  it('reports a save that stood as saved, even when the list cannot be refreshed', async () => {
-    const outcome = await saveLead(
-      LEAD,
-      { status: 'in_progress' },
-      {
-        save: async () => ({ ...answer }),
-        refresh: async () => {
-          throw new Error('Rate limit exceeded');
-        },
-      },
-    );
-    expect(outcome.error).toBe('');
-    expect(outcome.saved).toMatchObject({ status: 'in_progress' });
-    expect(outcome.notice).toMatch(/^Saved\./);
-  });
-
-  it('reports a save that failed as an error, and refreshes nothing', async () => {
-    let refreshed = false;
-    const outcome = await saveLead(
-      LEAD,
-      { status: 'in_progress' },
-      {
-        save: async () => {
-          throw new Error('That item no longer exists.');
-        },
-        refresh: async () => {
-          refreshed = true;
-        },
-      },
-    );
-    expect(outcome).toEqual({ saved: null, error: 'That item no longer exists.', notice: '' });
-    expect(refreshed).toBe(false);
   });
 });

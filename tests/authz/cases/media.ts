@@ -13,6 +13,14 @@ export const cases: readonly Case[] = [
     allow: ['admin', 'content_creator', 'seo', 'developer'],
   },
   {
+    // Admin v2 U4: the library's search and paging over public.media_library (0064).
+    name: 'media library (search and paging)',
+    load: () => import('@/pages/api/admin/media/library'),
+    method: 'GET',
+    url: '/api/admin/media/library?q=still&limit=10',
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+  },
+  {
     name: 'media register (external asset)',
     load: () => import('@/pages/api/admin/media/index'),
     method: 'POST',

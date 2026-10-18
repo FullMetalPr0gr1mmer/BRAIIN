@@ -332,7 +332,7 @@ describe('fix links', () => {
     const fixes = Object.fromEntries(runChecklist(failing).map((r) => [r.id, r.fix]));
     expect(fixes).toMatchObject({
       'content.placeholders': '/admin',
-      'content.alt': '/admin/media',
+      'content.alt': '/admin/media?alt=missing',
       'content.consent': '/admin/testimonials',
       'seo.default-description': '/admin/seo',
       'speed.lcp': '/admin/site-health?tab=speed',
@@ -350,7 +350,7 @@ describe('fix links', () => {
     expect(fixes['content.placeholders']).toBeNull();
     expect(fixes['content.consent']).toBeNull();
     expect(fixes['seo.default-description']).toBeNull();
-    expect(fixes['content.alt']).toBe('/admin/media');
+    expect(fixes['content.alt']).toBe('/admin/media?alt=missing');
     expect(fixes['errors.recent']).toBe('/admin/site-health?tab=errors');
     expect(fixFor('developer', rule('speed.lcp'))).toBe('/admin/site-health?tab=speed');
   });

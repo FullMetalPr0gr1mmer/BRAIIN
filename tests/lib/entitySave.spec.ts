@@ -210,6 +210,26 @@ describe('the request a save sends', () => {
     expect(req.body['version']).toBe(0);
   });
 
+  it('saveUrl (Admin v2 U4) moves the PATCH only: the load and a create stay where they were', () => {
+    const MEDIA: SaveTarget = {
+      kind: 'resource',
+      slug: 'media',
+      saveUrl: (id) => `/api/admin/media/meta/${id}`,
+    };
+    const state = run(loaded(ROW, MEDIA), { type: 'set', name: 'slug', value: 'x' });
+    const patch = buildSaveRequest(MEDIA, 'r1', state, FIELDS);
+    expect(patch).toMatchObject({ url: '/api/admin/media/meta/r1', method: 'PATCH' });
+    expect(patch.body['version']).toBe(4);
+    expect(loadUrl(MEDIA, 'r1')).toBe('/api/admin/media/r1');
+    const fresh = run(initialSaveState(FIELDS, true), { type: 'set', name: 'slug', value: 'n' });
+    expect(buildSaveRequest(MEDIA, null, fresh, FIELDS)).toMatchObject({
+      url: '/api/admin/media',
+      method: 'POST',
+    });
+    // Without it, unchanged (F5a's frozen API).
+    expect(buildSaveRequest(SERVICES, 'r1', state, FIELDS).url).toBe('/api/admin/services/r1');
+  });
+
   it('a value that cannot be sent throws with its field’s name', () => {
     const json: FieldDef[] = [{ name: 'meta', label: 'Meta', kind: 'json' }];
     const state = run(initialSaveState(json, true), { type: 'set', name: 'meta', value: '{' });

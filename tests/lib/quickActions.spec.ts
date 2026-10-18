@@ -184,7 +184,7 @@ describe('the library', () => {
       ['New post', '/admin/blog/new', 'plus', 'blog.write'],
       ['New page', '/admin/pages/new', 'plus', 'pages.write'],
       ['New testimonial', '/admin/testimonials/new', 'plus', 'portfolio.write'],
-      ['Upload media', '/admin/media/new', 'upload', 'media.write'],
+      ['Upload media', '/admin/media?upload=1', 'upload', 'media.write'],
       ['New redirect', '/admin/redirects/new', 'plus', 'redirects.manage'],
       ['Invite a user', '/admin/users', 'users', 'users.manage'],
     ]);

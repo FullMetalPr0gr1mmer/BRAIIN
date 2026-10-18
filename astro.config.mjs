@@ -46,9 +46,53 @@ const ADMIN_DASHBOARD_SCREEN =
   /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]dashboard[\\/]|islands[\\/]AdminDashboard\.tsx$)/;
 const ADMIN_DASHBOARD_LAZY =
   /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]dashboard[\\/](AddWidgetDrawer|QuickActionsDrawer|RoleDefaultsModal|ResetModal|customize)\.tsx?$/;
-// The islands that hydrate an editor: their entry chunks import admin-fields.
-const ADMIN_EDITOR_ISLANDS =
+// The islands whose static graph reaches the field kit, and their screens' directories
+// (Admin v2 U4, Wave 3's chunk rule): admin-ui's path rule would otherwise claim them, and a
+// group takes its modules' static dependencies, so admin-ui would import admin-fields and the
+// field kit would ride on every admin screen (F5a measured 12.1 KB gz each). One name per
+// line, sorted: a later slice adds its island and its screen directory here, a line each.
+// prettier-ignore
+const ADMIN_EDITOR_ISLAND_NAMES = [
+  'AdminMediaLibrary',
+  'AdminResourceForm',
+  'AdminSingletonForm',
+];
+// prettier-ignore
+const ADMIN_EDITOR_SCREEN_DIRS = [
+  'media',
+];
+/** @param {readonly string[]} names */
+const alternatives = (names) => names.join('|');
+const ADMIN_EDITOR_ISLANDS = new RegExp(
+  String.raw`[\\/]src[\\/]components[\\/]admin[\\/]islands[\\/](${alternatives(ADMIN_EDITOR_ISLAND_NAMES)})\.tsx$`,
+);
+const ADMIN_EDITOR_SCREENS = new RegExp(
+  String.raw`[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/](${alternatives(ADMIN_EDITOR_SCREEN_DIRS)})[\\/]`,
+);
+// F5a's two editor islands keep their own entry chunks: each is a one-line entry over
+// admin-fields, and in the shared group below every editor screen would load the other
+// screens' code with it.
+const ADMIN_SELF_NAMED_EDITORS =
   /[\\/]src[\\/]components[\\/]admin[\\/]islands[\\/]Admin(ResourceForm|SingletonForm)\.tsx$/;
+// Where the islands admin-ui leaves go (Wave 3's chunk rule, critique 6): one shared group
+// for every island entry and screen module no other group claims, so a module a screen
+// reaches only through import() still lands in an admin-* file instead of a module-named
+// chunk, which size-limit would weigh as public JavaScript. A later slice joins it by its
+// path alone.
+const ADMIN_SCREENS =
+  /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]Admin[^\\/]*\.tsx$|screens[\\/])/;
+// The leads screens (Admin v2 C4b): their islands and screen code, in their own group, so the
+// list and a lead's page share one chunk and no other admin screen loads it. The add drawer and the erase dialog are reached only through import(): their own
+// lazy group (ADMIN_LEADS_LAZY), below the field kit, so a first load never carries them.
+const ADMIN_LEADS =
+  /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]leads[\\/]|islands[\\/]AdminLead)/;
+const ADMIN_LEADS_LAZY =
+  /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]leads[\\/](AddLeadDrawer|EraseLeadDialog)\.tsx$/;
+// A kit piece both the kit's reference screen and a screen group draw (C4b: the React KPI
+// card, in the gallery and on the leads list): in admin-ui, so neither the AdminKit entry nor
+// the group's chunk imports the other's. Small (under 1 KB gz) and shared, like any kit piece
+// an admin-ui screen draws.
+const ADMIN_KIT_SHARED = /[\\/]src[\\/]components[\\/]admin[\\/]kit[\\/]Kpi\.tsx$/;
 // The shared admin-ui chunk claims none of these by path. A group also takes its modules' static
 // dependencies, so a kit piece still lands in admin-ui the moment a screen there imports
 // it; the rest of the kit goes to the lowest admin group, `admin-kit`, instead of riding
@@ -155,13 +199,24 @@ export default defineConfig({
                 // except the component kit and its reference screen (F4b).
                 name: 'admin-ui',
                 test: (id) =>
-                  /[\\/]src[\\/](components|lib)[\\/]admin[\\/]/.test(id) &&
-                  !ADMIN_KIT.test(id) &&
-                  !ADMIN_KIT_SCREEN.test(id) &&
-                  !ADMIN_DASHBOARD_SCREEN.test(id) &&
-                  !ADMIN_FIELDS.test(id) &&
-                  !ADMIN_EDITOR_ISLANDS.test(id),
+                  ADMIN_KIT_SHARED.test(id) ||
+                  (/[\\/]src[\\/](components|lib)[\\/]admin[\\/]/.test(id) &&
+                    !ADMIN_KIT.test(id) &&
+                    !ADMIN_KIT_SCREEN.test(id) &&
+                    !ADMIN_DASHBOARD_SCREEN.test(id) &&
+                    !ADMIN_FIELDS.test(id) &&
+                    !ADMIN_EDITOR_ISLANDS.test(id) &&
+                    !ADMIN_EDITOR_SCREENS.test(id) &&
+                    !ADMIN_LEADS.test(id)),
                 priority: 20,
+              },
+              {
+                // The leads screens (Admin v2 C4b): below admin-ui, so what both use stays in
+                // admin-ui and this chunk imports it from there; above the field kit, which no
+                // leads module reaches statically (tests/lib/adminBundle.spec.ts).
+                name: 'admin-leads',
+                test: (id) => ADMIN_LEADS.test(id) && !ADMIN_LEADS_LAZY.test(id),
+                priority: 17,
               },
               {
                 // The field kit and the editors (F5a): below admin-ui, so a module both
@@ -171,6 +226,27 @@ export default defineConfig({
                 name: 'admin-fields',
                 test: ADMIN_FIELDS,
                 priority: 15,
+              },
+              {
+                // The leads screens' lazy pieces (C4b): Add a lead and Erase, loaded on first
+                // use. Below the field kit, so a kit piece they share with it stays there.
+                name: 'admin-leads-lazy',
+                test: ADMIN_LEADS_LAZY,
+                priority: 14,
+              },
+              {
+                // The screens admin-ui leaves (Admin v2 U4, Wave 3's chunk rule): an island
+                // whose graph reaches the field kit, and its screen's own code. Below the
+                // field kit, so what both use stays in admin-fields and this chunk imports
+                // it from there; the kit's reference screen, the dashboard's island and F5a's
+                // two editor entries keep their own chunks.
+                name: 'admin-screens',
+                test: (id) =>
+                  ADMIN_SCREENS.test(id) &&
+                  !ADMIN_KIT_SCREEN.test(id) &&
+                  !ADMIN_DASHBOARD_SCREEN.test(id) &&
+                  !ADMIN_SELF_NAMED_EDITORS.test(id),
+                priority: 13,
               },
               {
                 // The dashboard's editing pieces (U1), reached only through import():

@@ -31,7 +31,8 @@ import { serviceClient } from '@/lib/supabase/server';
 // daily orphan sweep removes it (src/lib/media/orphans.ts), and a page rendered just before
 // the replace still finds its image until then. `removePrevious: true` in the details deletes
 // it at once instead, for an image that must come off the web now (a portrait whose subject
-// asked); the audit row records which object went, and the response how it went. A still
+// asked); the audit row records which object went, and the response how it went. The audit
+// row always names the previous path (`previousPath`), removed or not. A still
 // shipped with the site (`static`) or a legacy row can be replaced too; it becomes an
 // uploaded image (and has no object to remove).
 
@@ -111,6 +112,10 @@ export const POST = defineAdminRoute({
       entityId: id,
       detail: {
         from: current['provider'] ?? null,
+        // Always (U4 review sec-1): media_assets keeps no history, so this is the one record
+        // of what the picture showed before. A random key or a still's file name, never a
+        // person's data; the file's own name (display_name) is not recorded.
+        previousPath: previousPath || null,
         input: image.input.format,
         inputBytes: image.input.bytes,
         bytes: image.bytes.length,

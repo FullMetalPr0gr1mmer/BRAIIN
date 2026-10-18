@@ -209,7 +209,8 @@ describe('the bell: what an item says', () => {
       id: 'leads:l-1',
       text: 'New inquiry from Sara',
       detail: 'Logo Design',
-      href: '/admin/leads',
+      // The lead's own page (C4b).
+      href: '/admin/leads/l-1',
     });
     // Exactly these columns: no contact detail, budget, timeline, message, IP or note.
     const leadQuery = queries.find((q) => q.table === 'leads')!;
