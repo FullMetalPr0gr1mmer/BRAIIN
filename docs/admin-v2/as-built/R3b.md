@@ -168,6 +168,28 @@ capability is `maintenance.manage`).
     `resource.ts` and `staged.ts` write; the draft endpoints write theirs, so the words live
     in a separate map over every registry type.
 
+11. **Resolve on page visibility takes "keep mine" only.** Page visibility is a full replace too,
+    but its dates are stored as Riyadh midnights, so a live column does not map back onto the
+    payload: "use the live version" is 422 in words ("Keep yours, or discard the change")
+    rather than an unreadable change. No route stages page visibility yet (U14a keeps it
+    immediate), so such a draft exists only if written around the API.
+
+## Self-review
+
+Read once for security and authorization (per-item capabilities in both layers, tenant
+scoping of every read and `p_tenant`, no payload or value in a response the caller may not
+read or in an audit row, the switch Admin-only on every path) and once for correctness and
+the standard. Fixed, each with a test that fails without it: resolving an entity-SEO change
+stored all six columns in `fields` (now only those that still differ from live, as a staged
+save stores them), and "use the live version" on a page-visibility change answered
+"This change can no longer be read" (now departure 11).
+
+Noted, not changed: the Edits chip's filter (`kindFilter('edits')`, sent to PostgREST in the
+URL by `/admin/audit`) grows with every action of a fixed kind; with every type's
+`draft_resolve` (and the singletons' and entity SEO's `draft_save`/`draft_discard`) it is about
+3.3 KB. A suffix pattern (`action.like.*.draft_*`) would bound it if the URL ever nears a
+limit.
+
 ## Proof
 
 - `tests/lib/stagedSingleton.spec.ts`: GET and PATCH for both singletons over the PostgREST
