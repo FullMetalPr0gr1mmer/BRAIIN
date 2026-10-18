@@ -383,6 +383,8 @@ revoke all on function app.rollup_visits(int) from public, anon, authenticated, 
 -- lands), from the eight minutes of raw rows they need, read through the index above. A
 -- minute with no page view and nobody active writes no row (a missing minute reads as zero),
 -- and a recomputed minute that now has neither loses its row. Rows older than 48 hours go.
+-- One statement and no temporary table: a job that runs 1,440 times a day should not create
+-- and drop a table in the catalog each time (app.rollup_visits, every 15 minutes, may).
 create or replace function app.rollup_realtime()
   returns int
   language plpgsql
@@ -395,15 +397,6 @@ declare
   v_first timestamptz := v_end - interval '3 minutes';
   n int;
 begin
-  if to_regclass('pg_temp._g1_minutes') is null then
-    create temporary table _g1_minutes (
-      tenant_id uuid, minute timestamptz, views int, active_visits int, top_paths jsonb
-    ) on commit drop;
-  else
-    truncate pg_temp._g1_minutes;
-  end if;
-
-  insert into pg_temp._g1_minutes
   with ev as (
     select e.tenant_id, e.occurred_at, e.event_type,
            nullif(e.session_id, '') as sid,
@@ -418,46 +411,58 @@ begin
     select t.tenant_id, g.m
       from (select distinct ev.tenant_id from ev) t
      cross join generate_series(v_first, v_end - interval '1 minute', interval '1 minute') as g(m)
+  ),
+  computed as (
+    select g.tenant_id, g.m as minute,
+           (select count(*) from ev
+             where ev.tenant_id = g.tenant_id and ev.event_type = 'pageview'
+               and ev.occurred_at >= g.m and ev.occurred_at < g.m + interval '1 minute')::int
+             as views,
+           (select count(distinct ev.sid) from ev
+             where ev.tenant_id = g.tenant_id and ev.sid is not null
+               and ev.occurred_at >= g.m - interval '4 minutes'
+               and ev.occurred_at < g.m + interval '1 minute')::int
+             as active_visits,
+           (select coalesce(jsonb_agg(jsonb_build_object('path', p.path, 'visits', p.visits)
+                                      order by p.visits desc, p.path), '[]'::jsonb)
+              from (select l.path, count(*)::int as visits
+                      from (select distinct on (ev.sid) ev.sid, ev.path
+                              from ev
+                             where ev.tenant_id = g.tenant_id and ev.sid is not null
+                               and ev.path is not null
+                               and ev.occurred_at >= g.m - interval '4 minutes'
+                               and ev.occurred_at < g.m + interval '1 minute'
+                             order by ev.sid, ev.occurred_at desc) l
+                     group by l.path
+                     order by count(*) desc, l.path
+                     limit 10) p)
+             as top_paths
+      from grid g
+  ),
+  kept as (
+    select c.* from computed c where c.views > 0 or c.active_visits > 0
+  ),
+  -- In the window, a minute this run no longer produces goes (its rows and the upserted
+  -- ones are disjoint, so the two writes never meet one row).
+  gone as (
+    delete from public.rollup_minute_activity r
+     where r.minute >= v_first and r.minute < v_end
+       and not exists (select 1 from kept k
+                        where k.tenant_id = r.tenant_id and k.minute = r.minute)
+  ),
+  written as (
+    insert into public.rollup_minute_activity as r (tenant_id, minute, views, active_visits, top_paths)
+    select k.tenant_id, k.minute, k.views, k.active_visits, k.top_paths
+      from kept k
+    on conflict (tenant_id, minute) do update
+       set views = excluded.views, active_visits = excluded.active_visits,
+           top_paths = excluded.top_paths, updated_at = pg_catalog.now()
+     where (r.views, r.active_visits, r.top_paths)
+           is distinct from (excluded.views, excluded.active_visits, excluded.top_paths)
+    returning 1
   )
-  select g.tenant_id, g.m,
-         (select count(*) from ev
-           where ev.tenant_id = g.tenant_id and ev.event_type = 'pageview'
-             and ev.occurred_at >= g.m and ev.occurred_at < g.m + interval '1 minute')::int,
-         (select count(distinct ev.sid) from ev
-           where ev.tenant_id = g.tenant_id and ev.sid is not null
-             and ev.occurred_at >= g.m - interval '4 minutes'
-             and ev.occurred_at < g.m + interval '1 minute')::int,
-         (select coalesce(jsonb_agg(jsonb_build_object('path', p.path, 'visits', p.visits)
-                                    order by p.visits desc, p.path), '[]'::jsonb)
-            from (select l.path, count(*)::int as visits
-                    from (select distinct on (ev.sid) ev.sid, ev.path
-                            from ev
-                           where ev.tenant_id = g.tenant_id and ev.sid is not null
-                             and ev.path is not null
-                             and ev.occurred_at >= g.m - interval '4 minutes'
-                             and ev.occurred_at < g.m + interval '1 minute'
-                           order by ev.sid, ev.occurred_at desc) l
-                   group by l.path
-                   order by count(*) desc, l.path
-                   limit 10) p)
-    from grid g;
+  select count(*)::int into n from written;
 
-  delete from pg_temp._g1_minutes t where t.views = 0 and t.active_visits = 0;
-
-  insert into public.rollup_minute_activity as r (tenant_id, minute, views, active_visits, top_paths)
-  select t.tenant_id, t.minute, t.views, t.active_visits, t.top_paths
-    from pg_temp._g1_minutes t
-  on conflict (tenant_id, minute) do update
-     set views = excluded.views, active_visits = excluded.active_visits,
-         top_paths = excluded.top_paths, updated_at = pg_catalog.now()
-   where (r.views, r.active_visits, r.top_paths)
-         is distinct from (excluded.views, excluded.active_visits, excluded.top_paths);
-  get diagnostics n = row_count;
-
-  delete from public.rollup_minute_activity r
-   where r.minute >= v_first and r.minute < v_end
-     and not exists (select 1 from pg_temp._g1_minutes t
-                      where t.tenant_id = r.tenant_id and t.minute = r.minute);
   delete from public.rollup_minute_activity r where r.minute < pg_catalog.now() - interval '48 hours';
 
   return n;
