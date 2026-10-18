@@ -1,4 +1,5 @@
 import type { ActivityKind } from '@schemas/audit';
+import { RELEASE_ENTITY_TYPES } from '@schemas/release';
 import { RESOURCES } from '@/lib/admin/resources';
 import { columnOf, RESOURCE_UI, SINGLETON_UI, type FieldDef } from '@/lib/admin/ui';
 import type { BadgeTone } from '@/lib/admin/tones';
@@ -308,7 +309,21 @@ const EXACT: Readonly<Record<string, Label>> = {
   'auth.two_step_off': { kind: 'users', verb: 'Turned off 2FA', noun: null },
   'user.two_step_reset': { kind: 'users', verb: 'Reset the 2FA of', noun: 'a member' },
 
+  // Pending changes thrown away in one go (Admin v2 R3b): ids and types only, never values.
+  'drafts.discard_bulk': {
+    kind: 'edits',
+    verb: 'Threw away several unpublished changes',
+    noun: null,
+  },
+
   // Settings
+  // The job-application intake switch, written at once whatever the release flag (R3b).
+  'site_profile.intake': {
+    kind: 'settings',
+    verb: (detail) =>
+      detail['open'] === true ? 'Opened job applications' : 'Closed job applications',
+    noun: null,
+  },
   'maintenance.enable': { kind: 'settings', verb: 'Switched on', noun: 'maintenance mode' },
   'maintenance.disable': { kind: 'settings', verb: 'Switched off', noun: 'maintenance mode' },
   // Page visibility (U14a): the page is titled; a template is named by its kind.
@@ -439,10 +454,48 @@ const SINGLETON_LABELS: ReadonlyMap<string, Label> = new Map(
   ]),
 );
 
+/** What a pending change of a release-managed type is a change to, in words. */
+function draftNoun(type: string): Label['noun'] {
+  const kernel = KERNEL_ENTITIES.get(type)?.noun;
+  if (kernel) return kernel;
+  if (Object.hasOwn(SINGLETONS, type)) return SINGLETONS[type]!.noun;
+  if (type === 'entity_seo') {
+    return (detail) => `the search details of ${nounOf(str(detail['target'])) ?? 'an item'}`;
+  }
+  if (type === 'page_visibility') return 'the page visibility';
+  return `the ${type.replaceAll('_', ' ')}`;
+}
+
+/**
+ * The pending-change actions of every release-managed type (Admin v2 R3): a change saved or
+ * thrown away (the resource kernel's own are in KERNEL), and a conflict settled. Edits until
+ * they are published; a release is the publish.
+ */
+const DRAFT_LABELS: ReadonlyMap<string, Label> = new Map(
+  RELEASE_ENTITY_TYPES.flatMap((type) => {
+    const noun = draftNoun(type);
+    const titled = hasTitleSource(type);
+    const labels: [string, Label][] = [
+      [`${type}.draft_resolve`, { kind: 'edits', verb: 'Settled a conflict on', noun, titled }],
+    ];
+    if (!KERNEL.has(`${type}.draft_save`)) {
+      labels.push([`${type}.draft_save`, { kind: 'edits', verb: draftSaveVerb, noun, titled }]);
+    }
+    if (!KERNEL.has(`${type}.draft_discard`)) {
+      labels.push([
+        `${type}.draft_discard`,
+        { kind: 'edits', verb: 'Threw away unpublished changes to', noun, titled },
+      ]);
+    }
+    return labels;
+  }),
+);
+
 /** The label of an action, or null when the registry does not know it. */
 function labelOf(action: string): Label | null {
   return (
     KERNEL.get(action) ??
+    DRAFT_LABELS.get(action) ??
     SINGLETON_LABELS.get(action) ??
     EXACT[action] ??
     PREFIXES.find((p) => action.startsWith(p.prefix))?.label ??
@@ -543,7 +596,8 @@ function titleRefOf(
 ): ActivityDescription['titleRef'] {
   const id = row.entity_id;
   if (!id) return null;
-  if (row.action === 'entity_seo.update') {
+  // Entity SEO's rows (its save, and its pending changes since R3b) name the target's id.
+  if (row.action.startsWith('entity_seo.')) {
     const target = str(detail['target']);
     return target && hasTitleSource(target) ? { type: target, id } : null;
   }
@@ -587,7 +641,12 @@ export function sentence(description: ActivityDescription, title: string | null 
 /** Every action the registry knows by its exact key, with its fixed kind or `null` (by status). */
 function exactKinds(): Map<string, ActivityRowKind | null> {
   const out = new Map<string, ActivityRowKind | null>();
-  for (const [action, label] of [...KERNEL, ...SINGLETON_LABELS, ...Object.entries(EXACT)]) {
+  for (const [action, label] of [
+    ...KERNEL,
+    ...DRAFT_LABELS,
+    ...SINGLETON_LABELS,
+    ...Object.entries(EXACT),
+  ]) {
     out.set(action, typeof label.kind === 'function' ? null : label.kind);
   }
   return out;
