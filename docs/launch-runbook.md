@@ -1477,3 +1477,11 @@ database keeps revoking sessions on a role change. An older users screen meets t
 guard as a 500 instead of the 422. To roll back only the new session check, revert
 `src/lib/auth/context.ts` (and `src/lib/auth/claims.ts`) to their pre-U12a versions in a PR
 (`docs/admin-v2/as-built/U12a.md`, Rollback).
+
+0066 (Admin v2 R5) does not move the line either. It is expand only but for one privilege
+removal: TRUNCATE is revoked from `anon`, `authenticated` and `service_role` on every table the
+release guard watches (the registry tables and both case-study link tables), and no build,
+operator script or Edge Function truncates any of them (`tests/lib/noTruncate.spec.ts` fails one
+that does; seeds and restores run as the migration role). Its triggers are inert while
+`app.release_tenants` is empty, and an older Worker parses `media_usage`'s new `pending` column
+as an unknown key it drops. A Worker rollback across R5's PR is safe.
