@@ -189,6 +189,7 @@ nothing different. The new Worker needs nothing 0065 adds.
   join the staging CPU list; the fallback is to drop the list's server-rendered first page.
 - **C14a** removes `GET /api/admin/leads`, `?pii=1` and the legacy status; nothing in the new
   screens calls them (the sweep's leads sample uses the POST list).
+- **`?same=` on a lead's page** names earlier leads by the ids in the address (the drawer's answer, never the address itself), read under RLS for their numbers. A crafted link can name any lead the viewer can already see as having "written before"; it reveals nothing new, and a later slice can carry a short-lived token instead if that matters.
 
 ## Tests
 
