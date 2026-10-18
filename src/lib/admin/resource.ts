@@ -17,6 +17,15 @@ import {
 } from './crud';
 import { NotFoundError, ValidationError } from './errors';
 import { writeSystemLog } from '@/lib/data/systemLog';
+import {
+  stagedCreate,
+  stagedDelete,
+  stagedEntry,
+  stagedList,
+  stagedRead,
+  stagedReorder,
+  stagedUpdate,
+} from '@/lib/release/staged';
 
 // A declarative CRUD resource. Fifteen entities in this CMS have the same lifecycle —
 // list, read, create, optimistically update, delete — differing only in table name,
@@ -234,7 +243,8 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
     anyCap: readCapsOf(config),
     access: config.readAccess ?? ['full', 'view', 'meta'],
     input: ListQuerySchema,
-    handler: async ({ auth, sb, input, url }) => {
+    handler: async (ctx) => {
+      const { auth, sb, input, url } = ctx;
       const filters: Record<string, string> = {};
       const exclude: Record<string, string> = {};
       if (input.status) filters['status'] = input.status;
@@ -254,15 +264,26 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
         if (not !== null) exclude[column] = not;
       }
 
+      const search =
+        config.searchColumn && input.q ? { column: config.searchColumn, term: input.q } : undefined;
+      // Releases on (Admin v2 R3): the live page with the pending changes laid over it.
+      const entry = stagedEntry(config);
+      if (entry && (await ctx.releasesEnabled())) {
+        return stagedList(config, entry, ctx, {
+          filters,
+          exclude,
+          search,
+          limit: input.limit,
+          offset: input.offset,
+        });
+      }
+
       const { rows, total } = await listRows(sb, config.table, auth, {
         columns: config.listColumns,
         orderBy: config.orderBy,
         filters,
         exclude,
-        search:
-          config.searchColumn && input.q
-            ? { column: config.searchColumn, term: input.q }
-            : undefined,
+        search,
         limit: input.limit,
         offset: input.offset,
       });
@@ -278,7 +299,12 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
   const POST = defineAdminRoute({
     cap: config.writeCap,
     input: config.createSchema,
-    handler: async ({ auth, sb, input, audit }) => {
+    handler: async (ctx) => {
+      // Releases on (Admin v2 R3): a pending create, not a live row.
+      const entry = stagedEntry(config);
+      if (entry && (await ctx.releasesEnabled()))
+        return stagedCreate(config, entry, ctx, ctx.input);
+      const { auth, sb, input, audit } = ctx;
       const payload = input as ResourcePayload;
       // Creating something already published is a publish. Checking only on transitions
       // would leave "POST with status: 'published'" as an unguarded back door around
@@ -337,14 +363,34 @@ export function itemRoutes(config: ResourceConfig): {
     cap: readCapsOf(config)[0] as Capability,
     anyCap: readCapsOf(config),
     access: config.readAccess ?? ['full', 'view', 'meta'],
-    handler: async ({ auth, sb, params }) =>
-      shape(config, await getRow<Row>(sb, config.table, auth, requireId(params), config.columns)),
+    handler: async (ctx) => {
+      // Releases on (Admin v2 R3): live with its pending change laid over it.
+      const entry = stagedEntry(config);
+      if (entry && (await ctx.releasesEnabled())) {
+        return stagedRead(config, entry, ctx, requireId(ctx.params));
+      }
+      const { auth, sb, params } = ctx;
+      return shape(
+        config,
+        await getRow<Row>(sb, config.table, auth, requireId(params), config.columns),
+      );
+    },
   });
 
   const PATCH = defineAdminRoute({
     cap: config.writeCap,
-    input: config.updateSchema,
-    handler: async ({ auth, sb, input, params, audit }) => {
+    // The body is parsed in the handler: a staged save also reads `draftId`/`draftVersion`,
+    // which the update schema would strip. With releases off the parse below is the kernel's
+    // as it was (the same schema, the same 422).
+    input: z.unknown(),
+    handler: async (ctx) => {
+      // Releases on (Admin v2 R3): merged into the item's pending change.
+      const entry = stagedEntry(config);
+      if (entry && (await ctx.releasesEnabled())) {
+        return stagedUpdate(config, entry, ctx, requireId(ctx.params), ctx.input);
+      }
+      const input: unknown = config.updateSchema.parse(ctx.input);
+      const { auth, sb, params, audit } = ctx;
       const id = requireId(params);
       const payload = input as ResourcePayload & { version: number };
       assertTransition(auth, config, payload);
@@ -432,12 +478,16 @@ export function itemRoutes(config: ResourceConfig): {
     // is Admin-only even for entities Content Creator may freely author. A resource may
     // name its own `deleteCap` (redirects → `redirects.manage`, so SEO's "full" row holds).
     cap: config.deleteCap ?? 'content.archiveDelete',
-    handler: async ({ auth, sb, params, audit }) => {
+    handler: async (ctx) => {
+      const { auth, sb, params, audit } = ctx;
       const id = requireId(params);
       // BOTH capabilities: you may only delete a thing you were allowed to author.
       // content.archiveDelete alone would let an Admin-only role delete rows in a table
       // it has no write capability for, which is not what the matrix says.
       assertCap(auth, config.writeCap, ['full']);
+      // Releases on (Admin v2 R3): a pending removal, or a pending create discarded.
+      const entry = stagedEntry(config);
+      if (entry && (await ctx.releasesEnabled())) return stagedDelete(config, entry, ctx, id);
       // Only a resource with a hook pays the extra read; deleteRow confirms existence on
       // `id` alone for the rest.
       const row = config.afterDelete
@@ -471,7 +521,13 @@ export function reorderRoute(config: ResourceConfig): APIRoute {
         .min(1)
         .max(200),
     }),
-    handler: async ({ auth, sb, input, audit }) => {
+    handler: async (ctx) => {
+      // Releases on (Admin v2 R3): every moved row's position into its pending change.
+      const entry = stagedEntry(config);
+      if (entry && (await ctx.releasesEnabled())) {
+        return stagedReorder(config, entry, ctx, ctx.input.items);
+      }
+      const { auth, sb, input, audit } = ctx;
       // Sequential, tenant-scoped updates rather than one upsert: an upsert would need
       // to send every column (PostgREST upsert replaces the row) and would happily
       // INSERT a row whose id does not exist in this tenant — turning a reorder into a

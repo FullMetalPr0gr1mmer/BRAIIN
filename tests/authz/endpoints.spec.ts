@@ -68,6 +68,7 @@ describe('admin endpoints — {principal × capability} matrix', () => {
             testCase.body,
             testCase.method,
             testCase.params,
+            testCase,
           );
           const status = await statusOf(route as APIRoute, ctx);
 
@@ -106,6 +107,7 @@ describe('admin endpoints — {principal × capability} matrix', () => {
         testCase.body,
         testCase.method,
         testCase.params,
+        testCase,
       );
       await statusOf(route, ctx);
 
@@ -130,6 +132,7 @@ describe('admin endpoints — {principal × capability} matrix', () => {
         testCase.body,
         testCase.method,
         testCase.params,
+        testCase,
       );
       await statusOf(route, ctx);
       expect(
@@ -149,6 +152,7 @@ describe('admin endpoints — {principal × capability} matrix', () => {
         testCase.body,
         testCase.method,
         testCase.params,
+        testCase,
       );
       const status = await statusOf(route, ctx);
       expect([401, 403]).toContain(status);
