@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ACTIVITY_KINDS } from '@schemas/audit';
+import { RELEASE_ENTITY_TYPES } from '@schemas/release';
 import {
   actionsOfKind,
   changedFields,
@@ -272,6 +273,71 @@ describe('the kinds', () => {
       const d = describeRow(row(action, { entity_type: 'service', detail }));
       expect([d.kind, sentence(d)], JSON.stringify(detail)).toEqual(['edits', words]);
     }
+  });
+
+  it('every release-managed type: its pending changes saved, thrown away and settled (R3b)', () => {
+    // The draft endpoints and the staged singletons write `${type}.draft_*` by template, which
+    // the literal scan above cannot see, so every type is checked here.
+    for (const type of RELEASE_ENTITY_TYPES) {
+      for (const verb of ['draft_save', 'draft_discard', 'draft_resolve']) {
+        expect(hasLabel(`${type}.${verb}`), `${type}.${verb}`).toBe(true);
+        expect(describeRow(row(`${type}.${verb}`)).kind, `${type}.${verb}`).toBe('edits');
+      }
+    }
+    const cases: [string, Partial<ActivityRow>, string][] = [
+      [
+        'site_profile.draft_save',
+        { entity_type: 'site_profile', detail: { op: 'update', fields: ['brand_name'] } },
+        'Saved unpublished changes to the public identity',
+      ],
+      [
+        'seo_defaults.draft_discard',
+        { entity_type: 'seo_defaults', detail: { op: 'update', reason: 'no-op' } },
+        'Threw away unpublished changes to the global SEO defaults',
+      ],
+      [
+        'entity_seo.draft_save',
+        { entity_type: 'entity_seo', detail: { op: 'create', target: 'service' } },
+        'Saved unpublished changes to the search details of the service',
+      ],
+      [
+        'service.draft_resolve',
+        { entity_type: 'service', detail: { keepMine: ['title'], useLive: [] } },
+        'Settled a conflict on the service',
+      ],
+      [
+        'drafts.discard_bulk',
+        { detail: { count: 3, scope: 'mine', types: ['service'], draftIds: [] } },
+        'Threw away several unpublished changes',
+      ],
+    ];
+    for (const [action, extra, words] of cases) {
+      expect(sentence(describeRow(row(action, extra))), action).toBe(words);
+    }
+    // Entity SEO's pending change is titled by its target, as its save is.
+    const seo = describeRow(
+      row('entity_seo.draft_save', {
+        entity_type: 'entity_seo',
+        entity_id: '11111111-1111-4111-8111-111111111111',
+        detail: { op: 'update', target: 'service' },
+      }),
+    );
+    expect(seo.titleRef).toEqual({ type: 'service', id: '11111111-1111-4111-8111-111111111111' });
+  });
+
+  it('the intake switch is a setting, in words that say which way it went (R3b)', () => {
+    const open = describeRow(row('site_profile.intake', { detail: { open: true } }));
+    const closed = describeRow(row('site_profile.intake', { detail: { open: false } }));
+    expect([open.kind, sentence(open)]).toEqual(['settings', 'Opened job applications']);
+    expect([closed.kind, sentence(closed)]).toEqual(['settings', 'Closed job applications']);
+    expect(SRC_ACTIONS).toEqual(
+      expect.arrayContaining([
+        'site_profile.intake',
+        'drafts.discard_bulk',
+        'entity_seo.draft_save',
+        'entity_seo.draft_discard',
+      ]),
+    );
   });
 
   it('every resource whose saves carry a status reads the stored row on a PATCH, so a move is known', () => {
