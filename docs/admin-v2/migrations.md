@@ -79,7 +79,6 @@ every PR moves only its own row.
 | 0076 | U11 | `0076_integrations_typed.sql`: typed CHECKed integration columns, `app.role_manages_integrations`, Admin and SEO read with a RESTRICTIVE live check, anon's one column (`search_console_token`), the help set | 3 |
 | 0077 | U9b | `0077_maintenance_v2_help.sql`: the help set restated with `maintenance-mode` rewritten | 3 |
 | 0078 | G1c | `0078_stats_goals.sql`: `app.role_analytics_goals` (`analytics.goals`, §5), `analytics_goals` (immediate, live-checked), `goal_progress`, the help set | 3 |
-| (at merge) | H11 | `0069_help_catalog.sql` as built: `app.help_guide_catalog` (one row per guide, global, RLS forced with no policy and no API-role privilege), `app.help_article_set()` read from it, `app.put_help_guide` and `app.drop_help_guide` (Rules 7). Restates no guide: filled from the set as the database holds it, so it applies after any restatement (0067, 0068). Its number is assigned at merge with `scripts/renumber-migration.mjs` | 3 |
 | 0079 to 0081 | (slack) | Wave 3 slack: a mid-wave hotfix, U9c, C13's release or a slice that slips; the first to need one takes 0079 | 3 |
 
 ## Rules
