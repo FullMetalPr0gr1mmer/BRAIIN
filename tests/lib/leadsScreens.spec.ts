@@ -6,6 +6,7 @@ import LeadsList, { hoursText } from '@/components/admin/screens/leads/LeadsList
 import LeadDetail from '@/components/admin/screens/leads/LeadDetail';
 import LeadContactCard, { whatsappHref } from '@/components/admin/screens/leads/LeadContactCard';
 import { reasonsSentence } from '@/components/admin/screens/leads/LeadStatusCard';
+import { focusAfterMove } from '@/components/admin/screens/leads/MoveTo';
 import AddLeadDrawer, {
   checkManualLead,
   manualLeadBody,
@@ -341,6 +342,36 @@ describe('the add drawer', () => {
       expect(out, label).toContain(`<span>${label}`);
     expect(out).toContain('<span class="visually-hidden"> (required)</span>');
     expect(out).not.toMatch(/\sstyle=/);
+  });
+});
+
+describe('"Move to…" after a move', () => {
+  // A chosen stage closes the list that held focus, and the lead's page disables the button
+  // while the move is saved, which drops focus to the body. The button takes it back once
+  // enabled, never from where the person went meanwhile (WCAG 2.4.3). The browser half is
+  // tests/admin/leads.e2e.ts.
+  const body = { tag: 'body' } as unknown as Element;
+  const button = { tag: 'button' } as unknown as Element;
+  const field = { tag: 'input' } as unknown as Element;
+
+  it('gives focus back to the button once the move has settled', () => {
+    expect(focusAfterMove(true, false, body, button, body)).toBe(true);
+    expect(focusAfterMove(true, false, null, button, body)).toBe(true);
+    expect(focusAfterMove(true, false, button, button, body)).toBe(true);
+  });
+
+  it('waits while the button is disabled, and takes nothing it was not asked for', () => {
+    expect(focusAfterMove(true, true, body, button, body)).toBe(false);
+    expect(focusAfterMove(false, false, body, button, body)).toBe(false);
+    expect(focusAfterMove(true, false, field, button, body)).toBe(false);
+    expect(focusAfterMove(true, false, body, null, body)).toBe(false);
+  });
+
+  it('is wired: a chosen stage marks the move, and the effect gives focus back', () => {
+    const source = readFileSync('src/components/admin/screens/leads/MoveTo.tsx', 'utf8');
+    expect(source).toContain('pending.current = true;');
+    expect(source).toMatch(/focusAfterMove\(pending\.current, off,/);
+    expect(source).toContain('}, [off]);');
   });
 });
 

@@ -317,10 +317,16 @@ test.describe('as admin', () => {
     await page.getByRole('button', { name: 'Log', exact: true }).click();
     await expect(page.locator('.tl__t', { hasText: 'Call logged' })).toBeVisible();
 
-    // The stage, through Move to…
-    await page.getByRole('button', { name: `Move to… ${lead.name}` }).click();
+    // The stage, through Move to…, with its menu open under axe; focus returns to the
+    // button once the move is saved (it is disabled meanwhile).
+    const moveTo = page.getByRole('button', { name: `Move to… ${lead.name}` });
+    await moveTo.click();
+    await expect(page.locator('.moveto__m')).toBeVisible();
+    await axe(page, 'the move menu on a lead’s page');
     await page.locator('.moveto__m').getByRole('button', { name: 'Contacted' }).click();
     await expect(page.getByText('Moved to Contacted.')).toBeVisible();
+    await expect(moveTo).toBeEnabled();
+    await expect(moveTo).toBeFocused();
 
     // Another tab moves it again: this page's version is stale, and it says so.
     const all = await stages(page.request);
