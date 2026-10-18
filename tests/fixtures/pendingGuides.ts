@@ -38,3 +38,28 @@ export function withPendingGuides<T extends { slug: string; sort_order: number }
     (a, b) => a.sort_order - b.sort_order || a.slug.localeCompare(b.slug),
   );
 }
+
+/** H11's put, as a migration defines it. */
+const PUT_DEFINED = /create\s+(?:or\s+replace\s+)?function\s+app\.put_help_guide\s*\(/i;
+/** The marker a migration leaves where a pending guide's put goes. */
+const PUT_TODO = /TODO\(U\d+, H11\)/;
+
+/**
+ * What still waits on H11 once its put is on the branch: every guide file left in
+ * docs/admin-v2/guides and every migration still carrying the marker. Empty while no
+ * migration defines app.put_help_guide (the files are the plan then), so a merge of main that
+ * brings H11 in turns this red until the puts are wired: a migration applied with the marker
+ * in place could never deliver its guides.
+ */
+export function unwiredAfterPut(
+  migrations: readonly { name: string; sql: string }[],
+  pending: readonly { file: string }[],
+): string[] {
+  if (!migrations.some(({ sql }) => PUT_DEFINED.test(sql))) return [];
+  return [
+    ...pending.map(({ file }) => `${file}: wire its put and delete the file`),
+    ...migrations
+      .filter(({ sql }) => PUT_TODO.test(sql))
+      .map(({ name }) => `${name}: replace the H11 TODO with the puts`),
+  ];
+}

@@ -37,7 +37,7 @@ import {
 import HelpArticleBody from '@/components/admin/screens/help/HelpArticleBody';
 import HelpGuideList from '@/components/admin/screens/help/HelpGuideList';
 import { EXTRA_LINKS, pageFileFor } from '../admin/routes';
-import { pendingGuides, withPendingGuides } from '../fixtures/pendingGuides';
+import { pendingGuides, unwiredAfterPut, withPendingGuides } from '../fixtures/pendingGuides';
 
 const { logs } = vi.hoisted(() => ({ logs: [] as unknown[] }));
 vi.mock('@/lib/data/systemLog', () => ({
@@ -152,6 +152,29 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
         new RegExp(`TODO\\(U\\d+, H11\\)[\\s\\S]*?${file.replaceAll('.', '\\.')}`),
       );
     }
+  });
+
+  it('once H11 is on the branch, no guide waits for its put (U17 review)', () => {
+    // A pending guide is a plan only while app.put_help_guide does not exist: a migration
+    // pushed with the TODO in place after H11 lands would leave its guides out of the
+    // database for good (an applied file is never amended).
+    const migrations = readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith('.sql'))
+      .map((name) => ({ name, sql: readFileSync(`${MIGRATIONS}/${name}`, 'utf8') }));
+    expect(unwiredAfterPut(migrations, PENDING)).toEqual([]);
+    // The rule itself: silent without the put, every leftover named with it.
+    const todo = { name: '0072_x.sql', sql: '-- TODO(U17, H11): wire these' };
+    const put = {
+      name: '0069_help.sql',
+      sql: 'create or replace function app.put_help_guide(p jsonb, p_rev int)',
+    };
+    const files = [{ file: 'docs/admin-v2/guides/your-account.json' }];
+    expect(unwiredAfterPut([todo], files)).toEqual([]);
+    expect(unwiredAfterPut([put, todo], files)).toEqual([
+      'docs/admin-v2/guides/your-account.json: wire its put and delete the file',
+      '0072_x.sql: replace the H11 TODO with the puts',
+    ]);
+    expect(unwiredAfterPut([put], [])).toEqual([]);
   });
 
   it('slugs and places in the list are unique', () => {
