@@ -9,7 +9,7 @@ import {
   PENDING_LIST_CAP,
   STAGE_ANY_CAP,
 } from '@/lib/release/draftEndpoints';
-import { RELEASE_ENTITY_TYPES, type ReleaseEntityType } from '@schemas/release';
+import { PendingItemSchema, RELEASE_ENTITY_TYPES, type ReleaseEntityType } from '@schemas/release';
 import { resetIds, T, type Db, type Row } from '../fixtures/stagedDb';
 import {
   ADMIN,
@@ -183,6 +183,9 @@ describe('the pending summary', () => {
 
   it('says who can publish each change, and what it waits for', async () => {
     const res = await read('content_creator', OTHER_USER);
+    // Every item is the shape the savebar reads (packages/schemas/release.ts).
+    for (const item of res.data['items'] as Row[])
+      expect(PendingItemSchema.parse(item)).toBeTruthy();
     const [edit, archive, seo] = res.data['items'] as Row[];
     expect(edit).toMatchObject({
       draftId: id(1),

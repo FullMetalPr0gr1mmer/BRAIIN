@@ -15,7 +15,11 @@ import {
   DraftConflictDetailSchema,
   DraftLabelSchema,
   DraftRefFieldsSchema,
+  DiscardRequestSchema,
   DryRunReportSchema,
+  IntakeRequestSchema,
+  PendingItemSchema,
+  ResolveRequestSchema,
   WRITE_DRAFTS_MAX_OPS,
   WriteDraftsDiscardSchema,
   WriteDraftsOpsSchema,
@@ -676,5 +680,90 @@ describe('the staged-write shapes equal migration 0062', () => {
     for (const code of DraftConflictDetailSchema.shape.code.options) {
       expect(DRAFT_CONFLICT_CODES).toContain(code);
     }
+  });
+});
+
+// ---- R3b: the draft endpoints' and the intake switch's shapes --------------------------------
+
+describe('the draft endpoints and the intake switch (R3b)', () => {
+  const ref = (n: number, v = 1) => ({ draftId: uuid(n), draftVersion: v });
+
+  it('discard: mine, or 1 to WRITE_DRAFTS_MAX_OPS distinct changes; never both, never blind', () => {
+    expect(DiscardRequestSchema.safeParse({ scope: 'mine' }).success).toBe(true);
+    expect(DiscardRequestSchema.safeParse({ items: [ref(1), ref(2)] }).success).toBe(true);
+    const many = (n: number) => Array.from({ length: n }, (_, i) => ref(i + 1));
+    expect(DiscardRequestSchema.safeParse({ items: many(WRITE_DRAFTS_MAX_OPS) }).success).toBe(
+      true,
+    );
+    for (const bad of [
+      {},
+      { scope: 'all' },
+      { scope: 'mine', items: [ref(1)] },
+      { items: [] },
+      { items: [ref(1), ref(1, 2)] },
+      { items: [{ draftId: uuid(1) }] },
+      { items: [{ ...ref(1), extra: true }] },
+      { items: many(WRITE_DRAFTS_MAX_OPS + 1) },
+    ]) {
+      expect(DiscardRequestSchema.safeParse(bad).success, JSON.stringify(bad).slice(0, 50)).toBe(
+        false,
+      );
+    }
+  });
+
+  it('resolve: a version, column names in the content_drafts pattern, disjoint, at least one', () => {
+    expect(
+      ResolveRequestSchema.safeParse({ version: 2, keepMine: ['title'], useLive: ['blurb'] })
+        .success,
+    ).toBe(true);
+    expect(ResolveRequestSchema.parse({ version: 2, useLive: ['title'] }).keepMine).toEqual([]);
+    for (const bad of [
+      { version: 2 },
+      { version: 0, keepMine: ['title'] },
+      { version: 2, keepMine: ['title'], useLive: ['title'] },
+      { version: 2, keepMine: ['title', 'title'] },
+      { version: 2, keepMine: ['a long, free text'] },
+      { version: 2, keepMine: ['title'], other: 1 },
+      { version: 2, keepMine: Array.from({ length: DRAFT_FIELDS_MAX + 1 }, (_, i) => `c${i}`) },
+    ]) {
+      expect(ResolveRequestSchema.safeParse(bad).success, JSON.stringify(bad).slice(0, 50)).toBe(
+        false,
+      );
+    }
+  });
+
+  it('intake: one strict boolean', () => {
+    expect(IntakeRequestSchema.safeParse({ acceptingApplications: true }).success).toBe(true);
+    for (const bad of [
+      {},
+      { acceptingApplications: 'true' },
+      { acceptingApplications: true, version: 1 },
+    ]) {
+      expect(IntakeRequestSchema.safeParse(bad).success).toBe(false);
+    }
+  });
+
+  it('a pending item: stored metadata, a type and area of the registry', () => {
+    const item = {
+      draftId: uuid(1),
+      draftVersion: 3,
+      entityType: 'service',
+      entityId: uuid(2),
+      op: 'update',
+      area: 'services',
+      label: { en: 'Logo' },
+      fields: ['title'],
+      updatedBy: uuid(3),
+      updatedByName: 'Amal',
+      updatedAt: '2026-10-18T08:00:00Z',
+      scheduled: false,
+      mine: true,
+      publishableByMe: true,
+      requiredCaps: ['services.write', 'content.publish'],
+      waitingFor: ['admin', 'content_creator'],
+    };
+    expect(PendingItemSchema.safeParse(item).success).toBe(true);
+    expect(PendingItemSchema.safeParse({ ...item, entityType: 'lead' }).success).toBe(false);
+    expect(PendingItemSchema.safeParse({ ...item, payload: {} }).success).toBe(false);
   });
 });
