@@ -302,6 +302,11 @@ const EXACT: Readonly<Record<string, Label>> = {
   },
   'auth.password_reset': { kind: 'users', verb: 'Reset their password', noun: null },
   'auth.invite_accepted': { kind: 'users', verb: 'Accepted their invite', noun: null },
+  // Admin v2 U17 (0072): two factor authentication. Reset is written by public.reset_two_step
+  // in the transaction that resets; on and off by the /admin/2fa page as the person.
+  'auth.two_step_on': { kind: 'users', verb: 'Turned on 2FA', noun: null },
+  'auth.two_step_off': { kind: 'users', verb: 'Turned off 2FA', noun: null },
+  'user.two_step_reset': { kind: 'users', verb: 'Reset the 2FA of', noun: 'a member' },
 
   // Settings
   'maintenance.enable': { kind: 'settings', verb: 'Switched on', noun: 'maintenance mode' },

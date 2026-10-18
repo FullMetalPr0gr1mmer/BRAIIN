@@ -9,8 +9,11 @@ import {
   TransferOwnershipSchema,
 } from '@schemas/users';
 import {
+  accountsWithoutTwoStep,
   canCancelInvite,
   canResendInvite,
+  canResetTwoStep,
+  notSetUpSentence,
   inviteDomainRefusal,
   isOwnerGuardError,
   isPendingInvite,
@@ -131,22 +134,51 @@ describe('the Security card input', () => {
       SecuritySettingsSchema.safeParse({ sessionMaxDays: 7, inviteDomain: null, version: -1 })
         .success,
     ).toBe(false);
+    // U17 (0072): "Require 2FA for everyone" is one of the card's settings now; optional, so a
+    // card loaded before it saves without it (the stored value stays). Still strict.
+    expect(
+      SecuritySettingsSchema.parse({
+        sessionMaxDays: 7,
+        inviteDomain: null,
+        version: 1,
+        requireMfa: true,
+      }),
+    ).toEqual({ sessionMaxDays: 7, inviteDomain: null, version: 1, requireMfa: true });
     expect(
       SecuritySettingsSchema.safeParse({
         sessionMaxDays: 7,
         inviteDomain: null,
         version: 1,
-        requireMfa: true,
+        requireMfa: 'yes',
+      }).success,
+    ).toBe(false);
+    expect(
+      SecuritySettingsSchema.safeParse({
+        sessionMaxDays: 7,
+        inviteDomain: null,
+        version: 1,
+        requireTwoStep: true,
       }).success,
     ).toBe(false);
   });
   it('reads a stored row, and the defaults at version 0 for none', () => {
-    expect(securityFromRow(null)).toEqual({ sessionMaxDays: 7, inviteDomain: null, version: 0 });
+    expect(securityFromRow(null)).toEqual({
+      sessionMaxDays: 7,
+      inviteDomain: null,
+      requireMfa: false,
+      version: 0,
+    });
     expect(securityFromRow({ session_max_days: 1, invite_domain: 'x.test', version: 2 })).toEqual({
       sessionMaxDays: 1,
       inviteDomain: 'x.test',
+      requireMfa: false,
       version: 2,
     });
+    // Only a literal true requires 2FA.
+    expect(securityFromRow({ require_mfa: true }).requireMfa).toBe(true);
+    for (const value of ['true', 1, null, undefined]) {
+      expect(securityFromRow({ require_mfa: value }).requireMfa).toBe(false);
+    }
   });
   it('parses the directory rows and the transfer target', () => {
     expect(
@@ -160,6 +192,62 @@ describe('the Security card input', () => {
       }).success,
     ).toBe(true);
     expect(TransferOwnershipSchema.safeParse({ to: 'nope' }).success).toBe(false);
+  });
+});
+
+describe('two factor authentication on the users screen (Admin v2 U17)', () => {
+  const account = (over: Record<string, unknown>) =>
+    StaffAccountRowSchema.parse({
+      id: '11111111-1111-4111-8111-111111111111',
+      email: 'a@b.test',
+      invited_at: null,
+      email_confirmed_at: null,
+      last_sign_in_at: null,
+      is_owner: false,
+      ...over,
+    });
+
+  it('the directory row carries two_step and is_active since 0072, and parses without them', () => {
+    expect(account({ two_step: true, is_active: true })).toMatchObject({
+      two_step: true,
+      is_active: true,
+    });
+    expect(account({})).not.toHaveProperty('two_step');
+    // A misshapen flag is no row at all (the loader drops it), never a guess.
+    expect(StaffAccountRowSchema.safeParse({ ...account({}), two_step: 'yes' }).success).toBe(
+      false,
+    );
+  });
+
+  it('counts the active members without 2FA across the directory; unknown before 0072', () => {
+    expect(accountsWithoutTwoStep(null)).toBeNull();
+    expect(accountsWithoutTwoStep([account({})])).toBeNull();
+    expect(
+      accountsWithoutTwoStep([
+        account({ two_step: true, is_active: true }),
+        account({ two_step: false, is_active: true }),
+        account({ two_step: false, is_active: true }),
+        // Switched off: not counted.
+        account({ two_step: false, is_active: false }),
+      ]),
+    ).toBe(2);
+    expect(accountsWithoutTwoStep([])).toBe(0);
+  });
+
+  it('Reset 2FA is offered for a colleague with 2FA on: never yourself, never the owner', () => {
+    const row = { id: 'b', isOwner: false, twoStep: true as boolean | null };
+    expect(canResetTwoStep(row, 'a')).toBe(true);
+    expect(canResetTwoStep(row, 'b')).toBe(false);
+    expect(canResetTwoStep({ ...row, isOwner: true }, 'a')).toBe(false);
+    expect(canResetTwoStep({ ...row, twoStep: false }, 'a')).toBe(false);
+    expect(canResetTwoStep({ ...row, twoStep: null }, 'a')).toBe(false);
+  });
+
+  it("Require 2FA's confirm says how many are not set up, in plain words", () => {
+    expect(notSetUpSentence(0)).toBe('Everyone has set it up already.');
+    expect(notSetUpSentence(1)).toBe('1 person has not set it up yet.');
+    expect(notSetUpSentence(3)).toBe('3 people have not set it up yet.');
+    expect(notSetUpSentence(null)).toBe('Some people may not have set it up yet.');
   });
 });
 
