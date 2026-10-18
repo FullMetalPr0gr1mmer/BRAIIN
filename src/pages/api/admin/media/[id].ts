@@ -71,7 +71,7 @@ export const DELETE = defineAdminRoute({
     if (usage.length > 0) {
       const where = usage.slice(0, 5).map(usageWords).join(', ');
       throw new InUseError(
-        `still used by ${usage.length} item(s): ${where}${usage.length > 5 ? ', …' : ''} — replace it there first`,
+        `still used by ${usage.length} item(s): ${where}${usage.length > 5 ? ', …' : ''}. Replace it there first.`,
       );
     }
 

@@ -711,6 +711,16 @@ describe('media_usage v4: pending changes are references (0066, Admin v2 R5)', (
     expect(JSON.stringify(body)).toContain('still used by 1 item(s): service logo');
     expect(JSON.stringify(body)).not.toContain('pending');
   });
+
+  it('the refusal follows the admin copy rule: no em or en dash (P-12)', async () => {
+    state.stored = { id: ASSET, provider: 'static', storage_path: 'stills/work/p0.jpg' };
+    state.usage = [live, pending];
+    const { status, body } = await call(DELETE, ctx('DELETE', `/api/admin/media/${ASSET}`));
+    expect(status).toBe(409);
+    const words = JSON.stringify(body);
+    expect(words).toContain('. Replace it there first.');
+    expect(words).not.toMatch(/[\u2013\u2014]/);
+  });
 });
 
 describe('GET /api/admin/media/[id]/download and /stats', () => {
