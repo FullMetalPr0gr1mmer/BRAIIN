@@ -26,6 +26,11 @@ interface Props {
   summary?: string | undefined;
   /** The table's first heading ("Date"). */
   labelHeading?: string;
+  /**
+   * Shorter labels for the x axis only, one per label (the table and the summary keep
+   * `labels`): "14:00" under the line where the table says "15 Oct, 14:00".
+   */
+  axisLabels?: readonly string[] | undefined;
 }
 
 const {
@@ -37,8 +42,13 @@ const {
   height = 240,
   summary,
   labelHeading = 'Date',
+  axisLabels,
 } = Astro.props;
-const g = lineGeometry(series, labels, { height });
+const g = lineGeometry(
+  series,
+  axisLabels && axisLabels.length === labels.length ? axisLabels : labels,
+  { height },
+);
 const table = seriesTable(series, labels, labelHeading);
 ---
 

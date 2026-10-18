@@ -1,0 +1,40 @@
+---
+import ChartFigure from '@/components/admin/ui/charts/ChartFigure.astro';
+import type { UptimeDay } from '@schemas/healthProbe';
+import { dayState, stripSummary, stripTable } from '@/lib/admin/health/uptime';
+
+// The 90-day uptime strip (Admin v2 G2; the prototype's .up): one bar per Riyadh day, oldest
+// first, coloured by its state through a data attribute (no style=). The bars are
+// decoration for sighted readers (aria-hidden); the figure's summary and its "View as table"
+// carry the same days in words, the days with downtime listed (one dataset). The visible
+// summary under the bars repeats the figure's hidden one, so it is hidden from screen readers:
+// they hear it once.
+
+interface Props {
+  days: readonly UptimeDay[];
+}
+
+const { days } = Astro.props;
+const summary = stripSummary(days);
+---
+
+<ChartFigure
+  id="uptime-strip"
+  caption="Uptime over the last 90 days, by Riyadh day"
+  captionVisible={false}
+  summary={summary}
+  table={stripTable(days)}
+  empty={days.length === 0}
+  emptyText="No daily readings yet."
+>
+  <div class="up-wrap">
+    <ol class="up" aria-hidden="true">
+      {days.map((d) => <li class="up__d" data-state={dayState(d.ratio)} />)}
+    </ol>
+    <p class="up__cap" aria-hidden="true">
+      <span>90 days ago</span>
+      <span>Today</span>
+    </p>
+    <p class="up__sum" aria-hidden="true">{summary}</p>
+  </div>
+</ChartFigure>

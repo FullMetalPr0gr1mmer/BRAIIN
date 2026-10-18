@@ -11,11 +11,11 @@ import { ASSET_CSP, STATIC_SECURITY_HEADERS } from '@/lib/http/securityHeaders';
 
 const mocks = vi.hoisted(() => ({
   handle: vi.fn<(request: Request, env: unknown, ctx: unknown) => Promise<Response>>(),
-  runDailyJobs: vi.fn<() => Promise<void>>(),
+  runSchedule: vi.fn<(cron: string) => Promise<void>>(),
   writeSystemLog: vi.fn<(entry: unknown) => Promise<boolean>>(),
 }));
 vi.mock('@astrojs/cloudflare/handler', () => ({ handle: mocks.handle }));
-vi.mock('@/lib/cron/daily', () => ({ runDailyJobs: mocks.runDailyJobs }));
+vi.mock('@/lib/cron/schedules', () => ({ runSchedule: mocks.runSchedule }));
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: mocks.writeSystemLog }));
 
 const { default: worker } = await import('@/worker');
@@ -54,7 +54,7 @@ const expectSecured = (res: Response) => {
 
 beforeEach(() => {
   mocks.handle.mockReset();
-  mocks.runDailyJobs.mockReset().mockResolvedValue(undefined);
+  mocks.runSchedule.mockReset().mockResolvedValue(undefined);
   mocks.writeSystemLog.mockReset().mockResolvedValue(true);
 });
 afterEach(() => {
@@ -209,10 +209,14 @@ describe('a thrown error', () => {
 });
 
 describe('scheduled', () => {
-  it('hands the daily jobs to waitUntil', async () => {
-    const ctx = fakeCtx();
-    await worker.scheduled({} as never, {} as never, ctx as never);
-    expect(mocks.runDailyJobs).toHaveBeenCalledTimes(1);
-    expect(ctx.waitUntil).toHaveBeenCalledWith(mocks.runDailyJobs.mock.results[0]!.value);
-  });
+  it.each(['23 3 * * *', '*/10 * * * *'])(
+    'hands the schedule that fired (%s) to waitUntil, by its cron',
+    async (cron) => {
+      const ctx = fakeCtx();
+      await worker.scheduled({ cron } as never, {} as never, ctx as never);
+      expect(mocks.runSchedule).toHaveBeenCalledTimes(1);
+      expect(mocks.runSchedule).toHaveBeenCalledWith(cron);
+      expect(ctx.waitUntil).toHaveBeenCalledWith(mocks.runSchedule.mock.results[0]!.value);
+    },
+  );
 });

@@ -20,6 +20,8 @@ import { ADMIN_PRIVATE, securityFacts } from '@/lib/admin/health/security';
 import { SEO_BUILT_IN } from '@/lib/admin/health/seo';
 import { loadHealthReport, loadHealthSummary } from '@/lib/admin/health/summary';
 import type { VitalsReport } from '@/lib/admin/health/vitals';
+import type { ProbeReport, ProbeView } from '@/lib/admin/health/probes';
+import { probeFacts, type ProbeKind } from '@schemas/healthProbe';
 import { pageFileFor } from '../admin/routes';
 
 const { logs } = vi.hoisted(() => ({ logs: [] as unknown[] }));
@@ -490,11 +492,12 @@ const authOf = (role: Role): AuthContext => ({
 });
 
 describe('loadHealthReport', () => {
-  it('Admin: reads vitals, the counts, the errors and the last backup, each for its tenant', async () => {
+  it('Admin: reads vitals, the counts, the errors, the last backup and the readings, each for its tenant', async () => {
     const { sb, calls } = stub();
     const report = await loadHealthReport(sb, authOf('admin'), Date.parse('2026-10-15T12:00:00Z'));
     expect(calls.map((c) => `${c.kind}:${c.name}`).sort()).toEqual([
       'from:audit_log',
+      'from:health_probes',
       'from:system_logs',
       'rpc:content_health',
       'rpc:vitals_summary',
@@ -513,6 +516,7 @@ describe('loadHealthReport', () => {
       ['Largest paint (LCP)', '2.0 s'],
       ['Response to a tap (INP)', '150 ms'],
       ['Layout shift (CLS)', '0.30'],
+      ['Uptime, 30 days', 'Not set up'],
       ['Errors, 7 days', '5'],
       ['Checklist', expect.stringMatching(/^\d+ \/ \d+$/)],
     ]);
@@ -528,6 +532,10 @@ describe('loadHealthReport', () => {
     expect(calls.map((c) => `${c.kind}:${c.name}`)).toEqual(['rpc:content_health']);
     expect(report.errors7d).toBeNull();
     expect(report.tiles.find((t) => t.label === 'Errors, 7 days')?.value).toBe('Not checked');
+    // No siteHealth.view: no readings read, no uptime tile, uptime out of the score.
+    expect(report.probes).toBeNull();
+    expect(report.uptime).toBeNull();
+    expect(report.tiles.some((t) => t.label === 'Uptime, 30 days')).toBe(false);
   });
 
   it('a read that fails is logged and its rows say so; the rest still renders', async () => {
@@ -535,6 +543,8 @@ describe('loadHealthReport', () => {
     const { sb } = stub(['vitals_summary', 'system_logs']);
     const report = await loadHealthReport(sb, authOf('developer'));
     expect(report.vitals).toBeNull();
+    // The readings were read (the stub's rows are not probe rows, so none parse: not set up).
+    expect(report.uptime).toMatchObject({ status: 'off' });
     expect(report.checks.find((c) => c.id === 'speed.lcp')?.text).toBe(
       'Largest paint (LCP): could not be read just now',
     );
@@ -555,5 +565,345 @@ describe('loadHealthReport', () => {
       'speed.cls',
       'errors.recent',
     ]);
+  });
+});
+
+// ── Site health v2 (Admin v2 G2): the domain and the certificate ────────────────────────
+
+const NOW = Date.parse('2026-10-15T12:00:00Z');
+const inDays = (n: number) => new Date(NOW + n * 86_400_000 + 3_600_000).toISOString();
+
+function probe<K extends ProbeKind>(
+  kind: K,
+  state: ProbeView['state'],
+  facts: unknown,
+  extra: Partial<Omit<ProbeView, 'facts'>> = {},
+): ProbeView<K> {
+  return {
+    state,
+    facts: facts === null ? null : (probeFacts(kind, facts) as ProbeView<K>['facts']),
+    checkedAt: '2026-10-15T11:50:00Z',
+    okAt: '2026-10-15T11:50:00Z',
+    readOk: true,
+    failures: 0,
+    stateSince: '2026-10-01T00:00:00Z',
+    ...extra,
+  };
+}
+
+const domainFacts = (over: Record<string, unknown> = {}) => ({
+  apex: 'braiinstatiion.com',
+  outcome: 'ok',
+  expires: inDays(200),
+  registrar: 'Example Registrar',
+  rdap: {
+    tld: 'com',
+    base: 'https://rdap.verisign.com/com/v1/',
+    fetchedAt: '2026-10-01T00:00:00Z',
+  },
+  ...over,
+});
+
+const report = (over: Partial<ProbeReport> = {}): ProbeReport => ({
+  uptime: null,
+  domain: probe('domain', 'ok', domainFacts()),
+  certificate: null,
+  ...over,
+});
+
+describe('security.domain (G2)', () => {
+  const run = (probes: ProbeReport | null | undefined) =>
+    outcome('security.domain', ctx({ probes, now: NOW }));
+
+  it('names the domain when it renews well ahead, and fails at 30 days or fewer', () => {
+    expect(run(report())).toMatchObject({
+      state: 'ok',
+      text: 'braiinstatiion.com renews in 200 days',
+    });
+    expect(
+      run(report({ domain: probe('domain', 'fail', domainFacts({ expires: inDays(30) })) })),
+    ).toMatchObject({
+      state: 'fail',
+      text: 'braiinstatiion.com expires in 30 days',
+    });
+    expect(
+      run(report({ domain: probe('domain', 'ok', domainFacts({ expires: inDays(31) })) })).state,
+    ).toBe('ok');
+    expect(
+      run(report({ domain: probe('domain', 'fail', domainFacts({ expires: inDays(1) })) })).text,
+    ).toBe('braiinstatiion.com expires in 1 day');
+    expect(
+      run(report({ domain: probe('domain', 'fail', domainFacts({ expires: inDays(-3) })) })).text,
+    ).toMatch(/^braiinstatiion\.com expired on \d+ \w+ 2026$/);
+  });
+
+  it('fails when no registration is found, naming what was looked up', () => {
+    const found = run(
+      report({
+        domain: probe(
+          'domain',
+          'fail',
+          domainFacts({
+            apex: 'braiinstation.com',
+            outcome: 'not-found',
+            expires: null,
+            registrar: null,
+          }),
+        ),
+      }),
+    );
+    expect(found).toMatchObject({
+      state: 'fail',
+      text: 'No registration found for braiinstation.com',
+    });
+  });
+
+  it('is information on a Cloudflare address, or with no domain recorded', () => {
+    expect(
+      run(
+        report({
+          domain: probe(
+            'domain',
+            'info',
+            domainFacts({
+              apex: 'example-site.example.workers.dev',
+              outcome: 'not-applicable',
+              expires: null,
+              registrar: null,
+              rdap: null,
+            }),
+          ),
+        }),
+      ),
+    ).toMatchObject({
+      state: 'info',
+      text: 'Domain renewal: not checked: the site is on a Cloudflare address',
+    });
+    expect(
+      run(
+        report({
+          domain: probe(
+            'domain',
+            'info',
+            domainFacts({
+              apex: null,
+              outcome: 'not-applicable',
+              expires: null,
+              registrar: null,
+              rdap: null,
+            }),
+          ),
+        }),
+      ).text,
+    ).toBe('Domain renewal: not checked: no domain is recorded for the site');
+  });
+
+  it('is information when the record gives no date, or no registry covers the domain', () => {
+    expect(
+      run(
+        report({
+          domain: probe('domain', 'info', domainFacts({ outcome: 'unknown', expires: null })),
+        }),
+      ).text,
+    ).toBe('braiinstatiion.com: its registration record gives no renewal date');
+    expect(
+      run(
+        report({
+          domain: probe(
+            'domain',
+            'info',
+            domainFacts({ outcome: 'unknown', expires: null, rdap: null }),
+          ),
+        }),
+      ).text,
+    ).toBe('braiinstatiion.com: no public registration record covers this domain');
+  });
+
+  it('is unknown when never checked, when the readings could not be read, or when stale', () => {
+    expect(run(report({ domain: null }))).toMatchObject({
+      state: 'unknown',
+      text: 'Domain renewal: not checked yet',
+    });
+    expect(run(null)).toMatchObject({
+      state: 'unknown',
+      text: 'Domain renewal: could not be read just now',
+    });
+    expect(run(undefined).state).toBe('unknown');
+    expect(
+      run(
+        report({
+          domain: probe('domain', 'unknown', domainFacts(), { readOk: false, failures: 6 }),
+        }),
+      ).text,
+    ).toBe('Domain renewal: could not be read just now');
+    expect(run(report({ domain: probe('domain', 'unknown', null) })).state).toBe('unknown');
+  });
+});
+
+describe('security.certificate (G2)', () => {
+  const run = (probes: ProbeReport | null) =>
+    outcome('security.certificate', ctx({ probes, now: NOW }));
+  const cert = (expires: string | null, source = 'monitor') =>
+    probe('certificate', 'ok', { source, expires, issuer: expires ? "Let's Encrypt" : null });
+
+  it('renews ahead, and fails at 14 days or fewer (renewal is stuck)', () => {
+    expect(run(report({ certificate: cert(inDays(60)) }))).toMatchObject({
+      state: 'ok',
+      text: 'Certificate renews in 60 days',
+    });
+    expect(run(report({ certificate: cert(inDays(15)) })).state).toBe('ok');
+    const stuck = run(report({ certificate: cert(inDays(14)) }));
+    expect(stuck).toMatchObject({ state: 'fail', text: 'Certificate expires in 14 days' });
+    expect(stuck.detail).toContain("Issued by Let's Encrypt.");
+  });
+
+  it('says Cloudflare issues it, never a guess, when the monitor reports none or is off', () => {
+    for (const p of [cert(null, 'cloudflare'), null, probe('certificate', 'off', {})]) {
+      expect(run(report({ certificate: p })), JSON.stringify(p)).toMatchObject({
+        state: 'info',
+        text: 'Certificates are issued and renewed by Cloudflare',
+      });
+    }
+    expect(run(null).state).toBe('unknown');
+  });
+});
+
+describe('the G2 rules, gated and unlinked', () => {
+  it('only Admin and Developer are checked on them (siteHealth.view)', () => {
+    for (const role of ROLES) {
+      const results = runChecklist(ctx({ role, probes: report(), now: NOW }));
+      for (const id of ['security.domain', 'security.certificate']) {
+        expect(results.find((r) => r.id === id)?.checked, `${role} ${id}`).toBe(
+          ROLE_CAPS[role]['siteHealth.view'] === 'full',
+        );
+      }
+    }
+  });
+
+  it('carry no fix link: the fix is at the registrar or the monitor', () => {
+    for (const id of ['security.domain', 'security.certificate'])
+      expect(rule(id).fix).toBeUndefined();
+    const failing = report({
+      domain: probe('domain', 'fail', domainFacts({ outcome: 'not-found', expires: null })),
+    });
+    const row = runChecklist(ctx({ probes: failing, now: NOW })).find(
+      (r) => r.id === 'security.domain',
+    );
+    expect(row).toMatchObject({ state: 'fail', fix: null });
+  });
+
+  it('sit in the Security group after the code facts, in the prototype’s order', () => {
+    expect(HEALTH_RULES.filter((r) => r.group === 'Security').map((r) => r.id)).toEqual([
+      'security.csp',
+      'security.hsts',
+      'security.admin',
+      'security.crawlers',
+      'security.domain',
+      'security.certificate',
+    ]);
+  });
+});
+
+describe('loadHealthReport with readings (G2)', () => {
+  function probeStub(rows: unknown[] | null) {
+    const { sb, calls } = stub(rows === null ? ['health_probes'] : []);
+    const base = sb as unknown as { from: (name: string) => Record<string, unknown> };
+    const from = base.from.bind(base);
+    (sb as unknown as { from: unknown }).from = (name: string) => {
+      const b = from(name);
+      if (name !== 'health_probes' || rows === null) return b;
+      b['then'] = (resolve: (v: unknown) => unknown) => resolve({ data: rows, error: null });
+      return b;
+    };
+    return { sb, calls };
+  }
+  const row = (kind: string, state: string, facts: unknown) => ({
+    kind,
+    state,
+    facts,
+    read_ok: true,
+    failures: 0,
+    checked_at: '2026-10-15T11:50:00Z',
+    ok_at: '2026-10-15T11:50:00Z',
+    next_at: '2026-10-15T11:55:00Z',
+    state_since: '2026-10-01T00:00:00Z',
+  });
+  const uptimeFacts = {
+    ratio30: 99.96,
+    ratio90: 99.91,
+    days: [],
+    incidents: [],
+    responseTimes: [],
+    monitors: [{ name: 'Home', path: '/', intervalSec: 300, status: 'up' }],
+    downSince: null,
+  };
+
+  it('a reading: the tile, the 40/40/20 score, the rows, all read for the tenant', async () => {
+    const { sb, calls } = probeStub([
+      row('uptime', 'ok', uptimeFacts),
+      row('domain', 'ok', domainFacts()),
+      row('certificate', 'info', { source: 'cloudflare', expires: null, issuer: null }),
+    ]);
+    const r = await loadHealthReport(sb, authOf('admin'), NOW);
+    expect(calls.find((c) => c.name === 'health_probes')?.filters).toContainEqual([
+      'tenant_id',
+      't1',
+    ]);
+    expect(r.tiles.find((t) => t.label === 'Uptime, 30 days')).toEqual({
+      label: 'Uptime, 30 days',
+      value: '99.96%',
+      note: 'From the monitor',
+    });
+    expect(r.score.uptimePart).toBeCloseTo(96, 6);
+    expect(r.score.formula).toContain('uptime from the monitor (20%)');
+    expect(r.checks.find((c) => c.id === 'security.domain')?.state).toBe('ok');
+    expect(r.uptime).toEqual({
+      status: 'read',
+      state: 'ok',
+      ratio30: 99.96,
+      checkedAt: '2026-10-15T11:50:00Z',
+    });
+  });
+
+  it('a stale reading is not scored, and says the monitor could not be read', async () => {
+    const { sb } = probeStub([
+      { ...row('uptime', 'unknown', uptimeFacts), read_ok: false, failures: 6 },
+    ]);
+    const r = await loadHealthReport(sb, authOf('developer'), NOW);
+    expect(r.score.uptimePart).toBeNull();
+    expect(r.score.formula).toContain('Uptime could not be read just now.');
+  });
+
+  it('the tile: no reading yet once tried, not reported when the monitor omits it', async () => {
+    const tile = async (r: unknown) =>
+      (await loadHealthReport(probeStub([r]).sb, authOf('admin'), NOW)).tiles.find(
+        (t) => t.label === 'Uptime, 30 days',
+      )?.value;
+    // Never read: the row exists because a run tried, so "Not checked yet" would be untrue.
+    for (const failures of [1, 6]) {
+      expect(
+        await tile({ ...row('uptime', 'unknown', {}), read_ok: false, failures, ok_at: null }),
+      ).toBe('No reading yet');
+    }
+    expect(await tile(row('uptime', 'ok', { ...uptimeFacts, ratio30: null }))).toBe('Not reported');
+  });
+
+  it('a failed read is logged; the tile says so and the score leaves uptime out', async () => {
+    logs.length = 0;
+    const { sb } = probeStub(null);
+    const r = await loadHealthReport(sb, authOf('admin'), NOW);
+    expect(r.probes).toBeNull();
+    expect(r.tiles.find((t) => t.label === 'Uptime, 30 days')?.value).toBe('Could not be read');
+    expect(r.checks.find((c) => c.id === 'security.domain')?.text).toBe(
+      'Domain renewal: could not be read just now',
+    );
+    expect(r.score.formula).toContain('Uptime could not be read just now.');
+    expect(logs).toHaveLength(1);
+  });
+
+  it('the dashboard summary carries the uptime figure (additive, for U1)', async () => {
+    const { sb } = probeStub([row('uptime', 'ok', uptimeFacts)]);
+    const summary = await loadHealthSummary(sb, authOf('admin'), NOW);
+    expect(summary.uptime).toMatchObject({ status: 'read', ratio30: 99.96 });
   });
 });
