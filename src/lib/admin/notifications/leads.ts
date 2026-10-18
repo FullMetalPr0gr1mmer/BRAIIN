@@ -43,7 +43,8 @@ export const leads: NotificationSource = {
         detail: interest,
         at: row.created_at,
         since: row.created_at,
-        href: '/admin/leads',
+        // The lead's own page (C4b); a lead the reader can no longer see answers a 404 there.
+        href: `/admin/leads/${row.id}`,
       };
     });
   },

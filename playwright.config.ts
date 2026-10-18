@@ -37,11 +37,21 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      // The F0 harness extension (Admin v2 C4b): a row for each edit screen with no resource
+      // config (tests/admin/routes.ts EDIT_SAMPLES), added as the admin once the sessions
+      // exist, before the sweep looks for one.
+      name: 'admin-samples',
+      testDir: './tests/admin',
+      testMatch: /samples\.setup\.ts$/,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['admin-setup'],
+    },
+    {
       name: 'admin',
       testDir: './tests/admin',
       testIgnore: VISIBILITY_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['admin-setup'],
+      dependencies: ['admin-samples'],
     },
     {
       // Page visibility (Admin v2 U14a) hides real pages on the one preview every spec

@@ -82,9 +82,9 @@ export function leadPatchValues(patch: LeadPatch, now: Date): Record<string, unk
     values['last_contact_channel'] = patch.logContact.channel;
     values['last_contact_at'] = now.toISOString();
   }
-  // The legacy panel's two fields (the expand window; C4 and C14 retire them).
+  // The legacy status (the expand window; C14 retires it). The legacy notes field is never
+  // written here since C4b: LeadPatchSchema refuses it (notes are a thread).
   if (patch.status !== undefined) values['status'] = patch.status;
-  if (patch.internalNotes !== undefined) values['internal_notes'] = patch.internalNotes;
   return values;
 }
 

@@ -88,8 +88,10 @@ jobs:
       # CLAUDE.md §6 gate B. size-limit sums the gzipped files each glob in
       # .size-limit.json matches, and exits non-zero over a limit. §6 says failing any
       # budget blocks the PR, but until this step nothing ran it, so a regression could
-      # merge unseen.
-      - name: Bundle budgets — public ≤ 100 KB, admin ≤ 300 KB gz (size-limit)
+      # merge unseen. Since Admin v2 C4b (O-15, the plan's default) the admin gate is each
+      # screen's eager graph, ≤ 300 KB gz (scripts/admin-bundle.mjs, run by `npm run size`);
+      # the admin sum, lazy chunks included, is a coarse 400 KB tripwire.
+      - name: Bundle budgets — public ≤ 100 KB, admin screen eager ≤ 300 KB, admin sum ≤ 400 KB gz
         run: npm run size
 
   supply-chain:

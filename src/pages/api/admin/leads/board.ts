@@ -1,9 +1,8 @@
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { LeadBoardQuerySchema } from '@schemas/crm';
 import { defineAdminRoute } from '@/lib/admin/route';
-import { ValidationError } from '@/lib/admin/errors';
-import { LEAD_CARD_FIELDS, pick, tenantCountry, toRpcFilter } from '@/lib/crm/leadQuery';
-import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
+import { tenantCountry, toRpcFilter } from '@/lib/crm/leadQuery';
+import { readLeadBoard } from '@/lib/crm/leadReads';
 
 // The pipeline board (Admin v2 C2a): every stage of the caller's tenant with its count, its
 // value in SAR (C4a, 0063: the matching non-spam leads' value_sar; the screen shows it on won
@@ -23,36 +22,7 @@ export const POST = defineAdminRoute({
       input,
       tenantCountry(sb, auth.tenantId),
     );
-    const { data, error } = await sb.rpc('leads_board', {
-      p_tenant: auth.tenantId,
-      p_filter: filter,
-    });
-    if (error) {
-      if (error.code === '22023') throw new ValidationError('board filter refused');
-      throw new Error(`leads_board: ${error.message}`);
-    }
-    const columns = ((data ?? []) as Record<string, unknown>[]).map((column) => {
-      const cards = Array.isArray(column['leads'])
-        ? (column['leads'] as Record<string, unknown>[])
-        : [];
-      return {
-        stage_id: column['stage_id'] ?? null,
-        total: Number(column['total'] ?? 0),
-        value_sum: Number(column['value_sum'] ?? 0),
-        leads: cards.map((card) => pick(card, LEAD_CARD_FIELDS)),
-      };
-    });
-    // Labels for every card on the board at once: two queries, not two per card.
-    const labels = await resolveLeadInterests(
-      sb,
-      auth.tenantId,
-      columns.flatMap((column) => column.leads),
-    );
-    return {
-      columns: columns.map((column) => ({
-        ...column,
-        leads: column.leads.map((card) => withInterestLabels(card, labels)),
-      })),
-    };
+    // The read and its shaping are shared with the board page's first view (leadReads.ts).
+    return { columns: await readLeadBoard(sb, auth.tenantId, filter) };
   },
 });

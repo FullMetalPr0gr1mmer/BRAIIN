@@ -1,22 +1,86 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminLeads from '@/components/admin/islands/AdminLeads';
+import AdminLeadsList from '@/components/admin/islands/AdminLeadsList';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
 import { can } from '@/lib/authz/matrix';
+import { readLeadsFrame, readLeadsListInitial } from '@/lib/crm/leadPage';
+import { exportHrefOf, parseLeadFilters } from '@/lib/crm/leadUrl';
+import { leadsSubline } from '@/lib/crm/leadView';
 
 export const prerender = false;
 
-// The two flags below are UX hints computed from the SAME ROLE_CAPS the server
-// enforces. They decide which controls render; they decide nothing about access. A
-// caller who forges them reaches endpoints that re-check `leads.pii` and `export.csv`
-// server-side and refuse.
-const role = Astro.locals.session?.role ?? 'content_creator';
-const canSeePii = can(role, 'leads.pii') === 'full';
-const canExport = can(role, 'export.csv') === 'full';
+// The leads list (Admin v2 C4b, crm.md §11 screen 1): the KPIs, the chips, the search, the
+// filters, the table and its bulk bar. The first view is rendered here, for the filters the
+// address carries (src/lib/crm/leadUrl.ts: never a search), so the page is complete without
+// JavaScript; the island takes over. `leads.manage` (Admin + Developer): any other role is
+// refused here with a 403 and reads nothing, the U2 way (Refused.astro); RLS and the live
+// check refuse them again in the database.
+//
+// The flags handed to the island are UX hints from the same ROLE_CAPS the server enforces;
+// they decide which controls render, never access: every route re-checks its capability
+// (`leads.pii` for the manual add, `export.csv` for the export) and refuses.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = session !== null && can(session.role, 'leads.manage') === 'full';
+if (!allowed) Astro.response.status = 403;
+
+const filters = parseLeadFilters(Astro.url.searchParams);
+const now = new Date();
+const permissions = {
+  canSeePii: allowed && can(session.role, 'leads.pii') === 'full',
+  canExport: allowed && can(session.role, 'export.csv') === 'full',
+  canErase: allowed && can(session.role, 'crm.erase') === 'full',
+  canEditServices: allowed && can(session.role, 'services.write') === 'full',
+};
+
+const [frame, initial] =
+  allowed && session && sb
+    ? await Promise.all([
+        readLeadsFrame(sb, session).catch(() => null),
+        readLeadsListInitial(sb, session, filters, now),
+      ])
+    : [null, null];
+const summary = initial?.summary ?? null;
+const subtitle = summary
+  ? leadsSubline(summary, filters.range)
+  : 'Every inquiry from the site’s forms, and the ones added by hand.';
 ---
 
-<AdminLayout
-  title="Leads"
-  subtitle="Contact details are encrypted at rest. Revealing them is logged against your account."
->
-  <AdminLeads client:load canSeePii={canSeePii} canExport={canExport} />
+<AdminLayout title="Leads" subtitle={subtitle} styles={['leads.css']}>
+  {
+    allowed && permissions.canExport && (
+      <a slot="actions" class="btn" href={exportHrefOf(filters, now)} data-lead-export>
+        <Icon name="download" size={16} />
+        Export CSV<span class="visually-hidden"> of the leads these filters show</span>
+      </a>
+    )
+  }
+  {
+    allowed && permissions.canSeePii && (
+      <button slot="actions" type="button" data-variant="primary" data-lead-add hidden>
+        <Icon name="plus" size={16} />
+        Add lead manually
+      </button>
+    )
+  }
+  {
+    !allowed ? (
+      <Refused />
+    ) : frame === null ? (
+      <p class="msg" data-kind="error" role="alert">
+        The leads could not be loaded just now. Try again in a moment.
+      </p>
+    ) : (
+      <AdminLeadsList
+        client:load
+        frame={frame}
+        initial={{ summary, page: initial?.page ?? null }}
+        filters={filters}
+        permissions={permissions}
+        now={now.toISOString()}
+      />
+    )
+  }
 </AdminLayout>

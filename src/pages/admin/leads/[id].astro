@@ -1,0 +1,186 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminLeadDetail from '@/components/admin/islands/AdminLeadDetail';
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { NotFoundError } from '@/lib/admin/errors';
+import { formatDate } from '@/lib/admin/relTime';
+import {
+  readLeadDetail,
+  readPeople,
+  readStages,
+  type LeadDetailInitial,
+  type PersonView,
+  type StageView,
+} from '@/lib/crm/leadPage';
+import { firstPage, parseLeadFilters, withLeadFilters } from '@/lib/crm/leadUrl';
+import { interestOf } from '@/lib/crm/leadView';
+
+export const prerender = false;
+
+// One lead (Admin v2 C4b, crm.md §11 screen 3). The tab and the history say "Lead"; the h1 is
+// the person's name, in its own direction (names stay out of titles, crm.md §11). Back,
+// Previous and Next carry the list's filters from the address (never a search, decision D8):
+// public.lead_neighbours steps through the list's own order. `leads.manage`: any other role
+// is refused with a 403 and reads nothing. A lead the caller cannot see answers a 404, the
+// same as one that does not exist, so an id never tells whether it is real.
+//
+// What this page reads is the safe and pipeline columns (src/lib/crm/leadPage.ts): never a
+// contact detail, a budget, a note or a score reason. The island asks for those, through the
+// audited routes, when a person does. The flags handed to it are UX hints.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = session !== null && can(session.role, 'leads.manage') === 'full';
+if (!allowed) Astro.response.status = 403;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const id = Astro.params.id ?? '';
+const filters = firstPage(parseLeadFilters(Astro.url.searchParams));
+const now = new Date();
+const permissions = {
+  canSeePii: allowed && can(session.role, 'leads.pii') === 'full',
+  canExport: allowed && can(session.role, 'export.csv') === 'full',
+  canErase: allowed && can(session.role, 'crm.erase') === 'full',
+  canEditServices: allowed && can(session.role, 'services.write') === 'full',
+};
+
+let detail: LeadDetailInitial | null = null;
+let stages: StageView[] = [];
+let people: PersonView[] = [];
+let sameEmail: { id: string; number: number | null }[] = [];
+let failed = false;
+let notFound = false;
+
+if (allowed && session && sb) {
+  if (!UUID.test(id)) {
+    notFound = true;
+  } else {
+    try {
+      [detail, stages, people] = await Promise.all([
+        readLeadDetail(sb, session, id, filters, now, permissions.canEditServices),
+        readStages(sb, session),
+        readPeople(sb, session),
+      ]);
+    } catch (err) {
+      if (err instanceof NotFoundError) notFound = true;
+      else failed = true;
+    }
+    // After a lead added by hand: the earlier leads with the same e-mail (ids only, from the
+    // drawer's answer; their numbers read here, under RLS).
+    const same = (Astro.url.searchParams.get('same') ?? '')
+      .split(',')
+      .filter((v) => UUID.test(v))
+      .slice(0, 5);
+    if (detail && same.length > 0) {
+      const { data } = await sb
+        .from('leads')
+        .select('id,lead_number')
+        .eq('tenant_id', session.tenantId)
+        .in('id', same);
+      sameEmail = ((data ?? []) as { id: string; lead_number: number | null }[]).map((row) => ({
+        id: row.id,
+        number: typeof row.lead_number === 'number' ? row.lead_number : null,
+      }));
+    }
+  }
+}
+if (allowed && notFound) Astro.response.status = 404;
+
+const lead = detail?.lead;
+const name = typeof lead?.name === 'string' && lead.name.trim() ? lead.name.trim() : undefined;
+const subtitle = lead
+  ? [
+      typeof lead.company === 'string' && lead.company.trim() ? lead.company.trim() : null,
+      interestOf(
+        {
+          service_of_interest:
+            typeof lead.service_of_interest === 'string' ? lead.service_of_interest : null,
+          discipline_of_interest:
+            typeof lead.discipline_of_interest === 'string' ? lead.discipline_of_interest : null,
+          service_label: lead.service_label ?? null,
+          discipline_label: lead.discipline_label ?? null,
+        },
+        '',
+      ) || null,
+      typeof lead.created_at === 'string' ? `received ${formatDate(lead.created_at)}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  : undefined;
+const back = withLeadFilters('/admin/leads', filters);
+const neighbour = (to: string | null) =>
+  to ? withLeadFilters(`/admin/leads/${to}`, filters) : null;
+const prev = detail ? neighbour(detail.neighbours.prev) : null;
+const next = detail ? neighbour(detail.neighbours.next) : null;
+const me = session
+  ? { id: session.userId, name: people.find((p) => p.id === session.userId)?.name ?? 'You' }
+  : { id: '', name: 'You' };
+---
+
+<AdminLayout
+  title="Lead"
+  heading={name ?? (notFound ? 'Lead not found' : 'Lead')}
+  headingDir={name ? 'auto' : undefined}
+  subtitle={subtitle}
+  styles={['leads.css']}
+>
+  {
+    allowed && (
+      <div slot="actions" class="lead-nav">
+        <a class="btn" href={back}>
+          <Icon name="back" size={16} />
+          Back<span class="visually-hidden"> to the leads</span>
+        </a>
+        {detail &&
+          (prev ? (
+            <a class="btn" href={prev}>
+              Previous<span class="visually-hidden"> lead</span>
+            </a>
+          ) : (
+            <span class="btn" aria-disabled="true">
+              Previous<span class="visually-hidden"> (this is the newest lead)</span>
+            </span>
+          ))}
+        {detail &&
+          (next ? (
+            <a class="btn" href={next}>
+              Next<span class="visually-hidden"> lead</span>
+            </a>
+          ) : (
+            <span class="btn" aria-disabled="true">
+              Next<span class="visually-hidden"> (this is the last lead)</span>
+            </span>
+          ))}
+      </div>
+    )
+  }
+  {
+    !allowed ? (
+      <Refused />
+    ) : notFound ? (
+      <EmptyState icon="inbox" title="That lead is not here." text="It may have been erased.">
+        <a class="btn" href={back}>
+          Back to the leads
+        </a>
+      </EmptyState>
+    ) : failed || !detail ? (
+      <p class="msg" data-kind="error" role="alert">
+        The lead could not be loaded just now. Try again in a moment.
+      </p>
+    ) : (
+      <AdminLeadDetail
+        client:load
+        {...detail}
+        stages={stages}
+        people={people}
+        permissions={permissions}
+        me={me}
+        sameEmail={sameEmail}
+        now={now.toISOString()}
+      />
+    )
+  }
+</AdminLayout>

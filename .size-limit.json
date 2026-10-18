@@ -11,13 +11,13 @@
     "gzip": true
   },
   {
-    "name": "admin bundle (gzipped)",
+    "name": "admin bundle sum, a coarse tripwire (gzipped; the gate is each screen's eager graph, scripts/admin-bundle.mjs)",
     "path": [
       "dist/client/_astro/admin-*.js",
       "dist/client/_astro/Admin*.js",
       "dist/client/_astro/login.astro_*.js"
     ],
-    "limit": "300 KB",
+    "limit": "400 KB",
     "gzip": true
   }
 ]
