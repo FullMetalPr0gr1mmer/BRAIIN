@@ -121,10 +121,18 @@ for (const locale of ['en', 'ar'] as const) {
       page,
     }) => {
       // Opened by the URL at load: not the visitor's choice, nothing but the page view.
+      // Consent is given on another page first, so the panel opens at load with analytics
+      // already granted: an interest beacon from that open would be sent, not dropped by the
+      // gate, and this assertion would catch it. (Accepting after the load could not fail.)
+      await page.goto(p.contact, { waitUntil: 'networkidle' });
+      await accept(page);
       const first = beacons(page);
       await page.goto(`${p.services}#branding`, { waitUntil: 'networkidle' });
-      await accept(page);
       await expect(page.locator('.svc-panel#branding')).toBeVisible();
+      // The services page view arrived, so the gate was open while the panel opened.
+      await expect
+        .poll(() => first.filter((b) => b.type === 'pageview' && b.path === p.services).length)
+        .toBe(1);
       await settle(page);
       expect(first.filter((b) => b.type === 'service_interest')).toEqual([]);
 
