@@ -738,15 +738,15 @@ describe('the guides say only what the admin does', () => {
     expect(after.minutes).toBe(4);
   });
 
-  it('C4c (0079) restates C4b’s set (0065) and changes only the working-with-leads guide', () => {
-    // Production applies 0065 then 0079: every guide 0065 seeds, byte for byte, but the leads
+  it('C4c (0068) restates C4b’s set (0065) and changes only the working-with-leads guide', () => {
+    // Production applies 0065 then 0068: every guide 0065 seeds, byte for byte, but the leads
     // guide, which gains the Pipeline board's line (the board was carved out of C4b by size).
     const setOf = (file: string) => {
       const sql = source(`${MIGRATIONS}/${file}`);
       return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
     };
     const base = setOf('0065_help_leads_v2.sql');
-    const c4c = setOf('0079_help_leads_board.sql');
+    const c4c = setOf('0068_help_leads_board.sql');
     expect(c4c.map((a) => a.slug)).toEqual(base.map((a) => a.slug));
     for (const article of base.filter((a) => a.slug !== 'working-with-leads')) {
       expect(

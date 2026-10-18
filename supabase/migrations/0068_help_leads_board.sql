@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 0079 — The leads guide names the Pipeline board (Admin v2 C4c). Forward-only.
+-- 0068 — The leads guide names the Pipeline board (Admin v2 C4c). Forward-only.
 -- Depends on 0046 (the help centre: app.help_article_set(), app.seed_help_articles(),
 -- public.help_articles) and 0065 (C4b: the guides as it left them, every earlier restatement
 -- included, 0064's U4 among them).
@@ -10,7 +10,8 @@
 -- to its first list, in English and in Arabic ("On the Pipeline tab each stage is a column…").
 -- Its slug, place (70), tags, title, minutes (4), screens (/admin/leads, which covers the board
 -- through the screen match) and capability (leads.manage) are unchanged. Every other guide is
--- 0065's, byte for byte. 0079 is Wave 3's first slack number (docs/admin-v2/migrations.md).
+-- 0065's, byte for byte. The number is provisional: C4c merges after R5 (0066) and G2 (0067)
+-- and takes the next free number above main's highest at its merge (docs/admin-v2/migrations.md).
 --
 -- No table, column, policy, grant or capability changes (CLAUDE.md §5 is untouched). The
 -- reseed is app.seed_help_articles(), which updates a guide only where it differs from the set,
@@ -1259,7 +1260,7 @@ begin
   -- screens and capability, and reads in four minutes.
   v_set := app.help_article_set();
   if jsonb_typeof(v_set) <> 'array' or jsonb_array_length(v_set) <> 15 then
-    raise exception '0079: app.help_article_set() must hold 15 guides';
+    raise exception '0068: app.help_article_set() must hold 15 guides';
   end if;
   select a into v_guide from jsonb_array_elements(v_set) a
    where a ->> 'slug' = 'working-with-leads';
@@ -1270,20 +1271,20 @@ begin
      or v_guide -> 'screens' <> '["/admin/leads"]'::jsonb
      or v_guide -> 'caps' <> '["leads.manage"]'::jsonb
      or v_guide ->> 'title' <> 'Working with leads' then
-    raise exception '0079: the working-with-leads guide does not keep its place, screens and capability';
+    raise exception '0068: the working-with-leads guide does not keep its place, screens and capability';
   end if;
   -- The text names the board (C4c) in both languages, and keeps C4b's (Move to…, no old panel).
   if position('On the Pipeline tab' in (v_guide -> 'body' ->> 'en')) = 0
      or position('Pipeline' in (v_guide -> 'body' ->> 'ar')) = 0
      or position('Move to…' in (v_guide -> 'body' ->> 'en')) = 0
      or position('Reveal contact details and notes' in (v_guide -> 'body' ->> 'en')) > 0 then
-    raise exception '0079: the working-with-leads guide does not name the Pipeline board';
+    raise exception '0068: the working-with-leads guide does not name the Pipeline board';
   end if;
 
   -- No API role reads the set (0046).
   foreach p in array array['public', 'anon', 'authenticated', 'service_role'] loop
     if has_function_privilege(p, 'app.help_article_set()', 'execute') then
-      raise exception '0079: % may execute app.help_article_set()', p;
+      raise exception '0068: % may execute app.help_article_set()', p;
     end if;
   end loop;
 
@@ -1298,11 +1299,11 @@ begin
                    and h.body = v_guide -> 'body'
                    and h.screens = array['/admin/leads']
                    and h.caps = array['leads.manage'])) then
-    raise exception '0079: a tenant does not hold the working-with-leads guide as the set states it';
+    raise exception '0068: a tenant does not hold the working-with-leads guide as the set states it';
   end if;
   select count(*) into v_count from public.tenants tn
    where (select count(*) from public.help_articles h where h.tenant_id = tn.id) <> 15;
   if v_count > 0 then
-    raise exception '0079: % tenant(s) do not hold exactly the 15 guides', v_count;
+    raise exception '0068: % tenant(s) do not hold exactly the 15 guides', v_count;
   end if;
 end $$;

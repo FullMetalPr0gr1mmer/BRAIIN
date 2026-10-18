@@ -718,7 +718,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [C3](as-built/C3.md): the leads write API: versioned PATCH, bulk, manual add, erase, export filters, 0041
 - [C4a](as-built/C4a.md): the leads readers v2: assignee, star, unread, source, channel and discipline filters, the SLA flag, the board's values, the summary's figures, Previous/Next in the list's own order, the score's reasons behind the reveal, 0063 (#79)
 - [C4b](as-built/C4b.md): the leads screens: the list with its KPIs, chips, filters in the address and bulk bar, a lead's page (the audited reveal, the notes thread, the status card, Move to…, the timeline, Erase), the lazy add drawer, the `internalNotes` 422, the F0 harness extension, the `admin-leads` chunk groups and O-15 by the plan's default, 0065 (the help guide only; PR number at review)
-- [C4c](as-built/C4c.md): the Pipeline board, carved out of C4b by size: a column per stage, Move to… on every card, announced, the List | Pipeline tabs, 0079 (the help guide only; PR number at review)
+- [C4c](as-built/C4c.md): the Pipeline board, carved out of C4b by size: a column per stage, Move to… on every card, announced, the List | Pipeline tabs, 0068 for now (the help guide only; its number is decided at merge time; PR number at review)
 
 **Hotfixes**
 - [H5](as-built/H5.md): the audit chain is serialized, 0031 (#36)

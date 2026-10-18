@@ -71,7 +71,7 @@
   - "Agreed to be contacted about this inquiry" shows the public form's checkbox for a web-form lead, and "Added by hand" for a lead added by hand, whose column records no such answer (C4b, D10);
   - the list and the board are the Leads area's List | Pipeline tabs (links, zero JS), not the prototype's Inbox | Pipeline segmented switch: "Inbox" is reserved for L6's messaging (C4c, D2);
   - the board has no pointer drag yet: "Move to…" on every card is the one way to move a lead there (the prototype's native drag is optional in crm.md and would need the kit's Sortable core in cross-list mode and a pass of the sweep; C4c, D5); its sub-line says "Use Move to… on a card", not "Drag a card";
-  - the board was carved out of C4b by size (the Wave 3 brief, §13) and ships as C4c, its help line in its own restatement (0079);
+  - the board was carved out of C4b by size (the Wave 3 brief, §13) and ships as C4c, its help line in its own restatement (0068 for now, numbered at merge time);
   - no client-side CSV;
   - Mark as spam + Admin-only Erase instead of delete;
   - no keystroke autosave;
