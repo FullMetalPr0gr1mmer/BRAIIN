@@ -62,6 +62,14 @@
   - contact details behind an audited reveal; no budget in lists;
   - a lead's score shows as a number until the reveal: its reasons come with the contact details, through the audited reveal, because three of them (a budget given, a budget over 200k, a timeline given) name the budget band and the timeline (C4a, D7). The number itself is readable by every lead worker (all of whom hold `leads.pii`) and, with the scoring points, can imply the band: with the default points any score above 65 includes a budget over 200k;
   - the list's default order is starred first, then newest; "Newest" stays newest only, so the dashboard's latest leads do not move (C4a, D6);
+  - a lead's stage changes through "Move to…", a short list of the other stages, never a native select (Windows browsers fire `change` on each arrow key, which would move a lead by accident), on a lead's page and, with C4c, on every board card (C4b, D11);
+  - "Move to…" is named "Move to… {name}", the visible words first, not crm.md's "Move {name} to…": a spoken name that starts with what is seen (WCAG 2.5.3, Label in Name; C4b);
+  - a lead's tags are a short chip list with Add tag and a remove button per tag, saved as one versioned PATCH each, not the field kit's tags field, so a lead's page never loads the field kit (C4b, D12);
+  - "Add lead manually" is hidden until the page's script is up: with no JavaScript there is no drawer to open (C4b, D9); the list, a lead's page and their links all work without it;
+  - a ranged KPI's change compares the same elapsed span one range earlier (the last 7 days so far against the same days and hours a week before), never a part day against whole ones (C4b; C4a left it open);
+  - a role without `leads.manage` that opens a leads page by its address gets the admin's one refusal, "Your role does not allow that." (`Refused.astro`, a 403, nothing read), not crm.md's "You do not have access to this / Ask an admin if you need it" (C4b, the U2 pattern);
+  - "Agreed to be contacted about this inquiry" shows the public form's checkbox for a web-form lead, and "Added by hand" for a lead added by hand, whose column records no such answer (C4b, D10);
+  - until C4c merges, the Leads area has no List | Pipeline tabs and no board: the board was carved out of C4b by size (the brief's §13), and ships with its tab, its help line and its tests in C4c;
   - no client-side CSV;
   - Mark as spam + Admin-only Erase instead of delete;
   - no keystroke autosave;
@@ -73,6 +81,7 @@
 - **Backups**: leads are never in admin backups (DR via the runbook, §7/§10).
 - **Activity log**: kept permanently and tamper-evident, not "12 months" or "90 days" (§3); exportable under the export lockdown, with no titles in the file (U13).
 - **Invites** expire per Supabase Auth instead of 7 days, until L6 brings transactional email (O-22). As built (U12b, decision D1): **one hour, with Resend**, because Supabase has one e-mail link expiry (`otp_expiry`) for invite and reset links, so a longer invite would make reset links live as long; the owner may choose longer (up to 24 h) for both.
+- **Bundle** (O-15, decided by the approved plan's default on 2026-10-18; C4b): the admin bundle's gate is each admin screen's eager graph, at most 300 KB gz (`scripts/admin-bundle.mjs`), with its own caps on the lazy chunks and the sign-in script; the size-limit sum of every admin file, lazy ones included, is a coarse 400 KB tripwire, no longer the budget (it was 300 KB, and the leads screens took it past that).
 - **Health**: no in-Worker uptime checker; uptime comes from the external monitor (§10).
 - **Help** (U16):
   - guides only for features that are built (nine of the prototype's fifteen described later-phase screens; "roles" promised per-person exceptions §5 does not have);

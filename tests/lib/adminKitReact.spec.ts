@@ -509,6 +509,9 @@ describe('the kit screen’s island', () => {
     expect(out).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>.*SEO/s);
     expect(out).toContain('1 to 25 of 60');
     expect(out).toContain(KIT_ROWS[0]!.title);
+    // The island's KPI card (C4b): its figure, unit and the change pill's spoken words.
+    expect(out).toContain('<span class="stat-unit">50,000 SAR</span>');
+    expect(out).toContain('Up 20% vs the previous 7 days');
     for (const section of KIT_SECTIONS)
       expect(out).toContain(`aria-label="Reorder ${section.label}"`);
     expect(out).toContain('data-sortable-list="left"');

@@ -11,6 +11,7 @@ import {
   eventSentence,
   formatSar,
   interestOf,
+  leadsSubline,
   rangeToInstants,
   scoreBand,
   scoreBucket,
@@ -19,6 +20,7 @@ import {
   sourceTone,
   stageTone,
 } from '@/lib/crm/leadView';
+import { previousPeriod } from '@/lib/crm/leadKpis';
 
 // How a lead reads on the leads screens (Admin v2 C4a): src/lib/crm/leadView.ts. Pure, so a
 // server-rendered page and its island print the same words. P-12: no em or en dash, digits
@@ -167,27 +169,41 @@ describe('the timeline', () => {
 });
 
 describe('rangeToInstants: the studio calendar (Asia/Riyadh), half-open', () => {
-  it('the last 7 days end at midnight tonight in Riyadh, today included', () => {
+  it('the last 7 days run from midnight six days ago in Riyadh to now, today included', () => {
     // 15:00 in Riyadh on 17 October.
     expect(rangeToInstants('7', new Date('2026-10-17T12:00:00Z'))).toEqual({
       from: '2026-10-10T21:00:00.000Z',
-      to: '2026-10-17T21:00:00.000Z',
+      to: '2026-10-17T12:00:00.000Z',
+      // The same elapsed span a week earlier: midnight to 15:00 on the 10th (C4b).
       prevFrom: '2026-10-03T21:00:00.000Z',
-      prevTo: '2026-10-10T21:00:00.000Z',
+      prevTo: '2026-10-10T12:00:00.000Z',
     });
   });
 
   it('turns over at Riyadh midnight, not UTC midnight', () => {
     // 23:59:59 in Riyadh on 17 October, then 00:30 on the 18th.
-    expect(rangeToInstants('30', new Date('2026-10-17T20:59:59Z'))?.to).toBe(
-      '2026-10-17T21:00:00.000Z',
+    expect(rangeToInstants('30', new Date('2026-10-17T20:59:59Z'))?.from).toBe(
+      '2026-09-17T21:00:00.000Z',
     );
-    expect(rangeToInstants('30', new Date('2026-10-17T21:30:00Z'))?.to).toBe(
-      '2026-10-18T21:00:00.000Z',
+    expect(rangeToInstants('30', new Date('2026-10-17T21:30:00Z'))?.from).toBe(
+      '2026-09-18T21:00:00.000Z',
     );
     const ninety = rangeToInstants('90', new Date('2026-10-17T12:00:00Z'))!;
-    expect(Date.parse(ninety.to) - Date.parse(ninety.from)).toBe(90 * 86_400_000);
-    expect(ninety.prevTo).toBe(ninety.from);
+    expect(ninety.to).toBe('2026-10-17T12:00:00.000Z');
+    expect(Date.parse(ninety.from)).toBe(Date.parse('2026-07-19T21:00:00.000Z'));
+  });
+
+  it('compares the same elapsed span, never a part day with whole ones (C4b)', () => {
+    for (const range of ['7', '30', '90'] as const) {
+      const r = rangeToInstants(range, new Date('2026-10-17T06:15:00Z'))!;
+      const span = Date.parse(r.to) - Date.parse(r.from);
+      expect(Date.parse(r.prevTo) - Date.parse(r.prevFrom), range).toBe(span);
+      expect(Date.parse(r.from) - Date.parse(r.prevFrom), range).toBe(Number(range) * 86_400_000);
+      // The two never share an instant: the earlier one ends before this one starts.
+      expect(Date.parse(r.prevTo), range).toBeLessThanOrEqual(Date.parse(r.from));
+      // The route's own comparison moves the range the same way.
+      expect(previousPeriod(r.from, r.to), range).toEqual({ from: r.prevFrom, to: r.prevTo });
+    }
   });
 
   it('all time has no range, so no previous period (no invented deltas)', () => {
@@ -203,5 +219,20 @@ describe('the copy (P-12)', () => {
     }
     expect(interestOf({ service_of_interest: null })).not.toMatch(DASHES);
     expect(FORMER_MEMBER).not.toMatch(DASHES);
+  });
+});
+
+describe('leadsSubline (C4b)', () => {
+  it('counts inquiries, new and unread, and names the range when one is set', () => {
+    expect(leadsSubline({ total: 12, new: 3, unread: 5 }, 'all')).toBe(
+      '12 inquiries. 3 new, 5 unread.',
+    );
+    expect(leadsSubline({ total: 1, new: 1, unread: 0 }, '7')).toBe(
+      '1 inquiry in the last 7 days. 1 new, 0 unread.',
+    );
+    expect(leadsSubline({ total: 12345, new: 0, unread: 0 }, '90')).toBe(
+      '12,345 inquiries in the last 90 days. 0 new, 0 unread.',
+    );
+    expect(leadsSubline({ total: 2, new: 2, unread: 2 }, '30')).not.toMatch(DASHES);
   });
 });

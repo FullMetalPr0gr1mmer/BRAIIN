@@ -10,6 +10,7 @@ import LinkChips from '@/components/admin/ui/LinkChips.astro';
 import LinkTabs from '@/components/admin/ui/LinkTabs.astro';
 import ListRow from '@/components/admin/ui/ListRow.astro';
 import Note from '@/components/admin/ui/Note.astro';
+import PageHead from '@/components/admin/ui/PageHead.astro';
 import Pager from '@/components/admin/ui/Pager.astro';
 import ServerTable from '@/components/admin/ui/ServerTable.astro';
 import StatRows from '@/components/admin/ui/StatRows.astro';
@@ -469,5 +470,19 @@ describe('charts: an SVG image named by its caption and summary, tabled from the
   it('Spark: decoration only, nothing for no data', async () => {
     expect(await render(Spark, { data: [1, 4, 2] })).toMatch(/aria-hidden="true"/);
     expect((await render(Spark, { data: [] })).trim()).toBe('');
+  });
+});
+
+describe('PageHead: the h1 and the title (C4b)', () => {
+  it('prints the title as the h1 by default, with no direction of its own', async () => {
+    const html = await render(PageHead, { title: 'Leads', subtitle: '12 inquiries.' });
+    expect(html).toMatch(/<h1>Leads<\/h1>/);
+    expect(html).toContain('12 inquiries.');
+  });
+
+  it('a heading replaces the h1 only, read in its own direction (a person’s name)', async () => {
+    const html = await render(PageHead, { title: 'Lead', heading: 'سارة', headingDir: 'auto' });
+    expect(html).toMatch(/<h1 dir="auto">سارة<\/h1>/);
+    expect(html).not.toMatch(/<h1[^>]*>Lead<\/h1>/);
   });
 });

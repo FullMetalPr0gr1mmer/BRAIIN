@@ -92,7 +92,6 @@ export const CASE_MANIFEST: readonly string[] = [
   'leads: lead KPIs',
   'leads: lead contact reveal',
   'leads: lead detail',
-  'leads: lead internal notes (legacy panel, leads.pii)',
   'leads: lead notes thread (add)',
   'leads: lead notes thread (read)',
   'leads: lead pipeline board',

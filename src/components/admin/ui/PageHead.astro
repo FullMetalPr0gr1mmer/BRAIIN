@@ -14,9 +14,15 @@ import Icon from './Icon.astro';
 // the role, decided by the layout (src/lib/admin/help/pageGuides.ts): "Guide", first of the
 // actions, a link to the guide's page without JS (carrying this screen, so the page's "All
 // guides" lists this screen's guides first), opened in the help drawer with it.
+//
+// `heading` (C4b) is the h1 when it is not the title: a lead's page is titled "Lead" (the tab
+// and the history never carry a person's name, crm.md §11) while its h1 is the person's name,
+// read in its own direction (`headingDir: 'auto'`).
 
 interface Props {
   title: string;
+  heading?: string | undefined;
+  headingDir?: 'auto' | undefined;
   subtitle?: string | undefined;
   tabs?: readonly NavTab[] | undefined;
   currentTab?: NavTab | null | undefined;
@@ -24,13 +30,22 @@ interface Props {
   guide?: string | null | undefined;
 }
 
-const { title, subtitle, tabs = [], currentTab = null, area = title, guide } = Astro.props;
+const {
+  title,
+  heading,
+  headingDir,
+  subtitle,
+  tabs = [],
+  currentTab = null,
+  area = title,
+  guide,
+} = Astro.props;
 const screen = screenOf(Astro.url.pathname);
 ---
 
 <header class="admin-header">
   <div>
-    <h1>{title}</h1>
+    <h1 dir={headingDir}>{heading ?? title}</h1>
     {subtitle && <p class="admin-sub">{subtitle}</p>}
   </div>
   {

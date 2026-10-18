@@ -133,7 +133,13 @@ describe('the checks', () => {
   });
 
   it('fail when admin-ui imports a group meant for some screens only (Admin v2 U4)', () => {
-    for (const group of ['admin-fields.F2.js', 'admin-screens.S2.js', 'admin-dashboard.D2.js']) {
+    for (const group of [
+      'admin-fields.F2.js',
+      'admin-screens.S2.js',
+      'admin-dashboard.D2.js',
+      'admin-leads.E2.js',
+      'admin-leads-lazy.Z2.js',
+    ]) {
       const dir = build({
         ...GOOD,
         'admin-ui.U1.js': `import"./${group}";const L=()=>import("./admin-rich.X1.js");`,
@@ -183,6 +189,42 @@ describe('the checks', () => {
       'admin-vendor.V1.js': 'import"./rolldown-runtime.R1.js";export const a=1;',
     });
     expect(check(shared).problems).toEqual([]);
+  });
+
+  it('keep the leads group on the leads screens, its lazy pieces lazy (Admin v2 C4b)', () => {
+    const LEADS = {
+      ...GOOD,
+      'admin-fields.F1.js': 'import"./admin-ui.U1.js";export const f=1;',
+      'admin-leads.E1.js':
+        'import"./admin-ui.U1.js";const A=()=>import("./admin-leads-lazy.Z1.js");',
+      'admin-leads-lazy.Z1.js':
+        'import"./admin-leads.E1.js";import"./admin-fields.F1.js";export const d=1;',
+      'AdminLeadsList.I1.js': 'import"./admin-leads.E1.js";',
+      'AdminLeadDetail.I3.js': 'import"./admin-leads.E1.js";',
+    };
+    expect(check(build(LEADS)).problems).toEqual([]);
+    const problems = (files: Record<string, string>) =>
+      (check(build({ ...LEADS, ...files })).problems as string[]).join('\n');
+    // Another island, or the field kit, loading the leads code.
+    expect(problems({ 'AdminKit.K1.js': 'import"./admin-leads.E1.js";' })).toContain(
+      'AdminKit.K1.js imports admin-leads.E1.js statically',
+    );
+    expect(
+      problems({ 'admin-fields.F1.js': 'import"./admin-ui.U1.js";import"./admin-leads.E1.js";' }),
+    ).toContain('admin-fields.F1.js imports admin-leads.E1.js statically');
+    // The leads code pulling the field kit, or its own lazy pieces, onto its first load.
+    for (const dep of ['admin-fields.F1.js', 'admin-leads-lazy.Z1.js']) {
+      expect(
+        problems({ 'admin-leads.E1.js': `import"./admin-ui.U1.js";import"./${dep}";` }),
+        dep,
+      ).toContain(`admin-leads.E1.js imports ${dep.split('.')[0]}. statically`);
+    }
+    // An island importing the drawer's chunk eagerly.
+    expect(
+      problems({
+        'AdminLeadsList.I1.js': 'import"./admin-leads.E1.js";import"./admin-leads-lazy.Z1.js";',
+      }),
+    ).toContain('AdminLeadsList.I1.js import admin-leads-lazy.Z1.js statically');
   });
 
   it('accept a lazily loaded kit module in admin-kit, and catch it under its own name', () => {
@@ -365,6 +407,96 @@ describe('the screens admin-ui leaves share one admin-screens group (Admin v2 U4
       ).toBe(true);
       expect([...lines].sort(), name).toEqual(lines);
     }
+  });
+});
+
+describe('the leads screens have their own groups (Admin v2 C4b)', () => {
+  interface Group {
+    name: string;
+    test: RegExp | ((id: string) => boolean);
+    priority: number;
+  }
+  let groups: Group[] = [];
+  beforeAll(async () => {
+    const config = (await import('../../astro.config.mjs')).default as {
+      vite: { build: { rollupOptions: { output: { codeSplitting: { groups: Group[] } } } } };
+    };
+    groups = [...config.vite.build.rollupOptions.output.codeSplitting.groups].sort(
+      (a, b) => b.priority - a.priority,
+    );
+  });
+  const claim = (path: string) => {
+    const id = join(process.cwd(), path);
+    return groups.find((g) => (typeof g.test === 'function' ? g.test(id) : g.test.test(id)))?.name;
+  };
+  const priority = (name: string) => groups.find((g) => g.name === name)!.priority;
+
+  it('claims the three islands and their screen code for admin-leads', () => {
+    for (const path of [
+      'src/components/admin/islands/AdminLeadsList.tsx',
+      'src/components/admin/islands/AdminLeadDetail.tsx',
+      'src/components/admin/screens/leads/LeadsList.tsx',
+      'src/components/admin/screens/leads/MoveTo.tsx',
+      'src/components/admin/screens/leads/LeadDetail.tsx',
+      'src/components/admin/screens/leads/shared.tsx',
+    ]) {
+      expect(claim(path), path).toBe('admin-leads');
+    }
+  });
+
+  it('keeps the drawer and the erase dialog in their own lazy group', () => {
+    expect(claim('src/components/admin/screens/leads/AddLeadDrawer.tsx')).toBe('admin-leads-lazy');
+    expect(claim('src/components/admin/screens/leads/EraseLeadDialog.tsx')).toBe(
+      'admin-leads-lazy',
+    );
+    // Below the field kit (a kit piece both use stays there); above the shared screens group.
+    expect(priority('admin-leads-lazy')).toBeLessThan(priority('admin-fields'));
+    expect(priority('admin-leads-lazy')).toBeGreaterThan(priority('admin-screens'));
+  });
+
+  it('sits between admin-ui and the field kit, and leaves the React KPI to admin-ui', () => {
+    expect(priority('admin-leads')).toBeLessThan(priority('admin-ui'));
+    expect(priority('admin-leads')).toBeGreaterThan(priority('admin-fields'));
+    // The kit gallery and the list both draw it: in admin-ui, neither imports the other.
+    expect(claim('src/components/admin/kit/Kpi.tsx')).toBe('admin-ui');
+    expect(claim('src/components/admin/kit/Chips.tsx')).toBe('admin-kit');
+  });
+
+  it('no leads module loads the field kit or the lazy pieces statically', () => {
+    const dir = join(process.cwd(), 'src/components/admin/screens/leads');
+    const offenders: string[] = [];
+    for (const name of readdirSync(dir)) {
+      const path = `src/components/admin/screens/leads/${name}`;
+      if (claim(path) !== 'admin-leads') continue;
+      const source = readFileSync(join(dir, name), 'utf8');
+      for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
+        const spec = m[1] as string;
+        if (/fields\/|FormField|fieldErrors|AddLeadDrawer|EraseLeadDialog/.test(spec))
+          offenders.push(`${name} → ${spec}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('no module admin-ui claims imports the leads screens', () => {
+    const roots = ['src/components/admin', 'src/lib/admin'];
+    const walk = (d: string): string[] =>
+      readdirSync(join(process.cwd(), d), { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? walk(`${d}/${e.name}`)
+          : /\.(ts|tsx)$/.test(e.name)
+            ? [`${d}/${e.name}`]
+            : [],
+      );
+    const offenders = roots
+      .flatMap(walk)
+      .filter((path) => claim(path) === 'admin-ui')
+      .filter((path) =>
+        /from\s*['"][^'"]*(screens\/leads\/|islands\/AdminLead)/.test(
+          readFileSync(join(process.cwd(), path), 'utf8'),
+        ),
+      );
+    expect(offenders).toEqual([]);
   });
 });
 
