@@ -202,6 +202,10 @@ describe('the sweep route map', () => {
     expect(setup).toContain("import { EDIT_SAMPLES } from './routes'");
     for (const [pattern, sample] of Object.entries(EDIT_SAMPLES)) {
       expect(() => pageFileFor(pattern), pattern).not.toThrow();
+      // A row no parallel test erases: the oldest, never the list's default (newest), which
+      // tests/admin/leads.e2e.ts's erase test removes while the sweep runs.
+      expect(sample.body['sort'], pattern).toBe('oldest');
+      expect(sample.body['limit'], pattern).toBe(1);
       // The list and the create route exist and ask for the capability the sample names.
       for (const api of [sample.api, sample.create.api]) {
         const file = existsSync(`src/pages${api}.ts`)

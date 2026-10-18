@@ -57,7 +57,10 @@ export const EDIT_SAMPLES: Readonly<Record<string, EditSample>> = {
   '/admin/leads/[id]': {
     api: '/api/admin/leads/query',
     method: 'POST',
-    body: { limit: 1 },
+    // The OLDEST lead, never the default newest: tests/admin/leads.e2e.ts adds leads and
+    // erases one while the sweep runs (fullyParallel), and its erased lead is the newest for a
+    // moment. The oldest is the sample row or a lead no test removes.
+    body: { limit: 1, sort: 'oldest' },
     cap: 'leads.manage',
     create: {
       api: '/api/admin/leads',
