@@ -1,3 +1,5 @@
+import type { DraftConflictCode } from '@schemas/release';
+
 /** A concurrent edit won: the row's `version` no longer matches what the client held. */
 export class OptimisticLockError extends Error {
   readonly status = 409 as const;
@@ -48,5 +50,25 @@ export class RateLimitError extends Error {
   constructor(readonly scope: string) {
     super(`Rate limit exceeded: ${scope}`);
     this.name = 'RateLimitError';
+  }
+}
+
+/**
+ * A staged save (releases on, Admin v2 R3) was refused because of its pending change: the
+ * change moved on since the form read it, was published or thrown away, is claimed by a
+ * scheduled release, or (a bulk discard) several moved at once. `live` is the live row, shaped,
+ * when the form should keep the editor's values and offer "Save again"; `detail` is a sentence
+ * for the editor.
+ */
+export class DraftConflictError extends Error {
+  readonly status = 409 as const;
+  constructor(
+    readonly code: DraftConflictCode,
+    readonly entity: string,
+    readonly live?: Record<string, unknown> | null,
+    readonly detail?: string,
+  ) {
+    super(`Draft conflict (${code}) on '${entity}'`);
+    this.name = 'DraftConflictError';
   }
 }

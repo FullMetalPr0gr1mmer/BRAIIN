@@ -140,9 +140,10 @@ describe('every action the admin writes has words', () => {
     for (const entity of entities) {
       for (const verb of KERNEL_VERBS) expect(hasLabel(`${entity}.${verb}`), entity).toBe(true);
     }
-    // The kernel writes exactly these four (src/lib/admin/resource.ts).
-    const kernel = read('src/lib/admin/resource.ts');
-    const written = [...kernel.matchAll(/action:\s*`\$\{config\.entity\}\.([a-z]+)`/g)].map(
+    // The kernel writes exactly these (src/lib/admin/resource.ts, and its staged branch,
+    // src/lib/release/staged.ts, Admin v2 R3).
+    const kernel = read('src/lib/admin/resource.ts') + read('src/lib/release/staged.ts');
+    const written = [...kernel.matchAll(/action:\s*`\$\{config\.entity\}\.([a-z_]+)`/g)].map(
       (m) => m[1],
     );
     expect([...new Set(written)].sort()).toEqual([...KERNEL_VERBS].sort());
@@ -237,6 +238,40 @@ describe('the kinds', () => {
     expect([created.kind, sentence(created)]).toEqual(['publishing', 'Published the post']);
     const drafted = describeRow(row('blog_post.create', { detail: { status: 'draft' } }));
     expect([drafted.kind, sentence(drafted)]).toEqual(['edits', 'Added the post']);
+  });
+
+  it('a pending change (releases on, Admin v2 R3) is an edit until it is published', () => {
+    const cases: [string, Record<string, unknown>, string][] = [
+      [
+        'service.draft_save',
+        { op: 'update', fields: ['title'] },
+        'Saved unpublished changes to the service',
+      ],
+      [
+        'service.draft_save',
+        { op: 'create', status: 'published' },
+        'Saved unpublished changes to the service',
+      ],
+      [
+        'service.draft_save',
+        { op: 'delete', replaced: [] },
+        'Saved an unpublished removal of the service',
+      ],
+      [
+        'service.draft_save',
+        { op: 'reorder', count: 3 },
+        'Saved an unpublished new order for Services',
+      ],
+      [
+        'service.draft_discard',
+        { op: 'update', reason: 'no-op' },
+        'Threw away unpublished changes to the service',
+      ],
+    ];
+    for (const [action, detail, words] of cases) {
+      const d = describeRow(row(action, { entity_type: 'service', detail }));
+      expect([d.kind, sentence(d)], JSON.stringify(detail)).toEqual(['edits', words]);
+    }
   });
 
   it('every resource whose saves carry a status reads the stored row on a PATCH, so a move is known', () => {

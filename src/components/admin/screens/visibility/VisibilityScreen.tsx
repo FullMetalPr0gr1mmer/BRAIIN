@@ -56,7 +56,16 @@ function saved(item: VisibilityItem, mode: VisibilityDraft['mode']): string {
   const title = itemTitle(item);
   if (mode === 'public') return `${title} is visible to everyone.`;
   if (mode === 'link') return `${title} is open only to people with the link.`;
+  if (mode === 'password') return `${title} now asks for a password.`;
   return `${title} is hidden from the site.`;
+}
+
+/** The message above the password box, as the save sends it: absent lines are left out. */
+function noteOf(draft: VisibilityDraft): { en?: string; ar?: string } | null {
+  const en = draft.noteEn.trim();
+  const ar = draft.noteAr.trim();
+  if (en.length === 0 && ar.length === 0) return null;
+  return { ...(en.length > 0 ? { en } : {}), ...(ar.length > 0 ? { ar } : {}) };
 }
 
 export default function VisibilityScreen() {
@@ -95,17 +104,32 @@ export default function VisibilityScreen() {
     setSaveError(null);
     try {
       const hidden = draft.mode === 'hidden';
-      const answer = await adminFetch<VisibilitySaveAnswer>(API, {
-        method: 'PUT',
-        body: {
-          target: item.kind === 'page' ? { pageId: item.id } : { template: item.template },
-          mode: draft.mode,
-          redirectPageId: hidden && draft.redirect ? draft.redirect : null,
-          hideFrom: hidden && draft.hideFrom ? draft.hideFrom : null,
-          showOn: hidden && draft.showOn ? draft.showOn : null,
-          version: item.setting?.version ?? 0,
-        },
-      });
+      const version = item.setting?.version ?? 0;
+      // The password has its own door: the list's PUT takes the three modes that need no
+      // secret, and this one hands the password straight to the database, which hashes it.
+      // Nothing of it is kept here, and the drawer closes with the field empty.
+      const answer =
+        draft.mode === 'password' && item.kind === 'page'
+          ? await adminFetch<VisibilitySaveAnswer>(`${API}/password`, {
+              method: 'POST',
+              body: {
+                pageId: item.id,
+                password: draft.password,
+                note: noteOf(draft),
+                version,
+              },
+            })
+          : await adminFetch<VisibilitySaveAnswer>(API, {
+              method: 'PUT',
+              body: {
+                target: item.kind === 'page' ? { pageId: item.id } : { template: item.template },
+                mode: draft.mode,
+                redirectPageId: hidden && draft.redirect ? draft.redirect : null,
+                hideFrom: hidden && draft.hideFrom ? draft.hideFrom : null,
+                showOn: hidden && draft.showOn ? draft.showOn : null,
+                version,
+              },
+            });
       setOpen(null);
       setNotice(answer.kvSynced ? null : { tone: 'err', text: EDGE_MISSED });
       toast(saved(item, draft.mode), 'ok');

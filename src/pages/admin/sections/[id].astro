@@ -2,8 +2,16 @@
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
 import { uiFor } from '@/lib/admin/uiSchema';
+import { can } from '@/lib/authz/matrix';
 
 export const prerender = false;
+
+// "Advanced (JSON)" on a section's content is Admin-only (Admin v2 F5b, decision D5):
+// the UX half of the one Admin-only content capability, so no screen compares roles by
+// name. UX only — the server validates every save against the section's own schema.
+// (The middleware denies an anonymous caller long before a page renders.)
+const role = Astro.locals.session?.role;
+const canAdvanced = role !== undefined && can(role, 'content.archiveDelete') === 'full';
 
 // Astro resolves the static `new.astro` before this dynamic route, so /admin/sections/new
 // reaches the create form rather than being read as an id.
@@ -12,5 +20,5 @@ const id = Astro.params.id ?? null;
 ---
 
 <AdminLayout title={`Edit ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="sections" id={id} />
+  <AdminResourceForm client:load resource="sections" id={id} canAdvanced={canAdvanced} />
 </AdminLayout>

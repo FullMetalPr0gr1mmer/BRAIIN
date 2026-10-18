@@ -2,7 +2,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import VisibilityList, { windowText } from '@/components/admin/screens/visibility/VisibilityList';
-import VisibilityDrawer, { draftOf } from '@/components/admin/screens/visibility/VisibilityDrawer';
+import VisibilityDrawer, {
+  draftOf,
+  draftReady,
+} from '@/components/admin/screens/visibility/VisibilityDrawer';
 import { edgeLine } from '@/components/admin/screens/visibility/VisibilityScreen';
 import type { VisibilityItem } from '@/components/admin/screens/visibility/types';
 import { readFileSync } from 'node:fs';
@@ -13,6 +16,9 @@ import {
   HIDDEN_NOTE,
   HOME_REFUSAL,
   MODE_COPY,
+  PASSWORD_HINT,
+  PASSWORD_NOTE,
+  PASSWORD_REQUIRED,
   TEMPLATE_NOTE,
 } from '@/lib/admin/visibilityCopy';
 import { VISIBILITY_KV_CACHE_TTL_S, VISIBILITY_MEMO_MS } from '@/lib/http/visibility';
@@ -56,6 +62,8 @@ const template: VisibilityItem = {
     redirectPageId: null,
     hideFrom: null,
     showOn: null,
+    note: null,
+    passwordVersion: 0,
     version: 1,
     updatedAt: null,
   },
@@ -67,7 +75,21 @@ const hiddenAbout = page('about', ABOUT, {
   redirectPageId: HOME,
   hideFrom: '2026-11-01',
   showOn: '2026-11-08',
+  note: null,
+  passwordVersion: 0,
   version: 2,
+  updatedAt: null,
+});
+
+const passwordAbout = page('about', ABOUT, {
+  id: 'row-p',
+  mode: 'password',
+  redirectPageId: null,
+  hideFrom: null,
+  showOn: null,
+  note: { en: 'Ask the studio for the password.' },
+  passwordVersion: 2,
+  version: 3,
   updatedAt: null,
 });
 
@@ -118,12 +140,14 @@ describe('the list', () => {
 });
 
 describe('the drawer', () => {
-  it('a page: three real radios in a fieldset with a legend, the hidden extras labelled', () => {
+  it('a page: four real radios in a fieldset with a legend, the hidden extras labelled', () => {
     const html = drawer(hiddenAbout);
     expect(html).toContain('<fieldset class="vis-opts">');
     expect(html).toMatch(/<legend class="visually-hidden">Who can see About<\/legend>/);
-    expect(html.match(/type="radio"/g)).toHaveLength(3);
-    expect(html).not.toContain('Behind a password');
+    expect(html.match(/type="radio"/g)).toHaveLength(4);
+    // The fourth is U14b's, offered but not chosen, so none of its fields is rendered.
+    expect(html).toContain('Behind a password');
+    expect(html).not.toContain('type="password"');
     for (const label of [
       'Send visitors of the old link to',
       'Hide from (optional)',
@@ -163,7 +187,8 @@ describe('the drawer', () => {
   it('the homepage: the other modes are disabled and the refusal is said', () => {
     const html = drawer(page('home', HOME));
     expect(html).toContain(HOME_REFUSAL);
-    expect(html.match(/disabled=""/g)?.length).toBe(2);
+    // Hidden, link only and behind a password: every mode but "visible to everyone".
+    expect(html.match(/disabled=""/g)?.length).toBe(3);
   });
 
   it('a template: public or hidden only, and its note', () => {
@@ -179,9 +204,44 @@ describe('the drawer', () => {
       redirect: HOME,
       hideFrom: '',
       showOn: '',
+      // Never pre-filled: nothing can read a password back (0061).
+      password: '',
+      noteEn: '',
+      noteAr: '',
     });
     expect(draftOf(hiddenAbout, HOME).redirect).toBe(HOME);
     expect(draftOf(template, HOME).redirect).toBe('');
+  });
+
+  it('the password option: a field that starts empty, the message in both languages', () => {
+    const html = drawer(passwordAbout);
+    expect(html).toContain('type="password"');
+    // The stored message is editable; the password is not loaded, because it cannot be.
+    expect(html).toContain('value="Ask the studio for the password."');
+    expect(html).toMatch(/type="password"[^>]*value=""/);
+    // Not the admin's own sign-in: a browser offers to save or replace that credential for
+    // a field it takes for a login, and ignores "off" on a password field.
+    expect(html).toMatch(/type="password"[^>]*autocomplete="new-password"/i);
+    expect(html).toContain(PASSWORD_HINT);
+    expect(html).toContain(PASSWORD_NOTE);
+    expect(html).toContain(PASSWORD_REQUIRED);
+    expect(html).toContain('aria-pressed="false"');
+    expect(html).not.toMatch(/\sstyle=/);
+  });
+
+  it('Apply waits for a usable password, and asks nothing of the other modes', () => {
+    const base = draftOf(passwordAbout, HOME);
+    expect(draftReady({ ...base, mode: 'public' })).toBe(true);
+    expect(draftReady({ ...base, password: '' })).toBe(false);
+    expect(draftReady({ ...base, password: 'short7' })).toBe(false);
+    expect(draftReady({ ...base, password: 'letmein22' })).toBe(true);
+    // Bytes, not characters: bcrypt reads 72 bytes, and Arabic letters are two each.
+    expect(draftReady({ ...base, password: 'ا'.repeat(37) })).toBe(false);
+    expect(draftReady({ ...base, password: 'ا'.repeat(36) })).toBe(true);
+  });
+
+  it('a template is never offered a password (its children are linked from the lists)', () => {
+    expect(drawer(template)).not.toContain('Behind a password');
   });
 });
 

@@ -129,17 +129,22 @@ beforeEach(() => {
   logs.length = 0;
 });
 
-describe('buildVisibilitySnapshot', () => {
-  const row = (over: Record<string, unknown>) => ({
-    mode: 'public',
-    template: null,
-    hide_from: null,
-    show_on: null,
-    page: null,
-    redirect: null,
-    ...over,
-  });
+/** The launch tenant, as the snapshot now records it (0061: the password paths
+ * name it rather than asking the database again). */
+const TENANT = '61000000-0000-0000-0000-0000000000b1';
 
+/** One `page_visibility` row as the snapshot query returns it. */
+const row = (over: Record<string, unknown>) => ({
+  mode: 'public',
+  template: null,
+  hide_from: null,
+  show_on: null,
+  page: null,
+  redirect: null,
+  ...over,
+});
+
+describe('buildVisibilitySnapshot', () => {
   it('keeps what is not public, by slug, the redirect by its target’s slug', () => {
     const snap = buildVisibilitySnapshot(
       [
@@ -156,11 +161,13 @@ describe('buildVisibilitySnapshot', () => {
         row({ id: 'r-contact', version: 2, mode: 'public', page: { slug: 'contact' } }),
         row({ id: 'r-case', version: 5, mode: 'hidden', template: 'case_study' }),
       ],
+      TENANT,
       new Date('2026-10-16T09:00:00Z'),
     );
     expect(snap).toEqual({
       v: 1,
       builtAt: '2026-10-16T09:00:00.000Z',
+      tenant: TENANT,
       rev: 'r-about:3,r-case:5,r-join:1',
       pages: {
         about: {
@@ -182,24 +189,28 @@ describe('buildVisibilitySnapshot', () => {
       row({ id: 'r-careers', version: 1, mode: 'link', page: { slug: 'careers' } }),
       row({ id: 'r-svc', version: 4, mode: 'link', template: 'service' }),
     ];
-    expect(buildVisibilitySnapshot(rows).rev).toBe('r-about:2');
+    expect(buildVisibilitySnapshot(rows, TENANT).rev).toBe('r-about:2');
     // A save moves the version, so the same count with another setting is another revision.
-    const moved = buildVisibilitySnapshot([
-      row({ id: 'r-about', version: 3, mode: 'link', page: { slug: 'about' } }),
-    ]);
+    const moved = buildVisibilitySnapshot(
+      [row({ id: 'r-about', version: 3, mode: 'link', page: { slug: 'about' } })],
+      TENANT,
+    );
     expect(Object.keys(moved.pages)).toHaveLength(1);
     expect(moved.rev).toBe('r-about:3');
   });
 
   it('drops the homepage, a page the route map does not know, a redirect to one, and bad modes', () => {
-    const snap = buildVisibilitySnapshot([
-      row({ mode: 'hidden', page: { slug: 'home' } }),
-      row({ mode: 'hidden', page: { slug: 'careers' } }),
-      row({ mode: 'hidden', page: { slug: 'about' }, redirect: { slug: 'careers' } }),
-      row({ mode: 'secret', page: { slug: 'join' } }),
-      row({ mode: 'link', template: 'service' }),
-      row({ mode: 'hidden', page: null }),
-    ]);
+    const snap = buildVisibilitySnapshot(
+      [
+        row({ mode: 'hidden', page: { slug: 'home' } }),
+        row({ mode: 'hidden', page: { slug: 'careers' } }),
+        row({ mode: 'hidden', page: { slug: 'about' }, redirect: { slug: 'careers' } }),
+        row({ mode: 'secret', page: { slug: 'join' } }),
+        row({ mode: 'link', template: 'service' }),
+        row({ mode: 'hidden', page: null }),
+      ],
+      TENANT,
+    );
     expect(snap.pages).toEqual({ about: { mode: 'hidden', target: null } });
     expect(snap.templates).toEqual({});
   });
@@ -443,5 +454,88 @@ describe('saveVisibility', () => {
       show_on: null,
     });
     expect(update.filters).toContain(`eq:tenant_id=${AUTH.tenantId}`);
+  });
+});
+
+describe('the snapshot a page behind a password gets (U14b)', () => {
+  const PAGE_ID = '3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
+
+  it('carries the page’s id, its version and the message, and never a hash', () => {
+    const snap = buildVisibilitySnapshot(
+      [
+        row({
+          id: 'r-about',
+          version: 4,
+          mode: 'password',
+          page_id: PAGE_ID,
+          password_version: 2,
+          note: { en: 'Ask the studio.', ar: 'اسأل الاستوديو.' },
+          page: { slug: 'about' },
+        }),
+      ],
+      TENANT,
+    );
+    expect(snap.pages.about).toEqual({
+      mode: 'password',
+      id: PAGE_ID,
+      pv: 2,
+      note: { en: 'Ask the studio.', ar: 'اسأل الاستوديو.' },
+    });
+    expect(snap.tenant).toBe(TENANT);
+    expect(JSON.stringify(snap)).not.toMatch(/\$2[aby]\$/);
+    expect(JSON.stringify(snap)).not.toContain('password_hash');
+    expect(snap.rev).toBe('r-about:4');
+  });
+
+  it('leaves out a row that could not be unlocked, rather than publishing the page', () => {
+    for (const over of [{ password_version: 0 }, { password_version: null }, { page_id: null }]) {
+      const snap = buildVisibilitySnapshot(
+        [
+          row({
+            id: 'r-about',
+            version: 1,
+            mode: 'password',
+            page_id: PAGE_ID,
+            password_version: 1,
+            page: { slug: 'about' },
+            ...over,
+          }),
+        ],
+        TENANT,
+      );
+      expect(snap.pages, JSON.stringify(over)).toEqual({});
+      expect(snap.rev).toBe('');
+    }
+  });
+
+  it('keeps only a plain message, in the languages the gate renders', () => {
+    const note = (value: unknown) =>
+      buildVisibilitySnapshot(
+        [
+          row({
+            id: 'r',
+            version: 1,
+            mode: 'password',
+            page_id: PAGE_ID,
+            password_version: 1,
+            note: value,
+            page: { slug: 'about' },
+          }),
+        ],
+        TENANT,
+      ).pages.about?.note;
+    expect(note({ en: ' Ask. ' })).toEqual({ en: 'Ask.' });
+    expect(note({ en: '', ar: 'اسأل.' })).toEqual({ ar: 'اسأل.' });
+    expect(note({ fr: 'ouvrez' })).toBeUndefined();
+    expect(note(null)).toBeUndefined();
+    expect(note('a string')).toBeUndefined();
+  });
+
+  it('reads the columns the entry needs, and no column of the secret', () => {
+    for (const column of ['page_id', 'note', 'password_version']) {
+      expect(VISIBILITY_SNAPSHOT_SELECT).toContain(column);
+    }
+    expect(VISIBILITY_SNAPSHOT_SELECT).not.toContain('password_hash');
+    expect(VISIBILITY_SNAPSHOT_SELECT).not.toContain('page_passwords');
   });
 });

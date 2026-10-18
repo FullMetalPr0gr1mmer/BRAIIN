@@ -689,6 +689,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [F4a](as-built/F4a.md): the admin bundle plan (#40, folded into #34)
 - [F4b](as-built/F4b.md): the component kit: server primitives, SVG charts, DataTable, tabs, chips, the Sortable core, ResourceTable on DataTable, `/admin/kit` (#64)
 - [F5a](as-built/F5a.md): the field kit v2: FieldShell, bilingual with EN | AR | Both, switch, colour, range, chips, repeater on the Sortable, the media tile, the rich-text link dialog, `useEntitySave` and `EditorForm` under ResourceForm and SingletonForm, the `admin-fields` chunk, the Arabic-digit guard (PR number at review)
+- [F5b](as-built/F5b.md): the rest of the field kit: accent word ranges, the link field and `GET /api/admin/linkables`, the slug list, clip v2 on the site clip registry, section content stored as differences from the built-in copy, `SECTION_ADVANCED_ONLY` down to `hero.intro` (PR number at review)
 - [F6](as-built/F6.md): built-in section copy as shared data, the public HTML byte-identical (#60)
 - [F7](as-built/F7.md): sign-in v2, keep me signed in, forgot and reset password (#61)
 - [F8](as-built/F8.md): the personal layer: preferences, the people directory, the bell, the account, the environment pill, 0044
@@ -697,6 +698,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [U3](as-built/U3.md): media uploads (A5): the storage provider, the upload, replace and download routes, delivery through `/_image`, 0045 (PR number at review)
 - [U13](as-built/U13.md): the activity log v2: names, kind, person and day filters, plain language, the export under the lockdown, the live read on `audit_log`, 0054
 - [U14a](as-built/U14a.md): page visibility without the password mode: `page_visibility`, the middleware gate on the matched route, KV `site:visibility` through a 60 s isolate memo, the menus, sitemap, llms.txt and search filtered, `/admin/visibility`, the `nav_visible` alias, the registry row, 0057 (PR number at review)
+- [U14b](as-built/U14b.md): the password mode: `page_passwords` (bcrypt, no policy and no API-role privilege), `set_page_password` and `page_password_check`, the signed per-page cookie and `/api/page-access` with a limiter that fails closed, the gate page, and the `page_sections` fence with `page_sections_unlocked` and `page_media_unlocked` for an unlocked request, 0061 (PR number at review)
 - [U16](as-built/U16.md): the help centre: guides as typed blocks in the database, the "?" drawer with search and this screen's guides, `/admin/help`, 0046 (#62)
 - [U12a](as-built/U12a.md): users v2 and the session posture: the token's own claims and the session length checked, sessions revoked on a role change, the live read of profiles, the account owner, the Security card, the read-only role matrix, 0055 (PR number at review)
 - [U12b](as-built/U12b.md): invites: the acceptance page `/admin/invite` (eight pre-auth paths), Pending invites with Resend and Cancel, the invite drawer and message, switched off ("Not set up") until SMTP, the invite e-mail template, no address in the invite audit rows, 0056 (the help guide; PR number at review)
@@ -704,6 +706,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 **Releases**
 - [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)
 - [R2](as-built/R2.md): the release registry, caps and overlay core in TypeScript, `fields` on every release-managed config, the §5 relabel and the derived release publish matrix, no migration (#68)
+- [R3a](as-built/R3a.md): staged writes in the database and the resource kernel, behind the release flag: the draft writes, `public.write_drafts`, the staged branch of every kernel handler, inert, 0062
 - [R4](as-built/R4.md): applying a release as the publisher, change capture, the shared link-set helper, the purge record, inert, 0051 (#69)
 
 **CRM**
