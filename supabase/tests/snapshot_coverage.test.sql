@@ -14,12 +14,15 @@
 --
 -- A failure in the first three assertions after a migration adds a table or a column to a
 -- registry table means that migration must also classify it in app.release_entities and
--- give the table its snapshot trigger (releases.md §1.3, the registry contract).
+-- give the table its snapshot trigger (releases.md §1.3, the registry contract). Since 0066
+-- (Admin v2 R5) every registry table also carries the release guard, `<table>__release_guard`,
+-- as its first BEFORE trigger: a table that joins the registry adds it in the same migration
+-- (section 1b), as the two case-study link tables carry it with their link capture.
 --
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
 begin;
-select plan(23);
+select plan(26);
 
 -- ── 1. The catalog ─────────────────────────────────────────────────────────────────
 select is(
@@ -104,7 +107,10 @@ select is(
      from unnest(array['anon', 'authenticated', 'service_role']::name[]) as r
      cross join unnest(array['app.release_token_valid()', 'app.current_release_id()',
                              'app.tg_snapshot_version()', 'app.tg_snapshot_singleton()',
-                             'app.tg_draft_lock()', 'app.tg_release_capture()']) as f
+                             'app.tg_draft_lock()', 'app.tg_release_capture()',
+                             'app.tg_release_guard()', 'app.tg_release_links_stash()',
+                             'app.tg_release_links_capture()',
+                             'app.portfolio_link_sets(uuid, uuid)']) as f
     where has_function_privilege(r, f, 'execute')),
   '',
   'no API role can call the token or trigger functions (the flag reader: the service role, 0051)');
@@ -135,6 +141,44 @@ select is(
       and tg.tgfoid = 'app.tg_release_capture()'::regprocedure),
   '',
   'team_members captures nothing until owner item O-12 (PDPL: staff names and bios)');
+
+-- ── 1b. The release guard (0066, Admin v2 R5) ─────────────────────────────────────
+-- Every registry table, team_members included (its changes go through a release like any
+-- other; O-12 decides only whether they keep history), and both case-study link tables:
+-- exactly one `<table>__release_guard`, BEFORE ROW on INSERT, UPDATE and DELETE, enabled,
+-- and the first BEFORE row trigger on its table by name, so its refusal is the one staff see.
+select is(
+  (select coalesce(string_agg(x.t, ', ' order by x.t), '')
+     from (select e.table_name as t from app.release_entities e
+           union all select 'portfolio_services' union all select 'portfolio_media') x
+    where (select count(*) from pg_trigger tg
+            where tg.tgrelid = format('public.%I', x.t)::regclass and not tg.tgisinternal
+              and tg.tgfoid = 'app.tg_release_guard()'::regprocedure
+              and tg.tgname = x.t || '__release_guard' and tg.tgtype = 1 + 2 + 4 + 8 + 16
+              and tg.tgenabled = 'O') <> 1
+       or (select tg.tgname from pg_trigger tg
+            where tg.tgrelid = format('public.%I', x.t)::regclass and not tg.tgisinternal
+              and tg.tgtype & 3 = 3
+            order by tg.tgname collate "C" limit 1) is distinct from x.t || '__release_guard'),
+  '',
+  'every registry table and both link tables carry the release guard, first among their BEFORE row triggers');
+select is(
+  (select string_agg(format('%s %s', tg.tgname, tg.tgtype), ', ' order by tg.tgname collate "C")
+     from pg_trigger tg
+    where tg.tgrelid in ('public.portfolio_services'::regclass, 'public.portfolio_media'::regclass)
+      and tg.tgfoid in ('app.tg_release_links_stash()'::regprocedure,
+                        'app.tg_release_links_capture()'::regprocedure)),
+  'portfolio_media_links_capture 28, portfolio_media_links_stash 31, '
+  'portfolio_services_links_capture 28, portfolio_services_links_stash 31',
+  'both link tables keep their sets before a statement (BEFORE ROW) and record them after it (AFTER STATEMENT)');
+select is(
+  (select string_agg(tg.tgname, ', ' order by tg.tgname collate "C")
+     from pg_trigger tg
+    where tg.tgrelid = 'public.team_members'::regclass
+      and tg.tgfoid in ('app.tg_release_guard()'::regprocedure, 'app.tg_release_capture()'::regprocedure,
+                        'app.tg_release_links_capture()'::regprocedure)),
+  'team_members__release_guard',
+  'team_members is guarded but captures nothing (owner item O-12; an R14 blocker, deviations.md)');
 
 -- ── 2. Fixtures (as the migration role) ────────────────────────────────────────────
 insert into public.tenants (id, name) values

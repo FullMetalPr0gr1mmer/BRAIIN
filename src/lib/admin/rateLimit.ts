@@ -82,6 +82,18 @@ export const CRM_ERASE_LIMITS: RateLimitOptions = {
 };
 
 /**
+ * Site health's Check now (Admin v2 G2): 6 an hour per person and 12 per tenant. Each check
+ * is up to six outbound requests (the uptime monitor, the RDAP bootstrap and registry), and
+ * the monitor's own API allows 10 a minute on its free plan; the 10-minute schedule reads
+ * anyway, so a check is a convenience, never the only way to a reading.
+ */
+export const HEALTH_CHECK_LIMITS: RateLimitOptions = {
+  perUser: 6,
+  perTenant: 12,
+  windowMinutes: 60,
+};
+
+/**
  * Claims one slot for a privileged operation, or refuses with RateLimitError. Call it
  * BEFORE the work, so an operation that dies halfway still consumed its slot.
  *
