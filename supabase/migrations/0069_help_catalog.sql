@@ -176,7 +176,7 @@ begin
      or jsonb_typeof(p_guide -> 'title') <> 'string'
      or jsonb_typeof(p_guide -> 'title_ar') <> 'string'
      or jsonb_typeof(p_guide -> 'body') <> 'object'
-     -- Whole numbers only: 70, never 70.0, 7e1 or "70".
+     -- Whole numbers only: 70, never 70.0 or "70". (7e1 is accepted: jsonb stores it as 70.)
      or jsonb_typeof(p_guide -> 'sort_order') <> 'number'
      or (p_guide ->> 'sort_order') !~ '^-?[0-9]{1,9}$'
      or jsonb_typeof(p_guide -> 'minutes') <> 'number'

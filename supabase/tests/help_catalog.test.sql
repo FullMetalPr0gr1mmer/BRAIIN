@@ -23,7 +23,7 @@
 -- launch tenant seed.sql creates holds the guides too, and every "every tenant" check counts it.
 
 begin;
-select plan(83);
+select plan(85);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -267,6 +267,11 @@ select is((select count(*)::int from public.help_articles where slug = 'h11-othe
   'nor any tenant');
 select is((select title from app.help_guide_catalog where slug = 'h11-test-guide'), 'A test guide',
   'and the guide the refused puts named is as it was');
+-- A number with an exponent is not refused: jsonb keeps no exponent, so 2e0 arrives as 2, the
+-- whole number the guide already holds, and the put is the guide unchanged.
+select lives_ok($$ select app.put_help_guide(_new('minutes', '2e0'), 1) $$,
+  'minutes written 2e0 is the whole number 2 (jsonb stores no exponent)');
+select is(_rev('h11-test-guide'), 1, 'and, the guide unchanged, its revision stays');
 
 -- ---- 4. drop ---------------------------------------------------------------------------------
 select throws_ok($$ select app.drop_help_guide('h11-test-guide', 2) $$, '55000', null,
