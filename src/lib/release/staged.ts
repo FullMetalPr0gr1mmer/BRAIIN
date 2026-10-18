@@ -117,14 +117,14 @@ export function stageTransition(auth: AuthContext, config: ResourceConfig, paylo
 
 const target = (config: ResourceConfig) => ({ entity: config.entity, cap: config.writeCap });
 
-const pick = (row: Readonly<Row>, keys: Iterable<string>): Row => {
+export const pick = (row: Readonly<Row>, keys: Iterable<string>): Row => {
   const out: Row = {};
   for (const key of keys) if (key in row) out[key] = row[key];
   return out;
 };
 
 /** The draft meta of a draft whose payload no longer parses (written around the API). */
-function invalidMeta(draft: StoredDraft): DraftMeta & { invalid: true } {
+export function invalidMeta(draft: StoredDraft): DraftMeta & { invalid: true } {
   return {
     id: draft.id,
     version: draft.version,
@@ -138,7 +138,7 @@ function invalidMeta(draft: StoredDraft): DraftMeta & { invalid: true } {
 }
 
 /** A put op, every field stated (the writer's shape is strict). */
-function put(
+export function put(
   entry: RegistryEntry,
   entityId: string,
   op: DraftOp,

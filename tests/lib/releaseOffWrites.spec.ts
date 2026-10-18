@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import { RESOURCES } from '@/lib/admin/resources';
 import {
@@ -93,10 +93,28 @@ interface Write {
   values: unknown;
 }
 
-/** A client over one tenant: `existing` is the stored row (null = none yet). */
-function client(existing: Record<string, unknown> | null, writes: Write[]) {
+/** Every `rpc` and every table a request named, in order (the release flag included). */
+let touched: string[] = [];
+
+/**
+ * A client over one tenant: `existing` is the stored row (null = none yet). Releases are off:
+ * `rpc('releases_enabled')` answers false for the caller's tenant (R3b; R3a left these routes
+ * without the flag, so the stub had no `rpc`), or `flag` when a case sets it.
+ */
+function client(
+  existing: Record<string, unknown> | null,
+  writes: Write[],
+  flag: { data: unknown; error: unknown } = { data: false, error: null },
+) {
   return {
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      touched.push(`rpc ${fn} ${String(args['p_tenant'])}`);
+      return fn === 'releases_enabled'
+        ? flag
+        : { data: null, error: { message: `unexpected ${fn}` } };
+    },
     from: (table: string) => {
+      touched.push(table);
       let wrote = false;
       const b: Record<string, unknown> = {};
       for (const m of ['select', 'eq', 'order', 'limit', 'neq']) b[m] = () => b;
@@ -205,6 +223,10 @@ const ROUTES: {
 ];
 
 describe('singleton and entity-SEO routes: the database receives what it did before R2', () => {
+  beforeEach(() => {
+    touched = [];
+  });
+
   for (const route of ROUTES) {
     it(`${route.name}: the first save (an INSERT)`, async () => {
       const handler = (await route.load())[route.method] as APIRoute;
@@ -240,6 +262,105 @@ describe('singleton and entity-SEO routes: the database receives what it did bef
       expect(res.status, await res.clone().text()).toBe(200);
       expect(writes).toMatchSnapshot();
       expect(writes.map((w) => Object.keys(w.values as object))).toMatchSnapshot();
+    });
+  }
+});
+
+// ---- R3b: the routes ask the release flag, and with it off nothing else moves ---------------
+
+describe('releases off (Admin v2 R3b): the singleton and entity-SEO routes are what they were', () => {
+  beforeEach(() => {
+    touched = [];
+  });
+
+  const GETS = [
+    {
+      name: 'site profile',
+      url: '/api/admin/site-profile',
+      load: () => import('@/pages/api/admin/site-profile'),
+    },
+    {
+      name: 'SEO defaults',
+      url: '/api/admin/seo-defaults',
+      load: () => import('@/pages/api/admin/seo-defaults'),
+    },
+    {
+      name: 'entity SEO',
+      url: '/api/admin/entity-seo?entityType=service&entityId=22222222-2222-4222-8222-222222222222',
+      load: () => import('@/pages/api/admin/entity-seo'),
+    },
+  ];
+
+  const read = (url: string, sb: unknown) => {
+    const ctx = call('PATCH', url, {}, sb) as unknown as Record<string, unknown>;
+    const full = new URL(url, 'https://admin.example.test');
+    return { ...ctx, request: new Request(full), url: full } as unknown as Parameters<APIRoute>[0];
+  };
+
+  for (const route of ROUTES) {
+    it(`${route.name}: one flag read for the caller's tenant, then the legacy calls only`, async () => {
+      const handler = (await route.load())[route.method] as APIRoute;
+      const writes: Write[] = [];
+      const res = (await handler(
+        call(route.method, route.url, { ...route.body, version: 3 }, client(route.stored, writes)),
+      )) as Response;
+      expect(res.status).toBe(200);
+      expect(touched[0]).toBe(`rpc releases_enabled ${TENANT}`);
+      expect(touched.filter((t) => t.startsWith('rpc'))).toHaveLength(1);
+      expect(touched).not.toContain('content_drafts');
+      // The answer is the row as written, with no `draft` key (a staged answer has one).
+      const body = (await res.json()) as { data: Record<string, unknown> };
+      expect(body.data).not.toHaveProperty('draft');
+    });
+
+    it(`${route.name}: a flag answer that is not \`true\` is off`, async () => {
+      const handler = (await route.load())[route.method] as APIRoute;
+      const off: Write[] = [];
+      const odd: Write[] = [];
+      const body = { ...route.body, version: 3 };
+      await handler(call(route.method, route.url, body, client(route.stored, off)));
+      for (const data of [null, 'true', 1, {}]) {
+        odd.length = 0;
+        const res = (await handler(
+          call(route.method, route.url, body, client(route.stored, odd, { data, error: null })),
+        )) as Response;
+        expect(res.status).toBe(200);
+        expect(odd).toEqual(off);
+      }
+    });
+
+    it(`${route.name}: a flag read that fails is a 500 and writes nothing`, async () => {
+      const handler = (await route.load())[route.method] as APIRoute;
+      const writes: Write[] = [];
+      const res = (await handler(
+        call(
+          route.method,
+          route.url,
+          { ...route.body, version: 3 },
+          client(route.stored, writes, { data: null, error: { message: 'down' } }),
+        ),
+      )) as Response;
+      expect(res.status).toBe(500);
+      expect(writes).toEqual([]);
+    });
+  }
+
+  for (const route of GETS) {
+    it(`${route.name}: GET answers the stored row, or the defaults, as before`, async () => {
+      const { GET } = (await route.load()) as { GET: APIRoute };
+      const stored = { tenant_id: TENANT, id: '22222222-2222-4222-8222-222222222222', version: 4 };
+      const withRow = (await GET(read(route.url, client(stored, [])))) as Response;
+      expect(withRow.status).toBe(200);
+      expect(((await withRow.json()) as { data: unknown }).data).toEqual(stored);
+      const none = (await GET(read(route.url, client(null, [])))) as Response;
+      const data = ((await none.json()) as { data: Record<string, unknown> }).data;
+      expect(data['version']).toBe(0);
+      expect(data).not.toHaveProperty('draft');
+      expect(touched.filter((t) => t.startsWith('rpc'))).toEqual([
+        `rpc releases_enabled ${TENANT}`,
+        `rpc releases_enabled ${TENANT}`,
+      ]);
+      expect(touched).not.toContain('content_drafts');
     });
   }
 });

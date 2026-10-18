@@ -6,6 +6,11 @@ import { AuthorizationError } from '@/lib/authz/errors';
 import { defineAdminRoute } from './route';
 import { OptimisticLockError, ValidationError } from './errors';
 import type { ResourcePayload } from './resource';
+import {
+  singletonEntry,
+  stagedSingletonRead,
+  stagedSingletonUpdate,
+} from '@/lib/release/stagedSingleton';
 
 /**
  * 42501 from a singleton write means the DATABASE refused it after assertCap() allowed
@@ -14,7 +19,7 @@ import type { ResourcePayload } from './resource';
  * That is an authorization outcome and must reach the client as 403, not as the generic
  * 500 every other unexpected error becomes.
  */
-function rethrowWriteError(
+export function rethrowWriteError(
   table: string,
   cap: Capability,
   verb: string,
@@ -89,7 +94,11 @@ export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH
     cap: config.readCaps[0] as Capability,
     anyCap: config.readCaps,
     access: readAccess,
-    handler: async ({ auth, sb }) => {
+    handler: async (ctx) => {
+      // Releases on (Admin v2 R3b): live with the tenant's pending change laid over it.
+      const entry = singletonEntry(config);
+      if (entry && (await ctx.releasesEnabled())) return stagedSingletonRead(config, entry, ctx);
+      const { auth, sb } = ctx;
       const { data, error } = await sb
         .from(config.table)
         .select(config.columns)
@@ -102,9 +111,16 @@ export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH
 
   const PATCH = defineAdminRoute({
     cap: config.writeCap,
-    input: config.schema,
-    handler: async ({ auth, sb, input, audit }) => {
-      const payload = input as ResourcePayload & { version: number };
+    // The body is parsed in the handler, as the resource kernel's PATCH does (Admin v2 R3): a
+    // staged save also reads `draftId`/`draftVersion`, which the schema would strip.
+    input: z.unknown(),
+    handler: async (ctx) => {
+      const entry = singletonEntry(config);
+      if (entry && (await ctx.releasesEnabled())) {
+        return stagedSingletonUpdate(config, entry, ctx, ctx.input);
+      }
+      const { auth, sb, audit } = ctx;
+      const payload = config.schema.parse(ctx.input) as ResourcePayload & { version: number };
       const values = config.toRow(payload);
 
       const { data: existing, error: readError } = await sb
