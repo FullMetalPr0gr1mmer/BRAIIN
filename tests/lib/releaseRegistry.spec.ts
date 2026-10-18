@@ -390,7 +390,12 @@ describe('the registry stays on the server', () => {
     return seen;
   }
 
-  const FORBIDDEN = [`${ROOT}/src/lib/release/registry.ts`, `${ROOT}/src/lib/release/overlay.ts`];
+  // The releases preview (R8) is server code too: its emulator, dataset and drafts parsing.
+  const FORBIDDEN = [
+    `${ROOT}/src/lib/release/registry.ts`,
+    `${ROOT}/src/lib/release/overlay.ts`,
+    ...files(`${ROOT}/src/lib/preview`),
+  ];
 
   it('reads imports in every form the build follows', () => {
     const src = [
@@ -422,7 +427,7 @@ describe('the registry stays on the server', () => {
     );
   });
 
-  it('no island, component or client script reaches the registry or the overlay', () => {
+  it('no island, component or client script reaches the registry, the overlay or the preview', () => {
     const roots = [
       ...files(`${ROOT}/src/components`).filter((f) => /\.(tsx|ts|astro)$/.test(f)),
       ...files(`${ROOT}/src/lib/admin/client`),
@@ -432,6 +437,7 @@ describe('the registry stays on the server', () => {
     expect(roots.some((f) => /islands\/AdminResourceForm\.tsx$/.test(f))).toBe(true);
     const seen = reach(roots);
     expect(seen.size).toBeGreaterThan(roots.length);
+    expect(FORBIDDEN).toContain(`${ROOT}/src/lib/preview/dataset.ts`);
     expect(FORBIDDEN.filter((f) => seen.has(f))).toEqual([]);
   });
 
