@@ -69,6 +69,7 @@ const CONTENT_LOADERS = [
   'src/lib/data/blog.ts',
   'src/lib/data/certifications.ts',
   'src/lib/data/disciplines.ts',
+  'src/lib/data/faq.ts',
   'src/lib/data/navigation.ts',
   'src/lib/data/pageSections.ts',
   'src/lib/data/portfolio.ts',

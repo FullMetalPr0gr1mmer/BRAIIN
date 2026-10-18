@@ -27,10 +27,10 @@ describe('parseSelect', () => {
 
   it('parses every select any loader sends (read from the loaders, the private ones too)', () => {
     const selects = loaderQueries().filter((q) => q.table !== null);
-    // blog, certifications, disciplines, navigation, pageSections (2), portfolio (3),
+    // blog, certifications, disciplines, faq, navigation, pageSections (2), portfolio (3),
     // sectionMedia, seo (2), serviceCases, services (2), siteProfile, statistics,
-    // taxonomy (3), team: 22 `.from()` calls; search's two are rpcs.
-    expect(selects).toHaveLength(22);
+    // taxonomy (3), team: 23 `.from()` calls; search's two are rpcs.
+    expect(selects).toHaveLength(23);
     for (const q of selects) {
       expect(q.select, `${q.file}:${q.line}`).not.toBeNull();
       expect(() => parseSelect(q.select!), `${q.file}:${q.line}`).not.toThrow();
