@@ -1,14 +1,8 @@
 import { useEffect, useId, useState } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { toast } from '@/lib/admin/toast';
-import {
-  DEFAULT_SCORING,
-  MAX_LEAD_SCORE,
-  MAX_SIGNAL_POINTS,
-  SCORE_SIGNALS,
-  type ScoreSignal,
-} from '@schemas/crm';
-import { SIGNAL_COPY } from './copy';
+import type { ScoreSignal } from '@schemas/crm';
+import { ALL_SIGNALS, LIMITS, SIGNAL_COPY } from './copy';
 import type { CrmSettingsRow } from './types';
 
 // The lead scoring card (Admin v2 C9a, crm.md §6.3): the closed signals, 0 to 50 points each,
@@ -17,14 +11,15 @@ import type { CrmSettingsRow } from './types';
 
 export function scoringOf(settings: CrmSettingsRow): Record<ScoreSignal, number> {
   return Object.fromEntries(
-    SCORE_SIGNALS.map((s) => [s, settings.scoring[s] ?? DEFAULT_SCORING[s]]),
+    // A signal the row has no points for scores nothing (app.lead_score), so it shows 0.
+    ALL_SIGNALS.map((s) => [s, settings.scoring[s] ?? 0]),
   ) as Record<ScoreSignal, number>;
 }
 
 /** The most a lead can score with these points, the cap applied. */
 export function maxScore(points: Readonly<Record<string, number>>): number {
   return Math.min(
-    MAX_LEAD_SCORE,
+    LIMITS.maxScore,
     SIGNAL_COPY.reduce((sum, { signal }) => sum + (points[signal] ?? 0), 0),
   );
 }
@@ -47,12 +42,12 @@ export default function ScoringCard({ settings, version, onSaved }: Props) {
 
   const valid = SIGNAL_COPY.every(({ signal }) => {
     const v = points[signal];
-    return Number.isInteger(v) && v >= 0 && v <= MAX_SIGNAL_POINTS;
+    return Number.isInteger(v) && v >= 0 && v <= LIMITS.maxPoints;
   });
 
   async function save() {
     if (!valid) {
-      setError(`Points are whole numbers from 0 to ${MAX_SIGNAL_POINTS}.`);
+      setError(`Points are whole numbers from 0 to ${LIMITS.maxPoints}.`);
       return;
     }
     setBusy(true);
@@ -91,7 +86,7 @@ export default function ScoringCard({ settings, version, onSaved }: Props) {
               className="in--num"
               inputMode="numeric"
               min={0}
-              max={MAX_SIGNAL_POINTS}
+              max={LIMITS.maxPoints}
               step={1}
               value={Number.isFinite(points[signal]) ? points[signal] : ''}
               aria-describedby={`${id}-${signal}`}
@@ -107,7 +102,7 @@ export default function ScoringCard({ settings, version, onSaved }: Props) {
       </div>
       <p className="f__hint">
         Highest possible score: {Number.isFinite(maxScore(points)) ? maxScore(points) : 0} of{' '}
-        {MAX_LEAD_SCORE}. Scores above 75 show green.
+        {LIMITS.maxScore}. Scores above 75 show green.
       </p>
       {error && (
         <p className="msg" data-kind="error" role="alert">

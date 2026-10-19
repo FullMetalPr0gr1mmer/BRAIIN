@@ -36,6 +36,10 @@ import {
   RULE_COPY,
   SIGNAL_COPY,
   TONE_NAMES,
+  ALL_SIGNALS,
+  KINDS,
+  LIMITS,
+  TONES,
 } from '@/components/admin/screens/crmSettings/copy';
 import { pipelineProblem, stagesPayload } from '@/components/admin/screens/crmSettings/StagesCard';
 import { maxScore, scoringOf } from '@/components/admin/screens/crmSettings/ScoringCard';
@@ -108,6 +112,34 @@ describe('the vocabularies equal the database (0034, 0035, 0091)', () => {
     expect(SIGNAL_COPY.map((s) => s.signal).sort()).toEqual(
       SCORE_SIGNALS.filter((s) => s !== 'service_page').sort(),
     );
+  });
+});
+
+describe('the screen’s own copy of the limits equals the schema’s', () => {
+  // The screen cannot import @schemas/crm at run time (its chunk is the leads screens'), so it
+  // keeps its own copy, held here.
+  it('limits, signals, tones and kinds', () => {
+    expect(LIMITS).toEqual({
+      minStages: MIN_STAGES,
+      maxStages: MAX_STAGES,
+      maxLabel: MAX_STAGE_LABEL,
+      maxPoints: MAX_SIGNAL_POINTS,
+      maxScore: MAX_LEAD_SCORE,
+      maxPool: MAX_ASSIGNMENT_POOL,
+      minSla: MIN_SLA_HOURS,
+      maxSla: MAX_SLA_HOURS,
+    });
+    expect(ALL_SIGNALS).toEqual([...SCORE_SIGNALS]);
+    expect(TONES).toEqual([...STAGE_TONES]);
+    expect(KINDS).toEqual([...STAGE_KINDS]);
+  });
+
+  it('nothing in the screen imports the schema at run time (types only)', () => {
+    for (const f of readdirSync('src/components/admin/screens/crmSettings')) {
+      const source = readFileSync(`src/components/admin/screens/crmSettings/${f}`, 'utf8');
+      expect(source, f).not.toMatch(/^import \{[^}]*\} from '@schemas\//m);
+      expect(source, f).not.toMatch(/from '@\/lib\/crm\//);
+    }
   });
 });
 
@@ -493,7 +525,7 @@ describe('the screen’s own rules', () => {
         assignment: { rule: 'manual', pool: [], fixedTo: null },
         updatedAt: null,
       }),
-    ).toEqual({ ...DEFAULT_SCORING, returning: 3 });
+    ).toEqual({ ...Object.fromEntries(SCORE_SIGNALS.map((x) => [x, 0])), returning: 3 });
   });
 
   it('the copy keeps the client’s rules: no em or en dash (P-12)', () => {

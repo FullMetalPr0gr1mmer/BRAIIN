@@ -3,13 +3,8 @@ import { adminFetch, describeError } from '@/lib/admin/client';
 import { toast } from '@/lib/admin/toast';
 import { ROLE_LABELS } from '@/lib/authz/capLabels';
 import { isRole } from '@/lib/auth/types';
-import {
-  MAX_ASSIGNMENT_POOL,
-  MAX_SLA_HOURS,
-  MIN_SLA_HOURS,
-  type AssignmentRule,
-} from '@schemas/crm';
-import { RULE_COPY } from './copy';
+import type { AssignmentRule } from '@schemas/crm';
+import { LIMITS, RULE_COPY } from './copy';
 import type { CrmSettingsRow, Person } from './types';
 
 // The response time and assignment card (Admin v2 C9a, crm.md §11 screen 11): the hours a
@@ -71,8 +66,8 @@ export default function ResponseCard({ settings, version, people, onSaved }: Pro
   const assignment = assignmentPayload(rule, pool, fixedTo, people);
 
   function problem(): string | null {
-    if (!Number.isInteger(hours) || hours < MIN_SLA_HOURS || hours > MAX_SLA_HOURS) {
-      return `Response time is a whole number of hours from ${MIN_SLA_HOURS} to ${MAX_SLA_HOURS}.`;
+    if (!Number.isInteger(hours) || hours < LIMITS.minSla || hours > LIMITS.maxSla) {
+      return `Response time is a whole number of hours from ${LIMITS.minSla} to ${LIMITS.maxSla}.`;
     }
     if (rule === 'round_robin' && assignment.pool.length === 0) {
       return 'Choose at least one person for the rotation.';
@@ -120,8 +115,8 @@ export default function ResponseCard({ settings, version, people, onSaved }: Pro
             type="number"
             className="in--num"
             inputMode="numeric"
-            min={MIN_SLA_HOURS}
-            max={MAX_SLA_HOURS}
+            min={LIMITS.minSla}
+            max={LIMITS.maxSla}
             step={1}
             value={Number.isFinite(hours) ? hours : ''}
             aria-describedby={`${id}-hours`}
@@ -131,7 +126,7 @@ export default function ResponseCard({ settings, version, people, onSaved }: Pro
         </span>
         <span className="f__hint" id={`${id}-hours`}>
           A new web lead nobody has answered by then shows &ldquo;Over response time&rdquo; on the
-          leads list. Up to {MAX_SLA_HOURS} hours (a week).
+          leads list. Up to {LIMITS.maxSla} hours (a week).
         </span>
       </label>
 
@@ -164,7 +159,7 @@ export default function ResponseCard({ settings, version, people, onSaved }: Pro
             <p className="f__hint">Nobody works leads yet.</p>
           ) : (
             <ul className="crm-people">
-              {people.slice(0, MAX_ASSIGNMENT_POOL).map((person) => (
+              {people.slice(0, LIMITS.maxPool).map((person) => (
                 <li key={person.id}>
                   <label className="field-inline">
                     <input

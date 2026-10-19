@@ -3,8 +3,38 @@ import type { AssignmentRule, ScoreSignal, StageKind, StageTone } from '@schemas
 // The words of the CRM settings screen (Admin v2 C9a), in one place so the screen and its
 // tests read the same copy. The client's rules (README P-12): plain, warm, no em or en dashes,
 // the studio never named.
+//
+// The screen's limits and closed lists are here too, not imported from @schemas/crm at run
+// time: that module is the leads screens' (the admin-leads chunk group claims it), and a
+// static import from this screen's chunk would make every screen in admin-screens load the
+// leads chunk (scripts/admin-bundle.mjs refuses it). tests/lib/crmSettings.spec.ts holds every
+// value here equal to the schema's. Types are imported, which costs nothing at run time.
 
-/** A tone by its name: chosen by name, never by colour alone (the badge shows the word). */
+/** The limits the schema and the database hold (packages/schemas/crm.ts, 0034, 0035, 0091). */
+export const LIMITS = {
+  minStages: 2,
+  maxStages: 10,
+  maxLabel: 40,
+  maxPoints: 50,
+  maxScore: 100,
+  maxPool: 20,
+  minSla: 1,
+  maxSla: 168,
+} as const;
+
+/** Every scoring signal, in the schema's order (the save sends the whole set). */
+export const ALL_SIGNALS: readonly ScoreSignal[] = [
+  'named_service',
+  'budget_given',
+  'budget_200k_plus',
+  'company_email',
+  'company_named',
+  'timeline_given',
+  'returning',
+  'service_page',
+];
+
+/** A tone by its name, in the palette's order: chosen by name, never by colour alone. */
 export const TONE_NAMES: Readonly<Record<StageTone, string>> = {
   klein: 'Blue',
   sky: 'Sky',
@@ -19,6 +49,9 @@ export const KIND_NAMES: Readonly<Record<StageKind, string>> = {
   won: 'Won',
   lost: 'Lost',
 };
+
+export const TONES = Object.keys(TONE_NAMES) as StageTone[];
+export const KINDS = Object.keys(KIND_NAMES) as StageKind[];
 
 /**
  * The signals the screen offers, in the prototype's order of weight, with what each means.

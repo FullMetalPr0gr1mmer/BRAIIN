@@ -2,16 +2,8 @@ import { useEffect, useId, useState } from 'react';
 import Icon from '@/components/admin/kit/Icon';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { toast } from '@/lib/admin/toast';
-import {
-  MAX_STAGE_LABEL,
-  MAX_STAGES,
-  MIN_STAGES,
-  STAGE_KINDS,
-  STAGE_TONES,
-  type StageKind,
-  type StageTone,
-} from '@schemas/crm';
-import { KIND_NAMES, leadsCount, removeBlocked, TONE_NAMES } from './copy';
+import type { StageKind, StageTone } from '@schemas/crm';
+import { KIND_NAMES, KINDS, leadsCount, LIMITS, removeBlocked, TONE_NAMES, TONES } from './copy';
 import type { StageDraft, StageRow } from './types';
 
 // The pipeline stages card (Admin v2 C9a, crm.md §11 screen 11): a list of the stages in
@@ -52,8 +44,8 @@ export function stagesPayload(loaded: readonly StageRow[], drafts: readonly Stag
 
 /** What would stop this pipeline saving, in words, or null. The server checks it again. */
 export function pipelineProblem(drafts: readonly StageDraft[]): string | null {
-  if (drafts.length < MIN_STAGES || drafts.length > MAX_STAGES) {
-    return `A pipeline has ${MIN_STAGES} to ${MAX_STAGES} stages.`;
+  if (drafts.length < LIMITS.minStages || drafts.length > LIMITS.maxStages) {
+    return `A pipeline has ${LIMITS.minStages} to ${LIMITS.maxStages} stages.`;
   }
   if (drafts.some((d) => d.label.trim().length === 0)) return 'Every stage needs a label.';
   if (!drafts.some((d) => d.kind === 'won')) return 'Keep at least one Won stage.';
@@ -151,7 +143,7 @@ export default function StagesCard({ loaded, onSaved }: Props) {
                 <input
                   type="text"
                   value={d.label}
-                  maxLength={MAX_STAGE_LABEL}
+                  maxLength={LIMITS.maxLabel}
                   required
                   onChange={(e) => update(d.local, { label: e.target.value })}
                 />
@@ -159,7 +151,7 @@ export default function StagesCard({ loaded, onSaved }: Props) {
               <fieldset className="f f--group">
                 <legend className="f__l">Colour</legend>
                 <div className="crm-tones__list">
-                  {STAGE_TONES.map((tone: StageTone) => (
+                  {TONES.map((tone: StageTone) => (
                     <label className="crm-tone" key={tone}>
                       <input
                         type="radio"
@@ -178,7 +170,7 @@ export default function StagesCard({ loaded, onSaved }: Props) {
               <fieldset className="f f--group" disabled={kindLocked}>
                 <legend className="f__l">Counts as</legend>
                 <div className="crm-kinds__list">
-                  {STAGE_KINDS.map((kind: StageKind) => (
+                  {KINDS.map((kind: StageKind) => (
                     <label className="field-inline" key={kind}>
                       <input
                         type="radio"
@@ -228,7 +220,7 @@ export default function StagesCard({ loaded, onSaved }: Props) {
                     className="btn"
                     data-variant="ghost"
                     data-size="sm"
-                    disabled={blocked !== null || drafts.length <= MIN_STAGES}
+                    disabled={blocked !== null || drafts.length <= LIMITS.minStages}
                     aria-label={`Remove: ${d.label.trim() || 'this stage'}`}
                     onClick={() => remove(d.local)}
                   >
@@ -247,14 +239,14 @@ export default function StagesCard({ loaded, onSaved }: Props) {
           type="button"
           className="btn"
           data-variant="ghost"
-          disabled={drafts.length >= MAX_STAGES}
+          disabled={drafts.length >= LIMITS.maxStages}
           onClick={add}
         >
           <Icon name="plus" size={16} />
           Add stage
         </button>
         <span className="f__hint">
-          {drafts.length} of {MAX_STAGES} stages
+          {drafts.length} of {LIMITS.maxStages} stages
         </span>
       </div>
       {error && (
