@@ -3,6 +3,10 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import LeadsList, { hoursText } from '@/components/admin/screens/leads/LeadsList';
+import LeadsBoard, {
+  cardTakesFocus,
+  focusTargetAfterMove,
+} from '@/components/admin/screens/leads/LeadsBoard';
 import LeadDetail from '@/components/admin/screens/leads/LeadDetail';
 import LeadContactCard, { whatsappHref } from '@/components/admin/screens/leads/LeadContactCard';
 import { reasonsSentence } from '@/components/admin/screens/leads/LeadStatusCard';
@@ -22,7 +26,7 @@ import { DEFAULT_LEAD_FILTERS } from '@/lib/crm/leadUrl';
 //     e-mail, phone, budget or note, no mailto/tel/WhatsApp link before the audited reveal;
 //   • states are words, never colour or weight alone: "Unread", "Over response time", the
 //     star's pressed state, the board's counts;
-//   • "Move to…" names its lead;
+//   • "Move to…" names its card; the board scrolls in its own focusable region;
 //   • the revealed values live in component state only (no storage, no address).
 
 const NOW = '2026-10-18T09:00:00.000Z';
@@ -165,6 +169,127 @@ describe('the list', () => {
     });
     expect(manual).toContain('How they reached us');
     expect(manual).toContain('No leads match');
+  });
+});
+
+describe('the board', () => {
+  const out = html(LeadsBoard, {
+    frame: FRAME,
+    initial: [
+      { stage_id: NEW, total: 60, value_sum: 0, leads: [row()] },
+      {
+        stage_id: WON,
+        total: 1,
+        value_sum: 75000,
+        leads: [row({ id: OLD, name: 'Omar', stage_id: WON, value_sar: 75000, read_at: NOW })],
+      },
+    ] as never,
+    filters: DEFAULT_LEAD_FILTERS,
+    permissions: PERMS,
+    now: NOW,
+  });
+
+  it('scrolls in its own labelled, focusable region; no style, no contact detail', () => {
+    expect(out).toContain('<div class="kb" role="region" aria-label="Pipeline" tabindex="0">');
+    expect(out).not.toMatch(/\sstyle=/);
+    expect(out).not.toMatch(PII);
+  });
+
+  it('gives every card a "Move to…" that names it, closed until pressed', () => {
+    expect(out).toContain('Move to…<span class="visually-hidden"> Nora Haddad</span>');
+    expect(out).toContain('Move to…<span class="visually-hidden"> Omar</span>');
+    expect(out).toMatch(/aria-haspopup="true" aria-expanded="false"/);
+    expect(out).not.toContain('moveto__m');
+  });
+
+  it('adds up the won column in SAR, counts each column, and links past the 50 shown', () => {
+    expect(out).toContain('<span class="kb__sum">75,000 SAR</span>');
+    expect(out).toContain('60<span class="visually-hidden"> leads</span>');
+    expect(out).toContain(`href="/admin/leads?stage=${NEW}"`);
+    expect(out).toContain('Show all 60 in the list');
+    expect(out).toContain('<span class="visually-hidden">Unread</span>');
+  });
+
+  it('carries only the filters its toolbar shows into its cards (no chip, sort or page)', () => {
+    // A list's address pasted onto the board: the board shows no chip, sort or page, so its
+    // cards' links (and its own address) never carry them (boardFilters).
+    const pasted = html(LeadsBoard, {
+      frame: FRAME,
+      initial: [{ stage_id: NEW, total: 1, value_sum: 0, leads: [row()] }] as never,
+      filters: {
+        ...DEFAULT_LEAD_FILTERS,
+        chip: { kind: 'spam' },
+        sort: 'oldest',
+        page: 4,
+        range: '30',
+      },
+      permissions: PERMS,
+      now: NOW,
+    });
+    expect(pasted).toContain(`href="/admin/leads/${LEAD}?range=30"`);
+    expect(pasted).not.toMatch(/href="\/admin\/leads\/[^"]*(stage=spam|sort=|page=)/);
+  });
+
+  it('gives focus to the moved card only when focus was lost with its old place', () => {
+    // C4b's "Move to…" rule on the board: the card's link takes focus after a move (its
+    // button left for another column) or a conflict's refresh that moved it, never from where
+    // the person went meanwhile, nor from its own button that stayed put.
+    const body = { tag: 'body' } as unknown as Element;
+    const field = { tag: 'input' } as unknown as Element;
+    expect(cardTakesFocus(body, body)).toBe(true);
+    expect(cardTakesFocus(null, body)).toBe(true);
+    expect(cardTakesFocus(field, body)).toBe(false);
+    const source = readFileSync('src/components/admin/screens/leads/LeadsBoard.tsx', 'utf8');
+    expect(source).toContain('if (!cardTakesFocus(document.activeElement, document.body)) return;');
+    // A conflict's refresh follows the card too.
+    expect(source).toMatch(
+      /status === 409\) \{\n[^\n]*\n[^\n]*\n\s*focusAfter\.current = \{ id: card\.id, from: String\(card\.stage_id\) \};/,
+    );
+  });
+
+  it('gives focus to the column the card left when the refresh no longer holds it', () => {
+    // A conflict's refresh can drop the card: a colleague marked it spam (the board leaves
+    // spam out) or it now falls outside the filters. Its "Move to…" left with it, so focus
+    // goes to the heading of the column it left, else the board, never the body (WCAG 2.4.3).
+    const link = { tag: 'a' } as unknown as HTMLElement;
+    const heading = { tag: 'h2' } as unknown as HTMLElement;
+    const board = { tag: 'div.kb' } as unknown as HTMLElement;
+    const rootOf = (found: Record<string, HTMLElement>) => ({
+      querySelector: <E extends Element>(selector: string) => (found[selector] ?? null) as E | null,
+    });
+    const cardSel = `[data-lead-card="${LEAD}"] .kcard__n`;
+    const colSel = `[id="kb-${NEW}"]`;
+    expect(
+      focusTargetAfterMove(rootOf({ [cardSel]: link, [colSel]: heading, '.kb': board }), LEAD, NEW),
+    ).toBe(link);
+    expect(focusTargetAfterMove(rootOf({ [colSel]: heading, '.kb': board }), LEAD, NEW)).toBe(
+      heading,
+    );
+    expect(focusTargetAfterMove(rootOf({ '.kb': board }), LEAD, NEW)).toBe(board);
+    // The heading the selector names is the column's, and it can take focus.
+    expect(out).toContain(`<h2 id="kb-${NEW}" class="kb__t" tabindex="-1">`);
+    const source = readFileSync('src/components/admin/screens/leads/LeadsBoard.tsx', 'utf8');
+    expect(source).toContain('focusTargetAfterMove(document, after.id, after.from)?.focus();');
+  });
+
+  it('reads again after a move when a filter or search read was already in flight', () => {
+    // A read that started before the PATCH answers with the card in its old column and old
+    // version; let it land and the next move is a needless 409. The move asks again instead
+    // (the re-run aborts the stale read), and only the latest read clears the marker.
+    const source = readFileSync('src/components/admin/screens/leads/LeadsBoard.tsx', 'utf8');
+    expect(source).toMatch(
+      /const controller = new AbortController\(\);\n\s*reading\.current = controller;/,
+    );
+    expect(source).toContain('if (reading.current === controller) reading.current = null;');
+    expect(source).toMatch(
+      /setColumns\(\(list\) => moved\(list, card, to, answer\)\);\n(?:[^\n]*\n){1,4}\s*if \(reading\.current\) setReload\(\(n\) => n \+ 1\);/,
+    );
+    expect(source).toContain('}, [filters, q, reload]);');
+  });
+
+  it('reads the address through boardFilters on the server too', () => {
+    const page = readFileSync('src/pages/admin/leads/board.astro', 'utf8');
+    expect(page).toContain('boardFilters(parseLeadFilters(Astro.url.searchParams))');
   });
 });
 

@@ -704,7 +704,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [U16](as-built/U16.md): the help centre: guides as typed blocks in the database, the "?" drawer with search and this screen's guides, `/admin/help`, 0046 (#62)
 - [U12a](as-built/U12a.md): users v2 and the session posture: the token's own claims and the session length checked, sessions revoked on a role change, the live read of profiles, the account owner, the Security card, the read-only role matrix, 0055 (PR number at review)
 - [U12b](as-built/U12b.md): invites: the acceptance page `/admin/invite` (eight pre-auth paths), Pending invites with Resend and Cancel, the invite drawer and message, switched off ("Not set up") until SMTP, the invite e-mail template, no address in the invite audit rows, 0056 (the help guide; PR number at review)
-- [U17](as-built/U17.md): two factor sign in: TOTP set up on `/admin/2fa` (zero JS, the key and an `otpauth://` link), the second step held in two layers (the token hook at the required `aal`, `resolveAuthContext`'s pending step), Require 2FA for everyone, Reset 2FA, the 2FA column and health check, its guides waiting for H11's put, 0072 (PR number at review)
+- [U17](as-built/U17.md): two factor sign in: TOTP set up on `/admin/2fa` (zero JS, the key and an `otpauth://` link), the second step held in two layers (the token hook at the required `aal`, `resolveAuthContext`'s pending step), Require 2FA for everyone, Reset 2FA, the 2FA column and health check, its two guides put through H11's catalog, 0072 (PR number at review)
 
 **Releases**
 - [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)
@@ -724,6 +724,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [C3](as-built/C3.md): the leads write API: versioned PATCH, bulk, manual add, erase, export filters, 0041
 - [C4a](as-built/C4a.md): the leads readers v2: assignee, star, unread, source, channel and discipline filters, the SLA flag, the board's values, the summary's figures, Previous/Next in the list's own order, the score's reasons behind the reveal, 0063 (#79)
 - [C4b](as-built/C4b.md): the leads screens: the list with its KPIs, chips, filters in the address and bulk bar, a lead's page (the audited reveal, the notes thread, the status card, Move to…, the timeline, Erase), the lazy add drawer, the `internalNotes` 422, the F0 harness extension, the `admin-leads` chunk groups and O-15 by the plan's default, 0065 (the help guide only; PR number at review)
+- [C4c](as-built/C4c.md): the Pipeline board, carved out of C4b by size: a column per stage, Move to… on every card, announced, the List | Pipeline tabs, 0068 (the help guide only, after G2's 0067; PR number at review)
 
 **Hotfixes**
 - [H5](as-built/H5.md): the audit chain is serialized, 0031 (#36)
@@ -732,6 +733,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [H8](as-built/H8.md): RLS on every telemetry partition, SELECT only where staff only read, 0037 (#51)
 - [H9](as-built/H9.md): lead notifications restored, signed and never silent, 0048; the staleDomain flake (#63)
 - [H10](as-built/H10.md): a stale Admin token changes no profile, and an audit row names who wrote it, 0050 (#66)
+- [H11](as-built/H11.md): the help-guide catalog: one row per guide, `app.help_article_set()` read from it, `app.put_help_guide`/`app.drop_help_guide` with a revision guard, so no slice restates the set, built as 0069 (number at merge; PR number at review)
 
 **Wave 0**
 - [W0-a](as-built/W0-a.md): CLAUDE.md §8 in bullets with one lane per track, the as-built files, the migration ledger, the runbook's rollback floor

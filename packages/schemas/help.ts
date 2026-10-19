@@ -4,8 +4,9 @@ import { z } from 'zod';
 // (migration 0046) as typed blocks, never HTML. The same rules hold in three places: the
 // table's CHECK constraints (app.help_body_ok, app.help_text_ok, app.help_keys_ok), this
 // schema (what the Worker accepts when it reads a row), and the article set the migrations
-// seed (tests/lib/helpCentre.spec.ts parses it out of the last migration that defines
-// app.help_article_set() and holds every article to HelpArticleSeedSchema).
+// seed (tests/lib/helpCentre.spec.ts reads it as the last restatement of
+// app.help_article_set() before H11's catalog, 0069, plus every app.put_help_guide and
+// app.drop_help_guide since, and holds every article to HelpArticleSeedSchema).
 //
 // A block is one of four kinds, the client's prototype set (its GUIDES in screens_setup.js):
 //   p    a paragraph            { t: 'p',   x: text }

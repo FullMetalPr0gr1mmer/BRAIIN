@@ -2,8 +2,9 @@
 -- 0072 — Two-step sign-in (2FA, TOTP; Admin v2 U17). Forward-only, expand only.
 -- Depends on 0010 (the access-token hook and profiles_auth_admin_read), 0011 (USAGE on schema
 -- app for supabase_auth_admin), 0031 (the audit chain), 0033 (app.live_role), 0050
--- (app.role_manages_users, the audit actor binding) and 0055 (admin_security_settings,
--- public.staff_accounts, profiles.is_owner, the session revocation this mirrors).
+-- (app.role_manages_users, the audit actor binding), 0055 (admin_security_settings,
+-- public.staff_accounts, profiles.is_owner, the session revocation this mirrors) and 0069
+-- (the help-guide catalog, app.put_help_guide).
 --
 -- What it closes. Supabase Auth can hold a second factor per person (an authenticator app,
 -- TOTP), and a session that typed its code carries `aal: "aal2"` in its access token. Nothing
@@ -54,8 +55,8 @@
 -- Never switch Require on before the new Worker is live.
 --
 -- Production as of 2026-10-18: PostgreSQL 17.6; the ledger holds every migration through
--- 0065. Grants are stated for both Supabase privilege regimes (README P-14). The help guides
--- this slice rewrites are added through H11's app.put_help_guide (section 6's TODO).
+-- 0065. Grants are stated for both Supabase privilege regimes (README P-14). The two help
+-- guides this slice rewrites are put through H11's app.put_help_guide (0069, section 6).
 -- CLAUDE.md §2 (session invalidation), §3 (Pillar 1, 2FA), §8, §9.
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -233,18 +234,282 @@ revoke all on function public.staff_accounts(uuid) from public, anon, authentica
 grant execute on function public.staff_accounts(uuid) to authenticated;
 
 -- ---- 6. The guides ----------------------------------------------------------------------------
--- TODO(U17, H11): wire these once H11 (the help-guide catalog, app.put_help_guide) is on main.
--- This slice rewrites two guides; their full text, the nine keys exactly as a put takes them,
--- is kept in the repository until then:
---   docs/admin-v2/guides/your-account.json      (a 2FA section; /admin/2fa among its screens)
---   docs/admin-v2/guides/roles-and-access.json  (Require 2FA for everyone; Reset 2FA)
--- The wiring replaces this comment with one top-level line per guide, outside any DO block,
--- N being the guide's revision on main when this merges (1 unless a sibling put it first;
--- tests/fixtures/helpSet.ts names it), then deletes both files:
---   select app.put_help_guide($guide$ <your-account.json> $guide$::jsonb, N);
---   select app.put_help_guide($guide$ <roles-and-access.json> $guide$::jsonb, N);
--- tests/lib/helpCentre.spec.ts holds the files to every rule of the set today
--- (tests/fixtures/pendingGuides.ts). Until the wiring, this migration leaves the help set alone.
+-- Two guides change, each with H11's app.put_help_guide (0069): the nine keys exactly, at the
+-- revision main leaves them (1: no put has changed either since the catalog was filled). The
+-- put holds each to help_articles' CHECKs and re-seeds that one slug into every tenant; a
+-- sibling's put of either guide landing first makes this one stale (55000), never a silent
+-- revert. Places, titles, caps and tags are unchanged; no guide is added.
+--   your-account      a 2FA section (setting it up, the code at sign-in, a lost phone, turning
+--                     it off), and /admin/2fa among its screens.
+select app.put_help_guide($guide$
+{
+  "slug": "your-account",
+  "sort_order": 20,
+  "minutes": 4,
+  "tags": [
+    "account",
+    "basics"
+  ],
+  "screens": [
+    "/admin/account",
+    "/admin/notifications",
+    "/admin/2fa"
+  ],
+  "caps": [],
+  "title": "Your account, password and bell",
+  "title_ar": "حسابك وكلمة المرور والإشعارات",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Your account holds your display name (shown at the bottom of the menu and, to Admins, in Users & roles), your password, and a plain list of what your role can do. Open it from your name at the bottom of the menu."
+      },
+      {
+        "t": "h",
+        "x": "Changing your password"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Type your current password, then the new one twice. A new password has at least 10 characters.",
+          "Five wrong current passwords within 15 minutes lock your account for 15 minutes, as on the sign-in page.",
+          "Once the change goes through, every other device you are signed in on is signed out. This one stays signed in."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Your e-mail address"
+      },
+      {
+        "t": "p",
+        "x": "Changing it needs outgoing e-mail, which is not set up yet, so your account shows Not set up for now."
+      },
+      {
+        "t": "h",
+        "x": "The bell"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "It shows up to 30 items from the last 14 days: new inquiries and job applications for the roles that handle them, services and posts going live today for the roles that write them, and maintenance switched on or off for everyone.",
+          "Mark all as read marks what you were shown. Anything that arrives while the list is open stays new."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Two factor authentication (2FA)"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "With 2FA on, signing in asks for a 6-digit code from an authenticator app on your phone after your password, so a password alone does not get anyone in. To turn it on, open Two factor authentication in your account and choose Set up.",
+          "Add the account to your app: type the key the page shows, or, on the phone that has the app, choose Add it to the app. Then type the 6-digit code the app shows and choose Turn on 2FA.",
+          "From then on, after your password the admin asks for a code from the app. Five wrong codes within 15 minutes lock your account for 15 minutes, as wrong passwords do.",
+          "To turn it off, choose Manage and type a current code. If your team requires 2FA, it stays on."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "Lost your phone? Ask an Admin to reset your 2FA in Users & roles. That signs you out on every device, and you can set 2FA up again with your new phone."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "يضم حسابك اسم العرض (ويظهر أسفل القائمة، وللمسؤولين في Users & roles)، وكلمة المرور، وقائمة واضحة بما يستطيع دورك فعله. افتحه من اسمك أسفل القائمة."
+      },
+      {
+        "t": "h",
+        "x": "تغيير كلمة المرور"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "اكتب كلمة المرور الحالية، ثم الجديدة مرتين. يجب ألا تقل كلمة المرور الجديدة عن 10 أحرف.",
+          "خمس محاولات خاطئة لكلمة المرور الحالية خلال 15 دقيقة تقفل حسابك 15 دقيقة، كما في صفحة تسجيل الدخول.",
+          "بعد نجاح التغيير يُسجَّل خروجك من كل جهاز آخر كنت مسجّلًا فيه، ويبقى هذا الجهاز مسجّلًا."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "بريدك الإلكتروني"
+      },
+      {
+        "t": "p",
+        "x": "يحتاج تغييره إلى خدمة إرسال البريد، وهي غير مُعدّة بعد، لذلك يظهر في حسابك Not set up حاليًا."
+      },
+      {
+        "t": "h",
+        "x": "الجرس"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "يعرض حتى 30 عنصرًا من آخر 14 يومًا: الاستفسارات الجديدة وطلبات التوظيف للأدوار التي تتولاها، والخدمات والمقالات التي تُنشر اليوم للأدوار التي تكتبها، وتشغيل وضع الصيانة أو إيقافه للجميع.",
+          "يحدّد Mark all as read ما عُرض عليك كمقروء، وما يصل أثناء فتح القائمة يبقى جديدًا."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "التحقق بخطوتين (2FA)"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "عند تشغيل 2FA يطلب تسجيل الدخول، بعد كلمة المرور، رمزًا من 6 أرقام من تطبيق مصادقة على هاتفك، فلا تكفي كلمة المرور وحدها لدخول أي شخص. لتشغيله افتح Two factor authentication في حسابك واختر Set up.",
+          "أضف الحساب إلى تطبيقك: اكتب المفتاح الذي تعرضه الصفحة، أو اختر Add it to the app على الهاتف الذي يحمل التطبيق. ثم اكتب الرمز المكوّن من 6 أرقام الذي يعرضه التطبيق واختر Turn on 2FA.",
+          "بعد ذلك تطلب لوحة الإدارة رمزًا من التطبيق بعد كلمة المرور. خمسة رموز خاطئة خلال 15 دقيقة تقفل حسابك 15 دقيقة، كما تفعل كلمات المرور الخاطئة.",
+          "لإيقافه اختر Manage واكتب رمزًا حاليًا. إذا كان فريقك يشترط 2FA فإنه يبقى مفعّلًا."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "فقدت هاتفك؟ اطلب من مسؤول (Admin) إعادة ضبط 2FA الخاص بك من Users & roles. يُسجَّل بذلك خروجك من كل جهاز، ثم تستطيع إعداد 2FA من جديد بهاتفك الجديد."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 1);
+
+-- roles-and-access: Require 2FA for everyone, and an Admin's Reset 2FA.
+select app.put_help_guide($guide$
+{
+  "slug": "roles-and-access",
+  "sort_order": 30,
+  "minutes": 5,
+  "tags": [
+    "account",
+    "team"
+  ],
+  "screens": [
+    "/admin/account",
+    "/admin/users"
+  ],
+  "caps": [],
+  "title": "Roles: who can do what",
+  "title_ar": "الأدوار: من يستطيع فعل ماذا",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "There are four roles. Each sees only the screens it can use, and the server checks the role again on every save, so a hidden button is never the only lock."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Admin: everything, including people and their roles, archiving and deleting, and job applications.",
+          "Content Creator: writes and publishes the site's content (services, projects, posts, pages, testimonials and the rest) and manages media. No settings and no leads.",
+          "SEO: SEO defaults, redirects, integrations, and the website and search stats. It can open pages, services, projects and posts without changing their content.",
+          "Developer: general settings, maintenance, the theme editor (saved themes do not change the site yet), media, leads, site health, logs and the activity log. It does not write or publish content, and it cannot see job applications."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Changing someone's role"
+      },
+      {
+        "t": "p",
+        "x": "Only an Admin can, in Settings › Users & roles: open the person, choose the role or switch off Can sign in, and save. That ends every sign-in the person has, on every device: the admin turns them away at their next click, and they sign in again to get the new role. You cannot change your own role or switch yourself off."
+      },
+      {
+        "t": "p",
+        "x": "One limit to know: a sign-in pass already handed out keeps working for up to an hour when someone uses it directly against the database, outside the admin. On settings, media, the system logs and content it still carries the role it was issued with until it runs out. People and their roles, the security settings, leads, job applications and the activity log check the person's account on every request, so those close at once."
+      },
+      {
+        "t": "h",
+        "x": "The account owner"
+      },
+      {
+        "t": "p",
+        "x": "One Admin is the account owner, marked by whoever runs the database. The owner always keeps the Admin role: nobody can change it, switch the owner off or remove them. To hand ownership on, the owner opens another active Admin and chooses Make account owner."
+      },
+      {
+        "t": "h",
+        "x": "Security settings"
+      },
+      {
+        "t": "p",
+        "x": "The Security card on Users & roles sets the session length, 1 day or 7 days: someone who signed in longer ago than that is asked to sign in again at their next click. It also sets the allowed email domain: when it is filled in, invites go only to addresses at that domain."
+      },
+      {
+        "t": "p",
+        "x": "Require 2FA for everyone, on the same card, asks everyone who has not set up two factor authentication to set it up at their next click, before they can do anything else in the admin. Turn on 2FA for your own account first: until you have, the card does not save the switch."
+      },
+      {
+        "t": "h",
+        "x": "Resetting someone's 2FA"
+      },
+      {
+        "t": "p",
+        "x": "If someone loses their phone, an Admin opens the person in Users & roles and chooses Reset 2FA. Their authenticator app stops working here and they are signed out on every device; the reset is recorded in the activity log. You cannot reset your own 2FA there (turn it off from your account), nor the account owner's, which only whoever runs the database can reset."
+      },
+      {
+        "t": "tip",
+        "x": "Roles are fixed: there are no exceptions for one person. If someone needs more, they need a different role."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "هناك أربعة أدوار. يرى كل دور الشاشات التي يستطيع استخدامها فقط، ويتحقق الخادم من الدور مرة أخرى عند كل حفظ، فلا يكون إخفاء الزر هو القفل الوحيد أبدًا."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Admin (مسؤول): كل شيء، بما في ذلك الأشخاص وأدوارهم، والأرشفة والحذف، وطلبات التوظيف.",
+          "Content Creator (صانع محتوى): يكتب محتوى الموقع وينشره (الخدمات والمشاريع والمقالات والصفحات والتوصيات وغيرها) ويدير الوسائط. لا إعدادات ولا عملاء محتملين.",
+          "SEO (تحسين محركات البحث): إعدادات SEO الافتراضية، وإعادة التوجيه، والتكاملات، وإحصاءات الموقع والبحث. يستطيع فتح الصفحات والخدمات والمشاريع والمقالات دون تغيير محتواها.",
+          "Developer (مطوّر): الإعدادات العامة، ووضع الصيانة، ومحرر المظهر (لا تغيّر المظاهر المحفوظة الموقع بعد)، والوسائط، والعملاء المحتملون، وصحة الموقع، والسجلات، وسجل النشاط. لا يكتب المحتوى ولا ينشره، ولا يرى طلبات التوظيف."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "تغيير دور شخص ما"
+      },
+      {
+        "t": "p",
+        "x": "يستطيع ذلك المسؤول (Admin) فقط، من Settings › Users & roles: افتح حساب الشخص، واختر الدور أو أوقف Can sign in، ثم احفظ. يُنهي ذلك كل جلسات دخول الشخص على كل أجهزته: ترفضه لوحة الإدارة عند نقرته التالية، ثم يسجّل دخوله من جديد ليحصل على الدور الجديد. لا يمكنك تغيير دورك بنفسك ولا إيقاف حسابك."
+      },
+      {
+        "t": "p",
+        "x": "وهناك حدّ ينبغي معرفته: تصريح الدخول الذي صدر بالفعل يبقى صالحًا حتى ساعة إذا استُخدم مباشرة على قاعدة البيانات، خارج لوحة الإدارة. ففي الإعدادات والوسائط وسجلات النظام والمحتوى يبقى يحمل الدور الذي صدر به إلى أن ينتهي. أما الأشخاص وأدوارهم، وإعدادات الأمان، والعملاء المحتملون، وطلبات التوظيف، وسجل النشاط فتتحقق من حساب الشخص عند كل طلب، فيُغلق الوصول إليها فورًا."
+      },
+      {
+        "t": "h",
+        "x": "مالك الحساب"
+      },
+      {
+        "t": "p",
+        "x": "أحد المسؤولين هو مالك الحساب، ويحدّده من يدير قاعدة البيانات. يحتفظ المالك بدور Admin دائمًا: لا يستطيع أحد تغييره أو إيقاف حساب المالك أو حذفه. ولنقل الملكية، يفتح المالك حساب مسؤول آخر نشط ويختار Make account owner."
+      },
+      {
+        "t": "h",
+        "x": "إعدادات الأمان"
+      },
+      {
+        "t": "p",
+        "x": "تحدّد بطاقة Security في Users & roles مدة الجلسة، يومًا واحدًا أو 7 أيام: من سجّل دخوله قبل أكثر من ذلك يُطلب منه تسجيل الدخول من جديد عند نقرته التالية. وتحدّد أيضًا نطاق البريد الإلكتروني المسموح به: إذا مُلئ، لا تُرسل الدعوات إلا إلى عناوين ذلك النطاق."
+      },
+      {
+        "t": "p",
+        "x": "ويطلب الخيار Require 2FA for everyone، في البطاقة نفسها، من كل من لم يُعدّ التحقق بخطوتين أن يُعدّه عند نقرته التالية، قبل أن يستطيع فعل أي شيء آخر في لوحة الإدارة. شغّل 2FA لحسابك أنت أولًا: لا تحفظ البطاقة هذا الخيار قبل ذلك."
+      },
+      {
+        "t": "h",
+        "x": "إعادة ضبط 2FA لشخص ما"
+      },
+      {
+        "t": "p",
+        "x": "إذا فقد شخص هاتفه، يفتح المسؤول (Admin) حسابه في Users & roles ويختار Reset 2FA. يتوقف تطبيق المصادقة لديه عن العمل هنا ويُسجَّل خروجه من كل أجهزته، وتُسجَّل إعادة الضبط في سجل النشاط. لا يمكنك إعادة ضبط 2FA الخاص بك من هناك (أوقفه من حسابك)، ولا الخاص بمالك الحساب، فذلك لا يفعله إلا من يدير قاعدة البيانات."
+      },
+      {
+        "t": "tip",
+        "x": "الأدوار ثابتة، ولا استثناءات لشخص بعينه. من يحتاج إلى صلاحيات أكثر يحتاج إلى دور مختلف."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 1);
 
 -- ---- Postconditions ---------------------------------------------------------------------------
 -- The first block is the one the push depends on: if the owner of the definers cannot read
@@ -420,5 +685,43 @@ begin
    where g.held is distinct from g.wanted;
   if v_bad is not null then
     raise exception '0072: wrong column privileges on admin_security_settings (role privilege.column): %', v_bad;
+  end if;
+end $$;
+
+-- ---- The guides (section 6): the catalog holds this slice's text, and so does every tenant.
+-- Only the two guides this slice puts are checked (H11 rule 3: no count of the whole set).
+do $$
+declare
+  v_bad text;
+begin
+  if not exists (select 1 from app.help_guide_catalog c
+                  where c.slug = 'your-account' and c.revision >= 2
+                    and '/admin/2fa' = any (c.screens)
+                    and c.body::text like '%Two factor authentication%') then
+    raise exception '0072: the catalog does not hold your-account with its 2FA section and /admin/2fa';
+  end if;
+  if not exists (select 1 from app.help_guide_catalog c
+                  where c.slug = 'roles-and-access' and c.revision >= 2
+                    and c.body::text like '%Require 2FA for everyone%'
+                    and c.body::text like '%Reset 2FA%') then
+    raise exception '0072: the catalog does not hold roles-and-access with Require 2FA and Reset 2FA';
+  end if;
+  if (select count(*) from jsonb_array_elements(app.help_article_set()) g
+       where g ->> 'slug' in ('your-account', 'roles-and-access')) <> 2 then
+    raise exception '0072: app.help_article_set() does not render both guides';
+  end if;
+  -- Every tenant: a row per guide, field for field the catalog's.
+  select string_agg(format('%s %s', t.id, c.slug), ', ' order by t.id, c.slug) into v_bad
+    from public.tenants t
+    cross join app.help_guide_catalog c
+   where c.slug in ('your-account', 'roles-and-access')
+     and not exists (select 1 from public.help_articles h
+                      where h.tenant_id = t.id and h.slug = c.slug
+                        and row(h.title, h.title_ar, h.minutes, h.tags, h.screens, h.caps,
+                                h.body, h.sort_order)
+                            is not distinct from row(c.title, c.title_ar, c.minutes, c.tags,
+                                                     c.screens, c.caps, c.body, c.sort_order));
+  if v_bad is not null then
+    raise exception '0072: tenants missing this slice''s guide text (tenant slug): %', v_bad;
   end if;
 end $$;
