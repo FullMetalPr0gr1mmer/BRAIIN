@@ -1397,7 +1397,7 @@ describe('the Sales guides (C10a): the-sales-role, and roles-and-access with fiv
     expect(ar).toContain('Sales (المبيعات)');
   });
 
-  it('says the notes thread is limited for Sales too, as the route has it', () => {
+  it('says the notes thread is limited like the reveal, as the route has it', () => {
     expect(text('en')).toContain(
       "Opening a lead's notes is logged too, within a limit of the same size.",
     );
@@ -1406,8 +1406,8 @@ describe('the Sales guides (C10a): the-sales-role, and roles-and-access with fiv
     );
   });
 
-  it('takes the free place 75 (between leads 70 and personal data 80), for the lead workers', () => {
-    expect(article().sort_order).toBe(75);
+  it('takes its assigned place 65 (between SEO 60 and leads 70), for the lead workers', () => {
+    expect(article().sort_order).toBe(65);
     expect(article().tags).toEqual(['leads', 'team']);
     expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual([
       'admin',

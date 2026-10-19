@@ -306,31 +306,42 @@ describe('the notes thread', () => {
     });
   });
 
-  it('GET for Admin or Developer spends no limiter slot (they may export every lead)', async () => {
-    for (const role of ['admin', 'developer']) {
+  it('GET spends a slot of the reveal’s limit for every reader, before the audit row and the thread (C10a)', async () => {
+    for (const role of ['admin', 'developer', 'sales']) {
+      events.length = 0;
+      claimedLimits.length = 0;
       sessionRole = role;
       liveProfile = { role, is_active: true, locked_until: null };
-      expect((await notes.GET(ctx(`/api/admin/leads/${LEAD}/notes`))).status).toBe(200);
+      expect((await notes.GET(ctx(`/api/admin/leads/${LEAD}/notes`))).status, role).toBe(200);
+      expect(claimedLimits, role).toEqual([PII_REVEAL_LIMITS]);
+      expect(
+        events.filter((e) => e.startsWith('ops:')),
+        role,
+      ).toEqual(['ops:lead-notes-read']);
+      expect(events.indexOf('ops:lead-notes-read'), role).toBeLessThan(
+        events.indexOf('audit:lead.view_notes'),
+      );
+      expect(events.indexOf('ops:lead-notes-read'), role).toBeLessThan(
+        events.indexOf('svc:list:lead_notes'),
+      );
     }
-    expect(events.filter((e) => e.startsWith('ops:'))).toEqual([]);
   });
 
-  it('GET for Sales spends a slot of the reveal-sized limit before the lead is read (C10a)', async () => {
-    sessionRole = 'sales';
-    liveProfile = { role: 'sales', is_active: true, locked_until: null };
-    expect((await notes.GET(ctx(`/api/admin/leads/${LEAD}/notes`))).status).toBe(200);
-    expect(claimedLimits).toEqual([PII_REVEAL_LIMITS]);
-    expect(events.indexOf('ops:lead-notes-read')).toBeLessThan(
-      events.indexOf('audit:lead.view_notes'),
-    );
+  it('the limit is the reveal’s own: 60 an hour per person, 300 per tenant', () => {
+    expect(PII_REVEAL_LIMITS).toEqual({ perUser: 60, perTenant: 300, windowMinutes: 60 });
   });
 
-  it('GET for Sales over the limit (the 61st read in an hour): 429, and the thread is never read', async () => {
-    sessionRole = 'sales';
-    liveProfile = { role: 'sales', is_active: true, locked_until: null };
-    limited = true;
-    expect((await notes.GET(ctx(`/api/admin/leads/${LEAD}/notes`))).status).toBe(429);
-    expect(events).toEqual(['svc:profiles', 'ops:lead-notes-read']);
+  it('GET over the limit (the 61st read in an hour), any role: 429, and the thread is never read', async () => {
+    for (const role of ['admin', 'developer', 'sales']) {
+      events.length = 0;
+      audits.length = 0;
+      sessionRole = role;
+      liveProfile = { role, is_active: true, locked_until: null };
+      limited = true;
+      expect((await notes.GET(ctx(`/api/admin/leads/${LEAD}/notes`))).status, role).toBe(429);
+      expect(events, role).toEqual(['svc:profiles', 'ops:lead-notes-read']);
+      expect(audits, role).toEqual([]);
+    }
   });
 
   it('GET without an audit row: 403 and the thread is never read', async () => {

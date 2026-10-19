@@ -76,7 +76,7 @@
 -- Sales holds no new grant: every privilege it uses is `authenticated`'s, which the staff
 -- roles already share. No table is created here.
 --
--- HELP GUIDES (section 9): this slice's guide, the-sales-role (sort_order 75), is put into
+-- HELP GUIDES (section 9): this slice's guide, the-sales-role (sort_order 65), is put into
 -- H11's catalog, and the roles guide (roles-and-access) is put again with five roles. Neither
 -- restates app.help_article_set().
 --
@@ -217,13 +217,14 @@ create policy admin_role_defaults_read on public.admin_role_defaults for select 
 
 -- ---- 9. The help guides ----------------------------------------------------------------------
 -- H11's catalog (0069): one top-level put per guide, outside any DO block. the-sales-role is
--- new (revision 0, the free place 75, for the lead workers: leads.manage); roles-and-access
--- (revision 1, as 0068 left it) now says five roles and gains the Sales line. Each put
+-- new (revision 0, its assigned place 65, between SEO 60 and leads 70, for the lead workers:
+-- leads.manage); roles-and-access (revision 1, as 0069 left it) now says five roles and gains
+-- the Sales line. Each put
 -- re-seeds that one slug into every tenant and touches no other guide.
 select app.put_help_guide($guide$
 {
   "slug": "the-sales-role",
-  "sort_order": 75,
+  "sort_order": 65,
   "minutes": 2,
   "tags": [
     "leads",
@@ -573,7 +574,7 @@ begin
 
   -- The two guides: in the catalog and in every tenant, the roles guide naming five roles.
   if (select count(*) from app.help_guide_catalog where slug = 'the-sales-role'
-        and sort_order = 75 and caps = array['leads.manage']) <> 1
+        and sort_order = 65 and caps = array['leads.manage']) <> 1
      or exists (select 1 from public.tenants t
                  where not exists (select 1 from public.help_articles h
                                     where h.tenant_id = t.id and h.slug = 'the-sales-role')) then
