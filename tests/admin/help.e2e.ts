@@ -351,6 +351,9 @@ test.describe('without JS', () => {
   // the help catalog). /admin/seo is server-rendered, so its head works without JS;
   // /admin/redirects now answers there.
   const SEO_GUIDE = /^SEO, share images and redirects$/;
+  // A guide row is a link named by its title AND its reading time ("… 5 min read",
+  // HelpGuideList), so the row's name starts with the title and never ends with it.
+  const SEO_GUIDE_ROW = /^SEO, share images and redirects\s*\d+ min read$/;
 
   test('"?" is a link to the help page, which lists this screen’s guides and reads one', async ({
     page,
@@ -361,7 +364,7 @@ test.describe('without JS', () => {
     await helpButton(page).click();
     await expect(page).toHaveURL(/\/admin\/help\?screen=%2Fadmin%2Fseo$/);
     const onScreen = page.getByRole('list', { name: /^on this screen$/i });
-    await onScreen.getByRole('link', { name: SEO_GUIDE }).click();
+    await onScreen.getByRole('link', { name: SEO_GUIDE_ROW }).click();
     // The screen rides along on every link the page builds.
     await expect(page).toHaveURL(/\/admin\/help\?guide=seo-and-redirects&screen=%2Fadmin%2Fseo$/);
     await expect(page.getByRole('heading', { level: 1, name: SEO_GUIDE })).toBeVisible();
@@ -375,7 +378,9 @@ test.describe('without JS', () => {
     await page.getByRole('link', { name: /^all guides$/i }).click();
     await expect(page).toHaveURL(/\/admin\/help\?screen=%2Fadmin%2Fseo$/);
     await expect(
-      page.getByRole('list', { name: /^on this screen$/i }).getByRole('link', { name: SEO_GUIDE }),
+      page
+        .getByRole('list', { name: /^on this screen$/i })
+        .getByRole('link', { name: SEO_GUIDE_ROW }),
     ).toBeVisible();
   });
 
