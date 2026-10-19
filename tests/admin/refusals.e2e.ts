@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
 import { SKIP_REASON, STAFF_ROLES, authFile, staffEnv } from './staff';
-import { LOCKED_SCREENS, refusedRoles, renderOf } from './routes';
+import { LOCKED_APIS, LOCKED_SCREENS, refusedRoles, renderOf } from './routes';
 
 /*
  * The server's refusals, end to end (CLAUDE.md §9: "Negative E2E proves server 403, not
@@ -15,9 +15,12 @@ import { LOCKED_SCREENS, refusedRoles, renderOf } from './routes';
  *               island screen's page answers 200 and its island shows the API's 403; a
  *               server-rendered screen (render: 'server', Admin v2 U2) answers 403 itself
  *               with the refusal in the layout.
+ *               An API whose screen is a tab of another screen (LOCKED_APIS: the redirects
+ *               list, a tab of SEO since Admin v2 U10) is asked directly: the same 403.
  *   writes      creating a service as a role without `services.write`, with a valid CSRF
  *               token and origin, so the only thing left to refuse it is the capability.
- *   signed out  every locked screen sends a visitor to sign in, its API answers 401.
+ *   signed out  every locked screen sends a visitor to sign in, its API answers 401, and
+ *               so does every locked API.
  *
  * Not here: `other_tenant` (the harness has one tenant; the tenant predicate is proven in
  * pgTAP and tests/authz/endpoints.spec.ts) and a role change mid-session, which is
@@ -68,6 +71,23 @@ for (const role of STAFF_ROLES) {
   });
 }
 
+for (const role of STAFF_ROLES) {
+  const locked = LOCKED_APIS.filter((entry) => refusedRoles(entry).includes(role));
+  if (locked.length === 0) continue;
+
+  test.describe(`as ${role}, asking the API`, () => {
+    test.use({ storageState: authFile(role) });
+
+    for (const entry of locked) {
+      test(`${entry.api} is refused by the server`, async ({ page }) => {
+        const res = await page.request.get(entry.api);
+        expect(res.status(), `${entry.api} as ${role}`).toBe(403);
+        expect(await res.json()).toMatchObject({ ok: false, error: 'forbidden' });
+      });
+    }
+  });
+}
+
 for (const role of STAFF_ROLES.filter((r) => ROLE_CAPS[r]['services.write'] === 'none')) {
   test.describe(`as ${role}, writing`, () => {
     test.use({ storageState: authFile(role) });
@@ -94,6 +114,13 @@ test.describe('signed out', () => {
 
       const res = await page.request.get(screen.api);
       expect(res.status(), screen.api).toBe(401);
+      expect(await res.json()).toEqual({ ok: false, error: 'unauthenticated' });
+    });
+  }
+  for (const entry of LOCKED_APIS) {
+    test(`${entry.api} answers 401`, async ({ page }) => {
+      const res = await page.request.get(entry.api);
+      expect(res.status(), entry.api).toBe(401);
       expect(await res.json()).toEqual({ ok: false, error: 'unauthenticated' });
     });
   }

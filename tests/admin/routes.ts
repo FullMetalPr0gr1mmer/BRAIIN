@@ -150,13 +150,31 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/visibility', api: '/api/admin/page-visibility', cap: 'maintenance.manage' },
 ];
 
+/**
+ * Role-gated APIs whose screen is not a locked screen of its own, asked directly by
+ * tests/admin/refusals.e2e.ts: every role without the capability gets the server's 403
+ * (`forbidden`), a visitor signed out a 401. LOCKED_SCREENS needs a menu screen with one
+ * capability; these live on a tab of a screen another capability locks.
+ */
+export interface LockedApi {
+  api: string;
+  cap: Capability;
+}
+
+export const LOCKED_APIS: readonly LockedApi[] = [
+  // Admin v2 U10: the redirects list is a tab of /admin/seo (whose locked entry names
+  // seo.globalDefaults and the Pages tab's API), so the redirects API keeps its own negative
+  // check here: Content Creator and Developer get a 403 from it, not just a hidden tab.
+  { api: '/api/admin/redirects', cap: 'redirects.manage' },
+];
+
 /** How a locked screen refuses (see LockedScreen). */
 export function renderOf(screen: LockedScreen): 'island' | 'server' {
   return screen.render ?? 'island';
 }
 
-/** The roles a locked screen must refuse: those with no access at all to its capability. */
-export function refusedRoles(screen: LockedScreen): Role[] {
+/** The roles a locked screen (or API) must refuse: those with no access at all to its capability. */
+export function refusedRoles(screen: { cap: Capability }): Role[] {
   return ROLES.filter((role) => ROLE_CAPS[role][screen.cap] === 'none');
 }
 
