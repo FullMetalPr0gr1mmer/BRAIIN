@@ -4478,6 +4478,10 @@ dialog.drw[data-size='wide'] {
   font-size: 13px;
 }
 
+.seo-panel__index {
+  padding-block: 12px;
+}
+
 .seo-panel__legacy .note__b {
   display: flex;
   flex-wrap: wrap;
@@ -4526,6 +4530,10 @@ dialog.drw[data-size='wide'] {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
   gap: 12px;
+}
+
+.seo-preview {
+  min-inline-size: 0;
 }
 
 .seo-preview__h {
