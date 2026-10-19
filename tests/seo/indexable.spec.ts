@@ -39,8 +39,7 @@ vi.mock('@/lib/data/blog', () => ({
 }));
 vi.mock('@/lib/data/seo', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/data/seo')>()),
-  getSeoRules: async () =>
-    seoReadFails ? null : { rules, pages: [{ id: ABOUT, slug: 'about' }] },
+  getSeoRules: async () => (seoReadFails ? null : { rules, pages: [{ id: ABOUT, slug: 'about' }] }),
   getSeoDefaults: async () =>
     seoReadFails
       ? null
@@ -129,7 +128,11 @@ describe('the sitemap', () => {
   it('drops a project and a post canonicalised onto another path', async () => {
     rules = [
       rule({ entity_type: 'portfolio', entity_id: PROJECT, canonical_override: '/portfolio' }),
-      rule({ entity_type: 'blog_post', entity_id: POST, canonical_override: '/creative-knowledge' }),
+      rule({
+        entity_type: 'blog_post',
+        entity_id: POST,
+        canonical_override: '/creative-knowledge',
+      }),
     ];
     const xml = await body(sitemapGet);
     expect(listed(xml, '/portfolio/the-rider')).toBe(false);

@@ -114,7 +114,10 @@ describe('the mirror over the fixture tenant', () => {
     const shareOrphan = id(173);
     const shareDefault = id(174);
     tables['media_assets']!.push(
-      ...[shareLive, shareDraft, shareOrphan, shareDefault].map((mid) => ({ ...template, id: mid })),
+      ...[shareLive, shareDraft, shareOrphan, shareDefault].map((mid) => ({
+        ...template,
+        id: mid,
+      })),
     );
     const og = (eid: string, mid: string) => {
       const row = tables['entity_seo']!.find((r) => r['id'] === eid)!;

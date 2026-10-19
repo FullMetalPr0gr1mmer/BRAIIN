@@ -77,9 +77,7 @@ describe('EntitySeoWriteSchema (U10)', () => {
 
   it('every field may be left to the page default (D4)', () => {
     expect(issuesOf(base)).toEqual([]);
-    expect(issuesOf({ ...base, metaTitle: { en: '', ar: '' }, metaDescription: null })).toEqual(
-      [],
-    );
+    expect(issuesOf({ ...base, metaTitle: { en: '', ar: '' }, metaDescription: null })).toEqual([]);
   });
 
   it('a page may override only its title, or only its description (per pair)', () => {
@@ -161,8 +159,9 @@ describe('SeoDefaultsSchema (U10)', () => {
   });
 
   it('the default share image is a media id, or null', () => {
-    expect(SeoDefaultsSchema.safeParse({ defaultOgMediaId: entity.entityId, version: 0 }).success)
-      .toBe(true);
+    expect(
+      SeoDefaultsSchema.safeParse({ defaultOgMediaId: entity.entityId, version: 0 }).success,
+    ).toBe(true);
     expect(SeoDefaultsSchema.safeParse({ defaultOgMediaId: null, version: 0 }).success).toBe(true);
     expect(SeoDefaultsSchema.safeParse({ defaultOgMediaId: 'x', version: 0 }).success).toBe(false);
   });
