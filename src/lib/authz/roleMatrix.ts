@@ -31,7 +31,10 @@ export const CAP_GROUPS: readonly CapGroup[] = [
   { label: 'Publishing', caps: ['content.publish', 'content.archiveDelete'] },
   { label: 'SEO', caps: ['seo.entityMeta', 'seo.globalDefaults', 'redirects.manage'] },
   { label: 'Media', caps: ['media.write', 'media.hardDelete'] },
-  { label: 'Leads', caps: ['leads.manage', 'leads.pii', 'export.csv', 'crm.erase'] },
+  {
+    label: 'Leads',
+    caps: ['leads.manage', 'leads.pii', 'export.csv', 'crm.erase', 'crm.settings'],
+  },
   { label: 'Hiring', caps: ['applications.manage', 'applications.pii'] },
   { label: 'Stats', caps: ['analytics.read', 'analytics.search', 'siteHealth.view'] },
   {

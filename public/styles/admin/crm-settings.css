@@ -1,0 +1,162 @@
+/* Screen stylesheet: CRM settings, /admin/crm/settings (Admin v2 C9a). Linked only through
+   AdminLayout's `styles` prop (styles={['crm-settings.css']}), after admin.css. Its cards,
+   fields, badges and buttons are the kit's (admin.css); only the screen's layout, the stage
+   rows and the tone and rule choices restyled as real radio labels are here. It uses
+   admin.css's tokens and declares none, and holds no colour literal
+   (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+.crm-set__col > .card + .card {
+  margin-top: 18px;
+}
+
+.crm-card .admin-sub {
+  margin: 0 0 16px;
+}
+
+/* The pipeline: one bordered row per stage, numbered by its place on the board. */
+.crm-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.crm-stage {
+  padding: 14px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+}
+
+.crm-stage__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: 0 0 12px;
+}
+
+.crm-stage__n {
+  min-inline-size: 1.5em;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ad-dim2);
+}
+
+.crm-stage__count {
+  margin-inline-start: auto;
+  font-size: 12.5px;
+  color: var(--ad-dim2);
+  font-variant-numeric: tabular-nums;
+}
+
+.crm-stage__acts,
+.crm-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+/* A tone is a real radio whose label is the badge it gives: chosen by its name, the
+   choice shown by a ring (a shape, not only a colour) and the focus by the kit's ring. */
+.crm-tones__list,
+.crm-kinds__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.crm-tone {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border: 2px solid transparent;
+  border-radius: var(--ad-r-pill);
+  cursor: pointer;
+}
+
+.crm-tone > input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+
+.crm-tone:has(> input:checked) {
+  border-color: var(--ad-ink);
+}
+
+.crm-tone:has(> input:focus-visible) {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: 2px;
+}
+
+/* The scoring rows: the label and its hint on the left, the points on the right. */
+.crm-points {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.crm-points__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6rem;
+  align-items: center;
+  gap: 2px 12px;
+  margin: 0;
+}
+
+.crm-points__row > .f__l,
+.crm-points__row > .f__hint {
+  grid-column: 1;
+}
+
+.crm-points__row > input {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.crm-hours {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crm-hours > input {
+  inline-size: 6rem;
+}
+
+/* The assignment rule: three radio rows, each with what it does under its name. */
+.crm-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.crm-rule {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 10px;
+  cursor: pointer;
+}
+
+.crm-rule > .f__hint {
+  grid-column: 2;
+}
+
+.crm-rule__t {
+  font-weight: 700;
+}
+
+.crm-people {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}

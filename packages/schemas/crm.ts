@@ -377,3 +377,119 @@ export const LeadExportQuerySchema = z
   })
   .strict();
 export type LeadExportQuery = z.infer<typeof LeadExportQuerySchema>;
+
+// ── CRM settings (Admin v2 C9a) ─────────────────────────────────────────────────────────────
+// The SQL side is supabase/migrations/0034 (the stage CHECKs), 0035 (scoring, sla_hours) and
+// 0091 (the assignment rule, the pool, save_lead_stages); tests/lib/crmSettings.spec.ts parses
+// them and compares.
+
+/**
+ * A stage's tone: a named, closed palette (`.badge[data-tone]` in admin.css), never a colour.
+ * Free colours would need inline style, which the CSP forbids (§3), and each of these is a
+ * text-on-tint pair scripts/contrast-audit.mjs holds to WCAG AA.
+ */
+export const STAGE_TONES = ['klein', 'sky', 'ok', 'warn', 'err', 'gray'] as const;
+export type StageTone = (typeof STAGE_TONES)[number];
+
+/** What a stage counts as: still open, won or lost. */
+export const STAGE_KINDS = ['open', 'won', 'lost'] as const;
+export type StageKind = (typeof STAGE_KINDS)[number];
+
+export const MIN_STAGES = 2;
+export const MAX_STAGES = 10;
+export const MAX_STAGE_LABEL = 40;
+
+/** Who a new lead goes to (owner item O-9: manual by default). */
+export const ASSIGNMENT_RULES = ['manual', 'round_robin', 'fixed'] as const;
+export type AssignmentRule = (typeof ASSIGNMENT_RULES)[number];
+export const MAX_ASSIGNMENT_POOL = 20;
+
+export const MIN_SLA_HOURS = 1;
+export const MAX_SLA_HOURS = 168;
+export const MAX_SIGNAL_POINTS = 50;
+
+const unique = (list: readonly string[]) => new Set(list).size === list.length;
+
+/** One stage as the screen sends it: an id for a stage that exists, none for a new one. */
+export const LeadStageInputSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    label: z.string().trim().min(1).max(MAX_STAGE_LABEL),
+    tone: z.enum(STAGE_TONES),
+    kind: z.enum(STAGE_KINDS),
+  })
+  .strict();
+export type LeadStageInput = z.infer<typeof LeadStageInputSchema>;
+
+/**
+ * PUT /api/admin/crm/stages: the whole pipeline in board order, and the stages as the screen
+ * loaded them (`known`, id and version each): the save is refused if anything changed since.
+ * The initial stage stays, first; the database checks that it is the initial one.
+ */
+export const LeadStagesSaveSchema = z
+  .object({
+    known: z
+      .array(z.object({ id: z.string().uuid(), version: z.number().int().min(1) }).strict())
+      .min(MIN_STAGES)
+      .max(MAX_STAGES),
+    stages: z.array(LeadStageInputSchema).min(MIN_STAGES).max(MAX_STAGES),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const ids = value.stages.flatMap((s) => (s.id ? [s.id] : []));
+    if (!unique(ids)) ctx.addIssue({ code: 'custom', path: ['stages'], message: 'a stage twice' });
+    if (!value.stages[0]?.id) {
+      ctx.addIssue({ code: 'custom', path: ['stages', 0], message: 'the first stage stays first' });
+    }
+    if (!value.stages.some((s) => s.kind === 'won')) {
+      ctx.addIssue({ code: 'custom', path: ['stages'], message: 'a pipeline needs a won stage' });
+    }
+    if (!value.stages.some((s) => s.kind === 'lost')) {
+      ctx.addIssue({ code: 'custom', path: ['stages'], message: 'a pipeline needs a lost stage' });
+    }
+  });
+export type LeadStagesSave = z.infer<typeof LeadStagesSaveSchema>;
+
+/** Every signal's points: the whole closed set, 0 to 50 each (the CHECK, app.crm_scoring_ok). */
+export const CrmScoringSaveSchema = z
+  .object(
+    Object.fromEntries(
+      SCORE_SIGNALS.map((s) => [s, z.number().int().min(0).max(MAX_SIGNAL_POINTS)]),
+    ) as Record<ScoreSignal, z.ZodNumber>,
+  )
+  .strict();
+
+export const CrmAssignmentSchema = z
+  .object({
+    rule: z.enum(ASSIGNMENT_RULES),
+    pool: z.array(z.string().uuid()).max(MAX_ASSIGNMENT_POOL).refine(unique, 'a person twice'),
+    fixedTo: z.string().uuid().nullable(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.rule === 'fixed' && !value.fixedTo) {
+      ctx.addIssue({ code: 'custom', path: ['fixedTo'], message: 'choose the person' });
+    }
+    if (value.rule === 'round_robin' && value.pool.length === 0) {
+      ctx.addIssue({ code: 'custom', path: ['pool'], message: 'choose at least one person' });
+    }
+  });
+export type CrmAssignment = z.infer<typeof CrmAssignmentSchema>;
+
+/**
+ * PUT /api/admin/crm/settings: one card's change at the version the screen read. Each card
+ * sends its own part; the time zone is not here (site_profile owns it, the plan's B7.5).
+ */
+export const CrmSettingsSaveSchema = z
+  .object({
+    version: z.number().int().min(1),
+    scoring: CrmScoringSaveSchema.optional(),
+    slaHours: z.number().int().min(MIN_SLA_HOURS).max(MAX_SLA_HOURS).optional(),
+    assignment: CrmAssignmentSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (v) => v.scoring !== undefined || v.slaHours !== undefined || v.assignment !== undefined,
+    'nothing to save',
+  );
+export type CrmSettingsSave = z.infer<typeof CrmSettingsSaveSchema>;

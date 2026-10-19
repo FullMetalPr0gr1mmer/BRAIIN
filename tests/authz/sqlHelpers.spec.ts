@@ -14,6 +14,7 @@ import { ROLES } from '@/lib/auth/types';
 const HELPER_CAPABILITY: Record<string, Capability> = {
   role_works_leads: 'leads.manage',
   role_crm_erase: 'crm.erase',
+  role_crm_settings: 'crm.settings',
   role_manages_users: 'users.manage',
   role_views_audit: 'audit.view',
   role_site_health: 'siteHealth.view',
