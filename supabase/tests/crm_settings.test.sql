@@ -13,7 +13,7 @@
 -- skipping inactive people). CLAUDE.md §3, §5, §8, §9.
 
 begin;
-select plan(93);
+select plan(94);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -109,6 +109,13 @@ $$;
 create function _assignee(p_id text) returns uuid language sql as $$
   select assigned_to from public.leads where id = p_id::uuid
 $$;
+
+-- ---- The guide (H11's put) -------------------------------------------------------------------
+select ok(exists (select 1 from public.help_articles h
+                   where h.tenant_id = '00000000-0000-0000-0000-000000000001'
+                     and h.slug = 'crm-settings' and h.caps = '{crm.settings}'
+                     and h.screens = '{/admin/crm/settings}' and h.sort_order = 75),
+  'a new tenant is seeded with the CRM settings guide, Admin''s, on its screen');
 
 -- ---- The helper and who runs what --------------------------------------------------------------
 select is(

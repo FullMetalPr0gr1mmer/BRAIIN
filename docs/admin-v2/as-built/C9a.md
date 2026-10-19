@@ -27,7 +27,7 @@
   DELETE for `crm.settings` holders (never `key`, `is_initial`, the tenant); `save_lead_stages`
   (INVOKER) applies a whole pipeline against the set as loaded; `lead_stage_counts` (INVOKER);
   the assignment step in `crm_ingest_lead` through a definer `app.crm_pick_assignee`;
-  postconditions for both grant regimes; a TODO where the help guide's put goes once H11 lands.
+  postconditions for both grant regimes; the help guide's put (H11's `app.put_help_guide`).
 - **Routes.** `GET` and `PUT /api/admin/crm/settings`, `PUT /api/admin/crm/stages`
   (`crm.settings`), audited `crm.settings.update` and `crm.stages.update`.
 - **Screen.** `/admin/crm/settings` in Settings ("CRM settings"), an island in the
@@ -95,11 +95,13 @@
   100), and Response time and assignment (hours; Manual, Round robin with a checklist of the
   people who work leads, or Always to one person). The two settings cards share the row's
   version without resetting each other's unsaved fields.
-- **Help:** the guide `crm-settings` (sort_order 75, three minutes, EN and AR) as
-  `docs/admin-v2/guides/crm-settings.json`, its `PAGE_GUIDES` entry, and the migration's marked
-  TODO where `app.put_help_guide` goes once H11 merges (revision 0, a new guide).
-  `tests/lib/helpCentre.spec.ts` reads the guide files into the set it checks until a migration
-  seeds them (then the file must equal the seeded guide), and holds the guide to the screen.
+- **Help:** the guide `crm-settings` (sort_order 75, three minutes, EN and AR), put by 0091
+  with `select app.put_help_guide($guide$ … $guide$::jsonb, 0);` (H11, a new guide, so revision
+  0), and its `PAGE_GUIDES` entry. 75 is the free place after the leads guide (70), taken first
+  in merge order (corrections rule 2): C10a's sales guide (0092) merges after and takes another.
+  A postcondition, a pgTAP row and the read-back check the guide reaches the catalog and every
+  tenant; `tests/lib/helpCentre.spec.ts` reads it from the migration like every other guide and
+  holds it to the screen (the guide-file staging used before H11 merged is gone).
 - **Tests:** pgTAP `supabase/tests/crm_settings.test.sql` (`plan(93)`); one assertion each in
   `crm_ingest.test.sql` (47) and `rls_lead_pipeline.test.sql` (71) that said "staff cannot
   write this yet" now says what stays closed (the time zone; a key, a tenant);
@@ -152,8 +154,6 @@
 
 ## Follow-ups
 
-- Wire the guide once H11 merges: `select app.put_help_guide($guide$ … $guide$::jsonb, 0);`
-  with the file's JSON; the spec then holds the file equal to the seeded guide.
 - `crm_settings.timezone` moves to `site_profile.timezone` with U9 (B7.5) and is dropped in
   C14.
 - PostgreSQL 17 reports a RESTRICT foreign key as 23001, not 23503 (`rls_lead_pipeline.test.sql`

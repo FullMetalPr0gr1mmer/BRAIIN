@@ -64,7 +64,7 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     screens: ['/admin/seo', '/admin/redirects'],
   },
   { slug: 'working-with-leads', caps: ['leads.manage'], screens: ['/admin/leads'] },
-  // Admin v2 C9a: its guide is a file until H11's catalog puts it (docs/admin-v2/guides/).
+  // Admin v2 C9a: its guide is put by 0091 (H11's catalog).
   { slug: 'crm-settings', caps: ['crm.settings'], screens: ['/admin/crm/settings'] },
   { slug: 'job-applications', caps: ['applications.manage'], screens: ['/admin/applications'] },
   { slug: 'maintenance-mode', caps: ['maintenance.manage'], screens: ['/admin/maintenance'] },

@@ -575,12 +575,99 @@ revoke all on function public.crm_ingest_lead(uuid, jsonb) from public, anon, au
 grant execute on function public.crm_ingest_lead(uuid, jsonb) to service_role;
 
 -- ---- 11. The help guide -------------------------------------------------------------------------
--- TODO(C9a, H11): once the help-guide catalog (H11) is on main, put this slice's guide here,
--- at the start of a line and outside any DO block, as H11's as-built says:
---   select app.put_help_guide($guide$ <docs/admin-v2/guides/crm-settings.json> $guide$::jsonb, 0);
--- The guide's text is docs/admin-v2/guides/crm-settings.json (sort_order 75, a new guide, so
--- revision 0). Until then no migration seeds it, and tests/lib/helpCentre.spec.ts reads it
--- from that file.
+-- This slice's guide, a new one (revision 0), sort_order 75: the free place after the leads
+-- guide (70), taken first in merge order (C10a's sales guide, 0092, takes another). H11's
+-- put: one top-level statement at the start of a line, outside any DO block.
+select app.put_help_guide($guide$
+{
+  "slug": "crm-settings",
+  "sort_order": 75,
+  "minutes": 3,
+  "tags": ["leads", "settings"],
+  "screens": ["/admin/crm/settings"],
+  "caps": ["crm.settings"],
+  "title": "CRM settings",
+  "title_ar": "إعدادات إدارة العملاء",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "CRM settings decide how the leads pipeline looks and what happens to a new lead. Only an Admin opens this page. Each card has its own Save, and nothing changes until you press it."
+      },
+      { "t": "h", "x": "Pipeline stages" },
+      {
+        "t": "ol",
+        "x": [
+          "The stages are the columns of the Leads pipeline, in this order. Rename a stage, choose its colour by name, and say what it counts as: Open, Won or Lost.",
+          "A pipeline has 2 to 10 stages, with at least one Won and one Lost stage. The first stage is where every new lead starts, so it stays first and stays open.",
+          "Add stage puts a new stage at the end. Move up and Move down change the order. Save stages keeps the whole pipeline at once.",
+          "Each stage shows how many leads it holds. A stage that holds leads cannot be removed and keeps what it counts as: move its leads to another stage first.",
+          "If someone else saved the stages while you were editing, your save stops and asks you to reload, so nobody's change is lost."
+        ]
+      },
+      { "t": "h", "x": "Lead scoring" },
+      {
+        "t": "ol",
+        "x": [
+          "A lead scores points for what its inquiry tells you: a budget, a company e-mail, a service it asked about and more. Each sign is worth 0 to 50 points, and a score never goes above 100.",
+          "Save scoring re-scores every lead at once, so the list never mixes old and new points. Scores above 75 show green."
+        ]
+      },
+      { "t": "h", "x": "Response time and assignment" },
+      {
+        "t": "ol",
+        "x": [
+          "Answer new leads within sets how many hours a new web lead may wait. After that, the leads list marks it Over response time.",
+          "New leads go to: Manual leaves them for someone to pick up. Round robin gives each new lead to the next person in the rotation, and skips anyone switched off. Always to one person gives every new lead to them.",
+          "Only active team members who work leads can be chosen."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "Every save here is recorded in the activity log, card by card."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تحدد إعدادات إدارة العملاء شكل مراحل العملاء المحتملين وما يحدث لكل عميل محتمل جديد. لا يفتح هذه الصفحة إلا المسؤول (Admin). لكل بطاقة زر حفظ خاص بها، ولا يتغير شيء حتى تضغطه."
+      },
+      { "t": "h", "x": "مراحل العملاء (Pipeline stages)" },
+      {
+        "t": "ol",
+        "x": [
+          "المراحل هي أعمدة لوحة Pipeline في صفحة Leads، بهذا الترتيب. يمكنك تغيير اسم المرحلة، واختيار لونها باسمه، وتحديد ما تُحسب عليه: Open أو Won أو Lost.",
+          "تضم لوحة المراحل من 2 إلى 10 مراحل، منها مرحلة Won واحدة على الأقل ومرحلة Lost واحدة على الأقل. والمرحلة الأولى هي التي يبدأ منها كل عميل محتمل جديد، لذلك تبقى أولًا وتبقى مفتوحة.",
+          "يضيف زر Add stage مرحلة جديدة في آخر القائمة، ويغيّر الزران Move up وMove down الترتيب. ويحفظ زر Save stages المراحل كلها دفعة واحدة.",
+          "تُظهر كل مرحلة عدد العملاء المحتملين فيها. والمرحلة التي فيها عملاء محتملون لا يمكن حذفها ولا تغيير ما تُحسب عليه: انقل عملاءها إلى مرحلة أخرى أولًا.",
+          "إذا حفظ شخص آخر المراحل وأنت تعدّلها، يتوقف حفظك ويطلب منك إعادة تحميل الصفحة، حتى لا يضيع تعديل أحد."
+        ]
+      },
+      { "t": "h", "x": "تقييم العملاء (Lead scoring)" },
+      {
+        "t": "ol",
+        "x": [
+          "يحصل كل عميل محتمل على نقاط بحسب ما يذكره في استفساره: ميزانية، أو بريد إلكتروني لشركة، أو خدمة سأل عنها، وغير ذلك. قيمة كل علامة من 0 إلى 50 نقطة، ولا يتجاوز التقييم 100.",
+          "يعيد زر Save scoring حساب تقييم كل العملاء المحتملين في الحال، فلا تختلط في القائمة نقاط قديمة بنقاط جديدة. ويظهر التقييم الأعلى من 75 باللون الأخضر."
+        ]
+      },
+      { "t": "h", "x": "وقت الرد والتوزيع (Response time and assignment)" },
+      {
+        "t": "ol",
+        "x": [
+          "يحدد حقل Answer new leads within عدد الساعات التي يمكن أن ينتظرها عميل محتمل جديد من الموقع. وبعدها تضع عليه قائمة العملاء المحتملين علامة Over response time.",
+          "يحدد New leads go to لمن يذهب العميل المحتمل الجديد: يتركه Manual لمن يتولاه من الفريق. ويعطي Round robin كل عميل محتمل جديد للشخص التالي في الدور، ويتخطى من أُوقف حسابه. ويعطي Always to one person كل عميل محتمل جديد لشخص واحد.",
+          "لا يمكن اختيار إلا أعضاء الفريق النشطين الذين يعملون على العملاء المحتملين."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "يُسجَّل كل حفظ في هذه الصفحة في سجل النشاط، بطاقةً بطاقة."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 0);
 
 -- ---- 12. Postconditions (Admin v2 P-14: both grant regimes) ------------------------------------
 do $$
@@ -610,6 +697,14 @@ begin
                   where tgrelid = 'public.lead_stages'::regclass and tgname = 'lead_stages_key'
                     and tgenabled = 'O' and not tgisinternal) then
     raise exception '0091: lead_stages_key is missing or disabled';
+  end if;
+  -- The guide is in the catalog and every tenant's help centre, Admin's.
+  if not exists (select 1 from app.help_guide_catalog
+                  where slug = 'crm-settings' and caps = '{crm.settings}' and sort_order = 75)
+     or exists (select 1 from public.tenants t
+                 where not exists (select 1 from public.help_articles h
+                                    where h.tenant_id = t.id and h.slug = 'crm-settings')) then
+    raise exception '0091: the crm-settings guide is not in the catalog and every tenant';
   end if;
 
   -- PUBLIC and anon hold nothing on either table, table-wide or on a column.
