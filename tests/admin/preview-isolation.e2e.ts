@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { createClient } from '@supabase/supabase-js';
 import { expect, test, type Page } from '@playwright/test';
 import { mayRead } from '@/lib/admin/help/access';
+import { PAGE_GUIDES } from '@/lib/admin/help/pageGuides';
 import { ROUTES } from '../e2e/publicRoutes';
 import { SKIP_REASON, STAFF_ROLES, authFile, staffEnv } from './staff';
 
@@ -28,18 +28,12 @@ const PENDING_TITLE = 'Preview only title';
 /** As the per-role sweep (tests/admin/sweep.e2e.ts). */
 const OVERFLOW_PX = 2;
 
-// Who may preview: the roles the preview guide is for. tests/lib/previewGuide.spec.ts holds
-// the guide's caps to PREVIEW_READ_CAPS and its readers to `canPreview`, which this runner
-// cannot import (its graph reaches the Worker's bindings). A role the matrix adds without a
-// preview area (C10a's Sales) lands in REFUSED, not in a loop that expects a 200.
-const GUIDE_CAPS = (
-  JSON.parse(
-    readFileSync(
-      new URL('../../docs/admin-v2/guides/previewing-changes.json', import.meta.url),
-      'utf8',
-    ),
-  ) as { caps: string[] }
-).caps;
+// Who may preview: the roles the preview guide is for (its page-guide entry, PAGE_GUIDES).
+// tests/lib/previewGuide.spec.ts holds the entry's caps to the guide's and to
+// PREVIEW_READ_CAPS, and its readers to `canPreview`, which this runner cannot import (its
+// graph reaches the Worker's bindings). A role the matrix adds without a preview area
+// (C10a's Sales) lands in REFUSED, not in a loop that expects a 200.
+const GUIDE_CAPS = PAGE_GUIDES.find((guide) => guide.slug === 'previewing-changes')!.caps;
 const PREVIEWERS = STAFF_ROLES.filter((role) => mayRead(role, GUIDE_CAPS));
 const REFUSED = STAFF_ROLES.filter((role) => !mayRead(role, GUIDE_CAPS));
 

@@ -1,26 +1,26 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { HelpArticleSeedSchema, type HelpArticleRow } from '@schemas/help';
 import { ROLES } from '@/lib/auth/types';
 import { CAPABILITIES } from '@/lib/authz/matrix';
 import { reachableHrefs } from '@/lib/admin/nav';
-import { mayRead, PAGE_GUIDES, PENDING_PAGE_GUIDES } from '@/lib/admin/help';
+import { mayRead, PAGE_GUIDES, pageGuideFor } from '@/lib/admin/help';
 import { canPreview, PREVIEW_READ_CAPS } from '@/lib/preview/dataset';
 import { PREVIEW_COPY } from '@/lib/preview/report';
 import { pageFileFor } from '../admin/routes';
+import { helpSet, readMigrations } from '../fixtures/helpSet';
 
-// The preview's help guide (Admin v2 R9, U16), written ahead of H11's catalog: the nine keys
-// in docs/admin-v2/guides/previewing-changes.json, held here to every rule
-// tests/lib/helpCentre.spec.ts holds a seeded guide to, and to what the preview does.
-// TODO(H11): when the catalog is on main, a migration carries
-//   select app.put_help_guide($guide$ <this file> $guide$::jsonb, 0);
-// the PENDING_PAGE_GUIDES entry moves into PAGE_GUIDES, and helpCentre.spec.ts takes over.
-// The catalog's CHECK allows 12 caps, and the guide names exactly 12 (PREVIEW_READ_CAPS): a
-// cap the preview's door gains must not reach the guide unchecked.
+// The preview's help guide (Admin v2 R9, U16), put by its migration through H11's catalog
+// (`select app.put_help_guide($guide$ {…} $guide$::jsonb, 0);`) and read here as the
+// migrations leave it (tests/fixtures/helpSet.ts). tests/lib/helpCentre.spec.ts holds it to
+// every rule a guide keeps; this file holds it to what the preview does and to who may
+// preview. The catalog's CHECK allows 12 caps and the guide names exactly 12
+// (PREVIEW_READ_CAPS): a cap the preview's door gains must not reach the guide unchecked.
 
-const FILE = 'docs/admin-v2/guides/previewing-changes.json';
-const RAW = JSON.parse(readFileSync(FILE, 'utf8')) as unknown;
+const SLUG = 'previewing-changes';
+const HELP = helpSet(readMigrations());
+const RAW = HELP.set.find((g) => g.slug === SLUG);
 const GUIDE: HelpArticleRow = HelpArticleSeedSchema.parse(RAW);
+const PUT = HELP.edits.filter((e) => e.slug === SLUG);
 
 const texts = (lang?: 'en' | 'ar') => [
   ...(lang === 'ar' ? [] : [GUIDE.title]),
@@ -30,33 +30,24 @@ const texts = (lang?: 'en' | 'ar') => [
   ),
 ];
 
-describe(`the preview guide (${FILE})`, () => {
-  it('has exactly the nine keys app.put_help_guide takes, and the seed schema', () => {
-    expect(Object.keys(RAW as object).sort()).toEqual(
-      [
-        'body',
-        'caps',
-        'minutes',
-        'screens',
-        'slug',
-        'sort_order',
-        'tags',
-        'title',
-        'title_ar',
-      ].sort(),
-    );
-    expect(GUIDE.slug).toBe('previewing-changes');
+describe('the preview guide (previewing-changes)', () => {
+  it('is put once, as a new guide (revision 0), by a migration after the catalog', () => {
+    expect(PUT).toHaveLength(1);
+    expect(PUT[0]).toMatchObject({ op: 'put', slug: SLUG, revision: 0 });
+    expect(PUT[0]!.file).toMatch(/^\d{4}_help_preview_guide\.sql$/);
+    expect(HELP.revisions.get(SLUG)).toBe(1);
   });
 
-  it('takes a free place in the list (65: U7 holds 45, C9a/C10a 75; 95 and 125 stay free)', () => {
-    // H11's catalog holds one guide per place (a second put_help_guide is a 23505), so the
-    // places are agreed by merge order, and R9 takes 65.
-    expect(GUIDE.sort_order).toBe(65);
+  it('takes the place assigned to R9 (95: U7 holds 45, C10a 65, C9a 75)', () => {
+    // H11's catalog holds one guide per place (a second put at one place is a 23505).
+    expect(GUIDE.sort_order).toBe(95);
+    const others = HELP.set.filter((g) => g.slug !== SLUG).map((g) => g.sort_order);
+    expect(others).not.toContain(95);
   });
 
   it("names at most 12 caps, H11's CHECK (help_guide_catalog_caps_ok)", () => {
-    // Exactly 12 today: a capability PREVIEW_READ_CAPS gains breaks the H11 wiring, so the
-    // guide's caps must then be narrowed to the areas (TODO(H11) below).
+    // Exactly 12 today: a capability PREVIEW_READ_CAPS gains cannot simply be added to the
+    // guide (the put would fail, 23514), so the guide's caps would be narrowed to the areas.
     expect(GUIDE.caps.length).toBeLessThanOrEqual(12);
   });
 
@@ -76,16 +67,13 @@ describe(`the preview guide (${FILE})`, () => {
     }
   });
 
-  it('its page guide waits for the catalog, with the guide’s caps and one of its screens', () => {
-    const entry = PENDING_PAGE_GUIDES.find((g) => g.slug === GUIDE.slug)!;
-    expect([...entry.caps]).toEqual([...GUIDE.caps]);
-    for (const s of entry.screens) expect(GUIDE.screens).toContain(s);
-    expect(PAGE_GUIDES.some((g) => g.slug === GUIDE.slug)).toBe(false);
-    const offered = new Set(PAGE_GUIDES.flatMap((g) => g.screens));
-    for (const s of entry.screens) expect(offered.has(s), s).toBe(false);
-    // Its other screens already have their own page guides (each screen offers one).
-    for (const s of GUIDE.screens.filter((x) => !entry.screens.includes(x))) {
-      expect(offered.has(s), s).toBe(true);
+  it('the preview’s own pages offer it, to exactly the roles that may preview', () => {
+    const entry = PAGE_GUIDES.find((g) => g.slug === SLUG)!;
+    expect([...entry.caps].sort()).toEqual([...GUIDE.caps].sort());
+    expect(entry.screens).toEqual(['/admin/preview']);
+    for (const role of ROLES) {
+      const offered = canPreview(role) ? SLUG : null;
+      expect(pageGuideFor('/admin/preview/robots.txt', role), role).toBe(offered);
     }
   });
 

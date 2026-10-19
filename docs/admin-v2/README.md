@@ -711,7 +711,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [R3b](as-built/R3b.md): staged singletons and entity SEO, the immediate job-application switch (`PATCH /api/admin/site-profile/intake`), the draft endpoints (pending summary, discard one / mine / selected, resolve), inert, no migration (PR number at review)
 - [R4](as-built/R4.md): applying a release as the publisher, change capture, the shared link-set helper, the purge record, inert, 0051 (#69)
 - [R8](as-built/R8.md): the preview data seam: the scoped `contentClient()`, the narrowed PostgREST emulator, the anon-RLS mirror, the `range()`-paged dataset with drafts overlaid per role, the fail-closed report, no migration (PR number at review)
-- [R9](as-built/R9.md): the preview route, `/admin/preview/**` rendering each Tier A page through Astro's rewrite inside the R8 scope, the ribbon, the bridge and its envelope, `frame-src 'self'` on admin responses, the preview guide written ahead of H11, no migration (PR number at review)
+- [R9](as-built/R9.md): the preview route, `/admin/preview/**` rendering each Tier A page through Astro's rewrite inside the R8 scope, the ribbon, the bridge and its envelope, `frame-src 'self'` on admin responses and a preview render's `connect-src` narrowed to the read-only endpoints, the preview guide put through H11's catalog (one migration, numbered at merge) (PR number at review)
 - [R5](as-built/R5.md): the release guard on every registry and link table (no depth exemption), system items and link-set capture with cascades, TRUNCATE closed, `media_usage` v4 (pending changes) and `dashboard_attention` v4 (release kinds), `publish_scheduled` skips tenants with releases on, inert, 0066 (PR number at review)
 
 **CRM**
