@@ -11,7 +11,7 @@
 -- per-tenant lead numbers; the stage-set rules; and the grants. CLAUDE.md §3, §8, §9.
 
 begin;
-select plan(71);
+select plan(72);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -146,7 +146,16 @@ select is((select count(*)::int from public.lead_stages
               where lead_id = '00000000-0000-0000-0000-00000000aa01'),
   0, 'another tenant''s admin reads none of T1''s stages or events');
 
+select throws_ok($$ update public.leads set status = 'in_progress'
+                   where id = '00000000-0000-0000-0000-00000000aa01' $$, '42501', null,
+  'a staff token no longer writes the legacy status (0093)');
+reset role;
+
 -- ---- Legacy writes move the pipeline (the current admin, through the sync) --------------
+-- Since 0093 no API role but the service role writes status or internal_notes; the sync is
+-- still the expand window's (until C14), so it is exercised as the service role, carrying
+-- the admin's claim for the attribution the triggers read.
+set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.leads set status = 'in_progress'
                     where id = '00000000-0000-0000-0000-00000000aa01' $$), 1,
@@ -178,7 +187,7 @@ select ok(
      from public.leads where id = '00000000-0000-0000-0000-00000000aa01'),
   'marking spam caps retention at the tenant''s spam_days (10), and saves the old horizon');
 
-set local role authenticated;
+set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.leads set status = 'new'
                     where id = '00000000-0000-0000-0000-00000000aa01' $$), 1,
@@ -202,7 +211,7 @@ insert into public.leads (id, tenant_id, name, email_enc, message, created_at, r
    now() - interval '24 months' + interval '3 days', null),
   ('00000000-0000-0000-0000-00000000aa07', '00000000-0000-0000-0000-000000000001', 'Erased', 'x', 'hi',
    now(), null);
-set local role authenticated;
+set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.leads set status = 'spam'
                     where id in ('00000000-0000-0000-0000-00000000aa05', '00000000-0000-0000-0000-00000000aa06',
@@ -221,7 +230,7 @@ select ok(
 -- The erasure, while aa07 is flagged.
 update public.leads set retention_delete_after = now() + interval '1 day'
  where id = '00000000-0000-0000-0000-00000000aa07';
-set local role authenticated;
+set local role service_role;
 select is(_rows($$ update public.leads set status = 'new'
                     where id in ('00000000-0000-0000-0000-00000000aa05', '00000000-0000-0000-0000-00000000aa07') $$), 2,
   'two legacy writes clear spam');
@@ -235,7 +244,7 @@ select ok(
      from public.leads where id = '00000000-0000-0000-0000-00000000aa07'),
   'clearing spam never undoes a horizon shortened while flagged: the erasure stands');
 
-set local role authenticated;
+set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.leads set status = 'done'
                     where id = '00000000-0000-0000-0000-00000000aa02' $$), 1, 'a legacy done write');
@@ -258,7 +267,7 @@ select is((select count(*)::int from public.lead_events
 
 -- The legacy panel saves the whole field each time: the mirror is rewritten in place, so
 -- the thread holds one copy, and text taken out of the field is gone from it too.
-set local role authenticated;
+set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.leads set internal_notes = 'Call back on Sunday. ID 1234567890'
                     where id = '00000000-0000-0000-0000-00000000aa02' $$), 1,
@@ -291,7 +300,7 @@ select is((select count(*)::int from public.lead_events e
               and e.kind = 'note_added' and e.actor_id = '00000000-0000-0000-0000-0000000000a1'),
   1, 'a thread note writes its own timeline event, by its author');
 
-set local role authenticated;
+set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.leads set internal_notes = '  '
                     where id = '00000000-0000-0000-0000-00000000aa02' $$), 1, 'the field cleared');
@@ -305,7 +314,7 @@ select is((select string_agg(source, ',') from public.lead_notes
 insert into public.leads (id, tenant_id, name, email_enc, message, status)
 values ('00000000-0000-0000-0000-00000000aa08', '00000000-0000-0000-0000-000000000001',
         'Old hand', 'x', 'hi', 'in_progress');
-set local role authenticated;
+set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.leads set internal_notes = 'Spoke last spring'
                     where id = '00000000-0000-0000-0000-00000000aa08' $$), 1,
