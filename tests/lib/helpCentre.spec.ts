@@ -1248,23 +1248,26 @@ describe('the guides say only what the admin does', () => {
   });
 });
 
-// ── 1d. A guide written for H11's catalog, waiting for it (Admin v2 G1) ──────────────────
-// G1 rewrites website-stats for the tabs it adds. No slice restates app.help_article_set()
-// any more: H11 (the guide catalog) gives app.put_help_guide, and 0071 carries a TODO where
-// the call goes once H11 is on main. Until then the guide lives in
-// docs/admin-v2/guides/website-stats.json, held here to every rule the set's guides keep and
-// to the code behind each sentence; the set's own copy (above) stays the one 0065 seeded.
+// ── 1d. A guide put through H11's catalog (Admin v2 G1) ────────────────────────────────
+// G1 rewrites website-stats for the tabs it adds, with one top-level app.put_help_guide in its
+// migration (no slice restates app.help_article_set() since H11). The guide's text is
+// docs/admin-v2/guides/website-stats.json, held here to every rule the set's guides keep, to the
+// code behind each sentence, and to the put that ships it (the set above reads it through it).
 
 describe('website-stats as G1 rewrites it (docs/admin-v2/guides/website-stats.json)', () => {
   const RAW_GUIDE = JSON.parse(
     readFileSync('docs/admin-v2/guides/website-stats.json', 'utf8'),
   ) as unknown;
   const guide = HelpArticleSeedSchema.parse(RAW_GUIDE);
-  const base = SET.find((a) => a.slug === 'website-stats')!;
+  const G1_FILE = '0071_stats_v2.sql';
+  // The guide as main left it: every migration but this one (the put's revision guard and the
+  // place, screens and capabilities it keeps are read against it).
+  const BEFORE = helpSet(MIGRATION_FILES.filter((f) => f.name !== G1_FILE));
+  const base = HelpArticleSeedSchema.parse(BEFORE.set.find((a) => a.slug === 'website-stats')!);
   const en = textsOf(guide, 'en').join('\n');
   const ar = textsOf(guide, 'ar').join('\n');
   const source = (path: string) => readFileSync(path, 'utf8');
-  const MIGRATION = source('supabase/migrations/0071_stats_v2.sql');
+  const MIGRATION = source(`${MIGRATIONS}/${G1_FILE}`);
 
   it('keeps the schema (the nine keys put takes), its place, screens and capabilities', () => {
     expect(Object.keys(RAW_GUIDE as object).sort()).toEqual([
@@ -1373,19 +1376,39 @@ describe('website-stats as G1 rewrites it (docs/admin-v2/guides/website-stats.js
     expect(ar).toContain('20 هدفًا');
   });
 
-  it('0071 leaves the marked place where the put goes once H11 is on main', () => {
-    expect(MIGRATION).toContain('TODO(H11)');
-    expect(MIGRATION).toContain('docs/admin-v2/guides/website-stats.json');
-    // The call the TODO names is the one H11 defines: put_help_guide(p_guide, p_revision),
-    // which refuses a stale revision (55000); a one-argument call would not resolve.
-    expect(MIGRATION).toMatch(/--\s+select app\.put_help_guide\(<[^>]+>,\s*<revision[^>]*>\);/);
-    // And it does not claim 0065's guide is still true: it describes the Overview chart
-    // Audience now draws, and none of the new tabs, so the put is a merge blocker.
-    expect(MIGRATION).not.toContain('true of every number it states');
-    expect(MIGRATION).toMatch(/must not merge before the put lands/);
-    // No restatement of the set, and no put yet (the catalog is not on main).
+  it('0071 puts it through the catalog at the revision main leaves, and the set holds it', () => {
+    // One put, of this guide, naming the revision the guide is at before 0071.
+    const mine = HELP.edits.filter((e) => e.file === G1_FILE);
+    expect(mine).toEqual([
+      {
+        file: G1_FILE,
+        op: 'put',
+        slug: 'website-stats',
+        revision: BEFORE.revisions.get('website-stats'),
+      },
+    ]);
+    // It changes the guide, so the catalog moves it by one.
+    expect(HELP.revisions.get('website-stats')).toBe(
+      (BEFORE.revisions.get('website-stats') ?? 0) + 1,
+    );
+    // The set the migrations leave holds the file's guide exactly, and nothing else moved.
+    expect(SET.find((a) => a.slug === 'website-stats')).toEqual(guide);
+    expect(HELP.set.filter((g) => g.slug !== 'website-stats')).toEqual(
+      BEFORE.set.filter((g) => g.slug !== 'website-stats'),
+    );
+    // The put's literal is the guide file byte for byte (only its trailing newline dropped).
+    const literal =
+      /^select app\.put_help_guide\(\$guide\$\r?\n([\s\S]*?)\r?\n\$guide\$::jsonb, \d+\);/m.exec(
+        MIGRATION,
+      )?.[1];
+    expect(literal).toBe(
+      readFileSync('docs/admin-v2/guides/website-stats.json', 'utf8').replace(/\r?\n$/, ''),
+    );
+    expect(helpSetViolations(MIGRATION_FILES)).toEqual([]);
+    expect(MIGRATION).not.toContain('TODO(H11)');
     expect(MIGRATION).not.toMatch(/create or replace function app\.help_article_set\(\)/);
-    expect(MIGRATION).not.toMatch(/^select app\.put_help_guide/m);
+    // The migration's own postcondition checks the catalog row and every tenant's copy.
+    expect(MIGRATION).toContain("c.tags = array['stats', 'goals']");
   });
 });
 

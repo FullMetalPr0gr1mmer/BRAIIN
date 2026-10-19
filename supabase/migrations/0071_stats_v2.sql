@@ -813,15 +813,75 @@ grant execute on function public.realtime_summary(uuid) to authenticated;
 grant execute on function public.goal_progress(uuid) to authenticated;
 
 -- ---- 12. The help guide ----------------------------------------------------------------------------
--- TODO(H11): once the help-guide catalog (H11) is on main, merge main and replace this
--- comment with
---   select app.put_help_guide(<docs/admin-v2/guides/website-stats.json as a $guide$ literal>, <revision main holds>);
--- (H11's put takes the guide and the revision it replaces, and refuses a stale one, 55000).
--- That file is this slice's website-stats guide (EN and AR, block for block); no slice
--- restates app.help_article_set() any more. The guide C4b (0065) seeded is out of date with
--- these screens: it says Overview draws English and Arabic views day by day (Audience does
--- now) and says nothing of Conversions, Audience, Realtime or Goals. So this migration
--- must not merge before the put lands here.
+-- website-stats, rewritten for the tabs this slice adds (Overview v2, Conversions with the goals,
+-- Audience, Realtime). One guide through H11's catalog (0069): the put takes the nine keys and the
+-- revision main leaves the guide at (1: no put has changed it since the catalog was seeded), moves
+-- it to 2 and re-seeds that one slug into every tenant; a stale revision is refused (55000). The
+-- text is docs/admin-v2/guides/website-stats.json byte for byte (tests/lib/helpCentre.spec.ts).
+select app.put_help_guide($guide$
+{
+  "slug": "website-stats",
+  "sort_order": 110,
+  "minutes": 3,
+  "tags": ["stats", "goals"],
+  "screens": ["/admin/analytics", "/admin/analytics/search"],
+  "caps": ["analytics.read"],
+  "title": "Website stats",
+  "title_ar": "إحصاءات الموقع",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Website stats counts visits, page views and what people do on the site. The numbers are the site's own, with no outside tracker, and only visitors who accept analytics cookies are counted."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Pick 7, 30 or 90 days at the top. Overview shows visits, page views, pages per visit, one-page visits, the Arabic share and the top pages; Pages lists every page with its views in each language. If you work with leads, Overview also shows new leads and inquiries per 1,000 page views.",
+          "A visit is one browser tab on one day: a tab kept open past midnight UTC counts again the next day. Pages per visit is page views divided by visits; a one-page visit saw one page and did nothing else.",
+          "Conversions shows the funnel: visits, then the visits that opened a service page, then the ones that went on to an inquiry form in the same visit. Inquiries received are shown apart, and only to people who work with leads, because they count everyone who wrote, including visitors who declined cookies. Events lists clicks on the contact, language, project and service links, and the interest shown in the services explorer.",
+          "Audience shows the busiest hours of the day in Riyadh time over the days you picked, and English and Arabic views day by day. Devices, countries and sources are not collected.",
+          "Realtime counts people who accepted analytics cookies and did something on the site in the last 5 minutes, and the pages they are on. It updates every minute while the tab is open; Pause updates stops it, and it stops by itself after 30 minutes. Minute counts are kept 48 hours.",
+          "Admins and the SEO role can add goals on the Conversions tab: a name, what it counts and a target. Progress counts this calendar month, from the first, in UTC days. You can keep up to 20 goals.",
+          "A change against the previous period shows only when there is a previous period to compare: the same number of days just before.",
+          "Counts are added up every 15 minutes, by days that run midnight to midnight UTC (3 am in Riyadh), so the latest visits can take a while to show.",
+          "Where your role has a Search tab, it shows what visitors typed into the site's search, and which searches found nothing. A search that finds nothing is often a page worth writing.",
+          "Raw visit records are kept 90 days; the daily totals the screen reads are kept after that."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "A low number can simply mean few visitors accepted cookies, not few visitors."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تحتسب إحصاءات الموقع الزيارات ومشاهدات الصفحات وما يفعله الزوار في الموقع. الأرقام خاصة بالموقع نفسه دون أي أداة تتبع خارجية، ولا يُحتسب إلا من يقبل من الزوار ملفات تعريف الارتباط الخاصة بالتحليلات."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "اختر 7 أو 30 أو 90 يومًا في الأعلى. يعرض تبويب Overview الزيارات ومشاهدات الصفحات وعدد الصفحات لكل زيارة وزيارات الصفحة الواحدة وحصة العربية وأكثر الصفحات زيارة، ويسرد تبويب Pages كل صفحة مع مشاهداتها بكل لغة. وإذا كنت تعمل على العملاء المحتملين فسيعرض Overview أيضًا العملاء الجدد والاستفسارات لكل 1,000 مشاهدة.",
+          "الزيارة هي علامة تبويب واحدة في المتصفح خلال يوم واحد، فإذا بقيت علامة التبويب مفتوحة بعد منتصف الليل بتوقيت UTC احتُسبت زيارة جديدة في اليوم التالي. عدد الصفحات لكل زيارة هو المشاهدات مقسومة على الزيارات، وزيارة الصفحة الواحدة هي زيارة رأت صفحة واحدة ولم تفعل شيئًا آخر.",
+          "يعرض تبويب Conversions مسار التحويل: الزيارات، ثم الزيارات التي فتحت صفحة خدمة، ثم التي وصلت بعدها إلى نموذج استفسار في الزيارة نفسها. وتظهر الاستفسارات الواردة منفصلة، ولمن يعمل على العملاء المحتملين فقط، لأنها تحتسب كل من كتب إلينا بمن فيهم الزوار الذين رفضوا ملفات تعريف الارتباط. ويسرد قسم Events النقرات على روابط التواصل واللغة والمشاريع والخدمات، والاهتمام الذي يظهره الزوار في مستكشف الخدمات.",
+          "يعرض تبويب Audience أكثر ساعات اليوم نشاطًا بتوقيت الرياض خلال الأيام التي اخترتها، والمشاهدات بالإنجليزية والعربية يومًا بيوم. لا تُجمع بيانات الأجهزة أو الدول أو المصادر.",
+          "يحتسب تبويب Realtime الأشخاص الذين قبلوا ملفات تعريف الارتباط الخاصة بالتحليلات وقاموا بأي نشاط في الموقع خلال آخر 5 دقائق، والصفحات التي يتصفحونها. ويتحدّث كل دقيقة ما دام التبويب مفتوحًا، ويوقفه زر Pause updates، ويتوقف من تلقاء نفسه بعد 30 دقيقة. وتُحفظ أرقام الدقائق 48 ساعة.",
+          "يستطيع المسؤولون (Admin) ودور SEO إضافة أهداف في تبويب Conversions: اسم، وما يحتسبه الهدف، ورقم مستهدف. ويُحتسب التقدم خلال الشهر الحالي من أوله، بأيام توقيت UTC. ويمكن الاحتفاظ بما يصل إلى 20 هدفًا.",
+          "لا يظهر التغيّر مقارنة بالفترة السابقة إلا إذا وُجدت فترة سابقة للمقارنة، أي العدد نفسه من الأيام التي تسبقها مباشرة.",
+          "تُجمع الأرقام كل 15 دقيقة، بأيام تمتد من منتصف الليل إلى منتصف الليل بتوقيت UTC (الثالثة فجرًا بتوقيت الرياض)، لذا قد تتأخر أحدث الزيارات في الظهور.",
+          "إذا كان لدورك تبويب Search فهو يعرض ما كتبه الزوار في بحث الموقع، وعمليات البحث التي لم تجد شيئًا. والبحث الذي لا يجد شيئًا كثيرًا ما يشير إلى صفحة تستحق الكتابة.",
+          "تُحفظ سجلات الزيارات الأولية 90 يومًا، وتبقى المجاميع اليومية التي تقرؤها الشاشة بعد ذلك."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "قد يعني الرقم المنخفض ببساطة أن قلة من الزوار قبلوا ملفات تعريف الارتباط، لا أن الزوار قليلون."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 1);
 
 -- ---- Postconditions ---------------------------------------------------------------------
 -- Expressions are read as pg_get_expr prints them (each operator in parentheses, each AND list
@@ -1068,6 +1128,21 @@ begin
       raise exception '0071: % must set an empty search_path', p;
     end if;
   end loop;
+
+  -- ---- The help guide: the catalog holds this slice's website-stats, and every tenant a copy.
+  if not exists (select 1 from app.help_guide_catalog c
+                  where c.slug = 'website-stats' and c.revision >= 2
+                    and c.tags = array['stats', 'goals']) then
+    raise exception '0071: the catalog does not hold G1''s website-stats guide';
+  end if;
+  select count(*)::int into v_n
+    from public.tenants t
+   where not exists (select 1 from public.help_articles h
+                      where h.tenant_id = t.id and h.slug = 'website-stats'
+                        and h.tags = array['stats', 'goals']);
+  if v_n <> 0 then
+    raise exception '0071: % tenant(s) lack G1''s website-stats guide', v_n;
+  end if;
 
   -- ---- The jobs, when pg_cron is there.
   if exists (select 1 from pg_extension where extname = 'pg_cron') then
