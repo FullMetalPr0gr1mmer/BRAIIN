@@ -1824,7 +1824,10 @@ describe('the routes answer what the loaders decide', () => {
     );
     expect(status).toBe(200);
     const data = body.data as { guides: HelpGuide[]; onScreen: string[] };
-    expect(data.onScreen).toEqual(['working-with-leads', 'the-sales-role', 'personal-data']);
+    // In the catalog's order: the-sales-role sits at 65, before leads (70); the page head still
+    // opens working-with-leads (PAGE_GUIDES).
+    expect(data.onScreen).toEqual(['the-sales-role', 'working-with-leads', 'personal-data']);
+    expect(pageGuideFor('/admin/leads', 'developer')).toBe('working-with-leads');
     expect(data.guides.some((g) => g.slug === 'job-applications')).toBe(false);
   });
 
@@ -1838,7 +1841,8 @@ describe('the routes answer what the loaders decide', () => {
     );
     expect(status).toBe(200);
     const data = body.data as { guides: HelpGuide[]; onScreen: string[] };
-    expect(data.onScreen).toEqual(['working-with-leads', 'the-sales-role', 'personal-data']);
+    expect(data.onScreen).toEqual(['the-sales-role', 'working-with-leads', 'personal-data']);
+    expect(pageGuideFor('/admin/leads', 'sales')).toBe('working-with-leads');
     for (const slug of ['job-applications', 'saving-and-publishing', 'media-library']) {
       expect(
         data.guides.some((g) => g.slug === slug),
