@@ -93,6 +93,23 @@ describe('the ribbon’s markup', () => {
     expect(ribbon).not.toMatch(/style=/);
   });
 
+  it('carries the `only` selection to the twin, which the bridge does not rewrite', () => {
+    const ids = ['0b0e8c1e-1d2b-4c5a-9f00-000000000001', '0b0e8c1e-1d2b-4c5a-9f00-000000000002'];
+    const html = renderRibbon({
+      verdict: { state: 'ok', pending: 2, invalid: [], samples: 0, notPreviewed: [] },
+      gate: PASS,
+      self: `/admin/preview/services/logo?only=${ids.join(',')}`,
+      twin: '/ar/services/logo',
+      twinLocale: 'ar',
+      only: ids,
+    });
+    expect(html).toContain(
+      `<a href="/admin/preview/ar/services/logo?only=${ids.join(',')}" lang="ar" dir="rtl">`,
+    );
+    // With no selection, the twin is the bare preview path.
+    expect(ribbon).toContain('href="/admin/preview/ar/about" lang="ar"');
+  });
+
   it('escapes the five characters', () => {
     expect(escapeHtml(`<a href="x">'&'</a>`)).toBe(
       '&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;',

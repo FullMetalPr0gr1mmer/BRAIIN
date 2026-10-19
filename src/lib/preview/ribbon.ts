@@ -23,6 +23,8 @@ export interface RibbonInput {
   twin: string;
   /** The twin's language. */
   twinLocale: 'en' | 'ar';
+  /** The `only` selection this preview shows, carried to the twin (the bridge skips the link). */
+  only?: readonly string[];
 }
 
 const ESCAPES: Record<string, string> = {
@@ -83,7 +85,13 @@ export function ribbonLines(input: Pick<RibbonInput, 'verdict' | 'gate'>): {
 /** The ribbon's markup. */
 export function renderRibbon(input: RibbonInput): string {
   const { lead, notes } = ribbonLines(input);
-  const twinHref = toPreviewPath(input.twin);
+  const twinPreview = toPreviewPath(input.twin);
+  // The bridge leaves a link already under /admin/preview alone, so the selection is added
+  // here, as the handler's keepInPreview adds it to a redirect.
+  const twinHref =
+    twinPreview && input.only
+      ? `${twinPreview}${twinPreview.includes('?') ? '&' : '?'}only=${input.only.map(encodeURIComponent).join(',')}`
+      : twinPreview;
   const twinLabel = input.twinLocale === 'ar' ? 'العربية' : 'English';
   const twinAttrs = input.twinLocale === 'ar' ? ' lang="ar" dir="rtl"' : ' lang="en" dir="ltr"';
   const links = [

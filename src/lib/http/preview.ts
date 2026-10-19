@@ -217,6 +217,7 @@ export async function handlePreview(
       self,
       twin: twinPath(target),
       twinLocale: target.locale === 'ar' ? 'en' : 'ar',
+      ...(target.only ? { only: target.only } : {}),
     });
     const html = injectRibbon(await response.text(), ribbon);
     const headers = new Headers(response.headers);

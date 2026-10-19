@@ -148,6 +148,14 @@ describe('the preview through the middleware', () => {
     expect(html).toContain('href="/admin/preview/about"');
   });
 
+  it('the twin link keeps the `only` selection (the bridge does not rewrite it)', async () => {
+    signIn('seo');
+    const only = '0d000000-0000-4000-8000-000000000001';
+    const { next } = publicPage();
+    const html = await (await run(context(`/admin/preview/ar/about?only=${only}`), next)).text();
+    expect(html).toContain(`href="/admin/preview/about?only=${only}"`);
+  });
+
   it('with no session it is the sign-in redirect, and nothing renders', async () => {
     const { next, calls } = publicPage();
     const res = await run(context('/admin/preview/about'), next);
