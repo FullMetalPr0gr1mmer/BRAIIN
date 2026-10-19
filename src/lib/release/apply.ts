@@ -293,8 +293,16 @@ export async function publish(
   items: readonly CheckedItem[],
   note: string | undefined,
 ): Promise<PublishResult> {
-  const { data, error } = await callApply(requestOf(auth, 'publish', items, note));
-  if (error) throw refusalOf(error, items);
+  const answer = await callApply(requestOf(auth, 'publish', items, note));
+  let data = answer.data;
+  if (answer.error) {
+    // No answer is not a refusal: the transaction may have committed after the Worker stopped
+    // waiting. If it did, the after-effects still run (a release that hid a page must not leave
+    // it public at the edge until the daily re-sync); if not yet, the person is told "busy".
+    const landed = answer.unanswered ? await landedRelease(auth, items) : null;
+    if (!landed) throw refusalOf(answer.error, items);
+    data = landed;
+  }
   const result = ApplyResultSchema.safeParse(data);
   if (!result.success) throw new Error('apply_release answered in the wrong shape');
   const { release_id: releaseId, number } = result.data;
@@ -312,6 +320,49 @@ export async function publish(
     purge: effects.purge,
     ...(effects.kvSynced === undefined ? {} : { kvSynced: effects.kvSynced }),
   };
+}
+
+/**
+ * After an apply that did not answer: the release that claimed these drafts, if it committed.
+ * Reads as the service role, scoped to the publisher's tenant and to the selected drafts' ids
+ * (each draft is published at most once). Never throws: no answer here means "busy".
+ */
+async function landedRelease(
+  auth: AuthContext,
+  items: readonly CheckedItem[],
+): Promise<{ release_id: string; number: number; items: [] } | null> {
+  try {
+    const svc = serviceClient();
+    const { data: claimed, error } = await svc
+      .from('content_release_items')
+      .select('release_id')
+      .eq('tenant_id', auth.tenantId)
+      .in(
+        'draft_id',
+        items.map((i) => i.draft.id),
+      )
+      .limit(1)
+      .maybeSingle();
+    if (error || !claimed) return null;
+    const { data: release, error: readError } = await svc
+      .from('content_releases')
+      .select('id, number')
+      .eq('tenant_id', auth.tenantId)
+      .eq('id', (claimed as { release_id: string }).release_id)
+      .eq('status', 'published')
+      .maybeSingle();
+    const row = release as { id: string; number: number | null } | null;
+    if (readError || !row || typeof row.number !== 'number') return null;
+    void writeSystemLog({
+      level: 'warn',
+      source: 'release:apply',
+      message: 'The apply committed after the Worker stopped waiting; after-effects run.',
+      detail: { releaseId: row.id, number: row.number },
+    });
+    return { release_id: row.id, number: row.number, items: [] };
+  } catch {
+    return null;
+  }
 }
 
 /**

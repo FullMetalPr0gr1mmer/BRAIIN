@@ -786,6 +786,45 @@ describe('publishing', () => {
     );
   });
 
+  it('an apply that committed after the Worker stopped waiting still runs its after-effects', async () => {
+    // A release that hid a page must not leave it public at the edge until the daily re-sync.
+    const draft = draftRow({
+      id: draftId(15),
+      entity_type: 'page_visibility',
+      entity_id: id(51),
+      op: 'update',
+      payload: { target: { pageId: PAGE }, mode: 'hidden', redirectPageId: null },
+      base: { mode: 'public', redirect_page_id: null, hide_from: null, show_on: null },
+    });
+    const db = seed({
+      content_drafts: [draft],
+      page_visibility: [
+        { id: id(51), tenant_id: T, page_id: PAGE, template: null, mode: 'public', version: 1 },
+      ],
+      content_releases: [
+        { id: id(97), tenant_id: OTHER_TENANT, number: 3, status: 'published' },
+        { id: id(98), tenant_id: T, number: 9, status: 'published' },
+      ],
+      content_release_items: [
+        { id: 1, tenant_id: OTHER_TENANT, release_id: id(97), draft_id: draftId(15) },
+        { id: 2, tenant_id: T, release_id: id(98), draft_id: draftId(15) },
+      ],
+    });
+    svc.answer = (fn) =>
+      fn === 'apply_release'
+        ? ({
+            data: null,
+            error: { code: '', message: 'TimeoutError: aborted' },
+            status: 0,
+          } as never)
+        : { data: null, error: null };
+    const res = await run(PUBLISH, db, select(draft), 'developer');
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.data).toMatchObject({ release: { id: id(98), number: 9 }, purge: 'skipped' });
+    expect(syncs.visibility).toBe(1);
+    expect(svc.calls.filter((c) => c.fn === 'record_release_purge')).toHaveLength(1);
+  });
+
   it('releases switched off between the flag read and the apply (55000) is 409 releases-off', async () => {
     const { res } = await refusedWith({ code: '55000', message: 'off' });
     expect(res.status).toBe(409);
