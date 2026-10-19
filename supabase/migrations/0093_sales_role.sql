@@ -76,9 +76,9 @@
 -- Sales holds no new grant: every privilege it uses is `authenticated`'s, which the staff
 -- roles already share. No table is created here.
 --
--- HELP GUIDE: this slice's guide, the-sales-role (sort_order 75), is written as
--- docs/admin-v2/guides/the-sales-role.json and seeded once H11's catalog is on main
--- (see the TODO in section 9). It restates nothing of app.help_article_set().
+-- HELP GUIDES (section 9): this slice's guide, the-sales-role (sort_order 75), is put into
+-- H11's catalog, and the roles guide (roles-and-access) is put again with five roles. Neither
+-- restates app.help_article_set().
 --
 -- Rollout (docs/launch-runbook.md): 0092, then this file, then the deploy; then invite Sales
 -- users. This file revokes a privilege (section 6), and the Worker that merges with it
@@ -215,15 +215,219 @@ create policy admin_role_defaults_read on public.admin_role_defaults for select 
   using (tenant_id = app.effective_tenant_id() and (select app.live_role()) is not null
          and ((role)::text = app.current_role() or app.role_manages_users(app.current_role())));
 
--- ---- 9. The help guide ---------------------------------------------------------------------------
--- TODO(H11): WIRE THE GUIDE HERE. This slice's guide, the-sales-role (sort_order 75),
--- is written but not seeded yet. Once H11's catalog (0069) is on main, replace this comment
--- with H11's one top-level put of a new guide (revision 0), at the start of a line and
--- outside any DO block, its argument the JSON of docs/admin-v2/guides/the-sales-role.json
--- verbatim as a dollar-quoted jsonb literal; then add a postcondition that every tenant holds
--- the guide. No restatement of app.help_article_set() (H11 retired that). The roles guide
--- (roles-and-access) still says "four roles": put its revision with the Sales line in the
--- same place (an owner question in docs/admin-v2/as-built/C10a.md).
+-- ---- 9. The help guides ----------------------------------------------------------------------
+-- H11's catalog (0069): one top-level put per guide, outside any DO block. the-sales-role is
+-- new (revision 0, the free place 75, for the lead workers: leads.manage); roles-and-access
+-- (revision 1, as 0068 left it) now says five roles and gains the Sales line. Each put
+-- re-seeds that one slug into every tenant and touches no other guide.
+select app.put_help_guide($guide$
+{
+  "slug": "the-sales-role",
+  "sort_order": 75,
+  "minutes": 2,
+  "tags": [
+    "leads",
+    "team"
+  ],
+  "screens": [
+    "/admin/leads"
+  ],
+  "caps": [
+    "leads.manage"
+  ],
+  "title": "The Sales role",
+  "title_ar": "دور Sales (المبيعات)",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Sales is the role for the people who follow up inquiries. A Sales account works leads and nothing else: it opens no page, setting, media or job application, and it cannot change anyone's role."
+      },
+      {
+        "t": "h",
+        "x": "What Sales can do"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "See every lead, move it through the stages, assign it, star it, tag it and give it a value, like anyone who works leads.",
+          "Reveal one lead's contact details, budget and timeline at a time. Each reveal is logged against the account that made it, up to 60 an hour for each person and 300 an hour for the whole team.",
+          "Read and add notes, log a call or a message, and add a lead by hand. Opening a lead's notes is logged too, within a limit of the same size.",
+          "Open the dashboard and the website stats."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "What Sales cannot do"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Export leads to a file: the Export CSV button does not show.",
+          "Erase a lead, or receive a new lead's contact details in a notification. Sales reveals them on the lead's page instead, one lead at a time.",
+          "Change content, settings, people or the theme, or read job applications, the logs or the activity log."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "An Admin makes someone Sales in Settings › Users & roles. Give each person a display name, so the people a lead can be assigned to are easy to tell apart."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "دور Sales (المبيعات) مخصّص لمن يتابعون الاستفسارات. يعمل حساب Sales على العملاء المحتملين فقط: لا يفتح الصفحات ولا الإعدادات ولا الوسائط ولا طلبات التوظيف، ولا يستطيع تغيير دور أي شخص."
+      },
+      {
+        "t": "h",
+        "x": "ما يستطيعه Sales"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "يرى كل العملاء المحتملين، وينقلهم عبر المراحل، ويسندهم، ويميّزهم بنجمة، ويضع لهم الوسوم والقيمة، مثل كل من يعمل على العملاء المحتملين.",
+          "يكشف بيانات التواصل والميزانية والمدة الزمنية لعميل محتمل واحد في كل مرة. يُسجَّل كل كشف باسم الحساب الذي قام به، بحد أقصى 60 مرة في الساعة لكل شخص و300 مرة في الساعة للفريق كله.",
+          "يقرأ الملاحظات ويضيفها، ويسجّل مكالمة أو رسالة، ويضيف عميلًا محتملًا يدويًا. يُسجَّل فتح ملاحظات العميل المحتمل أيضًا، ضمن حد بالحجم نفسه.",
+          "يفتح لوحة المعلومات وإحصاءات الموقع."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "ما لا يستطيعه Sales"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "تصدير العملاء المحتملين إلى ملف: لا يظهر له زر Export CSV.",
+          "محو عميل محتمل، أو تلقّي بيانات التواصل لعميل محتمل جديد في إشعار. يكشفها Sales في صفحة العميل المحتمل بدلًا من ذلك، عميلًا واحدًا في كل مرة.",
+          "تغيير المحتوى أو الإعدادات أو الأشخاص أو المظهر، أو قراءة طلبات التوظيف أو السجلات أو سجل النشاط."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "يجعل المسؤول (Admin) شخصًا ما Sales من Settings › Users & roles. امنح كل شخص اسمًا ظاهرًا، ليسهل التمييز بين من يمكن إسناد العميل المحتمل إليهم."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 0);
+
+select app.put_help_guide($guide$
+{
+  "slug": "roles-and-access",
+  "sort_order": 30,
+  "minutes": 4,
+  "tags": [
+    "account",
+    "team"
+  ],
+  "screens": [
+    "/admin/account",
+    "/admin/users"
+  ],
+  "caps": [],
+  "title": "Roles: who can do what",
+  "title_ar": "الأدوار: من يستطيع فعل ماذا",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "There are five roles. Each sees only the screens it can use, and the server checks the role again on every save, so a hidden button is never the only lock."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Admin: everything, including people and their roles, archiving and deleting, and job applications.",
+          "Content Creator: writes and publishes the site's content (services, projects, posts, pages, testimonials and the rest) and manages media. No settings and no leads.",
+          "SEO: SEO defaults, redirects, integrations, and the website and search stats. It can open pages, services, projects and posts without changing their content.",
+          "Developer: general settings, maintenance, the theme editor (saved themes do not change the site yet), media, leads, site health, logs and the activity log. It does not write or publish content, and it cannot see job applications.",
+          "Sales: works leads, reveals one lead's contact details at a time, and reads the dashboard and the website stats. No content, settings, exports, job applications, logs or people."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Changing someone's role"
+      },
+      {
+        "t": "p",
+        "x": "Only an Admin can, in Settings › Users & roles: open the person, choose the role or switch off Can sign in, and save. That ends every sign-in the person has, on every device: the admin turns them away at their next click, and they sign in again to get the new role. You cannot change your own role or switch yourself off."
+      },
+      {
+        "t": "p",
+        "x": "One limit to know: a sign-in pass already handed out keeps working for up to an hour when someone uses it directly against the database, outside the admin. On settings, media, the system logs and content it still carries the role it was issued with until it runs out. People and their roles, the security settings, leads, job applications and the activity log check the person's account on every request, so those close at once."
+      },
+      {
+        "t": "h",
+        "x": "The account owner"
+      },
+      {
+        "t": "p",
+        "x": "One Admin is the account owner, marked by whoever runs the database. The owner always keeps the Admin role: nobody can change it, switch the owner off or remove them. To hand ownership on, the owner opens another active Admin and chooses Make account owner."
+      },
+      {
+        "t": "h",
+        "x": "Security settings"
+      },
+      {
+        "t": "p",
+        "x": "The Security card on Users & roles sets the session length, 1 day or 7 days: someone who signed in longer ago than that is asked to sign in again at their next click. It also sets the allowed email domain: when it is filled in, invites go only to addresses at that domain."
+      },
+      {
+        "t": "tip",
+        "x": "Roles are fixed: there are no exceptions for one person. If someone needs more, they need a different role."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "هناك خمسة أدوار. يرى كل دور الشاشات التي يستطيع استخدامها فقط، ويتحقق الخادم من الدور مرة أخرى عند كل حفظ، فلا يكون إخفاء الزر هو القفل الوحيد أبدًا."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Admin (مسؤول): كل شيء، بما في ذلك الأشخاص وأدوارهم، والأرشفة والحذف، وطلبات التوظيف.",
+          "Content Creator (صانع محتوى): يكتب محتوى الموقع وينشره (الخدمات والمشاريع والمقالات والصفحات والتوصيات وغيرها) ويدير الوسائط. لا إعدادات ولا عملاء محتملين.",
+          "SEO (تحسين محركات البحث): إعدادات SEO الافتراضية، وإعادة التوجيه، والتكاملات، وإحصاءات الموقع والبحث. يستطيع فتح الصفحات والخدمات والمشاريع والمقالات دون تغيير محتواها.",
+          "Developer (مطوّر): الإعدادات العامة، ووضع الصيانة، ومحرر المظهر (لا تغيّر المظاهر المحفوظة الموقع بعد)، والوسائط، والعملاء المحتملون، وصحة الموقع، والسجلات، وسجل النشاط. لا يكتب المحتوى ولا ينشره، ولا يرى طلبات التوظيف.",
+          "Sales (المبيعات): يعمل على العملاء المحتملين، ويكشف بيانات التواصل لعميل محتمل واحد في كل مرة، ويقرأ لوحة المعلومات وإحصاءات الموقع. لا محتوى ولا إعدادات ولا تصدير ولا طلبات توظيف ولا سجلات ولا أشخاص."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "تغيير دور شخص ما"
+      },
+      {
+        "t": "p",
+        "x": "يستطيع ذلك المسؤول (Admin) فقط، من Settings › Users & roles: افتح حساب الشخص، واختر الدور أو أوقف Can sign in، ثم احفظ. يُنهي ذلك كل جلسات دخول الشخص على كل أجهزته: ترفضه لوحة الإدارة عند نقرته التالية، ثم يسجّل دخوله من جديد ليحصل على الدور الجديد. لا يمكنك تغيير دورك بنفسك ولا إيقاف حسابك."
+      },
+      {
+        "t": "p",
+        "x": "وهناك حدّ ينبغي معرفته: تصريح الدخول الذي صدر بالفعل يبقى صالحًا حتى ساعة إذا استُخدم مباشرة على قاعدة البيانات، خارج لوحة الإدارة. ففي الإعدادات والوسائط وسجلات النظام والمحتوى يبقى يحمل الدور الذي صدر به إلى أن ينتهي. أما الأشخاص وأدوارهم، وإعدادات الأمان، والعملاء المحتملون، وطلبات التوظيف، وسجل النشاط فتتحقق من حساب الشخص عند كل طلب، فيُغلق الوصول إليها فورًا."
+      },
+      {
+        "t": "h",
+        "x": "مالك الحساب"
+      },
+      {
+        "t": "p",
+        "x": "أحد المسؤولين هو مالك الحساب، ويحدّده من يدير قاعدة البيانات. يحتفظ المالك بدور Admin دائمًا: لا يستطيع أحد تغييره أو إيقاف حساب المالك أو حذفه. ولنقل الملكية، يفتح المالك حساب مسؤول آخر نشط ويختار Make account owner."
+      },
+      {
+        "t": "h",
+        "x": "إعدادات الأمان"
+      },
+      {
+        "t": "p",
+        "x": "تحدّد بطاقة Security في Users & roles مدة الجلسة، يومًا واحدًا أو 7 أيام: من سجّل دخوله قبل أكثر من ذلك يُطلب منه تسجيل الدخول من جديد عند نقرته التالية. وتحدّد أيضًا نطاق البريد الإلكتروني المسموح به: إذا مُلئ، لا تُرسل الدعوات إلا إلى عناوين ذلك النطاق."
+      },
+      {
+        "t": "tip",
+        "x": "الأدوار ثابتة، ولا استثناءات لشخص بعينه. من يحتاج إلى صلاحيات أكثر يحتاج إلى دور مختلف."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 1);
 
 -- ═══ Postconditions ═══════════════════════════════════════════════════════════════════════
 -- Each block says what it checks. Expressions are read as pg_get_expr prints them.
@@ -365,6 +569,22 @@ begin
      !~ ('^\(' || v_tenant || ' AND \(\( SELECT (app\.)?live_role\(\) AS live_role\) IS NOT NULL\) AND '
          || '\(\(\(role\)::text = (app\.)?"?current_role"?\(\)\) OR (app\.)?role_manages_users\((app\.)?"?current_role"?\(\)\)\)\)$') then
     raise exception '0093: admin_role_defaults_read is not (tenant, a live member, own role or users.manage)';
+  end if;
+
+  -- The two guides: in the catalog and in every tenant, the roles guide naming five roles.
+  if (select count(*) from app.help_guide_catalog where slug = 'the-sales-role'
+        and sort_order = 75 and caps = array['leads.manage']) <> 1
+     or exists (select 1 from public.tenants t
+                 where not exists (select 1 from public.help_articles h
+                                    where h.tenant_id = t.id and h.slug = 'the-sales-role')) then
+    raise exception '0093: the-sales-role is not in the catalog and every tenant';
+  end if;
+  if exists (select 1 from public.tenants t
+              where not exists (select 1 from public.help_articles h
+                                 where h.tenant_id = t.id and h.slug = 'roles-and-access'
+                                   and h.body::text ~ 'There are five roles\.'
+                                   and h.body::text ~ 'Sales: works leads')) then
+    raise exception '0093: a tenant''s roles-and-access guide does not name five roles and Sales';
   end if;
 
   -- The sample lock: no role claim is the only trusted context.

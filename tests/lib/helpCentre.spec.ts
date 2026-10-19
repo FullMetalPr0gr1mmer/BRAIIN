@@ -82,27 +82,7 @@ const { base: SET_FILE, set: RAW_SET } = HELP;
  * when it merges. Re-based with scratchpad/hs_rebase.py when a sibling restates it first.
  */
 const G2_PREVIOUS_SET = '0065_help_leads_v2.sql';
-/**
- * Guides written as files and not yet seeded by a migration (docs/admin-v2/guides/<slug>.json).
- * Admin v2 C10a wrote the-sales-role before H11's catalog (app.put_help_guide) reached main
- * (U7 does the same for its guide); its migration carries a TODO where the put goes. Until
- * then the file is held to every rule below as if seeded, so the role lists already name it;
- * once a migration seeds the slug, the file must equal what the migration seeds (`filed
- * guides` below).
- */
-const GUIDE_FILES = 'docs/admin-v2/guides';
-const FILED: { file: string; raw: { slug?: unknown } }[] = readdirSync(GUIDE_FILES)
-  .filter((f) => f.endsWith('.json'))
-  .sort()
-  .map((file) => ({
-    file,
-    raw: JSON.parse(readFileSync(`${GUIDE_FILES}/${file}`, 'utf8')) as { slug?: unknown },
-  }));
-const seededSlugs = new Set(RAW_SET.map((raw) => (raw as { slug?: unknown }).slug));
-const PENDING_RAW: unknown[] = FILED.filter((f) => !seededSlugs.has(f.raw.slug)).map((f) => f.raw);
-const SET: HelpArticleRow[] = [...RAW_SET, ...PENDING_RAW]
-  .map((raw) => HelpArticleSeedSchema.parse(raw))
-  .sort((a, b) => a.sort_order - b.sort_order || a.slug.localeCompare(b.slug));
+const SET: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
 
 /** Every text of a guide, in one language or both. */
 function textsOf(article: HelpArticleRow, lang?: 'en' | 'ar'): string[] {
@@ -143,7 +123,7 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
   });
 
   it('every guide keeps the schema the Worker reads with (strict: no unknown key)', () => {
-    for (const raw of [...RAW_SET, ...PENDING_RAW]) {
+    for (const raw of RAW_SET) {
       expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
     }
   });
@@ -1390,19 +1370,40 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
   });
 });
 
-// ── 1c. Guides filed before the catalog seeds them ──────────────────────────────────────
+// ── 1c. The Sales guides (C10a) ─────────────────────────────────────────────────────────
 
-describe('filed guides (docs/admin-v2/guides): the-sales-role (C10a)', () => {
+describe('the Sales guides (C10a): the-sales-role, and roles-and-access with five roles', () => {
   const article = () => SET.find((a) => a.slug === 'the-sales-role')!;
   const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
   const source = (path: string) => readFileSync(path, 'utf8');
 
-  it('each file is named after its slug, and equals what a migration seeds once one does', () => {
-    for (const { file, raw } of FILED) {
-      expect(file).toBe(`${String(raw.slug)}.json`);
-      const seeded = RAW_SET.find((r) => (r as { slug?: unknown }).slug === raw.slug);
-      if (seeded) expect(seeded, `${file}: the seeded text differs from the file`).toEqual(raw);
-    }
+  it('0093 puts the new guide at revision 0 and the roles guide at the revision 0068 left', () => {
+    const c10a = HELP.edits.filter((e) => /_sales_role\.sql$/.test(e.file));
+    expect(c10a.map((e) => `${e.op} ${e.slug} ${e.revision}`)).toEqual([
+      'put the-sales-role 0',
+      'put roles-and-access 1',
+    ]);
+  });
+
+  it('the roles guide names the five roles ROLES has, Sales among them, in both languages', () => {
+    const roles = SET.find((a) => a.slug === 'roles-and-access')!;
+    expect(ROLES).toHaveLength(5);
+    const en = textsOf(roles, 'en').join(' ');
+    const ar = textsOf(roles, 'ar').join(' ');
+    expect(en).toContain('There are five roles.');
+    expect(en).not.toContain('four roles');
+    expect(en).toContain("Sales: works leads, reveals one lead's contact details at a time");
+    expect(ar).toContain('هناك خمسة أدوار.');
+    expect(ar).toContain('Sales (المبيعات)');
+  });
+
+  it('says the notes thread is limited for Sales too, as the route has it', () => {
+    expect(text('en')).toContain(
+      "Opening a lead's notes is logged too, within a limit of the same size.",
+    );
+    expect(source('src/pages/api/admin/leads/[id]/notes.ts')).toContain(
+      "claimPrivilegedOp(auth, 'lead-notes-read', PII_REVEAL_LIMITS)",
+    );
   });
 
   it('takes the free place 75 (between leads 70 and personal data 80), for the lead workers', () => {
