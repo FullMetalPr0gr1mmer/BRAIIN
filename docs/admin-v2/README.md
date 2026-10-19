@@ -731,6 +731,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [H8](as-built/H8.md): RLS on every telemetry partition, SELECT only where staff only read, 0037 (#51)
 - [H9](as-built/H9.md): lead notifications restored, signed and never silent, 0048; the staleDomain flake (#63)
 - [H10](as-built/H10.md): a stale Admin token changes no profile, and an audit row names who wrote it, 0050 (#66)
+- [H11](as-built/H11.md): the help-guide catalog: one row per guide, `app.help_article_set()` read from it, `app.put_help_guide`/`app.drop_help_guide` with a revision guard, so no slice restates the set, built as 0069 (number at merge; PR number at review)
 
 **Wave 0**
 - [W0-a](as-built/W0-a.md): CLAUDE.md §8 in bullets with one lane per track, the as-built files, the migration ledger, the runbook's rollback floor
