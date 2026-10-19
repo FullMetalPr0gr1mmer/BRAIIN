@@ -1,11 +1,12 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 -- 0070 — The FAQ moves into the database: public.faq_items (Admin v2 U7, slice U7a of the
 -- folded U7 PR). Forward-only and EXPAND only: one new table, one new CHECK helper, the
--- scheduled publisher restated with the table added. Nothing that exists changes shape.
+-- scheduled publisher restated with the table added, one new help guide. Nothing that exists
+-- changes shape.
 -- Depends on 0001 (tenants, content_status), 0009 (app.tg_bump_version), 0011 (the grant
 -- regime), 0021 (the status-entity policy pattern), 0038 (the release registry, history),
--- 0051 (app.tg_release_capture) and 0066 (the release guard, app.publish_scheduled as R5
--- left it).
+-- 0051 (app.tg_release_capture), 0066 (the release guard, app.publish_scheduled as R5
+-- left it) and 0069 (H11: the help-guide catalog, app.put_help_guide).
 --
 -- The design is docs/admin-v2/ui.md "Collections (AV-16)" and "### AV-16", releases.md §1.1
 -- (the faq_item row) and §2.6, and verification.md's FAQ cutover; the decisions taken and
@@ -34,9 +35,8 @@
 --   6. The release registry row (registry contract #4): staged once releases switch on (P-3).
 --   7. app.publish_scheduled() restated: 0066's body with faq_items added (D16), skipping a
 --      tenant with releases on exactly as 0066 does.
---   8. THE HELP GUIDE: not here yet (see the TODO in section 8). H11's catalog gives one
---      call per guide (app.put_help_guide); this slice's guide is
---      docs/admin-v2/guides/collections-and-faq.json and is wired once H11 is on main.
+--   8. The help guide, collections-and-faq: one app.put_help_guide at revision 0 (H11's
+--      catalog, 0069), sort_order 45, for the writers; every tenant holds it (postcondition 11).
 --
 -- No live check (app.live_role) on faq_items: public content, no PII, the same posture as
 -- every content table; a demoted token's last hour is the general stale-token gap
@@ -221,13 +221,101 @@ end $$;
 revoke all on function app.publish_scheduled() from public, anon, authenticated, service_role;
 
 -- ═══ 8. The help guide ═══════════════════════════════════════════════════════════════════
--- TODO(H11): WIRE THE GUIDE HERE. This slice's guide, collections-and-faq (sort_order 45),
--- is written but not seeded yet. Once H11's catalog (0069) is on main, replace this comment
--- with H11's one top-level put of a new guide (revision 0), at the start of a line and
--- outside any DO block, its argument the JSON of docs/admin-v2/guides/collections-and-faq.json
--- verbatim as a dollar-quoted jsonb literal; then add a postcondition that every tenant holds
--- the guide, and drop the pending-guide note in tests/lib/helpCentre.spec.ts's FILED reader
--- if H11's reader replaces it. No restatement of app.help_article_set() (H11 retired that).
+-- A NEW guide, so revision 0 (H11, 0069: one top-level put, held to help_articles' CHECKs,
+-- re-seeding this one slug into every tenant and touching no other guide). sort_order 45, a
+-- free place between saving-and-publishing (40) and media-library (50). For the writers: its
+-- capabilities are pages.write, portfolio.write, blog.write and services.write, so Admin and
+-- Content Creator read it (the Worker's filter from ROLE_CAPS). Its screens are the FAQ and the
+-- five collection screens, which PAGE_GUIDES (src/lib/admin/help/pageGuides.ts) sends here;
+-- tests/lib/helpCentre.spec.ts reads this statement (tests/fixtures/helpSet.ts) and holds the
+-- copy to the words the screens use.
+select app.put_help_guide($guide$
+{
+  "slug": "collections-and-faq",
+  "sort_order": 45,
+  "minutes": 3,
+  "tags": ["content"],
+  "screens": [
+    "/admin/faq",
+    "/admin/testimonials",
+    "/admin/clients",
+    "/admin/team",
+    "/admin/statistics",
+    "/admin/certifications"
+  ],
+  "caps": ["pages.write", "portfolio.write", "blog.write", "services.write"],
+  "title": "Collections and the FAQ",
+  "title_ar": "المجموعات والأسئلة الشائعة",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Collections are the lists the site draws from in several places: quotes, client names, the team, the numbers, certifications and the questions on the Contact page. Each has its own screen under Content: the list in the site's order, and a panel to add or edit one item."
+      },
+      {
+        "t": "p",
+        "x": "To change the order, drag a row by its handle, or use the up and down arrows beside it. The new order is saved at once, and the site follows it. Duplicate makes a draft copy right after the original; team members and design samples are not copied."
+      },
+      { "t": "h", "x": "The FAQ" },
+      {
+        "t": "p",
+        "x": "The questions appear on the Contact page and, word for word, in the page's FAQ markup that search engines and answer engines read. Write the answer first, in 40 to 60 words, as one paragraph, in both languages."
+      },
+      {
+        "t": "p",
+        "x": "While no question is published, the Contact page shows no FAQ at all."
+      },
+      { "t": "h", "x": "Quotes need consent" },
+      {
+        "t": "p",
+        "x": "A quote can be published or scheduled only once you record when the person agreed to be quoted. Note where that agreement is kept as well. Neither is ever shown on the site."
+      },
+      { "t": "h", "x": "Clients stay unnamed until they agree" },
+      {
+        "t": "p",
+        "x": "A client's name appears on the site only when Visible on the site is switched on. Switch it on only when the client has agreed to be named."
+      },
+      {
+        "t": "tip",
+        "x": "An item marked Sample came with the design delivery. A sample quote is made real in one save: switch on Make this quote real, write the real words, record consent, then save."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "المجموعات هي القوائم التي يأخذ منها الموقع في أكثر من مكان: الاقتباسات، وأسماء العملاء، والفريق، والأرقام، والشهادات، والأسئلة في صفحة Contact. لكل منها شاشتها تحت Content: القائمة بترتيب الموقع، ولوحة لإضافة عنصر أو تعديله."
+      },
+      {
+        "t": "p",
+        "x": "لتغيير الترتيب، اسحب الصف من مقبضه، أو استخدم سهمَي الأعلى والأسفل بجانبه. يُحفظ الترتيب الجديد فورًا ويتبعه الموقع. ينشئ Duplicate نسخة مسودة بعد الأصل مباشرة، ولا تُنسخ بيانات أعضاء الفريق ولا عينات التصميم."
+      },
+      { "t": "h", "x": "الأسئلة الشائعة (FAQ)" },
+      {
+        "t": "p",
+        "x": "تظهر الأسئلة في صفحة Contact، وتظهر بنصها نفسه في بيانات FAQ التي تقرؤها محركات البحث ومحركات الإجابة. اكتب الإجابة أولًا في 40 إلى 60 كلمة، في فقرة واحدة، وباللغتين."
+      },
+      {
+        "t": "p",
+        "x": "ما دام لا يوجد سؤال منشور، لا تعرض صفحة Contact أي أسئلة شائعة."
+      },
+      { "t": "h", "x": "الاقتباسات تحتاج إلى موافقة" },
+      {
+        "t": "p",
+        "x": "لا يمكن نشر الاقتباس أو جدولته إلا بعد أن تسجّل متى وافق صاحبه على اقتباس كلامه. واكتب أيضًا أين تُحفظ هذه الموافقة. ولا يظهر أي منهما على الموقع."
+      },
+      { "t": "h", "x": "العملاء بلا أسماء حتى يوافقوا" },
+      {
+        "t": "p",
+        "x": "لا يظهر اسم العميل على الموقع إلا عند تفعيل Visible on the site. لا تفعّله إلا بعد موافقة العميل على ذكر اسمه."
+      },
+      {
+        "t": "tip",
+        "x": "العنصر المعلَّم بـ Sample جاء مع تسليم التصميم. يتحول اقتباس العينة إلى اقتباس حقيقي بحفظة واحدة: فعّل Make this quote real، واكتب الكلمات الحقيقية، وسجّل الموافقة، ثم احفظ."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 0);
 
 -- ═══ Postconditions ═══════════════════════════════════════════════════════════════════════
 -- Each block says what it checks. Expressions are read as pg_get_expr prints them.
@@ -433,5 +521,25 @@ begin
   -- ---- 10. Releases are still off everywhere (0038, 0051, 0062, 0066) ----------------------
   if exists (select 1 from app.release_tenants) then
     raise exception '0070: releases must stay switched off (app.release_tenants is not empty)';
+  end if;
+
+  -- ---- 11. The guide: in the catalog at revision 1 (a new guide), and every tenant holds it,
+  -- field for field as the catalog renders it -----------------------------------------------
+  if not exists (select 1 from app.help_guide_catalog c
+                  where c.slug = 'collections-and-faq' and c.revision = 1 and c.sort_order = 45) then
+    raise exception '0070: the collections-and-faq guide is not in the catalog at revision 1, place 45';
+  end if;
+  select string_agg(t.id::text, ', ') into v_bad
+    from public.tenants t
+   where not exists (
+     select 1
+       from public.help_articles h
+       join app.help_guide_catalog c on c.slug = h.slug
+      where h.tenant_id = t.id and h.slug = 'collections-and-faq'
+        and h.sort_order = c.sort_order and h.minutes = c.minutes and h.tags = c.tags
+        and h.screens = c.screens and h.caps = c.caps and h.title = c.title
+        and h.title_ar = c.title_ar and h.body = c.body);
+  if v_bad is not null then
+    raise exception '0070: tenants without the collections-and-faq guide as the catalog holds it: %', v_bad;
   end if;
 end $$;

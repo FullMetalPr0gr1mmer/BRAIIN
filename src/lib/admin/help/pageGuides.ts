@@ -52,8 +52,7 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
       '/admin/navigation',
     ],
   },
-  // Admin v2 U7: the collection screens and the FAQ (the guide is written as
-  // docs/admin-v2/guides/collections-and-faq.json; H11's put seeds it).
+  // Admin v2 U7: the collection screens and the FAQ (the FAQ migration's put, revision 0).
   {
     slug: 'collections-and-faq',
     caps: ['pages.write', 'portfolio.write', 'blog.write', 'services.write'],

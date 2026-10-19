@@ -86,27 +86,7 @@ const { base: SET_FILE, set: RAW_SET } = HELP;
  * when it merges. Re-based with scratchpad/hs_rebase.py when a sibling restates it first.
  */
 const G2_PREVIOUS_SET = '0065_help_leads_v2.sql';
-
-/**
- * Guides written as files and not yet seeded by a migration (docs/admin-v2/guides/<slug>.json).
- * Admin v2 U7 wrote collections-and-faq before H11's catalog (app.put_help_guide) reached
- * main; its migration carries a TODO where the put goes. Until then the file is held to every
- * rule below as if seeded, so PAGE_GUIDES can already name it; once a migration seeds the
- * slug, the file must equal what the migration seeds (`filed guides` below).
- */
-const GUIDE_FILES = 'docs/admin-v2/guides';
-const FILED: { file: string; raw: { slug?: unknown } }[] = readdirSync(GUIDE_FILES)
-  .filter((f) => f.endsWith('.json'))
-  .sort()
-  .map((file) => ({
-    file,
-    raw: JSON.parse(readFileSync(`${GUIDE_FILES}/${file}`, 'utf8')) as { slug?: unknown },
-  }));
-const seededSlugs = new Set(RAW_SET.map((raw) => (raw as { slug?: unknown }).slug));
-const PENDING_RAW: unknown[] = FILED.filter((f) => !seededSlugs.has(f.raw.slug)).map((f) => f.raw);
-const SET: HelpArticleRow[] = [...RAW_SET, ...PENDING_RAW]
-  .map((raw) => HelpArticleSeedSchema.parse(raw))
-  .sort((a, b) => a.sort_order - b.sort_order || a.slug.localeCompare(b.slug));
+const SET: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
 
 /** Every text of a guide, in one language or both. */
 function textsOf(article: HelpArticleRow, lang?: 'en' | 'ar'): string[] {
@@ -147,9 +127,7 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
   });
 
   it('every guide keeps the schema the Worker reads with (strict: no unknown key)', () => {
-    for (const raw of [...RAW_SET, ...PENDING_RAW]) {
-      expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
-    }
+    for (const raw of RAW_SET) expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
   });
 
   it('slugs and places in the list are unique', () => {
@@ -1402,19 +1380,19 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
   });
 });
 
-// ── 1c. Guides filed before the catalog seeds them (U7) ──────────────────────────────────
+// ── 1c. The collections guide (U7), as its migration puts it ─────────────────────────────
 
-describe('filed guides (docs/admin-v2/guides): collections-and-faq (U7)', () => {
+describe('collections-and-faq (U7), a new guide put by the FAQ migration', () => {
   const article = () => SET.find((a) => a.slug === 'collections-and-faq')!;
   const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
   const source = (path: string) => readFileSync(path, 'utf8');
 
-  it('each file is named after its slug, and equals what a migration seeds once one does', () => {
-    for (const { file, raw } of FILED) {
-      expect(file).toBe(`${String(raw.slug)}.json`);
-      const seeded = RAW_SET.find((r) => (r as { slug?: unknown }).slug === raw.slug);
-      if (seeded) expect(seeded, `${file}: the seeded text differs from the file`).toEqual(raw);
-    }
+  it('is put once, at revision 0 (new), by the migration that creates faq_items', () => {
+    const puts = HELP.edits.filter((e) => e.slug === 'collections-and-faq');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts[0]?.file).toMatch(/^\d{4}_faq_items\.sql$/);
+    expect(HELP.revisions.get('collections-and-faq')).toBe(1);
   });
 
   it('takes the free place 45 (between saving 40 and media 50), for the content writers', () => {

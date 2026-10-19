@@ -15,14 +15,15 @@
 --   4. the stamps (version, actor, updated_at), history (content_versions, 'faq_item'),
 --      the scheduled publisher, and the release lane (nothing captured while releases are
 --      off; with them on, the guard refuses staff and an out-of-band write is one system
---      item).
+--      item);
+--   5. the help guide the migration puts (collections-and-faq): every tenant holds it.
 -- No stale-token row: no policy or definer here relies on app.live_role() (public content,
 -- the general stale-token gap, deviations.md).
 --
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
 begin;
-select plan(69);
+select plan(70);
 
 -- ── fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────────
 -- Tenant A is the launch tenant (the one anon is fenced to); tenant B is another. Every
@@ -308,6 +309,16 @@ select is((select count(*)::int from public.faq_items where id = '7a000000-0000-
 select is((select count(*)::int from public.content_release_items
             where entity_type = 'faq_item' and tenant_id = app.default_tenant_id()),
   0, 'tenant A (releases off) still captured nothing');
+
+
+-- ── 10. The guide (H11's put in the same migration) ──────────────────────────────────────
+-- Every tenant holds collections-and-faq: the launch tenant from the migration's put, tenant B
+-- (made in this test, after the migration) from the tenants trigger seeding the catalog's set.
+select is((select count(*)::int from public.tenants t
+            where not exists (select 1 from public.help_articles h
+                               where h.tenant_id = t.id and h.slug = 'collections-and-faq'
+                                 and h.sort_order = 45 and '/admin/faq' = any (h.screens))),
+  0, 'every tenant, one made after the migration included, holds the collections-and-faq guide');
 
 select * from finish();
 rollback;
