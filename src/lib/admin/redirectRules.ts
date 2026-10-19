@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { localeFromPath, toLogicalPath } from '@/lib/i18n';
 import { normalizeRedirectPath, targetPathOf } from '@/lib/http/redirects';
-import { liveDb, type OverlayDb } from '@/lib/release/overlayDb';
+import { liveDb, type DbListQuery, type OverlayDb } from '@/lib/release/overlayDb';
 
 export { targetPathOf };
 
@@ -71,19 +71,30 @@ export async function liveRouteRefusal(
   auth: AuthContext,
   db?: OverlayDb,
 ): Promise<RedirectRefusal | null> {
+  const check = liveRouteCheck(sourcePath);
+  if (check === 'static') return { message: LIVE_MESSAGE, field: 'sourcePath' };
+  if (!check) return null;
+  const row = await (db ?? liveDb(sb, auth)).first(check.table, check.query);
+  return row ? { message: LIVE_MESSAGE, field: 'sourcePath' } : null;
+}
+
+/**
+ * What `liveRouteRefusal` asks of a source: `'static'` (a static route: refused, no read),
+ * null (no route renders it: allowed, no read), or the one read it makes. Exported so a
+ * publish can answer the reads of all its redirects in one query per table and prime them
+ * (src/lib/release/validate.ts).
+ */
+export function liveRouteCheck(
+  sourcePath: string,
+): 'static' | { table: string; slug: string; query: DbListQuery } | null {
   const logical = normalizeRedirectPath(toLogicalPath(normalizeRedirectPath(sourcePath)));
-  if (STATIC_PUBLIC_ROUTES.includes(logical)) {
-    return { message: LIVE_MESSAGE, field: 'sourcePath' };
-  }
+  if (STATIC_PUBLIC_ROUTES.includes(logical)) return 'static';
   const target = slugTable(logical);
   if (!target) return null;
-
-  const row = await (db ?? liveDb(sb, auth)).first(target.table, {
-    columns: 'id',
-    eq: { slug: target.slug },
-    in: { status: LIVE_STATUSES },
-  });
-  return row ? { message: LIVE_MESSAGE, field: 'sourcePath' } : null;
+  return {
+    ...target,
+    query: { columns: 'id', eq: { slug: target.slug }, in: { status: LIVE_STATUSES } },
+  };
 }
 
 /** Which table a detail-route logical path would render from, and the slug it names. */

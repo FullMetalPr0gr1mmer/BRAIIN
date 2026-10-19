@@ -238,3 +238,66 @@ export function fixedLayers(
 ): (table: string) => Promise<TableLayer | null> {
   return async (table) => layers.get(table) ?? null;
 }
+
+// ---- memo -----------------------------------------------------------------------------------
+
+/** A database whose answers are kept for the request, and can be primed from a batched read. */
+export interface MemoDb extends OverlayDb {
+  primeExists(
+    table: string,
+    id: string,
+    where: Readonly<Record<string, string | number | boolean>>,
+    found: boolean,
+  ): void;
+  primeFirst(table: string, query: DbListQuery, row: Row | null): void;
+}
+
+const keyFor = (...parts: unknown[]): string => JSON.stringify(parts);
+const sortedEntries = (record: Readonly<Record<string, unknown>> | undefined) =>
+  Object.entries(record ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+const queryKey = (table: string, query: DbListQuery) =>
+  keyFor(
+    table,
+    query.columns,
+    sortedEntries(query.eq),
+    sortedEntries(query.in),
+    query.order ?? null,
+    query.limit ?? null,
+  );
+
+/**
+ * Every answer kept for this request (Admin v2 R6, P-15): a publish judges up to 60 changes,
+ * and each rule asks about its own links; with the answers primed from one read per table, a
+ * release costs a handful of subrequests rather than one per rule per change (the Free plan
+ * allows 50).
+ */
+export function memoDb(inner: OverlayDb): MemoDb {
+  const exists = new Map<string, Promise<boolean>>();
+  const lists = new Map<string, Promise<Row[]>>();
+  const firsts = new Map<string, Promise<Row | null>>();
+  const remember = <T>(cache: Map<string, Promise<T>>, key: string, run: () => Promise<T>) => {
+    let hit = cache.get(key);
+    if (!hit) {
+      hit = run();
+      cache.set(key, hit);
+      // A failed read is not remembered: the next asker tries again (and fails the same way).
+      hit.catch(() => cache.delete(key));
+    }
+    return hit;
+  };
+  return {
+    exists: (table, id, where = {}) =>
+      remember(exists, keyFor(table, id, sortedEntries(where)), () =>
+        inner.exists(table, id, where),
+      ),
+    list: (table, query) => remember(lists, queryKey(table, query), () => inner.list(table, query)),
+    first: (table, query) =>
+      remember(firsts, queryKey(table, query), () => inner.first(table, query)),
+    primeExists(table, id, where, found) {
+      exists.set(keyFor(table, id, sortedEntries(where)), Promise.resolve(found));
+    },
+    primeFirst(table, query, row) {
+      firsts.set(queryKey(table, query), Promise.resolve(row));
+    },
+  };
+}
