@@ -81,8 +81,8 @@
   (`crm.settings`); the read is four calls (the row, the stages, the counts, `crm_people`).
   `src/lib/crm/settings.ts` holds the reads, the writes and their error mapping: a stale save is
   a 409; a stage that holds leads is a 409 `in-use` saying "Proposal sent holds 3 leads. Move
-  its 3 leads first." (23503 from the door, 23001 if PostgreSQL 17's foreign key refuses
-  first); a refused assignee is a 422 on its field; a malformed pipeline a 422 in plain words;
+  its 3 leads first." (23503 from the door or the foreign key on PostgreSQL 15 to 17;
+  23001 if PostgreSQL 18's foreign key refuses first, as seen in PGlite); a refused assignee is a 422 on its field; a malformed pipeline a 422 in plain words;
   the database's own words are never echoed. Audit rows carry the cards' field names
   (`crm.settings.update`) and counts (`crm.stages.update`), never values.
 - **Screen:** `/admin/crm/settings`, the Settings group's "CRM settings" link (icon `kanban`),
@@ -102,7 +102,7 @@
   A postcondition, a pgTAP row and the read-back check the guide reaches the catalog and every
   tenant; `tests/lib/helpCentre.spec.ts` reads it from the migration like every other guide and
   holds it to the screen (the guide-file staging used before H11 merged is gone).
-- **Tests:** pgTAP `supabase/tests/crm_settings.test.sql` (`plan(93)`); one assertion each in
+- **Tests:** pgTAP `supabase/tests/crm_settings.test.sql` (`plan(94)`); one assertion each in
   `crm_ingest.test.sql` (47) and `rls_lead_pipeline.test.sql` (71) that said "staff cannot
   write this yet" now says what stays closed (the time zone; a key, a tenant);
   `tests/lib/crmSettings.spec.ts`; three authz cases; the matrix, helper, sidebar,
@@ -156,5 +156,6 @@
 
 - `crm_settings.timezone` moves to `site_profile.timezone` with U9 (B7.5) and is dropped in
   C14.
-- PostgreSQL 17 reports a RESTRICT foreign key as 23001, not 23503 (`rls_lead_pipeline.test.sql`
-  expects 23503: CI runs 15.8). Production runs 17.6; the Worker maps both.
+- PostgreSQL 18 (seen in the PGlite replay, `server_version_num` 180003) reports a RESTRICT
+  foreign key as 23001, not 23503, so `rls_lead_pipeline.test.sql`'s 23503 fails there only. CI
+  (15.8) and production (17.6) raise 23503; the Worker maps both, ready for an upgrade.

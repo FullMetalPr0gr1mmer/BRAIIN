@@ -227,8 +227,9 @@ export async function saveLeadStages(
       // RLS would change nothing and say nothing).
       case '42501':
         throw new AuthorizationError('crm.settings', 'refused by the database');
-      // 23503 is the door's own refusal; 23001 (restrict_violation) is what PostgreSQL 17
-      // raises if the foreign key itself refuses a delete.
+      // 23503 is the door's own refusal, and what PostgreSQL 15 to 17 (CI, production) raise
+      // when the RESTRICT foreign key itself refuses a delete; PostgreSQL 18 (seen in PGlite)
+      // raises 23001 (restrict_violation) there. Both are mapped.
       case '23503':
       case '23001':
         throw new InUseError(inUseDetail(error.details));
