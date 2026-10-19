@@ -2,8 +2,9 @@
 --
 -- Covers: the crm.settings helper over every role; who runs each new function; the grants
 -- (the configuration columns of crm_settings, the stage columns, nothing for anon or PUBLIC);
--- writes over admin, content_creator, seo, developer, anon, another tenant's admin and a stale
--- token (a demoted admin, a deactivated one); the version and stamps moving with the
+-- writes (crm_settings; lead_stages insert, update and delete; save_lead_stages) over admin,
+-- content_creator, seo, developer, anon, another tenant's admin and a stale token (a demoted
+-- admin, a deactivated one); the version and stamps moving with the
 -- configuration and never with the round-robin cursor; new points re-scoring every lead of
 -- the tenant without making a lead look edited; the assignee rules; save_lead_stages (a whole
 -- pipeline: rename, add, reorder, delete an empty stage; every refusal: a changed pipeline, the
@@ -12,7 +13,7 @@
 -- skipping inactive people). CLAUDE.md §3, §5, §8, §9.
 
 begin;
-select plan(69);
+select plan(88);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -252,17 +253,48 @@ select throws_ok($$ update public.lead_stages set tone = '#ff0000' where key = '
   '23514', null, 'a tone outside the palette is refused (no free colours, CSP)');
 select throws_ok($$ update public.lead_stages set kind = 'won' where key = 'contacted' $$,
   '23503', null, 'a stage that holds a lead keeps its kind, written directly too');
+select _as('00000000-0000-0000-0000-0000000000c1', 'content_creator', '00000000-0000-0000-0000-000000000001');
+select throws_ok($$ insert into public.lead_stages (label, tone, kind, sort_order) values ('CC', 'gray', 'open', 99) $$,
+  '42501', null, 'content_creator adds no stage');
+select is(_rows($$ update public.lead_stages set label = 'CC' $$), 0, 'content_creator renames no stage');
+select is(_rows($$ delete from public.lead_stages where key = 'proposal' $$), 0,
+  'content_creator deletes no stage');
+select _as('00000000-0000-0000-0000-0000000000e1', 'seo', '00000000-0000-0000-0000-000000000001');
+select throws_ok($$ insert into public.lead_stages (label, tone, kind, sort_order) values ('SEO', 'gray', 'open', 99) $$,
+  '42501', null, 'seo adds no stage');
+select is(_rows($$ update public.lead_stages set label = 'SEO' $$), 0, 'seo renames no stage');
+select is(_rows($$ delete from public.lead_stages where key = 'proposal' $$), 0, 'seo deletes no stage');
 select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.lead_stages set label = 'Dev' $$)
           + _rows($$ delete from public.lead_stages where key = 'proposal' $$), 0,
   'developer reads the stages but changes none');
+select throws_ok($$ insert into public.lead_stages (label, tone, kind, sort_order) values ('Dev', 'gray', 'open', 99) $$,
+  '42501', null, 'developer adds no stage');
 select _as('00000000-0000-0000-0000-0000000000a2', 'admin', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.lead_stages set label = 'Stale' $$), 0,
   'a demoted admin''s old token changes no stage (live check)');
+select throws_ok($$ insert into public.lead_stages (label, tone, kind, sort_order) values ('Stale', 'gray', 'open', 99) $$,
+  '42501', null, 'nor adds one (live check)');
+select is(_rows($$ delete from public.lead_stages where key = 'proposal' $$), 0,
+  'nor deletes one (live check)');
+select _as('00000000-0000-0000-0000-0000000000a3', 'admin', '00000000-0000-0000-0000-000000000001');
+select is(_rows($$ update public.lead_stages set label = 'Inactive' $$), 0,
+  'a deactivated admin''s token changes no stage (live check)');
+select throws_ok($$ insert into public.lead_stages (label, tone, kind, sort_order) values ('Inactive', 'gray', 'open', 99) $$,
+  '42501', null, 'nor adds one (live check)');
+select is(_rows($$ delete from public.lead_stages where key = 'proposal' $$), 0,
+  'nor deletes one (live check)');
 select _as('00000000-0000-0000-0000-0000000000f1', 'admin', '00000000-0000-0000-0000-0000000000ff');
 select is(_rows($$ update public.lead_stages set label = 'Theirs'
                     where tenant_id = '00000000-0000-0000-0000-000000000001' $$), 0,
   'another tenant''s admin changes none of T1''s stages');
+select is(_rows($$ delete from public.lead_stages
+                    where tenant_id = '00000000-0000-0000-0000-000000000001' $$), 0,
+  'nor deletes any');
+select throws_ok(
+  $$ insert into public.lead_stages (tenant_id, label, tone, kind, sort_order)
+     values ('00000000-0000-0000-0000-000000000001', 'Theirs', 'gray', 'open', 99) $$,
+  '42501', null, 'nor adds one to T1 (no API caller names a tenant)');
 
 -- ---- save_lead_stages --------------------------------------------------------------------------
 select throws_ok($$ select _save(_pipeline()) $$, '42501', null,
@@ -271,9 +303,18 @@ select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0
 select throws_ok($$ select _save(_pipeline()) $$, '42501', null, 'nor can developer');
 select _as('00000000-0000-0000-0000-0000000000a2', 'admin', '00000000-0000-0000-0000-000000000001');
 select throws_ok($$ select _save(_pipeline()) $$, '42501', null, 'nor a demoted admin''s old token');
+select _as('00000000-0000-0000-0000-0000000000a3', 'admin', '00000000-0000-0000-0000-000000000001');
+select throws_ok($$ select _save(_pipeline()) $$, '42501', null, 'nor a deactivated admin''s token');
+select _as('00000000-0000-0000-0000-0000000000c1', 'content_creator', '00000000-0000-0000-0000-000000000001');
+select throws_ok($$ select _save(_pipeline()) $$, '42501', null, 'nor content_creator');
+select _as('00000000-0000-0000-0000-0000000000e1', 'seo', '00000000-0000-0000-0000-000000000001');
+select throws_ok($$ select _save(_pipeline()) $$, '42501', null, 'nor seo');
 set local role anon;
 select _as(null, null, null);
 select throws_ok($$ select _save(_pipeline()) $$, '42501', null, 'nor anon');
+select throws_ok($$ insert into public.lead_stages (label, tone, kind, sort_order) values ('Anon', 'gray', 'open', 99) $$,
+  '42501', null, 'anon adds no stage');
+select throws_ok($$ delete from public.lead_stages $$, '42501', null, 'nor deletes one');
 set local role authenticated;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 
