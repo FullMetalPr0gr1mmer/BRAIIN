@@ -232,6 +232,27 @@ test.describe('as developer', () => {
 test.describe('as content_creator', () => {
   test.use({ storageState: authFile('content_creator') });
 
+  test('the FAQ’s page head opens the collections guide (U7, put by the FAQ migration)', async ({
+    page,
+  }) => {
+    await ready(page, '/admin/faq');
+    const guide = guideButton(page);
+    await expect(guide).toHaveAttribute(
+      'href',
+      '/admin/help?guide=collections-and-faq&screen=%2Fadmin%2Ffaq',
+    );
+    await guide.click();
+    const drawer = page.getByRole('dialog', { name: 'Help centre' });
+    await expect(drawer).toBeVisible();
+    await expect(
+      drawer.getByRole('heading', { level: 3, name: 'Collections and the FAQ' }),
+    ).toBeFocused();
+    await expectNoAxeViolations(page, 'content_creator: the collections guide');
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+    await expect(guide).toBeFocused();
+  });
+
   test('search finds guides in either language, and never one the role may not read', async ({
     page,
   }) => {
