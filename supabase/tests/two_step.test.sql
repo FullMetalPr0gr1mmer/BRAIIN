@@ -16,9 +16,11 @@
 --     never yourself, never the owner, never "nothing"; everyone else is refused and nothing
 --     is deleted.
 --   • public.staff_accounts: two_step and is_active per person, for a live Admin only.
+--   • The two guides this slice puts (H11's app.put_help_guide): the catalog holds this
+--     slice's text, and every tenant, the ones made after the migration included, holds it.
 
 begin;
-select plan(73);
+select plan(76);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -429,6 +431,31 @@ select is(
      from pg_attribute a join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
     where a.attrelid = 'public.admin_security_settings'::regclass and a.attname = 'require_mfa'),
   'boolean true false', 'require_mfa is boolean NOT NULL DEFAULT false');
+
+-- ── 7. the guides (§6, put through H11's catalog) ───────────────────────────────
+-- As the migration role (the catalog has no API-role privilege). Only this slice's two guides
+-- are checked; the set's size is not (H11 rule 3).
+select ok((select c.revision >= 2 and '/admin/2fa' = any (c.screens)
+                  and c.body::text like '%Two factor authentication%'
+             from app.help_guide_catalog c where c.slug = 'your-account'),
+  'the catalog holds your-account with its 2FA section and /admin/2fa (revision moved by the put)');
+select ok((select c.revision >= 2 and c.body::text like '%Require 2FA for everyone%'
+                  and c.body::text like '%Reset 2FA%'
+             from app.help_guide_catalog c where c.slug = 'roles-and-access'),
+  'the catalog holds roles-and-access with Require 2FA and Reset 2FA (revision moved by the put)');
+select is(
+  (select count(*)::int
+     from public.tenants t
+     cross join app.help_guide_catalog c
+    where c.slug in ('your-account', 'roles-and-access')
+      and t.id in ('17000000-0000-0000-0000-000000000001', '17000000-0000-0000-0000-0000000000ff')
+      and not exists (select 1 from public.help_articles h
+                       where h.tenant_id = t.id and h.slug = c.slug
+                         and row(h.title, h.title_ar, h.minutes, h.tags, h.screens, h.caps,
+                                 h.body, h.sort_order)
+                             is not distinct from row(c.title, c.title_ar, c.minutes, c.tags,
+                                                      c.screens, c.caps, c.body, c.sort_order))),
+  0, 'a tenant made after the migration holds both guides, field for field the catalog''s');
 
 select * from finish();
 rollback;
