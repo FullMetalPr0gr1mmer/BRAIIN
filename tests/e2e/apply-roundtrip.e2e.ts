@@ -124,7 +124,12 @@ test.describe('a real application, end to end', () => {
       },
       maxRedirects: 0,
     });
-    expect(res.headers()['cache-control']).toContain('no-store');
+    // Every answer apply.ts writes carries no-store; one without it is someone else's (a
+    // proxy's bare error, or a 500 for a throw), and the message says whose.
+    expect(
+      res.headers()['cache-control'],
+      `HTTP ${res.status()} server=${res.headers()['server'] ?? '-'}`,
+    ).toContain('no-store');
     expect(await res.json()).toEqual({ status: 'ok' });
     expect(res.status()).toBe(200);
 
