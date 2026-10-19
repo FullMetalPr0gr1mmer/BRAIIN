@@ -118,6 +118,11 @@ async function pressRowAction(button: Locator): Promise<void> {
 
 const row = (page: Page, text: string) => page.locator('ul.coll__list > li', { hasText: text });
 const dialog = (page: Page) => page.getByRole('dialog');
+/**
+ * A row's badges, each by its whole word. Never the row's text: the sample's author is
+ * "Sample Person …", so "Sample" is in its title whether or not the badge is.
+ */
+const badges = (rowLocator: Locator) => rowLocator.locator('.badge');
 
 async function serviceRow(table: string, key: string) {
   const { data, error } = await service().from(table).select('*').eq('slug', key).single();
@@ -128,7 +133,7 @@ async function serviceRow(table: string, key: string) {
 test('a sample quote is made real in one save, consent first', async ({ page }) => {
   await openScreen(page, '/admin/testimonials');
   const sample = row(page, AUTHOR.en);
-  await expect(sample).toContainText('Sample');
+  await expect(badges(sample)).toHaveText(['Sample', 'Draft']);
   // A sample is never copied (the lock refuses creating one; its words are nobody's).
   await sample.hover();
   await expect(
@@ -176,8 +181,8 @@ test('a sample quote is made real in one save, consent first', async ({ page }) 
   expect(stored['consent_obtained_at']).toBeTruthy();
   expect(stored['consent_reference']).toBe(`email ${MARK}`);
   expect(stored['status']).toBe('scheduled');
-  await expect(row(page, AUTHOR.en)).not.toContainText('Sample');
-  await expect(row(page, AUTHOR.en)).not.toContainText('Needs consent');
+  // Its badges: the status only (no Sample, and no Needs consent: consent is recorded).
+  await expect(badges(row(page, AUTHOR.en))).toHaveText(['Scheduled']);
 });
 
 test('a client: hidden until cleared, copied hidden, cleared with one switch', async ({ page }) => {
