@@ -60,7 +60,8 @@ export const DRAFT_LIST_CAP = 1000;
 /** Coalescing (P-5, D9): one `draft_save` audit row per draft per person per ten minutes. */
 export const DRAFT_AUDIT_WINDOW_MS = 10 * 60 * 1000;
 
-function parseDraft(row: unknown): StoredDraft {
+/** One stored draft as read, or a 500 when the row is not one. */
+export function parseDraft(row: unknown): StoredDraft {
   const parsed = StoredDraftSchema.safeParse(row);
   if (!parsed.success) throw new Error('content_drafts returned a row of the wrong shape');
   return parsed.data;
