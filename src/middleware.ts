@@ -21,7 +21,7 @@ import { localizedPagePath, targetForRoute } from '@/lib/visibility/routes';
 import { pageAccessCookieName, verifyAccessCookie } from '@/lib/visibility/access';
 import { pageAccessGate } from '@/lib/visibility/gate';
 import { withPageAccess } from '@/lib/visibility/scope';
-import { handlePreview } from '@/lib/http/preview';
+import { handlePreview, previewConnectSources } from '@/lib/http/preview';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { localeFromPath } from '@/lib/i18n';
@@ -218,7 +218,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // first place. Buffering the body is acceptable at dev latency only.
   const secured = async (
     response: Response,
-    extra: { noForms?: boolean } = {},
+    extra: { noForms?: boolean; connectOnly?: readonly string[] } = {},
   ): Promise<Response> => {
     const isHtml = (response.headers.get('content-type') ?? '').includes('text/html');
     let out = response;
@@ -238,6 +238,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       // on admin pages only, never on a public response.
       ...(isAdmin ? { frameSelf: true } : {}),
       ...(extra.noForms ? { noForms: true } : {}),
+      ...(extra.connectOnly ? { connectOnly: extra.connectOnly } : {}),
     });
     if (isPrivate) out.headers.set('Cache-Control', PRIVATE_CACHE);
     if (isPrivate) {
@@ -420,7 +421,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
         log: (entry) => writeSystemLog(entry),
       },
     );
-    return secured(response, { noForms: rendered });
+    // A rendered preview sends no form and reaches no endpoint that writes (its CSP), on top
+    // of the bridge; the preview's own 404 is an admin page and keeps the admin policy.
+    return secured(
+      response,
+      rendered ? { noForms: true, connectOnly: previewConnectSources(url.origin) } : {},
+    );
   }
 
   // 3) Render. A page whose password this request answered renders inside the page-access

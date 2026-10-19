@@ -7,7 +7,7 @@ import { decide, PASS, type VisibilityGate, type VisibilitySnapshot } from '@/li
 import { pageAccessGate } from '@/lib/visibility/gate';
 import { localizedPagePath, targetForPath } from '@/lib/visibility/routes';
 import { pageAccess } from '@/lib/visibility/scope';
-import { PREVIEW_PREFIX, toPreviewPath } from '@/lib/admin/preview/paths';
+import { PREVIEW_PREFIX, READ_ONLY_ENDPOINTS, toPreviewPath } from '@/lib/admin/preview/paths';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { canPreview, createPreviewSource, PREVIEW_READ_CAPS } from '@/lib/preview/dataset';
 import { assessPreview, previewLogFields } from '@/lib/preview/report';
@@ -76,6 +76,16 @@ export interface PreviewOutcome {
 }
 
 const PRIVATE = 'private, no-store, max-age=0, must-revalidate';
+
+/**
+ * A preview render's `connect-src` (the middleware passes it to the CSP): exactly the API
+ * endpoints that write nothing, at this origin. The bridge refuses every other request too,
+ * but only once it runs; this holds from the first byte, so a page script that asks at
+ * start-up (the search page's `?q=`) is refused by the browser, and no row is written.
+ */
+export function previewConnectSources(origin: string): string[] {
+  return READ_ONLY_ENDPOINTS.map((path) => `${origin}${path}`);
+}
 
 /** A short plain answer for the cases that render no page. */
 function plain(status: number, text: string, extra: Record<string, string> = {}): Response {

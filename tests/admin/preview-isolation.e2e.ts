@@ -45,13 +45,17 @@ const REFUSED = STAFF_ROLES.filter((role) => !mayRead(role, GUIDE_CAPS));
 
 /**
  * Listens for what the sweep fails on in a live page: a page error, a console error and a
- * CSP violation. Call before the first navigation; call the result to read them.
+ * CSP violation. Call before the first navigation; call the result to read them. A console
+ * error carries the URL it is about, as in the sweep, so a test can tell which resource it
+ * names.
  */
 async function watchLive(page: Page): Promise<() => Promise<string[]>> {
   const problems: string[] = [];
   page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
   page.on('console', (message) => {
-    if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+    if (message.type() !== 'error') return;
+    const where = message.location().url;
+    problems.push(`console: ${message.text()}${where ? ` (${where})` : ''}`);
   });
   await page.addInitScript(() => {
     const w = window as unknown as { __csp: string[] };
@@ -155,10 +159,13 @@ for (const role of PREVIEWERS) {
 
     // The live page at each width: no overflow, axe clean (target-size is wcag22aa).
     const live = await watchLive(page);
-    for (const width of [320, 390, 1280]) {
+    const widths = [320, 390, 1280];
+    let documentUrl = '';
+    for (const width of widths) {
       await page.setViewportSize({ width, height: 800 });
       const shown = await page.goto(path, { waitUntil: 'networkidle' });
       expect(shown?.status()).toBe(404);
+      documentUrl = shown?.url() ?? '';
       await expect(page.getByText("This page can't be previewed")).toBeVisible();
       const overflow = await page.evaluate(() => {
         const root = document.documentElement;
@@ -178,7 +185,14 @@ for (const role of PREVIEWERS) {
         )
         .toEqual([]);
     }
-    expect(await live(), 'page errors, console errors and CSP violations').toEqual([]);
+    // Chromium reports every document that answers 404 as a console error about that
+    // document ("Failed to load resource: … 404"): the status this page must answer, once per
+    // load. Those three reports, of this document, and nothing else: a resource the page
+    // fails to load, a script error or a CSP violation still fails here.
+    const statusReport = `console: Failed to load resource: the server responded with a status of 404 (Not Found) (${documentUrl})`;
+    expect(await live(), 'page errors, console errors and CSP violations').toEqual(
+      widths.map(() => statusReport),
+    );
     await context.close();
   });
 }
@@ -269,4 +283,31 @@ test('a search typed into the preview never reaches /api/search, which records i
   // The page's debounce is 250 ms: wait well past it, as long as it would have taken to send.
   await page.waitForTimeout(1000);
   expect(searches).toEqual([]);
+});
+
+test('a preview of /search?q= runs no search at start-up either, and logs nothing', async ({
+  page,
+}) => {
+  // The search page runs an initial `?q=` as soon as its script runs. The bridge is in the
+  // head, so it refuses that request before it leaves; the CSP's connect-src (exact
+  // READ_ONLY_ENDPOINTS) would refuse it too, with a console error and a violation, which
+  // watchLive fails on.
+  const searches: string[] = [];
+  page.on('request', (r) => {
+    if (new URL(r.url()).pathname.startsWith('/api/search')) searches.push(r.url());
+  });
+  const live = await watchLive(page);
+  for (const path of ['/admin/preview/search?q=logo', '/admin/preview/ar/search?q=logo']) {
+    const res = await page.goto(path, { waitUntil: 'networkidle' });
+    expect(res?.status(), path).toBe(200);
+    const connect = (res?.headers()['content-security-policy'] ?? '')
+      .split(';')
+      .map((d) => d.trim())
+      .find((d) => d.startsWith('connect-src '));
+    expect(connect, path).toMatch(/^connect-src https?:\/\/\S+\/api\/apply\/status$/);
+    await expect(page.locator('#search-input')).toHaveValue('logo');
+    await page.waitForTimeout(500);
+  }
+  expect(searches).toEqual([]);
+  expect(await live(), 'page errors, console errors and CSP violations').toEqual([]);
 });

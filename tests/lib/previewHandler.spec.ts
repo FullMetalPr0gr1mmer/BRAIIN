@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '@/lib/auth/types';
 import { contentClient } from '@/lib/data/source';
-import { handlePreview, type PreviewDeps } from '@/lib/http/preview';
+import { READ_ONLY_ENDPOINTS } from '@/lib/admin/preview/paths';
+import { handlePreview, previewConnectSources, type PreviewDeps } from '@/lib/http/preview';
 import { clearVisibilityMemo, VISIBILITY_KV_KEY } from '@/lib/http/visibility';
 import { PREVIEW_COPY } from '@/lib/preview/report';
 import { escapeHtml, VISIBILITY_COPY } from '@/lib/preview/ribbon';
@@ -103,6 +104,15 @@ beforeEach(() => {
 });
 
 const csp = (res: Response) => res.headers.get('content-security-policy') ?? '';
+const ORIGIN = 'https://www.example.test';
+/** One directive's sources. */
+const directive = (res: Response, name: string) =>
+  (
+    csp(res)
+      .split(';')
+      .map((d) => d.trim().split(/\s+/))
+      .find((t) => t[0] === name) ?? []
+  ).slice(1);
 
 describe('the preview through the middleware', () => {
   it('renders the public route by rewrite, inside the scope, with the ribbon, private and noindex', async () => {
@@ -186,8 +196,31 @@ describe('the preview through the middleware', () => {
       '/admin/preview/services/x%5Cy',
     ]) {
       const { next, calls } = publicPage();
-      await run(context(path), next);
+      const res = await run(context(path), next);
       expect(calls, path).toEqual([undefined]);
+      // The preview's own 404 is an admin page, not a render: the admin's policy, unnarrowed.
+      expect(directive(res, 'connect-src'), path).toEqual(["'self'"]);
+      expect(csp(res), path).toContain("form-action 'self'");
+    }
+  });
+
+  it('a preview render reaches only the endpoints that write nothing, from the first byte (CSP)', async () => {
+    // The search page runs an initial `?q=` as soon as its script runs, which can be before
+    // the bridge has replaced fetch; /api/search records every query. The CSP holds before
+    // any script: connect-src names exactly READ_ONLY_ENDPOINTS at this origin.
+    signIn('seo');
+    const { next, calls } = publicPage(false);
+    const res = await run(context('/admin/preview/search?q=logo'), next);
+    expect(calls).toEqual(['/search?q=logo']);
+    expect(directive(res, 'connect-src')).toEqual(
+      READ_ONLY_ENDPOINTS.map((p) => `https://www.example.test${p}`),
+    );
+    expect(directive(res, 'connect-src')).not.toContain("'self'");
+    expect(csp(res)).not.toContain('/api/search');
+    for (const path of ['/admin/preview/ar/search?q=x', '/admin/preview', '/admin/preview/join']) {
+      const page = publicPage(false);
+      const out = await run(context(path), page.next);
+      expect(directive(out, 'connect-src'), path).toEqual(previewConnectSources(ORIGIN));
     }
   });
 
@@ -265,6 +298,7 @@ describe('the preview through the middleware', () => {
     const res = await run(context('/about', '/about'), next);
     expect(csp(res)).not.toMatch(/frame-src 'self'/);
     expect(csp(res)).toContain("form-action 'self'");
+    expect(directive(res, 'connect-src')).toEqual(["'self'"]);
     expect(res.headers.get('cache-tag')).toBe('route:services,tenant:default');
     expect(await res.text()).not.toContain('pv-ribbon');
   });

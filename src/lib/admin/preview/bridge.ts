@@ -6,7 +6,7 @@ import {
   type FromPreviewMessage,
   type ToPreviewMessage,
 } from '@schemas/previewMessage';
-import { PREVIEW_PREFIX, toPreviewPath } from './paths';
+import { PREVIEW_PREFIX, READ_ONLY_ENDPOINTS, toPreviewPath } from './paths';
 
 // The bridge's preview side (Admin v2 R9, P-4; releases.md §6.3 item 9), loaded only into a
 // `/admin/preview/**` render (src/components/preview/AdminPreviewBridge.astro). The parent
@@ -104,12 +104,7 @@ export function sectionsOf(doc: Pick<Document, 'querySelectorAll'>): {
   return out;
 }
 
-/**
- * The site's API endpoints a preview may read: each answers a GET without writing anything.
- * `/api/search` is not one (it records every query, `recordSearchQuery`), so a search typed
- * into a preview finds nothing, as the guide says.
- */
-export const READ_ONLY_ENDPOINTS: readonly string[] = ['/api/apply/status'];
+export { READ_ONLY_ENDPOINTS };
 
 /** Stands in for the page's origin when no base is given (a relative URL keeps its path). */
 const NO_BASE = 'http://preview.invalid/';

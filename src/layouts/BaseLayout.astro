@@ -89,6 +89,17 @@ const robotsValue = preview ? 'noindex,nofollow' : robots;
     />
     <link rel="stylesheet" href="/styles/global.css" />
     {styles.map((sheet) => <link rel="stylesheet" href={`/styles/${sheet}`} />)}
+    {
+      /*
+      The preview's bridge goes in the head, before every script the page renders: module
+      scripts run in document order, so it has replaced fetch and sendBeacon before a page
+      script can call them at start-up (the search page runs an initial `?q=` at once, and
+      /api/search records every query). Deferred like any module script, it still runs with
+      the whole document parsed. The response's CSP narrows connect-src as well
+      (src/lib/http/preview.ts), so a request the bridge misses is refused by the browser.
+    */
+    }
+    {preview && <AdminPreviewBridge />}
   </head>
   <body>
     {chrome && <SiteHeader locale={locale} variant={header} {...(langHref ? { langHref } : {})} />}
@@ -107,9 +118,7 @@ const robotsValue = preview ? 'noindex,nofollow' : robots;
     </div>
     {chrome && <SiteFooter locale={locale} />}
     {
-      preview ? (
-        <AdminPreviewBridge />
-      ) : (
+      !preview && (
         <>
           <ConsentBanner locale={locale} />
           <WebVitals />

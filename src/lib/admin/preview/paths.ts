@@ -15,6 +15,15 @@
 
 export const PREVIEW_PREFIX = '/admin/preview';
 
+/**
+ * The site's API endpoints a preview may read: each answers a GET without writing anything.
+ * `/api/search` is not one (it records every query, `recordSearchQuery`). The bridge refuses
+ * every other request to `/api/**` (bridge.ts), and a preview render's CSP lists only these
+ * in `connect-src` (src/lib/http/preview.ts), so the browser refuses the rest as well, even a
+ * request a page script sends before the bridge is installed.
+ */
+export const READ_ONLY_ENDPOINTS: readonly string[] = ['/api/apply/status'];
+
 const SLUG = '[A-Za-z0-9](?:[A-Za-z0-9-]{0,118}[A-Za-z0-9])?';
 
 /** Every previewable LOGICAL path (no `/ar`), as a pattern, with the route it renders. */
