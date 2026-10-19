@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -171,5 +171,30 @@ describe('previewTarget', () => {
     expect(twinPath({ locale: 'en', logical: '/about' })).toBe('/ar/about');
     expect(twinPath({ locale: 'ar', logical: '/' })).toBe('/');
     expect(twinPath({ locale: 'ar', logical: '/services/logo' })).toBe('/services/logo');
+  });
+});
+
+describe("the preview's sources name files that exist", () => {
+  // A comment or the as-built pointing at a file that is not there sends the next reader to
+  // nothing (the handler is src/lib/http/preview.ts; there was never a preview/handler.ts).
+  const SOURCES = [
+    ...readdirSync('src/lib/preview').map((f) => `src/lib/preview/${f}`),
+    ...readdirSync('src/lib/admin/preview').map((f) => `src/lib/admin/preview/${f}`),
+    'src/lib/http/preview.ts',
+    'src/lib/admin/previewChannel.ts',
+    'src/components/preview/AdminPreviewBridge.astro',
+    'src/pages/admin/preview/[...path].astro',
+    'docs/admin-v2/as-built/R9.md',
+  ];
+  /** Named on purpose as a path NOT taken (the as-built's departure 7). */
+  const NOT_BUILT = new Set(['src/scripts/previewBridge.ts']);
+  const PATH =
+    /\b(?:src|packages|tests|public|docs|scripts|supabase)\/[\w./[\]-]+\.(?:tsx?|astro|css|mjs|json|md|sql)\b/g;
+
+  it.each(SOURCES)('%s', (source) => {
+    const missing = [...readFileSync(source, 'utf8').matchAll(PATH)]
+      .map((m) => m[0])
+      .filter((path) => !NOT_BUILT.has(path) && !existsSync(path));
+    expect(missing).toEqual([]);
   });
 });

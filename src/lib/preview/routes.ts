@@ -4,7 +4,7 @@ import { fromPreviewPath, previewRouteOf, splitLocale } from '@/lib/admin/previe
 
 // What one `/admin/preview/**` request renders (Admin v2 R9; releases.md §6.3 item 5). The
 // preview renders the PUBLIC route itself, through Astro's rewrite inside the content scope
-// (src/lib/preview/handler.ts), so this maps a preview URL to the public path to rewrite to
+// (src/lib/http/preview.ts), so this maps a preview URL to the public path to rewrite to
 // and nothing more: the page files stay the one implementation of every page, and the parity
 // e2e compares the two renders of that one implementation.
 //

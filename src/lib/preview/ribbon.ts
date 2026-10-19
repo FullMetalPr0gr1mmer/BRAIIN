@@ -4,7 +4,7 @@ import { notPreviewedKey, PREVIEW_COPY, type PreviewVerdict } from './report';
 
 // The preview's ribbon (Admin v2 R9; README "Preview": a fail-closed ribbon). Server-rendered
 // by the middleware AFTER the page has rendered, because only then is the render's report
-// final (a section component that reads late still counts): src/lib/preview/handler.ts
+// final (a section component that reads late still counts): src/lib/http/preview.ts
 // builds it from the verdict and splices it in right after `<body>`, with preview.css.
 //
 // Every text is fixed copy (PREVIEW_COPY, P-12) or a count; every href is a path the route
