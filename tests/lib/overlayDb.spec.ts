@@ -9,6 +9,9 @@ import {
   type TableLayer,
 } from '@/lib/release/overlayDb';
 import { pendingDb } from '@/lib/release/layers';
+import { stagedUpdate } from '@/lib/release/staged';
+import { registryByTable } from '@/lib/release/registry';
+import { redirectResource } from '@/lib/admin/resources/redirects';
 import { assertLinkInTenant } from '@/lib/admin/resources/shared';
 import { liveRouteRefusal } from '@/lib/admin/redirectRules';
 import { client, T, type Row } from '../fixtures/stagedDb';
@@ -269,6 +272,65 @@ describe('the pending view of a staged save', () => {
     const sb = client(db) as unknown as SupabaseClient;
     expect(await liveRouteRefusal('/services/logo', sb, auth)).not.toBeNull();
     expect(await liveRouteRefusal('/services/logo', sb, auth, pendingDb(sb, auth))).toBeNull();
+  });
+});
+
+describe('a staged save is judged without its own pending change', () => {
+  it('editing a pending new redirect to swap its paths is not read as a loop with itself', async () => {
+    const own = '0f0f0f0f-0000-4000-8000-000000000031';
+    const db = makeDb({
+      redirects: [],
+      content_drafts: [
+        draftRow({
+          id: '77777777-7777-4777-8777-000000000031',
+          entity_type: 'redirect',
+          entity_id: own,
+          op: 'create',
+          payload: { sourcePath: '/old-a', targetPath: '/old-b' },
+          base: {},
+          base_version: null,
+        }),
+      ],
+    });
+    const sb = client(db) as unknown as SupabaseClient;
+    const ctx = { auth, sb, audit: () => undefined } as unknown as Parameters<
+      typeof stagedUpdate
+    >[2];
+    const row = await stagedUpdate(redirectResource, registryByTable('redirects')!, ctx, own, {
+      draftId: '77777777-7777-4777-8777-000000000031',
+      draftVersion: 1,
+      sourcePath: '/old-b',
+      targetPath: '/old-a',
+    });
+    expect(row['source_path']).toBe('/old-b');
+    // Another pending rule still counts: the same swap beside a pending /old-a -> /old-b is a loop.
+    expect(
+      await (async () => {
+        db.tables['content_drafts']!.push(
+          draftRow({
+            id: '77777777-7777-4777-8777-000000000032',
+            entity_type: 'redirect',
+            entity_id: '0f0f0f0f-0000-4000-8000-000000000032',
+            op: 'create',
+            payload: { sourcePath: '/old-a', targetPath: '/old-b' },
+            base: {},
+            base_version: null,
+          }),
+        );
+        const draft = db.tables['content_drafts']!.find(
+          (d) => d['id'] === '77777777-7777-4777-8777-000000000031',
+        )!;
+        return stagedUpdate(redirectResource, registryByTable('redirects')!, ctx, own, {
+          draftId: draft['id'],
+          draftVersion: draft['version'],
+          sourcePath: '/old-b',
+          targetPath: '/old-a',
+        }).then(
+          () => 'saved',
+          (err: unknown) => (err instanceof Error ? err.message : String(err)),
+        );
+      })(),
+    ).toMatch(/loop/);
   });
 });
 

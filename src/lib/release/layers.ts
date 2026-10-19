@@ -32,8 +32,17 @@ export const keyOfTable = (table: string): string => registryByTable(table)?.key
  * (one read of that type's drafts, at most 1,000, the list overlay's cap): the database a staged
  * save's rules see (R3a's decision D5, now over the pending state). `exists` asks live first,
  * so a save linking to a live row reads no drafts. A table outside the registry is live's.
+ *
+ * `saving` is the item the save replaces the pending change of: its own draft is left out of
+ * the layer, so the rules judge the new version against everything else, never against its own
+ * earlier version (a pending create carries no key in the merged row, so a rule could not tell
+ * it from another item: swapping `/old-a -> /old-b` to `/old-b -> /old-a` read as a loop).
  */
-export function pendingDb(sb: SupabaseClient, auth: AuthContext): OverlayDb {
+export function pendingDb(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  saving?: { table: string; id: string },
+): OverlayDb {
   const cache = new Map<string, Promise<TableLayer | null>>();
   const load = async (table: string): Promise<TableLayer | null> => {
     const entry = registryByTable(table);
@@ -41,6 +50,7 @@ export function pendingDb(sb: SupabaseClient, auth: AuthContext): OverlayDb {
     const { drafts } = await loadDraftsOf(sb, auth, entry.entityType);
     const layer = new Map<string, LayerChange>();
     for (const draft of drafts) {
+      if (saving && saving.table === table && draft.entity_id === saving.id) continue;
       const change = changeOf(entry, draft, auth.tenantId);
       if (change) layer.set(draft.entity_id, change);
     }

@@ -397,7 +397,7 @@ export async function stagedUpdate(
     auth,
     sb,
     changed: derived.patch,
-    db: pendingDb(sb, auth),
+    db: pendingDb(sb, auth, { table: entry.table, id }),
   });
 
   // The base: each patched column's live value when it was first patched, never overwritten,
