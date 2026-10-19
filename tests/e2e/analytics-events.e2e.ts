@@ -9,7 +9,10 @@ import { consentCookieHeader } from './consentCookie';
  *   - after accepting, a click on the WhatsApp card sends exactly one `cta_click`
  *     ({ cta: 'whatsapp' }), however many times it is clicked in one page view;
  *   - the /services explorer sends one `service_interest` for a discipline the visitor opens,
- *     and none for the panel a URL's hash opened at load;
+ *     and dispatches nothing for the panel a URL's hash opened at load (watched at the
+ *     dispatch, not only at the beacon: the explorer's script runs before PageView's, so a
+ *     load-time `bs:interest` would find no listener yet and the beacon check alone could
+ *     never fail);
  *   - the language link's beacon survives the navigation it starts (sendBeacon).
  * The links that leave the site (wa.me, mailto:) are kept from leaving: a capture listener
  * added before the page's own scripts prevents their default action, which stops nothing the
@@ -64,6 +67,28 @@ async function accept(page: Page) {
 }
 
 const settle = (page: Page) => page.waitForTimeout(400);
+
+/**
+ * Records every `bs:interest` the page dispatches, from before any of its own scripts run (an
+ * init script's capture listener on the document), so a dispatch is seen whether or not the
+ * emitter was listening yet.
+ */
+async function watchInterest(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __interest: unknown[] };
+    w.__interest = [];
+    document.addEventListener(
+      'bs:interest',
+      (e) => {
+        w.__interest.push(JSON.parse(JSON.stringify((e as CustomEvent<unknown>).detail ?? null)));
+      },
+      true,
+    );
+  });
+}
+
+const dispatched = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __interest: unknown[] }).__interest);
 
 for (const locale of ['en', 'ar'] as const) {
   const p = PAGES[locale];
@@ -120,20 +145,26 @@ for (const locale of ['en', 'ar'] as const) {
     test('the explorer: one service_interest for a panel the visitor opens, none from the hash', async ({
       page,
     }) => {
-      // Opened by the URL at load: not the visitor's choice, nothing but the page view.
-      // Consent is given on another page first, so the panel opens at load with analytics
-      // already granted: an interest beacon from that open would be sent, not dropped by the
-      // gate, and this assertion would catch it. (Accepting after the load could not fail.)
+      // Opened by the URL at load: not the visitor's choice. The hand-over runs while the
+      // explorer's script is evaluated, before PageView's script wires the emitter, so a
+      // regression that dispatched interest there would reach no listener and send no
+      // beacon. The dispatch itself is therefore what is checked: the init script hears it.
+      // Consent is given on another page first, so the beacon check is live as well.
+      await watchInterest(page);
       await page.goto(p.contact, { waitUntil: 'networkidle' });
       await accept(page);
       const first = beacons(page);
       await page.goto(`${p.services}#branding`, { waitUntil: 'networkidle' });
+      // The hand-over ran: the explorer is live and holds the addressed panel as its state.
+      await expect(page.locator('[data-xp].is-live')).toHaveCount(1);
+      await expect(page.locator('.svc-panel#branding')).toHaveClass(/is-active/);
       await expect(page.locator('.svc-panel#branding')).toBeVisible();
       // The services page view arrived, so the gate was open while the panel opened.
       await expect
         .poll(() => first.filter((b) => b.type === 'pageview' && b.path === p.services).length)
         .toBe(1);
       await settle(page);
+      expect(await dispatched(page)).toEqual([]);
       expect(first.filter((b) => b.type === 'service_interest')).toEqual([]);
 
       // A fresh page view: the visitor opens a discipline (twice: one beacon).
@@ -143,6 +174,11 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(page.locator('.svc-panel#production')).toBeVisible();
       await page.locator('.disc-card[data-disc="production"]').click();
       await settle(page);
+      // The watcher hears a visitor's open (so its silence above means something), and the
+      // emitter sends it once per page view however often it is dispatched.
+      const heard = await dispatched(page);
+      expect(heard.length).toBeGreaterThanOrEqual(1);
+      expect(heard.every((d) => JSON.stringify(d) === '{"discipline":"production"}')).toBe(true);
       expect(sent.filter((b) => b.type === 'service_interest').map((b) => b.props)).toEqual([
         { discipline: 'production' },
       ]);
