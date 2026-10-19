@@ -11,6 +11,9 @@ export const prerender = false;
 // private and noindex like every admin page. It reads nothing.
 
 Astro.response.status = 404;
+// Astro gives a page response the reason phrase 'OK' unless the route is /404 itself, so a
+// 404 from any other page went out as `404 OK`. Say what the status means.
+Astro.response.statusText = 'Not Found';
 ---
 
 <AdminLayout

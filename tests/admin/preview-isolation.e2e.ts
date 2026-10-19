@@ -183,10 +183,15 @@ for (const role of PREVIEWERS) {
     // document ("Failed to load resource: … 404"): the status this page must answer, once per
     // load. Those three reports, of this document, and nothing else: a resource the page
     // fails to load, a script error or a CSP violation still fails here.
-    const statusReport = `console: Failed to load resource: the server responded with a status of 404 (Not Found) (${documentUrl})`;
-    expect(await live(), 'page errors, console errors and CSP violations').toEqual(
-      widths.map(() => statusReport),
-    );
+    // Matched without the reason phrase (Chromium copies it from the status line), so the
+    // check is about the 404 and the document, not about wording the server chooses.
+    const head = 'console: Failed to load resource: the server responded with a status of 404 (';
+    const tail = `) (${documentUrl})`;
+    const reports = await live();
+    expect(reports, 'page errors, console errors and CSP violations').toHaveLength(widths.length);
+    for (const report of reports) {
+      expect(report.startsWith(head) && report.endsWith(tail), report).toBe(true);
+    }
     await context.close();
   });
 }
