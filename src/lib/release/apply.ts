@@ -58,28 +58,42 @@ function parseDetail(details: unknown): unknown {
   }
 }
 
+/** The apply's answer, or none: `unanswered` when the call ended without a response. */
+interface ApplyAnswer {
+  data: unknown;
+  error: DbError | null;
+  unanswered?: true;
+}
+
 /** The RPC call, bounded by the Worker's own timeout. */
-async function callApply(args: ApplyRequest): Promise<{ data: unknown; error: DbError | null }> {
-  const call = serviceClient().rpc('apply_release', args) as unknown as PromiseLike<{
-    data: unknown;
-    error: DbError | null;
-  }> & {
-    abortSignal?: (signal: AbortSignal) => PromiseLike<{ data: unknown; error: DbError | null }>;
+async function callApply(args: ApplyRequest): Promise<ApplyAnswer> {
+  const signal = AbortSignal.timeout(APPLY_TIMEOUT_MS);
+  type Answer = { data: unknown; error: DbError | null; status?: number };
+  const call = serviceClient().rpc('apply_release', args) as unknown as PromiseLike<Answer> & {
+    abortSignal?: (signal: AbortSignal) => PromiseLike<Answer>;
   };
+  let answer: Answer;
   try {
-    return await (typeof call.abortSignal === 'function'
-      ? call.abortSignal(AbortSignal.timeout(APPLY_TIMEOUT_MS))
-      : call);
+    answer = await (typeof call.abortSignal === 'function' ? call.abortSignal(signal) : call);
   } catch (err) {
-    // A timeout or a dropped connection: the transaction may still finish or roll back on its
-    // own; the person is told to look again, never that it failed.
-    void writeSystemLog({
-      level: 'error',
-      source: 'release:apply',
-      message: err instanceof Error ? err.message : 'apply_release did not answer',
-    });
-    return { data: null, error: { code: '57014', message: 'timeout' } };
+    return unanswered(err instanceof Error ? err.message : 'apply_release did not answer');
   }
+  // postgrest-js does not throw when the call is aborted or the connection drops: it resolves
+  // with `status: 0` and an empty `code` (no response was read). Without this, an abort fell
+  // through `refusalOf` to a 500 instead of the documented 503 busy.
+  if (signal.aborted || answer.status === 0) {
+    return unanswered(answer.error?.message ?? 'apply_release did not answer');
+  }
+  return { data: answer.data, error: answer.error };
+}
+
+/**
+ * A timeout or a dropped connection: the transaction may still finish or roll back on its own;
+ * the person is told to look again, never that it failed.
+ */
+function unanswered(message: string): ApplyAnswer {
+  void writeSystemLog({ level: 'error', source: 'release:apply', message });
+  return { data: null, error: { code: '57014', message: 'timeout' }, unanswered: true };
 }
 
 /** A busy database: 503 with a Retry-After, never "refused". */

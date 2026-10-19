@@ -24,9 +24,14 @@ vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
     // The person, re-read live, and the account links: the stand-in's own tables.
     from: (table: string) => client(svc.db).from(table),
-    rpc: async (fn: string, args: Record<string, unknown>) => {
+    // A builder like postgrest-js's: awaitable, and `abortSignal()` returns the same answer.
+    rpc: (fn: string, args: Record<string, unknown>) => {
       svc.calls.push({ fn, args });
-      return svc.answer(fn, args);
+      const answer = () => Promise.resolve().then(() => svc.answer(fn, args));
+      return {
+        then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => answer().then(ok, ko),
+        abortSignal: () => answer(),
+      };
     },
   }),
 }));
@@ -757,6 +762,28 @@ describe('publishing', () => {
       expect(res.status, code).toBe(503);
       expect(res.body['error']).toBe('busy');
     }
+  });
+
+  it('an apply the Worker stopped waiting for is 503 busy, never a 500', async () => {
+    // postgrest-js resolves an aborted call (status 0, an empty code); it does not throw.
+    const aborted = {
+      code: '',
+      message: 'TimeoutError: The operation was aborted due to timeout',
+      details: '',
+      hint: 'Request was aborted (timeout or manual cancellation)',
+    };
+    const draft = serviceEdit(
+      { title: BI('Logo', 'شعار') },
+      { title: BI('Logo Design', 'تصميم الشعار') },
+    );
+    svc.answer = () => ({ data: null, error: aborted, status: 0 }) as never;
+    const res = await run(PUBLISH, seed({ content_drafts: [draft] }), select(draft));
+    expect(res.status).toBe(503);
+    expect(res.body['error']).toBe('busy');
+    expect(res.headers.get('Retry-After')).toBe('5');
+    expect(svc.logs).toContainEqual(
+      expect.objectContaining({ level: 'error', source: 'release:apply' }),
+    );
   });
 
   it('releases switched off between the flag read and the apply (55000) is 409 releases-off', async () => {
