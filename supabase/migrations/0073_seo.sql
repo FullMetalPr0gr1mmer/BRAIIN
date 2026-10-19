@@ -261,6 +261,7 @@ revoke delete on public.seo_defaults from authenticated;
 -- 'seo-and-redirects' from PENDING_EDITS in tests/lib/helpCentre.spec.ts (its filed-guides
 -- test fails until you do). No restatement of app.help_article_set() (H11 retired that).
 -- Until then the database holds the guide as 0067 left it, which describes the old form.
+-- tests/lib/helpCatalogWiring.spec.ts fails while this marker stands beside H11's catalog.
 
 -- ═══ 7. Postconditions ═══════════════════════════════════════════════════════════════════
 do $$
