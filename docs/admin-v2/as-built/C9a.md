@@ -146,11 +146,24 @@
   nothing; no API role can make a second initial stage, name or rename a key or pick a tenant
   (column grants); the definers have empty search paths and are run by no API role; audit rows carry
   field names and counts only.
-- Residual (owner question): the points are Admin's, and points that weigh one budget signal
-  alone make every lead's score name that signal to every lead worker (today Admin and
-  Developer, who both hold `leads.pii`). C10a gives Sales `leads.pii` one lead at a time; with
-  Sales, a points change becomes a bulk view of one budget signal. CLAUDE.md §3 says so; C10a
-  should decide (hide the score from Sales, or fence the points).
+- Residual, accepted (see Decisions recorded): the scoring side channel.
+
+## Decisions recorded
+
+- **The scoring side channel is accepted.** The points are Admin's (`crm.settings`), and an
+  Admin can weight one budget signal alone (for example `budget_200k_plus` = 50, every other
+  signal 0), so every lead's score then reveals that budget band to whoever reads the score. It
+  is accepted because every lead worker today (Admin and Developer) already holds `leads.pii`
+  and can read the budget itself, and every points change is audited (`crm.settings.update`).
+  It is noted for any future role that works leads without holding `leads.pii` for every lead
+  (C10a's Sales holds it one lead at a time): before such a role sees scores in bulk, either hide
+  the score from it or fence the points (for example a floor on the other signals' weights).
+  CLAUDE.md §3's lead-PII bullet says the same.
+- **Manual adds are assigned by the rule too (the default kept).** Under round robin or
+  "Always to one person", a lead added by hand gets the rule's assignee like a web lead, because
+  `crm_ingest_lead`'s allow-list carries no assignee and the rule reads as "every new lead". The
+  alternative, a manual add going to the person who added it, was considered and not taken; it
+  would need an assignee in the allow-list (a later slice, if the owner asks).
 
 ## Follow-ups
 
