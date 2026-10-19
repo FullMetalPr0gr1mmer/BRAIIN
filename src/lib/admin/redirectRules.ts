@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { localeFromPath, toLogicalPath } from '@/lib/i18n';
 import { normalizeRedirectPath, targetPathOf } from '@/lib/http/redirects';
+import { liveDb, type OverlayDb } from '@/lib/release/overlayDb';
 
 export { targetPathOf };
 
@@ -58,14 +59,17 @@ const LIVE_MESSAGE = 'this path renders a page; a redirect from it would never a
  * Refuses a source that a page answers: a static route, or a detail slug whose row is
  * live (published, or scheduled — the cron publishes it without asking again). A bare
  * `/<slug>` consults no table: no route renders `pages` by slug (its rows — `home`,
- * `join`, `portfolio-all` — are the section containers of the static routes), so only
+ * `join`, `portfolio-all`) are the section containers of the static routes), so only
  * STATIC_PUBLIC_ROUTES applies there. Checked on the logical path, so `/ar/x` is refused
- * exactly when `/x` is. The read runs under the caller's RLS.
+ * exactly when `/x` is. The read runs under the caller's RLS, through `db` when one is given
+ * (Admin v2 R6: a publish judges the routes its release leaves, so a slug renamed in the same
+ * release frees its old path), else live.
  */
 export async function liveRouteRefusal(
   sourcePath: string,
   sb: SupabaseClient,
   auth: AuthContext,
+  db?: OverlayDb,
 ): Promise<RedirectRefusal | null> {
   const logical = normalizeRedirectPath(toLogicalPath(normalizeRedirectPath(sourcePath)));
   if (STATIC_PUBLIC_ROUTES.includes(logical)) {
@@ -74,16 +78,12 @@ export async function liveRouteRefusal(
   const target = slugTable(logical);
   if (!target) return null;
 
-  const { data, error } = await sb
-    .from(target.table)
-    .select('id')
-    .eq('tenant_id', auth.tenantId)
-    .eq('slug', target.slug)
-    .in('status', LIVE_STATUSES)
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(`check ${target.table}: ${error.message}`);
-  return data ? { message: LIVE_MESSAGE, field: 'sourcePath' } : null;
+  const row = await (db ?? liveDb(sb, auth)).first(target.table, {
+    columns: 'id',
+    eq: { slug: target.slug },
+    in: { status: LIVE_STATUSES },
+  });
+  return row ? { message: LIVE_MESSAGE, field: 'sourcePath' } : null;
 }
 
 /** Which table a detail-route logical path would render from, and the slug it names. */

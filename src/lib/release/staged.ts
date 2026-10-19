@@ -22,6 +22,7 @@ import {
   type DraftMeta,
 } from './overlay';
 import { registryByTable, type RegistryEntry } from './registry';
+import { pendingDb } from './layers';
 import {
   draftFields,
   draftLabel,
@@ -53,7 +54,8 @@ import {
 //   • the payload is stored camelCase through `mergePayload`, and re-derived with
 //     `derivePatch` (the schema and `toRow`, no `published_at`, no per-item schedule);
 //   • stage time runs the status capabilities (`stageTransition`, the legacy save's rule) and
-//     `assertWritable` over live ⊕ patch (D5: over live until R6's OverlayDb), never
+//     `assertWritable` over live ⊕ patch, its reads through `pendingDb` (R6: live with every
+//     pending change laid over it, so a link to a pending create passes), never
 //     `assertPublishable` (D6: publish and the dry run run it);
 //   • never `persist`, `afterWrite` or `afterDelete`: save_portfolio, theme deactivation and the
 //     redirects' KV sync belong to the apply (R4) and R7. Child sets stay in the payload.
@@ -256,7 +258,12 @@ export async function stagedCreate(
   stageTransition(auth, config, payload);
   const merged = mergePayload(null, payload, entry);
   const derived = derivePatch(entry, 'create', merged);
-  await config.assertWritable?.(derived.patch, { auth, sb, changed: derived.patch });
+  await config.assertWritable?.(derived.patch, {
+    auth,
+    sb,
+    changed: derived.patch,
+    db: pendingDb(sb, auth),
+  });
 
   // Never the client's: a create's key is the Worker's, so other drafts can link to it.
   const entityId = crypto.randomUUID();
@@ -386,7 +393,12 @@ export async function stagedUpdate(
   }
 
   const merged = op === 'create' ? derived.patch : { ...live!, ...derived.patch };
-  await config.assertWritable?.(merged, { auth, sb, changed: derived.patch });
+  await config.assertWritable?.(merged, {
+    auth,
+    sb,
+    changed: derived.patch,
+    db: pendingDb(sb, auth),
+  });
 
   // The base: each patched column's live value when it was first patched, never overwritten,
   // and only for the columns the change still writes.

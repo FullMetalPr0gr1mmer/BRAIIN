@@ -9,6 +9,7 @@ import {
 import { chainRefusal, liveRouteRefusal, type RedirectRow } from '../redirectRules';
 import { syncRedirectsToEdge } from '../redirectSync';
 import type { ResourceConfig } from '../resource';
+import { liveDb } from '@/lib/release/overlayDb';
 import { fieldsOf, pick, type Input } from './shared';
 
 // Redirects (Admin + SEO).
@@ -77,7 +78,7 @@ export const redirectResource: ResourceConfig = {
   },
   // The source is normalised and the target sanitised in place: one column each.
   fields: fieldsOf(REDIRECT_KEYS),
-  assertWritable: async (merged, { changed, sb, auth }) => {
+  assertWritable: async (merged, { changed, sb, auth, db }) => {
     if (!('source_path' in changed) && !('target_path' in changed)) return;
     const source = String(merged['source_path'] ?? '');
     const target = String(merged['target_path'] ?? '');
@@ -103,18 +104,18 @@ export const redirectResource: ResourceConfig = {
     // /ar twin fallback means the rows that interact are not a prefix of anything. One
     // parameter-encoded read — never a PostgREST `.or()` string built from editor input
     // — bounded like the snapshot this same request rebuilds next.
-    const { data, error } = await sb
-      .from('redirects')
-      .select('id,source_path,target_path')
-      .eq('tenant_id', auth.tenantId)
-      .order('source_path', { ascending: true })
-      .limit(REDIRECT_MAP_LIMIT);
-    if (error) throw new Error(`read redirects: ${error.message}`);
-    const chain = chainRefusal(own, (data ?? []) as RedirectRow[]);
+    // Through the overlay-aware database when given (Admin v2 R6): a publish judges the
+    // rules its release leaves, a staged save the pending ones.
+    const rows = await (db ?? liveDb(sb, auth)).list('redirects', {
+      columns: 'id,source_path,target_path',
+      order: { column: 'source_path', ascending: true },
+      limit: REDIRECT_MAP_LIMIT,
+    });
+    const chain = chainRefusal(own, rows as unknown as RedirectRow[]);
     if (chain) throw new ValidationError(chain.message, chain.field);
 
     if ('source_path' in changed) {
-      const live = await liveRouteRefusal(source, sb, auth);
+      const live = await liveRouteRefusal(source, sb, auth, db);
       if (live) throw new ValidationError(live.message, live.field);
     }
   },
