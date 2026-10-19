@@ -24,6 +24,13 @@ import {
   ValuePointSchema,
 } from './content';
 import { LocalizedDocSchema } from './tiptap';
+import {
+  CANONICAL_PATH_PATTERN,
+  SEO_DEFAULT_ROBOTS,
+  SEO_DESCRIPTION_MAX,
+  SEO_ROBOTS,
+  SEO_TITLE_MAX,
+} from './seoRules';
 import { DisplayNameValueSchema, PASSWORD_MAX_BYTES, PASSWORD_MIN, utf8Bytes } from './adminPrefs';
 import { SectionTypeSchema, sectionContentIssues, type SectionType } from './sections';
 import {
@@ -658,27 +665,13 @@ export const NavItemUpdateSchema = updatable(NavItemWriteSchema);
 
 // ── SEO ─────────────────────────────────────────────────────────────────────────
 
-/** The longest title and description an SEO override may hold, per language (U10 D14). */
-export const SEO_TITLE_MAX = 120;
-export const SEO_DESCRIPTION_MAX = 320;
-
-/**
- * A page's own robots value (U10 D5): `null` follows the site default; otherwise index or
- * noindex, always "follow" (a page hidden from search still passes its links on). Closed so a
- * typo can never reach `<meta name="robots">`. Legacy free text is read leniently (anything
- * holding `noindex` counts as noindex: src/lib/seo/robots.ts) and written only as one of these.
- */
-export const SEO_ROBOTS = ['index,follow', 'noindex,follow'] as const;
-/** The site default's robots value: the page values, plus hiding the links too. */
-export const SEO_DEFAULT_ROBOTS = ['index,follow', 'noindex,follow', 'noindex,nofollow'] as const;
-
-/**
- * A canonical override (U10 D6): a path on this site, never another origin, a query or a
- * fragment, never `//host` or a backslash (the URL standard reads `/\host` as `//host`), and
- * never the Arabic twin's `/ar` path: SeoHead localizes it per language (`/x` → `/ar/x` on
- * the Arabic page), so each language stays self-canonical (CLAUDE.md Pillar 3).
- */
-export const CANONICAL_PATH_PATTERN = /^\/(?!\/)(?!ar(?:\/|$))[^\s?#\\]*$/;
+export {
+  CANONICAL_PATH_PATTERN,
+  SEO_DEFAULT_ROBOTS,
+  SEO_DESCRIPTION_MAX,
+  SEO_ROBOTS,
+  SEO_TITLE_MAX,
+} from './seoRules';
 export const CanonicalPathSchema = z
   .string()
   .trim()

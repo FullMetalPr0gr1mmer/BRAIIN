@@ -138,6 +138,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'media.css',
       'personal.css',
       'search.css',
+      'seo.css',
       'stats.css',
       'users.css',
       'visibility.css',
@@ -433,6 +434,8 @@ describe('admin.css keeps the hooks the markup renders', () => {
         'src/pages/admin/media/index.astro',
       ]);
       expect(pagesFor('users.css')).toEqual(['src/pages/admin/users.astro']);
+      // The SEO screen (U10): its page renders the sections, its island the table and dialogs.
+      expect(pagesFor('seo.css')).toEqual(['src/pages/admin/seo.astro']);
       expect(pagesFor('personal.css')).toEqual([
         'src/pages/admin/account.astro',
         'src/pages/admin/notifications.astro',

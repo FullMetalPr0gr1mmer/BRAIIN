@@ -98,6 +98,79 @@ export function ilikeValue(q: string): string {
   return `"${like.replace(/["\\]/g, (c) => `\\${c}`)}"`;
 }
 
+/** What every row of a page shares: the tenant's defaults, its brand and its template. */
+interface SeoContextRead {
+  tenantDefaults: {
+    title_template?: Record<string, string> | null;
+    default_title?: Record<string, string> | null;
+    default_description?: Record<string, string> | null;
+    robots_directives?: string | null;
+  } | null;
+  brand: Bi;
+  titleTemplate: Bi;
+  defaultRobots: string;
+}
+
+/** The tenant's SEO defaults and brand, read together (the caller's own reads; RLS decides). */
+async function readSeoContext(sb: SupabaseClient, auth: AuthContext): Promise<SeoContextRead> {
+  const [defaults, profile] = await Promise.all([
+    sb
+      .from('seo_defaults')
+      .select('title_template,default_title,default_description,robots_directives')
+      .eq('tenant_id', auth.tenantId)
+      .maybeSingle(),
+    sb.from('site_profile').select('brand_name').eq('tenant_id', auth.tenantId).maybeSingle(),
+  ]);
+  if (defaults.error) throw new Error(`read seo_defaults: ${defaults.error.message}`);
+  const tenantDefaults = defaults.data as SeoContextRead['tenantDefaults'];
+  return {
+    tenantDefaults,
+    // The brand only names the preview; the code identity stands in if the row is unreadable.
+    brand: bi(
+      (profile.data as { brand_name?: unknown } | null)?.brand_name,
+      IDENTITY_FALLBACK.brandName,
+    ),
+    titleTemplate: bi(tenantDefaults?.title_template, {
+      en: DEFAULT_TITLE_TEMPLATE,
+      ar: DEFAULT_TITLE_TEMPLATE,
+    }),
+    defaultRobots: tenantDefaults?.robots_directives ?? 'index,follow',
+  };
+}
+
+/** One target and its SEO row (or none) as the list's row. */
+function listRow(
+  type: SeoEntityType,
+  target: TargetRow,
+  row: Record<string, unknown> | undefined,
+  context: SeoContextRead,
+): SeoListRow {
+  const fallback = defaultsFor(type, target, context.tenantDefaults);
+  const title = customPair(row?.['meta_title']);
+  const description = customPair(row?.['meta_description']);
+  const stored = (row?.['robots'] as string | null | undefined) ?? null;
+  return {
+    id: `${type}:${target.id}`,
+    entityType: type,
+    entityId: target.id,
+    label: target.title?.en || target.title?.ar || target.slug,
+    slug: target.slug,
+    status: target.status,
+    path: entityPath(type, target.slug),
+    version: Number(row?.['version'] ?? 0),
+    robots: pageRobots(stored),
+    indexed: !isNoindex(stored ?? context.defaultRobots),
+    canonicalOverride: (row?.['canonical_override'] as string | null | undefined) ?? null,
+    ogMediaId: (row?.['og_media_id'] as string | null | undefined) ?? null,
+    ogImage: (row?.['og_image'] as string | null | undefined) ?? null,
+    title: { custom: title, default: fallback.title },
+    description: { custom: description, default: fallback.description },
+    arabicComplete: Boolean(
+      (title?.ar || fallback.title.ar) && (description?.ar || fallback.description.ar),
+    ),
+  };
+}
+
 export async function listEntitySeo(
   sb: SupabaseClient,
   auth: AuthContext,
@@ -127,7 +200,7 @@ export async function listEntitySeo(
   const rows = (data ?? []) as unknown as TargetRow[];
   const ids = rows.map((row) => row.id);
 
-  const [seo, defaults, profile] = await Promise.all([
+  const [seo, context] = await Promise.all([
     ids.length === 0
       ? Promise.resolve({ data: [], error: null })
       : sb
@@ -136,27 +209,9 @@ export async function listEntitySeo(
           .eq('tenant_id', auth.tenantId)
           .eq('entity_type', type)
           .in('entity_id', ids),
-    sb
-      .from('seo_defaults')
-      .select('title_template,default_title,default_description,robots_directives')
-      .eq('tenant_id', auth.tenantId)
-      .maybeSingle(),
-    sb.from('site_profile').select('brand_name').eq('tenant_id', auth.tenantId).maybeSingle(),
+    readSeoContext(sb, auth),
   ]);
   if (seo.error) throw new Error(`read entity_seo: ${seo.error.message}`);
-  if (defaults.error) throw new Error(`read seo_defaults: ${defaults.error.message}`);
-  // The brand only names the preview; the code identity stands in if the row is unreadable.
-  const brand = bi(
-    (profile.data as { brand_name?: unknown } | null)?.brand_name,
-    IDENTITY_FALLBACK.brandName,
-  );
-  const tenantDefaults = defaults.data as {
-    title_template?: Record<string, string> | null;
-    default_title?: Record<string, string> | null;
-    default_description?: Record<string, string> | null;
-    robots_directives?: string | null;
-  } | null;
-  const defaultRobots = tenantDefaults?.robots_directives ?? 'index,follow';
   const byTarget = new Map(
     ((seo.data ?? []) as Record<string, unknown>[]).map((row) => [String(row['entity_id']), row]),
   );
@@ -166,38 +221,52 @@ export async function listEntitySeo(
     total: count ?? rows.length,
     offset,
     limit,
-    brand,
-    titleTemplate: bi(tenantDefaults?.title_template, {
-      en: DEFAULT_TITLE_TEMPLATE,
-      ar: DEFAULT_TITLE_TEMPLATE,
-    }),
-    defaultRobots,
-    rows: rows.map((target) => {
-      const row = byTarget.get(target.id);
-      const fallback = defaultsFor(type, target, tenantDefaults);
-      const title = customPair(row?.['meta_title']);
-      const description = customPair(row?.['meta_description']);
-      const stored = (row?.['robots'] as string | null | undefined) ?? null;
-      const shownTitle = { ar: title?.ar || fallback.title.ar };
-      const shownDescription = { ar: description?.ar || fallback.description.ar };
-      return {
-        id: `${type}:${target.id}`,
-        entityType: type,
-        entityId: target.id,
-        label: target.title?.en || target.title?.ar || target.slug,
-        slug: target.slug,
-        status: target.status,
-        path: entityPath(type, target.slug),
-        version: Number(row?.['version'] ?? 0),
-        robots: pageRobots(stored),
-        indexed: !isNoindex(stored ?? defaultRobots),
-        canonicalOverride: (row?.['canonical_override'] as string | null | undefined) ?? null,
-        ogMediaId: (row?.['og_media_id'] as string | null | undefined) ?? null,
-        ogImage: (row?.['og_image'] as string | null | undefined) ?? null,
-        title: { custom: title, default: fallback.title },
-        description: { custom: description, default: fallback.description },
-        arabicComplete: Boolean(shownTitle.ar && shownDescription.ar),
-      };
-    }),
+    brand: context.brand,
+    titleTemplate: context.titleTemplate,
+    defaultRobots: context.defaultRobots,
+    rows: rows.map((target) => listRow(type, target, byTarget.get(target.id), context)),
+  };
+}
+
+/** What SeoPanel needs about its page (src/components/admin/screens/seo/types.ts). */
+export interface SeoPanelSetup {
+  target: { entityType: SeoEntityType; entityId: string; label: string; path: string | null };
+  context: {
+    brand: Bi;
+    titleTemplate: Bi;
+    defaults: { title: Bi; description: Bi };
+    defaultRobots: string;
+  };
+}
+
+/**
+ * One page's SeoPanel setup, for an editor that shows the panel in its own SEO tab (U5, U6,
+ * U8, E1): its server page calls this and hands the result to its island, so the panel's
+ * previews and placeholders say what the public head would. The caller's own reads (RLS and
+ * the route's capability decide); null when the target is not readable. Three reads in one
+ * round. The panel loads and saves the SEO row itself (GET/PUT /api/admin/entity-seo).
+ */
+export async function loadSeoPanelSetup(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  type: SeoEntityType,
+  entityId: string,
+): Promise<SeoPanelSetup | null> {
+  const { table, columns } = targetTable(type);
+  const [target, context] = await Promise.all([
+    sb.from(table).select(columns).eq('tenant_id', auth.tenantId).eq('id', entityId).maybeSingle(),
+    readSeoContext(sb, auth),
+  ]);
+  if (target.error) throw new Error(`read ${table}: ${target.error.message}`);
+  if (!target.data) return null;
+  const row = listRow(type, target.data as unknown as TargetRow, undefined, context);
+  return {
+    target: { entityType: type, entityId, label: row.label, path: row.path },
+    context: {
+      brand: context.brand,
+      titleTemplate: context.titleTemplate,
+      defaults: { title: row.title.default, description: row.description.default },
+      defaultRobots: context.defaultRobots,
+    },
   };
 }

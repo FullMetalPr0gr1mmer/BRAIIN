@@ -1,4 +1,4 @@
-import { SEO_ROBOTS } from '@schemas/admin';
+import type { SEO_ROBOTS } from '@schemas/seoRules';
 
 // Robots values, read leniently and written strictly (Admin v2 U10 D5). The write schemas
 // take only the closed sets in packages/schemas/admin.ts; production may still hold free text

@@ -156,7 +156,11 @@ export function targetTable(type: SeoEntityType) {
 export async function normalizeCanonical(
   sb: SupabaseClient,
   auth: AuthContext,
-  input: { entityType: SeoEntityType; entityId: string; canonicalOverride?: string | null | undefined },
+  input: {
+    entityType: SeoEntityType;
+    entityId: string;
+    canonicalOverride?: string | null | undefined;
+  },
   base: string,
 ): Promise<string | null> {
   const path = canonicalPath(input.canonicalOverride, base);

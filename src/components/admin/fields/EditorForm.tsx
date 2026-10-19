@@ -34,6 +34,12 @@ export interface EditorFormProps {
   /** F5b: "Advanced (JSON)" on section content is offered (Admin, D5). */
   canAdvanced?: boolean | undefined;
   children?: ReactNode;
+  /**
+   * Admin v2 U10: what follows the fields and comes before the action bar (the SEO panel's
+   * Index switch, its Advanced section and its previews). Inside the form, so a press of
+   * Enter in it still saves.
+   */
+  after?: ReactNode;
 }
 
 const LANGUAGE_KINDS = new Set(['bilingual', 'prose', 'richtext']);
@@ -56,6 +62,7 @@ export default function EditorForm({
   back,
   canAdvanced,
   children,
+  after,
 }: EditorFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   // Errors found here before anything is sent (a number or a date the browser could not
@@ -164,6 +171,7 @@ export default function EditorForm({
           />
         ))}
       </div>
+      {after}
 
       <div className="toolbar form-actions">
         <button type="submit" data-variant="primary" disabled={save.status === 'saving'}>

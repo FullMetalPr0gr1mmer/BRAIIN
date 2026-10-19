@@ -259,8 +259,14 @@ describe('the sweep route map', () => {
   it('Admin is swept on every sidebar link and tab, and the extras', () => {
     const paths = new Set(sweepRoutes('admin').map((r) => r.path));
     for (const screen of [...menuScreens(), ...EXTRA_LINKS]) {
+      // A page that only redirects is not opened as a screen (the test below), only its
+      // create and edit pages.
+      if (screen.href in REDIRECT_PAGES) continue;
       expect(paths, screen.href).toContain(screen.href);
     }
+    // U10: the redirects list moved to /admin/seo; its no-JS pages are still swept.
+    expect(paths).toContain('/admin/redirects/new');
+    expect(paths).toContain('/admin/redirects/[id]');
   });
 
   it('every role is swept on its own account and bell pages (Admin v2 F8)', () => {
@@ -329,6 +335,7 @@ describe('the locked screens the refusals e2e opens', () => {
       '/admin/analytics/search',
       '/admin/audit',
       '/admin/leads',
+      '/admin/seo',
       '/admin/site-health',
     ]);
     for (const screen of server) {
