@@ -204,7 +204,7 @@ function inUseDetail(details: unknown): string {
       ? `${label} holds ${leads}, so it keeps its kind. Move its ${leads} first.`
       : `${label} holds ${leads}. Move its ${leads} first.`;
   } catch {
-    return 'A stage you removed still holds leads. Move them first.';
+    return 'A stage you changed or removed still holds leads. Move them first.';
   }
 }
 

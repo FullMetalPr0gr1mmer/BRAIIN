@@ -139,7 +139,9 @@ export default function StagesCard({ loaded, onSaved }: Props) {
                 <span className="crm-stage__count">{leadsCount(d.leads)}</span>
               </div>
               <label className="f">
-                <span className="f__l">Label</span>
+                <span className="f__l">
+                  Label<span className="visually-hidden"> of stage {i + 1}</span>
+                </span>
                 <input
                   type="text"
                   value={d.label}

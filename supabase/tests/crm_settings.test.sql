@@ -12,7 +12,7 @@
 -- skipping inactive people). CLAUDE.md §3, §5, §8, §9.
 
 begin;
-select plan(68);
+select plan(69);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -250,6 +250,8 @@ select is(_rows($$ delete from public.lead_stages where is_initial $$), 0,
   'the initial stage is never deleted');
 select throws_ok($$ update public.lead_stages set tone = '#ff0000' where key = 'won' $$,
   '23514', null, 'a tone outside the palette is refused (no free colours, CSP)');
+select throws_ok($$ update public.lead_stages set kind = 'won' where key = 'contacted' $$,
+  '23503', null, 'a stage that holds a lead keeps its kind, written directly too');
 select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.lead_stages set label = 'Dev' $$)
           + _rows($$ delete from public.lead_stages where key = 'proposal' $$), 0,

@@ -26,6 +26,7 @@
 --     and the one person, must be an active lead worker of the tenant (23514, naming a
 --     constraint for the Worker). Someone deactivated later blocks nothing; arrival skips
 --     them.
+--   • A stage that holds leads keeps its kind, whoever writes it (a definer trigger).
 --   • lead_stages becomes editable by crm.settings holders: INSERT of the label, tone, kind,
 --     order and key; UPDATE of the label, tone, kind and order; DELETE of a stage that is not
 --     the initial one. Column grants, so no API caller makes a second initial stage, moves the
@@ -234,6 +235,28 @@ create policy lead_stages_update_live on public.lead_stages as restrictive for u
 drop policy if exists lead_stages_delete_live on public.lead_stages;
 create policy lead_stages_delete_live on public.lead_stages as restrictive for delete to authenticated
   using (tenant_id = app.effective_tenant_id() and app.role_crm_settings((select app.live_role())));
+
+-- A stage that holds leads keeps what it counts as, whoever writes it (the door says so
+-- with the count; a direct write through the column grant meets this): turning an open stage
+-- into Won would make its leads count as won with no won_at, and the KPIs read both. A
+-- definer, because RLS may hide leads from the writer. 23503 with a constraint name, like a
+-- delete the foreign key refuses.
+create or replace function app.tg_lead_stages_kind_fixed() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+begin
+  if new.kind is distinct from old.kind
+     and exists (select 1 from public.leads l
+                  where l.tenant_id = old.tenant_id and l.stage_id = old.id) then
+    raise exception using errcode = '23503',
+      message = 'a stage that holds leads keeps its kind (constraint "lead_stages_kind_in_use")';
+  end if;
+  return new;
+end $$;
+revoke all on function app.tg_lead_stages_kind_fixed() from public, anon, authenticated, service_role;
+drop trigger if exists lead_stages_kind_fixed on public.lead_stages;
+create trigger lead_stages_kind_fixed
+  before update of kind on public.lead_stages
+  for each row execute function app.tg_lead_stages_kind_fixed();
 
 revoke all on public.lead_stages from public, anon, authenticated, service_role;
 grant select, delete on public.lead_stages to authenticated;
@@ -685,7 +708,8 @@ begin
       raise exception '0091: % must be the service role''s alone', v_fn;
     end if;
   end loop;
-  foreach v_fn in array array['app.tg_crm_settings_assignees()', 'app.tg_crm_settings_rescore()'] loop
+  foreach v_fn in array array['app.tg_crm_settings_assignees()', 'app.tg_crm_settings_rescore()',
+                              'app.tg_lead_stages_kind_fixed()'] loop
     if has_function_privilege('anon', v_fn, 'execute')
        or has_function_privilege('authenticated', v_fn, 'execute')
        or has_function_privilege('service_role', v_fn, 'execute') then
@@ -695,7 +719,7 @@ begin
   -- The definers write or read FORCE RLS tables with no policy for them: their owner must
   -- bypass RLS (as 0034's and 0041's).
   foreach v_fn in array array['app.tg_crm_settings_assignees()', 'app.tg_crm_settings_rescore()',
-                              'app.crm_pick_assignee(uuid)'] loop
+                              'app.tg_lead_stages_kind_fixed()', 'app.crm_pick_assignee(uuid)'] loop
     if not exists (select 1 from pg_proc f join pg_roles r on r.oid = f.proowner
                     where f.oid = v_fn::regprocedure and f.prosecdef
                       and (r.rolsuper or r.rolbypassrls)) then
