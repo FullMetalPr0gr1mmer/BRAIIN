@@ -61,6 +61,8 @@ const VIEWS: Record<Role, string[]> = {
   developer: [...STATS, ...SEARCH, ...HEALTH],
   seo: [...STATS, ...SEARCH],
   content_creator: STATS,
+  // Sales (C10a) holds analytics.read, not the search stats or site health.
+  sales: STATS,
 };
 
 for (const role of Object.keys(VIEWS) as Role[]) {

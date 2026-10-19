@@ -84,7 +84,27 @@ const { file: SET_FILE, set: RAW_SET } = articleSet();
  * when it merges. Re-based with scratchpad/hs_rebase.py when a sibling restates it first.
  */
 const G2_PREVIOUS_SET = '0065_help_leads_v2.sql';
-const SET: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
+/**
+ * Guides written as files and not yet seeded by a migration (docs/admin-v2/guides/<slug>.json).
+ * Admin v2 C10a wrote the-sales-role before H11's catalog (app.put_help_guide) reached main
+ * (U7 does the same for its guide); its migration carries a TODO where the put goes. Until
+ * then the file is held to every rule below as if seeded, so the role lists already name it;
+ * once a migration seeds the slug, the file must equal what the migration seeds (`filed
+ * guides` below).
+ */
+const GUIDE_FILES = 'docs/admin-v2/guides';
+const FILED: { file: string; raw: { slug?: unknown } }[] = readdirSync(GUIDE_FILES)
+  .filter((f) => f.endsWith('.json'))
+  .sort()
+  .map((file) => ({
+    file,
+    raw: JSON.parse(readFileSync(`${GUIDE_FILES}/${file}`, 'utf8')) as { slug?: unknown },
+  }));
+const seededSlugs = new Set(RAW_SET.map((raw) => (raw as { slug?: unknown }).slug));
+const PENDING_RAW: unknown[] = FILED.filter((f) => !seededSlugs.has(f.raw.slug)).map((f) => f.raw);
+const SET: HelpArticleRow[] = [...RAW_SET, ...PENDING_RAW]
+  .map((raw) => HelpArticleSeedSchema.parse(raw))
+  .sort((a, b) => a.sort_order - b.sort_order || a.slug.localeCompare(b.slug));
 
 /** Every text of a guide, in one language or both. */
 function textsOf(article: HelpArticleRow, lang?: 'en' | 'ar'): string[] {
@@ -125,7 +145,9 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
   });
 
   it('every guide keeps the schema the Worker reads with (strict: no unknown key)', () => {
-    for (const raw of RAW_SET) expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
+    for (const raw of [...RAW_SET, ...PENDING_RAW]) {
+      expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
+    }
   });
 
   it('slugs and places in the list are unique', () => {
@@ -1059,6 +1081,74 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
   });
 });
 
+// ── 1c. Guides filed before the catalog seeds them ──────────────────────────────────────
+
+describe('filed guides (docs/admin-v2/guides): the-sales-role (C10a)', () => {
+  const article = () => SET.find((a) => a.slug === 'the-sales-role')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+
+  it('each file is named after its slug, and equals what a migration seeds once one does', () => {
+    for (const { file, raw } of FILED) {
+      expect(file).toBe(`${String(raw.slug)}.json`);
+      const seeded = RAW_SET.find((r) => (r as { slug?: unknown }).slug === raw.slug);
+      if (seeded) expect(seeded, `${file}: the seeded text differs from the file`).toEqual(raw);
+    }
+  });
+
+  it('takes the free place 75 (between leads 70 and personal data 80), for the lead workers', () => {
+    expect(article().sort_order).toBe(75);
+    expect(article().tags).toEqual(['leads', 'team']);
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual([
+      'admin',
+      'developer',
+      'sales',
+    ]);
+    // /admin/leads opens working-with-leads from its head: one guide per screen.
+    expect(pageGuideFor('/admin/leads', 'sales')).toBe('working-with-leads');
+  });
+
+  it('says what Sales holds, as ROLE_CAPS and the routes have it', () => {
+    const en = text('en');
+    for (const cap of ['leads.manage', 'leads.pii', 'analytics.read'] as const) {
+      expect(ROLE_CAPS.sales[cap]).toBe('full');
+    }
+    expect(en).toContain("Reveal one lead's contact details, budget and timeline at a time");
+    // The reveal's limits (src/lib/admin/rateLimit.ts) and its audit row.
+    expect(en).toContain('up to 60 an hour for each person and 300 an hour for the whole team');
+    expect(source('src/lib/admin/rateLimit.ts')).toMatch(
+      /PII_REVEAL_LIMITS: RateLimitOptions = \{\s*perUser: 60,\s*perTenant: 300,/,
+    );
+    expect(en).toContain('Open the dashboard and the website stats.');
+  });
+
+  it('says what Sales cannot do, as the screens and the hook have it', () => {
+    const en = text('en');
+    expect(en).toContain('the Export CSV button does not show');
+    expect(ROLE_CAPS.sales['export.csv']).toBe('none');
+    expect(source('src/pages/admin/leads/index.astro')).toContain(
+      "canExport: allowed && can(session.role, 'export.csv') === 'full'",
+    );
+    expect(en).toContain("Erase a lead, or receive a new lead's contact details in a notification");
+    expect(ROLE_CAPS.sales['crm.erase']).toBe('none');
+    expect(source('src/pages/api/hooks/notify-lead.ts')).toContain('receivesLeadPiiUnasked(role)');
+    for (const cap of [
+      'settings.general',
+      'users.manage',
+      'theme.edit',
+      'applications.manage',
+      'logs.view',
+      'audit.view',
+      'pages.write',
+    ] as const) {
+      expect(ROLE_CAPS.sales[cap], cap).toBe('none');
+    }
+    for (const label of ['Export CSV', 'Settings › Users & roles']) {
+      expect(text('ar')).toContain(label);
+    }
+  });
+});
+
 // ── 2. Who is shown what, and the shared rules ────────────────────────────────────────────
 
 describe('which guides each role is shown (the server’s filter, from ROLE_CAPS)', () => {
@@ -1104,6 +1194,20 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'personal-data',
       'roles-and-access',
       'site-health-and-logs',
+      'the-sales-role',
+      'website-stats',
+      'working-with-leads',
+      'your-account',
+      'your-dashboard',
+    ]);
+  });
+
+  it('Sales: the basics, leads and their personal data, the Sales role and stats; nothing else (C10a)', () => {
+    expect(shown('sales')).toEqual([
+      'finding-your-way',
+      'personal-data',
+      'roles-and-access',
+      'the-sales-role',
       'website-stats',
       'working-with-leads',
       'your-account',
@@ -1410,8 +1514,27 @@ describe('the routes answer what the loaders decide', () => {
     );
     expect(status).toBe(200);
     const data = body.data as { guides: HelpGuide[]; onScreen: string[] };
-    expect(data.onScreen).toEqual(['working-with-leads', 'personal-data']);
+    expect(data.onScreen).toEqual(['working-with-leads', 'the-sales-role', 'personal-data']);
     expect(data.guides.some((g) => g.slug === 'job-applications')).toBe(false);
+  });
+
+  it('GET /api/admin/help as Sales (C10a): its guides only, the leads screen’s three', async () => {
+    const { sb } = fakeDb({ rows: SET.map(rowOf) });
+    const { status, body } = await call(
+      () => import('@/pages/api/admin/help/index'),
+      '/api/admin/help?screen=%2Fadmin%2Fleads',
+      'sales',
+      sb,
+    );
+    expect(status).toBe(200);
+    const data = body.data as { guides: HelpGuide[]; onScreen: string[] };
+    expect(data.onScreen).toEqual(['working-with-leads', 'the-sales-role', 'personal-data']);
+    for (const slug of ['job-applications', 'saving-and-publishing', 'media-library']) {
+      expect(
+        data.guides.some((g) => g.slug === slug),
+        slug,
+      ).toBe(false);
+    }
   });
 
   it('GET /api/admin/help/article: 404 for a guide the role may not read', async () => {

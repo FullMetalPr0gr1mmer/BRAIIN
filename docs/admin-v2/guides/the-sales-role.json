@@ -1,0 +1,89 @@
+{
+  "slug": "the-sales-role",
+  "sort_order": 75,
+  "minutes": 2,
+  "tags": [
+    "leads",
+    "team"
+  ],
+  "screens": [
+    "/admin/leads"
+  ],
+  "caps": [
+    "leads.manage"
+  ],
+  "title": "The Sales role",
+  "title_ar": "دور Sales (المبيعات)",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Sales is the role for the people who follow up inquiries. A Sales account works leads and nothing else: it opens no page, setting, media or job application, and it cannot change anyone's role."
+      },
+      {
+        "t": "h",
+        "x": "What Sales can do"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "See every lead, move it through the stages, assign it, star it, tag it and give it a value, like anyone who works leads.",
+          "Reveal one lead's contact details, budget and timeline at a time. Each reveal is logged against the account that made it, up to 60 an hour for each person and 300 an hour for the whole team.",
+          "Read and add notes, log a call or a message, and add a lead by hand.",
+          "Open the dashboard and the website stats."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "What Sales cannot do"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Export leads to a file: the Export CSV button does not show.",
+          "Erase a lead, or receive a new lead's contact details in a notification. Sales reveals them on the lead's page instead, one lead at a time.",
+          "Change content, settings, people or the theme, or read job applications, the logs or the activity log."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "An Admin makes someone Sales in Settings › Users & roles. Give each person a display name, so the people a lead can be assigned to are easy to tell apart."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "دور Sales (المبيعات) مخصّص لمن يتابعون الاستفسارات. يعمل حساب Sales على العملاء المحتملين فقط: لا يفتح الصفحات ولا الإعدادات ولا الوسائط ولا طلبات التوظيف، ولا يستطيع تغيير دور أي شخص."
+      },
+      {
+        "t": "h",
+        "x": "ما يستطيعه Sales"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "يرى كل العملاء المحتملين، وينقلهم عبر المراحل، ويسندهم، ويميّزهم بنجمة، ويضع لهم الوسوم والقيمة، مثل كل من يعمل على العملاء المحتملين.",
+          "يكشف بيانات التواصل والميزانية والمدة الزمنية لعميل محتمل واحد في كل مرة. يُسجَّل كل كشف باسم الحساب الذي قام به، بحد أقصى 60 مرة في الساعة لكل شخص و300 مرة في الساعة للفريق كله.",
+          "يقرأ الملاحظات ويضيفها، ويسجّل مكالمة أو رسالة، ويضيف عميلًا محتملًا يدويًا.",
+          "يفتح لوحة المعلومات وإحصاءات الموقع."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "ما لا يستطيعه Sales"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "تصدير العملاء المحتملين إلى ملف: لا يظهر له زر Export CSV.",
+          "محو عميل محتمل، أو تلقّي بيانات التواصل لعميل محتمل جديد في إشعار. يكشفها Sales في صفحة العميل المحتمل بدلًا من ذلك، عميلًا واحدًا في كل مرة.",
+          "تغيير المحتوى أو الإعدادات أو الأشخاص أو المظهر، أو قراءة طلبات التوظيف أو السجلات أو سجل النشاط."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "يجعل المسؤول (Admin) شخصًا ما Sales من Settings › Users & roles. امنح كل شخص اسمًا ظاهرًا، ليسهل التمييز بين من يمكن إسناد العميل المحتمل إليهم."
+      }
+    ]
+  }
+}

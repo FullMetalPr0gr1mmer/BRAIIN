@@ -69,8 +69,8 @@
 -- Sales holds no new grant: every privilege it uses is `authenticated`'s, which the staff
 -- roles already share. No table is created here.
 --
--- HELP GUIDE: this slice's guide, revealing-lead-details (sort_order 75), is written as
--- docs/admin-v2/guides/revealing-lead-details.json and seeded once H11's catalog is on main
+-- HELP GUIDE: this slice's guide, the-sales-role (sort_order 75), is written as
+-- docs/admin-v2/guides/the-sales-role.json and seeded once H11's catalog is on main
 -- (see the TODO in section 9). It restates nothing of app.help_article_set().
 --
 -- Rollout (docs/launch-runbook.md): 0092, then this file, then the deploy; then invite Sales
@@ -201,10 +201,10 @@ create policy help_articles_member_read on public.help_articles for select to au
   using (tenant_id = app.effective_tenant_id() and (select app.live_role()) is not null);
 
 -- ---- 9. The help guide ---------------------------------------------------------------------------
--- TODO(H11): WIRE THE GUIDE HERE. This slice's guide, revealing-lead-details (sort_order 75),
+-- TODO(H11): WIRE THE GUIDE HERE. This slice's guide, the-sales-role (sort_order 75),
 -- is written but not seeded yet. Once H11's catalog (0069) is on main, replace this comment
 -- with H11's one top-level put of a new guide (revision 0), at the start of a line and
--- outside any DO block, its argument the JSON of docs/admin-v2/guides/revealing-lead-details.json
+-- outside any DO block, its argument the JSON of docs/admin-v2/guides/the-sales-role.json
 -- verbatim as a dollar-quoted jsonb literal; then add a postcondition that every tenant holds
 -- the guide. No restatement of app.help_article_set() (H11 retired that). The roles guide
 -- (roles-and-access) still says "four roles": put its revision with the Sales line in the
