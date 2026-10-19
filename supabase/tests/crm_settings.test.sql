@@ -4,7 +4,7 @@
 -- (the configuration columns of crm_settings, the stage columns, nothing for anon or PUBLIC);
 -- writes (crm_settings; lead_stages insert, update and delete; save_lead_stages) over admin,
 -- content_creator, seo, developer, anon, another tenant's admin and a stale token (a demoted
--- admin, a deactivated one); the version and stamps moving with the
+-- admin, a deactivated one); a new stage's key set by the database, never by the writer; the version and stamps moving with the
 -- configuration and never with the round-robin cursor; new points re-scoring every lead of
 -- the tenant without making a lead look edited; the assignee rules; save_lead_stages (a whole
 -- pipeline: rename, add, reorder, delete an empty stage; every refusal: a changed pipeline, the
@@ -13,7 +13,7 @@
 -- skipping inactive people). CLAUDE.md §3, §5, §8, §9.
 
 begin;
-select plan(88);
+select plan(93);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -149,6 +149,13 @@ select is(
       and has_column_privilege('authenticated', 'public.lead_stages', a.attname::text, 'update')),
   array['kind', 'label', 'label_ar', 'sort_order', 'tone'],
   'staff UPDATE on lead_stages: never the key, the initial flag or the tenant');
+select is(
+  (select array_agg(a.attname::text order by a.attname)
+     from pg_attribute a
+    where a.attrelid = 'public.lead_stages'::regclass and a.attnum > 0 and not a.attisdropped
+      and has_column_privilege('authenticated', 'public.lead_stages', a.attname::text, 'insert')),
+  array['kind', 'label', 'label_ar', 'sort_order', 'tone'],
+  'staff INSERT on lead_stages: never the key (the database sets it), the initial flag or the tenant');
 select ok(
   not has_table_privilege('anon', 'public.crm_settings', 'select, insert, update, delete, truncate, references, trigger')
   and not has_any_column_privilege('anon', 'public.crm_settings', 'select, insert, update, references')
@@ -249,6 +256,20 @@ select throws_ok(
   '42501', null, 'nobody adds a second initial stage (the flag is not granted)');
 select is(_rows($$ delete from public.lead_stages where is_initial $$), 0,
   'the initial stage is never deleted');
+select throws_ok(
+  $$ insert into public.lead_stages (key, label, tone, kind, sort_order)
+     values ('lost_old', 'Different', 'err', 'lost', 98) $$,
+  '42501', null,
+  'nobody names a key, so no writer reuses a deleted stage''s key (timeline events name keys)');
+select lives_ok(
+  $$ insert into public.lead_stages (label, tone, kind, sort_order) values ('Extra step', 'gray', 'open', 35) $$,
+  'admin adds a stage directly (the tenant is the token''s)');
+select ok(exists (select 1 from public.lead_stages
+                   where label = 'Extra step' and key ~ '^extra_step_[0-9a-f]{6}$'
+                     and tenant_id = '00000000-0000-0000-0000-000000000001'),
+  'its key is the database''s: the label plus a random suffix');
+select is(_rows($$ delete from public.lead_stages where label = 'Extra step' $$), 1,
+  'admin deletes an empty stage');
 select throws_ok($$ update public.lead_stages set tone = '#ff0000' where key = 'won' $$,
   '23514', null, 'a tone outside the palette is refused (no free colours, CSP)');
 select throws_ok($$ update public.lead_stages set kind = 'won' where key = 'contacted' $$,

@@ -27,10 +27,12 @@
 --     constraint for the Worker). Someone deactivated later blocks nothing; arrival skips
 --     them.
 --   • A stage that holds leads keeps its kind, whoever writes it (a definer trigger).
---   • lead_stages becomes editable by crm.settings holders: INSERT of the label, tone, kind,
---     order and key; UPDATE of the label, tone, kind and order; DELETE of a stage that is not
---     the initial one. Column grants, so no API caller makes a second initial stage, moves the
---     initial flag, renames a key or picks a tenant. A stage with leads in it cannot be
+--   • lead_stages becomes editable by crm.settings holders: INSERT of the label, tone, kind
+--     and order; UPDATE of the label, tone, kind and order; DELETE of a stage that is not the
+--     initial one. Column grants, so no API caller makes a second initial stage, moves the
+--     initial flag, names or renames a key or picks a tenant. A new stage's key is the
+--     database's (a trigger: the label plus a random suffix), so no writer can reuse the key
+--     of a deleted stage, which old timeline events still name. A stage with leads in it cannot be
 --     deleted (the 0034 foreign key, RESTRICT), and the 0034 constraint trigger still checks
 --     the whole set at commit (2 to 10, one initial, a won and a lost).
 --   • public.save_lead_stages(p_tenant, p_known, p_stages): the screen's door. A whole
@@ -211,8 +213,8 @@ grant select, insert, update on public.crm_settings to service_role;
 
 -- ---- 6. Who writes lead_stages --------------------------------------------------------------
 -- Insert, update and delete for crm.settings holders, live. Column grants: no API caller
--- names a tenant (the default is the token's), a key after the stage exists, or the initial
--- flag (so there is never a second initial stage, and the first never moves). The initial
+-- names a tenant (the default is the token's), a key (the trigger below sets it), or the
+-- initial flag (so there is never a second initial stage, and the first never moves). The initial
 -- stage is never deleted.
 drop policy if exists lead_stages_insert on public.lead_stages;
 create policy lead_stages_insert on public.lead_stages for insert to authenticated
@@ -258,9 +260,37 @@ create trigger lead_stages_kind_fixed
   before update of kind on public.lead_stages
   for each row execute function app.tg_lead_stages_kind_fixed();
 
+-- A new stage's key, when the writer names none (an API caller cannot: the key is not in the
+-- INSERT grant): lower-case words of the label joined by _, else "stage", and a random
+-- suffix. Never a key a deleted stage used: lead_events records stage moves by key, and the
+-- timeline shows each key with its current stage's label, so a reused key would rewrite old
+-- history. The seeded pipelines (0034's tenant trigger, the service role) name theirs.
+create or replace function app.tg_lead_stages_key() returns trigger
+  language plpgsql set search_path = '' as $$
+declare
+  v_base text;
+begin
+  if new.key is null then
+    v_base := btrim(regexp_replace(lower(coalesce(new.label, '')), '[^a-z0-9]+', '_', 'g'), '_');
+    if v_base = '' then
+      v_base := 'stage';
+    elsif v_base !~ '^[a-z]' then
+      v_base := 'stage_' || v_base;
+    end if;
+    new.key := rtrim(left(v_base, 24), '_') || '_'
+               || substr(md5(random()::text || clock_timestamp()::text), 1, 6);
+  end if;
+  return new;
+end $$;
+revoke all on function app.tg_lead_stages_key() from public, anon, authenticated, service_role;
+drop trigger if exists lead_stages_key on public.lead_stages;
+create trigger lead_stages_key
+  before insert on public.lead_stages
+  for each row execute function app.tg_lead_stages_key();
+
 revoke all on public.lead_stages from public, anon, authenticated, service_role;
 grant select, delete on public.lead_stages to authenticated;
-grant insert (key, label, label_ar, tone, kind, sort_order) on public.lead_stages to authenticated;
+grant insert (label, label_ar, tone, kind, sort_order) on public.lead_stages to authenticated;
 grant update (label, label_ar, tone, kind, sort_order) on public.lead_stages to authenticated;
 grant select, insert, update, delete on public.lead_stages to service_role;
 
@@ -301,7 +331,6 @@ declare
   v_n int;
   v_won int := 0;
   v_lost int := 0;
-  v_base text;
   r record;
   v_busy record;
 begin
@@ -401,18 +430,9 @@ begin
               case when r.e ? 'label_ar' then nullif(r.e ->> 'label_ar', '') else s.label_ar end,
               r.e ->> 'tone', r.e ->> 'kind', r.o * 10);
     else
-      -- A key from the label (lower-case words joined by _), else "stage", and a random
-      -- suffix: never one a deleted stage used, which old timeline events still name.
-      v_base := btrim(regexp_replace(lower(r.e ->> 'label'), '[^a-z0-9]+', '_', 'g'), '_');
-      if v_base = '' then
-        v_base := 'stage';
-      elsif v_base !~ '^[a-z]' then
-        v_base := 'stage_' || v_base;
-      end if;
-      v_base := rtrim(left(v_base, 24), '_');
-      insert into public.lead_stages (key, label, label_ar, tone, kind, sort_order)
-      values (v_base || '_' || substr(md5(random()::text || clock_timestamp()::text), 1, 6),
-              r.e ->> 'label', nullif(r.e ->> 'label_ar', ''), r.e ->> 'tone', r.e ->> 'kind', r.o * 10);
+      -- The key is the database's (lead_stages_key: the label plus a random suffix).
+      insert into public.lead_stages (label, label_ar, tone, kind, sort_order)
+      values (r.e ->> 'label', nullif(r.e ->> 'label_ar', ''), r.e ->> 'tone', r.e ->> 'kind', r.o * 10);
     end if;
   end loop;
 
@@ -585,6 +605,12 @@ begin
          and relrowsecurity and relforcerowsecurity) <> 2 then
     raise exception '0091: crm_settings and lead_stages must be ENABLE + FORCE row level security';
   end if;
+  -- A new stage's key is the database's (no writer reuses a deleted stage's key).
+  if not exists (select 1 from pg_trigger
+                  where tgrelid = 'public.lead_stages'::regclass and tgname = 'lead_stages_key'
+                    and tgenabled = 'O' and not tgisinternal) then
+    raise exception '0091: lead_stages_key is missing or disabled';
+  end if;
 
   -- PUBLIC and anon hold nothing on either table, table-wide or on a column.
   foreach v_who in array array['public', 'anon'] loop
@@ -630,7 +656,7 @@ begin
     from pg_attribute a
    where a.attrelid = 'public.lead_stages'::regclass and a.attnum > 0 and not a.attisdropped
      and has_column_privilege('authenticated', 'public.lead_stages', a.attname::text, 'insert');
-  if v_have <> array['key', 'kind', 'label', 'label_ar', 'sort_order', 'tone'] then
+  if v_have <> array['kind', 'label', 'label_ar', 'sort_order', 'tone'] then
     raise exception '0091: authenticated may insert lead_stages columns %', v_have;
   end if;
   select coalesce(array_agg(a.attname::text order by a.attname), '{}') into v_have
@@ -709,7 +735,7 @@ begin
     end if;
   end loop;
   foreach v_fn in array array['app.tg_crm_settings_assignees()', 'app.tg_crm_settings_rescore()',
-                              'app.tg_lead_stages_kind_fixed()'] loop
+                              'app.tg_lead_stages_kind_fixed()', 'app.tg_lead_stages_key()'] loop
     if has_function_privilege('anon', v_fn, 'execute')
        or has_function_privilege('authenticated', v_fn, 'execute')
        or has_function_privilege('service_role', v_fn, 'execute') then

@@ -62,8 +62,10 @@
   - Grants and policies: staff SELECT on `crm_settings`, UPDATE of `scoring`, `sla_hours` and
     the three assignment columns; `crm_settings_read` (lead workers or `crm.settings`),
     `crm_settings_write` and the RESTRICTIVE `crm_settings_write_live`. On `lead_stages`: SELECT
-    and DELETE, INSERT of `key, label, label_ar, tone, kind, sort_order`, UPDATE of `label,
-    label_ar, tone, kind, sort_order`; insert, update and delete policies for `crm.settings`
+    and DELETE, INSERT of `label, label_ar, tone, kind, sort_order` (never the key: the BEFORE
+    INSERT trigger `lead_stages_key` sets it from the label plus a random suffix, so no writer,
+    door or direct, reuses a deleted stage's key, which old timeline events name), UPDATE of
+    `label, label_ar, tone, kind, sort_order`; insert, update and delete policies for `crm.settings`
     (delete never the initial stage), each with its own RESTRICTIVE live policy. The service
     role's grants are stated.
   - `public.save_lead_stages(p_tenant, p_known, p_stages)` and
@@ -98,7 +100,7 @@
   TODO where `app.put_help_guide` goes once H11 merges (revision 0, a new guide).
   `tests/lib/helpCentre.spec.ts` reads the guide files into the set it checks until a migration
   seeds them (then the file must equal the seeded guide), and holds the guide to the screen.
-- **Tests:** pgTAP `supabase/tests/crm_settings.test.sql` (`plan(69)`); one assertion each in
+- **Tests:** pgTAP `supabase/tests/crm_settings.test.sql` (`plan(93)`); one assertion each in
   `crm_ingest.test.sql` (47) and `rls_lead_pipeline.test.sql` (71) that said "staff cannot
   write this yet" now says what stays closed (the time zone; a key, a tenant);
   `tests/lib/crmSettings.spec.ts`; three authz cases; the matrix, helper, sidebar,
@@ -139,8 +141,8 @@
 
 - Security: every write is two layers (`assertCap('crm.settings')` and RLS with a live check);
   the door refuses a stale or wrong-tenant token itself, since a refused UPDATE through RLS says
-  nothing; no API role can make a second initial stage, rename a key or pick a tenant (column
-  grants); the definers have empty search paths and are run by no API role; audit rows carry
+  nothing; no API role can make a second initial stage, name or rename a key or pick a tenant
+  (column grants); the definers have empty search paths and are run by no API role; audit rows carry
   field names and counts only.
 - Residual (owner question): the points are Admin's, and points that weigh one budget signal
   alone make every lead's score name that signal to every lead worker (today Admin and
