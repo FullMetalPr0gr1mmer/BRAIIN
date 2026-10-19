@@ -6,15 +6,20 @@ import { NotFoundError } from '@/lib/admin/errors';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { getRow } from '@/lib/admin/crud';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
+import { claimPrivilegedOp, PII_REVEAL_LIMITS } from '@/lib/admin/rateLimit';
+import { receivesLeadPiiUnasked } from '@/lib/admin/leadFields';
 import { serviceClient } from '@/lib/supabase/server';
 
-// A lead's notes thread (Admin v2 C2b): `leads.pii` (Admin, Developer), the capability the
+// A lead's notes thread (Admin v2 C2b): `leads.pii` (Admin, Developer, Sales), the capability the
 // old internal_notes column carried. lead_notes is reachable by the service role only
 // (0034), so this route is the thread's only door for reading it and for adding to it, and
 // it is audited. (Until C14 the thread also holds one mirror of the legacy internal_notes
 // field, which the 0034 trigger keeps in step with that field.)
 //
-//   GET   live recheck → the caller's own client must see the lead (RLS, live check) → an
+//   GET   live recheck → for a role that holds `leads.pii` one lead at a time (Sales, C10a:
+//         not `receivesLeadPiiUnasked`), a slot of its own limit, the reveal's numbers (60 an
+//         hour per person, 300 per tenant, fail-closed), because a note can quote a budget or
+//         a phone number → the caller's own client must see the lead (RLS, live check) → an
 //         audit row WRITTEN (fail-closed: no row, no notes) → the thread, newest first
 //   POST  live recheck → the lead must be visible → ONE insert as the service role, its
 //         author the session's user (never a client-supplied id). Its timeline event is
@@ -38,6 +43,11 @@ export const GET = defineAdminRoute({
   handler: async ({ auth, sb, params }) => {
     const id = requireId(params);
     await liveRecheck(auth);
+    // Admin and Developer may export every lead at once, so a ceiling here would bound
+    // nothing; for Sales it is what keeps "one lead at a time" true of the thread too.
+    if (!receivesLeadPiiUnasked(auth.role)) {
+      await claimPrivilegedOp(auth, 'lead-notes-read', PII_REVEAL_LIMITS);
+    }
     await getRow(sb, 'leads', auth, id, 'id');
 
     const logged = await writeAudit(sb, auth, {
