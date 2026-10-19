@@ -247,7 +247,15 @@ describe('the pending view of a staged save', () => {
 
   it('a pending rename frees the old slug for a redirect', async () => {
     const db = makeDb({
-      services: [{ id: '0f0f0f0f-0000-4000-8000-000000000011', tenant_id: T, slug: 'logo', status: 'published', version: 1 }],
+      services: [
+        {
+          id: '0f0f0f0f-0000-4000-8000-000000000011',
+          tenant_id: T,
+          slug: 'logo',
+          status: 'published',
+          version: 1,
+        },
+      ],
       content_drafts: [
         draftRow({
           entity_type: 'service',
