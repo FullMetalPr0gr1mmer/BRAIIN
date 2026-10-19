@@ -39,8 +39,7 @@ export function assignmentPayload(
   };
 }
 
-const isRule = (value: string): value is AssignmentRule =>
-  RULE_COPY.some((r) => r.rule === value);
+const isRule = (value: string): value is AssignmentRule => RULE_COPY.some((r) => r.rule === value);
 
 interface Props {
   /** The settings as the screen loaded them: the fields start from these. */

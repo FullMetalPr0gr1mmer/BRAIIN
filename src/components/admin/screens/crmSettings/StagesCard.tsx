@@ -89,7 +89,14 @@ export default function StagesCard({ loaded, onSaved }: Props) {
   const add = () =>
     setDrafts((list) => [
       ...list,
-      { local: localKey(), label: 'New stage', tone: 'gray', kind: 'open', is_initial: false, leads: 0 },
+      {
+        local: localKey(),
+        label: 'New stage',
+        tone: 'gray',
+        kind: 'open',
+        is_initial: false,
+        leads: 0,
+      },
     ]);
 
   const problem = pipelineProblem(drafts);
