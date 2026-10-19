@@ -93,7 +93,9 @@ test.describe('Realtime', () => {
       if (new URL(req.url()).pathname === '/api/admin/analytics/realtime') asked += 1;
     });
     await open(page, '/admin/analytics?tab=realtime');
-    await expect(page.getByText('on the site right now')).toBeVisible();
+    // Exact: with no minute rows (CI has no pg_cron) "Nobody is on the site right now." is
+    // on the page too, and a substring match would find both.
+    await expect(page.getByText(/^(people|person) on the site right now$/)).toBeVisible();
     await expect(page.getByText('Updates every minute.')).toBeVisible();
     expect(asked).toBe(0); // the first figures are the server's
 
@@ -141,7 +143,7 @@ test.describe('Goals', () => {
     await drawer.getByLabel('Target').fill('40');
     await drawer.getByRole('button', { name: 'Add goal' }).click();
     await page.waitForURL(/tab=conversions/);
-    await expect(page.getByText('Goal added')).toBeVisible();
+    await expect(page.locator('#admin-toasts')).toContainText('Goal added');
     const row = page.locator('.goal', { hasText: name });
     await expect(row).toContainText('Clicks: WhatsApp click');
     await expect(row).toContainText('of 40');
@@ -150,7 +152,7 @@ test.describe('Goals', () => {
     const edit = page.getByRole('dialog', { name: 'Edit goal' });
     await edit.getByLabel('Target').fill('80');
     await edit.getByRole('button', { name: 'Save goal' }).click();
-    await expect(page.getByText('Goal saved')).toBeVisible();
+    await expect(page.locator('#admin-toasts')).toContainText('Goal saved');
     await expect(page.locator('.goal', { hasText: name })).toContainText('of 80');
 
     await page
@@ -159,7 +161,7 @@ test.describe('Goals', () => {
       .click();
     const confirm = page.getByRole('dialog', { name: 'Delete this goal?' });
     await confirm.getByRole('button', { name: 'Delete goal' }).click();
-    await expect(page.getByText('Goal deleted')).toBeVisible();
+    await expect(page.locator('#admin-toasts')).toContainText('Goal deleted');
     await expect(page.locator('.goal', { hasText: name })).toHaveCount(0);
     await context.close();
   });
@@ -174,7 +176,7 @@ test.describe('Goals', () => {
     await drawer.getByLabel('Goal name').fill(name);
     await drawer.getByLabel('Target').fill('500');
     await drawer.getByRole('button', { name: 'Add goal' }).click();
-    await expect(page.getByText('Goal added')).toBeVisible();
+    await expect(page.locator('#admin-toasts')).toContainText('Goal added');
     const row = page.locator('.goal', { hasText: name });
     await expect(row).toContainText('Visits');
     await row.getByRole('button', { name: `Delete ${name}` }).click();
