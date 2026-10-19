@@ -24,7 +24,10 @@ import { PREVIEW_PREFIX, toPreviewPath } from './paths';
 //   - a form never sends: the submit is stopped before the page's own handler sees it, and the
 //     response's CSP already says `form-action 'none'` (src/lib/http/preview.ts);
 //   - a script's request that could change something (any method but GET and HEAD) is refused,
-//     and so is a beacon: a preview never writes a lead, an application or telemetry.
+//     and so is a beacon: a preview never writes a lead, an application or telemetry. A read
+//     of the site's own API is refused too unless it is on READ_ONLY_ENDPOINTS: a GET can
+//     write (`/api/search` records the query for the SEO report), so only an endpoint known
+//     to write nothing may answer a preview.
 
 export interface MessageEventLike {
   origin: string;
@@ -101,12 +104,45 @@ export function sectionsOf(doc: Pick<Document, 'querySelectorAll'>): {
   return out;
 }
 
-/** Whether a script's request may go: reads only (GET, HEAD). */
-export function requestAllowed(input: RequestInfo | URL, init?: RequestInit): boolean {
+/**
+ * The site's API endpoints a preview may read: each answers a GET without writing anything.
+ * `/api/search` is not one (it records every query, `recordSearchQuery`), so a search typed
+ * into a preview finds nothing, as the guide says.
+ */
+export const READ_ONLY_ENDPOINTS: readonly string[] = ['/api/apply/status'];
+
+/** Stands in for the page's origin when no base is given (a relative URL keeps its path). */
+const NO_BASE = 'http://preview.invalid/';
+
+/**
+ * Whether a script's request may go: reads only (GET, HEAD), and of this site's own API only
+ * the endpoints on READ_ONLY_ENDPOINTS. `base` is the page's URL, against which a relative
+ * request is resolved.
+ */
+export function requestAllowed(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  base: string = NO_BASE,
+): boolean {
   const method = (
     init?.method ?? (typeof input === 'object' && 'method' in input ? input.method : 'GET')
   ).toUpperCase();
-  return method === 'GET' || method === 'HEAD';
+  if (method !== 'GET' && method !== 'HEAD') return false;
+  let url: URL;
+  let here: URL;
+  let path: string;
+  try {
+    here = new URL(base);
+    const raw =
+      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    url = new URL(raw, here);
+    path = decodeURIComponent(url.pathname).toLowerCase().replace(/\/+$/, '');
+  } catch {
+    return false;
+  }
+  if (url.origin !== here.origin) return true;
+  if (path !== '/api' && !path.startsWith('/api/')) return true;
+  return READ_ONLY_ENDPOINTS.includes(path);
 }
 
 export const FORMS_NOTICE = "Forms don't send in preview.";
@@ -163,10 +199,11 @@ export function installBridge(win: Window): void {
   const parent: Window | null = win.parent !== win ? win.parent : null;
   const doc = win.document;
 
-  // Nothing a preview runs may write: refuse every request but a read, and every beacon.
+  // Nothing a preview runs may write: refuse every request but a read (and every read of an
+  // API endpoint that writes), and every beacon.
   const nativeFetch = win.fetch.bind(win);
   win.fetch = (input: RequestInfo | URL, init?: RequestInit) =>
-    requestAllowed(input, init)
+    requestAllowed(input, init, win.location.href)
       ? nativeFetch(input, init)
       : Promise.reject(new TypeError(FORMS_NOTICE));
   if (typeof win.navigator.sendBeacon === 'function') {

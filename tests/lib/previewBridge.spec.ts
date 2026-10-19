@@ -8,6 +8,7 @@ import {
   acceptToPreview,
   postToParent,
   previewHrefFor,
+  READ_ONLY_ENDPOINTS,
   requestAllowed,
   sectionsOf,
 } from '@/lib/admin/preview/bridge';
@@ -152,6 +153,23 @@ describe('the preview side', () => {
     expect(requestAllowed('/x', { method: 'head' })).toBe(true);
     expect(requestAllowed('/api/contact', { method: 'POST' })).toBe(false);
     expect(requestAllowed(new Request(`${ORIGIN}/api/contact`, { method: 'PUT' }))).toBe(false);
+  });
+
+  it('refuses a read of an API endpoint that writes: a preview search records nothing', () => {
+    const base = `${ORIGIN}/admin/preview/search`;
+    // /api/search records every query (recordSearchQuery): a preview must not reach it.
+    expect(requestAllowed('/api/search?q=logo&locale=en', undefined, base)).toBe(false);
+    expect(requestAllowed(`${ORIGIN}/api/search?q=logo`, { method: 'GET' }, base)).toBe(false);
+    expect(requestAllowed(new URL('/api/search/?q=x', ORIGIN), undefined, base)).toBe(false);
+    expect(requestAllowed(new Request(`${ORIGIN}/api/search?q=x`), undefined, base)).toBe(false);
+    expect(requestAllowed('/api', { method: 'HEAD' }, base)).toBe(false);
+    expect(requestAllowed('/API/Search?q=x', undefined, base)).toBe(false);
+    expect(requestAllowed('/api/%73earch?q=x', undefined, base)).toBe(false);
+    // An endpoint that writes nothing still answers, and so does anything outside the API.
+    expect(requestAllowed('/api/apply/status', undefined, base)).toBe(true);
+    expect(requestAllowed('/styles/preview.css', undefined, base)).toBe(true);
+    expect(requestAllowed('/apix', undefined, base)).toBe(true);
+    for (const path of READ_ONLY_ENDPOINTS) expect(path.startsWith('/api/')).toBe(true);
   });
 
   it('lists the marked sections, skipping a marker that is not an id', () => {
