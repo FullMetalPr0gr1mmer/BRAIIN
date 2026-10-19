@@ -14,8 +14,8 @@
 --     updated_at is ignored.
 --   • the CHECKs (kind, state, facts an object of at most 16 KB), the key, the tenant's
 --     cascade, and the grants as the migration's postconditions state them.
---   • the guides: every tenant holds the rewritten site health guide, and the set's count is
---     0061's.
+--   • the guides: every tenant holds the rewritten site health guide, and the set holds at
+--     least 0061's fifteen.
 --
 -- Fixtures are two tenants of this file's own; every count is scoped to them.
 
@@ -285,8 +285,10 @@ select is(
   '', 'no API role executes the stamps function or reads the help set');
 
 -- ── 6. the guides ────────────────────────────────────────────────────────────
-select is((select count(*)::int from jsonb_array_elements(app.help_article_set())), 15,
-  'the set holds 0061''s fifteen guides');
+-- At least 0061's fifteen: later slices add their own guides through app.put_help_guide
+-- (0069, H11), and a count pinned here would make each of them edit this file.
+select ok((select count(*)::int from jsonb_array_elements(app.help_article_set())) >= 15,
+  'the set holds at least 0061''s fifteen guides');
 select is(
   (select count(*)::int from public.tenants t
     where t.id in ('67000000-0000-0000-0000-000000000001', '67000000-0000-0000-0000-0000000000ff')

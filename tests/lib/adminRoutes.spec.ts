@@ -330,6 +330,7 @@ describe('the locked screens the refusals e2e opens', () => {
       '/admin/analytics/search',
       '/admin/audit',
       '/admin/leads',
+      '/admin/leads/board',
       '/admin/site-health',
     ]);
     for (const screen of server) {

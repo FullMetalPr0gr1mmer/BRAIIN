@@ -551,11 +551,15 @@ until both exist again — which also makes revoking the way to stop all deploys
 
 ## 5b. Branch protection on `main` (the gates bind everyone)
 
-`main` takes changes only through a pull request whose required checks are green on a
-branch **up to date with `main`** (strict), admins included, with no force-push or deletion
-(owner decision 2026-10-04). With the deploy needing every gate (§5a; CLAUDE.md §2), this is
-what makes "a red gate never ships" hold for the merge as well as the deploy, and `strict`
-keeps the migration ledger honest: every PR is checked against the `main` it lands on.
+`main` takes changes only through a pull request whose required checks are green, admins
+included, with no force-push or deletion (owner decision 2026-10-04). Since 2026-10-19 the
+branch need **not** be up to date with `main` to merge (`strict: false`, owner decision, to stop
+every merge re-running every open PR's CI). What still holds: the deploy needs every gate on
+`main`'s own merge commit (§5a; CLAUDE.md §2), so a combination two green PRs break together
+never ships and is fixed forward; and the migration ledger stays ordered because a PR that
+adds a migration is still updated with `main` (and renumbered, `scripts/renumber-migration.mjs`)
+right before its merge, and `supabase db push` refuses a file that sorts below one already
+applied.
 
 The settings are code. `.github/branch-protection.json` is the exact body of the API call:
 seven required checks — `migrations`, `build-test`, `supply-chain`, `deploy-preflight`,
@@ -578,9 +582,9 @@ checks have reported — a required context that never reports blocks every PR):
   gh api "$R/branches/main/protection" --jq '{strict:.required_status_checks.strict,checks:[.required_status_checks.checks[].context],admins:.enforce_admins.enabled}' )
 ```
 
-Expect `strict: true`, the seven checks and `admins: true`. From then on
+Expect `strict: false`, the seven checks and `admins: true`. From then on
 `gh pr view <n> --json mergeStateStatus` reads BLOCKED while a required check is pending or
-red, and BEHIND when `main` has moved.
+red.
 
 **Renaming a check** (a job in ci.yml or in a workflow it calls, or adding or removing a
 gate): change `.github/branch-protection.json` in the same PR (the spec fails until you do),
@@ -921,7 +925,7 @@ renames match no row the second time and fail loudly.
 | 4 | `--step content` | The rows the seed skips. The 8 kept or renamed services get the new copy (title, tagline, intro, body + body_html, value points, deliverables), their discipline, poster, clip window **and sort_order** (so they do not interleave with the new 20). The 12 sample projects' `portfolio_services` are rebuilt by slug. `crafts` → 28, "Services under one roof" (value and value_numeric together). Header Services → `/services`. | `COMMIT`. Then apply what step 0 surfaced (e.g. clear a stale `entity_seo` title or `canonical_override` of a renamed service, after review). |
 | 5 | `--step samples` | The owner's override for `testimonials` and `service_cases` (audit-logged by the override table's trigger — §6c step 5 explains it), then publishes **only flagged drafts**, by exact slug: the 9 sample quotes, the 28 case blocks, the 4 Services-page stats (and the Services page's sample sections, when the seed has them). Asserts: disciplines = the 5, published services = the 28, archived = the 6 (test-service, archived in round 1, aside), live cases = the 28, live quotes = the 9, live Services stats = the 4, both override rows with their audit grants, crafts = 28. | `COMMIT`. |
 | 6 | `--step verify` | Read-only JSON of the same facts, for the report. | 5 disciplines, 28 services each with its discipline, the 6 (+ test-service) archived, `cases_live` 28, 9 quotes, `98% 12+ 85% 250+`, crafts `28`, header `/services`, overrides incl. testimonials + service_cases. |
-| 7 | Merge the stack one PR at a time (protection is strict, §5b: each is updated with `main` and green before its merge, and deploys ~30 min after it, once its gates pass) → the deploy job → live checks | — | `/services`, `/services/logo` and the `/ar` twins → 200; `/services/branding` → 301 to `/services#branding`; `/ar/services/music` → 301; home shows the 5 discipline cards, the quote carousel and stat 28; a case study shows its quote. |
+| 7 | Merge the stack one PR at a time (§5b: each green before its merge, a migration PR updated with `main` first; each deploys ~30 min after it, once its gates pass) → the deploy job → live checks | — | `/services`, `/services/logo` and the `/ar` twins → 200; `/services/branding` → 301 to `/services#branding`; `/ar/services/music` → 301; home shows the 5 discipline cards, the quote carousel and stat 28; a case study shows its quote. |
 
 **Making the samples real, and taking the override back:** §6c steps 8–9. The Round 2 samples
 are listed on the admin dashboard as "Placeholder content is live" until then.

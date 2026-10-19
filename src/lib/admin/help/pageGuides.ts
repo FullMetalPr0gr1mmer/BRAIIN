@@ -8,8 +8,8 @@ import { isOnScreen } from './model';
 // in the database (migration 0046).
 //
 // Each entry copies what the set says of its guide: the capabilities it is for, and screens
-// the guide names. tests/lib/helpCentre.spec.ts holds the copy to the set the last migration
-// seeds (the slug is there, the caps are the same, every screen is one the guide names, every
+// the guide names. tests/lib/helpCentre.spec.ts holds the copy to the set the migrations
+// seed (the catalog, H11: the last restatement plus every put and drop since; the slug is there, the caps are the same, every screen is one the guide names, every
 // screen a guide names has a page guide but the help page itself), so a migration that
 // retires or retargets a guide fails CI until this list follows it.
 //

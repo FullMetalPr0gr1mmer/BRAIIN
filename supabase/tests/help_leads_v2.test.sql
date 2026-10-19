@@ -1,7 +1,7 @@
 -- pgTAP: the leads guide rewritten for the leads screens (0065, Admin v2 C4b). Run with
 -- `supabase test db`. What help_centre.test.sql proves for every guide (the RLS, the CHECKs,
 -- the grants, the search) holds here unchanged; this file proves what 0065 itself changes:
---   1. the set still holds 15 guides, and working-with-leads keeps its place, screens and
+--   1. the set still holds (at least) its 15 guides, and working-with-leads keeps its place, screens and
 --      capability, in four minutes;
 --   2. its text is the leads screens' own, in both languages (Move to…, not the old panel's
 --      "Reveal contact details and notes");
@@ -41,7 +41,9 @@ create function _as(p_role text, p_tid text) returns void language sql as $$
 $$;
 
 -- ---- 1. the set ------------------------------------------------------------------------
-select is(_set_size(), 15, 'the set still holds 15 guides');
+-- At least 0065's fifteen: later slices add their own guides through app.put_help_guide
+-- (0069, H11), and a count pinned here would make each of them edit this file.
+select ok(_set_size() >= 15, 'the set still holds at least its 15 guides');
 select ok(_guide() -> 'sort_order' = '70'::jsonb
           and _guide() -> 'minutes' = '4'::jsonb
           and _guide() -> 'screens' = '["/admin/leads"]'::jsonb
