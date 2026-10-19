@@ -157,6 +157,21 @@ test.describe('the Pages tab, end to end', () => {
     page,
     request,
   }) => {
+    // The panel reads its row once per opening. The list refreshing after the save re-renders
+    // the drawer's host, and must not read the row again: that answer resets the form, which
+    // cleared "Saved" (and anything typed since) before SeoPanel keyed its fields on words.
+    let rowReads = 0;
+    let saveSent = false;
+    let relisted = 0;
+    page.on('request', (req) => {
+      if (new URL(req.url()).pathname !== '/api/admin/entity-seo') return;
+      if (req.method() === 'GET') rowReads += 1;
+      if (req.method() === 'PUT') saveSent = true;
+    });
+    page.on('requestfinished', (req) => {
+      if (saveSent && new URL(req.url()).pathname === '/api/admin/entity-seo/list') relisted += 1;
+    });
+
     await page.goto('/admin/seo?tab=pages&type=service');
     await ready(page);
     await page.getByLabel('Search services').fill(SLUG);
@@ -203,6 +218,10 @@ test.describe('the Pages tab, end to end', () => {
 
     await drawer.getByRole('button', { name: 'Save SEO' }).click();
     await expect(drawer.locator('.save-status')).toHaveText(/^Saved/);
+    // The list has its fresh answer, and the panel still says Saved, from its one read.
+    await expect.poll(() => relisted).toBeGreaterThan(0);
+    await expect(drawer.locator('.save-status')).toHaveText(/^Saved/);
+    expect(rowReads, 'reads of the SEO row while the drawer was open').toBe(1);
     await page.keyboard.press('Escape');
     await expect(drawer).toBeHidden();
     const row = page.getByRole('row', { name: new RegExp(label) });

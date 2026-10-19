@@ -145,7 +145,19 @@ export default function SeoPanel({
   canAdvanced = false,
   onSaved,
 }: SeoPanelProps) {
-  const fields = useMemo(() => seoPanelFields(context.defaults), [context.defaults]);
+  // The fields follow the default WORDS, not the object that carries them: a host builds
+  // `context` afresh on each render (the SEO list does, from its row, and re-renders when a
+  // save refreshes it), and new fields are a new load for useEntitySave, whose answer
+  // resets the form: "Saved" vanished, and an edit typed meanwhile was thrown away.
+  const { title: defaultTitle, description: defaultDescription } = context.defaults;
+  const fields = useMemo(
+    () =>
+      seoPanelFields({
+        title: { en: defaultTitle.en, ar: defaultTitle.ar },
+        description: { en: defaultDescription.en, ar: defaultDescription.ar },
+      }),
+    [defaultTitle.en, defaultTitle.ar, defaultDescription.en, defaultDescription.ar],
+  );
   const shown = useMemo(() => fields.filter((field) => SHOWN.has(field.name)), [fields]);
   const save = useEntitySave(
     { kind: 'entitySeo', entityType: target.entityType, entityId: target.entityId },
