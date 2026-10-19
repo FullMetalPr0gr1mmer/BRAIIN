@@ -65,6 +65,13 @@
 --   8. help_articles: any live member reads its tenant's guides (the Worker then shows a
 --      role only the guides for capabilities it holds, src/lib/admin/help/access.ts; the
 --      guides are in the public repository, 0046). By the live role, not app.is_member().
+--   8b. admin_role_defaults (0060): an Admin saves a dashboard preset for every role, Sales
+--      included (the Worker's modal lists ROLES), but 0060's read required app.is_staff(),
+--      so a Sales token read no row and its preset was silently ignored. The read is now any
+--      live member's own role's preset, an Admin every role's: app.is_staff() is replaced by
+--      the live check (0060's RESTRICTIVE admin_role_defaults_live already requires one;
+--      it is restated in the permissive branch so the policy reads alone). The writes are
+--      unchanged (an Admin, by the live role).
 --
 -- Sales holds no new grant: every privilege it uses is `authenticated`'s, which the staff
 -- roles already share. No table is created here.
@@ -199,6 +206,14 @@ revoke all on function app.staff_directory() from public, anon, authenticated, s
 drop policy if exists help_articles_member_read on public.help_articles;
 create policy help_articles_member_read on public.help_articles for select to authenticated
   using (tenant_id = app.effective_tenant_id() and (select app.live_role()) is not null);
+
+-- ---- 8b. Dashboard presets for every live member --------------------------------------------
+-- 0060's read with app.is_staff() replaced by a live member: the tenant first (P-14), then a
+-- live profile, then the token's own role's preset or, for users.manage, every role's.
+drop policy if exists admin_role_defaults_read on public.admin_role_defaults;
+create policy admin_role_defaults_read on public.admin_role_defaults for select to authenticated
+  using (tenant_id = app.effective_tenant_id() and (select app.live_role()) is not null
+         and ((role)::text = app.current_role() or app.role_manages_users(app.current_role())));
 
 -- ---- 9. The help guide ---------------------------------------------------------------------------
 -- TODO(H11): WIRE THE GUIDE HERE. This slice's guide, the-sales-role (sort_order 75),
@@ -341,6 +356,15 @@ begin
   if has_table_privilege('authenticated', 'public.leads', 'update')
      or has_table_privilege('anon', 'public.leads', 'update') then
     raise exception '0093: a table-wide UPDATE on leads is held';
+  end if;
+
+  -- admin_role_defaults_read: the tenant, a live member, its own role's preset or users.manage.
+  if coalesce((select qual from pg_policies where schemaname = 'public' and tablename = 'admin_role_defaults'
+                 and policyname = 'admin_role_defaults_read' and cmd = 'SELECT'
+                 and permissive = 'PERMISSIVE' and roles = '{authenticated}'), '')
+     !~ ('^\(' || v_tenant || ' AND \(\( SELECT (app\.)?live_role\(\) AS live_role\) IS NOT NULL\) AND '
+         || '\(\(\(role\)::text = (app\.)?"?current_role"?\(\)\) OR (app\.)?role_manages_users\((app\.)?"?current_role"?\(\)\)\)\)$') then
+    raise exception '0093: admin_role_defaults_read is not (tenant, a live member, own role or users.manage)';
   end if;
 
   -- The sample lock: no role claim is the only trusted context.

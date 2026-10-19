@@ -17,8 +17,8 @@
 --      (disciplines is the one named exception, 0093 §4 says why). The fixtures give every
 --      relation `authenticated` holds more of than anon at least one row in the tenant, and
 --      a test fails when one has none, so a new staff-only table cannot pass by being empty;
---   4. the member's own rows (its profile, its preferences, its tenant, the guides), the
---      stats analytics.read gives it, the password fence (U14b's 0061: a Sales token reads
+--   4. the member's own rows (its profile, its preferences, its tenant, the guides, its
+--      role's dashboard preset), the stats and the team note analytics.read gives it, the password fence (U14b's 0061: a Sales token reads
 --      no section of a locked page), the definers it may call (the people directory gives
 --      it the assignable lead workers only), its audit rows (its own, never a colleague's
 --      name), and the sample lock's trusted context (no role claim);
@@ -26,7 +26,7 @@
 --      lead, no timeline and nobody in the directory.
 
 begin;
-select plan(55);
+select plan(61);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- T1 is created older than any seeded tenant, so inside this transaction it is the launch
@@ -100,7 +100,9 @@ insert into public.site_settings (tenant_id) values ('93000000-0000-0000-0000-00
 insert into public.site_integrations (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.ai_config (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.admin_security_settings (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
-insert into public.admin_role_defaults (tenant_id, role) values ('93000000-0000-0000-0000-000000000001', 'admin') on conflict do nothing;
+insert into public.admin_role_defaults (tenant_id, role) values
+  ('93000000-0000-0000-0000-000000000001', 'admin'), ('93000000-0000-0000-0000-000000000001', 'sales'),
+  ('93000000-0000-0000-0000-0000000000ff', 'sales') on conflict do nothing;
 insert into public.team_notes (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.health_probes (tenant_id, kind, state) values ('93000000-0000-0000-0000-000000000001', 'uptime', 'ok') on conflict do nothing;
 insert into public.redirects (tenant_id, source_path, target_path) values ('93000000-0000-0000-0000-000000000001', '/c10a-old', '/');
@@ -223,7 +225,7 @@ grant insert, select on _seen to anon, authenticated;
 create function _not_compared() returns text[] language sql immutable as $$
   select array['leads', 'leads_safe', 'lead_stages', 'lead_events', 'crm_settings',
                'profiles', 'admin_user_prefs', 'tenants', 'help_articles',
-               'rollup_daily_pageviews', 'team_notes']
+               'admin_role_defaults', 'rollup_daily_pageviews', 'team_notes']
 $$;
 grant execute on function _not_compared() to anon, authenticated;
 
@@ -360,6 +362,15 @@ select ok((select count(*) from public.help_articles) > 0,
   'Sales reads its tenant''s guides (0093: a live member; the Worker shows its own)');
 select is((select sum(views)::int from public.rollup_daily_pageviews), 3,
   'analytics.read: Sales reads the page-view rollup the dashboard draws');
+select is((select string_agg(tenant_id::text || ':' || role::text, ',') from public.admin_role_defaults),
+  '93000000-0000-0000-0000-000000000001:sales',
+  'Sales reads the dashboard preset an Admin saved for its role, and no other role''s (0093 §8b)');
+select is((select count(*)::int from public.team_notes where tenant_id = '93000000-0000-0000-0000-000000000001'), 1,
+  'analytics.read: Sales reads its tenant''s team note (0060, by the live role)');
+select is(_val($$ select (public.save_team_notes('93000000-0000-0000-0000-000000000001', 'Call the new leads first', 0) ->> 'version') $$),
+  '1', 'and saves it through the one door, save_team_notes (analytics.read, audited)');
+select is(_val($$ select public.save_team_notes('93000000-0000-0000-0000-0000000000ff', 'x', 0)::text $$),
+  '42501', 'but never another tenant''s');
 select is(_count('public.rollup_daily_vitals') + _count('public.web_vitals') + _count('public.analytics_events')
           + _count('public.search_queries'), 0::bigint,
   'but not the raw telemetry, the vitals or the searches');
@@ -373,8 +384,7 @@ select is(
     + _count('public.custom_themes') + _count('public.content_versions') + _count('public.audit_log')
     + _count('public.system_logs') + _count('public.consent_log') + _count('public.notification_log')
     + _count('public.job_applications') + _count('public.content_drafts') + _count('public.page_visibility')
-    + _count('public.ai_config') + _count('public.health_probes') + _count('public.admin_security_settings')
-    + _count('public.admin_role_defaults'),
+    + _count('public.ai_config') + _count('public.health_probes') + _count('public.admin_security_settings'),
   0::bigint, 'none of the staff-only tables crm.md §13 lists (and the newer ones)');
 reset role;
 
@@ -451,6 +461,8 @@ select _as('93000000-0000-0000-0000-0000000000b2', 'sales', '93000000-0000-0000-
 select is(_count('public.leads') + _count('public.lead_events') + _count('public.help_articles')
           + (select count(*) from public.crm_people('93000000-0000-0000-0000-000000000001')), 0::bigint,
   'a demoted Sales token (the profile says content_creator) reads no lead, timeline, guide or colleague');
+select is(_count('public.admin_role_defaults') + _count('public.team_notes'), 0::bigint,
+  'nor its old role''s preset or the team note');
 select _as('93000000-0000-0000-0000-0000000000b3', 'sales', '93000000-0000-0000-0000-000000000001');
 select is(_count('public.leads') + _count('public.lead_events')
           + (select count(*) from public.crm_people('93000000-0000-0000-0000-000000000001')), 0::bigint,
@@ -466,6 +478,8 @@ select is(
     + (select count(*)::int from public.crm_people('93000000-0000-0000-0000-000000000001')),
   0, 'another tenant''s Sales reads none of T1''s leads or people');
 select is((select count(*)::int from public.leads), 1, 'and its own tenant''s lead only');
+select is((select string_agg(tenant_id::text, ',') from public.admin_role_defaults),
+  '93000000-0000-0000-0000-0000000000ff', 'and its own tenant''s preset only');
 reset role;
 
 select * from finish();
