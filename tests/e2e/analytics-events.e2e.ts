@@ -32,13 +32,24 @@ interface Beacon {
   props?: Record<string, string>;
 }
 
-/** Records every beacon to /api/analytics, its body parsed. */
+/**
+ * Makes the beacons' bodies readable. The emitter sends a Blob (`sendBeacon`), and Chromium
+ * reports a Blob body to Playwright's request event only while the request is intercepted:
+ * without a route, `postData()` is null for every beacon (the first CI run of this file). The
+ * route passes each one on to the Worker unchanged, the one the language link starts
+ * included (a keepalive request outlives the page that sent it).
+ */
+async function readBeacons(page: Page) {
+  await page.route('**/api/analytics', (route) => route.continue());
+}
+
+/** Records every beacon to /api/analytics, its body parsed (`unreadable` when it has none). */
 function beacons(page: Page): Beacon[] {
   const seen: Beacon[] = [];
   page.on('request', (req: Request) => {
     if (new URL(req.url()).pathname !== '/api/analytics') return;
     try {
-      seen.push(req.postDataJSON() as Beacon);
+      seen.push((req.postDataJSON() as Beacon | null) ?? { type: 'unreadable' });
     } catch {
       seen.push({ type: 'unreadable' });
     }
@@ -97,6 +108,7 @@ for (const locale of ['en', 'ar'] as const) {
     test.beforeEach(async ({ page }) => {
       await page.setViewportSize({ width: 1366, height: 900 });
       await keepOnSite(page);
+      await readBeacons(page);
     });
 
     test('nothing is sent before consent, clicks included', async ({ page }) => {
@@ -157,7 +169,7 @@ for (const locale of ['en', 'ar'] as const) {
       await page.goto(`${p.services}#branding`, { waitUntil: 'networkidle' });
       // The hand-over ran: the explorer is live and holds the addressed panel as its state.
       await expect(page.locator('[data-xp].is-live')).toHaveCount(1);
-      await expect(page.locator('.svc-panel#branding')).toHaveClass(/is-active/);
+      await expect(page.locator('.svc-panel#branding')).toHaveClass(/\bis-active\b/);
       await expect(page.locator('.svc-panel#branding')).toBeVisible();
       // The services page view arrived, so the gate was open while the panel opened.
       await expect
