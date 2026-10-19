@@ -57,6 +57,8 @@ vi.mock('@/lib/admin/visibilitySync', () => ({
 
 const { POST: PUBLISH } = await import('@/pages/api/admin/releases/index');
 const { POST: VALIDATE } = await import('@/pages/api/admin/releases/validate');
+const { RELEASE_REGISTRY } = await import('@/lib/release/registry');
+const { RELEASE_LINKS } = await import('@/lib/release/links');
 
 const BI = (en: string, ar: string) => ({ en, ar });
 const OTHER_TENANT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -862,5 +864,63 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
     expect(res.data).toMatchObject({ ok: true });
     const reads = db.calls.length + svc.calls.length;
     expect(reads).toBeLessThanOrEqual(12);
+  });
+
+  it('a release touching every registry type stays in a stated budget (the reads grow per table)', async () => {
+    // One link-only change per type: readLive costs one read per table and primeLinks one per
+    // link table (two for a table the selection also edits), so a broad release, not a long one,
+    // is what approaches the Free plan's 50. Validate alone costs 41 reads here (the rules do not
+    // run: these changes stop at the Worker's own check), held as a tripwire; with the session's
+    // two reads, the apply and the after-effects a clean all-types publish is about 50. O-16
+    // measures it on staging; a cap on the tables per release, or one live read, follows it.
+    const MAX_READS = 41;
+    const tables: Record<string, Row[]> = {};
+    const drafts: Row[] = [];
+    let n = 0;
+    for (const [type, entry] of Object.entries(RELEASE_REGISTRY)) {
+      n += 1;
+      const rowId = entry.key === 'tenant_id' ? T : id(2000 + n);
+      (tables[entry.table] ??= []).push({
+        id: id(2000 + n),
+        tenant_id: T,
+        version: 1,
+        slug: `t${n}`,
+        status: 'draft',
+      });
+      const payload: Row = {};
+      const base: Row = {};
+      for (const spec of RELEASE_LINKS[type as keyof typeof RELEASE_LINKS] ?? []) {
+        base[spec.column] = null;
+        // The seeded image and the publisher's own account; every other link a row of its own.
+        if (spec.table === 'media_assets' || spec.table === 'profiles') {
+          payload[spec.field] = spec.table === 'media_assets' ? POSTER : ADMIN;
+          continue;
+        }
+        payload[spec.field] = id(2500 + n);
+        (tables[spec.table] ??= []).push({
+          id: id(2500 + n),
+          tenant_id: T,
+          version: 1,
+          slug: `l${n}`,
+          status: 'published',
+        });
+      }
+      drafts.push(
+        draftRow({
+          id: draftId(2000 + n),
+          entity_type: type,
+          entity_id: rowId,
+          op: 'update',
+          payload,
+          base,
+        }),
+      );
+    }
+    const db = seed({ ...tables, content_drafts: drafts });
+    svc.answer = () => dryOk(drafts.length);
+    const res = await run(VALIDATE, db, select(...drafts));
+    expect(res.status).toBe(200);
+    expect(drafts.length).toBeGreaterThanOrEqual(20);
+    expect(db.calls.length + svc.calls.length).toBeLessThanOrEqual(MAX_READS);
   });
 });
