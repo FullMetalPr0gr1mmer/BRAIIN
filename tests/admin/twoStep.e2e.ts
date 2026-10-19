@@ -107,10 +107,23 @@ async function freshContext(browser: Browser): Promise<BrowserContext> {
   return context;
 }
 
+/**
+ * Console errors, each with the path of the resource it names when it names one: a document
+ * the server answers 4xx is logged by Chromium as "Failed to load resource", and the path
+ * tells a 422 the page meant (the setup step shown again for a wrong code) from any other.
+ */
 function watchConsole(page: Page): string[] {
   const errors: string[] = [];
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
+    if (message.type() !== 'error') return;
+    const where = message.location().url;
+    let path = '';
+    try {
+      path = where ? new URL(where).pathname : '';
+    } catch {
+      path = where;
+    }
+    errors.push(path ? `${message.text()} (${path})` : message.text());
   });
   page.on('pageerror', (error) => errors.push(error.message));
   return errors;
@@ -244,9 +257,14 @@ test('sets 2FA up from the account: the key, a code, and the row says On', async
   await expect(page.locator('img[src^="data:"]')).toHaveCount(0);
   await expectClean(page, 'the setup step');
 
-  // A wrong code first: the same step again, the same key, nothing counted.
+  // A wrong code first: the same step again, the same key, nothing counted. The step is
+  // rendered as the POST's answer, never redirected (its key is never stored), with 422.
   await page.getByLabel('6-digit code').fill(wrongCode());
-  await page.getByRole('button', { name: 'Turn on 2FA' }).click();
+  const [refused] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/admin/2fa') && r.request().method() === 'POST'),
+    page.getByRole('button', { name: 'Turn on 2FA' }).click(),
+  ]);
+  expect(refused.status(), 'a wrong code shows the setup step again, as 422').toBe(422);
   await expect(page.locator('.two-step .msg')).toContainText('That code did not work.');
   await expect(page.locator('code.two-step__key')).toHaveText(/[A-Z2-7 ]+/);
   expect(((await page.locator('code.two-step__key').textContent()) ?? '').replace(/\s+/g, '')).toBe(
@@ -263,7 +281,12 @@ test('sets 2FA up from the account: the key, a code, and the row says On', async
   await expect(page.locator('li', { hasText: 'Two factor authentication' })).toContainText(
     'On, via authenticator app.',
   );
-  expect(errors, 'no console error').toEqual([]);
+  // One line only: Chromium's log of the wrong code's 422 document (above), and no other.
+  expect(errors, 'no console error but the wrong code’s 422').toEqual([
+    expect.stringMatching(
+      /^Failed to load resource: the server responded with a status of 422\b.* \(\/admin\/2fa\)$/,
+    ),
+  ]);
   await context.close();
 });
 
@@ -355,8 +378,10 @@ test('an Admin resets it: signed out everywhere, then signed in with the passwor
   const person = admin.getByRole('row', { name: new RegExp(ACCOUNT.displayName) });
   await expect(person).toContainText('On');
   const edit = admin.getByRole('button', { name: `Edit ${ACCOUNT.displayName}`, exact: true });
+  // A row's action takes no pointer press until it is armed; focus arms it at once, so the
+  // keyboard's way: focus, then Enter (tests/admin/invites.e2e.ts, pressRowAction).
   await edit.focus();
-  await edit.click();
+  await edit.press('Enter');
   await admin.getByRole('button', { name: 'Reset 2FA' }).click();
   const confirm = admin.getByRole('dialog', { name: `Reset 2FA for ${ACCOUNT.displayName}?` });
   await expect(confirm).toBeVisible();

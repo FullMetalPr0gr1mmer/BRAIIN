@@ -27,6 +27,27 @@ describe('tests/admin/twoStep.e2e.ts', () => {
     expect(source).not.toMatch(/test\.setTimeout\(/);
   });
 
+  it('expects the setup step’s 422 for a wrong code, and no other console error', () => {
+    // twoStepFlow's confirm renders the setup step again with 422 (its key is never stored,
+    // so it cannot redirect); Chromium logs that document as "Failed to load resource". The
+    // first test asserts the status and accepts exactly that one line, by its path; the
+    // second (whose wrong code redirects) still accepts none.
+    const first = source.slice(
+      source.indexOf("test('sets 2FA up from the account"),
+      source.indexOf("test('signing in asks for the code"),
+    );
+    expect(first).toMatch(/expect\(refused\.status\(\)[^)]*\)\.toBe\(422\)/);
+    expect(first).toContain('status of 422\\b.* \\(\\/admin\\/2fa\\)$/');
+    expect(first).not.toContain("expect(errors, 'no console error').toEqual([]);");
+    const second = source.slice(
+      source.indexOf("test('signing in asks for the code"),
+      source.indexOf("test('an Admin resets it"),
+    );
+    expect(second).toContain("expect(errors, 'no console error').toEqual([]);");
+    // The path is what tells the expected 422 from any other.
+    expect(source).toContain('message.location().url');
+  });
+
   it('asks GoTrue itself to add or remove a factor with the password alone, and expects no', () => {
     // Both layers stand on GoTrue's AAL rule: the hook (0072) stamps the role whenever no
     // verified factor is required, so if an aal1 token could unenrol the factor (or enrol a
