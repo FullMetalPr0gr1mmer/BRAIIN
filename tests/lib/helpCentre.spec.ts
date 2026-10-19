@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -763,10 +764,75 @@ describe('the guides say only what the admin does', () => {
     expect(after.minutes).toBe(4);
   });
 
+  it('C4c (0068) restates G2’s set (0067) and changes only the working-with-leads guide', () => {
+    // Production applies 0067 then 0068: every guide 0067 seeds, byte for byte, but the leads
+    // guide, which gains the Pipeline board's line (the board was carved out of C4b by size).
+    const setOf = (file: string) => {
+      const sql = source(`${MIGRATIONS}/${file}`);
+      return JSON.parse(/\$help\$([\s\S]*?)\$help\$/.exec(sql)![1]!) as HelpArticleRow[];
+    };
+    const base = setOf('0067_health_probes.sql');
+    const c4c = setOf('0068_help_leads_board.sql');
+    expect(c4c.map((a) => a.slug)).toEqual(base.map((a) => a.slug));
+    for (const article of base.filter((a) => a.slug !== 'working-with-leads')) {
+      expect(
+        c4c.find((a) => a.slug === article.slug),
+        article.slug,
+      ).toEqual(article);
+    }
+    const before = base.find((a) => a.slug === 'working-with-leads')!;
+    const after = c4c.find((a) => a.slug === 'working-with-leads')!;
+    expect({ ...after, body: null }).toEqual({ ...before, body: null });
+    // One line added to the first list, in each language; nothing else moves.
+    for (const lang of ['en', 'ar'] as const) {
+      const lists = (body: HelpArticleRow['body']) =>
+        body[lang].filter((b) => b.t === 'ol').map((b) => b.x as string[]);
+      const [was, now] = [lists(before.body), lists(after.body)];
+      expect(now[0]!.slice(0, -1), lang).toEqual(was[0]);
+      expect(now[0]!.at(-1), lang).toContain('Pipeline');
+      expect(now.slice(1), lang).toEqual(was.slice(1));
+    }
+  });
+
+  it('C4c (0068) refuses to revert a guide it does not own: it keeps the set before and compares', () => {
+    // A sibling's restatement that reaches production before C4c (as G2's 0067 did, onto which
+    // 0068 is re-based) would be reverted by a 0068 not re-based on it; the migration keeps the
+    // set it found and its postcondition refuses any other guide that changed, so the push
+    // fails instead.
+    const sql = source(`${MIGRATIONS}/0068_help_leads_board.sql`);
+    const keep = sql.indexOf(
+      'create temporary table _help_set_before_0068 on commit drop as\n  select app.help_article_set() as guides;',
+    );
+    expect(keep).toBeGreaterThan(-1);
+    expect(keep).toBeLessThan(sql.indexOf('create or replace function app.help_article_set()'));
+    expect(sql).toContain('from _help_set_before_0068 h');
+    expect(sql).toContain("raise exception '0068: the set changes guides it does not own (%)");
+    // The one guide the guard lets change is the one the file changes against its base.
+    const setOf = (file: string) =>
+      JSON.parse(
+        /\$help\$([\s\S]*?)\$help\$/.exec(source(`${MIGRATIONS}/${file}`))![1]!,
+      ) as HelpArticleRow[];
+    const base = setOf('0067_health_probes.sql');
+    const changed = setOf('0068_help_leads_board.sql')
+      .filter(
+        (a) =>
+          !isDeepStrictEqual(
+            a,
+            base.find((b) => b.slug === a.slug),
+          ),
+      )
+      .map((a) => a.slug);
+    const owned = [...sql.matchAll(/<> '([a-z-]+)'\n\s+and a\.g is distinct from b\.g;/g)].map(
+      (m) => m[1],
+    );
+    expect(owned).toEqual(changed);
+    expect(owned).toEqual(['working-with-leads']);
+  });
+
   it('the leads guide names the controls the leads screens draw (C4b)', () => {
     const en = guide('working-with-leads', 'en');
     const screens = codeIn('src/components/admin/screens/leads').map(source).join('\n');
-    const pages = ['index.astro', '[id].astro']
+    const pages = ['index.astro', 'board.astro', '[id].astro']
       .map((page) => source(`src/pages/admin/leads/${page}`))
       .join('\n');
     const drawn = [
@@ -779,6 +845,7 @@ describe('the guides say only what the admin does', () => {
       'Over response time',
       'Unread',
       'Spam',
+      'Pipeline',
       'Move to…',
       'Previous',
       'Next',
