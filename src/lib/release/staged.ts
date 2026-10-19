@@ -55,7 +55,8 @@ import {
 //     `derivePatch` (the schema and `toRow`, no `published_at`, no per-item schedule);
 //   • stage time runs the status capabilities (`stageTransition`, the legacy save's rule) and
 //     `assertWritable` over live ⊕ patch, its reads through `pendingDb` (R6: live with every
-//     pending change laid over it, so a link to a pending create passes), never
+//     other pending change laid over it, the saved item's own draft left out, so a link to a
+//     pending create passes), never
 //     `assertPublishable` (D6: publish and the dry run run it);
 //   • never `persist`, `afterWrite` or `afterDelete`: save_portfolio, theme deactivation and the
 //     redirects' KV sync belong to the apply (R4) and R7. Child sets stay in the payload.

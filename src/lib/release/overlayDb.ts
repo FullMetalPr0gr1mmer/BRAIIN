@@ -8,8 +8,8 @@ import type { AuthContext } from '@/lib/auth/types';
 //   • a save while releases are off: `liveDb`, which sends exactly the queries the rules sent
 //     before R6 (tests/lib/overlayDb.spec.ts pins them, and the call-for-call kernel specs stay
 //     unchanged);
-//   • a staged save (R3): `pendingDb`, live with every pending change of the tenant laid over
-//     it, so a link to a pending create, or a redirect over a slug a pending change renames, is
+//   • a staged save (R3): `pendingDb`, live with every other pending change of the tenant laid
+//     over it (the saved item's own draft left out), so a link to a pending create, or a redirect over a slug a pending change renames, is
 //     not refused before anyone has published anything;
 //   • a publish and its dry run (R6): `layeredDb` over the changes SELECTED, the state the
 //     release leaves behind, so a release is judged on what it will publish and nothing else.

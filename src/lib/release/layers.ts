@@ -28,7 +28,8 @@ export function changeOf(
 export const keyOfTable = (table: string): string => registryByTable(table)?.key ?? 'id';
 
 /**
- * Live with EVERY pending change of the tenant laid over it, loaded per table on first need
+ * Live with every OTHER pending change of the tenant laid over it (the saved item's own
+ * draft is left out when `saving` names it), loaded per table on first need
  * (one read of that type's drafts, at most 1,000, the list overlay's cap): the database a staged
  * save's rules see (R3a's decision D5, now over the pending state). `exists` asks live first,
  * so a save linking to a live row reads no drafts. A table outside the registry is live's.
