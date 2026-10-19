@@ -722,6 +722,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [C3](as-built/C3.md): the leads write API: versioned PATCH, bulk, manual add, erase, export filters, 0041
 - [C4a](as-built/C4a.md): the leads readers v2: assignee, star, unread, source, channel and discipline filters, the SLA flag, the board's values, the summary's figures, Previous/Next in the list's own order, the score's reasons behind the reveal, 0063 (#79)
 - [C4b](as-built/C4b.md): the leads screens: the list with its KPIs, chips, filters in the address and bulk bar, a lead's page (the audited reveal, the notes thread, the status card, Move to…, the timeline, Erase), the lazy add drawer, the `internalNotes` 422, the F0 harness extension, the `admin-leads` chunk groups and O-15 by the plan's default, 0065 (the help guide only; PR number at review)
+- [C10a](as-built/C10a.md): the Sales role for leads: the enum value alone (0092), then the helpers, `app.is_member()` for `audit_insert`, the non-staff block, the no-role-claim trusted context, the legacy lead writes withdrawn, the directory and the guides (0093), the Sales column in §5 and architecture §3.4 (both parsed), the catalog-driven pgTAP, the Sales sweep (numbers assigned at merge; PR number at review)
 
 **Hotfixes**
 - [H5](as-built/H5.md): the audit chain is serialized, 0031 (#36)
