@@ -1,6 +1,6 @@
 {
   "slug": "previewing-changes",
-  "sort_order": 45,
+  "sort_order": 65,
   "minutes": 3,
   "tags": ["content", "site"],
   "screens": ["/admin/preview", "/admin/pages", "/admin/visibility"],

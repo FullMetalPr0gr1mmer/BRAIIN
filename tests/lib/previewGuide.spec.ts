@@ -15,6 +15,8 @@ import { pageFileFor } from '../admin/routes';
 // TODO(H11): when the catalog is on main, a migration carries
 //   select app.put_help_guide($guide$ <this file> $guide$::jsonb, 0);
 // the PENDING_PAGE_GUIDES entry moves into PAGE_GUIDES, and helpCentre.spec.ts takes over.
+// The catalog's CHECK allows 12 caps, and the guide names exactly 12 (PREVIEW_READ_CAPS): a
+// cap the preview's door gains must not reach the guide unchecked.
 
 const FILE = 'docs/admin-v2/guides/previewing-changes.json';
 const RAW = JSON.parse(readFileSync(FILE, 'utf8')) as unknown;
@@ -46,8 +48,16 @@ describe(`the preview guide (${FILE})`, () => {
     expect(GUIDE.slug).toBe('previewing-changes');
   });
 
-  it('takes a free place in the list (45, from the free 45, 65, 75, 95, 125)', () => {
-    expect(GUIDE.sort_order).toBe(45);
+  it('takes a free place in the list (65: U7 holds 45, C9a/C10a 75; 95 and 125 stay free)', () => {
+    // H11's catalog holds one guide per place (a second put_help_guide is a 23505), so the
+    // places are agreed by merge order, and R9 takes 65.
+    expect(GUIDE.sort_order).toBe(65);
+  });
+
+  it("names at most 12 caps, H11's CHECK (help_guide_catalog_caps_ok)", () => {
+    // Exactly 12 today: a capability PREVIEW_READ_CAPS gains breaks the H11 wiring, so the
+    // guide's caps must then be narrowed to the areas (TODO(H11) below).
+    expect(GUIDE.caps.length).toBeLessThanOrEqual(12);
   });
 
   it('is for exactly the roles that can preview, by the preview’s own caps', () => {
