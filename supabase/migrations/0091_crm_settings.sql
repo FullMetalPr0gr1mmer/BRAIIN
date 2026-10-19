@@ -610,7 +610,7 @@ select app.put_help_guide($guide$
         "t": "ol",
         "x": [
           "A lead scores points for what its inquiry tells you: a budget, a company e-mail, a service it asked about and more. Each sign is worth 0 to 50 points, and a score never goes above 100.",
-          "Save scoring re-scores every lead at once, so the list never mixes old and new points. Scores above 75 show green."
+          "Save scoring re-scores every lead at once, so the list never mixes old and new points. Scores of 75 and above show green."
         ]
       },
       { "t": "h", "x": "Response time and assignment" },
@@ -648,7 +648,7 @@ select app.put_help_guide($guide$
         "t": "ol",
         "x": [
           "يحصل كل عميل محتمل على نقاط بحسب ما يذكره في استفساره: ميزانية، أو بريد إلكتروني لشركة، أو خدمة سأل عنها، وغير ذلك. قيمة كل علامة من 0 إلى 50 نقطة، ولا يتجاوز التقييم 100.",
-          "يعيد زر Save scoring حساب تقييم كل العملاء المحتملين في الحال، فلا تختلط في القائمة نقاط قديمة بنقاط جديدة. ويظهر التقييم الأعلى من 75 باللون الأخضر."
+          "يعيد زر Save scoring حساب تقييم كل العملاء المحتملين في الحال، فلا تختلط في القائمة نقاط قديمة بنقاط جديدة. ويظهر التقييم من 75 فما فوق باللون الأخضر."
         ]
       },
       { "t": "h", "x": "وقت الرد والتوزيع (Response time and assignment)" },

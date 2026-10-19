@@ -102,7 +102,7 @@ export default function ScoringCard({ settings, version, onSaved }: Props) {
       </div>
       <p className="f__hint">
         Highest possible score: {Number.isFinite(maxScore(points)) ? maxScore(points) : 0} of{' '}
-        {LIMITS.maxScore}. Scores above 75 show green.
+        {LIMITS.maxScore}. Scores of 75 and above show green.
       </p>
       {error && (
         <p className="msg" data-kind="error" role="alert">
