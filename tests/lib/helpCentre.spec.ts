@@ -84,7 +84,25 @@ const { file: SET_FILE, set: RAW_SET } = articleSet();
  * when it merges. Re-based with scratchpad/hs_rebase.py when a sibling restates it first.
  */
 const G2_PREVIOUS_SET = '0065_help_leads_v2.sql';
-const SET: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
+const SEEDED: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
+
+/**
+ * Guides a slice wrote while the help-guide catalog (H11, `app.put_help_guide`) was still on
+ * its way: docs/admin-v2/guides/<slug>.json, each one guide as the catalog's put will take it.
+ * Until its migration puts it, it is held here to every rule the seeded set keeps, as if it
+ * were seeded; once a migration seeds the slug, the file must equal it (a test below).
+ */
+const GUIDE_DIR = 'docs/admin-v2/guides';
+const GUIDE_FILES = readdirSync(GUIDE_DIR)
+  .filter((f) => f.endsWith('.json'))
+  .sort();
+const PENDING: HelpArticleRow[] = GUIDE_FILES.map((f) =>
+  HelpArticleSeedSchema.parse(JSON.parse(readFileSync(`${GUIDE_DIR}/${f}`, 'utf8'))),
+);
+const SET: HelpArticleRow[] = [
+  ...SEEDED,
+  ...PENDING.filter((guide) => !SEEDED.some((a) => a.slug === guide.slug)),
+].sort((a, b) => a.sort_order - b.sort_order || a.slug.localeCompare(b.slug));
 
 /** Every text of a guide, in one language or both. */
 function textsOf(article: HelpArticleRow, lang?: 'en' | 'ar'): string[] {
@@ -928,6 +946,85 @@ describe('the guides say only what the admin does', () => {
     expect(everything('ar')).not.toContain('شوركت');
     expect(guide('seo-and-redirects', 'ar')).toContain('الروابط التي تمت مشاركتها');
     expect(guide('personal-data', 'ar')).toContain('تُعرض بيانات شخص واحد');
+  });
+});
+
+// ── 1a. Guides waiting for the catalog (H11) ────────────────────────────────────────────
+
+describe(`the guides written as files (${GUIDE_DIR})`, () => {
+  const source = (path: string) => readFileSync(path, 'utf8');
+  it('each file is one guide, named by its slug, its place free in the set', () => {
+    expect(GUIDE_FILES.length).toBeGreaterThan(0);
+    for (const [i, file] of GUIDE_FILES.entries()) {
+      expect(file).toBe(`${PENDING[i]!.slug}.json`);
+    }
+    // A file the migrations already seed must be what they seed (its put has landed).
+    for (const guide of PENDING) {
+      const seeded = SEEDED.find((a) => a.slug === guide.slug);
+      if (seeded) expect(guide, guide.slug).toEqual(seeded);
+    }
+  });
+
+  it('a guide not seeded yet is put by its slice’s migration once H11 lands: the TODO says where', () => {
+    const migrations = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql'));
+    for (const guide of PENDING.filter((g) => !SEEDED.some((a) => a.slug === g.slug))) {
+      const owner = migrations.filter((f) =>
+        source(`${MIGRATIONS}/${f}`).includes(`docs/admin-v2/guides/${guide.slug}.json`),
+      );
+      expect(owner, guide.slug).toHaveLength(1);
+      expect(source(`${MIGRATIONS}/${owner[0]!}`), guide.slug).toMatch(
+        /TODO\([^)]*H11\)[\s\S]*app\.put_help_guide/,
+      );
+    }
+  });
+});
+
+describe('the CRM settings guide says what the screen does (C9a)', () => {
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const guide = () => SET.find((a) => a.slug === 'crm-settings')!;
+  const en = () => textsOf(guide(), 'en').join('\n');
+
+  it('is Admin’s (crm.settings), on its screen, in the place after the leads guide', () => {
+    expect(guide().caps).toEqual(['crm.settings']);
+    expect(guide().screens).toEqual(['/admin/crm/settings']);
+    expect(guide().sort_order).toBe(75);
+    for (const role of ROLES) {
+      expect(mayRead(role, guide().caps), role).toBe(ROLE_CAPS[role]['crm.settings'] === 'full');
+    }
+  });
+
+  it('gives the limits the schema and the database hold', async () => {
+    const crm = await import('@schemas/crm');
+    expect(en()).toContain(`${crm.MIN_STAGES} to ${crm.MAX_STAGES} stages`);
+    expect(en()).toContain(`0 to ${crm.MAX_SIGNAL_POINTS} points`);
+    expect(en()).toContain(`never goes above ${crm.MAX_LEAD_SCORE}`);
+  });
+
+  it('names the controls the screen draws, in both languages', () => {
+    const screen = ['StagesCard', 'ScoringCard', 'ResponseCard']
+      .map((f) => source(`src/components/admin/screens/crmSettings/${f}.tsx`))
+      .join('\n');
+    const copy = source('src/components/admin/screens/crmSettings/copy.ts');
+    for (const control of [
+      'Add stage',
+      'Move up',
+      'Move down',
+      'Save stages',
+      'Save scoring',
+      'Answer new leads within',
+      'New leads go to',
+    ]) {
+      expect(screen, control).toContain(control);
+      expect(en(), control).toContain(control);
+      expect(textsOf(guide(), 'ar').join('\n'), control).toContain(control);
+    }
+    for (const rule of ['Manual', 'Round robin', 'Always to one person']) {
+      expect(copy, rule).toContain(`label: '${rule}'`);
+      expect(en(), rule).toContain(rule);
+    }
+    // The flag the leads list shows past the response time, in its words.
+    expect(source('src/lib/crm/leadView.ts')).toContain('Over response time');
+    expect(en()).toContain('Over response time');
   });
 });
 
