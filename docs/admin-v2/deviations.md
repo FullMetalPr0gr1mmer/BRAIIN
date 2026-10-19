@@ -13,7 +13,7 @@
 - **Roles** (A2/A4, RLS):
   - 5 roles;
   - no editable matrix, per-person grants or View as;
-  - Developer gets no CRM (O-7);
+  - Developer gets no CRM (O-7), and no CRM settings: `crm.settings` is Admin only (§5 amended in C9a);
   - Site health stays Admin + Developer.
 - **Publishing**:
   - per area (P-2);
@@ -70,6 +70,7 @@
   - a role without `leads.manage` that opens a leads page by its address gets the admin's one refusal, "Your role does not allow that." (`Refused.astro`, a 403, nothing read), not crm.md's "You do not have access to this / Ask an admin if you need it" (C4b, the U2 pattern);
   - "Agreed to be contacted about this inquiry" shows the public form's checkbox for a web-form lead, and "Added by hand" for a lead added by hand, whose column records no such answer (C4b, D10);
   - until C4c merges, the Leads area has no List | Pipeline tabs and no board: the board was carved out of C4b by size (the brief's §13), and ships with its tab, its help line and its tests in C4c;
+  - CRM settings (C9a): a stage's colour is one of six named tones, never a free colour (CSP; each tone AA-checked); stages reorder with Move up / Move down, not drag; a stage that holds leads cannot be removed or change what it counts as until its leads move; the cards are Pipeline stages, Lead scoring and Response time and assignment only (custom fields and contact stages arrive with contacts, C9b; retention stays in General settings; the messaging cards wait for L6; the time zone is General's, B7.5);
   - no client-side CSV;
   - Mark as spam + Admin-only Erase instead of delete;
   - no keystroke autosave;
