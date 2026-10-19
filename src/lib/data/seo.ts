@@ -204,10 +204,9 @@ export async function getSeoRules(): Promise<{
 } | null> {
   if (!supabaseConfigured()) return null;
   try {
-    const db = contentClient();
     const [rules, pages] = await Promise.all([
-      db.from('entity_seo').select('entity_type,entity_id,robots,canonical_override'),
-      db.from('pages').select('id,slug').eq('status', 'published'),
+      contentClient().from('entity_seo').select('entity_type,entity_id,robots,canonical_override'),
+      contentClient().from('pages').select('id,slug').eq('status', 'published'),
     ]);
     if (rules.error || pages.error) return null;
     return {

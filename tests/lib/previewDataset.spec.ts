@@ -290,13 +290,13 @@ describe('laying the drafts over', () => {
   it('keys the singletons on their tenant', async () => {
     const { db } = source(fixtureTables(), [
       draft('site_profile', 'update', TENANT, { brandName: BI('New name', 'اسم') }),
-      draft('seo_defaults', 'update', TENANT, { robotsDirectives: 'noindex' }),
+      draft('seo_defaults', 'update', TENANT, { robotsDirectives: 'noindex,follow' }),
     ]);
     expect(await read(db, 'site_profile', 'brand_name')).toEqual([
       { brand_name: BI('New name', 'اسم') },
     ]);
     expect(await read(db, 'seo_defaults', 'robots_directives')).toEqual([
-      { robots_directives: 'noindex' },
+      { robots_directives: 'noindex,follow' },
     ]);
   });
 });

@@ -205,6 +205,14 @@ const CASES: Record<string, () => Promise<void>> = {
     expect((await inPreview(() => seo.getEntitySeo('service', ID.sDraft))).value).toBeNull();
     clean(report);
   },
+  'seo.getSeoRules': async () => {
+    // Admin v2 U10 (D8): the fixture's SEO rows set neither robots nor a canonical, so none
+    // is a rule; the published pages are read by slug.
+    const { value, report } = await inPreview(() => seo.getSeoRules());
+    expect(value?.rules).toEqual([]);
+    expect(value?.pages.map((p) => p.slug)).toContain('home');
+    clean(report);
+  },
   'seo.getSeoDefaults': async () => {
     const { value, report } = await inPreview(() => seo.getSeoDefaults());
     expect(value?.robots_directives).toBe('index,follow');
