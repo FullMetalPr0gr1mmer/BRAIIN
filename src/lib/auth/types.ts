@@ -10,7 +10,12 @@ export type Role = (typeof ROLES)[number];
  * is a member but not CMS staff: it works leads and reads no draft, setting or staff-only
  * content, in the database and here alike.
  */
-export const CMS_ROLES = ['admin', 'content_creator', 'seo', 'developer'] as const satisfies readonly Role[];
+export const CMS_ROLES = [
+  'admin',
+  'content_creator',
+  'seo',
+  'developer',
+] as const satisfies readonly Role[];
 
 export function isCmsRole(role: Role): boolean {
   return (CMS_ROLES as readonly Role[]).includes(role);
