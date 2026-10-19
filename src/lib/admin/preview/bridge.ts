@@ -133,8 +133,7 @@ export function requestAllowed(
   let path: string;
   try {
     here = new URL(base);
-    const raw =
-      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     url = new URL(raw, here);
     path = decodeURIComponent(url.pathname).toLowerCase().replace(/\/+$/, '');
   } catch {
