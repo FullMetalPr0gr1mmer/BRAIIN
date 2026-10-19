@@ -8,6 +8,7 @@ import {
 } from '@schemas/crm';
 import {
   DEFAULT_LEAD_FILTERS,
+  boardFilters,
   boardQueryOf,
   exportHrefOf,
   leadFilterParams,
@@ -192,6 +193,23 @@ describe('the bodies the filters become', () => {
       perStage: 50,
     });
     expect(LeadBoardQuerySchema.safeParse(body).success).toBe(true);
+  });
+
+  it('the board’s address: only what its toolbar shows, never a chip, sort or page', () => {
+    const pasted = parse(
+      `stage=spam&assigned=none&source=manual&channel=walk_in&discipline=branding&range=30&sort=oldest&page=4`,
+    );
+    const board = boardFilters(pasted);
+    expect(board).toEqual({
+      ...pasted,
+      chip: { kind: 'all' },
+      sort: DEFAULT_LEAD_FILTERS.sort,
+      page: 1,
+    });
+    expect(withLeadFilters('/admin/leads/board', board)).toBe(
+      '/admin/leads/board?assigned=none&source=manual&channel=walk_in&discipline=branding&range=30',
+    );
+    expect(boardFilters(DEFAULT_LEAD_FILTERS)).toEqual(DEFAULT_LEAD_FILTERS);
   });
 
   it('the KPIs: the range only, to now; nothing for all time', () => {
