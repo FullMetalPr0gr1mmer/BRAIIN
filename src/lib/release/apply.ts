@@ -14,7 +14,6 @@ import {
   type ReleaseIssue,
 } from '@schemas/release';
 import type { AuthContext } from '@/lib/auth/types';
-import { ROLE_CAPS } from '@/lib/authz/matrix';
 import { syncRedirectsToEdge } from '@/lib/admin/redirectSync';
 import { syncVisibilityToEdge } from '@/lib/admin/visibilitySync';
 import { writeSystemLog } from '@/lib/data/systemLog';
@@ -372,11 +371,10 @@ async function landedRelease(
  *     the publisher's RLS client, as a save does; publishing a redirect needs
  *     `redirects.manage`, so the publisher reads every rule);
  *   • page visibility in the release: the visibility snapshot rebuilt (`syncVisibilityToEdge`,
- *     the publisher's RLS client; publishing it needs `maintenance.manage`). Never for a
- *     release without one, even one that renames a page: the snapshot is built from what the
- *     client reads, and a publisher who cannot read `page_visibility` (Content Creator) would
- *     write an EMPTY snapshot, making every hidden page public. A page's new slug reaches the
- *     edge as it does for a save today, by the daily re-sync (R7 may run it as the system);
+ *     the publisher's RLS client, which reads every rule: `page_visibility_read` is any staff
+ *     role of the tenant, 0057). Only for a release carrying a visibility change, because only
+ *     that change moves the snapshot; a page's new slug reaches the edge as it does for a save
+ *     today, by the daily re-sync (R7 may run a rebuild as the system after a page release);
  *   • the cache purge: a logged no-op until a cache zone exists (owner item O-3, KAN-20; R7
  *     brings the purge seam), recorded on the release as `skipped`.
  */
@@ -392,7 +390,7 @@ async function afterPublish(
   if (types.has('redirect')) {
     kvSynced = (await syncRedirectsToEdge(sb, auth)).kvSynced;
   }
-  if (types.has('page_visibility') && ROLE_CAPS[auth.role]['maintenance.manage'] === 'full') {
+  if (types.has('page_visibility')) {
     const synced = (await syncVisibilityToEdge(sb, auth)).kvSynced;
     kvSynced = (kvSynced ?? true) && synced;
   }

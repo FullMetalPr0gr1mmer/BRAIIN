@@ -627,9 +627,9 @@ describe('publishing', () => {
     );
   });
 
-  it('a page change by a Content Creator never rebuilds the visibility snapshot', async () => {
-    // Built from what the publisher's client reads: Content Creator reads no page_visibility,
-    // so a rebuild would write an EMPTY snapshot and make every hidden page public.
+  it('a page change never rebuilds the visibility snapshot: only a visibility change moves it', async () => {
+    // A page's new slug reaches the edge by the daily re-sync, as for a save (R7 may rebuild as
+    // the system after a page release).
     const draft = draftRow({
       id: draftId(13),
       entity_type: 'page',
