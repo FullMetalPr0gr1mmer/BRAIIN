@@ -56,10 +56,17 @@ export function pageFallback(
       return { title: pickLocale(row.title, locale), description: '' };
     }
     case 'service': {
-      const service = { title: row.title, discipline: row.discipline ?? null, tagline: row.blurb ?? null };
+      const service = {
+        title: row.title,
+        discipline: row.discipline ?? null,
+        tagline: row.blurb ?? null,
+      };
       return {
         title: serviceTitle(service as Parameters<typeof serviceTitle>[0], locale),
-        description: serviceDescription(service as Parameters<typeof serviceDescription>[0], locale),
+        description: serviceDescription(
+          service as Parameters<typeof serviceDescription>[0],
+          locale,
+        ),
       };
     }
     case 'portfolio': {
@@ -76,7 +83,9 @@ export function pageFallback(
     }
     case 'blog_post':
       return {
-        title: pickLocale(row.title, locale),
+        // BlogDetail.astro's own reads: the title (the slug when it has none), the excerpt
+        // strictly in the page's language.
+        title: pickLocale(row.title, locale, row.slug),
         description: pickLocaleStrict(row.excerpt, locale),
       };
   }

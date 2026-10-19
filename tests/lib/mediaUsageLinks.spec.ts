@@ -80,15 +80,31 @@ describe('"Used in": words and links', () => {
     expect(USAGE_SCREENS).toEqual([...new Set(Object.values(USAGE_KINDS).map((k) => k.screen))]);
   });
 
-  it('a kind it does not know (R5, U10a and U9a add some) is words, no link, no crash', () => {
+  it('a kind it does not know (R5 and U9a add some) is words, no link, no crash', () => {
     const entries = usageEntries(usageScreensFor('admin'), [
-      { entityType: 'entity_seo', entityId: ID, label: 'home' },
+      { entityType: 'site_icon', entityId: ID, label: 'favicon' },
       { entityType: 'site_profile', entityId: ID, label: null },
     ]);
     expect(entries.map((e) => [e.words, e.href])).toEqual([
-      ['Entity seo: home', null],
+      ['Site icon: favicon', null],
       ['Site profile', null],
     ]);
+  });
+
+  it('a share image (media_usage v5, U10) opens the SEO screen, for the roles that open it', () => {
+    const shares = [
+      { entityType: 'entity_seo', entityId: ID, label: 'service: logo' },
+      { entityType: 'seo_defaults', entityId: ID, label: 'site default' },
+    ];
+    for (const role of ['admin', 'seo'] as const) {
+      expect(usageEntries(usageScreensFor(role), shares).map((e) => [e.words, e.href])).toEqual([
+        ['Share image (service: logo)', '/admin/seo'],
+        ['Default share image', '/admin/seo?tab=site'],
+      ]);
+    }
+    for (const role of ['content_creator', 'developer'] as const) {
+      expect(usageEntries(usageScreensFor(role), shares).map((e) => e.href)).toEqual([null, null]);
+    }
   });
 
   it('a pending change (media_usage v4, 0066) says it is one, and is never a link', () => {
@@ -106,6 +122,7 @@ describe('"Used in": words and links', () => {
       pending('page_section', 'Home hero'),
       pending('team_member', 'amal'),
       pending('entity_seo', 'home'),
+      pending('blog_post', 'hello'),
       // 0066's label when the draft has no English label and no slug.
       pending('site_profile', 'pending change'),
       pending('service', null),
@@ -115,7 +132,8 @@ describe('"Used in": words and links', () => {
       ['Pending change to service: logo', null],
       ['Pending change to page section: Home hero', null],
       ['Pending change to team member: amal', null],
-      ['Pending change to entity seo: home', null],
+      ['Pending change to share image: home', null],
+      ['Pending change to blog post: hello', null],
       ['Pending change to site profile', null],
       ['Pending change to service', null],
     ]);
