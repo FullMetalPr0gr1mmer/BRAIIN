@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ROLES } from '@/lib/auth/types';
 import { CAPABILITIES, ROLE_CAPS } from '@/lib/authz/matrix';
-import { CAP_LABELS, ROLE_LABELS } from '@/lib/authz/capLabels';
+import { CAP_LABELS, ROLE_DESCRIPTIONS, ROLE_LABELS } from '@/lib/authz/capLabels';
+import { RoleSchema, UserInviteSchema, UserUpdateSchema } from '@schemas/admin';
 import {
   CAP_GROUPS,
   CELL_SPOKEN,
@@ -62,5 +63,36 @@ describe('the role matrix', () => {
     expect(matrixColumns()).toEqual(ROLES.map((role) => ({ role, label: ROLE_LABELS[role] })));
     // A role subset (or a new role, once C10a adds Sales) is a column more or fewer.
     expect(roleMatrix(['admin'])[0]?.rows[0]?.cells).toEqual({ admin: '✓' });
+  });
+});
+
+// Users & roles (Admin v2 C10a): the picker offers every role, each with one plain line.
+describe('the roles as Users & roles shows them', () => {
+  it('every role has a label and a one-line description, in the copy rules (P-12)', () => {
+    for (const role of ROLES) {
+      expect(ROLE_LABELS[role], role).toBeTruthy();
+      expect(ROLE_DESCRIPTIONS[role], role).toMatch(/^[A-Z].*\.$/);
+      expect(ROLE_DESCRIPTIONS[role], role).not.toMatch(/[–—]/);
+      expect(ROLE_DESCRIPTIONS[role], role).not.toMatch(/braiin/i);
+    }
+    expect(ROLE_LABELS.sales).toBe('Sales');
+  });
+
+  it('says what Sales is: leads, one lead at a time and logged, no exports', () => {
+    expect(ROLE_DESCRIPTIONS.sales).toContain('one lead at a time');
+    expect(ROLE_DESCRIPTIONS.sales).toContain('logged');
+    expect(ROLE_DESCRIPTIONS.sales).toContain('No content, settings, exports or job applications');
+  });
+
+  it('an invite or a role change to Sales passes the schema the users routes read', () => {
+    expect(RoleSchema.parse('sales')).toBe('sales');
+    expect(UserInviteSchema.parse({ email: 'Sam@Example.com', role: 'sales' })).toMatchObject({
+      role: 'sales',
+    });
+    expect(
+      UserUpdateSchema.parse({ userId: '00000000-0000-4000-8000-000000000001', role: 'sales' })
+        .role,
+    ).toBe('sales');
+    expect(RoleSchema.options).toEqual([...ROLES]);
   });
 });

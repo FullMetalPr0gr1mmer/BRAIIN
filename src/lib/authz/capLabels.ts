@@ -69,6 +69,21 @@ export const ROLE_LABELS: Readonly<Record<Role, string>> = {
   sales: 'Sales',
 };
 
+/**
+ * One line per role, shown under the role picker in Users & roles (Admin v2 C10a, crm.md
+ * §10): what choosing it gives, in the matrix's words. Plain copy (P-12): no dashes, no brand.
+ */
+export const ROLE_DESCRIPTIONS: Readonly<Record<Role, string>> = {
+  admin: 'Everything, including people and their roles, erasing data and job applications.',
+  content_creator:
+    'Writes and publishes the site’s content and manages media. No settings or leads.',
+  seo: 'SEO defaults, redirects, integrations and the stats. Opens content without changing it.',
+  developer:
+    'Settings, maintenance, the theme, media, leads, site health and the logs. No content or job applications.',
+  sales:
+    'Works leads. Sees a lead’s contact details and budget one lead at a time, and each look is logged. No content, settings, exports or job applications.',
+};
+
 /** The line for one capability at one access level, or null when the role has none. */
 export function capLine(cap: Capability, access: Access): string | null {
   if (access === 'none') return null;
