@@ -66,6 +66,7 @@ export const ROLE_LABELS: Readonly<Record<Role, string>> = {
   content_creator: 'Content Creator',
   seo: 'SEO',
   developer: 'Developer',
+  sales: 'Sales',
 };
 
 /** The line for one capability at one access level, or null when the role has none. */

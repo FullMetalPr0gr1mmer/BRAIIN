@@ -2,7 +2,7 @@
 // `app_metadata` (set by the Supabase Custom Access Token Hook) — NEVER from
 // `user_metadata` (user-writable). See CLAUDE.md Pillar 1.
 
-export const ROLES = ['admin', 'content_creator', 'seo', 'developer'] as const;
+export const ROLES = ['admin', 'content_creator', 'seo', 'developer', 'sales'] as const;
 export type Role = (typeof ROLES)[number];
 
 export function isRole(value: unknown): value is Role {
