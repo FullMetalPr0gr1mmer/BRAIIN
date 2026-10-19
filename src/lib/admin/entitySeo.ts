@@ -4,7 +4,8 @@ import { EntitySeoFieldsSchema, seoPairGap, seoPairIssues } from '@schemas/admin
 import type { AuthContext } from '@/lib/auth/types';
 import { canonicalPath } from '@/lib/seo/canonical';
 import { entityPath, type SeoEntityType } from '@/lib/seo/entityPaths';
-import { ValidationError } from './errors';
+import { constraintOf, type ConstraintFields } from './crud';
+import { OptimisticLockError, ValidationError } from './errors';
 
 // Per-entity SEO metadata (`seo.entityMeta` — Admin + SEO write, Content Creator view):
 // the table, its columns, the request shapes and the payload → column mapping the
@@ -132,6 +133,35 @@ export const ENTITY_SEO = {
   isEmpty: (row: Record<string, unknown>) =>
     Object.values(META_KEYS).every((column) => blank(row[column])),
 } as const;
+
+/**
+ * What the editor is told when a share image's composite key (0073) refuses a save: the id
+ * names no picture of this tenant (another tenant's, or one hard-deleted since the picker
+ * listed it). Bad input, so a 422 on the field, never a 500 logged as a server error.
+ */
+export const SHARE_IMAGE_MISSING = 'Choose a picture from the media library';
+
+/** The share-image keys of entity_seo (0073) → the field a refusal names. */
+const ENTITY_SEO_KEYS: ConstraintFields = {
+  entity_seo_og_media_fk: { field: 'ogMediaId', message: SHARE_IMAGE_MISSING },
+};
+
+/**
+ * The error a failed entity_seo write becomes: a unique-key race on create is the 409 it is,
+ * a refused share image (23503 on its key) a 422 on `ogMediaId`, anything else a 500.
+ */
+export function entitySeoWriteError(
+  error: { code?: string; message: string; details?: string | null },
+  verb: 'create' | 'update',
+): Error {
+  if (verb === 'create' && error.code === '23505') return new OptimisticLockError('entity_seo');
+  if (error.code === '23503') {
+    const name = constraintOf(error);
+    const known = name ? ENTITY_SEO_KEYS[name] : undefined;
+    if (known) return new ValidationError(known.message, known.field);
+  }
+  return new Error(`${verb} entity_seo: ${error.message}`);
+}
 
 /** The table and columns a target type's own row is read from. */
 const TARGET_TABLES: Readonly<Record<SeoEntityType, { table: string; columns: string }>> = {

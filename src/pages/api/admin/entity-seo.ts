@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { OptimisticLockError } from '@/lib/admin/errors';
-import { ENTITY_SEO, normalizeCanonical } from '@/lib/admin/entitySeo';
+import { ENTITY_SEO, entitySeoWriteError, normalizeCanonical } from '@/lib/admin/entitySeo';
 import { stagedEntitySeoRead, stagedEntitySeoWrite } from '@/lib/release/stagedEntitySeo';
 
 // Per-entity SEO metadata (`seo.entityMeta` — Admin + SEO write, Content Creator view).
@@ -92,10 +92,7 @@ export const PUT = defineAdminRoute({
         .insert({ ...values, tenant_id: auth.tenantId, ...ENTITY_SEO.target(input) })
         .select(COLUMNS)
         .single();
-      if (error) {
-        if (error.code === '23505') throw new OptimisticLockError('entity_seo');
-        throw new Error(`create entity_seo: ${error.message}`);
-      }
+      if (error) throw entitySeoWriteError(error, 'create');
       row = data;
     } else {
       if (existing.version !== input.version) throw new OptimisticLockError('entity_seo');
@@ -107,7 +104,7 @@ export const PUT = defineAdminRoute({
         .eq('version', input.version)
         .select(COLUMNS)
         .maybeSingle();
-      if (error) throw new Error(`update entity_seo: ${error.message}`);
+      if (error) throw entitySeoWriteError(error, 'update');
       if (!data) throw new OptimisticLockError('entity_seo');
       row = data;
     }
