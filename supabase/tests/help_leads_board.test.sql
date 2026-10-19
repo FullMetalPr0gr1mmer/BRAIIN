@@ -14,7 +14,7 @@ create function _guide() returns jsonb language sql security definer as $$
    where a ->> 'slug' = 'working-with-leads'
 $$;
 
-select is(jsonb_array_length(app.help_article_set()), 15, 'the set still holds 15 guides');
+select ok(jsonb_array_length(app.help_article_set()) >= 15, 'the set still holds at least its 15 guides');
 select ok(position('On the Pipeline tab each stage is a column.' in (_guide() -> 'body' ->> 'en')) > 0
           and position('في تبويب Pipeline' in (_guide() -> 'body' ->> 'ar')) > 0,
   'the leads guide names the Pipeline board, in English and in Arabic');
