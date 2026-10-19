@@ -13,11 +13,13 @@
 --     workers only (Admin, Developer), null for SEO and Content Creator; another tenant gets
 --     the empty shape.
 --   • the helper answers analytics.goals; the grants are stated (table and column).
+--   • the help guide: 0071's put leaves G1's website-stats (the goals tag) in H11's catalog
+--     and in every tenant's copy, this file's two included (the tenants trigger seeds them).
 --
 -- Fixtures are two tenants of this file's own.
 
 begin;
-select plan(44);
+select plan(45);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -284,6 +286,15 @@ select is(
      from (values ('public'), ('anon'), ('authenticated'), ('service_role')) as w(who)
     where has_function_privilege(w.who, 'public.goal_progress(uuid)', 'execute') is distinct from (w.who = 'authenticated')),
   '', 'staff alone call goal_progress');
+
+select ok(
+  (select c.revision >= 2 and c.tags @> array['goals'] and c.screens @> array['/admin/analytics']
+     from app.help_guide_catalog c where c.slug = 'website-stats')
+  and not exists (select 1 from public.tenants t
+                   where not exists (select 1 from public.help_articles h
+                                      where h.tenant_id = t.id and h.slug = 'website-stats'
+                                        and h.tags @> array['goals'])),
+  'website-stats is G1''s guide: in the catalog (a revision past the seed) and every tenant''s copy');
 
 select * from finish();
 rollback;
