@@ -621,7 +621,10 @@ export async function checkSelection(
   const selected = new Set(drafts.map((d) => d.id));
   for (const { item, spec, id } of missing) {
     const create = pending.get(id);
-    if (create && create.table === spec.table && !selected.has(create.id)) {
+    // A selected new item that is not in the state the release leaves could not be read: its
+    // own error stops the publish, and this change needs nothing more said.
+    if (create && create.table === spec.table && selected.has(create.id)) continue;
+    if (create && create.table === spec.table) {
       if (!item.report.requires.some((r) => r.draftId === create.id)) {
         item.report.requires.push({ draftId: create.id, draftVersion: create.version });
       }

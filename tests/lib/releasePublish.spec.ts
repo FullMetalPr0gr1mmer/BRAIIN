@@ -622,7 +622,9 @@ describe('publishing', () => {
     );
   });
 
-  it('a page change rebuilds the visibility snapshot, and says when the edge missed it', async () => {
+  it('a page change by a Content Creator never rebuilds the visibility snapshot', async () => {
+    // Built from what the publisher's client reads: Content Creator reads no page_visibility,
+    // so a rebuild would write an EMPTY snapshot and make every hidden page public.
     const draft = draftRow({
       id: draftId(13),
       entity_type: 'page',
@@ -638,6 +640,27 @@ describe('publishing', () => {
       'content_creator',
     );
     expect(res.status).toBe(200);
+    expect(syncs.visibility).toBe(0);
+    expect(res.data['kvSynced']).toBeUndefined();
+  });
+
+  it('a page-visibility change rebuilds the snapshot, and says when the edge missed it', async () => {
+    const draft = draftRow({
+      id: draftId(14),
+      entity_type: 'page_visibility',
+      entity_id: id(50),
+      op: 'update',
+      payload: { target: { pageId: PAGE }, mode: 'hidden', redirectPageId: null },
+      base: { mode: 'public', redirect_page_id: null, hide_from: null, show_on: null },
+    });
+    const db = seed({
+      content_drafts: [draft],
+      page_visibility: [
+        { id: id(50), tenant_id: T, page_id: PAGE, template: null, mode: 'public', version: 1 },
+      ],
+    });
+    const res = await run(PUBLISH, db, select(draft), 'developer');
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(syncs.visibility).toBe(1);
     expect(res.data['kvSynced']).toBe(false);
   });

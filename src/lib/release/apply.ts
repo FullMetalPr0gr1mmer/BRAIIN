@@ -14,6 +14,7 @@ import {
   type ReleaseIssue,
 } from '@schemas/release';
 import type { AuthContext } from '@/lib/auth/types';
+import { ROLE_CAPS } from '@/lib/authz/matrix';
 import { syncRedirectsToEdge } from '@/lib/admin/redirectSync';
 import { syncVisibilityToEdge } from '@/lib/admin/visibilitySync';
 import { writeSystemLog } from '@/lib/data/systemLog';
@@ -303,9 +304,14 @@ export async function publish(
  * After the commit, each effect on its own and never fatal (the `runHook` contract of
  * resource.ts: the release is live, so a failure here is reported, not thrown):
  *   • redirects in the release: the edge map rebuilt from the table (`syncRedirectsToEdge`,
- *     the publisher's RLS client, as a save does);
- *   • page visibility, or pages (whose slugs and statuses the snapshot carries): the
- *     visibility snapshot rebuilt (`syncVisibilityToEdge`);
+ *     the publisher's RLS client, as a save does; publishing a redirect needs
+ *     `redirects.manage`, so the publisher reads every rule);
+ *   • page visibility in the release: the visibility snapshot rebuilt (`syncVisibilityToEdge`,
+ *     the publisher's RLS client; publishing it needs `maintenance.manage`). Never for a
+ *     release without one, even one that renames a page: the snapshot is built from what the
+ *     client reads, and a publisher who cannot read `page_visibility` (Content Creator) would
+ *     write an EMPTY snapshot, making every hidden page public. A page's new slug reaches the
+ *     edge as it does for a save today, by the daily re-sync (R7 may run it as the system);
  *   • the cache purge: a logged no-op until a cache zone exists (owner item O-3, KAN-20; R7
  *     brings the purge seam), recorded on the release as `skipped`.
  */
@@ -321,7 +327,7 @@ async function afterPublish(
   if (types.has('redirect')) {
     kvSynced = (await syncRedirectsToEdge(sb, auth)).kvSynced;
   }
-  if (types.has('page_visibility') || types.has('page')) {
+  if (types.has('page_visibility') && ROLE_CAPS[auth.role]['maintenance.manage'] === 'full') {
     const synced = (await syncVisibilityToEdge(sb, auth)).kvSynced;
     kvSynced = (kvSynced ?? true) && synced;
   }
