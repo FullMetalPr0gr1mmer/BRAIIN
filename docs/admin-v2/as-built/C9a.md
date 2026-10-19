@@ -98,7 +98,7 @@
   TODO where `app.put_help_guide` goes once H11 merges (revision 0, a new guide).
   `tests/lib/helpCentre.spec.ts` reads the guide files into the set it checks until a migration
   seeds them (then the file must equal the seeded guide), and holds the guide to the screen.
-- **Tests:** pgTAP `supabase/tests/crm_settings.test.sql` (`plan(68)`); one assertion each in
+- **Tests:** pgTAP `supabase/tests/crm_settings.test.sql` (`plan(69)`); one assertion each in
   `crm_ingest.test.sql` (47) and `rls_lead_pipeline.test.sql` (71) that said "staff cannot
   write this yet" now says what stays closed (the time zone; a key, a tenant);
   `tests/lib/crmSettings.spec.ts`; three authz cases; the matrix, helper, sidebar,
@@ -113,7 +113,9 @@
   added is never deleted by a save that did not know it.
 - **A stage that holds leads keeps its kind** (not in crm.md). Turning an open stage that holds
   leads into Won would make them count as won with no `won_at`, and the KPIs read both. The
-  screen says so and the door refuses it with the count, as for a delete.
+  screen says so, the door refuses it with the count, as for a delete, and a definer trigger
+  (`lead_stages_kind_fixed`, 23503) holds it for a direct write through the column grant too
+  (found in the self-review: the door alone left PostgREST open to an Admin token).
 - **The assignees are checked by a trigger, the pool only for people added.** A member switched
   off later must not block a save that leaves them in; arrival skips them, and the screen drops
   people no longer offered when it saves.
