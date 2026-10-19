@@ -90,6 +90,7 @@ const OFF_SCREEN_GROUPS = [
   'admin-dashboard.',
   'admin-leads.',
   'admin-leads-lazy.',
+  'admin-preview.',
 ];
 
 // A screen family's group and the chunks allowed to import it statically (check 6).

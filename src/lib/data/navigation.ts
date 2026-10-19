@@ -40,7 +40,8 @@ export async function getNavigation(location: 'header' | 'footer'): Promise<NavN
       .select(COLUMNS)
       .eq('location', location)
       .eq('visible', true)
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
     if (error || !data) return [];
     return nest(parseRows(NavRowSchema, data, 'nav_item'));
   } catch {

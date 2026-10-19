@@ -6,6 +6,8 @@ import type { HeroText } from '@/lib/text/heroLinks';
 import { HERO_COPY, HERO_LABELS } from './copy/hero';
 
 export interface SectionData {
+  /** The `page_sections` row's id, when the section came from one (the preview's marker). */
+  id?: string;
   type: string;
   visible?: boolean;
   /** Per-instance overrides; section components also localise their own copy. */

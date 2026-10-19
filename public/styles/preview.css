@@ -1,0 +1,93 @@
+/* The releases preview's own sheet (Admin v2 R9). Linked only into a `/admin/preview/**`
+   render, by the middleware's preview branch (src/lib/http/preview.ts, PREVIEW_STYLESHEET),
+   right before </head>: never on a public page. Same-origin, so style-src 'self' covers it.
+
+   Every box here is fixed or an outline: nothing changes where the page's own content lays
+   out, so a preview with no pending changes renders the public page's layout exactly (the
+   parity e2e compares the two). Colours are the admin's midnight and its AA-checked badge
+   tones (admin.css); white on each is well over 4.5:1. */
+
+.pv-ribbon {
+  position: fixed;
+  inset-inline-start: 12px;
+  bottom: 12px;
+  z-index: 2147483000;
+  box-sizing: border-box;
+  max-width: min(40rem, calc(100vw - 24px));
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #0b0d14;
+  color: #ffffff;
+  font: 500 14px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  text-align: left;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.28);
+}
+.pv-ribbon[data-state='untrusted'] {
+  background: #b42318;
+}
+.pv-ribbon p,
+.pv-ribbon ul {
+  margin: 0;
+}
+.pv-ribbon__lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+.pv-ribbon__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f5a524;
+}
+.pv-ribbon[data-state='untrusted'] .pv-ribbon__dot {
+  background: #ffffff;
+}
+.pv-ribbon__notes {
+  padding: 4px 0 0 18px;
+}
+.pv-ribbon__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding-top: 6px;
+}
+.pv-ribbon a {
+  color: #ffffff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pv-ribbon a:focus-visible {
+  outline: 2px solid #22a9ff;
+  outline-offset: 2px;
+}
+
+/* A section the page editor points at (the bridge's `highlight`). */
+.pv-highlight {
+  outline: 3px solid #024cff;
+  outline-offset: -3px;
+}
+
+/* "Forms don't send in preview." */
+.pv-notice {
+  position: fixed;
+  inset-inline-end: 12px;
+  bottom: 12px;
+  z-index: 2147483000;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #0b0d14;
+  color: #ffffff;
+  font: 600 14px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+@media print {
+  .pv-ribbon,
+  .pv-notice {
+    display: none;
+  }
+}

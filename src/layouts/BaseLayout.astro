@@ -10,6 +10,7 @@ import ConsentBanner from '@/components/ConsentBanner.astro';
 import WebVitals from '@/components/WebVitals.astro';
 import PageView from '@/components/PageView.astro';
 import ErrorReporter from '@/components/ErrorReporter.astro';
+import AdminPreviewBridge from '@/components/preview/AdminPreviewBridge.astro';
 import { dir } from '@/lib/i18n';
 
 interface Props {
@@ -64,6 +65,12 @@ const {
   heroFace,
 } = Astro.props;
 const direction = dir(locale);
+// The releases preview (Admin v2 R9): set only by the middleware's /admin/preview branch. A
+// preview never asks for consent or sends telemetry (no banner, RUM, page view or error
+// reporter), is never indexed, and loads the bridge the page editor talks to. A public
+// request has no `preview`, so none of this changes a public page.
+const preview = Astro.locals.preview;
+const robotsValue = preview ? 'noindex,nofollow' : robots;
 ---
 
 <!doctype html>
@@ -75,7 +82,7 @@ const direction = dir(locale);
       locale={locale}
       logicalPath={logicalPath}
       jsonLd={jsonLd}
-      robots={robots}
+      robots={robotsValue}
       {...ogImages ? { ogImages } : {}}
       {...canonicalOverride ? { canonicalOverride } : {}}
       {...heroFace ? { heroFace } : {}}
@@ -99,10 +106,18 @@ const direction = dir(locale);
       <slot />
     </div>
     {chrome && <SiteFooter locale={locale} />}
-    <ConsentBanner locale={locale} />
-    <WebVitals />
-    <PageView />
-    <ErrorReporter />
+    {
+      preview ? (
+        <AdminPreviewBridge />
+      ) : (
+        <>
+          <ConsentBanner locale={locale} />
+          <WebVitals />
+          <PageView />
+          <ErrorReporter />
+        </>
+      )
+    }
     <script>
       // Reveal-on-scroll enhancement. Elements opt in with class="rv" and are FULLY
       // visible without JS (crawlers and no-JS visitors always get the content —

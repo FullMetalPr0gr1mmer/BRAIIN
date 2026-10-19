@@ -88,6 +88,10 @@ const ADMIN_LEADS =
   /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]leads[\\/]|islands[\\/]AdminLead)/;
 const ADMIN_LEADS_LAZY =
   /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]leads[\\/](AddLeadDrawer|EraseLeadDialog)\.tsx$/;
+// The releases preview's bridge (Admin v2 R9, P-4): the code a `/admin/preview/**` render
+// loads (src/components/preview/AdminPreviewBridge.astro). Its own group, below admin-ui so
+// what both use (zod) stays there, and never in admin-ui, which every admin screen loads.
+const ADMIN_PREVIEW = /[\\/]src[\\/]lib[\\/]admin[\\/]preview[\\/]/;
 // A kit piece both the kit's reference screen and a screen group draw (C4b: the React KPI
 // card, in the gallery and on the leads list): in admin-ui, so neither the AdminKit entry nor
 // the group's chunk imports the other's. Small (under 1 KB gz) and shared, like any kit piece
@@ -207,8 +211,15 @@ export default defineConfig({
                     !ADMIN_FIELDS.test(id) &&
                     !ADMIN_EDITOR_ISLANDS.test(id) &&
                     !ADMIN_EDITOR_SCREENS.test(id) &&
-                    !ADMIN_LEADS.test(id)),
+                    !ADMIN_LEADS.test(id) &&
+                    !ADMIN_PREVIEW.test(id)),
                 priority: 20,
+              },
+              {
+                // The preview bridge (R9): only a preview render loads it.
+                name: 'admin-preview',
+                test: ADMIN_PREVIEW,
+                priority: 19,
               },
               {
                 // The leads screens (Admin v2 C4b): below admin-ui, so what both use stays in

@@ -32,5 +32,10 @@ declare namespace App {
     // sitemap and llms.txt leave out what it does not list. Absent on /admin, /api and the
     // health probe, and in a render with no middleware: read as "every page public".
     visibility?: import('@/lib/http/visibility').VisibilitySnapshot;
+    // The releases preview (Admin v2 R9), set by its middleware branch
+    // (src/lib/http/preview.ts) on a `/admin/preview/**` render only: BaseLayout drops the
+    // consent banner and telemetry, says noindex and loads the bridge; SectionRenderer marks
+    // each section. Absent on every public request.
+    preview?: import('@/lib/http/preview').PreviewLocals;
   }
 }

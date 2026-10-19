@@ -74,11 +74,23 @@ export interface CspOptions {
    */
   scriptHashes?: readonly string[];
   styleHashes?: readonly string[];
+  /**
+   * `/admin/**` only (Admin v2 R9): `frame-src` also admits `'self'`, because the page editor
+   * frames `/admin/preview`. A public response never frames its own origin.
+   */
+  frameSelf?: boolean;
+  /**
+   * A preview render only (R9): `form-action 'none'`, so a public form shown in the preview
+   * can never send, whatever its markup or the bridge does.
+   */
+  noForms?: boolean;
 }
 
 interface CspExtras {
   scriptHashes?: readonly string[];
   styleHashes?: readonly string[];
+  frameSelf?: boolean;
+  noForms?: boolean;
 }
 
 /** Inline `<script>` — negative lookahead excludes anything with a `src=`, which `'self'` already covers. */
@@ -172,9 +184,9 @@ export function buildCsp(nonce: string, extras?: CspExtras): string {
     "img-src 'self' https://imagedelivery.net https://*.cloudflarestream.com",
     "font-src 'self'",
     "connect-src 'self'", // same-origin RUM beacon + Sentry tunnel
-    `frame-src ${stream} ${videoFallback}`,
+    `frame-src ${extras?.frameSelf ? "'self' " : ''}${stream} ${videoFallback}`,
     `media-src 'self' ${stream}`,
-    "form-action 'self'",
+    extras?.noForms ? "form-action 'none'" : "form-action 'self'",
     "frame-ancestors 'self'",
     "manifest-src 'self'",
     "worker-src 'self' blob:",
@@ -204,6 +216,8 @@ export function applySecurityHeaders(headers: Headers, opts: CspOptions): void {
   const csp = buildCsp(opts.nonce, {
     scriptHashes: [...new Set(scriptHashes)],
     styleHashes: [...new Set(styleHashes)],
+    ...(opts.frameSelf ? { frameSelf: true } : {}),
+    ...(opts.noForms ? { noForms: true } : {}),
   });
   // A response that asked for `sandbox` keeps it (the admin's CV download, Join): the rebuild
   // below may only ever ADD restrictions to what a route set, never drop one. Hashes and

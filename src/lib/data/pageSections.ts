@@ -73,11 +73,13 @@ function toSection(row: z.infer<typeof PageSectionRowSchema>): SectionData | nul
   // Table-backed types (statistics, team, certifications) take NO content props: their
   // data comes from their own tables, and a stray key would overwrite it (the write path
   // refuses one too — sectionContentIssues).
-  if (!schema) return { type: row.type, visible: row.visible, props: {} };
+  const id = row.id ? { id: row.id } : {};
+  if (!schema) return { ...id, type: row.type, visible: row.visible, props: {} };
   // Invalid JSON degrades to the component's built-in copy rather than breaking render
   // (SectionBoundary is the second net).
   const parsed = schema.safeParse(row.content);
   return {
+    ...id,
     type: row.type,
     visible: row.visible,
     props: parsed.success ? (parsed.data as Record<string, unknown>) : {},
@@ -111,9 +113,10 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
       unlocked === null
         ? await contentClient()
             .from('page_sections')
-            .select('type,content,visible,sort_order')
+            .select('id,type,content,visible,sort_order')
             .eq('page_id', page.id)
             .order('sort_order', { ascending: true })
+            .order('id', { ascending: true })
         : await serviceClient().rpc('page_sections_unlocked', {
             p_tenant: unlocked.tenantId,
             p_page_id: page.id,

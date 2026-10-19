@@ -1,0 +1,14 @@
+---
+// The releases preview's bridge (Admin v2 R9, P-4), loaded by BaseLayout ONLY when the
+// middleware's /admin/preview branch rendered the page (`Astro.locals.preview`): a public
+// page never references it (tests/admin/preview-isolation.e2e.ts reads the served HTML).
+// Its code lives under src/lib/admin (the `admin-preview` chunk group, astro.config.mjs), and
+// this component's script is an `Admin*` chunk, so both are weighed by the admin budget and
+// never by the public 100 KB one (.size-limit.json, scripts/admin-bundle.mjs).
+---
+
+<script>
+  import { installBridge } from '@/lib/admin/preview/bridge';
+
+  installBridge(window);
+</script>
