@@ -100,8 +100,11 @@ const FILED: { file: string; raw: { slug?: unknown } }[] = readdirSync(GUIDE_FIL
     file,
     raw: JSON.parse(readFileSync(`${GUIDE_FILES}/${file}`, 'utf8')) as { slug?: unknown },
   }));
-/** Admin v2 U10 rewrote seo-and-redirects for the SEO screen; 0073 puts it once H11 lands. */
-const PENDING_EDITS = new Set<unknown>(['seo-and-redirects']);
+/**
+ * Edited guides filed but not yet put: none. (Admin v2 U10's seo-and-redirects is put by 0073
+ * now that H11's catalog is on main; its file equals what the migration seeds.)
+ */
+const PENDING_EDITS = new Set<unknown>([]);
 const seededSlugs = new Set(RAW_SET.map((raw) => (raw as { slug?: unknown }).slug));
 const PENDING_RAW: unknown[] = FILED.filter(
   (f) => !seededSlugs.has(f.raw.slug) || PENDING_EDITS.has(f.raw.slug),

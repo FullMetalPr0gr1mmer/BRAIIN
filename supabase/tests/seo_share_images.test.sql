@@ -10,6 +10,9 @@
 --     either table as anon must not recurse (42P17): no policy on them reads media_assets.
 --   • media_usage v5 lists both kinds, pending false.
 --   • the release registry stages both columns.
+--   • authenticated holds no DELETE on seo_defaults (0073 §5b).
+--   • the help guide seo-and-redirects is the SEO screen's (0073 §6, put through 0069's
+--     catalog), in the catalog and in the launch tenant's help.
 --
 -- Roles: admin, content_creator, seo, developer, anon and other_tenant (an admin, and anon,
 -- of a second tenant). Writes to entity_seo and seo_defaults rely on the token's role
@@ -18,7 +21,7 @@
 -- stale-token rows.
 
 begin;
-select plan(38);
+select plan(40);
 
 -- ── fixtures, as the migration role (RLS bypassed), in the LAUNCH tenant ───────────────────
 insert into public.media_assets (id, tenant_id, kind, provider, storage_path) values
@@ -229,6 +232,18 @@ select _claims('admin', _tid());
 select throws_ok($$ delete from public.seo_defaults $$, '42501', null,
   'admin cannot delete the seo_defaults row (authenticated holds no DELETE)');
 reset role;
+
+-- ── 39–40. The SEO screen's guide, put through the catalog ───────────────────────────────
+select ok(exists (select 1 from app.help_guide_catalog
+                   where slug = 'seo-and-redirects' and revision >= 2
+                     and title = 'SEO, share images and redirects'
+                     and '/admin/seo' = any (screens)),
+  'the catalog holds seo-and-redirects as the SEO screen''s guide, past its first revision');
+select ok(exists (select 1 from public.help_articles h
+                    join app.help_guide_catalog c on c.slug = h.slug
+                   where h.tenant_id = app.default_tenant_id() and h.slug = 'seo-and-redirects'
+                     and h.title = c.title and h.title_ar = c.title_ar and h.body = c.body),
+  'the launch tenant reads the guide the catalog holds');
 
 select * from finish();
 rollback;

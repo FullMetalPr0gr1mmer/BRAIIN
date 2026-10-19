@@ -347,10 +347,10 @@ test.describe('as content_creator', () => {
 test.describe('without JS', () => {
   test.use({ storageState: authFile('seo'), javaScriptEnabled: false });
 
-  // The SEO screen's guide (Admin v2 U10 rewrote it for the screen; its old title held until
-  // the help catalog puts the new text, so either is accepted). /admin/seo is server-rendered,
-  // so its head works without JS; /admin/redirects now answers there.
-  const SEO_GUIDE = /^SEO(, share images| defaults) and redirects$/;
+  // The SEO screen's guide, as Admin v2 U10 rewrote it for the screen (0073 puts it through
+  // the help catalog). /admin/seo is server-rendered, so its head works without JS;
+  // /admin/redirects now answers there.
+  const SEO_GUIDE = /^SEO, share images and redirects$/;
 
   test('"?" is a link to the help page, which lists this screen’s guides and reads one', async ({
     page,
