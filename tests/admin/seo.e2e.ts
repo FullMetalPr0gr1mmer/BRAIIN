@@ -85,7 +85,9 @@ for (const role of ['admin', 'seo'] as const) {
         await press(page, /^Edit SEO for /);
         const drawer = page.getByRole('dialog', { name: /^SEO: / });
         await expect(drawer).toBeVisible();
-        await expect(drawer.getByRole('region', { name: 'Google preview' })).toBeVisible();
+        await expect(
+          drawer.getByRole('region', { name: 'Google preview', exact: true }),
+        ).toBeVisible();
         await expect(
           drawer.getByRole('region', { name: 'Google preview in Arabic' }),
         ).toBeVisible();
@@ -172,7 +174,9 @@ test.describe('the Pages tab, end to end', () => {
     await drawer.locator('#f-metaTitle-ar').fill(TITLE.ar);
     // The counters follow, and both previews show the words as typed.
     await expect(drawer).toContainText(`${TITLE.en.length}/120`);
-    await expect(drawer.getByRole('region', { name: 'Google preview' })).toContainText(TITLE.en);
+    await expect(drawer.getByRole('region', { name: 'Google preview', exact: true })).toContainText(
+      TITLE.en,
+    );
     await expect(drawer.getByRole('region', { name: 'Google preview in Arabic' })).toContainText(
       TITLE.ar,
     );
