@@ -21,7 +21,11 @@ const { legacyFixes, seoPanelFields, SCHEMA_OF_TYPE, HIDE_TEXT, INDEX_LABEL } =
   await import('@/components/admin/screens/seo/SeoPanel');
 const { needsConfirmation, CONFIRM_TEXT, CONFIRM_WORD } =
   await import('@/components/admin/screens/seo/SiteWideForm');
-const { default: PagesTab, listUrl } = await import('@/components/admin/screens/seo/PagesTab');
+const {
+  default: PagesTab,
+  listUrl,
+  readList,
+} = await import('@/components/admin/screens/seo/PagesTab');
 
 const HOST = new URL(SITE).host;
 const brand = IDENTITY_FALLBACK.brandName;
@@ -242,5 +246,50 @@ describe('the Pages tab', () => {
     expect(new URL(listUrl('page', 0, 'x'.repeat(80)), SITE).searchParams.get('q')).toHaveLength(
       64,
     );
+  });
+  // Every keystroke reads again (U10 review): a slower, older answer must not replace a newer
+  // one, or the table shows rows for a query the box no longer holds.
+  it('a read a newer one replaced is cancelled, and its late answer is dropped', async () => {
+    type Page = Parameters<Parameters<typeof readList>[2]['page']>[0];
+    const pageOf = (q: string) => ({ ...initial, rows: [], total: q.length }) as Page;
+    const pending = new Map<string, (page: Page) => void>();
+    const signals: AbortSignal[] = [];
+    const fetcher = (url: string, { signal }: { signal: AbortSignal }) => {
+      signals.push(signal);
+      return new Promise<Page>((resolve) => pending.set(url, resolve));
+    };
+    const shown: number[] = [];
+    const busy: boolean[] = [];
+    const sink = {
+      page: (p: Page) => shown.push(p.total),
+      error: () => {},
+      busy: (b: boolean) => busy.push(b),
+    };
+
+    // "bo" is typed, then "booth" before the first answer arrives: the component's effect
+    // aborts the first read as it starts the second.
+    const older = new AbortController();
+    const first = readList(listUrl('service', 0, 'bo'), older.signal, sink, fetcher);
+    older.abort();
+    const newer = new AbortController();
+    const second = readList(listUrl('service', 0, 'booth'), newer.signal, sink, fetcher);
+
+    pending.get(listUrl('service', 0, 'booth'))!(pageOf('booth'));
+    await second;
+    pending.get(listUrl('service', 0, 'bo'))!(pageOf('bo'));
+    await first;
+
+    expect(shown).toEqual([5]);
+    expect(busy.at(-1)).toBe(false);
+    // The request itself is cancelled, not only its answer ignored.
+    expect(signals[0]?.aborted).toBe(true);
+    expect(signals[1]?.aborted).toBe(false);
+  });
+
+  it('the tab aborts the read it started when the type, page, search or a save moves on', () => {
+    const source = readFileSync('src/components/admin/screens/seo/PagesTab.tsx', 'utf8');
+    expect(source).toMatch(/readList\(listUrl\(type, offset, query\), controller\.signal,/);
+    expect(source).toContain('return () => controller.abort();');
+    expect(source).toContain('}, [type, offset, query, reload]);');
   });
 });

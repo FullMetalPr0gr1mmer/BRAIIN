@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Chips from '@/components/admin/kit/Chips';
 import DataTable, { type DataColumn } from '@/components/admin/kit/DataTable';
 import Icon from '@/components/admin/kit/Icon';
@@ -13,7 +13,9 @@ import { SEO_TYPE_CHIPS, type SeoEntityType, type SeoListPage, type SeoListRow }
 // from GET /api/admin/entity-seo/list (Admin and SEO). Each row says, per field, whether the
 // page has its own words (Custom) or uses its default (Default), whether search engines may
 // index it, and whether its Arabic is complete; "Edit SEO for <page>" opens the drawer, and a
-// save refreshes the list where it stands.
+// save refreshes the list where it stands. Every keystroke in the search reads again, so a read
+// is cancelled when a newer one starts and its late answer is dropped (`readList`): the table
+// never shows rows for a query the box no longer holds.
 
 export const SEO_LIST_PATH = '/api/admin/entity-seo/list';
 const LIMIT = 50;
@@ -30,6 +32,40 @@ export function listUrl(type: SeoEntityType, offset: number, q: string): string 
   const term = q.trim();
   if (term) params.set('q', term.slice(0, 64));
   return `${SEO_LIST_PATH}?${params.toString()}`;
+}
+
+/** Where one read of the list lands: the component's setters. */
+export interface ListSink {
+  page: (page: SeoListPage) => void;
+  error: (message: string) => void;
+  busy: (busy: boolean) => void;
+}
+
+type ListFetch = (url: string, options: { signal: AbortSignal }) => Promise<SeoListPage>;
+
+const fetchList: ListFetch = (url, options) => adminFetch<SeoListPage>(url, options);
+
+/**
+ * One read of the list. `signal` is aborted when a newer read starts (or the tab goes): the
+ * request is cancelled, and an answer or error that still arrives is dropped, as is the busy
+ * flag's reset, which belongs to the newer read.
+ */
+export async function readList(
+  url: string,
+  signal: AbortSignal,
+  sink: ListSink,
+  fetcher: ListFetch = fetchList,
+): Promise<void> {
+  sink.busy(true);
+  sink.error('');
+  try {
+    const page = await fetcher(url, { signal });
+    if (!signal.aborted) sink.page(page);
+  } catch (err) {
+    if (!signal.aborted) sink.error(describeError(err));
+  } finally {
+    if (!signal.aborted) sink.busy(false);
+  }
 }
 
 function Kind({ custom }: { custom: boolean }) {
@@ -65,28 +101,24 @@ export default function PagesTab({ initial, canAdvanced }: PagesTabProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState<SeoListRow | null>(null);
+  // A save asks for the list again where it stands.
+  const [reload, setReload] = useState(0);
   // The first view is the server's: no read until something changes.
   const first = useRef(true);
-
-  const load = useCallback(async () => {
-    setBusy(true);
-    setError('');
-    try {
-      setPage(await adminFetch<SeoListPage>(listUrl(type, offset, query)));
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setBusy(false);
-    }
-  }, [type, offset, query]);
 
   useEffect(() => {
     if (first.current) {
       first.current = false;
       return;
     }
-    void load();
-  }, [load]);
+    const controller = new AbortController();
+    void readList(listUrl(type, offset, query), controller.signal, {
+      page: setPage,
+      error: setError,
+      busy: setBusy,
+    });
+    return () => controller.abort();
+  }, [type, offset, query, reload]);
 
   const columns: DataColumn<SeoListRow>[] = [
     {
@@ -203,7 +235,7 @@ export default function PagesTab({ initial, canAdvanced }: PagesTabProps) {
             defaultRobots: page.defaultRobots,
           }}
           canAdvanced={canAdvanced}
-          onSaved={() => void load()}
+          onSaved={() => setReload((n) => n + 1)}
         />
       )}
     </div>
