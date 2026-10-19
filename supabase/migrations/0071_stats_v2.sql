@@ -52,10 +52,10 @@
 -- queueing); app.rollup_visits(90) then scans the last 90 days once. Both modest at
 -- production's volume; push at a quiet hour.
 --
--- Production as of 2026-10-18: PostgreSQL 17.6; the ledger holds 0001-0038, 0041,
--- 0044-0046, 0048, 0050-0052, 0054-0057, 0060-0067 (C4c and H11 may land first: nothing
--- here depends on either; H11's catalog only changes how this slice's guide ships, the TODO
--- in section 12). Grants are stated for both Supabase
+-- Production as of 2026-10-19: PostgreSQL 17.6; the ledger holds 0001-0038, 0041,
+-- 0044-0046, 0048, 0050-0052, 0054-0057 and 0060-0069. Section 12 depends on H11 (0069):
+-- it changes the website-stats guide with app.put_help_guide, which exists only from 0069.
+-- Grants are stated for both Supabase
 -- privilege regimes (README P-14). CLAUDE.md §3 (Pillars 1 and 4), §5, §8, §9.
 -- ─────────────────────────────────────────────────────────────────────────────
 
