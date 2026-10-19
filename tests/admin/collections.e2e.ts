@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import { expectCleanAtWidths } from './collectionLayout';
@@ -110,6 +110,12 @@ async function openScreen(page: Page, path: string) {
   await expect(page.locator('ul.coll__list')).toBeVisible();
 }
 
+/** A list row's action: focus, then Enter (hover arms a pointer press only after 0.2s). */
+async function pressRowAction(button: Locator): Promise<void> {
+  await button.focus();
+  await button.press('Enter');
+}
+
 const row = (page: Page, text: string) => page.locator('ul.coll__list > li', { hasText: text });
 const dialog = (page: Page) => page.getByRole('dialog');
 
@@ -179,8 +185,7 @@ test('a client: hidden until cleared, copied hidden, cleared with one switch', a
   const client = row(page, CLIENT.en).first();
   await expect(client).toContainText('Not cleared to name');
 
-  await client.hover();
-  await page.getByRole('button', { name: `Duplicate ${CLIENT.en}` }).click();
+  await pressRowAction(client.getByRole('button', { name: `Duplicate ${CLIENT.en}` }));
   await expect(page.locator('.toast', { hasText: 'Copied as a draft.' }).first()).toBeVisible();
   await expect(row(page, CLIENT.en)).toHaveCount(2);
   const copy = await serviceRow('clients', `${slug('client')}-copy`);

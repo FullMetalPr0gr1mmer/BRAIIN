@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { expectCleanAtWidths } from './collectionLayout';
 import { SKIP_REASON, authFile, staffEnv } from './staff';
@@ -65,6 +65,12 @@ async function publicFaq(page: Page, path: string) {
   const block = ld.find((n) => n?.['@type'] === 'FAQPage') as
     { mainEntity: { name: string }[] } | undefined;
   return { visible, asked: block ? block.mainEntity.map((q) => q.name) : [] };
+}
+
+/** A list row's action: focus, then Enter (hover arms a pointer press only after 0.2s). */
+async function pressRowAction(button: Locator): Promise<void> {
+  await button.focus();
+  await button.press('Enter');
 }
 
 const row = (page: Page, text: string) => page.locator('ul.coll__list > li', { hasText: text });
@@ -184,9 +190,13 @@ test.describe('as content_creator', () => {
     page,
   }) => {
     await openScreen(page);
-    const original = row(page, Q.en).first();
-    await original.hover();
-    await page.getByRole('button', { name: `Duplicate ${Q.en}` }).click();
+    // A row action takes no pointer press until hover has armed it (0.2s, kept under reduced
+    // motion); focus arms it at once, so it is reached as a keyboard user does.
+    await pressRowAction(
+      row(page, Q.en)
+        .first()
+        .getByRole('button', { name: `Duplicate ${Q.en}` }),
+    );
     await expect(page.locator('.toast', { hasText: 'Copied as a draft.' }).first()).toBeVisible();
     await expect(row(page, Q.en)).toHaveCount(2);
     const rows = page.locator('ul.coll__list > li');
