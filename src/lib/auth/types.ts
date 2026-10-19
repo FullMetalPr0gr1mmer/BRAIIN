@@ -17,10 +17,6 @@ export const CMS_ROLES = [
   'developer',
 ] as const satisfies readonly Role[];
 
-export function isCmsRole(role: Role): boolean {
-  return (CMS_ROLES as readonly Role[]).includes(role);
-}
-
 export function isRole(value: unknown): value is Role {
   return typeof value === 'string' && (ROLES as readonly string[]).includes(value);
 }
