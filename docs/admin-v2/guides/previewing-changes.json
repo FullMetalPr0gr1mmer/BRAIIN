@@ -1,0 +1,91 @@
+{
+  "slug": "previewing-changes",
+  "sort_order": 45,
+  "minutes": 3,
+  "tags": ["content", "site"],
+  "screens": ["/admin/preview", "/admin/pages", "/admin/visibility"],
+  "caps": [
+    "blog.write",
+    "categories.manage",
+    "maintenance.manage",
+    "nav.edit",
+    "pages.write",
+    "portfolio.write",
+    "redirects.manage",
+    "seo.entityMeta",
+    "seo.globalDefaults",
+    "services.write",
+    "settings.general",
+    "theme.edit"
+  ],
+  "title": "Previewing your changes",
+  "title_ar": "معاينة تغييراتك",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "The preview shows a page of the site as visitors will see it once your unpublished changes go live. Nothing in the preview is live, and nobody outside the admin can open it."
+      },
+      { "t": "h", "x": "Open a preview" },
+      {
+        "t": "ol",
+        "x": [
+          "Sign in to the admin.",
+          "Open the page's address with /admin/preview in front of it: /admin/preview for the home page, /admin/preview/about for About, and /admin/preview/ar/about for its Arabic twin.",
+          "Links inside the preview keep you in the preview, so you can move around the site as a visitor would."
+        ]
+      },
+      { "t": "h", "x": "Reading the ribbon" },
+      {
+        "t": "p",
+        "x": "A dark ribbon in the corner says how many unpublished changes you can see. It also says when a change can't be shown, when a page is hidden or open only to people with its link, and when part of a page, such as search results or redirects, isn't previewed."
+      },
+      {
+        "t": "tip",
+        "x": "If the ribbon turns red, the preview may be showing the live site instead of your changes. Reload the page. If it stays red, tell whoever runs the site."
+      },
+      { "t": "h", "x": "What the preview never does" },
+      {
+        "t": "p",
+        "x": "Forms don't send, nothing is counted in the website stats, and the cookie notice doesn't appear. Search engines never see a preview."
+      },
+      {
+        "t": "p",
+        "x": "You see the changes in the areas your role can open. A page behind a password shows its password prompt, as visitors see it."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تعرض المعاينة صفحة من الموقع كما سيراها الزوار بعد نشر تغييراتك غير المنشورة. لا شيء في المعاينة منشور، ولا يستطيع أحد خارج لوحة الإدارة فتحها."
+      },
+      { "t": "h", "x": "افتح معاينة" },
+      {
+        "t": "ol",
+        "x": [
+          "سجّل الدخول إلى لوحة الإدارة.",
+          "افتح عنوان الصفحة وفي أوله /admin/preview: العنوان /admin/preview للصفحة الرئيسية، و/admin/preview/about لصفحة من نحن، و/admin/preview/ar/about لنسختها العربية.",
+          "الروابط داخل المعاينة تبقيك فيها، فتتنقل في الموقع كما يفعل الزائر."
+        ]
+      },
+      { "t": "h", "x": "قراءة الشريط" },
+      {
+        "t": "p",
+        "x": "يوضح شريط داكن في الزاوية عدد التغييرات غير المنشورة التي تراها. ويوضح أيضًا متى يتعذر عرض تغيير، ومتى تكون الصفحة مخفية أو متاحة فقط لمن لديه رابطها، ومتى لا يُعرض جزء من الصفحة في المعاينة مثل نتائج البحث أو التحويلات."
+      },
+      {
+        "t": "tip",
+        "x": "إذا تحول الشريط إلى اللون الأحمر، فقد تعرض المعاينة الموقع المنشور بدلًا من تغييراتك. أعد تحميل الصفحة، وإذا بقي أحمر فأخبر المسؤول عن الموقع."
+      },
+      { "t": "h", "x": "ما لا تفعله المعاينة أبدًا" },
+      {
+        "t": "p",
+        "x": "لا تُرسل النماذج، ولا يُحتسب شيء في إحصاءات الموقع، ولا يظهر إشعار ملفات تعريف الارتباط. ولا ترى محركات البحث أي معاينة."
+      },
+      {
+        "t": "p",
+        "x": "ترى التغييرات في الأقسام التي يتيحها دورك. والصفحة المحمية بكلمة مرور تعرض نافذة كلمة المرور كما يراها الزوار."
+      }
+    ]
+  }
+}

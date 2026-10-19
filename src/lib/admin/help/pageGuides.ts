@@ -24,6 +24,34 @@ export interface PageGuide {
   screens: readonly string[];
 }
 
+/**
+ * Page guides written ahead of their guide (Admin v2 R9): the guide is in
+ * docs/admin-v2/guides/<slug>.json and reaches the database through H11's
+ * `app.put_help_guide`. TODO(H11): once the catalog is on main, a migration puts the guide
+ * and this entry moves into PAGE_GUIDES (tests/lib/previewGuide.spec.ts holds the two equal
+ * meanwhile). Until then no screen offers it, so no button opens a guide that is not there.
+ */
+export const PENDING_PAGE_GUIDES: readonly PageGuide[] = [
+  {
+    slug: 'previewing-changes',
+    caps: [
+      'blog.write',
+      'categories.manage',
+      'maintenance.manage',
+      'nav.edit',
+      'pages.write',
+      'portfolio.write',
+      'redirects.manage',
+      'seo.entityMeta',
+      'seo.globalDefaults',
+      'services.write',
+      'settings.general',
+      'theme.edit',
+    ],
+    screens: ['/admin/preview'],
+  },
+];
+
 export const PAGE_GUIDES: readonly PageGuide[] = [
   { slug: 'finding-your-way', caps: [], screens: ['/admin/search'] },
   { slug: 'your-dashboard', caps: [], screens: ['/admin'] },

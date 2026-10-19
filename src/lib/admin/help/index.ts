@@ -20,7 +20,7 @@ import {
 
 export * from './model';
 export { mayRead } from './access';
-export { PAGE_GUIDES, pageGuideFor, type PageGuide } from './pageGuides';
+export { PAGE_GUIDES, PENDING_PAGE_GUIDES, pageGuideFor, type PageGuide } from './pageGuides';
 
 // The help centre, server side (Admin v2 U16): the guides of `help_articles` (migration
 // 0046) a signed-in staff member may read, the ones for the screen they are on, a search,

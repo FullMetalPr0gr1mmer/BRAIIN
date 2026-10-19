@@ -251,11 +251,15 @@ function hasPage(route: string, exists: Exists): boolean {
   return exists(`${PAGES_DIR}${route}.astro`);
 }
 
-/** The page file behind an href: `<path>.astro` or `<path>/index.astro`. */
+/**
+ * The page file behind an href: `<path>.astro`, `<path>/index.astro`, or a rest route that
+ * answers the bare path too (`<path>/[...path].astro`: the preview, Admin v2 R9).
+ */
 export function pageFileFor(href: string, exists: Exists = existsSync): string {
   const path = href.split('?')[0] ?? href;
   if (hasPage(path, exists)) return `${PAGES_DIR}${path}.astro`;
   if (hasPage(`${path}/index`, exists)) return `${PAGES_DIR}${path}/index.astro`;
+  if (hasPage(`${path}/[...path]`, exists)) return `${PAGES_DIR}${path}/[...path].astro`;
   throw new Error(`no page for ${href}`);
 }
 
