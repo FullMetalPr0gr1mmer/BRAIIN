@@ -84,7 +84,36 @@ const { file: SET_FILE, set: RAW_SET } = articleSet();
  * when it merges. Re-based with scratchpad/hs_rebase.py when a sibling restates it first.
  */
 const G2_PREVIOUS_SET = '0065_help_leads_v2.sql';
-const SET: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
+
+/**
+ * Guides written as files and not yet put by a migration (docs/admin-v2/guides/<slug>.json):
+ * a slice built before H11's catalog (app.put_help_guide) reached main writes its guide there,
+ * and its migration carries a TODO where the put goes. Until then the file is held to every
+ * rule below as if seeded. A new guide's file joins the set; an edited guide's file
+ * (PENDING_EDITS) replaces the seeded text, which still describes the old screen. Once a
+ * migration puts the slug, the file must equal what it seeds (`filed guides` below), and an
+ * edit leaves PENDING_EDITS.
+ */
+const GUIDE_FILES = 'docs/admin-v2/guides';
+const FILED: { file: string; raw: { slug?: unknown } }[] = readdirSync(GUIDE_FILES)
+  .filter((f) => f.endsWith('.json'))
+  .sort()
+  .map((file) => ({
+    file,
+    raw: JSON.parse(readFileSync(`${GUIDE_FILES}/${file}`, 'utf8')) as { slug?: unknown },
+  }));
+/** Admin v2 U10 rewrote seo-and-redirects for the SEO screen; 0073 puts it once H11 lands. */
+const PENDING_EDITS = new Set<unknown>(['seo-and-redirects']);
+const seededSlugs = new Set(RAW_SET.map((raw) => (raw as { slug?: unknown }).slug));
+const PENDING_RAW: unknown[] = FILED.filter(
+  (f) => !seededSlugs.has(f.raw.slug) || PENDING_EDITS.has(f.raw.slug),
+).map((f) => f.raw);
+const SET: HelpArticleRow[] = [
+  ...RAW_SET.filter((raw) => !PENDING_EDITS.has((raw as { slug?: unknown }).slug)),
+  ...PENDING_RAW,
+]
+  .map((raw) => HelpArticleSeedSchema.parse(raw))
+  .sort((a, b) => a.sort_order - b.sort_order || a.slug.localeCompare(b.slug));
 
 /** Every text of a guide, in one language or both. */
 function textsOf(article: HelpArticleRow, lang?: 'en' | 'ar'): string[] {
@@ -125,7 +154,9 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
   });
 
   it('every guide keeps the schema the Worker reads with (strict: no unknown key)', () => {
-    for (const raw of RAW_SET) expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
+    for (const raw of [...RAW_SET, ...PENDING_RAW]) {
+      expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
+    }
   });
 
   it('slugs and places in the list are unique', () => {
@@ -366,7 +397,8 @@ describe('the guides say only what the admin does', () => {
   });
 
   it('SEO defaults are not said to hold organisation details, which the site no longer reads', () => {
-    expect(source('src/lib/admin/ui/seo.ts')).toMatch(/name: 'organization',[\s\S]*?Deprecated/);
+    // U10 (D11): the form no longer offers the field at all; its column stays.
+    expect(source('src/lib/admin/ui/seo.ts')).not.toMatch(/name: 'organization'/);
     expect(everything('en')).not.toMatch(/organi[sz]ation/i);
     expect(everything('ar')).not.toContain('المؤسسة');
   });
@@ -1056,6 +1088,94 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
     expect(pageGuideFor('/admin/pages', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/blog/1', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/pages', 'content_creator')).toBe('saving-and-publishing');
+  });
+});
+
+// ── 1c. Guides filed before the catalog puts them ──────────────────────────────────────
+
+describe('filed guides (docs/admin-v2/guides)', () => {
+  it('each file is named after its slug, and equals what a migration seeds once one does', () => {
+    for (const { file, raw } of FILED) {
+      expect(file).toBe(`${String(raw.slug)}.json`);
+      const seeded = RAW_SET.find((r) => (r as { slug?: unknown }).slug === raw.slug);
+      if (!seeded) continue;
+      if (PENDING_EDITS.has(raw.slug)) {
+        // Still waiting for its put: once the catalog seeds this text, drop it from the list.
+        expect(seeded, `${file}: seeded now, so leave PENDING_EDITS`).not.toEqual(raw);
+      } else {
+        expect(seeded, `${file}: the seeded text differs from the file`).toEqual(raw);
+      }
+    }
+  });
+});
+
+describe('seo-and-redirects says what the SEO screen does (Admin v2 U10)', () => {
+  const article = () => SET.find((a) => a.slug === 'seo-and-redirects')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+
+  it('keeps its place, caps and screens: no one is sent to a screen they cannot open', () => {
+    expect(article()).toMatchObject({
+      sort_order: 60,
+      title: 'SEO, share images and redirects',
+      caps: ['seo.globalDefaults', 'redirects.manage'],
+      screens: ['/admin/seo', '/admin/redirects'],
+    });
+    // Content Creator holds seo.entityMeta at view only, and /admin/seo refuses them.
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual(['admin', 'seo']);
+  });
+
+  it('every number and label it states is the code’s', async () => {
+    const en = text('en');
+    const ar = text('ar');
+    const { SEO_TITLE_MAX, SEO_DESCRIPTION_MAX } = await import('@schemas/seoRules');
+    const { SHARE_IMAGE_MAX_WIDTH } = await import('@/lib/seo/shareImage');
+    expect(en).toContain(`the boxes stop at ${SEO_TITLE_MAX} and ${SEO_DESCRIPTION_MAX}`);
+    expect(ar).toContain(`عند ${SEO_TITLE_MAX} و${SEO_DESCRIPTION_MAX}`);
+    expect(en).toContain(`at most ${SHARE_IMAGE_MAX_WIDTH.toLocaleString('en')} pixels wide`);
+    expect(ar).toContain(`${SHARE_IMAGE_MAX_WIDTH.toLocaleString('en')} بكسل`);
+    // The panel's own words, and the confirmation's.
+    const panel = source('src/components/admin/screens/seo/SeoPanel.tsx');
+    expect(panel).toContain("INDEX_LABEL = 'Let search engines index this page'");
+    expect(panel).toContain('50 to 60 characters works best');
+    expect(panel).toContain('150 to 160 characters works best');
+    for (const label of ['Let search engines index this page', 'Advanced', 'Edit SEO']) {
+      expect(en).toContain(label);
+      expect(ar).toContain(label);
+    }
+    expect(source('src/components/admin/screens/seo/PagesTab.tsx')).toContain(
+      'aria-label={`Edit SEO for ${row.label}`}',
+    );
+    expect(source('src/components/admin/screens/seo/SiteWideForm.tsx')).toContain(
+      "CONFIRM_WORD = 'noindex'",
+    );
+    expect(en).toContain('asks you to type noindex first');
+    expect(ar).toContain('أن تكتب noindex أولًا');
+    // The sitemap's lag: llms.txt and the sitemap are cached for an hour.
+    expect(en).toContain('at most an hour behind');
+    expect(source('src/pages/sitemap.xml.ts')).toContain('max-age=3600');
+    // Redirects: the edge's minute, and Sync to edge.
+    expect(en).toContain('within a minute of saving');
+    expect(source('src/lib/admin/ui/redirects.ts')).toContain(
+      'Takes effect at the edge within a minute of saving.',
+    );
+    expect(en).toContain('Sync to edge');
+  });
+
+  it('names the share image’s fallbacks in the order the head resolves them', () => {
+    const en = text('en');
+    const order = [
+      'a picture from the media library',
+      'the page’s own image is used',
+      'the site’s default share image',
+      'the built-in logo card',
+    ];
+    const at = order.map((words) => en.indexOf(words));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(source('src/lib/data/seo.ts')).toContain(
+      'share image  entity override (its media-library picture, else its legacy URL) → the',
+    );
   });
 });
 

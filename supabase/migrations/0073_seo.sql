@@ -240,13 +240,18 @@ on conflict (entity_type) do update
       publish_flag = excluded.publish_flag;
 
 -- ═══ 6. The help guide ═══════════════════════════════════════════════════════════════════
--- TODO(H11): once the help-guide catalog (H11, app.put_help_guide) is on main, the
--- seo-and-redirects guide for the SEO screen is put here, at the start of a line and outside
--- any DO block, from docs/admin-v2/guides/seo-and-redirects.json (its revision on main, 1 if
--- no other slice has put it):
+-- TODO(H11): WIRE THE GUIDE HERE. This slice rewrote seo-and-redirects (sort_order 60, its
+-- own place; caps and screens unchanged) for the SEO screen, as
+-- docs/admin-v2/guides/seo-and-redirects.json. Once H11's catalog is on main, replace this
+-- comment with H11's one top-level put of an edited guide, at the start of a line and
+-- outside any DO block, its argument that file's JSON verbatim as a dollar-quoted jsonb
+-- literal and its revision the guide's revision on main (1 unless a sibling put it first;
+-- tests/fixtures/helpSet.ts names it):
 --   select app.put_help_guide($guide$ {the JSON file} $guide$::jsonb, 1);
--- Until then the guide in the database is the one the latest restatement left (0067), which
--- still describes the old form; tests/lib/helpCentre.spec.ts holds the file's claims.
+-- then add a postcondition that every tenant holds the new title, and remove
+-- 'seo-and-redirects' from PENDING_EDITS in tests/lib/helpCentre.spec.ts (its filed-guides
+-- test fails until you do). No restatement of app.help_article_set() (H11 retired that).
+-- Until then the database holds the guide as 0067 left it, which describes the old form.
 
 -- ═══ 7. Postconditions ═══════════════════════════════════════════════════════════════════
 do $$
