@@ -297,8 +297,11 @@ describe('.github/branch-protection.json — the required checks', () => {
     expect(required.sort()).toEqual(produced.sort());
   });
 
-  it('binds admins too: strict, PRs only, no force-push or deletion, checks from Actions', () => {
-    expect(protection.required_status_checks.strict).toBe(true);
+  it('binds admins too: PRs only, no force-push or deletion, checks from Actions', () => {
+    // Not strict since 2026-10-19 (owner decision): a PR need not be up to date with main to
+    // merge. The deploy still waits for every gate on main's own commit, and the production
+    // migration push refuses an out-of-order file (runbook §5b).
+    expect(protection.required_status_checks.strict).toBe(false);
     expect(protection.enforce_admins).toBe(true);
     expect(protection.required_pull_request_reviews.required_approving_review_count).toBe(0);
     expect(protection.allow_force_pushes).toBe(false);
