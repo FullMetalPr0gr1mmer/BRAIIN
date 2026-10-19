@@ -110,13 +110,11 @@ export async function readCrmSettings(
   if (counts.error) throw new Error(`lead_stage_counts: ${counts.error.message}`);
   if (people.error) throw new Error(`crm_people: ${people.error.message}`);
   if (!settings.data) throw new Error('crm_settings: the tenant has no row');
+  const rows = (data: unknown) => (Array.isArray(data) ? (data as Record<string, unknown>[]) : []);
   return {
     settings: settingsView(settings.data as Record<string, unknown>),
-    stages: stagesView(
-      (stages.data ?? []) as Record<string, unknown>[],
-      (counts.data ?? []) as Record<string, unknown>[],
-    ),
-    people: ((people.data ?? []) as Record<string, unknown>[]).map((p) => ({
+    stages: stagesView(rows(stages.data), rows(counts.data)),
+    people: rows(people.data).map((p) => ({
       id: String(p['id']),
       display_name: typeof p['display_name'] === 'string' ? p['display_name'] : null,
       role: typeof p['role'] === 'string' ? p['role'] : null,
