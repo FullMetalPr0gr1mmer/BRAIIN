@@ -200,6 +200,7 @@ describe('the checks', () => {
       'admin-leads-lazy.Z1.js':
         'import"./admin-leads.E1.js";import"./admin-fields.F1.js";export const d=1;',
       'AdminLeadsList.I1.js': 'import"./admin-leads.E1.js";',
+      'AdminLeadsBoard.I2.js': 'import"./admin-leads.E1.js";',
       'AdminLeadDetail.I3.js': 'import"./admin-leads.E1.js";',
     };
     expect(check(build(LEADS)).problems).toEqual([]);
@@ -446,8 +447,10 @@ describe('the leads screens have their own groups (Admin v2 C4b)', () => {
   it('claims the three islands and their screen code for admin-leads', () => {
     for (const path of [
       'src/components/admin/islands/AdminLeadsList.tsx',
+      'src/components/admin/islands/AdminLeadsBoard.tsx',
       'src/components/admin/islands/AdminLeadDetail.tsx',
       'src/components/admin/screens/leads/LeadsList.tsx',
+      'src/components/admin/screens/leads/LeadsBoard.tsx',
       'src/components/admin/screens/leads/MoveTo.tsx',
       'src/components/admin/screens/leads/LeadDetail.tsx',
       'src/components/admin/screens/leads/shared.tsx',

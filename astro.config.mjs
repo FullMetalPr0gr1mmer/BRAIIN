@@ -83,8 +83,9 @@ const ADMIN_SELF_NAMED_EDITORS =
 // path alone.
 const ADMIN_SCREENS =
   /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]Admin[^\\/]*\.tsx$|screens[\\/])/;
-// The leads screens (Admin v2 C4b): their islands and screen code, in their own group, so the
-// list and a lead's page share one chunk and no other admin screen loads it. The add drawer and the erase dialog are reached only through import(): their own
+// The leads screens (Admin v2 C4b): the three islands and their screen code, in their own
+// group, so the list, the board and a lead's page share one chunk and no other admin screen
+// loads it. The add drawer and the erase dialog are reached only through import(): their own
 // lazy group (ADMIN_LEADS_LAZY), below the field kit, so a first load never carries them.
 const ADMIN_LEADS =
   /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]leads[\\/]|islands[\\/]AdminLead)/;
