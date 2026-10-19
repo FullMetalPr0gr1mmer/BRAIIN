@@ -292,7 +292,15 @@ describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
 
 describe('admin.css keeps the hooks the markup renders', () => {
   // Classes that are behaviour or test hooks with no style of their own.
-  const UNSTYLED_HOOKS = new Set(['admin-nav']);
+  // The preview bridge's classes (Admin v2 R9) are drawn inside a PUBLIC page, so they live in
+  // public/styles/preview.css, which the preview links instead of admin.css (checked below).
+  const PREVIEW_CLASSES = new Set(['pv-notice', 'pv-highlight']);
+  const UNSTYLED_HOOKS = new Set(['admin-nav', ...PREVIEW_CLASSES]);
+
+  it('the preview bridge’s classes are styled by the preview’s own sheet', () => {
+    const sheet = read('public/styles/preview.css');
+    for (const c of PREVIEW_CLASSES) expect(sheet, c).toContain(`.${c} {`);
+  });
 
   function walk(dir: string): string[] {
     return readdirSync(join(ROOT, dir)).flatMap((name) => {

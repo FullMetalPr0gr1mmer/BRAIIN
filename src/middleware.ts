@@ -239,10 +239,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
       ...(isAdmin ? { frameSelf: true } : {}),
       ...(extra.noForms ? { noForms: true } : {}),
     });
+    if (isPrivate) out.headers.set('Cache-Control', PRIVATE_CACHE);
     if (isPrivate) {
-      // Tier C: never stored by any cache, never indexed, and no cache tag a purge could
-      // mistake for a public page's (a preview renders public pages, which set one).
-      out.headers.set('Cache-Control', PRIVATE_CACHE);
+      // Tier C is never indexed, and carries no cache tag a purge could mistake for a public
+      // page's (a preview renders public pages, which set one: Admin v2 R9).
       out.headers.delete('Cache-Tag');
       out.headers.set('X-Robots-Tag', 'noindex, nofollow');
     }
