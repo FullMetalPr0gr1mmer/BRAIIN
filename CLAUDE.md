@@ -11,7 +11,7 @@
 1. **Public site** — bilingual EN/AR (RTL) marketing/portfolio site for **28 services in 5 disciplines**, fully CMS-driven sections (toggleable, re-orderable, styleable, per-section error isolation). Each service detail page opens with its **own clip** — a window of the showreel until Stream (EXC-009, KAN-20) — and a case block. **Gaming** (the teaser) and **Merchandise** were retired on 2026-09-27: archived, restorable, their URLs 301 to the nearest new page.
 2. **AI Style-Finder** — lead-gen quiz app. **Logic deferred**: ship the **module boundary + security/cost envelope only** (proxy, rate limits, spend cap, Zod wrappers around a `501` stub).
 3. **Creative Knowledge blog** — SEO/GEO/AEO content engine.
-4. **Admin / CMS** — authenticated, 4 roles: **Admin, Content Creator, SEO, Developer**. RBAC enforced **server-side from scratch**.
+4. **Admin / CMS** — authenticated, 5 roles: **Admin, Content Creator, SEO, Developer, Sales** (Sales added in Admin v2 C10a, owner decision A4, 2026-10-03). RBAC enforced **server-side from scratch**.
 
 The 5 disciplines and 28 services (Round 2, 2026-09-27 — the `disciplines` table, `services.discipline_id`, migration 0028):
 - **Branding** — Logo Design · Business Cards · Letterhead · Brand Guidelines · Stationery · Packaging · PowerPoint Templates · Company Profile
@@ -126,45 +126,45 @@ Supavisor transaction mode (`:6543`, `pgbouncer=true`, `prepare:false`); `:5432`
 
 From `ROLE_CAPS` in `src/lib/authz/matrix.ts`. **Byte-for-byte identical to architecture.md §3.4, its `ROLE_CAPS` block, and the §9.3 authz test matrix; a CI snapshot test fails on any drift between the four.**
 
-> **Canonical role model.** **Admin** = everything. **Content Creator** = authors content **and publishes/schedules** (no archive/delete, no leads, no settings). **SEO** = per-entity + global SEO meta/schema, redirects/canonical, integrations (GA4/Search Console/Calendly) + analytics; no content body, no leads. **Developer** = technical role: settings/identity/maintenance/theme, logs/audit/site-health, **leads management + PII + backup export** — but **NO content authoring, NO content publish/schedule, NO archive/delete**, and **no job applications** (the Join careers form — applicants' CVs and contact details are **Admin only**, both caps, both server layers; owner decision J6). (Feature inventory: "Developer = full technical access + site-health panel.")
+> **Canonical role model.** **Admin** = everything. **Content Creator** = authors content **and publishes/schedules** (no archive/delete, no leads, no settings). **SEO** = per-entity + global SEO meta/schema, redirects/canonical, integrations (GA4/Search Console/Calendly) + analytics; no content body, no leads. **Developer** = technical role: settings/identity/maintenance/theme, logs/audit/site-health, **leads management + PII + backup export** — but **NO content authoring, NO content publish/schedule, NO archive/delete**, and **no job applications** (the Join careers form — applicants' CVs and contact details are **Admin only**, both caps, both server layers; owner decision J6). (Feature inventory: "Developer = full technical access + site-health panel.") **Sales** = works leads (Admin v2 C10a, owner decision A4): the list, the pipeline, assignment, notes and the timeline, a lead's contact details, budget and timeline **one lead at a time** (the reveal: live-rechecked, rate-limited, audited fail-closed; owner default O-6; never in a notification), and the website stats (prototype parity). **NO content, NO settings, NO exports or backups, NO job applications, NO logs/audit/site health, NO users, NO erasure, NO bulk contact details.** Sales is not CMS staff: `app.is_staff()` stays the four roles above (README P-6), and a catalog-driven pgTAP (`supabase/tests/rls_sales_role.test.sql`) proves Sales reads no more than anon outside the CRM.
 
-| Capability / Area | Admin | Content Creator | SEO | Developer |
-|---|:---:|:---:|:---:|:---:|
-| Users & roles | ✅ | ❌ | ❌ | ❌ |
-| General settings (identity, footer, localization) | ✅ | ❌ | ❌ | ✅ |
-| Integrations (GA4, Search Console, Calendly, reCAPTCHA) | ✅ | ❌ | ✅ | ❌ |
-| Maintenance / hidden pages / page visibility | ✅ | ❌ | ❌ | ✅ |
-| Theme editor | ✅ | ❌ | ❌ | ✅ |
-| Services — create/edit | ✅ | ✅ | ❌ | ❌ |
-| Blog — create/edit/autosave | ✅ | ✅ | ❌ | ❌ |
-| Portfolio — create/edit | ✅ | ✅ | ❌ | ❌ |
-| Pages & sections — edit/reorder/style | ✅ | ✅ | ❌ | ❌ |
-| Navigation editor | ✅ | ✅ | ❌ | ❌ |
-| Categories management | ✅ | ✅ | ❌ | ❌ |
-| Publish / schedule content | ✅ | ✅ | ❌ | ❌ |
-| Archive / delete content | ✅ | ❌ | ❌ | ❌ |
-| Per-entity SEO meta / slug / schema | ✅ | view | ✅ | ❌ |
-| Global SEO defaults | ✅ | ❌ | ✅ | ❌ |
-| Redirects / canonical module | ✅ | ❌ | ✅ | ❌ |
-| Media — upload / edit metadata | ✅ | ✅ | meta only | ✅ |
-| Media — hard delete | ✅ | ❌ | ❌ | ❌ |
-| Leads — view list / manage status / notes | ✅ | ❌ | ❌ | ✅ |
-| Leads — budget/timeline/internal_notes/ip (PII) | ✅ | ❌ | ❌ | ✅ |
-| Leads / analytics / activity — export CSV | ✅ | ❌ | ❌ | ✅ |
-| Leads & contacts — erase a person's data (DSAR) | ✅ | ❌ | ❌ | ❌ |
-| Job applications — view / manage status / notes / erase | ✅ | ❌ | ❌ | ❌ |
-| Job applications — contact details & CV download (PII) | ✅ | ❌ | ❌ | ❌ |
-| Analytics — read dashboards | ✅ | ✅ | ✅ | ✅ |
-| Search analytics | ✅ | ❌ | ✅ | ✅ |
-| AI Style-Finder — questions/styles editor | ✅ | ✅ | ❌ | ❌ |
-| AI Style-Finder — results/logic config | ✅ | ❌ | ❌ | ❌ |
-| System logs — view | ✅ | ❌ | ❌ | ✅ |
-| System logs — clear | ✅ | ❌ | ❌ | ❌ |
-| Audit log — view | ✅ | ❌ | ❌ | ✅ |
-| Site Health & Performance panel | ✅ | ❌ | ❌ | ✅ |
-| Backup export (`export-backup`) | ✅ | ❌ | ❌ | ✅ |
+| Capability / Area | Admin | Content Creator | SEO | Developer | Sales |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Users & roles | ✅ | ❌ | ❌ | ❌ | ❌ |
+| General settings (identity, footer, localization) | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Integrations (GA4, Search Console, Calendly, reCAPTCHA) | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Maintenance / hidden pages / page visibility | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Theme editor | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Services — create/edit | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Blog — create/edit/autosave | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Portfolio — create/edit | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Pages & sections — edit/reorder/style | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Navigation editor | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Categories management | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Publish / schedule content | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Archive / delete content | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Per-entity SEO meta / slug / schema | ✅ | view | ✅ | ❌ | ❌ |
+| Global SEO defaults | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Redirects / canonical module | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Media — upload / edit metadata | ✅ | ✅ | meta only | ✅ | ❌ |
+| Media — hard delete | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Leads — view list / manage status / notes | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Leads — budget/timeline/internal_notes/ip (PII) | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Leads / analytics / activity — export CSV | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Leads & contacts — erase a person's data (DSAR) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Job applications — view / manage status / notes / erase | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Job applications — contact details & CV download (PII) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Analytics — read dashboards | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Search analytics | ✅ | ❌ | ✅ | ✅ | ❌ |
+| AI Style-Finder — questions/styles editor | ✅ | ✅ | ❌ | ❌ | ❌ |
+| AI Style-Finder — results/logic config | ✅ | ❌ | ❌ | ❌ | ❌ |
+| System logs — view | ✅ | ❌ | ❌ | ✅ | ❌ |
+| System logs — clear | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Audit log — view | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Site Health & Performance panel | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Backup export (`export-backup`) | ✅ | ❌ | ❌ | ✅ | ❌ |
 
-Legend: ✅ full · "view"/"meta only" partial · ❌ none. `anon` and `other_tenant` get **deny on every row**. When in doubt, default-deny.
+Legend: ✅ full · "view"/"meta only" partial · ❌ none. `anon` and `other_tenant` get **deny on every row**; Sales gets deny on every row not marked. When in doubt, default-deny.
 
 ---
 

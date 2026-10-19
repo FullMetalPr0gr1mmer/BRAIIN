@@ -190,7 +190,7 @@ export const MAX_LEAD_VALUE_SAR = 10_000_000;
 
 const LeadVersionSchema = z.number().int().min(1);
 
-/** The legacy status, still accepted from an old tab until C14 drops it (C4b removed its panel). */
+/** The legacy status: an export filter still reads it until C14 drops it (C4b removed its panel). */
 const LegacyLeadStatusSchema = z.enum(['new', 'in_progress', 'done', 'spam']);
 
 /** The PATCH fields that move a lead's version, so they need the version the caller read. */
@@ -205,11 +205,17 @@ export const VERSIONED_LEAD_FIELDS = [
 /** What a PATCH that still sends the legacy notes field is told (C4b, decision D4's fix). */
 export const NOTES_ARE_A_THREAD = 'Notes are a thread now. Add a note instead.';
 
+/** What a PATCH that still sends the legacy status is told (C10a: 0093 withdrew the column). */
+export const STATUS_IS_A_STAGE = 'A lead moves by its stage now. Choose a stage instead.';
+
 /**
  * PATCH /api/admin/leads/[id]. The pipeline fields need the `version` the caller read (a
  * 409 when it moved on); a star, a read mark and a logged contact do not, because they
- * never move it. `status` is the legacy panel's (the expand window: C14 drops it), and a
- * legacy status cannot be sent with a stage or a spam flag, which it would contradict.
+ * never move it.
+ *
+ * `status` is refused (C10a): migration 0093 withdrew the staff UPDATE on the legacy column,
+ * so a lead moves by its stage only (the database keeps the old column in step until C14).
+ * Like `internalNotes`, the key stays known so the 422 names it and says what to do.
  *
  * `internalNotes` is refused (C4b): the notes are a thread now (POST …/[id]/notes, audited),
  * and a PATCH that rewrote the legacy field could blank what a colleague wrote there. The key
@@ -229,13 +235,17 @@ export const LeadPatchSchema = z
       .object({ channel: z.enum(LEAD_CONTACT_CHANNELS) })
       .strict()
       .optional(),
-    status: LegacyLeadStatusSchema.optional(),
+    status: z.unknown().optional(),
     internalNotes: z.unknown().optional(),
   })
   .strict()
   .refine((patch) => patch.internalNotes === undefined, {
     message: NOTES_ARE_A_THREAD,
     path: ['internalNotes'],
+  })
+  .refine((patch) => patch.status === undefined, {
+    message: STATUS_IS_A_STAGE,
+    path: ['status'],
   })
   .refine(
     (patch) =>
@@ -250,11 +260,6 @@ export const LeadPatchSchema = z
       message: 'send the version you read with a stage, spam, assignee, value or tags change',
       path: ['version'],
     },
-  )
-  .refine(
-    (patch) =>
-      patch.status === undefined || (patch.stageId === undefined && patch.isSpam === undefined),
-    { message: 'a legacy status cannot be sent with a stage or a spam flag', path: ['status'] },
   );
 export type LeadPatch = z.infer<typeof LeadPatchSchema>;
 

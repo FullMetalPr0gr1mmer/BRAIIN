@@ -50,6 +50,7 @@ describe('the role matrix', () => {
       content_creator: '—',
       seo: '—',
       developer: '—',
+      sales: '—',
     });
   });
 

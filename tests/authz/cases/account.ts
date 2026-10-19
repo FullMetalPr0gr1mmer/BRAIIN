@@ -7,7 +7,7 @@ import type { Case } from '../harness';
 // the lockout, other sessions signed out, the audit rows) are in
 // tests/lib/accountPassword.spec.ts.
 
-const EVERY_ROLE: Case['allow'] = ['admin', 'content_creator', 'seo', 'developer'];
+const EVERY_ROLE: Case['allow'] = ['admin', 'content_creator', 'seo', 'developer', 'sales'];
 
 export const cases: readonly Case[] = [
   {

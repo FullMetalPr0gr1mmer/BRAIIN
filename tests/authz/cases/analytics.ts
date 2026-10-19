@@ -9,7 +9,7 @@ export const cases: readonly Case[] = [
     method: 'GET',
     url: '/api/admin/analytics',
     // The one capability all four roles hold.
-    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    allow: ['admin', 'content_creator', 'seo', 'developer', 'sales'],
   },
   {
     name: 'search analytics',

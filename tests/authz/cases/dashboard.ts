@@ -6,7 +6,7 @@ import type { Case } from '../harness';
 // by RLS. The presets are users.manage's (Admin), as the database's write policies are the
 // live Admin's (admin_role_defaults, 0060, in supabase/tests/dashboard_layer.test.sql).
 
-const EVERY_ROLE: Case['allow'] = ['admin', 'content_creator', 'seo', 'developer'];
+const EVERY_ROLE: Case['allow'] = ['admin', 'content_creator', 'seo', 'developer', 'sales'];
 
 export const cases: readonly Case[] = [
   {

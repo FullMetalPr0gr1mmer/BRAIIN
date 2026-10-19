@@ -9,13 +9,13 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/crm/stages'),
     method: 'GET',
     url: '/api/admin/crm/stages',
-    allow: ['admin', 'developer'],
+    allow: ['admin', 'developer', 'sales'],
   },
   {
     name: 'CRM people (assignees)',
     load: () => import('@/pages/api/admin/crm/people'),
     method: 'GET',
     url: '/api/admin/crm/people',
-    allow: ['admin', 'developer'],
+    allow: ['admin', 'developer', 'sales'],
   },
 ];

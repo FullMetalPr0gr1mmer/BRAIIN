@@ -69,9 +69,10 @@ export const GET = defineAdminRoute({
 //   • isStarred, read and logContact never move it (a star or a read mark must not turn
 //     every open lead into a conflict); the database stamps the read mark and the contact
 //     with its own clock and the session's person.
-//   • status is the legacy panel's, kept for an old tab until C14. internalNotes is refused
-//     by the schema since C4b (a 422 naming the field): notes are a thread, written through
-//     POST /api/admin/leads/[id]/notes, audited, never by rewriting the legacy field.
+//   • the legacy fields are refused by the schema, each with a 422 naming it: internalNotes
+//     since C4b (notes are a thread, written through POST /api/admin/leads/[id]/notes,
+//     audited) and status since C10a (a lead moves by its stage; 0093 withdrew the staff
+//     UPDATE on both columns).
 export const PATCH = defineAdminRoute({
   cap: 'leads.manage',
   input: LeadPatchSchema,
@@ -112,14 +113,13 @@ export const PATCH = defineAdminRoute({
       row = data as unknown as Record<string, unknown>;
     }
 
-    // Field names, the legacy status and the stage id: never tags or values.
+    // Field names and the stage id: never tags or values.
     audit({
       action: 'lead.update',
       entityType: 'lead',
       entityId: id,
       detail: {
         fields: Object.keys(values),
-        status: input.status ?? null,
         ...(input.stageId !== undefined ? { stage: input.stageId } : {}),
       },
     });
