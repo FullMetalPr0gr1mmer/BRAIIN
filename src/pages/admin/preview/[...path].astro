@@ -13,7 +13,10 @@ export const prerender = false;
 Astro.response.status = 404;
 ---
 
-<AdminLayout title="Preview" subtitle="See the site with your unpublished changes before they go live.">
+<AdminLayout
+  title="Preview"
+  subtitle="See the site with your unpublished changes before they go live."
+>
   <EmptyState
     title="This page can't be previewed"
     text="Only the site's pages can be previewed: the home page, services, projects, articles and the other pages visitors open."

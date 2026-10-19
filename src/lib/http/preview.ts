@@ -9,7 +9,7 @@ import { localizedPagePath, targetForPath } from '@/lib/visibility/routes';
 import { pageAccess } from '@/lib/visibility/scope';
 import { PREVIEW_PREFIX, toPreviewPath } from '@/lib/admin/preview/paths';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createPreviewSource, PREVIEW_READ_CAPS } from '@/lib/preview/dataset';
+import { canPreview, createPreviewSource, PREVIEW_READ_CAPS } from '@/lib/preview/dataset';
 import { assessPreview, previewLogFields } from '@/lib/preview/report';
 import { injectRibbon, renderRibbon, type RibbonVerdict } from '@/lib/preview/ribbon';
 import { previewTarget, twinPath } from '@/lib/preview/routes';
@@ -120,8 +120,14 @@ export async function handlePreview(
       rendered: false,
     };
   }
+  // `canPreview` first: it reads a role the matrix does not know (a future Sales token) as
+  // holding nothing, where assertAnyCap would index the matrix with it.
+  const who = locals.session;
+  if (!who || !who.isActive || !canPreview(who.role)) {
+    return { response: plain(403, "Your role can't preview the site."), rendered: false };
+  }
   try {
-    assertAnyCap(locals.session, PREVIEW_READ_CAPS, ['full', 'view', 'meta']);
+    assertAnyCap(who, PREVIEW_READ_CAPS, ['full', 'view', 'meta']);
   } catch (err) {
     if (err instanceof AuthorizationError) {
       return { response: plain(403, "Your role can't preview the site."), rendered: false };

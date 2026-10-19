@@ -19,7 +19,13 @@
   border-radius: 14px;
   background: #0b0d14;
   color: #ffffff;
-  font: 500 14px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  font:
+    500 14px/1.45 system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    Arial,
+    sans-serif;
   text-align: left;
   box-shadow: 0 8px 28px rgb(0 0 0 / 0.28);
 }
@@ -82,7 +88,13 @@
   border-radius: 10px;
   background: #0b0d14;
   color: #ffffff;
-  font: 600 14px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  font:
+    600 14px/1.4 system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    Arial,
+    sans-serif;
 }
 
 @media print {

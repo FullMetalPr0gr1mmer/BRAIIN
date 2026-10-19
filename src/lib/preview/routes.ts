@@ -31,8 +31,7 @@ export interface PreviewTarget {
 }
 
 export type PreviewTargetResult =
-  | { ok: true; target: PreviewTarget }
-  | { ok: false; reason: 'not-previewed' | 'bad-selection' };
+  { ok: true; target: PreviewTarget } | { ok: false; reason: 'not-previewed' | 'bad-selection' };
 
 /** A preview URL → what it renders, or why it renders nothing. */
 export function previewTarget(url: URL): PreviewTargetResult {

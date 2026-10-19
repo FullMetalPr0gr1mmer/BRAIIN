@@ -67,6 +67,32 @@ describe('buildCsp', () => {
   it('embeds the caller-supplied nonce verbatim', () => {
     expect(buildCsp('AAAA1111')).toContain("'nonce-AAAA1111'");
   });
+
+  it('frames its own origin only with the admin flag (Admin v2 R9: the editor frames /admin/preview)', () => {
+    expect(directive('frame-src')).not.toContain("'self'");
+    const admin = buildCsp(NONCE, { frameSelf: true });
+    expect(admin).toMatch(/(^|; )frame-src 'self' https:\/\/\*\.cloudflarestream\.com /);
+    expect(admin).toContain("frame-ancestors 'self'");
+    expect(admin).not.toContain('unsafe-inline');
+  });
+
+  it("a preview render sends no form (form-action 'none'), nothing else changes", () => {
+    const preview = buildCsp(NONCE, { noForms: true });
+    expect(preview).toContain("form-action 'none'");
+    expect(preview).not.toContain("form-action 'self'");
+    expect(preview.replace("form-action 'none'", "form-action 'self'")).toBe(csp);
+  });
+
+  it('applySecurityHeaders carries both flags into the header it sets', () => {
+    const h = new Headers();
+    applySecurityHeaders(h, { nonce: NONCE, frameSelf: true, noForms: true });
+    const value = h.get('content-security-policy') ?? '';
+    expect(value).toContain("frame-src 'self' ");
+    expect(value).toContain("form-action 'none'");
+    const plain = new Headers();
+    applySecurityHeaders(plain, { nonce: NONCE });
+    expect(plain.get('content-security-policy')).toBe(csp);
+  });
 });
 
 describe('generateNonce', () => {

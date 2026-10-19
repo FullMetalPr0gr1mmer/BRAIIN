@@ -88,9 +88,7 @@ export function renderRibbon(input: RibbonInput): string {
   const twinAttrs = input.twinLocale === 'ar' ? ' lang="ar" dir="rtl"' : ' lang="en" dir="ltr"';
   const links = [
     `<a href="/admin">Back to the admin</a>`,
-    twinHref
-      ? `<a href="${escapeHtml(twinHref)}"${twinAttrs}>${escapeHtml(twinLabel)}</a>`
-      : '',
+    twinHref ? `<a href="${escapeHtml(twinHref)}"${twinAttrs}>${escapeHtml(twinLabel)}</a>` : '',
     input.verdict.state === 'untrusted'
       ? `<a href="${escapeHtml(input.self)}">Reload the preview</a>`
       : '',
