@@ -18,7 +18,7 @@
 -- stale-token rows.
 
 begin;
-select plan(37);
+select plan(38);
 
 -- ── fixtures, as the migration role (RLS bypassed), in the LAUNCH tenant ───────────────────
 insert into public.media_assets (id, tenant_id, kind, provider, storage_path) values
@@ -222,6 +222,13 @@ select is((select count(*) from pg_policies
             where schemaname = 'public' and tablename in ('entity_seo', 'seo_defaults')
               and (coalesce(qual, '') ~ 'media_assets' or coalesce(with_check, '') ~ 'media_assets'))::int,
   0, 'no policy on entity_seo or seo_defaults reads media_assets (the recursion rule)');
+
+-- ── 38. Staff never delete the defaults row (0011 grants no DELETE; 0073 checks it) ───────
+set local role authenticated;
+select _claims('admin', _tid());
+select throws_ok($$ delete from public.seo_defaults $$, '42501', null,
+  'admin cannot delete the seo_defaults row (authenticated holds no DELETE)');
+reset role;
 
 select * from finish();
 rollback;

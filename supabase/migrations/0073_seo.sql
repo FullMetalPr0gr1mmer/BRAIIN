@@ -2,7 +2,7 @@
 -- 0073 — SEO: share images from the media library (Admin v2 U10, the folded U10a + U10b PR).
 -- Forward-only and EXPAND only: two nullable columns, one unique constraint, two composite
 -- foreign keys, two indexes, one policy and one function restated, two registry rows
--- restated. No data changes, no grant changes. The number is a placeholder: it is assigned
+-- restated, and one inherited privilege withdrawn (5b). No data changes. The number is a placeholder: it is assigned
 -- at merge (scripts/renumber-migration.mjs). Depends on 0009, 0011, 0024, 0028, 0038, 0045 and
 -- 0066 (media_usage v4, whose text v5 below extends).
 --
@@ -39,9 +39,15 @@
 --      other SEO column (R1/R2 contract; tests/fixtures/releaseRegistry.ts reads this shape).
 --      apply_release (0051) builds its statements from the registry at call time, and the
 --      snapshot, capture and guard triggers are row-generic: nothing else is restated.
+--  5b. authenticated's DELETE on seo_defaults revoked. 0011 grants staff SELECT, INSERT and
+--      UPDATE on the singleton and means to withhold DELETE ("upserted, never deleted"), but
+--      it never revoked Supabase's bootstrap grant of ALL, and seo_defaults_write (0009) is
+--      FOR ALL: an Admin or SEO token could drop the tenant's defaults row through PostgREST,
+--      past the Worker and its audit. Nothing deletes it (the registry's delete_roles is
+--      empty), so the revoke changes no path; a postcondition holds it in both regimes.
 --
 -- Production runs this as postgres (BYPASSRLS) on PostgreSQL 17; CI replays it on 15. Grants
--- are not touched: anon's table SELECT on entity_seo and seo_defaults (0011) covers the new
+-- are not widened (5b only withdraws one): anon's table SELECT on entity_seo and seo_defaults (0011) covers the new
 -- columns (public data, rendered in the head), staff grants are table-wide, and anon's column
 -- grant on media_assets (0024) is unchanged. Postconditions at the end check both grant
 -- regimes (MAINTAIN only on 17).
@@ -239,6 +245,9 @@ on conflict (entity_type) do update
       has_status = excluded.has_status,
       publish_flag = excluded.publish_flag;
 
+-- ═══ 5b. seo_defaults: staff create and edit the singleton, never delete it ════════════════
+revoke delete on public.seo_defaults from authenticated;
+
 -- ═══ 6. The help guide ═══════════════════════════════════════════════════════════════════
 -- TODO(H11): WIRE THE GUIDE HERE. This slice rewrote seo-and-redirects (sort_order 60, its
 -- own place; caps and screens unchanged) for the SEO screen, as
@@ -369,6 +378,11 @@ begin
       end loop;
     end if;
   end loop;
+  -- The defaults row is a singleton staff create and edit but never remove (5b): no DELETE
+  -- for authenticated, whichever regime granted what before.
+  if has_table_privilege('authenticated', 'public.seo_defaults', 'delete') then
+    raise exception '0073: authenticated may delete seo_defaults';
+  end if;
   -- anon reads the new columns (they ship in the head) and writes neither.
   if not has_column_privilege('anon', 'public.entity_seo', 'og_media_id', 'select')
      or not has_column_privilege('anon', 'public.seo_defaults', 'default_og_media_id', 'select')
