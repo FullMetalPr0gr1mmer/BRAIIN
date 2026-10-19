@@ -15,9 +15,10 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 // BEFORE anything gated is read (fail-closed), then the gated columns as the service role.
 //
 // Four gates stack here, and each one alone would be insufficient:
-//   1. RLS       — `leads_read` scopes rows to Admin + Developer in-tenant, and the
-//                  RESTRICTIVE `leads_live` re-reads the profile, so a demoted, inactive
-//                  or locked token sees no lead at all (0033)
+//   1. RLS       — `leads_read` scopes rows to Admin, Developer and Sales in-tenant
+//                  (`app.role_works_leads`, 0093), and the RESTRICTIVE `leads_live`
+//                  re-reads the profile, so a demoted, inactive or locked token sees no
+//                  lead at all (0033)
 //   2. GRANTS    — the caller's client can read only the safe columns (0033). The gated
 //                  ones are read as the service role, by revealLead and the export only
 //   3. assertCap — `leads.manage` for the row, `leads.pii` for the plaintext, then a live
