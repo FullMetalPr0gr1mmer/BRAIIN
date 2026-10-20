@@ -3,6 +3,7 @@ import {
   ORDER_STEP,
   duplicateChanges,
   orderChanges,
+  renumberable,
   type OrderChange,
   type Positioned,
 } from '@/components/admin/screens/collection/reorder';
@@ -137,5 +138,89 @@ describe('duplicateChanges: a duplicate goes right after its original (D9)', () 
     expect(duplicateChanges(rows(10, 20), 'gone', { id: 'copy', sort_order: 0 })).toEqual([
       { id: 'copy', sortOrder: 30 },
     ]);
+  });
+});
+
+// An archived row is written by an Admin only (the RESTRICTIVE archive gates, 0018 on), and
+// the reorder route stops at the first refused row: a Content Creator's move over a list that
+// holds one (the seed's three archived numbers) was refused whole, 42501.
+const positioned = (list: readonly (Positioned & { status?: string })[]): Positioned[] =>
+  list.map(({ id, sort_order }) => ({ id, sort_order }));
+const ARCHIVED = new Set(['old1', 'old2', 'old3']);
+
+describe('renumberable: an archived row is renumbered by an Admin only', () => {
+  // The statistics seed: three archived legacy numbers and four live ones, both 1, 2, 3…,
+  // then this run's two drafts at the end.
+  const seeded = [
+    { id: 'old1', sort_order: 1, status: 'archived' },
+    { id: 'a', sort_order: 1, status: 'published' },
+    { id: 'old2', sort_order: 2, status: 'archived' },
+    { id: 'b', sort_order: 2, status: 'published' },
+    { id: 'old3', sort_order: 3, status: 'archived' },
+    { id: 'c', sort_order: 3, status: 'published' },
+    { id: 'd', sort_order: 4, status: 'scheduled' },
+    { id: 'n1', sort_order: 9980, status: 'draft' },
+    { id: 'n2', sort_order: 9990, status: 'draft' },
+  ];
+  // n2 moved one place up, over n1.
+  const moved = ['old1', 'a', 'old2', 'b', 'old3', 'c', 'd', 'n2', 'n1'];
+
+  it('keeps every row for a person who may archive and drops the archived ones otherwise', () => {
+    expect(renumberable(seeded, true)).toEqual(seeded);
+    expect(renumberable(seeded, false).map((row) => row.id)).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+      'n1',
+      'n2',
+    ]);
+  });
+
+  it('keeps a row with no status (a client) whoever moves it', () => {
+    const clients = [
+      { id: 'x', sort_order: 1 },
+      { id: 'y', sort_order: 2 },
+    ];
+    expect(renumberable(clients, false)).toEqual(clients);
+  });
+
+  it("a non-archiver's move names no archived row and numbers the rest in tens, in order", () => {
+    const changes = orderChanges(positioned(renumberable(seeded, false)), moved);
+    expect(changes.filter((change) => ARCHIVED.has(change.id))).toEqual([]);
+    expect(changes).toEqual([
+      { id: 'a', sortOrder: 10 },
+      { id: 'b', sortOrder: 20 },
+      { id: 'c', sortOrder: 30 },
+      { id: 'd', sortOrder: 40 },
+      { id: 'n2', sortOrder: 50 },
+      { id: 'n1', sortOrder: 60 },
+    ]);
+    // An Admin's renumbers the archived rows too, in their places.
+    expect(orderChanges(positioned(renumberable(seeded, true)), moved)).toContainEqual({
+      id: 'old1',
+      sortOrder: 10,
+    });
+  });
+
+  it("a non-archiver's duplicate names no archived row after the original", () => {
+    const list = [
+      { id: 'a', sort_order: 10, status: 'published' },
+      { id: 'b', sort_order: 20, status: 'draft' },
+      { id: 'old1', sort_order: 30, status: 'archived' },
+      { id: 'c', sort_order: 40, status: 'published' },
+      { id: 'old2', sort_order: 50, status: 'archived' },
+    ];
+    const copy = { id: 'copy', sort_order: 10 };
+    const changes = duplicateChanges(positioned(renumberable(list, false)), 'a', copy);
+    expect(changes.filter((change) => ARCHIVED.has(change.id))).toEqual([]);
+    // The copy takes b's place and b takes the next; c already stands at 40.
+    expect(changes).toEqual([
+      { id: 'b', sortOrder: 30 },
+      { id: 'copy', sortOrder: 20 },
+    ]);
+    // An Admin's pushes the archived rows down with the rest.
+    const admin = duplicateChanges(positioned(renumberable(list, true)), 'a', copy);
+    expect(admin.map((change) => change.id)).toEqual(['old2', 'c', 'old1', 'b', 'copy']);
   });
 });

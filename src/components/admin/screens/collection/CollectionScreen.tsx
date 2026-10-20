@@ -10,7 +10,7 @@ import { copyPayload } from './copy';
 import CollectionDrawer from './CollectionDrawer';
 import CollectionList from './CollectionList';
 import type { CollectionPermissions } from './fields';
-import { ORDER_STEP, duplicateChanges, orderChanges } from './reorder';
+import { ORDER_STEP, duplicateChanges, orderChanges, renumberable } from './reorder';
 
 // One collection's screen (Admin v2 U7, the prototype's route('/collections/:kind')): the
 // AdminCollection island at /admin/<slug>. The page head (server) holds the title, the line
@@ -24,6 +24,7 @@ import { ORDER_STEP, duplicateChanges, orderChanges } from './reorder';
 //   the order    a move renumbers the list in tens and sends only the rows it changed
 //                (reorder.ts; one subrequest each, P-15), then reads the list again (each
 //                moved row's version moved). A refusal puts the list back and says why.
+//                An archived row keeps its number unless the role may archive (renumberable).
 //   the drawer   add or edit one item (CollectionDrawer). The address follows it
 //                (/admin/<slug>/new, /admin/<slug>/<id>), so a reload or a link reopens it.
 //   Duplicate    a draft copy right after the original (its slug suffixed, consent and the
@@ -127,7 +128,10 @@ export default function CollectionScreen({ collection, open, permissions }: Coll
     const before = rows;
     if (!before) return;
     const changes = orderChanges(
-      before.map((row) => ({ id: row.id, sort_order: Number(row['sort_order'] ?? 0) })),
+      renumberable(before, permissions.remove).map((row) => ({
+        id: row.id,
+        sort_order: Number(row['sort_order'] ?? 0),
+      })),
       order,
     );
     if (changes.length === 0) return;
@@ -164,7 +168,10 @@ export default function CollectionScreen({ collection, open, permissions }: Coll
       const newId = String(created['id']);
       // Right after the original: the copy and the rows after it renumbered, nothing above.
       const changes = duplicateChanges(
-        rows.map((r) => ({ id: r.id, sort_order: Number(r['sort_order'] ?? 0) })),
+        renumberable(rows, permissions.remove).map((r) => ({
+          id: r.id,
+          sort_order: Number(r['sort_order'] ?? 0),
+        })),
         row.id,
         { id: newId, sort_order: Number(created['sort_order'] ?? 0) },
       );

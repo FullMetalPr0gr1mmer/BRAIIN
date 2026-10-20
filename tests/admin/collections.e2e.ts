@@ -17,7 +17,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *   a client          hidden until cleared ("Not cleared to name"); Duplicate makes a hidden
  *                     copy with its own slug, right after it; "Visible on the site" clears
  *                     it in one save;
- *   numbers           a keyboard move (handle, Space, ArrowUp, Space) reorders them;
+ *   numbers           a keyboard move (handle, Space, ArrowUp, Space) reorders them, and the
+ *                     seed's archived numbers (an Admin's rows only) keep their places;
  *   team              offers no Duplicate (people are not copied by accident);
  *   every width       each screen's list and add drawer, a client's edit drawer and the sample
  *                     quote's drawer with zero axe WCAG 2.2 A/AA violations and no sideways
@@ -213,6 +214,17 @@ test('a client: hidden until cleared, copied hidden, cleared with one switch', a
   await expect(row(page, CLIENT.en).first()).not.toContainText('Not cleared to name');
 });
 
+/** The seed's archived legacy numbers (30-legacy-demo.json), slug to `sort_order`. */
+async function archivedNumbers(): Promise<Record<string, unknown>> {
+  const { data, error } = await service()
+    .from('statistics')
+    .select('slug, sort_order')
+    .eq('tenant_id', TENANT_ID)
+    .in('slug', ['projects', 'services', 'years']);
+  expect(error).toBeNull();
+  return Object.fromEntries((data ?? []).map((r) => [String(r.slug), r.sort_order]));
+}
+
 test('numbers: a keyboard move reorders them', async ({ page }) => {
   await openScreen(page, '/admin/statistics');
   const second = NUMBER(2).en;
@@ -220,16 +232,31 @@ test('numbers: a keyboard move reorders them', async ({ page }) => {
   expect(texts.findIndex((t) => t.includes(second))).toBe(
     texts.findIndex((t) => t.includes(NUMBER(1).en)) + 1,
   );
+  // The seed's archived numbers are listed: a Content Creator may not write those rows (0018).
+  await expect(
+    page.locator('ul.coll__list > li .badge').filter({ hasText: /^Archived$/ }),
+  ).not.toHaveCount(0);
+  const archivedBefore = await archivedNumbers();
+  expect(Object.keys(archivedBefore).sort()).toEqual(['projects', 'services', 'years']);
 
+  const reorder = page.waitForResponse(
+    (res) =>
+      new URL(res.url()).pathname === '/api/admin/statistics/reorder' &&
+      res.request().method() === 'POST',
+  );
   await page.getByRole('button', { name: new RegExp(`^Reorder .*${second}`) }).focus();
   await page.keyboard.press('Space');
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('Space');
+  const response = await reorder;
+  expect(response.status(), await response.text()).toBe(200);
   await expect(page.locator('.toast', { hasText: 'Order updated.' }).first()).toBeVisible();
 
   const one = Number((await serviceRow('statistics', slug('n1')))['sort_order']);
   const two = Number((await serviceRow('statistics', slug('n2')))['sort_order']);
   expect(two).toBeLessThan(one);
+  // The move left the archived rows as they were.
+  expect(await archivedNumbers()).toEqual(archivedBefore);
 });
 
 test('team members are never duplicated', async ({ page }) => {

@@ -6,7 +6,8 @@
 // update, one subrequest (README P-15: 50 a request on the Workers Free plan), so a move
 // near the top of a long list costs the rows between its two ends, not the whole list.
 // Ties and gaps in the stored numbers (a seed's 1, 2, 3; two rows at 0) settle on the first
-// move, after which the numbers are tens and a move touches only what it passed.
+// move, after which the numbers are tens and a move touches only what it passed. Only an
+// Admin's move renumbers an archived row (`renumberable`); anyone else's leaves it as it is.
 
 export interface Positioned {
   id: string;
@@ -20,6 +21,21 @@ export interface OrderChange {
 
 /** The step between two rows' numbers. */
 export const ORDER_STEP = 10;
+
+/**
+ * The rows a move or a duplicate may renumber: every row for a person who may archive
+ * (`permissions.remove`, content.archiveDelete: `app.is_admin()` in the policy), else every
+ * row that is not archived (a row with no status, such as a client, is always kept). An
+ * archived row is written by an Admin only (the RESTRICTIVE archive gates, 0018 on: any
+ * update fails WITH CHECK while the row is archived), one refused row refuses the whole
+ * move, and an archived row has no place on the site, so it keeps its number.
+ */
+export function renumberable<T extends Readonly<Record<string, unknown>>>(
+  rows: readonly T[],
+  mayArchive: boolean,
+): T[] {
+  return mayArchive ? [...rows] : rows.filter((row) => row['status'] !== 'archived');
+}
 
 /**
  * The updates that give `order` (every row's id, in the new order) as `sort_order`s: the
