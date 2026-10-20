@@ -10,6 +10,7 @@
 
 export const ADMIN_STYLESHEETS = [
   'activity.css',
+  'applications.css',
   'dashboard.css',
   'health.css',
   'help.css',

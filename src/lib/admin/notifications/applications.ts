@@ -3,7 +3,8 @@ import { PER_SOURCE, windowStart, type NotificationSource } from './types';
 
 // "New application for <role>": the role the applicant applied for, and nothing that
 // names the applicant. Admin only (`applications.manage`, owner decision J6), behind the
-// table's live Admin check (0029). Spam is left out.
+// table's live Admin check (0029). Spam is left out. Each item opens its application in the
+// screen's drawer (`?open=<id>`, Admin v2 U8a), which writes the route's no-PII view audit.
 
 interface ApplicationRow {
   id: string;
@@ -32,7 +33,7 @@ export const applications: NotificationSource = {
       detail: null,
       at: row.created_at,
       since: row.created_at,
-      href: '/admin/applications',
+      href: `/admin/applications?open=${row.id}`,
     }));
   },
 };
