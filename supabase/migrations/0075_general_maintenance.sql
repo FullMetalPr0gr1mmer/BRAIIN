@@ -111,13 +111,15 @@ alter table public.site_profile
   add column if not exists footer_show_social boolean not null default false;
 
 alter table public.site_profile drop constraint if exists site_profile_tagline_shape;
+-- coalesce(…, false): a CHECK passes on NULL, and a missing half makes every test below it
+-- NULL rather than false (0045's lesson).
 alter table public.site_profile add constraint site_profile_tagline_shape check (
-  tagline is null or (
+  tagline is null or coalesce((
     jsonb_typeof(tagline) = 'object'
     and jsonb_typeof(tagline -> 'en') = 'string'
     and jsonb_typeof(tagline -> 'ar') = 'string'
     and char_length(tagline ->> 'en') between 1 and 120
-    and char_length(tagline ->> 'ar') between 1 and 120));
+    and char_length(tagline ->> 'ar') between 1 and 120), false));
 
 alter table public.site_profile drop constraint if exists site_profile_phone_e164_shape;
 alter table public.site_profile add constraint site_profile_phone_e164_shape
@@ -142,14 +144,14 @@ alter table public.site_profile add constraint site_profile_map_url_https check 
 -- {place}". Both languages, 1-160 characters, and no brace but the three placeholders.
 alter table public.site_profile drop constraint if exists site_profile_footer_copyright_shape;
 alter table public.site_profile add constraint site_profile_footer_copyright_shape check (
-  footer_copyright is null or (
+  footer_copyright is null or coalesce((
     jsonb_typeof(footer_copyright) = 'object'
     and jsonb_typeof(footer_copyright -> 'en') = 'string'
     and jsonb_typeof(footer_copyright -> 'ar') = 'string'
     and char_length(footer_copyright ->> 'en') between 1 and 160
     and char_length(footer_copyright ->> 'ar') between 1 and 160
     and regexp_replace(footer_copyright ->> 'en', '\{(year|brand|place)\}', '', 'g') !~ '[{}]'
-    and regexp_replace(footer_copyright ->> 'ar', '\{(year|brand|place)\}', '', 'g') !~ '[{}]'));
+    and regexp_replace(footer_copyright ->> 'ar', '\{(year|brand|place)\}', '', 'g') !~ '[{}]'), false));
 alter table public.site_profile drop constraint if exists site_profile_footer_style_known;
 alter table public.site_profile add constraint site_profile_footer_style_known
   check (footer_style in ('light', 'dark'));
