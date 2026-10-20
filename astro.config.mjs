@@ -56,12 +56,14 @@ const ADMIN_EDITOR_ISLAND_NAMES = [
   'AdminCrmSettings',
   'AdminMediaLibrary',
   'AdminResourceForm',
+  'AdminSeo',
   'AdminSingletonForm',
 ];
 // prettier-ignore
 const ADMIN_EDITOR_SCREEN_DIRS = [
   'crmSettings',
   'media',
+  'seo',
 ];
 /** @param {readonly string[]} names */
 const alternatives = (names) => names.join('|');

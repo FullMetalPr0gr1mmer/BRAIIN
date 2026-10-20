@@ -20,7 +20,9 @@ export const ADMIN_STYLESHEETS = [
   'media.css',
   'personal.css',
   'search.css',
+  'seo.css',
   'stats.css',
+  'two-step.css',
   'users.css',
   'visibility.css',
 ] as const;

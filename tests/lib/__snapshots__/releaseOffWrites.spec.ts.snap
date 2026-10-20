@@ -3737,7 +3737,7 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
     "op": "update",
     "table": "entity_seo",
     "values": {
-      "canonical_override": "https://example.test/services/sample",
+      "canonical_override": "/services/sample",
       "meta_description": {
         "ar": "وصف",
         "en": "Meta description",
@@ -3747,6 +3747,7 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
         "en": "Meta title",
       },
       "og_image": "/og/service.jpg",
+      "og_media_id": null,
       "robots": "index,follow",
       "schema_type": "Service",
     },
@@ -3775,6 +3776,7 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
     "meta_title",
     "meta_description",
     "og_image",
+    "og_media_id",
     "canonical_override",
     "robots",
     "schema_type",
@@ -3797,7 +3799,7 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
     "op": "insert",
     "table": "entity_seo",
     "values": {
-      "canonical_override": "https://example.test/services/sample",
+      "canonical_override": "/services/sample",
       "entity_id": "0f0f0f0f-0000-4000-8000-00000000000a",
       "entity_type": "service",
       "meta_description": {
@@ -3809,6 +3811,7 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
         "en": "Meta title",
       },
       "og_image": "/og/service.jpg",
+      "og_media_id": null,
       "robots": "index,follow",
       "schema_type": "Service",
       "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -3838,6 +3841,7 @@ exports[`singleton and entity-SEO routes: the database receives what it did befo
     "meta_title",
     "meta_description",
     "og_image",
+    "og_media_id",
     "canonical_override",
     "robots",
     "schema_type",

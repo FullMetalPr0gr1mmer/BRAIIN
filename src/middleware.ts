@@ -34,6 +34,7 @@ import {
 } from '@/lib/http/csrf';
 import { createSessionClient, clearSessionCookies, HOST_COOKIE_BASE } from '@/lib/auth/session';
 import { resolveAuthContext } from '@/lib/auth/context';
+import { TWO_STEP_PATH } from '@/lib/auth/twoStep';
 import { expiredSignInForm, tooLargeSignInForm } from '@/lib/auth/expiredForm';
 import { PRIVATE_FORM_BODY_LIMIT, bodyWithinLimit } from '@/lib/auth/bodyLimit';
 
@@ -107,6 +108,16 @@ const PRE_AUTH_PATHS: ReadonlySet<string> = new Set([
   '/api/admin/auth/reset',
   '/api/admin/auth/invite',
 ]);
+
+/**
+ * What a session that passed the password but still owes its second step (Admin v2 U17,
+ * src/lib/auth/context.ts) may reach: the two-step page and sign-out. Read like the pre-auth
+ * list, by the path AND the route Astro matched. Everything else answers as if the request
+ * had no session, but pointing at the second step: a page redirects to /admin/2fa, the API
+ * answers 401 `two-step-required`. The pre-auth screens stay open to it (signing in as
+ * someone else, a reset link). It also gets the CSRF check and `no-store`, as any session.
+ */
+const SECOND_STEP_PATHS: ReadonlySet<string> = new Set([TWO_STEP_PATH, '/api/admin/auth/logout']);
 
 /**
  * The path the pre-auth list is read with. `trailingSlash: 'ignore'` (astro.config.mjs)
@@ -201,6 +212,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const nonce = generateNonce();
   locals.cspNonce = nonce;
   locals.session = null;
+  locals.secondStep = null;
   locals.csrfToken = '';
 
   // `secured()` is the ONLY way a response leaves this middleware.
@@ -313,7 +325,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     const supabase = createSessionClient(cookies);
     locals.supabase = supabase;
 
-    const { ctx, revoke } = await resolveAuthContext(supabase);
+    const { ctx, revoke, pending = null } = await resolveAuthContext(supabase);
     // A stale, disabled or too-old session is torn down here rather than merely ignored:
     // signed out at the auth server (this session only, best effort: the refresh token in
     // the cookie stops working even if the cookie was copied), then its cookies cleared, so
@@ -323,6 +335,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       clearSessionCookies(cookies);
     }
     locals.session = ctx;
+    locals.secondStep = pending;
 
     // Mint the double-submit token on first contact so the login form itself is
     // protected (login is a state-changing POST too — CSRF-ing a victim into a session
@@ -345,11 +358,23 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Both the path and the route Astro matched must be one of the eight: a path that reads as
     // the sign-in endpoint but routes to a lead's is not pre-auth (see "What a request is").
     const preAuth = PRE_AUTH_PATHS.has(route) && PRE_AUTH_PATHS.has(matched);
+    // The same rule for the second step's two paths (U17).
+    const secondStepPath = SECOND_STEP_PATHS.has(route) && SECOND_STEP_PATHS.has(matched);
     const unauthenticated = (): Response => {
       if (isAdminApi) return jsonError(401, 'unauthenticated');
       const next = `${url.pathname}${url.search}`;
       return context.redirect(`${LOGIN_PATH}?next=${encodeURIComponent(next)}`, 302);
     };
+    // A session still owing its second step, anywhere but the second step's own paths and
+    // the pre-auth screens: no answer from the admin, only the way to the second step.
+    const owesSecondStep = pending !== null && !secondStepPath && !preAuth;
+    const toSecondStep = (): Response => {
+      if (isAdminApi) return jsonError(401, 'two-step-required');
+      const next = `${url.pathname}${url.search}`;
+      return context.redirect(`${TWO_STEP_PATH}?next=${encodeURIComponent(next)}`, 302);
+    };
+    /** Who may go on: a full session; a pending one on its paths; anyone on a pre-auth one. */
+    const admitted = ctx !== null || preAuth || (pending !== null && secondStepPath);
 
     if (!SAFE_METHODS.has(request.method)) {
       if (!isSameOrigin(request.headers.get('origin'), request.headers.get('host'))) {
@@ -359,7 +384,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
       // given before a byte of the body is read. The token check below clones a form body,
       // and until the F7 review a signed-out post of any size to any admin path was read
       // (the clone, and the original buffered behind it) before its 401.
-      if (!ctx && !preAuth) return secured(unauthenticated());
+      if (owesSecondStep) return secured(toSecondStep());
+      if (!admitted) return secured(unauthenticated());
       // Anyone can post to a pre-auth path, and its body is read several times below (the
       // token check's clone, a refused form's clone, the handler): bound it first, before
       // any of them (src/lib/auth/bodyLimit.ts). A sign-in form goes back to its page.
@@ -373,7 +399,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
         tokenInBody(request) &&
         !(await bodyWithinLimit(request, PRIVATE_FORM_BODY_LIMIT))
       ) {
-        return secured(jsonError(413, 'too-large'));
+        // The two-step page's own form goes back to it, as a sign-in screen's does.
+        return secured(tooLargeSignInForm(request, route) ?? jsonError(413, 'too-large'));
       }
       const cookieToken = cookies.get(CSRF_COOKIE_NAME)?.value ?? null;
       if (!csrfTokenMatches(cookieToken, await submittedCsrf(request))) {
@@ -385,7 +412,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
       }
     }
 
-    if (!ctx && !preAuth) return secured(unauthenticated());
+    if (owesSecondStep) return secured(toSecondStep());
+    if (!admitted) return secured(unauthenticated());
   }
 
   // 3) Render. A page whose password this request answered renders inside the page-access

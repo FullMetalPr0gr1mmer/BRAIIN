@@ -3,9 +3,12 @@
 // the local PostgREST and look for the same system_logs messages. src/lib/auth/context.ts uses
 // them.
 
-/** The profile and, in the same request, the tenant's session length (0055). */
+/**
+ * The profile and, in the same request, the tenant's session length (0055) and whether it
+ * requires 2FA (0072, Admin v2 U17).
+ */
 export const PROFILE_WITH_SETTING =
-  'tenant_id,role,is_active,locked_until,tenant:tenants(security:admin_security_settings(session_max_days))';
+  'tenant_id,role,is_active,locked_until,tenant:tenants(security:admin_security_settings(session_max_days,require_mfa))';
 
 /** The profile alone: the fallback when the embed is refused. */
 export const PROFILE_ONLY = 'tenant_id,role,is_active,locked_until';

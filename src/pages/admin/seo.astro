@@ -1,13 +1,144 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminSingletonForm from '@/components/admin/islands/AdminSingletonForm';
+import AdminSeo from '@/components/admin/islands/AdminSeo';
+import Card from '@/components/admin/ui/Card.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
+import LinkTabs from '@/components/admin/ui/LinkTabs.astro';
+import Note from '@/components/admin/ui/Note.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { SEO_BUILT_IN } from '@/lib/admin/health/seo';
+import { listEntitySeo, SeoListQuerySchema, type SeoListPage } from '@/lib/admin/seo/list';
+import { writeSystemLog } from '@/lib/data/systemLog';
 
 export const prerender = false;
+
+// SEO (Admin v2 U10, docs/admin-v2/ui.md "SEO (/admin/seo; AV-19)"): server-rendered, with
+// in-page tabs, each a URL of this page (`?tab=`), each gated by its own capability:
+//   pages      every page, service, project and post with its SEO (`seo.entityMeta` at full:
+//              Admin, SEO); the first page of rows is read here, so the island needs no
+//              fetch on first paint; `?type=` picks the kind;
+//   redirects  the redirects list and its drawer (`redirects.manage`: Admin, SEO);
+//              /admin/redirects redirects here;
+//   site       the site-wide defaults (`seo.globalDefaults`: Admin, SEO), with the "Built in"
+//              rows from the one list Site health shows too (SEO_BUILT_IN).
+// A role holding none of the three (Content Creator, who sees a page's meta read-only inside
+// its editor, and Developer) gets the layout with the refusal and a 403, and nothing is read.
+// Every read is the person's own (RLS decides).
+
+type Tab = 'pages' | 'redirects' | 'site';
+const PATH = '/admin/seo';
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const mayPages = Boolean(session && can(session.role, 'seo.entityMeta') === 'full');
+const mayRedirects = Boolean(session && can(session.role, 'redirects.manage') === 'full');
+const maySite = Boolean(session && can(session.role, 'seo.globalDefaults') === 'full');
+const allowed = Boolean(
+  session && sb && (can(session.role, 'seo.globalDefaults') === 'full' || mayPages || mayRedirects),
+);
+if (!allowed) Astro.response.status = 403;
+
+const open: Tab[] = [
+  ...(mayPages ? (['pages'] as const) : []),
+  ...(mayRedirects ? (['redirects'] as const) : []),
+  ...(maySite ? (['site'] as const) : []),
+];
+const asked = Astro.url.searchParams.get('tab');
+const tab: Tab = open.find((t) => t === asked) ?? open[0] ?? 'pages';
+
+const LABEL: Record<Tab, string> = { pages: 'Pages', redirects: 'Redirects', site: 'Site wide' };
+const tabHref = (id: Tab) => (id === open[0] ? PATH : `${PATH}?tab=${id}`);
+const tabs = open.map((id) => ({ label: LABEL[id], href: tabHref(id) }));
+
+let initial: SeoListPage | null = null;
+let failed = false;
+if (allowed && session && sb && tab === 'pages') {
+  const query = SeoListQuerySchema.safeParse({
+    type: Astro.url.searchParams.get('type') ?? undefined,
+  });
+  try {
+    initial = await listEntitySeo(
+      sb,
+      session,
+      query.success ? query.data : { type: 'page', offset: 0, limit: 50 },
+    );
+  } catch (err) {
+    failed = true;
+    await writeSystemLog({
+      level: 'error',
+      source: 'admin:seo.list',
+      message: err instanceof Error ? err.message : 'SEO list read failed',
+      detail: { path: Astro.url.pathname },
+    });
+  }
+}
 ---
 
 <AdminLayout
-  title="Global SEO defaults"
-  subtitle="Titles, descriptions and Organization schema used wherever a page has no per-entity override."
+  title="SEO"
+  subtitle="Titles, descriptions and the technical bits search engines look for."
+  styles={['seo.css']}
 >
-  <AdminSingletonForm client:load config="seo" />
+  {
+    !allowed ? (
+      <Refused />
+    ) : (
+      <>
+        {tabs.length > 1 && <LinkTabs label="SEO views" current={tabHref(tab)} tabs={tabs} />}
+
+        {tab === 'pages' &&
+          (initial ? (
+            <section aria-labelledby="seo-pages-h">
+              <h2 id="seo-pages-h" class="seo-sec__t">
+                Pages
+              </h2>
+              <p class="seo-sec__s">Choose a page to edit its title and description.</p>
+              <AdminSeo client:load view="pages" initial={initial} canAdvanced={mayPages} />
+            </section>
+          ) : (
+            <p class="msg" data-kind="error" role="alert">
+              {failed
+                ? 'The pages could not be read just now. Reload the page to try again.'
+                : 'Nothing to show.'}
+            </p>
+          ))}
+
+        {tab === 'redirects' && (
+          <section aria-labelledby="seo-redirects-h">
+            <h2 id="seo-redirects-h" class="seo-sec__t">
+              Redirects
+            </h2>
+            <p class="seo-sec__s">Old links keep working after a page moves.</p>
+            <AdminSeo client:load view="redirects" />
+          </section>
+        )}
+
+        {tab === 'site' && (
+          <div class="seo-site">
+            <AdminSeo client:load view="site" />
+            <Card title="Built in" sub="How the site is made for search">
+              <ul class="seo-facts">
+                {SEO_BUILT_IN.map((fact) => (
+                  <li>
+                    <Icon name="check" size={14} />
+                    <div>
+                      <span class="seo-facts__t">{fact.text}</span>
+                      <small class="seo-facts__s">{fact.detail}</small>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <Note>
+                <p>
+                  hreflang tags for English and Arabic are added automatically, so Google shows the
+                  right language.
+                </p>
+              </Note>
+            </Card>
+          </div>
+        )}
+      </>
+    )
+  }
 </AdminLayout>

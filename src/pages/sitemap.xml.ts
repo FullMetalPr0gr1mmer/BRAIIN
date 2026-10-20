@@ -4,6 +4,9 @@ import { localizedPath } from '@/lib/i18n';
 import { getPublishedServices } from '@/lib/data/services';
 import { getCaseStudyIndex } from '@/lib/data/portfolio';
 import { getPublishedPosts } from '@/lib/data/blog';
+import { getSeoDefaults, getSeoRules } from '@/lib/data/seo';
+import { indexability, isIndexedPath } from '@/lib/seo/indexable';
+import type { SeoEntityType } from '@/lib/seo/entityPaths';
 import { isListedPath } from '@/lib/visibility/listing';
 
 // Bilingual sitemap with reciprocal hreflang + truthful <lastmod> (CLAUDE.md Pillar 3).
@@ -47,23 +50,49 @@ export const GET: APIRoute = async (context) => {
   // (`locals`); a crawler's copy may list a page up to an hour after it is hidden (max-age).
   const visibility = context?.locals?.visibility;
   const now = Date.now();
-  const [services, portfolio, posts] = await Promise.all([
+  const [services, portfolio, posts, seoRules, seoDefaults] = await Promise.all([
     getPublishedServices(),
     // The case-study page's own loader + schema (never a URL the page would 404 on).
     getCaseStudyIndex(),
     getPublishedPosts(),
+    // Admin v2 U10 (D8): what leaves a URL out for crawlers, read in the same round.
+    getSeoRules(),
+    getSeoDefaults(),
   ]);
+  const ix = indexability(seoRules, seoDefaults?.robots_directives);
 
-  const all: { path: string; updated: string | null }[] = [
+  type Entry = {
+    path: string;
+    updated: string | null;
+    ref?: { type: SeoEntityType; id: string };
+  };
+  const all: Entry[] = [
     ...STATIC_PATHS.map((path) => ({ path, updated: null })),
     // Every PUBLISHED service — the rule its page answers 200 by (status + RLS, which also
     // hides one whose discipline is unpublished). Round 1’s retired slugs are
     // archived, so they are never listed: those URLs answer a 301 (src/lib/services/retired.ts).
-    ...services.map((s) => ({ path: `/services/${s.slug}`, updated: s.updated_at })),
-    ...portfolio.map((p) => ({ path: `/portfolio/${p.slug}`, updated: p.updatedAt })),
-    ...posts.map((p) => ({ path: `/creative-knowledge/${p.slug}`, updated: p.updated_at })),
+    ...services.map((s) => ({
+      path: `/services/${s.slug}`,
+      updated: s.updated_at,
+      ref: { type: 'service' as const, id: s.id },
+    })),
+    ...portfolio.map((p) => ({
+      path: `/portfolio/${p.slug}`,
+      updated: p.updatedAt,
+      ref: { type: 'portfolio' as const, id: p.id },
+    })),
+    ...posts.map((p) => ({
+      path: `/creative-knowledge/${p.slug}`,
+      updated: p.updated_at,
+      ref: { type: 'blog_post' as const, id: p.id },
+    })),
   ];
-  const entries = all.filter(({ path }) => isListedPath(visibility, path, now));
+  // Page visibility first (U14a), then indexability (U10): a page hidden from search by its
+  // robots, or canonicalised onto another path, is not offered either.
+  const entries = all.filter(
+    ({ path, ref }) =>
+      isListedPath(visibility, path, now) && isIndexedPath(ix, path, base, ref ?? null),
+  );
 
   const urls = entries.flatMap(({ path, updated }) =>
     (['en', 'ar'] as const).map((loc) => {

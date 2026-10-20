@@ -371,6 +371,18 @@ describe('the screens admin-ui leaves share one admin-screens group (Admin v2 U4
     expect(claim('src/components/admin/fields/media/UploadDialog.tsx')).toBe('admin-fields');
   });
 
+  it('claims the SEO island and its screen code, SeoPanel included (Admin v2 U10)', () => {
+    for (const path of [
+      'src/components/admin/islands/AdminSeo.tsx',
+      'src/components/admin/screens/seo/SeoScreen.tsx',
+      'src/components/admin/screens/seo/SeoPanel.tsx',
+      'src/components/admin/screens/seo/GooglePreview.tsx',
+      'src/components/admin/screens/seo/RedirectsTab.tsx',
+    ]) {
+      expect(claim(path), path).toBe('admin-screens');
+    }
+  });
+
   it('leaves every other screen where it was', () => {
     expect(claim('src/components/admin/screens/users/UsersPanel.tsx')).toBe('admin-ui');
     expect(claim('src/components/admin/islands/AdminUsers.tsx')).toBe('admin-ui');

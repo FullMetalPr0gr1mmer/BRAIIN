@@ -34,7 +34,14 @@ export type SaveMode = 'live' | 'draft';
  */
 export type SaveTarget =
   | { kind: 'resource'; slug: string; saveUrl?: ((id: string) => string) | undefined }
-  | { kind: 'singleton'; endpoint: string };
+  | { kind: 'singleton'; endpoint: string }
+  /**
+   * A page's SEO row (Admin v2 U10, additive): keyed by its target, not its own id. GET
+   * /api/admin/entity-seo?entityType=&entityId= loads it (the defaults at version 0 when it
+   * has no row), and a save is a PUT of the whole meta (a full replace) with the target and
+   * the version it loaded.
+   */
+  | { kind: 'entitySeo'; entityType: string; entityId: string };
 
 export interface EntitySaveState {
   values: Row;
@@ -90,6 +97,8 @@ const NO_ERRORS = { byId: {}, summary: [] } as const;
 export function versionFallback(target: SaveTarget): number {
   return target.kind === 'resource' ? 1 : 0;
 }
+
+const ENTITY_SEO_URL = '/api/admin/entity-seo';
 
 /**
  * The state before anything loads. A new record starts ready, from `defaults` and then
@@ -213,7 +222,15 @@ export function isDirty(state: EntitySaveState): boolean {
 
 /** Where an editor reads its row from. */
 export function loadUrl(target: SaveTarget, id: string | null): string {
-  return target.kind === 'singleton' ? target.endpoint : `/api/admin/${target.slug}/${id ?? ''}`;
+  if (target.kind === 'singleton') return target.endpoint;
+  if (target.kind === 'entitySeo') {
+    const query = new URLSearchParams({
+      entityType: target.entityType,
+      entityId: target.entityId,
+    });
+    return `${ENTITY_SEO_URL}?${query.toString()}`;
+  }
+  return `/api/admin/${target.slug}/${id ?? ''}`;
 }
 
 /**
@@ -225,8 +242,21 @@ export function buildSaveRequest(
   id: string | null,
   state: EntitySaveState,
   fields: readonly FieldDef[],
-): { url: string; method: 'POST' | 'PATCH'; body: Row } {
+): { url: string; method: 'POST' | 'PATCH' | 'PUT'; body: Row } {
   const body = formToPayload(state.values, fields);
+  if (target.kind === 'entitySeo') {
+    // A full replace: every field the form holds, the target, and the version it loaded.
+    return {
+      url: ENTITY_SEO_URL,
+      method: 'PUT',
+      body: {
+        ...body,
+        entityType: target.entityType,
+        entityId: target.entityId,
+        version: state.version,
+      },
+    };
+  }
   if (target.kind === 'resource' && id === null) {
     return { url: `/api/admin/${target.slug}`, method: 'POST', body };
   }

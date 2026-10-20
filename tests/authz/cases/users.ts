@@ -44,7 +44,7 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/users/security'),
     method: 'PUT',
     url: '/api/admin/users/security',
-    body: { sessionMaxDays: 1, inviteDomain: 'example.test', version: 1 },
+    body: { sessionMaxDays: 1, inviteDomain: 'example.test', requireMfa: false, version: 1 },
     allow: ['admin'],
   },
   {
@@ -68,6 +68,15 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/users/[id]/owner'),
     method: 'POST',
     url: `/api/admin/users/${UUID}/owner`,
+    allow: ['admin'],
+  },
+  {
+    // Admin v2 U17: Reset 2FA, through public.reset_two_step (the stub's RPC answers nothing,
+    // read as no factors counted). Every other role is refused at the gate.
+    name: 'user two-step reset',
+    load: () => import('@/pages/api/admin/users/[id]/two-step-reset'),
+    method: 'POST',
+    url: `/api/admin/users/${UUID}/two-step-reset`,
     allow: ['admin'],
   },
 ];

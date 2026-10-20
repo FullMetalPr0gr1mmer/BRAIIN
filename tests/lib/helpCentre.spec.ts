@@ -90,7 +90,39 @@ const { base: SET_FILE, set: RAW_SET } = HELP;
  * when it merges. Re-based with scratchpad/hs_rebase.py when a sibling restates it first.
  */
 const G2_PREVIOUS_SET = '0065_help_leads_v2.sql';
-const SET: HelpArticleRow[] = RAW_SET.map((raw) => HelpArticleSeedSchema.parse(raw));
+
+/**
+ * Guides written as files and not yet put by a migration (docs/admin-v2/guides/<slug>.json):
+ * a slice built before H11's catalog (app.put_help_guide) reached main writes its guide there,
+ * and its migration carries a TODO where the put goes. Until then the file is held to every
+ * rule below as if seeded. A new guide's file joins the set; an edited guide's file
+ * (PENDING_EDITS) replaces the seeded text, which still describes the old screen. Once a
+ * migration puts the slug, the file must equal what it seeds (`filed guides` below), and an
+ * edit leaves PENDING_EDITS.
+ */
+const GUIDE_FILES = 'docs/admin-v2/guides';
+const FILED: { file: string; raw: { slug?: unknown } }[] = readdirSync(GUIDE_FILES)
+  .filter((f) => f.endsWith('.json'))
+  .sort()
+  .map((file) => ({
+    file,
+    raw: JSON.parse(readFileSync(`${GUIDE_FILES}/${file}`, 'utf8')) as { slug?: unknown },
+  }));
+/**
+ * Edited guides filed but not yet put: none. (Admin v2 U10's seo-and-redirects is put by 0073
+ * now that H11's catalog is on main; its file equals what the migration seeds.)
+ */
+const PENDING_EDITS = new Set<unknown>([]);
+const seededSlugs = new Set(RAW_SET.map((raw) => (raw as { slug?: unknown }).slug));
+const PENDING_RAW: unknown[] = FILED.filter(
+  (f) => !seededSlugs.has(f.raw.slug) || PENDING_EDITS.has(f.raw.slug),
+).map((f) => f.raw);
+const SET: HelpArticleRow[] = [
+  ...RAW_SET.filter((raw) => !PENDING_EDITS.has((raw as { slug?: unknown }).slug)),
+  ...PENDING_RAW,
+]
+  .map((raw) => HelpArticleSeedSchema.parse(raw))
+  .sort((a, b) => a.sort_order - b.sort_order || a.slug.localeCompare(b.slug));
 
 /** Every text of a guide, in one language or both. */
 function textsOf(article: HelpArticleRow, lang?: 'en' | 'ar'): string[] {
@@ -131,7 +163,9 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
   });
 
   it('every guide keeps the schema the Worker reads with (strict: no unknown key)', () => {
-    for (const raw of RAW_SET) expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
+    for (const raw of [...RAW_SET, ...PENDING_RAW]) {
+      expect(() => HelpArticleSeedSchema.parse(raw)).not.toThrow();
+    }
   });
 
   it('slugs and places in the list are unique', () => {
@@ -503,12 +537,118 @@ describe('the guides say only what the admin does', () => {
   };
   const everything = (lang: 'en' | 'ar') => SET.map((a) => textsOf(a, lang).join('\n')).join('\n');
   const source = (path: string) => readFileSync(path, 'utf8');
+  /** U17's migration, found by its name: its number is assigned at merge. */
+  const twoStepMigration = () => {
+    const file = MIGRATION_FILES.find((f) => f.name.endsWith('_two_step_sign_in.sql'));
+    if (!file) throw new Error('no two-step migration');
+    return file;
+  };
   /** Every .ts, .tsx and .astro file below a directory, as paths from the repository root. */
   const codeIn = (dir: string) =>
     (readdirSync(dir, { recursive: true, encoding: 'utf8' }) as string[])
       .map((f) => f.replaceAll('\\', '/'))
       .filter((f) => /\.(ts|tsx|astro)$/.test(f))
       .map((f) => `${dir}/${f}`);
+
+  it('two factor authentication (U17): the guides say what /admin/2fa and Users & roles do', () => {
+    const en = guide('your-account', 'en');
+    const panel = source('src/components/admin/screens/twoStep/TwoStepPanel.astro');
+    const account = source('src/components/admin/screens/chrome/AccountPanel.tsx');
+    // The row in the account, its two links, and the setup step's words.
+    expect(account).toContain('<span className="li__t">Two factor authentication</span>');
+    expect(account).toContain("{view.twoStep.on ? 'Manage' : 'Set up'}");
+    expect(en).toContain('open Two factor authentication in your account and choose Set up');
+    expect(en).toContain('choose Manage and type a current code');
+    for (const words of ['Add it to the app', 'Turn on 2FA', 'Set up']) {
+      expect(panel, words).toContain(words);
+      expect(en, words).toContain(words);
+    }
+    // The setup step shows a key and a link, never a QR code (as-built U17): the guide too.
+    expect(panel).not.toContain('<svg');
+    expect(en).toContain('type the key the page shows');
+    expect(en).not.toMatch(/\bQR\b|scan/i);
+    // Wrong codes count as wrong passwords do (src/lib/auth/twoStepFlow.ts, lockout.ts).
+    const lockout = source('src/lib/auth/lockout.ts');
+    expect(lockout).toContain('LOCKOUT_THRESHOLD = 5;');
+    expect(lockout).toContain('LOCKOUT_WINDOW_MINUTES = 15;');
+    expect(lockout).toContain('LOCKOUT_DURATION_MINUTES = 15;');
+    expect(source('src/lib/auth/twoStepFlow.ts')).toContain('registerFailure(email, input.ip)');
+    expect(en).toContain(
+      'Five wrong codes within 15 minutes lock your account for 15 minutes, as wrong passwords do.',
+    );
+    // Turning it off is refused while the team requires it.
+    expect(panel).toContain("view.mode === 'manage' && !view.required");
+    expect(en).toContain('If your team requires 2FA, it stays on.');
+    // A lost phone: an Admin's Reset 2FA, which signs the person out everywhere.
+    expect(en).toContain('Ask an Admin to reset your 2FA in Users & roles');
+    const migration = twoStepMigration().sql;
+    expect(migration).toContain('delete from auth.sessions where user_id = p_user;');
+    const roles = guide('roles-and-access', 'en');
+    const card = source('src/components/admin/screens/users/SecurityCard.tsx');
+    expect(card).toContain('Require 2FA for everyone');
+    expect(card).toContain('People without it are asked to set it up at their next click.');
+    expect(roles).toContain('Require 2FA for everyone, on the same card, asks everyone');
+    expect(roles).toContain('to set it up at their next click');
+    expect(source('src/lib/admin/userModel.ts')).toContain(
+      "REQUIRE_MFA_SELF_FIRST = 'Turn on 2FA for your own account first.'",
+    );
+    expect(roles).toContain('Turn on 2FA for your own account first');
+    expect(source('src/components/admin/screens/users/EditUserDrawer.tsx')).toContain('Reset 2FA');
+    expect(roles).toContain('chooses Reset 2FA');
+    expect(roles).toContain('they are signed out on every device');
+    expect(migration).toContain("message = 'owner_protected'");
+    expect(migration).toContain("message = 'self'");
+    expect(roles).toContain("nor the account owner's");
+    // Both languages say it: the Arabic names the same screens and buttons.
+    for (const words of ['Two factor authentication', 'Set up', 'Turn on 2FA', 'Manage']) {
+      expect(guide('your-account', 'ar'), words).toContain(words);
+    }
+    for (const words of ['Require 2FA for everyone', 'Reset 2FA', 'Users & roles']) {
+      expect(guide('roles-and-access', 'ar'), words).toContain(words);
+    }
+  });
+
+  it('U17 puts only its two guides, and keeps their place, title, caps and tags', () => {
+    // The two-step migration (numbered at merge) changes your-account and roles-and-access
+    // with app.put_help_guide (H11) and adds no guide.
+    const name = twoStepMigration().name;
+    expect(HELP.edits.filter((e) => e.file === name)).toEqual([
+      { file: name, op: 'put', slug: 'your-account', revision: 1 },
+      { file: name, op: 'put', slug: 'roles-and-access', revision: 1 },
+    ]);
+    const base = new Map(
+      literalSet(MIGRATION_FILES.find((f) => f.name === SET_FILE)!)
+        .map((raw) => HelpArticleSeedSchema.parse(raw))
+        .map((a) => [a.slug, a]),
+    );
+    for (const slug of ['your-account', 'roles-and-access']) {
+      const before = base.get(slug)!;
+      const after = SET.find((a) => a.slug === slug)!;
+      const keep = ({ slug: s, sort_order, title, title_ar, caps, tags }: HelpArticleRow) => ({
+        s,
+        sort_order,
+        title,
+        title_ar,
+        caps,
+        tags,
+      });
+      expect(keep(after), slug).toEqual(keep(before));
+      // Only blocks added: every block the guide had stays, in order.
+      for (const lang of ['en', 'ar'] as const) {
+        const kept = after.body[lang].filter((block) =>
+          before.body[lang].some((b) => JSON.stringify(b) === JSON.stringify(block)),
+        );
+        expect(kept, `${slug} ${lang}`).toEqual(before.body[lang]);
+      }
+    }
+    // /admin/2fa is your-account's screen (corrections rule 4), offered by its page head.
+    expect(SET.find((a) => a.slug === 'your-account')?.screens).toEqual([
+      '/admin/account',
+      '/admin/notifications',
+      '/admin/2fa',
+    ]);
+    expect(pageGuideFor('/admin/2fa', 'seo')).toBe('your-account');
+  });
 
   it('the activity log names who acted, filters and exports: the guide says what the screen does', () => {
     // Since U13 (0054) the screen names the person (public.audit_people, former members
@@ -617,7 +757,8 @@ describe('the guides say only what the admin does', () => {
   });
 
   it('SEO defaults are not said to hold organisation details, which the site no longer reads', () => {
-    expect(source('src/lib/admin/ui/seo.ts')).toMatch(/name: 'organization',[\s\S]*?Deprecated/);
+    // U10 (D11): the form no longer offers the field at all; its column stays.
+    expect(source('src/lib/admin/ui/seo.ts')).not.toMatch(/name: 'organization'/);
     expect(everything('en')).not.toMatch(/organi[sz]ation/i);
     expect(everything('ar')).not.toContain('المؤسسة');
   });
@@ -1586,6 +1727,94 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
     expect(pageGuideFor('/admin/pages', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/blog/1', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/pages', 'content_creator')).toBe('saving-and-publishing');
+  });
+});
+
+// ── 1c. Guides filed before the catalog puts them ──────────────────────────────────────
+
+describe('filed guides (docs/admin-v2/guides)', () => {
+  it('each file is named after its slug, and equals what a migration seeds once one does', () => {
+    for (const { file, raw } of FILED) {
+      expect(file).toBe(`${String(raw.slug)}.json`);
+      const seeded = RAW_SET.find((r) => (r as { slug?: unknown }).slug === raw.slug);
+      if (!seeded) continue;
+      if (PENDING_EDITS.has(raw.slug)) {
+        // Still waiting for its put: once the catalog seeds this text, drop it from the list.
+        expect(seeded, `${file}: seeded now, so leave PENDING_EDITS`).not.toEqual(raw);
+      } else {
+        expect(seeded, `${file}: the seeded text differs from the file`).toEqual(raw);
+      }
+    }
+  });
+});
+
+describe('seo-and-redirects says what the SEO screen does (Admin v2 U10)', () => {
+  const article = () => SET.find((a) => a.slug === 'seo-and-redirects')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+
+  it('keeps its place, caps and screens: no one is sent to a screen they cannot open', () => {
+    expect(article()).toMatchObject({
+      sort_order: 60,
+      title: 'SEO, share images and redirects',
+      caps: ['seo.globalDefaults', 'redirects.manage'],
+      screens: ['/admin/seo', '/admin/redirects'],
+    });
+    // Content Creator holds seo.entityMeta at view only, and /admin/seo refuses them.
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual(['admin', 'seo']);
+  });
+
+  it('every number and label it states is the code’s', async () => {
+    const en = text('en');
+    const ar = text('ar');
+    const { SEO_TITLE_MAX, SEO_DESCRIPTION_MAX } = await import('@schemas/seoRules');
+    const { SHARE_IMAGE_MAX_WIDTH } = await import('@/lib/seo/shareImage');
+    expect(en).toContain(`the boxes stop at ${SEO_TITLE_MAX} and ${SEO_DESCRIPTION_MAX}`);
+    expect(ar).toContain(`عند ${SEO_TITLE_MAX} و${SEO_DESCRIPTION_MAX}`);
+    expect(en).toContain(`at most ${SHARE_IMAGE_MAX_WIDTH.toLocaleString('en')} pixels wide`);
+    expect(ar).toContain(`${SHARE_IMAGE_MAX_WIDTH.toLocaleString('en')} بكسل`);
+    // The panel's own words, and the confirmation's.
+    const panel = source('src/components/admin/screens/seo/SeoPanel.tsx');
+    expect(panel).toContain("INDEX_LABEL = 'Let search engines index this page'");
+    expect(panel).toContain('50 to 60 characters works best');
+    expect(panel).toContain('150 to 160 characters works best');
+    for (const label of ['Let search engines index this page', 'Advanced', 'Edit SEO']) {
+      expect(en).toContain(label);
+      expect(ar).toContain(label);
+    }
+    expect(source('src/components/admin/screens/seo/PagesTab.tsx')).toContain(
+      'aria-label={`Edit SEO for ${row.label}`}',
+    );
+    expect(source('src/components/admin/screens/seo/SiteWideForm.tsx')).toContain(
+      "CONFIRM_WORD = 'noindex'",
+    );
+    expect(en).toContain('asks you to type noindex first');
+    expect(ar).toContain('أن تكتب noindex أولًا');
+    // The sitemap's lag: llms.txt and the sitemap are cached for an hour.
+    expect(en).toContain('at most an hour behind');
+    expect(source('src/pages/sitemap.xml.ts')).toContain('max-age=3600');
+    // Redirects: the edge's minute, and Sync to edge.
+    expect(en).toContain('within a minute of saving');
+    expect(source('src/lib/admin/ui/redirects.ts')).toContain(
+      'Takes effect at the edge within a minute of saving.',
+    );
+    expect(en).toContain('Sync to edge');
+  });
+
+  it('names the share image’s fallbacks in the order the head resolves them', () => {
+    const en = text('en');
+    const order = [
+      'a picture from the media library',
+      'the page’s own image is used',
+      'the site’s default share image',
+      'the built-in logo card',
+    ];
+    const at = order.map((words) => en.indexOf(words));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(source('src/lib/data/seo.ts')).toContain(
+      'share image  entity override (its media-library picture, else its legacy URL) → the',
+    );
   });
 });
 

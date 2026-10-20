@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import type { AuthContext } from '@/lib/auth/types';
+import type { PendingSecondStep } from '@/lib/auth/twoStep';
 import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from '@/lib/http/csrf';
 import { PRE_AUTH_BODY_LIMIT, PRIVATE_FORM_BODY_LIMIT } from '@/lib/auth/bodyLimit';
 import { TENANT, UUID } from './harness';
@@ -35,7 +36,11 @@ const state = vi.hoisted(() => ({
   /** False when the lockout store cannot answer: every RPC errors. */
   storeUp: true,
   /** What resolveAuthContext finds for the session a sign-in creates. */
-  auth: { ctx: null, revoke: false } as { ctx: AuthContext | null; revoke: boolean },
+  auth: { ctx: null, revoke: false } as {
+    ctx: AuthContext | null;
+    revoke: boolean;
+    pending?: PendingSecondStep | null;
+  },
   clearSessionCookies: vi.fn(),
   /** The "Keep me signed in" choice each sign-in recorded, in order. */
   chooseSessionPersistence: vi.fn(),
@@ -1194,5 +1199,57 @@ describe('the zero-JS sign-in form (Admin v2 F7)', () => {
     expect(res.headers.get('location')).toBe('/admin/login?error=unavailable');
     const json = await signIn(null, { email: EMAIL, password: PASSWORD });
     expect(json.status).toBe(500);
+  });
+});
+
+// ── Two-step sign-in (Admin v2 U17) ─────────────────────────────────────────────
+// A right password on an account that owes its second step: the session stays (held at
+// /admin/2fa by the middleware), and the sign-in is NOT finished: the failure count is not
+// cleared (else whoever holds the password could try codes for ever) and nothing is audited
+// until the code (src/lib/auth/twoStepFlow.ts writes `auth.login` then).
+describe('a password that leaves the second step owed (U17)', () => {
+  const PENDING = {
+    userId: UUID,
+    tenantId: TENANT,
+    email: EMAIL,
+    role: 'developer' as const,
+    mode: 'challenge' as const,
+    factorId: null,
+  };
+
+  it('keeps the session and the persistence choice; clears no failure, audits nothing', async () => {
+    state.failures.set(EMAIL, 3);
+    state.auth = { ctx: null, revoke: false, pending: PENDING };
+    const { client, audit } = sessionClient();
+    const res = await signIn(client, { email: EMAIL, password: PASSWORD });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, data: { secondStep: 'challenge' } });
+    expect(state.rpcs).toEqual(['login_is_locked']);
+    expect(state.failures.get(EMAIL)).toBe(3);
+    expect(audit).toEqual([]);
+    expect(state.commitSessionPersistence).toHaveBeenCalledOnce();
+    expect(client.auth.signOut).not.toHaveBeenCalled();
+    expect(state.clearSessionCookies).not.toHaveBeenCalled();
+  });
+
+  it('the form post goes on to the two-step page, keeping where the person was going', async () => {
+    state.auth = { ctx: null, revoke: false, pending: { ...PENDING, mode: 'enrol' } };
+    const { client } = sessionClient();
+    const res = await signInForm(client, {
+      email: EMAIL,
+      password: PASSWORD,
+      next: '/admin/leads?view=board',
+    });
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/admin/2fa?next=%2Fadmin%2Fleads%3Fview%3Dboard');
+    expect(res.headers.get('location')).not.toContain(EMAIL);
+  });
+
+  it('a wrong password is still a wrong password, whatever the account owes', async () => {
+    state.auth = { ctx: null, revoke: false, pending: PENDING };
+    const { client } = sessionClient();
+    const res = await signIn(client, { email: EMAIL, password: 'wrong password' });
+    expect(res.status).toBe(401);
+    expect(state.failures.get(EMAIL)).toBe(1);
   });
 });

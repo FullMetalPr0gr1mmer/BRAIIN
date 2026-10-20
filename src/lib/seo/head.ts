@@ -1,4 +1,8 @@
 import type { Locale } from '@schemas/primitives';
+import type { PublicMediaRow } from '@schemas/content';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import { imageRef } from '@/lib/media/resolve';
+import { shareImageUrl } from '@/lib/seo/shareImage';
 import {
   getEntitySeo,
   getSeoDefaults,
@@ -64,6 +68,13 @@ export async function loadHead(
     options.fallbackDescription,
   ]);
   const brand = brandName(identity, options.locale);
+  // The share images from the media library (Admin v2 U10): made into `/_image` JPEG URLs
+  // here, where the page's other image work happens, only when one is set (no work, and the
+  // same bytes, for a page without one).
+  const [entityShare, defaultShare] = await Promise.all([
+    shareUrlOf(entity?.og_media),
+    shareUrlOf(defaults?.default_og_media),
+  ]);
   const seo = resolveSeo({
     locale: options.locale,
     brand,
@@ -71,6 +82,22 @@ export async function loadHead(
     defaults,
     fallbackTitle,
     ...(fallbackDescription === undefined ? {} : { fallbackDescription }),
+    shareImages: { entity: entityShare, defaults: defaultShare },
   });
   return { seo, identity, brand };
+}
+
+/**
+ * A media row as a share-image URL, or undefined (none, or a provider a page cannot render:
+ * `imageRef` answers null, and the next candidate is used). A failed transform is treated
+ * the same: the head never fails over a picture.
+ */
+async function shareUrlOf(row: PublicMediaRow | null | undefined): Promise<string | undefined> {
+  const ref = imageRef(row);
+  if (!ref) return undefined;
+  try {
+    return await shareImageUrl(ref, PUBLIC_SITE_URL);
+  } catch {
+    return undefined;
+  }
 }
