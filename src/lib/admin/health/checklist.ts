@@ -80,6 +80,12 @@ export interface HealthContext {
    * read failed; undefined when not read (the role lacks siteHealth.view).
    */
   probes?: ProbeReport | null | undefined;
+  /**
+   * Active members without two factor sign in (Admin v2 U17, public.staff_accounts): null
+   * when the directory could not be read; undefined when not read (the role lacks
+   * users.manage).
+   */
+  withoutTwoStep?: number | null | undefined;
   now: number;
 }
 
@@ -441,6 +447,28 @@ export const HEALTH_RULES: readonly HealthRule[] = [
     title: 'Certificate',
     needs: ['siteHealth.view'],
     evaluate: certificateRule,
+  },
+  // ---- Security, the team's sign-in (public.staff_accounts, Admin v2 U17): after the
+  // website's rows, as the prototype's "Admin and data" card follows its "Website" card ----
+  {
+    id: 'security.two_step',
+    group: 'Security',
+    title: 'Two factor sign in',
+    needs: ['users.manage'],
+    fix: '/admin/users',
+    evaluate: ({ withoutTwoStep }) => {
+      if (withoutTwoStep === undefined || withoutTwoStep === null) {
+        return unread('Two factor sign in');
+      }
+      return withoutTwoStep > 0
+        ? {
+            state: 'fail',
+            count: withoutTwoStep,
+            text: `${withoutTwoStep} ${plural(withoutTwoStep, 'team member', 'team members')} without two factor sign in`,
+            detail: 'Each person turns it on from their account. Users & roles can require it.',
+          }
+        : { state: 'ok', text: 'Everyone uses two factor sign in' };
+    },
   },
   // ---- Backups (audit_log) ----
   // Information only until backups are scheduled (R17): a row that could only fail until

@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from './types';
 import { isRole } from './types';
 import { accessClaims, signedInAt } from './claims';
+import { factorsOf, secondStepNeeded, type FactorLike, type PendingSecondStep } from './twoStep';
 import { serviceClient } from '@/lib/supabase/server';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import {
@@ -15,7 +16,7 @@ import {
 
 // Resolves the verified auth context for a request, or null (→ deny).
 //
-// Three facts have to agree before a request is treated as authenticated:
+// Four facts have to agree before a request is treated as authenticated:
 //
 //   1. The token is genuine and its session alive. `getUser(token)` asks the auth server,
 //      which checks the signature and that the session the token names still exists (a
@@ -35,6 +36,17 @@ import {
 //   3. The sign-in is young enough: no older than the tenant's session length
 //      (admin_security_settings.session_max_days, 1 or 7 days, 7 when unset), counted from
 //      the newest sign-in time the token's `amr` records.
+//
+//   4. The sign-in is at the level the account requires (Admin v2 U17, src/lib/auth/twoStep.ts):
+//      a person with a verified factor, or in a tenant that requires 2FA, must be at `aal2`.
+//      Below it the request gets NO context, only a PENDING second step (`challenge` when a
+//      verified factor exists, `enrol` when the tenant requires one and there is none), which
+//      the middleware lets reach /admin/2fa and sign-out and nothing else. It is neither
+//      downgraded nor accepted (CLAUDE.md §2, session invalidation). Its token usually carries
+//      no role at all (the access-token hook withholds it below the required level, 0072), so
+//      the profile is read for it too; a token that still carries one (minted before the
+//      factor or the tenant's switch) is held at the second step the same way, and the hook
+//      strips it at the next refresh. A person who needs no second step sees no change.
 //
 // ── Why divergence DENIES instead of downgrading ─────────────────────────────────
 // The obvious move when the token says `admin` and the row says `seo` is "use the row" —
@@ -60,14 +72,20 @@ import {
 //     (0055 not applied yet, a stale schema cache), the profile is read again alone and
 //     the 7-day default applies, logged once per isolate. Only an unreadable PROFILE
 //     fails closed, as it always has.
-// Rollback: revert this file to its pre-U12a version (git history); it needs nothing
-// from the database that 0050 did not already have (docs/admin-v2/as-built/U12a.md).
+// Rollback: revert this file to its pre-U17 version (git history; docs/admin-v2/as-built/U17.md
+// says what goes with it), or to its pre-U12a version, which needs nothing from the database
+// that 0050 did not already have (docs/admin-v2/as-built/U12a.md).
 
 export interface ResolveResult {
   ctx: AuthContext | null;
   /** Set when a session existed but must be torn down (stale role/tenant, lockout, age). */
   revoke: boolean;
+  /** A session that passed the password but must still type a code or set 2FA up (U17). */
+  pending: PendingSecondStep | null;
 }
+
+/** Active, unlocked, with a role and a tenant: the profile a session may stand on, or not. */
+type ProfileVerdict = { ok: true; role: AuthContext['role']; tenantId: string } | { ok: false };
 
 interface ProfileRow {
   tenant_id: unknown;
@@ -77,8 +95,8 @@ interface ProfileRow {
   tenant?: unknown;
 }
 
-const DENY_ANON: ResolveResult = { ctx: null, revoke: false };
-const DENY_REVOKE: ResolveResult = { ctx: null, revoke: true };
+const DENY_ANON: ResolveResult = { ctx: null, revoke: false, pending: null };
+const DENY_REVOKE: ResolveResult = { ctx: null, revoke: true, pending: null };
 
 /** How far apart this Worker's clock and the auth server's may be: five minutes. */
 export const CLOCK_SKEW_SECONDS = 300;
@@ -135,6 +153,24 @@ export function sessionMaxDays(profile: { tenant?: unknown }): number {
     : DEFAULT_SESSION_MAX_DAYS;
 }
 
+/**
+ * Whether the tenant requires 2FA (0072), from the embedded setting: true only for a literal
+ * `true`. Anything else (no row, the plain-profile fallback, a misshapen embed, which is logged
+ * once with the session length's) is "not required" at the Worker; the access-token hook still
+ * holds the database layer.
+ */
+export function tenantRequiresMfa(profile: { tenant?: unknown }): boolean {
+  return one(one(profile.tenant)?.['security'])?.['require_mfa'] === true;
+}
+
+function profileVerdict(profile: ProfileRow, now: number): ProfileVerdict {
+  const { tenant_id: tenant, role, is_active: isActive, locked_until: lockedUntil } = profile;
+  if (isActive !== true) return { ok: false };
+  if (typeof lockedUntil === 'string' && Date.parse(lockedUntil) > now) return { ok: false };
+  if (!isRole(role) || typeof tenant !== 'string') return { ok: false };
+  return { ok: true, role, tenantId: tenant };
+}
+
 /** The profile with the setting; the profile alone when the embed is refused; null = unreadable. */
 async function readProfile(userId: string): Promise<ProfileRow | null> {
   const sb = serviceClient();
@@ -170,6 +206,7 @@ export async function resolveAuthContext(
   let userId: string;
   let email: string;
   let token: string;
+  let factors: readonly FactorLike[] | null;
 
   try {
     // The token this request carries (refreshed first when it is about to expire), then
@@ -183,6 +220,8 @@ export async function resolveAuthContext(
     userId = data.user.id;
     email = data.user.email ?? '';
     token = accessToken;
+    // The account's factors as the auth server holds them now (U17): what fact 4 reads.
+    factors = (data.user.factors as readonly FactorLike[] | undefined) ?? null;
   } catch {
     return DENY_ANON;
   }
@@ -195,15 +234,69 @@ export async function resolveAuthContext(
     return DENY_REVOKE;
   }
 
+  const factor = factorsOf(factors);
+
+  /** Fact 3. A token with no sign-in time is let through without an age check, never refused. */
+  const tooOld = async (profile: ProfileRow): Promise<boolean> => {
+    const signedIn = signedInAt(claims);
+    if (signedIn === null) {
+      await logOnce('amr-missing', 'warn', AMR_MISSING);
+      return false;
+    }
+    return nowSeconds - signedIn > sessionMaxDays(profile) * DAY_SECONDS + CLOCK_SKEW_SECONDS;
+  };
+
+  /** Fact 4: the second step this session still owes, or null (src/lib/auth/twoStep.ts). */
+  const owed = (profile: ProfileRow) =>
+    secondStepNeeded({
+      verifiedFactor: factor.verified,
+      tenantRequires: tenantRequiresMfa(profile),
+      aal: claims.aal,
+    });
+
+  const held = (
+    verdict: { role: AuthContext['role']; tenantId: string },
+    mode: 'challenge' | 'enrol',
+  ): ResolveResult => ({
+    ctx: null,
+    revoke: false,
+    pending: {
+      userId,
+      tenantId: verdict.tenantId,
+      email,
+      role: verdict.role,
+      mode,
+      factorId: factor.totpId,
+    },
+  });
+
   // app_metadata ONLY (never user_metadata, which the user can write), and the TOKEN's: the
   // role RLS will enforce for this request's queries.
   const jwtRole = claims.role;
   const jwtTenant = claims.tenantId;
   // A session with no role/tenant claim never had access to begin with: the access-token
-  // hook did not stamp it (no profile, or a switched-off one), so RLS would resolve this
-  // user into the anon fence. Anonymous rather than half-authenticated.
+  // hook did not stamp it (no profile, a switched-off one, or since 0072 a sign-in below the
+  // level the account requires), so RLS would resolve this user into the anon fence. Only
+  // the last becomes a pending second step; everything else is anonymous, as before U17.
   if (!isRole(jwtRole) || typeof jwtTenant !== 'string' || jwtTenant.length === 0) {
-    return DENY_ANON;
+    // An aal2 token the hook did not stamp is owed no code: anonymous, without a read.
+    if (claims.aal === 'aal2') return DENY_ANON;
+    let profile: ProfileRow | null;
+    try {
+      profile = await readProfile(userId);
+    } catch {
+      // Not the refusal of a session that had access: it never had any. As before U17.
+      return DENY_ANON;
+    }
+    if (!profile) return DENY_ANON;
+    const mode = owed(profile);
+    if (mode === null) return DENY_ANON;
+    // From here the session is a sign-in in progress: a profile that cannot stand (switched
+    // off, or locked, as the fifth wrong code does) ends it, as it ends a full session.
+    const verdict = profileVerdict(profile, now);
+    if (!verdict.ok) return DENY_REVOKE;
+    if (await tooOld(profile)) return DENY_REVOKE;
+    return held(verdict, mode);
   }
 
   let profile: ProfileRow | null;
@@ -216,30 +309,33 @@ export async function resolveAuthContext(
   }
   if (!profile) return DENY_REVOKE;
 
-  const {
-    tenant_id: dbTenant,
-    role: dbRole,
-    is_active: isActive,
-    locked_until: lockedUntil,
-  } = profile;
-
-  if (isActive !== true) return DENY_REVOKE;
-  if (typeof lockedUntil === 'string' && Date.parse(lockedUntil) > now) return DENY_REVOKE;
-  if (!isRole(dbRole) || typeof dbTenant !== 'string') return DENY_REVOKE;
+  const verdict = profileVerdict(profile, now);
+  if (!verdict.ok) return DENY_REVOKE;
 
   // See the header comment: stale claims cannot be downgraded, only rejected.
-  if (dbRole !== jwtRole || dbTenant !== jwtTenant) return DENY_REVOKE;
+  if (verdict.role !== jwtRole || verdict.tenantId !== jwtTenant) return DENY_REVOKE;
 
-  // The session length. No sign-in time in the token: let through, never refused.
-  const signedIn = signedInAt(claims);
-  if (signedIn === null) {
-    await logOnce('amr-missing', 'warn', AMR_MISSING);
-  } else if (nowSeconds - signedIn > sessionMaxDays(profile) * DAY_SECONDS + CLOCK_SKEW_SECONDS) {
-    return DENY_REVOKE;
-  }
+  if (await tooOld(profile)) return DENY_REVOKE;
+
+  // Fact 4. A token minted before the factor was verified, or before the tenant switched
+  // Require on, still carries its role: it is held at the second step all the same.
+  const mode = owed(profile);
+  if (mode !== null) return held(verdict, mode);
 
   return {
-    ctx: { userId, tenantId: dbTenant, role: dbRole, isActive: true, email },
+    ctx: {
+      userId,
+      tenantId: verdict.tenantId,
+      role: verdict.role,
+      isActive: true,
+      email,
+      twoStep: {
+        on: factor.verified,
+        required: tenantRequiresMfa(profile),
+        factorId: factor.totpId,
+      },
+    },
     revoke: false,
+    pending: null,
   };
 }

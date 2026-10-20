@@ -71,15 +71,15 @@ export const RELEASE_LINKS: Readonly<Partial<Record<ReleaseEntityType, readonly 
     link('author_id', 'team_members', 'authorId', 'set null'),
     link('category_id', 'categories', 'categoryId', 'set null'),
   ],
-  // U10's share images (0073: composite keys to the tenant's media, ON DELETE RESTRICT).
-  entity_seo: [media('og_media_id', 'ogMediaId')],
-  seo_defaults: [media('default_og_media_id', 'defaultOgMediaId')],
   page_section: [link('page_id', 'pages', 'pageId', 'cascade')],
   nav_item: [link('parent_id', 'navigation', 'parentId', 'cascade')],
   page_visibility: [
     link('page_id', 'pages', 'target', 'cascade'),
     link('redirect_page_id', 'pages', 'redirectPageId', 'set null'),
   ],
+  // The share images (U10, 0073); entity SEO's target is added by the rules (SEO_TARGET_TABLES).
+  entity_seo: [media('og_media_id', 'ogMediaId')],
+  seo_defaults: [media('default_og_media_id', 'defaultOgMediaId')],
 };
 
 /** The table an entity-SEO row's target lives in (its `entity_type` CHECK, 0009). */

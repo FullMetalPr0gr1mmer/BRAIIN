@@ -124,6 +124,7 @@ const security = await import('@/pages/api/admin/users/security');
 const owner = await import('@/pages/api/admin/users/[id]/owner');
 const resend = await import('@/pages/api/admin/users/[id]/resend');
 const cancel = await import('@/pages/api/admin/users/[id]/invite');
+const twoStepReset = await import('@/pages/api/admin/users/[id]/two-step-reset');
 const {
   OWNER_PROTECTED,
   NOT_OWNER,
@@ -199,6 +200,8 @@ function call(
   sb: ReturnType<typeof session>,
   body?: unknown,
   params: Record<string, string> = { id: TARGET },
+  /** More of the caller's context (U17: their own 2FA). */
+  extra: Record<string, unknown> = {},
 ) {
   const url = new URL(`https://admin.example.test${path}`);
   return route({
@@ -217,6 +220,7 @@ function call(
         role: 'admin',
         isActive: true,
         email: 'a@x.test',
+        ...extra,
       },
       supabase: sb,
       cspNonce: 'n',
@@ -363,6 +367,7 @@ describe('GET and PUT /api/admin/users/security', () => {
     expect((await bodyOf(res))['data']).toEqual({
       sessionMaxDays: 7,
       inviteDomain: null,
+      requireMfa: false,
       version: 0,
     });
   });
@@ -373,6 +378,7 @@ describe('GET and PUT /api/admin/users/security', () => {
     expect((await bodyOf(res))['data']).toEqual({
       sessionMaxDays: 1,
       inviteDomain: 'example.com',
+      requireMfa: false,
       version: 3,
     });
   });
@@ -395,7 +401,7 @@ describe('GET and PUT /api/admin/users/security', () => {
     expect(sb.calls).toContainEqual([
       'insert',
       'admin_security_settings',
-      { tenant_id: TENANT, session_max_days: 1, invite_domain: 'example.com' },
+      { tenant_id: TENANT, session_max_days: 1, invite_domain: 'example.com', require_mfa: false },
     ]);
     expect(state.audits).toEqual([
       {
@@ -408,6 +414,7 @@ describe('GET and PUT /api/admin/users/security', () => {
     expect((await bodyOf(res))['data']).toEqual({
       sessionMaxDays: 1,
       inviteDomain: 'example.com',
+      requireMfa: false,
       version: 1,
     });
   });
@@ -452,7 +459,7 @@ describe('GET and PUT /api/admin/users/security', () => {
     expect(sb.calls).toContainEqual([
       'update',
       'admin_security_settings',
-      { session_max_days: 7, invite_domain: 'example.com' },
+      { session_max_days: 7, invite_domain: 'example.com', require_mfa: false },
     ]);
     expect(state.audits).toEqual([
       expect.objectContaining({ detail: { fields: ['session_max_days'] } }),
@@ -760,7 +767,7 @@ describe('§9 (b): an Admin demoted, switched off or locked under an open sessio
   ];
 
   it.each(stale)(
-    '%s: PUT security, POST owner, PATCH user, POST invite, resend and cancel are 403',
+    '%s: PUT security, POST owner, PATCH user, POST invite, resend, cancel and Reset 2FA are 403',
     async (_label, live) => {
       state.live = live;
       const sb = session({
@@ -787,8 +794,16 @@ describe('§9 (b): an Admin demoted, switched off or locked under an open sessio
         }),
         await call(resend.POST as APIRoute, 'POST', `/api/admin/users/${TARGET}/resend`, sb),
         await call(cancel.DELETE as APIRoute, 'DELETE', `/api/admin/users/${TARGET}/invite`, sb),
+        // U17: refused before public.reset_two_step is asked (it checks the same again).
+        await call(
+          twoStepReset.POST as APIRoute,
+          'POST',
+          `/api/admin/users/${TARGET}/two-step-reset`,
+          sb,
+        ),
       ];
-      expect(answers.map((r) => r.status)).toEqual([403, 403, 403, 403, 403, 403]);
+      expect(answers.map((r) => r.status)).toEqual([403, 403, 403, 403, 403, 403, 403]);
+      expect(sb.calls.filter((c) => c[0] === 'rpc' && c[1] === 'reset_two_step')).toEqual([]);
       expect(state.deleted).toEqual([]);
       expect(state.claims).toEqual([]);
       expect(sb.calls.filter((c) => c[0] !== 'select')).toEqual([]);
@@ -1230,5 +1245,153 @@ describe('GET /api/admin/users: pending invites', () => {
       await bodyOf(await call(users.GET as APIRoute, 'GET', '/api/admin/users', down))
     )['data'] as { pending: unknown[] };
     expect(downData.pending).toEqual([]);
+  });
+});
+
+// ── Two factor authentication (Admin v2 U17) ─────────────────────────────────────────────
+
+describe('PUT /api/admin/users/security: Require 2FA for everyone', () => {
+  const stored: Read = {
+    data: { session_max_days: 7, invite_domain: null, require_mfa: false, version: 3 },
+    error: null,
+  };
+  const body = (requireMfa?: boolean) => ({
+    sessionMaxDays: 7,
+    inviteDomain: null,
+    version: 3,
+    ...(requireMfa === undefined ? {} : { requireMfa }),
+  });
+  const ON = { twoStep: { on: true, required: false, factorId: TARGET } };
+
+  it('turning it on is refused (422 requireMfa) unless the saving Admin uses 2FA (D5)', async () => {
+    for (const extra of [{}, { twoStep: { on: false, required: false, factorId: null } }]) {
+      const sb = session({ reads: { admin_security_settings: stored } });
+      const res = await call(
+        security.PUT as APIRoute,
+        'PUT',
+        '/api/admin/users/security',
+        sb,
+        body(true),
+        { id: TARGET },
+        extra,
+      );
+      expect(res.status).toBe(422);
+      expect(await bodyOf(res)).toMatchObject({
+        error: 'validation',
+        field: 'requireMfa',
+        detail: 'Turn on 2FA for your own account first.',
+      });
+      expect(sb.calls.filter((c) => c[0] === 'update' || c[0] === 'insert')).toEqual([]);
+    }
+    expect(state.audits).toEqual([]);
+  });
+
+  it('an Admin with 2FA on turns it on: saved at the version read, audited by field name', async () => {
+    const sb = session({
+      reads: { admin_security_settings: stored },
+      writes: {
+        admin_security_settings: {
+          data: { session_max_days: 7, invite_domain: null, require_mfa: true, version: 4 },
+          error: null,
+        },
+      },
+    });
+    const res = await call(
+      security.PUT as APIRoute,
+      'PUT',
+      '/api/admin/users/security',
+      sb,
+      body(true),
+      { id: TARGET },
+      ON,
+    );
+    expect(res.status).toBe(200);
+    expect(sb.calls).toContainEqual([
+      'update',
+      'admin_security_settings',
+      { session_max_days: 7, invite_domain: null, require_mfa: true },
+    ]);
+    expect(state.audits).toEqual([
+      expect.objectContaining({ detail: { fields: ['require_mfa'] } }),
+    ]);
+    expect((await bodyOf(res))['data']).toMatchObject({ requireMfa: true, version: 4 });
+  });
+
+  it('turning it off, or keeping it on, needs no 2FA of the saver (nobody is locked in)', async () => {
+    const on: Read = { data: { ...(stored.data as object), require_mfa: true }, error: null };
+    let sb = session({
+      reads: { admin_security_settings: on },
+      writes: { admin_security_settings: stored },
+    });
+    let res = await call(
+      security.PUT as APIRoute,
+      'PUT',
+      '/api/admin/users/security',
+      sb,
+      body(false),
+    );
+    expect(res.status).toBe(200);
+    expect(sb.calls).toContainEqual([
+      'update',
+      'admin_security_settings',
+      { session_max_days: 7, invite_domain: null, require_mfa: false },
+    ]);
+    // A card loaded before U17 posts no requireMfa: the stored value is kept, and nothing
+    // changed, so nothing is written.
+    sb = session({ reads: { admin_security_settings: on } });
+    res = await call(security.PUT as APIRoute, 'PUT', '/api/admin/users/security', sb, body());
+    expect(res.status).toBe(200);
+    expect(sb.calls.filter((c) => c[0] === 'update')).toEqual([]);
+  });
+});
+
+describe('POST /api/admin/users/[id]/two-step-reset', () => {
+  const reset = (sb: ReturnType<typeof session>, id = TARGET) =>
+    call(
+      twoStepReset.POST as APIRoute,
+      'POST',
+      `/api/admin/users/${id}/two-step-reset`,
+      sb,
+      undefined,
+      { id },
+    );
+
+  it('resets through public.reset_two_step, which audits it; the route writes no row', async () => {
+    const sb = session({ rpc: { reset_two_step: { data: 2, error: null } } });
+    const res = await reset(sb);
+    expect(res.status).toBe(200);
+    expect((await bodyOf(res))['data']).toEqual({ factors: 2 });
+    expect(sb.calls).toEqual([['rpc', 'reset_two_step', { p_tenant: TENANT, p_user: TARGET }]]);
+    expect(state.audits).toEqual([]);
+  });
+
+  it('never your own: refused before the database is asked', async () => {
+    const sb = session({});
+    const res = await reset(sb, ADMIN);
+    expect(res.status).toBe(422);
+    expect(await bodyOf(res)).toMatchObject({ field: 'two-step' });
+    expect(sb.calls).toEqual([]);
+  });
+
+  it.each([
+    ['owner_protected', { code: '42501', message: 'owner_protected' }, 422, 'owner-protected'],
+    ['a stale Admin', { code: '42501', message: 'reset_two_step: not a live Admin' }, 403, null],
+    ['self', { code: '22023', message: 'self' }, 422, 'two-step'],
+    ['nothing_to_reset', { code: '22023', message: 'nothing_to_reset' }, 409, null],
+    ['not_found', { code: '22023', message: 'not_found' }, 404, null],
+    ['anything else', { code: 'XX000', message: 'boom' }, 500, null],
+  ] as const)('the database refusing (%s) is answered', async (_label, error, status, field) => {
+    const sb = session({ rpc: { reset_two_step: { data: null, error } } });
+    const res = await reset(sb);
+    expect(res.status).toBe(status);
+    if (field) expect(await bodyOf(res)).toMatchObject({ field });
+    expect(state.audits).toEqual([]);
+  });
+
+  it('a path that is not an id is a 404, and nothing is asked', async () => {
+    const sb = session({});
+    const res = await reset(sb, 'nope');
+    expect(res.status).toBe(404);
+    expect(sb.calls).toEqual([]);
   });
 });

@@ -43,11 +43,19 @@ export const GET = defineAdminRoute({
     // read (profiles_live_read) limit this to a live Admin of the tenant, so the primary
     // layer does the work rather than being bypassed for convenience. The e-mails and
     // sign-in times come from public.staff_accounts, which checks the same itself.
-    const { rows, total, hasOwner, pending } = await loadUsers(sb, auth, {
+    const { rows, total, hasOwner, pending, withoutTwoStep } = await loadUsers(sb, auth, {
       limit: input.limit,
       offset: input.offset,
     });
-    return { rows, total, limit: input.limit, offset: input.offset, hasOwner, pending };
+    return {
+      rows,
+      total,
+      limit: input.limit,
+      offset: input.offset,
+      hasOwner,
+      pending,
+      withoutTwoStep,
+    };
   },
 });
 

@@ -386,9 +386,10 @@ const MIDDLEWARE = 3;
  * so they never crowd the content kinds out of the attention list's capped read. G2 added two:
  * the health widget's readings (health_probes, through loadHealthSummary) and the bell's health
  * source in the shell (docs/admin-v2/as-built/G2.md). G1b added one: the Right now widget's
- * realtime_summary (docs/admin-v2/as-built/G1.md).
+ * realtime_summary (docs/admin-v2/as-built/G1.md). U17 added one, for users.manage only:
+ * the health widget's two factor row reads the directory (staff_accounts).
  */
-const MEASURED = { loadDashboard: 27, total: 38 };
+const MEASURED = { loadDashboard: 28, total: 39 };
 
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
   // A real request has one clock: the dashboard's "Going live today" and the bell both ask

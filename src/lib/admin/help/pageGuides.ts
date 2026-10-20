@@ -27,7 +27,12 @@ export interface PageGuide {
 export const PAGE_GUIDES: readonly PageGuide[] = [
   { slug: 'finding-your-way', caps: [], screens: ['/admin/search'] },
   { slug: 'your-dashboard', caps: [], screens: ['/admin'] },
-  { slug: 'your-account', caps: [], screens: ['/admin/account', '/admin/notifications'] },
+  {
+    slug: 'your-account',
+    caps: [],
+    // /admin/2fa (U17): the two factor page, a full session's setup and management.
+    screens: ['/admin/account', '/admin/notifications', '/admin/2fa'],
+  },
   { slug: 'roles-and-access', caps: [], screens: ['/admin/users'] },
   {
     slug: 'saving-and-publishing',

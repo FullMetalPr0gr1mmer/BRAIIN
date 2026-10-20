@@ -18,6 +18,9 @@ declare namespace App {
     cspNonce: string;
     // Resolved auth context (null for anonymous public requests).
     session: import('@/lib/auth/types').AuthContext | null;
+    // A session that passed the password but still owes its second step (Admin v2 U17): no
+    // context, only this. The middleware lets it reach /admin/2fa and sign-out, nothing else.
+    secondStep: import('@/lib/auth/twoStep').PendingSecondStep | null;
     // Double-submit CSRF token for admin mutations ('' on public routes).
     csrfToken: string;
     // Request-scoped, cookie-bound Supabase client for /admin and /api/admin. Carries

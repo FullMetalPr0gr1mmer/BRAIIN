@@ -1,0 +1,234 @@
+---
+import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
+import { TWO_STEP_LOST, TWO_STEP_NOT_SET_UP, type PageMessage } from '@/lib/auth/messages';
+import { TWO_STEP_PATH } from '@/lib/auth/twoStep';
+import { groupKey, type TwoStepView } from '@/lib/auth/twoStepFlow';
+
+// The /admin/2fa page's content (Admin v2 U17): zero JavaScript, every action a plain form
+// posting to the page itself with the double-submit token (src/lib/auth/twoStepFlow.ts decides
+// what a post does). Two frames: the sign-in shell (AuthLayout) for a session still owing its
+// code or its setup, where this is the page's h1; the admin shell for a full session (setting
+// 2FA up, or turning it off), where the page head holds the h1 and this starts at h2.
+//
+// The setup step shows the key as text and as an `otpauth://` link (which opens the
+// authenticator on the phone this page is open on): no QR code yet, because drawing one means
+// a QR encoder this repository does not carry (owner question, as-built U17). GoTrue's own QR
+// is a `data:` image, which the CSP refuses (CLAUDE.md §3).
+
+interface Props {
+  view: TwoStepView;
+  message: PageMessage | null;
+  csrfToken: string;
+  /** Where the person goes after the code (held to /admin by safeNext). */
+  next: string;
+  /** Inside the admin shell: headings start at h2, and there is a way back to the account. */
+  inShell: boolean;
+}
+
+const { view, message, csrfToken, next, inShell } = Astro.props;
+const H = inShell ? 'h2' : 'h1';
+const pendingStep = !inShell;
+---
+
+<div class="two-step" data-mode={view.mode} data-frame={inShell ? 'admin' : 'auth'}>
+  {
+    view.mode === 'challenge' && (
+      <>
+        <H>Enter your code</H>
+        <p class="two-step__lead">
+          Open your authenticator app and type the 6-digit code for this account.
+        </p>
+      </>
+    )
+  }
+  {
+    view.mode === 'enrol' && (
+      <>
+        <H>Set up 2FA</H>
+        <p class="two-step__lead">
+          Your team asks everyone to use two factor authentication. You need an authenticator app on
+          your phone.
+        </p>
+      </>
+    )
+  }
+  {
+    view.mode === 'intro' && (
+      <>
+        <H>Set up 2FA</H>
+        <p class="two-step__lead">
+          With 2FA on, signing in asks for a 6-digit code from an authenticator app on your phone
+          after your password. Someone who learns your password still cannot get in.
+        </p>
+      </>
+    )
+  }
+  {
+    view.mode === 'setup' && (
+      <>
+        <H>Add this account to your app</H>
+        <ol class="two-step__steps">
+          <li>Open your authenticator app and choose to add an account.</li>
+          <li>Choose to enter a key, and type this one. If the app asks, the key is time based.</li>
+          <li>Type the 6-digit code the app then shows.</li>
+        </ol>
+        <p class="two-step__keybox">
+          <span class="two-step__keylabel">Your key</span>
+          <code class="two-step__key" dir="ltr">
+            {groupKey(view.setupKey)}
+          </code>
+        </p>
+        <p class="two-step__alt">
+          Is your authenticator app on this device?{' '}
+          <a class="two-step__link" href={view.otpauth}>
+            Add it to the app
+          </a>
+        </p>
+      </>
+    )
+  }
+  {
+    view.mode === 'manage' && (
+      <>
+        <H>2FA is on</H>
+        <p class="two-step__lead">
+          On, via authenticator app. Each sign in asks for a code after your password.
+        </p>
+        {view.required && <p class="two-step__lead">Your team requires 2FA, so it stays on.</p>}
+      </>
+    )
+  }
+  {
+    view.mode === 'not-set-up' && (
+      <>
+        <H>{TWO_STEP_NOT_SET_UP.title}</H>
+        <p class="two-step__lead">{TWO_STEP_NOT_SET_UP.text}</p>
+      </>
+    )
+  }
+
+  {
+    message && (
+      <p class="msg" data-kind={message.kind} role={message.kind === 'error' ? 'alert' : 'status'}>
+        {message.text}
+      </p>
+    )
+  }
+
+  {
+    view.mode === 'challenge' && (
+      <form class="two-step__form" method="post" action={TWO_STEP_PATH}>
+        <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+        <input type="hidden" name="intent" value="verify" />
+        <input type="hidden" name="next" value={next} />
+        <label class="field">
+          <span>6-digit code</span>
+          <input
+            class="two-step__code"
+            type="text"
+            name="code"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            required
+            maxlength="16"
+            dir="ltr"
+          />
+        </label>
+        <button type="submit" data-variant="primary">
+          Verify
+        </button>
+      </form>
+    )
+  }
+  {
+    (view.mode === 'enrol' || view.mode === 'intro') && (
+      <form class="two-step__form" method="post" action={TWO_STEP_PATH}>
+        <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+        <input type="hidden" name="intent" value="start" />
+        <input type="hidden" name="next" value={next} />
+        <button type="submit" data-variant="primary">
+          Set up
+        </button>
+      </form>
+    )
+  }
+  {
+    view.mode === 'setup' && (
+      <form class="two-step__form" method="post" action={TWO_STEP_PATH}>
+        <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+        <input type="hidden" name="intent" value="confirm" />
+        <input type="hidden" name="next" value={next} />
+        <input type="hidden" name="factorId" value={view.factorId} />
+        <input type="hidden" name="setupKey" value={view.setupKey} />
+        <label class="field">
+          <span>6-digit code</span>
+          <input
+            class="two-step__code"
+            type="text"
+            name="code"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            required
+            maxlength="16"
+            dir="ltr"
+          />
+        </label>
+        <button type="submit" data-variant="primary">
+          Turn on 2FA
+        </button>
+      </form>
+    )
+  }
+  {
+    view.mode === 'manage' && !view.required && (
+      <form class="two-step__form" method="post" action={TWO_STEP_PATH}>
+        <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+        <input type="hidden" name="intent" value="off" />
+        <input type="hidden" name="next" value={next} />
+        <label class="field">
+          <span>Code from your app, to turn 2FA off</span>
+          <input
+            class="two-step__code"
+            type="text"
+            name="code"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            required
+            maxlength="16"
+            dir="ltr"
+          />
+        </label>
+        <p class="two-step__hint">
+          Five wrong codes in 15 minutes lock your account for 15 minutes.
+        </p>
+        <button type="submit" data-variant="danger">
+          Turn off 2FA
+        </button>
+      </form>
+    )
+  }
+
+  {
+    (view.mode === 'challenge' || view.mode === 'setup') && (
+      <p class="two-step__hint">{TWO_STEP_LOST}</p>
+    )
+  }
+
+  {
+    pendingStep ? (
+      <form class="two-step__signout" method="post" action={TWO_STEP_PATH}>
+        <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+        <input type="hidden" name="intent" value="signout" />
+        <button type="submit" data-variant="ghost">
+          Sign out
+        </button>
+      </form>
+    ) : (
+      <p class="two-step__back">
+        <a class="two-step__link" href="/admin/account">
+          Back to your account
+        </a>
+      </p>
+    )
+  }
+</div>

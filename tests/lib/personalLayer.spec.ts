@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import AccountDrawer from '@/components/admin/screens/chrome/AccountDrawer';
+import AccountPanel from '@/components/admin/screens/chrome/AccountPanel';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
 import { CAPABILITIES, ROLE_CAPS } from '@/lib/authz/matrix';
@@ -322,6 +323,43 @@ describe('the account drawer on the server', () => {
     expect(html).not.toContain('Change password');
     expect(html).not.toContain('acct__can');
     for (const line of capLinesFor('admin')) expect(html).not.toContain(line);
+  });
+});
+
+describe('the account row for two factor authentication (Admin v2 U17)', () => {
+  const panel = (twoStep?: { on: boolean; required: boolean; factorId: string | null }) =>
+    renderToStaticMarkup(
+      createElement(AccountPanel, {
+        view: accountViewFor({ ...auth('seo'), ...(twoStep ? { twoStep } : {}) }, 'Sam'),
+        idPrefix: 'acct',
+        mode: 'page',
+        csrfToken: 'token',
+      }),
+    );
+
+  it('off: says so, warns, and links to set it up on /admin/2fa', () => {
+    for (const html of [panel(), panel({ on: false, required: false, factorId: null })]) {
+      expect(html).toContain('Two factor authentication');
+      expect(html).toContain('Off. Turn it on to protect the admin.');
+      expect(html).toMatch(/<a class="acct__link" href="\/admin\/2fa">Set up<\/a>/);
+      expect(html).toMatch(/<span class="badge" data-tone="warn">Off<\/span>/);
+    }
+  });
+
+  it('on: says so, and links to manage it', () => {
+    const html = panel({ on: true, required: true, factorId: USER });
+    expect(html).toContain('On, via authenticator app.');
+    expect(html).toMatch(/<a class="acct__link" href="\/admin\/2fa">Manage<\/a>/);
+    expect(html).toMatch(/<span class="badge" data-tone="ok">On<\/span>/);
+    // The view carries the two flags only, never the factor's id.
+    expect(
+      accountViewFor({ ...auth(), twoStep: { on: true, required: true, factorId: USER } }, null)
+        .twoStep,
+    ).toEqual({
+      on: true,
+      required: true,
+    });
+    expect(html).not.toContain(USER);
   });
 });
 

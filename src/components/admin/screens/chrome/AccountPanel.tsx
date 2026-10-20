@@ -314,6 +314,28 @@ export default function AccountPanel({
           </span>
         </li>
         <li className="li">
+          {/* Two factor authentication (Admin v2 U17, the prototype's account row): set up and
+              managed on /admin/2fa, a zero-JS page (a plain link in the drawer too). Required
+              and off cannot be seen here: such a session is held at the second step. */}
+          <span className="li__ico" aria-hidden="true">
+            <Icon name="lock" />
+          </span>
+          <span className="li__main">
+            <span className="li__t">Two factor authentication</span>
+            <span className="li__s">
+              {view.twoStep.on
+                ? 'On, via authenticator app.'
+                : 'Off. Turn it on to protect the admin.'}{' '}
+              <a className="acct__link" href="/admin/2fa">
+                {view.twoStep.on ? 'Manage' : 'Set up'}
+              </a>
+            </span>
+          </span>
+          <span className="badge" data-tone={view.twoStep.on ? 'ok' : 'warn'}>
+            {view.twoStep.on ? 'On' : 'Off'}
+          </span>
+        </li>
+        <li className="li">
           <span className="li__ico" aria-hidden="true">
             <Icon name="shield" />
           </span>

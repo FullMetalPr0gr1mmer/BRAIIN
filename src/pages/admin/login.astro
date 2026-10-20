@@ -2,6 +2,7 @@
 import AuthLayout from '@/layouts/AuthLayout.astro';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
 import { safeNext } from '@/lib/auth/next';
+import { TWO_STEP_PATH } from '@/lib/auth/twoStep';
 import { INVITE_READY, LOGIN_MESSAGES, RESET_DONE, messageFor } from '@/lib/auth/messages';
 
 export const prerender = false;
@@ -15,6 +16,10 @@ export const prerender = false;
 // target (src/lib/auth/next.ts: an open redirect otherwise).
 const next = safeNext(Astro.url.searchParams.get('next') ?? '/admin');
 if (Astro.locals.session) return Astro.redirect(next, 302);
+// Signed in with the password, the code still owed (Admin v2 U17): straight to the second step.
+if (Astro.locals.secondStep) {
+  return Astro.redirect(`${TWO_STEP_PATH}?${new URLSearchParams({ next })}`, 302);
+}
 
 const error = messageFor(LOGIN_MESSAGES, Astro.url.searchParams.get('error'));
 // A finished reset (F7) or an accepted invite (U12b) says so; neither ever names the account.

@@ -258,6 +258,24 @@ states it. Local stacks set neither (`supabase/config.toml` has no `[auth.sessio
 the e2e harness's saved sessions are not cut short. Check: sign in, then confirm the
 dashboard shows both values; a session idle past the timeout lands on the sign-in page.
 
+### 2d. Two factor sign in: authenticator apps on (Admin v2 U17, owner item O-25)
+
+Not a blocker: while it is off, nothing changes and `/admin/2fa` says "Not set up". On each
+hosted project (staging, then production): Dashboard → **Authentication → Multi-Factor** →
+**TOTP (App Authenticator)**: enrolment and verification **enabled** (the hosted default),
+maximum factors per user **10**. Local stacks pin the same in `supabase/config.toml`
+(`[auth.mfa]`, `[auth.mfa.totp]`). Verify: `GET https://api.supabase.com/v1/projects/<ref>/config/auth`
+shows `mfa_totp_enroll_enabled: true`, `mfa_totp_verify_enabled: true` and
+`mfa_max_enrolled_factors: 10`.
+
+Migration 0072 restates the access-token hook (§2): role and tenant are stamped only at the
+assurance level the account requires. Right after `supabase db push` of 0072, **before** the
+deploy, sign in once to the live admin: the old Worker meets the new hook, and since nobody
+has a factor yet and `require_mfa` is false for every tenant, every token is stamped exactly
+as before. **Do not switch Require 2FA for everyone on until the new Worker is live** (the old
+one has no `/admin/2fa`). The residuals the owner accepts with O-25 are in
+`docs/admin-v2/deviations.md` ("Residual risks").
+
 ## 3. Create and promote the first admin  ⛔ blocker
 
 `users.manage` is Admin-only, so there is no in-product path to the first admin.
@@ -317,6 +335,26 @@ commit;
 
 Deleting the owner's account (the dashboard, or `auth.admin.deleteUser`) fails while the
 marker is set: clear it first, as above.
+
+**The owner lost the phone that holds their 2FA (Admin v2 U17).** Nobody can reset the
+owner's 2FA from the admin (`public.reset_two_step` refuses it, and there are no recovery
+codes). In the SQL editor, as `postgres`, after confirming who is asking:
+
+```sql
+begin;
+delete from auth.mfa_factors   where user_id = '<the owner''s user id>';
+delete from auth.sessions      where user_id = '<the owner''s user id>';
+delete from auth.refresh_tokens where user_id = '<the owner''s user id>';
+insert into public.audit_log (tenant_id, actor_id, actor_role, action, entity_type, entity_id, detail)
+select p.tenant_id, null, null, 'user.two_step_reset', 'profile', p.id::text,
+       jsonb_build_object('by', 'operator')
+  from public.profiles p where p.id = '<the owner''s user id>';
+commit;
+```
+
+The owner then signs in with the password alone (or, if the tenant requires 2FA, is asked to
+set it up again at once). An operator's row keeps the actor it writes (0050's binding applies
+to staff tokens only), so the activity log shows the reset with no person behind it.
 
 ## 4. Worker secrets  ⛔ blocker
 
@@ -1481,6 +1519,21 @@ database keeps revoking sessions on a role change. An older users screen meets t
 guard as a 500 instead of the 422. To roll back only the new session check, revert
 `src/lib/auth/context.ts` (and `src/lib/auth/claims.ts`) to their pre-U12a versions in a PR
 (`docs/admin-v2/as-built/U12a.md`, Rollback).
+
+0072 (Admin v2 U17) does not move the line either: it is expand only (a column, two new
+definers, `staff_accounts` with two more columns an older Worker drops, and the hook
+restated). A Worker rollback across U17's PR is safe: the older Worker reads an `aal1` token
+the hook left without a role as anonymous, so a person with a factor is refused until they
+verify (nobody can verify without the new Worker), and it never grants more than the hook
+stamped. Three narrower rollbacks, as `postgres`:
+
+1. **The hook alone**, to stamp every token as before 0072 whatever its `aal`: re-run 0010's
+   `create or replace function public.custom_access_token_hook` body (and its two grant
+   lines); 0072's `app.mfa_required` stays, unused.
+2. **The escape hatch**, if Require 2FA locks people out:
+   `update public.admin_security_settings set require_mfa = false;`
+3. **One person's 2FA**: `delete from auth.mfa_factors where user_id = '<user id>';` (an
+   Admin's Reset 2FA does the same, with the sessions and an audit row).
 
 0066 (Admin v2 R5) does not move the line either. It is expand only but for one privilege
 removal: TRUNCATE is revoked from `anon`, `authenticated` and `service_role` on every table the
