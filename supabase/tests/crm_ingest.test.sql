@@ -262,8 +262,8 @@ set local role authenticated;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 select is((select sla_hours || '/' || timezone from public.crm_settings), '24/Asia/Riyadh',
   'admin reads its tenant''s settings (defaults: 24 hours, Riyadh)');
-select throws_ok($$ update public.crm_settings set sla_hours = 48 $$, '42501', null,
-  'admin cannot change settings through the API yet (C9)');
+select throws_ok($$ update public.crm_settings set timezone = 'UTC' $$, '42501', null,
+  'admin cannot change the time zone through the API (C9a edits the rest; site_profile owns it, B7.5)');
 select lives_ok($$ select score, source, channel from public.leads $$, 'admin reads the score, source and channel');
 select throws_ok($$ select email_hmac from public.leads $$, '42501', null,
   'admin cannot read the blind indexes');

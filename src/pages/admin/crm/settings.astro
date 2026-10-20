@@ -1,0 +1,17 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminCrmSettings from '@/components/admin/islands/AdminCrmSettings';
+
+// CRM settings for leads (Admin v2 C9a): Settings › CRM settings, `crm.settings` (Admin only,
+// CLAUDE.md §5). The island reads GET /api/admin/crm/settings, which refuses every other role;
+// the island shows that refusal.
+export const prerender = false;
+---
+
+<AdminLayout
+  title="CRM settings"
+  subtitle="How the pipeline looks, how leads are scored, how fast they should be answered and who gets them."
+  styles={['crm-settings.css']}
+>
+  <AdminCrmSettings client:load />
+</AdminLayout>
