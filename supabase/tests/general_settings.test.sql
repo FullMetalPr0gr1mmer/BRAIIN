@@ -13,10 +13,11 @@
 --     copy from crm_settings; app.studio_time_zone's tenant fence.
 --   • media_assets_public_read's icon branch, media_usage v6's icon rows.
 --   • the exact policy sets, the helper, the grants (has and has-not).
---   • the two guides, in every tenant.
+--   • the four guides 0075 puts, in every tenant (two of them one sentence each: the busiest
+--     hours and the uptime days follow the studio's zone, not Riyadh).
 
 begin;
-select plan(72);
+select plan(73);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- Tenants created AFTER the launch tenant, so the anon fence keeps resolving to the launch
@@ -436,6 +437,18 @@ select is(
                          and h.caps = array['maintenance.manage']
                          and h.body::text ~ 'Back on ends maintenance by itself')),
   0, 'every tenant holds the rewritten maintenance-mode');
+select is(
+  (select count(*)::int from public.tenants t
+    where not exists (select 1 from public.help_articles h
+                       where h.tenant_id = t.id and h.slug = 'website-stats'
+                         and h.body::text ~ 'busiest hours of the day in the studio''s time zone')
+       or not exists (select 1 from public.help_articles h
+                       where h.tenant_id = t.id and h.slug = 'site-health-and-logs'
+                         and h.body::text ~ 'Days follow the studio''s time zone')
+       or exists (select 1 from public.help_articles h
+                   where h.tenant_id = t.id and h.slug in ('website-stats', 'site-health-and-logs')
+                     and h.body::text ~ '(hours of the day in Riyadh|midnight to midnight in Riyadh)')),
+  0, 'every tenant''s website-stats and site-health-and-logs name the studio''s zone, not Riyadh');
 select is((select sort_order from app.help_guide_catalog where slug = 'general-settings'), 98,
   'general-settings sits just before maintenance-mode');
 set local role authenticated;

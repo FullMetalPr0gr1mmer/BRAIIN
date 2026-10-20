@@ -4,7 +4,7 @@
 -- foreign keys and two indexes on site_profile, one invoker trigger, one closed-list column on
 -- site_settings (copied from crm_settings, the only data written), one capability helper, four
 -- RESTRICTIVE live-write policies, the two tables' grants stated, one definer reader, one
--- policy and one function restated, one registry row restated and two help guides put. The
+-- policy and one function restated, one registry row restated and four help guides put. The
 -- number is a placeholder: it is assigned at merge (scripts/renumber-migration.mjs). Depends on
 -- 0001, 0009, 0011, 0019, 0033 (app.live_role), 0035 (crm_settings), 0038 (the registry),
 -- 0045, 0066, 0069 (the help catalog's put) and 0073 (media_assets_tenant_id_id, the policy
@@ -61,10 +61,12 @@
 --  11. The release registry's site_profile row restated (`do update`) with the ten columns
 --      appended, so a release stages them like the rest. timezone is on site_settings and is
 --      never in the registry; accepting_applications stays exempt.
---  12. Two guides through H11's catalog (0069): general-settings, new, at place 98 (just
---      before maintenance-mode; 45, 65, 75, 95 and 125 are taken by slices in flight), and
---      maintenance-mode rewritten for maintenance v2 (revision 1, as the catalog was filled).
---      The literals are docs/admin-v2/guides/<slug>.json verbatim. No other guide is touched.
+--  12. Four guides through H11's catalog (0069): general-settings, new, at place 98 (just
+--      before maintenance-mode; 45, 65, 75, 95 and 125 are taken), maintenance-mode rewritten
+--      for maintenance v2, and one sentence each in website-stats (the busiest hours) and
+--      site-health-and-logs (the uptime days), which said "Riyadh" of what now follows the
+--      studio's zone. The literals are docs/admin-v2/guides/<slug>.json verbatim. No other
+--      guide is touched.
 --
 -- Maintenance v2 itself needs no DDL: the switch, the copy, the background, the contact
 -- buttons, "Back on", the date, the staff bypass and the IP allowlist are one JSON value
@@ -467,8 +469,12 @@ on conflict (entity_type) do update
       publish_flag = excluded.publish_flag;
 
 -- ═══ 12. The help guides ═══════════════════════════════════════════════════════════════════
--- general-settings, new (revision 0), at place 98; the literal is
--- docs/admin-v2/guides/general-settings.json verbatim.
+-- Four puts through H11's catalog, each literal docs/admin-v2/guides/<slug>.json verbatim, each
+-- naming the revision main leaves the guide at (a stale one is refused, 55000). No other guide
+-- is touched.
+--
+-- general-settings, new (revision 0), at place 98 (just before maintenance-mode; 45, 65, 75,
+-- 95 and 125 are taken by slices in flight or merged).
 select app.put_help_guide($guide$
 {
   "slug": "general-settings",
@@ -517,7 +523,7 @@ select app.put_help_guide($guide$
       },
       {
         "t": "p",
-        "x": "The time zone is the studio's clock: the dates and times on every admin screen, the days of the activity log, and the midnight when maintenance ends by itself. It saves on its own, with the retention limits, which can be shortened but never extended."
+        "x": "The time zone is the studio's clock: the dates and times on every admin screen, the days of the activity log, the busiest hours in website stats, the uptime days in site health, and the midnight when maintenance ends by itself. Page visibility keeps Riyadh days. The time zone saves on its own, with the retention limits, which can be shortened but never extended."
       },
       {
         "t": "ol",
@@ -562,7 +568,7 @@ select app.put_help_guide($guide$
       },
       {
         "t": "p",
-        "x": "المنطقة الزمنية هي ساعة الاستوديو: التواريخ والأوقات في كل شاشات الإدارة، وأيام سجل النشاط، ومنتصف الليل الذي ينتهي فيه وضع الصيانة تلقائيًا. تُحفظ وحدها مع حدود الاحتفاظ بالبيانات، التي يمكن تقصيرها ولا يمكن تمديدها."
+        "x": "المنطقة الزمنية هي ساعة الاستوديو: التواريخ والأوقات في كل شاشات الإدارة، وأيام سجل النشاط، وأكثر الساعات نشاطًا في إحصاءات الموقع، وأيام وقت التشغيل في صحة الموقع، ومنتصف الليل الذي ينتهي فيه وضع الصيانة تلقائيًا. أما إخفاء الصفحات فيبقى بأيام الرياض. تُحفظ المنطقة الزمنية وحدها مع حدود الاحتفاظ بالبيانات، التي يمكن تقصيرها ولا يمكن تمديدها."
       },
       {
         "t": "ol",
@@ -581,8 +587,7 @@ select app.put_help_guide($guide$
 $guide$::jsonb, 0);
 
 -- maintenance-mode rewritten for maintenance v2 (its place, caps and screens unchanged), at
--- the revision main holds it at: 1, as the catalog was filled. The literal is
--- docs/admin-v2/guides/maintenance-mode.json verbatim.
+-- revision 1, as the catalog was filled.
 select app.put_help_guide($guide$
 {
   "slug": "maintenance-mode",
@@ -674,6 +679,148 @@ select app.put_help_guide($guide$
       {
         "t": "tip",
         "x": "أطفئ الوضع فور انتهاء الإصلاح حتى لا ينتظر الزوار ومحركات البحث."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 1);
+
+-- website-stats (G1's, 0071 left it at revision 2): one sentence. The busiest hours are
+-- grouped in the studio's zone now (src/pages/admin/analytics/index.astro passes
+-- studioTimeZone to public.busy_hours), not always Riyadh.
+select app.put_help_guide($guide$
+{
+  "slug": "website-stats",
+  "sort_order": 110,
+  "minutes": 3,
+  "tags": ["stats", "goals"],
+  "screens": ["/admin/analytics", "/admin/analytics/search"],
+  "caps": ["analytics.read"],
+  "title": "Website stats",
+  "title_ar": "إحصاءات الموقع",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Website stats counts visits, page views and what people do on the site. The numbers are the site's own, with no outside tracker, and only visitors who accept analytics cookies are counted."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Pick 7, 30 or 90 days at the top. Overview shows visits, page views, pages per visit, one-page visits, the Arabic share and the top pages; Pages lists every page with its views in each language. If you work with leads, Overview also shows new leads and inquiries per 1,000 page views.",
+          "A visit is one browser tab on one day: a tab kept open past midnight UTC counts again the next day. Pages per visit is page views divided by visits; a one-page visit saw one page and did nothing else.",
+          "Conversions shows the funnel: visits, then the visits that opened a service page, then the ones that went on to an inquiry form in the same visit. Inquiries received are shown apart, and only to people who work with leads, because they count everyone who wrote, including visitors who declined cookies. Events lists clicks on the contact, language, project and service links, and the interest shown in the services explorer.",
+          "Audience shows the busiest hours of the day in the studio's time zone, which the card names, over the days you picked, and English and Arabic views day by day. Devices, countries and sources are not collected.",
+          "Realtime counts people who accepted analytics cookies and did something on the site in the last 5 minutes, and the pages they are on. It updates every minute while the tab is open; Pause updates stops it, and it stops by itself after 30 minutes. Minute counts are kept 48 hours.",
+          "Admins and the SEO role can add goals on the Conversions tab: a name, what it counts and a target. Progress counts this calendar month, from the first, in UTC days. You can keep up to 20 goals.",
+          "A change against the previous period shows only when there is a previous period to compare: the same number of days just before.",
+          "Counts are added up every 15 minutes, by days that run midnight to midnight UTC (3 am in Riyadh), so the latest visits can take a while to show.",
+          "Where your role has a Search tab, it shows what visitors typed into the site's search, and which searches found nothing. A search that finds nothing is often a page worth writing.",
+          "Raw visit records are kept 90 days; the daily totals the screen reads are kept after that."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "A low number can simply mean few visitors accepted cookies, not few visitors."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تحتسب إحصاءات الموقع الزيارات ومشاهدات الصفحات وما يفعله الزوار في الموقع. الأرقام خاصة بالموقع نفسه دون أي أداة تتبع خارجية، ولا يُحتسب إلا من يقبل من الزوار ملفات تعريف الارتباط الخاصة بالتحليلات."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "اختر 7 أو 30 أو 90 يومًا في الأعلى. يعرض تبويب Overview الزيارات ومشاهدات الصفحات وعدد الصفحات لكل زيارة وزيارات الصفحة الواحدة وحصة العربية وأكثر الصفحات زيارة، ويسرد تبويب Pages كل صفحة مع مشاهداتها بكل لغة. وإذا كنت تعمل على العملاء المحتملين فسيعرض Overview أيضًا العملاء الجدد والاستفسارات لكل 1,000 مشاهدة.",
+          "الزيارة هي علامة تبويب واحدة في المتصفح خلال يوم واحد، فإذا بقيت علامة التبويب مفتوحة بعد منتصف الليل بتوقيت UTC احتُسبت زيارة جديدة في اليوم التالي. عدد الصفحات لكل زيارة هو المشاهدات مقسومة على الزيارات، وزيارة الصفحة الواحدة هي زيارة رأت صفحة واحدة ولم تفعل شيئًا آخر.",
+          "يعرض تبويب Conversions مسار التحويل: الزيارات، ثم الزيارات التي فتحت صفحة خدمة، ثم التي وصلت بعدها إلى نموذج استفسار في الزيارة نفسها. وتظهر الاستفسارات الواردة منفصلة، ولمن يعمل على العملاء المحتملين فقط، لأنها تحتسب كل من كتب إلينا بمن فيهم الزوار الذين رفضوا ملفات تعريف الارتباط. ويسرد قسم Events النقرات على روابط التواصل واللغة والمشاريع والخدمات، والاهتمام الذي يظهره الزوار في مستكشف الخدمات.",
+          "يعرض تبويب Audience أكثر ساعات اليوم نشاطًا بتوقيت المنطقة الزمنية للاستوديو، كما تذكرها البطاقة، خلال الأيام التي اخترتها، والمشاهدات بالإنجليزية والعربية يومًا بيوم. لا تُجمع بيانات الأجهزة أو الدول أو المصادر.",
+          "يحتسب تبويب Realtime الأشخاص الذين قبلوا ملفات تعريف الارتباط الخاصة بالتحليلات وقاموا بأي نشاط في الموقع خلال آخر 5 دقائق، والصفحات التي يتصفحونها. ويتحدّث كل دقيقة ما دام التبويب مفتوحًا، ويوقفه زر Pause updates، ويتوقف من تلقاء نفسه بعد 30 دقيقة. وتُحفظ أرقام الدقائق 48 ساعة.",
+          "يستطيع المسؤولون (Admin) ودور SEO إضافة أهداف في تبويب Conversions: اسم، وما يحتسبه الهدف، ورقم مستهدف. ويُحتسب التقدم خلال الشهر الحالي من أوله، بأيام توقيت UTC. ويمكن الاحتفاظ بما يصل إلى 20 هدفًا.",
+          "لا يظهر التغيّر مقارنة بالفترة السابقة إلا إذا وُجدت فترة سابقة للمقارنة، أي العدد نفسه من الأيام التي تسبقها مباشرة.",
+          "تُجمع الأرقام كل 15 دقيقة، بأيام تمتد من منتصف الليل إلى منتصف الليل بتوقيت UTC (الثالثة فجرًا بتوقيت الرياض)، لذا قد تتأخر أحدث الزيارات في الظهور.",
+          "إذا كان لدورك تبويب Search فهو يعرض ما كتبه الزوار في بحث الموقع، وعمليات البحث التي لم تجد شيئًا. والبحث الذي لا يجد شيئًا كثيرًا ما يشير إلى صفحة تستحق الكتابة.",
+          "تُحفظ سجلات الزيارات الأولية 90 يومًا، وتبقى المجاميع اليومية التي تقرؤها الشاشة بعد ذلك."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "قد يعني الرقم المنخفض ببساطة أن قلة من الزوار قبلوا ملفات تعريف الارتباط، لا أن الزوار قليلون."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 2);
+
+-- site-health-and-logs (G2's, revision 1 as the catalog was filled): one sentence. The uptime
+-- strip's days are the studio's (src/lib/health/probes.ts reads the zone with the probes).
+select app.put_help_guide($guide$
+{
+  "slug": "site-health-and-logs",
+  "sort_order": 120,
+  "minutes": 4,
+  "tags": [
+    "site"
+  ],
+  "screens": [
+    "/admin/site-health",
+    "/admin/audit"
+  ],
+  "caps": [
+    "siteHealth.view",
+    "logs.view",
+    "audit.view"
+  ],
+  "title": "Site health, errors and the activity log",
+  "title_ar": "صحة الموقع والأخطاء وسجل النشاط",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Site health shows how fast the site feels to real visitors (Core Web Vitals), measured in their own browsers when they accept analytics cookies, beside a checklist of things worth fixing."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Once the uptime monitor is set up, the score weighs speed 40%, the checklist 40% and uptime 20%; until then it is half speed and half checklist. Speed comes from real visits over the last 28 days: each of LCP, INP and CLS counts in full when it is within budget, half when it needs work and not at all when it is poor. Uptime over the last 30 days counts in full at 100% and not at all at 99% or less.",
+          "The checklist groups what it checks: content, SEO, speed, errors, security and backups. A row that needs fixing links to the screen where you fix it, and a row your role cannot check says so.",
+          "The Uptime card shows what the uptime monitor sees: it checks the site from outside our hosting, and its readings arrive here every 10 minutes. Each of the last 90 days is a bar: green when the site was up all day, amber when it was down for a few minutes, red when it was down for more than 14 minutes, grey when there is no reading. Days follow the studio's time zone, and View as table lists the days with downtime. Check now asks for a fresh reading at once, up to 6 times an hour. Until a developer adds the monitor's read-only key, the card says Not set up and the score leaves uptime out.",
+          "The Security tab lists how the site is protected, with its domain and its certificate. The domain's renewal date is read from its public registration record about once a day, and the row needs fixing when 30 days or fewer are left. The certificate's date comes from the uptime monitor when it reports one, and the row needs fixing when 14 days or fewer are left; otherwise the row says Cloudflare issues and renews the certificates.",
+          "The bell tells Admins and Developers when the site is down, when it was down for a while, when the domain or the certificate is about to expire, when no registration is found for the domain, and when the uptime monitor has not answered for an hour.",
+          "Speed lists each page's figures from visitors' browsers, added up every hour and kept 400 days. Lab scores run in CI on every change, so none are shown here.",
+          "Errors lists problems the site ran into. Every night, entries older than 30 days are deleted by themselves; an Admin can clear them sooner with Clear logs, choosing entries older than 7 days, older than 30 days, or all of them, and the clearing itself is recorded in the activity log.",
+          "The activity log records saves, publishes, reveals of contact details, sign-ins and exports, each against the account that made it, with the time. The database itself writes who made an entry and when, so nobody can record something in someone else's name. Each entry names the person, former members included, and says what they did in plain words, with the names of the fields a save changed, never what they hold. Nobody can edit or delete an entry, not even an Admin, and the log is kept for good.",
+          "Narrow the log to a kind of activity, a person or a range of days. Publishing finds publishes recorded since these filters arrived; earlier ones are listed as updates. Export downloads the entries that match as a spreadsheet file (CSV), up to three times an hour, and each download is recorded in the log too; the file names each item by its type and id, not its title. If the line above the list says the latest entries do not link up, tell whoever runs the site."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "To find out when something changed, and who changed it, look in the activity log."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تُظهر صحة الموقع مدى سرعة الموقع كما يشعر بها الزوار الحقيقيون (Core Web Vitals)، وتُقاس في متصفحاتهم عندما يقبلون ملفات تعريف الارتباط الخاصة بالتحليلات، إلى جانب قائمة تحقق بما يستحق الإصلاح."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "بعد إعداد مراقب وقت التشغيل، تُوزَّع الدرجة على 40% للسرعة و40% لقائمة التحقق و20% لوقت التشغيل، وحتى ذلك الحين يكون نصفها للسرعة ونصفها لقائمة التحقق. تأتي السرعة من زيارات حقيقية خلال آخر 28 يومًا: يُحتسب كل من LCP وINP وCLS كاملًا إذا كان ضمن الحد المستهدف، ونصفه إذا احتاج إلى تحسين، ولا يُحتسب إذا كان ضعيفًا. ويُحتسب وقت التشغيل خلال آخر 30 يومًا كاملًا عند 100%، ولا يُحتسب عند 99% أو أقل.",
+          "تجمع قائمة التحقق ما تفحصه في مجموعات: المحتوى وSEO والسرعة والأخطاء والأمان والنسخ الاحتياطية. والبند الذي يحتاج إلى إصلاح يرتبط بالشاشة التي تصلحه منها، والبند الذي لا يستطيع دورك فحصه يذكر ذلك.",
+          "تعرض بطاقة Uptime ما يراه مراقب وقت التشغيل: فهو يفحص الموقع من خارج الاستضافة، وتصل قراءاته إلى هنا كل 10 دقائق. لكل يوم من آخر 90 يومًا شريط: أخضر إذا عمل الموقع طوال اليوم، وكهرماني إذا توقف بضع دقائق، وأحمر إذا توقف أكثر من 14 دقيقة، ورمادي إذا لم تتوفر قراءة. تتبع الأيام المنطقة الزمنية للاستوديو، ويسرد زر View as table الأيام التي توقف فيها الموقع. ويطلب زر Check now قراءة جديدة فورًا، حتى 6 مرات في الساعة. وإلى أن يضيف المطوّر مفتاح القراءة فقط الخاص بالمراقب، تذكر البطاقة Not set up ولا تدخل وقت التشغيل في الدرجة.",
+          "يعرض تبويب Security كيف يُحمى الموقع، ومعه النطاق والشهادة. يُقرأ تاريخ تجديد النطاق من سجل تسجيله العام مرة في اليوم تقريبًا، ويحتاج البند إلى إصلاح عندما يبقى 30 يومًا أو أقل. ويأتي تاريخ الشهادة من مراقب وقت التشغيل إذا أبلغ عنه، ويحتاج البند إلى إصلاح عندما يبقى 14 يومًا أو أقل، وإلا فيذكر البند أن Cloudflare تُصدر الشهادات وتجددها.",
+          "يُنبّه الجرس المسؤول (Admin) والمطوّر (Developer) عندما يتوقف الموقع، وبعد أن يتوقف مدة، وعندما يقترب انتهاء النطاق أو الشهادة، وعندما لا يُعثر على تسجيل للنطاق، وعندما لا يجيب مراقب وقت التشغيل لمدة ساعة.",
+          "يعرض تبويب Speed أرقام كل صفحة من متصفحات الزوار، تُجمع كل ساعة وتُحفظ 400 يوم. أما درجات المختبر فتُشغَّل في CI مع كل تغيير، لذا لا تظهر هنا.",
+          "يعرض تبويب Errors المشكلات التي واجهها الموقع. تُحذف كل ليلة الإدخالات الأقدم من 30 يومًا تلقائيًا، ويستطيع المسؤول (Admin) مسحها قبل ذلك بزر Clear logs، فيختار الإدخالات الأقدم من 7 أيام أو الأقدم من 30 يومًا أو كلها، ويُسجَّل المسح نفسه في سجل النشاط.",
+          "يسجّل سجل النشاط الحفظ والنشر وكشف بيانات التواصل وتسجيل الدخول والتصدير، كلًّا على الحساب الذي قام به مع وقته. وتكتب قاعدة البيانات بنفسها صاحب كل إدخال ووقته، فلا يستطيع أحد أن يسجّل شيئًا باسم غيره. ويذكر كل إدخال اسم الشخص، ومنهم من غادر الفريق، وما فعله بكلمات واضحة، مع أسماء الحقول التي غيّرها الحفظ دون محتواها. ولا يستطيع أحد تعديل أي إدخال أو حذفه، ولا حتى المسؤول (Admin)، ويُحتفظ بالسجل دائمًا.",
+          "ضيّق السجل حسب نوع النشاط أو الشخص أو مدة من الأيام. يجد مرشّح Publishing ما نُشر منذ إضافة هذه المرشّحات، ويظهر ما نُشر قبلها كتحديثات. ويُنزّل زر Export الإدخالات المطابقة في ملف جدول بيانات (CSV) حتى ثلاث مرات في الساعة، ويُسجَّل كل تنزيل في السجل أيضًا، ويذكر الملف كل عنصر بنوعه ومعرّفه لا بعنوانه. وإذا ذكر السطر أعلى القائمة أن أحدث الإدخالات لا تتصل كما ينبغي، فأبلغ المسؤول عن الموقع."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "لمعرفة متى تغيّر شيء ومن قام بتغييره، ارجع إلى سجل النشاط."
       }
     ]
   }
@@ -974,8 +1121,16 @@ begin
                      where slug = 'maintenance-mode' and revision = 2 and sort_order = 100
                        and caps = array['maintenance.manage']
                        and screens = array['/admin/maintenance']
-                       and body::text ~ 'Back on ends maintenance by itself') then
-    raise exception '0075: the catalog must hold general-settings at revision 1 and maintenance-mode at revision 2';
+                       and body::text ~ 'Back on ends maintenance by itself')
+     or not exists (select 1 from app.help_guide_catalog
+                     where slug = 'website-stats' and revision = 3
+                       and body::text ~ 'busiest hours of the day in the studio''s time zone'
+                       and body::text !~ 'busiest hours of the day in Riyadh')
+     or not exists (select 1 from app.help_guide_catalog
+                     where slug = 'site-health-and-logs' and revision = 2
+                       and body::text ~ 'Days follow the studio''s time zone'
+                       and body::text !~ 'midnight to midnight in Riyadh') then
+    raise exception '0075: the catalog must hold general-settings at revision 1, maintenance-mode at 2, website-stats at 3 and site-health-and-logs at 2, with their new words';
   end if;
   select string_agg(tn.id::text, ', ') into v_bad
     from public.tenants tn
@@ -983,8 +1138,14 @@ begin
                       where h.tenant_id = tn.id and h.slug = 'general-settings')
       or not exists (select 1 from public.help_articles h
                       where h.tenant_id = tn.id and h.slug = 'maintenance-mode'
-                        and h.body::text ~ 'Back on ends maintenance by itself');
+                        and h.body::text ~ 'Back on ends maintenance by itself')
+      or not exists (select 1 from public.help_articles h
+                      where h.tenant_id = tn.id and h.slug = 'website-stats'
+                        and h.body::text ~ 'busiest hours of the day in the studio''s time zone')
+      or not exists (select 1 from public.help_articles h
+                      where h.tenant_id = tn.id and h.slug = 'site-health-and-logs'
+                        and h.body::text ~ 'Days follow the studio''s time zone');
   if v_bad is not null then
-    raise exception '0075: tenants without the two U9 guides: %', v_bad;
+    raise exception '0075: tenants without the four guides as U9 leaves them: %', v_bad;
   end if;
 end $$;
