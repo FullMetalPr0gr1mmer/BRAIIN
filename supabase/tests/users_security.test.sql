@@ -497,9 +497,11 @@ select is(
      cross join pg_attribute a
     where a.attrelid = 'public.admin_security_settings'::regclass and a.attnum > 0 and not a.attisdropped
       and has_column_privilege(r, 'public.admin_security_settings', a.attname::text, p)),
-  'authenticated insert.invite_domain, authenticated insert.session_max_days, authenticated insert.tenant_id, '
-  'authenticated update.invite_domain, authenticated update.session_max_days',
-  'at column level staff insert the key and the two settings and update the two settings, nothing more');
+  'authenticated insert.invite_domain, authenticated insert.require_mfa, '
+  'authenticated insert.session_max_days, authenticated insert.tenant_id, '
+  'authenticated update.invite_domain, authenticated update.require_mfa, '
+  'authenticated update.session_max_days',
+  'at column level staff insert the key and the three settings (U17, 0072: require_mfa) and update the three settings, nothing more');
 select is(
   (select coalesce(string_agg(a.attname::text, ', ' order by a.attname), '')
      from pg_attribute a

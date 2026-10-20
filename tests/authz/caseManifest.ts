@@ -262,6 +262,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'users: user ownership transfer',
   'users: user security settings read',
   'users: user security settings save',
+  'users: user two-step reset',
   'users: user update',
   'visibility: page visibility list',
   'visibility: page visibility save',

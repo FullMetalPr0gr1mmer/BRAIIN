@@ -53,3 +53,16 @@ content_path = "./supabase/templates/invite.html"
 [auth.hook.custom_access_token]
 enabled = true
 uri = "pg-functions://postgres/public/custom_access_token_hook"
+
+# Admin v2 U17: two factor sign in with an authenticator app (TOTP). The CLI's defaults
+# already allow it; pinned so a change of default cannot switch it off in CI unnoticed. One
+# app per person is all the admin offers (/admin/2fa removes an abandoned setup first); 10 is
+# GoTrue's own ceiling. Hosted projects: Authentication > Multi-Factor, launch runbook §2
+# (owner item O-25). While a project has it off, /admin/2fa says "Not set up" and nothing
+# else changes. tests/lib/twoStepConfig.spec.ts holds these keys.
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true

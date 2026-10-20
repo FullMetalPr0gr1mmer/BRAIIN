@@ -140,6 +140,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'search.css',
       'seo.css',
       'stats.css',
+      'two-step.css',
       'users.css',
       'visibility.css',
     ]);
@@ -433,12 +434,15 @@ describe('admin.css keeps the hooks the markup renders', () => {
       // they share, src/layouts/AuthLayout.astro, which the walk traces to all four (the
       // invite page joined in U12b).
       expect(pagesFor('login.css')).toEqual([
+        // U17: the two step page in the sign-in shell (a session that owes its code).
+        'src/pages/admin/2fa.astro',
         'src/pages/admin/forgot.astro',
         'src/pages/admin/invite.astro',
         'src/pages/admin/login.astro',
         'src/pages/admin/reset.astro',
       ]);
       expect(pagesOf('src/layouts/AuthLayout.astro').sort()).toEqual([
+        'src/pages/admin/2fa.astro',
         'src/pages/admin/forgot.astro',
         'src/pages/admin/invite.astro',
         'src/pages/admin/login.astro',
@@ -453,6 +457,8 @@ describe('admin.css keeps the hooks the markup renders', () => {
       expect(pagesFor('users.css')).toEqual(['src/pages/admin/users.astro']);
       // The SEO screen (U10): its page renders the sections, its island the table and dialogs.
       expect(pagesFor('seo.css')).toEqual(['src/pages/admin/seo.astro']);
+      // The two step page (U17), in either frame: its panel's classes are this sheet's.
+      expect(pagesFor('two-step.css')).toEqual(['src/pages/admin/2fa.astro']);
       expect(pagesFor('personal.css')).toEqual([
         'src/pages/admin/account.astro',
         'src/pages/admin/notifications.astro',

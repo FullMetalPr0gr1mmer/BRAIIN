@@ -4,6 +4,7 @@ import { seeOther } from './body';
 import { DEFAULT_NEXT, safeNext } from './next';
 import { keepResetToken } from './resetToken';
 import { keepInviteToken } from './inviteToken';
+import { TWO_STEP_PATH } from './twoStep';
 
 // A sign-in screen's form post that fails the CSRF check (Admin v2 F7 review).
 //
@@ -13,6 +14,10 @@ import { keepInviteToken } from './inviteToken';
 // renders as `{"ok":false,"error":"csrf"}`: a dead end. And a person meets it in ordinary
 // use, because `__Host-csrf` is a session cookie: close the browser with the sign-in page
 // open, let it restore the tab, and the token the page carries matches nothing.
+//
+// The two-step page (Admin v2 U17, /admin/2fa) is one of them too: a zero-JS page reached with
+// a session (or one still owing its code), whose forms post to the page itself. It goes back
+// to itself with its `next`, as the sign-in page does.
 //
 // So a urlencoded post to one of their endpoints that fails the token check goes back
 // to its page with a fixed code, and the page's GET mints a fresh token. Nothing in the post
@@ -43,14 +48,18 @@ const SIGN_IN_FORMS: ReadonlyMap<string, { page: string; key: 'error' | 'status'
   ['/api/admin/auth/forgot', { page: '/admin/forgot', key: 'status' }],
   ['/api/admin/auth/reset', { page: '/admin/reset', key: 'error' }],
   ['/api/admin/auth/invite', { page: '/admin/invite', key: 'error' }],
+  [TWO_STEP_PATH, { page: TWO_STEP_PATH, key: 'error' }],
 ]);
+
+/** The pages whose form carries a `next` that goes back with it (held to /admin by safeNext). */
+const KEEPS_NEXT: ReadonlySet<string> = new Set(['/admin/login', TWO_STEP_PATH]);
 
 /** Where a sign-in form post that failed the token check goes back to, or null. */
 export function expiredFormLocation(endpoint: string, fields: URLSearchParams): string | null {
   const form = SIGN_IN_FORMS.get(endpoint);
   if (!form) return null;
   const params = new URLSearchParams();
-  if (form.page === '/admin/login') {
+  if (KEEPS_NEXT.has(form.page)) {
     const next = safeNext(fields.get('next'));
     if (next !== DEFAULT_NEXT) params.set('next', next);
   }

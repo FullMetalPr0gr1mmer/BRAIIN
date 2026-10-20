@@ -183,6 +183,40 @@ export const INVITE_LINK_SPENT: ReadonlySet<string> = new Set([
   'interrupted',
 ]);
 
+// ── Two-step sign-in (Admin v2 U17): /admin/2fa?error=… and ?done=… ──────────────────────
+
+/** /admin/2fa?error=… (src/lib/auth/twoStepFlow.ts). A locked account goes to sign-in instead. */
+export const TWO_STEP_MESSAGES = {
+  'bad-code': msg(
+    'error',
+    'That code did not work. Check that the time on your phone is right and try again.',
+  ),
+  unavailable: msg(
+    'error',
+    'Two factor sign in is not available right now. Try again in a few minutes.',
+  ),
+  limited: msg('error', 'Too many tries in a short time. Wait a minute and try again.'),
+  gone: msg('error', 'That setup ran out before it was finished. Start again.'),
+  required: msg('error', 'Your team requires 2FA, so it stays on.'),
+  'expired-form': EXPIRED_FORM_MESSAGE,
+  'too-large': TOO_LARGE_MESSAGE,
+} as const;
+
+/** /admin/2fa?done=… */
+export const TWO_STEP_DONE = {
+  on: msg('ok', '2FA is on. Each time you sign in, you will be asked for a code from your app.'),
+  off: msg('ok', '2FA is off.'),
+} as const;
+
+/** While Supabase Auth's authenticator apps are switched off for the project (owner item O-25). */
+export const TWO_STEP_NOT_SET_UP = {
+  title: 'Not set up',
+  text: 'Two factor sign in is not switched on for this site yet. Ask whoever runs the site to turn it on.',
+} as const;
+
+/** What someone without their phone does (no recovery codes: decision D10). */
+export const TWO_STEP_LOST = 'Lost your phone? Ask an Admin to reset your 2FA.';
+
 /** A code from the query string → its message, or null for anything not on the list. */
 export function messageFor<T extends Record<string, PageMessage>>(
   table: T,
