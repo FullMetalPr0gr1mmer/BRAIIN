@@ -2,16 +2,21 @@
 // Per-section error isolation (feature-inventory: "one broken section won't take down
 // the page"). Renders the slotted section, catching any error during its render so a
 // single failing section degrades to an empty placeholder instead of a 500.
+import { markPreviewSection } from '@/lib/sections/previewMarker';
+
 interface Props {
   type: string;
+  /** The releases preview only (Admin v2 R9): the section's `data-pv-section` value. */
+  previewId?: string;
 }
 
-const { type } = Astro.props;
+const { type, previewId } = Astro.props;
 
 let html = '';
 let failed = false;
 try {
   html = await Astro.slots.render('default');
+  if (previewId !== undefined) html = markPreviewSection(html, previewId);
 } catch (err) {
   failed = true;
   // Surfaced to the error pipeline (Sentry/system_logs) at provisioning.

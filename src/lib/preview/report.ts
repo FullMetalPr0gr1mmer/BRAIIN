@@ -42,6 +42,12 @@ export interface PreviewReport {
   draftsNotShown: number;
   /** Pending changes this person may read (the ribbon's count), from the raw list. */
   pending: number;
+  /**
+   * Changes shown that leave a flagged design sample live (`is_placeholder`, 0025/0028).
+   * Shown, but production refuses them unless the owner allowed samples on that table
+   * (0027): the preview cannot tell which environment it is in (R9).
+   */
+  samples: number;
 }
 
 export function createReport(): PreviewReport {
@@ -58,6 +64,7 @@ export function createReport(): PreviewReport {
     invalid: [],
     draftsNotShown: 0,
     pending: 0,
+    samples: 0,
   };
 }
 
@@ -70,7 +77,13 @@ export type UntrustedReason =
   'no-reads' | 'anon-lookup' | 'unsupported' | 'truncated' | 'failed-table' | 'foreign-tenant';
 
 export type PreviewVerdict =
-  | { state: 'ok'; pending: number; invalid: InvalidDraft[]; notPreviewed: string[] }
+  | {
+      state: 'ok';
+      pending: number;
+      invalid: InvalidDraft[];
+      notPreviewed: string[];
+      samples: number;
+    }
   | { state: 'untrusted'; reasons: UntrustedReason[] };
 
 /**
@@ -95,6 +108,7 @@ export function assessPreview(r: PreviewReport): PreviewVerdict {
     pending: r.pending,
     invalid: [...r.invalid],
     notPreviewed: [...r.notPreviewed],
+    samples: r.samples,
   };
 }
 
@@ -116,6 +130,7 @@ export function previewLogFields(r: PreviewReport): Record<string, number | stri
     invalid: r.invalid.length,
     draftsNotShown: r.draftsNotShown,
     pending: r.pending,
+    samples: r.samples,
   };
 }
 
@@ -129,6 +144,8 @@ export const PREVIEW_COPY = {
     one: 'Preview. Not live yet. 1 unpublished change.',
     other: 'Preview. Not live yet. {n} unpublished changes.',
   },
+  /** A page behind a password: the preview shows what visitors get, the prompt (R9). */
+  locked: 'Preview of what visitors see.',
   untrusted:
     'This preview may be showing the live site instead of your changes. Reload to try again.',
   reasons: {
@@ -142,6 +159,11 @@ export const PREVIEW_COPY = {
   invalid: {
     one: "1 change can't be shown. Open it to fix it.",
     other: "{n} changes can't be shown. Open them to fix them.",
+  },
+  samples: {
+    one: '1 change puts a design sample on the page. The live site refuses that unless the owner has allowed samples there.',
+    other:
+      '{n} changes put design samples on the page. The live site refuses that unless the owner has allowed samples there.',
   },
   notPreviewed: {
     search: "Search results aren't previewed.",

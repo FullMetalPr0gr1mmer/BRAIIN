@@ -82,7 +82,8 @@ export async function getPublishedDisciplines(): Promise<Discipline[]> {
         .from('disciplines')
         .select(DISCIPLINE_COLUMNS)
         .eq('status', 'published')
-        .order('sort_order', { ascending: true }),
+        .order('sort_order', { ascending: true })
+        .order('id', { ascending: true }),
       loadPublishedServiceRows(),
     ]);
     if (disciplines.error) {

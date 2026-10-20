@@ -29,7 +29,8 @@ export async function getSectors(): Promise<Sector[]> {
     const { data, error } = await contentClient()
       .from('sectors')
       .select('id,slug,name,sort_order')
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
     if (error) {
       reportLoadError('sectors', error);
       return [];
@@ -62,7 +63,8 @@ export async function getMarqueeClients(): Promise<MarqueeClient[]> {
       .from('clients')
       .select(`id,slug,name,website_url,sort_order,logo:logo_media_id${MEDIA}`)
       .eq('show_in_marquee', true)
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
     if (error) {
       reportLoadError('clients', error);
       return [];
@@ -111,6 +113,7 @@ export async function getTestimonials(opts: {
       .select(TESTIMONIAL_COLUMNS)
       .eq('status', 'published')
       .order('sort_order', { ascending: true })
+      .order('id', { ascending: true })
       .limit(limit);
     if (opts.placement) query = query.contains('placements', [opts.placement]);
     if (opts.portfolioId) query = query.eq('portfolio_id', opts.portfolioId);

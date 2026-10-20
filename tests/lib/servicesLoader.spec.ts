@@ -17,6 +17,7 @@ interface Recorded {
   columns: string;
   filters: Record<string, unknown>;
   order?: string;
+  orders?: string[];
 }
 let recorded: Recorded[] = [];
 let tables: Record<string, unknown[]> = {};
@@ -49,7 +50,9 @@ vi.mock('@/lib/supabase/client', () => ({
           return q;
         },
         order: (col: string) => {
-          rec.order = col;
+          // The first order is the sort; `id` after it only breaks ties (Admin v2 R9).
+          rec.order ??= col;
+          (rec.orders ??= []).push(col);
           return q;
         },
         maybeSingle: async () => {
@@ -142,6 +145,8 @@ describe('services', () => {
     expect(q.columns).not.toContain('*');
     expect(q.filters).toEqual({ status: 'published' });
     expect(q.order).toBe('sort_order');
+    // Ties broken by id, so the preview (which reads in key order) and the public page agree.
+    expect(q.orders).toEqual(['sort_order', 'id']);
   });
 
   it('drops (and does not crash on) a row whose value points are malformed', async () => {
