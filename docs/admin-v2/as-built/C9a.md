@@ -98,7 +98,7 @@
 - **Help:** the guide `crm-settings` (sort_order 75, three minutes, EN and AR), put by 0091
   with `select app.put_help_guide($guide$ … $guide$::jsonb, 0);` (H11, a new guide, so revision
   0), and its `PAGE_GUIDES` entry. 75 is the free place after the leads guide (70), taken first
-  in merge order (corrections rule 2): C10a's sales guide (0092) merges after and takes another.
+  in merge order (corrections rule 2): C10a's sales guide (0097) merges after and takes another.
   A postcondition, a pgTAP row and the read-back check the guide reaches the catalog and every
   tenant; `tests/lib/helpCentre.spec.ts` reads it from the migration like every other guide and
   holds it to the screen (the guide-file staging used before H11 merged is gone).

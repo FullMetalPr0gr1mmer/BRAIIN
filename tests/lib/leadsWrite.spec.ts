@@ -274,7 +274,7 @@ describe('PATCH /api/admin/leads/[id]', () => {
   });
 
   it.each(['admin', 'developer', 'sales'] as const)(
-    'refuses the legacy status for %s with a 422 naming it, and writes nothing (C10a, 0093)',
+    'refuses the legacy status for %s with a 422 naming it, and writes nothing (C10a, 0097)',
     async (role) => {
       liveProfile = { role, is_active: true, locked_until: null };
       for (const body of [

@@ -16,7 +16,7 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 //
 // Four gates stack here, and each one alone would be insufficient:
 //   1. RLS       — `leads_read` scopes rows to Admin, Developer and Sales in-tenant
-//                  (`app.role_works_leads`, 0093), and the RESTRICTIVE `leads_live`
+//                  (`app.role_works_leads`, 0097), and the RESTRICTIVE `leads_live`
 //                  re-reads the profile, so a demoted, inactive or locked token sees no
 //                  lead at all (0033)
 //   2. GRANTS    — the caller's client can read only the safe columns (0033). The gated
@@ -72,7 +72,7 @@ export const GET = defineAdminRoute({
 //     with its own clock and the session's person.
 //   • the legacy fields are refused by the schema, each with a 422 naming it: internalNotes
 //     since C4b (notes are a thread, written through POST /api/admin/leads/[id]/notes,
-//     audited) and status since C10a (a lead moves by its stage; 0093 withdrew the staff
+//     audited) and status since C10a (a lead moves by its stage; 0097 withdrew the staff
 //     UPDATE on both columns).
 export const PATCH = defineAdminRoute({
   cap: 'leads.manage',

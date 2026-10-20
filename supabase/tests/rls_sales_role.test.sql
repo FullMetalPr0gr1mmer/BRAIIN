@@ -1,4 +1,4 @@
--- pgTAP: the Sales role (0092 + 0093, Admin v2 C10a, owner decision A4). Run with
+-- pgTAP: the Sales role (0096 + 0097, Admin v2 C10a, owner decision A4). Run with
 -- `supabase test db`.
 --
 -- Sales is the first signed-in principal that is not CMS staff, so this file proves what
@@ -6,7 +6,7 @@
 --   1. the catalog: 'sales' is in app_role; app.is_staff() still names four roles and
 --      app.is_member() five; every capability helper answers ROLE_CAPS for every enum value
 --      (a literal copy of CLAUDE.md §5); audit_insert, the non-staff block and the sample
---      lock read as 0093 wrote them;
+--      lock read as 0097 wrote them;
 --   2. the CRM: a live Sales token reads and works leads (the stages, the timeline, the
 --      settings, the people it may assign to) through RLS and the pipeline's column grant,
 --      and writes nothing else of a lead: no insert, no delete, no legacy status, no
@@ -14,7 +14,7 @@
 --   3. everything else, FROM THE CATALOG: for every relation in public that `authenticated`
 --      can read at all, outside the CRM and the member's own rows, a Sales token reads no
 --      more rows than anon, and wherever it reads a row it reads no column anon cannot read
---      (disciplines is the one named exception, 0093 §4 says why). The fixtures give every
+--      (disciplines is the one named exception, 0097 §4 says why). The fixtures give every
 --      relation `authenticated` holds more of than anon at least one row in the tenant, and
 --      a test fails when one has none, so a new staff-only table cannot pass by being empty;
 --   4. the member's own rows (its profile, its preferences, its tenant, the guides, its
@@ -244,7 +244,7 @@ $$;
 grant execute on function _not_compared() to anon, authenticated;
 
 -- ── 1. the catalog ─────────────────────────────────────────────────────────────
-select ok('sales' = any (enum_range(null::public.app_role)::text[]), 'sales is an app_role (0092)');
+select ok('sales' = any (enum_range(null::public.app_role)::text[]), 'sales is an app_role (0096)');
 set local role authenticated;
 select _sales();
 select is(app.is_staff()::text || '/' || app.is_member()::text, 'false/true',
@@ -306,7 +306,7 @@ select is(_val($$ select internal_notes from public.leads $$), '42501',
   'the gated columns stay out of reach (0033''s column grant)');
 select is(_run($$ update public.leads set is_starred = true where id = '93000000-0000-0000-0000-0000000000aa' $$),
   'ok:1', 'Sales works the pipeline through the column grant');
-select is(_run($$ update public.leads set status = 'done' $$), '42501', 'but no legacy status (0093)');
+select is(_run($$ update public.leads set status = 'done' $$), '42501', 'but no legacy status (0097)');
 select is(_run($$ update public.leads set email_enc = '\x01' $$), '42501', 'nor the ciphertext');
 select is(_run($$ insert into public.leads (tenant_id, name, email_enc, message)
                   values ('93000000-0000-0000-0000-000000000001', 'x', '\x00', 'y') $$), '42501',
@@ -358,7 +358,7 @@ select is(
      from _seen s
     where s.who = 'sales' and s.n > 0 and _extra_columns(s.name::regclass) <> ''),
   'disciplines [scheduled_for,version,created_at,created_by,updated_by]',
-  'wherever Sales reads a row it reads no column anon cannot, but disciplines'' bookkeeping (0093 §4)');
+  'wherever Sales reads a row it reads no column anon cannot, but disciplines'' bookkeeping (0097 §4)');
 select is(
   (select string_agg(r.name, ', ' order by r.name)
      from _readable() r
@@ -382,7 +382,7 @@ select is(
   '93000000-0000-0000-0000-0000000000b1 / 93000000-0000-0000-0000-0000000000b1 / 93000000-0000-0000-0000-000000000001',
   'Sales reads its own profile, its own preferences and its own tenant, nobody else''s');
 select ok((select count(*) from public.help_articles) > 0,
-  'Sales reads its tenant''s guides (0093: a live member; the Worker shows its own)');
+  'Sales reads its tenant''s guides (0097: a live member; the Worker shows its own)');
 select is((select sum(views)::int from public.rollup_daily_pageviews), 3,
   'analytics.read: Sales reads the page-view rollup the dashboard draws');
 select is(_count('public.rollup_daily_visits') || '/' || _count('public.rollup_daily_events') || '/'
@@ -396,7 +396,7 @@ select is(_run($$ insert into public.analytics_goals (tenant_id, name, metric, t
   '42501 ok:0 ok:0', 'but sets, changes and deletes no goal (analytics.goals is not Sales'')');
 select is((select string_agg(tenant_id::text || ':' || role::text, ',') from public.admin_role_defaults),
   '93000000-0000-0000-0000-000000000001:sales',
-  'Sales reads the dashboard preset an Admin saved for its role, and no other role''s (0093 §8b)');
+  'Sales reads the dashboard preset an Admin saved for its role, and no other role''s (0097 §8b)');
 select is((select count(*)::int from public.team_notes where tenant_id = '93000000-0000-0000-0000-000000000001'), 1,
   'analytics.read: Sales reads its tenant''s team note (0060, by the live role)');
 select is(_val($$ select (public.save_team_notes('93000000-0000-0000-0000-000000000001', 'Call the new leads first', 0) ->> 'version') $$),
@@ -476,7 +476,7 @@ select is(_run($$ insert into public.audit_log (tenant_id, action)
   'a token with no subject writes no audit row (the actor must be the caller)');
 reset role;
 
--- The sample lock (0028, 0093 §5): a seed (no role claim) may flag a sample; any signed-in
+-- The sample lock (0028, 0097 §5): a seed (no role claim) may flag a sample; any signed-in
 -- token, staff or not, may not, the migration role with a Sales claim included.
 select _as(null, null, null);
 select is(_run($$ update public.testimonials set is_placeholder = true where id = '93000000-0000-0000-0000-00000000f001' $$),

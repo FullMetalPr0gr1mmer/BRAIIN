@@ -213,7 +213,7 @@ select throws_ok(
   $$ update public.leads set status = 'in_progress', internal_notes = 'Sent the proposal'
      where id = '00000000-0000-0000-0000-0000000000aa' $$,
   '42501', null,
-  'a live admin no longer writes the legacy status or notes field (0093: the stage and the notes thread are the ways)');
+  'a live admin no longer writes the legacy status or notes field (0097: the stage and the notes thread are the ways)');
 select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0000-0000-000000000001');
 select throws_ok(
   $$ insert into public.leads (tenant_id, name, email_enc, message)
@@ -277,7 +277,7 @@ select ok(
   and not has_column_privilege('authenticated', 'public.leads', 'internal_notes', 'update')
   and has_column_privilege('authenticated', 'public.leads', 'stage_id', 'update')
   and not has_column_privilege('authenticated', 'public.leads', 'internal_notes', 'select'),
-  'authenticated: column SELECT and column UPDATE (the pipeline since 0041; the legacy status and notes withdrawn by 0093), no insert/delete/truncate (0030, 0033, 0041)');
+  'authenticated: column SELECT and column UPDATE (the pipeline since 0041; the legacy status and notes withdrawn by 0097), no insert/delete/truncate (0030, 0033, 0041)');
 
 select ok(
   exists (select 1 from pg_policies

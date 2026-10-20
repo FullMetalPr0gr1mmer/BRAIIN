@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
--- 0093 — The Sales role, part B: what the role may reach (Admin v2 C10a, owner decision A4;
+-- 0097 — The Sales role, part B: what the role may reach (Admin v2 C10a, owner decision A4;
 -- docs/admin-v2/crm.md §10, the approved plan's B2 C10a paragraph). Forward-only. Depends on
--- 0092 (the enum value, committed in its own file: 55P04), 0001 (app.current_role,
+-- 0096 (the enum value, committed in its own file: 55P04), 0001 (app.current_role,
 -- app.is_staff), 0002 (audit_log, audit_insert), 0021/0028 (testimonials, disciplines,
 -- service_cases and the sample lock), 0024 (media_assets' public read), 0030 + 0041 (the
 -- staff UPDATE grant on leads), 0033 (app.role_works_leads), 0044 (app.staff_directory,
@@ -82,7 +82,7 @@
 -- H11's catalog, and the roles guide (roles-and-access) is put again with five roles, on U17's
 -- revision-2 text (0072). Neither restates app.help_article_set().
 --
--- Rollout (docs/launch-runbook.md): 0092, then this file, then the deploy; then invite Sales
+-- Rollout (docs/launch-runbook.md): 0096, then this file, then the deploy; then invite Sales
 -- users. This file revokes a privilege (section 6), and the Worker that merges with it
 -- already refuses the legacy status, so the code may deploy first; the old Worker answers a
 -- legacy-status PATCH from a stale tab with a refusal between the push and the deploy.
@@ -469,14 +469,14 @@ declare
 begin
   -- The value is there, and app.is_staff() still names the four CMS roles only.
   if not ('sales' = any (enum_range(null::public.app_role)::text[])) then
-    raise exception '0093: app_role has no sales value (apply 0092 first, in its own transaction)';
+    raise exception '0097: app_role has no sales value (apply 0096 first, in its own transaction)';
   end if;
   if pg_get_functiondef('app.is_staff()'::regprocedure) ~ 'sales' then
-    raise exception '0093: app.is_staff() names sales; it must stay the four CMS roles (P-6)';
+    raise exception '0097: app.is_staff() names sales; it must stay the four CMS roles (P-6)';
   end if;
   if pg_get_functiondef('app.is_member()'::regprocedure) !~
      $re$in \('admin', 'content_creator', 'seo', 'developer', 'sales'\)$re$ then
-    raise exception '0093: app.is_member() is not the five roles';
+    raise exception '0097: app.is_member() is not the five roles';
   end if;
 
   -- The helpers answer ROLE_CAPS for Sales: leads.manage and analytics.read, and nothing else.
@@ -484,19 +484,19 @@ begin
           and app.role_works_leads('developer') and not app.role_works_leads('seo')
           and not app.role_works_leads('content_creator') and not app.role_works_leads('anon')
           and not app.role_works_leads(null)) then
-    raise exception '0093: app.role_works_leads is not leads.manage (admin, developer, sales)';
+    raise exception '0097: app.role_works_leads is not leads.manage (admin, developer, sales)';
   end if;
   if not (app.role_analytics_read('sales') and app.role_analytics_read('admin')
           and app.role_analytics_read('content_creator') and app.role_analytics_read('seo')
           and app.role_analytics_read('developer') and not app.role_analytics_read('anon')
           and not app.role_analytics_read(null)) then
-    raise exception '0093: app.role_analytics_read is not analytics.read (the five roles)';
+    raise exception '0097: app.role_analytics_read is not analytics.read (the five roles)';
   end if;
   if app.role_crm_erase('sales') or app.role_manages_users('sales')
      or app.role_views_audit('sales') or app.role_site_health('sales')
      or app.role_manages_visibility('sales') or app.role_analytics_goals('sales')
      or app.role_crm_settings('sales') then
-    raise exception '0093: a helper Sales must not pass answers true for sales';
+    raise exception '0097: a helper Sales must not pass answers true for sales';
   end if;
 
   -- EXECUTE, stated: the two API roles that evaluate policies, never anon or PUBLIC.
@@ -507,22 +507,22 @@ begin
        or not has_function_privilege('service_role', p, 'execute')
        or exists (select 1 from pg_proc f, aclexplode(coalesce(f.proacl, acldefault('f', f.proowner))) a
                    where f.oid = p::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE') then
-      raise exception '0093: EXECUTE on % is wrong', p;
+      raise exception '0097: EXECUTE on % is wrong', p;
     end if;
   end loop;
   foreach p in array array['app.staff_directory()', 'app.tg_testimonial_sample_lock()'] loop
     if has_function_privilege('anon', p, 'execute')
        or has_function_privilege('authenticated', p, 'execute')
        or has_function_privilege('service_role', p, 'execute') then
-      raise exception '0093: % is executable by an API role', p;
+      raise exception '0097: % is executable by an API role', p;
     end if;
   end loop;
   if not has_function_privilege('authenticated', 'public.crm_people(uuid)', 'execute')
      or has_function_privilege('anon', 'public.crm_people(uuid)', 'execute') then
-    raise exception '0093: EXECUTE on public.crm_people(uuid) moved';
+    raise exception '0097: EXECUTE on public.crm_people(uuid) moved';
   end if;
   if pg_get_functiondef('app.staff_directory()'::regprocedure) !~ 'role_works_leads' then
-    raise exception '0093: app.staff_directory() has no lead-worker branch';
+    raise exception '0097: app.staff_directory() has no lead-worker branch';
   end if;
 
   -- audit_log: the three policies, audit_insert the tenant, the member test and the actor.
@@ -533,7 +533,7 @@ begin
   if v_have is distinct from array['audit_insert INSERT PERMISSIVE {public}',
                                    'audit_log_live_read SELECT RESTRICTIVE {authenticated}',
                                    'audit_read SELECT PERMISSIVE {public}'] then
-    raise exception '0093: audit_log policies are %', v_have;
+    raise exception '0097: audit_log policies are %', v_have;
   end if;
   if (select with_check from pg_policies
        where schemaname = 'public' and tablename = 'audit_log' and policyname = 'audit_insert')
@@ -541,7 +541,7 @@ begin
      or (select qual from pg_policies
           where schemaname = 'public' and tablename = 'audit_log' and policyname = 'audit_insert')
         is not null then
-    raise exception '0093: audit_insert is not (tenant, is_member, actor = caller)';
+    raise exception '0097: audit_insert is not (tenant, is_member, actor = caller)';
   end if;
 
   -- The block: one RESTRICTIVE SELECT TO authenticated per table, tenant first, then staff.
@@ -551,11 +551,11 @@ begin
            and cmd = 'SELECT' and permissive = 'RESTRICTIVE' and roles = '{authenticated}'
            and with_check is null
            and qual ~ ('^\(' || v_tenant || ' AND (app\.)?is_staff\(\)\)$')) <> 1 then
-      raise exception '0093: %_staff_columns is missing or is not (tenant, is_staff)', t;
+      raise exception '0097: %_staff_columns is missing or is not (tenant, is_staff)', t;
     end if;
     if not (select relrowsecurity and relforcerowsecurity from pg_class
              where oid = ('public.' || t)::regclass) then
-      raise exception '0093: % is not ENABLE + FORCE row level security', t;
+      raise exception '0097: % is not ENABLE + FORCE row level security', t;
     end if;
   end loop;
 
@@ -566,12 +566,12 @@ begin
     from pg_policies where schemaname = 'public' and tablename = 'help_articles';
   if v_have is distinct from array['help_articles_member_read SELECT PERMISSIVE {authenticated}',
                                    'help_articles_staff_read SELECT PERMISSIVE {authenticated}'] then
-    raise exception '0093: help_articles policies are %', v_have;
+    raise exception '0097: help_articles policies are %', v_have;
   end if;
   if (select qual from pg_policies where schemaname = 'public' and tablename = 'help_articles'
         and policyname = 'help_articles_member_read')
      !~ ('^\(' || v_tenant || ' AND \(\( SELECT (app\.)?live_role\(\) AS live_role\) IS NOT NULL\)\)$') then
-    raise exception '0093: help_articles_member_read is not (tenant, a live member)';
+    raise exception '0097: help_articles_member_read is not (tenant, a live member)';
   end if;
 
   -- leads: staff UPDATE is exactly the pipeline's columns; the legacy pair is gone.
@@ -583,11 +583,11 @@ begin
   if v_cols is distinct from array['assigned_to', 'is_spam', 'is_starred', 'last_contact_at',
                                    'last_contact_channel', 'read_at', 'stage_id', 'tags',
                                    'value_sar'] then
-    raise exception '0093: authenticated may update leads columns % (expected the pipeline''s)', v_cols;
+    raise exception '0097: authenticated may update leads columns % (expected the pipeline''s)', v_cols;
   end if;
   if has_table_privilege('authenticated', 'public.leads', 'update')
      or has_table_privilege('anon', 'public.leads', 'update') then
-    raise exception '0093: a table-wide UPDATE on leads is held';
+    raise exception '0097: a table-wide UPDATE on leads is held';
   end if;
 
   -- admin_role_defaults_read: the tenant, a live member, its own role's preset or users.manage.
@@ -596,7 +596,7 @@ begin
                  and permissive = 'PERMISSIVE' and roles = '{authenticated}'), '')
      !~ ('^\(' || v_tenant || ' AND \(\( SELECT (app\.)?live_role\(\) AS live_role\) IS NOT NULL\) AND '
          || '\(\(\(role\)::text = (app\.)?"?current_role"?\(\)\) OR (app\.)?role_manages_users\((app\.)?"?current_role"?\(\)\)\)\)$') then
-    raise exception '0093: admin_role_defaults_read is not (tenant, a live member, own role or users.manage)';
+    raise exception '0097: admin_role_defaults_read is not (tenant, a live member, own role or users.manage)';
   end if;
 
   -- The two guides: in the catalog and in every tenant, the roles guide naming five roles.
@@ -605,7 +605,7 @@ begin
      or exists (select 1 from public.tenants t
                  where not exists (select 1 from public.help_articles h
                                     where h.tenant_id = t.id and h.slug = 'the-sales-role')) then
-    raise exception '0093: the-sales-role is not in the catalog and every tenant';
+    raise exception '0097: the-sales-role is not in the catalog and every tenant';
   end if;
   if exists (select 1 from public.tenants t
               where not exists (select 1 from public.help_articles h
@@ -613,12 +613,12 @@ begin
                                    and h.body::text ~ 'There are five roles\.'
                                    and h.body::text ~ 'Sales: works leads'
                                    and h.body::text ~ 'Resetting someone''s 2FA')) then
-    raise exception '0093: a tenant''s roles-and-access guide does not name five roles and Sales (with U17''s 2FA text)';
+    raise exception '0097: a tenant''s roles-and-access guide does not name five roles and Sales (with U17''s 2FA text)';
   end if;
 
   -- The sample lock: no role claim is the only trusted context.
   if pg_get_functiondef('app.tg_testimonial_sample_lock()'::regprocedure) ~ 'is_staff'
      or pg_get_functiondef('app.tg_testimonial_sample_lock()'::regprocedure) !~ 'app_metadata,role' then
-    raise exception '0093: the sample lock still trusts "not staff"';
+    raise exception '0097: the sample lock still trusts "not staff"';
   end if;
 end $$;

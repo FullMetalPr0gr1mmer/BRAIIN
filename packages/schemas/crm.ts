@@ -205,7 +205,7 @@ export const VERSIONED_LEAD_FIELDS = [
 /** What a PATCH that still sends the legacy notes field is told (C4b, decision D4's fix). */
 export const NOTES_ARE_A_THREAD = 'Notes are a thread now. Add a note instead.';
 
-/** What a PATCH that still sends the legacy status is told (C10a: 0093 withdrew the column). */
+/** What a PATCH that still sends the legacy status is told (C10a: 0097 withdrew the column). */
 export const STATUS_IS_A_STAGE = 'A lead moves by its stage now. Choose a stage instead.';
 
 /**
@@ -213,7 +213,7 @@ export const STATUS_IS_A_STAGE = 'A lead moves by its stage now. Choose a stage 
  * 409 when it moved on); a star, a read mark and a logged contact do not, because they
  * never move it.
  *
- * `status` is refused (C10a): migration 0093 withdrew the staff UPDATE on the legacy column,
+ * `status` is refused (C10a): migration 0097 withdrew the staff UPDATE on the legacy column,
  * so a lead moves by its stage only (the database keeps the old column in step until C14).
  * Like `internalNotes`, the key stays known so the 422 names it and says what to do.
  *

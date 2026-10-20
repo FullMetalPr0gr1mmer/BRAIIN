@@ -83,7 +83,7 @@ export function leadPatchValues(patch: LeadPatch, now: Date): Record<string, unk
     values['last_contact_at'] = now.toISOString();
   }
   // Neither legacy field is written here: LeadPatchSchema refuses the notes field since C4b
-  // (notes are a thread) and the status since C10a (0093 withdrew the staff UPDATE on both;
+  // (notes are a thread) and the status since C10a (0097 withdrew the staff UPDATE on both;
   // a lead moves by its stage).
   return values;
 }

@@ -52,7 +52,7 @@ describe('the leads SELECT grant (0033)', () => {
   });
 });
 
-describe('the leads UPDATE grant (0030, 0041, 0093)', () => {
+describe('the leads UPDATE grant (0030, 0041, 0097)', () => {
   const granted = replayLeadGrant('update');
 
   it('is a column grant, never table-wide', () => {
@@ -62,7 +62,7 @@ describe('the leads UPDATE grant (0030, 0041, 0093)', () => {
   it('covers every column the PATCH route writes, and nothing the CRM keeps to itself', () => {
     // Every field a PATCH can send, so leadPatchValues names every column it can write.
     // Neither legacy field is one: the schema refuses the notes field since C4b (notes are a
-    // thread) and the status since C10a, and 0093 revoked 0030's grant on both, so the
+    // thread) and the status since C10a, and 0097 revoked 0030's grant on both, so the
     // grant is exactly what the route writes.
     const written = Object.keys(
       leadPatchValues(

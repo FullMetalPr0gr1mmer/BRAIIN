@@ -149,11 +149,11 @@ select is((select count(*)::int from public.lead_stages
 
 select throws_ok($$ update public.leads set status = 'in_progress'
                    where id = '00000000-0000-0000-0000-00000000aa01' $$, '42501', null,
-  'a staff token no longer writes the legacy status (0093)');
+  'a staff token no longer writes the legacy status (0097)');
 reset role;
 
 -- ---- Legacy writes move the pipeline (the current admin, through the sync) --------------
--- Since 0093 no API role but the service role writes status or internal_notes; the sync is
+-- Since 0097 no API role but the service role writes status or internal_notes; the sync is
 -- still the expand window's (until C14), so it is exercised as the service role, carrying
 -- the admin's claim for the attribution the triggers read.
 set local role service_role;

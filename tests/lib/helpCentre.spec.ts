@@ -621,7 +621,7 @@ describe('the guides say only what the admin does', () => {
         .map((raw) => HelpArticleSeedSchema.parse(raw))
         .map((a) => [a.slug, a]),
     );
-    // The set as the two-step migration leaves it: a later slice (C10a's 0093) puts
+    // The set as the two-step migration leaves it: a later slice (C10a's 0097) puts
     // roles-and-access again on top of these blocks, and its own test holds that.
     const throughU17 = helpSet(
       MIGRATION_FILES.slice(0, MIGRATION_FILES.indexOf(twoStepMigration()) + 1),
@@ -1830,7 +1830,7 @@ describe('the Sales guides (C10a): the-sales-role, and roles-and-access with fiv
   const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
   const source = (path: string) => readFileSync(path, 'utf8');
 
-  it('0093 puts the new guide at revision 0 and the roles guide at the revision the migrations before it leave', () => {
+  it('0097 puts the new guide at revision 0 and the roles guide at the revision the migrations before it leave', () => {
     const at = MIGRATION_FILES.findIndex((f) => /_sales_role\.sql$/.test(f.name));
     const before = helpSet(MIGRATION_FILES.slice(0, at));
     const c10a = HELP.edits.filter((e) => /_sales_role\.sql$/.test(e.file));

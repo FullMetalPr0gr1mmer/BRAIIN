@@ -6,7 +6,7 @@
 --   1. each CMS role (admin, content_creator, seo, developer) reads every row of the 21 tables
 --      a public loader reads, in its tenant, whatever the status or visible flag, with the
 --      dataset's projection (`*`, or anon's columns on the four column-granted tables); a
---      `sales` claim and anon read only what is public, and since 0093 a `sales` claim reads
+--      `sales` claim and anon read only what is public, and since 0097 a `sales` claim reads
 --      no testimonial, case study or media row at all (the non-staff block: `authenticated`
 --      holds columns of those three that anon does not); another tenant's admin reads none;
 --   2. the CMS roles read their tenant's pending changes (content_drafts); a `sales` claim
@@ -353,7 +353,7 @@ select is(_seen(),
 select _as('sales');
 select is(_seen(),
   'blog_posts=1 categories=1 certifications=1 clients=1 disciplines=1 entity_seo=1 media_assets=0 navigation=1 page_sections=1 pages=2 portfolio=1 portfolio_media=1 portfolio_services=1 sectors=1 seo_defaults=1 service_cases=0 services=1 site_profile=1 statistics=1 team_members=1 testimonials=0 page_visibility=0',
-  'a sales claim reads only the public fixture rows (no draft, archived or hidden row), and no testimonial, case study or media row (0093)');
+  'a sales claim reads only the public fixture rows (no draft, archived or hidden row), and no testimonial, case study or media row (0097)');
 select _as_other();
 select is(_seen(),
   'blog_posts=0 categories=0 certifications=0 clients=0 disciplines=0 entity_seo=0 media_assets=0 navigation=0 page_sections=0 pages=0 portfolio=0 portfolio_media=0 portfolio_services=0 sectors=0 seo_defaults=0 service_cases=0 services=0 site_profile=0 statistics=0 team_members=0 testimonials=0 page_visibility=0',
