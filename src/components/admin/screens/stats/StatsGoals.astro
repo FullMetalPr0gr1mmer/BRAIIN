@@ -1,0 +1,59 @@
+---
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import { barBucket, formatNumber } from '@/lib/admin/charts';
+import type { GoalView } from '@/lib/admin/stats/goals';
+import { goalCounts, goalPercent } from '@/lib/admin/stats/labels';
+
+// The goals card's list for a role that reads goals but cannot set them (Admin v2 G1c):
+// Content Creator and Developer. Zero JS. Holders of analytics.goals get the same list from
+// the island instead (screens/goals/StatsGoals.tsx, the same markup with the controls):
+// tests/astro/statsHealth.spec.ts renders both and compares them.
+
+interface Props {
+  goals: readonly GoalView[];
+}
+
+const { goals } = Astro.props;
+---
+
+{
+  goals.length === 0 ? (
+    <EmptyState
+      icon="chart"
+      title="No goals yet."
+      text="Admins and the SEO role can add goals. Progress counts this calendar month."
+    />
+  ) : (
+    <>
+      <ul class="goals__list">
+        {goals.map((goal) => {
+          const pct = goalPercent(goal);
+          return (
+            <li class="goal">
+              <div class="goal__h">
+                <div>
+                  <span class="goal__name" dir="auto">
+                    {goal.name}
+                  </span>
+                  <span class="goal__counts">{goalCounts(goal.metric, goal.cta)}</span>
+                </div>
+              </div>
+              <div class="prog">
+                <span>
+                  {goal.done === null
+                    ? `Target ${formatNumber(goal.target)}. Progress shows to people who work with leads.`
+                    : `${formatNumber(goal.done)} of ${formatNumber(goal.target)}`}
+                </span>
+                <span class="prog__v">{pct === null ? '' : `${pct}%`}</span>
+                <span class="bar" aria-hidden="true">
+                  <span class="bar-fill ch-s1" data-width={barBucket(pct ?? 0, 100)} />
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <p class="stats__under">Progress counts from the first of this month, in UTC days.</p>
+    </>
+  )
+}

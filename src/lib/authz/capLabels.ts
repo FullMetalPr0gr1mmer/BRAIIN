@@ -51,6 +51,7 @@ export const CAP_LABELS: Readonly<Record<Capability, CapLabel>> = {
   'applications.pii': { full: 'See applicants’ contact details and download CVs' },
   'analytics.read': { full: 'See website stats' },
   'analytics.search': { full: 'See what visitors search for' },
+  'analytics.goals': { full: 'Set goals for the website stats' },
   'ai.editContent': { full: 'Edit the Style-Finder questions and styles' },
   'ai.config': { full: 'Set up the Style-Finder results' },
   'logs.view': { full: 'Read the system logs' },

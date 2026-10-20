@@ -4,6 +4,7 @@ import type { VideoClip } from '@schemas/media';
 import { renderTiptapToHtml } from '@/lib/content/tiptap';
 import { ValidationError } from '../errors';
 import type { ResourcePayload } from '../resource';
+import { liveDb, type OverlayDb } from '@/lib/release/overlayDb';
 
 // What the resource configs share (Admin v2 W0: one module per entity in this
 // directory): the column allowlist, the derived columns, the go-live rules and the
@@ -202,20 +203,16 @@ type Auth = import('@/lib/auth/types').AuthContext;
  * RLS and the tenant predicate, and says which field is wrong. Only when the write sets it.
  */
 export async function assertLinkInTenant(
-  ctx: { auth: Auth; sb: Db; changed: Input },
+  ctx: { auth: Auth; sb: Db; changed: Input; db?: OverlayDb | undefined },
   link: { column: string; table: string; field: string; message: string; image?: boolean },
 ): Promise<void> {
   const id = ctx.changed[link.column];
   if (id === undefined || id === null) return;
-  let q = ctx.sb
-    .from(link.table)
-    .select('id')
-    .eq('tenant_id', ctx.auth.tenantId)
-    .eq('id', String(id));
-  if (link.image) q = q.eq('kind', 'image');
-  const { data, error } = await q.maybeSingle();
-  if (error) throw new Error(`check ${link.table}: ${error.message}`);
-  if (!data) throw new ValidationError(link.message, link.field);
+  // Through the overlay-aware database when the caller gives one (Admin v2 R6: a staged save,
+  // a publish); else live, with the query this check always sent.
+  const db = ctx.db ?? liveDb(ctx.sb, ctx.auth);
+  const found = await db.exists(link.table, String(id), link.image ? { kind: 'image' } : {});
+  if (!found) throw new ValidationError(link.message, link.field);
 }
 
 export const POSTER_LINK = {

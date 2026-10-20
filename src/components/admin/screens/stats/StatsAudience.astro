@@ -1,0 +1,108 @@
+---
+import Card from '@/components/admin/ui/Card.astro';
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import Note from '@/components/admin/ui/Note.astro';
+import BarsV from '@/components/admin/ui/charts/BarsV.astro';
+import Donut from '@/components/admin/ui/charts/Donut.astro';
+import Line from '@/components/admin/ui/charts/Line.astro';
+import { formatNumber } from '@/lib/admin/charts';
+import { busiestHours, hourLabel } from '@/lib/admin/stats/hours';
+import type { PageviewSummary } from '@/lib/admin/stats/pageviews';
+import { dayLabel } from '@/lib/admin/stats/range';
+
+// Website stats, Audience (Admin v2 G1a; the prototype's opsStatsAudience, screens_ops.js,
+// less what is not collected): the busiest hours of the day in Riyadh time, then English and
+// Arabic page views day by day and the language split (moved here from the Overview). The
+// prototype's countries, cities, browsers, devices and new versus returning are L5 (they
+// need a persistent id or new capture): the note says they are not collected. Zero JS.
+
+interface Props {
+  summary: PageviewSummary;
+  /** Page views per hour of the day, 0 to 23, Riyadh time. */
+  hours: readonly number[];
+}
+
+const { summary, hours } = Astro.props;
+const { current, range } = summary;
+const views = current.total;
+const busiest = busiestHours(hours);
+const en = current.byLocale.find((l) => l.locale === 'en')?.views ?? 0;
+const ar = current.byLocale.find((l) => l.locale === 'ar')?.views ?? 0;
+const other = Math.max(0, views - en - ar);
+const languages = [
+  { label: 'English', value: en },
+  { label: 'Arabic', value: ar },
+  ...(other > 0 ? [{ label: 'Other', value: other }] : []),
+];
+const busiestLine =
+  busiest.length > 0
+    ? `Busiest: ${busiest
+        .slice()
+        .sort((a, b) => a - b)
+        .map(hourLabel)
+        .join(', ')}.`
+    : '';
+---
+
+{
+  views === 0 ? (
+    <Card level={2} flush>
+      <EmptyState
+        icon="chart"
+        title={summary.firstDay ? 'No visits counted in this period.' : 'No visits counted yet.'}
+        text="Visits arrive from visitors who accept analytics cookies."
+      />
+    </Card>
+  ) : (
+    <>
+      <Card
+        level={2}
+        title="Busiest hours"
+        sub="Riyadh time. Good to know when to post and when to answer."
+      >
+        <BarsV
+          id="stats-hours"
+          caption="Page views by hour of day, Riyadh time"
+          captionVisible={false}
+          data={hours.map((value, hour) => ({ label: String(hour), value }))}
+          height={180}
+          labelHeading="Hour"
+          valueHeading="Page views"
+          series={1}
+          highlight={busiest}
+          highlightSeries={0}
+        />
+        {busiestLine && <p class="stats__under">{busiestLine}</p>}
+      </Card>
+      <div class="grid grid--2-1 stats__row">
+        <Card level={2} title="English and Arabic page views" sub={`The last ${range.days} days`}>
+          <Line
+            id="stats-line"
+            caption="Page views per day, English and Arabic"
+            captionVisible={false}
+            series={[
+              { name: 'English', data: current.byDay.map((d) => d.en) },
+              { name: 'Arabic', data: current.byDay.map((d) => d.ar) },
+            ]}
+            labels={current.byDay.map((d) => dayLabel(d.day))}
+            labelHeading="Day"
+          />
+        </Card>
+        <Card level={2} title="Languages" sub="Which version they read">
+          <Donut
+            id="stats-donut"
+            caption="Page views by language"
+            captionVisible={false}
+            data={languages}
+            center={formatNumber(views)}
+            labelHeading="Language"
+            valueHeading="Page views"
+          />
+        </Card>
+      </div>
+    </>
+  )
+}
+<Note class="stats__row">
+  Devices, countries, cities and sources are not collected: the stats keep no lasting visitor id.
+</Note>
