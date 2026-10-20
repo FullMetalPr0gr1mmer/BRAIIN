@@ -12,7 +12,12 @@ import {
   INVITE_READY,
   INVITE_REOPEN,
   INVITE_TOO_LARGE,
+  TWO_STEP_DONE,
+  TWO_STEP_LOST,
+  TWO_STEP_MESSAGES,
+  TWO_STEP_NOT_SET_UP,
 } from '@/lib/auth/messages';
+import type { TwoStepView } from '@/lib/auth/twoStepFlow';
 import { EXPIRED_FORM, expiredSignInForm, tooLargeSignInForm } from '@/lib/auth/expiredForm';
 import { IDENTITY } from './fixtures';
 import { normalise } from './harness';
@@ -431,5 +436,177 @@ describe('/admin/invite: the page an invite link opens (Admin v2 U12b)', () => {
     expect(messages(await render('login', '?invite=ready&error=invalid'))).toEqual([
       { role: 'alert', text: LOGIN_MESSAGES.invalid.text },
     ]);
+  });
+});
+
+// ── /admin/2fa (Admin v2 U17) ───────────────────────────────────────────────────
+// The page a session owing its code reaches, in the sign-in shell (the admin shell frames a
+// full session's setup and is swept signed in, tests/admin). Every mode of its content
+// (TwoStepPanel), in both frames' heading levels: one form per action posting to the page
+// with the CSRF field, no script, no style=, labelled inputs, and each code's fixed copy.
+// The page imports both frames (AdminLayout's import graph is large): its first, cold render
+// takes longer than the default five seconds on a loaded runner.
+describe('/admin/2fa: two-step sign-in (Admin v2 U17)', { timeout: 60_000 }, () => {
+  const PENDING = {
+    userId: '11111111-1111-4111-8111-111111111111',
+    tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    email: 'staff@example.test',
+    role: 'seo' as const,
+    mode: 'challenge' as const,
+    factorId: '33333333-3333-4333-8333-333333333333',
+  };
+
+  async function renderTwoStep(
+    search = '',
+    pending: typeof PENDING | { mode: 'enrol' } = PENDING,
+  ): Promise<string> {
+    const { default: Page } = await import('@/pages/admin/2fa.astro');
+    container ??= AstroContainer.create();
+    const res = await (
+      await container
+    ).renderToResponse(Page, {
+      request: new Request(`${ORIGIN}/admin/2fa${search}`),
+      locals: {
+        ...LOCALS,
+        supabase: {},
+        secondStep: { ...PENDING, ...pending },
+      } as unknown as App.Locals,
+    });
+    return normalise(await res.text());
+  }
+
+  async function renderPanel(view: TwoStepView, inShell: boolean): Promise<string> {
+    const { default: Panel } =
+      await import('@/components/admin/screens/twoStep/TwoStepPanel.astro');
+    container ??= AstroContainer.create();
+    return normalise(
+      await (
+        await container
+      ).renderToString(Panel, {
+        props: { view, message: null, csrfToken: TOKEN, next: '/admin/leads', inShell },
+      }),
+    );
+  }
+
+  const forms = (html: string) =>
+    [...html.matchAll(/<form([^>]*)>([\s\S]*?)<\/form>/g)].map((m) => ({
+      attrs: m[1] ?? '',
+      body: m[2] ?? '',
+      intent: /name="intent" value="([a-z]+)"/.exec(m[2] ?? '')?.[1] ?? null,
+    }));
+
+  it('the code at sign-in: one h1, a labelled code field, Verify, and Sign out', async () => {
+    const html = await renderTwoStep('?next=%2Fadmin%2Fleads');
+    expect(html.match(/<h1[\s>]/g)).toHaveLength(1);
+    expect(html).toContain('Enter your code');
+    const all = forms(html);
+    expect(all.map((f) => f.intent)).toEqual(['verify', 'signout']);
+    for (const f of all) {
+      expect(f.attrs).toContain('method="post"');
+      expect(f.attrs).toContain('action="/admin/2fa"');
+      expect(f.body).toContain(`<input type="hidden" name="${CSRF_FIELD_NAME}" value="${TOKEN}">`);
+    }
+    const verify = all[0]?.body ?? '';
+    expect(verify).toContain('<input type="hidden" name="next" value="/admin/leads">');
+    expect(verify).toMatch(/<label class="field">\s*<span>6-digit code<\/span>\s*<input/);
+    expect(verify).toMatch(/autocomplete="one-time-code"/);
+    expect(verify).toMatch(/inputmode="numeric"/);
+    expect(html).toContain(TWO_STEP_LOST);
+    expectNoScriptOrInlineStyle(html);
+  });
+
+  it('a forced setup offers Set up and Sign out, nothing else', async () => {
+    const html = await renderTwoStep('', { mode: 'enrol' });
+    expect(html).toContain('Set up 2FA');
+    expect(forms(html).map((f) => f.intent)).toEqual(['start', 'signout']);
+    expectNoScriptOrInlineStyle(html);
+  });
+
+  it.each(Object.entries(TWO_STEP_MESSAGES))(
+    '?error=%s renders its fixed copy',
+    async (code, m) => {
+      const html = await renderTwoStep(`?error=${code}`);
+      expect(messages(html)).toEqual([{ role: 'alert', text: m.text }]);
+    },
+  );
+
+  it('?done renders its notice; an unknown or crafted code renders nothing', async () => {
+    expect(messages(await renderTwoStep('?done=on'))).toEqual([
+      { role: 'status', text: TWO_STEP_DONE.on.text },
+    ]);
+    for (const code of ['nope', '<b>x</b>', 'toString', '__proto__']) {
+      const html = await renderTwoStep(`?error=${encodeURIComponent(code)}`);
+      expect(messages(html), code).toEqual([]);
+      expect(html).not.toContain('<b>x</b>');
+    }
+  });
+
+  it('the setup step: the key as text and as a link, its form carrying the setup back', async () => {
+    const view: TwoStepView = {
+      mode: 'setup',
+      factorId: PENDING.factorId,
+      setupKey: 'JBSWY3DPEHPK3PXP',
+      otpauth: 'otpauth://totp/Studio:staff%40example.test?secret=JBSWY3DPEHPK3PXP&issuer=Studio',
+    };
+    for (const inShell of [false, true]) {
+      const html = await renderPanel(view, inShell);
+      expect(html).toMatch(inShell ? /<h2[\s>]/ : /<h1[\s>]/);
+      expect(html).not.toMatch(inShell ? /<h1[\s>]/ : /<h2[\s>]/);
+      expect(html).toContain('JBSW Y3DP EHPK 3PXP');
+      expect(html).toContain('<code class="two-step__key" dir="ltr">');
+      expect(html).toContain(
+        'href="otpauth://totp/Studio:staff%40example.test?secret=JBSWY3DPEHPK3PXP&amp;issuer=Studio"',
+      );
+      const [confirm, last] = forms(html);
+      expect(confirm?.intent).toBe('confirm');
+      expect(confirm?.body).toContain(`name="factorId" value="${PENDING.factorId}"`);
+      expect(confirm?.body).toContain('name="setupKey" value="JBSWY3DPEHPK3PXP"');
+      // Sign out only where the person has no admin to go back to.
+      expect(last?.intent ?? null).toBe(inShell ? null : 'signout');
+      expect(html.includes('href="/admin/account"')).toBe(inShell);
+      expectNoScriptOrInlineStyle(html);
+      // The prototype's words: no dashes (P-12).
+      expect(html).not.toMatch(/[–—]/);
+    }
+  });
+
+  it('manage: Turn off 2FA with a code, unless the team requires it', async () => {
+    const off = await renderPanel({ mode: 'manage', required: false }, true);
+    expect(forms(off).map((f) => f.intent)).toEqual(['off']);
+    expect(off).toContain('Turn off 2FA');
+    const kept = await renderPanel({ mode: 'manage', required: true }, true);
+    expect(forms(kept)).toEqual([]);
+    expect(kept).toContain('Your team requires 2FA, so it stays on.');
+  });
+
+  it('intro and "Not set up"', async () => {
+    const intro = await renderPanel({ mode: 'intro' }, true);
+    expect(forms(intro).map((f) => f.intent)).toEqual(['start']);
+    const none = await renderPanel({ mode: 'not-set-up' }, true);
+    expect(none).toContain(TWO_STEP_NOT_SET_UP.title);
+    expect(none).toContain(TWO_STEP_NOT_SET_UP.text);
+    expect(forms(none)).toEqual([]);
+  });
+
+  it('a two-step form the CSRF check refused goes back to the page with its next', async () => {
+    const request = new Request(`${ORIGIN}/admin/2fa`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: `${CSRF_FIELD_NAME}=stale&intent=verify&code=123456&next=%2Fadmin%2Fleads`,
+    });
+    const res = await expiredSignInForm(request, '/admin/2fa');
+    expect(res?.status).toBe(303);
+    expect(res?.headers.get('location')).toBe(
+      `/admin/2fa?next=%2Fadmin%2Fleads&error=${EXPIRED_FORM}`,
+    );
+    const big = tooLargeSignInForm(
+      new Request(`${ORIGIN}/admin/2fa`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: 'x',
+      }),
+      '/admin/2fa',
+    );
+    expect(big?.headers.get('location')).toBe('/admin/2fa?error=too-large');
   });
 });

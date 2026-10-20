@@ -199,6 +199,10 @@ const ALLOWED: Record<string, string> = {
   // (Admin v2 U1, D5); a note is stored exactly as typed, or not at all.
   'packages/schemas/dashboard.ts':
     'finds a phone number in either Arabic digit set to refuse a team note; nothing is changed',
+  // Admin v2 U17, decision D13: a 6-digit code typed on an Arabic keypad is checked as the
+  // digits it is. The code is sent to the auth server and discarded, never stored or shown.
+  'packages/schemas/twoStep.ts':
+    'reads a typed 2FA code in either Arabic digit set as ASCII digits; never stored or shown',
 };
 
 /** U+0660-0669, U+06F0-06F9, as characters or as \u escapes. */

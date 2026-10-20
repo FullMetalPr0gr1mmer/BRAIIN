@@ -14,6 +14,7 @@ import {
 } from '@/lib/auth/lockout';
 import { readAuthBody, seeOther, ticked } from '@/lib/auth/body';
 import { safeNext } from '@/lib/auth/next';
+import { TWO_STEP_PATH } from '@/lib/auth/twoStep';
 import { clientIp } from '@/lib/http/maintenance';
 import { writeAudit } from '@/lib/admin/audit';
 import { json } from '@/lib/admin/route';
@@ -111,7 +112,20 @@ export const POST: APIRoute = async ({ request, locals, cookies }) => {
   // the full live-recheck (active, unlocked, JWT claims agreeing with the profile row),
   // so a user whose credentials are valid but whose account was disabled — or who never
   // had the access-token hook stamp a role — never receives a usable admin session.
-  const { ctx } = await resolveAuthContext(supabase);
+  const { ctx, pending } = await resolveAuthContext(supabase);
+
+  // The password was right and the account asks for a second step (Admin v2 U17): the session
+  // stays, held at /admin/2fa (the middleware lets it reach nothing else). The persistence
+  // choice is kept. NOT registerSuccess: it would clear the failure count between the password
+  // and the code, and someone holding the password could then try codes for ever. NOT an
+  // `auth.login` row: the sign-in is not done; the two-step page writes it after the code.
+  if (pending) {
+    commitSessionPersistence(cookies);
+    return form
+      ? seeOther(`${TWO_STEP_PATH}?${new URLSearchParams({ next })}`)
+      : json({ ok: true, data: { secondStep: pending.mode } });
+  }
+
   if (!ctx) {
     await supabase.auth.signOut();
     clearSessionCookies(cookies);

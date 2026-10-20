@@ -155,6 +155,34 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     `security_update_password_require_current_password: true`, `password_min_length: 10`
     and `security_update_password_require_reauthentication: true`.
 
+- **Two factor sign in: what stays open** (Admin v2 U17; owner item **O-25**).
+  - *The gap.* 2FA is enforced in two layers (the access-token hook stamps the role only at
+    the required `aal`; `resolveAuthContext` holds a session below it at `/admin/2fa`), but
+    four things stay outside them. (1) A code typed at Supabase Auth's own verify endpoint
+    (the project URL and the anon key are public) counts nothing toward the Worker's
+    5-in-15-minutes lockout: only GoTrue's per-IP rate limit bounds guessing there (the "MFA
+    verification attempt" hook that could lock it is a paid-plan feature); a million codes
+    with about three valid per window keeps it slow, not impossible, and only for someone who
+    already has the password. (2) Until a person sets 2FA up, their password alone protects
+    them, even with Require 2FA on: whoever holds the password at their next sign-in sets it
+    up first. (3) An access token minted before someone turned 2FA on, or before Require was
+    switched on, keeps its role at PostgREST for up to an hour (the hour U12a records); the
+    admin itself holds it at the second step at once. (4) No recovery codes: a lost phone
+    needs an Admin's Reset 2FA, and the account owner's needs whoever runs the database
+    (launch runbook §3a).
+  - *What the code does.* Wrong codes at the sign-in step and for turning 2FA off count
+    toward the lockout, and `registerSuccess` waits for the code. Users & roles shows who is
+    Off, site health counts them (Admin), and `auth.two_step_on`, `auth.two_step_off` and
+    `user.two_step_reset` are in the activity log. Require 2FA can be turned on only by an
+    Admin whose own session uses 2FA.
+  - *What closes it.* (1) and (4) are Supabase Auth's to own; O-25 asks the owner to accept
+    them, and to confirm TOTP is enabled on staging and production (launch runbook §2d). (2)
+    closes as people set it up (Reset 2FA and Require 2FA are the tools); (3) is the token
+    lifetime's, as for a role change.
+  - *Owner:* Kareem (O-25). *Expiry:* U17's production push, at the latest 2026-12-31.
+    *Closes when* the hosted projects read `mfa_totp_enroll_enabled: true` and
+    `mfa_totp_verify_enabled: true` and the owner has accepted (1) to (4) here.
+
 - **A reset link's token in the platform's request logs** (Admin v2 F7; owner item **O-2**).
   - *The gap.* `wrangler.jsonc` turns observability on, so Workers Logs keep an invocation
     log per request, with its URL. The reset e-mail's link carries its token in the query
@@ -334,7 +362,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §6.3 crm.tasks | Tasks (call/email/whatsapp/meeting/todo) | covered | covered | CRM-8 |  |
 | §6.3 messaging | Conversations, templates, segments, campaigns, automations, exports log, messaging and automation settings | deferred | later phase (A1) or legal gate | A1 | Consistent with A1. |
 | §6.4 users | People list with email, last seen, active | covered | covered | AV-21 |  |
-| §6.4 users | TOTP 2FA, require 2FA, reset 2FA | deviated-challenge | built under A6 | AV-05/AV-21 hide 2FA | Supabase Auth MFA exists and raises Pillar 1. |
+| §6.4 users | TOTP 2FA, require 2FA, reset 2FA | deviated-challenge | built under A6 | U17 (0072, `/admin/2fa`) | Built (U17): TOTP set up from the account on a zero-JS page (key and `otpauth://` link, no QR yet), enforced in two layers (the token hook at the required `aal`, `resolveAuthContext`'s second step), Require 2FA for everyone on Users › Security, Reset 2FA (Admin, one definer transaction). No recovery codes (Supabase Auth has none); residuals under O-25 below. |
 | §6.4/§7 invites | Invitation links that expire in 7 days | missing | added as a slice | AV-21 (inviteUserByEmail resend/cancel) | Supabase invite links follow the global Email OTP expiry (default 1 h; more than one day is discouraged and Management-API only). |
 | §6.4 | rolePerms, userPerms, session.viewRole | deviated-ok | deviation (standard or owner decision) | A2/A4 | Binding. |
 | §6.4 dash | Per-person layout and quick actions | covered | covered | AV-05 (admin_user_prefs), AV-09 |  |
@@ -390,11 +418,11 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §14 | 10-minute health worker (uptime, TTFB, weight, errors, broken links, SSL/domain, headers, SEO, synthetic form, backup, storage), score, alerts | deviated-challenge | built under A6 | AV-10 v1; G2 (0067) | Vitals, errors, checklist, security, SEO, backup, storage (U2); uptime, domain and certificate built (G2): the monitor's read-only API every 10 minutes, the domain's RDAP record about daily, the certificate where the monitor reports it, failures in the bell. No broken-link crawl (L8), no lab weight, no alert channels (A1). |
 | §14 | Health visible to every 'stats' role | deviated-ok | deviation (standard or owner decision) | AV-10 (siteHealth.view) | §5: Admin + Developer. |
 | §15 | Twelve widgets, per-user layout, Customize across three columns | covered | covered | AV-09 | Team notes built in U1; Right now (realtime) built in G1b, off the board by default as the prototype's DASH_DEFAULT, figures as of the page's load (the stats' Realtime tab keeps them current). |
-| §15 | Users: invite with role, deactivate, reset 2FA, editable matrix, personal access | covered | covered | AV-21 | Read-only matrix and no personal access (binding); reset 2FA missing. |
+| §15 | Users: invite with role, deactivate, reset 2FA, editable matrix, personal access | covered | covered | AV-21, U17 | Read-only matrix and no personal access (binding); reset 2FA built (U17: never yourself or the account owner). |
 | §15 | Activity log filterable by person, action and date; exportable | covered | covered | AV-22, U13 (kind chips, person, Riyadh days; CSV under the export lockdown) | No free-text search (U13 D1): the sentences are composed in code. The file names items by type and id, not title (D5). |
 | §15 | Publish versions list with restore | covered | covered | R10, R13, AV-24 |  |
 | §16 | REST/JSON, session cookie, CSRF on writes, per-route permission | covered | covered | defineAdminRoute, __Host-csrf, assertCap | /state bootstrap and /site/*.json are not needed (SSR, P-1). |
-| §16 | /auth/2fa and /auth/invite/:token | missing | added as a slice | none | Follows the 2FA and 7-day invite gaps. |
+| §16 | /auth/2fa and /auth/invite/:token | covered | added as a slice | U17 `/admin/2fa`, U12b `/admin/invite` | Under `/admin`, not `/auth` (the admin's path rules, CSP and pre-auth list). Invite links last one hour with Resend (O-22). |
 | §16 | Workers: rollups, backups, health checks, link crawl, senders, sheets sync | covered | covered | existing pg_cron rollups + AV-10 rollup_vitals; R7/R11 minute cron; §10 DR | Senders/sheets are A1; health from the external monitor; a crawl does not fit the free plan's 10 ms cron CPU. |
 | §17 | Phases 1-3: foundation, CMS live, leads | covered | covered | R0-R16, AV-01-AV-31, CRM-1-CRM-14 | Phase-3 notifications/auto reply/inbox threads (A1) and import (O12) excluded. |
 | §17 | Phases 4-7: email, WhatsApp, automations, growth | deferred | later phase (A1) or legal gate | A1 (4-6); phase 7 partly outside A1 | GA4, Search Console, beacon enrichment, health worker and editable help need owner confirmation. |
