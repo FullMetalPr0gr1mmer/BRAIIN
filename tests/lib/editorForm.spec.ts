@@ -203,9 +203,10 @@ describe('EditorForm in tabs and read-only (Admin v2 U8b)', () => {
       { initialTab: 'publishing' },
     );
     expect(html).toContain(
-      'Content<span class="tab-cue" aria-hidden="true"></span><span class="visually-hidden">, has errors</span>',
+      'aria-label="Content, has errors" data-cue="">Content<span class="tab-cue" aria-hidden="true"></span></button>',
     );
     expect(html).toMatch(/data-cue=""[^>]*>Content/);
+    expect(html).not.toContain('aria-label="Publishing');
     expect(html).not.toMatch(/>Publishing<span class="tab-cue"/);
     // The summary still links the field, which the reveal listener shows first.
     expect(html).toContain('<a href="#f-authorId">');

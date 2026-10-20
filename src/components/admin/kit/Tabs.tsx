@@ -18,6 +18,9 @@ import { rovingIndex, tabFromParam } from '@/lib/admin/roving';
 // a panel tab after it). `Tabs` is TabStrip plus its panels, its markup and behaviour as
 // before. A tab may carry a `cue` ("has errors"): a dot it shows, and words its accessible
 // name ends with ("Content, has errors"), so the visible label starts the name (WCAG 2.5.3).
+// The name is the tab's `aria-label`, not a visually hidden span: Chromium puts a space before
+// the text of an absolutely positioned element when it builds a name from content, so a span
+// gave "Content , has errors" (and an e2e looking for the name found nothing).
 
 export interface TabStripTab {
   id: string;
@@ -91,17 +94,13 @@ export function TabStrip({ tabs, label, value, onChange, idBase, param = 'tab' }
             aria-selected={selected}
             aria-controls={panel}
             tabIndex={selected ? 0 : -1}
+            aria-label={tab.cue ? `${tab.label}, ${tab.cue}` : undefined}
             data-cue={tab.cue ? '' : undefined}
             onClick={() => select(index, false)}
           >
             {tab.icon && <Icon name={tab.icon} size={14} />}
             {tab.label}
-            {tab.cue && (
-              <>
-                <span className="tab-cue" aria-hidden="true" />
-                <span className="visually-hidden">, {tab.cue}</span>
-              </>
-            )}
+            {tab.cue && <span className="tab-cue" aria-hidden="true" />}
           </button>
         );
       })}

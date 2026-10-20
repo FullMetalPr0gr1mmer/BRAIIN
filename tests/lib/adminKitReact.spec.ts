@@ -281,10 +281,16 @@ describe('TabStrip (Admin v2 U8b: the tab list alone, for EditorForm)', () => {
 
   it('a cue: a dot, and words that end the name after the visible label (WCAG 2.5.3)', () => {
     const out = strip({ tabs: [{ ...tabs[0]!, cue: 'has errors' }, tabs[1]!] });
+    // The name is stated whole ("Content, has errors"): a visually hidden span's words are
+    // read after a space Chromium adds before an absolutely positioned box ("Content , has").
     expect(out).toContain(
-      'data-cue="">Content<span class="tab-cue" aria-hidden="true"></span><span class="visually-hidden">, has errors</span></button>',
+      'tabindex="-1" aria-label="Content, has errors" data-cue="">Content<span class="tab-cue" aria-hidden="true"></span></button>',
     );
+    expect(out).not.toContain('visually-hidden');
     expect(out.match(/tab-cue/g)).toHaveLength(1);
+    // A tab without a cue is named by its label alone.
+    expect(out).toMatch(/aria-controls="ed-panel-seo" tabindex="0">SEO</);
+    expect(out.match(/aria-label=/g)).toHaveLength(2);
   });
 
   it('Tabs draws the same tab list it did before the split', () => {

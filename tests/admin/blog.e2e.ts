@@ -91,8 +91,15 @@ async function stored(): Promise<{ version: number; excerpt: unknown }> {
   return data as { version: number; excerpt: unknown };
 }
 
+/**
+ * A tab of the post editor by its whole computed name: a string matches exactly, so "Content"
+ * is the Content tab with no cue, and "Content, has errors" the one with it (Chromium's name,
+ * not the markup: a hidden span once computed to "Content , has errors" and matched nothing).
+ */
 const tab = (page: Page, name: string | RegExp) =>
-  page.getByRole('tablist', { name: 'Post editor' }).getByRole('tab', { name });
+  page
+    .getByRole('tablist', { name: 'Post editor' })
+    .getByRole('tab', typeof name === 'string' ? { name, exact: true } : { name });
 
 test.beforeAll(async () => {
   const { error } = await service()
@@ -174,7 +181,7 @@ test.describe('as Admin', () => {
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.locator('.save-status')).toContainText(/Saved/);
     await expect(tab(page, 'Content')).toBeVisible();
-    await expect(tab(page, 'Content, has errors')).toHaveCount(0);
+    await expect(tab(page, /has errors/)).toHaveCount(0);
     const open = page.getByRole('link', { name: 'Open on site' });
     await expect(open).toHaveAttribute('href', `/creative-knowledge/${SLUG}`);
     const res = await page.request.get(`/creative-knowledge/${SLUG}`);
