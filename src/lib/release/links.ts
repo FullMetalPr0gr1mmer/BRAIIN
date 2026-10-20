@@ -80,6 +80,11 @@ export const RELEASE_LINKS: Readonly<Partial<Record<ReleaseEntityType, readonly 
   // The share images (U10, 0073); entity SEO's target is added by the rules (SEO_TARGET_TABLES).
   entity_seo: [media('og_media_id', 'ogMediaId')],
   seo_defaults: [media('default_og_media_id', 'defaultOgMediaId')],
+  // The site's icons (U9, 0075): composite keys to the tenant's own media, RESTRICT.
+  site_profile: [
+    media('favicon_media_id', 'faviconMediaId'),
+    media('app_icon_media_id', 'appIconMediaId'),
+  ],
 };
 
 /** The table an entity-SEO row's target lives in (its `entity_type` CHECK, 0009). */
