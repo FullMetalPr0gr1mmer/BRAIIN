@@ -79,7 +79,15 @@
   - consent toggles, unsubscribe and Suggested reply/Send wait for L6.
 - **Stats**:
   - referrer/UTM/device/country and unique visitors wait for L5 (legal);
-  - "No cookie banner needed" is corrected (§7).
+  - "No cookie banner needed" is corrected (§7);
+  - goals are set by Admin and SEO only, through a new capability, `analytics.goals` (a CLAUDE.md §5 amendment, G1c, D2: §5's "Analytics — read dashboards" grants reading, and SEO owns analytics in the role model); the prototype let every stats role add one. Content Creator and Developer see the goals with no controls;
+  - a visit is one tab's session id on one UTC day, not a 30-minute inactivity window (G1 D3), and there is no average time on site or per page (a tab's last page has no end time);
+  - the funnel stops at "Reached an inquiry form": no "Started the form" step and no "Inquiry sent" event, because either would put a session's page trail beside an identified lead (G1 D4); inquiries received show apart, to lead workers only, with why;
+  - no "Video played" event (the loops play by themselves; there is no play action to count);
+  - realtime is the people active in the last five minutes, their pages and page views per minute, from a one-minute rollup; no live feed of single page views with country and device (raw rows on a screen; L5) (G1b);
+  - raw `analytics_events` and `web_vitals` are read by the service role only; every staff screen reads rollups (G1 D6).
+  - the goals card saves through its own small form in the kit's Drawer (POST/PATCH/DELETE, then a reload with a confirmation), not `EditorForm` + `useEntitySave`: a goal is four fields saved at once, with no autosave or draft (P-3), the C4b manual-lead pattern (G1c);
+  - the busiest hours are drawn in the admin's series colours (the four busiest strong, the rest in the second series) and named in a sentence under the chart, not the prototype's two shades of Klein.
 - **Backups**: leads are never in admin backups (DR via the runbook, §7/§10).
 - **Activity log**: kept permanently and tamper-evident, not "12 months" or "90 days" (§3); exportable under the export lockdown, with no titles in the file (U13).
 - **Invites** expire per Supabase Auth instead of 7 days, until L6 brings transactional email (O-22). As built (U12b, decision D1): **one hour, with Resend**, because Supabase has one e-mail link expiry (`otp_expiry`) for invite and reset links, so a longer invite would make reset links live as long; the owner may choose longer (up to 24 h) for both.
@@ -376,12 +384,12 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §13 | Get connected list, wizards, banners, dashboard setup note | deferred | later phase (A1) or legal gate | A1 |  |
 | §13 | Help centre: ? button, search, guides, per-screen Guide, articles editable in the DB | missing | built (U16), editing deferred | U16, migration 0046 | See §2.7. The per-screen Guide is a code map held to the seeded set by a test, so a render reads nothing (P-15); editing waits for phase 7. |
 | §14 | First-party beacon with no cookies | deviated-ok | deviation (standard or owner decision) | /api/analytics (hasConsent) | §2/§7 consent-gated; the 'no cookie banner' copy is corrected. |
-| §14 | Events, funnel, goals, realtime, sessions | deviated-challenge | built under A6 | AV-10 (later) | Feasible on consented data; realtime needs a 1-minute rollup (Pillar 4). |
+| §14 | Events, funnel, goals, realtime, sessions | covered | built (G1, 0071) | AV-10 (later) | On consented first-party data: visits per tab and UTC day, clicks and explorer interest, a three-step funnel, busiest hours in Riyadh time, goals (Admin and SEO, §5 `analytics.goals`), realtime from a 1-minute rollup (Pillar 4). See Stats above for what stays out. |
 | §14 | Sources, countries, devices, browsers, unique visitors, cities | deviated-ok | deviation (standard or owner decision) | AV-10 (later) | Consent-gated capture + notice change (PDPL, O4); a persistent visitor id needs legal; cities never. |
 | §14 | GA4 numbers via the Data API (/stats/ga) | deviated-challenge | built under A6 | none |  |
 | §14 | 10-minute health worker (uptime, TTFB, weight, errors, broken links, SSL/domain, headers, SEO, synthetic form, backup, storage), score, alerts | deviated-challenge | built under A6 | AV-10 v1; G2 (0067) | Vitals, errors, checklist, security, SEO, backup, storage (U2); uptime, domain and certificate built (G2): the monitor's read-only API every 10 minutes, the domain's RDAP record about daily, the certificate where the monitor reports it, failures in the bell. No broken-link crawl (L8), no lab weight, no alert channels (A1). |
 | §14 | Health visible to every 'stats' role | deviated-ok | deviation (standard or owner decision) | AV-10 (siteHealth.view) | §5: Admin + Developer. |
-| §15 | Twelve widgets, per-user layout, Customize across three columns | covered | covered | AV-09 | Realtime and Team notes omitted (challenged). |
+| §15 | Twelve widgets, per-user layout, Customize across three columns | covered | covered | AV-09 | Team notes built in U1; Right now (realtime) built in G1b, off the board by default as the prototype's DASH_DEFAULT, figures as of the page's load (the stats' Realtime tab keeps them current). |
 | §15 | Users: invite with role, deactivate, reset 2FA, editable matrix, personal access | covered | covered | AV-21 | Read-only matrix and no personal access (binding); reset 2FA missing. |
 | §15 | Activity log filterable by person, action and date; exportable | covered | covered | AV-22, U13 (kind chips, person, Riyadh days; CSV under the export lockdown) | No free-text search (U13 D1): the sentences are composed in code. The file names items by type and id, not title (D5). |
 | §15 | Publish versions list with restore | covered | covered | R10, R13, AV-24 |  |

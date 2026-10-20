@@ -26,6 +26,12 @@ interface Props {
   valueHeading?: string;
   /** The bars' series, 0-based. */
   series?: number;
+  /**
+   * Bars drawn in `highlightSeries` instead (Admin v2 G1a: the busiest hours). Colour is
+   * never the only cue: the caller says in words which bars these are.
+   */
+  highlight?: readonly number[] | undefined;
+  highlightSeries?: number;
 }
 
 const {
@@ -38,9 +44,11 @@ const {
   labelHeading = 'Item',
   valueHeading = 'Value',
   series = 0,
+  highlight = [],
+  highlightSeries = 0,
 } = Astro.props;
 const g = barsGeometry(data, { height });
-const tone = seriesClass(series);
+const tone = (i: number) => seriesClass(highlight.includes(i) ? highlightSeries : series);
 ---
 
 <ChartFigure
@@ -61,11 +69,11 @@ const tone = seriesClass(series);
         focusable="false"
       >
         <line class="ch-grid" x1="0" x2={g.width} y1={g.baseline} y2={g.baseline} />
-        {g.bars.map((bar) => (
+        {g.bars.map((bar, i) => (
           <>
             {bar.height > 0 && (
               <rect
-                class:list={['ch-bar', tone]}
+                class:list={['ch-bar', tone(i)]}
                 x={n(bar.x)}
                 y={n(bar.y)}
                 width={n(bar.width)}
