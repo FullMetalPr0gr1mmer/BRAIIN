@@ -695,6 +695,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [F8](as-built/F8.md): the personal layer: preferences, the people directory, the bell, the account, the environment pill, 0044
 - [U1](as-built/U1.md): the dashboard: a server widget registry that loads only the role's widgets, per-person layout and quick actions, Admin's role presets (library actions only), team notes without contact details cleared after 180 days by pg_cron, "Going live today" on the Riyadh day, 0060 (PR number at review)
 - [U2](as-built/U2.md): website stats and site health on the rollups, server-rendered: `rollup_daily_vitals`, the invoker readers, whole-day page views, the health checklist, `/admin/logs` retired, 0052 (PR number at review)
+- [G1](as-built/G1.md): website stats v2, folded (G1a, G1b, G1c): the public site's click and explorer events, visits per tab and UTC day, the funnel, events, busiest hours in Riyadh time, realtime from a pg_cron minute rollup with Pause, the Right now widget, goals under the new `analytics.goals` (Admin, SEO), raw telemetry for the service role only, 0071 (PR number at review)
 - [U3](as-built/U3.md): media uploads (A5): the storage provider, the upload, replace and download routes, delivery through `/_image`, 0045 (PR number at review)
 - [U4](as-built/U4.md): the media library and the picker with upload: search, Images | Videos, the storage meter, describe-then-upload with progress, the drawer (alt, tags, Used in, Download, Replace, Delete), Upload in place in every picture field, the shared `admin-screens` chunk group, `media_library`, 0064 (PR number at review)
 - [U13](as-built/U13.md): the activity log v2: names, kind, person and day filters, plain language, the export under the lockdown, the live read on `audit_log`, 0054
@@ -714,6 +715,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [R4](as-built/R4.md): applying a release as the publisher, change capture, the shared link-set helper, the purge record, inert, 0051 (#69)
 - [R8](as-built/R8.md): the preview data seam: the scoped `contentClient()`, the narrowed PostgREST emulator, the anon-RLS mirror, the `range()`-paged dataset with drafts overlaid per role, the fail-closed report, no migration (PR number at review)
 - [R5](as-built/R5.md): the release guard on every registry and link table (no depth exemption), system items and link-set capture with cascades, TRUNCATE closed, `media_usage` v4 (pending changes) and `dashboard_attention` v4 (release kinds), `publish_scheduled` skips tenants with releases on, inert, 0066 (PR number at review)
+- [R6](as-built/R6.md): publishing a release and its dry run: `POST /api/admin/releases` and `/validate`, per-change capabilities and the live re-read, the check over the state the selection leaves (the overlay-aware database the domain rules now read, links held to the tenant, dependencies, removed parents), the apply's refusals mapped, the after-effects never fatal and the purge a logged no-op, inert, no migration (PR number at review)
 
 **CRM**
 - [C1a-1](as-built/C1a-1.md): lead personal data at the database layer, 0033 (#43)

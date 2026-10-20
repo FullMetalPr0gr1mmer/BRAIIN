@@ -5,14 +5,18 @@
 -- profiles. It granted `authenticated` SELECT on them and never revoked Supabase's default
 -- INSERT/UPDATE/DELETE/TRUNCATE, so RLS alone stood in front of a staff write, and TRUNCATE
 -- is not subject to RLS. 0037 withdraws them; the users screen keeps UPDATE on
--- profiles.role, is_active and display_name. This file pins:
+-- profiles.role, is_active and display_name. 0071 (Admin v2 G1) then took SELECT on the two
+-- raw telemetry tables (analytics_events, web_vitals) from staff as well: the stats read
+-- rollups only, so staff read six of the eight. This file pins:
 --
---   1. the catalog: authenticated holds SELECT only at table level, and UPDATE on exactly
---      those three columns at column level; anon and PUBLIC hold nothing; the service role
---      holds SELECT/INSERT/UPDATE/DELETE, and USAGE on the three bigserial sequences;
---   2. for each of admin, developer, seo and content_creator: every table still reads
---      exactly as its RLS policy allows (the reads that work today), and a direct INSERT,
---      UPDATE, DELETE and TRUNCATE on every table is refused by the GRANT layer;
+--   1. the catalog: authenticated holds SELECT only at table level on the six, nothing on
+--      the two raw telemetry tables, and UPDATE on exactly those three profiles columns at
+--      column level; anon and PUBLIC hold nothing; the service role holds
+--      SELECT/INSERT/UPDATE/DELETE, and USAGE on the three bigserial sequences;
+--   2. for each of admin, developer, seo and content_creator: every one of the six still
+--      reads exactly as its RLS policy allows, a read of either raw telemetry table is refused
+--      by the GRANT layer, and a direct INSERT, UPDATE, DELETE and TRUNCATE on every table is
+--      refused by the GRANT layer;
 --   3. the users screen still works: an admin changes a colleague's role, status and name,
 --      and no other role changes a profile, not even its own;
 --   4. the service role still writes telemetry.
@@ -24,9 +28,9 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §5, §9.
 
 begin;
--- 5 catalog + 4 roles × (8 reads + 32 refusals) + 4 users screen + 3 service-role writes
--- + 1 tenants RLS-only
-select plan(173);
+-- 6 catalog + 4 roles × (6 reads + 2 raw-read refusals + 32 refusals) + 4 users screen
+-- + 3 service-role writes + 1 tenants RLS-only
+select plan(174);
 
 -- ── helpers (rolled back with the file) ─────────────────────────────────────────
 create function _claims(p_role text, p_tid text, p_sub text default null) returns void
@@ -58,7 +62,14 @@ create function _tables() returns setof regclass language sql stable as $$
          ('public.tenants'::regclass), ('public.profiles'::regclass)
 $$;
 
--- One role's row of the matrix, as the CURRENT role: 8 reads, then 32 refusals.
+-- The six staff read (0071 left analytics_events and web_vitals to the service role).
+create function _staff_read() returns setof regclass language sql stable as $$
+  select t from _tables() t
+   where t not in ('public.analytics_events'::regclass, 'public.web_vitals'::regclass)
+$$;
+
+-- One role's row of the matrix, as the CURRENT role: 6 reads, 2 refused reads, then 32
+-- refusals.
 create function _matrix(p_role text, p_sub text) returns setof text language plpgsql as $f$
 declare
   t constant text := '37000000-0000-0000-0000-000000000001';
@@ -71,8 +82,6 @@ begin
   -- profiles: an admin sees the tenant's four, everyone else only their own row.
   for r in
     select * from (values
-      ('analytics_events',       'tenant_id', 1, 1, 1, 0),
-      ('web_vitals',             'tenant_id', 1, 1, 0, 0),
       ('rollup_daily_pageviews', 'tenant_id', 1, 1, 1, 1),
       ('search_queries',         'tenant_id', 1, 1, 1, 0),
       ('consent_log',            'tenant_id', 1, 1, 0, 0),
@@ -87,6 +96,15 @@ begin
       case p_role when 'admin' then r.admin when 'developer' then r.developer
                   when 'seo' then r.seo else r.content_creator end,
       format('%s reads %s as its policy allows', p_role, r.tbl));
+  end loop;
+
+  -- Raw telemetry (0071): the GRANT layer refuses the read before any policy is consulted.
+  for r in select * from (values ('analytics_events'), ('web_vitals')) as v(tbl) loop
+    return next throws_ok(
+      format('select count(*) from public.%I', r.tbl),
+      '42501',
+      format('permission denied for table %s', r.tbl),
+      format('%s: a read of %s is refused by the GRANT layer', p_role, r.tbl));
   end loop;
 
   -- Writes: every command on every table, refused before RLS is consulted. The profiles
@@ -169,10 +187,22 @@ select is(
      from pg_class c
      cross join (values ('select'), ('insert'), ('update'), ('delete'), ('truncate'),
                         ('references'), ('trigger')) as p(priv)
-    where c.oid in (select * from _tables())
+    where c.oid in (select * from _staff_read())
       and has_table_privilege('authenticated', c.oid, p.priv) is distinct from (p.priv = 'select')),
   '',
-  'authenticated holds SELECT and nothing else on the eight tables (table level)');
+  'authenticated holds SELECT and nothing else on the six tables staff read (table level)');
+select is(
+  (select coalesce(string_agg(format('%s %s', p.priv, c.relname), ', '
+                              order by c.relname, p.priv), '')
+     from pg_class c
+     cross join (values ('select'), ('insert'), ('update'), ('delete'), ('truncate'),
+                        ('references'), ('trigger')) as p(priv)
+    where c.oid in ('public.analytics_events'::regclass, 'public.web_vitals'::regclass)
+      and (has_table_privilege('authenticated', c.oid, p.priv)
+           or (p.priv in ('select', 'insert', 'update', 'references')
+               and has_any_column_privilege('authenticated', c.oid, p.priv)))),
+  '',
+  'and nothing at all on the two raw telemetry tables (0071), table-wide or per column');
 select is(
   (select coalesce(string_agg(format('%s %s.%s', p.priv, c.relname, a.attname), ', '
                               order by c.relname, a.attname, p.priv), '')

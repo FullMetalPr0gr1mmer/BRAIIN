@@ -198,7 +198,7 @@ export const portfolioResource: ResourceConfig = {
     return out;
   },
   // What a card and a case study need to be presentable — the public pages show these.
-  assertPublishable: async (row, { auth, sb }) => {
+  assertPublishable: async (row, { auth, sb, db }) => {
     requireBilingual(row, 'title', 'Case study title');
     requireBilingual(row, 'project_type', 'Project type');
     refusePlaceholder(row, 'case study');
@@ -206,12 +206,18 @@ export const portfolioResource: ResourceConfig = {
     const posterId = row['poster_media_id'];
     if (!posterId)
       throw new ValidationError('choose a poster image before publishing', 'posterMediaId');
-    const { data } = await sb
-      .from('media_assets')
-      .select('alt')
-      .eq('tenant_id', auth.tenantId)
-      .eq('id', String(posterId))
-      .maybeSingle();
+    // A publish (Admin v2 R6) reads through its database, which answers every poster of the
+    // release from one read; a save while releases are off reads as it always did.
+    const data = db
+      ? await db.first('media_assets', { columns: 'alt', eq: { id: String(posterId) } })
+      : (
+          await sb
+            .from('media_assets')
+            .select('alt')
+            .eq('tenant_id', auth.tenantId)
+            .eq('id', String(posterId))
+            .maybeSingle()
+        ).data;
     const alt = (data?.['alt'] ?? {}) as Record<string, unknown>;
     if (!alt['en'] || !alt['ar']) {
       throw new ValidationError(

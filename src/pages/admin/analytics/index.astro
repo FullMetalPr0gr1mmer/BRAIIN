@@ -3,10 +3,18 @@ import AdminLayout from '@/layouts/AdminLayout.astro';
 import LinkChips from '@/components/admin/ui/LinkChips.astro';
 import LinkTabs from '@/components/admin/ui/LinkTabs.astro';
 import Refused from '@/components/admin/ui/Refused.astro';
+import StatsAudience from '@/components/admin/screens/stats/StatsAudience.astro';
+import StatsConversions from '@/components/admin/screens/stats/StatsConversions.astro';
+import StatsGoals from '@/components/admin/screens/stats/StatsGoals.astro';
 import StatsOverview from '@/components/admin/screens/stats/StatsOverview.astro';
 import StatsPages from '@/components/admin/screens/stats/StatsPages.astro';
+import AdminRealtime from '@/components/admin/islands/AdminRealtime';
+import AdminStatsGoals from '@/components/admin/islands/AdminStatsGoals';
 import { can } from '@/lib/authz/matrix';
 import { pageParam } from '@/lib/admin/pager';
+import { loadEventSummary, type EventSummary } from '@/lib/admin/stats/events';
+import { loadGoalProgress, type GoalProgress } from '@/lib/admin/stats/goals';
+import { loadBusyHours } from '@/lib/admin/stats/hours';
 import { loadLeadKpis, type LeadKpis } from '@/lib/admin/stats/leads';
 import {
   loadPagePaths,
@@ -15,17 +23,32 @@ import {
   type PageviewSummary,
 } from '@/lib/admin/stats/pageviews';
 import { RANGE_PARAM, STAT_RANGES, rangeFrom, statsHref } from '@/lib/admin/stats/range';
+import { loadRealtime } from '@/lib/admin/stats/realtime';
+import type { RealtimeView } from '@/lib/admin/stats/realtimeView';
+import { loadVisitSummary, type VisitSummary } from '@/lib/admin/stats/visits';
 
 export const prerender = false;
 
-// Website stats (Admin v2 U2, docs/admin-v2/ui.md "Website stats v1"): server-rendered, zero
-// JS. Range links (7, 30 or 90 days, `?range=`) and two in-page tabs (`?tab=`, links that
-// keep the range): Overview and Pages. Search is its own route (analytics.search). Every
-// figure comes from the page-view rollup through the invoker RPCs of migration 0052, read as
-// the person (analytics.read, every staff role).
+// Website stats (Admin v2 U2, v2 in G1): server-rendered. Range links (7, 30 or 90 days,
+// `?range=`) and in-page tabs (`?tab=`, links that keep the range): Overview, Pages,
+// Conversions, Audience and Realtime (no range there: it is the last minutes). Search is its
+// own route (analytics.search). Every figure comes from a rollup through the invoker readers
+// of migrations 0052 and 0071, read as the person (analytics.read, every staff role); the
+// raw events are read by the service role only. Two islands, the rest zero JS: Realtime
+// (asks again once a minute, with Pause) and the goals card's controls, for holders of
+// analytics.goals only (Admin, SEO).
 
 const PATH = '/admin/analytics';
 const SUBTITLE = 'First-party stats from visitors who accepted analytics cookies.';
+
+const TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'pages', label: 'Pages' },
+  { id: 'conversions', label: 'Conversions' },
+  { id: 'audience', label: 'Audience' },
+  { id: 'realtime', label: 'Realtime' },
+] as const;
+type Tab = (typeof TABS)[number]['id'];
 
 const session = Astro.locals.session;
 const sb = Astro.locals.supabase;
@@ -33,11 +56,22 @@ const allowed = Boolean(session && sb && can(session.role, 'analytics.read') ===
 if (!allowed) Astro.response.status = 403;
 
 const url = Astro.url;
-const tab = url.searchParams.get('tab') === 'pages' ? 'pages' : 'overview';
+const asked = url.searchParams.get('tab');
+const tab: Tab = TABS.find((t) => t.id === asked && t.id !== 'overview')?.id ?? 'overview';
 const range = rangeFrom(url);
+const setsGoals = Boolean(session && can(session.role, 'analytics.goals') === 'full');
 
-let overview: { summary: PageviewSummary; leads: LeadKpis | null } | null = null;
+let overview: { summary: PageviewSummary; visits: VisitSummary; leads: LeadKpis | null } | null =
+  null;
 let pages: PathPage | null = null;
+let conversions: {
+  visits: VisitSummary;
+  events: EventSummary;
+  inquiries: number | null;
+  goals: GoalProgress;
+} | null = null;
+let audience: { summary: PageviewSummary; hours: number[] } | null = null;
+let realtime: RealtimeView | null = null;
 let failed = false;
 if (allowed && session && sb) {
   try {
@@ -45,10 +79,27 @@ if (allowed && session && sb) {
       const summary = await loadPageviewSummary(sb, session, range);
       overview = {
         summary,
+        visits: await loadVisitSummary(sb, session, range),
         leads: await loadLeadKpis(sb, session, range, summary.previous !== null),
       };
-    } else {
+    } else if (tab === 'pages') {
       pages = await loadPagePaths(sb, session, range, pageParam(url.searchParams.get('page')));
+    } else if (tab === 'conversions') {
+      const [visits, events, leads, goals] = await Promise.all([
+        loadVisitSummary(sb, session, range, { previous: false }),
+        loadEventSummary(sb, session, range),
+        loadLeadKpis(sb, session, range, false),
+        loadGoalProgress(sb, session),
+      ]);
+      conversions = { visits, events, inquiries: leads ? leads.current : null, goals };
+    } else if (tab === 'audience') {
+      const [summary, hours] = await Promise.all([
+        loadPageviewSummary(sb, session, range, null, { previous: false }),
+        loadBusyHours(sb, session, range),
+      ]);
+      audience = { summary, hours };
+    } else {
+      realtime = await loadRealtime(sb, session);
     }
   } catch {
     // Logged by the loader (system_logs); the screen says so instead of showing zeros.
@@ -56,8 +107,12 @@ if (allowed && session && sb) {
   }
 }
 
-const tabHref = (id: 'overview' | 'pages') =>
-  statsHref(PATH, url, { tab: id === 'overview' ? null : id });
+const tabHref = (id: Tab) =>
+  statsHref(PATH, url, {
+    tab: id === 'overview' ? null : id,
+    // Realtime has no range: its link drops it, and the other tabs keep the one chosen.
+    ...(id === 'realtime' ? { [RANGE_PARAM]: null } : {}),
+  });
 const rangeHref = (days: number) => statsHref(PATH, url, { [RANGE_PARAM]: String(days) });
 ---
 
@@ -71,24 +126,45 @@ const rangeHref = (days: number) => statsHref(PATH, url, { [RANGE_PARAM]: String
           <LinkTabs
             label="Website stats views"
             current={tabHref(tab)}
-            tabs={[
-              { label: 'Overview', href: tabHref('overview') },
-              { label: 'Pages', href: tabHref('pages') },
-            ]}
+            tabs={TABS.map((t) => ({ label: t.label, href: tabHref(t.id) }))}
           />
-          <LinkChips
-            label="Date range"
-            current={rangeHref(range.days)}
-            chips={STAT_RANGES.map((days) => ({ label: `${days} days`, href: rangeHref(days) }))}
-          />
+          {tab !== 'realtime' && (
+            <LinkChips
+              label="Date range"
+              current={rangeHref(range.days)}
+              chips={STAT_RANGES.map((days) => ({ label: `${days} days`, href: rangeHref(days) }))}
+            />
+          )}
         </div>
         {failed && (
           <p class="msg" data-kind="error" role="alert">
             The stats could not be read just now. The system log has the detail.
           </p>
         )}
-        {overview && <StatsOverview summary={overview.summary} leads={overview.leads} />}
+        {overview && (
+          <StatsOverview
+            summary={overview.summary}
+            visits={overview.visits}
+            leads={overview.leads}
+          />
+        )}
         {pages && <StatsPages pages={pages} url={url} days={range.days} />}
+        {conversions && (
+          <StatsConversions
+            visits={conversions.visits.current}
+            events={conversions.events}
+            inquiries={conversions.inquiries}
+            days={range.days}
+          >
+            {setsGoals ? (
+              <AdminStatsGoals slot="goals" client:load goals={conversions.goals.goals} />
+            ) : (
+              <StatsGoals slot="goals" goals={conversions.goals.goals} />
+            )}
+          </StatsConversions>
+        )}
+        {audience && <StatsAudience summary={audience.summary} hours={audience.hours} />}
+        {realtime && <AdminRealtime client:load initial={realtime} />}
       </>
     )
   }
