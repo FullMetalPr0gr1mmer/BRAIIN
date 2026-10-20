@@ -4,7 +4,9 @@ import { ROLES } from '@/lib/auth/types';
 import { can } from '@/lib/authz/matrix';
 import { ENTITY_SEO } from '@/lib/admin/entitySeo';
 import { canWriteResource, seoAccess } from '@/lib/admin/editorAccess';
+import { seoPanelFields } from '@/components/admin/screens/seo/SeoPanel';
 import {
+  SEO_PANEL_FIELD_NAMES,
   fieldOfId,
   firstTab,
   tabOfElement,
@@ -90,6 +92,24 @@ describe('every ResourceUi with tabs is sound', () => {
       }
     });
   }
+
+  it('no record field repeats an id of the SEO panel mounted beside it', () => {
+    const blank = { en: '', ar: '' };
+    expect(seoPanelFields({ title: blank, description: blank }).map((f) => f.name)).toEqual([
+      ...SEO_PANEL_FIELD_NAMES,
+    ]);
+    expect(
+      validateTabs({
+        slug: 'x',
+        seoEntity: 'service',
+        fields: [{ name: 'metaTitle', label: 'M', kind: 'bilingual' }],
+        tabs: [
+          { id: 'content', label: 'C', fields: ['metaTitle'] },
+          { id: 'seo', label: 'S', panel: 'seo' },
+        ],
+      }),
+    ).toEqual([`x: "metaTitle" repeats an SEO panel field's id`]);
+  });
 
   it('catches what it exists to catch (not vacuous)', () => {
     const fields = [

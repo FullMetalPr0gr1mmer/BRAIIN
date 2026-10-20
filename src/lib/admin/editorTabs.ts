@@ -89,6 +89,23 @@ export function firstTab(
 
 const TAB_ID = /^[a-z]+(?:-[a-z]+)*$/;
 
+/**
+ * The field names the shared SEO editor (SeoPanel) gives its controls, ids `f-<name>…` like
+ * the record's own. With the SEO tab mounted both forms are on the page, so a resource field
+ * of one of these names would repeat an element id (and an error link would reach the wrong
+ * field): validateTabs refuses it. tests/lib/editorTabs.spec.ts holds this list to
+ * seoPanelFields().
+ */
+export const SEO_PANEL_FIELD_NAMES = [
+  'metaTitle',
+  'metaDescription',
+  'ogMediaId',
+  'ogImage',
+  'robots',
+  'canonicalOverride',
+  'schemaType',
+] as const;
+
 /** What is wrong with a resource's tabs; empty when they are sound (or it has none). */
 export function validateTabs(
   ui: Pick<ResourceUi, 'fields' | 'tabs' | 'seoEntity' | 'slug'>,
@@ -108,6 +125,11 @@ export function validateTabs(
     if (!tab.panel && !tab.fields) problems.push(`${ui.slug}: tab "${tab.id}" holds nothing`);
     if (tab.panel === 'seo' && !ui.seoEntity) {
       problems.push(`${ui.slug}: tab "${tab.id}" mounts SEO without seoEntity`);
+    }
+    if (tab.panel === 'seo') {
+      for (const name of SEO_PANEL_FIELD_NAMES) {
+        if (names.has(name)) problems.push(`${ui.slug}: "${name}" repeats an SEO panel field's id`);
+      }
     }
     for (const name of tab.fields ?? []) {
       if (!names.has(name)) problems.push(`${ui.slug}: tab "${tab.id}" names no field "${name}"`);
