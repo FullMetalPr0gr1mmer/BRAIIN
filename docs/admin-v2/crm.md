@@ -696,7 +696,7 @@ alter type public.app_role add value if not exists 'sales';
     - The calendar-connection banner is not shown (LATER).
 11. **CRM settings** `/admin/crm/settings` (crm.settings). Every card has an explicit Save.
     - Pipeline stages: a repeater of label, tone (named swatches, chosen by name not colour), kind (Open, Won, Lost); the initial stage is locked; Move up / Move down plus optional drag; 2–10 stages; delete only when empty ("Move its {n} leads first").
-    - Lead scoring: the closed signal list with points 0–50 each and the total capped at 100; "Scores above 75 show green."
+    - Lead scoring: the closed signal list with points 0–50 each and the total capped at 100; "Scores of 75 and above show green."
     - Contact stages: the four, read-only, with the mockup's descriptions.
     - Custom fields: up to 12 rows of key, label, type; a warning that renaming a key orphans stored values.
     - Response time and assignment: SLA hours; rule Manual, Round robin (pool) or Always to one person. The Notifications architect's "Assignment rule" and "Answer within" fields write here.

@@ -129,6 +129,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
     // Pinned, not derived: a sheet dropped from the list must fail, not go unchecked.
     expect([...ADMIN_STYLESHEETS].sort()).toEqual([
       'activity.css',
+      'crm-settings.css',
       'dashboard.css',
       'general.css',
       'health.css',
