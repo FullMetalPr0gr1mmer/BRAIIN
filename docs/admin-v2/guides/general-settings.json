@@ -1,0 +1,108 @@
+{
+  "slug": "general-settings",
+  "sort_order": 98,
+  "minutes": 3,
+  "tags": [
+    "site"
+  ],
+  "screens": [
+    "/admin/settings"
+  ],
+  "caps": [
+    "settings.general"
+  ],
+  "title": "General settings",
+  "title_ar": "الإعدادات العامة",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "General settings hold the site's name and tagline, its icons, how people reach the studio, its social accounts and the studio's time zone. Saving puts a change live at once."
+      },
+      {
+        "t": "h",
+        "x": "Name, contact and accounts"
+      },
+      {
+        "t": "p",
+        "x": "The site name and the email also appear in the privacy notice, the terms and the job application notice. When you change either, tell the owner, so the notices can be dated again."
+      },
+      {
+        "t": "p",
+        "x": "An account with Show on the site off leaves the Social section and the details search engines read about the studio. The map link must be a Google Maps or Apple Maps link."
+      },
+      {
+        "t": "h",
+        "x": "Icons"
+      },
+      {
+        "t": "p",
+        "x": "The favicon and the app icon come from the media library. Each must be a square picture at least 512 pixels wide. Until one is chosen, the site links no icon."
+      },
+      {
+        "t": "h",
+        "x": "Region and data"
+      },
+      {
+        "t": "p",
+        "x": "The time zone is the studio's clock: the dates and times on every admin screen, the days of the activity log, and the midnight when maintenance ends by itself. It saves on its own, with the retention limits, which can be shortened but never extended."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Only an admin can open or close job applications. The switch saves at once.",
+          "A developer sees the switch but cannot change it."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "The logos are part of the site build, so the first screen paints fast. To change one, ask a developer."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تضم الإعدادات العامة اسم الموقع وشعاره النصي وأيقوناته، وطرق التواصل مع الاستوديو، وحساباته الاجتماعية، والمنطقة الزمنية للاستوديو. الحفظ ينشر التغيير فورًا."
+      },
+      {
+        "t": "h",
+        "x": "الاسم والتواصل والحسابات"
+      },
+      {
+        "t": "p",
+        "x": "يظهر اسم الموقع والبريد الإلكتروني أيضًا في إشعار الخصوصية والشروط وإشعار طلبات التوظيف. عند تغيير أيٍّ منهما أبلغ المالك ليُحدَّث تاريخ هذه الإشعارات."
+      },
+      {
+        "t": "p",
+        "x": "الحساب الذي أُطفئ فيه خيار Show on the site يختفي من قسم التواصل الاجتماعي ومن البيانات التي تقرؤها محركات البحث عن الاستوديو. ويجب أن يكون رابط الخريطة من خرائط Google أو خرائط Apple."
+      },
+      {
+        "t": "h",
+        "x": "الأيقونات"
+      },
+      {
+        "t": "p",
+        "x": "تُختار أيقونة الموقع وأيقونة التطبيق من مكتبة الوسائط. ويجب أن تكون كل منهما صورة مربعة لا يقل عرضها عن 512 بكسل. وإلى أن تُختار لا يربط الموقع أي أيقونة."
+      },
+      {
+        "t": "h",
+        "x": "المنطقة والبيانات"
+      },
+      {
+        "t": "p",
+        "x": "المنطقة الزمنية هي ساعة الاستوديو: التواريخ والأوقات في كل شاشات الإدارة، وأيام سجل النشاط، ومنتصف الليل الذي ينتهي فيه وضع الصيانة تلقائيًا. تُحفظ وحدها مع حدود الاحتفاظ بالبيانات، التي يمكن تقصيرها ولا يمكن تمديدها."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "المدير وحده يفتح طلبات التوظيف أو يغلقها، ويُحفظ المفتاح فورًا.",
+          "يرى المطوّر المفتاح لكنه لا يستطيع تغييره."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "الشعارات جزء من بناء الموقع ليظهر أول ما يراه الزائر بسرعة. لتغيير أحدها اطلب ذلك من مطوّر."
+      }
+    ]
+  }
+}

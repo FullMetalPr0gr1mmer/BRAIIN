@@ -1,0 +1,94 @@
+{
+  "slug": "maintenance-mode",
+  "sort_order": 100,
+  "minutes": 3,
+  "tags": [
+    "site"
+  ],
+  "screens": [
+    "/admin/maintenance"
+  ],
+  "caps": [
+    "maintenance.manage"
+  ],
+  "title": "Maintenance mode",
+  "title_ar": "وضع الصيانة",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Maintenance mode puts a short page in front of the public site while you fix something. It takes effect within about a minute, and the admin keeps working as usual."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Write the headline and the message in English and Arabic, or leave them empty for the built-in words.",
+          "Choose the background: the hero image or plain black. Show email and WhatsApp buttons adds the studio's email and WhatsApp number from General settings.",
+          "Choose Turn on and confirm. Search engines are told the break is temporary, so rankings are safe for a few days."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Coming back by itself"
+      },
+      {
+        "t": "p",
+        "x": "Back on ends maintenance by itself at midnight at the start of that day, in the studio's time zone. Pick a day up to 30 days ahead. Show the date to visitors puts it on the page."
+      },
+      {
+        "t": "h",
+        "x": "Who still sees the site"
+      },
+      {
+        "t": "p",
+        "x": "With Signed in team still sees the site on, anyone signed in to this admin sees the real site. If their sign in cannot be checked, they see the maintenance page like everyone else. You can also allow IP addresses, for the client or an outside tester."
+      },
+      {
+        "t": "p",
+        "x": "Preview full screen opens the page as visitors see it, with the saved settings. While maintenance is on, the top bar says Maintenance on, and the bell says when it was switched on or off."
+      },
+      {
+        "t": "tip",
+        "x": "Switch it off as soon as the fix is in, so visitors and search engines are not kept waiting."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "يضع وضع الصيانة صفحة قصيرة أمام الموقع العام أثناء إصلاحك لشيء ما. يسري خلال دقيقة تقريبًا، وتستمر لوحة الإدارة في العمل كالمعتاد."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "اكتب العنوان والرسالة بالإنجليزية والعربية، أو اتركهما فارغين لاستخدام النص الافتراضي.",
+          "اختر الخلفية: صورة الواجهة أو الأسود. خيار Show email and WhatsApp buttons يضيف بريد الاستوديو ورقم واتساب من الإعدادات العامة.",
+          "اختر Turn on وأكّد. تُبلَّغ محركات البحث بأن التوقف مؤقت، فلا يتأثر ترتيب الموقع لبضعة أيام."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "العودة تلقائيًا"
+      },
+      {
+        "t": "p",
+        "x": "خيار Back on ينهي وضع الصيانة تلقائيًا عند منتصف الليل في بداية ذلك اليوم، بتوقيت المنطقة الزمنية للاستوديو. اختر يومًا خلال 30 يومًا. وخيار Show the date to visitors يعرض التاريخ على الصفحة."
+      },
+      {
+        "t": "h",
+        "x": "من يرى الموقع"
+      },
+      {
+        "t": "p",
+        "x": "عند تشغيل Signed in team still sees the site يرى كل من سجّل الدخول إلى لوحة الإدارة الموقعَ الحقيقي. وإذا تعذّر التحقق من دخوله يرى صفحة الصيانة مثل الجميع. ويمكنك أيضًا السماح بعناوين IP للعميل أو لمختبِر من الخارج."
+      },
+      {
+        "t": "p",
+        "x": "يفتح Preview full screen الصفحة كما يراها الزوار بالإعدادات المحفوظة. وأثناء تشغيل الصيانة يعرض الشريط العلوي Maintenance on، ويذكر الجرس متى شُغّل الوضع أو أُطفئ."
+      },
+      {
+        "t": "tip",
+        "x": "أطفئ الوضع فور انتهاء الإصلاح حتى لا ينتظر الزوار ومحركات البحث."
+      }
+    ]
+  }
+}

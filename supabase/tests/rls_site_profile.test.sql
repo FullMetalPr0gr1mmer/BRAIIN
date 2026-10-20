@@ -7,7 +7,9 @@
 -- Developer may edit every other field and must NOT be able to open intake.
 --
 -- RLS UPDATE by a role with no matching policy FILTERS (0 rows, no error), so write
--- denials are asserted by re-reading the value as a staff role afterwards.
+-- denials are asserted by re-reading the value as a staff role afterwards. Every token is a
+-- live profile's (0075's RESTRICTIVE live writes); the stale tokens are proven in
+-- general_settings.test.sql.
 
 begin;
 select plan(21);
@@ -28,11 +30,40 @@ values (app.default_tenant_id(), '{"en":"Launch","ar":"ل"}', 'launch@example.te
         '{"en":"Jeddah","ar":"جدة"}')
 on conflict (tenant_id) do nothing;
 
+-- Since 0075 a write to site_profile also needs the token's profile to be live and to hold
+-- settings.general (RESTRICTIVE, app.live_role()), so every role below is a real profile and
+-- its token carries its `sub`. The token for each role is that profile's.
+insert into public.tenants (id, name) values ('51000000-0000-0000-0000-000000000003', 'ProfileT3');
+insert into auth.users (id, email) values
+  ('51000000-0000-0000-0000-0000000000a1', 'sp-admin@example.test'),
+  ('51000000-0000-0000-0000-0000000000c1', 'sp-creator@example.test'),
+  ('51000000-0000-0000-0000-0000000000e1', 'sp-seo@example.test'),
+  ('51000000-0000-0000-0000-0000000000d1', 'sp-developer@example.test'),
+  ('51000000-0000-0000-0000-0000000000d2', 'sp-developer-t2@example.test'),
+  ('51000000-0000-0000-0000-0000000000f1', 'sp-other-admin@example.test');
+insert into public.profiles (id, tenant_id, role, is_active) values
+  ('51000000-0000-0000-0000-0000000000a1', '51000000-0000-0000-0000-000000000001', 'admin', true),
+  ('51000000-0000-0000-0000-0000000000c1', '51000000-0000-0000-0000-000000000001', 'content_creator', true),
+  ('51000000-0000-0000-0000-0000000000e1', '51000000-0000-0000-0000-000000000001', 'seo', true),
+  ('51000000-0000-0000-0000-0000000000d1', '51000000-0000-0000-0000-000000000001', 'developer', true),
+  ('51000000-0000-0000-0000-0000000000d2', '51000000-0000-0000-0000-000000000002', 'developer', true),
+  ('51000000-0000-0000-0000-0000000000f1', '51000000-0000-0000-0000-000000000003', 'admin', true);
+
+-- The token of a role in a tenant: the profile that role has there (null role: no token).
 create function _claims(p_role text, p_tid text) returns void language sql as $$
   select set_config(
     'request.jwt.claims',
     case when p_role is null then ''
-         else json_build_object('app_metadata', json_build_object('role', p_role, 'tenant_id', p_tid))::text end,
+         else json_build_object(
+                'sub', case p_role || '@' || right(p_tid, 1)
+                         when 'admin@1' then '51000000-0000-0000-0000-0000000000a1'
+                         when 'content_creator@1' then '51000000-0000-0000-0000-0000000000c1'
+                         when 'seo@1' then '51000000-0000-0000-0000-0000000000e1'
+                         when 'developer@1' then '51000000-0000-0000-0000-0000000000d1'
+                         when 'developer@2' then '51000000-0000-0000-0000-0000000000d2'
+                         when 'admin@3' then '51000000-0000-0000-0000-0000000000f1'
+                       end,
+                'app_metadata', json_build_object('role', p_role, 'tenant_id', p_tid))::text end,
     true
   )
 $$;
@@ -49,7 +80,7 @@ create function _rows() returns int language sql as $$
 set local role authenticated;
 select _claims('content_creator', _tid()); select is(_rows(), 1, 'content_creator reads the profile');
 select _claims('seo', _tid());             select is(_rows(), 1, 'seo reads the profile');
-select _claims('admin', '00000000-0000-0000-0000-0000000000ff');
+select _claims('admin', '51000000-0000-0000-0000-000000000003');
                                            select is(_rows(), 0, 'other_tenant admin sees no row');
 
 -- ── write: CC and SEO are filtered ───────────────────────────────────────────
@@ -73,7 +104,7 @@ select lives_ok(
 
 -- other_tenant: an admin of ANOTHER tenant, with no WHERE clause, so only the policy's
 -- tenant predicate can filter the row.
-select _claims('admin', '00000000-0000-0000-0000-0000000000ff');
+select _claims('admin', '51000000-0000-0000-0000-000000000003');
 update public.site_profile set brand_name = '{"en":"XT","ar":"ب"}';
 select _claims('admin', _tid());
 select is(_brand(), 'ADM', 'other_tenant admin update affected 0 rows (brand unchanged)');

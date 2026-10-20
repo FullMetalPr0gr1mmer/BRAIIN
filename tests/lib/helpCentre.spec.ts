@@ -1530,6 +1530,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
   it('Developer: the basics, media, leads and their personal data, maintenance, stats and site health; no hiring', () => {
     expect(shown('developer')).toEqual([
       'finding-your-way',
+      'general-settings',
       'maintenance-mode',
       'media-library',
       'page-visibility',

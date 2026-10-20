@@ -65,6 +65,7 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
   },
   { slug: 'working-with-leads', caps: ['leads.manage'], screens: ['/admin/leads'] },
   { slug: 'job-applications', caps: ['applications.manage'], screens: ['/admin/applications'] },
+  { slug: 'general-settings', caps: ['settings.general'], screens: ['/admin/settings'] },
   { slug: 'maintenance-mode', caps: ['maintenance.manage'], screens: ['/admin/maintenance'] },
   { slug: 'page-visibility', caps: ['maintenance.manage'], screens: ['/admin/visibility'] },
   {

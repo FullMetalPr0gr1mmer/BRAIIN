@@ -141,7 +141,7 @@ export const MIRRORED_POLICIES: Readonly<
     entity_seo_write: 'PERMISSIVE:763c5ebb7d12ee38b8e17d30ad1570df',
   },
   media_assets: {
-    media_assets_public_read: 'PERMISSIVE:82f73c685108f7926f304603081a723c',
+    media_assets_public_read: 'PERMISSIVE:f7fb1e5779de752edd5116394a0286de',
     media_read: 'PERMISSIVE:392446073406bce5902ebbac287245a1',
     media_write: 'PERMISSIVE:4f9223ffe3d088ba7a0a4098c7d190d6',
   },
@@ -241,6 +241,7 @@ export const VISIBILITY_DEPS: Readonly<Record<DatasetTable, readonly DatasetTabl
     'services',
     'entity_seo',
     'seo_defaults',
+    'site_profile',
   ],
   navigation: [],
   page_sections: ['pages', 'page_visibility'],
@@ -339,7 +340,10 @@ export function createMirror(data: MirrorData): Mirror {
     return pages;
   };
 
-  /** 0073 media_assets_public_read: 0045's eight branches and 0073's two, each under anon's RLS. */
+  /**
+   * 0075 media_assets_public_read: 0045's eight branches, 0073's two and 0075's icons, each
+   * under anon's RLS.
+   */
   const referencedMedia = (): Set<string> => {
     if (mediaRefs) return mediaRefs;
     const refs = new Set<string>();
@@ -379,6 +383,9 @@ export function createMirror(data: MirrorData): Mirror {
     each('entity_seo', 'og_media_id');
     // 10. (0073) the tenant's default share image
     each('seo_defaults', 'default_og_media_id');
+    // 11. (0075) the site's favicon and app icon, under site_profile's own RLS (the tenant)
+    each('site_profile', 'favicon_media_id');
+    each('site_profile', 'app_icon_media_id');
     mediaRefs = refs;
     return refs;
   };
@@ -452,8 +459,8 @@ export function createMirror(data: MirrorData): Mirror {
         const parent = SEO_PARENTS[String(row['entity_type'])];
         return parent !== undefined && visibleById(parent, row['entity_id']);
       }
-      // 0073 media_assets_public_read (restating 0045/0028/0024): a hosted provider,
-      // referenced by one of ten branches of visible content.
+      // 0075 media_assets_public_read (restating 0073/0045/0028/0024): a hosted provider,
+      // referenced by one of eleven branches of visible content.
       case 'media_assets':
         return (
           typeof row['provider'] === 'string' &&
