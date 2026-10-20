@@ -11,7 +11,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  * Job applications on the kit (Admin v2 U8a), signed in as Admin, through the real Worker:
  *   list     at 320, 390 and 1280 px: zero axe violations, no sideways scroll, no CSP
  *            violation; the status chips filter;
- *   ?open    the address opens one application in the drawer (axe with it open);
+ *   ?open    the address opens one application in the drawer (axe with it open), its
+ *            heading the applicant's name with dir="auto";
  *   reveal   one GET that writes exactly one `application.view_pii` row; a status change and a
  *            notes save after it write NO second one, and the revealed values stay on screen
  *            (before U8a every save re-revealed: a second decrypt and audit row per save);
@@ -200,6 +201,8 @@ test('?open= opens the application in the drawer, and the drawer is clean', asyn
     await page.goto(`/admin/applications?open=${id}`);
     await ready(page);
     await expect(drawer(page)).toBeVisible();
+    // The heading is the applicant's name, in its own direction (dir="auto").
+    await expect(drawer(page).locator('.drw__h h2 > span[dir="auto"]')).toHaveText(NAME);
     await expect(drawer(page).getByText('I would love to join the studio.')).toBeVisible();
     await expect(drawer(page).getByText(EMAIL)).toHaveCount(0);
     await axeClean(page, `drawer ${width}`);

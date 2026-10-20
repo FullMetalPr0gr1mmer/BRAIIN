@@ -26,6 +26,7 @@ import { applications } from '@/lib/admin/notifications/applications';
 import ApplicationDrawer, {
   LEAVE_MESSAGE,
   SPAM_MESSAGE,
+  drawerTitle,
   eraseMessage,
 } from '@/components/admin/screens/applications/ApplicationDrawer';
 import ApplicationsPanel from '@/components/admin/screens/applications/ApplicationsPanel';
@@ -356,6 +357,12 @@ describe('the panel and the drawer (source and server render)', () => {
     expect(closed).toContain('<dialog class="drw" data-size="wide"');
     expect(closed).not.toMatch(/\sstyle=/);
     expect(drawer).toMatch(/className="prewrap app-drawer__message" dir="auto"/);
+    // The heading is the applicant's name too (the dialog's name): in its own direction.
+    expect(renderToStaticMarkup(createElement('h2', null, drawerTitle(DETAIL)))).toBe(
+      '<h2><span dir="auto">ريم</span></h2>',
+    );
+    expect(drawerTitle(null)).toBe('Application');
+    expect(code(drawer)).toContain('title={drawerTitle(detail)}');
     expect(panel).toMatch(/<span dir="auto">\{row\.name\}<\/span>/);
     expect(drawer).not.toMatch(DASHES);
     expect(panel).not.toMatch(DASHES);

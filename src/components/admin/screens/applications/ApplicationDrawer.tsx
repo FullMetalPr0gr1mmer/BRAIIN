@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   APPLICATION_STATUSES,
   CRAFTS,
@@ -66,6 +66,14 @@ export interface ApplicationDrawerProps {
 /** "Erase <name>'s application and CV?": the name a bidi isolate, so Arabic stays in place. */
 export function eraseMessage(name: string): string {
   return `Erase ⁨${name}⁩’s application and CV? This cannot be undone.`;
+}
+
+/**
+ * The drawer's heading: the applicant's name in its own direction (dir="auto", like every
+ * applicant-written text here), or "Application" while it loads.
+ */
+export function drawerTitle(detail: ApplicationDetail | null): ReactNode {
+  return detail ? <span dir="auto">{detail.name}</span> : 'Application';
 }
 
 export const SPAM_MESSAGE = `Mark as spam? It will be deleted within ${SPAM_RETENTION_DAYS} days.`;
@@ -239,7 +247,7 @@ export default function ApplicationDrawer({
     <Drawer
       open={id !== null && !asking}
       onClose={() => void onDialogClosed()}
-      title={detail?.name ?? 'Application'}
+      title={drawerTitle(detail)}
       size="wide"
       dismissible={!dirty}
       footer={

@@ -13,7 +13,12 @@ import { useBackdropDismiss, useDialog } from './useDialog';
 export interface DrawerProps {
   open: boolean;
   onClose: () => void;
-  title: string;
+  /**
+   * The heading, and so the dialog's name. Words, or a node when part of it is someone's own
+   * text (Admin v2 U8: an applicant's name as `<span dir="auto">`, so an Arabic name keeps
+   * its own direction in the English heading).
+   */
+  title: ReactNode;
   footer?: ReactNode;
   size?: 'wide' | undefined;
   /**

@@ -413,6 +413,16 @@ describe('Modal and Drawer', () => {
     expect(out).not.toContain('drw__f');
   });
 
+  it('a drawer’s title may be a node: someone’s own text keeps its direction (U8)', () => {
+    const out = html(Drawer, {
+      open: false,
+      onClose: () => {},
+      title: createElement('span', { dir: 'auto' }, 'ريم'),
+      children: 'Body',
+    });
+    expect(out).toMatch(/<h2 id="[^"]+"><span dir="auto">ريم<\/span><\/h2>/);
+  });
+
   it('only a press on the backdrop closes the dialog: one that starts or ends inside does not', () => {
     const close = vi.fn();
     const dialog = { close } as unknown as HTMLDialogElement;
