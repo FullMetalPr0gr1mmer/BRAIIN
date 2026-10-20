@@ -621,9 +621,14 @@ describe('the guides say only what the admin does', () => {
         .map((raw) => HelpArticleSeedSchema.parse(raw))
         .map((a) => [a.slug, a]),
     );
+    // The set as the two-step migration leaves it: a later slice (C10a's 0097) puts
+    // roles-and-access again on top of these blocks, and its own test holds that.
+    const throughU17 = helpSet(
+      MIGRATION_FILES.slice(0, MIGRATION_FILES.indexOf(twoStepMigration()) + 1),
+    ).set.map((raw) => HelpArticleSeedSchema.parse(raw));
     for (const slug of ['your-account', 'roles-and-access']) {
       const before = base.get(slug)!;
-      const after = SET.find((a) => a.slug === slug)!;
+      const after = throughU17.find((a) => a.slug === slug)!;
       const keep = ({ slug: s, sort_order, title, title_ar, caps, tags }: HelpArticleRow) => ({
         s,
         sort_order,
@@ -1818,6 +1823,131 @@ describe('seo-and-redirects says what the SEO screen does (Admin v2 U10)', () =>
   });
 });
 
+// ── 1e. The Sales guides (C10a) ─────────────────────────────────────────────────────────
+
+describe('the Sales guides (C10a): the-sales-role, and roles-and-access with five roles', () => {
+  const article = () => SET.find((a) => a.slug === 'the-sales-role')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+
+  it('0097 puts the new guide at revision 0 and the roles guide at the revision the migrations before it leave', () => {
+    const at = MIGRATION_FILES.findIndex((f) => /_sales_role\.sql$/.test(f.name));
+    const before = helpSet(MIGRATION_FILES.slice(0, at));
+    const c10a = HELP.edits.filter((e) => /_sales_role\.sql$/.test(e.file));
+    expect(c10a.map((e) => `${e.op} ${e.slug} ${e.revision}`)).toEqual([
+      `put the-sales-role ${before.revisions.get('the-sales-role') ?? 0}`,
+      `put roles-and-access ${before.revisions.get('roles-and-access') ?? 0}`,
+    ]);
+    // The new guide is new; the roles guide was last put by U17 (0072, two-step sign-in), and
+    // this put moves it by one.
+    expect(before.revisions.has('the-sales-role')).toBe(false);
+    expect(
+      before.edits
+        .filter((e) => e.slug === 'roles-and-access')
+        .map((e) => e.file)
+        .at(-1),
+    ).toMatch(/_two_step_sign_in\.sql$/);
+    expect(HELP.revisions.get('roles-and-access')).toBe(
+      (before.revisions.get('roles-and-access') ?? 0) + 1,
+    );
+  });
+
+  it("the roles guide is U17's text with the five roles: every block U17 left stays but the two C10a rewrites", () => {
+    const at = MIGRATION_FILES.findIndex((f) => /_sales_role\.sql$/.test(f.name));
+    const parse = (raw: unknown) => HelpArticleSeedSchema.parse(raw);
+    const before = parse(
+      helpSet(MIGRATION_FILES.slice(0, at)).set.find((g) => g.slug === 'roles-and-access'),
+    );
+    const after = SET.find((a) => a.slug === 'roles-and-access')!;
+    const { body: beforeBody, ...beforeRest } = before;
+    const { body: afterBody, ...afterRest } = after;
+    expect(afterRest).toEqual(beforeRest);
+    for (const lang of ['en', 'ar'] as const) {
+      expect(afterBody[lang], lang).toHaveLength(beforeBody[lang].length);
+      // Blocks 0 (the count) and 1 (the list) gain Sales; the rest is U17's, block for block.
+      expect(afterBody[lang].slice(2), lang).toEqual(beforeBody[lang].slice(2));
+    }
+    const en = textsOf(after, 'en').join(' ');
+    const ar = textsOf(after, 'ar').join(' ');
+    expect(en).toContain("Resetting someone's 2FA");
+    expect(en).toContain('Require 2FA for everyone, on the same card');
+    expect(ar).toContain('إعادة ضبط 2FA لشخص ما');
+  });
+
+  it('the roles guide names the five roles ROLES has, Sales among them, in both languages', () => {
+    const roles = SET.find((a) => a.slug === 'roles-and-access')!;
+    expect(ROLES).toHaveLength(5);
+    const en = textsOf(roles, 'en').join(' ');
+    const ar = textsOf(roles, 'ar').join(' ');
+    expect(en).toContain('There are five roles.');
+    expect(en).not.toContain('four roles');
+    expect(en).toContain("Sales: works leads, reveals one lead's contact details at a time");
+    expect(ar).toContain('هناك خمسة أدوار.');
+    expect(ar).toContain('Sales (المبيعات)');
+  });
+
+  it('says the notes thread is limited like the reveal, as the route has it', () => {
+    expect(text('en')).toContain(
+      "Opening a lead's notes is logged too, within a limit of the same size.",
+    );
+    expect(source('src/pages/api/admin/leads/[id]/notes.ts')).toContain(
+      "claimPrivilegedOp(auth, 'lead-notes-read', PII_REVEAL_LIMITS)",
+    );
+  });
+
+  it('takes its assigned place 65 (between SEO 60 and leads 70), for the lead workers', () => {
+    expect(article().sort_order).toBe(65);
+    expect(article().tags).toEqual(['leads', 'team']);
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual([
+      'admin',
+      'developer',
+      'sales',
+    ]);
+    // /admin/leads opens working-with-leads from its head: one guide per screen.
+    expect(pageGuideFor('/admin/leads', 'sales')).toBe('working-with-leads');
+  });
+
+  it('says what Sales holds, as ROLE_CAPS and the routes have it', () => {
+    const en = text('en');
+    for (const cap of ['leads.manage', 'leads.pii', 'analytics.read'] as const) {
+      expect(ROLE_CAPS.sales[cap]).toBe('full');
+    }
+    expect(en).toContain("Reveal one lead's contact details, budget and timeline at a time");
+    // The reveal's limits (src/lib/admin/rateLimit.ts) and its audit row.
+    expect(en).toContain('up to 60 an hour for each person and 300 an hour for the whole team');
+    expect(source('src/lib/admin/rateLimit.ts')).toMatch(
+      /PII_REVEAL_LIMITS: RateLimitOptions = \{\s*perUser: 60,\s*perTenant: 300,/,
+    );
+    expect(en).toContain('Open the dashboard and the website stats.');
+  });
+
+  it('says what Sales cannot do, as the screens and the hook have it', () => {
+    const en = text('en');
+    expect(en).toContain('the Export CSV button does not show');
+    expect(ROLE_CAPS.sales['export.csv']).toBe('none');
+    expect(source('src/pages/admin/leads/index.astro')).toContain(
+      "canExport: allowed && can(session.role, 'export.csv') === 'full'",
+    );
+    expect(en).toContain("Erase a lead, or receive a new lead's contact details in a notification");
+    expect(ROLE_CAPS.sales['crm.erase']).toBe('none');
+    expect(source('src/pages/api/hooks/notify-lead.ts')).toContain('receivesLeadPiiUnasked(role)');
+    for (const cap of [
+      'settings.general',
+      'users.manage',
+      'theme.edit',
+      'applications.manage',
+      'logs.view',
+      'audit.view',
+      'pages.write',
+    ] as const) {
+      expect(ROLE_CAPS.sales[cap], cap).toBe('none');
+    }
+    for (const label of ['Export CSV', 'Settings › Users & roles']) {
+      expect(text('ar')).toContain(label);
+    }
+  });
+});
+
 // ── 2. Who is shown what, and the shared rules ────────────────────────────────────────────
 
 describe('which guides each role is shown (the server’s filter, from ROLE_CAPS)', () => {
@@ -1866,6 +1996,20 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'previewing-changes',
       'roles-and-access',
       'site-health-and-logs',
+      'the-sales-role',
+      'website-stats',
+      'working-with-leads',
+      'your-account',
+      'your-dashboard',
+    ]);
+  });
+
+  it('Sales: the basics, leads and their personal data, the Sales role and stats; nothing else (C10a)', () => {
+    expect(shown('sales')).toEqual([
+      'finding-your-way',
+      'personal-data',
+      'roles-and-access',
+      'the-sales-role',
       'website-stats',
       'working-with-leads',
       'your-account',
@@ -2172,8 +2316,31 @@ describe('the routes answer what the loaders decide', () => {
     );
     expect(status).toBe(200);
     const data = body.data as { guides: HelpGuide[]; onScreen: string[] };
-    expect(data.onScreen).toEqual(['working-with-leads', 'personal-data']);
+    // In the catalog's order: the-sales-role sits at 65, before leads (70); the page head still
+    // opens working-with-leads (PAGE_GUIDES).
+    expect(data.onScreen).toEqual(['the-sales-role', 'working-with-leads', 'personal-data']);
+    expect(pageGuideFor('/admin/leads', 'developer')).toBe('working-with-leads');
     expect(data.guides.some((g) => g.slug === 'job-applications')).toBe(false);
+  });
+
+  it('GET /api/admin/help as Sales (C10a): its guides only, the leads screen’s three', async () => {
+    const { sb } = fakeDb({ rows: SET.map(rowOf) });
+    const { status, body } = await call(
+      () => import('@/pages/api/admin/help/index'),
+      '/api/admin/help?screen=%2Fadmin%2Fleads',
+      'sales',
+      sb,
+    );
+    expect(status).toBe(200);
+    const data = body.data as { guides: HelpGuide[]; onScreen: string[] };
+    expect(data.onScreen).toEqual(['the-sales-role', 'working-with-leads', 'personal-data']);
+    expect(pageGuideFor('/admin/leads', 'sales')).toBe('working-with-leads');
+    for (const slug of ['job-applications', 'saving-and-publishing', 'media-library']) {
+      expect(
+        data.guides.some((g) => g.slug === slug),
+        slug,
+      ).toBe(false);
+    }
   });
 
   it('GET /api/admin/help/article: 404 for a guide the role may not read', async () => {

@@ -221,6 +221,51 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'siteHealth.view': F,
     'export.backup': F,
   },
+  // Sales (Admin v2 C10a, owner decision A4): works leads. Leads: the list, the pipeline,
+  // assignment, notes and the timeline (leads.manage), and a lead's contact details, budget
+  // and timeline one lead at a time, live-rechecked, rate-limited and audited before anything
+  // is decrypted (leads.pii, owner default O-6), plus the website stats (analytics.read,
+  // prototype parity). NO content, NO settings (the CRM's included), NO exports or backups,
+  // NO job applications, NO logs, activity log or site health, NO users, NO erasure, NO bulk
+  // contact details.
+  // Sales is not CMS staff: app.is_staff() stays the four roles above (P-6).
+  sales: {
+    'users.manage': N,
+    'settings.general': N,
+    'settings.integrations': N,
+    'maintenance.manage': N,
+    'theme.edit': N,
+    'services.write': N,
+    'blog.write': N,
+    'portfolio.write': N,
+    'pages.write': N,
+    'nav.edit': N,
+    'categories.manage': N,
+    'content.publish': N,
+    'content.archiveDelete': N,
+    'seo.entityMeta': N,
+    'seo.globalDefaults': N,
+    'redirects.manage': N,
+    'media.write': N,
+    'media.hardDelete': N,
+    'leads.manage': F,
+    'leads.pii': F,
+    'export.csv': N,
+    'crm.erase': N,
+    'crm.settings': N,
+    'applications.manage': N,
+    'applications.pii': N,
+    'analytics.read': F,
+    'analytics.search': N,
+    'analytics.goals': N,
+    'ai.editContent': N,
+    'ai.config': N,
+    'logs.view': N,
+    'logs.clear': N,
+    'audit.view': N,
+    'siteHealth.view': N,
+    'export.backup': N,
+  },
 };
 
 /** Pure lookup of a role's access level for a capability. */

@@ -148,7 +148,7 @@ select is((select count(*) from public.leads)::int, 0,
   'a demoted developer''s old token reads no lead (the profile says seo)');
 select is(app.live_role(), null::text,
   'app.live_role() is null when the profile disagrees with the token');
-select is(_rows($$ update public.leads set status = 'done'
+select is(_rows($$ update public.leads set is_starred = true
                     where id = '00000000-0000-0000-0000-0000000000aa' $$), 0,
   'a demoted developer''s old token changes no lead');
 select _as('00000000-0000-0000-0000-0000000000a2', 'admin', '00000000-0000-0000-0000-000000000001');
@@ -209,9 +209,11 @@ select throws_ok(
   $$ update public.leads set retention_delete_after = now() + interval '10 years'
      where id = '00000000-0000-0000-0000-0000000000aa' $$,
   '42501', null, 'admin cannot extend a lead''s retention (0030)');
-select is(_rows($$ update public.leads set status = 'in_progress', internal_notes = 'Sent the proposal'
-                    where id = '00000000-0000-0000-0000-0000000000aa' $$), 1,
-  'a live admin still updates status and writes notes, without being able to read them');
+select throws_ok(
+  $$ update public.leads set status = 'in_progress', internal_notes = 'Sent the proposal'
+     where id = '00000000-0000-0000-0000-0000000000aa' $$,
+  '42501', null,
+  'a live admin no longer writes the legacy status or notes field (0097: the stage and the notes thread are the ways)');
 select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0000-0000-000000000001');
 select throws_ok(
   $$ insert into public.leads (tenant_id, name, email_enc, message)
@@ -227,8 +229,8 @@ select _as(null, null, null);
 select is(
   (select internal_notes || ' / ' || status from public.leads
     where id = '00000000-0000-0000-0000-0000000000aa'),
-  'Sent the proposal / in_progress',
-  'the live admin''s write landed: notes are written without being readable');
+  'Called back / new',
+  'the refused legacy write changed nothing');
 select throws_ok(
   $$ insert into public.leads (tenant_id, name, email_enc, message, discipline_of_interest)
      values ('00000000-0000-0000-0000-000000000001', 'x', '\x00', 'y', 'Not a slug!') $$,
@@ -271,10 +273,11 @@ select ok(
   and not has_table_privilege('authenticated', 'public.leads', 'delete')
   and not has_table_privilege('authenticated', 'public.leads', 'truncate')
   and not has_table_privilege('authenticated', 'public.leads', 'update')
-  and has_column_privilege('authenticated', 'public.leads', 'status', 'update')
-  and has_column_privilege('authenticated', 'public.leads', 'internal_notes', 'update')
+  and not has_column_privilege('authenticated', 'public.leads', 'status', 'update')
+  and not has_column_privilege('authenticated', 'public.leads', 'internal_notes', 'update')
+  and has_column_privilege('authenticated', 'public.leads', 'stage_id', 'update')
   and not has_column_privilege('authenticated', 'public.leads', 'internal_notes', 'select'),
-  'authenticated: column SELECT and column UPDATE (status, notes and, since 0041, the pipeline), no insert/delete/truncate (0030, 0033, 0041)');
+  'authenticated: column SELECT and column UPDATE (the pipeline since 0041; the legacy status and notes withdrawn by 0097), no insert/delete/truncate (0030, 0033, 0041)');
 
 select ok(
   exists (select 1 from pg_policies

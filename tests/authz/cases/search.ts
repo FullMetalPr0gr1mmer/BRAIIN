@@ -10,6 +10,6 @@ export const cases: readonly Case[] = [
     method: 'GET',
     url: '/api/admin/search?q=logo',
     // Any staff role: what each one FINDS is gated per entity inside searchAdmin().
-    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    allow: ['admin', 'content_creator', 'seo', 'developer', 'sales'],
   },
 ];

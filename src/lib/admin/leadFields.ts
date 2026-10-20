@@ -70,6 +70,17 @@ export function canSeeLeadPii(role: Role): boolean {
   return can(role, 'leads.pii') === 'full';
 }
 
+/**
+ * May this role be handed lead PII it did not ask for, one lead at a time? Only a holder of
+ * `leads.pii` that also holds `export.csv` (Admin, Developer): those roles may take every
+ * lead's details at once anyway. Sales holds `leads.pii` one lead at a time (owner default
+ * O-6), so it sees a lead's details only through the reveal, which is live-rechecked,
+ * rate-limited and audited first; a notification never carries them to it (Admin v2 C10a).
+ */
+export function receivesLeadPiiUnasked(role: Role): boolean {
+  return canSeeLeadPii(role) && can(role, 'export.csv') === 'full';
+}
+
 export function canManageLeads(role: Role): boolean {
   return can(role, 'leads.manage') === 'full';
 }

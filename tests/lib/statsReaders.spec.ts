@@ -148,9 +148,11 @@ describe('loadLeadKpis', () => {
   );
 
   it('is shown to exactly the roles that work with leads', () => {
+    // Sales works leads too (Admin v2 C10a), so it sees the inquiries count.
     expect(roles.filter((r) => ROLE_CAPS[r]['leads.manage'] === 'full').sort()).toEqual([
       'admin',
       'developer',
+      'sales',
     ]);
   });
 });

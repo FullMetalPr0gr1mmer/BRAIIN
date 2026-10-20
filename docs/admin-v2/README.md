@@ -730,6 +730,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [C4b](as-built/C4b.md): the leads screens: the list with its KPIs, chips, filters in the address and bulk bar, a lead's page (the audited reveal, the notes thread, the status card, Move to…, the timeline, Erase), the lazy add drawer, the `internalNotes` 422, the F0 harness extension, the `admin-leads` chunk groups and O-15 by the plan's default, 0065 (the help guide only; PR number at review)
 - [C4c](as-built/C4c.md): the Pipeline board, carved out of C4b by size: a column per stage, Move to… on every card, announced, the List | Pipeline tabs, 0068 (the help guide only, after G2's 0067; PR number at review)
 - [C9a](as-built/C9a.md): CRM settings for leads: `crm.settings` (Admin), the pipeline stages (named tones, saved against the stages as loaded, "Move its N leads first"), scoring with every lead re-scored, response time, assignment at arrival (manual, round robin, one person), 0091 (numbered at merge; PR number at review)
+- [C10a](as-built/C10a.md): the Sales role for leads: the enum value alone (0096), then the helpers, `app.is_member()` for `audit_insert`, the non-staff block, the no-role-claim trusted context, the legacy lead writes withdrawn, the directory and the guides (0097), the Sales column in §5 and architecture §3.4 (both parsed), the catalog-driven pgTAP, the Sales sweep (numbers assigned at merge; PR number at review)
 
 **Hotfixes**
 - [H5](as-built/H5.md): the audit chain is serialized, 0031 (#36)

@@ -16,6 +16,7 @@ let auditOk = true;
 let limited = false;
 let rlsSeesLead = true;
 let noteInsertFails = false;
+let sessionRole = 'admin';
 let liveProfile: Record<string, unknown> = { role: 'admin', is_active: true, locked_until: null };
 const events: string[] = [];
 const audits: { action: string; detail?: Record<string, unknown> }[] = [];
@@ -173,7 +174,7 @@ function ctx(path: string, method = 'GET', body?: unknown): APIContext {
     url,
     params: { id: LEAD },
     locals: {
-      session: { userId: USER, tenantId: TENANT, role: 'admin', email: 'a@x', isActive: true },
+      session: { userId: USER, tenantId: TENANT, role: sessionRole, email: 'a@x', isActive: true },
       supabase: { from: (table: string) => builder(table, 'rls') },
     },
   } as unknown as APIContext;
@@ -189,6 +190,7 @@ beforeEach(() => {
   limited = false;
   rlsSeesLead = true;
   noteInsertFails = false;
+  sessionRole = 'admin';
   liveProfile = { role: 'admin', is_active: true, locked_until: null };
   events.length = 0;
   audits.length = 0;
@@ -302,6 +304,44 @@ describe('the notes thread', () => {
       tenant_id: TENANT,
       lead_id: LEAD,
     });
+  });
+
+  it('GET spends a slot of the reveal’s limit for every reader, before the audit row and the thread (C10a)', async () => {
+    for (const role of ['admin', 'developer', 'sales']) {
+      events.length = 0;
+      claimedLimits.length = 0;
+      sessionRole = role;
+      liveProfile = { role, is_active: true, locked_until: null };
+      expect((await notes.GET(ctx(`/api/admin/leads/${LEAD}/notes`))).status, role).toBe(200);
+      expect(claimedLimits, role).toEqual([PII_REVEAL_LIMITS]);
+      expect(
+        events.filter((e) => e.startsWith('ops:')),
+        role,
+      ).toEqual(['ops:lead-notes-read']);
+      expect(events.indexOf('ops:lead-notes-read'), role).toBeLessThan(
+        events.indexOf('audit:lead.view_notes'),
+      );
+      expect(events.indexOf('ops:lead-notes-read'), role).toBeLessThan(
+        events.indexOf('svc:list:lead_notes'),
+      );
+    }
+  });
+
+  it('the limit is the reveal’s own: 60 an hour per person, 300 per tenant', () => {
+    expect(PII_REVEAL_LIMITS).toEqual({ perUser: 60, perTenant: 300, windowMinutes: 60 });
+  });
+
+  it('GET over the limit (the 61st read in an hour), any role: 429, and the thread is never read', async () => {
+    for (const role of ['admin', 'developer', 'sales']) {
+      events.length = 0;
+      audits.length = 0;
+      sessionRole = role;
+      liveProfile = { role, is_active: true, locked_until: null };
+      limited = true;
+      expect((await notes.GET(ctx(`/api/admin/leads/${LEAD}/notes`))).status, role).toBe(429);
+      expect(events, role).toEqual(['svc:profiles', 'ops:lead-notes-read']);
+      expect(audits, role).toEqual([]);
+    }
   });
 
   it('GET without an audit row: 403 and the thread is never read', async () => {

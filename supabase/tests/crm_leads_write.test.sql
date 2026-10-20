@@ -130,9 +130,9 @@ select is(
      from pg_attribute a
     where a.attrelid = 'public.leads'::regclass and a.attnum > 0 and not a.attisdropped
       and has_column_privilege('authenticated', 'public.leads', a.attname::text, 'update')),
-  array['assigned_to', 'internal_notes', 'is_spam', 'is_starred', 'last_contact_at',
-        'last_contact_channel', 'read_at', 'stage_id', 'status', 'tags', 'value_sar'],
-  'staff UPDATE on leads: the pipeline''s columns and the legacy pair, nothing else');
+  array['assigned_to', 'is_spam', 'is_starred', 'last_contact_at',
+        'last_contact_channel', 'read_at', 'stage_id', 'tags', 'value_sar'],
+  'staff UPDATE on leads: the pipeline''s columns, nothing else (0097 withdrew the legacy pair)');
 select ok(
   (select count(*) = 8 from information_schema.columns
     where table_schema = 'public' and table_name = 'leads_safe'
@@ -581,8 +581,10 @@ select is(
 
 -- The common case: the admin who deletes a mirror saved its field herself, so she is already
 -- the lead's last editor, and an updated_by the door wrote would read as unchanged. The door
--- names her in app.acting_for instead, for its own write only.
-set local role authenticated;
+-- names her in app.acting_for instead, for its own write only. Since 0097 no staff token
+-- writes the legacy field, so her save (made before) is replayed by the service role carrying
+-- her claim, which is how the field's existing mirrors came to name her.
+set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 update public.leads set internal_notes = 'Saved by the admin herself'
  where id = '00000000-0000-0000-0000-00000000aa07';
