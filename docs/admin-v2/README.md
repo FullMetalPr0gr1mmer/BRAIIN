@@ -608,7 +608,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
    | Every route for every role: no errors, no overflow, sidebar per role | F0/Z1 | ✓ per-role sessions replace View as; https, not `file://` |
    | Homepage headline visible after Publish, not before | R14 | ✓ |
    | Hidden page returns 404 and leaves the menu | U14 | ✓ incl. sitemap/llms and KV re-sync after rollback |
-   | 503 for visitors, signed-in admin passes | U9 | ✓ fail-closed |
+   | 503 for visitors, signed-in admin passes | U9 | ✓ fail-closed (built: `tests/admin/maintenance.e2e.ts`) |
    | Sales cannot open users by URL, API or PostgREST | C10 | ✓ |
    | A deleted project comes back | R10 | ✓ Restore vN, with portfolio children |
    | A form submission is a lead within 5 s | C1 | ✓ bell notification; email delivery is L6 |
@@ -696,6 +696,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [U2](as-built/U2.md): website stats and site health on the rollups, server-rendered: `rollup_daily_vitals`, the invoker readers, whole-day page views, the health checklist, `/admin/logs` retired, 0052 (PR number at review)
 - [U3](as-built/U3.md): media uploads (A5): the storage provider, the upload, replace and download routes, delivery through `/_image`, 0045 (PR number at review)
 - [U4](as-built/U4.md): the media library and the picker with upload: search, Images | Videos, the storage meter, describe-then-upload with progress, the drawer (alt, tags, Used in, Download, Replace, Delete), Upload in place in every picture field, the shared `admin-screens` chunk group, `media_library`, 0064 (PR number at review)
+- [U9](as-built/U9.md): General settings and maintenance v2, folded U9a + U9b: typed identity (tagline, phone, map link, socials with Show on the site), the favicon and app icon with the manifests, the footer settings columns, `site_settings.timezone` and the admin clock on it, the RESTRICTIVE live writes on both rows; maintenance in one KV value (copy, background, buttons, Back on, the fail-closed staff bypass, the allowlist), Retry-After from Back on, the 503 in both languages, Preview full screen, the 10-minute reconcile; two guides through H11's catalog, 0075 placeholder (PR number at review)
 - [U10](as-built/U10.md): SEO, folded U10a + U10b: share images from the media library (`og_media_id`, `default_og_media_id`, composite keys, `media_assets_public_read` and `media_usage` v5), the pair rule, closed robots, localized canonical paths, the sitemap and llms.txt indexability filter, `/admin/seo` with Pages, Redirects and Site wide, the shared `SeoPanel`, the guide put through H11's catalog, 0073 placeholder (PR number at review)
 - [U13](as-built/U13.md): the activity log v2: names, kind, person and day filters, plain language, the export under the lockdown, the live read on `audit_log`, 0054
 - [U14a](as-built/U14a.md): page visibility without the password mode: `page_visibility`, the middleware gate on the matched route, KV `site:visibility` through a 60 s isolate memo, the menus, sitemap, llms.txt and search filtered, `/admin/visibility`, the `nav_visible` alias, the registry row, 0057 (PR number at review)

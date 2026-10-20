@@ -25,12 +25,15 @@ const ctx = (tz = 'Asia/Riyadh') => ({ now: NOW, tz, contact: null });
 
 describe('planMaintenanceSave: "Back on"', () => {
   it('is 00:00 that day in the studio’s zone', () => {
-    expect(planMaintenanceSave(null, { until: '2026-10-25', version: 1 }, ctx()).next).toMatchObject({
+    expect(
+      planMaintenanceSave(null, { until: '2026-10-25', version: 1 }, ctx()).next,
+    ).toMatchObject({
       until: '2026-10-25',
       untilAt: '2026-10-24T21:00:00.000Z',
     });
     expect(
-      planMaintenanceSave(null, { until: '2026-10-25', version: 1 }, ctx('Asia/Dubai')).next.untilAt,
+      planMaintenanceSave(null, { until: '2026-10-25', version: 1 }, ctx('Asia/Dubai')).next
+        .untilAt,
     ).toBe('2026-10-24T20:00:00.000Z');
     expect(
       planMaintenanceSave(null, { until: '2026-10-26', version: 1 }, ctx('Europe/London')).next
@@ -54,11 +57,17 @@ describe('planMaintenanceSave: "Back on"', () => {
       expect((caught as ValidationError).field).toBe('until');
       expect((caught as ValidationError).detail).toBe(message);
     }
-    expect(() => planMaintenanceSave(null, { until: '2026-11-19', version: 1 }, ctx())).not.toThrow();
+    expect(() =>
+      planMaintenanceSave(null, { until: '2026-11-19', version: 1 }, ctx()),
+    ).not.toThrow();
   });
 
   it('a cleared date clears its instant', () => {
-    const stored = { ...MAINTENANCE_DEFAULTS, until: '2026-10-25', untilAt: '2026-10-24T21:00:00.000Z' };
+    const stored = {
+      ...MAINTENANCE_DEFAULTS,
+      until: '2026-10-25',
+      untilAt: '2026-10-24T21:00:00.000Z',
+    };
     expect(planMaintenanceSave(stored, { until: null, version: 1 }, ctx()).next).toMatchObject({
       until: null,
       untilAt: null,
@@ -68,11 +77,21 @@ describe('planMaintenanceSave: "Back on"', () => {
 
 describe('planMaintenanceSave: the switch and its stamp', () => {
   it('turning it on stamps now and is a flip; changing the allowlist keeps the stamp', () => {
-    const on = planMaintenanceSave({ active: false, allowlist: [] }, { active: true, version: 1 }, ctx());
+    const on = planMaintenanceSave(
+      { active: false, allowlist: [] },
+      { active: true, version: 1 },
+      ctx(),
+    );
     expect(on.flipped).toBe(true);
     expect(on.next.changedAt).toBe(new Date(NOW).toISOString());
     const kept = planMaintenanceSave(
-      { v: 2, active: true, allowlist: [], changedAt: '2026-10-09T08:00:00.000Z', staffBypass: true },
+      {
+        v: 2,
+        active: true,
+        allowlist: [],
+        changedAt: '2026-10-09T08:00:00.000Z',
+        staffBypass: true,
+      },
       { allowlist: ['203.0.113.9'], version: 1 },
       ctx(),
     );
@@ -82,7 +101,11 @@ describe('planMaintenanceSave: the switch and its stamp', () => {
   });
 
   it('a switch never recorded is not given an invented time', () => {
-    const plan = planMaintenanceSave({ active: false, allowlist: [] }, { active: false, version: 1 }, ctx());
+    const plan = planMaintenanceSave(
+      { active: false, allowlist: [] },
+      { active: false, version: 1 },
+      ctx(),
+    );
     expect(plan.next).not.toHaveProperty('changedAt');
     expect(plan.flipped).toBe(false);
   });
@@ -112,12 +135,16 @@ describe('planMaintenanceSave: the switch and its stamp', () => {
     expect(storedForEditing({ active: false, allowlist: [] }, NOW).staffBypass).toBe(true);
     expect(storedForEditing({ active: true, allowlist: [] }, NOW).staffBypass).toBe(false);
     expect(storedForEditing(null, NOW).staffBypass).toBe(true);
-    expect(storedForEditing({ v: 2, active: false, staffBypass: false }, NOW).staffBypass).toBe(false);
+    expect(storedForEditing({ v: 2, active: false, staffBypass: false }, NOW).staffBypass).toBe(
+      false,
+    );
   });
 
   it('takes the identity’s contact when given, else keeps the stored one', () => {
     const contact = { brand: { en: 'B', ar: 'ب' }, email: 'a@example.test', whatsappE164: null };
-    expect(planMaintenanceSave(null, { version: 1 }, { ...ctx(), contact }).next.contact).toEqual(contact);
+    expect(planMaintenanceSave(null, { version: 1 }, { ...ctx(), contact }).next.contact).toEqual(
+      contact,
+    );
     const stored = { ...MAINTENANCE_DEFAULTS, contact };
     expect(planMaintenanceSave(stored, { version: 1 }, ctx()).next.contact).toEqual(contact);
   });
@@ -140,7 +167,11 @@ vi.mock('@/lib/admin/liveRecheck', () => ({
   },
 }));
 vi.mock('@/lib/admin/audit', () => ({
-  writeAudit: async (_sb: unknown, _auth: unknown, entry: { action: string; detail?: Record<string, unknown> }) => {
+  writeAudit: async (
+    _sb: unknown,
+    _auth: unknown,
+    entry: { action: string; detail?: Record<string, unknown> },
+  ) => {
     state.audits.push(entry);
     return true;
   },
@@ -177,7 +208,11 @@ function client() {
       b['maybeSingle'] = async () => {
         if (table === 'site_profile') {
           return {
-            data: { brand_name: { en: 'Braiin', ar: 'بريّن' }, contact_email: 'hello@example.test', whatsapp_e164: null },
+            data: {
+              brand_name: { en: 'Braiin', ar: 'بريّن' },
+              contact_email: 'hello@example.test',
+              whatsapp_e164: null,
+            },
             error: null,
           };
         }

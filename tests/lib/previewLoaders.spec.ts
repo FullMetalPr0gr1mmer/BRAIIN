@@ -250,7 +250,12 @@ const CASES: Record<string, () => Promise<void>> = {
   'siteProfile.getSiteProfile': async () => {
     const { value, report } = await inPreview(() => siteProfile.getSiteProfile());
     expect(value.contactEmail).toBe('hello@example.test');
-    expect(value.footer).toEqual({ copyright: null, style: 'light', showEmail: true, showSocial: false });
+    expect(value.footer).toEqual({
+      copyright: null,
+      style: 'light',
+      showEmail: true,
+      showSocial: false,
+    });
     clean(report);
   },
   // Admin v2 U9: the icons are one media read for the ids the identity names. The fixture's

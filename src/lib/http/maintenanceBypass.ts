@@ -55,7 +55,9 @@ export function storedAccessToken(value: string): string | null {
     }
     const parsed = JSON.parse(json) as unknown;
     const token =
-      parsed && typeof parsed === 'object' ? (parsed as { access_token?: unknown }).access_token : null;
+      parsed && typeof parsed === 'object'
+        ? (parsed as { access_token?: unknown }).access_token
+        : null;
     return typeof token === 'string' && token.length > 0 && token.length < 16_384 ? token : null;
   } catch {
     return null;

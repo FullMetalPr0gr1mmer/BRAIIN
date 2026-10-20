@@ -9,7 +9,9 @@ import ApplicationsSwitch, {
 } from '@/components/admin/screens/general/ApplicationsSwitch';
 import BrandFacts, { LOGO_NOTE } from '@/components/admin/screens/general/BrandFacts';
 import TurnOnDialog, { turnOnText } from '@/components/admin/screens/maintenance/TurnOnDialog';
-import MaintenanceSketch, { dayWords } from '@/components/admin/screens/maintenance/MaintenanceSketch';
+import MaintenanceSketch, {
+  dayWords,
+} from '@/components/admin/screens/maintenance/MaintenanceSketch';
 import SaveStatus, { saveStatusText } from '@/components/admin/kit/SaveStatus';
 import { ClockProvider } from '@/components/admin/kit/clock';
 import { entitySaveReducer, initialSaveState } from '@/lib/admin/entitySave';
@@ -69,7 +71,12 @@ describe('EditorForm groups (Admin v2 U9)', () => {
   ];
   const render = (extra = {}) =>
     renderToStaticMarkup(
-      createElement(EditorForm, { save: fakeSave({}), fields: FIELDS, submitLabel: 'Save', ...extra }),
+      createElement(EditorForm, {
+        save: fakeSave({}),
+        fields: FIELDS,
+        submitLabel: 'Save',
+        ...extra,
+      }),
     );
 
   it('without groups: one card, as before', () => {
@@ -81,9 +88,13 @@ describe('EditorForm groups (Admin v2 U9)', () => {
   it('cards in two columns, a closed card as <details>, the rest after', () => {
     const html = render({ groups, slots: { left: createElement('p', { id: 'slot' }, 'Slot') } });
     expect(html).toContain('class="grid grid--2 editor__cols"');
-    expect(html).toMatch(/<section class="card editor__group" data-group="left" aria-labelledby="g-left"><h2 class="card-title" id="g-left">Left card<\/h2><p id="slot">Slot<\/p>/);
+    expect(html).toMatch(
+      /<section class="card editor__group" data-group="left" aria-labelledby="g-left"><h2 class="card-title" id="g-left">Left card<\/h2><p id="slot">Slot<\/p>/,
+    );
     expect(html).toContain('<p class="admin-sub editor__group-sub">A line</p>');
-    expect(html).toMatch(/<details class="card editor__group" data-group="more"><summary class="card-title">Advanced<\/summary>/);
+    expect(html).toMatch(
+      /<details class="card editor__group" data-group="more"><summary class="card-title">Advanced<\/summary>/,
+    );
     expect(html).not.toMatch(/<details[^>]* open/);
     // Delta is in no group: it follows, in a card of its own.
     expect(html.indexOf('id="f-d"')).toBeGreaterThan(html.indexOf('id="f-c"'));
@@ -94,8 +105,15 @@ describe('EditorForm groups (Admin v2 U9)', () => {
     for (const ui of [profileUi, settingsUi, maintenanceUi]) {
       const grouped = new Set(ui.groups!.flatMap((g) => g.fields));
       const drawn = ui.fields.filter((f) => f.name !== 'active').map((f) => f.name);
-      expect(drawn.filter((n) => !grouped.has(n)), ui.endpoint).toEqual([]);
-      for (const name of grouped) expect(ui.fields.map((f) => f.name), name).toContain(name);
+      expect(
+        drawn.filter((n) => !grouped.has(n)),
+        ui.endpoint,
+      ).toEqual([]);
+      for (const name of grouped)
+        expect(
+          ui.fields.map((f) => f.name),
+          name,
+        ).toContain(name);
     }
     expect(profileUi.fields.map((f) => f.name)).not.toContain('acceptingApplications');
     expect(settingsUi.fields.map((f) => f.name)).not.toContain('identity');
@@ -124,7 +142,10 @@ describe('the singleton kernel names a refused value’s field (constraintFields
         'site_profile',
         'settings.general',
         'update',
-        { code, message: `new row for relation "site_profile" violates check constraint "${constraint}"` },
+        {
+          code,
+          message: `new row for relation "site_profile" violates check constraint "${constraint}"`,
+        },
         siteProfileSingleton.foreignKeys,
         siteProfileSingleton.constraintFields,
       );
@@ -251,12 +272,20 @@ describe('the General screen’s words', () => {
 
   it('the applications switch: live for Admin, disabled with the reason for Developer', () => {
     const admin = renderToStaticMarkup(
-      createElement(ApplicationsSwitch, { open: true, canChange: true, onChanged: () => undefined }),
+      createElement(ApplicationsSwitch, {
+        open: true,
+        canChange: true,
+        onChanged: () => undefined,
+      }),
     );
     expect(admin).toMatch(/role="switch"[^>]*aria-checked="true"/);
     expect(admin).not.toMatch(/role="switch"[^>]*disabled/);
     const developer = renderToStaticMarkup(
-      createElement(ApplicationsSwitch, { open: false, canChange: false, onChanged: () => undefined }),
+      createElement(ApplicationsSwitch, {
+        open: false,
+        canChange: false,
+        onChanged: () => undefined,
+      }),
     );
     expect(developer).toMatch(/role="switch"[^>]*disabled/);
     expect(developer).toContain(LOCKED_NOTE);
@@ -277,7 +306,9 @@ describe('the maintenance screen’s words', () => {
   it('Turn on says who still sees the site, and when that is nobody', () => {
     expect(turnOnText(true, 0)).toContain('Your signed in team still sees the site.');
     expect(turnOnText(false, 2)).toContain('Only the addresses you allow still see the site.');
-    expect(turnOnText(false, 0)).toContain('No address is allowed, so everyone sees it, you included.');
+    expect(turnOnText(false, 0)).toContain(
+      'No address is allowed, so everyone sees it, you included.',
+    );
     for (const text of [turnOnText(true, 0), turnOnText(false, 0)]) {
       expect(text).toContain('within about a minute');
       expect(text).not.toMatch(/[–—]/);
@@ -331,9 +362,8 @@ describe('the studio’s zone for a request (studioTimeZone)', () => {
   beforeEach(() => read.mockReset());
 
   it('reads once per request, the listed zone or the default', async () => {
-    const { studioTimeZone, resetStudioTimeZoneWarning } = await import(
-      '@/lib/admin/studioTimeZone'
-    );
+    const { studioTimeZone, resetStudioTimeZoneWarning } =
+      await import('@/lib/admin/studioTimeZone');
     resetStudioTimeZoneWarning();
     const locals = {
       supabase: sb({ data: { timezone: 'Asia/Dubai' }, error: null }),
@@ -347,9 +377,9 @@ describe('the studio’s zone for a request (studioTimeZone)', () => {
       { data: { timezone: 'Mars/Olympus' }, error: null },
       { data: null, error: { message: 'boom' } },
     ]) {
-      expect(await studioTimeZone({ supabase: sb(answer), session: { tenantId: 't' } } as never)).toBe(
-        'Asia/Riyadh',
-      );
+      expect(
+        await studioTimeZone({ supabase: sb(answer), session: { tenantId: 't' } } as never),
+      ).toBe('Asia/Riyadh');
     }
     expect(await studioTimeZone({ session: null } as never)).toBe('Asia/Riyadh');
   });

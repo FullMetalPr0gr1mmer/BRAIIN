@@ -194,12 +194,7 @@ function monitorOf(m: RobotMonitor, siteHost: string | null): Monitor {
 const iso = (seconds: number) => new Date(seconds * 1000).toISOString();
 
 /** Normalises getMonitors' answer. Exported for the fixture tests. */
-export function readingOf(
-  json: unknown,
-  now: Date,
-  siteUrl: string,
-  tz?: string,
-): UptimeReading {
+export function readingOf(json: unknown, now: Date, siteUrl: string, tz?: string): UptimeReading {
   const top = ResponseSchema.safeParse(json);
   if (!top.success) throw new UptimeProviderError('shape');
   if (top.data.stat !== 'ok') throw new UptimeProviderError('api');

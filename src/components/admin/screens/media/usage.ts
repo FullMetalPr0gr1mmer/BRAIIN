@@ -3,8 +3,8 @@
 // own sidebar would open the target screen, else plain words: a link that answers 403 is a
 // dead end. Which screens those are is decided on the server (usageScreensFor in
 // src/lib/admin/mediaLibrary.ts: isVisible over ADMIN_NAV) and handed to the island, so the
-// menu's registry never ships in the browser. An entity type this map does not know (R5 and
-// U9a add some) is said in its own words, with no link, and never breaks the list.
+// menu's registry never ships in the browser. An entity type this map does not know (R5 adds
+// some) is said in its own words, with no link, and never breaks the list.
 //
 // Since media_usage v4 (0066, Admin v2 R5) a row may be a pending change (`pending`): a draft
 // that names the picture, not yet live. It is said as one ("Pending change to service: logo")
@@ -71,6 +71,15 @@ export const USAGE_KINDS: Readonly<Record<string, Kind>> = {
     noun: 'default share image',
     words: () => 'Default share image',
     href: () => '/admin/seo?tab=site',
+  },
+  // Admin v2 U9 (media_usage v6, 0075): the site's favicon or app icon. The entity is the
+  // tenant's identity row, its label which icon; it opens General settings.
+  site_profile: {
+    screen: '/admin/settings',
+    noun: 'site icon',
+    words: (label) =>
+      label === 'app icon' ? 'App icon (General settings)' : 'Favicon (General settings)',
+    href: () => '/admin/settings',
   },
 };
 

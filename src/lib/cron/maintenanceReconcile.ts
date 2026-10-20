@@ -5,10 +5,7 @@ import { resolveLaunchTenantId } from '@/lib/data/tenant';
 import type { CronJob } from './jobs';
 import { readMaintenance, type MaintenanceSnapshot } from '@schemas/maintenance';
 import { writeSystemLog } from '@/lib/data/systemLog';
-import {
-  putMaintenanceState,
-  readMaintenanceSnapshot,
-} from '@/lib/http/maintenance';
+import { putMaintenanceState, readMaintenanceSnapshot } from '@/lib/http/maintenance';
 import { readContact } from '@/lib/maintenance/contact';
 
 // The maintenance reconcile (Admin v2 U9b, decision D12), a job of the 10-minute schedule
@@ -70,12 +67,14 @@ export async function reconcileMaintenance(
       .eq('version', data.version)
       .select('version')
       .maybeSingle();
-    if (writeError) throw new Error(`maintenance reconcile: write: ${writeError.code ?? 'no code'}`);
+    if (writeError)
+      throw new Error(`maintenance reconcile: write: ${writeError.code ?? 'no code'}`);
     if (!updated) {
       await writeSystemLog({
         level: 'warn',
         source: 'cron:maintenance-reconcile',
-        message: 'maintenance ended by its date; an editor saved at the same time, so the next run settles it',
+        message:
+          'maintenance ended by its date; an editor saved at the same time, so the next run settles it',
       });
       return { outcome: 'ended-race', kvSynced: null };
     }

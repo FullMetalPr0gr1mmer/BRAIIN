@@ -103,14 +103,22 @@ test.describe('as admin', () => {
     await switches.nth(1).click();
     await expect(switches.nth(1)).toHaveAttribute('aria-checked', 'false');
     await page.getByRole('button', { name: 'Save general settings' }).click();
-    await expect(page.getByRole('status').filter({ hasText: /Saved at \d\d:\d\d/ }).first()).toBeVisible();
+    await expect(
+      page
+        .getByRole('status')
+        .filter({ hasText: /Saved at \d\d:\d\d/ })
+        .first(),
+    ).toBeVisible();
 
     await page.locator('#f-timezone').selectOption('Asia/Dubai');
     await page.getByRole('button', { name: 'Save region and data' }).click();
     await expect.poll(async () => (await read(page, SETTINGS))['timezone']).toBe('Asia/Dubai');
 
     const row = await read(page, PROFILE);
-    expect(row['tagline']).toEqual({ en: 'From the brain to the real world', ar: 'من الفكرة إلى الواقع' });
+    expect(row['tagline']).toEqual({
+      en: 'From the brain to the real world',
+      ar: 'من الفكرة إلى الواقع',
+    });
     expect((row['socials'] as { visible?: boolean }[])[1]?.visible).toBe(false);
   });
 
@@ -176,7 +184,9 @@ test.describe('as admin', () => {
     await save(page, PROFILE, { faviconMediaId: icon, appIconMediaId: icon, version: row.version });
 
     const head = await (await page.request.get('/')).text();
-    const links = [...head.matchAll(/<link rel="icon" type="image\/png" sizes="(\d+)x\1" href="([^"]+)"/g)];
+    const links = [
+      ...head.matchAll(/<link rel="icon" type="image\/png" sizes="(\d+)x\1" href="([^"]+)"/g),
+    ];
     expect(links.map((m) => m[1])).toEqual(['32', '192']);
     for (const [, , href] of links) {
       const res = await page.request.get(href!.replace(/&amp;/g, '&'));
@@ -207,7 +217,9 @@ test.describe('as admin', () => {
 
     await page.locator('#f-mapUrl').fill('https://maps.app.goo.gl/e2eConflict');
     await page.getByRole('button', { name: 'Save general settings' }).click();
-    await expect(page.getByText('Someone else saved changes while you were editing.')).toBeVisible();
+    await expect(
+      page.getByText('Someone else saved changes while you were editing.'),
+    ).toBeVisible();
     await expect(page.locator('#f-mapUrl')).toHaveValue('https://maps.app.goo.gl/e2eConflict');
   });
 });
@@ -215,13 +227,19 @@ test.describe('as admin', () => {
 test.describe('as developer', () => {
   test.use({ storageState: authFile('developer') });
 
-  test('edits the identity, but the applications switch is off with the reason', async ({ page }) => {
+  test('edits the identity, but the applications switch is off with the reason', async ({
+    page,
+  }) => {
     await page.goto('/admin/settings', { waitUntil: 'networkidle' });
     const toggle = page.getByRole('switch', { name: 'Accepting job applications' });
     await expect(toggle).toBeDisabled();
     await expect(page.getByText('Only an admin can open or close job applications.')).toBeVisible();
     const row = await read(page, PROFILE);
-    await save(page, PROFILE, { phoneE164: '+966500000009', phoneDisplay: '050 000 0009', version: row.version });
+    await save(page, PROFILE, {
+      phoneE164: '+966500000009',
+      phoneDisplay: '050 000 0009',
+      version: row.version,
+    });
     const after = await read(page, PROFILE);
     expect(after['phone_e164']).toBe('+966500000009');
     await save(page, PROFILE, { phoneE164: null, phoneDisplay: null, version: after.version });

@@ -5,7 +5,10 @@
 import LeadDetail, { type LeadDetailProps } from '@/components/admin/screens/leads/LeadDetail';
 import { ClockProvider } from '@/components/admin/kit/clock';
 
-export default function AdminLeadDetail({ tz, ...props }: LeadDetailProps & { tz?: string | undefined }) {
+export default function AdminLeadDetail({
+  tz,
+  ...props
+}: LeadDetailProps & { tz?: string | undefined }) {
   return (
     <ClockProvider tz={tz}>
       <LeadDetail {...props} />

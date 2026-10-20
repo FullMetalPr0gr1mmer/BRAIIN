@@ -67,7 +67,9 @@ describe('the words', () => {
   });
 
   it('the brand from the snapshot, else the code fallback', () => {
-    expect(page({ contact: contact() })).toContain('<title>We&#39;re making something new. | Braiin</title>');
+    expect(page({ contact: contact() })).toContain(
+      '<title>We&#39;re making something new. | Braiin</title>',
+    );
     expect(page({ contact: { brand: null, email: null, whatsappE164: null } })).toContain(
       '| Studio</title>',
     );
@@ -76,12 +78,12 @@ describe('the words', () => {
 
 describe('"Back on" (D10)', () => {
   it('only when asked and set, in our own month words', () => {
-    expect(page({ showDate: true, until: '2026-11-03', untilAt: '2026-11-02T21:00:00Z' })).toContain(
-      '<p class="when">Back on 3 November</p>',
-    );
-    expect(page({ showDate: false, until: '2026-11-03', untilAt: '2026-11-02T21:00:00Z' })).not.toContain(
-      'class="when"',
-    );
+    expect(
+      page({ showDate: true, until: '2026-11-03', untilAt: '2026-11-02T21:00:00Z' }),
+    ).toContain('<p class="when">Back on 3 November</p>');
+    expect(
+      page({ showDate: false, until: '2026-11-03', untilAt: '2026-11-02T21:00:00Z' }),
+    ).not.toContain('class="when"');
     expect(page({ showDate: true, until: null })).not.toContain('class="when"');
   });
 
@@ -90,9 +92,9 @@ describe('"Back on" (D10)', () => {
     expect(backOnDate('2027-01-02', 'ar', NOW)).toBe('٢ يناير ٢٠٢٧');
     expect(backOnDate('2027-01-02', 'en', NOW)).toBe('2 January 2027');
     expect(backOnDate('nope', 'en', NOW)).toBeNull();
-    expect(page({ showDate: true, until: '2026-11-03', untilAt: '2026-11-02T21:00:00Z' }, 'ar')).toContain(
-      'نعود في ٣ نوفمبر',
-    );
+    expect(
+      page({ showDate: true, until: '2026-11-03', untilAt: '2026-11-02T21:00:00Z' }, 'ar'),
+    ).toContain('نعود في ٣ نوفمبر');
   });
 });
 

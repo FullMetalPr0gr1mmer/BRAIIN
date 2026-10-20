@@ -17,7 +17,11 @@ import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
 const NOW = Date.parse('2026-10-20T09:00:00Z');
 
 const b64url = (value: string) =>
-  Buffer.from(value, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  Buffer.from(value, 'utf8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 
 function jwt(payload: Record<string, unknown>): string {
   return `${b64url(JSON.stringify({ alg: 'HS256' }))}.${b64url(JSON.stringify(payload))}.sig`;
@@ -49,7 +53,10 @@ function jar(cookies: Record<string, string>) {
   };
 }
 
-const live = { ctx: { userId: 'u', tenantId: 't', role: 'admin', isActive: true, email: '' }, revoke: false };
+const live = {
+  ctx: { userId: 'u', tenantId: 't', role: 'admin', isActive: true, email: '' },
+  revoke: false,
+};
 
 describe('the local pre-filter never grants, and keeps garbage away from the auth server', () => {
   it('reads the access token from the cookie as @supabase/ssr writes it, whole or chunked', () => {
@@ -71,20 +78,34 @@ describe('the local pre-filter never grants, and keeps garbage away from the aut
     ['a token that is not a JWT', { [SESSION_COOKIE_NAME]: sessionCookie('abc') }],
     [
       'an expired token',
-      { [SESSION_COOKIE_NAME]: sessionCookie(jwt({ sub: 'u', exp: NOW / 1000 - 1, app_metadata: { role: 'admin' } })) },
+      {
+        [SESSION_COOKIE_NAME]: sessionCookie(
+          jwt({ sub: 'u', exp: NOW / 1000 - 1, app_metadata: { role: 'admin' } }),
+        ),
+      },
     ],
     [
       'a token with no member role',
-      { [SESSION_COOKIE_NAME]: sessionCookie(jwt({ sub: 'u', exp: NOW / 1000 + 60, app_metadata: {} })) },
+      {
+        [SESSION_COOKIE_NAME]: sessionCookie(
+          jwt({ sub: 'u', exp: NOW / 1000 + 60, app_metadata: {} }),
+        ),
+      },
     ],
     [
       'a role that is not ours',
-      { [SESSION_COOKIE_NAME]: sessionCookie(jwt({ sub: 'u', exp: NOW / 1000 + 60, app_metadata: { role: 'owner' } })) },
+      {
+        [SESSION_COOKIE_NAME]: sessionCookie(
+          jwt({ sub: 'u', exp: NOW / 1000 + 60, app_metadata: { role: 'owner' } }),
+        ),
+      },
     ],
   ])('%s: no bypass, and the auth server is never asked', async (_, cookies) => {
     const resolve = vi.fn();
     const { jar: j } = jar(cookies as Record<string, string>);
-    expect(await staffMayBypass(j, { now: NOW, resolve, sessionClient: () => ({}) as never })).toBe(false);
+    expect(await staffMayBypass(j, { now: NOW, resolve, sessionClient: () => ({}) as never })).toBe(
+      false,
+    );
     expect(resolve).not.toHaveBeenCalled();
   });
 });
@@ -124,9 +145,9 @@ describe('the admin’s session check decides, and fails closed', () => {
   });
 
   it('held at its second step (Admin v2 U17): no', async () => {
-    expect(
-      await ask({ ctx: null, revoke: false, pending: { mode: 'challenge' } }).result,
-    ).toBe(false);
+    expect(await ask({ ctx: null, revoke: false, pending: { mode: 'challenge' } }).result).toBe(
+      false,
+    );
   });
 
   it('the auth server throws: no, and nobody is signed out', async () => {

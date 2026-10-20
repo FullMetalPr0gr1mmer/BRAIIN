@@ -90,7 +90,7 @@ describe('a visitor during maintenance', () => {
     expect(res.headers.get('content-security-policy')).not.toContain("'unsafe-inline'");
     const html = await res.text();
     expect(html).toContain('<html lang="en" dir="ltr">');
-    expect(html).toContain("We&#39;re making something new.");
+    expect(html).toContain('We&#39;re making something new.');
   });
 
   it('on an Arabic route, in Arabic, right to left', async () => {
@@ -164,7 +164,11 @@ describe('who passes', () => {
     set({ v: 2, active: true, staffBypass: true });
     __kv.set(
       VISIBILITY_KV_KEY,
-      JSON.stringify({ v: 1, builtAt: null, pages: { about: { mode: 'hidden', target: 'contact' } } }),
+      JSON.stringify({
+        v: 1,
+        builtAt: null,
+        pages: { about: { mode: 'hidden', target: 'contact' } },
+      }),
     );
     clearVisibilityMemo();
     const res = await run(context('/about', '/about'), page().next);

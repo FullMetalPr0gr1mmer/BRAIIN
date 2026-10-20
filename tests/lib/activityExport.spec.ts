@@ -435,8 +435,7 @@ describe('the studio clock, without Intl', () => {
       ['Africa/Cairo', Date.UTC(2026, 3, 23, 22)],
       ['Africa/Cairo', Date.UTC(2026, 9, 29, 21)],
     ] as const) {
-      sweep(tz, at - 3 * 3_600_000, 6 * 60 / 7, 7);
+      sweep(tz, at - 3 * 3_600_000, (6 * 60) / 7, 7);
     }
   });
-
 });

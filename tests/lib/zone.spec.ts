@@ -29,7 +29,9 @@ const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
 /** The quoted zones of the last CHECK in the migrations that names `constraint` (or column). */
 function checkList(pattern: RegExp): string[] {
   let found: string[] | null = null;
-  for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) {
+  for (const file of readdirSync(MIGRATIONS)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()) {
     const sql = readFileSync(join(MIGRATIONS, file), 'utf8');
     for (const m of sql.matchAll(pattern)) {
       found = [...(m[1] ?? '').matchAll(/'([^']+)'/g)].map((x) => x[1]!);

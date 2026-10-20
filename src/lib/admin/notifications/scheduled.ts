@@ -17,7 +17,6 @@ import { PER_SOURCE, type NotificationSource, type SourceItem } from './types';
 // first look of the day shows it, "Mark all as read" clears it, and one scheduled (or moved
 // to today) after the person last marked the bell read lights the bell again.
 
-
 interface ScheduledRow {
   id: string;
   title: unknown;
@@ -41,7 +40,10 @@ function titleOf(value: unknown): string | null {
 }
 
 /** The studio's calendar day that holds `now`, as the UTC instants [start, end). */
-export function studioDay(now: Date, tz: string = DEFAULT_TIME_ZONE): { start: string; end: string } {
+export function studioDay(
+  now: Date,
+  tz: string = DEFAULT_TIME_ZONE,
+): { start: string; end: string } {
   const day = dayKeyIn(now, tz);
   return {
     start: zonedDayStart(day, tz).toISOString(),

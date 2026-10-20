@@ -244,12 +244,7 @@ export default function EditorForm({
       {children}
 
       {groups && groups.length > 0 ? (
-        <GroupedFields
-          groups={groups}
-          slots={slots}
-          fields={fields}
-          renderField={renderField}
-        />
+        <GroupedFields groups={groups} slots={slots} fields={fields} renderField={renderField} />
       ) : (
         <div className="card">{fields.map(renderField)}</div>
       )}

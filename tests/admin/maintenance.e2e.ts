@@ -217,9 +217,14 @@ test('Preview full screen: the saved page, 200, private, axe-clean, no CSP viola
     expect(res?.status()).toBe(200);
     expect(res?.headers()['cache-control']).toContain('no-store');
     expect(res?.headers()['x-robots-tag']).toBe('noindex');
-    await expect(page.locator('h1')).toHaveText(lang === 'en' ? 'Back very soon' : 'نعود قريبًا جدًا');
+    await expect(page.locator('h1')).toHaveText(
+      lang === 'en' ? 'Back very soon' : 'نعود قريبًا جدًا',
+    );
     const axe = await new AxeBuilder({ page }).withTags(WCAG).analyze();
-    expect(axe.violations.map((v) => v.id), lang).toEqual([]);
+    expect(
+      axe.violations.map((v) => v.id),
+      lang,
+    ).toEqual([]);
   }
   expect(errors).toEqual([]);
 });

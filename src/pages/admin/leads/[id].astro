@@ -109,7 +109,9 @@ const subtitle = lead
         },
         '',
       ) || null,
-      typeof lead.created_at === 'string' ? `received ${clockFor(studioTz).formatDate(lead.created_at)}` : null,
+      typeof lead.created_at === 'string'
+        ? `received ${clockFor(studioTz).formatDate(lead.created_at)}`
+        : null,
     ]
       .filter(Boolean)
       .join(' · ')

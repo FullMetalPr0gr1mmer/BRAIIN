@@ -242,7 +242,9 @@ export function objectToForm(obj: unknown, fields: readonly FieldDef[]): Row {
     // A switch with a default shows it when the item does not say (Admin v2 U9: a social
     // account stored before "Show on the site" existed is shown, as the server reads it).
     const raw =
-      field.kind === 'checkbox' && source[field.name] === undefined && field.defaultValue !== undefined
+      field.kind === 'checkbox' &&
+      source[field.name] === undefined &&
+      field.defaultValue !== undefined
         ? field.defaultValue
         : source[field.name];
     out[field.name] = valueToForm(raw, field, source);

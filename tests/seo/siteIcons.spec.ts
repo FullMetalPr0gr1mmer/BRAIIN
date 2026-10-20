@@ -22,7 +22,10 @@ const ask = (params: Record<string, string>) =>
 describe('the /_image icon rule: an upload, square, PNG, at a listed size only', () => {
   it('admits each listed size of a square upload as PNG', () => {
     for (const size of ICON_WIDTHS) {
-      expect(ask({ href: href(512, 512), w: String(size), h: String(size), f: 'png' }), String(size)).toBe(true);
+      expect(
+        ask({ href: href(512, 512), w: String(size), h: String(size), f: 'png' }),
+        String(size),
+      ).toBe(true);
     }
     expect(ICON_FORMAT).toBe('png');
   });
@@ -42,7 +45,10 @@ describe('the /_image icon rule: an upload, square, PNG, at a listed size only',
     // a bundled asset never takes the icon rule
     const bundled = new Map([['/_astro/logo.png', { width: 512, height: 512 }]]);
     expect(
-      checkImageRequest(new URLSearchParams({ href: '/_astro/logo.png', w: '32', h: '32', f: 'png' }), bundled).ok,
+      checkImageRequest(
+        new URLSearchParams({ href: '/_astro/logo.png', w: '32', h: '32', f: 'png' }),
+        bundled,
+      ).ok,
     ).toBe(false);
     // an extra parameter
     expect(ask({ href: href(512, 512), w: '32', h: '32', f: 'png', q: '80' })).toBe(false);
@@ -135,7 +141,10 @@ describe('readSiteIcons: one read, and it fails soft', () => {
 
   it('an error is no icons, never a throw (the brand on the page is untouched)', async () => {
     media.error = { message: 'permission denied' };
-    expect(await readSiteIcons(withIcons(ICON_ID, ICON_ID))).toEqual({ favicon: null, appIcon: null });
+    expect(await readSiteIcons(withIcons(ICON_ID, ICON_ID))).toEqual({
+      favicon: null,
+      appIcon: null,
+    });
   });
 });
 

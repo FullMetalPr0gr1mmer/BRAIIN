@@ -99,11 +99,7 @@ export const MaintenanceInputSchema = z
       .transform((ips) => [...new Set(ips)])
       .optional(),
     staffBypass: z.boolean().optional(),
-    until: z
-      .string()
-      .refine(isCalendarDay, 'a day, YYYY-MM-DD')
-      .nullable()
-      .optional(),
+    until: z.string().refine(isCalendarDay, 'a day, YYYY-MM-DD').nullable().optional(),
     showDate: z.boolean().optional(),
     background: z.enum(MAINTENANCE_BACKGROUNDS).optional(),
     showContact: z.boolean().optional(),
@@ -165,7 +161,8 @@ export const MAINTENANCE_DEFAULTS: MaintenanceSnapshot = {
 };
 
 type Loose = Record<string, unknown>;
-const isObject = (v: unknown): v is Loose => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isObject = (v: unknown): v is Loose =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
 
 const isoOrNull = (v: unknown): string | null =>
   typeof v === 'string' && v.length <= 40 && Number.isFinite(Date.parse(v)) ? v : null;

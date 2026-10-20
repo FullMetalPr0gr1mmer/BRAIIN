@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { MAINTENANCE_DEFAULTS, readMaintenance, type MaintenanceSnapshot } from '@schemas/maintenance';
+import {
+  MAINTENANCE_DEFAULTS,
+  readMaintenance,
+  type MaintenanceSnapshot,
+} from '@schemas/maintenance';
 import { MAINTENANCE_KV_KEY } from '@/lib/http/maintenance';
 import { __kv } from '../stubs/cloudflare-workers';
 
@@ -21,9 +25,8 @@ vi.mock('@/lib/data/systemLog', () => ({
   },
 }));
 
-const { reconcileMaintenance, MAINTENANCE_RECONCILE_JOB } = await import(
-  '@/lib/cron/maintenanceReconcile'
-);
+const { reconcileMaintenance, MAINTENANCE_RECONCILE_JOB } =
+  await import('@/lib/cron/maintenanceReconcile');
 const { env } = await import('../stubs/cloudflare-workers');
 
 const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -77,7 +80,11 @@ beforeEach(() => {
   updated = null;
   raced = false;
   audits = [];
-  profile = { brand_name: { en: 'B', ar: 'ب' }, contact_email: 'a@example.test', whatsapp_e164: null };
+  profile = {
+    brand_name: { en: 'B', ar: 'ب' },
+    contact_email: 'a@example.test',
+    whatsapp_e164: null,
+  };
 });
 
 describe('"Back on" has come', () => {
@@ -168,7 +175,10 @@ describe('the buttons follow the identity while it is on', () => {
   it('a changed email reaches the edge; an unchanged one writes nothing', async () => {
     const on = { ...MAINTENANCE_DEFAULTS, active: true };
     row = { version: 3, maintenance: on };
-    put({ ...on, contact: { brand: { en: 'B', ar: 'ب' }, email: 'old@example.test', whatsappE164: null } });
+    put({
+      ...on,
+      contact: { brand: { en: 'B', ar: 'ب' }, email: 'old@example.test', whatsappE164: null },
+    });
     expect((await reconcileMaintenance(client(), env, TENANT, NOW)).outcome).toBe('contact');
     expect(edge().contact.email).toBe('a@example.test');
     expect((await reconcileMaintenance(client(), env, TENANT, NOW)).outcome).toBe('none');

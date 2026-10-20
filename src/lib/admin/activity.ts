@@ -289,7 +289,9 @@ export async function loadActivity(
   let page = query.page;
   if (read.outOfRange || (read.rows.length === 0 && page > 1)) {
     const total =
-      read.outOfRange && read.total === 0 ? await countMatching(sb, tenantId, query, tz) : read.total;
+      read.outOfRange && read.total === 0
+        ? await countMatching(sb, tenantId, query, tz)
+        : read.total;
     const last = Math.max(1, Math.ceil(total / PAGE_SIZE));
     if (last < page) {
       page = last;

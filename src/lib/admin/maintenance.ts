@@ -22,9 +22,7 @@ export const UNTIL_TOO_FAR = `Pick a day within ${MAINTENANCE_MAX_DAYS_AHEAD} da
 
 /** True for a stored value maintenance v2 wrote (`v: 2`). */
 export function isV2(raw: unknown): boolean {
-  return (
-    typeof raw === 'object' && raw !== null && (raw as Record<string, unknown>)['v'] === 2
-  );
+  return typeof raw === 'object' && raw !== null && (raw as Record<string, unknown>)['v'] === 2;
 }
 
 /**

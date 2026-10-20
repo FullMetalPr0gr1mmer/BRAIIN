@@ -133,7 +133,8 @@ describe('retryAfterSeconds (decision D11)', () => {
   });
 
   it('counts down to "Back on", within a minute and a day', () => {
-    const at = (ms: number) => on({ until: '2026-10-21', untilAt: new Date(NOW + ms).toISOString() });
+    const at = (ms: number) =>
+      on({ until: '2026-10-21', untilAt: new Date(NOW + ms).toISOString() });
     expect(retryAfterSeconds(at(5 * 3_600_000), NOW)).toBe(5 * 3600);
     expect(retryAfterSeconds(at(1_500), NOW)).toBe(60);
     expect(retryAfterSeconds(at(-60_000), NOW)).toBe(60);

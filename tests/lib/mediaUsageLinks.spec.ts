@@ -80,15 +80,31 @@ describe('"Used in": words and links', () => {
     expect(USAGE_SCREENS).toEqual([...new Set(Object.values(USAGE_KINDS).map((k) => k.screen))]);
   });
 
-  it('a kind it does not know (R5 and U9a add some) is words, no link, no crash', () => {
+  it('a kind it does not know (R5 adds some) is words, no link, no crash', () => {
     const entries = usageEntries(usageScreensFor('admin'), [
       { entityType: 'site_icon', entityId: ID, label: 'favicon' },
-      { entityType: 'site_profile', entityId: ID, label: null },
+      { entityType: 'mystery_table', entityId: ID, label: null },
     ]);
     expect(entries.map((e) => [e.words, e.href])).toEqual([
       ['Site icon: favicon', null],
-      ['Site profile', null],
+      ['Mystery table', null],
     ]);
+  });
+
+  it('the site’s icons (media_usage v6, U9) open General settings, for the roles that open it', () => {
+    const icons = [
+      { entityType: 'site_profile', entityId: ID, label: 'favicon' },
+      { entityType: 'site_profile', entityId: ID, label: 'app icon' },
+    ];
+    for (const role of ['admin', 'developer'] as const) {
+      expect(usageEntries(usageScreensFor(role), icons).map((e) => [e.words, e.href])).toEqual([
+        ['Favicon (General settings)', '/admin/settings'],
+        ['App icon (General settings)', '/admin/settings'],
+      ]);
+    }
+    for (const role of ['content_creator', 'seo'] as const) {
+      expect(usageEntries(usageScreensFor(role), icons).map((e) => e.href)).toEqual([null, null]);
+    }
   });
 
   it('a share image (media_usage v5, U10) opens the SEO screen, for the roles that open it', () => {
@@ -134,7 +150,7 @@ describe('"Used in": words and links', () => {
       ['Pending change to team member: amal', null],
       ['Pending change to share image: home', null],
       ['Pending change to blog post: hello', null],
-      ['Pending change to site profile', null],
+      ['Pending change to site icon', null],
       ['Pending change to service', null],
     ]);
     // A live and a pending reference to one entity are two entries with two keys.

@@ -224,10 +224,7 @@ export function useEntitySave(
     message: state.phase === 'load-failed' ? null : state.message,
     save,
     reloadTheirs,
-    adoptVersion: useCallback(
-      (version: number) => dispatch({ type: 'version', version }),
-      [],
-    ),
+    adoptVersion: useCallback((version: number) => dispatch({ type: 'version', version }), []),
   };
 }
 

@@ -33,9 +33,7 @@ const logoSrc = allowed
       .then((image) => image.src)
       .catch(() => null)
   : null;
-const canOpenApplications = Boolean(
-  session && can(session.role, 'applications.manage') === 'full',
-);
+const canOpenApplications = Boolean(session && can(session.role, 'applications.manage') === 'full');
 const tz = allowed ? await studioTimeZone(Astro.locals) : '';
 ---
 

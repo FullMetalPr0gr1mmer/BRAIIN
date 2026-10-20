@@ -33,7 +33,13 @@ export default function TurnOnDialog({ open, bypass, allowed, onCancel, onConfir
       sub={turnOnText(bypass, allowed)}
       footer={
         <>
-          <button type="button" className="btn" data-variant="ghost" data-autofocus onClick={onCancel}>
+          <button
+            type="button"
+            className="btn"
+            data-variant="ghost"
+            data-autofocus
+            onClick={onCancel}
+          >
             Cancel
           </button>
           <button type="button" className="btn" data-variant="danger" onClick={onConfirm}>

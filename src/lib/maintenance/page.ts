@@ -59,7 +59,10 @@ export function backOnDate(day: string, locale: Locale, now: number): string | n
 }
 
 /** The message the page shows: the admin's, else the built-in one matching its buttons. */
-function messageOf(s: MaintenanceSnapshot, buttons: { email: boolean; whatsapp: boolean }): Bilingual {
+function messageOf(
+  s: MaintenanceSnapshot,
+  buttons: { email: boolean; whatsapp: boolean },
+): Bilingual {
   if (s.copy.message) return s.copy.message;
   if (buttons.email && buttons.whatsapp) return DEFAULT_MESSAGE.emailAndWhatsapp;
   if (buttons.email) return DEFAULT_MESSAGE.email;

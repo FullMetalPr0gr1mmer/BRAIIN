@@ -5,7 +5,10 @@
 import LeadsBoard, { type LeadsBoardProps } from '@/components/admin/screens/leads/LeadsBoard';
 import { ClockProvider } from '@/components/admin/kit/clock';
 
-export default function AdminLeadsBoard({ tz, ...props }: LeadsBoardProps & { tz?: string | undefined }) {
+export default function AdminLeadsBoard({
+  tz,
+  ...props
+}: LeadsBoardProps & { tz?: string | undefined }) {
   return (
     <ClockProvider tz={tz}>
       <LeadsBoard {...props} />

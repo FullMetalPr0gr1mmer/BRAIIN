@@ -67,7 +67,13 @@ let directory: { id: string; name: string; role: string | null }[] = [];
 
 if (allowed && session && sb) {
   const [loaded, staff] = await Promise.all([
-    loadActivity(sb, session, query, query.actor ? [query.actor] : [], await studioTimeZone(Astro.locals)).catch(async (err) => {
+    loadActivity(
+      sb,
+      session,
+      query,
+      query.actor ? [query.actor] : [],
+      await studioTimeZone(Astro.locals),
+    ).catch(async (err) => {
       await writeSystemLog({
         level: 'error',
         source: 'admin:audit.view',

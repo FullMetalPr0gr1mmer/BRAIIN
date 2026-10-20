@@ -37,7 +37,9 @@ const empty = data.goingLive.length === 0 && data.groups.length === 0;
                 <a class="data-link" href={item.href} dir="auto">
                   {item.title}
                 </a>
-                <span class="att__m">At {formatTime(item.at)}, {city} time</span>
+                <span class="att__m">
+                  At {formatTime(item.at)}, {city} time
+                </span>
               </li>
             ))}
           </ul>

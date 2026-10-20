@@ -670,4 +670,3 @@ describe('the maintenance snapshot carries when it last flipped', () => {
     expect(await getMaintenanceState(env)).toMatchObject({ active: true, allowlist: [] });
   });
 });
-

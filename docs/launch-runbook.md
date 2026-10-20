@@ -1364,6 +1364,45 @@ time (expected under 3 ms: one JSON of 10 to 30 KB) and its subrequests (at most
 
 ---
 
+### 6l. General settings and maintenance v2 (migration 0075, Admin v2 U9)
+
+The letter is the next free one when U9 merges; renumber if a sibling took it.
+
+**Apply before the merge** (expand only; rule 5): 0075 adds columns, CHECKs, the icon keys,
+`site_settings.timezone` (copied from `crm_settings.timezone`; only rows that differ are
+written), the RESTRICTIVE live writes on `site_profile` and `site_settings` and the two tables'
+grants (authenticated loses an inherited DELETE on `site_settings` that nothing used). The old
+Worker reads the new shapes: the identity loader selects named columns, `media_usage` keeps its
+four columns, and the maintenance KV value it reads is v1 until the first v2 save. Read back
+with the U9 read-back query; every value must match its expected line.
+
+**After the deploy, before relying on maintenance v2:**
+
+1. Open Settings › Maintenance mode and Save once (without turning it on): the value becomes v2,
+   with "Signed in team still sees the site" on (decision D14). Until a v2 save, a stored value
+   reads with the bypass OFF (fail closed), which only matters while maintenance is on.
+2. To prove the staff bypass on production: turn maintenance on, then open the site in a
+   private window (the 503, Retry-After, `no-store`) and in the signed-in browser (the site,
+   `Cache-Control: private, no-store`, `X-Robots-Tag: noindex`); turn it off. A signed-in
+   person who still gets the 503 has a session the admin would refuse too (expired, switched
+   off, locked, or a second step owed): sign in again.
+3. `kvSynced: false` after a save means the row changed but the edge did not: the site is
+   still doing what it did before. Save again; the 10-minute reconcile heals an edge that says
+   on while the row says off, never the other way round (a row on with the edge off is logged
+   as an error in Site health's logs until someone saves).
+4. "Back on" ends maintenance at 00:00 of that day in the studio's time zone (Settings ›
+   General › Region and data); the reconcile then writes the row and audits
+   `maintenance.auto_disable` within ten minutes.
+
+**Icons.** Nothing is linked until the owner sets a favicon and an app icon (square uploads of at
+least 512 px). After setting them, `/_image` serves each as PNG at 32, 180, 192 and 512 only
+(four transformations per picture), and `/manifest.webmanifest` lists the app icon.
+
+**Rollback.** Revert the Worker; 0075 stays (expand only). If the RESTRICTIVE live writes ever
+need lifting, drop `site_profile_live_insert`, `site_profile_live_update`,
+`site_settings_live_insert` and `site_settings_live_update` (the permissive policies of 0001 and
+0019 still gate by role).
+
 ## 7. Cloudflare WAF (CLAUDE.md §3)
 
 Not code; nothing enforces these until they are created.

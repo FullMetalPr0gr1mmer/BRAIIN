@@ -54,7 +54,11 @@ export async function headIcons(icons: SiteIcons, locale: Locale): Promise<HeadI
   return {
     favicons,
     appleTouch: apple[0] ?? null,
-    manifest: icons.appIcon ? (locale === 'ar' ? '/ar/manifest.webmanifest' : '/manifest.webmanifest') : null,
+    manifest: icons.appIcon
+      ? locale === 'ar'
+        ? '/ar/manifest.webmanifest'
+        : '/manifest.webmanifest'
+      : null,
   };
 }
 

@@ -178,9 +178,10 @@ describe('the settings row (SiteSettingsSchema, Admin v2 U9)', () => {
       [{ spam_days: 0 }, false],
       [{ spam_days: 1.5 }, false],
     ] as const) {
-      expect(SiteSettingsSchema.safeParse({ retention, version: 1 }).success, JSON.stringify(retention)).toBe(
-        okay,
-      );
+      expect(
+        SiteSettingsSchema.safeParse({ retention, version: 1 }).success,
+        JSON.stringify(retention),
+      ).toBe(okay);
     }
   });
 
