@@ -125,6 +125,32 @@ export function mergeAfterPatch(
   return next;
 }
 
+// The drawer's requests belong to the application they were sent for. The drawer stays
+// mounted while it moves from one application to another (closed and reopened, or opened
+// from the list or the bell), so a request may still be on its way when another
+// application is on screen. Its answer touches only its own application: a slow save for A
+// never turns B's drawer into A's (with B's unsaved notes ready to be written into A).
+
+/**
+ * A status or notes save's answer, laid over the drawer's application only when that is
+ * the one the save was for (`forId`); any other application is returned as it is.
+ */
+export function afterPatch(
+  current: ApplicationDetail | null,
+  forId: string,
+  answer: Partial<ApplicationDetail>,
+): ApplicationDetail | null {
+  return current !== null && current.id === forId ? mergeAfterPatch(current, answer) : current;
+}
+
+/** The reveal's answer, likewise: it replaces only the application it was read for. */
+export function afterReveal(
+  current: ApplicationDetail | null,
+  row: ApplicationDetail,
+): ApplicationDetail | null {
+  return current !== null && current.id === row.id ? row : current;
+}
+
 /** True once the contact details have been revealed into this application. */
 export const isRevealed = (detail: ApplicationDetail | null): boolean =>
   detail !== null && ('email' in detail || 'phone' in detail);

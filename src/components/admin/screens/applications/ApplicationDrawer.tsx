@@ -11,10 +11,11 @@ import { formatDate } from '@/lib/admin/relTime';
 import { toast } from '@/lib/admin/toast';
 import {
   APPLICATION_STATUS_LABEL,
+  afterPatch,
+  afterReveal,
   detailRows,
   formatBytes,
   isRevealed,
-  mergeAfterPatch,
   safeLink,
   statusLabel,
   withoutContact,
@@ -39,6 +40,9 @@ import { Badge } from '@/components/admin/kit/StatusBadge';
 // Discrete controls send one request each (P-5): the status on change (Spam asks first,
 // it shortens the retention to 30 days), the notes on "Save notes". Errors stay inline,
 // successes are toasts. Every applicant-written text is a text node with dir="auto".
+// A request belongs to the application it was sent for: the drawer stays mounted from one
+// application to the next, so an answer or a refusal that lands after it moved on is laid
+// over nothing else (afterPatch, afterReveal, and `shown` for the error line).
 
 export interface ApplicationDrawerProps {
   /** The application to show; null closes the drawer. */
@@ -77,6 +81,8 @@ export default function ApplicationDrawer({
   // header's Close shut the native dialog first); a "no" opens it again.
   const [asking, setAsking] = useState(false);
   const leaving = useRef(false);
+  // The application on screen now, for a request that ends after the drawer moved on.
+  const shown = useRef(id);
   const statusId = useId();
   const notesId = useId();
   const notesCountId = useId();
@@ -86,6 +92,7 @@ export default function ApplicationDrawer({
   const dirty = detail !== null && notes !== stored;
 
   useEffect(() => {
+    shown.current = id;
     setDetail(null);
     setNotes('');
     setError('');
@@ -133,16 +140,22 @@ export default function ApplicationDrawer({
     else setAsking(false);
   }
 
+  /** A refusal for `forId`, shown only while that application is on screen. */
+  function failed(forId: string, err: unknown) {
+    if (shown.current === forId) setError(describeError(err));
+  }
+
   async function reveal() {
     if (!detail) return;
+    const forId = detail.id;
     setBusy(true);
     setError('');
     try {
       // The one audited read of the contact details (live recheck, audit row first).
-      const row = await adminFetch<ApplicationDetail>(`/api/admin/applications/${detail.id}?pii=1`);
-      setDetail((current) => (current && current.id === row.id ? row : current));
+      const row = await adminFetch<ApplicationDetail>(`/api/admin/applications/${forId}?pii=1`);
+      setDetail((current) => afterReveal(current, row));
     } catch (err) {
-      setError(describeError(err));
+      failed(forId, err);
     } finally {
       setBusy(false);
     }
@@ -150,20 +163,22 @@ export default function ApplicationDrawer({
 
   async function patch(body: { status?: string; internalNotes?: string }, done: string) {
     if (!detail) return false;
+    const forId = detail.id;
     setBusy(true);
     setError('');
     try {
       const answer = await adminFetch<Partial<ApplicationDetail>>(
-        `/api/admin/applications/${detail.id}`,
+        `/api/admin/applications/${forId}`,
         { method: 'PATCH', body },
       );
-      // The answer carries no contact details; what was revealed stays (one audit row).
-      setDetail((current) => (current ? mergeAfterPatch(current, answer) : current));
+      // The answer carries no contact details; what was revealed stays (one audit row). It
+      // lands only on the application it was for, whichever the drawer shows by now.
+      setDetail((current) => afterPatch(current, forId, answer));
       toast(done, 'ok');
       onChanged();
       return true;
     } catch (err) {
-      setError(describeError(err));
+      failed(forId, err);
       return false;
     } finally {
       setBusy(false);

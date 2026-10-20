@@ -7,6 +7,8 @@ import { BADGE_TONES } from '@/lib/admin/tones';
 import {
   APPLICATION_STATUS_LABEL,
   APPLICATION_STATUS_TONE,
+  afterPatch,
+  afterReveal,
   detailRows,
   formatBytes,
   isRevealed,
@@ -141,6 +143,45 @@ describe('a save after a reveal keeps what was revealed', () => {
   });
 });
 
+describe('a request belongs to the application it was sent for (U8 review)', () => {
+  // The drawer stays mounted from one application to the next: A's request may end while B
+  // is on screen. Its PATCH answer is A's whole detail row (id, name and message included).
+  const B: ApplicationDetail = {
+    ...DETAIL,
+    id: '0b0b0b0b-0000-4000-8000-000000000002',
+    name: 'Sam',
+    message: 'Second application.',
+    internal_notes: 'B notes',
+  };
+  const answerForA: Partial<ApplicationDetail> = {
+    ...DETAIL,
+    status: 'shortlisted',
+    internal_notes: 'A notes',
+  };
+
+  it('a save’s answer for A leaves B as it is', () => {
+    expect(afterPatch(B, DETAIL.id, answerForA)).toBe(B);
+    expect(afterPatch(null, DETAIL.id, answerForA)).toBeNull();
+  });
+
+  it('on A itself it is laid over, and what was revealed stays', () => {
+    const revealed: ApplicationDetail = { ...DETAIL, email: 'r@example.com', phone: null };
+    expect(afterPatch(revealed, DETAIL.id, answerForA)).toMatchObject({
+      id: DETAIL.id,
+      status: 'shortlisted',
+      internal_notes: 'A notes',
+      email: 'r@example.com',
+    });
+  });
+
+  it('a reveal for A leaves B as it is, and so never shows A’s contact details on B', () => {
+    const readA: ApplicationDetail = { ...DETAIL, email: 'r@example.com', phone: null };
+    expect(afterReveal(B, readA)).toBe(B);
+    expect(afterReveal(DETAIL, readA)).toBe(readA);
+    expect(afterReveal(null, readA)).toBeNull();
+  });
+});
+
 describe('the address', () => {
   it('a known status and a uuid; anything else is ignored', () => {
     expect(parseInitial({ status: 'in_review', open: DETAIL.id })).toEqual({
@@ -234,9 +275,26 @@ describe('the panel and the drawer (source and server render)', () => {
     // The save path sends one PATCH and takes its answer; it never re-opens the application.
     const patch = drawer.slice(drawer.indexOf('async function patch('));
     const patchBody = code(patch.slice(0, patch.indexOf(END)));
-    expect(patchBody).toContain('mergeAfterPatch');
+    expect(patchBody).toContain('afterPatch(current, forId, answer)');
     expect(patchBody.match(/adminFetch/g)).toHaveLength(1);
     expect(patchBody).toContain("method: 'PATCH'");
+  });
+
+  it('an answer or a refusal lands only on the application it was for', () => {
+    const body = (name: string) => {
+      const from = drawer.slice(drawer.indexOf(`async function ${name}(`));
+      return code(from.slice(0, from.indexOf('\n  }\n')));
+    };
+    expect(body('reveal')).toContain('afterReveal(current, row)');
+    expect(body('patch')).toContain('afterPatch(current, forId, answer)');
+    for (const name of ['reveal', 'patch']) {
+      expect(body(name), name).toContain('const forId = detail.id;');
+      expect(body(name), name).toContain('failed(forId, err)');
+      expect(body(name), name).not.toContain('setError(describeError');
+    }
+    // `shown` follows the drawer's application, and the error line is only that one's.
+    expect(code(drawer)).toContain('shown.current = id;');
+    expect(code(drawer)).toContain('if (shown.current === forId) setError(describeError(err));');
   });
 
   it('render with no style attribute, no em or en dash, and every applicant text dir="auto"', () => {

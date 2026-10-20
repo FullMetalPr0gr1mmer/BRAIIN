@@ -18,9 +18,11 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *   spam     asks first, and Cancel changes nothing;
  *   CV       the link answers an attachment with the sandbox CSP and no-store, and writes one
  *            `application.cv_download` row;
+ *   two      a status save for one application, held until a second is open in the drawer,
+ *            lands on the first only: the second keeps its name, message and status;
  *   erase    asks first, then the row and the CV object are gone (read as the service role).
- * The application is made here with the repo's own writer (createApplication, the CI dummy
- * key the workflows export). Its name has no `E2E ` prefix: tests/e2e/apply-roundtrip.e2e.ts
+ * The applications are made here with the repo's own writer (createApplication, the CI dummy
+ * key the workflows export); the second has no CV. Its name has no `E2E ` prefix: tests/e2e/apply-roundtrip.e2e.ts
  * deletes `name like 'E2E %'` and may run alongside. Whatever remains is erased in afterAll.
  * Non-admins are refused by the server (tests/admin/refusals.e2e.ts, LOCKED_SCREENS).
  */
@@ -36,11 +38,14 @@ const RUN = Date.now().toString(36);
 const NAME = `Drawer Check ${RUN}`;
 const EMAIL = `drawer-${RUN}@example.com`;
 const PHONE = '+966500000123';
+const OTHER = `Drawer Second ${RUN}`;
+const OTHER_MESSAGE = 'A second application, opened while the first one saves.';
 const PDF = new Blob(['%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n'], {
   type: 'application/pdf',
 });
 
 let id = '';
+let otherId = '';
 
 function service(): SupabaseClient {
   return createClient(env!.url, env!.serviceKey, {
@@ -120,15 +125,45 @@ test.beforeAll(async () => {
   );
   expect(made.ok, JSON.stringify(made)).toBe(true);
   if (made.ok) id = made.id;
+  const other = await createApplication(
+    service(),
+    TENANT_ID,
+    {
+      locale: 'en',
+      name: OTHER,
+      email: `drawer-second-${RUN}@example.com`,
+      phone: '+966500000124',
+      city: 'Jeddah',
+      role: 'Copywriter',
+      experience: '3-6',
+      workType: 'full-time',
+      availability: 'month',
+      skills: ['copywriting'],
+      portfolio: 'https://example.com/second',
+      message: OTHER_MESSAGE,
+      consentApplication: true,
+      consentFutureRoles: false,
+      policyVersion: RECRUITMENT_POLICY_VERSION,
+    },
+    null,
+    KEY,
+  );
+  expect(other.ok, JSON.stringify(other)).toBe(true);
+  if (other.ok) otherId = other.id;
 });
 
 test.afterAll(async () => {
-  if (!id) return;
   const svc = service();
-  const { data } = await svc.from('job_applications').select('cv_path').eq('id', id).maybeSingle();
-  const path = (data as { cv_path?: string | null } | null)?.cv_path;
-  if (path) await svc.storage.from(CV_BUCKET).remove([path]);
-  await svc.from('job_applications').delete().eq('id', id);
+  for (const made of [id, otherId].filter(Boolean)) {
+    const { data } = await svc
+      .from('job_applications')
+      .select('cv_path')
+      .eq('id', made)
+      .maybeSingle();
+    const path = (data as { cv_path?: string | null } | null)?.cv_path;
+    if (path) await svc.storage.from(CV_BUCKET).remove([path]);
+    await svc.from('job_applications').delete().eq('id', made);
+  }
 });
 
 for (const width of [320, 390, 1280]) {
@@ -242,6 +277,51 @@ test('the CV link: an audited attachment, sandboxed and never cached', async ({ 
   expect(headers['content-security-policy']).toContain('sandbox');
   expect(headers['cache-control']).toContain('no-store');
   expect(await auditCount('application.cv_download')).toBe(before + 1);
+});
+
+test('a slow save for one application never lands in the drawer of the next', async ({ page }) => {
+  await page.goto(`/admin/applications?open=${id}`);
+  await ready(page);
+  // The first application's PATCH is held until the second is on screen.
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const path = `/api/admin/applications/${id}`;
+  await page.route(`**${path}`, async (route) => {
+    if (route.request().method() === 'PATCH') await held;
+    await route.continue();
+  });
+  await drawer(page).getByRole('combobox', { name: 'Status' }).selectOption('shortlisted');
+  await drawer(page).getByRole('button', { name: 'Close' }).last().click();
+  await expect(drawer(page)).toBeHidden();
+
+  await page.getByRole('button', { name: `Open ${OTHER}’s application` }).click();
+  const second = page.getByRole('dialog', { name: OTHER });
+  await expect(second.getByText(OTHER_MESSAGE)).toBeVisible();
+  const answered = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === path && r.request().method() === 'PATCH',
+  );
+  release();
+  expect((await answered).status()).toBe(200);
+  await expect(page.getByText('Status changed to Shortlisted.')).toBeVisible();
+  await page.unroute(`**${path}`);
+
+  // The second is still itself: its name, its message and its status, nothing of the first.
+  await expect(second).toBeVisible();
+  await expect(second.getByText(OTHER_MESSAGE)).toBeVisible();
+  await expect(second.getByText('I would love to join the studio.')).toHaveCount(0);
+  await expect(second.getByRole('combobox', { name: 'Status' })).toHaveValue('new');
+  await expect(drawer(page)).toHaveCount(0);
+  const svc = service();
+  const { data: first } = await svc.from('job_applications').select('status').eq('id', id).single();
+  expect((first as { status: string }).status).toBe('shortlisted');
+  const { data: next } = await svc
+    .from('job_applications')
+    .select('status')
+    .eq('id', otherId)
+    .single();
+  expect((next as { status: string }).status).toBe('new');
 });
 
 test('erase asks first, then the application and its CV are gone', async ({ page }) => {
