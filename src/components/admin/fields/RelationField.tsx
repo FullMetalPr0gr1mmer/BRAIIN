@@ -7,6 +7,8 @@ import { useOptions } from './useOptions';
 // `relation` (one id) and `multiRelation` (an ORDERED list of ids). Order is data for a
 // multi relation — "featured projects", a case study's services — so the list keeps the
 // sequence the editor chose and offers up/down moves rather than a sorted checkbox grid.
+// The empty option says "Not set" in words, as the kit's other selects do (README P-12: no em or
+// en dash in admin copy; it read "—" until the post editor's Author and Category used it).
 
 interface Props {
   field: FieldDef;
@@ -41,7 +43,7 @@ export default function RelationField({ field, value, onChange, idPrefix = 'f', 
           aria-describedby={describedBy(id, { error: fieldError })}
           onChange={(e) => onChange(field.name, e.target.value)}
         >
-          <option value="">{loading ? 'Loading…' : '—'}</option>
+          <option value="">{loading ? 'Loading…' : 'Not set'}</option>
           {/* a stored id the list does not contain (hidden, or beyond the page) stays selectable */}
           {current && !options.some((o) => o.value === current) && (
             <option value={current}>{current}</option>
@@ -129,7 +131,7 @@ export default function RelationField({ field, value, onChange, idPrefix = 'f', 
             onChange={(e) => setPick(e.target.value)}
           >
             <option value="">
-              {loading ? 'Loading…' : full ? `At most ${field.maxItems}` : '—'}
+              {loading ? 'Loading…' : full ? `At most ${field.maxItems}` : 'Not set'}
             </option>
             {options
               .filter((o) => !selected.includes(o.value))
