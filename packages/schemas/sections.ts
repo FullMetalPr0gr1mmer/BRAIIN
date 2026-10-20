@@ -624,6 +624,8 @@ export function sectionContentIssues(type: SectionType, content: unknown): z.Zod
 
 /** Public row shape for the Tier-A page_sections read (see PageSectionRow loaders). */
 export const PageSectionRowSchema = z.object({
+  /** Kept for the preview's `data-pv-section` (Admin v2 R9); the unlocked read has none. */
+  id: z.string().uuid().optional(),
   type: z
     .string()
     .trim()

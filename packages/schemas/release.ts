@@ -631,3 +631,109 @@ export const PendingItemSchema = z
   })
   .strict();
 export type PendingItem = z.infer<typeof PendingItemSchema>;
+
+// ---- Publishing and its check (the publish and validate endpoints, Admin v2 R6) -------------
+// `POST /api/admin/releases/validate` answers a ReleaseCheck: per selected change, what stops it
+// (`errors`), what the person should know (`warnings`), the pending changes it needs
+// (`requires`, the dialog ticks them) and, from the database's dry run, a conflict. `POST
+// /api/admin/releases` runs the same check and publishes only when nothing stops any change.
+
+/** Why a change cannot be published as it stands (a closed list R12's dialog words). */
+export const RELEASE_ISSUE_CODES = [
+  // The stored change no longer reads as one (written around the API, or an old shape).
+  'unreadable',
+  // A rule refused it (a schema or domain rule; `field` names the field).
+  'invalid',
+  // It was saved without the live values it started from: open it and save again.
+  'base-missing',
+  // It no longer changes anything.
+  'nothing',
+  // A first save of something that has since been set up on the live site.
+  'exists-live',
+  // The live row it changes (or removes) is gone.
+  'removed',
+  // It points at something that is not on this site.
+  'link',
+  // It points at a pending new item that is not in the selection.
+  'requires',
+  // It points at something this release removes.
+  'parent-removed',
+  // Entity SEO: the page it describes is not the one it was made for, or does not exist.
+  'target',
+  // The database refused it in the dry run.
+  'refused',
+  // The live site moved under it since it was made (the dry run's conflict).
+  'conflict',
+] as const;
+export type ReleaseIssueCode = (typeof RELEASE_ISSUE_CODES)[number];
+
+/** What the person should know but that does not stop the publish. */
+export const RELEASE_WARNING_CODES = ['hidden-by-discipline'] as const;
+export type ReleaseWarningCode = (typeof RELEASE_WARNING_CODES)[number];
+
+export const ReleaseIssueSchema = z
+  .object({
+    code: z.enum(RELEASE_ISSUE_CODES),
+    message: z.string(),
+    field: z.string().optional(),
+  })
+  .strict();
+export type ReleaseIssue = z.infer<typeof ReleaseIssueSchema>;
+
+export const ReleaseWarningSchema = z
+  .object({ code: z.enum(RELEASE_WARNING_CODES), message: z.string() })
+  .strict();
+export type ReleaseWarning = z.infer<typeof ReleaseWarningSchema>;
+
+/** One selected change, checked. */
+export const ReleaseCheckItemSchema = z
+  .object({
+    draftId: Uuid,
+    draftVersion: DraftVersionSchema,
+    entityType: ReleaseEntityTypeSchema,
+    entityId: Uuid,
+    op: DraftOpSchema,
+    area: ReleaseAreaSchema,
+    label: z.record(z.string(), z.unknown()).nullable(),
+    errors: z.array(ReleaseIssueSchema),
+    warnings: z.array(ReleaseWarningSchema),
+    /** Pending new items this change links to that the selection leaves out. */
+    requires: z.array(DraftRefSchema),
+    /** The dry run's conflict: the columns live moved in (with the values, for "Compare"). */
+    conflict: ApplyConflictSchema.optional(),
+  })
+  .strict();
+export type ReleaseCheckItem = z.infer<typeof ReleaseCheckItemSchema>;
+
+/**
+ * The whole check: `ok` when no change has an error. `dryRun` says whether the database's dry
+ * run ran (only when the Worker found nothing to fix first: a dry run over a selection with a
+ * change that cannot be sent would report what the missing change causes, not what is wrong).
+ */
+export const ReleaseCheckSchema = z
+  .object({
+    ok: z.boolean(),
+    items: z.array(ReleaseCheckItemSchema),
+    /** Refusals that name no single change. */
+    errors: z.array(ReleaseIssueSchema),
+    dryRun: z.enum(['ran', 'skipped']),
+  })
+  .strict();
+export type ReleaseCheck = z.infer<typeof ReleaseCheckSchema>;
+
+/** What a publish answers. The purge is a logged no-op until a cache zone exists (O-3, R7). */
+export const PublishResultSchema = z
+  .object({
+    release: z.object({ id: Uuid, number: z.number().int().min(1) }).strict(),
+    items: z.array(
+      z.object({ entityType: z.string(), entityId: Uuid, op: DraftOpSchema }).strict(),
+    ),
+    warnings: z.array(
+      z.object({ draftId: Uuid, code: z.enum(RELEASE_WARNING_CODES), message: z.string() }),
+    ),
+    purge: PurgeStatusSchema,
+    /** Present when the release changed redirects or page visibility: did the edge take it. */
+    kvSynced: z.boolean().optional(),
+  })
+  .strict();
+export type PublishResult = z.infer<typeof PublishResultSchema>;

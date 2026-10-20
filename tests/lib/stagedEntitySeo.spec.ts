@@ -35,6 +35,7 @@ const seoRow = (over: Row = {}): Row => ({
   meta_title: TITLE,
   meta_description: DESC,
   og_image: null,
+  og_media_id: null,
   canonical_override: null,
   robots: null,
   schema_type: null,
@@ -147,16 +148,16 @@ describe('PUT with releases on', () => {
     const { PUT } = await routes();
     await callRoute(db, PUT, 'PUT', '/api/admin/entity-seo', { body: { ...save(), version: 0 } });
     const blind = await callRoute(db, PUT, 'PUT', '/api/admin/entity-seo', {
-      body: { ...save({ robots: 'noindex' }), version: 0 },
+      body: { ...save({ robots: 'noindex,follow' }), version: 0 },
     });
     expect([blind.status, blind.body['error']]).toEqual([409, 'draft-conflict']);
     const named = await callRoute(db, PUT, 'PUT', '/api/admin/entity-seo', {
-      body: { ...save({ robots: 'noindex' }), ...ref(drafts()[0]!) },
+      body: { ...save({ robots: 'noindex,follow' }), ...ref(drafts()[0]!) },
     });
     expect(named.status, JSON.stringify(named.body)).toBe(200);
     expect(drafts()).toHaveLength(1);
     expect(drafts()[0]).toMatchObject({ op: 'create', version: 2 });
-    expect((drafts()[0]!['payload'] as Row)['robots']).toBe('noindex');
+    expect((drafts()[0]!['payload'] as Row)['robots']).toBe('noindex,follow');
   });
 
   it('the database refuses a second pending create for one target (a race)', async () => {
@@ -177,7 +178,7 @@ describe('PUT with releases on', () => {
       return null;
     };
     const res = await callRoute(db, (await routes()).PUT, 'PUT', '/api/admin/entity-seo', {
-      body: { ...save({ robots: 'noindex' }), version: 0 },
+      body: { ...save({ robots: 'noindex,follow' }), version: 0 },
     });
     expect([res.status, res.body['error']]).toEqual([409, 'draft-conflict']);
     expect(drafts()).toHaveLength(1);
@@ -197,6 +198,8 @@ describe('PUT with releases on', () => {
       meta_title: TITLE,
       meta_description: DESC,
       og_image: null,
+      // Admin v2 U10: the share image is the seventh meta column, staged like the rest.
+      og_media_id: null,
       canonical_override: null,
       robots: null,
       schema_type: null,

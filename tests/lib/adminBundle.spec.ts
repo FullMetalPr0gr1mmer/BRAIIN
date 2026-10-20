@@ -66,6 +66,29 @@ describe('the checks', () => {
     );
   });
 
+  it('fail when the preview bridge reaches admin-ui or React (R9, check 7)', () => {
+    const bridge = {
+      'AdminPreviewBridge.astro_astro_type_script_index_0_lang.B1.js':
+        'import{i}from"./admin-preview.P1.js";',
+      'admin-zod.Z1.js': 'export const z=1;',
+    };
+    const good = build({
+      ...GOOD,
+      ...bridge,
+      'admin-preview.P1.js': 'import{z}from"./admin-zod.Z1.js";',
+    });
+    expect(check(good).problems).toEqual([]);
+    const bad = build({
+      ...GOOD,
+      ...bridge,
+      'admin-ui.U1.js': 'import{a}from"./admin-vendor.V1.js";import{z}from"./admin-zod.Z1.js";',
+      'admin-preview.P1.js': 'import{u}from"./admin-ui.U1.js";',
+    });
+    expect(check(bad).problems.join('\n')).toMatch(
+      /AdminPreviewBridge\.astro_.* loads admin-ui\.U1\.js, admin-vendor\.V1\.js eagerly/,
+    );
+  });
+
   it('fail when a public chunk imports an admin chunk', () => {
     const dir = build({
       ...GOOD,
@@ -297,6 +320,17 @@ describe('the chunk plan in astro.config.mjs', () => {
   const SELF_NAMED =
     /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]Admin\w*\.tsx$|screens[\\/]kit[\\/]|screens[\\/]dashboard[\\/](Dashboard\.tsx|types\.ts)$)/;
 
+  it('gives the preview bridge zod and its envelope above admin-ui, so it never loads React (R9)', () => {
+    const at = (path: string) => claim(join(process.cwd(), path));
+    expect(at('src/lib/admin/preview/bridge.ts')).toBe('admin-preview');
+    expect(at('packages/schemas/previewMessage.ts')).toBe('admin-zod');
+    expect(at('packages/schemas/themeTokens.ts')).toBe('admin-zod');
+    expect(at('node_modules/zod/v4/classic/schemas.js')).toBe('admin-zod');
+    const priority = (name: string) => groups.find((g) => g.name === name)!.priority;
+    expect(priority('admin-zod')).toBeGreaterThan(priority('admin-ui'));
+    expect(priority('admin-zod')).toBeLessThan(priority('admin-vendor'));
+  });
+
   it('names a group for each kind of admin module, the kit last', () => {
     const at = (path: string) => claim(join(process.cwd(), path));
     expect(at('src/lib/admin/client.ts')).toBe('admin-client');
@@ -369,6 +403,18 @@ describe('the screens admin-ui leaves share one admin-screens group (Admin v2 U4
     // The picker, the grid and the upload dialog are the field kit's (every editor).
     expect(claim('src/components/admin/fields/media/MediaPicker.tsx')).toBe('admin-fields');
     expect(claim('src/components/admin/fields/media/UploadDialog.tsx')).toBe('admin-fields');
+  });
+
+  it('claims the SEO island and its screen code, SeoPanel included (Admin v2 U10)', () => {
+    for (const path of [
+      'src/components/admin/islands/AdminSeo.tsx',
+      'src/components/admin/screens/seo/SeoScreen.tsx',
+      'src/components/admin/screens/seo/SeoPanel.tsx',
+      'src/components/admin/screens/seo/GooglePreview.tsx',
+      'src/components/admin/screens/seo/RedirectsTab.tsx',
+    ]) {
+      expect(claim(path), path).toBe('admin-screens');
+    }
   });
 
   it('leaves every other screen where it was', () => {

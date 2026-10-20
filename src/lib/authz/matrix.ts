@@ -40,10 +40,12 @@ export const CAPABILITIES = [
   'leads.pii',
   'export.csv',
   'crm.erase',
+  'crm.settings',
   'applications.manage',
   'applications.pii',
   'analytics.read',
   'analytics.search',
+  'analytics.goals',
   'ai.editContent',
   'ai.config',
   'logs.view',
@@ -83,10 +85,12 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': F,
     'export.csv': F,
     'crm.erase': F,
+    'crm.settings': F,
     'applications.manage': F,
     'applications.pii': F,
     'analytics.read': F,
     'analytics.search': F,
+    'analytics.goals': F,
     'ai.editContent': F,
     'ai.config': F,
     'logs.view': F,
@@ -120,10 +124,12 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': N,
     'export.csv': N,
     'crm.erase': N,
+    'crm.settings': N,
     'applications.manage': N,
     'applications.pii': N,
     'analytics.read': F,
     'analytics.search': N,
+    'analytics.goals': N,
     'ai.editContent': F,
     'ai.config': N,
     'logs.view': N,
@@ -157,10 +163,12 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': N,
     'export.csv': N,
     'crm.erase': N,
+    'crm.settings': N,
     'applications.manage': N,
     'applications.pii': N,
     'analytics.read': F,
     'analytics.search': F,
+    'analytics.goals': F,
     'ai.editContent': N,
     'ai.config': N,
     'logs.view': N,
@@ -172,8 +180,10 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
   // Developer — technical role: settings/identity/maintenance/theme, logs/audit/
   // site-health, leads management + PII + backup export. NO content authoring, NO
   // content publish/schedule, NO archive/delete — and NO job applications (Join, owner decision
-  // J6: applicants' CVs and contact details are Admin-only, unlike leads), and NO erasing
-  // a lead or a person's data (crm.erase is Admin's, Admin v2 C3).
+  // J6: applicants' CVs and contact details are Admin-only, unlike leads), NO erasing
+  // a lead or a person's data (crm.erase is Admin's, Admin v2 C3), and NO CRM settings
+  // (crm.settings is Admin's, Admin v2 C9a: owner item O-7, Developer gets no CRM
+  // configuration).
   developer: {
     'users.manage': N,
     'settings.general': F,
@@ -197,10 +207,12 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': F,
     'export.csv': F,
     'crm.erase': N,
+    'crm.settings': N,
     'applications.manage': N,
     'applications.pii': N,
     'analytics.read': F,
     'analytics.search': F,
+    'analytics.goals': N,
     'ai.editContent': N,
     'ai.config': N,
     'logs.view': F,

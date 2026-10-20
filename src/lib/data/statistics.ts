@@ -25,7 +25,8 @@ export async function getPublishedStatistics(
       .from('statistics')
       .select(COLUMNS)
       .eq('status', 'published')
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
     if (opts.placement) query = query.contains('placements', [opts.placement]);
     const { data, error } = await query;
     if (error) {

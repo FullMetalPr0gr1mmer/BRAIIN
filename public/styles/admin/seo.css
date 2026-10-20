@@ -1,0 +1,95 @@
+/* Screen stylesheet: SEO, /admin/seo (Admin v2 U10). Linked only through AdminLayout's
+   `styles` prop (styles={['seo.css']}), after admin.css. The table, drawer, form, badges and
+   notes are the kit's; the shared SEO panel and its previews are admin.css's (later editors
+   show the panel in their own SEO tab). Here: the tabs' sections, the Pages table's cells,
+   the Site wide layout with its "Built in" rows, and the typed confirmation. It uses
+   admin.css's tokens and declares none, and holds no colour literal
+   (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+/* A tab's heading and its line, above the table. */
+.seo-sec__t {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.seo-sec__s {
+  margin: 2px 0 14px;
+  color: var(--ad-dim);
+  font-size: 13px;
+}
+
+/* The Pages table: the page's name over its address; a Custom/Default badge over the words
+   the head shows, which may be long and unbroken. */
+.seo-cell__name {
+  display: block;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.seo-cell {
+  display: block;
+  max-inline-size: 26rem;
+  margin-block-start: 4px;
+  overflow-wrap: anywhere;
+}
+
+/* Site wide: the form, and beside it on a wide screen the "Built in" rows. */
+.seo-site {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .seo-site {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+.seo-facts {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.seo-facts li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.seo-facts li > svg {
+  flex: none;
+  margin-block-start: 3px;
+  color: var(--ad-ok-text);
+}
+
+.seo-facts__t {
+  display: block;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.seo-facts__s {
+  display: block;
+  color: var(--ad-dim);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* The typed confirmation for a site-wide noindex. */
+.seo-confirm {
+  display: grid;
+  gap: 6px;
+}
+
+.seo-confirm label {
+  font-weight: 600;
+}
+
+.seo-confirm input {
+  inline-size: 100%;
+}

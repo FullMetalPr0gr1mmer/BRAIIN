@@ -21,6 +21,8 @@ import { localizedPagePath, targetForRoute } from '@/lib/visibility/routes';
 import { pageAccessCookieName, verifyAccessCookie } from '@/lib/visibility/access';
 import { pageAccessGate } from '@/lib/visibility/gate';
 import { withPageAccess } from '@/lib/visibility/scope';
+import { handlePreview, previewConnectSources } from '@/lib/http/preview';
+import { writeSystemLog } from '@/lib/data/systemLog';
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { localeFromPath } from '@/lib/i18n';
 import { checkImageRequest, imageGuardResponse, isImageEndpoint } from '@/lib/http/imageGuard';
@@ -34,6 +36,7 @@ import {
 } from '@/lib/http/csrf';
 import { createSessionClient, clearSessionCookies, HOST_COOKIE_BASE } from '@/lib/auth/session';
 import { resolveAuthContext } from '@/lib/auth/context';
+import { TWO_STEP_PATH } from '@/lib/auth/twoStep';
 import { expiredSignInForm, tooLargeSignInForm } from '@/lib/auth/expiredForm';
 import { PRIVATE_FORM_BODY_LIMIT, bodyWithinLimit } from '@/lib/auth/bodyLimit';
 
@@ -109,6 +112,16 @@ const PRE_AUTH_PATHS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * What a session that passed the password but still owes its second step (Admin v2 U17,
+ * src/lib/auth/context.ts) may reach: the two-step page and sign-out. Read like the pre-auth
+ * list, by the path AND the route Astro matched. Everything else answers as if the request
+ * had no session, but pointing at the second step: a page redirects to /admin/2fa, the API
+ * answers 401 `two-step-required`. The pre-auth screens stay open to it (signing in as
+ * someone else, a reset link). It also gets the CSRF check and `no-store`, as any session.
+ */
+const SECOND_STEP_PATHS: ReadonlySet<string> = new Set([TWO_STEP_PATH, '/api/admin/auth/logout']);
+
+/**
  * The path the pre-auth list is read with. `trailingSlash: 'ignore'` (astro.config.mjs)
  * routes `/api/admin/auth/login/` to the sign-in endpoint too, so the list, and the body
  * limit it brings, must not depend on the slash.
@@ -120,6 +133,8 @@ function routeKey(pathname: string): string {
 const isAdminPath = (path: string): boolean => path === '/admin' || path.startsWith('/admin/');
 const isApiPath = (path: string): boolean => path.startsWith('/api/');
 const isAdminApiPath = (path: string): boolean => path.startsWith('/api/admin/');
+const isPreviewPath = (path: string): boolean =>
+  path === '/admin/preview' || path.startsWith('/admin/preview/');
 
 // What a request is (admin, API, private, pre-auth) is read from the path the middleware
 // sees AND from the route Astro matched (F7, third review), because the two can differ.
@@ -201,6 +216,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const nonce = generateNonce();
   locals.cspNonce = nonce;
   locals.session = null;
+  locals.secondStep = null;
   locals.csrfToken = '';
 
   // `secured()` is the ONLY way a response leaves this middleware.
@@ -212,7 +228,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // custom-element definition and every /admin island renders and then sits inert —
   // and relaxing the policy for dev is the precise divergence that hid this in the
   // first place. Buffering the body is acceptable at dev latency only.
-  const secured = async (response: Response): Promise<Response> => {
+  const secured = async (
+    response: Response,
+    extra: { noForms?: boolean; connectOnly?: readonly string[] } = {},
+  ): Promise<Response> => {
     const isHtml = (response.headers.get('content-type') ?? '').includes('text/html');
     let out = response;
     let extras: { scriptHashes: string[]; styleHashes: string[] } | null = null;
@@ -227,8 +246,19 @@ export const onRequest = defineMiddleware(async (context, next) => {
       nonce,
       reportOnly: CSP_REPORT_ONLY,
       ...(extras ?? {}),
+      // The page editor frames /admin/preview (Admin v2 R9): same-origin framing is admitted
+      // on admin pages only, never on a public response.
+      ...(isAdmin ? { frameSelf: true } : {}),
+      ...(extra.noForms ? { noForms: true } : {}),
+      ...(extra.connectOnly ? { connectOnly: extra.connectOnly } : {}),
     });
     if (isPrivate) out.headers.set('Cache-Control', PRIVATE_CACHE);
+    if (isPrivate) {
+      // Tier C is never indexed, and carries no cache tag a purge could mistake for a public
+      // page's (a preview renders public pages, which set one: Admin v2 R9).
+      out.headers.delete('Cache-Tag');
+      out.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    }
     return out;
   };
 
@@ -313,7 +343,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     const supabase = createSessionClient(cookies);
     locals.supabase = supabase;
 
-    const { ctx, revoke } = await resolveAuthContext(supabase);
+    const { ctx, revoke, pending = null } = await resolveAuthContext(supabase);
     // A stale, disabled or too-old session is torn down here rather than merely ignored:
     // signed out at the auth server (this session only, best effort: the refresh token in
     // the cookie stops working even if the cookie was copied), then its cookies cleared, so
@@ -323,6 +353,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       clearSessionCookies(cookies);
     }
     locals.session = ctx;
+    locals.secondStep = pending;
 
     // Mint the double-submit token on first contact so the login form itself is
     // protected (login is a state-changing POST too — CSRF-ing a victim into a session
@@ -345,11 +376,23 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Both the path and the route Astro matched must be one of the eight: a path that reads as
     // the sign-in endpoint but routes to a lead's is not pre-auth (see "What a request is").
     const preAuth = PRE_AUTH_PATHS.has(route) && PRE_AUTH_PATHS.has(matched);
+    // The same rule for the second step's two paths (U17).
+    const secondStepPath = SECOND_STEP_PATHS.has(route) && SECOND_STEP_PATHS.has(matched);
     const unauthenticated = (): Response => {
       if (isAdminApi) return jsonError(401, 'unauthenticated');
       const next = `${url.pathname}${url.search}`;
       return context.redirect(`${LOGIN_PATH}?next=${encodeURIComponent(next)}`, 302);
     };
+    // A session still owing its second step, anywhere but the second step's own paths and
+    // the pre-auth screens: no answer from the admin, only the way to the second step.
+    const owesSecondStep = pending !== null && !secondStepPath && !preAuth;
+    const toSecondStep = (): Response => {
+      if (isAdminApi) return jsonError(401, 'two-step-required');
+      const next = `${url.pathname}${url.search}`;
+      return context.redirect(`${TWO_STEP_PATH}?next=${encodeURIComponent(next)}`, 302);
+    };
+    /** Who may go on: a full session; a pending one on its paths; anyone on a pre-auth one. */
+    const admitted = ctx !== null || preAuth || (pending !== null && secondStepPath);
 
     if (!SAFE_METHODS.has(request.method)) {
       if (!isSameOrigin(request.headers.get('origin'), request.headers.get('host'))) {
@@ -359,7 +402,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
       // given before a byte of the body is read. The token check below clones a form body,
       // and until the F7 review a signed-out post of any size to any admin path was read
       // (the clone, and the original buffered behind it) before its 401.
-      if (!ctx && !preAuth) return secured(unauthenticated());
+      if (owesSecondStep) return secured(toSecondStep());
+      if (!admitted) return secured(unauthenticated());
       // Anyone can post to a pre-auth path, and its body is read several times below (the
       // token check's clone, a refused form's clone, the handler): bound it first, before
       // any of them (src/lib/auth/bodyLimit.ts). A sign-in form goes back to its page.
@@ -373,7 +417,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
         tokenInBody(request) &&
         !(await bodyWithinLimit(request, PRIVATE_FORM_BODY_LIMIT))
       ) {
-        return secured(jsonError(413, 'too-large'));
+        // The two-step page's own form goes back to it, as a sign-in screen's does.
+        return secured(tooLargeSignInForm(request, route) ?? jsonError(413, 'too-large'));
       }
       const cookieToken = cookies.get(CSRF_COOKIE_NAME)?.value ?? null;
       if (!csrfTokenMatches(cookieToken, await submittedCsrf(request))) {
@@ -385,7 +430,31 @@ export const onRequest = defineMiddleware(async (context, next) => {
       }
     }
 
-    if (!ctx && !preAuth) return secured(unauthenticated());
+    if (owesSecondStep) return secured(toSecondStep());
+    if (!admitted) return secured(unauthenticated());
+  }
+
+  // 2a) The releases preview (Admin v2 R9): a staff render of a public page with the pending
+  //     changes laid over it (src/lib/http/preview.ts decides the door, the route and the
+  //     scope). Behind the session gate above, so a request here has a session. By the path
+  //     or the route Astro matched, as for every private request; the handler maps only the
+  //     resolved path, and anything it does not know renders the preview's own 404 page.
+  if (isAdmin && (isPreviewPath(url.pathname) || isPreviewPath(matched))) {
+    const { response, rendered } = await handlePreview(
+      { request, url, nonce, locals },
+      {
+        render: (path) => next(path),
+        fallthrough: () => next(),
+        snapshot: () => getVisibilitySnapshot(env),
+        log: (entry) => writeSystemLog(entry),
+      },
+    );
+    // A rendered preview sends no form and reaches no endpoint that writes (its CSP), on top
+    // of the bridge; the preview's own 404 is an admin page and keeps the admin policy.
+    return secured(
+      response,
+      rendered ? { noForms: true, connectOnly: previewConnectSources(url.origin) } : {},
+    );
   }
 
   // 3) Render. A page whose password this request answered renders inside the page-access

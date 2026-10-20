@@ -20,9 +20,12 @@ import type { FieldComponentProps } from './types';
 // the form's "Arabic missing: N" bar. `prose` lets the Arabic lag: a neutral line says
 // "Arabic not written yet".
 //
-// `multiline` (Admin v2 U7, D14): a `bilingual` pair written as a paragraph (an FAQ answer,
-// a quote) takes a five-row textarea per language and stays required in both, unlike
-// `prose`. Unset, the field renders exactly as before.
+// `multiline` (Admin v2 U7, D14, and U10): a `bilingual` pair written as a paragraph (an
+// FAQ answer, a quote, an SEO description) takes a five-row textarea per language and stays
+// required in both, unlike `prose`. Unset, the field renders exactly as before.
+//
+// `placeholder` (Admin v2 U10): what an empty half shows, per language (an SEO override's
+// empty box shows the page's own words it keeps).
 
 type Lang = 'en' | 'ar';
 const LANGUAGE_NAME: Record<Lang, string> = { en: 'English', ar: 'Arabic' };
@@ -42,8 +45,7 @@ export default function BilingualField({
     en: typeof record['en'] === 'string' ? record['en'] : '',
     ar: typeof record['ar'] === 'string' ? record['ar'] : '',
   };
-  const multiline =
-    field.kind === 'prose' || (field.kind === 'bilingual' && field.multiline === true);
+  const multiline = field.kind === 'prose' || field.multiline === true;
   const rows = field.kind === 'bilingual' && field.multiline === true ? 5 : undefined;
   const english = text.en.trim() !== '';
   const arabicEmpty = text.ar.trim() === '';
@@ -78,6 +80,7 @@ export default function BilingualField({
       dir: lang === 'ar' ? 'rtl' : undefined,
       value: text[lang],
       maxLength: field.maxLength,
+      placeholder: field.placeholder?.[lang] || undefined,
       'aria-required':
         (lang === 'en' ? field.required === true : arabicRequired && field.required === true) ||
         undefined,

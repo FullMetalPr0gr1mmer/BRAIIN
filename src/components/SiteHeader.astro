@@ -7,6 +7,7 @@ import { filterNavForVisibility } from '@/lib/visibility/listing';
 import { isCurrentNav } from '@/lib/nav/current';
 import { getIdentity, brandName } from '@/lib/identity';
 import { localizedHref, localizedPath } from '@/lib/i18n';
+import { trackHref } from '@/lib/analytics/track';
 import logo from '@/assets/braiin-logo-white.png';
 
 // Sitewide header. Renders CMS-authored navigation (`public.navigation`, edited under
@@ -104,7 +105,12 @@ const STR = {
          stays one tap away while the full list lives in the menu. It sits BEFORE the
          toggle so the tab order runs logo → key link → menu → its panel → language. */
       key ? (
-        <a class="site-header__key" href={href(key.href)} aria-current={ariaCurrent(key.href)}>
+        <a
+          class="site-header__key"
+          href={href(key.href)}
+          aria-current={ariaCurrent(key.href)}
+          data-track={trackHref(href(key.href))}
+        >
           {label(key)}
         </a>
       ) : null
@@ -131,14 +137,22 @@ const STR = {
         {
           items.map((item) => (
             <li class:list={{ 'is-key': item.is_key }}>
-              <a href={href(item.href)} aria-current={ariaCurrent(item.href)}>
+              <a
+                href={href(item.href)}
+                aria-current={ariaCurrent(item.href)}
+                data-track={trackHref(href(item.href))}
+              >
                 {label(item)}
               </a>
               {item.children.length > 0 && (
                 <ul class="site-nav__sub">
                   {item.children.map((child) => (
                     <li>
-                      <a href={href(child.href)} aria-current={ariaCurrent(child.href)}>
+                      <a
+                        href={href(child.href)}
+                        aria-current={ariaCurrent(child.href)}
+                        data-track={trackHref(href(child.href))}
+                      >
                         {label(child)}
                       </a>
                     </li>
@@ -151,7 +165,13 @@ const STR = {
       </ul>
     </nav>
 
-    <a class="site-header__lang" href={switchHref} hreflang={otherLocale} lang={otherLocale}>
+    <a
+      class="site-header__lang"
+      href={switchHref}
+      hreflang={otherLocale}
+      lang={otherLocale}
+      data-track={otherLocale === 'ar' ? 'language_ar' : 'language_en'}
+    >
       {otherLocale === 'ar' ? 'العربية' : 'English'}
     </a>
   </div>

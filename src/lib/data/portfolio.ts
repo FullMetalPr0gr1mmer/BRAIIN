@@ -228,7 +228,8 @@ export async function getPortfolioCards(
       .from('portfolio')
       .select(CARD_COLUMNS)
       .eq('status', 'published')
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
     if (opts.featuredOnly) query = query.eq('is_featured', true);
     const { data, error } = await query;
     if (error) {
@@ -251,6 +252,8 @@ export function parseCaseStudies(rows: unknown[]): CaseStudy[] {
 }
 
 export interface CaseStudyEntry {
+  /** The project's id: its SEO row's target (the sitemap's indexability filter, U10). */
+  id: string;
   slug: string;
   title: LocalizedText;
   updatedAt: string | null;
@@ -269,12 +272,14 @@ export async function getCaseStudyIndex(): Promise<CaseStudyEntry[]> {
       .from('portfolio')
       .select(CASE_STUDY_COLUMNS)
       .eq('status', 'published')
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
     if (error) {
       reportLoadError('case_study_index', error);
       return [];
     }
     return parseCaseStudies(data ?? []).map((study) => ({
+      id: study.id,
       slug: study.slug,
       title: study.title,
       updatedAt: study.updatedAt,

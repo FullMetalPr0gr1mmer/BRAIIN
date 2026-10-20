@@ -44,7 +44,8 @@ const CHANGE: Record<ReleaseEntityType, () => Record<string, unknown>> = {
   site_profile: () => draft('site_profile', 'update', TENANT, { brandName: BI('B', 'ب') }),
   custom_theme: () => draft('custom_theme', 'delete', ID.foreign),
   entity_seo: () => draft('entity_seo', 'delete', ID.esSvc),
-  seo_defaults: () => draft('seo_defaults', 'update', TENANT, { robotsDirectives: 'noindex' }),
+  seo_defaults: () =>
+    draft('seo_defaults', 'update', TENANT, { robotsDirectives: 'noindex,follow' }),
   redirect: () => draft('redirect', 'delete', ID.foreign),
   page_visibility: () => draft('page_visibility', 'delete', ID.foreign),
   faq_item: () => draft('faq_item', 'delete', ID.fqPub),

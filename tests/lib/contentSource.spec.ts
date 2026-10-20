@@ -220,10 +220,14 @@ function builderCallbacks(ast: ts.SourceFile): number[] {
 }
 
 /**
- * The only files that may enter a preview scope (`withContentSource`), and why. Exact. Empty
- * until R9 adds the `/admin/preview` branch of src/middleware.ts, after its auth gate.
+ * The only files that may enter a preview scope (`withContentSource`), and why. Exact. R9:
+ * the `/admin/preview` branch of src/middleware.ts, which calls this one after its session
+ * gate (tests/lib/previewHandler.spec.ts drives it).
  */
-const SCOPE_ENTRIES: Record<string, string> = {};
+const SCOPE_ENTRIES: Record<string, string> = {
+  'src/lib/http/preview.ts':
+    "the /admin/preview branch: after the middleware's session gate, the preview read caps, no page-access scope, a Tier A path",
+};
 
 /** Names src/lib/preview/** never uses: it reads only through the person's own client. */
 const PREVIEW_FORBIDDEN_NAMES = [
@@ -517,7 +521,7 @@ describe('the scan behind these rules (tests/lib/sourceScan.ts)', () => {
 describe('the preview scope (R8)', () => {
   const preview = files.filter((f) => f.path.startsWith('src/lib/preview/'));
 
-  it('is entered only where listed (nowhere until R9 adds the middleware branch)', () => {
+  it('is entered only where listed (the middleware branch R9 added)', () => {
     expect(naming('withContentSource')).toEqual(
       ['src/lib/data/source.ts', ...Object.keys(SCOPE_ENTRIES)].sort(),
     );

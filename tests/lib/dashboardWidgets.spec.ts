@@ -96,7 +96,7 @@ function fakeDb(answers: Answers = {}) {
 const EVERYTHING = {
   top: ['kpis'],
   left: ['quick', 'views', 'leads', 'attention', 'health'],
-  right: ['activity', 'applications', 'pages', 'disciplines', 'notes'],
+  right: ['activity', 'applications', 'pages', 'disciplines', 'notes', 'realtime'],
   hidden: [],
 };
 
@@ -115,11 +115,22 @@ describe('the registry follows ROLE_CAPS', () => {
 
   it.each([
     ['admin', [...WIDGET_IDS]],
-    ['content_creator', ['kpis', 'quick', 'views', 'attention', 'pages', 'notes']],
-    ['seo', ['kpis', 'quick', 'views', 'attention', 'pages', 'notes']],
+    ['content_creator', ['kpis', 'quick', 'views', 'attention', 'pages', 'notes', 'realtime']],
+    ['seo', ['kpis', 'quick', 'views', 'attention', 'pages', 'notes', 'realtime']],
     [
       'developer',
-      ['kpis', 'quick', 'views', 'leads', 'health', 'activity', 'pages', 'disciplines', 'notes'],
+      [
+        'kpis',
+        'quick',
+        'views',
+        'leads',
+        'health',
+        'activity',
+        'pages',
+        'disciplines',
+        'notes',
+        'realtime',
+      ],
     ],
   ] as [Role, WidgetId[]][])('%s', (role, widgets) => {
     expect(widgetsFor(role)).toEqual(widgets);
@@ -374,9 +385,11 @@ const MIDDLEWARE = 3;
  * R5 (0066) added one read: stale pending changes are read on their own, with an exact count,
  * so they never crowd the content kinds out of the attention list's capped read. G2 added two:
  * the health widget's readings (health_probes, through loadHealthSummary) and the bell's health
- * source in the shell (docs/admin-v2/as-built/G2.md).
+ * source in the shell (docs/admin-v2/as-built/G2.md). G1b added one: the Right now widget's
+ * realtime_summary (docs/admin-v2/as-built/G1.md). U17 added one, for users.manage only:
+ * the health widget's two factor row reads the directory (staff_accounts).
  */
-const MEASURED = { loadDashboard: 26, total: 37 };
+const MEASURED = { loadDashboard: 28, total: 39 };
 
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
   // A real request has one clock: the dashboard's "Going live today" and the bell both ask

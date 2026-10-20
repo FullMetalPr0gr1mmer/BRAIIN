@@ -368,48 +368,50 @@ test.describe('as content_creator', () => {
 test.describe('without JS', () => {
   test.use({ storageState: authFile('seo'), javaScriptEnabled: false });
 
+  // The SEO screen's guide, as Admin v2 U10 rewrote it for the screen (0073 puts it through
+  // the help catalog). /admin/seo is server-rendered, so its head works without JS;
+  // /admin/redirects now answers there.
+  const SEO_GUIDE = /^SEO, share images and redirects$/;
+  // A guide row is a link named by its title AND its reading time ("… 5 min read",
+  // HelpGuideList), so the row's name starts with the title and never ends with it.
+  const SEO_GUIDE_ROW = /^SEO, share images and redirects\s*\d+ min read$/;
+
   test('"?" is a link to the help page, which lists this screen’s guides and reads one', async ({
     page,
   }) => {
     await page.goto('/admin/redirects');
+    // The old address answers on the SEO screen's Redirects tab.
+    await expect(page).toHaveURL(/\/admin\/seo\?tab=redirects$/);
     await helpButton(page).click();
-    await expect(page).toHaveURL(/\/admin\/help\?screen=%2Fadmin%2Fredirects$/);
+    await expect(page).toHaveURL(/\/admin\/help\?screen=%2Fadmin%2Fseo$/);
     const onScreen = page.getByRole('list', { name: /^on this screen$/i });
-    await onScreen.getByRole('link', { name: /SEO defaults and redirects/ }).click();
+    await onScreen.getByRole('link', { name: SEO_GUIDE_ROW }).click();
     // The screen rides along on every link the page builds.
-    await expect(page).toHaveURL(
-      /\/admin\/help\?guide=seo-and-redirects&screen=%2Fadmin%2Fredirects$/,
-    );
-    await expect(
-      page.getByRole('heading', { level: 1, name: 'SEO defaults and redirects' }),
-    ).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/help\?guide=seo-and-redirects&screen=%2Fadmin%2Fseo$/);
+    await expect(page.getByRole('heading', { level: 1, name: SEO_GUIDE })).toBeVisible();
     await page.getByRole('link', { name: 'اقرأ بالعربية' }).click();
     await expect(page).toHaveURL(
-      /\/admin\/help\?guide=seo-and-redirects&screen=%2Fadmin%2Fredirects&lang=ar$/,
+      /\/admin\/help\?guide=seo-and-redirects&screen=%2Fadmin%2Fseo&lang=ar$/,
     );
     await expect(page.locator('.hc-art')).toHaveAttribute('lang', 'ar');
 
     // So "All guides", after the language switch, still lists this screen's guides first.
     await page.getByRole('link', { name: /^all guides$/i }).click();
-    await expect(page).toHaveURL(/\/admin\/help\?screen=%2Fadmin%2Fredirects$/);
+    await expect(page).toHaveURL(/\/admin\/help\?screen=%2Fadmin%2Fseo$/);
     await expect(
       page
         .getByRole('list', { name: /^on this screen$/i })
-        .getByRole('link', { name: /SEO defaults and redirects/ }),
+        .getByRole('link', { name: SEO_GUIDE_ROW }),
     ).toBeVisible();
   });
 
   test('the page head’s "Guide" is a link to the guide; SEO gets none on Pages', async ({
     page,
   }) => {
-    await page.goto('/admin/redirects');
+    await page.goto('/admin/seo?tab=site');
     await guideButton(page).click();
-    await expect(page).toHaveURL(
-      /\/admin\/help\?guide=seo-and-redirects&screen=%2Fadmin%2Fredirects$/,
-    );
-    await expect(
-      page.getByRole('heading', { level: 1, name: 'SEO defaults and redirects' }),
-    ).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/help\?guide=seo-and-redirects&screen=%2Fadmin%2Fseo$/);
+    await expect(page.getByRole('heading', { level: 1, name: SEO_GUIDE })).toBeVisible();
 
     // The content guide is for the roles that write content; SEO opens Pages for SEO only.
     await page.goto('/admin/pages');

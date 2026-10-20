@@ -9,6 +9,7 @@ import {
   CAPTURE_VIEWPORTS,
   EDIT_SAMPLES,
   EXTRA_LINKS,
+  LOCKED_APIS,
   LOCKED_SCREENS,
   REDIRECT_PAGES,
   UNSEEDED_LISTS,
@@ -260,8 +261,14 @@ describe('the sweep route map', () => {
   it('Admin is swept on every sidebar link and tab, and the extras', () => {
     const paths = new Set(sweepRoutes('admin').map((r) => r.path));
     for (const screen of [...menuScreens(), ...EXTRA_LINKS]) {
+      // A page that only redirects is not opened as a screen (the test below), only its
+      // create and edit pages.
+      if (screen.href in REDIRECT_PAGES) continue;
       expect(paths, screen.href).toContain(screen.href);
     }
+    // U10: the redirects list moved to /admin/seo; its no-JS pages are still swept.
+    expect(paths).toContain('/admin/redirects/new');
+    expect(paths).toContain('/admin/redirects/[id]');
   });
 
   it('every role is swept on its own account and bell pages (Admin v2 F8)', () => {
@@ -331,6 +338,7 @@ describe('the locked screens the refusals e2e opens', () => {
       '/admin/audit',
       '/admin/leads',
       '/admin/leads/board',
+      '/admin/seo',
       '/admin/site-health',
     ]);
     for (const screen of server) {
@@ -350,6 +358,43 @@ describe('the locked screens the refusals e2e opens', () => {
   it('cover every role but Admin', () => {
     const covered = new Set(LOCKED_SCREENS.flatMap(refusedRoles));
     expect([...covered].sort()).toEqual(ROLES.filter((r) => r !== 'admin').sort());
+  });
+});
+
+// An API whose screen became a tab of another screen (LOCKED_APIS) is asked directly, so the
+// move does not take its negative e2e with it (CLAUDE.md §9; U10 review: the redirects list).
+describe('the locked APIs the refusals e2e asks directly', () => {
+  it('are resource lists refused for their own capability, to some role, never to Admin', () => {
+    expect(LOCKED_APIS.length).toBeGreaterThan(0);
+    for (const entry of LOCKED_APIS) {
+      const api = `src/pages${entry.api}`;
+      expect(existsSync(`${api}.ts`) || existsSync(`${api}/index.ts`), api).toBe(true);
+      const resource = RESOURCE_BY_SEGMENT[entry.api.replace(/^\/api\/admin\//, '')];
+      expect(resource, entry.api).toBeDefined();
+      expect(resource!.config.readCaps ?? [resource!.config.writeCap], entry.api).toEqual([
+        entry.cap,
+      ]);
+      const refused = refusedRoles(entry);
+      expect(refused.length, entry.api).toBeGreaterThan(0);
+      expect(refused, entry.api).not.toContain('admin');
+    }
+  });
+
+  it('a list screen that now only redirects keeps its API in the refusals e2e (U10)', () => {
+    const asked = new Set([...LOCKED_SCREENS, ...LOCKED_APIS].map((entry) => entry.api));
+    let moved = 0;
+    for (const page of Object.keys(REDIRECT_PAGES)) {
+      const resource = RESOURCE_BY_SEGMENT[page.replace(/^\/admin\//, '')];
+      if (!resource) continue; // not a list screen (/admin/media/new is an upload now)
+      const { config } = resource;
+      const caps = config.readCaps ?? [config.writeCap];
+      const gated = ROLES.some((role) => caps.every((cap) => ROLE_CAPS[role][cap] === 'none'));
+      if (!gated) continue;
+      moved += 1;
+      expect(asked, page).toContain(`/api${page}`);
+    }
+    // /admin/redirects (the SEO screen's Redirects tab since U10) is one.
+    expect(moved).toBeGreaterThan(0);
   });
 });
 
@@ -387,6 +432,7 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'Integrations /admin/integrations',
       'Users & roles /admin/users',
       'Activity log /admin/audit',
+      'CRM settings /admin/crm/settings',
     ],
   },
   // Authors and publishes; no leads, applications, settings, logs or theme.

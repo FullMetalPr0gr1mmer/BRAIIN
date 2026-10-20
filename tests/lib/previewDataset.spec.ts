@@ -290,13 +290,13 @@ describe('laying the drafts over', () => {
   it('keys the singletons on their tenant', async () => {
     const { db } = source(fixtureTables(), [
       draft('site_profile', 'update', TENANT, { brandName: BI('New name', 'اسم') }),
-      draft('seo_defaults', 'update', TENANT, { robotsDirectives: 'noindex' }),
+      draft('seo_defaults', 'update', TENANT, { robotsDirectives: 'noindex,follow' }),
     ]);
     expect(await read(db, 'site_profile', 'brand_name')).toEqual([
       { brand_name: BI('New name', 'اسم') },
     ]);
     expect(await read(db, 'seo_defaults', 'robots_directives')).toEqual([
-      { robots_directives: 'noindex' },
+      { robots_directives: 'noindex,follow' },
     ]);
   });
 });
@@ -457,6 +457,31 @@ describe("a quote's consent (0028 testimonials_consent_gate)", () => {
     expect(fake.selects['testimonials']![0]!.columns).toMatch(
       /,consent_obtained_at,is_placeholder$/,
     );
+  });
+});
+
+describe('a design sample going live (0025 production guard, R9)', () => {
+  it('a change that leaves a flagged sample published is shown and counted', async () => {
+    const tables = fixtureTables();
+    tables['testimonials']!.find((t) => t['id'] === ID.tDraft)!['is_placeholder'] = true;
+    const { db, report } = source(tables, [
+      draft('testimonial', 'update', ID.tDraft, { status: 'published' }),
+    ]);
+    expect((await read(db, 'testimonials', 'id')).map((r) => r['id'])).toContain(ID.tDraft);
+    expect(report.samples).toBe(1);
+    expect(report.invalid).toEqual([]);
+  });
+
+  it('a change to a real row, or one that keeps a sample off the site, counts nothing', async () => {
+    const tables = fixtureTables();
+    tables['testimonials']!.find((t) => t['id'] === ID.tDraft)!['is_placeholder'] = true;
+    tables['testimonials']!.find((t) => t['id'] === ID.tDraft)!['consent_obtained_at'] =
+      '2026-01-01T00:00:00+00:00';
+    const { db, report } = source(tables, [
+      draft('testimonial', 'update', ID.tDraft, { status: 'draft' }),
+    ]);
+    await read(db, 'testimonials', 'id');
+    expect(report.samples).toBe(0);
   });
 });
 

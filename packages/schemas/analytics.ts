@@ -9,11 +9,50 @@ import { LocaleSchema } from './primitives';
 // service-role insert, so the schema is the row-size bound (the WAF rate limit is the
 // row-count bound). An unbounded `path` or `props` here is a storage-amplification
 // primitive available to anyone with curl.
+//
+// Admin v2 G1: each type carries exactly the props its rollup reads, nothing else
+// (`.strict()` everywhere: an unknown key is a 422). The click vocabulary is closed (CTA_IDS),
+// so a client cannot invent event names no dashboard reads and no retention rule anticipates.
 
-export const AnalyticsEventSchema = z.object({
-  // Closed set, not free text: an open `event_type` lets a client invent event names
-  // that no dashboard reads and no retention rule anticipates.
-  type: z.enum(['pageview', 'cta_click', 'service_interest', 'search']),
+/**
+ * The links the public site counts a click on (`data-track="<id>"`, one delegated listener in
+ * src/lib/client/analytics.ts). Only ids that render: there is no `tel:` link on the site, so
+ * no phone id. tests/lib/analyticsVocabulary.spec.ts holds this list equal to the values the
+ * components render, each one used.
+ */
+export const CTA_IDS = [
+  'whatsapp',
+  'email',
+  'skip_to_inquiry',
+  'start_project',
+  'language_ar',
+  'language_en',
+  'discipline_card',
+  'project_card',
+  'contact_link',
+] as const;
+export type CtaId = (typeof CTA_IDS)[number];
+
+/**
+ * The clicks that count as "reached an inquiry form" in the stats funnel, beside a page view
+ * of the contact page. Mirrored as a literal in the visits rollup (migration 0071,
+ * app.rollup_visits); the vocabulary spec holds the two equal.
+ */
+export const INQUIRY_CTAS = [
+  'skip_to_inquiry',
+  'start_project',
+  'contact_link',
+] as const satisfies readonly CtaId[];
+
+/** A service page, in either language (the funnel's second step). Equal to the rollup's. */
+export const SERVICE_PATH = /^(\/ar)?\/services\/[^/?#]+\/?$/;
+/** The contact page, in either language (an inquiry form). Equal to the rollup's. */
+export const INQUIRY_PATH = /^(\/ar)?\/contact\/?$/;
+
+/** A discipline's or a service's slug, as the explorer names it. */
+const InterestSlugSchema = z.string().regex(/^[a-z0-9-]{1,64}$/);
+
+const base = {
   /** Site-relative path only — never a full URL, which could carry a query string. */
   path: z
     .string()
@@ -30,11 +69,32 @@ export const AnalyticsEventSchema = z.object({
     .max(64)
     .regex(/^[A-Za-z0-9_-]*$/)
     .optional(),
-  props: z
-    .record(z.string().max(40), z.union([z.string().max(200), z.number(), z.boolean()]))
-    .refine((value) => Object.keys(value).length <= 10, { message: 'at most 10 props' })
-    .optional(),
-});
+};
+
+export const AnalyticsEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('pageview'), ...base }).strict(),
+  z
+    .object({
+      type: z.literal('cta_click'),
+      ...base,
+      props: z.object({ cta: z.enum(CTA_IDS) }).strict(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('service_interest'),
+      ...base,
+      // Exactly one of the two: a discipline's panel opened, or a service chosen.
+      props: z.union([
+        z.object({ discipline: InterestSlugSchema }).strict(),
+        z.object({ service: InterestSlugSchema }).strict(),
+      ]),
+    })
+    .strict(),
+  // Nothing sends it yet (the search endpoint logs its own ledger); kept in the closed set
+  // with no props.
+  z.object({ type: z.literal('search'), ...base }).strict(),
+]);
 export type AnalyticsEvent = z.infer<typeof AnalyticsEventSchema>;
 
 /** Consent record posted by the banner. */

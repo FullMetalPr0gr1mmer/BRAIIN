@@ -18,6 +18,9 @@ declare namespace App {
     cspNonce: string;
     // Resolved auth context (null for anonymous public requests).
     session: import('@/lib/auth/types').AuthContext | null;
+    // A session that passed the password but still owes its second step (Admin v2 U17): no
+    // context, only this. The middleware lets it reach /admin/2fa and sign-out, nothing else.
+    secondStep: import('@/lib/auth/twoStep').PendingSecondStep | null;
     // Double-submit CSRF token for admin mutations ('' on public routes).
     csrfToken: string;
     // Request-scoped, cookie-bound Supabase client for /admin and /api/admin. Carries
@@ -32,5 +35,10 @@ declare namespace App {
     // sitemap and llms.txt leave out what it does not list. Absent on /admin, /api and the
     // health probe, and in a render with no middleware: read as "every page public".
     visibility?: import('@/lib/http/visibility').VisibilitySnapshot;
+    // The releases preview (Admin v2 R9), set by its middleware branch
+    // (src/lib/http/preview.ts) on a `/admin/preview/**` render only: BaseLayout drops the
+    // consent banner and telemetry, says noindex and loads the bridge; SectionRenderer marks
+    // each section. Absent on every public request.
+    preview?: import('@/lib/http/preview').PreviewLocals;
   }
 }

@@ -130,6 +130,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
     expect([...ADMIN_STYLESHEETS].sort()).toEqual([
       'activity.css',
       'collection.css',
+      'crm-settings.css',
       'dashboard.css',
       'health.css',
       'help.css',
@@ -139,7 +140,9 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'media.css',
       'personal.css',
       'search.css',
+      'seo.css',
       'stats.css',
+      'two-step.css',
       'users.css',
       'visibility.css',
     ]);
@@ -309,7 +312,15 @@ describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
 
 describe('admin.css keeps the hooks the markup renders', () => {
   // Classes that are behaviour or test hooks with no style of their own.
-  const UNSTYLED_HOOKS = new Set(['admin-nav']);
+  // The preview bridge's classes (Admin v2 R9) are drawn inside a PUBLIC page, so they live in
+  // public/styles/preview.css, which the preview links instead of admin.css (checked below).
+  const PREVIEW_CLASSES = new Set(['pv-notice', 'pv-highlight']);
+  const UNSTYLED_HOOKS = new Set(['admin-nav', ...PREVIEW_CLASSES]);
+
+  it('the preview bridge’s classes are styled by the preview’s own sheet', () => {
+    const sheet = read('public/styles/preview.css');
+    for (const c of PREVIEW_CLASSES) expect(sheet, c).toContain(`.${c} {`);
+  });
 
   function walk(dir: string): string[] {
     return readdirSync(join(ROOT, dir)).flatMap((name) => {
@@ -433,12 +444,15 @@ describe('admin.css keeps the hooks the markup renders', () => {
       // they share, src/layouts/AuthLayout.astro, which the walk traces to all four (the
       // invite page joined in U12b).
       expect(pagesFor('login.css')).toEqual([
+        // U17: the two step page in the sign-in shell (a session that owes its code).
+        'src/pages/admin/2fa.astro',
         'src/pages/admin/forgot.astro',
         'src/pages/admin/invite.astro',
         'src/pages/admin/login.astro',
         'src/pages/admin/reset.astro',
       ]);
       expect(pagesOf('src/layouts/AuthLayout.astro').sort()).toEqual([
+        'src/pages/admin/2fa.astro',
         'src/pages/admin/forgot.astro',
         'src/pages/admin/invite.astro',
         'src/pages/admin/login.astro',
@@ -451,6 +465,10 @@ describe('admin.css keeps the hooks the markup renders', () => {
         'src/pages/admin/media/index.astro',
       ]);
       expect(pagesFor('users.css')).toEqual(['src/pages/admin/users.astro']);
+      // The SEO screen (U10): its page renders the sections, its island the table and dialogs.
+      expect(pagesFor('seo.css')).toEqual(['src/pages/admin/seo.astro']);
+      // The two step page (U17), in either frame: its panel's classes are this sheet's.
+      expect(pagesFor('two-step.css')).toEqual(['src/pages/admin/2fa.astro']);
       expect(pagesFor('personal.css')).toEqual([
         'src/pages/admin/account.astro',
         'src/pages/admin/notifications.astro',

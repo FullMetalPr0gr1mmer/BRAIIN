@@ -208,7 +208,7 @@ Generated `search_en`/`search_ar` tsvector + GIN. English=`'english'`; Arabic no
 `UNION ALL` over services + portfolio + blog behind the single `search_content` accessor, each branch projecting `(entity_type, id, slug, title, snippet, ts_rank(...) as rank)`, ordered by `rank` with `LIMIT`. No materialised cross-entity index in v1 (a materialised view is a behind-the-accessor escalation). Did-you-mean/suggestions via `pg_trgm` similarity on zero/low-result queries.
 
 ### 2.9 Telemetry tables (partitioned, retention-bounded)
-`analytics_events` (range-partitioned by `occurred_at`). All telemetry is **consent-gated** at the write boundary by the single `hasConsent(req,'analytics')` gate in **§4.12** — no row without analytics consent. Dashboards read only `rollup_*` tables. Raw retention is the single named constant `RAW_TELEMETRY_RETENTION` (value/SQL in §8.3); `system_logs` 30 days; `audit_log` never auto-dropped.
+`analytics_events` (range-partitioned by `occurred_at`). All telemetry is **consent-gated** at the write boundary by the single `hasConsent(req,'analytics')` gate in **§4.12** — no row without analytics consent. Dashboards read only `rollup_*` tables; since Admin v2 G1 (0071) raw `analytics_events` and `web_vitals` are read and written by the service role only (no staff grant or policy), and the stats' visits, events, busiest hours and realtime come from `rollup_daily_visits`, `rollup_daily_events`, `rollup_hourly_pageviews` and `rollup_minute_activity`. Raw retention is the single named constant `RAW_TELEMETRY_RETENTION` (value/SQL in §8.3); `system_logs` 30 days; `audit_log` never auto-dropped.
 
 ### 2.10 Requirements closed
 #3 (RBAC schema half + `login_attempts`/lockout columns), #6 (redirects v1), #10 (analytics canonical + retention with the single `RAW_TELEMETRY_RETENTION` constant), #12 (tenancy); supports #2, #9 (`consent_log` + leads `consent_marketing`; full store/gate is §4.12), #13. Also models `team_members`, `certifications`, `statistics`, `media_assets.folder`/`tags`; dashboard banners are derived views.
@@ -251,6 +251,7 @@ Legend: ● full · ◐ limited/own · ○ none.
 | **Redirects & canonicals** | ● | ○ | ● | ○ |
 | Analytics — read dashboards | ● | ● | ● | ● |
 | Search analytics | ● | ○ | ● | ● |
+| Analytics goals — set | ● | ○ | ● | ○ |
 | AI Style-Finder — questions/styles editor | ● | ● | ○ | ○ |
 | AI Style-Finder — results/logic config | ● | ○ | ○ | ○ |
 | Exports — `export-csv` (leads/analytics/activity) | ● | ○ | ○ | ● |
@@ -258,6 +259,7 @@ Legend: ● full · ◐ limited/own · ○ none.
 | Leads — list/manage (status, notes) | ● | ○ | ○ | ● |
 | **Leads — budget/timeline/internal_notes/ip (PII)** | ● | ○ | ○ | ● |
 | **Leads & contacts — erase a person's data (DSAR)** | ● | ○ | ○ | ○ |
+| CRM settings — pipeline stages, scoring, response time, assignment | ● | ○ | ○ | ○ |
 | Job applications — view / manage status / notes / erase | ● | ○ | ○ | ○ |
 | **Job applications — contact details & CV download (PII)** | ● | ○ | ○ | ○ |
 | Theme editor | ● | ○ | ○ | ● |
@@ -273,13 +275,13 @@ Legend: ● full · ◐ limited/own · ○ none.
 // src/lib/authz/matrix.ts
 export const CAPS = ['content.read','content.write','content.publish','content.delete',
   'users.manage','settings.write','maintenance.write','integrations.write','seo.meta',
-  'redirects.write','analytics.read','search.analytics','exports.leads','exports.backup',
+  'redirects.write','analytics.read','search.analytics','analytics.goals','exports.leads','exports.backup',
   'leads.manage','leads.sensitive','media.write','media.delete','theme.write','logs.view',
-  'logs.clear','audit.view','sitehealth.view','crm.erase'] as const;
+  'logs.clear','audit.view','sitehealth.view','crm.erase','crm.settings'] as const;
 export const ROLE_CAPS: Record<AppRole, ReadonlySet<Cap>> = {
   admin: new Set(CAPS),
   content_creator: new Set(['content.read','content.write','content.publish','seo.meta','media.write','analytics.read']),
-  seo: new Set(['content.read','seo.meta','redirects.write','integrations.write','analytics.read','search.analytics','media.write']),
+  seo: new Set(['content.read','seo.meta','redirects.write','integrations.write','analytics.read','search.analytics','analytics.goals','media.write']),
   developer: new Set(['settings.write','maintenance.write','theme.write','analytics.read','search.analytics','media.write',
     'exports.leads','exports.backup','leads.manage','leads.sensitive','logs.view','audit.view','sitehealth.view']),
 };
@@ -412,7 +414,7 @@ update partman.part_config
        retention_keep_table = false
  where parent_table = 'public.analytics_events';
 ```
-`web_vitals` 90d; `system_logs` 30d; `audit_log` indefinite. Rollups idempotent (`on conflict … do update`); rollup schema must lead dashboard requirements (R45).
+`web_vitals` 90d; `system_logs` 30d; `audit_log` indefinite. Rollups idempotent (`on conflict … do update`); rollup schema must lead dashboard requirements (R45). Raw telemetry is readable by the service role only (0071, Admin v2 G1); the stats' daily and hourly rollups keep 400 days, the realtime minute rollup 48 hours (docs/retention.md).
 
 ### 8.4 Schema-wide tenancy; 8.5 build time stays flat
 Tenant predicate first in every policy and composite index. **§8.5 freshness mechanism:** the authoritative, guaranteed mechanism is the explicit edge tag purge (§1.4(b)/§1.6) on cache-backed-SSR Tier-A routes; `Astro.cache.set` dependency-tracing is an optional optimisation enabled only after staging verification (R43, launch-blocking; fallback `POST /api/revalidate`).
@@ -425,7 +427,7 @@ Tenant predicate first in every policy and composite index. **§8.5 freshness me
 ## 9. CI/CD, Testing, Observability, DR & Notifications
 
 ### 9.1–9.5 Type safety, testing pyramid, per-role authz, CI/CD, a11y
-TypeScript strict; Zod single source. **The authz matrix (§9.3)** is byte-for-byte consistent with §3.4 and CLAUDE.md §5: `service.publish` = Admin+Content Creator; `read lead.budget/timeline` = Admin+Developer; `content.write` = Admin+Content Creator; `settings.write/export-backup` = Admin+Developer; `integrations.write/seo_meta/redirects.write` = Admin+SEO; `crm.erase` (erasing a lead, then a person's data) = Admin only; `audit_log.delete` = deny all. Plus the targeted regression tests: anon tenant fence, live-recheck, lead-PII, notify-lead 401, search safety, role-matrix snapshot, AI limits, audit chain. CI gate order mirrors pillars. Three isolated Supabase projects; no preview deployments — a PR builds the production Worker and dry-runs `wrangler deploy` (`deploy-preflight`), and the browser suites run against the built Worker under `wrangler dev`; only `main` deploys, from CI, after every gate (CLAUDE.md §2, deploys amendment). WCAG 2.2 AA blocking (axe + 4 targeted checks).
+TypeScript strict; Zod single source. **The authz matrix (§9.3)** is byte-for-byte consistent with §3.4 and CLAUDE.md §5: `service.publish` = Admin+Content Creator; `read lead.budget/timeline` = Admin+Developer; `content.write` = Admin+Content Creator; `settings.write/export-backup` = Admin+Developer; `integrations.write/seo_meta/redirects.write` = Admin+SEO; `crm.erase` (erasing a lead, then a person's data) = Admin only; `crm.settings` (the pipeline stages, scoring points, response time and assignment) = Admin only; `analytics.goals` (setting the website stats' goals) = Admin+SEO; `audit_log.delete` = deny all. Plus the targeted regression tests: anon tenant fence, live-recheck, lead-PII, notify-lead 401, search safety, role-matrix snapshot, AI limits, audit chain. CI gate order mirrors pillars. Three isolated Supabase projects; no preview deployments — a PR builds the production Worker and dry-runs `wrangler deploy` (`deploy-preflight`), and the browser suites run against the built Worker under `wrangler dev`; only `main` deploys, from CI, after every gate (CLAUDE.md §2, deploys amendment). WCAG 2.2 AA blocking (axe + 4 targeted checks).
 
 ### 9.6 Observability
 Operational telemetry (Sentry same-origin tunnel + `system_logs`, synthetics, `/healthz`) is legitimate-interest, PII-scrubbed, consent-independent. **Field web-vitals (RUM) is consent-gated** (carries `session_id`, `analytics` category) — client checks before `sendBeacon`, the same-origin Worker endpoint re-checks server-side (§4.12).

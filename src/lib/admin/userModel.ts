@@ -21,6 +21,11 @@ export interface UserRow {
   confirmed: boolean;
   lastSignInAt: string | null;
   isOwner: boolean;
+  /**
+   * A verified authenticator app (Admin v2 U17, staff_accounts.two_step); null when the
+   * directory could not be read or predates 0072 (the table shows a dash).
+   */
+  twoStep: boolean | null;
   status: UserStatus;
 }
 
@@ -140,6 +145,8 @@ export function isOwnerGuardError(error: { code?: string; message?: string } | n
 export interface SecuritySettings {
   sessionMaxDays: 1 | 7;
   inviteDomain: string | null;
+  /** "Require 2FA for everyone" (Admin v2 U17, 0072). */
+  requireMfa: boolean;
   /** 0 before the row exists: the first save creates it. */
   version: number;
 }
@@ -147,6 +154,7 @@ export interface SecuritySettings {
 export const SECURITY_DEFAULTS: SecuritySettings = {
   sessionMaxDays: 7,
   inviteDomain: null,
+  requireMfa: false,
   version: 0,
 };
 
@@ -156,6 +164,7 @@ export function securityFromRow(row: Record<string, unknown> | null): SecuritySe
   return {
     sessionMaxDays: row['session_max_days'] === 1 ? 1 : 7,
     inviteDomain: text(row['invite_domain']),
+    requireMfa: row['require_mfa'] === true,
     version: typeof row['version'] === 'number' ? row['version'] : 0,
   };
 }
@@ -175,4 +184,37 @@ export function inviteDomainRefusal(email: string, domain: string | null): strin
           .trim()
           .toLowerCase();
   return host === domain ? null : `Only ${domain} addresses can be invited. Change it in Security.`;
+}
+
+// ── Two factor authentication (Admin v2 U17) ──────────────────────────────────────────
+
+/** Reset 2FA refused: it is the caller's own (they turn it off on their own account). */
+export const TWO_STEP_SELF_RESET =
+  'You cannot reset your own 2FA here. Manage it from your account instead.';
+
+/** Reset 2FA refused for the account owner (launch runbook §3a: whoever runs the database). */
+export const TWO_STEP_OWNER_RESET =
+  "Only whoever runs the database can reset the account owner's 2FA.";
+
+/** Reset 2FA refused: the person has no authenticator app (nothing to reset, nobody signed out). */
+export const TWO_STEP_NOTHING_TO_RESET = 'They do not use 2FA, so there is nothing to reset.';
+
+/** Require 2FA refused: the Admin saving it does not use 2FA themselves (decision D5). */
+export const REQUIRE_MFA_SELF_FIRST = 'Turn on 2FA for your own account first.';
+
+/** Whether an Admin can reset this person's 2FA from the users screen. */
+export function canResetTwoStep(
+  row: Pick<UserRow, 'id' | 'isOwner' | 'twoStep'>,
+  selfId: string,
+): boolean {
+  return row.twoStep === true && !row.isOwner && row.id !== selfId;
+}
+
+/** Require 2FA's confirm: the sentence about who is not set up yet. */
+export function notSetUpSentence(count: number | null): string {
+  if (count === null) return 'Some people may not have set it up yet.';
+  if (count === 0) return 'Everyone has set it up already.';
+  return count === 1
+    ? '1 person has not set it up yet.'
+    : `${count} people have not set it up yet.`;
 }

@@ -223,6 +223,12 @@ const EXACT: Readonly<Record<string, Label>> = {
     titled: true,
   },
 
+  // Website stats goals (G1c): immediate, not in RESOURCES, so their kernel actions are
+  // named here. A goal's name is admin text; only the act is described.
+  'analytics_goal.create': { kind: 'settings', verb: 'Added', noun: 'a website stats goal' },
+  'analytics_goal.update': { kind: 'settings', verb: 'Updated', noun: 'a website stats goal' },
+  'analytics_goal.delete': { kind: 'settings', verb: 'Deleted', noun: 'a website stats goal' },
+
   // The dashboard (U1): the shared note (its length only is recorded, never its words) and
   // the owner's presets per role.
   'dashboard.notes.update': { kind: 'edits', verb: 'Updated', noun: 'the team notes' },
@@ -303,6 +309,11 @@ const EXACT: Readonly<Record<string, Label>> = {
   },
   'auth.password_reset': { kind: 'users', verb: 'Reset their password', noun: null },
   'auth.invite_accepted': { kind: 'users', verb: 'Accepted their invite', noun: null },
+  // Admin v2 U17 (0072): two factor authentication. Reset is written by public.reset_two_step
+  // in the transaction that resets; on and off by the /admin/2fa page as the person.
+  'auth.two_step_on': { kind: 'users', verb: 'Turned on 2FA', noun: null },
+  'auth.two_step_off': { kind: 'users', verb: 'Turned off 2FA', noun: null },
+  'user.two_step_reset': { kind: 'users', verb: 'Reset the 2FA of', noun: 'a member' },
 
   // Pending changes thrown away in one go (Admin v2 R3b): ids and types only, never values.
   'drafts.discard_bulk': {
@@ -347,6 +358,9 @@ const EXACT: Readonly<Record<string, Label>> = {
     verb: 'Set a password on',
     noun: 'a page',
   },
+  // CRM settings for leads (C9a): which card changed, never its values.
+  'crm.settings.update': { kind: 'settings', verb: 'Changed', noun: 'the CRM settings' },
+  'crm.stages.update': { kind: 'settings', verb: 'Changed', noun: 'the pipeline stages' },
   'logs.clear': { kind: 'settings', verb: 'Cleared', noun: 'old error logs' },
   'export.backup.attempt': { kind: 'settings', verb: 'Started downloading', noun: 'a backup' },
   'export.backup.outcome': {
