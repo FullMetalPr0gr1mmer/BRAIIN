@@ -358,6 +358,9 @@ const EXACT: Readonly<Record<string, Label>> = {
     verb: 'Set a password on',
     noun: 'a page',
   },
+  // CRM settings for leads (C9a): which card changed, never its values.
+  'crm.settings.update': { kind: 'settings', verb: 'Changed', noun: 'the CRM settings' },
+  'crm.stages.update': { kind: 'settings', verb: 'Changed', noun: 'the pipeline stages' },
   'logs.clear': { kind: 'settings', verb: 'Cleared', noun: 'old error logs' },
   'export.backup.attempt': { kind: 'settings', verb: 'Started downloading', noun: 'a backup' },
   'export.backup.outcome': {

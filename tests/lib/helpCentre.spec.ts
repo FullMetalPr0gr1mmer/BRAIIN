@@ -1389,6 +1389,55 @@ describe('the guides say only what the admin does', () => {
   });
 });
 
+describe('the CRM settings guide says what the screen does (C9a)', () => {
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const guide = () => SET.find((a) => a.slug === 'crm-settings')!;
+  const en = () => textsOf(guide(), 'en').join('\n');
+
+  it('is Admin’s (crm.settings), on its screen, in the place after the leads guide', () => {
+    expect(guide().caps).toEqual(['crm.settings']);
+    expect(guide().screens).toEqual(['/admin/crm/settings']);
+    expect(guide().sort_order).toBe(75);
+    for (const role of ROLES) {
+      expect(mayRead(role, guide().caps), role).toBe(ROLE_CAPS[role]['crm.settings'] === 'full');
+    }
+  });
+
+  it('gives the limits the schema and the database hold', async () => {
+    const crm = await import('@schemas/crm');
+    expect(en()).toContain(`${crm.MIN_STAGES} to ${crm.MAX_STAGES} stages`);
+    expect(en()).toContain(`0 to ${crm.MAX_SIGNAL_POINTS} points`);
+    expect(en()).toContain(`never goes above ${crm.MAX_LEAD_SCORE}`);
+  });
+
+  it('names the controls the screen draws, in both languages', () => {
+    const screen = ['StagesCard', 'ScoringCard', 'ResponseCard']
+      .map((f) => source(`src/components/admin/screens/crmSettings/${f}.tsx`))
+      .join('\n');
+    const copy = source('src/components/admin/screens/crmSettings/copy.ts');
+    for (const control of [
+      'Add stage',
+      'Move up',
+      'Move down',
+      'Save stages',
+      'Save scoring',
+      'Answer new leads within',
+      'New leads go to',
+    ]) {
+      expect(screen, control).toContain(control);
+      expect(en(), control).toContain(control);
+      expect(textsOf(guide(), 'ar').join('\n'), control).toContain(control);
+    }
+    for (const rule of ['Manual', 'Round robin', 'Always to one person']) {
+      expect(copy, rule).toContain(`label: '${rule}'`);
+      expect(en(), rule).toContain(rule);
+    }
+    // The flag the leads list shows past the response time, in its words.
+    expect(source('src/lib/crm/leadView.ts')).toContain('Over response time');
+    expect(en()).toContain('Over response time');
+  });
+});
+
 // ── 1d. A guide put through H11's catalog (Admin v2 G1) ────────────────────────────────
 // G1 rewrites website-stats for the tabs it adds, with one top-level app.put_help_guide in its
 // migration (no slice restates app.help_article_set() since H11). The guide's text is
@@ -1854,6 +1903,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
     expect(shown('content_creator')).toEqual([
       'finding-your-way',
       'media-library',
+      'previewing-changes',
       'roles-and-access',
       'saving-and-publishing',
       'style-finder',
@@ -1867,6 +1917,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
     expect(shown('seo')).toEqual([
       'finding-your-way',
       'media-library',
+      'previewing-changes',
       'roles-and-access',
       'seo-and-redirects',
       'website-stats',
@@ -1882,6 +1933,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'media-library',
       'page-visibility',
       'personal-data',
+      'previewing-changes',
       'roles-and-access',
       'site-health-and-logs',
       'website-stats',

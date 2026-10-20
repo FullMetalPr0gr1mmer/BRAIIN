@@ -430,6 +430,7 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'Integrations /admin/integrations',
       'Users & roles /admin/users',
       'Activity log /admin/audit',
+      'CRM settings /admin/crm/settings',
     ],
   },
   // Authors and publishes; no leads, applications, settings, logs or theme.

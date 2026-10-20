@@ -13,7 +13,7 @@
 - **Roles** (A2/A4, RLS):
   - 5 roles;
   - no editable matrix, per-person grants or View as;
-  - Developer gets no CRM (O-7);
+  - Developer gets no CRM (O-7), and no CRM settings: `crm.settings` is Admin only (§5 amended in C9a);
   - Site health stays Admin + Developer.
 - **Publishing**:
   - per area (P-2);
@@ -72,6 +72,7 @@
   - the list and the board are the Leads area's List | Pipeline tabs (links, zero JS), not the prototype's Inbox | Pipeline segmented switch: "Inbox" is reserved for L6's messaging (C4c, D2);
   - the board has no pointer drag yet: "Move to…" on every card is the one way to move a lead there (the prototype's native drag is optional in crm.md and would need the kit's Sortable core in cross-list mode and a pass of the sweep; C4c, D5); its sub-line says "Use Move to… on a card", not "Drag a card";
   - the board was carved out of C4b by size (the Wave 3 brief, §13) and ships as C4c, its help line in its own restatement (0068, after G2's 0067; every later Wave 3 reservation moved up by one);
+  - CRM settings (C9a): a stage's colour is one of six named tones, never a free colour (CSP; each tone AA-checked); stages reorder with Move up / Move down, not drag; a stage that holds leads cannot be removed or change what it counts as until its leads move; the cards are Pipeline stages, Lead scoring and Response time and assignment only (custom fields and contact stages arrive with contacts, C9b; retention stays in General settings; the messaging cards wait for L6; the time zone is General's, B7.5);
   - no client-side CSV;
   - Mark as spam + Admin-only Erase instead of delete;
   - no keystroke autosave;
