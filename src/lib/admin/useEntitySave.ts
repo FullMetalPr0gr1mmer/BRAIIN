@@ -34,6 +34,11 @@ type Row = Record<string, unknown>;
 export interface EntitySave {
   isNew: boolean;
   values: Row;
+  /**
+   * The values as loaded or last saved (Admin v2 U8 review): what is stored, for anything
+   * that must describe the record as it is, not as typed ("Open on site").
+   */
+  saved: Row;
   set(name: string, value: unknown): void;
   version: number;
   /** Loading the row, or saving it. */
@@ -199,6 +204,7 @@ export function useEntitySave(
   return {
     isNew,
     values: state.values,
+    saved: state.initial,
     set: useCallback((name: string, value: unknown) => dispatch({ type: 'set', name, value }), []),
     version: state.version,
     busy: state.phase === 'loading' || state.phase === 'saving',

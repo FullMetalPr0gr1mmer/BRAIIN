@@ -20,9 +20,12 @@ const FIELDS: FieldDef[] = [
 ];
 
 function fakeSave(patch: Partial<EntitySave> = {}): EntitySave {
+  // What is stored follows what is shown unless a test says otherwise (an unsaved edit).
+  const values = patch.values ?? { slug: 'logo', title: { en: 'Logo', ar: 'الشعار' } };
   return {
     isNew: false,
-    values: { slug: 'logo', title: { en: 'Logo', ar: 'الشعار' } },
+    values,
+    saved: values,
     set: () => undefined,
     version: 4,
     busy: false,
@@ -240,6 +243,29 @@ describe('EditorForm in tabs and read-only (Admin v2 U8b)', () => {
       publicHref: blog.publicHref,
     });
     expect(draft).not.toContain('Open on site');
+  });
+
+  it('"Open on site" reads the post as saved, never unsaved edits (U8 review)', () => {
+    const extra = { publicHref: blog.publicHref };
+    // Published chosen, not saved yet: the page does not exist.
+    const chosen = render(
+      fakeSave({ values, saved: { ...values, status: 'draft' }, dirty: true }),
+      blog.fields,
+      extra,
+    );
+    expect(chosen).not.toContain('Open on site');
+    // A published post's slug edited, not saved: the page is still at the stored slug.
+    const renamed = render(
+      fakeSave({ values: { ...values, slug: 'colour-two' }, saved: values, dirty: true }),
+      blog.fields,
+      extra,
+    );
+    expect(renamed).toContain('href="/creative-knowledge/colour"');
+    expect(renamed).not.toContain('href="/creative-knowledge/colour-two"');
+    // A new record has no address, whatever its values say.
+    expect(render(fakeSave({ values, isNew: true }), blog.fields, extra)).not.toContain(
+      'Open on site',
+    );
   });
 
   it('a rich text is told it is read-only (a disabled fieldset does not stop contenteditable)', () => {

@@ -147,6 +147,8 @@ test.describe('as Admin', () => {
     await author.selectOption({ index: 1 });
     await tab(page, 'Publishing').click();
     await page.locator('#f-status').selectOption('published');
+    // Chosen, not saved: the page does not exist yet, so nothing links to it.
+    await expect(page.getByRole('link', { name: 'Open on site' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.locator('.save-status')).toContainText(/Saved/);
     await expect(tab(page, 'Content')).toBeVisible();

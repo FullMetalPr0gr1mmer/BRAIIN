@@ -47,7 +47,9 @@ import {
 //     capability): the fields inside a disabled <fieldset>, a rich text not editable
 //     (FieldsReadOnly), no Save and no Ctrl/⌘+S, and `readOnlyNote` as a note above the
 //     fields. UX only: the server refuses a write whatever this shows.
-// `publicHref` adds "Open on site" to the action bar when it gives an address. Field groups
+// `publicHref` adds "Open on site" to the action bar when it gives an address, read from the
+// record as saved (`save.saved`), never from unsaved edits: choosing Published, or editing a
+// published post's slug, links nowhere until it is saved. Field groups
 // (U9a) compose inside a field tab: a group renders in its tab's card, never across two tabs.
 // The tab API is frozen in docs/admin-v2/as-built/U8.md for U5 and U6.
 
@@ -77,7 +79,7 @@ export interface EditorFormProps {
   readOnly?: boolean | undefined;
   /** What a read-only role is told, above the fields. */
   readOnlyNote?: ReactNode;
-  /** The record's public address ("Open on site"), or null. */
+  /** The record's public address ("Open on site"), or null; given the saved values. */
   publicHref?: ((values: Readonly<Record<string, unknown>>) => string | null) | undefined;
 }
 
@@ -244,7 +246,8 @@ export default function EditorForm({
       </fieldset>
     );
   }
-  const href = publicHref?.(save.values) ?? null;
+  // The stored record's address: a new record has none, and an unsaved edit moves nothing.
+  const href = save.isNew ? null : (publicHref?.(save.saved) ?? null);
 
   const form = (
     // noValidate: an input of the hidden language must never block a save silently (a
