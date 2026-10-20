@@ -22,7 +22,8 @@ export async function getPublishedPosts() {
       .from('blog_posts')
       .select(COLUMNS)
       .eq('status', 'published')
-      .order('published_at', { ascending: false, nullsFirst: false });
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: true });
     if (error || !data) return [];
     return parseRows(PostRowSchema, data, 'blog_post');
   } catch {

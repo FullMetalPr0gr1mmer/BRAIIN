@@ -74,11 +74,45 @@ export interface CspOptions {
    */
   scriptHashes?: readonly string[];
   styleHashes?: readonly string[];
+  /**
+   * `/admin/**` only (Admin v2 R9): `frame-src` also admits `'self'`, because the page editor
+   * frames `/admin/preview`. A public response never frames its own origin.
+   */
+  frameSelf?: boolean;
+  /**
+   * A preview render only (R9): `form-action 'none'`, so a public form shown in the preview
+   * can never send, whatever its markup or the bridge does.
+   */
+  noForms?: boolean;
+  /**
+   * A preview render only (R9): `connect-src` lists exactly these absolute URLs instead of
+   * `'self'` (`'none'` when empty), so a page script can reach only the endpoints known to
+   * write nothing, whether or not the bridge has replaced `fetch` yet.
+   */
+  connectOnly?: readonly string[];
 }
 
 interface CspExtras {
   scriptHashes?: readonly string[];
   styleHashes?: readonly string[];
+  frameSelf?: boolean;
+  noForms?: boolean;
+  connectOnly?: readonly string[];
+}
+
+/** A source an exact-URL connect-src may hold: an http(s) origin and a path, nothing else. */
+const CONNECT_SOURCE =
+  /^https?:\/\/(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?\/[A-Za-z0-9/_-]*$/;
+
+/**
+ * `'self'` by default (the same-origin RUM beacon and Sentry tunnel), or exactly the listed
+ * URLs. A listed source that is not an exact URL (a keyword, a wildcard, a second directive)
+ * is left out, never passed through, and a list left empty is `'none'`: it fails closed.
+ */
+function connectSrc(only: readonly string[] | undefined): string {
+  if (only === undefined) return "'self'";
+  const exact = only.filter((source) => CONNECT_SOURCE.test(source));
+  return exact.length > 0 ? exact.join(' ') : "'none'";
 }
 
 /** Inline `<script>` — negative lookahead excludes anything with a `src=`, which `'self'` already covers. */
@@ -171,10 +205,10 @@ export function buildCsp(nonce: string, extras?: CspExtras): string {
     `style-src ${styleSrc}`,
     "img-src 'self' https://imagedelivery.net https://*.cloudflarestream.com",
     "font-src 'self'",
-    "connect-src 'self'", // same-origin RUM beacon + Sentry tunnel
-    `frame-src ${stream} ${videoFallback}`,
+    `connect-src ${connectSrc(extras?.connectOnly)}`,
+    `frame-src ${extras?.frameSelf ? "'self' " : ''}${stream} ${videoFallback}`,
     `media-src 'self' ${stream}`,
-    "form-action 'self'",
+    extras?.noForms ? "form-action 'none'" : "form-action 'self'",
     "frame-ancestors 'self'",
     "manifest-src 'self'",
     "worker-src 'self' blob:",
@@ -204,6 +238,9 @@ export function applySecurityHeaders(headers: Headers, opts: CspOptions): void {
   const csp = buildCsp(opts.nonce, {
     scriptHashes: [...new Set(scriptHashes)],
     styleHashes: [...new Set(styleHashes)],
+    ...(opts.frameSelf ? { frameSelf: true } : {}),
+    ...(opts.noForms ? { noForms: true } : {}),
+    ...(opts.connectOnly ? { connectOnly: opts.connectOnly } : {}),
   });
   // A response that asked for `sandbox` keeps it (the admin's CV download, Join): the rebuild
   // below may only ever ADD restrictions to what a route set, never drop one. Hashes and

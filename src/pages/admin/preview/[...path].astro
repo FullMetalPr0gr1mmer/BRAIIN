@@ -1,0 +1,30 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+
+export const prerender = false;
+
+// The preview's own 404 (Admin v2 R9). Every `/admin/preview/**` request goes through the
+// middleware's preview branch (src/lib/http/preview.ts) first: a Tier A page renders there,
+// through the public route, and never reaches this file. What does reach it is a path the
+// preview does not render (an endpoint, a feed, a typo), answered inside the admin, 404,
+// private and noindex like every admin page. It reads nothing.
+
+Astro.response.status = 404;
+// Astro gives a page response the reason phrase 'OK' unless the route is /404 itself, so a
+// 404 from any other page went out as `404 OK`. Say what the status means.
+Astro.response.statusText = 'Not Found';
+---
+
+<AdminLayout
+  title="Preview"
+  subtitle="See the site with your unpublished changes before they go live."
+>
+  <EmptyState
+    title="This page can't be previewed"
+    text="Only the site's pages can be previewed: the home page, services, projects, articles and the other pages visitors open."
+    icon="eye"
+  >
+    <a class="btn" href="/admin/preview">Preview the home page</a>
+  </EmptyState>
+</AdminLayout>

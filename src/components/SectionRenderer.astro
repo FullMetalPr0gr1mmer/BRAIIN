@@ -40,6 +40,10 @@ interface Props {
 }
 
 const { locale, sections } = Astro.props;
+// The releases preview (Admin v2 R9) marks each section for the page editor's bridge
+// (`data-pv-section`: the row's id, or `default-<n>` for a built-in composition). Only in a
+// preview render: a public page's markup is unchanged.
+const preview = Astro.locals.preview !== undefined;
 
 // Type → component registry. Unknown types are skipped (forward-compatible with CMS).
 //
@@ -98,11 +102,14 @@ const COMPONENTS = REGISTRY as unknown as Record<RenderedSectionType, AnySection
 {
   sections
     .filter((s) => s.visible !== false)
-    .map((s) => {
+    .map((s, i) => {
       if (!isRenderedSectionType(s.type)) return null;
       const Comp = COMPONENTS[s.type];
       return (
-        <SectionBoundary type={s.type}>
+        <SectionBoundary
+          type={s.type}
+          {...(preview ? { previewId: s.id ?? `default-${String(i)}` } : {})}
+        >
           <Comp locale={locale} {...(s.props ?? {})} data={s.data} />
         </SectionBoundary>
       );
