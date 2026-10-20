@@ -111,7 +111,7 @@ describe('the schedules (src/lib/cron/schedules.ts)', () => {
 
   it('dispatches by cron string: the 10-minute schedule runs its two jobs, in order', async () => {
     const ran: string[] = [];
-    const jobs = SCHEDULES['*/10 * * * *']! as { name: string; run: () => Promise<void> }[];
+    const jobs = SCHEDULES['*/10 * * * *']! as unknown as { name: string; run: () => Promise<void> }[];
     const originals = jobs.map((job) => job.run);
     for (const job of jobs) {
       job.run = async () => {

@@ -27,7 +27,9 @@ vi.mock('@/lib/data/systemLog', () => ({
 
 const { reconcileMaintenance, MAINTENANCE_RECONCILE_JOB } =
   await import('@/lib/cron/maintenanceReconcile');
-const { env } = await import('../stubs/cloudflare-workers');
+const { env: stubEnv } = await import('../stubs/cloudflare-workers');
+// The stub's KV has the four methods the code calls, not the whole binding (redirects.spec's cast).
+const env = stubEnv as unknown as { SESSION?: KVNamespace };
 
 const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const NOW = Date.parse('2026-10-20T09:00:00Z');
