@@ -89,6 +89,77 @@ const perItem: readonly Case[] = (
   },
 ]);
 
+// R6: publishing and its check. The kernel admits every role that publishes some area; each
+// selected change is then checked against what ITS publish needs (the release publish matrix,
+// architecture §3.4). One draft per row (the stub answers it from every table), both routes,
+// releases on; and releases off, where both answer 409 to every role the kernel admits.
+const THEME_DRAFT = draftRow('custom_theme', { name: 'Night' }, { name: 'Night' });
+const DEFAULTS_DRAFT = draftRow(
+  'seo_defaults',
+  { robotsDirectives: 'index,follow' },
+  { entity_id: TENANT, robots_directives: 'index,follow' },
+);
+const REDIRECT_DRAFT = draftRow(
+  'redirect',
+  { sourcePath: '/old', targetPath: '/services' },
+  { source_path: '/old', target_path: '/services' },
+);
+const VISIBILITY_DRAFT = draftRow('page_visibility', { mode: 'hidden' }, { mode: 'hidden' });
+
+const publishItems: readonly Case[] = (
+  [
+    ['a service change', SERVICE_DRAFT, ['admin', 'content_creator']],
+    ['a service archive', { ...SERVICE_DRAFT, payload: { status: 'archived' } }, ['admin']],
+    ['a service removal', { ...SERVICE_DRAFT, op: 'delete', payload: {} }, ['admin']],
+    ['the public identity', PROFILE_DRAFT, ['admin', 'developer']],
+    ['a theme', THEME_DRAFT, ['admin', 'developer']],
+    ['entity SEO', SEO_DRAFT, ['admin', 'seo']],
+    ['the SEO defaults', DEFAULTS_DRAFT, ['admin', 'seo']],
+    ['a redirect', REDIRECT_DRAFT, ['admin', 'seo']],
+    ['a redirect removal', { ...REDIRECT_DRAFT, op: 'delete', payload: {} }, ['admin', 'seo']],
+    ['page visibility', VISIBILITY_DRAFT, ['admin', 'developer']],
+  ] as const
+).flatMap(([what, row, allow]): Case[] =>
+  (
+    [
+      ['publish', () => import('@/pages/api/admin/releases/index'), '/api/admin/releases'],
+      [
+        'validate',
+        () => import('@/pages/api/admin/releases/validate'),
+        '/api/admin/releases/validate',
+      ],
+    ] as const
+  ).map(([verb, load, url]) => ({
+    name: `release ${verb}: ${what}`,
+    load,
+    method: 'POST',
+    url,
+    body: { items: [{ draftId: UUID, draftVersion: 1 }] },
+    allow: [...allow],
+    row,
+    releases: true,
+  })),
+);
+
+const publishOff: readonly Case[] = (
+  [
+    ['publish', () => import('@/pages/api/admin/releases/index'), '/api/admin/releases'],
+    [
+      'validate',
+      () => import('@/pages/api/admin/releases/validate'),
+      '/api/admin/releases/validate',
+    ],
+  ] as const
+).map(([verb, load, url]) => ({
+  name: `release ${verb} (releases off)`,
+  load,
+  method: 'POST',
+  url,
+  body: { items: [{ draftId: UUID, draftVersion: 1 }] },
+  allow: ['admin', 'content_creator', 'seo', 'developer'],
+  row: SERVICE_DRAFT,
+}));
+
 export const cases: readonly Case[] = [
   {
     name: 'services create (releases on)',
@@ -249,4 +320,6 @@ export const cases: readonly Case[] = [
     allow: ['admin', 'content_creator', 'seo', 'developer'],
   },
   ...perItem,
+  ...publishItems,
+  ...publishOff,
 ];
