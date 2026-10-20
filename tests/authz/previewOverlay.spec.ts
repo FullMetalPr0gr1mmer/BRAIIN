@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ROLES, type Role } from '@/lib/auth/types';
+import { CMS_ROLES, type Role } from '@/lib/auth/types';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { assertAnyCap } from '@/lib/authz/matrix';
 import { canPreview, createPreviewSource, PREVIEW_READ_CAPS } from '@/lib/preview/dataset';
@@ -67,7 +67,7 @@ const N: Outcome = 'not shown';
  * live mode; docs/admin-v2/as-built/R8.md says why). The FAQ (Admin v2 U7) is Contact-page
  * content: Admin and Content Creator (pages.write) only.
  */
-const EXPECTED: Record<Role, Record<ReleaseEntityType, Outcome>> = {
+const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Outcome>> = {
   admin: {
     category: O,
     sector: O,
@@ -193,12 +193,12 @@ async function outcome(role: Role, type: ReleaseEntityType): Promise<Outcome> {
 }
 
 describe('pending changes a preview shows, per role and entity type', () => {
-  it('covers every registry type and every role', () => {
-    for (const role of ROLES)
+  it('covers every registry type and every CMS role', () => {
+    for (const role of CMS_ROLES)
       expect(Object.keys(EXPECTED[role]).sort()).toEqual([...RELEASE_ENTITY_TYPES].sort());
   });
 
-  for (const role of ROLES) {
+  for (const role of CMS_ROLES) {
     it(`${role}: as §5 says`, async () => {
       const got: Record<string, Outcome> = {};
       for (const type of RELEASE_ENTITY_TYPES) got[type] = await outcome(role, type);
@@ -215,7 +215,7 @@ describe('who may open a preview at all', () => {
   const supabase = fakeStaffClient(fixtureTables()).client;
 
   it('every CMS role may (each reads at least one area)', () => {
-    for (const role of ROLES) {
+    for (const role of CMS_ROLES) {
       expect(canPreview(role)).toBe(true);
       expect(() => createPreviewSource({ supabase, session: session(role) })).not.toThrow();
       // R9's gate on the same list agrees.
@@ -234,7 +234,7 @@ describe('who may open a preview at all', () => {
   });
 
   it('a role holding none of the read capabilities is refused (Sales, C10a)', () => {
-    const sales = 'sales' as Role;
+    const sales: Role = 'sales';
     expect(canPreview(sales)).toBe(false);
     expect(() => createPreviewSource({ supabase, session: session(sales) })).toThrow(
       AuthorizationError,

@@ -4,6 +4,7 @@ import { csrfTokenMatches, generateCsrfToken, timingSafeEqual } from '@/lib/http
 import {
   canSeeLeadPii,
   canManageLeads,
+  receivesLeadPiiUnasked,
   GATED_LEAD_COLUMNS,
   SAFE_LEAD_COLUMNS,
   stripSensitive,
@@ -91,9 +92,19 @@ describe('CSRF double-submit', () => {
 // ── Lead PII field visibility ───────────────────────────────────────────────────
 
 describe('lead field visibility', () => {
-  it('grants lead access to Admin and Developer only', () => {
-    expect(ROLES.filter(canManageLeads).sort()).toEqual(['admin', 'developer']);
-    expect(ROLES.filter(canSeeLeadPii).sort()).toEqual(['admin', 'developer']);
+  it('grants lead access to Admin, Developer and Sales only (Sales since C10a)', () => {
+    expect(ROLES.filter(canManageLeads).sort()).toEqual(['admin', 'developer', 'sales']);
+    expect(ROLES.filter(canSeeLeadPii).sort()).toEqual(['admin', 'developer', 'sales']);
+  });
+
+  it('hands lead PII unasked (a notification) only to the roles that may export it all', () => {
+    // Sales sees one lead's details at a time, through the audited reveal (owner default O-6).
+    expect(ROLES.filter(receivesLeadPiiUnasked).sort()).toEqual(['admin', 'developer']);
+    for (const role of ROLES) {
+      expect(receivesLeadPiiUnasked(role), role).toBe(
+        canSeeLeadPii(role) && ROLE_CAPS[role]['export.csv'] === 'full',
+      );
+    }
   });
 
   it('gives Content Creator and SEO no lead columns at all', () => {

@@ -258,7 +258,7 @@ describe('PATCH /api/admin/leads/[id]', () => {
         action: 'lead.update',
         entityType: 'lead',
         entityId: LEAD,
-        detail: { fields: ['stage_id', 'value_sar', 'tags'], status: null, stage: STAGE },
+        detail: { fields: ['stage_id', 'value_sar', 'tags'], stage: STAGE },
       },
     ]);
     expect(JSON.stringify(audits)).not.toContain('Husband');
@@ -273,11 +273,27 @@ describe('PATCH /api/admin/leads/[id]', () => {
     expect(updates).toEqual([]);
   });
 
-  it('a legacy status from an old tab is still saved (the expand window, until C14)', async () => {
-    const res = await patch({ status: 'in_progress' });
-    expect(res.status).toBe(200);
-    expect(updates[0]!.values).toEqual({ status: 'in_progress' });
-  });
+  it.each(['admin', 'developer', 'sales'] as const)(
+    'refuses the legacy status for %s with a 422 naming it, and writes nothing (C10a, 0097)',
+    async (role) => {
+      liveProfile = { role, is_active: true, locked_until: null };
+      for (const body of [
+        { status: 'in_progress' },
+        { status: 'done', stageId: STAGE, version: 3 },
+        { status: null },
+      ]) {
+        const res = await patch(body, role);
+        expect(res.status, JSON.stringify(body)).toBe(422);
+        const answer = (await res.json()) as { issues?: { path: string; message: string }[] };
+        expect(answer.issues).toContainEqual({
+          path: 'status',
+          message: 'A lead moves by its stage now. Choose a stage instead.',
+        });
+      }
+      expect(updates).toEqual([]);
+      expect(audits).toEqual([]);
+    },
+  );
 
   it.each(['admin', 'developer'] as const)(
     'refuses the legacy notes field for %s with a 422 naming it, and writes nothing (C4b)',

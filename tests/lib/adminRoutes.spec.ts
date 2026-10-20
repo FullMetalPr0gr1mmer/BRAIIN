@@ -476,6 +476,12 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
     Appearance: ['Theme /admin/themes'],
     Settings: ['General /admin/settings', 'Activity log /admin/audit'],
   },
+  // Sales (C10a): works leads and reads the stats; no content, media, settings or logs.
+  sales: {
+    Overview: ['Dashboard /admin'],
+    CRM: ['Leads /admin/leads'],
+    Growth: ['Website stats /admin/analytics'],
+  },
 };
 
 describe("the sweep's expected sidebar", () => {

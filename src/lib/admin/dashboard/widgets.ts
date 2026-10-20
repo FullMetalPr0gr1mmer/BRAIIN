@@ -142,4 +142,12 @@ export const DEFAULT_LAYOUTS: Readonly<Record<Role, DashboardLayout>> = {
     right: ['health', 'activity'],
     hidden: ['pages', 'disciplines', 'notes', 'realtime'],
   },
+  // Sales (C10a): the leads first, then where they came from; the stats it holds as
+  // analytics.read stay on the board, below.
+  sales: {
+    top: ['kpis'],
+    left: ['quick', 'leads'],
+    right: ['disciplines', 'views'],
+    hidden: ['pages', 'notes', 'realtime'],
+  },
 };

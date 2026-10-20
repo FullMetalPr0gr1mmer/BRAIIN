@@ -52,7 +52,7 @@ describe('the leads SELECT grant (0033)', () => {
   });
 });
 
-describe('the leads UPDATE grant (0030, 0041)', () => {
+describe('the leads UPDATE grant (0030, 0041, 0097)', () => {
   const granted = replayLeadGrant('update');
 
   it('is a column grant, never table-wide', () => {
@@ -60,10 +60,10 @@ describe('the leads UPDATE grant (0030, 0041)', () => {
   });
 
   it('covers every column the PATCH route writes, and nothing the CRM keeps to itself', () => {
-    // Every field a PATCH can send, so leadPatchValues names every column it can write. The
-    // legacy notes field is not one since C4b (the schema refuses it, notes are a thread),
-    // but 0030's grant still names it, for a live Admin or Developer token writing it
-    // directly until C10a revokes it or C14 drops the field (CLAUDE.md §3).
+    // Every field a PATCH can send, so leadPatchValues names every column it can write.
+    // Neither legacy field is one: the schema refuses the notes field since C4b (notes are a
+    // thread) and the status since C10a, and 0097 revoked 0030's grant on both, so the
+    // grant is exactly what the route writes.
     const written = Object.keys(
       leadPatchValues(
         {
@@ -83,8 +83,9 @@ describe('the leads UPDATE grant (0030, 0041)', () => {
       ),
     );
     expect(written).not.toContain('internal_notes');
+    expect(written).not.toContain('status');
     for (const column of written) expect(granted, column).toContain(column);
-    expect([...granted].sort()).toEqual([...written, 'internal_notes'].sort());
+    expect([...granted].sort()).toEqual([...written].sort());
     for (const column of [
       ...GATED_LEAD_COLUMNS.split(',').filter((c) => c !== 'internal_notes'),
       'retention_delete_after',

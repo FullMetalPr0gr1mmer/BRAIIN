@@ -189,6 +189,8 @@ const SEARCHED_BY: Record<Role, readonly string[]> = {
     'Media',
   ],
   developer: ['Pages', 'Media', 'Themes'],
+  // Sales (C10a) opens no content, media or setting, and leads are never searched here.
+  sales: [],
 };
 
 describe('what each role searches', () => {

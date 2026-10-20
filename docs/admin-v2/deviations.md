@@ -14,6 +14,7 @@
   - 5 roles;
   - no editable matrix, per-person grants or View as;
   - Developer gets no CRM (O-7), and no CRM settings: `crm.settings` is Admin only (§5 amended in C9a);
+  - Sales (C10a) works leads only until C10b (contacts and tasks wait for O-11); it reads the website stats (README's matrix, prototype parity) though crm.md §2.1 said no analytics, and a lead's details reach it one lead at a time through the reveal, never in a notification (O-6);
   - Site health stays Admin + Developer.
 - **Publishing**:
   - per area (P-2);
