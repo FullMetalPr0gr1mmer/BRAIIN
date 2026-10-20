@@ -28,6 +28,8 @@ import { localizedPagePath, targetForRoute } from '@/lib/visibility/routes';
 import { pageAccessCookieName, verifyAccessCookie } from '@/lib/visibility/access';
 import { pageAccessGate } from '@/lib/visibility/gate';
 import { withPageAccess } from '@/lib/visibility/scope';
+import { handlePreview, previewConnectSources } from '@/lib/http/preview';
+import { writeSystemLog } from '@/lib/data/systemLog';
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { localeFromPath } from '@/lib/i18n';
 import { checkImageRequest, imageGuardResponse, isImageEndpoint } from '@/lib/http/imageGuard';
@@ -138,6 +140,8 @@ function routeKey(pathname: string): string {
 const isAdminPath = (path: string): boolean => path === '/admin' || path.startsWith('/admin/');
 const isApiPath = (path: string): boolean => path.startsWith('/api/');
 const isAdminApiPath = (path: string): boolean => path.startsWith('/api/admin/');
+const isPreviewPath = (path: string): boolean =>
+  path === '/admin/preview' || path.startsWith('/admin/preview/');
 
 // What a request is (admin, API, private, pre-auth) is read from the path the middleware
 // sees AND from the route Astro matched (F7, third review), because the two can differ.
@@ -231,7 +235,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // custom-element definition and every /admin island renders and then sits inert —
   // and relaxing the policy for dev is the precise divergence that hid this in the
   // first place. Buffering the body is acceptable at dev latency only.
-  const secured = async (response: Response): Promise<Response> => {
+  const secured = async (
+    response: Response,
+    extra: { noForms?: boolean; connectOnly?: readonly string[] } = {},
+  ): Promise<Response> => {
     const isHtml = (response.headers.get('content-type') ?? '').includes('text/html');
     let out = response;
     let extras: { scriptHashes: string[]; styleHashes: string[] } | null = null;
@@ -246,8 +253,19 @@ export const onRequest = defineMiddleware(async (context, next) => {
       nonce,
       reportOnly: CSP_REPORT_ONLY,
       ...(extras ?? {}),
+      // The page editor frames /admin/preview (Admin v2 R9): same-origin framing is admitted
+      // on admin pages only, never on a public response.
+      ...(isAdmin ? { frameSelf: true } : {}),
+      ...(extra.noForms ? { noForms: true } : {}),
+      ...(extra.connectOnly ? { connectOnly: extra.connectOnly } : {}),
     });
     if (isPrivate) out.headers.set('Cache-Control', PRIVATE_CACHE);
+    if (isPrivate) {
+      // Tier C is never indexed, and carries no cache tag a purge could mistake for a public
+      // page's (a preview renders public pages, which set one: Admin v2 R9).
+      out.headers.delete('Cache-Tag');
+      out.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    }
     return out;
   };
 
@@ -440,6 +458,29 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
     if (owesSecondStep) return secured(toSecondStep());
     if (!admitted) return secured(unauthenticated());
+  }
+
+  // 2a) The releases preview (Admin v2 R9): a staff render of a public page with the pending
+  //     changes laid over it (src/lib/http/preview.ts decides the door, the route and the
+  //     scope). Behind the session gate above, so a request here has a session. By the path
+  //     or the route Astro matched, as for every private request; the handler maps only the
+  //     resolved path, and anything it does not know renders the preview's own 404 page.
+  if (isAdmin && (isPreviewPath(url.pathname) || isPreviewPath(matched))) {
+    const { response, rendered } = await handlePreview(
+      { request, url, nonce, locals },
+      {
+        render: (path) => next(path),
+        fallthrough: () => next(),
+        snapshot: () => getVisibilitySnapshot(env),
+        log: (entry) => writeSystemLog(entry),
+      },
+    );
+    // A rendered preview sends no form and reaches no endpoint that writes (its CSP), on top
+    // of the bridge; the preview's own 404 is an admin page and keeps the admin policy.
+    return secured(
+      response,
+      rendered ? { noForms: true, connectOnly: previewConnectSources(url.origin) } : {},
+    );
   }
 
   // 3) Render. A page whose password this request answered renders inside the page-access

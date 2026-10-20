@@ -173,6 +173,29 @@ function consentHolds(row: Readonly<Row>): boolean {
   );
 }
 
+/**
+ * The tables whose design samples (`is_placeholder`) 0025's guard keeps off production, and
+ * what "live" means on each (0025; service_cases 0028): a status, or a go-live flag.
+ */
+const SAMPLE_LIVE: Readonly<Partial<Record<DatasetTable, 'status' | 'visible'>>> = {
+  portfolio: 'status',
+  testimonials: 'status',
+  team_members: 'status',
+  statistics: 'status',
+  service_cases: 'status',
+  clients: 'visible',
+  page_sections: 'visible',
+};
+
+/** Whether a row is a flagged design sample that 0025 would call live. */
+function sampleLive(table: DatasetTable, row: Readonly<Row>): boolean {
+  const mode = SAMPLE_LIVE[table];
+  if (!mode || row['is_placeholder'] !== true) return false;
+  return mode === 'status'
+    ? ['published', 'scheduled'].includes(String(row['status']))
+    : row['visible'] === true;
+}
+
 /** Tables with a `published_at` a first publish stamps (R4's `has_published_at`). */
 const PUBLISHED_AT_TABLES: readonly DatasetTable[] = [
   'blog_posts',
@@ -444,6 +467,7 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
         if (Object.keys(change.patch).length > 0) {
           stamp(table, current, next, change.patch);
           rows[at] = next;
+          if (sampleLive(table, next)) report.samples += 1;
         }
       } else {
         if (at !== -1) {
@@ -463,6 +487,7 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
         }
         stamp(table, null, next, change.patch);
         rows.push(next);
+        if (sampleLive(table, next)) report.samples += 1;
       }
       applied.add(draft.id);
       report.overlaid += 1;

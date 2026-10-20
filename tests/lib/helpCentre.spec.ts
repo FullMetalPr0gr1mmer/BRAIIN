@@ -1835,6 +1835,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
     expect(shown('content_creator')).toEqual([
       'finding-your-way',
       'media-library',
+      'previewing-changes',
       'roles-and-access',
       'saving-and-publishing',
       'website-stats',
@@ -1847,6 +1848,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
     expect(shown('seo')).toEqual([
       'finding-your-way',
       'media-library',
+      'previewing-changes',
       'roles-and-access',
       'seo-and-redirects',
       'website-stats',
@@ -1863,6 +1865,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'media-library',
       'page-visibility',
       'personal-data',
+      'previewing-changes',
       'roles-and-access',
       'site-health-and-logs',
       'website-stats',

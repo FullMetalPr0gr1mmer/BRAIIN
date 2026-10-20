@@ -18,7 +18,8 @@ export async function getPublishedCertifications() {
       .from('certifications')
       .select(COLUMNS)
       .eq('status', 'published')
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
     if (error || !data) return [];
     return parseRows(CertificationRowSchema, data, 'certification');
   } catch {

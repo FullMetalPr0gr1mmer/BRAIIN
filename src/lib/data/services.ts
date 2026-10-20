@@ -118,7 +118,8 @@ export async function loadPublishedServiceRows(): Promise<ServiceRow[] | null> {
       .from('services')
       .select(SERVICE_COLUMNS)
       .eq('status', 'published')
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
     if (error) {
       reportLoadError('services', error);
       return null;

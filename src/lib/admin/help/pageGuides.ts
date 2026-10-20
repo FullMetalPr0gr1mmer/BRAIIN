@@ -85,6 +85,25 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     caps: ['siteHealth.view', 'logs.view', 'audit.view'],
     screens: ['/admin/site-health', '/admin/audit'],
   },
+  {
+    // R9: the roles that may preview (PREVIEW_READ_CAPS; tests/lib/previewGuide.spec.ts).
+    slug: 'previewing-changes',
+    caps: [
+      'blog.write',
+      'categories.manage',
+      'maintenance.manage',
+      'nav.edit',
+      'pages.write',
+      'portfolio.write',
+      'redirects.manage',
+      'seo.entityMeta',
+      'seo.globalDefaults',
+      'services.write',
+      'settings.general',
+      'theme.edit',
+    ],
+    screens: ['/admin/preview'],
+  },
 ];
 
 /**
