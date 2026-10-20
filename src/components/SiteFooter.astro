@@ -5,6 +5,7 @@ import { FOOTER_FALLBACK, LEGAL_LINKS } from '@/lib/nav/fallback';
 import { filterNavForVisibility } from '@/lib/visibility/listing';
 import { getIdentity, brandName } from '@/lib/identity';
 import { arabicIndic, localizedHref, localizedPath } from '@/lib/i18n';
+import { trackHref } from '@/lib/analytics/track';
 
 // Sitewide footer — the mockup's paper bar: "© 2026 Braiin Statiion. Jeddah, Saudi
 // Arabia" and the studio mailbox, both from the public identity (`site_profile`), so a
@@ -48,7 +49,12 @@ const STR = {
   <div class="site-footer__bar">
     <p class="site-footer__copy">© {yearText} {brand}. {place}</p>
     {/* dir=ltr: an address must not be re-ordered inside RTL text */}
-    <a class="site-footer__mail" href={`mailto:${identity.contactEmail}`} dir="ltr">
+    <a
+      class="site-footer__mail"
+      href={`mailto:${identity.contactEmail}`}
+      dir="ltr"
+      data-track="email"
+    >
       {identity.contactEmail}
     </a>
   </div>
@@ -59,7 +65,12 @@ const STR = {
         {
           items.map((item) => (
             <li>
-              <a href={localizedHref(item.href, locale)}>{item.label[locale] ?? item.label.en}</a>
+              <a
+                href={localizedHref(item.href, locale)}
+                data-track={trackHref(localizedHref(item.href, locale))}
+              >
+                {item.label[locale] ?? item.label.en}
+              </a>
             </li>
           ))
         }

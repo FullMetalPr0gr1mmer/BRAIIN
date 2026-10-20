@@ -1,4 +1,4 @@
--- pgTAP: telemetry partitions (migration 0037, hotfix H8).
+-- pgTAP: telemetry partitions (migration 0037, hotfix H8; reads narrowed by 0071, G1).
 --
 -- `analytics_events` and `web_vitals` are partitioned by month. A partition is a table of
 -- its own, with its own RLS flags and ACL, and CREATE TABLE … PARTITION OF copies neither
@@ -10,8 +10,10 @@
 --   2. so is every partition app.ensure_telemetry_partitions() creates later: it is called
 --      here, inside this transaction, 15 months ahead;
 --   3. writes through the parents still land, in those RLS-forced partitions;
---   4. reads through the parents are unchanged: the PARENT's policies decide, over the §9
---      role set {admin, developer, seo, content_creator, other_tenant, anon};
+--   4. reads through the parents: since 0071 (Admin v2 G1) no API role but the service role
+--      reads raw telemetry, so every role of the §9 set {admin, developer, seo,
+--      content_creator, other_tenant, anon} is refused at the GRANT layer (the stats read
+--      rollups only), and the service role still reads through the parents;
 --   5. naming a partition directly is refused at the GRANT layer, for anon and for staff;
 --   6. and at the RLS layer if a grant ever slips back: no policy, so no row.
 --
@@ -140,36 +142,39 @@ select is(
   2,
   'the fixture rows sit in this month''s partitions, RLS enabled and forced, no policy');
 
--- ── 4. reads through the parents: the parents' policies decide ─────────────────────
--- 0002: analytics_events → admin, developer, seo; web_vitals → admin, developer (the site
--- health panel); both tenant-scoped. 0011 granted SELECT on both to authenticated, none to
--- anon. Every row read here lives in a partition whose own RLS would return nothing.
+-- ── 4. reads through the parents: the service role only (0071) ─────────────────────
+-- 0002's read policies (Admin, Developer, SEO; Admin and Developer for vitals) and 0011's
+-- staff SELECT are gone: the staff screens read rollups only. Every staff role connects as
+-- `authenticated`, so the claim cannot change a GRANT decision; each is still checked.
 set local role authenticated;
 select _claims('admin', '37000000-0000-0000-0000-000000000001');
-select is((select count(*)::int from public.analytics_events where path = '/__h8'), 1,
-  'admin reads analytics_events through the parent');
-select is((select count(*)::int from public.web_vitals where path = '/__h8'), 1,
-  'admin reads web_vitals through the parent');
+select throws_ok($$ select count(*) from public.analytics_events $$, '42501', null,
+  'admin is refused analytics_events at the GRANT layer');
+select throws_ok($$ select count(*) from public.web_vitals $$, '42501', null,
+  'admin is refused web_vitals at the GRANT layer');
 select _claims('developer', '37000000-0000-0000-0000-000000000001');
-select is((select count(*)::int from public.analytics_events where path = '/__h8'), 1,
-  'developer reads analytics_events through the parent');
-select is((select count(*)::int from public.web_vitals where path = '/__h8'), 1,
-  'developer reads web_vitals through the parent (site health)');
+select throws_ok($$ select count(*) from public.analytics_events $$, '42501', null,
+  'developer is refused analytics_events');
+select throws_ok($$ select count(*) from public.web_vitals $$, '42501', null,
+  'developer is refused web_vitals (site health reads its rollup)');
 select _claims('seo', '37000000-0000-0000-0000-000000000001');
-select is((select count(*)::int from public.analytics_events where path = '/__h8'), 1,
-  'seo reads analytics_events through the parent');
-select is((select count(*)::int from public.web_vitals where path = '/__h8'), 0,
-  'seo reads no web_vitals (Admin + Developer only)');
+select throws_ok($$ select count(*) from public.analytics_events $$, '42501', null,
+  'seo is refused analytics_events');
+select throws_ok($$ select count(*) from public.web_vitals $$, '42501', null,
+  'seo is refused web_vitals');
 select _claims('content_creator', '37000000-0000-0000-0000-000000000001');
-select is((select count(*)::int from public.analytics_events where path = '/__h8'), 0,
-  'content_creator reads no analytics_events');
-select is((select count(*)::int from public.web_vitals where path = '/__h8'), 0,
-  'content_creator reads no web_vitals');
+select throws_ok($$ select count(*) from public.analytics_events $$, '42501', null,
+  'content_creator is refused analytics_events');
 select _claims('admin', '37000000-0000-0000-0000-0000000000ff');
-select is((select count(*)::int from public.analytics_events where path = '/__h8'), 0,
-  'an admin of another tenant reads no analytics_events');
-select is((select count(*)::int from public.web_vitals where path = '/__h8'), 0,
-  'an admin of another tenant reads no web_vitals');
+select throws_ok($$ select count(*) from public.analytics_events $$, '42501', null,
+  'an admin of another tenant is refused analytics_events');
+reset role;
+set local role service_role;
+select is((select count(*)::int from public.analytics_events where path = '/__h8'), 1,
+  'the service role reads analytics_events through the parent');
+select is((select count(*)::int from public.web_vitals where path = '/__h8'), 1,
+  'the service role reads web_vitals through the parent');
+reset role;
 set local role anon;
 select _claims(null, null);
 select throws_ok($$ select count(*) from public.analytics_events $$, '42501', null,
@@ -204,7 +209,7 @@ select throws_ok(format('select count(*) from public.%I', _cur('web_vitals')), '
 -- ── 6. …and at the RLS layer, if a grant ever slips back ──────────────────────────
 -- The mistake 0011 and 0037 exist to prevent, made on purpose (rolled back with the file):
 -- with SELECT granted, the partition's own RLS (enabled, no policy) still returns no row,
--- while the same admin reads that row through the parent in section 4.
+-- while the service role reads that row through the parent in section 4.
 reset role;
 do $$
 begin

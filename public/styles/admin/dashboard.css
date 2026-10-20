@@ -305,3 +305,23 @@
 .notes__editor > button {
   justify-self: start;
 }
+
+/* ---- Right now (G1b, ui/dashboard/Realtime.astro): the people on the site now, large, with
+   the pages under it (admin.css's stat rows). */
+.dash-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0 0 8px;
+  color: var(--ad-dim);
+}
+
+.dash-now__n {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ad-ink);
+  font-variant-numeric: tabular-nums;
+}

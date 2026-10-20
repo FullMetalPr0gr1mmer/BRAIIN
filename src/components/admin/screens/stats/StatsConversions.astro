@@ -1,0 +1,100 @@
+---
+import Card from '@/components/admin/ui/Card.astro';
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import Funnel from '@/components/admin/ui/Funnel.astro';
+import Note from '@/components/admin/ui/Note.astro';
+import ServerTable from '@/components/admin/ui/ServerTable.astro';
+import StatRows from '@/components/admin/ui/StatRows.astro';
+import type { EventRow, EventSummary } from '@/lib/admin/stats/events';
+import { funnelSteps, inquiryWithoutService, type VisitTotals } from '@/lib/admin/stats/visits';
+
+// Website stats, Conversions (Admin v2 G1a; the prototype's opsStatsConversions,
+// screens_ops.js): the views to inquiry funnel, then the events (clicks on the site's links
+// and interest shown in the /services explorer), then the goals card (G1c, the `goals` slot:
+// the page decides who gets the controls). Zero JS here.
+//
+// The funnel counts visits in one tab on one UTC day, from visitors who accepted analytics
+// cookies; inquiries (leads) count everyone who wrote, so they are never a step of it (G1
+// D4: no analytics event comes from the contact form), and only a leads.manage holder sees
+// them (`inquiries`, null for the others: nothing about leads is read for them).
+
+interface Props {
+  visits: VisitTotals;
+  events: EventSummary;
+  /** Leads that arrived in the range, or null for a role without leads.manage. */
+  inquiries: number | null;
+  days: number;
+}
+
+const { visits, events, inquiries, days } = Astro.props;
+const steps = funnelSteps(visits).map((step) => ({ label: step.label, value: step.visits }));
+const columns = [
+  { key: 'label', label: 'Event' },
+  { key: 'events', label: 'Count', kind: 'number' as const },
+  { key: 'visits', label: 'Visits', kind: 'number' as const },
+];
+const rowsOf = (list: readonly EventRow[]) =>
+  list.map((row) => ({ id: row.key, label: row.label, events: row.events, visits: row.visits }));
+const under = [
+  {
+    label: 'Reached an inquiry form without a service page',
+    value: inquiryWithoutService(visits),
+  },
+  ...(inquiries === null ? [] : [{ label: 'Inquiries received', value: inquiries }]),
+];
+---
+
+<Card level={2} title="Funnel" sub="Blue is who stayed, orange is who left at that step">
+  {
+    visits.visits === 0 ? (
+      <EmptyState
+        icon="chart"
+        title="No visits counted in this period."
+        text="Visits arrive from visitors who accept analytics cookies."
+      />
+    ) : (
+      <>
+        <Funnel steps={steps} label={`Visits in the last ${days} days, step by step`} />
+        <StatRows rows={under} />
+        {inquiries !== null && (
+          <p class="stats__under">
+            Inquiries received counts everyone who wrote, including visitors who declined analytics
+            cookies, so it is not a step of the funnel.
+          </p>
+        )}
+      </>
+    )
+  }
+</Card>
+
+<div class="grid grid--2-1 stats__row">
+  <Card level={2} title="Events" sub="Things people do on the site">
+    <ServerTable
+      caption="Clicks on the site's links"
+      columns={columns}
+      rows={rowsOf(events.cta)}
+      empty={{
+        title: 'No clicks counted in this period.',
+        text: 'Clicks are counted on the contact, language, project and service links.',
+        icon: 'chart',
+      }}
+    />
+    <h3 class="stats__h stats__row">Interest in a discipline or service</h3>
+    <ServerTable
+      caption="Interest shown in the services explorer"
+      columns={columns}
+      rows={rowsOf(events.interest)}
+      empty={{
+        title: 'No interest counted in this period.',
+        text: 'Counted when a visitor opens a discipline or chooses a service in the explorer.',
+        icon: 'chart',
+      }}
+    />
+    <Note class="stats__row">
+      Devices, countries and sources are not collected. Clicks count once per link per page view.
+    </Note>
+  </Card>
+  <Card level={2} title="Goals" sub="Track a number that matters">
+    <slot name="goals" />
+  </Card>
+</div>

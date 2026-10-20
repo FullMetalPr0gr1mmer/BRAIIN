@@ -142,7 +142,7 @@ for (const locale of ['en', 'ar'] as const) {
       // The accent stops before the footnote mark: <em>performs</em>*. The mark is its own
       // word (it may wrap alone, as in the design), never part of the accented one.
       await expect(page.locator('.hero h1 .word--mark')).toHaveText('*');
-      await expect(page.locator('.hero h1 .word--mark')).not.toHaveClass(/accent/);
+      await expect(page.locator('.hero h1 .word--mark')).not.toHaveClass(/\baccent\b/);
       await expect(page.locator('.hero h1 .accent .letter--plain')).toHaveCount(0);
     });
 
