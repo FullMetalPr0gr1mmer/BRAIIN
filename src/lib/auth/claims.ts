@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { aalOf, type Aal } from './twoStep';
 
 // The access token's own claims (Admin v2 U12a), read by resolveAuthContext.
 //
@@ -39,6 +40,12 @@ export interface AccessClaims {
   tenantId: unknown;
   /** The sign-in methods, or null when the token has no list of them. */
   amr: readonly AmrEntry[] | null;
+  /**
+   * The assurance level (Admin v2 U17): `aal2` once a second factor was verified in this
+   * session, `aal1` after a password alone. Anything else, missing included, is null, which
+   * the session check treats as below aal2 (never as a refusal by itself).
+   */
+  aal: Aal | null;
 }
 
 const PayloadSchema = z
@@ -48,6 +55,7 @@ const PayloadSchema = z
     session_id: z.string().optional(),
     app_metadata: z.record(z.string(), z.unknown()).optional(),
     amr: z.unknown().optional(),
+    aal: z.unknown().optional(),
   })
   .passthrough();
 
@@ -96,7 +104,7 @@ function amrEntries(raw: unknown): AmrEntry[] | null {
 export function accessClaims(token: string): AccessClaims | null {
   const parsed = PayloadSchema.safeParse(decodeJwtPayload(token));
   if (!parsed.success) return null;
-  const { sub, exp, session_id: sessionId, app_metadata: meta, amr } = parsed.data;
+  const { sub, exp, session_id: sessionId, app_metadata: meta, amr, aal } = parsed.data;
   return {
     sub,
     exp,
@@ -104,6 +112,7 @@ export function accessClaims(token: string): AccessClaims | null {
     role: meta?.['role'],
     tenantId: meta?.['tenant_id'],
     amr: amrEntries(amr),
+    aal: aalOf(aal),
   };
 }
 

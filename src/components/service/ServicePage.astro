@@ -1,5 +1,4 @@
 ---
-import { getImage } from 'astro:assets';
 import type { Locale } from '@schemas/primitives';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import BaseLayout from '@/layouts/BaseLayout.astro';
@@ -8,6 +7,7 @@ import Hero from '@/components/sections/Hero.astro';
 import Hello from '@/components/sections/Hello.astro';
 import { buildBreadcrumbSchema, buildServiceSchema, orgRef } from '@/lib/seo/jsonld';
 import { ogImageCandidates } from '@/lib/seo/ogImage';
+import { shareImageUrl } from '@/lib/seo/shareImage';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import { serviceHelloHeading } from '@/lib/sections/hello';
 import { serviceDescription, serviceHeroSub, type ServicePage } from '@/lib/services/page';
@@ -73,18 +73,7 @@ const crumb = {
 // JPEG — the case-study rule. It outranks the tenant's default share image and yields only
 // to the SEO role's per-page override (src/lib/seo/ogImage.ts).
 const poster = service.poster;
-const shareImage = poster
-  ? new URL(
-      (
-        await getImage({
-          src: poster.src,
-          width: Math.min(1200, poster.width),
-          format: 'jpg',
-        })
-      ).src,
-      `${base}/`,
-    ).href
-  : undefined;
+const shareImage = poster ? await shareImageUrl(poster, base) : undefined;
 
 const jsonLd = [
   buildServiceSchema({

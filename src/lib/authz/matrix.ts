@@ -40,6 +40,7 @@ export const CAPABILITIES = [
   'leads.pii',
   'export.csv',
   'crm.erase',
+  'crm.settings',
   'applications.manage',
   'applications.pii',
   'analytics.read',
@@ -84,6 +85,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': F,
     'export.csv': F,
     'crm.erase': F,
+    'crm.settings': F,
     'applications.manage': F,
     'applications.pii': F,
     'analytics.read': F,
@@ -122,6 +124,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': N,
     'export.csv': N,
     'crm.erase': N,
+    'crm.settings': N,
     'applications.manage': N,
     'applications.pii': N,
     'analytics.read': F,
@@ -160,6 +163,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': N,
     'export.csv': N,
     'crm.erase': N,
+    'crm.settings': N,
     'applications.manage': N,
     'applications.pii': N,
     'analytics.read': F,
@@ -176,8 +180,10 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
   // Developer — technical role: settings/identity/maintenance/theme, logs/audit/
   // site-health, leads management + PII + backup export. NO content authoring, NO
   // content publish/schedule, NO archive/delete — and NO job applications (Join, owner decision
-  // J6: applicants' CVs and contact details are Admin-only, unlike leads), and NO erasing
-  // a lead or a person's data (crm.erase is Admin's, Admin v2 C3).
+  // J6: applicants' CVs and contact details are Admin-only, unlike leads), NO erasing
+  // a lead or a person's data (crm.erase is Admin's, Admin v2 C3), and NO CRM settings
+  // (crm.settings is Admin's, Admin v2 C9a: owner item O-7, Developer gets no CRM
+  // configuration).
   developer: {
     'users.manage': N,
     'settings.general': F,
@@ -201,6 +207,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': F,
     'export.csv': F,
     'crm.erase': N,
+    'crm.settings': N,
     'applications.manage': N,
     'applications.pii': N,
     'analytics.read': F,
@@ -218,8 +225,9 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
   // assignment, notes and the timeline (leads.manage), and a lead's contact details, budget
   // and timeline one lead at a time, live-rechecked, rate-limited and audited before anything
   // is decrypted (leads.pii, owner default O-6), plus the website stats (analytics.read,
-  // prototype parity). NO content, NO settings, NO exports or backups, NO job applications,
-  // NO logs, activity log or site health, NO users, NO erasure, NO bulk contact details.
+  // prototype parity). NO content, NO settings (the CRM's included), NO exports or backups,
+  // NO job applications, NO logs, activity log or site health, NO users, NO erasure, NO bulk
+  // contact details.
   // Sales is not CMS staff: app.is_staff() stays the four roles above (P-6).
   sales: {
     'users.manage': N,
@@ -244,6 +252,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': F,
     'export.csv': N,
     'crm.erase': N,
+    'crm.settings': N,
     'applications.manage': N,
     'applications.pii': N,
     'analytics.read': F,

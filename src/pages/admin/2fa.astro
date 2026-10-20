@@ -1,0 +1,92 @@
+---
+import AuthLayout from '@/layouts/AuthLayout.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import TwoStepPanel from '@/components/admin/screens/twoStep/TwoStepPanel.astro';
+import { safeNext } from '@/lib/auth/next';
+import {
+  TWO_STEP_DONE,
+  TWO_STEP_MESSAGES,
+  messageFor,
+  type PageMessage,
+} from '@/lib/auth/messages';
+import { twoStepFormPost, viewFor, type TwoStepView } from '@/lib/auth/twoStepFlow';
+import { getIdentity } from '@/lib/identity';
+import { clientIp } from '@/lib/http/maintenance';
+
+export const prerender = false;
+
+// Two-step sign-in (Admin v2 U17, docs/admin-v2/as-built/U17.md): one zero-JS page for the
+// code at sign-in, a forced setup (the team requires 2FA), and a member setting their own 2FA
+// up or turning it off. The middleware lets a session that still owes its code reach this
+// page and sign-out only (src/middleware.ts); a visitor with no session is sent to sign in.
+// Its forms post here (the middleware has checked the origin and the double-submit token);
+// what a post does is twoStepFormPost (src/lib/auth/twoStepFlow.ts). A success redirects
+// (303); the setup step is rendered, never redirected, because its key is never stored.
+//
+// Frames: the sign-in shell for a session owing its second step (it has no admin to show),
+// the admin shell for a full session. Neither the page nor either shell carries a <script>
+// of its own (tests/lib/adminConventions.spec.ts).
+
+const session = Astro.locals.session;
+const pending = Astro.locals.secondStep ?? null;
+const sb = Astro.locals.supabase;
+const params = Astro.url.searchParams;
+let next = safeNext(params.get('next') ?? '/admin');
+
+let view: TwoStepView | null = viewFor(session, pending);
+// The middleware sends a request with neither to sign in; this is its second line.
+if (view === null || !sb) return Astro.redirect('/admin/login?next=%2Fadmin%2F2fa', 302);
+
+let message: PageMessage | null = null;
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const result = await twoStepFormPost({
+    sb,
+    session,
+    pending,
+    form,
+    cookies: Astro.cookies,
+    ip: clientIp(Astro.request),
+    brand: (await getIdentity(Astro.locals)).brandName.en,
+  });
+  if (result.kind === 'refuse') {
+    return new Response(null, { status: result.status, headers: { 'cache-control': 'no-store' } });
+  }
+  if (result.kind === 'redirect') return Astro.redirect(result.location, 303);
+  Astro.response.status = result.status;
+  view = result.view;
+  message = result.error ? TWO_STEP_MESSAGES[result.error] : null;
+  next = safeNext(form.get('next') ?? '/admin');
+} else {
+  message =
+    messageFor(TWO_STEP_MESSAGES, params.get('error')) ??
+    messageFor(TWO_STEP_DONE, params.get('done'));
+}
+
+const title = 'Two factor authentication';
+const csrfToken = Astro.locals.csrfToken;
+---
+
+{
+  !session ? (
+    <AuthLayout title={title} styles={['login.css', 'two-step.css']}>
+      <TwoStepPanel
+        view={view}
+        message={message}
+        csrfToken={csrfToken}
+        next={next}
+        inShell={false}
+      />
+    </AuthLayout>
+  ) : (
+    <AdminLayout
+      title={title}
+      subtitle="A code from your phone, asked for after your password."
+      styles={['two-step.css']}
+    >
+      <div class="card two-step-page">
+        <TwoStepPanel view={view} message={message} csrfToken={csrfToken} next={next} inShell />
+      </div>
+    </AdminLayout>
+  )
+}

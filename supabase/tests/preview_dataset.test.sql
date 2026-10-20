@@ -126,7 +126,7 @@ create function _anon_policies() returns table (tbl text, policies text) languag
     ('clients', 'clients_read:PERMISSIVE:db9934fa0ab3f173e346a67310b57bac,clients_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('disciplines', 'disciplines_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,disciplines_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('entity_seo', 'entity_seo_published_only:RESTRICTIVE:df5c9a7d7588fed51b9e8704523bf0a3,entity_seo_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,entity_seo_write:PERMISSIVE:763c5ebb7d12ee38b8e17d30ad1570df'),
-    ('media_assets', 'media_assets_public_read:PERMISSIVE:88fb58b63c6cf01b1652b4f3959970a6,media_read:PERMISSIVE:392446073406bce5902ebbac287245a1,media_write:PERMISSIVE:4f9223ffe3d088ba7a0a4098c7d190d6'),
+    ('media_assets', 'media_assets_public_read:PERMISSIVE:82f73c685108f7926f304603081a723c,media_read:PERMISSIVE:392446073406bce5902ebbac287245a1,media_write:PERMISSIVE:4f9223ffe3d088ba7a0a4098c7d190d6'),
     ('navigation', 'navigation_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,navigation_visible_only:RESTRICTIVE:d3e6a42adad1d6a81062627de227ba33,navigation_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('page_sections', 'page_sections_password_fence:RESTRICTIVE:288466d0b0045b81ef63d2e215c90e8e,page_sections_published_only:RESTRICTIVE:1f97d3d1084c993ca178204580b8d11d,page_sections_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,page_sections_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('pages', 'pages_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,pages_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),

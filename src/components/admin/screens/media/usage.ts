@@ -3,8 +3,8 @@
 // own sidebar would open the target screen, else plain words: a link that answers 403 is a
 // dead end. Which screens those are is decided on the server (usageScreensFor in
 // src/lib/admin/mediaLibrary.ts: isVisible over ADMIN_NAV) and handed to the island, so the
-// menu's registry never ships in the browser. An entity type this map does not know (R5,
-// U10a and U9a add some) is said in its own words, with no link, and never breaks the list.
+// menu's registry never ships in the browser. An entity type this map does not know (R5 and
+// U9a add some) is said in its own words, with no link, and never breaks the list.
 //
 // Since media_usage v4 (0066, Admin v2 R5) a row may be a pending change (`pending`): a draft
 // that names the picture, not yet live. It is said as one ("Pending change to service: logo")
@@ -30,6 +30,8 @@ export interface UsageEntry {
 interface Kind {
   /** The screen that edits it: the list's address, the entity's id after it. */
   screen: string;
+  /** Where the entry links, when it is not `<screen>/<id>` (a screen with no edit page). */
+  href?: (entityId: string) => string;
   /** What it is, in lower case, for a pending change's words. */
   noun: string;
   words: (label: string | null) => string;
@@ -55,6 +57,21 @@ export const USAGE_KINDS: Readonly<Record<string, Kind>> = {
   },
   discipline: { screen: '/admin/disciplines', noun: 'discipline', words: named('Discipline') },
   service: { screen: '/admin/services', noun: 'service', words: named('Service') },
+  // Admin v2 U10 (media_usage v5, 0073): a share image. The entity is the page the SEO row
+  // describes, its label "<kind>: <slug>" ("service: logo"); both open the SEO screen, which
+  // has no page per row (its Pages tab lists them).
+  entity_seo: {
+    screen: '/admin/seo',
+    noun: 'share image',
+    words: (label) => (label ? `Share image (${label})` : 'Share image'),
+    href: () => '/admin/seo',
+  },
+  seo_defaults: {
+    screen: '/admin/seo',
+    noun: 'default share image',
+    words: () => 'Default share image',
+    href: () => '/admin/seo?tab=site',
+  },
 };
 
 /** Every screen a "Used in" entry may link to. */
@@ -107,7 +124,7 @@ export function usageEntries(
     const key = `${row.pending ? 'pending' : 'live'}-${row.entityType}-${row.entityId}-${index}`;
     const href =
       kind && !row.pending && open.has(kind.screen)
-        ? `${kind.screen}/${encodeURIComponent(row.entityId)}`
+        ? (kind.href?.(row.entityId) ?? `${kind.screen}/${encodeURIComponent(row.entityId)}`)
         : null;
     return { key, words: usageWords(row), href };
   });

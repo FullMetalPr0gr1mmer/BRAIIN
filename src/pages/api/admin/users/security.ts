@@ -3,10 +3,14 @@ import { defineAdminRoute } from '@/lib/admin/route';
 import { OptimisticLockError, ValidationError } from '@/lib/admin/errors';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { AuthorizationError } from '@/lib/authz/errors';
-import { securityFromRow } from '@/lib/admin/users';
+import { REQUIRE_MFA_SELF_FIRST, securityFromRow } from '@/lib/admin/users';
 
 // The users screen's Security card (Admin v2 U12a): the session length (1 or 7 days, which
-// resolveAuthContext enforces on every admin request) and the domain invites may go to.
+// resolveAuthContext enforces on every admin request) and the domain invites may go to; since
+// U17 (0072) "Require 2FA for everyone", which resolveAuthContext and the access-token hook
+// enforce. Turning it ON is refused (422, field requireMfa) unless the saving Admin uses 2FA
+// in this session (decision D5: `auth.twoStep.on`, which a full session has only at aal2), so
+// nobody switches it on and is sent to set it up mid-save. Omitted, it is left as stored.
 // `users.manage`, Admin only, in both layers: admin_security_settings' policies (0055) want
 // an Admin token AND a live Admin profile. Immediate (P-3): no release, no history row.
 //
@@ -16,7 +20,7 @@ import { securityFromRow } from '@/lib/admin/users';
 
 export const prerender = false;
 
-const COLUMNS = 'session_max_days,invite_domain,version';
+const COLUMNS = 'session_max_days,invite_domain,require_mfa,version';
 
 export const GET = defineAdminRoute({
   cap: 'users.manage',
@@ -53,13 +57,19 @@ export const PUT = defineAdminRoute({
       .maybeSingle<Record<string, unknown>>();
     if (readError) rethrow('read', readError);
     const before = securityFromRow(existing ?? null);
+    const requireMfa = input.requireMfa ?? before.requireMfa;
+    if (requireMfa && !before.requireMfa && auth.twoStep?.on !== true) {
+      throw new ValidationError(REQUIRE_MFA_SELF_FIRST, 'requireMfa');
+    }
     const values = {
       session_max_days: input.sessionMaxDays,
       invite_domain: input.inviteDomain,
+      require_mfa: requireMfa,
     };
     const fields = [
       ...(before.sessionMaxDays !== input.sessionMaxDays ? ['session_max_days'] : []),
       ...(before.inviteDomain !== input.inviteDomain ? ['invite_domain'] : []),
+      ...(before.requireMfa !== requireMfa ? ['require_mfa'] : []),
     ];
 
     let row: Record<string, unknown> | null;

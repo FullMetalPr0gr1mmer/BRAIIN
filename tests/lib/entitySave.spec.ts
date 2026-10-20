@@ -250,6 +250,60 @@ describe('the save mode', () => {
   it('is live for every editor until releases switch on', () => {
     expect(saveModeFor(SERVICES)).toBe('live');
     expect(saveModeFor(SEO)).toBe('live');
+    expect(saveModeFor(PAGE_SEO)).toBe('live');
+  });
+});
+
+// Admin v2 U10: a page's SEO row, keyed by its target.
+const PAGE_SEO: SaveTarget = {
+  kind: 'entitySeo',
+  entityType: 'service',
+  entityId: '11111111-1111-4111-8111-111111111111',
+};
+
+describe('the entity-SEO target (U10)', () => {
+  const SEO_FIELDS: FieldDef[] = [
+    { name: 'metaTitle', label: 'Title', kind: 'bilingual', column: 'meta_title' },
+    { name: 'robots', label: 'Index', kind: 'text' },
+  ];
+
+  it('loads by its target', () => {
+    expect(loadUrl(PAGE_SEO, null)).toBe(
+      '/api/admin/entity-seo?entityType=service&entityId=11111111-1111-4111-8111-111111111111',
+    );
+    expect(loadUrl(PAGE_SEO, 'ignored')).toBe(loadUrl(PAGE_SEO, null));
+  });
+
+  it('reads a row without a version as 0 (no SEO row yet), as a singleton', () => {
+    expect(versionFallback(PAGE_SEO)).toBe(0);
+  });
+
+  it('saves with a PUT of the whole meta, the target and the version it loaded', () => {
+    const state = run(initialSaveState(SEO_FIELDS, false), {
+      type: 'loaded',
+      row: { meta_title: { en: 'T', ar: 'ت' }, robots: null, version: 3 },
+      fields: SEO_FIELDS,
+      versionFallback: versionFallback(PAGE_SEO),
+    });
+    const req = buildSaveRequest(PAGE_SEO, null, state, SEO_FIELDS);
+    expect(req.method).toBe('PUT');
+    expect(req.url).toBe('/api/admin/entity-seo');
+    expect(req.body).toMatchObject({
+      metaTitle: { en: 'T', ar: 'ت' },
+      entityType: 'service',
+      entityId: '11111111-1111-4111-8111-111111111111',
+      version: 3,
+    });
+  });
+
+  it('a first save sends version 0', () => {
+    const state = run(initialSaveState(SEO_FIELDS, false), {
+      type: 'loaded',
+      row: { meta_title: {}, robots: null, version: 0, id: null },
+      fields: SEO_FIELDS,
+      versionFallback: versionFallback(PAGE_SEO),
+    });
+    expect(buildSaveRequest(PAGE_SEO, null, state, SEO_FIELDS).body['version']).toBe(0);
   });
 });
 

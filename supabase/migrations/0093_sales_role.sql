@@ -6,7 +6,8 @@
 -- service_cases and the sample lock), 0024 (media_assets' public read), 0030 + 0041 (the
 -- staff UPDATE grant on leads), 0033 (app.role_works_leads), 0044 (app.staff_directory,
 -- crm_people), 0046 (help_articles), 0050 (the audit actor binding), 0052
--- (app.role_analytics_read) and 0071 (app.role_analytics_goals, which stays Admin + SEO).
+-- (app.role_analytics_read), 0071 (app.role_analytics_goals, which stays Admin + SEO), 0072
+-- (U17: roles-and-access at revision 2) and 0091 (C9a: app.role_crm_settings, Admin only).
 --
 -- Sales works leads, and is NOT CMS staff. ROLE_CAPS gives it three capabilities:
 -- leads.manage, leads.pii (one lead at a time, through the reveal: live-rechecked,
@@ -32,8 +33,8 @@
 --      token writes one in a colleague's name.
 --   3. The capability helpers gain 'sales' where ROLE_CAPS says so: app.role_works_leads
 --      (leads.manage) and app.role_analytics_read (analytics.read). The others are
---      unchanged (users, audit, site health, visibility, erasure, the stats' goals stay off
---      for Sales).
+--      unchanged (users, audit, site health, visibility, erasure, the stats' goals and the
+--      CRM settings stay off for Sales).
 --      tests/authz/sqlHelpers.spec.ts holds every helper equal to ROLE_CAPS.
 --   4. A RESTRICTIVE non-staff block on three of the four tables whose published rows anon
 --      reads while `authenticated` holds more columns than anon: testimonials (the consent
@@ -78,8 +79,8 @@
 -- roles already share. No table is created here.
 --
 -- HELP GUIDES (section 9): this slice's guide, the-sales-role (sort_order 65), is put into
--- H11's catalog, and the roles guide (roles-and-access) is put again with five roles. Neither
--- restates app.help_article_set().
+-- H11's catalog, and the roles guide (roles-and-access) is put again with five roles, on U17's
+-- revision-2 text (0072). Neither restates app.help_article_set().
 --
 -- Rollout (docs/launch-runbook.md): 0092, then this file, then the deploy; then invite Sales
 -- users. This file revokes a privilege (section 6), and the Worker that merges with it
@@ -219,9 +220,9 @@ create policy admin_role_defaults_read on public.admin_role_defaults for select 
 -- ---- 9. The help guides ----------------------------------------------------------------------
 -- H11's catalog (0069): one top-level put per guide, outside any DO block. the-sales-role is
 -- new (revision 0, its assigned place 65, between SEO 60 and leads 70, for the lead workers:
--- leads.manage); roles-and-access (revision 1, as 0069 left it) now says five roles and gains
--- the Sales line. Each put
--- re-seeds that one slug into every tenant and touches no other guide.
+-- leads.manage); roles-and-access (revision 2, as U17's 0072 left it: its 2FA paragraphs and
+-- five minutes kept) now says five roles and gains the Sales line, in English and Arabic.
+-- Each put re-seeds that one slug into every tenant and touches no other guide.
 select app.put_help_guide($guide$
 {
   "slug": "the-sales-role",
@@ -318,7 +319,7 @@ select app.put_help_guide($guide$
 {
   "slug": "roles-and-access",
   "sort_order": 30,
-  "minutes": 4,
+  "minutes": 5,
   "tags": [
     "account",
     "team"
@@ -375,6 +376,18 @@ select app.put_help_guide($guide$
         "x": "The Security card on Users & roles sets the session length, 1 day or 7 days: someone who signed in longer ago than that is asked to sign in again at their next click. It also sets the allowed email domain: when it is filled in, invites go only to addresses at that domain."
       },
       {
+        "t": "p",
+        "x": "Require 2FA for everyone, on the same card, asks everyone who has not set up two factor authentication to set it up at their next click, before they can do anything else in the admin. Turn on 2FA for your own account first: until you have, the card does not save the switch."
+      },
+      {
+        "t": "h",
+        "x": "Resetting someone's 2FA"
+      },
+      {
+        "t": "p",
+        "x": "If someone loses their phone, an Admin opens the person in Users & roles and chooses Reset 2FA. Their authenticator app stops working here and they are signed out on every device; the reset is recorded in the activity log. You cannot reset your own 2FA there (turn it off from your account), nor the account owner's, which only whoever runs the database can reset."
+      },
+      {
         "t": "tip",
         "x": "Roles are fixed: there are no exceptions for one person. If someone needs more, they need a different role."
       }
@@ -423,13 +436,25 @@ select app.put_help_guide($guide$
         "x": "تحدّد بطاقة Security في Users & roles مدة الجلسة، يومًا واحدًا أو 7 أيام: من سجّل دخوله قبل أكثر من ذلك يُطلب منه تسجيل الدخول من جديد عند نقرته التالية. وتحدّد أيضًا نطاق البريد الإلكتروني المسموح به: إذا مُلئ، لا تُرسل الدعوات إلا إلى عناوين ذلك النطاق."
       },
       {
+        "t": "p",
+        "x": "ويطلب الخيار Require 2FA for everyone، في البطاقة نفسها، من كل من لم يُعدّ التحقق بخطوتين أن يُعدّه عند نقرته التالية، قبل أن يستطيع فعل أي شيء آخر في لوحة الإدارة. شغّل 2FA لحسابك أنت أولًا: لا تحفظ البطاقة هذا الخيار قبل ذلك."
+      },
+      {
+        "t": "h",
+        "x": "إعادة ضبط 2FA لشخص ما"
+      },
+      {
+        "t": "p",
+        "x": "إذا فقد شخص هاتفه، يفتح المسؤول (Admin) حسابه في Users & roles ويختار Reset 2FA. يتوقف تطبيق المصادقة لديه عن العمل هنا ويُسجَّل خروجه من كل أجهزته، وتُسجَّل إعادة الضبط في سجل النشاط. لا يمكنك إعادة ضبط 2FA الخاص بك من هناك (أوقفه من حسابك)، ولا الخاص بمالك الحساب، فذلك لا يفعله إلا من يدير قاعدة البيانات."
+      },
+      {
         "t": "tip",
         "x": "الأدوار ثابتة، ولا استثناءات لشخص بعينه. من يحتاج إلى صلاحيات أكثر يحتاج إلى دور مختلف."
       }
     ]
   }
 }
-$guide$::jsonb, 1);
+$guide$::jsonb, 2);
 
 -- ═══ Postconditions ═══════════════════════════════════════════════════════════════════════
 -- Each block says what it checks. Expressions are read as pg_get_expr prints them.
@@ -469,7 +494,8 @@ begin
   end if;
   if app.role_crm_erase('sales') or app.role_manages_users('sales')
      or app.role_views_audit('sales') or app.role_site_health('sales')
-     or app.role_manages_visibility('sales') or app.role_analytics_goals('sales') then
+     or app.role_manages_visibility('sales') or app.role_analytics_goals('sales')
+     or app.role_crm_settings('sales') then
     raise exception '0093: a helper Sales must not pass answers true for sales';
   end if;
 
@@ -585,8 +611,9 @@ begin
               where not exists (select 1 from public.help_articles h
                                  where h.tenant_id = t.id and h.slug = 'roles-and-access'
                                    and h.body::text ~ 'There are five roles\.'
-                                   and h.body::text ~ 'Sales: works leads')) then
-    raise exception '0093: a tenant''s roles-and-access guide does not name five roles and Sales';
+                                   and h.body::text ~ 'Sales: works leads'
+                                   and h.body::text ~ 'Resetting someone''s 2FA')) then
+    raise exception '0093: a tenant''s roles-and-access guide does not name five roles and Sales (with U17''s 2FA text)';
   end if;
 
   -- The sample lock: no role claim is the only trusted context.

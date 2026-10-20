@@ -159,6 +159,7 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   defaultTitle: BI('Sample', 'تجريبي'),
   defaultDescription: BI('Sample description', 'وصف تجريبي'),
   defaultOgImage: '/og/sample.jpg',
+  defaultOgMediaId: UUID_B,
   organization: { name: 'Sample' },
   robotsDirectives: 'index,follow',
   // entity SEO
@@ -167,7 +168,8 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   metaTitle: BI('Meta title', 'عنوان'),
   metaDescription: BI('Meta description', 'وصف'),
   ogImage: '/og/service.jpg',
-  canonicalOverride: 'https://example.test/services/sample',
+  ogMediaId: UUID_B,
+  canonicalOverride: '/services/sample',
   robots: 'index,follow',
   schemaType: 'Service',
 };

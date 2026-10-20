@@ -27,7 +27,12 @@ export interface PageGuide {
 export const PAGE_GUIDES: readonly PageGuide[] = [
   { slug: 'finding-your-way', caps: [], screens: ['/admin/search'] },
   { slug: 'your-dashboard', caps: [], screens: ['/admin'] },
-  { slug: 'your-account', caps: [], screens: ['/admin/account', '/admin/notifications'] },
+  {
+    slug: 'your-account',
+    caps: [],
+    // /admin/2fa (U17): the two factor page, a full session's setup and management.
+    screens: ['/admin/account', '/admin/notifications', '/admin/2fa'],
+  },
   { slug: 'roles-and-access', caps: [], screens: ['/admin/users'] },
   {
     slug: 'saving-and-publishing',
@@ -64,6 +69,8 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     screens: ['/admin/seo', '/admin/redirects'],
   },
   { slug: 'working-with-leads', caps: ['leads.manage'], screens: ['/admin/leads'] },
+  // Admin v2 C9a: its guide is put by 0091 (H11's catalog).
+  { slug: 'crm-settings', caps: ['crm.settings'], screens: ['/admin/crm/settings'] },
   { slug: 'job-applications', caps: ['applications.manage'], screens: ['/admin/applications'] },
   { slug: 'maintenance-mode', caps: ['maintenance.manage'], screens: ['/admin/maintenance'] },
   { slug: 'page-visibility', caps: ['maintenance.manage'], screens: ['/admin/visibility'] },

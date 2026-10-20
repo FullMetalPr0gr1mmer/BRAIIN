@@ -2,7 +2,8 @@
 -- notes thread. Run with `supabase test db`.
 --
 -- Covers: who reads stages and the timeline (six principals plus a stale token); that
--- nobody writes them through the API, and nobody reaches the notes thread at all; the
+-- nobody writes the timeline through the API (stages are written by CRM settings since 0091,
+-- C9a: supabase/tests/crm_settings.test.sql), and nobody reaches the notes thread at all; the
 -- legacy sync both ways (old status writes move the stage, new stage writes set the
 -- status); the spam horizon (D2) applied to a LEGACY status='spam' write, never
 -- lengthened, and given back on clearing without undoing an erasure made while flagged;
@@ -107,9 +108,9 @@ select throws_ok($$ select retention_before_spam from public.leads $$, '42501', 
 select throws_ok(
   $$ insert into public.lead_stages (tenant_id, key, label, tone, kind)
      values ('00000000-0000-0000-0000-000000000001', 'extra', 'Extra', 'gray', 'open') $$,
-  '42501', null, 'admin cannot add a stage through the API (CRM settings, C9)');
-select throws_ok($$ update public.lead_stages set label = 'Renamed' $$, '42501', null,
-  'admin cannot rename a stage through the API');
+  '42501', null, 'admin cannot name the tenant of a new stage (C9a: a column grant, the token''s tenant)');
+select throws_ok($$ update public.lead_stages set key = 'renamed' $$, '42501', null,
+  'admin cannot change a stage''s key through the API (C9a edits labels, tones, kinds and order)');
 select throws_ok(
   $$ insert into public.lead_events (tenant_id, lead_id, kind)
      values ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000aa01', 'created') $$,
@@ -400,6 +401,7 @@ select ok(
 select ok(
   has_table_privilege('authenticated', 'public.lead_stages', 'select')
   and has_table_privilege('authenticated', 'public.lead_events', 'select')
+  -- Since 0091 (C9a) stage inserts are a column grant: never table-wide.
   and not has_table_privilege('authenticated', 'public.lead_stages', 'insert')
   and not has_table_privilege('authenticated', 'public.lead_events', 'insert')
   and not has_table_privilege('authenticated', 'public.lead_notes', 'select')
@@ -407,7 +409,7 @@ select ok(
   and has_table_privilege('service_role', 'public.lead_notes', 'select')
   and has_table_privilege('service_role', 'public.lead_notes', 'insert')
   and has_table_privilege('service_role', 'public.lead_events', 'insert'),
-  'grants: staff read stages and events only; the notes thread is service-role only');
+  'grants: staff insert no stage or event table-wide; the notes thread is service-role only');
 select ok(
   exists (select 1 from pg_policies
            where schemaname = 'public' and tablename = 'lead_events' and policyname = 'lead_events_live'

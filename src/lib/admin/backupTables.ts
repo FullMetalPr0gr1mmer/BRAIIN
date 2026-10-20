@@ -103,7 +103,7 @@ export const BACKUP_TABLES: readonly { table: string; columns: string }[] = [
   {
     table: 'entity_seo',
     columns:
-      'id,entity_type,entity_id,meta_title,meta_description,og_image,canonical_override,robots,schema_type',
+      'id,entity_type,entity_id,meta_title,meta_description,og_image,og_media_id,canonical_override,robots,schema_type',
   },
   {
     table: 'media_assets',

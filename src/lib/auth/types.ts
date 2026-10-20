@@ -28,4 +28,9 @@ export interface AuthContext {
   /** Mirrors profiles.is_active; a demoted/disabled user fails assertCap immediately. */
   readonly isActive: boolean;
   readonly email: string;
+  /**
+   * The person's 2FA (Admin v2 U17): set by resolveAuthContext for every full session, absent
+   * where a context is built by hand (tests, fixtures), which reads as "off, not required".
+   */
+  readonly twoStep?: import('./twoStep').TwoStepState;
 }

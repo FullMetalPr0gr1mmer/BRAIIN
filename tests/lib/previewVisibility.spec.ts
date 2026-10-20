@@ -106,13 +106,43 @@ describe('the mirror over the fixture tenant', () => {
     }
   });
 
+  it('media: a share image (0073) is read while its SEO row is, and the default always', async () => {
+    const tables = fixtureTables();
+    const template = tables['media_assets']!.find((m) => m['id'] === ID.mUnref)!;
+    const shareLive = id(171);
+    const shareDraft = id(172);
+    const shareOrphan = id(173);
+    const shareDefault = id(174);
+    tables['media_assets']!.push(
+      ...[shareLive, shareDraft, shareOrphan, shareDefault].map((mid) => ({
+        ...template,
+        id: mid,
+      })),
+    );
+    const og = (eid: string, mid: string) => {
+      const row = tables['entity_seo']!.find((r) => r['id'] === eid)!;
+      row['og_media_id'] = mid;
+    };
+    og(ID.esSvc, shareLive); // a published service's SEO row: read
+    og(ID.esSvcDraft, shareDraft); // a draft service's: hidden
+    og(ID.esOrphan, shareOrphan); // an orphan's: hidden
+    tables['seo_defaults']![0]!['default_og_media_id'] = shareDefault;
+    const { ids } = await visible(tables);
+    expect(ids['media_assets']).toContain(shareLive);
+    expect(ids['media_assets']).toContain(shareDefault);
+    expect(ids['media_assets']).not.toContain(shareDraft);
+    expect(ids['media_assets']).not.toContain(shareOrphan);
+  });
+
   it('reads every rule from the tables it depends on (the closure the dataset loads)', () => {
     expect([...visibilityClosure(['service_cases'])].sort()).toEqual([
       'disciplines',
       'service_cases',
       'services',
     ]);
-    expect(visibilityClosure(['media_assets']).size).toBe(11);
+    // 0073 adds the share images: entity_seo (and the parents its fence reads, blog_posts
+    // among them) and seo_defaults.
+    expect(visibilityClosure(['media_assets']).size).toBe(14);
     for (const table of PREVIEW_TABLES)
       expect(VISIBILITY_DEPS[table as PreviewTable]).toBeDefined();
   });

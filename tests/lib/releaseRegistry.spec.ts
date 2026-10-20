@@ -277,6 +277,9 @@ describe('apply order', () => {
     'testimonials.avatar_media_id': 'outside',
     'team_members.portrait_media_id': 'outside',
     'team_members.profile_user_id': 'outside',
+    // The share images (Admin v2 U10, 0073): media assets too.
+    'entity_seo.og_media_id': 'outside',
+    'seo_defaults.default_og_media_id': 'outside',
   };
 
   it('every link column is classified', () => {

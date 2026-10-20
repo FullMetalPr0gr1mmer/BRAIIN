@@ -38,7 +38,7 @@ export default function BilingualField({
     en: typeof record['en'] === 'string' ? record['en'] : '',
     ar: typeof record['ar'] === 'string' ? record['ar'] : '',
   };
-  const multiline = field.kind === 'prose';
+  const multiline = field.kind === 'prose' || field.multiline === true;
   const english = text.en.trim() !== '';
   const arabicEmpty = text.ar.trim() === '';
   const arabicRequired = field.kind === 'bilingual' && (field.required === true || english);
@@ -72,6 +72,7 @@ export default function BilingualField({
       dir: lang === 'ar' ? 'rtl' : undefined,
       value: text[lang],
       maxLength: field.maxLength,
+      placeholder: field.placeholder?.[lang] || undefined,
       'aria-required':
         (lang === 'en' ? field.required === true : arabicRequired && field.required === true) ||
         undefined,

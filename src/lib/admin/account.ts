@@ -26,6 +26,11 @@ export interface AccountView {
   can: string[];
   /** Who changes this person's access. */
   accessNote: string;
+  /**
+   * The person's 2FA (Admin v2 U17), from the session check: on (an authenticator app, this
+   * session typed its code) and whether the team requires it. Off when unknown.
+   */
+  twoStep: { on: boolean; required: boolean };
 }
 
 /** The outcome of a form just posted on /admin/account, shown beside that form. */
@@ -48,6 +53,7 @@ export function accountViewFor(auth: AuthContext, displayName: string | null): A
       auth.role === 'admin'
         ? 'You change people’s access in Users & roles.'
         : 'Ask an Admin to change your access.',
+    twoStep: { on: auth.twoStep?.on === true, required: auth.twoStep?.required === true },
   };
 }
 

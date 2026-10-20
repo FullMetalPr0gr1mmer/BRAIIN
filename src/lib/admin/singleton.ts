@@ -4,6 +4,7 @@ import type { Access, Capability } from '@/lib/authz/matrix';
 import type { AuthContext } from '@/lib/auth/types';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { defineAdminRoute } from './route';
+import { constraintOf, type ConstraintFields } from './crud';
 import { OptimisticLockError, ValidationError } from './errors';
 import type { ResourcePayload } from './resource';
 import {
@@ -23,10 +24,19 @@ export function rethrowWriteError(
   table: string,
   cap: Capability,
   verb: string,
-  error: { code?: string; message: string },
+  error: { code?: string; message: string; details?: string | null },
+  foreignKeys: ConstraintFields = {},
 ): never {
   if (error.code === '42501')
     throw new AuthorizationError(cap, `database refused the ${table} write`);
+  // 23503 on a key the config names = a reference the editor chose that does not exist for
+  // this tenant (seo_defaults' share image, 0073: a composite key to the tenant's own media).
+  // Bad input, so 422 on that field, not a 500 in system_logs. Any other key stays a 500.
+  if (error.code === '23503') {
+    const name = constraintOf(error);
+    const known = name ? foreignKeys[name] : undefined;
+    if (known) throw new ValidationError(known.message, known.field);
+  }
   // 23514 = a CHECK constraint the schema could not see, because a PATCH names only the
   // fields it changes and the check spans stored ones (site_profile: a WhatsApp display
   // form needs the E.164 number it displays). Bad input, so 422 — not a 500.
@@ -67,6 +77,11 @@ export interface SingletonConfig {
    * exempt_columns). The legacy PATCH still writes them while releases are off.
    */
   immediateColumns?: readonly string[];
+  /**
+   * The row's foreign keys → the field and message a refused reference (23503) reports, so a
+   * save naming a missing record is a 422 on that field (seo_defaults' share image, 0073).
+   */
+  foreignKeys?: ConstraintFields;
   /** Returned by GET when no row exists yet. */
   defaults: Record<string, unknown>;
   /**
@@ -147,7 +162,7 @@ export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH
         // 23505 = someone else inserted between our read and our write.
         if (error) {
           if (error.code === '23505') throw new OptimisticLockError(config.table);
-          rethrowWriteError(config.table, config.writeCap, 'create', error);
+          rethrowWriteError(config.table, config.writeCap, 'create', error, config.foreignKeys);
         }
         row = data;
       } else {
@@ -159,7 +174,9 @@ export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH
           .eq('version', payload.version)
           .select(config.columns)
           .maybeSingle();
-        if (error) rethrowWriteError(config.table, config.writeCap, 'update', error);
+        if (error) {
+          rethrowWriteError(config.table, config.writeCap, 'update', error, config.foreignKeys);
+        }
         if (!data) throw new OptimisticLockError(config.table);
         row = data;
       }

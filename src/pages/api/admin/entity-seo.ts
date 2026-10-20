@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { OptimisticLockError } from '@/lib/admin/errors';
-import { ENTITY_SEO } from '@/lib/admin/entitySeo';
+import { ENTITY_SEO, entitySeoWriteError, normalizeCanonical } from '@/lib/admin/entitySeo';
 import { stagedEntitySeoRead, stagedEntitySeoWrite } from '@/lib/release/stagedEntitySeo';
 
 // Per-entity SEO metadata (`seo.entityMeta` — Admin + SEO write, Content Creator view).
@@ -21,6 +22,11 @@ import { stagedEntitySeoRead, stagedEntitySeoWrite } from '@/lib/release/stagedE
 // With releases on for the caller's tenant (Admin v2 R3b) both handlers stage instead: one line
 // at the top of each hands the request to src/lib/release/stagedEntitySeo.ts, and the bodies
 // below are the legacy path, unchanged while releases are off.
+//
+// Admin v2 U10: a save may leave any field to the page's default (the pair rule, in the
+// schema and `assertBilingual`); a canonical override equal to the page's own path is stored
+// as null (`normalizeCanonical`, one read when an override is sent); and a save that sets
+// nothing on a target with no row creates none: it answers the defaults, unaudited.
 
 export const prerender = false;
 
@@ -60,7 +66,10 @@ export const PUT = defineAdminRoute({
     const { auth, sb, audit } = ctx;
     const input = WriteSchema.parse(ctx.input);
     ENTITY_SEO.assertBilingual(input);
-    const values = ENTITY_SEO.toRow(input);
+    const values = ENTITY_SEO.toRow({
+      ...input,
+      canonicalOverride: await normalizeCanonical(sb, auth, input, PUBLIC_SITE_URL),
+    });
 
     const { data: existing, error: readError } = await sb
       .from('entity_seo')
@@ -74,15 +83,16 @@ export const PUT = defineAdminRoute({
     let row: unknown;
     if (!existing) {
       if (input.version !== 0 && input.version !== 1) throw new OptimisticLockError('entity_seo');
+      if (ENTITY_SEO.isEmpty(values)) {
+        // Nothing to keep: the page follows its defaults, and no empty row is made.
+        return { ...DEFAULTS, entity_type: input.entityType, entity_id: input.entityId, id: null };
+      }
       const { data, error } = await sb
         .from('entity_seo')
         .insert({ ...values, tenant_id: auth.tenantId, ...ENTITY_SEO.target(input) })
         .select(COLUMNS)
         .single();
-      if (error) {
-        if (error.code === '23505') throw new OptimisticLockError('entity_seo');
-        throw new Error(`create entity_seo: ${error.message}`);
-      }
+      if (error) throw entitySeoWriteError(error, 'create');
       row = data;
     } else {
       if (existing.version !== input.version) throw new OptimisticLockError('entity_seo');
@@ -94,7 +104,7 @@ export const PUT = defineAdminRoute({
         .eq('version', input.version)
         .select(COLUMNS)
         .maybeSingle();
-      if (error) throw new Error(`update entity_seo: ${error.message}`);
+      if (error) throw entitySeoWriteError(error, 'update');
       if (!data) throw new OptimisticLockError('entity_seo');
       row = data;
     }

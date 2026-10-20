@@ -26,7 +26,7 @@
 --      lead, no timeline and nobody in the directory.
 
 begin;
-select plan(63);
+select plan(64);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- T1 is created older than any seeded tenant, so inside this transaction it is the launch
@@ -257,12 +257,13 @@ select ok(not app.is_member(), 'no role claim is no member');
 
 -- Every helper, for every value of the enum and none: a literal copy of CLAUDE.md §5.
 select is(
-  (select string_agg(format('%s:%s%s%s%s%s%s%s%s', r,
+  (select string_agg(format('%s:%s%s%s%s%s%s%s%s%s', r,
             app.role_works_leads(r)::int, app.role_analytics_read(r)::int, app.role_crm_erase(r)::int,
             app.role_manages_users(r)::int, app.role_views_audit(r)::int, app.role_site_health(r)::int,
-            app.role_manages_visibility(r)::int, app.role_analytics_goals(r)::int), ' ' order by r)
+            app.role_manages_visibility(r)::int, app.role_analytics_goals(r)::int,
+            app.role_crm_settings(r)::int), ' ' order by r)
      from unnest(enum_range(null::public.app_role)::text[] || array['anon']) r),
-  'admin:11111111 anon:00000000 content_creator:01000000 developer:11001110 sales:11000000 seo:01000001',
+  'admin:111111111 anon:000000000 content_creator:010000000 developer:110011100 sales:110000000 seo:010000010',
   'each helper answers its capability for each role: Sales works leads and reads the stats, nothing else');
 
 select is(
@@ -312,8 +313,16 @@ select is(_run($$ insert into public.leads (tenant_id, name, email_enc, message)
   'no API insert');
 select is(_run($$ delete from public.leads $$), '42501', 'no API delete');
 select is(_run($$ select * from public.lead_notes $$), '42501', 'no notes table (the audited route reads it)');
-select is(_run($$ update public.crm_settings set sla_hours = 1 $$) || ' ' || _run($$ delete from public.lead_stages $$),
-  '42501 42501', 'no CRM settings or stages write (crm.settings is not Sales'')');
+-- Since C9a (0091) `authenticated` holds column grants on crm_settings and lead_stages for
+-- crm.settings holders, so the refusal is RLS's: Sales changes no row and adds no stage.
+select is(_run($$ update public.crm_settings set sla_hours = 1 $$) || ' '
+          || _run($$ update public.lead_stages set label = 'x' $$) || ' '
+          || _run($$ delete from public.lead_stages $$) || ' '
+          || _run($$ insert into public.lead_stages (label, label_ar, tone, kind, sort_order)
+                     values ('x', 'س', 'gray', 'open', 99) $$),
+  'ok:0 ok:0 ok:0 42501', 'no CRM settings or stages write (crm.settings is not Sales'', 0091)');
+select is(_run($$ select public.save_lead_stages('93000000-0000-0000-0000-000000000001', '[]'::jsonb, '[]'::jsonb) $$),
+  '42501', 'and the stages'' one door, save_lead_stages, refuses it in its own tenant (crm.settings)');
 select is(
   (select string_agg(display_name || ':' || role, ', ' order by display_name)
      from public.crm_people('93000000-0000-0000-0000-000000000001')),

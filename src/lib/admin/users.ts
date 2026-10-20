@@ -53,6 +53,7 @@ function toUserRow(
     createdAt: text(profile['created_at']),
     email: account?.email ?? null,
     isOwner: profile['is_owner'] === true,
+    twoStep: typeof account?.two_step === 'boolean' ? account.two_step : null,
     ...partial,
     status: userStatus(partial, now),
   };
@@ -68,7 +69,13 @@ export async function loadUsers(
   auth: AuthContext,
   page: { limit: number; offset: number },
   now: number = Date.now(),
-): Promise<{ rows: UserRow[]; total: number; hasOwner: boolean | null; pending: UserRow[] }> {
+): Promise<{
+  rows: UserRow[];
+  total: number;
+  hasOwner: boolean | null;
+  pending: UserRow[];
+  withoutTwoStep: number | null;
+}> {
   const [{ rows: profiles, total }, accounts] = await Promise.all([
     listRows<Record<string, unknown>>(sb, 'profiles', auth, {
       columns: PROFILE_COLUMNS,
@@ -94,7 +101,7 @@ export async function loadUsers(
         ? true
         : null;
   const pending = await pendingInvites(sb, auth, accounts, rows, now);
-  return { rows, total, hasOwner, pending };
+  return { rows, total, hasOwner, pending, withoutTwoStep: accountsWithoutTwoStep(accounts) };
 }
 
 /**
@@ -223,8 +230,19 @@ export async function pendingInviteTarget(
   return { id, role: profile.role, isActive: profile.is_active === true, email: user.email };
 }
 
+/**
+ * How many active members have no verified second factor (Admin v2 U17), across the whole
+ * directory rather than one page of the list: the Require 2FA confirm and the health check
+ * say it. Null when the directory cannot be read or predates 0072 (no `two_step`).
+ */
+export function accountsWithoutTwoStep(accounts: readonly StaffAccountRow[] | null): number | null {
+  if (!accounts) return null;
+  if (accounts.some((a) => a.two_step === undefined || a.is_active === undefined)) return null;
+  return accounts.filter((a) => a.is_active === true && a.two_step !== true).length;
+}
+
 /** public.staff_accounts for the caller's tenant; null when it cannot be read. */
-async function staffAccounts(
+export async function staffAccounts(
   sb: SupabaseClient,
   tenantId: string,
 ): Promise<StaffAccountRow[] | null> {
