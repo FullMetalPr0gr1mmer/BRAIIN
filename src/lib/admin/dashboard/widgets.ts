@@ -84,6 +84,13 @@ export const WIDGETS: Readonly<Record<WidgetId, WidgetDef>> = {
     description: 'A shared note for the team',
     anyCaps: ['analytics.read'],
   },
+  // G1b: off the board by default, as the prototype's DASH_DEFAULT; one read when shown.
+  realtime: {
+    id: 'realtime',
+    label: 'Right now',
+    description: 'People on the site now and the pages they are on',
+    anyCaps: ['analytics.read'],
+  },
 };
 
 type Caps = Readonly<Record<Capability, Access>>;
@@ -115,24 +122,24 @@ export const DEFAULT_LAYOUTS: Readonly<Record<Role, DashboardLayout>> = {
     top: ['kpis'],
     left: ['quick', 'views', 'leads'],
     right: ['attention', 'health', 'activity', 'applications'],
-    hidden: ['pages', 'disciplines', 'notes'],
+    hidden: ['pages', 'disciplines', 'notes', 'realtime'],
   },
   content_creator: {
     top: ['kpis'],
     left: ['quick', 'views'],
     right: ['attention', 'pages'],
-    hidden: ['notes'],
+    hidden: ['notes', 'realtime'],
   },
   seo: {
     top: ['kpis'],
     left: ['quick', 'views'],
     right: ['attention', 'pages'],
-    hidden: ['notes'],
+    hidden: ['notes', 'realtime'],
   },
   developer: {
     top: ['kpis'],
     left: ['quick', 'views', 'leads'],
     right: ['health', 'activity'],
-    hidden: ['pages', 'disciplines', 'notes'],
+    hidden: ['pages', 'disciplines', 'notes', 'realtime'],
   },
 };

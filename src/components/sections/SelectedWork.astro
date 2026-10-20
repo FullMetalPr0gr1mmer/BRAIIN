@@ -83,7 +83,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
             {featuredBlurb && <span>{featuredBlurb}</span>}
           </p>
           <FacetTags card={featured} locale={locale} variant="light" />
-          <a class="sel-work__link" href={featuredHref}>
+          <a class="sel-work__link" href={featuredHref} data-track="project_card">
             {linkLabel}
             <span class="sr-only">{`: ${featuredTitle}`}</span>
           </a>

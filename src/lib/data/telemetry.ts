@@ -33,7 +33,7 @@ export async function recordAnalyticsEvent(event: AnalyticsEvent): Promise<boole
         path: event.path ?? null,
         locale: event.locale,
         session_id: event.sessionId ?? null,
-        props: event.props ?? {},
+        props: 'props' in event ? event.props : {},
       });
     return !error;
   } catch {

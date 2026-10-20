@@ -24,6 +24,8 @@ import { ADMIN_TIME_ZONE } from '../relTime';
 import { dailyArabicShare, loadPageviewSummary, type PageviewSummary } from '../stats/pageviews';
 import { dayLabel, hasPreviousPeriod, rangeOfDays } from '../stats/range';
 import { count as countOf, record } from '../stats/read';
+import { loadRealtime } from '../stats/realtime';
+import type { RealtimeView } from '../stats/realtimeView';
 import { resolveLayout, resolveQuick, shownWidgets, type LayoutSource } from './layout';
 import { readMyRolePreset, type RolePreset } from './roleDefaults';
 import { readTeamNotes, type TeamNotes } from './teamNotes';
@@ -135,6 +137,7 @@ export interface WidgetDataMap {
   pages: BarDatum[];
   disciplines: { items: BarDatum[]; total: number; capped: boolean };
   notes: TeamNotes;
+  realtime: RealtimeView;
 }
 
 export type WidgetResult<K extends WidgetId = WidgetId> =
@@ -690,6 +693,9 @@ export function widgetLoaders(
     },
 
     notes: () => readTeamNotes(sb, auth),
+
+    // "Right now" (G1b): one read of the minute rollup, as the stats' Realtime tab.
+    realtime: () => loadRealtime(sb, auth),
   };
 }
 
