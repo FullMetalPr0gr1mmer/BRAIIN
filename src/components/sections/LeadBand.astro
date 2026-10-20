@@ -7,6 +7,7 @@ import { getIdentity } from '@/lib/identity';
 import AccentText from '@/components/ui/AccentText.astro';
 import Cta from '@/components/ui/Cta.astro';
 import { CTA_COPY } from '@/lib/sections/copy/cta';
+import { trackHref } from '@/lib/analytics/track';
 
 // The closing call to action of Our Work, All projects and the case study (UI v2): a Klein
 // band with the outlined accent, a line of copy, the inquiry button and the studio email
@@ -54,10 +55,12 @@ const email = showEmail ? (await getIdentity(Astro.locals)).contactEmail : null;
     <div class="lead-band__row">
       <p class="rv">{text}</p>
       <div class="lead-band__acts rv">
-        <Cta href={href} variant="light">{button}</Cta>
+        <Cta href={href} variant="light" data-track={trackHref(href)}>
+          {button}
+        </Cta>
         {
           email && (
-            <a class="lead-band__mail" href={`mailto:${email}`} dir="ltr">
+            <a class="lead-band__mail" href={`mailto:${email}`} dir="ltr" data-track="email">
               {email}
             </a>
           )

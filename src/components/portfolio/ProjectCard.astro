@@ -64,7 +64,7 @@ const facets = filterable ? JSON.stringify(facetValues(card)) : undefined;
   data-facets={facets}
   hidden={hidden}
 >
-  <a class="pcard__link" href={href} data-clip-trigger>
+  <a class="pcard__link" href={href} data-clip-trigger data-track="project_card">
     <MediaFrame
       image={card.poster}
       locale={locale}

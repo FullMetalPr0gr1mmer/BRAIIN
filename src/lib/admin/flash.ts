@@ -15,6 +15,10 @@ export const FLASH_PARAM = 'done';
 export const FLASH_MESSAGES = {
   'lead-added': 'Lead added',
   'lead-erased': 'Lead erased',
+  // Website stats goals (G1c): the card reloads with its new progress after each change.
+  'goal-added': 'Goal added',
+  'goal-saved': 'Goal saved',
+  'goal-deleted': 'Goal deleted',
 } as const;
 
 export type FlashKey = keyof typeof FLASH_MESSAGES;

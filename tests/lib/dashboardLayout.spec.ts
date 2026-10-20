@@ -45,7 +45,8 @@ describe('the schemas refuse on write', () => {
   });
 
   it('an id this build does not know, and an unknown key', () => {
-    expect(DashboardLayoutSchema.safeParse(layout(['realtime' as WidgetId], [], [])).success).toBe(
+    // 'pipeline' is the CRM's, not built yet ('realtime' was the example until G1b built it).
+    expect(DashboardLayoutSchema.safeParse(layout(['pipeline' as WidgetId], [], [])).success).toBe(
       false,
     );
     expect(
@@ -97,7 +98,7 @@ describe('the reader drops on read (ui.md §10)', () => {
   it('unknown ids and repeats go, the rest keep their order', () => {
     expect(
       readDashboardLayout({
-        top: ['kpis', 'realtime'],
+        top: ['kpis', 'pipeline'],
         left: ['quick', 'kpis', 'views'],
         right: 'not a list',
         hidden: ['notes', 7, null],

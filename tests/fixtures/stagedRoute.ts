@@ -23,6 +23,7 @@ export interface Answer {
   status: number;
   body: Row;
   data: Row;
+  headers: Headers;
 }
 
 export async function callRoute(
@@ -59,7 +60,7 @@ export async function callRoute(
   } as unknown as Parameters<APIRoute>[0];
   const res = (await route(ctx)) as Response;
   const body = (await res.json()) as Row;
-  return { status: res.status, body, data: (body['data'] ?? {}) as Row };
+  return { status: res.status, body, data: (body['data'] ?? {}) as Row, headers: res.headers };
 }
 
 /** The audit actions written, in order. */

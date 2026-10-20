@@ -26,7 +26,7 @@
 --      lead, no timeline and nobody in the directory.
 
 begin;
-select plan(61);
+select plan(63);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- T1 is created older than any seeded tenant, so inside this transaction it is the launch
@@ -115,6 +115,18 @@ insert into public.consent_log (tenant_id, subject_hash, categories, policy_vers
 insert into public.notification_log (tenant_id, channel, status) values ('93000000-0000-0000-0000-000000000001', 'inbox', 'queued');
 insert into public.search_queries (tenant_id, q) values ('93000000-0000-0000-0000-000000000001', 'logo');
 insert into public.rollup_daily_pageviews (tenant_id, day, path, views) values ('93000000-0000-0000-0000-000000000001', current_date, '/', 3);
+-- The stats' rollups and goals (0071, Admin v2 G1): analytics.read reads them.
+insert into public.rollup_daily_visits (tenant_id, day, visits, one_page_visits, visit_views, service_visits,
+                                        service_inquiry_visits, inquiry_visits)
+  values ('93000000-0000-0000-0000-000000000001', current_date, 4, 1, 6, 2, 1, 1);
+insert into public.rollup_daily_events (tenant_id, day, event_type, key, events, visits)
+  values ('93000000-0000-0000-0000-000000000001', current_date, 'cta_click', '*', 2, 2);
+insert into public.rollup_hourly_pageviews (tenant_id, hour, views)
+  values ('93000000-0000-0000-0000-000000000001', date_trunc('hour', now() at time zone 'UTC') at time zone 'UTC', 3);
+insert into public.rollup_minute_activity (tenant_id, minute, views, active_visits)
+  values ('93000000-0000-0000-0000-000000000001', date_trunc('minute', now() at time zone 'UTC') at time zone 'UTC', 1, 1);
+insert into public.analytics_goals (tenant_id, name, metric, target)
+  values ('93000000-0000-0000-0000-000000000001', 'Visits this month', 'visits', 100);
 insert into public.rollup_daily_vitals (tenant_id, day, path, metric, p75, samples, hist)
   values ('93000000-0000-0000-0000-000000000001', current_date, '/', 'LCP', 1200, 3,
           array_fill(0, array[24]) || array[3]);
@@ -225,7 +237,9 @@ grant insert, select on _seen to anon, authenticated;
 create function _not_compared() returns text[] language sql immutable as $$
   select array['leads', 'leads_safe', 'lead_stages', 'lead_events', 'crm_settings',
                'profiles', 'admin_user_prefs', 'tenants', 'help_articles',
-               'admin_role_defaults', 'rollup_daily_pageviews', 'team_notes']
+               'admin_role_defaults', 'rollup_daily_pageviews', 'team_notes',
+               'rollup_daily_visits', 'rollup_daily_events', 'rollup_hourly_pageviews',
+               'rollup_minute_activity', 'analytics_goals']
 $$;
 grant execute on function _not_compared() to anon, authenticated;
 
@@ -243,12 +257,12 @@ select ok(not app.is_member(), 'no role claim is no member');
 
 -- Every helper, for every value of the enum and none: a literal copy of CLAUDE.md §5.
 select is(
-  (select string_agg(format('%s:%s%s%s%s%s%s%s', r,
+  (select string_agg(format('%s:%s%s%s%s%s%s%s%s', r,
             app.role_works_leads(r)::int, app.role_analytics_read(r)::int, app.role_crm_erase(r)::int,
             app.role_manages_users(r)::int, app.role_views_audit(r)::int, app.role_site_health(r)::int,
-            app.role_manages_visibility(r)::int), ' ' order by r)
+            app.role_manages_visibility(r)::int, app.role_analytics_goals(r)::int), ' ' order by r)
      from unnest(enum_range(null::public.app_role)::text[] || array['anon']) r),
-  'admin:1111111 anon:0000000 content_creator:0100000 developer:1100111 sales:1100000 seo:0100000',
+  'admin:11111111 anon:00000000 content_creator:01000000 developer:11001110 sales:11000000 seo:01000001',
   'each helper answers its capability for each role: Sales works leads and reads the stats, nothing else');
 
 select is(
@@ -362,6 +376,15 @@ select ok((select count(*) from public.help_articles) > 0,
   'Sales reads its tenant''s guides (0093: a live member; the Worker shows its own)');
 select is((select sum(views)::int from public.rollup_daily_pageviews), 3,
   'analytics.read: Sales reads the page-view rollup the dashboard draws');
+select is(_count('public.rollup_daily_visits') || '/' || _count('public.rollup_daily_events') || '/'
+          || _count('public.rollup_hourly_pageviews') || '/' || _count('public.rollup_minute_activity')
+          || '/' || _count('public.analytics_goals'),
+  '1/1/1/1/1', 'and the stats'' visits, events, hours and realtime rollups and the goals (0071)');
+select is(_run($$ insert into public.analytics_goals (tenant_id, name, metric, target)
+                  values ('93000000-0000-0000-0000-000000000001', 'x', 'visits', 5) $$) || ' '
+          || _run($$ update public.analytics_goals set target = 1 $$) || ' '
+          || _run($$ delete from public.analytics_goals $$),
+  '42501 ok:0 ok:0', 'but sets, changes and deletes no goal (analytics.goals is not Sales'')');
 select is((select string_agg(tenant_id::text || ':' || role::text, ',') from public.admin_role_defaults),
   '93000000-0000-0000-0000-000000000001:sales',
   'Sales reads the dashboard preset an Admin saved for its role, and no other role''s (0093 §8b)');

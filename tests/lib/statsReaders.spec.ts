@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AuthContext } from '@/lib/auth/types';
+import type { AuthContext, Role } from '@/lib/auth/types';
+import { ROLE_CAPS } from '@/lib/authz/matrix';
 import { ValidationError } from '@/lib/admin/errors';
 import { loadLogs } from '@/lib/admin/health/logs';
+import { loadLeadKpis } from '@/lib/admin/stats/leads';
 import { loadPagePaths } from '@/lib/admin/stats/pageviews';
 import { rangeOfDays } from '@/lib/admin/stats/range';
 import { MAX_OFFSET, boundedOffset, readError } from '@/lib/admin/stats/read';
@@ -116,5 +118,41 @@ describe('readError', () => {
     expect(err).not.toBeInstanceOf(ValidationError);
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({ level: 'error', source: 'admin:stats' });
+  });
+});
+
+// The Conversions tab's "Inquiries received" and the Overview's lead figures (G1 review,
+// g1-correctness-3: the signed-in e2e could not hold this, CI's rollups being empty): a role
+// without leads.manage gets null and lead_summary is never asked; a lead role gets the count.
+describe('loadLeadKpis', () => {
+  const roles = Object.keys(ROLE_CAPS) as Role[];
+  it.each(roles)(
+    'as %s: the count only with leads.manage, nothing read otherwise',
+    async (role) => {
+      const asked: string[] = [];
+      const sb = {
+        rpc: async (fn: string) => {
+          asked.push(fn);
+          return { data: { total: 12 }, error: null };
+        },
+      } as unknown as SupabaseClient;
+      const kpis = await loadLeadKpis(sb, { tenantId: 't1', role } as AuthContext, range, false);
+      if (ROLE_CAPS[role]['leads.manage'] === 'full') {
+        expect(kpis).toEqual({ current: 12, previous: null });
+        expect(asked).toEqual(['lead_summary']);
+      } else {
+        expect(kpis).toBeNull();
+        expect(asked).toEqual([]);
+      }
+    },
+  );
+
+  it('is shown to exactly the roles that work with leads', () => {
+    // Sales works leads too (Admin v2 C10a), so it sees the inquiries count.
+    expect(roles.filter((r) => ROLE_CAPS[r]['leads.manage'] === 'full').sort()).toEqual([
+      'admin',
+      'developer',
+      'sales',
+    ]);
   });
 });

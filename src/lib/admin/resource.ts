@@ -17,6 +17,7 @@ import {
 } from './crud';
 import { NotFoundError, ValidationError } from './errors';
 import { writeSystemLog } from '@/lib/data/systemLog';
+import type { OverlayDb } from '@/lib/release/overlayDb';
 import {
   stagedCreate,
   stagedDelete,
@@ -106,16 +107,24 @@ export interface ResourceConfig {
    * May be async (a rule that reads related rows, e.g. "has alt text"); it receives the
    * merged row (stored + patch) and the caller's client, under RLS.
    */
-  assertPublishable?: (row: Row, ctx: { auth: AuthContext; sb: Db }) => void | Promise<void>;
+  assertPublishable?: (
+    row: Row,
+    ctx: { auth: AuthContext; sb: Db; db?: OverlayDb },
+  ) => void | Promise<void>;
   /**
    * Rules over the row AFTER the write (stored + patch) that the payload schema alone
    * cannot prove — e.g. section content validated against a type the PATCH did not
    * restate. `changed` is the column patch, so a rule can skip writes that do not touch
    * what it checks. Runs on create (merged = the new row) and on every update.
+   *
+   * A rule that reads other rows reads them through `db` when it is given (Admin v2 R6,
+   * src/lib/release/overlayDb.ts): a staged save passes live with the pending changes laid
+   * over it, a publish the state its release leaves. Absent (a save while releases are off),
+   * the rule reads live, with the queries it always sent.
    */
   assertWritable?: (
     merged: Row,
-    ctx: { auth: AuthContext; sb: Db; changed: Row },
+    ctx: { auth: AuthContext; sb: Db; changed: Row; db?: OverlayDb },
   ) => void | Promise<void>;
   /**
    * Named constraints of this table and what they mean to an editor — turns a raw
@@ -215,7 +224,7 @@ function readCapsOf(config: ResourceConfig): readonly Capability[] {
  * strip a field the go-live rules require. Scheduled counts — `app.publish_scheduled()`
  * flips it to published on a timer with no further checks.
  */
-function isLive(config: ResourceConfig, row: Row): boolean {
+export function isLive(config: ResourceConfig, row: Row): boolean {
   if (config.statusOf && (row['status'] === 'published' || row['status'] === 'scheduled')) {
     return true;
   }

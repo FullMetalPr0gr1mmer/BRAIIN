@@ -10,19 +10,24 @@ import { percentChange, pointChange } from '@/lib/admin/kpi';
 import { perThousand, type LeadKpis } from '@/lib/admin/stats/leads';
 import { arabicShare, dailyArabicShare, type PageviewSummary } from '@/lib/admin/stats/pageviews';
 import { dayLabel, periodLabel } from '@/lib/admin/stats/range';
+import { onePageShare, pagesPerVisit, type VisitSummary } from '@/lib/admin/stats/visits';
 
-// Website stats, Overview (Admin v2 U2; the prototype's opsStatsOverview, screens_ops.js):
-// the KPIs, English and Arabic views day by day, the language split and the top pages, all
-// from the page-view rollup. A KPI shows its change only when the rollups hold the previous
-// period too (`summary.previous`); the lead figures only for leads.manage holders
-// (`leads`, null otherwise). Zero JS: every chart is server-drawn SVG with its table.
+// Website stats, Overview (Admin v2 U2, v2 in G1a; the prototype's opsStatsOverview,
+// screens_ops.js): visits, page views, pages per visit and one-page visits; then the Arabic
+// share and, for leads.manage holders only (`leads`, null otherwise), new leads and
+// inquiries per 1,000 page views exactly as U2 drew them; then visits and page views day by
+// day, the language split and the top pages. A visit is one browser tab on one UTC day
+// (visits.ts). A KPI shows its change only when its own rollup holds the previous period
+// (`summary.previous` for page views, `visits.previous` for visits, which started counting
+// later). Zero JS: every chart is server-drawn SVG with its table.
 
 interface Props {
   summary: PageviewSummary;
+  visits: VisitSummary;
   leads: LeadKpis | null;
 }
 
-const { summary, leads } = Astro.props;
+const { summary, visits, leads } = Astro.props;
 const { current, previous, range } = summary;
 const period = periodLabel(range);
 
@@ -35,6 +40,11 @@ const prevRate =
   leads && leads.previous !== null && prevViews !== null
     ? perThousand(leads.previous, prevViews)
     : null;
+
+const now = visits.current;
+const before = visits.previous;
+const perVisit = pagesPerVisit(now);
+const onePage = onePageShare(now);
 
 const percent = (value: number) =>
   `${new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 }).format(value)}%`;
@@ -49,18 +59,46 @@ const languages = [
   ...(other > 0 ? [{ label: 'Other', value: other }] : []),
 ];
 const top = current.topPaths.slice(0, 10).map((p) => ({ label: p.path, value: p.views }));
-const delta = (now: number | null, before: number | null) =>
-  now === null ? null : percentChange(now, before);
+const delta = (value: number | null, earlier: number | null) =>
+  value === null ? null : percentChange(value, earlier);
+const visitsByDay = new Map(now.byDay.map((d) => [d.day, d.visits]));
 ---
 
-<div class:list={['grid', leads ? 'grid--4' : 'grid--2']}>
+<div class="grid grid--4">
+  <Kpi
+    label="Visits"
+    value={now.visits}
+    delta={delta(now.visits, before ? before.visits : null)}
+    period={period}
+    spark={now.byDay.map((d) => d.visits)}
+  />
   <Kpi
     label="Page views"
     value={views}
     delta={delta(views, prevViews)}
     period={period}
     spark={dayViews}
+    series={1}
   />
+  <Kpi
+    label="Pages per visit"
+    value={perVisit === null ? 'No visits yet' : formatNumber(perVisit)}
+    delta={delta(perVisit, before ? pagesPerVisit(before) : null)}
+    period={period}
+    series={2}
+  />
+  <Kpi
+    label="One-page visits"
+    value={onePage === null ? 'No visits yet' : percent(onePage)}
+    delta={pointChange(onePage, before ? onePageShare(before) : null)}
+    deltaUnit="points"
+    good="down"
+    period={period}
+    series={3}
+  />
+</div>
+
+<div class:list={['grid stats__row', leads ? 'grid--3' : 'grid--2']}>
   <Kpi
     label="Arabic share"
     value={share === null ? 'No views yet' : percent(share)}
@@ -93,7 +131,7 @@ const delta = (now: number | null, before: number | null) =>
 </div>
 
 {
-  views === 0 ? (
+  views === 0 && now.visits === 0 ? (
     <Card level={2} class="stats__row" flush>
       <EmptyState
         icon="chart"
@@ -104,14 +142,17 @@ const delta = (now: number | null, before: number | null) =>
   ) : (
     <>
       <div class="grid grid--2-1 stats__row">
-        <Card level={2} title="English and Arabic page views" sub={`The last ${range.days} days`}>
+        <Card level={2} title="Visits and page views" sub={`The last ${range.days} days`}>
           <Line
             id="stats-line"
-            caption="Page views per day, English and Arabic"
+            caption="Visits and page views per day"
             captionVisible={false}
             series={[
-              { name: 'English', data: current.byDay.map((d) => d.en) },
-              { name: 'Arabic', data: current.byDay.map((d) => d.ar) },
+              {
+                name: 'Visits',
+                data: current.byDay.map((d) => visitsByDay.get(d.day) ?? 0),
+              },
+              { name: 'Page views', data: dayViews },
             ]}
             labels={labels}
             labelHeading="Day"

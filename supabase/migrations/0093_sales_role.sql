@@ -5,8 +5,8 @@
 -- app.is_staff), 0002 (audit_log, audit_insert), 0021/0028 (testimonials, disciplines,
 -- service_cases and the sample lock), 0024 (media_assets' public read), 0030 + 0041 (the
 -- staff UPDATE grant on leads), 0033 (app.role_works_leads), 0044 (app.staff_directory,
--- crm_people), 0046 (help_articles), 0050 (the audit actor binding) and 0052
--- (app.role_analytics_read).
+-- crm_people), 0046 (help_articles), 0050 (the audit actor binding), 0052
+-- (app.role_analytics_read) and 0071 (app.role_analytics_goals, which stays Admin + SEO).
 --
 -- Sales works leads, and is NOT CMS staff. ROLE_CAPS gives it three capabilities:
 -- leads.manage, leads.pii (one lead at a time, through the reveal: live-rechecked,
@@ -32,7 +32,8 @@
 --      token writes one in a colleague's name.
 --   3. The capability helpers gain 'sales' where ROLE_CAPS says so: app.role_works_leads
 --      (leads.manage) and app.role_analytics_read (analytics.read). The others are
---      unchanged (users, audit, site health, visibility, erasure stay off for Sales).
+--      unchanged (users, audit, site health, visibility, erasure, the stats' goals stay off
+--      for Sales).
 --      tests/authz/sqlHelpers.spec.ts holds every helper equal to ROLE_CAPS.
 --   4. A RESTRICTIVE non-staff block on three of the four tables whose published rows anon
 --      reads while `authenticated` holds more columns than anon: testimonials (the consent
@@ -468,7 +469,7 @@ begin
   end if;
   if app.role_crm_erase('sales') or app.role_manages_users('sales')
      or app.role_views_audit('sales') or app.role_site_health('sales')
-     or app.role_manages_visibility('sales') then
+     or app.role_manages_visibility('sales') or app.role_analytics_goals('sales') then
     raise exception '0093: a helper Sales must not pass answers true for sales';
   end if;
 

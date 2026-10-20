@@ -5,6 +5,7 @@ import Banners from '@/components/admin/ui/dashboard/Banners.astro';
 import Views from '@/components/admin/ui/dashboard/Views.astro';
 import Notes from '@/components/admin/ui/dashboard/Notes.astro';
 import Quick from '@/components/admin/ui/dashboard/Quick.astro';
+import RightNow from '@/components/admin/ui/dashboard/Realtime.astro';
 import type { WidgetResults } from '@/lib/admin/dashboard/loaders';
 
 // The dashboard's server partials (Admin v2 U1) rendered with Astro's container API on
@@ -195,5 +196,36 @@ describe('the widgets', () => {
     });
     expect(quiet).not.toContain('/admin/maintenance');
     expect(quiet).not.toContain('placeholder');
+  });
+});
+
+describe('Right now (G1b)', () => {
+  it('says how many people are on the site and the four pages most are on, as text', async () => {
+    const html = await render(RightNow, {
+      view: {
+        asOf: '2026-10-16T08:59:00Z',
+        activeVisits: 7,
+        topPaths: [
+          { path: '/services', visits: 3 },
+          { path: '/', visits: 2 },
+          { path: '/ar/contact', visits: 1 },
+          { path: '/services/logo', visits: 1 },
+          { path: '/about', visits: 1 },
+        ],
+        perMinute: [],
+      },
+    });
+    expect(html).toContain('<span class="dash-now__n">7</span>');
+    expect(html).toContain('people on the site right now');
+    expect(html.match(/<div class="stat-row">/g)).toHaveLength(4);
+    expect(html).not.toContain('/about');
+  });
+
+  it('one person, and no page list when nobody is on the site', async () => {
+    const one = await render(RightNow, {
+      view: { asOf: null, activeVisits: 1, topPaths: [], perMinute: [] },
+    });
+    expect(one).toContain('person on the site right now');
+    expect(one).not.toContain('stat-rows');
   });
 });

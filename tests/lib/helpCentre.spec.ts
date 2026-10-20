@@ -38,6 +38,14 @@ import {
 import HelpArticleBody from '@/components/admin/screens/help/HelpArticleBody';
 import HelpGuideList from '@/components/admin/screens/help/HelpGuideList';
 import { EXTRA_LINKS, pageFileFor } from '../admin/routes';
+import { MAX_GOALS } from '@schemas/analyticsGoals';
+import { ADMIN_TIME_ZONE } from '@/lib/admin/relTime';
+import {
+  ACTIVE_MINUTES,
+  REALTIME_AUTO_STOP_MS,
+  REALTIME_KEEP_HOURS,
+  REALTIME_POLL_MS,
+} from '@/lib/admin/stats/realtimeView';
 import {
   helpSet,
   helpSetViolations,
@@ -1239,6 +1247,170 @@ describe('the guides say only what the admin does', () => {
     expect(everything('ar')).not.toContain('شوركت');
     expect(guide('seo-and-redirects', 'ar')).toContain('الروابط التي تمت مشاركتها');
     expect(guide('personal-data', 'ar')).toContain('تُعرض بيانات شخص واحد');
+  });
+});
+
+// ── 1d. A guide put through H11's catalog (Admin v2 G1) ────────────────────────────────
+// G1 rewrites website-stats for the tabs it adds, with one top-level app.put_help_guide in its
+// migration (no slice restates app.help_article_set() since H11). The guide's text is
+// docs/admin-v2/guides/website-stats.json, held here to every rule the set's guides keep, to the
+// code behind each sentence, and to the put that ships it (the set above reads it through it).
+
+describe('website-stats as G1 rewrites it (docs/admin-v2/guides/website-stats.json)', () => {
+  const RAW_GUIDE = JSON.parse(
+    readFileSync('docs/admin-v2/guides/website-stats.json', 'utf8'),
+  ) as unknown;
+  const guide = HelpArticleSeedSchema.parse(RAW_GUIDE);
+  const G1_FILE = '0071_stats_v2.sql';
+  // The guide as main left it: every migration but this one (the put's revision guard and the
+  // place, screens and capabilities it keeps are read against it).
+  const BEFORE = helpSet(MIGRATION_FILES.filter((f) => f.name !== G1_FILE));
+  const base = HelpArticleSeedSchema.parse(BEFORE.set.find((a) => a.slug === 'website-stats')!);
+  const en = textsOf(guide, 'en').join('\n');
+  const ar = textsOf(guide, 'ar').join('\n');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const MIGRATION = source(`${MIGRATIONS}/${G1_FILE}`);
+
+  it('keeps the schema (the nine keys put takes), its place, screens and capabilities', () => {
+    expect(Object.keys(RAW_GUIDE as object).sort()).toEqual([
+      'body',
+      'caps',
+      'minutes',
+      'screens',
+      'slug',
+      'sort_order',
+      'tags',
+      'title',
+      'title_ar',
+    ]);
+    expect(guide.slug).toBe(base.slug);
+    expect(guide.sort_order).toBe(base.sort_order);
+    expect(guide.screens).toEqual(base.screens);
+    expect(guide.caps).toEqual(base.caps);
+    expect(guide.title).toBe(base.title);
+    expect(guide.title_ar).toBe(base.title_ar);
+    // Its screens are still the page heads' (no new screen: the tabs are ?tab= links).
+    expect(PAGE_GUIDES.find((g) => g.slug === 'website-stats')?.screens).toEqual(guide.screens);
+  });
+
+  it('the Arabic follows the English block for block; no dash, brand, markup or $guide$', () => {
+    const kinds = (lang: 'en' | 'ar') =>
+      guide.body[lang].map((b) => (b.t === 'ol' ? `ol${b.x.length}` : b.t)).join(',');
+    expect(kinds('ar')).toBe(kinds('en'));
+    expect(textsOf(guide, 'ar').every((t) => /[؀-ۿ]/.test(t))).toBe(true);
+    for (const text of textsOf(guide)) {
+      expect(text).not.toMatch(/[–—]/);
+      expect(text.toLowerCase()).not.toMatch(/braii?n|statii?on/);
+      expect(text).not.toMatch(/[<>\u0000-\u001f]/);
+      expect(text.includes('$guide$')).toBe(false);
+      expect(text.includes('$help$')).toBe(false);
+    }
+  });
+
+  it('keeps every sentence of U2’s that stays true', () => {
+    expect(source('src/lib/admin/stats/range.ts')).toContain('STAT_RANGES = [7, 30, 90] as const');
+    expect(en).toContain('Pick 7, 30 or 90 days at the top');
+    expect(en).toContain('Counts are added up every 15 minutes');
+    expect(en).toContain('midnight to midnight UTC (3 am in Riyadh)');
+    expect(en).toContain('Raw visit records are kept 90 days');
+    expect(ar).toContain('كل 15 دقيقة');
+    // The visits rollup runs every 15 minutes too, offset from the page views'.
+    expect(MIGRATION).toContain(
+      "cron.schedule('rollup-visits', '4-59/15 * * * *', $job$ select app.rollup_visits(3) $job$)",
+    );
+  });
+
+  it('says what a visit is, as the rollup counts it', () => {
+    expect(en).toContain('A visit is one browser tab on one day');
+    expect(en).toContain('counts again the next day');
+    expect(MIGRATION).toMatch(
+      /group by e\.tenant_id, \(e\.occurred_at at time zone 'UTC'\)::date, e\.session_id/,
+    );
+    expect(source('src/lib/client/analytics.ts')).toContain("sessionStorage.getItem('bs_sid')");
+  });
+
+  it('says the funnel’s steps and why inquiries are apart, and for whom', () => {
+    expect(en).toContain('then the visits that opened a service page');
+    expect(en).toContain('only to people who work with leads');
+    expect(source('src/lib/admin/stats/leads.ts')).toContain(
+      "if (can(auth.role, 'leads.manage') !== 'full') return null;",
+    );
+    expect(en).toContain('Devices, countries and sources are not collected.');
+  });
+
+  it('says the busiest hours are in Riyadh time', () => {
+    expect(ADMIN_TIME_ZONE).toBe('Asia/Riyadh');
+    expect(en).toContain('busiest hours of the day in Riyadh time');
+    expect(ar).toContain('بتوقيت الرياض');
+  });
+
+  it('says what realtime counts, how often it updates, when it stops and how long minutes are kept', () => {
+    expect(ACTIVE_MINUTES).toBe(5);
+    expect(REALTIME_POLL_MS).toBe(60_000);
+    expect(REALTIME_AUTO_STOP_MS).toBe(30 * 60_000);
+    expect(REALTIME_KEEP_HOURS).toBe(48);
+    expect(MIGRATION).toContain("cron.schedule('rollup-realtime', '* * * * *'");
+    expect(MIGRATION).toContain("r.minute < pg_catalog.now() - interval '48 hours'");
+    // Active: the five minutes ending with the minute (it, and the four before it).
+    expect(MIGRATION).toContain("ev.occurred_at >= g.m - interval '4 minutes'");
+    expect(en).toContain('in the last 5 minutes');
+    expect(en).toContain('It updates every minute while the tab is open');
+    expect(en).toContain('stops by itself after 30 minutes');
+    expect(en).toContain('Minute counts are kept 48 hours.');
+    expect(source('src/components/admin/screens/realtime/Realtime.tsx')).toContain('Pause updates');
+    expect(en).toContain('Pause updates stops it');
+    expect(ar).toContain('آخر 5 دقائق');
+    expect(ar).toContain('48 ساعة');
+  });
+
+  it('says who sets goals, how progress is counted and how many there can be', () => {
+    const setters = ROLES.filter((r) => ROLE_CAPS[r]['analytics.goals'] === 'full');
+    expect(setters).toEqual(['admin', 'seo']);
+    expect(en).toContain('Admins and the SEO role can add goals');
+    expect(en).toContain('Progress counts this calendar month, from the first, in UTC days.');
+    expect(MIGRATION).toContain(
+      "v_month date := date_trunc('month', (pg_catalog.now() at time zone 'UTC'))::date;",
+    );
+    expect(MAX_GOALS).toBe(20);
+    // Counted after the row is in (an AFTER trigger), so more than 20 is the refusal.
+    expect(MIGRATION).toMatch(/g\.tenant_id = new\.tenant_id\) > 20 then/);
+    expect(en).toContain('You can keep up to 20 goals.');
+    expect(ar).toContain('20 هدفًا');
+  });
+
+  it('0071 puts it through the catalog at the revision main leaves, and the set holds it', () => {
+    // One put, of this guide, naming the revision the guide is at before 0071.
+    const mine = HELP.edits.filter((e) => e.file === G1_FILE);
+    expect(mine).toEqual([
+      {
+        file: G1_FILE,
+        op: 'put',
+        slug: 'website-stats',
+        revision: BEFORE.revisions.get('website-stats'),
+      },
+    ]);
+    // It changes the guide, so the catalog moves it by one.
+    expect(HELP.revisions.get('website-stats')).toBe(
+      (BEFORE.revisions.get('website-stats') ?? 0) + 1,
+    );
+    // The set the migrations leave holds the file's guide exactly, and nothing else moved.
+    expect(SET.find((a) => a.slug === 'website-stats')).toEqual(guide);
+    expect(HELP.set.filter((g) => g.slug !== 'website-stats')).toEqual(
+      BEFORE.set.filter((g) => g.slug !== 'website-stats'),
+    );
+    // The put's literal is the guide file byte for byte (only its trailing newline dropped).
+    const literal =
+      /^select app\.put_help_guide\(\$guide\$\r?\n([\s\S]*?)\r?\n\$guide\$::jsonb, \d+\);/m.exec(
+        MIGRATION,
+      )?.[1];
+    expect(literal).toBe(
+      readFileSync('docs/admin-v2/guides/website-stats.json', 'utf8').replace(/\r?\n$/, ''),
+    );
+    expect(helpSetViolations(MIGRATION_FILES)).toEqual([]);
+    expect(MIGRATION).not.toContain('TODO(H11)');
+    expect(MIGRATION).not.toMatch(/create or replace function app\.help_article_set\(\)/);
+    // The migration's own postcondition checks the catalog row and every tenant's copy.
+    expect(MIGRATION).toContain("c.tags = array['stats', 'goals']");
   });
 });
 

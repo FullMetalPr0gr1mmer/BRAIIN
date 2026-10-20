@@ -36,6 +36,7 @@ const LABEL_TO_CAP: Record<string, Capability> = {
   'Job applications — contact details & CV download (PII)': 'applications.pii',
   'Analytics — read dashboards': 'analytics.read',
   'Search analytics': 'analytics.search',
+  'Analytics goals — set': 'analytics.goals',
   'AI Style-Finder — questions/styles editor': 'ai.editContent',
   'AI Style-Finder — results/logic config': 'ai.config',
   'System logs — view': 'logs.view',
@@ -88,7 +89,7 @@ for (const file of ['CLAUDE.md', 'docs/architecture.md']) {
   describe(`ROLE_CAPS matches the matrix in ${file}`, () => {
     const doc = parseDocMatrix(file);
 
-    it('parses all 33 capabilities from the documented table', () => {
+    it('parses all 34 capabilities from the documented table', () => {
       expect(Object.keys(doc.admin).sort()).toEqual([...CAPABILITIES].sort());
     });
 
@@ -160,7 +161,7 @@ describe('Sales holds leads and the stats, nothing else', () => {
     'export.csv',
     'export.backup',
     'crm.erase',
-    // hiring, logs, the activity log, site health, search analytics
+    // hiring, logs, the activity log, site health, search analytics, the stats' goals
     'applications.manage',
     'applications.pii',
     'logs.view',
@@ -168,6 +169,7 @@ describe('Sales holds leads and the stats, nothing else', () => {
     'audit.view',
     'siteHealth.view',
     'analytics.search',
+    'analytics.goals',
   ] satisfies Capability[])('never %s', (cap) => {
     expect(ROLE_CAPS.sales[cap]).toBe('none');
   });
