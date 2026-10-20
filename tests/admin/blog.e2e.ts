@@ -13,8 +13,12 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *            (the API: the picker offers published members only); every tab clean at 320,
  *            390 and 1280 (axe, no sideways scroll, no CSP violation);
  *   seo      the post opens on its SEO tab, the content is read-only (a disabled fieldset,
- *            no Save, the note), the list offers no "New post", and the SEO tab saves;
- *   cc       the SEO tab is view-only.
+ *            no Save, the note), the list offers no "New post", and the SEO tab saves; the
+ *            server refuses its edit of the post and its new post (403 `forbidden`);
+ *   cc       the SEO tab is view-only, and the server refuses its SEO save (403).
+ * The refusals are sent by hand with the layout's CSRF token and the page's origin, so the
+ * capability is the only thing left to refuse them (CLAUDE.md §9: a server 403, not just a
+ * hidden button; tests/admin/refusals.e2e.ts does the same for services).
  * The whole file runs in order, in one worker. The post is NOT deleted afterwards (the sweep
  * opens the first row of the posts list, and a post removed between its list and its open
  * would 404 there; the CI database is per run): it is archived instead, off the public site.
@@ -67,6 +71,24 @@ async function watchCsp(page: Page) {
       w.__csp.push(`${event.violatedDirective} ${event.blockedURI || 'inline'}`);
     });
   });
+}
+
+/** A hand-made mutation's CSRF double-submit token and origin, from the admin layout. */
+async function writeHeaders(page: Page): Promise<Record<string, string>> {
+  const token = await page.locator('meta[name="csrf-token"]').getAttribute('content');
+  expect(token, 'the admin layout carries a CSRF token').toBeTruthy();
+  return { 'x-csrf-token': token!, origin: new URL(page.url()).origin };
+}
+
+/** The post's stored version and excerpt, read as the service role. */
+async function stored(): Promise<{ version: number; excerpt: unknown }> {
+  const { data, error } = await service()
+    .from('blog_posts')
+    .select('version,excerpt')
+    .eq('id', postId)
+    .single();
+  expect(error, error?.message).toBeNull();
+  return data as { version: number; excerpt: unknown };
 }
 
 const tab = (page: Page, name: string | RegExp) =>
@@ -227,6 +249,30 @@ test.describe('as SEO', () => {
     });
   }
 
+  test('the server refuses SEO an edit of the post and a new post', async ({ page }) => {
+    await page.goto(`/admin/blog/${postId}`);
+    await ready(page);
+    const headers = await writeHeaders(page);
+    const before = await stored();
+    const edit = await page.request.patch(`/api/admin/blog/${postId}`, {
+      headers,
+      data: { excerpt: { en: 'Refused', ar: 'مرفوض' }, version: before.version },
+    });
+    expect(edit.status(), 'PATCH /api/admin/blog/[id] as seo').toBe(403);
+    expect(await edit.json()).toMatchObject({ ok: false, error: 'forbidden' });
+    const slug = `e2e-refused-${RUN}`;
+    const create = await page.request.post('/api/admin/blog', {
+      headers,
+      data: { slug, title: { en: 'Refused', ar: 'مرفوض' }, status: 'draft' },
+    });
+    expect(create.status(), 'POST /api/admin/blog as seo').toBe(403);
+    expect(await create.json()).toMatchObject({ ok: false, error: 'forbidden' });
+    // Nothing changed, nothing was made.
+    expect(await stored()).toEqual(before);
+    const { data: made } = await service().from('blog_posts').select('id').eq('slug', slug);
+    expect(made).toEqual([]);
+  });
+
   test('the SEO tab saves', async ({ page }) => {
     await page.goto(`/admin/blog/${postId}?tab=seo`);
     await ready(page);
@@ -255,5 +301,30 @@ test.describe('as Content Creator', () => {
     await tab(page, 'Content').click();
     await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
     await axeClean(page, 'cc content');
+  });
+
+  test('the server refuses a Content Creator’s SEO save', async ({ page }) => {
+    await page.goto(`/admin/blog/${postId}?tab=seo`);
+    await ready(page);
+    const read = await page.request.get(
+      `/api/admin/entity-seo?entityType=blog_post&entityId=${postId}`,
+    );
+    expect(read.status(), 'GET /api/admin/entity-seo as content_creator (view)').toBe(200);
+    const before = ((await read.json()) as { data: Record<string, unknown> }).data;
+    const res = await page.request.put('/api/admin/entity-seo', {
+      headers: await writeHeaders(page),
+      data: {
+        entityType: 'blog_post',
+        entityId: postId,
+        metaTitle: { en: 'Refused', ar: 'مرفوض' },
+        version: Number(before['version'] ?? 0),
+      },
+    });
+    expect(res.status(), 'PUT /api/admin/entity-seo as content_creator').toBe(403);
+    expect(await res.json()).toMatchObject({ ok: false, error: 'forbidden' });
+    const after = await page.request.get(
+      `/api/admin/entity-seo?entityType=blog_post&entityId=${postId}`,
+    );
+    expect(((await after.json()) as { data: Record<string, unknown> }).data).toEqual(before);
   });
 });
