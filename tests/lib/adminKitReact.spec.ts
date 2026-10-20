@@ -24,7 +24,7 @@ import {
   sortLiveId,
 } from '@/components/admin/kit/Sortable';
 import StatusBadge from '@/components/admin/kit/StatusBadge';
-import Tabs from '@/components/admin/kit/Tabs';
+import Tabs, { TabStrip } from '@/components/admin/kit/Tabs';
 import { backdropDismiss } from '@/components/admin/kit/useDialog';
 import KitGallery from '@/components/admin/screens/kit/KitGallery';
 import { KIT_ROWS, KIT_SECTIONS } from '@/components/admin/screens/kit/samples';
@@ -249,6 +249,54 @@ describe('Tabs', () => {
         /aria-selected="true"[^>]*>Content/,
       );
     }
+  });
+});
+
+describe('TabStrip (Admin v2 U8b: the tab list alone, for EditorForm)', () => {
+  const tabs = [
+    { id: 'content', label: 'Content' },
+    { id: 'seo', label: 'SEO' },
+  ];
+  const strip = (props: Partial<Parameters<typeof TabStrip>[0]> = {}) =>
+    html(TabStrip, {
+      tabs,
+      label: 'Post editor',
+      value: 'seo',
+      onChange: () => {},
+      idBase: 'ed',
+      ...props,
+    });
+
+  it('is controlled: the value is the selected tab, each tab controls its panel by idBase', () => {
+    const out = strip();
+    expect(out).toMatch(/^<div class="seg" role="tablist" aria-label="Post editor">/);
+    expect(out).toMatch(
+      /id="ed-tab-seo" aria-selected="true" aria-controls="ed-panel-seo" tabindex="0">SEO</,
+    );
+    expect(out).toMatch(
+      /id="ed-tab-content" aria-selected="false" aria-controls="ed-panel-content" tabindex="-1">Content</,
+    );
+    expect(out).not.toContain('role="tabpanel"');
+  });
+
+  it('a cue: a dot, and words that end the name after the visible label (WCAG 2.5.3)', () => {
+    const out = strip({ tabs: [{ ...tabs[0]!, cue: 'has errors' }, tabs[1]!] });
+    expect(out).toContain(
+      'data-cue="">Content<span class="tab-cue" aria-hidden="true"></span><span class="visually-hidden">, has errors</span></button>',
+    );
+    expect(out.match(/tab-cue/g)).toHaveLength(1);
+  });
+
+  it('Tabs draws the same tab list it did before the split', () => {
+    const out = html(Tabs, {
+      tabs: tabs.map((t) => ({ ...t, panel: t.label })),
+      label: 'Editor',
+      active: 'seo',
+    });
+    expect(out).not.toContain('data-cue');
+    expect(out).toMatch(
+      /^<div class="seg" role="tablist" aria-label="Editor"><button type="button" role="tab" id="[^"]+-tab-content" aria-selected="false" aria-controls="[^"]+-panel-content" tabindex="-1">Content<\/button>/,
+    );
   });
 });
 

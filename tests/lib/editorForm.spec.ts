@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -130,5 +131,133 @@ describe('the ErrorSummary’s links are 24px targets (WCAG 2.5.8; F5a CI axe ta
     expect(rule).toMatch(/display:\s*inline-block/);
     const size = Number(/min-block-size:\s*(\d+)px/.exec(rule)?.[1]);
     expect(size).toBeGreaterThanOrEqual(24);
+  });
+});
+
+describe('EditorForm in tabs and read-only (Admin v2 U8b)', () => {
+  const blog = RESOURCE_UI['blog']!;
+  const values = {
+    title: { en: 'Colour', ar: 'اللون' },
+    slug: 'colour',
+    status: 'published',
+    authorId: '',
+  };
+  const tabbed = (patch: Partial<EntitySave> = {}, extra: Record<string, unknown> = {}) =>
+    render(fakeSave({ values, ...patch }), blog.fields, {
+      tabs: blog.tabs,
+      tabsLabel: 'Post editor',
+      panels: { seo: createElement('p', null, 'THE SEO PANEL') },
+      ...extra,
+    });
+
+  it('a tab list above the form; field tabs inside it, the others hidden; the panel tab after it', () => {
+    const html = tabbed();
+    expect(html).toMatch(
+      /^<div class="editor-tabs"><div class="seg" role="tablist" aria-label="Post editor">/,
+    );
+    expect(html.match(/role="tab"/g)).toHaveLength(3);
+    expect(html).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>Content</);
+    const form = html.slice(html.indexOf('<form'), html.indexOf('</form>'));
+    expect(form).toMatch(/data-editor-tab="content"(?![^>]*hidden)/);
+    expect(form).toMatch(/data-editor-tab="publishing" hidden=""/);
+    expect(form).not.toContain('data-editor-tab="seo"');
+    expect(form).toContain('id="f-authorId"');
+    expect(form).toContain('id="f-status"');
+    const after = html.slice(html.indexOf('</form>'));
+    expect(after).toMatch(/data-editor-tab="seo" hidden=""><\/div>/);
+    // Not opened yet: the panel mounts the first time its tab opens.
+    expect(html).not.toContain('THE SEO PANEL');
+    expect(html).toMatch(/<form class="editor" novalidate="">/i);
+    expect(html).not.toMatch(/\sstyle=/);
+  });
+
+  it('every tab controls its panel, and every panel is named by its tab', () => {
+    const html = tabbed();
+    const controls = [...html.matchAll(/aria-controls="([^"]+)"/g)].map((m) => m[1]);
+    expect(controls).toHaveLength(3);
+    for (const id of controls) expect(html).toContain(`id="${id}"`);
+    for (const m of html.matchAll(/role="tabpanel" id="[^"]+" aria-labelledby="([^"]+)"/g)) {
+      expect(html).toContain(`id="${m[1]}"`);
+    }
+  });
+
+  it('opened on the SEO tab: the form is hidden and the panel is mounted', () => {
+    const html = tabbed({}, { initialTab: 'seo' });
+    expect(html).toMatch(/<form class="editor" novalidate="" hidden="">/i);
+    expect(html).toMatch(/data-editor-tab="seo"(?![^>]*hidden)[^>]*><p>THE SEO PANEL<\/p>/);
+    expect(html).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>SEO</);
+  });
+
+  it('a tab holding an error says so: a dot, and words that end its name', () => {
+    const html = tabbed(
+      {
+        status: 'error',
+        errors: {
+          byId: { 'f-authorId': 'a published post must have an author' },
+          summary: [{ id: 'f-authorId', message: 'Author: a published post must have an author' }],
+        },
+      },
+      { initialTab: 'publishing' },
+    );
+    expect(html).toContain(
+      'Content<span class="tab-cue" aria-hidden="true"></span><span class="visually-hidden">, has errors</span>',
+    );
+    expect(html).toMatch(/data-cue=""[^>]*>Content/);
+    expect(html).not.toMatch(/>Publishing<span class="tab-cue"/);
+    // The summary still links the field, which the reveal listener shows first.
+    expect(html).toContain('<a href="#f-authorId">');
+  });
+
+  it('read-only: the fields in a disabled fieldset, the note, no Save and no save status', () => {
+    const html = tabbed({}, { readOnly: true, readOnlyNote: 'You can read this post.' });
+    expect(html).toContain('<fieldset class="editor-ro" disabled="">');
+    expect(html).toContain('You can read this post.');
+    expect(html).not.toContain('type="submit"');
+    expect(html).not.toContain('class="save-status"');
+    expect(html).toContain('Version 4');
+    // The fieldset wraps every field tab, and closes before the action bar.
+    const set = html.slice(
+      html.indexOf('<fieldset class="editor-ro"'),
+      html.indexOf('</fieldset><div class="toolbar form-actions">'),
+    );
+    expect(set).toContain('data-editor-tab="content"');
+    expect(set).toContain('data-editor-tab="publishing"');
+  });
+
+  it('read-only without tabs too (U5 and U6 may use it alone); editable stays unchanged', () => {
+    const html = render(fakeSave(), FIELDS, { readOnly: true });
+    expect(html).toContain('<fieldset class="editor-ro" disabled="">');
+    expect(html).not.toContain('type="submit"');
+    expect(render(fakeSave(), FIELDS, { readOnly: false })).toBe(render(fakeSave(), FIELDS));
+  });
+
+  it('"Open on site" for a published post, nothing otherwise', () => {
+    const html = tabbed({}, { publicHref: blog.publicHref });
+    expect(html).toContain(
+      '<a class="btn" href="/creative-knowledge/colour" target="_blank" rel="noopener">Open on site</a>',
+    );
+    const draft = render(fakeSave({ values: { ...values, status: 'draft' } }), blog.fields, {
+      publicHref: blog.publicHref,
+    });
+    expect(draft).not.toContain('Open on site');
+  });
+
+  it('a rich text is told it is read-only (a disabled fieldset does not stop contenteditable)', () => {
+    const field = readFileSync('src/components/admin/FormField.tsx', 'utf8');
+    expect(field).toContain('const readOnly = useContext(FieldsReadOnly);');
+    expect(field).toContain('readOnly={readOnly}');
+    const rich = readFileSync('src/components/admin/RichText.tsx', 'utf8');
+    expect(rich).toContain('editable: !readOnly');
+    expect(rich).toMatch(
+      /if \(readOnly\) \{\s*return \(\s*<div className="rich" data-readonly="">\s*<EditorContent/,
+    );
+    // Still a lazy chunk that imports nothing new from the shared admin code.
+    expect(rich.match(/^import (?!type)[^;]+from '(@\/|\.)[^']*';/gm) ?? []).toEqual([]);
+  });
+
+  it('Ctrl/⌘+S and a submit never save a read-only form', () => {
+    const source = readFileSync('src/components/admin/fields/EditorForm.tsx', 'utf8');
+    expect(source).toContain('if (!form || readOnly) return;');
+    expect(source).toContain('if (!readOnly) submit();');
   });
 });
