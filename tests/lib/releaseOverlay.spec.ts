@@ -183,11 +183,12 @@ describe('derivePatch', () => {
     };
     const create = derivePatch(entitySeo, 'create', payload);
     expect(create.patch).toMatchObject({ entity_type: 'service', entity_id: ID(5) });
-    expect(create.patch).toMatchObject({ og_image: null, robots: null });
+    expect(create.patch).toMatchObject({ og_image: null, og_media_id: null, robots: null });
     const update = derivePatch(entitySeo, 'update', payload);
     expect(update.patch).not.toHaveProperty('entity_type');
     expect(update.patch).not.toHaveProperty('entity_id');
-    expect(Object.keys(update.patch)).toHaveLength(6);
+    // The seven meta columns (Admin v2 U10 added the share image, og_media_id).
+    expect(Object.keys(update.patch)).toHaveLength(7);
   });
 
   it('a column outside the allowlist is registry drift, loudly', () => {

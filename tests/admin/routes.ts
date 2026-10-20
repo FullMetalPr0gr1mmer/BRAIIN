@@ -129,7 +129,15 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/settings', api: '/api/admin/settings', cap: 'settings.general' },
   { href: '/admin/integrations', api: '/api/admin/integrations', cap: 'settings.integrations' },
   { href: '/admin/themes', api: '/api/admin/themes', cap: 'theme.edit' },
-  { href: '/admin/redirects', api: '/api/admin/redirects', cap: 'redirects.manage' },
+  // Admin v2 U10: SEO is server-rendered with in-page tabs (Pages, Redirects, Site wide); a
+  // role holding none of its capabilities gets the page's own 403. The redirects list moved
+  // there (/admin/redirects answers with a 302 to its tab).
+  {
+    href: '/admin/seo',
+    api: '/api/admin/entity-seo/list',
+    cap: 'seo.globalDefaults',
+    render: 'server',
+  },
   { href: '/admin/service-cases', api: '/api/admin/service-cases', cap: 'services.write' },
   {
     href: '/admin/analytics/search',
@@ -142,13 +150,31 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/visibility', api: '/api/admin/page-visibility', cap: 'maintenance.manage' },
 ];
 
+/**
+ * Role-gated APIs whose screen is not a locked screen of its own, asked directly by
+ * tests/admin/refusals.e2e.ts: every role without the capability gets the server's 403
+ * (`forbidden`), a visitor signed out a 401. LOCKED_SCREENS needs a menu screen with one
+ * capability; these live on a tab of a screen another capability locks.
+ */
+export interface LockedApi {
+  api: string;
+  cap: Capability;
+}
+
+export const LOCKED_APIS: readonly LockedApi[] = [
+  // Admin v2 U10: the redirects list is a tab of /admin/seo (whose locked entry names
+  // seo.globalDefaults and the Pages tab's API), so the redirects API keeps its own negative
+  // check here: Content Creator and Developer get a 403 from it, not just a hidden tab.
+  { api: '/api/admin/redirects', cap: 'redirects.manage' },
+];
+
 /** How a locked screen refuses (see LockedScreen). */
 export function renderOf(screen: LockedScreen): 'island' | 'server' {
   return screen.render ?? 'island';
 }
 
-/** The roles a locked screen must refuse: those with no access at all to its capability. */
-export function refusedRoles(screen: LockedScreen): Role[] {
+/** The roles a locked screen (or API) must refuse: those with no access at all to its capability. */
+export function refusedRoles(screen: { cap: Capability }): Role[] {
   return ROLES.filter((role) => ROLE_CAPS[role][screen.cap] === 'none');
 }
 
@@ -235,6 +261,19 @@ export const EXTRA_LINKS: readonly NavTab[] = [
     caps: ['media.write'],
     access: ['full', 'meta'],
   },
+  // The SEO screen's in-page tabs (Admin v2 U10): the Pages tab on another kind than the
+  // first, the redirects list and its drawer, and the site-wide form, each with the
+  // capability that tab asks for. /admin/redirects itself only redirects (REDIRECT_PAGES),
+  // and is listed so its create and edit pages (the no-JS twins) are still swept.
+  {
+    href: '/admin/seo?tab=pages&type=service',
+    label: 'SEO, services',
+    caps: ['seo.entityMeta'],
+    access: ['full'],
+  },
+  { href: '/admin/seo?tab=redirects', label: 'SEO redirects', caps: ['redirects.manage'] },
+  { href: '/admin/seo?tab=site', label: 'SEO site wide', caps: ['seo.globalDefaults'] },
+  { href: '/admin/redirects', label: 'Redirects', caps: ['redirects.manage'] },
   // The leads list's states (Admin v2 C4b): the spam view (its chip pressed, the empty state,
   // "Not spam" in the bulk bar), and a range with a filter (the KPIs' changes, the sub-line's
   // "in the last 30 days").
@@ -254,6 +293,8 @@ export const EXTRA_LINKS: readonly NavTab[] = [
  */
 export const REDIRECT_PAGES: Readonly<Record<string, string>> = {
   '/admin/media/new': '/admin/media?upload=1',
+  // Admin v2 U10: the redirects list is the SEO screen's Redirects tab.
+  '/admin/redirects': '/admin/seo?tab=redirects',
 };
 
 /** Every screen of the menu: sidebar links, then their tabs, each once. */
@@ -296,7 +337,9 @@ export function sweepRoutes(role: Role, exists: Exists = existsSync): SweepRoute
     if (link.caps.length > 0 && !isVisible(role, link)) continue;
     pageFileFor(link.href, exists);
     const base = link.href.split('?')[0] ?? link.href;
-    routes.push({ path: link.href, pattern: base, kind: 'screen' });
+    // A page that only redirects is not a screen, but its create and edit pages still are
+    // (U10: /admin/redirects → the SEO tab; /admin/redirects/new and /[id] stay).
+    if (!(base in REDIRECT_PAGES)) routes.push({ path: link.href, pattern: base, kind: 'screen' });
 
     const author = link.caps[0];
     const create = `${base}/new`;

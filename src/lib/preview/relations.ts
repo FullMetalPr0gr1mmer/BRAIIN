@@ -248,6 +248,22 @@ export const FOREIGN_KEYS: readonly ForeignKey[] = [
     onDelete: 'set null',
     migration: '0028',
   },
+  // 0073 (Admin v2 U10): the share images, composite keys (tenant_id, <column>) to
+  // media_assets (tenant_id, id); the emulator joins by the id, the dataset being one tenant.
+  {
+    table: 'entity_seo',
+    column: 'og_media_id',
+    target: 'media_assets',
+    onDelete: 'restrict',
+    migration: '0073',
+  },
+  {
+    table: 'seo_defaults',
+    column: 'default_og_media_id',
+    target: 'media_assets',
+    onDelete: 'restrict',
+    migration: '0073',
+  },
 ];
 
 /** How an embed joins: to one row through a column, or to the rows that point back. */

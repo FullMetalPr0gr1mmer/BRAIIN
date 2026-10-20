@@ -138,6 +138,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'media.css',
       'personal.css',
       'search.css',
+      'seo.css',
       'stats.css',
       'two-step.css',
       'users.css',
@@ -454,6 +455,8 @@ describe('admin.css keeps the hooks the markup renders', () => {
         'src/pages/admin/media/index.astro',
       ]);
       expect(pagesFor('users.css')).toEqual(['src/pages/admin/users.astro']);
+      // The SEO screen (U10): its page renders the sections, its island the table and dialogs.
+      expect(pagesFor('seo.css')).toEqual(['src/pages/admin/seo.astro']);
       // The two step page (U17), in either frame: its panel's classes are this sheet's.
       expect(pagesFor('two-step.css')).toEqual(['src/pages/admin/2fa.astro']);
       expect(pagesFor('personal.css')).toEqual([

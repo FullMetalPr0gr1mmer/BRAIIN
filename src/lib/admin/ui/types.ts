@@ -105,6 +105,13 @@ export interface FieldDef {
   defaultValue?: unknown;
   /** Text kinds: the most characters; shows "n/max" in the label row and sets maxLength. */
   maxLength?: number;
+  /**
+   * `bilingual` (Admin v2 U10): what an empty half shows as placeholder text, per language
+   * (an SEO override's empty box keeps the page's default, and says which words those are).
+   */
+  placeholder?: { en: string; ar: string };
+  /** `bilingual` (Admin v2 U10): a textarea per language, as `prose`, with the pair rule kept. */
+  multiline?: boolean;
   /** `color`: swatches to offer, and the text colour its contrast line is measured for. */
   color?: { swatches?: readonly string[]; contrastWith?: string };
   /** `range`: bounded steps; the value is a number. */

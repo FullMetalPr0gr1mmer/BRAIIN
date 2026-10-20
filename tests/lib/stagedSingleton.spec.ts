@@ -163,7 +163,8 @@ describe('PATCH with releases on: the first save is a pending create keyed by th
 
   it('SEO defaults: the same, keyed by the tenant', async () => {
     const res = await callRoute(db, (await seo()).PATCH, 'PATCH', '/api/admin/seo-defaults', {
-      body: { robotsDirectives: 'noindex', version: 0 },
+      // A closed value (Admin v2 U10, SEO_DEFAULT_ROBOTS).
+      body: { robotsDirectives: 'noindex,follow', version: 0 },
       role: 'seo',
     });
     expect(res.status, JSON.stringify(res.body)).toBe(200);

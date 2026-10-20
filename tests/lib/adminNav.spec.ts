@@ -64,9 +64,11 @@ describe('the admin menu', () => {
         '/admin/analytics/search',
       ]),
     );
+    // Redirects are a tab of /admin/seo since U10 (/admin/redirects answers there).
     expect(reachableHrefs('seo')).toEqual(
-      expect.arrayContaining(['/admin/redirects', '/admin/analytics/search']),
+      expect.arrayContaining(['/admin/seo', '/admin/analytics/search']),
     );
+    expect(reachableHrefs('seo')).not.toContain('/admin/redirects');
   });
 
   it('shows no tab row where the role can open only one screen of the area', () => {

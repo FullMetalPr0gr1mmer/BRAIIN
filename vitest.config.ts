@@ -22,6 +22,9 @@ export default defineConfig({
       'astro:env/server': fileURLToPath(
         new URL('./tests/stubs/astro-env-server.ts', import.meta.url),
       ),
+      // `astro:assets` (Admin v2 U10): the share-image helper's getImage, reached through
+      // the head loader; the stub builds Astro's `/_image` URL shape deterministically.
+      'astro:assets': fileURLToPath(new URL('./tests/stubs/astro-assets.ts', import.meta.url)),
       // `cloudflare:workers` is workerd-only. Same reasoning as astro:env — without a
       // stub, the middleware and any endpoint touching a binding are unreachable from
       // tests, which is precisely the code that most wants covering.

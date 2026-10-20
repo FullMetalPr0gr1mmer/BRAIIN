@@ -25,7 +25,7 @@
 -- Run with `supabase test db`.
 
 begin;
-select plan(28);
+select plan(30);
 
 -- Setup runs as the migration role, where RLS is bypassed.
 --
@@ -116,6 +116,12 @@ set local role anon;
 select _claims(null, null);
 select is((select count(*) from public.entity_seo)::int, 1,
   'anon reads entity_seo for PUBLISHED entities only (draft meta stays hidden)');
+-- 0073 (Admin v2 U10): the share-image columns ship in the head too, so anon reads them,
+-- on the published row only (supabase/tests/seo_share_images.test.sql has the writes).
+select lives_ok($$ select og_media_id from public.entity_seo $$,
+  'anon reads entity_seo.og_media_id (0073), under the same published-only fence');
+select lives_ok($$ select default_og_media_id from public.seo_defaults $$,
+  'anon reads seo_defaults.default_og_media_id (0073)');
 
 set local role authenticated;
 

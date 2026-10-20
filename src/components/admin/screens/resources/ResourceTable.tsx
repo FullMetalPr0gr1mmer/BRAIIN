@@ -43,6 +43,15 @@ export interface ResourceTableProps {
   resource: string;
   /** Extra query string appended to the list call (e.g. `page_id=…` for sections). */
   filter?: string;
+  /**
+   * Admin v2 U10 (the SEO screen's Redirects tab): edit and create in a drawer. Each row
+   * gains "Edit <name>", which calls `onEdit`, and the toolbar's New button calls `onCreate`;
+   * the row's link still opens its no-JS edit page. Without them nothing changes.
+   */
+  onEdit?: (row: Row) => void;
+  onCreate?: () => void;
+  /** Bump to re-read the list and the edge status line (a save made in the drawer). */
+  epoch?: number;
 }
 
 /** The status filter's chips: every lifecycle state, and "All" (no filter). */
@@ -56,7 +65,13 @@ const STATUS_CHIPS = [
 
 type StatusChip = (typeof STATUS_CHIPS)[number]['value'];
 
-export default function ResourceTable({ resource, filter = '' }: ResourceTableProps) {
+export default function ResourceTable({
+  resource,
+  filter = '',
+  onEdit,
+  onCreate,
+  epoch = 0,
+}: ResourceTableProps) {
   const ui = uiFor(resource);
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
@@ -87,7 +102,8 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
     } finally {
       setBusy(false);
     }
-  }, [ui.slug, offset, status, query, filter]);
+    // `epoch` is a dependency on purpose: a save in the drawer bumps it, and the list re-reads.
+  }, [ui.slug, offset, status, query, filter, epoch]);
 
   useEffect(() => {
     void load();
@@ -163,7 +179,7 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
 
   return (
     <div>
-      {ui.syncAction && <SyncStatus action={ui.syncAction} epoch={syncEpoch} />}
+      {ui.syncAction && <SyncStatus action={ui.syncAction} epoch={syncEpoch + epoch} />}
 
       <DataTable<Row>
         caption={ui.title}
@@ -181,6 +197,16 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
         actionsLabel="Actions"
         rowActions={(row, index) => (
           <>
+            {onEdit && (
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => onEdit(row)}
+                aria-label={`Edit ${rowName(row)}`}
+              >
+                <Icon name="edit" size={15} />
+              </button>
+            )}
             {ui.reorder && (
               <>
                 <button
@@ -216,10 +242,17 @@ export default function ResourceTable({ resource, filter = '' }: ResourceTablePr
         )}
         toolbar={
           <>
-            <a className="btn" data-variant="primary" href={`/admin/${ui.slug}/new`}>
-              <Icon name="plus" size={16} />
-              New {ui.singular.toLowerCase()}
-            </a>
+            {onCreate ? (
+              <button type="button" className="btn" data-variant="primary" onClick={onCreate}>
+                <Icon name="plus" size={16} />
+                New {ui.singular.toLowerCase()}
+              </button>
+            ) : (
+              <a className="btn" data-variant="primary" href={`/admin/${ui.slug}/new`}>
+                <Icon name="plus" size={16} />
+                New {ui.singular.toLowerCase()}
+              </a>
+            )}
             <label className="visually-hidden" htmlFor={`${ui.slug}-search`}>
               Search {ui.title}
             </label>

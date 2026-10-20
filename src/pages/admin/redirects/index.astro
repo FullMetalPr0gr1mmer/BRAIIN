@@ -1,18 +1,10 @@
 ---
-import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceTable from '@/components/admin/islands/AdminResourceTable';
-import { uiFor } from '@/lib/admin/uiSchema';
-
 export const prerender = false;
 
-const ui = uiFor('redirects');
+// The redirects list lives on the SEO screen's Redirects tab now (Admin v2 U10, AV-19 D10),
+// with its drawer; this address answers there, inside the admin, so a bookmark or an old
+// link still works. A 302, not a 301: an admin route is never cached, and a later screen may
+// take the address back. /admin/redirects/new and /admin/redirects/<id> stay as the no-JS
+// pages. The SEO page decides who may open the tab.
+return Astro.redirect('/admin/seo?tab=redirects', 302);
 ---
-
-<AdminLayout title={ui.title}>
-  <!--
-  `client:load` rather than `client:visible`: this island IS the page, so deferring it
-  to intersection just adds a blank frame. Public routes use visible/idle — /admin is
-  exempt from the CWV budgets (CLAUDE.md §6) and is gated on bundle size instead.
--->
-  <AdminResourceTable client:load resource="redirects" />
-</AdminLayout>

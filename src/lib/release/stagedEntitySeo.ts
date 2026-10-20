@@ -1,7 +1,8 @@
 import type { z } from 'zod';
 import type { DraftOp } from '@schemas/release';
 import type { AdminRouteContext } from '@/lib/admin/route';
-import { ENTITY_SEO } from '@/lib/admin/entitySeo';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import { ENTITY_SEO, normalizeCanonical } from '@/lib/admin/entitySeo';
 import { DraftConflictError, OptimisticLockError } from '@/lib/admin/errors';
 import { derivePatch, dropNoOps, mergePayload, overlayRow, recordBase } from './overlay';
 import { registryEntry } from './registry';
@@ -31,9 +32,12 @@ import { parseDraftSave } from './stagedSingleton';
 //   • the payload ALWAYS stores the target (`entityType`, `entityId`), on an edit too: the
 //     publish (R4) reads it and refuses a target that differs from its row (R2's note);
 //   • the payload is the whole save, never merged with the previous one (a PUT replaces), so
-//     the change writes all six meta columns and records a base for each; `fields` names only
-//     the ones that differ from live, for the pending list;
-//   • the Arabic meta is still required at stage time (`assertBilingual`, as today).
+//     the change writes all seven meta columns (U10 added the share image, `og_media_id`) and
+//     records a base for each; `fields` names only the ones that differ from live, for the
+//     pending list;
+//   • the pair rule is checked at stage time (`assertBilingual`: a title or description written
+//     in one language needs the other), and a save that sets nothing on a target with no row
+//     and no pending change stages nothing (U10 D4), as the live path creates no row.
 
 type Row = Record<string, unknown>;
 type Ctx = AdminRouteContext<unknown>;
@@ -99,6 +103,8 @@ export async function stagedEntitySeoWrite(ctx: Ctx, raw: unknown): Promise<Row>
   const { auth, sb, audit } = ctx;
   const { payload, ref } = parseDraftSave<Write>(ENTITY_SEO.WriteSchema, raw);
   ENTITY_SEO.assertBilingual(payload);
+  // As the live path: an override equal to the page's own path is no override (U10 D6).
+  payload.canonicalOverride = await normalizeCanonical(ctx.sb, ctx.auth, payload, PUBLIC_SITE_URL);
   const lookup: Lookup = { entityType: payload.entityType, entityId: payload.entityId };
   const live = await readLive(ctx, lookup);
   const draft: StoredDraft | null = await loadSeoDraft(ctx, live, lookup);
@@ -128,6 +134,9 @@ export async function stagedEntitySeoWrite(ctx: Ctx, raw: unknown): Promise<Row>
   } else if (payload.version !== 0 && payload.version !== 1) {
     // What GET reported for a target with no row yet (the legacy first save's rule).
     throw new OptimisticLockError(ENTITY_SEO.table);
+  } else if (ENTITY_SEO.isEmpty(ENTITY_SEO.toRow(payload))) {
+    // No row, no pending change, and nothing set: nothing to stage (U10 D4).
+    return { ...fallbackOf(lookup), draft: null };
   }
 
   const e = entry();

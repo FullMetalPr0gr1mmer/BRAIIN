@@ -251,6 +251,8 @@ export function parseCaseStudies(rows: unknown[]): CaseStudy[] {
 }
 
 export interface CaseStudyEntry {
+  /** The project's id: its SEO row's target (the sitemap's indexability filter, U10). */
+  id: string;
   slug: string;
   title: LocalizedText;
   updatedAt: string | null;
@@ -275,6 +277,7 @@ export async function getCaseStudyIndex(): Promise<CaseStudyEntry[]> {
       return [];
     }
     return parseCaseStudies(data ?? []).map((study) => ({
+      id: study.id,
       slug: study.slug,
       title: study.title,
       updatedAt: study.updatedAt,

@@ -55,11 +55,13 @@ const ADMIN_DASHBOARD_LAZY =
 const ADMIN_EDITOR_ISLAND_NAMES = [
   'AdminMediaLibrary',
   'AdminResourceForm',
+  'AdminSeo',
   'AdminSingletonForm',
 ];
 // prettier-ignore
 const ADMIN_EDITOR_SCREEN_DIRS = [
   'media',
+  'seo',
 ];
 /** @param {readonly string[]} names */
 const alternatives = (names) => names.join('|');

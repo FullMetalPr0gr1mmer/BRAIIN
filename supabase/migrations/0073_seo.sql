@@ -1,0 +1,594 @@
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- 0073 — SEO: share images from the media library (Admin v2 U10, the folded U10a + U10b PR).
+-- Forward-only and EXPAND only: two nullable columns, one unique constraint, two composite
+-- foreign keys, two indexes, one policy and one function restated, two registry rows
+-- restated, one inherited privilege withdrawn (5b) and one help guide put (6). No other data
+-- changes. The number is a placeholder: it is assigned at merge
+-- (scripts/renumber-migration.mjs). Depends on 0009, 0011, 0024, 0028, 0038, 0045, 0066
+-- (media_usage v4, whose text v5 below extends) and 0069 (the help catalog's put).
+--
+-- The design is docs/admin-v2/ui.md "SEO (/admin/seo; AV-19)" and §6, as the Wave 3 U10 brief
+-- decides it (D2, D3); the departures are in docs/admin-v2/as-built/U10.md.
+--
+--   1. media_assets_tenant_id_id: UNIQUE (tenant_id, id) on media_assets, the target of the
+--      two composite keys below (0041's profiles precedent; U9a reuses it for the site icons).
+--   2. entity_seo.og_media_id and seo_defaults.default_og_media_id: the share image as a
+--      media asset. Each is a composite foreign key (tenant_id, <column>) → media_assets
+--      (tenant_id, id) ON DELETE RESTRICT, so a share image is always an asset of the row's
+--      own tenant (MATCH SIMPLE: a null id is not checked), and a picture in use cannot be
+--      hard-deleted even before the Worker's media_usage gate. The legacy URL columns
+--      (og_image, default_og_image) stay: read as a fallback, never silently wiped.
+--   3. media_assets_public_read: 0045's policy word for word, plus two branches: an asset a
+--      VISIBLE entity_seo row names as its share image, and one the tenant's seo_defaults
+--      names. Each subquery runs under anon's own RLS on that table, so entity_seo's
+--      published-parent fence (0011 entity_seo_published_only) applies: a draft service's
+--      share image stays hidden, fail-closed.
+--
+--      THE RECURSION RULE (why the tenant fence on the new references is a foreign key, not
+--      a policy term): this policy now reads entity_seo and seo_defaults, so no policy on
+--      either table may ever read media_assets. PostgreSQL would expand the two policies
+--      into each other and refuse every read of either table with 42P17 (infinite recursion
+--      detected in policy), which would take every public image and every page head down.
+--      A postcondition below holds it, and pgTAP reads both tables as anon.
+--   4. public.media_usage v5: v4 (0066) word for word, plus `entity_seo` (the target's id,
+--      labelled "<kind>: <slug>") and `seo_defaults` (the tenant, "site default") branches,
+--      both `pending false`. Same four columns, so the deployed Worker's parsers read it as
+--      they read v4 (as-built U10, rule 5). INVOKER, search_path '', every name qualified,
+--      every branch tenant-first; EXECUTE authenticated only.
+--   5. The release registry rows of entity_seo and seo_defaults restated (`do update`) with
+--      the new columns appended, so a release may stage and publish a share image like any
+--      other SEO column (R1/R2 contract; tests/fixtures/releaseRegistry.ts reads this shape).
+--      apply_release (0051) builds its statements from the registry at call time, and the
+--      snapshot, capture and guard triggers are row-generic: nothing else is restated.
+--  5b. authenticated's DELETE on seo_defaults revoked. 0011 grants staff SELECT, INSERT and
+--      UPDATE on the singleton and means to withhold DELETE ("upserted, never deleted"), but
+--      it never revoked Supabase's bootstrap grant of ALL, and seo_defaults_write (0009) is
+--      FOR ALL: an Admin or SEO token could drop the tenant's defaults row through PostgREST,
+--      past the Worker and its audit. Nothing deletes it (the registry's delete_roles is
+--      empty), so the revoke changes no path; a postcondition holds it in both regimes.
+--   6. seo-and-redirects rewritten for the SEO screen, put through the help catalog (0069) at
+--      revision 1 (docs/admin-v2/guides/seo-and-redirects.json verbatim): the catalog moves it
+--      to 2 and re-seeds it into every tenant. No other guide is read or written.
+--
+-- Production runs this as postgres (BYPASSRLS) on PostgreSQL 17; CI replays it on 15. Grants
+-- are not widened (5b only withdraws one): anon's table SELECT on entity_seo and seo_defaults
+-- (0011) covers the new columns (public data, rendered in the head), staff grants are
+-- table-wide, and anon's column grant on media_assets (0024) is unchanged. Postconditions at the end check both grant
+-- regimes (MAINTAIN only on 17).
+--
+-- CLAUDE.md §3 (Pillar 3, the canonical and sitemap rule), §8 (Media; Admin v2 lanes, UI).
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+
+-- A busy table fails the push instead of queueing: three live tables gain a constraint, two a
+-- column and an index, a policy is replaced and a function restated, and a statement that
+-- waits more than five seconds for a lock raises, so the push is retried later rather than
+-- holding its place in the lock queue while the site's reads pile up behind it.
+-- Transaction-local: it ends with this file.
+set local lock_timeout = '5s';
+
+-- ═══ 1. media_assets (tenant_id, id) ══════════════════════════════════════════════════════
+do $$
+begin
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.media_assets'::regclass
+                    and conname = 'media_assets_tenant_id_id') then
+    alter table public.media_assets
+      add constraint media_assets_tenant_id_id unique (tenant_id, id);
+  end if;
+end $$;
+
+-- ═══ 2. The share-image columns ═══════════════════════════════════════════════════════════
+alter table public.entity_seo add column if not exists og_media_id uuid;
+alter table public.entity_seo drop constraint if exists entity_seo_og_media_fk;
+alter table public.entity_seo
+  add constraint entity_seo_og_media_fk foreign key (tenant_id, og_media_id)
+  references public.media_assets (tenant_id, id) on delete restrict;
+-- For media_usage and the foreign key's check on a media delete.
+create index if not exists entity_seo_og_media_idx
+  on public.entity_seo (og_media_id) where og_media_id is not null;
+
+alter table public.seo_defaults add column if not exists default_og_media_id uuid;
+alter table public.seo_defaults drop constraint if exists seo_defaults_default_og_media_fk;
+alter table public.seo_defaults
+  add constraint seo_defaults_default_og_media_fk foreign key (tenant_id, default_og_media_id)
+  references public.media_assets (tenant_id, id) on delete restrict;
+create index if not exists seo_defaults_default_og_media_idx
+  on public.seo_defaults (default_og_media_id) where default_og_media_id is not null;
+
+comment on column public.entity_seo.og_media_id is
+  'The page''s share image (og:image), a media asset of the same tenant (0073). Outranks the '
+  'legacy og_image URL, which is read only as a fallback.';
+comment on column public.seo_defaults.default_og_media_id is
+  'The default share image for a page with no image of its own, a media asset of the same '
+  'tenant (0073). Outranks the legacy default_og_image URL.';
+
+-- ═══ 3. media_assets_public_read: 0045's branches, plus the two share images ══════════════
+-- NO policy on public.entity_seo or public.seo_defaults may read public.media_assets: this
+-- policy reads them, and the two would recurse (42P17). A postcondition holds it.
+drop policy if exists media_assets_public_read on public.media_assets;
+create policy media_assets_public_read on public.media_assets for select using (
+  tenant_id = app.effective_tenant_id()
+  and provider in ('static', 'cf_images', 'stream', 'storage')
+  and (
+    exists (select 1 from public.portfolio p
+             where p.poster_media_id = media_assets.id and p.status = 'published')
+    or exists (select 1 from public.portfolio_media pm
+                 join public.portfolio p on p.id = pm.portfolio_id
+                where pm.media_id = media_assets.id and p.status = 'published')
+    or exists (select 1 from public.clients c
+                where c.logo_media_id = media_assets.id and c.visible)
+    or exists (select 1 from public.testimonials t
+                where t.avatar_media_id = media_assets.id and t.status = 'published')
+    or exists (select 1 from public.team_members m
+                where m.portrait_media_id = media_assets.id and m.status = 'published')
+    or exists (select 1 from public.page_sections s
+                 join public.pages pg on pg.id = s.page_id
+                where s.visible and pg.status = 'published'
+                  and jsonb_path_exists(s.content, 'lax $.**.mediaId ? (@ == $id)',
+                                        jsonb_build_object('id', media_assets.id::text)))
+    or exists (select 1 from public.disciplines d
+                where d.poster_media_id = media_assets.id and d.status = 'published')
+    or exists (select 1 from public.services sv
+                where sv.poster_media_id = media_assets.id and sv.status = 'published')
+    -- 0073: a share image. entity_seo is read under the reader's own RLS, so for anon only
+    -- a row whose parent is published (0011 entity_seo_published_only) matches.
+    or exists (select 1 from public.entity_seo e
+                where e.og_media_id = media_assets.id)
+    or exists (select 1 from public.seo_defaults sd
+                where sd.default_og_media_id = media_assets.id)
+  )
+);
+
+-- ═══ 4. media_usage v5: v4 (0066), plus the two share images ═════════════════════════════
+create or replace function public.media_usage(p_media_id uuid)
+  returns table (entity_type text, entity_id uuid, label text, pending boolean)
+  language sql stable security invoker set search_path = ''
+as $$
+  select 'portfolio'::text, p.id, p.slug::text, false
+    from public.portfolio p
+   where p.tenant_id = app.effective_tenant_id() and p.poster_media_id = p_media_id
+  union all
+  select 'portfolio_media', pm.portfolio_id, pm.role, false
+    from public.portfolio_media pm
+   where pm.tenant_id = app.effective_tenant_id() and pm.media_id = p_media_id
+  union all
+  select 'client', c.id, c.slug::text, false
+    from public.clients c
+   where c.tenant_id = app.effective_tenant_id() and c.logo_media_id = p_media_id
+  union all
+  select 'testimonial', t.id, t.slug::text, false
+    from public.testimonials t
+   where t.tenant_id = app.effective_tenant_id() and t.avatar_media_id = p_media_id
+  union all
+  select 'team_member', m.id, m.slug::text, false
+    from public.team_members m
+   where m.tenant_id = app.effective_tenant_id() and m.portrait_media_id = p_media_id
+  union all
+  select 'page_section', s.id, s.type, false
+    from public.page_sections s
+   where s.tenant_id = app.effective_tenant_id()
+     and pg_catalog.jsonb_path_exists(s.content, 'lax $.**.mediaId ? (@ == $id)',
+                                      pg_catalog.jsonb_build_object('id', p_media_id::text))
+  union all
+  select 'discipline', d.id, d.slug::text, false
+    from public.disciplines d
+   where d.tenant_id = app.effective_tenant_id() and d.poster_media_id = p_media_id
+  union all
+  select 'service', sv.id, sv.slug::text, false
+    from public.services sv
+   where sv.tenant_id = app.effective_tenant_id() and sv.poster_media_id = p_media_id
+  -- ---- v5 (0073): the share images. The entity is the page the SEO row describes (its
+  -- target), labelled "<kind>: <slug>" from the target's own row; the defaults are the
+  -- tenant's, labelled "site default" ----
+  union all
+  select 'entity_seo', e.entity_id,
+         case e.entity_type
+           when 'service' then 'service'
+           when 'portfolio' then 'project'
+           when 'blog_post' then 'post'
+           else 'page'
+         end
+         || coalesce(': ' || case e.entity_type
+              when 'service' then (select sv.slug::text from public.services sv
+                                    where sv.tenant_id = e.tenant_id and sv.id = e.entity_id)
+              when 'portfolio' then (select p.slug::text from public.portfolio p
+                                      where p.tenant_id = e.tenant_id and p.id = e.entity_id)
+              when 'blog_post' then (select b.slug::text from public.blog_posts b
+                                      where b.tenant_id = e.tenant_id and b.id = e.entity_id)
+              else (select pg.slug::text from public.pages pg
+                     where pg.tenant_id = e.tenant_id and pg.id = e.entity_id)
+            end, ''),
+         false
+    from public.entity_seo e
+   where e.tenant_id = app.effective_tenant_id() and e.og_media_id = p_media_id
+  union all
+  select 'seo_defaults', sd.tenant_id, 'site default', false
+    from public.seo_defaults sd
+   where sd.tenant_id = app.effective_tenant_id() and sd.default_og_media_id = p_media_id
+  -- ---- v4 (0066): pending changes ----
+  union all
+  select dr.entity_type, dr.entity_id,
+         pg_catalog.left(coalesce(nullif(dr.label ->> 'en', ''), dr.payload ->> 'slug', 'pending change'), 120),
+         true
+    from public.content_drafts dr
+   where dr.tenant_id = app.effective_tenant_id()
+     and dr.op <> 'delete'
+     and exists (select 1
+                   from pg_catalog.jsonb_path_query(dr.payload, 'lax $.**') as v(value)
+                  where pg_catalog.jsonb_typeof(v.value) = 'string'
+                    and pg_catalog.lower(pg_catalog.regexp_replace(v.value #>> '{}', '[{}-]', '', 'g'))
+                        = pg_catalog.replace(p_media_id::text, '-', ''))
+$$;
+revoke all on function public.media_usage(uuid) from public, anon, authenticated, service_role;
+grant execute on function public.media_usage(uuid) to authenticated;
+
+-- ═══ 5. The release registry: the share-image columns are staged like the rest ════════════
+-- 0038's two rows, restated with the new column appended. `do update`, so these replace
+-- 0038's; tests/fixtures/releaseRegistry.ts folds the migrations in order and reads this shape.
+insert into app.release_entities
+  (entity_type, table_name, key_column, area, author_roles, delete_roles, columns,
+   deferred_columns, unique_flags, exempt_columns, apply_order, has_status, publish_flag)
+values
+  ('entity_seo', 'entity_seo', 'id', 'seo', '{admin,seo}', '{}',
+   '{entity_type,entity_id,meta_title,meta_description,og_image,canonical_override,robots,schema_type,og_media_id}',
+   '{}', '{}', '{}', 120, false, null),
+  ('seo_defaults', 'seo_defaults', 'tenant_id', 'seo', '{admin,seo}', '{}',
+   '{title_template,default_title,default_description,default_og_image,organization,robots_directives,default_og_media_id}',
+   '{}', '{}', '{}', 120, false, null)
+on conflict (entity_type) do update
+  set table_name = excluded.table_name,
+      key_column = excluded.key_column,
+      area = excluded.area,
+      author_roles = excluded.author_roles,
+      delete_roles = excluded.delete_roles,
+      columns = excluded.columns,
+      deferred_columns = excluded.deferred_columns,
+      unique_flags = excluded.unique_flags,
+      exempt_columns = excluded.exempt_columns,
+      apply_order = excluded.apply_order,
+      has_status = excluded.has_status,
+      publish_flag = excluded.publish_flag;
+
+-- ═══ 5b. seo_defaults: staff create and edit the singleton, never delete it ════════════════
+revoke delete on public.seo_defaults from authenticated;
+
+-- ═══ 6. The help guide ═══════════════════════════════════════════════════════════════════
+-- seo-and-redirects rewritten for the SEO screen (its place, caps and screens unchanged), put
+-- through H11's catalog (0069) at the revision main holds it at: 1, as the catalog was filled.
+-- The literal is docs/admin-v2/guides/seo-and-redirects.json verbatim; the put re-seeds that
+-- one guide into every tenant and touches no other. A postcondition below checks both.
+select app.put_help_guide($guide$
+{
+  "slug": "seo-and-redirects",
+  "sort_order": 60,
+  "minutes": 5,
+  "tags": [
+    "seo"
+  ],
+  "screens": [
+    "/admin/seo",
+    "/admin/redirects"
+  ],
+  "caps": [
+    "seo.globalDefaults",
+    "redirects.manage"
+  ],
+  "title": "SEO, share images and redirects",
+  "title_ar": "SEO وصور المشاركة وإعادة التوجيه",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "The SEO screen has three tabs. Pages lists every page, service, project and post with what search engines and social sites see for it. Redirects keeps old links working. Site wide holds the defaults every page starts from."
+      },
+      {
+        "t": "h",
+        "x": "Pages"
+      },
+      {
+        "t": "p",
+        "x": "Each row says, for the title and the description, whether the page has words of its own (Custom) or uses its default (Default), whether search engines may index it, and whether its Arabic is complete. Choose Edit SEO on a row to open its panel."
+      },
+      {
+        "t": "p",
+        "x": "An empty box keeps the page’s default, which the box shows in grey. A title or a description written in one language needs the other too. A title works best at 50 to 60 characters and a description at 150 to 160; the boxes stop at 120 and 320."
+      },
+      {
+        "t": "p",
+        "x": "The share image is a picture from the media library, shown when the page is shared. Without one, the page’s own image is used (a service’s poster, a project’s banner, a post’s cover), then the site’s default share image, then the built-in logo card. It is sent as a JPEG at most 1,200 pixels wide, in the picture’s own shape."
+      },
+      {
+        "t": "p",
+        "x": "Let search engines index this page stays on unless you hide the page. Turning it off asks first: search engines stop showing the page and it leaves the sitemap, but people with the link can still open it. Until you choose, the page follows the site default."
+      },
+      {
+        "t": "p",
+        "x": "Under Advanced you can name another address on this site that search engines should index instead, such as /services/logo. The Arabic page follows on its own. Leave it empty for almost every page: a page pointing elsewhere also leaves the sitemap."
+      },
+      {
+        "t": "p",
+        "x": "The two previews show the search result in English and in Arabic, with the site’s title template, as you type."
+      },
+      {
+        "t": "h",
+        "x": "Redirects"
+      },
+      {
+        "t": "p",
+        "x": "A redirect sends visitors and search engines from an old address to a new one, so links shared before a rename keep working. Add or edit one in its panel. The list says whether the live site has every rule, and Sync to edge sends them again."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "From is the old path, such as /old-page. A path that still shows a page is refused: a redirect only covers addresses that would otherwise find nothing.",
+          "To is where it leads: a path on this site or a full https:// address. Point at the final address, because a redirect to another redirect is refused.",
+          "301 is a permanent move and 302 a temporary one. 308 is permanent too, for addresses that receive forms.",
+          "A rule takes effect within a minute of saving, and a rule for an English path also covers its Arabic twin under /ar."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Site wide"
+      },
+      {
+        "t": "p",
+        "x": "The title template places a page’s title in every tab and search result: %s is the page’s title and %brand% the studio’s name, as in %brand% | %s. The default title and description are used only by a page with no words of its own, and the default share image only by a page with no image."
+      },
+      {
+        "t": "p",
+        "x": "Search engines can be kept away from the whole site. Because that hides every page, the save asks you to type noindex first."
+      },
+      {
+        "t": "p",
+        "x": "Built in lists what the site does on its own: the sitemap and llms.txt, read from what is published at most an hour behind; English and Arabic pages pointing to each other; each language naming itself; the crawler rules; and the structured data, checked on every change."
+      },
+      {
+        "t": "tip",
+        "x": "Browsers can remember a permanent redirect for up to a day. If you are not sure a move is final, start with 302: it can be changed or removed at once."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "لشاشة SEO ثلاث علامات تبويب. تعرض Pages كل صفحة وخدمة ومشروع ومقال مع ما تراه محركات البحث ومواقع التواصل لكل منها. وتُبقي Redirects الروابط القديمة صالحة. وتضم Site wide الإعدادات الافتراضية التي تبدأ منها كل صفحة."
+      },
+      {
+        "t": "h",
+        "x": "الصفحات"
+      },
+      {
+        "t": "p",
+        "x": "يوضح كل صف، للعنوان وللوصف، إن كانت للصفحة كلماتها الخاصة (Custom) أو تستخدم نصها الافتراضي (Default)، وإن كان مسموحًا لمحركات البحث بفهرستها، وإن كان نصها العربي مكتملًا. اختر Edit SEO في الصف لفتح لوحته."
+      },
+      {
+        "t": "p",
+        "x": "الحقل الفارغ يُبقي النص الافتراضي للصفحة، ويعرضه الحقل باللون الرمادي. العنوان أو الوصف المكتوب بلغة يحتاج إلى اللغة الأخرى أيضًا. يعمل العنوان بأفضل شكل بين 50 و60 حرفًا والوصف بين 150 و160، ويتوقف الحقلان عند 120 و320."
+      },
+      {
+        "t": "p",
+        "x": "صورة المشاركة صورة من مكتبة الوسائط تظهر عند مشاركة الصفحة. وإن لم تُختر، تُستخدم صورة الصفحة نفسها (ملصق الخدمة أو لافتة المشروع أو غلاف المقال)، ثم صورة المشاركة الافتراضية للموقع، ثم بطاقة الشعار المدمجة. وتُرسل بصيغة JPEG بعرض 1,200 بكسل على الأكثر، وبشكل الصورة الأصلي."
+      },
+      {
+        "t": "p",
+        "x": "يبقى خيار Let search engines index this page مفعّلًا ما لم تُخفِ الصفحة. ويطلب إيقافه تأكيدًا أولًا: تتوقف محركات البحث عن عرض الصفحة وتخرج من خريطة الموقع، لكن من يملك الرابط يستطيع فتحها. وإلى أن تختار، تتبع الصفحة الإعداد الافتراضي للموقع."
+      },
+      {
+        "t": "p",
+        "x": "ضمن Advanced يمكنك تسمية عنوان آخر في هذا الموقع تفهرسه محركات البحث بدلًا من الصفحة، مثل /services/logo. وتتبعه الصفحة العربية تلقائيًا. اتركه فارغًا لمعظم الصفحات: فالصفحة التي تشير إلى عنوان آخر تخرج أيضًا من خريطة الموقع."
+      },
+      {
+        "t": "p",
+        "x": "تعرض المعاينتان نتيجة البحث بالإنجليزية وبالعربية، مع قالب عنوان الموقع، أثناء الكتابة."
+      },
+      {
+        "t": "h",
+        "x": "إعادة التوجيه"
+      },
+      {
+        "t": "p",
+        "x": "تنقل إعادة التوجيه الزوار ومحركات البحث من عنوان قديم إلى عنوان جديد، فتبقى الروابط التي تمت مشاركتها قبل تغيير الاسم صالحة. أضف قاعدة أو عدّلها في لوحتها. وتوضح القائمة إن كان الموقع المباشر يملك كل القواعد، ويعيد Sync to edge إرسالها."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "From هو المسار القديم، مثل /old-page. يُرفض المسار الذي ما زال يعرض صفحة، فإعادة التوجيه تغطي فقط العناوين التي لن تجد شيئًا بدونها.",
+          "To هو الوجهة: مسار في هذا الموقع أو عنوان كامل يبدأ بـ https://. وجّهها إلى العنوان النهائي، لأن إعادة التوجيه إلى إعادة توجيه أخرى تُرفض.",
+          "301 نقل دائم و302 نقل مؤقت، و308 نقل دائم أيضًا للعناوين التي تستقبل النماذج.",
+          "تسري القاعدة خلال دقيقة من الحفظ، والقاعدة الخاصة بمسار إنجليزي تشمل نظيره العربي تحت /ar."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "على مستوى الموقع"
+      },
+      {
+        "t": "p",
+        "x": "يضع قالب العنوان عنوان الصفحة في كل تبويب وكل نتيجة بحث: %s هو عنوان الصفحة و%brand% اسم الاستوديو، كما في %brand% | %s. ولا يُستخدم العنوان والوصف الافتراضيان إلا لصفحة ليست لها كلماتها الخاصة، ولا تُستخدم صورة المشاركة الافتراضية إلا لصفحة بلا صورة."
+      },
+      {
+        "t": "p",
+        "x": "يمكن إبعاد محركات البحث عن الموقع كله. ولأن ذلك يخفي كل الصفحات، يطلب الحفظ أن تكتب noindex أولًا."
+      },
+      {
+        "t": "p",
+        "x": "تعرض Built in ما يفعله الموقع من تلقاء نفسه: خريطة الموقع وllms.txt، وتُقرآن مما هو منشور بتأخير لا يتجاوز ساعة؛ وصفحات إنجليزية وعربية تشير كل منها إلى الأخرى؛ وكل لغة تسمي نفسها؛ وقواعد برامج الزحف؛ والبيانات المنظمة التي تُفحص مع كل تغيير."
+      },
+      {
+        "t": "tip",
+        "x": "قد تتذكر المتصفحات إعادة التوجيه الدائمة حتى يوم كامل. إن لم تكن متأكدًا من أن النقل نهائي فابدأ بـ 302، إذ يمكن تغييرها أو حذفها فورًا."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 1);
+
+-- ═══ 7. Postconditions ═══════════════════════════════════════════════════════════════════
+do $$
+declare
+  v_maintain boolean := current_setting('server_version_num')::int >= 170000;
+  v_privs text;
+  r text;
+  t text;
+  v_qual text;
+  v_bad text;
+begin
+  -- ---- 1. The unique key is exactly (tenant_id, id) ---------------------------------------
+  if not exists (select 1 from pg_constraint c
+                  where c.conrelid = 'public.media_assets'::regclass
+                    and c.conname = 'media_assets_tenant_id_id' and c.contype = 'u'
+                    and pg_get_constraintdef(c.oid) = 'UNIQUE (tenant_id, id)') then
+    raise exception '0073: media_assets_tenant_id_id must be UNIQUE (tenant_id, id)';
+  end if;
+
+  -- ---- 2. The two composite keys: RESTRICT, to that unique key ----------------------------
+  if not exists (select 1 from pg_constraint c
+                  where c.conrelid = 'public.entity_seo'::regclass
+                    and c.conname = 'entity_seo_og_media_fk' and c.contype = 'f'
+                    and c.confdeltype = 'r'
+                    and c.conindid = (select conindid from pg_constraint
+                                       where conname = 'media_assets_tenant_id_id'
+                                         and conrelid = 'public.media_assets'::regclass)
+                    and pg_get_constraintdef(c.oid)
+                        ~ '^FOREIGN KEY \(tenant_id, og_media_id\) REFERENCES (public\.)?media_assets\(tenant_id, id\) ON DELETE RESTRICT$') then
+    raise exception '0073: entity_seo_og_media_fk must be (tenant_id, og_media_id) -> media_assets (tenant_id, id) ON DELETE RESTRICT';
+  end if;
+  if not exists (select 1 from pg_constraint c
+                  where c.conrelid = 'public.seo_defaults'::regclass
+                    and c.conname = 'seo_defaults_default_og_media_fk' and c.contype = 'f'
+                    and c.confdeltype = 'r'
+                    and c.conindid = (select conindid from pg_constraint
+                                       where conname = 'media_assets_tenant_id_id'
+                                         and conrelid = 'public.media_assets'::regclass)
+                    and pg_get_constraintdef(c.oid)
+                        ~ '^FOREIGN KEY \(tenant_id, default_og_media_id\) REFERENCES (public\.)?media_assets\(tenant_id, id\) ON DELETE RESTRICT$') then
+    raise exception '0073: seo_defaults_default_og_media_fk must be (tenant_id, default_og_media_id) -> media_assets (tenant_id, id) ON DELETE RESTRICT';
+  end if;
+  if to_regclass('public.entity_seo_og_media_idx') is null
+     or to_regclass('public.seo_defaults_default_og_media_idx') is null then
+    raise exception '0073: the share-image indexes are missing';
+  end if;
+
+  -- ---- 3. media_assets_public_read: PERMISSIVE SELECT, tenant first, every branch --------
+  select qual into v_qual from pg_policies
+   where schemaname = 'public' and tablename = 'media_assets'
+     and policyname = 'media_assets_public_read'
+     and permissive = 'PERMISSIVE' and cmd = 'SELECT';
+  if v_qual is null
+     or v_qual !~ '^\(\(tenant_id = (app\.)?effective_tenant_id\(\)\)'
+     or position('storage' in v_qual) = 0
+     or position('portfolio_media' in v_qual) = 0
+     or position('page_sections' in v_qual) = 0
+     or position('disciplines' in v_qual) = 0
+     or position('services' in v_qual) = 0
+     or position('entity_seo' in v_qual) = 0
+     or position('og_media_id' in v_qual) = 0
+     or position('seo_defaults' in v_qual) = 0
+     or position('default_og_media_id' in v_qual) = 0 then
+    raise exception '0073: media_assets_public_read must be PERMISSIVE SELECT, tenant first, naming storage, every 0045 branch, entity_seo and seo_defaults';
+  end if;
+
+  -- ---- 4. The recursion rule: no policy on entity_seo or seo_defaults reads media_assets --
+  select string_agg(policyname, ', ') into v_bad
+    from pg_policies
+   where schemaname = 'public' and tablename in ('entity_seo', 'seo_defaults')
+     and (coalesce(qual, '') ~ 'media_assets' or coalesce(with_check, '') ~ 'media_assets');
+  if v_bad is not null then
+    raise exception '0073: policies on entity_seo or seo_defaults read media_assets (42P17 with media_assets_public_read): %', v_bad;
+  end if;
+
+  -- ---- 5. media_usage v5: INVOKER, search_path '', four columns, authenticated only -----
+  if not exists (select 1 from pg_proc
+                  where oid = 'public.media_usage(uuid)'::regprocedure and not prosecdef
+                    and proconfig = array['search_path=""']
+                    and pg_get_function_result(oid)
+                        = 'TABLE(entity_type text, entity_id uuid, label text, pending boolean)'
+                    and prosrc ~ '''entity_seo''' and prosrc ~ '''seo_defaults'''
+                    and prosrc ~ 'content_drafts') then
+    raise exception '0073: public.media_usage must be INVOKER, search_path '''', four columns, with the share-image and pending branches';
+  end if;
+  if not has_function_privilege('authenticated', 'public.media_usage(uuid)', 'execute')
+     or has_function_privilege('anon', 'public.media_usage(uuid)', 'execute')
+     or has_function_privilege('public', 'public.media_usage(uuid)', 'execute')
+     or has_function_privilege('service_role', 'public.media_usage(uuid)', 'execute') then
+    raise exception '0073: public.media_usage must be executable by authenticated only';
+  end if;
+
+  -- ---- 6. Grants unchanged where they matter: PUBLIC and anon never write the three
+  -- tables, and no API role truncates them (R5, 0066). Staff's other table privileges are
+  -- the regime's and 0011's, which this file does not touch ------------------------------
+  v_privs := 'insert, update, delete, truncate';
+  foreach t in array array['public.entity_seo', 'public.seo_defaults', 'public.media_assets'] loop
+    foreach r in array array['public', 'anon'] loop
+      if has_table_privilege(r::name, t, v_privs) then
+        raise exception '0073: % may write %', r, t;
+      end if;
+    end loop;
+    foreach r in array array['authenticated', 'service_role'] loop
+      if has_table_privilege(r::name, t, 'truncate') then
+        raise exception '0073: % may truncate %', r, t;
+      end if;
+    end loop;
+    -- MAINTAIN (PostgreSQL 17) for the roles that must never write: staff and the service
+    -- role keep whatever their regime gave them, which this file does not touch.
+    if v_maintain then
+      foreach r in array array['public', 'anon'] loop
+        if (case when v_maintain then has_table_privilege(r::name, t, 'maintain') else false end) then
+          raise exception '0073: % holds MAINTAIN on %', r, t;
+        end if;
+      end loop;
+    end if;
+  end loop;
+  -- The defaults row is a singleton staff create and edit but never remove (5b): no DELETE
+  -- for authenticated, whichever regime granted what before.
+  if has_table_privilege('authenticated', 'public.seo_defaults', 'delete') then
+    raise exception '0073: authenticated may delete seo_defaults';
+  end if;
+  -- anon reads the new columns (they ship in the head) and writes neither.
+  if not has_column_privilege('anon', 'public.entity_seo', 'og_media_id', 'select')
+     or not has_column_privilege('anon', 'public.seo_defaults', 'default_og_media_id', 'select')
+     or has_column_privilege('anon', 'public.entity_seo', 'og_media_id', 'insert, update, references')
+     or has_column_privilege('anon', 'public.seo_defaults', 'default_og_media_id', 'insert, update, references') then
+    raise exception '0073: anon must read, and only read, the share-image columns';
+  end if;
+  -- anon's media_assets read stays the 0024 column grant: never display_name.
+  if has_column_privilege('anon', 'public.media_assets', 'display_name', 'select') then
+    raise exception '0073: anon may read media_assets.display_name';
+  end if;
+
+  -- ---- 7. RLS still on and forced -------------------------------------------------------
+  select string_agg(relname, ', ') into v_bad
+    from pg_class
+   where oid in ('public.entity_seo'::regclass, 'public.seo_defaults'::regclass,
+                 'public.media_assets'::regclass)
+     and not (relrowsecurity and relforcerowsecurity);
+  if v_bad is not null then
+    raise exception '0073: RLS is not enabled and forced on %', v_bad;
+  end if;
+
+  -- ---- 8. The registry stages the new columns ------------------------------------------
+  if not exists (select 1 from app.release_entities
+                  where entity_type = 'entity_seo' and 'og_media_id' = any (columns)
+                    and 'og_image' = any (columns))
+     or not exists (select 1 from app.release_entities
+                     where entity_type = 'seo_defaults' and 'default_og_media_id' = any (columns)
+                       and 'default_og_image' = any (columns)) then
+    raise exception '0073: the release registry must stage og_media_id and default_og_media_id';
+  end if;
+
+  -- ---- 9. The guide: the catalog moved it to revision 2, and every tenant reads it --------
+  if not exists (select 1 from app.help_guide_catalog
+                  where slug = 'seo-and-redirects' and revision = 2
+                    and title = 'SEO, share images and redirects' and sort_order = 60
+                    and caps = array['seo.globalDefaults', 'redirects.manage']
+                    and screens = array['/admin/seo', '/admin/redirects']) then
+    raise exception '0073: the catalog must hold seo-and-redirects at revision 2 with the SEO screen''s text';
+  end if;
+  select string_agg(t.id::text, ', ') into v_bad
+    from public.tenants t
+   where not exists (select 1 from public.help_articles h
+                      where h.tenant_id = t.id and h.slug = 'seo-and-redirects'
+                        and h.title = 'SEO, share images and redirects');
+  if v_bad is not null then
+    raise exception '0073: tenants without the new seo-and-redirects guide: %', v_bad;
+  end if;
+end $$;

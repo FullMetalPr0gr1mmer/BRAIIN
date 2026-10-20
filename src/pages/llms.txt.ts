@@ -7,6 +7,9 @@ import { getPublishedPosts } from '@/lib/data/blog';
 import { getCaseStudyIndex } from '@/lib/data/portfolio';
 import { TRAINING_DENY, RETRIEVAL_ALLOW } from '@/lib/seo/crawlers';
 import { getIdentity } from '@/lib/identity';
+import { getSeoDefaults, getSeoRules } from '@/lib/data/seo';
+import { indexability, isIndexedPath } from '@/lib/seo/indexable';
+import type { SeoEntityType } from '@/lib/seo/entityPaths';
 import { isListedPath } from '@/lib/visibility/listing';
 
 // llms.txt — guidance for AI answer engines (NOT access control; that's robots.txt + the
@@ -37,17 +40,31 @@ export const GET: APIRoute = async ({ locals }) => {
   // template, are not offered to answer engines (the middleware's snapshot, from `locals`).
   const visibility = locals?.visibility;
   const now = Date.now();
-  const listed = (path: string) => isListedPath(visibility, path, now);
-  const [allServices, disciplines, posts, allCaseStudies, identity] = await Promise.all([
-    getPublishedServices(),
-    getPublishedDisciplines(),
-    getPublishedPosts(),
-    // The case-study page's own loader + schema, as the sitemap uses: never a 404.
-    getCaseStudyIndex(),
-    getIdentity(locals),
-  ]);
-  const services = allServices.filter((s) => listed(`/services/${s.slug}`));
-  const caseStudies = allCaseStudies.filter((p) => listed(`/portfolio/${p.slug}`));
+  const [allServices, disciplines, allPosts, allCaseStudies, identity, seoRules, seoDefaults] =
+    await Promise.all([
+      getPublishedServices(),
+      getPublishedDisciplines(),
+      getPublishedPosts(),
+      // The case-study page's own loader + schema, as the sitemap uses: never a 404.
+      getCaseStudyIndex(),
+      getIdentity(locals),
+      // Admin v2 U10 (D8): a page hidden from search (robots noindex, or canonicalised onto
+      // another path) is not offered to answer engines either, as the sitemap.
+      getSeoRules(),
+      getSeoDefaults(),
+    ]);
+  const ix = indexability(seoRules, seoDefaults?.robots_directives);
+  const listed = (path: string, ref: { type: SeoEntityType; id: string } | null = null) =>
+    isListedPath(visibility, path, now) && isIndexedPath(ix, path, site, ref);
+  const services = allServices.filter((s) =>
+    listed(`/services/${s.slug}`, { type: 'service', id: s.id }),
+  );
+  const caseStudies = allCaseStudies.filter((p) =>
+    listed(`/portfolio/${p.slug}`, { type: 'portfolio', id: p.id }),
+  );
+  const posts = allPosts.filter((p) =>
+    listed(`/creative-knowledge/${p.slug}`, { type: 'blog_post', id: p.id }),
+  );
   const sectionLines = SECTIONS.filter(([, path]) => listed(path))
     .map(([label, path]) => `- ${label}: ${site}${path}`)
     .join('\n');
