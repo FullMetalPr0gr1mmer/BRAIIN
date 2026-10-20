@@ -3819,6 +3819,35 @@ a.li__t::after {
   box-shadow: var(--ad-shadow-sm);
 }
 
+/* A tab's cue (Admin v2 U8b, kit TabStrip): a dot after the label for a tab that holds an
+   error; the words ("has errors") end the tab's accessible name, so the dot is never the
+   only cue. */
+.seg [role='tab'][data-cue] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab-cue {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--ad-err-text);
+}
+
+/* An editor split into tabs (Admin v2 U8b, EditorForm `tabs`): the tab list sits above the
+   form, and a panel tab that is not part of the form (the SEO editor) follows it. */
+.editor-tabs > .seg[role='tablist'] {
+  max-inline-size: 100%;
+}
+
+.editor-ro {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 /* Tables built by the kit (DataTable, ServerTable): flush in a card, the footer with the
    range and the pager under the scrolling table, row actions on hover and focus. */
 table.data .num {
@@ -4598,6 +4627,12 @@ dialog.drw[data-size='wide'] {
   .dt tbody tr[data-selected],
   .bulkbar {
     border: 1px solid CanvasText;
+  }
+
+  /* A tab's error dot is a fill: drawn in the system text colour (U8b). */
+  .tab-cue {
+    forced-color-adjust: none;
+    background: CanvasText;
   }
 
   /* Its own rule: a list mixing :has() with plain selectors is dropped whole by an

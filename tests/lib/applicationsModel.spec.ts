@@ -78,7 +78,12 @@ describe('the statuses', () => {
 
 describe('the details card', () => {
   it('labels from the option tables, the language in words, never a contact field', () => {
-    const rows = detailRows({ ...DETAIL, email: 'r@example.com', phone: '+966500000000' });
+    const revealed: ApplicationDetail = {
+      ...DETAIL,
+      email: 'r@example.com',
+      phone: '+966500000000',
+    };
+    const rows = detailRows(revealed);
     expect(rows.map(([label]) => label)).toEqual([
       'Role',
       'City',
