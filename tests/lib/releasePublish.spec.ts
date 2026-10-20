@@ -866,6 +866,63 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
     expect(reads).toBeLessThanOrEqual(12);
   });
 
+  it('posts published by several authors read the authors once, not once per author (U8b, D11)', async () => {
+    // Twelve posts by four authors, one of them a draft: the published-author rule
+    // (requirePublishedAuthor) is answered from primeLinks' one team_members read, so a
+    // release's author checks cost one subrequest however many authors it names.
+    const authors = [0, 1, 2, 3].map((k) => id(3000 + k));
+    const DRAFT = authors[3]!;
+    const posts: Row[] = [];
+    const drafts: Row[] = [];
+    for (let n = 0; n < 12; n += 1) {
+      const postId = id(3100 + n);
+      posts.push({
+        id: postId,
+        tenant_id: T,
+        slug: `p${n}`,
+        title: BI(`Post ${n}`, `مقال ${n}`),
+        status: 'draft',
+        author_id: null,
+        version: 1,
+      });
+      drafts.push(
+        draftRow({
+          id: draftId(3100 + n),
+          entity_type: 'blog_post',
+          entity_id: postId,
+          op: 'update',
+          payload: { status: 'published', authorId: authors[n % 4] },
+          base: { status: 'draft', author_id: null },
+        }),
+      );
+    }
+    const db = seed({
+      blog_posts: posts,
+      team_members: authors.map((member, k) => ({
+        id: member,
+        tenant_id: T,
+        slug: `a${k}`,
+        status: member === DRAFT ? 'draft' : 'published',
+        version: 1,
+      })),
+      content_drafts: drafts,
+    });
+    const res = await run(VALIDATE, db, select(...drafts));
+    expect(res.status).toBe(200);
+    const items = res.data['items'] as Row[];
+    expect(items).toHaveLength(12);
+    for (const [n, item] of items.entries()) {
+      const byDraft = drafts.findIndex((d) => d['id'] === item['draftId']);
+      expect(byDraft, `item ${n}`).toBeGreaterThan(-1);
+      expect(item['errors'], `post ${byDraft}`).toEqual(
+        byDraft % 4 === 3
+          ? [expect.objectContaining({ field: 'authorId', message: expect.any(String) })]
+          : [],
+      );
+    }
+    expect(db.calls.filter((c) => c.name === 'team_members')).toHaveLength(1);
+  });
+
   it('a release touching every registry type stays in a stated budget (the reads grow per table)', async () => {
     // One link-only change per type: readLive costs one read per table and primeLinks one per
     // link table (two for a table the selection also edits), so a broad release, not a long one,
