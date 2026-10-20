@@ -11,10 +11,12 @@ import {
   afterReveal,
   detailRows,
   formatBytes,
+  isBusyFor,
   isRevealed,
   mergeAfterPatch,
   parseInitial,
   safeLink,
+  settled,
   statusChips,
   statusLabel,
   withoutContact,
@@ -174,6 +176,31 @@ describe('a request belongs to the application it was sent for (U8 review)', () 
     });
   });
 
+  it('the controls are off only while a request for the application on screen is out', () => {
+    const A = DETAIL.id;
+    // A save for A is on its way; the drawer moves to B: B is ready at once.
+    let pending = A as string | null;
+    expect(isBusyFor(pending, A)).toBe(true);
+    expect(isBusyFor(pending, B.id)).toBe(false);
+    expect(isBusyFor(pending, null)).toBe(false);
+    // B starts its own; A's late end leaves B's mark alone, then B's own clears it.
+    pending = B.id;
+    pending = settled(pending, A);
+    expect(isBusyFor(pending, B.id)).toBe(true);
+    pending = settled(pending, B.id);
+    expect(pending).toBeNull();
+  });
+
+  it('an erase that succeeds ends too: the next application opens with its controls on', () => {
+    // Before: `busy` was cleared only when the DELETE failed, and the drawer stayed mounted.
+    let pending = settled(DETAIL.id, DETAIL.id);
+    expect(pending).toBeNull();
+    expect(isBusyFor(pending, B.id)).toBe(false);
+    // Even with the mark still set, it is A's, not B's.
+    pending = DETAIL.id;
+    expect(isBusyFor(pending, B.id)).toBe(false);
+  });
+
   it('a reveal for A leaves B as it is, and so never shows A’s contact details on B', () => {
     const readA: ApplicationDetail = { ...DETAIL, email: 'r@example.com', phone: null };
     expect(afterReveal(B, readA)).toBe(B);
@@ -292,6 +319,20 @@ describe('the panel and the drawer (source and server render)', () => {
       expect(body(name), name).toContain('failed(forId, err)');
       expect(body(name), name).not.toContain('setError(describeError');
     }
+    // Every request marks its application and clears that mark however it ends, an erase
+    // that succeeds included (it used to leave the next application's controls off).
+    expect(code(drawer)).toContain('const busy = isBusyFor(pending, id);');
+    expect(code(drawer)).not.toContain('setBusy');
+    for (const name of ['reveal', 'patch', 'erase']) {
+      const from = drawer.slice(drawer.indexOf(`async function ${name}(`));
+      const fn = code(from.slice(0, from.indexOf('\n  }\n')));
+      expect(fn, name).toContain('setPending(forId);');
+      expect(fn.slice(fn.indexOf('} finally {')), name).toContain(
+        'setPending((current) => settled(current, forId));',
+      );
+    }
+    // An erase ending after the drawer moved on closes only its own application.
+    expect(panel).toContain('setOpen((current) => (current === erased ? null : current));');
     // `shown` follows the drawer's application, and the error line is only that one's.
     expect(code(drawer)).toContain('shown.current = id;');
     expect(code(drawer)).toContain('if (shown.current === forId) setError(describeError(err));');

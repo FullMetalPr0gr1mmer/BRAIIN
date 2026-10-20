@@ -20,7 +20,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *            `application.cv_download` row;
  *   two      a status save for one application, held until a second is open in the drawer,
  *            lands on the first only: the second keeps its name, message and status;
- *   erase    asks first, then the row and the CV object are gone (read as the service role).
+ *   erase    asks first, then the row and the CV object are gone (read as the service role);
+ *            the next application opened has its controls on (an erase used to leave them off).
  * The applications are made here with the repo's own writer (createApplication, the CI dummy
  * key the workflows export); the second has no CV. Its name has no `E2E ` prefix: tests/e2e/apply-roundtrip.e2e.ts
  * deletes `name like 'E2E %'` and may run alongside. Whatever remains is erased in afterAll.
@@ -350,4 +351,12 @@ test('erase asks first, then the application and its CV are gone', async ({ page
   const { data: objects } = await svc.storage.from(CV_BUCKET).list(folder);
   expect(objects ?? []).toEqual([]);
   id = '';
+
+  // The drawer stays mounted: the next application opens ready, nothing left disabled.
+  await page.getByRole('button', { name: `Open ${OTHER}’s application` }).click();
+  const next = page.getByRole('dialog', { name: OTHER });
+  await expect(next.getByText(OTHER_MESSAGE)).toBeVisible();
+  await expect(next.getByRole('button', { name: 'Reveal contact details' })).toBeEnabled();
+  await expect(next.getByRole('combobox', { name: 'Status' })).toBeEnabled();
+  await expect(next.getByRole('button', { name: 'Erase application' })).toBeEnabled();
 });

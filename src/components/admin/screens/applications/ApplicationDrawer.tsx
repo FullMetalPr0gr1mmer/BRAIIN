@@ -15,8 +15,10 @@ import {
   afterReveal,
   detailRows,
   formatBytes,
+  isBusyFor,
   isRevealed,
   safeLink,
+  settled,
   statusLabel,
   withoutContact,
   type ApplicationDetail,
@@ -42,7 +44,9 @@ import { Badge } from '@/components/admin/kit/StatusBadge';
 // successes are toasts. Every applicant-written text is a text node with dir="auto".
 // A request belongs to the application it was sent for: the drawer stays mounted from one
 // application to the next, so an answer or a refusal that lands after it moved on is laid
-// over nothing else (afterPatch, afterReveal, and `shown` for the error line).
+// over nothing else (afterPatch, afterReveal, and `shown` for the error line), and the
+// controls are off only while a request for the application on screen is on its way
+// (`pending`, isBusyFor), an erase's included: the next application opens ready.
 
 export interface ApplicationDrawerProps {
   /** The application to show; null closes the drawer. */
@@ -52,8 +56,11 @@ export interface ApplicationDrawerProps {
   onClose: () => void;
   /** A status or notes save landed: the list re-reads. */
   onChanged: () => void;
-  /** The application was erased: the panel says so and re-reads. */
-  onErased: () => void;
+  /**
+   * An application was erased: the panel says so, re-reads, and closes the drawer if it
+   * still shows that one (an erase may end after the drawer moved to another).
+   */
+  onErased: (id: string) => void;
 }
 
 /** "Erase <name>'s application and CV?": the name a bidi isolate, so Arabic stays in place. */
@@ -75,7 +82,9 @@ export default function ApplicationDrawer({
   const [detail, setDetail] = useState<ApplicationDetail | null>(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
+  // The application a request is on its way for; `busy` is true only while that one shows.
+  const [pending, setPending] = useState<string | null>(null);
+  const busy = isBusyFor(pending, id);
   const [error, setError] = useState('');
   // The drawer is closed while it asks whether to leave an unsaved note (Escape or the
   // header's Close shut the native dialog first); a "no" opens it again.
@@ -148,7 +157,7 @@ export default function ApplicationDrawer({
   async function reveal() {
     if (!detail) return;
     const forId = detail.id;
-    setBusy(true);
+    setPending(forId);
     setError('');
     try {
       // The one audited read of the contact details (live recheck, audit row first).
@@ -157,14 +166,14 @@ export default function ApplicationDrawer({
     } catch (err) {
       failed(forId, err);
     } finally {
-      setBusy(false);
+      setPending((current) => settled(current, forId));
     }
   }
 
   async function patch(body: { status?: string; internalNotes?: string }, done: string) {
     if (!detail) return false;
     const forId = detail.id;
-    setBusy(true);
+    setPending(forId);
     setError('');
     try {
       const answer = await adminFetch<Partial<ApplicationDetail>>(
@@ -181,7 +190,7 @@ export default function ApplicationDrawer({
       failed(forId, err);
       return false;
     } finally {
-      setBusy(false);
+      setPending((current) => settled(current, forId));
     }
   }
 
@@ -207,15 +216,18 @@ export default function ApplicationDrawer({
     if (!(await confirmDialog({ message: eraseMessage(detail.name), confirmLabel: 'Erase' }))) {
       return;
     }
-    setBusy(true);
+    const forId = detail.id;
+    setPending(forId);
     setError('');
     try {
-      await adminFetch(`/api/admin/applications/${detail.id}`, { method: 'DELETE' });
-      leaving.current = true;
-      onErased();
+      await adminFetch(`/api/admin/applications/${forId}`, { method: 'DELETE' });
+      if (shown.current === forId) leaving.current = true;
+      onErased(forId);
     } catch (err) {
-      setError(describeError(err));
-      setBusy(false);
+      failed(forId, err);
+    } finally {
+      // Done either way: the next application the drawer opens is not left disabled.
+      setPending((current) => settled(current, forId));
     }
   }
 

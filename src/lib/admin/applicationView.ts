@@ -128,8 +128,9 @@ export function mergeAfterPatch(
 // The drawer's requests belong to the application they were sent for. The drawer stays
 // mounted while it moves from one application to another (closed and reopened, or opened
 // from the list or the bell), so a request may still be on its way when another
-// application is on screen. Its answer touches only its own application: a slow save for A
-// never turns B's drawer into A's (with B's unsaved notes ready to be written into A).
+// application is on screen. Its answer and its end touch only its own application: a slow
+// save for A never turns B's drawer into A's (with B's unsaved notes ready to be written
+// into A), and neither a request for A nor a finished erase leaves B's controls disabled.
 
 /**
  * A status or notes save's answer, laid over the drawer's application only when that is
@@ -150,6 +151,21 @@ export function afterReveal(
 ): ApplicationDetail | null {
   return current !== null && current.id === row.id ? row : current;
 }
+
+/**
+ * The application a drawer request is on its way for (`pending`): the controls are off
+ * only while that is the application on screen (`shown`).
+ */
+export const isBusyFor = (pending: string | null, shown: string | null): boolean =>
+  pending !== null && pending === shown;
+
+/**
+ * A request for `forId` has ended (answered, refused, or an erase done): the mark is
+ * cleared only if it is still that request's, so a later request for another application
+ * keeps its own.
+ */
+export const settled = (pending: string | null, forId: string): string | null =>
+  pending === forId ? null : pending;
 
 /** True once the contact details have been revealed into this application. */
 export const isRevealed = (detail: ApplicationDetail | null): boolean =>

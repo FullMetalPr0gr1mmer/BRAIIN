@@ -177,8 +177,9 @@ export default function ApplicationsPanel({
         canSeePii={canSeePii}
         onClose={() => setOpen(null)}
         onChanged={() => void load()}
-        onErased={() => {
-          setOpen(null);
+        onErased={(erased) => {
+          // Closed only if it still shows the erased application.
+          setOpen((current) => (current === erased ? null : current));
           setNotice('Application erased.');
           void load();
         }}
